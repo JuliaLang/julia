@@ -98,14 +98,17 @@
             // keep track of whether we have received a fatal message
             var dead = false;
 
-            // jQuery extension to indent at cursor position
+            // jQuery extensions
             jQuery.fn.extend({
                 indent_at_caret: function(str)
                 {
+                    // apply this function to all elements that match the selector
                     return this.each(function(i)
                     {
+                        // if text is selected, then just replace it
                         if (document.selection)
                         {
+                            // replace the selection with str
                             this.focus();
                             sel = document.selection.createRange();
                             sel.text = str;
@@ -113,6 +116,7 @@
                         }
                         else if (this.selectionStart || this.selectionStart == "0")
                         {
+                            // replace the selection with str
                             var start_pos = this.selectionStart;
                             var end_pos = this.selectionEnd;
                             var scroll_top = this.scrollTop;
@@ -124,6 +128,7 @@
                         }
                         else
                         {
+                            // just add str to the end
                             this.value += str;
                             this.focus();
                         }
@@ -131,8 +136,10 @@
                 },
                 backspace_at_caret: function()
                 {
+                    // apply this function to all elements that match the selector
                     return this.each(function(i)
                     {
+                        // if text is selected, then just delete it
                         if (document.selection)
                         {
                             this.focus();
@@ -142,23 +149,31 @@
                         }
                         else if (this.selectionStart || this.selectionStart == "0")
                         {
+                            // get the selection
                             var start_pos = this.selectionStart;
                             var end_pos = this.selectionEnd;
                             var scroll_top = this.scrollTop;
+
+                            // check if nothing is selected
                             if (start_pos == end_pos)
                             {
+                                // only backspace if we aren't at the beginning
                                 if (start_pos > 0)
                                 {
+                                    // check if we are far enough that we might want to de-indent
                                     if (start_pos > indent_str.length-1)
                                     {
+                                        // check if there is indentation right before the cursor
                                         if (this.value.substring(start_pos-indent_str.length, start_pos) == indent_str)
                                         {
+                                            // delete the indentation
                                             this.value = this.value.substring(0, start_pos-indent_str.length)+this.value.substring(end_pos, this.value.length);
                                             this.selectionStart = start_pos-indent_str.length;
                                             this.selectionEnd = start_pos-indent_str.length;
                                         }
                                         else
                                         {
+                                            // just delete the character before the cursor
                                             this.value = this.value.substring(0, start_pos-1)+this.value.substring(end_pos, this.value.length);
                                             this.selectionStart = start_pos-1;
                                             this.selectionEnd = start_pos-1;
@@ -166,6 +181,7 @@
                                     }
                                     else
                                     {
+                                        // just delete the character before the cursor
                                         this.value = this.value.substring(0, start_pos-1)+this.value.substring(end_pos, this.value.length);
                                         this.selectionStart = start_pos-1;
                                         this.selectionEnd = start_pos-1;
@@ -174,15 +190,53 @@
                             }
                             else
                             {
+                                // just delete the selection
                                 this.value = this.value.substring(0, start_pos)+this.value.substring(end_pos, this.value.length);
                                 this.selectionStart = start_pos;
                                 this.selectionEnd = start_pos;
                             }
+
+                            // focus the element and scroll it appropriately
                             this.focus();
                             this.scrollTop = scroll_top;
                         }
                     })
-                }
+                },
+                newline_at_caret: function()
+                {
+                    // apply this function to all elements that match the selector
+                    return this.each(function(i)
+                    {
+                        // determine the indentation for this line
+                        var indent = "";
+                        if (this.selectionStart || this.selectionStart == "0")
+                        {
+                            // determine the start of the indentation
+                            var start_pos = this.selectionStart;
+                            while (start_pos > 0)
+                            {
+                                if (this.value[start_pos-1] == "\n")
+                                    break;
+                                start_pos -= 1;
+                            }
+
+                            // determine the end of the indentation
+                            var end_pos = start_pos;
+                            while (end_pos < this.value.length)
+                            {
+                                if (this.value[end_pos] != " ")
+                                    break;
+                                end_pos += 1;
+                            }
+
+                            // get the indentation
+                            indent = this.value.substring(start_pos, end_pos);
+                        }
+
+                        // insert a newline and auto-indent
+                        $(this).indent_at_caret("\n"+indent);
+                    })
+                },
             });
 
             // escape html
@@ -274,19 +328,24 @@
                     // MSG_OUTPUT_MESSAGE
                     if (inbox_queue[id][0] == MSG_OUTPUT_MESSAGE)
                     {
+                        // print the message
                         add_to_terminal("<span class=\"message\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
                     }
 
                     // MSG_OUTPUT_OTHER
                     if (inbox_queue[id][0] == MSG_OUTPUT_OTHER)
                     {
+                        // just print the output
                         add_to_terminal(escape_html(inbox_queue[id][1]));
                     }
 
                     // MSG_OUTPUT_FATAL_ERROR
                     if (inbox_queue[id][0] == MSG_OUTPUT_FATAL_ERROR)
                     {
+                        // print the error message
                         add_to_terminal("<span class=\"error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
+
+                        // stop processing new messages
                         dead = true;
                         inbox_queue = [];
                         outbox_queue = [];
@@ -334,7 +393,7 @@
                         $("#terminal-input").focus();
 
                         // add a newline for the user
-                        $("#terminal-input").indent_at_caret("\n");
+                        $("#terminal-input").newline_at_caret();
                     }
 
                     // MSG_OUTPUT_PARSE_COMPLETE
