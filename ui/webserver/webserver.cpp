@@ -833,10 +833,28 @@ string get_response(request* req)
     return respond(session_token, writer.write(response_root));
 }
 
+// CTRL+C signal handler
 void sigproc(int)
 {
-    if (system("killall julia") == -1)
-        cout<<"terminating julia processes failed.";
+    // lock the mutex
+    pthread_mutex_lock(&session_mutex);
+
+    // clean up
+    for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+    {
+        // close the pipes
+        close((iter->second).julia_in[1]);
+        close((iter->second).julia_out[0]);
+
+        // kill the julia process
+        kill((iter->second).pid, 9);
+        waitpid((iter->second).pid, 0, 0);
+    }
+
+    // unlock the mutex
+    pthread_mutex_unlock(&session_mutex);
+
+    // terminate
     exit(0);
 }
 
