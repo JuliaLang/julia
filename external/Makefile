@@ -344,7 +344,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	touch $@
 $(LIGHTTPD_OBJ_SOURCE): lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(EXTROOT) --without-pcre
+	./configure --prefix=$(EXTROOT) --without-pcre --without-zlib --without-bzip2
 	$(MAKE)
 	touch $@
 $(LIGHTTPD_OBJ_TARGET): $(LIGHTTPD_OBJ_SOURCE)
