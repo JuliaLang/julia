@@ -1,0 +1,5 @@
+#!/bin/sh
+
+echo "Connect to http://localhost:2000/ for the web REPL."
+./external/root/sbin/lighttpd -D -f ./external/lighttpd.conf &
+./julia-release-webserver -p 2001 

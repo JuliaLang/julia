@@ -9,6 +9,7 @@ LAPACK_VER = 3.4.0
 ARPACK_VER = 96
 FFTW_VER = 3.3
 UNWIND_VER = 0.99
+LIGHTTPD_VER = 1.4.29
 
 ## high-level setup ##
 
@@ -327,6 +328,34 @@ clean-unwind:
 
 distclean-unwind:
 	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
+
+## GNU LIGHTTPD ##
+
+LIGHTTPD_OBJ_TARGET = $(EXTROOT)/sbin/lighttpd
+LIGHTTPD_OBJ_SOURCE = lighttpd-$(LIGHTTPD_VER)/src/lighttpd
+
+compile-lighttpd: $(LIGHTTPD_OBJ_SOURCE)
+install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
+
+lighttpd-$(LIGHTTPD_VER).tar.gz:
+	curl -O http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
+lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
+	tar zxf $<
+	touch $@
+$(LIGHTTPD_OBJ_SOURCE): lighttpd-$(LIGHTTPD_VER)/configure
+	cd lighttpd-$(LIGHTTPD_VER) && \
+	./configure --prefix=$(EXTROOT) --without-pcre
+	$(MAKE)
+	touch $@
+$(LIGHTTPD_OBJ_TARGET): $(LIGHTTPD_OBJ_SOURCE)
+	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
+	touch $@
+
+clean-lighttpd:
+	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) clean
+	rm -f $(LIGHTTPD_OBJ_TARGET)
+distclean-lighttpd:
+	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
 
 ## phony targets ##
 
