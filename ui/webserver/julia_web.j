@@ -15,6 +15,37 @@ __PRESERVE_ASPECT_RATIO_THRESHOLD = 0.05
 __HORIZONTAL_PADDING = 0.05
 __VERTICAL_PADDING = 0.05
 
+# helper functions
+function __safe_min(x::Array{Float64, 1})
+    m = NaN
+    for i=1:length(x)
+        if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+            if isequal(m, NaN) || x[i] < m
+                m =x[i]
+            end
+        end
+    end
+    if isequal(m, NaN)
+        return error("unable to determine window dimensions")
+    end
+    return m
+end
+
+function __safe_max(x::Array{Float64, 1})
+    m = NaN
+    for i=1:length(x)
+        if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
+            if isequal(m, NaN) || x[i] > m
+                m =x[i]
+            end
+        end
+    end
+    if isequal(m, NaN)
+        return error("unable to determine window dimensions")
+    end
+    return m
+end
+
 # plot an array (window determined manually)
 function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number)
     # make sure we have arrays of numbers
@@ -72,38 +103,10 @@ function plot(x::Array, y::Array)
     if length(x_safe) < 1 return error("at least two data points required for line plot") end
 
     # determine the window
-    function safe_min(x::Array{Float64, 1})
-        m = NaN
-        for i=1:length(x)
-            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
-                if isequal(m, NaN) || x[i] < m
-                    m =x[i]
-                end
-            end
-        end
-        if isequal(m, NaN)
-            return error("unable to determine window dimensions")
-        end
-        return m
-    end
-    function safe_max(x::Array{Float64, 1})
-        m = NaN
-        for i=1:length(x)
-            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
-                if isequal(m, NaN) || x[i] > m
-                    m =x[i]
-                end
-            end
-        end
-        if isequal(m, NaN)
-            return error("unable to determine window dimensions")
-        end
-        return m
-    end
-    xmin = safe_min(x_safe)
-    xmax = safe_max(x_safe)
-    ymin = safe_min(y_safe)
-    ymax = safe_max(y_safe)
+    xmin = __safe_min(x_safe)
+    xmax = __safe_max(x_safe)
+    ymin = __safe_min(y_safe)
+    ymax = __safe_max(y_safe)
     if xmin == xmax
         xmin -= 0.5
         xmax += 0.5
@@ -152,39 +155,11 @@ function plot(y::Array)
     end
 
     # determine the window
-    function safe_min(x::Array{Float64, 1})
-        m = NaN
-        for i=1:length(x)
-            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
-                if isequal(m, NaN) || x[i] < m
-                    m =x[i]
-                end
-            end
-        end
-        if isequal(m, NaN)
-            return error("unable to determine window dimensions")
-        end
-        return m
-    end
-    function safe_max(x::Array{Float64, 1})
-        m = NaN
-        for i=1:length(x)
-            if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
-                if isequal(m, NaN) || x[i] > m
-                    m =x[i]
-                end
-            end
-        end
-        if isequal(m, NaN)
-            return error("unable to determine window dimensions")
-        end
-        return m
-    end
     x_safe = [i-1 | i=1:length(y_safe)]
     xmin = 0
     xmax = length(y)-1
-    ymin = safe_min(y_safe)
-    ymax = safe_max(y_safe)
+    ymin = __safe_min(y_safe)
+    ymax = __safe_max(y_safe)
     if ymin == ymax
         ymin -= 0.5
         ymax += 0.5
