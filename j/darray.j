@@ -36,7 +36,8 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
 
     # don't use DArray() directly; use darray() below instead
     function DArray(initializer, dims, procs, dist)
-        go = GlobalObject(g->DArray{T,N,distdim}(g,initializer,dims,procs,dist))
+        go = GlobalObject(procs,
+                          g->DArray{T,N,distdim}(g,initializer,dims,procs,dist))
         go.local_identity
     end
 

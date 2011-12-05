@@ -1,6 +1,6 @@
-all: quick core hashing unicode perf
+all: quick core hashing unicode perf arrayops
 
-quick core hashing perf:
+quick core hashing perf arrayops:
 	../julia $@.j
 
 unicode:
