@@ -18,7 +18,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw lighttpd
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
