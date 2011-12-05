@@ -1,5 +1,5 @@
 /*
- * jQuery.fn.autoResize 1.12
+ * jQuery.fn.autoResize 1.14
  * --
  * https://github.com/jamespadolsey/jQuery.fn.autoResize
  * --
@@ -11,24 +11,28 @@
 
 (function($){
 
-	var defaults = autoResize.defaults = {
-		onResize: function(){},
-		animate: {
-			duration: 200,
-			complete: function(){}
-		},
-		extraSpace: 50,
-		minHeight: 'original',
-		maxHeight: 500,
-		minWidth: 'original',
-		maxWidth: 500
-	};
+	var uid = 'ar' + +new Date,
+
+		defaults = autoResize.defaults = {
+			onResize: function(){},
+			onBeforeResize: function(){return 123},
+			onAfterResize: function(){return 555},
+			animate: {
+				duration: 200,
+				complete: function(){}
+			},
+			extraSpace: 50,
+			minHeight: 'original',
+			maxHeight: 500,
+			minWidth: 'original',
+			maxWidth: 500
+		};
 
 	autoResize.cloneCSSProperties = [
 		'lineHeight', 'textDecoration', 'letterSpacing',
 		'fontSize', 'fontFamily', 'fontStyle', 'fontWeight',
 		'textTransform', 'textAlign', 'direction', 'wordSpacing', 'fontSizeAdjust',
-		'padding', 'width'
+		'paddingTop', 'paddingLeft', 'paddingBottom', 'paddingRight', 'width'
 	];
 
 	autoResize.cloneCSSValues = {
@@ -39,7 +43,14 @@
 		overflow: 'hidden'
 	};
 
-	autoResize.resizableFilterSelector = 'textarea,input:not(input[type]),input[type=text],input[type=password]';
+	autoResize.resizableFilterSelector = [
+		'textarea:not(textarea.' + uid + ')',
+		'input:not(input[type])',
+		'input[type=text]',
+		'input[type=password]',
+		'input[type=email]',
+		'input[type=url]'
+	].join(',');
 
 	autoResize.AutoResizer = AutoResizer;
 
@@ -53,6 +64,10 @@
 	}
 
 	function AutoResizer(el, config) {
+
+		if (el.data('AutoResizer')) {
+			el.data('AutoResizer').destroy();
+		}
 		
 		config = this.config = $.extend({}, autoResize.defaults, config);
 		this.el = el;
@@ -78,8 +93,14 @@
 
 		el.data('AutoResizer', this);
 
-		this.createClone();
-		this.injectClone();
+		// Make sure onAfterResize is called upon animation completion
+		config.animate.complete = (function(f){
+			return function() {
+				config.onAfterResize.call(el);
+				return f.apply(this, arguments);
+			};
+		}(config.animate.complete));
+
 		this.bind();
 
 	}
@@ -98,9 +119,14 @@
 			this.el
 				.bind('keyup.autoResize', check)
 				//.bind('keydown.autoResize', check)
-				.bind('change.autoResize', check);
+				.bind('change.autoResize', check)
+				.bind('paste.autoResize', function() {
+					setTimeout(function() { check(); }, 0);
+				});
 			
-			this.check(null, true);
+			if (!this.el.is(':hidden')) {
+				this.check(null, true);
+			}
 
 		},
 
@@ -122,6 +148,7 @@
 			clone
 				.removeAttr('name')
 				.removeAttr('id')
+				.addClass(uid)
 				.attr('tabIndex', -1)
 				.css(autoResize.cloneCSSValues);
 
@@ -137,10 +164,19 @@
 
 		check: function(e, immediate) {
 
+			if (!this.clone) {
+		this.createClone();
+		this.injectClone();
+			}
+
 			var config = this.config,
 				clone = this.clone,
 				el = this.el,
 				value = el.val();
+
+			// Do nothing if value hasn't changed
+			if (value === this.prevValue) { return true; }
+			this.prevValue = value;
 
 			if (this.nodeName === 'input') {
 
@@ -159,15 +195,19 @@
 					(newWidth >= config.minWidth && newWidth <= config.maxWidth)
 				) {
 
+					config.onBeforeResize.call(el);
 					config.onResize.call(el);
 
 					el.scrollLeft(0);
 
-					config.animate && !immediate ?
+					if (config.animate && !immediate) {
 						el.stop(1,1).animate({
 							width: newWidth
-						}, config.animate)
-					: el.width(newWidth);
+						}, config.animate);
+					} else {
+						el.width(newWidth);
+						config.onAfterResize.call(el);
+					}
 
 				}
 
@@ -177,9 +217,9 @@
 
 			// TEXTAREA
 			
-			clone.height(0).val(value).scrollTop(10000);
+			clone.width(el.width()).height(0).val(value).scrollTop(10000);
 			
-			var scrollTop = clone[0].scrollTop + config.extraSpace;
+			var scrollTop = clone[0].scrollTop;
 				
 			// Don't do anything if scrollTop hasen't changed:
 			if (this.previousScrollTop === scrollTop) {
@@ -188,26 +228,30 @@
 
 			this.previousScrollTop = scrollTop;
 			
-			if (scrollTop >= config.maxHeight) {
+			if (scrollTop + config.extraSpace >= config.maxHeight) {
 				el.css('overflowY', '');
 				scrollTop = config.maxHeight;
+				immediate = true;
+			} else if (scrollTop <= config.minHeight) {
+				scrollTop = config.minHeight;
 			} else {
 				el.css('overflowY', 'hidden');
+				scrollTop += config.extraSpace;
 			}
 
-			if (scrollTop < config.minHeight) {
-				scrollTop = config.minHeight;
-			}
-
+			config.onBeforeResize.call(el);
 			config.onResize.call(el);
-			
+
 			// Either animate or directly apply height:
-			config.animate && !immediate ?
+			if (config.animate && !immediate) {
 				el.stop(1,1).animate({
 					height: scrollTop
-				}, config.animate)
-				: el.height(scrollTop);
-			
+				}, config.animate);
+			} else {
+				el.height(scrollTop);
+				config.onAfterResize.call(el);
+			}
+
 		},
 
 		destroy: function() {
