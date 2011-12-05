@@ -552,6 +552,12 @@ void* watchdog_thread(void* arg)
 // the maximum number of concurrent sessions
 const size_t MAX_CONCURRENT_SESSIONS = 4;
 
+// give julia this much time to respond to messages
+const int JULIA_TIMEOUT = 500; // in milliseconds
+
+// give julia this much time to respond to messages
+const int JULIA_TIMEOUT_INTERVAL = 10000; // in nanoseconds
+
 // generate a session token
 string make_session_token()
 {
@@ -696,6 +702,9 @@ string get_response(request* req)
     // the response
     vector <message> response_messages;
 
+    // whether we are waiting for an eval
+    bool waiting_for_eval = false;
+
     // process input if there is any
     if (req->get_field_exists("request"))
     {
@@ -777,11 +786,73 @@ string get_response(request* req)
                             // forward the message to julia
                             if (request_message.type != MSG_INPUT_POLL)
                                 session_map[session_token].inbox.push_back(request_message);
+
+                            // check if this was an eval message
+                            if (request_message.type == MSG_INPUT_EVAL)
+                                waiting_for_eval = true;
                         }
                     }
                 }
             }
         }
+    }
+
+    // if we asked julia for an eval, wait a little and see if julia responds
+    if (waiting_for_eval)
+    {
+        // unlock the mutex
+        pthread_mutex_unlock(&session_mutex);
+
+        // try to get the response from julia (and time out if it takes too long)
+        clock_t start_time = clock();
+        while (clock()-start_time < JULIA_TIMEOUT*(CLOCKS_PER_SEC/1000))
+        {
+            // don't waste cpu time
+            timespec timeout;
+            timeout.tv_sec = 0;
+            timeout.tv_nsec = JULIA_TIMEOUT_INTERVAL;
+            nanosleep(&timeout, 0);
+
+            // lock the mutex
+            pthread_mutex_lock(&session_mutex);
+
+            // iterate through the messages
+            bool eval_done = false;
+            for (size_t i = 0; i < session_map[session_token].outbox.size(); i++)
+            {
+                // check for parse errors
+                if (session_map[session_token].outbox[i].type == MSG_OUTPUT_PARSE_ERROR)
+                    eval_done = true;
+
+                // check if we need more input to parse
+                if (session_map[session_token].outbox[i].type == MSG_OUTPUT_PARSE_INCOMPLETE)
+                    eval_done = true;
+
+                // check if the eval is done
+                if (session_map[session_token].outbox[i].type == MSG_OUTPUT_EVAL_RESULT)
+                    eval_done = true;
+
+                // check if an exception was thrown
+                if (session_map[session_token].outbox[i].type == MSG_OUTPUT_EVAL_ERROR)
+                    eval_done = true;
+            }
+
+            // check if there was a message from julia
+            if (eval_done)
+            {
+                // unlock the mutex
+                pthread_mutex_unlock(&session_mutex);
+
+                // stop waiting
+                break;
+            }
+
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+        }
+
+        // lock the mutex
+        pthread_mutex_lock(&session_mutex);
     }
 
     // perform maintenance on the session if there is one
