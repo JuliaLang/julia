@@ -98,6 +98,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
     - **[FFTW][]**         — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
     - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+    - **[D3][]**	   - javascript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -111,6 +112,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [LLVM]:         http://www.llvm.org/
+[D3]:		http://mbostock.github.com/d3/
 
 <a name="Supported-Platforms"/>
 ## Supported Platforms
