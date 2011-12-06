@@ -110,7 +110,7 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     if numel(A) > 50000
-        return _jl_fftw_transpose(reshape(A, size(A, 2), size(A, 1)))
+        return _jl_fftw_transpose(A)
     else
         return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
     end
