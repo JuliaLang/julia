@@ -12,24 +12,6 @@ body
     color: #555555;
 }
 
-div#header-bar
-{
-    position: relative; /* make this appear above everything */
-    width: 100%;
-    min-width: 960px;
-    background: #1c1c1c url('images/banner.png') repeat-x left top;
-    -moz-box-shadow: 0px 0px 20px #888888;
-    -webkit-box-shadow: 0px 0px 20px #888888;
-    box-shadow: 0px 0px 20px #888888;
-}
-
-header
-{
-    width: 960px;
-    margin-left: auto;
-    margin-right: auto;
-}
-
 div#main
 {
     width: 960px;
@@ -208,7 +190,7 @@ span.prompt
 /* for plotting */
 
 .hrule line {
-  stroke: #eee;
+  stroke: #dadada;
   shape-rendering: crispEdges;
 }
 
@@ -218,7 +200,7 @@ span.prompt
 }
 
 .vrule line {
-  stroke: #eee;
+  stroke: #dadada;
   shape-rendering: crispEdges;
 }
 
