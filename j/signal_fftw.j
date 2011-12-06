@@ -235,8 +235,8 @@ end
 macro jl_transpose_real_macro(libname, fname, eltype)
     quote
         function _jl_fftw_transpose(X::Matrix{$eltype})
-            P = similar(X)
             (n1, n2) = size(X)
+            P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Uint32),
                          int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [_jl_FFTW_HC2R], _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
@@ -253,8 +253,8 @@ end
 macro jl_transpose_complex_macro(libname, fname, celtype)
     quote
         function _jl_fftw_transpose(X::Matrix{$celtype})
-            P = similar(X)
             (n1, n2) = size(X)
+            P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Int32, Uint32),
                          int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, _jl_FFTW_FORWARD, _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
