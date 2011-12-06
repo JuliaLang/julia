@@ -52,10 +52,7 @@ div#left-column a:hover
 
 div#right-column
 {
-    width: 730px;
-    padding-top: 20px;
-    padding-bottom: 20px;
-    padding-left: 20px;
+    width: 750px;
     float: right;
 }
 
@@ -124,7 +121,7 @@ p
 
 form#terminal-form
 {
-    border: 1px solid #d9d9d9;
+    border-right: 1px solid #d9d9d9;
     padding: 20px;
     background-color: #fafafa;
     overflow: auto;
