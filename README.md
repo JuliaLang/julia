@@ -41,7 +41,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
 
          Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
-Julia beats other high-level systems on all micro-benchmarks above and even beats C++ by %26 on the pi summation benchmark.
+Julia beats other high-level systems on all micro-benchmarks above and even beats C++ by 26% on the pi summation benchmark.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
