@@ -23,7 +23,7 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ### High-Performance JIT Compiler
 
 Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
-The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR2 RAM:
+The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
     ________________________________________________________________________________
                      |             |
