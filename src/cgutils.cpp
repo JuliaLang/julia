@@ -479,13 +479,17 @@ static Value *boxed(Value *v)
     if (t == T_int1) return julia_bool(v);
     jl_value_t *jt = julia_type_of(v);
     jl_bits_type_t *jb = (jl_bits_type_t*)jt;
-    if (jb == jl_int8_type)  return builder.CreateCall(box_int8_func, v);
+    if (jb == jl_int8_type)
+        return builder.CreateCall(box_int8_func,
+                                  builder.CreateSExt(v, T_int32));
     if (jb == jl_int16_type) return builder.CreateCall(box_int16_func, v);
     if (jb == jl_int32_type) return builder.CreateCall(box_int32_func, v);
     if (jb == jl_int64_type) return builder.CreateCall(box_int64_func, v);
     if (jb == jl_float32_type) return builder.CreateCall(box_float32_func, v);
     if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
-    if (jb == jl_uint8_type)  return builder.CreateCall(box_uint8_func, v);
+    if (jb == jl_uint8_type)
+        return builder.CreateCall(box_uint8_func,
+                                  builder.CreateZExt(v, T_int32));
     if (jb == jl_uint16_type) return builder.CreateCall(box_uint16_func, v);
     if (jb == jl_uint32_type) return builder.CreateCall(box_uint32_func, v);
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
