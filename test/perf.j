@@ -41,17 +41,17 @@ A = ones(200,200)
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
-function mandel(z::Complex)
+function mandel(z)
     n = 0
     c = z
-    for n=0:79
-        if abs(z)>2
+    for n = 0:79
+        if abs(z) > 2
             n -= 1
             break
         end
-        z = z^2+c
+        z = z^2 + c
     end
-    n+1
+    n + 1
 end
 
 mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
@@ -71,9 +71,9 @@ end
 
 function pisum()
     sum = 0.0
-    for j=1:500
+    for j = 1:500
         sum = 0.0
-        for k=1:10000
+        for k = 1:10000
             sum += 1.0/(k*k)
         end
     end
