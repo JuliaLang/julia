@@ -133,6 +133,76 @@ double pisum() {
     return sum;
 }
 
+struct double_pair { double s1, s2; };
+
+struct double_pair randmatstat(int t) {
+    int n = 5;
+    struct double_pair r;
+    double *v = (double*)calloc(t, sizeof(double));
+    double *w = (double*)calloc(t, sizeof(double));
+    for (int i=0; i < t; i++) {
+        // TODO: use Gaussian random numbers
+        double *a = myrand(n*n);
+        double *b = myrand(n*n);
+        double *c = myrand(n*n);
+        double *d = myrand(n*n);
+        double *P = (double*)malloc(4*n*n*sizeof(double));
+        memcpy(P+0*n*n, a, n*n*sizeof(double));
+        memcpy(P+1*n*n, b, n*n*sizeof(double));
+        memcpy(P+2*n*n, c, n*n*sizeof(double));
+        memcpy(P+3*n*n, d, n*n*sizeof(double));
+        double *Q = (double*)malloc(4*n*n*sizeof(double));
+        for (int j=0; j < n; j++) {
+            for (int k=0; k < n; k++) {
+                Q[2*n*j+k]       = a[k];
+                Q[2*n*j+n+k]     = b[k];
+                Q[2*n*(n+j)+k]   = c[k];
+                Q[2*n*(n+j)+n+k] = d[k];
+            }
+        }
+        free(a);
+        free(b);
+        free(c);
+        free(d);
+        double *PtP1 = (double*)malloc(n*n*sizeof(double));
+        double *PtP2 = (double*)malloc(n*n*sizeof(double));
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    n, n, 4*n, 1.0, P, 4*n, P, 4*n, 0.0, PtP1, n);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    n, n, n, 1.0, PtP1, n, PtP1, n, 0.0, PtP2, n);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    n, n, n, 1.0, PtP2, n, PtP2, n, 0.0, PtP1, n);
+        for (int j=0; j < n; j++)
+            v[i] += PtP1[(n+1)*j];
+        free(PtP1);
+        free(PtP2);
+        free(P);
+        double *QtQ1 = (double*)malloc(4*n*n*sizeof(double));
+        double *QtQ2 = (double*)malloc(4*n*n*sizeof(double));
+        cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
+                    2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    2*n, 2*n, 2*n, 1.0, QtQ1, 2*n, QtQ1, 2*n, 0.0, QtQ2, 2*n);
+        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                    2*n, 2*n, 2*n, 1.0, QtQ2, 2*n, QtQ2, 2*n, 0.0, QtQ1, 2*n);
+        for (int j=0; j < 2*n; j++)
+            w[i] += QtQ1[(n+1)*j];
+        free(QtQ1);
+        free(QtQ2);
+        free(Q);
+    }
+    double v1=0.0, v2=0.0, w1=0.0, w2=0.0;
+    for (int i=0; i < t; i++) {
+        v1 += v[i]; v2 += v[i]*v[i];
+        w1 += w[i]; w2 += w[i]*w[i];
+    }
+    free(v);
+    free(w);
+    r.s1 = sqrt((t*(t*v2-v1*v1))/((t-1)*v1*v1));
+    r.s2 = sqrt((t*(t*w2-w1*w1))/((t-1)*w1*w1));
+    return r;
+}
+
 void print_perf(const char *name, double t) {
     printf("c,%s,%.6f\n", name, t*1000);
 }
@@ -142,7 +212,7 @@ int main() {
     dsfmt_gv_init_gen_rand(0);
 
     double t, tmin;
-    
+
     // fib(20)
     assert(fib(20) == 6765);
     int f=0;
@@ -154,7 +224,7 @@ int main() {
         if (t < tmin) tmin = t;
     }
     print_perf("fib", tmin);
-    
+
     // parse_bin
     assert(parse_int("1111000011110000111100001111", 2) == 252645135);
     tmin = INFINITY;
@@ -228,6 +298,20 @@ int main() {
     }
     assert(fabs(pi-1.644834071848065) < 1e-12);
     print_perf("pi_sum", tmin);
+
+    // rand mat stat
+    struct double_pair r;
+    tmin = INFINITY;
+    for (int i=0; i<NITER; ++i) {
+        t = clock_now();
+        r = randmatstat(1000);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
+    }
+    // printf("s1=%f\n", r.s1);
+    // printf("s2=%f\n", r.s2);
+    // assert(0.5 < r.s1 && r.s1 < 1.0 && 0.5 < r.s2 && r.s2 < 1.0);
+    print_perf("rand_mat_stat", tmin);
 
     return 0;
 } 
