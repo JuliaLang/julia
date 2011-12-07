@@ -31,7 +31,8 @@ static const char *opts =
     " -b --bare                Bare: don't load default startup files\n"
     " -J --sysimage=file       Start up with the given system image file\n\n"
 
-    " -p n                     Run n local processes\n\n"
+    " -p n                     Run n local processes\n"
+    " --machinefile file       Run processes on hosts listed in file\n\n"
 
     " -h --help                Print this message\n";
 
