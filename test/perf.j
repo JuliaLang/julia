@@ -42,16 +42,15 @@ A = ones(200,200)
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
 function mandel(z)
-    n = 0
+    maxiter = 80
     c = z
-    for n = 0:79
+    for n = 1:maxiter
         if abs(z) > 2
-            n -= 1
-            break
+            return n-1
         end
         z = z^2 + c
     end
-    n + 1
+    return maxiter
 end
 
 mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]

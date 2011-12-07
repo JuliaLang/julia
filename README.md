@@ -48,20 +48,19 @@ These benchmarks, while not comprehensive, do test compiler performance on a ran
 
 *Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
 
-As an aside, to give a quick taste of what Julia looks like, here is the implementation code for core functions used in the Mandelbrot and random matrix statistics benchmarks:
+To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
 ```
 function mandel(z)
-    n = 0
+    maxiter = 80
     c = z
-    for n = 0:79
+    for n = 1:maxiter
         if abs(z) > 2
-            n -= 1
-            break
+            return n-1
         end
         z = z^2 + c
     end
-    n + 1
+    return maxiter
 end
 
 function randmatstat(t)
@@ -82,8 +81,7 @@ function randmatstat(t)
 end
 ```
 
-As you can tell, the code is clear, simple and readable.
-Programming in Julia should feel familiar to anyone who has programmed in other mathematical programming languages.
+As you can tell, the code is quite clear, and should feel familiar to anyone who has programmed in other mathematical languages.
 
 ### Designed for Parallelism & Cloud Computing
 
@@ -102,8 +100,7 @@ Here is a screenshot of a web-based interactive Julia session, plotting a trigon
 
 <a href="http://julialang.github.com/misc/web_repl.png"><img src="http://julialang.github.com/misc/web_repl.png"/></a>
 
-There will eventually be full support for entirely cloud-based operation, including:
-data management, code editing, execution, debugging, collaboration, analysis, data exploration, and visualization.
+There will eventually be full support for cloud-based operation, including data management, code editing, execution, debugging, collaboration, analysis, data exploration, and visualization.
 The goal is to allow people who work with big data to stop worrying about administering machines and data and get straight to the real problem:
 exporing their data and creating the algorithms that can solve the problems presented by their big data.
 
