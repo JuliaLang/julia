@@ -48,7 +48,7 @@ These benchmarks, while not comprehensive, do test compiler performance on a ran
 
 *Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
 
-### Designed for Parallelism
+### Designed for Parallelism & Cloud Computing
 
 Julia does not impose any particular style of parallelism on the user.
 Instead, it provides a number of [key building blocks for distributed computation](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), making it flexible enough to support a number of styles of parallelism, and allowing users to add more.
@@ -59,6 +59,16 @@ The following simple example demonstrates how to count the number of heads in a 
     end
 
 This computation is automatically distributed across all available compute nodes, and the result, reduced by summation (`+`), is returned at the calling node.
+
+Although it is in the early stages, Julia already supports a fully remote cloud computing mode.
+Here is a screenshot of a web-based interactive Julia session, plotting a trigonometric function and some Brownian motion:
+
+<a href="http://julialang.github.com/misc/web_repl.png"><img src="http://julialang.github.com/misc/web_repl.png"/></a>
+
+There will eventually be full support for entirely cloud-based operation, including:
+data management, code editing, execution, debugging, collaboration, analysis, data exploration, and visualization.
+The goal is to allow people who work with big data to stop worrying about administering machines and data and get straight to the real problem:
+exporing their data and creating the algorithms that can solve the problems presented by their big data.
 
 ### Free, Open Source & Library-Friendly
 
