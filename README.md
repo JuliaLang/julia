@@ -44,9 +44,8 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
 Julia beats other high-level systems on all micro-benchmarks above and even beats C++ on one of them.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
-In particular, it should be noted that Julia is strong in an area that high-level languages have traditionally been weak:
-linear arithmetic loop code, such as that found in the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72).
-Much of this performance is due to LLVM, but in order for LLVM to generate very fast machine code, the generated LLVM needs to be of high quality.
+Julia is strong in an area that high-level languages have traditionally been weak: scalar arithmetic loops, such as that found in the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72). Moreover, Julia has a comprehensive approach to performance that allows it to eliminate overhead in all kinds of code and for all data types, not just double-precision scalar operations.
+This performance is due to a combination of LLVM optimizations, and our compiler's ability to generate high-quality LLVM code.
 
 To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
@@ -82,9 +81,9 @@ end
 ```
 
 As you can see, the code is quite clear, and should feel familiar to anyone who has programmed in other mathematical languages.
-Although C++ beats Julia in the random matrix statistics benchmark by a factor of four, consider how much smaller and simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cc#L138).
-Moreover, we plan to close this performance gap in the future, but retain the clarity and simplicity of the high-level Julia code.
-By design, Julia allows you to range from fast native low-level loop and vector code, up to very high-level programming style, sacrificing some performance, but gaining the ability to express very complex algorithms easily.
+Although C++ beats Julia in the random matrix statistics benchmark by a factor of four, consider how much simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cc#L138).
+There are more compiler optimizations planned that we hope will close this performance gap in the future.
+By design, Julia allows you to range from low-level loop and vector code, up to a high-level programming style, sacrificing some performance, but gaining the ability to express complex algorithms easily.
 This continuous spectrum of programming levels is a hallmark of the Julia approach to programming and is very much an intentional feature of the language.
 
 ### Designed for Parallelism & Cloud Computing
