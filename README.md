@@ -48,7 +48,7 @@ These benchmarks, while not comprehensive, do test compiler performance on a ran
 
 *Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
 
-As an aside, to give a quick taste of what Julia looks like, here is the implementation code for core functions used in the Mandelbrot and pi sum benchmarks:
+As an aside, to give a quick taste of what Julia looks like, here is the implementation code for core functions used in the Mandelbrot and random matrix statistics benchmarks:
 
 ```
 function mandel(z)
@@ -64,15 +64,21 @@ function mandel(z)
     n + 1
 end
 
-function pisum()
-    sum = 0.0
-    for j = 1:500
-        sum = 0.0
-        for k = 1:10000
-            sum += 1.0/(k*k)
-        end
+function randmatstat(t)
+    n = 5
+    v = zeros(t)
+    w = zeros(t)
+    for i = 1:t
+        a = randn(n,n)
+        b = randn(n,n)
+        c = randn(n,n)
+        d = randn(n,n)
+        P = [a b c d]
+        Q = [a b; c d]
+        v[i] = trace((P.'*P)^4)
+        w[i] = trace((Q.'*Q)^4)
     end
-    sum
+    std(v)/mean(v), std(w)/mean(w)
 end
 ```
 
