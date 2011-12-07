@@ -19,28 +19,21 @@
             // set the outer height of an element or group of elements
             function set_outer_height(selector, height)
             {
-                $(selector).height(0);
-                $(selector).height(height-$(selector).outerHeight(true));
+                $(selector).height(1);
+                $(selector).height(height+1-$(selector).outerHeight(true));
             }
             
             // this function makes all of the columns the same height
             function set_column_heights() {
                 // set the height of all the columns to the height of the longest one
-                set_outer_height("#left-column", $(window).height()-$("#left-column").offset().top);
-                set_outer_height("#right-column", $(window).height()-$("#right-column").offset().top);
-                set_outer_height("#main", $(window).height()-$("#main").offset().top);
-                set_outer_height("#terminal-form", $(window).height()-$("#terminal-form").offset().top-20);
-                
-                // resize the input box (the -1 is for Internet Explorer)
-                // we do this here because a scrollbar might have appeared (which reduces the width of the terminal)
-                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                set_outer_height("#left-column", $(window).height());
+                set_outer_height("#right-column", $(window).height());
+                set_outer_height("#terminal-form", $(window).height());
             }
             
-            // called on page load
-            window.onload = set_column_heights;
-            
-            // set the window resize callback
-            window.onresize = set_column_heights;
+            // adjust the heights of the columns when the page loads or is resized
+            $(document).ready(set_column_heights);
+            $(window).resize(set_column_heights);
         </script>
         <script>
             /*
@@ -98,9 +91,19 @@
             // keep track of whether we have received a fatal message
             var dead = false;
 
+            // reset the width of the terminal input
+            function set_input_width() {
+                // resize the input box (the -1 is for Internet Explorer)
+                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+            }
+
+            // resize the input box when the window is resized
+            $(window).resize(set_input_width);
+
             // jQuery extensions
             jQuery.fn.extend({
-                indent_at_caret: function(str)
+                // inset some text into a textarea at the cursor position
+                insert_at_caret: function(str)
                 {
                     // apply this function to all elements that match the selector
                     return this.each(function(i)
@@ -134,6 +137,8 @@
                         }
                     })
                 },
+
+                // remove the character in a textarea before the cursor position or de-indent
                 backspace_at_caret: function()
                 {
                     // apply this function to all elements that match the selector
@@ -202,6 +207,8 @@
                         }
                     })
                 },
+
+                // insert a newline in a textarea at the cursor position and auto-indent
                 newline_at_caret: function()
                 {
                     // apply this function to all elements that match the selector
@@ -234,7 +241,7 @@
                         }
 
                         // insert a newline and auto-indent
-                        $(this).indent_at_caret("\n"+indent);
+                        $(this).insert_at_caret("\n"+indent);
                     })
                 },
             });
@@ -252,9 +259,8 @@
                 // update the html
                 $("#terminal").append(data);
 
-                // resize the input box (the -1 is for Internet Explorer)
-                // we do this here because a scrollbar might have appeared (which reduces the width of the terminal)
-                $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                // reset the size of the input box
+                set_input_width();
 
                 // scroll to the new data
                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
@@ -321,8 +327,8 @@
                         $("#terminal-input").show();
                         $("#terminal-input").focus();
 
-                        // resize the input box (the -1 is for Internet Explorer)
-                        $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                        // reset the size of the input box
+                        set_input_width();
                     }
 
                     // MSG_OUTPUT_MESSAGE
@@ -616,7 +622,7 @@
                 // apply the autoresize plugin to the textarea
                 $("#terminal-input").autoResize({ animate: false, maxHeight: 1000, onAfterResize: function() {
                     setTimeout(function() { $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight")); }, 100);
-                    $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
+                    set_input_width();
                 } });
                 
                 // clear the textarea in case the browser decides to pre-populate it
@@ -656,7 +662,7 @@
                             if (!$("#terminal-input").attr("disabled"))
                             {
                                 // indent
-                                $("#terminal-input").indent_at_caret(indent_str);
+                                $("#terminal-input").insert_at_caret(indent_str);
                                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
                             }
                             return false;
@@ -718,16 +724,11 @@
         </script>
     </head>
     <body>
-        <div id="header-bar">
-            <header>
-                <a href="/"><img id="logo" src="images/logo.png" alt="Julia" /></a>
-                <img id="slogan" src="images/slogan.png" alt="Julia - A fresh approach to technical computing" />
-                <div class="float-clear"> </div>
-            </header>
-        </div>
         <div id="main">
             <div id="left-column">
                 <a href="/" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
+                <a href="http://github.com/JuliaLang/julia/wiki"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
+                <a href="http://julialang.org/"><img class="bullet" src="images/bullet.png" alt="" /> Julia Home</a>
             </div>
             <div id="right-column">
                 <form id="terminal-form">

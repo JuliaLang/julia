@@ -718,8 +718,8 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 }
 
 #define ADD_I(name) add_intrinsic(#name, name)
-#define BOX_F(ct)                                                       \
-    box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##ct),     \
+#define BOX_F(ct,jl_ct)                                                       \
+    box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
                                    "jl_box_"#ct, (void*)&jl_box_##ct);
 
 extern "C" void jl_init_intrinsic_functions()
@@ -762,12 +762,12 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(ccall);
     
-    BOX_F(int8);  BOX_F(uint8);
-    BOX_F(int16); BOX_F(uint16);
-    BOX_F(int32); BOX_F(uint32);
-    BOX_F(int64); BOX_F(uint64);
-    BOX_F(float32); BOX_F(float64);
-    BOX_F(char);
+    BOX_F(int8,int32);  BOX_F(uint8,uint32);
+    BOX_F(int16,int16); BOX_F(uint16,uint16);
+    BOX_F(int32,int32); BOX_F(uint32,uint32);
+    BOX_F(int64,int64); BOX_F(uint64,uint64);
+    BOX_F(float32,float32); BOX_F(float64,float64);
+    BOX_F(char,char);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)*jl_box8);
