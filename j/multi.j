@@ -808,7 +808,7 @@ function perform_work(job::WorkItem)
             else
                 push(waiters, waitinfo)
             end
-        elseif !task_done(job.task) && job.requeue
+        elseif !istaskdone(job.task) && job.requeue
             # otherwise return to queue
             enq_work(job)
         end

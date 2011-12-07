@@ -202,7 +202,7 @@ compile_hint(strlen, (ASCIIString,))
 compile_hint(dims2string, (Tuple,))
 compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int32))
-compile_hint(task_done, (Task,))
+compile_hint(istaskdone, (Task,))
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))

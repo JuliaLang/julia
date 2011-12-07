@@ -247,7 +247,7 @@ finalizer(o, f::Function) =
 gc() = ccall(:jl_gc_collect, Void, ())
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
-task_done(t::Task) = t.done
+istaskdone(t::Task) = t.done
 
 cstring(str::ByteString) = str
 

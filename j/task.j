@@ -2,7 +2,7 @@ show(t::Task) = print("Task")
 
 function wait(t::Task)
     @assert !is(t,current_task())
-    while !task_done(t)
+    while !istaskdone(t)
         yieldto(t)
     end
     yieldto(t)  # return last value
@@ -35,7 +35,7 @@ let _generator_stack = {}
     function consume(G::Task, args...)
         push(_generator_stack::Array{Any,1}, current_task())
         v = yieldto(G, args...)
-        if task_done(G)
+        if istaskdone(G)
             pop(_generator_stack::Array{Any,1})
         end
         v
@@ -43,5 +43,5 @@ let _generator_stack = {}
 end
 
 start(t::Task) = consume(t)
-done(t::Task, val) = task_done(t)
+done(t::Task, val) = istaskdone(t)
 next(t::Task, val) = (val, consume(t))
