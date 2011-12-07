@@ -48,6 +48,37 @@ These benchmarks, while not comprehensive, do test compiler performance on a ran
 
 *Note:* A C++ implementation of random matrix statistics is missing because this test involves many whole-matrix operations, and it is not clear what an idiomatic implementation would look like.
 
+As an aside, to give a quick taste of what Julia looks like, here is the implementation code for core functions used in the Mandelbrot and pi sum benchmarks:
+
+```
+function mandel(z)
+    n = 0
+    c = z
+    for n = 0:79
+        if abs(z) > 2
+            n -= 1
+            break
+        end
+        z = z^2 + c
+    end
+    n + 1
+end
+
+function pisum()
+    sum = 0.0
+    for j = 1:500
+        sum = 0.0
+        for k = 1:10000
+            sum += 1.0/(k*k)
+        end
+    end
+    sum
+end
+```
+
+As you can tell, the code is clear, simple and readable.
+Programming in Julia should feel familiar to anyone who has programmed in other mathematical programming languages.
+
 ### Designed for Parallelism & Cloud Computing
 
 Julia does not impose any particular style of parallelism on the user.
