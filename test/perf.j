@@ -42,8 +42,8 @@ A = ones(200,200)
 ## mandelbrot set: complex arithmetic and comprehensions ##
 
 function mandel(z)
-    maxiter = 80
     c = z
+    maxiter = 80
     for n = 1:maxiter
         if abs(z) > 2
             return n-1
