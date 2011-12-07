@@ -1486,20 +1486,24 @@ function nonzeros{T}(A::AbstractArray{T})
 end
 
 sub2ind(dims) = 1
-sub2ind(dims, i::Int) = i
-sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Int, i1::Int, i2::Int) =
+sub2ind(dims, i::Int) = long(i)
+sub2ind(dims, i::Int, j::Int) = sub2ind(long(i), long(j))
+sub2ind(dims, i::Size, j::Size) = (j-1)*dims[1] + i
+sub2ind(dims, i0::Int, i1::Int, i2::Int) = sub2ind(long(i0),long(i1),long(i2))
+sub2ind(dims, i0::Size, i1::Size, i2::Size) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
+    sub2ind(long(i0),long(i1),long(i2),long(i3))
+sub2ind(dims, i0::Size, i1::Size, i2::Size, i3::Size) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
 function sub2ind(dims, I::Int...)
     ndims = length(dims)
-    index = I[1]
+    index = long(I[1])
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
-        index += (I[k]-1) * stride
+        index += (long(I[k])-1) * stride
     end
     return index
 end
@@ -1507,12 +1511,16 @@ end
 sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
+ind2sub(dims, ind::Int) = ind2sub(dims, long(ind))
 ind2sub(dims::(), ind::Int) = throw(BoundsError())
-ind2sub(dims::(Int,), ind::Int) = (ind,)
-ind2sub(dims::(Int,Int), ind::Int) =
+ind2sub(dims::(Int,), ind::Size) = (ind,)
+ind2sub(dims::(Int,Int), ind::Size) =
     (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
+ind2sub(dims::(Int,Int,Int), ind::Size) =
+    (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
+     div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
 
-function ind2sub(dims, ind::Int)
+function ind2sub(dims::(Int,Int...), ind::Size)
     ndims = length(dims)
     stride = dims[1]
     for i=2:ndims-1

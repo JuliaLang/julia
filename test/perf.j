@@ -102,5 +102,5 @@ function randmatstat(t)
 end
 
 (s1, s2) = randmatstat(1000)
-@assert s1 > 0.5 && s1 < 1.0
+@assert 0.5 < s1 < 1.0 && 0.5 < s2 < 1.0
 @timeit randmatstat(1000) "rand_mat_stat"

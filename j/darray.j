@@ -369,12 +369,12 @@ function assign(r::RemoteRef, args...)
     if r.where==myid()
         assign(fetch(r), args...)
     else
-        remote_do(r.where, assign, r, args...)
+        sync_add(remote_call(r.where, assign, r, args...))
     end
 end
 
 # 1d scalar ref
-function ref{T}(d::DArray{T,1}, i::Index)
+function ref{T}(d::DArray{T,1}, i::Int)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -383,8 +383,13 @@ function ref{T}(d::DArray{T,1}, i::Index)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
+assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
+    invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
+
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Index) =
     invoke(assign, (DArray{T,1}, Any, Index), d, v, i)
+
+assign{T}(d::DArray{T,1}, v, i::Int) = assign(d, v, long(i))
 
 # 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Index)
@@ -393,7 +398,7 @@ function assign{T}(d::DArray{T,1}, v, i::Index)
         offs = d.dist[p]-1
         localize(d)[i-offs] = v
     else
-        remote_do(d.pmap[p], assign, d, v, i)
+        sync_add(remote_call(d.pmap[p], assign, d, v, i))
     end
     d
 end
@@ -412,7 +417,7 @@ function ref_elt{T}(d::DArray{T}, sub::(Index...))
     return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
-ref{T}(d::DArray{T}, i::Index)    = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, i::Int)      = ref_elt(d, ind2sub(d.dims, i))
 ref{T}(d::DArray{T}, I::Index...) = ref_elt(d, I)
 
 ref(d::DArray) = d
@@ -524,7 +529,7 @@ function assign_elt(d::DArray, v, sub::(Index...))
         end
         localize(d)[sub...] = v
     else
-        remote_do(d.pmap[p], assign_elt, d, v, sub)
+        sync_add(remote_call(d.pmap[p], assign_elt, d, v, sub))
     end
     d
 end
