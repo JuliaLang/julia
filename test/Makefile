@@ -1,10 +1,10 @@
-all: quick core hashing unicode perf arrayops
+all: quick core hashing arrayops unicode perf
 
-quick core hashing perf arrayops:
+quick core hashing arrayops perf:
 	../julia $@.j
 
 unicode:
-	$(MAKE) -C unicode
-	../julia unicode.j
+	@$(MAKE) -C $@ -s
+	../julia $@.j
 
-.PHONY: all quick core hashing unicode perf
+.PHONY: all quick core hashing arrayops unicode perf
