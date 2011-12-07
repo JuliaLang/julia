@@ -98,7 +98,7 @@ The following simple example demonstrates how to count the number of heads in a 
 This computation is automatically distributed across all available compute nodes, and the result, reduced by summation (`+`), is returned at the calling node.
 
 Although it is in the early stages, Julia already supports a fully remote cloud computing mode.
-Here is a screenshot of a web-based interactive Julia session, plotting a trigonometric function and some Brownian motion:
+Here is a screenshot of a web-based interactive Julia session, plotting an oscillating function and a Gaussian random walk:
 
 <a href="http://julialang.github.com/misc/web_repl.png"><img src="http://julialang.github.com/misc/web_repl.png"/></a>
 
