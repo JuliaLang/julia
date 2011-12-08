@@ -57,7 +57,6 @@ def quicksort(list, start, end):
     else:
         return
 
-
 ## randmatstat ##
 
 def randmatstat(t):
@@ -75,6 +74,12 @@ def randmatstat(t):
         w[i] = trace(pow(transpose(Q)*Q, 4))
     return (std(v)/mean(v), std(w)/mean(w))
 
+## randmatmul ##
+
+def randmatmul(n):
+    A = matrix(numpy.random.rand(n,n))
+    B = matrix(numpy.random.rand(n,n))
+    return A*B
 
 ## mandelbrot ##
 
@@ -169,3 +174,12 @@ if __name__=="__main__":
         t = time.time()-t
         if t < tmin: tmin = t
     print_perf ("rand_mat_stat", tmin)
+
+    tmin = float('inf')
+    for i in xrange(5):
+        t = time.time()
+        C = randmatmul(1000)
+        assert C[0,0] >= 0
+        t = time.time()-t
+        if t < tmin: tmin = t
+    print_perf ("rand_mat_mul", tmin)

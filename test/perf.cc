@@ -203,6 +203,15 @@ struct double_pair randmatstat(int t) {
     return r;
 }
 
+double *randmatmul(int n) {
+    double *A = myrand(n*n);
+    double *B = myrand(n*n);
+    double *C = (double*)malloc(n*n*sizeof(double));
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                n, n, n, 1.0, A, n, B, n, 0.0, C, n);
+    return C;
+}
+
 void print_perf(const char *name, double t) {
     printf("c,%s,%.6f\n", name, t*1000);
 }
@@ -312,6 +321,17 @@ int main() {
     // printf("s2=%f\n", r.s2);
     // assert(0.5 < r.s1 && r.s1 < 1.0 && 0.5 < r.s2 && r.s2 < 1.0);
     print_perf("rand_mat_stat", tmin);
+
+    // rand mat mul
+    tmin = INFINITY;
+    for (int i=0; i<NITER; ++i) {
+        t = clock_now();
+        double *C = randmatmul(1000);
+        assert(0 <= C[0]);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
+    }
+    print_perf("rand_mat_mul", tmin);
 
     return 0;
 } 

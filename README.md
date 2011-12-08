@@ -35,14 +35,19 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
       parse_int      |     .0901   |     1.60         6.55      897.      5580.
       mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
-      pi_sum         |   53.8      |     0.74        18.9         1.13     351.        1.58
+      pi_sum         |   53.8      |      .743       18.9         1.13     351.        1.58
       rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1      23.5
+      rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    498.
     _________________|_____________|____________________________________________________________
 
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
-Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark, and Julia even manages to beat C++ by 26% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72).
+Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark.
+The LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
+Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication stems from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
+Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).
+
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
 scalar arithmetic loops, such as that found in the pi summation benchmark.

@@ -94,11 +94,16 @@ console.log("javascript,mandel," + tmin/1000);
 
 // numeric vector sort //
 
-function sortperf(n) {
-    v = new Array(n);
+function rand(n) {
+    var v = new Array(n);
     var i = 0;
     for (i = 0; i < n; i++)
         v[i] = Math.random();
+    return v;
+}
+
+function sortperf(n) {
+    var v = rand(n);
     v.sort();
     return v;
 }
@@ -246,3 +251,19 @@ for (var i=0; i < 5; i++) {
     if (t < tmin) tmin = t;
 }
 console.log("javascript,rand_mat_stat," + tmin/10);
+
+// random matrix multiply //
+
+function randmatmul(n) {
+    var A = rand(n*n);
+    var B = rand(n*n);
+    return matmul(A, B, n, n, n);
+}
+
+tmin = Number.POSITIVE_INFINITY;
+t = (new Date).getTime();
+var C = randmatmul(1000);
+assert(0 <= C[0]);
+t = (new Date).getTime()-t;
+if (t < tmin) tmin = t;
+console.log("javascript,rand_mat_mul," + tmin);

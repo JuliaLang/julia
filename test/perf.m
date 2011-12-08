@@ -145,6 +145,8 @@ s = pisum(true);
 assert(abs(s-1.644834071848065) < 1e-12);
 timeit('pi_sum',@pisum, true)
 
+%% random matrix statistics %%
+
 function [s1, s2] = randmatstat(t)
     n=5;
     v = zeros(t,1);
@@ -178,3 +180,11 @@ function t = mytranspose(x)
 end
 
 end
+
+%% largish random number gen & matmul %%
+
+function X = randmatmul(n)
+    X = rand(n,n)*rand(n,n);
+end
+
+timeit ('rand_mat_mul', @randmatmul, 1000);
