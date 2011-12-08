@@ -25,27 +25,27 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
 The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
-    _______________________________________________________________________________
+    ____________________________________________________________________________________________
                      |             |
-                     |  C++ (GCC)  |    Julia    Python/NumPy    Matlab    Octave
-                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4
-    _________________|_____________|_______________________________________________
+                     |  C++ (GCC)  |    Julia    Python/NumPy    Matlab    Octave   JavaScript
+                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4    Node 0.2.2
+    _________________|_____________|____________________________________________________________
                      |             |
-      fib            |     .205    |     2.14        27.5      1351.      2531.
+      fib            |     .205    |     2.14        27.5      1351.      2531.        1.42
       parse_int      |     .0901   |     1.60         6.55      897.      5580.
-      mandel         |     .269    |     5.87        30.3        61.6      844.
-      quicksort      |     .429    |     1.15        61.8       145.      3356.
-      pi_sum         |   53.8      |     0.74        18.9         1.13     351.
+      mandel         |     .269    |     5.87        30.3        61.6      844.       11.44
+      quicksort      |     .429    |     1.15        61.8       145.      3356.       24.24
+      pi_sum         |   53.8      |     0.74        18.9         1.13     351.        1.58
       rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1
-    _________________|_____________|_______________________________________________
+    _________________|_____________|____________________________________________________________
 
          Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
-Julia beats other high-level systems on all micro-benchmarks above and even beats C++ by 26% on the pi summation benchmark.
+Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark, and Julia even manages to beat C++ by 26% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72).
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
-scalar arithmetic loops, such as that found in the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72).
+scalar arithmetic loops, such as that found in the pi summation benchmark.
 Moreover, Julia has a comprehensive approach to performance that allows it to eliminate overhead in all kinds of code and for all data types, not just double-precision scalar operations.
 This performance is due to a combination of LLVM optimizations, and the Julia compiler's ability to generate high-quality LLVM code.
 

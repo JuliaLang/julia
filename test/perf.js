@@ -90,7 +90,7 @@ for (var i=0; i < 5; i++) {
     t = (new Date).getTime()-t;
     if (t < tmin) tmin = t;
 }
-console.log("javascript,mandelperf," + tmin/1000);
+console.log("javascript,mandel," + tmin/1000);
 
 // numeric vector sort //
 
