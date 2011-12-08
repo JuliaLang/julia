@@ -60,7 +60,7 @@ These benchmarks, while not comprehensive, do test compiler performance on a ran
 Julia is strong in an area that high-level languages have traditionally been weak:
 scalar arithmetic loops, such as that found in the pi summation benchmark.
 Matlab's JIT for floating-point arithmetic does very well here too.
-However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize all kinds of code — not just the special, albeit important case of double-precision scalar operations, but also code involving user-defined data types.
+However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize not only code involving floating-point scalars, but also code for arbitrary user-defined data types.
 
 To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
