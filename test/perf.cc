@@ -186,7 +186,7 @@ struct double_pair randmatstat(int t) {
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, QtQ2, 2*n, QtQ2, 2*n, 0.0, QtQ1, 2*n);
         for (int j=0; j < 2*n; j++)
-            w[i] += QtQ1[(n+1)*j];
+            w[i] += QtQ1[(2*n+1)*j];
         free(QtQ1);
         free(QtQ2);
         free(Q);

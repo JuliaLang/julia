@@ -36,7 +36,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
       mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
       pi_sum         |   53.8      |     0.74        18.9         1.13     351.        1.58
-      rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1
+      rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1      23.5
     _________________|_____________|____________________________________________________________
 
       Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
