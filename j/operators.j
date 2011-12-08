@@ -25,6 +25,25 @@ min(x, y) = x < y ? x : y
 
 ## definitions providing basic traits of arithmetic operators ##
 
++=(x,y)   = x+y
+-=(x,y)   = x-y
+*=(x,y)   = x*y
+.*=(x,y)  = x.*y
+/=(x,y)   = x/y
+./=(x,y)  = x./y
+//=(x,y)  = x//y
+\=(x,y)   = x\y
+.\=(x,y)  = x.\y
+^=(x,y)   = x^y
+.^=(x,y)  = x.^y
+%=(x,y)   = x%y
+|=(x,y)   = x|y
+&=(x,y)   = x&y
+$=(x,y)   = x$y
+<<=(x,y)  = x<<y
+>>=(x,y)  = x>>y
+>>>=(x,y) = x>>>y
+
 +() = 0
 *() = 1
 &() = error("zero-argument & is ambiguous")
