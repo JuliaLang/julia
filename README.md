@@ -23,7 +23,15 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 ### High-Performance JIT Compiler
 
 Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
-The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/perf.j) are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
+To get a sense of relative performance of Julia compared to other languages that can or could be used for numerical and scientific computing, we've written a small set of micro-benchmarks in a variety of languages.
+The source code for the various implementations can be found here:
+[C++](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx),
+[Julia](https://github.com/JuliaLang/julia/blob/master/test/perf.j),
+[Python](https://github.com/JuliaLang/julia/blob/master/test/perf.py),
+[Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.j),
+[JavaScript](https://github.com/JuliaLang/julia/blob/master/test/perf.js).
+We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
+The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
     ____________________________________________________________________________________________
                      |             |
@@ -33,8 +41,8 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
                      |             |
       fib            |     .205    |     2.14        27.5      1351.      2531.        1.42
       parse_int      |     .0901   |     1.60         6.55      897.      5580.
-      mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
+      mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       pi_sum         |   53.8      |      .743       18.9         1.13     351.        1.58
       rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1      23.5
       rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    498.
@@ -43,7 +51,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark.
-The LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
+The LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L71) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication stems from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
 Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).
@@ -88,7 +96,7 @@ end
 ```
 
 As you can see, the code is quite clear, and should feel familiar to anyone who has programmed in other mathematical languages.
-Although C++ beats Julia in the random matrix statistics benchmark by a factor of four, consider how much simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cc#L138).
+Although C++ beats Julia in the random matrix statistics benchmark by a factor of four, consider how much simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx#L138).
 There are more compiler optimizations planned that we hope will close this performance gap in the future.
 By design, Julia allows you to range from low-level loop and vector code, up to a high-level programming style, sacrificing some performance, but gaining the ability to express complex algorithms easily.
 This continuous spectrum of programming levels is a hallmark of the Julia approach to programming and is very much an intentional feature of the language.

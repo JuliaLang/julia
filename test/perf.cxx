@@ -32,7 +32,7 @@ int fib(int n) {
 
 long parse_int(const char *s, long base) {
     long n = 0;
-    
+
     for (unsigned int i=0; i<strlen(s); ++i) {
         char c = s[i];
         long d = 0;
@@ -334,4 +334,4 @@ int main() {
     print_perf("rand_mat_mul", tmin);
 
     return 0;
-} 
+}
