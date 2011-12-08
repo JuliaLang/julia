@@ -33,7 +33,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
                      |             |
       fib            |     .205    |     2.14        27.5      1351.      2531.        1.42
       parse_int      |     .0901   |     1.60         6.55      897.      5580.
-      mandel         |     .269    |     5.87        30.3        61.6      844.       11.4
+      mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
       pi_sum         |   53.8      |     0.74        18.9         1.13     351.        1.58
       rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1

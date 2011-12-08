@@ -38,7 +38,7 @@ function Complex(real, imag) {
     this.im = imag;
 }
 function complex_abs(z) {
-    return Math.sqrt(this.re*this.re + this.im*this.im);
+    return Math.sqrt(z.re*z.re + z.im*z.im);
 }
 function complex_add(z,w) {
     return new Complex(z.re+w.re, z.im+w.im);
@@ -65,7 +65,7 @@ function mandelperf() {
         re = -2.0 + r*0.1;
         var i = 0;
         for (i = 0; i < 21; i++) {
-            im = 1.0 + i*0.1;
+            im = -1.0 + i*0.1;
             z = new Complex(re,im);
             a[r*21+i] = mandel(z);
         }
@@ -77,7 +77,7 @@ a = mandelperf();
 i = 0;
 sum = 0;
 for (i = 0; i < a.length; i++) sum += a[i];
-assert(sum == 15040);
+assert(sum == 14791);
 a0 = a[0];
 
 tmin = Number.POSITIVE_INFINITY;
