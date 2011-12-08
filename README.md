@@ -25,11 +25,11 @@ For a more in-depth discussion of the rationale and advantages of Julia over oth
 Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
 To get a sense of relative performance of Julia compared to other languages that can or could be used for numerical and scientific computing, we've written a small set of micro-benchmarks in a variety of languages.
 The source code for the various implementations can be found here:
-[C++](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx),
-[Julia](https://github.com/JuliaLang/julia/blob/master/test/perf.j),
-[Python](https://github.com/JuliaLang/julia/blob/master/test/perf.py),
-[Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.m),
-[JavaScript](https://github.com/JuliaLang/julia/blob/master/test/perf.js).
+[C++](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx#L1),
+[Julia](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L1),
+[Python](https://github.com/JuliaLang/julia/blob/master/test/perf.py#L1),
+[Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.m#L1),
+[JavaScript](https://github.com/JuliaLang/julia/blob/master/test/perf.js#L1).
 We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
 The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
