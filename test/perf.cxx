@@ -13,8 +13,21 @@
 
 #define DSFMT_MEXP 19937
 #include "../external/random/dsfmt-2.1/dSFMT.c"
+#include "../external/random/randmtzig.c"
 
 using namespace std;
+
+double *myrand(int n) {
+    double *d = (double *)malloc(n*sizeof(double));
+    for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
+    return d;
+}
+
+double *myrandn(int n) {
+    double *d = (double *)malloc(n*sizeof(double));
+    randmtzig_fill_randn(d, n);
+    return d;
+}
 
 #define NITER 5
 
@@ -85,12 +98,6 @@ int mandelperf() {
     return mandel_sum;
 }
 
-double *myrand(int n) {
-    double *d = (double *) malloc (n*sizeof(double));
-    for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
-    return d;
-}
-
 void quicksort(double *a, int lo, int hi) {
     int i = lo;
     int j = hi;
@@ -142,10 +149,10 @@ struct double_pair randmatstat(int t) {
     double *w = (double*)calloc(t, sizeof(double));
     for (int i=0; i < t; i++) {
         // TODO: use Gaussian random numbers
-        double *a = myrand(n*n);
-        double *b = myrand(n*n);
-        double *c = myrand(n*n);
-        double *d = myrand(n*n);
+        double *a = myrandn(n*n);
+        double *b = myrandn(n*n);
+        double *c = myrandn(n*n);
+        double *d = myrandn(n*n);
         double *P = (double*)malloc(4*n*n*sizeof(double));
         memcpy(P+0*n*n, a, n*n*sizeof(double));
         memcpy(P+1*n*n, b, n*n*sizeof(double));
