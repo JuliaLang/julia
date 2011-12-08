@@ -1027,9 +1027,11 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
 {
     if (jl_is_symbol(expr)) {
+        if (!value) return NULL;
         return emit_var((jl_sym_t*)expr, (jl_value_t*)jl_undef_type, ctx);
     }
     if (jl_is_symbolnode(expr)) {
+        if (!value) return NULL;
         return emit_var(jl_symbolnode_sym(expr),
                         jl_symbolnode_type(expr), ctx);
     }
