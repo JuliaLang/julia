@@ -39,7 +39,7 @@ The following [benchmarks](https://github.com/JuliaLang/julia/blob/master/test/p
       rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1
     _________________|_____________|____________________________________________________________
 
-         Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
+      Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark, and Julia even manages to beat C++ by 26% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L72).
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
