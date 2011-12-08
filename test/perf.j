@@ -82,7 +82,7 @@ end
 @assert abs(pisum()-1.644834071848065) < 1e-12
 @timeit pisum() "pi_sum"
 
-## Random matrix statistics ##
+## random matrix statistics ##
 
 function randmatstat(t)
     n = 5
