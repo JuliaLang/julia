@@ -51,7 +51,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark.
-The LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L71) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
+Julia's LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L71) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication stems from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
 Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).
@@ -59,8 +59,8 @@ Users who have a licensed copy of MKL can use it with Julia, but the default BLA
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
 scalar arithmetic loops, such as that found in the pi summation benchmark.
-Moreover, Julia has a comprehensive approach to performance that allows it to eliminate overhead in all kinds of code and for all data types, not just double-precision scalar operations.
-This performance is due to a combination of LLVM optimizations, and the Julia compiler's ability to generate high-quality LLVM code.
+Matlab's JIT for floating-point arithmetic does very well here too.
+However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize all kinds of code — not just the special, albeit important case of double-precision scalar operations, but also code involving user-defined data types.
 
 To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
