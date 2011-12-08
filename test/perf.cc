@@ -186,7 +186,7 @@ struct double_pair randmatstat(int t) {
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, QtQ2, 2*n, QtQ2, 2*n, 0.0, QtQ1, 2*n);
         for (int j=0; j < 2*n; j++)
-            w[i] += QtQ1[(n+1)*j];
+            w[i] += QtQ1[(2*n+1)*j];
         free(QtQ1);
         free(QtQ2);
         free(Q);
@@ -201,6 +201,15 @@ struct double_pair randmatstat(int t) {
     r.s1 = sqrt((t*(t*v2-v1*v1))/((t-1)*v1*v1));
     r.s2 = sqrt((t*(t*w2-w1*w1))/((t-1)*w1*w1));
     return r;
+}
+
+double *randmatmul(int n) {
+    double *A = myrand(n*n);
+    double *B = myrand(n*n);
+    double *C = (double*)malloc(n*n*sizeof(double));
+    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
+                n, n, n, 1.0, A, n, B, n, 0.0, C, n);
+    return C;
 }
 
 void print_perf(const char *name, double t) {
@@ -312,6 +321,17 @@ int main() {
     // printf("s2=%f\n", r.s2);
     // assert(0.5 < r.s1 && r.s1 < 1.0 && 0.5 < r.s2 && r.s2 < 1.0);
     print_perf("rand_mat_stat", tmin);
+
+    // rand mat mul
+    tmin = INFINITY;
+    for (int i=0; i<NITER; ++i) {
+        t = clock_now();
+        double *C = randmatmul(1000);
+        assert(0 <= C[0]);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
+    }
+    print_perf("rand_mat_mul", tmin);
 
     return 0;
 } 
