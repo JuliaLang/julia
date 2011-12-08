@@ -28,7 +28,7 @@ The source code for the various implementations can be found here:
 [C++](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx),
 [Julia](https://github.com/JuliaLang/julia/blob/master/test/perf.j),
 [Python](https://github.com/JuliaLang/julia/blob/master/test/perf.py),
-[Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.j),
+[Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.m),
 [JavaScript](https://github.com/JuliaLang/julia/blob/master/test/perf.js).
 We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
 The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
