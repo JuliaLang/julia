@@ -1389,6 +1389,17 @@ end
 
 inlining_pass(x, vars) = x
 
+_jl_tn(sym::Symbol) =
+    ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
+
+const _jl_top_tupleref = _jl_tn(:tupleref)
+
+function _jl_mk_tupleref(texpr, i)
+    e = :(($_jl_top_tupleref)($texpr, $i))
+    e.typ = exprtype(texpr)[i]
+    e
+end
+
 function inlining_pass(e::Expr, vars)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
@@ -1424,21 +1435,30 @@ function inlining_pass(e::Expr, vars)
             return body
         end
         if is(f,apply)
-            if length(e.args) == 3
-                aarg = e.args[3]
-                if isa(aarg,Expr) && is(aarg.head,:call) &&
-                    isa(aarg.args[1],TopNode) &&
-                    is(eval(aarg.args[1]),tuple)
+            na = length(e.args)
+            newargs = cell(na-2)
+            for i = 3:na
+                aarg = e.args[i]
+                t = exprtype(aarg)
+                if isa(aarg,Expr) && is_top_call(aarg, :tuple)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
-                    e.args = append({e.args[2]}, aarg.args[2:])
-                    # now try to inline the simplified call
-                    body = inlineable(eval(e.args[1]), e, vars)
-                    if !is(body,NF)
-                        return body
-                    end
+                    newargs[i-2] = aarg.args[2:]
+                elseif isa(t,Tuple) && isleaftype(t)
+                    # apply(f,t::(x,y)) => f(t[1],t[2])
+                    newargs[i-2] = { _jl_mk_tupleref(aarg,j) | j=1:length(t) }
+                else
+                    # not all args expandable
                     return e
                 end
             end
+            e.args = append({e.args[2]}, newargs...)
+
+            # now try to inline the simplified call
+            body = inlineable(eval(e.args[1]), e, vars)
+            if !is(body,NF)
+                return body
+            end
+            return e
         end
     elseif is(e.head,:call)
         farg = arg1
