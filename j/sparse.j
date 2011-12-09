@@ -183,8 +183,8 @@ end
 
 function sprand_rng(m, n, density, rng)
     numnz = long(m*n*density)
-    I = [ randi_interval(1, m) | i=1:numnz ]
-    J = [ randi_interval(1, n) | i=1:numnz ]
+    I = randi(m, numnz)
+    J = randi(n, numnz)
     V = rng((numnz,))
     S = sparse(I, J, V, m, n)
 end
