@@ -687,7 +687,7 @@
 	    (nxt       (require-token s)))
        (take-token s)
        (case nxt
-	 ((end)   try-block)
+	 ((end)   (list 'try try-block #f '(block)))
 	 ((catch) (let* ((var
 			  (if (symbol? (peek-token s))
 			      (let ((v (parse-atom s)))
