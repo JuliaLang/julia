@@ -214,21 +214,6 @@ function showall{T}(a::AbstractArray{T,1})
     show_comma_array(a, opn, cls)
 end
 
-function showall{T}(a::AbstractArray{T,2})
-    print(summary(a))
-    if isempty(a)
-        return
-    end
-    println()
-    for i = 1:size(a,1)
-        for j = 1:size(a,2)
-            show(a[i,j])
-            print(' ')
-        end
-        print('\n')
-    end
-end
-
 alignment(x::Any) = (0, strlen(showcompact_to_string(x)))
 alignment(x::Number) = (strlen(showcompact_to_string(x)), 0)
 function alignment(x::Real)
@@ -444,6 +429,28 @@ end
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
 show(X::AbstractMatrix) = (println(summary(X),":"); print_matrix(X))
 show(X::AbstractArray) = (println(summary(X),":"); show_nd(X))
+
+showall(X::AbstractMatrix) = (println(summary(X),":");
+                              print_matrix(X, typemax(Int64), typemax(Int64)))
+
+function showall(a::AbstractArray)
+    println(summary(a),":")
+    if isempty(a)
+        return
+    end
+    tail = size(a)[3:]
+    nd = ndims(a)-2
+    function print_slice(idxs...)
+        print("[:, :, ")
+        for i = 1:(nd-1); print("$(idxs[i]), "); end
+        println(idxs[end], "] =")
+        slice = a[:,:,idxs...]
+        print_matrix(reshape(slice, size(slice,1), size(slice,2)),
+                     typemax(Int64), typemax(Int64))
+        print(idxs == tail ? "" : "\n\n")
+    end
+    cartesian_map(print_slice, tail)
+end
 
 function show(v::AbstractVector)
     if is(eltype(v),Any)
