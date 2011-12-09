@@ -19,7 +19,7 @@ using namespace std;
 
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));
-    for (int k=0; k<n; ++k) d[k] = dsfmt_gv_genrand_open_open();
+    dsfmt_gv_fill_array_open_open(d, n);
     return d;
 }
 
