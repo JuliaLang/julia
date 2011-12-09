@@ -1085,7 +1085,9 @@ function start_sge_workers(n)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
-    run(qsub_cmd)
+    if !run(qsub_cmd)
+        error("batch queue not available (could not run qsub)")
+    end
     id = split(readline(out),'.')[1]
     println("job id is $id")
     print("waiting for job to start"); flush(stdout_stream)

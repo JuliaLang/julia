@@ -15,7 +15,8 @@ function _jl_librandom_init()
     _jl_randn_zig_init()
 end
 
-_jl_dsfmt_get_min_array_size() = ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
+const _jl_dsfmt_get_min_array_size =
+    ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
 
 # macros to generate random arrays
 
@@ -83,16 +84,18 @@ rand(dims::Size...) = rand(dims)
 
 function _jl_dsfmt_fill_array_open_open(A::Array{Float64})
     n = numel(A)
-    if (n <= _jl_dsfmt_get_min_array_size())
+    if (n <= _jl_dsfmt_get_min_array_size)
         for i=1:numel(A)
             A[i] = rand()
         end
     else
         if isodd(n)
-            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n-1))
+            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open),
+                  Void, (Ptr{Void}, Int32), A, int32(n-1))
             A[n] = rand()
         else
-            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open), Void, (Ptr{Void}, Int32), A, int32(n))
+            ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open),
+                  Void, (Ptr{Void}, Int32), A, int32(n))
         end
     end
     return A
@@ -100,10 +103,12 @@ end
 
 ## random integers
 
-_jl_dsfmt_randui32() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
+_jl_dsfmt_randui32() =
+    ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
-_jl_dsfmt_randui64() = boxui64(or_int(zext64(unbox32(_jl_dsfmt_randui32())),
-                           shl_int(zext64(unbox32(_jl_dsfmt_randui32())), 32)))
+_jl_dsfmt_randui64() =
+    boxui64(or_int(zext64(unbox32(_jl_dsfmt_randui32())),
+                          shl_int(zext64(unbox32(_jl_dsfmt_randui32())), 32)))
 
 if WORD_SIZE == 64
     randi() = randi(Uint64)
@@ -163,15 +168,15 @@ randbool() = randbit() == 1
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-_jl_randn_zig_init() = ccall(dlsym(_jl_librandom, :randmtzig_create_ziggurat_tables), Void, ())
+_jl_randn_zig_init() =
+    ccall(dlsym(_jl_librandom, :randmtzig_create_ziggurat_tables), Void, ())
 
 randn() = ccall(dlsym(_jl_librandom, :randmtzig_randn), Float64, ())
 
 function randn(dims::Dims)
     A = Array(Float64, dims)
-    ccall(dlsym(_jl_librandom, :randmtzig_fill_randn), Void,
-          (Ptr{Float64}, Uint32), 
-          A, uint32(numel(A)))
+    ccall(dlsym(_jl_librandom, :randmtzig_fill_randn),
+          Void, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
     return A
 end
 
@@ -183,9 +188,8 @@ randexp() = ccall(dlsym(_jl_librandom, :randmtzig_exprnd), Float64, ())
 
 function randexp(dims::Dims)
     A = Array(Float64, dims)
-    ccall(dlsym(_jl_librandom, :randmtzig_fill_exprnd), Void,
-          (Ptr{Float64}, Uint32), 
-          A, uint32(numel(A)))
+    ccall(dlsym(_jl_librandom, :randmtzig_fill_exprnd),
+          Void, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
     return A
 end
 

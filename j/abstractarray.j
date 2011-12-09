@@ -1511,7 +1511,7 @@ end
 sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
-ind2sub(dims, ind::Int) = ind2sub(dims, long(ind))
+ind2sub(dims::(Int...), ind::Int) = ind2sub(dims, long(ind))
 ind2sub(dims::(), ind::Int) = throw(BoundsError())
 ind2sub(dims::(Int,), ind::Size) = (ind,)
 ind2sub(dims::(Int,Int), ind::Size) =

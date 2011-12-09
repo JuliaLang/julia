@@ -36,7 +36,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
     ____________________________________________________________________________________________
                      |             |
                      |  C++ (GCC)  |    Julia    Python/NumPy    Matlab    Octave   JavaScript
-                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4    Node 0.2.2
+                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4     V8 2.3.8
     _________________|_____________|____________________________________________________________
                      |             |
       fib            |     .205    |     2.14        27.5      1351.      2531.        1.42
@@ -44,23 +44,23 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
       mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       pi_sum         |   53.8      |      .743       18.9         1.13     351.        1.58
-      rand_mat_stat  |    7.05     |     4.29        44.0        13.1       62.1      23.5
+      rand_mat_stat  |    9.11     |     3.32        34.1        10.1       48.1      18.2
       rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    498.
     _________________|_____________|____________________________________________________________
 
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
-Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark.
-Julia's LLVM JIT code even manages to beat C++ by 25% on the [pi summation benchmark](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L71) and by a small margin on [random matrix generation and multiplication](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L87).
+Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
+Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
-Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication stems from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
+Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
 Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).
 
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
 scalar arithmetic loops, such as that found in the pi summation benchmark.
 Matlab's JIT for floating-point arithmetic does very well here too.
-However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize all kinds of code — not just the special, albeit important case of double-precision scalar operations, but also code involving user-defined data types.
+However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize not only code involving floating-point scalars, but also code for arbitrary user-defined data types.
 
 To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
