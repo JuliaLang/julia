@@ -811,47 +811,52 @@
 
    ; for loop over ranges
    (pattern-lambda
-    (for (= var (: a b (-? c))) body)
+    (for (= var (: a b c)) body)
     (begin
       (if (not (symbol? var))
 	  (error "invalid for loop syntax: expected symbol"))
-      (if c
-	  (let ((cnt (gensy))
-		(lim (gensy))
-		(aa  (if (number? a) a (gensy)))
-		(bb  (if (number? b) b (gensy))))
-	    `(scope-block
-	     (block
-	      ,@(if (eq? aa a) '() `((= ,aa ,a)))
-	      ,@(if (eq? bb b) '() `((= ,bb ,b)))
-	      (= ,cnt 0)
-	      (= ,lim
-		 (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb))))
-	      (break-block loop-exit
-			   (_while (call < ,cnt ,lim)
-				   (block
-				    (= ,var (call + ,aa (call * ,cnt ,bb)))
-				    (break-block loop-cont
-						 ,body)
-				    (= ,cnt (call + 1 ,cnt))))))))
-	  (let ((cnt (gensy))
-		(lim (if (number? b) b (gensy))))
-	    `(scope-block
-	     (block
-	      (= ,cnt ,a)
-	      ,@(if (eq? lim b) '() `((= ,lim ,b)))
-	      (break-block loop-exit
-			   (_while (call <= ,cnt ,lim)
-				   (block
-				    (= ,var ,cnt)
-				    (break-block loop-cont
-						 ,body)
-				    (= ,cnt (call +
-						  (call (top convert)
-							(call (top typeof)
-							      ,cnt)
-							1)
-						  ,cnt)))))))))))
+      (let ((cnt (gensy))
+	    (lim (gensy))
+	    (aa  (if (number? a) a (gensy)))
+	    (bb  (if (number? b) b (gensy))))
+	`(scope-block
+	  (block
+	   ,@(if (eq? aa a) '() `((= ,aa ,a)))
+	   ,@(if (eq? bb b) '() `((= ,bb ,b)))
+	   (= ,cnt 0)
+	   (= ,lim
+	      (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb))))
+	   (break-block loop-exit
+			(_while (call < ,cnt ,lim)
+				(block
+				 (= ,var (call + ,aa (call * ,cnt ,bb)))
+				 (break-block loop-cont
+					      ,body)
+				 (= ,cnt (call + 1 ,cnt))))))))))
+
+   (pattern-lambda
+    (for (= var (: a b)) body)
+    (begin
+      (if (not (symbol? var))
+	  (error "invalid for loop syntax: expected symbol"))
+      (let ((cnt (gensy))
+	    (lim (if (number? b) b (gensy))))
+	`(scope-block
+	  (block
+	   (= ,cnt ,a)
+	   ,@(if (eq? lim b) '() `((= ,lim ,b)))
+	   (break-block loop-exit
+			(_while (call <= ,cnt ,lim)
+				(block
+				 (= ,var ,cnt)
+				 (break-block loop-cont
+					      ,body)
+				 (= ,cnt (call +
+					       (call (top convert)
+						     (call (top typeof)
+							   ,cnt)
+						     1)
+					       ,cnt))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
@@ -899,11 +904,11 @@
    (pattern-lambda (: (: b c))      (error "invalid ':' outside indexing"))
    (pattern-lambda (: c)            (error "invalid ':' outside indexing"))
 
-   (pattern-lambda
-    (: a b (-? c))
-    (if c
-	`(call (top colon) ,a ,c ,b)
-	`(call (top colon) ,a ,b)))
+   (pattern-lambda (: a b c)
+		   `(call (top colon) ,a ,c ,b))
+
+   (pattern-lambda (: a b)
+		   `(call (top colon) ,a ,b))
 
    ;; hcat, vcat
    (pattern-lambda (hcat . a)
