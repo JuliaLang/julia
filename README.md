@@ -45,7 +45,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
       pi_sum         |   53.8      |      .743       18.9         1.13     351.        1.58
       rand_mat_stat  |    9.11     |     3.32        34.1        10.1       48.1      18.2
-      rand_mat_mul   |  240.       |     
+      rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    498.
     _________________|_____________|____________________________________________________________
 
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
