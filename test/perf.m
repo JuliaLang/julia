@@ -179,8 +179,6 @@ function t = mytranspose(x)
     end
 end
 
-end
-
 %% largish random number gen & matmul %%
 
 function X = randmatmul(n)
@@ -188,3 +186,5 @@ function X = randmatmul(n)
 end
 
 timeit ('rand_mat_mul', @randmatmul, 1000);
+
+end
