@@ -9,7 +9,8 @@
 body
 {
     font: 100% 'Arial', sans-serif;
-    color: #555555;
+    color: #666;
+    background-color: #eee;
 }
 
 div#main
@@ -36,7 +37,7 @@ div#left-column a
     padding: 5px;
     padding-left: 20px;
     text-decoration: none;
-    color: #444444;
+    color: #666;
     font-size: 100%;
 }
 
@@ -47,38 +48,12 @@ div#left-column a.current-page
 
 div#left-column a:hover
 {
-    background-color: #ececec;
+    background-color: #f6f6f6;
 }
 
 div#right-column
 {
     width: 750px;
-    float: right;
-}
-
-img#logo
-{
-    display: block;
-    float: left;
-}
-
-img#slogan
-{
-    display: block;
-    float: right;
-}
-
-img#landing
-{
-    display: block;
-    border: 1px solid #cccccc;
-    -moz-box-shadow: 0px 0px 20px #888888;
-    -webkit-box-shadow: 0px 0px 20px #888888;
-    box-shadow: 0px 0px 20px #888888;
-}
-
-img#mit-logo
-{
     float: right;
 }
 
@@ -96,21 +71,22 @@ ul
 
 h1
 {
-    color: #0d4d73;
-    font-size: 170%;
+    font-size: 130%;
     font-weight: bold;
-    text-shadow: 1px 1px 3px #e2e2e2;
     margin-top: 20px;
     margin-bottom: 10px;
+    text-shadow: 1px 1px 1px #fff;
+    color: #666;
 }
 
 h2
 {
-    font-size: 130%;
+    font-size: 110%;
     font-weight: bold;
-    text-shadow: 1px 1px 3px #e6e6e6;
     margin-top: 20px;
     margin-bottom: 10px;
+    text-shadow: 1px 1px 1px #fff;
+    color: #999;
 }
 
 p
@@ -119,13 +95,22 @@ p
     margin-bottom: 10px;
 }
 
+code
+{
+    font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
+    background-color: #f6f6f6;
+}
+
 form#terminal-form
 {
     border-right: 1px solid #d9d9d9;
     padding: 20px;
-    background-color: #fafafa;
+    background-color: #f8f8f8;
     overflow: auto;
     cursor: text;
+    -moz-box-shadow: 0px 0px 20px #ddd;
+    -webkit-box-shadow: 0px 0px 20px #ddd;
+    box-shadow: 0px 0px 20px #ddd;
 }
 
 div#terminal
