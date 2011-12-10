@@ -868,27 +868,32 @@ hex(n::Int, l::Int) = lpad(hex(n), l, '0')
 
 ## string to float functions ##
 
+function float64_isvalid(s::String, out::Array{Float64,1})
+    s = cstring(s)
+    return (ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), s, out)==0)
+end
+
+function float32_isvalid(s::String, out::Array{Float32,1})
+    s = cstring(s)
+    return (ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out)==0)
+end
+
 begin
-    local tmp::Array{Ptr{Uint8},1} = Array(Ptr{Uint8},1)
+    local tmp::Array{Float64,1} = Array(Float64,1)
+    local tmpf::Array{Float32,1} = Array(Float32,1)
     global float64, float32
     function float64(s::String)
-        s = cstring(s)
-        p = pointer(s.data)
-        f = ccall(:strtod, Float64, (Ptr{Uint8},Ptr{Ptr{Uint8}}), p, tmp)
-        if p==tmp[1] || errno()!=0
+        if !float64_isvalid(s, tmp)
             throw(ArgumentError("float64(String): invalid number format"))
         end
-        f
+        return tmp[1]
     end
 
     function float32(s::String)
-        s = cstring(s)
-        p = pointer(s.data)
-        f = ccall(:strtof, Float32, (Ptr{Uint8},Ptr{Ptr{Uint8}}), p, tmp)
-        if p==tmp[1] || errno()!=0
+        if !float32_isvalid(s, tmpf)
             throw(ArgumentError("float32(String): invalid number format"))
         end
-        f
+        return tmpf[1]
     end
 end
 

@@ -648,6 +648,28 @@ JL_CALLABLE(jl_f_print_symbol)
     return (jl_value_t*)jl_nothing;
 }
 
+DLLEXPORT
+int jl_strtod(char *str, double *out)
+{
+    char *p;
+    errno = 0;
+    *out = strtod(str, &p);
+    if (p == str || errno != 0)
+        return 1;
+    return 0;
+}
+
+DLLEXPORT
+int jl_strtof(char *str, float *out)
+{
+    char *p;
+    errno = 0;
+    *out = strtof(str, &p);
+    if (p == str || errno != 0)
+        return 1;
+    return 0;
+}
+
 // --- showing ---
 
 jl_function_t *jl_show_gf;

@@ -8,6 +8,8 @@
     jl_hash_symbol;
     jl_symbol_name;
     jl_uid;
+    jl_strtod;
+    jl_strtof;
     rand_double;
     rand_float;
     genrand_int32;

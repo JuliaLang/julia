@@ -557,6 +557,7 @@ assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
 assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
     (t[iround(i),iround(j),iround(k)] = x)
 assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
+assign(t::AbstractArray, x) = error("assign: too few arguments")
 
 function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
     for i=I

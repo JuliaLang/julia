@@ -59,8 +59,22 @@
 #abstract AbstractArray{T,N}
 
 #type Array{T,N} <: AbstractArray{T,N}
-#    dims::NTuple{N,Int32}
 #end
+
+#type LambdaStaticData
+#    ast::Expr
+#    sparams::Tuple
+#    tfunc
+#    name::Symbol
+#end
+
+#type Box{T}
+#    contents::T
+#end
+
+#bitstype {32|64} Ptr{T}
+
+# types for the front end
 
 #type Expr
 #    head::Symbol
@@ -88,19 +102,6 @@
 #    name::Symbol
 #    typ
 #end
-
-#type LambdaStaticData
-#    ast::Expr
-#    sparams::Tuple
-#    tfunc
-#    name::Symbol
-#end
-
-#type Box{T}
-#    contents::T
-#end
-
-#bitstype {32|64} Ptr{T}
 
 type Nothing; end
 const nothing = Nothing()

@@ -1,22 +1,104 @@
 ## file formats ##
 
-function dlmread(fname::String, dlm::Char)
-    nr = int(split(readall(`wc -l $fname`),' ')[1])
-    f = open(fname)
-
+function _jl_dlm_readrow(f, dlm)
     row = split(readline(f), dlm, true)
-    nc = length(row)
-    a = Array(Float64, nr, nc)
+    row[end] = chomp(row[end])
+    row
+end
 
+# all strings
+function _jl_dlmread(a, f, dlm, nr, nc, row)
+    for i=1:nr
+        a[i,:] = row
+        if i < nr
+            row = _jl_dlm_readrow(f, dlm)
+        end
+    end
+    a
+end
+
+# all numeric, with NaN for invalid data
+function _jl_dlmread{T<:Number}(a::Array{T}, f, dlm, nr, nc, row)
+    tmp = Array(Float64,1)
+    for i=1:nr
+        for j=1:nc
+            if float64_isvalid(row[j], tmp)
+                a[i,j] = tmp[1]
+            else
+                a[i,j] = NaN
+            end
+        end
+        if i < nr
+            row = _jl_dlm_readrow(f, dlm)
+        end
+    end
+end
+
+# float64 or string
+_jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row) =
+    _jl_dlmread(a, f, dlm, nr, nc, row, 1, 1)
+function _jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row, i0, j0)
+    tmp = Array(Float64,1)
+    j = j0
+    for i=i0:nr
+        while j <= nc
+            el = row[j]
+            if float64_isvalid(el, tmp)
+                a[i,j] = tmp[1]
+            else
+                a[i,j] = el
+            end
+            j += 1
+        end
+        j = 1
+        if i < nr
+            row = _jl_dlm_readrow(f, dlm)
+        end
+    end
+    a
+end
+
+# float64 or cell depending on data
+function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
+    tmp = Array(Float64, 1)
     for i=1:nr
         for j=1:nc
             el = row[j]
-            a[i,j] = (length(el)==0 ? 0 : float64(el))
+            if !float64_isvalid(el, tmp)
+                a = convert(Array{Any,2}, a)
+                _jl_dlmread(a, f, dlm, nr, nc, row, i, j)
+                return a
+            else
+                a[i,j] = tmp[1]
+            end
         end
         if i < nr
-            row = split(readline(f), dlm, true)
+            row = _jl_dlm_readrow(f, dlm)
         end
     end
+    a
+end
+
+function _jl_dlmread_setup(fname::String, dlm::Char)
+    nr = int(split(readall(`wc -l $fname`),' ',false)[1])
+    f = open(fname)
+    row = _jl_dlm_readrow(f, dlm)
+    nc = length(row)
+    return (f, nr, nc, row)
+end
+
+function dlmread(fname::String, dlm::Char, T::Type)
+    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
+    a = Array(T, nr, nc)
+    _jl_dlmread(a, f, dlm, nr, nc, row)
+    close(f)
+    return a
+end
+
+function dlmread(fname::String, dlm::Char)
+    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
+    a = Array(Float64, nr, nc)
+    a = _jl_dlmread_auto(a, f, dlm, nr, nc, row)
     close(f)
     return a
 end
@@ -41,4 +123,6 @@ function dlmwrite(fname::String, a, dlm::Char)
 end
 
 csvread(fname::String) = dlmread(fname, ',')
+csvread(fname::String, T::Type) = dlmread(fname, ',', T)
+
 csvwrite(fname::String, a) = dlmwrite(fname, a, ',')
