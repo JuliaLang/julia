@@ -50,6 +50,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
 
               Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
 
+C++ times are absolute; others are relative to C++.
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
