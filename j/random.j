@@ -89,7 +89,7 @@ function rand!(A::Array{Float64})
             A[i] = rand()
         end
     else
-        ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_open_open),
+        ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_close_open),
               Void, (Ptr{Void}, Int32), A, int32(n & 0xfffffffe))
         if isodd(n)
             A[n] = rand()
@@ -98,7 +98,7 @@ function rand!(A::Array{Float64})
     return A
 end
 
-rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_open_open), Float64, ())
+rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Size...) = rand(dims)
 
