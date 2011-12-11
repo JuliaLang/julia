@@ -14,10 +14,10 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 DEBUGFLAGS = $(FLAGS)
 SHIPFLAGS = $(FLAGS)
 
-ifeq ($(USEGCC),1)
-DEBUGFLAGS += -static-libgcc -static-libstdc++
-SHIPFLAGS += -static-libgcc -static-libstdc++
-endif
+#ifeq ($(USEGCC),1)
+#DEBUGFLAGS += -static-libgcc -static-libstdc++
+#SHIPFLAGS += -static-libgcc -static-libstdc++
+#endif
 
 LIBJULIA_RELEASE = $(JULIAHOME)/src/libjulia-release.a
 LIBJULIA_DEBUG = $(JULIAHOME)/src/libjulia-debug.a
