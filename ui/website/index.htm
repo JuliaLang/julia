@@ -78,14 +78,33 @@
                     text_color: "#444444",
                     message_color: "#0000aa",
                     error_color: "#ff0000",
-                    prompt_color: "#00aa00"
+                    prompt_color: "#00aa00",
+                    plot_grid_color: "#dadada",
+                    plot_axis_color: "#aaaaaa",
+                    plot_text_color: "#444444",
+                    plot_line_color: "#4d87b7",
                 }],
                 ["Viral", {
                     background_color: "#000000",
                     text_color: "#ffff00",
                     message_color: "#0000aa",
                     error_color: "#ff0000",
-                    prompt_color: "#00bb00"
+                    prompt_color: "#00bb00",
+                    plot_grid_color: "#333333",
+                    plot_axis_color: "#666666",
+                    plot_text_color: "#ffff00",
+                    plot_line_color: "#4d87c7",
+                }],
+                ["Stephan", {
+                    background_color: "#000000",
+                    text_color: "#dddddd",
+                    message_color: "#0000aa",
+                    error_color: "#ff0000",
+                    prompt_color: "#00bb00",
+                    plot_grid_color: "#333333",
+                    plot_axis_color: "#666666",
+                    plot_text_color: "#dddddd",
+                    plot_line_color: "#4d87c7",
                 }],
             ];
 
@@ -100,6 +119,10 @@
                 $("span.color-scheme-message").css("color", color_schemes[current_color_scheme][1].message_color);
                 $("span.color-scheme-error").css("color", color_schemes[current_color_scheme][1].error_color);
                 $("span.color-scheme-prompt").css("color", color_schemes[current_color_scheme][1].prompt_color);
+                $("svg .hrule line, svg .vrule line").css("stroke", color_schemes[current_color_scheme][1].plot_grid_color);
+                $("svg .hrule2 line, svg .vrule2 line").css("stroke", color_schemes[current_color_scheme][1].plot_axis_color);
+                $("svg text").css("fill", color_schemes[current_color_scheme][1].plot_text_color);
+                $("svg .line").css("stroke", color_schemes[current_color_scheme][1].plot_line_color);
             }
 
             // when the DOM loads
@@ -568,7 +591,6 @@
                                 .attr("y", h + 10)
                                 .attr("dy", ".71em")
                                 .attr("text-anchor", "middle")
-                                .attr("fill", "#444444")
                                 .text(x.tickFormat(10));
 
                             // y-axis labels
@@ -577,7 +599,6 @@
                                 .attr("x", -5)
                                 .attr("dy", ".35em")
                                 .attr("text-anchor", "end")
-                                .attr("fill", "#444444")
                                 .text(y.tickFormat(10));
 
                             // y-axis
@@ -594,7 +615,6 @@
                             
                             // y-axis line
                             vrules2.filter(function(d) { return (d == 0); }).append("line")
-                                .attr("class", "axis")
                                 .attr("x1", x)
                                 .attr("x2", x)
                                 .attr("y1", 0)
@@ -602,7 +622,6 @@
                             
                             // x-axis line
                             hrules2.filter(function(d) { return (d == 0); }).append("line")
-                                .attr("class", "axis")
                                 .attr("y1", y)
                                 .attr("y2", y)
                                 .attr("x1", 0)

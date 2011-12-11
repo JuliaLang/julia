@@ -165,30 +165,20 @@ select#color-scheme-picker
 
 /* for plotting */
 
-.hrule line {
-  stroke: #dadada;
+svg .hrule line, svg .vrule line {
   shape-rendering: crispEdges;
 }
 
-.hrule2 line.axis {
-  stroke: #aaa;
+svg .hrule2 line, svg .vrule2 line {
   shape-rendering: crispEdges;
 }
 
-.vrule line {
-  stroke: #dadada;
-  shape-rendering: crispEdges;
-}
-
-.vrule2 line.axis {
-  stroke: #aaa;
-  shape-rendering: crispEdges;
-}
-
-.line {
+svg .line {
   fill: none;
-  stroke: steelblue;
   stroke-width: 1.5px;
+}
+
+svg text {
 }
 
 /* for Internet Explorer */
