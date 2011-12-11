@@ -24,7 +24,7 @@ install: release
 	mkdir -p $(DESTDIR)/usr/bin
 	cp julia-release-readline $(DESTDIR)/usr/bin/julia
 	cp julia-release-basic $(DESTDIR)/usr/bin/julia-no-readline
-	cp lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT) lib/libpcrecpp.$(SHLIB_EXT) lib/libpcreposix.$(SHLIB_EXT) lib/librandom.$(SHLIB_EXT) lib/libLAPACK.$(SHLIB_EXT)  $(DESTDIR)/usr/share/julia/lib
+	cp -a lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT).* lib/libpcrecpp.$(SHLIB_EXT).* lib/libpcreposix.$(SHLIB_EXT).* lib/librandom.$(SHLIB_EXT) lib/libLAPACK.$(SHLIB_EXT)  $(DESTDIR)/usr/lib
 	cp -r j $(DESTDIR)/usr/share/julia
 	cp -r contrib $(DESTDIR)/usr/share/julia
 	cp -r examples $(DESTDIR)/usr/share/julia
