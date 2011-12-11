@@ -36,20 +36,21 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
     ____________________________________________________________________________________________
                      |             |
                      |  C++ (GCC)  |    Julia    Python/NumPy    Matlab    Octave   JavaScript
-                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4     V8 2.3.8
+                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4   V8 3.6.6.11
     _________________|_____________|____________________________________________________________
                      |             |
-      fib            |     .205    |     2.14        27.5      1351.      2531.        1.42
+      fib            |     .205    |     2.14        27.5      1351.      2531.        1.50
       parse_int      |     .0901   |     1.60         6.55      897.      5580.
-      quicksort      |     .429    |     1.15        61.8       145.      3356.       24.2
-      mandel         |     .269    |     5.87        30.3        61.6      844.       10.5
-      pi_sum         |   53.8      |      .743       18.9         1.13     351.        1.58
-      rand_mat_stat  |    9.11     |     3.32        34.1        10.1       48.1      18.2
-      rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    498.
+      quicksort      |     .429    |     1.15        61.8       145.      3356.       24.0
+      mandel         |     .269    |     5.87        30.3        61.6      844.        6.09
+      pi_sum         |   53.8      |      .743       18.9         1.13     351.         .793
+      rand_mat_stat  |    9.11     |     3.32        34.1        10.1       48.1       8.78
+      rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    311.
     _________________|_____________|____________________________________________________________
 
-              Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
+    Figure: C++ numbers are benchmark times in ms; other timings are relative to C++ (smaller is better).
 
+C++ times are absolute; others are relative to C++.
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
@@ -96,7 +97,7 @@ end
 ```
 
 As you can see, the code is quite clear, and should feel familiar to anyone who has programmed in other mathematical languages.
-Although C++ beats Julia in the random matrix statistics benchmark by a factor of four, consider how much simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx#L138).
+Although C++ beats Julia in the random matrix statistics benchmark by a factor of three, consider how much simpler this code is than the [C++ implementation](https://github.com/JuliaLang/julia/blob/master/test/perf.cxx#L138).
 There are more compiler optimizations planned that we hope will close this performance gap in the future.
 By design, Julia allows you to range from low-level loop and vector code, up to a high-level programming style, sacrificing some performance, but gaining the ability to express complex algorithms easily.
 This continuous spectrum of programming levels is a hallmark of the Julia approach to programming and is very much an intentional feature of the language.

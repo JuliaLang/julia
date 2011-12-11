@@ -140,6 +140,7 @@ end
 
 diff(a::Matrix) = diff(a, 1)
 
+diag(A::Vector) = error("Perhaps you meant to use diagm().")
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
 
 function diagm{T}(v::Union(Vector{T},Matrix{T}))

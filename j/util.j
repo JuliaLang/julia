@@ -80,41 +80,6 @@ end
 
 # source files, editing
 
-edit(fl::String) = edit(fl, 1)
-function edit(fl::String, line::Int)
-    editor = get(ENV, "JULIA_EDITOR", "emacs")
-    issrc = fl[end-1:end] == ".j"
-    if issrc
-        if editor == "emacs"
-            jmode = "$JULIA_HOME/contrib/julia-mode.el"
-            run(`emacs $fl --eval "(progn
-                                     (require 'julia-mode \"$jmode\")
-                                     (julia-mode)
-                                     (goto-line $line))"`)
-        elseif editor == "vim"
-            run(`vim $fl +$line`)
-        elseif editor == "textmate"
-            run(`mate -w $fl -l $line`)
-        else
-            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
-        end
-        load(fl)
-    else
-        if editor == "emacs"
-            run(`emacs $fl --eval "(goto-line $line)"`)
-        elseif editor == "vim"
-            run(`vim $fl +$line`)
-        elseif editor == "textmate"
-            run(`mate $fl -l $line`)
-        else
-            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
-        end
-    end
-    nothing
-end
-
-function_loc(f::Function) = function_loc(f, (Any...))
-
 function function_loc(f::Function, types)
     for m = getmethods(f, types)
         if isa(m[3],LambdaStaticData)
@@ -127,9 +92,53 @@ function function_loc(f::Function, types)
     end
     error("could not find function definition")
 end
+function_loc(f::Function) = function_loc(f, (Any...))
 
-edit(f::Function) = edit(function_loc(f)...)
+edit(file::String) = edit(file, 1)
+function edit(file::String, line::Int)
+    editor = get(ENV, "JULIA_EDITOR", "emacs")
+    issrc = file[end-1:end] == ".j"
+    if issrc
+        if editor == "emacs"
+            jmode = "$JULIA_HOME/contrib/julia-mode.el"
+            run(`emacs $file --eval "(progn
+                                     (require 'julia-mode \"$jmode\")
+                                     (julia-mode)
+                                     (goto-line $line))"`)
+        elseif editor == "vim"
+            run(`vim $file +$line`)
+        elseif editor == "textmate"
+            run(`mate -w $file -l $line`)
+        else
+            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
+        end
+        load(file)
+    else
+        if editor == "emacs"
+            run(`emacs $file --eval "(goto-line $line)"`)
+        elseif editor == "vim"
+            run(`vim $file +$line`)
+        elseif editor == "textmate"
+            run(`mate $file -l $line`)
+        else
+            error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
+        end
+    end
+    nothing
+end
+edit(file::String) = edit(file, 1)
+
+function view(file::String, line::Int)
+    pager = get(ENV, "PAGER", "less")
+    run(`$pager +$(line)g $file`)
+    nothing
+end
+view(file::String) = view(file, 1)
+
+edit(f::Function)    = edit(function_loc(f)...)
 edit(f::Function, t) = edit(function_loc(f,t)...)
+view(f::Function)    = view(function_loc(f)...)
+view(f::Function, t) = view(function_loc(f,t)...)
 
 function parse_help(stream)
     helpdb = HashTable()
