@@ -48,7 +48,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    311.
     _________________|_____________|____________________________________________________________
 
-              Figure. C++: benchmark time (ms); others: benchmark time / C++ time.
+    Figure: C++ numbers are benchmark times in ms; other timings are relative to C++ (smaller is better).
 
 C++ times are absolute; others are relative to C++.
 Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
