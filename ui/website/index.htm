@@ -24,10 +24,15 @@
             
             // this function makes all of the columns the same height
             function set_column_heights() {
-                // set the height of all the columns to the height of the longest one
-                set_outer_height("#left-column", $(window).height());
-                set_outer_height("#right-column", $(window).height());
-                set_outer_height("#terminal-form", $(window).height());
+                // determine the new height of the columns
+                var new_columns_height = Math.max(350, $(window).height());
+
+                // set the height of all the columns to the height of the window
+                set_outer_height("#left-column", new_columns_height);
+                set_outer_height("#right-column", new_columns_height);
+
+                // make the terminal take up the full height of the right column
+                set_outer_height("#terminal-form", new_columns_height);
             }
             
             // adjust the heights of the columns when the page loads or is resized
@@ -159,8 +164,21 @@
                 $("#terminal-input").width($("#terminal").width()-$("#prompt").width()-1);
             }
 
-            // resize the input box when the window is resized
-            $(window).resize(set_input_width);
+            // set the width of the terminal
+            function set_terminal_width() {
+                // set the width of the terminal
+                var new_terminal_width = Math.max($(window).width()-229, 200);
+                $("div#right-column").width(new_terminal_width);
+
+                // resize the page container as well
+                $("div#main").width($("div#left-column").outerWidth(true)+$("div#right-column").outerWidth(true));
+
+                // reset the width of the terminal input
+                set_input_width();
+            }
+
+            // set the width of the terminal when the window is resized
+            $(window).resize(set_terminal_width);
 
             // jQuery extensions
             jQuery.fn.extend({
@@ -642,6 +660,9 @@
                 
                 // clear the textarea in case the browser decides to pre-populate it
                 $("#terminal-input").val("");
+
+                // set the width of the terminal
+                set_terminal_width();
 
                 // record the cursor position when the user clicks anywhere
                 var mouse_x, mouse_y;

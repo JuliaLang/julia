@@ -15,9 +15,6 @@ body
 
 div#main
 {
-    width: 960px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 div#left-column
@@ -25,8 +22,8 @@ div#left-column
     width: 189px;
     float: left;
     font-size: 90%;
+    padding-left: 20px;
     padding-right: 20px;
-    border-right: 1px solid #d9d9d9;
 }
 
 div#left-column a
@@ -51,8 +48,7 @@ div#left-column a:hover
 
 div#right-column
 {
-    width: 750px;
-    float: right;
+    float: left;
 }
 
 img.bullet
@@ -101,7 +97,7 @@ code
 
 form#terminal-form
 {
-    border-right: 1px solid #d9d9d9;
+    border-left: 1px solid #d9d9d9;
     padding: 20px;
     overflow: auto;
     cursor: text;
