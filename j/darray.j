@@ -29,7 +29,11 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
         da.distdim = distdim
         da.localpiece = lp
         da.go = go
-        da.locl = initializer(T, locsz, da)
+        if lp == 0
+            da.locl = Array(T, locsz)
+        else
+            da.locl = initializer(T, locsz, da)
+        end
         #remote_call(LocalProcess(), initializer, T, locsz, da)
         da
     end
