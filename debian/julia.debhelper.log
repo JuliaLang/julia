@@ -1,0 +1,2 @@
+dh_install
+dh_auto_build
