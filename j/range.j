@@ -113,7 +113,8 @@ intersect(r::Range, s::Range1) = intersect(s, r)
 *(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
 *(r::Ranges, x::Real) = x*r
 
-/(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
+/(r::Ranges, x::Real)  = Range(r.start/x, step(r)/x, r.stop/x)
+./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
 
 function +(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
