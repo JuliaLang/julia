@@ -175,11 +175,19 @@ end
 ./(x::Number,y::Array ) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
 ./(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
 
+./(x::AbstractArray, y::AbstractArray ) = throw(MethodError(./, (x,y)))
+./(x::Number,y::AbstractArray )         = throw(MethodError(./, (x,y)))
+./(x::AbstractArray, y::Number)         = throw(MethodError(./, (x,y)))
+
 # ^ is difficult, since negative exponents give a different type
 
 .^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
 .^(x::Number,y::Array ) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
 .^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
+
+.^(x::AbstractArray, y::AbstractArray ) = throw(MethodError(.^, (x,y)))
+.^(x::Number,y::AbstractArray )         = throw(MethodError(.^, (x,y)))
+.^(x::AbstractArray, y::Number)         = throw(MethodError(.^, (x,y)))
 
 function .^{S<:Int,T<:Int}(A::Array{S}, B::Array{T})
     if size(A) != size(B); error("argument dimensions must match"); end
