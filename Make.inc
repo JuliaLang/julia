@@ -39,11 +39,11 @@ endif
 
 # OS specific stuff
 
-USE_SYSTEM_READLINE=1
+USE_SYSTEM_READLINE=0
 
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
-TARGET_OPENBLAS_ARCH=NEHALEM
+TARGET_OPENBLAS_ARCH=
 
 
 ifeq ($(OS), Linux)
