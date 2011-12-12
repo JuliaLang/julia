@@ -15,9 +15,6 @@ body
 
 div#main
 {
-    width: 960px;
-    margin-left: auto;
-    margin-right: auto;
 }
 
 div#left-column
@@ -25,10 +22,8 @@ div#left-column
     width: 189px;
     float: left;
     font-size: 90%;
-    padding-top: 20px;
-    padding-bottom: 20px;
+    padding-left: 20px;
     padding-right: 20px;
-    border-right: 1px solid #d9d9d9;
 }
 
 div#left-column a
@@ -53,8 +48,7 @@ div#left-column a:hover
 
 div#right-column
 {
-    width: 750px;
-    float: right;
+    float: left;
 }
 
 img.bullet
@@ -103,9 +97,8 @@ code
 
 form#terminal-form
 {
-    border-right: 1px solid #d9d9d9;
+    border-left: 1px solid #d9d9d9;
     padding: 20px;
-    background-color: #f8f8f8;
     overflow: auto;
     cursor: text;
     -moz-box-shadow: 0px 0px 20px #ddd;
@@ -120,14 +113,12 @@ div#terminal
     display: block;
     overflow-x: hidden;
     font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-    color: #444444;
 }
 
 div#prompt
 {
     float: left;
     font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-    color: #00aa00;
     display: none;
 }
 
@@ -139,7 +130,6 @@ textarea#terminal-input
     outline: none;
     display: block;
     font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
-    color: #444444;
     resize: none;
     overflow: hidden;
 }
@@ -154,47 +144,41 @@ span.strong
     font-weight: bold;
 }
 
-span.message
+/* color scheme */
+
+span.color-scheme-message
 {
-    color: #0000aa;
 }
 
-span.error
+span.color-scheme-error
 {
-    color: #ff0000;
 }
 
-span.prompt
+span.color-scheme-prompt
 {
-    color: #00aa00;
+}
+
+select#color-scheme-picker
+{
+    width: 189px;
 }
 
 /* for plotting */
 
-.hrule line {
-  stroke: #dadada;
+svg .hrule line, svg .vrule line {
   shape-rendering: crispEdges;
 }
 
-.hrule2 line.axis {
-  stroke: #aaa;
+svg .hrule2 line, svg .vrule2 line {
   shape-rendering: crispEdges;
 }
 
-.vrule line {
-  stroke: #dadada;
-  shape-rendering: crispEdges;
-}
-
-.vrule2 line.axis {
-  stroke: #aaa;
-  shape-rendering: crispEdges;
-}
-
-.line {
+svg .line {
   fill: none;
-  stroke: steelblue;
   stroke-width: 1.5px;
+}
+
+svg text {
 }
 
 /* for Internet Explorer */
