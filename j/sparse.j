@@ -603,7 +603,6 @@ assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::Int) =
 
 #todo: assign where v is sparse
 function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
-    #at the moment _jl_spa_store_reset assumes spa has ordered indices, so columns' rowvals not guaranteed to be in order
     if size(v,1) != length(I) || size(v,2) != length(J)
         return("error in assign: mismatched dimensions")
     end
@@ -755,7 +754,7 @@ numel(S::SparseAccumulator) = S.nvals
 function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)
     vals = S.vals
     flags = S.flags
-    indexes = S.indexes
+    indexes = sort!(S.indexes)
     nvals = S.nvals
     z = zero(T)
 
