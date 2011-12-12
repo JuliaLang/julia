@@ -38,7 +38,6 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
 function show(S::SparseMatrixCSC)
-    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
     for col = 1:S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
             print("\t[")
@@ -603,7 +602,6 @@ assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::Int) =
 
 #todo: assign where v is sparse
 function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
-    #at the moment _jl_spa_store_reset assumes spa has ordered indices, so columns' rowvals not guaranteed to be in order
     if size(v,1) != length(I) || size(v,2) != length(J)
         return("error in assign: mismatched dimensions")
     end
@@ -639,7 +637,9 @@ function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, 
         end
         A_col = Js[j]
         _jl_spa_set(spa, A, A_col)
+        println(spa)
         spa[I] = v[:,Jp[j]]
+        println(spa)
         (rowval, nzval) = _jl_spa_store_reset(spa, A_col, colptr, rowval, nzval)
         A_col += 1
         j += 1
@@ -766,11 +766,18 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         nzval = grow(nzval, length(nzval))
     end
 
+    _jl_mergesort(indexes, 1, nvals, Array(T,length(indexes))) #sort indexes[1:nvals]
+
+    offs = 1
     for i=1:nvals
         pos = indexes[i]
-        rowval[start + i - 1] = pos
-        nzval[start + i - 1] = vals[pos]
-        vals[pos] = z
+        if vals[pos] != z
+            rowval[start + i - offs] = pos
+            nzval[start + i - offs] = vals[pos]
+            vals[pos] = z
+        else
+            offs += 1
+        end
         flags[i] = false
     end
 
@@ -867,6 +874,18 @@ function assign{T}(S::SparseAccumulator{T}, v, i::Int)
         if S.flags[i]
             S.vals[i] = v
             S.flags[i] = false
+            #find value of i in indexes and swap it out
+            j = 1
+            n = S.nvals
+            while j <= n
+                if S.indexes[j] == i
+                    S.indexes[j] = S.indexes[n]
+                    S.indexes[n] = i
+                    break
+                end
+                j += 1
+            end
+            if j > n; error("unexpected error in SPA assign"); end
             S.nvals -= 1
         end
     else
