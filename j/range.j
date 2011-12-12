@@ -44,13 +44,14 @@ isempty(r::Range1) = (r.stop < r.start)
 
 start{T<:Int}(r::Ranges{T}) = r.start
 next{T<:Int}(r::Ranges{T}, i::T) = (i, i+step(r))
-done{T<:Int}(r::Ranges{T}, i::T) = (i > r.stop)
 done{T<:Int}(r::Ranges{T}, i::T) = (step(r) < 0 ? i < r.stop : i > r.stop)
+done{T<:Int}(r::Range1{T}, i::T) = (i > r.stop)
 
 start(r::Ranges) = 0
 next(r::Ranges, i::Int) = (r.start+i*step(r), i+1)
 done(r::Ranges, i::Int) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
                                          r.start+i*step(r) > r.stop)
+done(r::Range1, i::Int) = (r.start+i > r.stop)
 
 ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
 ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
@@ -126,9 +127,8 @@ end
 
 ## non-linear opearations on ranges ##
 
-/(x::Real, r::Ranges)  = [ x/y | y=r ]
-^(x::Real, r::Ranges)  = [ x^y | y=r ]
-.^(r::Ranges, y::Real) = [ x^y | x=r ]
+./(x::Number, r::Ranges) = [ x/y | y=r ]
+.^(r::Ranges, y::Number) = [ x^y | x=r ]
 
 ## concatenation ##
 
