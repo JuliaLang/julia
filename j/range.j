@@ -128,6 +128,8 @@ end
 ## non-linear opearations on ranges ##
 
 ./(x::Number, r::Ranges) = [ x/y | y=r ]
+./(r::Ranges, y::Number) = [ x/y | x=r ]
+.^(x::Number, r::Ranges) = [ x^y | y=r ]
 .^(r::Ranges, y::Number) = [ x^y | x=r ]
 
 ## concatenation ##
