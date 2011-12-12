@@ -21,7 +21,7 @@ function __safe_min(x::Array{Float64, 1})
     for i=1:length(x)
         if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
             if isequal(m, NaN) || x[i] < m
-                m =x[i]
+                m = x[i]
             end
         end
     end
@@ -36,7 +36,7 @@ function __safe_max(x::Array{Float64, 1})
     for i=1:length(x)
         if x[i] != Inf && x[i] != -Inf && !isequal(x[i], NaN)
             if isequal(m, NaN) || x[i] > m
-                m =x[i]
+                m = x[i]
             end
         end
     end
