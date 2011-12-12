@@ -110,10 +110,10 @@ intersect(r::Range, s::Range1) = intersect(s, r)
 -(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
 -(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
 
-*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
-*(r::Ranges, x::Real) = x*r
+.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
+.*(r::Ranges, x::Real) = x*r
 
-/(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
+./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
 
 function +(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
@@ -125,16 +125,36 @@ function -(r1::Ranges, r2::Ranges)
     Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
 end
 
-## non-linear opearations on ranges ##
+## non-linear operations on ranges ##
 
 ./(x::Number, r::Ranges) = [ x/y | y=r ]
 ./(r::Ranges, y::Number) = [ x/y | x=r ]
+function ./(r::Ranges, s::Ranges)
+    if length(r) != length(s)
+        error("argument dimensions must match")
+    end
+    [ r[i]/s[i] | i = 1:length(r) ]
+end
+
+function .*(r::Ranges, s::Ranges)
+    if length(r) != length(s)
+        error("argument dimensions must match")
+    end
+    [ r[i]*s[i] | i = 1:length(r) ]
+end
+
 .^(x::Number, r::Ranges) = [ x^y | y=r ]
 .^(r::Ranges, y::Number) = [ x^y | x=r ]
+function .^(r::Ranges, s::Ranges)
+    if length(r) != length(s)
+        error("argument dimensions must match")
+    end
+    [ r[i]^s[i] | i = 1:length(r) ]
+end
 
 ## concatenation ##
 
-function vcat{T}(r::Union(Range{T},Range1{T}))
+function vcat{T}(r::Ranges{T})
     n = length(r)
     a = Array(T,n)
     i = 1
@@ -145,7 +165,7 @@ function vcat{T}(r::Union(Range{T},Range1{T}))
     a
 end
 
-function vcat{T}(rs::Union(Range{T},Range1{T})...)
+function vcat{T}(rs::Ranges{T}...)
     n = sum(length,rs)::Size
     a = Array(T,n)
     i = 1
