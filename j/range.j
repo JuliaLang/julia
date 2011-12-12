@@ -2,7 +2,9 @@
 
 typealias Dims (Size...)
 
-type Range{T<:Real} <: AbstractArray{T,1}
+abstract Ranges{T<:Real} <: AbstractArray{T,1}
+
+type Range{T<:Real} <: Ranges{T}
     start::T
     step::T
     stop::T
@@ -11,7 +13,7 @@ Range(start, step, stop) = Range(promote(start, step, stop)...)
 Range{T}(start::T, step::T, stop::T) =
     throw(MethodError(Range, (start,step,stop)))
 
-type Range1{T<:Real} <: AbstractArray{T,1}
+type Range1{T<:Real} <: Ranges{T}
     start::T
     stop::T
 end
@@ -19,10 +21,10 @@ Range1(start, stop) = Range1(promote(start, stop)...)
 Range1{T}(start::T, stop::T) =
     throw(MethodError(Range1, (start,stop)))
 
-similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
-similar(r::Range1, T::Type, dims::Dims) = Array(T, dims)
+colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
+colon(start::Real, stop::Real) = Range1(start, stop)
 
-typealias Ranges Union(Range,Range1)
+similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
 
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
@@ -30,33 +32,25 @@ step(r::Range1) = one(r.start)
 show(r::Range)  = print(r.start,':',r.step,':',r.stop)
 show(r::Range1) = print(r.start,':',r.stop)
 
-numel(r::Ranges) = length(r)
-size(r::Ranges) = tuple(length(r))
 length{T<:Int}(r::Range{T}) = max(zero(T), div(r.stop-r.start+r.step, r.step))
 length{T<:Int}(r::Range1{T}) = max(zero(T), r.stop-r.start+1)
-length{T}(r::Range{T}) = max(zero(T), itrunc((r.stop-r.start)/r.step+1))
-length{T}(r::Range1{T}) = max(zero(T), itrunc(r.stop-r.start+1))
+length{T}(r::Range{T}) = max(0, itrunc((r.stop-r.start)/r.step+1))
+length{T}(r::Range1{T}) = max(0, itrunc(r.stop-r.start+1))
+size(r::Ranges) = tuple(length(r))
+numel(r::Ranges) = length(r)
 
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
 
-start{T<:Int}(r::Range{T}) = r.start
-done{T<:Int}(r::Range{T}, i::T) = (r.step < 0 ? i < r.stop : i > r.stop)
-next{T<:Int}(r::Range{T}, i::T) = (i, i+r.step)
+start{T<:Int}(r::Ranges{T}) = r.start
+next{T<:Int}(r::Ranges{T}, i::T) = (i, i+step(r))
+done{T<:Int}(r::Ranges{T}, i::T) = (i > r.stop)
+done{T<:Int}(r::Ranges{T}, i::T) = (step(r) < 0 ? i < r.stop : i > r.stop)
 
-start(r::Range1) = r.start
-done(r::Range1, i) = (i > r.stop)
-next{T}(r::Range1{T}, i) = (i, i+one(T))
-
-# floating point ranges need to keep an integer counter
-start(r::Range) = 0
-done{T}(r::Range{T}, st) =
-    (r.step < 0 ? r.start+st*r.step < r.stop :
-                  r.start+st*r.step > r.stop)
-next{T}(r::Range{T}, st) = (r.start+st*r.step, st+1)
-
-colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
-colon(start::Real, stop::Real) = Range1(start, stop)
+start(r::Ranges) = 0
+next(r::Ranges, i::Int) = (r.start+i*step(r), i+1)
+done(r::Ranges, i::Int) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
+                                         r.start+i*step(r) > r.stop)
 
 ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
 ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
@@ -81,22 +75,13 @@ function ref(r::Range1, i::Int)
     return x
 end
 
-last(r::Range1) = r.stop
-last(r::Range) = r.start + (length(r)-1)*r.step
+last{T<:Int}(r::Range1{T}) = r.stop
+last(r::Ranges) = r.start + (length(r)-1)*step(r)
 
-isequal(r::Range, s::Range) = (r.start==s.start && r.step==s.step &&
-                               last(r)==last(s))
-
-isequal(r::Range1, s::Range1) = (r.start==s.start && r.stop==s.stop)
-
-isequal(r::Range, s::Range1) = (r.start==s.start && r.step==1 &&
-                                last(r)==last(s))
-
-isequal(r::Range1, s::Range) = isequal(s, r)
+isequal(r::Range1, s::Range1) = r.start==s.start && r.stop==s.stop
+isequal(r::Ranges, s::Ranges) = r.start==s.start && step(r)==step(s) && last(r)==last(s)
 
 intersect(r::Range1, s::Range1) = max(r.start,s.start):min(r.stop,s.stop)
-
-intersect(r::Range, s::Range1) = intersect(s, r)
 
 function intersect(r::Range1, s::Range)
     sta = start(s)
@@ -110,8 +95,9 @@ function intersect(r::Range1, s::Range)
     i1 = min(i1, sto)
     i0:ste:i1
 end
+intersect(r::Range, s::Range1) = intersect(s, r)
 
-## linear operations on 1-d ranges ##
+## linear operations on ranges ##
 
 -(r::Ranges) = Range(-r.start, -step(r), -r.stop)
 
@@ -128,10 +114,6 @@ end
 
 /(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
 
-## adding and subtracting ranges ##
-
-# TODO: if steps combine to zero, create sparse zero vector
-
 function +(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
     Range(r1.start+r2.start, step(r1)+step(r2), r1.stop+r2.stop)
@@ -141,6 +123,12 @@ function -(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
     Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
 end
+
+## non-linear opearations on ranges ##
+
+/(x::Real, r::Ranges)  = [ x/y | y=r ]
+^(x::Real, r::Ranges)  = [ x^y | y=r ]
+.^(r::Ranges, y::Real) = [ x^y | x=r ]
 
 ## concatenation ##
 
