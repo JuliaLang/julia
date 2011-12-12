@@ -257,25 +257,10 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
     test/          unit and function tests for julia itself
     ui/            source for various front ends
 
-<a name="Emacs-Setup"/>
-## Emacs Setup
+<a name="Editor-Setup"/>
+## Editor Setup
 
-Add the following line to `~/.emacs`
-
-    (require 'julia-mode "JULIA_PATH/contrib/julia-mode.el")
-
-where `JULIA_PATH` is the location of the top-level julia directory.
-
-<a name="TextMate-Setup"/>
-## TextMate Setup
-
-Copy (or symlink) the TextMate Julia bundle into the TextMate application support directory:
-
-    cp -r JULIA_PATH/contrib/Julia.tmbundle ~/Library/Application\ Support/TextMate/Bundles/
-
-where `JULIA_PATH` is the location of the top-level julia directory.
-Now select from the menu in TextMate `Bundles > Bundle Editor > Reload Bundles`.
-Julia should appear as a file type and be automatically detected for files with the `.j` extension.
+Julia support is currently available for Emacs, Textmate, and Vim. Instructions for configuring these editors to recognize Julia syntax are in [contrib/README.md](https://github.com/JuliaLang/julia/tree/master/contrib).
 
 <a name="Terminal-Setup"/>
 ## Terminal Setup
