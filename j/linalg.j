@@ -258,7 +258,7 @@ function ishermitian(A::Matrix)
     return true
 end
 
-function isuppertriangular(A::Matrix)
+function istriu(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
     for i = 1:n, j = 1:n
@@ -269,7 +269,7 @@ function isuppertriangular(A::Matrix)
     return true
 end
 
-function islowertriangular(A::Matrix)
+function istril(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
     for i = 1:n, j = n:-1:1

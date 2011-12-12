@@ -629,8 +629,8 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
     if m == n # Square
         case = :general
-        if isuppertriangular(A); case = :upper_triangular; end
-        if islowertriangular(A); case = :lower_triangular; end
+        if istriu(A); case = :upper_triangular; end
+        if istril(A); case = :lower_triangular; end
 
         if case == :general # General
             ipiv = Array(Int32, n)

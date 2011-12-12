@@ -213,7 +213,7 @@ function issymmetric(A::SparseMatrixCSC)
     nnz(A - A.') == 0 ? true : false
 end
 
-function islowertriangular{T}(A::SparseMatrixCSC{T})
+function istril{T}(A::SparseMatrixCSC{T})
     for col = 1:A.n
         for i = A.colptr[col]:(A.colptr[col]-1)
             if A.rowval[i] < col && A.nzval[i] != zero(T); return false; end
@@ -222,7 +222,7 @@ function islowertriangular{T}(A::SparseMatrixCSC{T})
     return true
 end
 
-function isuppertriangular{T}(A::SparseMatrixCSC{T})
+function istriu{T}(A::SparseMatrixCSC{T})
     for col = 1:A.n
         for i = A.colptr[col]:(A.colptr[col]-1)
             if A.rowval[i] > col && A.nzval[i] != zero(T); return false; end
