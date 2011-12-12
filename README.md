@@ -237,7 +237,7 @@ If everything works correctly, you will see a Julia banner and an interactive pr
 You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Platform-Specific-Notes"/>
-## Platform-Specific Notes
+### Platform-Specific Notes
 
 On some Linux distributions (for instance Ubuntu 11.10) you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
@@ -257,13 +257,11 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
     test/          unit and function tests for julia itself
     ui/            source for various front ends
 
-<a name="Editor-Setup"/>
-## Editor Setup
+<a name="Editor-Terminal-Setup"/>
+## Editor & Terminal Setup
 
-Julia support is currently available for Emacs, Textmate, and Vim. Instructions for configuring these editors to recognize Julia syntax are in [contrib/README.md](https://github.com/JuliaLang/julia/tree/master/contrib).
-
-<a name="Terminal-Setup"/>
-## Terminal Setup
+Julia support is currently available for Emacs, Vim, and TextMate.
+Support files and instructions for configuring these editors can be found in [`contrib/`](https://github.com/JuliaLang/julia/tree/master/contrib).
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
