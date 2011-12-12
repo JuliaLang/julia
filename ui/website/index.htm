@@ -73,6 +73,17 @@
 
             // array of color schemes
             var color_schemes = [
+                ["Classic", {
+                    background_color: "#f8f8f8",
+                    text_color: "#444444",
+                    message_color: "#0000aa",
+                    error_color: "#ff0000",
+                    prompt_color: "#00aa00",
+                    plot_grid_color: "#dadada",
+                    plot_axis_color: "#aaaaaa",
+                    plot_text_color: "#444444",
+                    plot_line_color: "#4d87b7",
+                }],
                 ["Dark", {
                     background_color: "#000000",
                     text_color: "#dddddd",
@@ -83,17 +94,6 @@
                     plot_axis_color: "#666666",
                     plot_text_color: "#dddddd",
                     plot_line_color: "#4d87c7",
-                }],
-                ["Light", {
-                    background_color: "#f8f8f8",
-                    text_color: "#444444",
-                    message_color: "#0000aa",
-                    error_color: "#ff0000",
-                    prompt_color: "#00aa00",
-                    plot_grid_color: "#dadada",
-                    plot_axis_color: "#aaaaaa",
-                    plot_text_color: "#444444",
-                    plot_line_color: "#4d87b7",
                 }],
             ];
 
@@ -166,6 +166,9 @@
 
             // a queue of messages from julia to be processed
             var inbox_queue = [];
+
+            // keep track of whether new terminal data will appear on a new line
+            var new_line = true;
 
             // keep track of whether we have received a fatal message
             var dead = false;
@@ -314,13 +317,37 @@
             // escape html
             function escape_html(str) {
                 // escape ampersands, angle brackets, spaces, tabs, and newlines
-                return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/ /g, "&nbsp;").replace(/\t/g, "&nbsp;&nbsp;&nbsp;&nbsp;").replace(/\n/g, "<br />");
+                return str.replace(/\t/g, "    ").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br />");
             }
 
-            // add to the terminal
+            // indent and escape html
+            function indent_and_escape_html(str) {
+                // indent newlines to line up with the end of the julia prompt
+                return escape_html(str.replace(/\n/g, "\n       "));
+            }
+
+            // add html to the terminal (preserving whitespace)
             function add_to_terminal(data) {
+                // preserve whitespace with non-breaking spaces
+                var new_data = "";
+                var tag_depth = 0;
+                for (var i = 0; i < data.length; i += 1) {
+                    if (data[i] == "<")
+                        tag_depth += 1;
+                    if (data[i] == ">")
+                        tag_depth -= 1;
+                    if (tag_depth == 0 && i < data.length-1) {
+                        if (data[i] == " " && data[i+1] == " ")
+                            new_data += "&nbsp;";
+                        else
+                            new_data += data[i];
+                    } else {
+                        new_data += data[i];
+                    }
+                }
+
                 // update the html
-                $("#terminal").append(data);
+                $("#terminal").append(new_data);
 
                 // apply the color scheme to the new content
                 apply_color_scheme();
@@ -330,6 +357,12 @@
 
                 // scroll to the new data
                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+                // determine whether the last thing added was a newline
+                if (new_data.length >= 6)
+                    new_line = (new_data.substr(new_data.length-6, 6) == "<br />");
+                else
+                    new_line = false;
             }
 
             // the first request
@@ -427,7 +460,7 @@
                         input_history_id = input_history_current.length-1;
 
                         // add the julia prompt and the input to the log
-                        add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                        add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
                         
                         // print the error message
                         add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
@@ -469,7 +502,7 @@
                         input_history_id = input_history_current.length-1;
 
                         // add the julia prompt and the input to the log
-                        add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+escape_html(input.replace(/\n/g, "\n       "))+"<br />");
+                        add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
                         
                         // clear the input field
                         $("#terminal-input").val("");
@@ -765,10 +798,8 @@
             <div id="left-column">
                 <h1>The Julia Language</h1>
                 <a href="/" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
+                <a href="http://github.com/JuliaLang/julia/wiki"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
                 <a href="http://julialang.org/"><img class="bullet" src="images/bullet.png" alt="" /> Julia Home</a>
-		<a href="http://github.com/JuliaLang/julia/wiki"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
-		<a href="https://github.com/JuliaLang/julia/issues"><img class="bullet" src="images/bullet.png" alt="" /> Issues</a>
-                
                 <h2>Color Scheme</h2>
                 <select id="color-scheme-picker">
                     <option>Milk</option>

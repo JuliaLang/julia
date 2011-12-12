@@ -101,16 +101,12 @@ form#terminal-form
     padding: 20px;
     overflow: auto;
     cursor: text;
-    -moz-box-shadow: 0px 0px 20px #ddd;
-    -webkit-box-shadow: 0px 0px 20px #ddd;
-    box-shadow: 0px 0px 20px #ddd;
 }
 
 div#terminal
 {
     border: none;
     outline: none;
-    display: block;
     overflow-x: hidden;
     font: 85% "Droid Sans Mono", "Consolas", "Courier", "Courier New", monospace;
 }
