@@ -213,6 +213,24 @@ function issymmetric(A::SparseMatrixCSC)
     nnz(A - A.') == 0 ? true : false
 end
 
+function islowertriangular{T}(A::SparseMatrixCSC{T})
+    for col = 1:A.n
+        for i = A.colptr[col]:(A.colptr[col]-1)
+            if A.rowval[i] < col && A.nzval[i] != zero(T); return false; end
+        end
+    end
+    return true
+end
+
+function isuppertriangular{T}(A::SparseMatrixCSC{T})
+    for col = 1:A.n
+        for i = A.colptr[col]:(A.colptr[col]-1)
+            if A.rowval[i] > col && A.nzval[i] != zero(T); return false; end
+        end
+    end
+    return true
+end
+
 #transpose(S::SparseMatrixCSC) = ((I,J,V) = find(S); sparse(J, I, V, S.n, S.m))
 
 #Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
@@ -475,7 +493,7 @@ assign{T,N}(A::SparseMatrixCSC, v::AbstractArray{T,N}, i0::Int, i1::Int) =
 assign{T}(A::SparseMatrixCSC{T}, v, i::Int) = assign(A, v, ind2sub(size(A),i))
 assign{T}(A::SparseMatrixCSC{T}, v, I::(Int,Int)) = assign(A, v, I[1], I[2])
 
-function assign{T}(A::SparseMatrixCSC{T}, v, i0::Int, i1::Int)
+function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Int, i1::Int)
     if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
     if v == zero(T) #either do nothing or delete entry if it exists
         first = A.colptr[i1]
@@ -577,7 +595,60 @@ function assign{T}(A::SparseMatrixCSC{T}, v, i0::Int, i1::Int)
     return A
 end
 
-#TODO: assign of ranges, vectors
+assign{T,S<:Int}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, J::AbstractVector{S}) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, J)
+assign{T,S<:Int}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Int, J::AbstractVector{S}) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, [i], J)
+assign{T,S<:Int}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Int) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
+assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Int, J::AbstractVector) = assign(A, v, [i], J)
+assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::Int) = assign(A, v, I, [j])
+
+#todo: assign where v is sparse
+function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
+    #at the moment _jl_spa_store_reset assumes spa has ordered indices, so columns' rowvals not guaranteed to be in order
+    if size(v,1) != length(I) || size(v,2) != length(J)
+        return("error in assign: mismatched dimensions")
+    end
+    m, n = size(A,1), size(A,2)
+    inttype = _jl_best_inttype(m)
+    est = nnz(A) + numel(v)
+    colptr = Array(Size, n+1)
+    colptr[:] = A.colptr[:]
+    rowval = Array(inttype, est)
+    nzval = Array(T, est)
+    Js, Jp = sortperm(J)
+    A_col = 1
+    j = 1
+    spa = SparseAccumulator(T, inttype, m)
+    j_max = size(v,2)
+    while A_col <= n
+        if j > j_max
+            temp2 = A.colptr[A_col]:(A.colptr[n+1]-1)
+            offs = colptr[A_col]-A.colptr[A_col]
+            temp1 = temp2 + offs
+            colptr[A_col:(n+1)] = A.colptr[A_col:(n+1)] + offs
+            rowval[temp1] = A.rowval[temp2]
+            nzval[temp1] = A.nzval[temp2]
+            break
+        end
+        if A_col < Js[j]
+            temp2 = A.colptr[A_col]:(A.colptr[Js[j]]-1)
+            offs = colptr[A_col]-A.colptr[A_col]
+            temp1 = temp2 + offs
+            colptr[A_col:Js[j]] = A.colptr[A_col:Js[j]] + offs
+            rowval[temp1] = A.rowval[temp2]
+            nzval[temp1] = A.nzval[temp2]            
+        end
+        A_col = Js[j]
+        _jl_spa_set(spa, A, A_col)
+        spa[I] = v[:,Jp[j]]
+        (rowval, nzval) = _jl_spa_store_reset(spa, A_col, colptr, rowval, nzval)
+        A_col += 1
+        j += 1
+    end
+    A.colptr = colptr
+    A.rowval = rowval
+    A.nzval = nzval
+    A
+end
 #TODO: sub
 
 # In matrix-vector multiplication, the right orientation of the vector is assumed.
@@ -675,7 +746,7 @@ function SparseAccumulator{T,T_int}(::Type{T}, ::Type{T_int}, s::Size)
     return SparseAccumulator(zeros(T,s), falses(s), Array(T_int,s), 0)
 end
 
-SparseAccumulator(s::Size) = SparseAccumulator(Float64, s)
+SparseAccumulator(s::Size) = SparseAccumulator(Float64, Index, s)
 
 length(S::SparseAccumulator) = length(S.vals)
 numel(S::SparseAccumulator) = S.nvals
@@ -737,6 +808,29 @@ function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Int)
     
     S.nvals = nvals
 end
+#set spa S to be the i'th column of A
+function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Int)
+    m = A.m
+    if length(S) != m; return("mismatched dimensions"); end
+    
+    z = zero(T)
+    offs = A.colptr[i]-1
+    nvals = A.colptr[i+1] - offs - 1
+    S.indexes[1:nvals] = A.rowval[(offs+1):(offs+nvals)]
+    S.nvals = nvals
+    j = 1
+    for k = 1:m
+        if j <= nvals && k == S.indexes[j]
+            S.vals[k] = A.nzval[offs+j]
+            S.flags[k] = true
+            j += 1
+        else
+            S.vals[k] = z
+            S.flags[k] = false
+        end
+    end
+    S
+end
 
 # # reset spa
 # function _jl_spa_reset{T}(S::SparseAccumulator{T})
@@ -763,27 +857,27 @@ end
 #     return S
 # end
 
-# ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
+ref{T}(S::SparseAccumulator{T}, i::Index) = S.flags[i] ? S.vals[i] : zero(T)
 
-# assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Index) = 
-#     invoke(assign, (SparseAccumulator{T}, Any, Int), S, v, i)
+assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Int) = 
+    invoke(assign, (SparseAccumulator{T}, Any, Int), S, v, i)
 
-# function assign{T}(S::SparseAccumulator{T}, v, i::Int)
-#     if v == zero(T)
-#         if S.flags[i]
-#             S.vals[i] = v
-#             S.flags[i] = false
-#             S.nvals -= 1
-#         end
-#     else
-#         if S.flags[i]
-#             S.vals[i] = v
-#         else
-#             S.flags[i] = true
-#             S.vals[i] = v
-#             S.nvals += 1
-#             S.indexes[S.nvals] = i
-#         end
-#     end
-#     return S
-# end
+function assign{T}(S::SparseAccumulator{T}, v, i::Int)
+    if v == zero(T)
+        if S.flags[i]
+            S.vals[i] = v
+            S.flags[i] = false
+            S.nvals -= 1
+        end
+    else
+        if S.flags[i]
+            S.vals[i] = v
+        else
+            S.flags[i] = true
+            S.vals[i] = v
+            S.nvals += 1
+            S.indexes[S.nvals] = i
+        end
+    end
+    return S
+end
