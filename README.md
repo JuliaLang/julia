@@ -260,7 +260,7 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Julia support is currently available for Emacs, Vim, and TextMate.
+Julia support is currently available for [Emacs](https://github.com/JuliaLang/julia/tree/master/contrib#Emacs), [Vim](https://github.com/JuliaLang/julia/tree/master/contrib#Vim), and [TextMate](https://github.com/JuliaLang/julia/tree/master/contrib#TextMate).
 Support files and instructions for configuring these editors can be found in [`contrib/`](https://github.com/JuliaLang/julia/tree/master/contrib).
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
