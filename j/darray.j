@@ -39,7 +39,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(initializer, dims, procs, dist)
+    function DArray(initializer, dims, procs, dist::Array{Size,1})
         go = GlobalObject(procs,
                           g->DArray{T,N,distdim}(g,initializer,dims,procs,dist))
         go.local_identity
@@ -218,7 +218,7 @@ end
 
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
-darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist) =
+darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist::Array{Size,1}) =
     DArray{T,length(dims),long(distdim)}(init, dims, procs, dist)
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
