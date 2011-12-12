@@ -178,6 +178,8 @@ function vcat{T}(rs::Ranges{T}...)
     a
 end
 
+reverse{T<:Real}(v::Ranges{T}) = (last(v)):(-step(v)):(v.start)
+
 ## sorting ##
 
 issorted(v::Range1) = true
@@ -185,6 +187,11 @@ issorted(v::Range) = v.step >= 0
 
 sort(v::Range1) = v
 sort!(v::Range1) = v
+
+sort{T<:Real}(v::Range{T}) = issorted(v) ? v : reverse(v)
+
+sortperm(v::Range1) = (v, 1:length(v))
+sortperm{T<:Real}(v::Range{T}) = issorted(v) ? (v, 1:1:length(v)) : (reverse(v),length(v):-1:1) 
 
 function sum(v::Range1)
     n1 = v.start-1
