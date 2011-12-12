@@ -17,15 +17,21 @@ eltype{T,n}(::AbstractArray{T,n}) = T
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
-nnz(a::AbstractArray) = (n = 0; for i=1:numel(a); n += a[i] != 0 ? 1 : 0; end; n)
-nnz(a::AbstractArray{Bool}) = (n = 0; for i=1:numel(a); n += a[i] == true ? 1 : 0; end; n)
+
+function nnz(a::AbstractArray)
+    n = 0
+    for i = 1:numel(a)
+        n += bool(a[i]) ? 1 : 0
+    end
+    return n
+end
 
 function stride(a::AbstractArray, i::Int)
     s = 1
     for n=1:(i-1)
         s *= size(a, n)
     end
-    s
+    return s
 end
 strides{T}(a::AbstractArray{T,1}) = (1,)
 strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
@@ -42,17 +48,21 @@ iscomplex(::AbstractArray) = false
 ## Constructors ##
 
 # default arguments to similar()
-similar{T}(a::AbstractArray{T})                      = similar(a, T, size(a))
-similar   (a::AbstractArray, T)                      = similar(a, T, size(a))
-similar{T}(a::AbstractArray{T}, dims::Dims)          = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::Size...)       = similar(a, T, dims)
-similar   (a::AbstractArray, T, dims::Size...)       = similar(a, T, dims)
+similar{T}(a::AbstractArray{T})                = similar(a, T, size(a))
+similar   (a::AbstractArray, T)                = similar(a, T, size(a))
+similar{T}(a::AbstractArray{T}, dims::Dims)    = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::Size...) = similar(a, T, dims)
+similar   (a::AbstractArray, T, dims::Size...) = similar(a, T, dims)
 
 empty(a::AbstractArray) = similar(a, 0)
 
-reshape(a::AbstractArray, dims::Dims) = (b = similar(a, dims);
-                                  for i=1:numel(a); b[i] = a[i]; end;
-                                  b)
+function reshape(a::AbstractArray, dims::Dims)
+    b = similar(a, dims)
+    for i=1:numel(a)
+        b[i] = a[i]
+    end
+    return b
+end
 reshape(a::AbstractArray, dims::Size...) = reshape(a, dims)
 
 function fill!(A::AbstractArray, x)
@@ -72,13 +82,21 @@ end
 copy(a::AbstractArray) = copy_to(similar(a), a)
 
 eye(n::Size) = eye(n, n)
-eye(m::Size, n::Size) = (a = zeros(m,n);
-                         for i=1:min(m,n); a[i,i]=1; end;
-                         a)
-one{T}(x::AbstractArray{T,2}) = (m=size(x,1); n=size(x,2);
-                          a = zeros(T,size(x));
-                          for i=1:min(m,n); a[i,i]=1; end;
-                          a)
+function eye(m::Size, n::Size)
+    a = zeros(m,n)
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
+function one{T}(x::AbstractMatrix{T})
+    m, n = size(x)
+    a = zeros(T,size(x))
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
 zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
 
 ## Conversions ##
@@ -115,7 +133,6 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
 macro unary_op(f)
     quote
-
         function ($f)(A::AbstractArray)
             F = similar(A)
             for i=1:numel(A)
@@ -123,9 +140,8 @@ macro unary_op(f)
             end
             return F
         end
-
-    end # quote
-end # macro
+    end
+end
 
 @unary_op (-)
 @unary_op (~)
@@ -133,7 +149,6 @@ end # macro
 
 macro unary_c2r_op(f)
     quote
-
         function ($f){T}(A::AbstractArray{T})
             S = typeof(($f)(zero(T)))
             F = similar(A, S)
@@ -142,9 +157,8 @@ macro unary_c2r_op(f)
             end
             return F
         end
-
-    end # quote
-end # macro
+    end
+end
 
 @unary_c2r_op (real)
 @unary_c2r_op (imag)
@@ -220,7 +234,6 @@ end
 
 macro binary_arithmetic_op(f)
     quote
-
         function ($f){S,T}(A::Array{S}, B::Array{T})
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, promote_type(S,T))
@@ -243,9 +256,8 @@ macro binary_arithmetic_op(f)
             end
             return F
         end
-
-    end # quote
-end # macro
+    end
+end
 
 @binary_arithmetic_op (+)
 @binary_arithmetic_op (-)
@@ -327,7 +339,7 @@ end
 
 ## code generator for specializing on the number of dimensions ##
 
-#otherbodies are the bodies that reside between loops, if its a 2 dimension array. 
+#otherbodies are the bodies that reside between loops, if its a 2 dimension array.
 function make_loop_nest(vars, ranges, body)
     otherbodies = cell(length(vars),2)
     #println(vars)
@@ -356,10 +368,10 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     expr
 end
 
-## genbodies() is a function that creates an array (potentially 2d), 
-## where the first element is inside the inner most array, and the last 
-## element is outside most loop, and all the other arguments are 
-## between each loop. If it creates a 2d array, it just means that it 
+## genbodies() is a function that creates an array (potentially 2d),
+## where the first element is inside the inner most array, and the last
+## element is outside most loop, and all the other arguments are
+## between each loop. If it creates a 2d array, it just means that it
 ## specifies what it wants to do before and after each loop.
 ## If genbodies creates an array it must of length N.
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
@@ -413,42 +425,33 @@ end
 
 ref(t::AbstractArray) = t
 ref(t::AbstractArray, i::Int) = error("indexing not defined for ", typeof(t))
-ref(t::AbstractArray, i::Real)          = ref(t, iround(i))
+ref(t::AbstractArray, i::Real) = ref(t, iround(i))
 ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
-ref(t::AbstractArray, i::Real, j::Real, k::Real) =
-    ref(t, iround(i), iround(j), iround(k))
-ref(t::AbstractArray, r::Real...)       = ref(t,map(iround,r)...)
+ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, iround(i), iround(j), iround(k))
+ref(t::AbstractArray, r::Real...) = ref(t,map(iround,r)...)
 
 ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
 ref{T<:Int}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
 
-ref{T<:Int}(A::AbstractMatrix, I::Int, J::AbstractVector{T})       = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::Int)       = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::Int, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::Int) = [ A[i,j] | i = I, j = J ]
 ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 
-function ref(A::AbstractArray, i0::Int, i1::Int)
-    A[i0 + size(A,1)*(i1-1)]
-end
-
-function ref(A::AbstractArray, i0::Int, i1::Int, i2::Int)
+ref(A::AbstractArray, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)]
+ref(A::AbstractArray, i0::Int, i1::Int, i2::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
-end
-
-function ref(A::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int)
+ref(A::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
-end
 
 function ref(A::AbstractArray, I::Int...)
     dims = size(A)
     ndims = length(I)
-
     index = I[1]
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
         index += (I[k]-1) * stride
     end
-
     return A[index]
 end
 
@@ -460,20 +463,18 @@ function ref(A::AbstractArray, I::Indices...)
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
-    gen_cartesian_map(ref_cache, ivars->:(X[storeind] = A[$(ivars...)];
-                                          storeind += 1),
-                      I,
-                      (:A, :X, :storeind),
-                      A, X, 1)
+    gen_cartesian_map(ref_cache, ivars -> quote
+            X[storeind] = A[$(ivars...)];
+            storeind += 1
+        end, I, (:A, :X, :storeind), A, X, 1)
     return X
 end
 end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
-function slicedim(A::AbstractArray, d::Int, i)
+slicedim(A::AbstractArray, d::Int, i) =
     A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
-end
 
 function flipdim(A::AbstractArray, d::Int)
     nd = ndims(A)
@@ -568,14 +569,14 @@ assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
 assign(t::AbstractArray, x) = error("assign: too few arguments")
 
 function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
-    for i=I
+    for i = I
         A[i] = x
     end
     return A
 end
 
 function assign{T<:Int}(A::AbstractVector, X::AbstractArray, I::AbstractVector{T})
-    for i=1:length(I)
+    for i = 1:length(I)
         A[I[i]] = X[i]
     end
     return A
@@ -702,7 +703,6 @@ function hcat{T}(A::AbstractMatrix{T}...)
     for j = 2:nargs
         if size(A[j], 1) != nrows; error("hcat: mismatched dimensions"); end
     end
-
     B = similar(A[1], nrows, ncols)
     pos = 1
     for k=1:nargs
@@ -711,7 +711,6 @@ function hcat{T}(A::AbstractMatrix{T}...)
         B[:, pos:p1] = Ak
         pos = p1+1
     end
-
     return B
 end
 
@@ -722,7 +721,6 @@ function vcat{T}(A::AbstractMatrix{T}...)
     for j = 2:nargs
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
-
     B = similar(A[1], nrows, ncols)
     pos = 1
     for k=1:nargs
@@ -731,7 +729,6 @@ function vcat{T}(A::AbstractMatrix{T}...)
         B[pos:p1, :] = Ak
         pos = p1+1
     end
-
     return B
 end
 
@@ -1008,7 +1005,7 @@ function areduce(f::Function, A::AbstractArray, region::Region, v0, RType::Type)
     ndimsA = ndims(A)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
     R = similar(A, RType, dimsR)
-    
+
     if is(areduce_cache,nothing)
         areduce_cache = HashTable()
     end
@@ -1305,13 +1302,13 @@ function permute(A::AbstractArray, perm)
         for i = 1:numel(toReturn)
             toReturn[i] = nothing
         end
-        
+
         tmp = counts[end]
         toReturn[len+1] = quote
             ind = 1
             $tmp = $stridenames[end]
         end
-        
+
         #inner most loop
         toReturn[1] = quote
             P[ind] = A[+($counts...)+offset]
@@ -1341,7 +1338,7 @@ function permute(A::AbstractArray, perm)
     gen_cartesian_map(permute_cache, permute_one, ranges,
                       tuple(:A, :P, :perm, :offset, stridenames...),
                       A, P, perm, offset, strides...)
-    
+
     return P
 end
 end # let
@@ -1436,11 +1433,11 @@ let findn_cache = nothing
 function findn_one(ivars)
     s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
     quote
-	Aind = A[$(ivars...)]
-	if Aind != z
-	    $(s...)
-	    count +=1
-	end
+    	Aind = A[$(ivars...)]
+    	if Aind != z
+    	    $(s...)
+    	    count +=1
+    	end
     end
 end
 
@@ -1574,7 +1571,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
             new(p, i, (length(i[1]),), [1], i[1].start)
         end
         function SubArray(p::A, i::(Range{Index},))
-            new(p, i, (length(i[1]),), [i[1].step], i[1].start) 
+            new(p, i, (length(i[1]),), [i[1].step], i[1].start)
         end
     else
         function SubArray(p::A, i::I)
@@ -1591,7 +1588,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
                     push(newstrides, isa(i[j],Range1) ? pstrides[j] :
                          pstrides[j] * i[j].step)
                     newfirst += (i[j].start-1)*pstrides[j]
-                end 
+                end
             end
             new(p, i, tuple(newdims...), newstrides, newfirst)
         end
@@ -1667,7 +1664,7 @@ end
 #        newdims = tuple(newdims..., next)
 #    end
 #    sub(a, newdims)
-#end 
+#end
 #function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
 #    newdims = ()
 #    for i = 1:length(s.indexes)
@@ -1739,7 +1736,7 @@ function ref(s::SubArray, I::Indices...)
         newindexes[i] = isa(t, Index) ? t : t[I[j]]
         j += 1
     end
-    
+
     reshape(ref(s.parent, newindexes...), map(length, I))
 end
 
@@ -1790,9 +1787,9 @@ assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
 assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Index}) = 
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Index}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
-assign{T}(s::SubArray{T,1}, v, I::Range1{Index}) = 
+assign{T}(s::SubArray{T,1}, v, I::Range1{Index}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
 assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Index}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
@@ -1824,7 +1821,7 @@ function assign(s::SubArray, v::AbstractArray, I::Indices...)
         newindexes[i] = isa(t, Index) ? t : t[I[j]]
         j += 1
     end
-    
+
     assign(s.parent, reshape(v, map(length, I)), newindexes...)
 end
 
@@ -1838,7 +1835,7 @@ function assign(s::SubArray, v, I::Indices...)
         newindexes[i] = isa(t, Index) ? t : t[I[j]]
         j += 1
     end
-    
+
     assign(s.parent, v, newindexes...)
 end
 
