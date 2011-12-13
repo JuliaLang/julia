@@ -797,12 +797,13 @@ function parse_int{T<:Int}(::Type{T}, s::String, base::Int)
     return n
 end
 
-parse_bin(s::String) = parse_int(Int64, s,  2)
-parse_oct(s::String) = parse_int(Int64, s,  8)
-parse_dec(s::String) = parse_int(Int64, s, 10)
-parse_hex(s::String) = parse_int(Int64, s, 16)
+parse_bin(s::String) = parse_int(Long, s,  2)
+parse_oct(s::String) = parse_int(Long, s,  8)
+parse_dec(s::String) = parse_int(Long, s, 10)
+parse_hex(s::String) = parse_int(Long, s, 16)
 
 int   (s::String) = parse_dec(s)
+uint  (s::String) = parse_int(Ulong, s, 10)
 int8  (s::String) = int8(int(s))
 uint8 (s::String) = uint8(int(s))
 int16 (s::String) = int16(int(s))

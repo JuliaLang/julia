@@ -101,9 +101,9 @@ convert(::Type{Int}, x::Float32) = convert(Int32, x)
 convert(::Type{Int}, x::Float64) = convert(Int64, x)
 
 convert(::Type{Uint}, x::Bool   ) = convert(Uint8,  x)
-convert(::Type{Uint}, x::Int8   ) = convert(Uint16, x)
-convert(::Type{Uint}, x::Int16  ) = convert(Uint32, x)
-convert(::Type{Uint}, x::Int32  ) = convert(Uint64, x)
+convert(::Type{Uint}, x::Int8   ) = convert(Uint8, x)
+convert(::Type{Uint}, x::Int16  ) = convert(Uint16, x)
+convert(::Type{Uint}, x::Int32  ) = convert(Uint32, x)
 convert(::Type{Uint}, x::Int64  ) = convert(Uint64, x) # LOSSY
 convert(::Type{Uint}, x::Float32) = convert(Uint32, x)
 convert(::Type{Uint}, x::Float64) = convert(Uint64, x)

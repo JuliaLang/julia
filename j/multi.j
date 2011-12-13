@@ -92,7 +92,7 @@ type Worker
     fd::Int32
     socket::IOStream
     sendbuf::IOStream
-    id::Int32
+    id::Size
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
@@ -175,10 +175,10 @@ type Location
 end
 
 type ProcessGroup
-    myid::Int32
+    myid::Size
     workers::Array{Any,1}
     locs::Array{Any,1}
-    np::Int32
+    np::Size
 
     # global references
     refs::HashTable
