@@ -781,9 +781,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         rowval = grow(rowval, length(rowval))
         nzval = grow(nzval, length(nzval))
     end
-
     _jl_quicksort(indexes, 1, nvals) #sort indexes[1:nvals]
-
     offs = 1
     for i=1:nvals
         pos = indexes[i]
@@ -825,7 +823,7 @@ function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Int)
             flags[r] = true
             vals[r] = v
             nvals += 1
-            indexes[nvals] = i
+            indexes[nvals] = r
         end
     end
     
@@ -834,7 +832,7 @@ end
 #set spa S to be the i'th column of A
 function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Int)
     m = A.m
-    if length(S) != m; return("mismatched dimensions"); end
+    if length(S) != m; error("mismatched dimensions"); end
     
     z = zero(T)
     offs = A.colptr[i]-1
