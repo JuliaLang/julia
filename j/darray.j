@@ -58,8 +58,8 @@ typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
 size(d::DArray) = d.dims
 distdim(d::DArray) = d.distdim
 procs(d::DArray) = d.pmap
+dist(d::DArray) = d.dist
 distdim(d::SubDArray) = d.parent.distdim
-procs(d::SubDArray) = d.parent.pmap
 
 function serialize{T,N,dd}(s, d::DArray{T,N,dd})
     i = worker_id_from_socket(s)
@@ -87,21 +87,36 @@ function defaultdist(distdim, dims, np)
 end
 
 function pieceindexes(d::DArray, p)
-    if p == 0
-        return ntuple(ndims(d), i->(i==d.distdim ? (1:0) : 1:size(d,i)))
-    end
-    ntuple(ndims(d), i->(i==d.distdim ? (d.dist[p]:d.dist[p+1]-1) :
-                                        1:size(d,i)))
+    dd = distdim(d)
+    ntuple(ndims(d), i->(i==dd ? pieceindex(d, p) : 1:size(d,i)))
 end
 
-myindexes(d::DArray) = pieceindexes(d, d.localpiece)
+function pieceindexes(d::SubDArray, p, locl::Bool)
+    dd = distdim(d)
+    ntuple(ndims(d), i->(i==dd ? pieceindex(d, p, locl) : 1:size(d,i)))
+end
 
-function myindexes(s::SubDArray, locl)
+pieceindexes(s::SubDArray, p) = pieceindexes(s, p, false)
+
+function pieceindex(d::DArray, p)
+    if p == 0
+        return 1:0
+    end
+    d.dist[p]:(d.dist[p+1]-1)
+end
+
+pieceindex(s::SubDArray, p) = pieceindex(s, p, false)
+
+function pieceindex(s::SubDArray, p, locl::Bool)
     d = s.parent
-    lo = d.dist[d.localpiece]
-    hi = d.dist[d.localpiece+1]-1
-    sdi = s.indexes[d.distdim]
-    l = localize(d)
+    dd = d.distdim
+    nd = ndims(d)
+    if p == 0
+        return 1:0
+    end
+    lo = d.dist[p]
+    hi = d.dist[p+1]-1
+    sdi = s.indexes[dd]
     if isa(sdi,Int)
         if lo <= sdi <= hi
             r = sdi
@@ -109,7 +124,7 @@ function myindexes(s::SubDArray, locl)
                 r -= (lo-1)
             end
         else
-            return ntuple(ndims(l), i->(i==d.distdim ? (1:0) : 1:size(s,i)))
+            return 1:0
         end
     else
         r = intersect(lo:hi, sdi)
@@ -117,12 +132,15 @@ function myindexes(s::SubDArray, locl)
             r -= (lo-1)
         end
     end
-    return ntuple(ndims(l), i->(i==d.distdim ? r : 1:size(s,i)))
+    return r
 end
 
-myindexes(s::SubDArray) = myindexes(s, false)
+myindexes(d::DArray) = pieceindexes(d, d.localpiece)
 
-# when we actually need the data, wait for it
+myindexes(s::SubDArray) = pieceindexes(s, s.parent.localpiece)
+
+myindexes(s::SubDArray, locl) = pieceindexes(s, s.parent.localpiece, locl)
+
 localize(d::DArray) = d.locl
 
 localize(s::SubDArray) = sub(localize(s.parent), myindexes(s, true))
@@ -138,12 +156,53 @@ function localize(src::DArray, dest::DArray)
     src[myindexes(dest)...]
 end
 
+function localize_copy(src::DArray, dest::DArray)
+    if size(src)==size(dest) && distdim(src)==distdim(dest) &&
+       src.dist[src.localpiece]   == dest.dist[dest.localpiece] &&
+       src.dist[src.localpiece+1] == dest.dist[dest.localpiece+1]
+        return copy(localize(src))
+    end
+    src[myindexes(dest)...]
+end
+
 function localize(src::SubDArray, dest::DArray)
     di = myindexes(dest)
     if isequal(myindexes(src), di)
         return localize(src)
     end
     src[di...]
+end
+
+function localize_copy(src::SubDArray, dest::DArray)
+    di = myindexes(dest)
+    if isequal(myindexes(src), di)
+        return copy(localize(src))
+    end
+    src[di...]
+end
+
+# piece numbers covered by a subarray
+function _jl_sub_da_pieces(s::SubDArray)
+    dd = s.parent.distdim
+    sdi = s.indexes[dd]
+    if isa(sdi,Int)
+        p = locate(s.parent, sdi)
+        return p:p
+    end
+    lo = locate(s.parent, sdi[1])
+    hi = locate(s.parent, sdi[end])
+    if hi < lo
+        return hi:lo
+    end
+    return lo:hi
+end
+
+procs(s::SubDArray) = s.parent.pmap[_jl_sub_da_pieces(s)]
+
+function dist(s::SubDArray)
+    pcs = _jl_sub_da_pieces(s)
+    sizes = [ length(pieceindex(s, p)) | p = pcs ]
+    cumsum([1, sizes])
 end
 
 # find which piece holds index i in the distributed dimension
@@ -257,13 +316,13 @@ similar(d::DArray, T::Type, dims::Dims) =
     darray((T,lsz,da)->Array(T,lsz), T, dims,
            d.distdim>length(dims) ? maxdim(dims) : d.distdim, d.pmap)
 
-copy{T}(d::DArray{T}) =
-    darray((T,lsz,da)->copy(localize(d)), T, size(d), d.distdim,d.pmap,d.dist)
+copy{T}(d::SubOrDArray{T}) =
+    darray((T,lsz,da)->localize_copy(d, da), T, size(d), distdim(d), procs(d))
 
-function copy_to(d::DArray, src::DArray)
+function copy_to(d::DArray, src::SubOrDArray)
     @sync begin
         for p = d.pmap
-            @spawnat p copy_to(localize(d), src[myindexes(d)...])
+            @spawnat p copy_to(localize(d), localize(src, d))
         end
     end
     return d

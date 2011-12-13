@@ -125,7 +125,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
     if m != n; error("matrix argument must be square"); end
 
     isrealsymA = false
-    if !iscomplex(A) && issymmetric(A); isrealsymA = true; end
+    if !iscomplex(A) && issym(A); isrealsymA = true; end
 
     nev = k
     ncv = min(max(nev*2, 20), n)

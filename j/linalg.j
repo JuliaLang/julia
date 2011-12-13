@@ -236,7 +236,7 @@ inv(a::Matrix) = a \ one(a)
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::Matrix) = cond(a, 2)
 
-function issymmetric(A::Matrix)
+function issym(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
     for i = 1:(n-1), j = (i+1):n

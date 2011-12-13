@@ -8,18 +8,23 @@ type Range{T<:Real} <: Ranges{T}
     start::T
     step::T
     stop::T
+
+    function Range(start::T, step::T, stop::T)
+        if step == zero(T)
+            error("Range: step cannot be zero")
+        end
+        new(start, step, stop)
+    end
 end
+Range{T}(start::T, step::T, stop::T) = Range{T}(start, step, stop)
 Range(start, step, stop) = Range(promote(start, step, stop)...)
-Range{T}(start::T, step::T, stop::T) =
-    throw(MethodError(Range, (start,step,stop)))
 
 type Range1{T<:Real} <: Ranges{T}
     start::T
     stop::T
 end
+Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
 Range1(start, stop) = Range1(promote(start, stop)...)
-Range1{T}(start::T, stop::T) =
-    throw(MethodError(Range1, (start,stop)))
 
 colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
 colon(start::Real, stop::Real) = Range1(start, stop)
@@ -117,12 +122,12 @@ intersect(r::Range, s::Range1) = intersect(s, r)
 
 function +(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start+r2.start, step(r1)+step(r2), r1.stop+r2.stop)
+    Range(r1.start+r2.start, step(r1)+step(r2), last(r1)+last(r2))
 end
 
 function -(r1::Ranges, r2::Ranges)
     if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start-r2.start, step(r1)-step(r2), r1.stop-r2.stop)
+    Range(r1.start-r2.start, step(r1)-step(r2), last(r1)-last(r2))
 end
 
 ## non-linear operations on ranges ##
