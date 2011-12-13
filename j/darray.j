@@ -628,7 +628,6 @@ function assign(d::DArray, v, I::Range1{Index}...)
         return d
     end
     for p = 1:length(pmap)
-        offs = I[d.distdim][1] - 1
         K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                I[i]))
         sync_add(remote_call(d.pmap[pmap[p]], assign, d, v, K...))
@@ -647,13 +646,16 @@ function assign(d::DArray, v::AbstractArray, I::Range1{Index}...)
         localize(d)[J...] = v
         return d
     end
+    offs = I[d.distdim][1] - 1
+    if ndims(v) != length(I)
+        v = reshape(v, map(length, I))
+    end
     for p = 1:length(pmap)
-        offs = I[d.distdim][1] - 1
         J = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1))-offs :
                                                (1:length(I[i]))))
         K = ntuple(ndims(d),i->(i==d.distdim ? (dist[p]:(dist[p+1]-1)) :
                                                I[i]))
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, sub(v,J...), K...))
     end
     return d
 end
@@ -698,6 +700,9 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
     n = length(perm)
     j = 1
     II = I[d.distdim][perm] #the sorted indexes in the distributed dimension
+    if ndims(v) != length(I)
+        v = reshape(v, map(length, I))
+    end
     for p = 1:length(pmap)
         if dist[p] > II[j]; continue; end
         lower = j
@@ -708,7 +713,7 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Index}...)
                                                (1:length(I[i]))))
         K = ntuple(ndims(d),i->(i==d.distdim ? II[lower:(j-1)] :
                                                I[i]))
-        sync_add(remote_call(d.pmap[pmap[p]], assign, d, v[J...], K...))
+        sync_add(remote_call(d.pmap[pmap[p]], assign, d, sub(v,J...), K...))
     end
     return d
 end

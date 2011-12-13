@@ -444,12 +444,11 @@ ref(A::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
 
 function ref(A::AbstractArray, I::Int...)
-    dims = size(A)
     ndims = length(I)
     index = I[1]
     stride = 1
     for k=2:ndims
-        stride = stride * dims[k-1]
+        stride = stride * size(A, k-1)
         index += (I[k]-1) * stride
     end
     return A[index]
@@ -619,11 +618,10 @@ assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
 
 function assign_scalarND(A, x, I0, I...)
-    dims = size(A)
     index = I0
     stride = 1
     for k=1:length(I)
-        stride = stride * dims[k]
+        stride = stride * size(A, k)
         index += (I[k]-1) * stride
     end
     A[index] = x
