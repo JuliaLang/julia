@@ -28,7 +28,7 @@ function SparseMatrixCSC(T::Type, m::Int, n::Int, numnz::Int)
     rowval = Array(inttype, numnz)
     nzval = Array(T, numnz)
 
-    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
+    return SparseMatrixCSC{T,inttype}(m, n, colptr, rowval, nzval)
 end
 
 issparse(A::AbstractArray) = false
@@ -38,6 +38,7 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
 function show(S::SparseMatrixCSC)
+    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
     for col = 1:S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
             print("\t[")
@@ -72,6 +73,7 @@ sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 function sparse{T1,T2}(I::AbstractVector{T1}, J::AbstractVector{T2}, 
                        V::Union(Number,AbstractVector), 
                        m::Int, n::Int)
+    if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     create_I_copy = true
 
@@ -105,6 +107,7 @@ end
 function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
                          V::Union(Number, AbstractVector),
                          m::Int, n::Int)
+    if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     if isa(I, Range1) || isa(I, Range); I = [I]; end
     if isa(J, Range1) || isa(J, Range); J = [J]; end
@@ -192,6 +195,13 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
+spzeros(m::Size) = spzeros(m,m)
+spzeros(m::Size, n::Size) = spzeros(Float64,m,n)
+spzeros(T::Type, m::Size) = spzeros(T,m,m)
+spzeros(T::Type, m::Size, n::Size) =
+    SparseMatrixCSC(m,n,ones(Size,n+1),Array(_jl_best_inttype(m),0),Array(T,0))
+
+
 function speye(T::Type, n::Size)
     L = linspace(1, n)
     _jl_make_sparse(L, L, ones(T, n), n, n)
@@ -207,7 +217,7 @@ end
 
 speye(m::Size, n::Size) = speye(Float64, m, n)
 
-function issymmetric(A::SparseMatrixCSC)
+function issym(A::SparseMatrixCSC)
     # Slow implementation
     nnz(A - A.') == 0 ? true : false
 end
@@ -432,6 +442,8 @@ end # macro
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 @_jl_binary_op_A_sparse_B_sparse_res_sparse (.^)
 
+sum(A::SparseMatrixCSC) = sum(sub(A.nzval,1:nnz(A)))
+
 ## ref ##
 ref(A::SparseMatrixCSC, i::Int) = ref(A, ind2sub(size(A),i))
 ref(A::SparseMatrixCSC, I::(Int,Int)) = ref(A, I[1], I[2])
@@ -493,7 +505,10 @@ assign{T}(A::SparseMatrixCSC{T}, v, i::Int) = assign(A, v, ind2sub(size(A),i))
 assign{T}(A::SparseMatrixCSC{T}, v, I::(Int,Int)) = assign(A, v, I[1], I[2])
 
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Int, i1::Int)
+    i0 = convert(T_int, i0)
+    i1 = convert(T_int, i1)
     if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
+    v = convert(T, v)
     if v == zero(T) #either do nothing or delete entry if it exists
         first = A.colptr[i1]
         last = A.colptr[i1+1]-1
@@ -766,7 +781,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         nzval = grow(nzval, length(nzval))
     end
 
-    _jl_mergesort(indexes, 1, nvals, Array(T,length(indexes))) #sort indexes[1:nvals]
+    _jl_quicksort(indexes, 1, nvals, ) #sort indexes[1:nvals]
 
     offs = 1
     for i=1:nvals
