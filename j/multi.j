@@ -39,7 +39,7 @@
 ## @parallel (r) for i=1:n ... end -
 ##     parallel loop. the results from each iteration are reduced using (r).
 ##
-## @bcast expr - run expr everywhere. useful for load().
+## @everywhere expr - run expr everywhere. useful for load().
 
 # todo:
 # - more indexing
@@ -1417,7 +1417,7 @@ function at_each(f, args...)
     end
 end
 
-macro bcast(ex)
+macro everywhere(ex)
     quote
         @sync begin
             at_each(()->eval($expr(:quote,ex)))

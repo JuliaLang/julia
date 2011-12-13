@@ -195,6 +195,9 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
+spones{T}(S::SparseMatrixCSC{T}) = 
+     SparseMatrixCSC(S.m, S.n, S.colptr, S.rowval, ones(T, S.colptr[end]-1))
+
 spzeros(m::Size) = spzeros(m,m)
 spzeros(m::Size, n::Size) = spzeros(Float64,m,n)
 spzeros(T::Type, m::Size) = spzeros(T,m,m)
@@ -652,9 +655,7 @@ function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, 
         end
         A_col = Js[j]
         _jl_spa_set(spa, A, A_col)
-        println(spa)
         spa[I] = v[:,Jp[j]]
-        println(spa)
         (rowval, nzval) = _jl_spa_store_reset(spa, A_col, colptr, rowval, nzval)
         A_col += 1
         j += 1
@@ -780,9 +781,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         rowval = grow(rowval, length(rowval))
         nzval = grow(nzval, length(nzval))
     end
-
     _jl_quicksort(indexes, 1, nvals) #sort indexes[1:nvals]
-
     offs = 1
     for i=1:nvals
         pos = indexes[i]
@@ -824,7 +823,7 @@ function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Int)
             flags[r] = true
             vals[r] = v
             nvals += 1
-            indexes[nvals] = i
+            indexes[nvals] = r
         end
     end
     
@@ -833,7 +832,7 @@ end
 #set spa S to be the i'th column of A
 function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Int)
     m = A.m
-    if length(S) != m; return("mismatched dimensions"); end
+    if length(S) != m; error("mismatched dimensions"); end
     
     z = zero(T)
     offs = A.colptr[i]-1
