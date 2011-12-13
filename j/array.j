@@ -66,6 +66,21 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
 empty(T) = Array(T, 0)
 
+function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Int)
+    ccall(:memset, Void, (Ptr{T}, Int32, Long), a, int32(x), long(length(a)))
+    return a
+end
+function fill!{T<:Union(Int,Float)}(a::Array{T}, x)
+    if convert(T,x) == zero(T)
+        ccall(:bzero, Void, (Ptr{T}, Long), a, long(length(a)*sizeof(T)))
+    else
+        for i = 1:numel(a)
+            a[i] = x
+        end
+    end
+    return a
+end
+
 zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
 zeros(T::Type, dims::Size...) = zeros(T, dims)
 zeros(dims::Dims) = zeros(Float64, dims)
