@@ -195,6 +195,9 @@ sprand(m,n,density) = sprand_rng (m,n,density,rand)
 sprandn(m,n,density) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
+spones{T}(S::SparseMatrixCSC{T}) = 
+     SparseMatrixCSC(S.m, S.n, S.colptr, S.rowval, ones(T, S.colptr[end]-1))
+
 spzeros(m::Size) = spzeros(m,m)
 spzeros(m::Size, n::Size) = spzeros(Float64,m,n)
 spzeros(T::Type, m::Size) = spzeros(T,m,m)
