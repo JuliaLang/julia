@@ -781,7 +781,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         nzval = grow(nzval, length(nzval))
     end
 
-    _jl_quicksort(indexes, 1, nvals, ) #sort indexes[1:nvals]
+    _jl_quicksort(indexes, 1, nvals) #sort indexes[1:nvals]
 
     offs = 1
     for i=1:nvals
