@@ -652,9 +652,7 @@ function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, 
         end
         A_col = Js[j]
         _jl_spa_set(spa, A, A_col)
-        println(spa)
         spa[I] = v[:,Jp[j]]
-        println(spa)
         (rowval, nzval) = _jl_spa_store_reset(spa, A_col, colptr, rowval, nzval)
         A_col += 1
         j += 1
