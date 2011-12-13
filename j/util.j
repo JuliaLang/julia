@@ -131,7 +131,6 @@ edit(file::String) = edit(file, 1)
 function view(file::String, line::Int)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
-    nothing
 end
 view(file::String) = view(file, 1)
 

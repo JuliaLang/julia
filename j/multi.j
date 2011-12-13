@@ -1018,7 +1018,7 @@ end
 # returns P such that localhost:P connects to host:port
 # function worker_tunnel(host, port)
 #     localp = 9201
-#     while !run(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
+#     while !success(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
 #         localp += 1
 #     end
 #     localp
@@ -1085,7 +1085,7 @@ function start_sge_workers(n)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
     `echo $home/julia --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
-    if !run(qsub_cmd)
+    if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
     end
     id = split(readline(out),'.')[1]

@@ -374,10 +374,8 @@ end
 
 # spawn and wait for a set of commands
 
-function run(cmds::Cmds)
-    spawn(cmds)
-    wait(cmds)
-end
+success(cmds::Cmds) = (spawn(cmds); wait(cmds))
+run(cmds::Cmds) = success(cmds) ? nothing : error("pipeline failed: $cmds")
 
 # run some commands and read all output
 
@@ -409,6 +407,7 @@ end
 each_line(ports::Ports) = _each_line(ports, cmds(ports))
 each_line(cmds::Cmds) = _each_line(stdout(cmds), cmds)
 
+cmd_stdin_stream (cmds::Cmds) = fdio(write_to(cmds).fd)
 cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 
 ## implementation of `cmd` syntax ##

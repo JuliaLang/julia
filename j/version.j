@@ -61,7 +61,7 @@ macro v_str(v); convert(VersionNumber, v); end
 
 const VERSION = convert(VersionNumber,readall(`cat $JULIA_HOME/VERSION`)[1:end-1])
 const VERSION_COMMIT = readall(`git rev-parse HEAD`)[1:end-1]
-const VERSION_CLEAN = run(`git diff --quiet`)
+const VERSION_CLEAN = success(`git diff --quiet`)
 const VERSION_TIME = readall(
     `git log -1 --pretty=format:%ct` |
     `perl -MPOSIX=strftime -e 'print strftime "%F %T", gmtime <>'`
@@ -104,7 +104,7 @@ $(jl)|__/$(tx)                   |
 \033[0m"
 
 color_available() =
-    run(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+    success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
 
 banner() = print(color_available() ? jl_banner_color : jl_banner_plain)
 
