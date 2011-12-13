@@ -3,12 +3,12 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     locl::Array{T,N}
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
-    pmap::Array{Int32,1}
+    pmap::Array{Size,1}
     # piece i consists of indexes dist[i] through dist[i+1]-1
     dist::Array{Size,1}
     # dimension of distribution
-    distdim::Int32
-    localpiece::Int32  # my piece #; pmap[localpiece]==myid()
+    distdim::Size
+    localpiece::Size  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
     function DArray(go, initializer, dims, pmap, dist)
