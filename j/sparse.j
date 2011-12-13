@@ -207,7 +207,7 @@ end
 
 speye(m::Size, n::Size) = speye(Float64, m, n)
 
-function issymmetric(A::SparseMatrixCSC)
+function issym(A::SparseMatrixCSC)
     # Slow implementation
     nnz(A - A.') == 0 ? true : false
 end
