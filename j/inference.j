@@ -837,6 +837,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     tf = def.tfunc
     while !is(tf,())
         if typeseq(tf[1],atypes)
+            if isa(tf[2],Tuple)
+                # compressed tree format
+                return (tf[2], tf[2][3])
+            end
             # if the frame above this one recurred, rerun type inf
             # here instead of returning, and update the cache, until the new
             # inferred type equals the cached type (fixed point)
@@ -885,11 +889,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #print("typeinf ", linfo.name, " ", atypes, "\n")
 
     if redo
-    elseif cop
-        sparams = append(sparams, linfo.sparams)
-        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
     else
         ast = linfo.ast
+        if cop
+            sparams = append(sparams, linfo.sparams)
+            ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast, sparams)::Expr
+        end
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
@@ -1059,13 +1064,18 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     fulltree = type_annotate(ast, s, sv,
                              rec ? RecPending{frame.result} : frame.result,
                              vars)
-    if !redo
-        def.tfunc = (atypes, fulltree, def.tfunc)
-    end
     if !rec
         fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
         tuple_elim_pass(fulltree)
         linfo.inferred = true
+    end
+    if !redo
+        vals = {}
+        treedata = ccall(:jl_compress_ast, Any, (Any, Any), fulltree, vals)
+        compressed = (treedata, vals, frame.result)
+        fulltree = compressed
+        #compressed = fulltree
+        def.tfunc = (atypes, compressed, def.tfunc)
     end
     inference_stack = (inference_stack::CallStack).prev
     return (fulltree, frame.result)
@@ -1295,17 +1305,21 @@ function inlineable(f, e::Expr, vars)
             return NF
         end
     end
-    for vi = meth[3].ast.args[2].args[2]
+    (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
+    if is(ast,())
+        return NF
+    end
+    if isa(ast,Tuple)
+        ast = ccall(:jl_uncompress_ast, Any, (Any,), ast)
+    end
+    ast = ast::Expr
+    for vi = ast.args[2].args[2]
         if (vi[3]&1)!=0
             # captures variables (TODO)
             return NF
         end
     end
-    (ast, ty) = typeinf(meth[3], meth[1], meth[2], meth[3])
-    if is(ast,())
-        return NF
-    end
-    body = without_linenums(ast.args[3].args)
+    body = without_linenums(ast.args[3].args)::Array{Any,1}
     # see if body is only "return <expr>"
     if length(body) != 1
         return NF
@@ -1543,7 +1557,11 @@ end
 
 function finfer(f, types)
     x = getmethods(f,types)[1]
-    typeinf(x[3], x[1], x[2])[1]
+    (tree, ty) = typeinf(x[3], x[1], x[2])
+    if isa(tree,Tuple)
+        return ccall(:jl_uncompress_ast, Any, (Any,), tree)
+    end
+    tree
 end
 
 tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
