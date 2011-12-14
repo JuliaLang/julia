@@ -132,23 +132,7 @@
      (io.close infile))))
 
 (define (jl-parse-file s)
-  (jl-parse-source s)
-  #;(let ((preparsed-fname (string (string.sub s 0 (- (length s) 2))
-				 ".jp")))
-    (let ((ppmt  (file-mod-time preparsed-fname))
-	  (srcmt (file-mod-time s)))
-      (if (and (equal? (string.sub s (- (length s) 2) (length s)) ".j")
-	       ppmt srcmt
-	       (> ppmt srcmt))
-	  (let ((fl (open-input-file preparsed-fname)))
-	    (begin0 (read fl) (io.close fl)))
-	  (let ((ast (jl-parse-source s)))
-	    (with-bindings
-	     ((*print-pretty* #f))
-	     (let ((outfl (file preparsed-fname :write :create :truncate)))
-	       (write ast outfl)
-	       (io.close outfl)))
-	    ast)))))
+  (jl-parse-source s))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

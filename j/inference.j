@@ -1,25 +1,3 @@
-# infrastructure needed for type inference:
-# * shared assoc list
-# * IntSet
-# * printing exprs
-# * compute type intersection
-# - more method table reflection
-#   . cached t-functions
-#   . abstract_invoke()
-#     * consult t-func cache
-#     * determine applicable methods
-#     * abstract_invoke all of them, type-union the result, and cache it
-# * hash table of symbols
-# * eval
-# - t-functions for builtins
-# * deal with call stack and recursive types
-# - isconstant()
-# * approximate static parameters
-# - use type bounds
-# * reflection for constructors
-# * be able to infer the results of promote()
-# - avoid branches when condition can be statically evaluated
-
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPEUNION_DEPTH = 3
@@ -603,8 +581,6 @@ function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
     return t
 end
 
-ast_rettype(ast) = ast.args[3].typ
-
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
         isa(x,FuncKind) || isa(x,UnionKind) || isa(x,TypeConstructor)
@@ -846,6 +822,8 @@ typeinf(linfo,atypes,sparams,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
 abstract RecPending{T}
 
 isRecPending(t) = isa(t, AbstractKind) && is(t.name, RecPending.name)
+
+ast_rettype(ast) = ast.args[3].typ
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.

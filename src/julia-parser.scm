@@ -412,10 +412,6 @@
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
 (define (parse-ineq s)  (parse-comparison s (prec-ops 5)))
-		      ; (parse-LtoR s parse-range (prec-ops 5)))
-;(define (parse-range s) (parse-LtoR s parse-expr  (prec-ops 6)))
-;(define (parse-expr s)  (parse-LtoR/chains s parse-shift (prec-ops 8) '(+)))
-;(define (parse-term s)  (parse-LtoR/chains s parse-unary (prec-ops 9) '(*)))
 
 ; parse left to right, combining chains of certain operators into 1 call
 ; e.g. a+b+c => (call + a b c)
@@ -770,14 +766,6 @@
 		      (else
 		       (error "missing comma or ) in argument list")))))))))
 
-(define (colons-to-ranges ranges)
-  (map (lambda (r) (pattern-expand
-		    (list
-		     (pattern-lambda (: a b) `(call (top Range1) ,a ,b))
-		     (pattern-lambda (: a b c) `(call (top Range) ,a ,b ,c)) )
-		    r))
-       ranges))
-
 ; parse [] concatenation expressions and {} cell expressions
 (define (parse-vcat s first closer)
   (let loop ((lst '())
@@ -866,7 +854,7 @@
 	     (if (not (eqv? (require-token s) closer))
 		 (error (string "expected " closer))
 		 (take-token s))
-	     `(comprehension ,first ,@(colons-to-ranges r))))
+	     `(comprehension ,first ,@r)))
 	  (else
 	   (parse-matrix s first closer))))))
 
