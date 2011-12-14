@@ -28,8 +28,10 @@ syntax match   juliaErrorElse		display "\<\(else\|elseif\)\>"
 syntax match   juliaErrorCatch		display "\<catch\>"
 syntax match   juliaErrorSemicol	display contained ";"
 
+syntax match   juliaRangeEnd		display contained "\<end\>"
+
 syntax region  juliaParBlock		matchgroup=juliaParDelim start="(" end=")" contains=@juliaExpressions
-syntax region  juliaSqBraBlock		matchgroup=juliaParDelim start="\[" end="\]" contains=@juliaExpressions
+syntax region  juliaSqBraBlock		matchgroup=juliaParDelim start="\[" end="\]" contains=@juliaExpressions,juliaRangeEnd
 syntax region  juliaBraBlock		matchgroup=juliaParDelim start="{" end="}" contains=@juliaExpressions
 
 syntax match   juliaKeyword		"\<\(return\|local\|break\|continue\|global\|module\|import\|export\|const\)\>"
@@ -124,6 +126,7 @@ hi def link juliaException		Exception
 hi def link juliaTypedef		Typedef
 hi def link juliaBuiltin		Type
 hi def link juliaConst			Constant
+hi def link juliaRangeEnd		Constant
 hi def link juliaBoolean		Boolean
 
 hi def link juliaMacro			Macro
