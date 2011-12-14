@@ -12,7 +12,7 @@ show(n::Int)  = show(int64(n))
 function show_trailing_hex(n::Uint64, ndig::Int)
     for s = ndig-1:-1:0
         d = (n >> 4*s) & uint64(0xf)
-        print("0123456789abcdef"[long(d+1)])
+        print("0123456789abcdef"[d+1])
     end
 end
 show(n::Uint) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
