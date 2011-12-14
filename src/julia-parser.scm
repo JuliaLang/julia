@@ -135,6 +135,11 @@
 	       (loop (cons c str) (peek-char port)))
 	(list->string (reverse str)))))
 
+(define (char-hex? c)
+  (or (char-numeric? c)
+      (and (>= c #\a) (<= c #\f))
+      (and (>= c #\A) (<= c #\F))))
+
 (define (read-number port . leadingdot)
   (let ((str  (open-output-string))
 	(pred char-numeric?))
@@ -157,10 +162,7 @@
 	(if (eqv? (peek-char port) #\0)
 	    (begin (write-char (read-char port) str)
 		   (if (allow #\x)
-		       (set! pred (lambda (c)
-				    (or (char-numeric? c)
-					(and (>= c #\a) (<= c #\f))
-					(and (>= c #\A) (<= c #\F)))))))
+		       (set! pred char-hex?)))
 	    (allow #\.)))
     (read-digs)
     (if (eqv? (peek-char port) #\.)
@@ -176,8 +178,18 @@
 	       (disallow #\.)))
     (let* ((s (get-output-string str))
 	   (n (string->number s)))
-      (if n n
+      (if n
+	  (if (eq? pred char-hex?)
+	      (sized-uint-literal n s)
+	      n)
 	  (error (string "invalid numeric constant " s))))))
+
+(define (sized-uint-literal n s)
+  (let ((l (length s)))
+    (cond ((< l 5)  (uint8  n))
+	  ((< l 7)  (uint16 n))
+	  ((< l 11) (uint32 n))
+	  (else     (uint64 n)))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)

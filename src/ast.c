@@ -197,14 +197,24 @@ static jl_value_t *scm_to_julia(value_t e)
 static jl_value_t *scm_to_julia_(value_t e)
 {
     if (fl_isnumber(e)) {
-        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_DOUBLE) {
-            return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
-        }
-        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_INT64) {
-            return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
-        }
-        if (iscprim(e) && cp_numtype((cprim_t*)ptr(e))==T_UINT64) {
-            return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
+        if (iscprim(e)) {
+            numerictype_t nt = cp_numtype((cprim_t*)ptr(e));
+            switch (nt) {
+            case T_DOUBLE:
+                return (jl_value_t*)jl_box_float64(*(double*)cp_data((cprim_t*)ptr(e)));
+            case T_INT64:
+                return (jl_value_t*)jl_box_int64(*(int64_t*)cp_data((cprim_t*)ptr(e)));
+            case T_UINT8:
+                return (jl_value_t*)jl_box_uint8(*(uint8_t*)cp_data((cprim_t*)ptr(e)));
+            case T_UINT16:
+                return (jl_value_t*)jl_box_uint16(*(uint16_t*)cp_data((cprim_t*)ptr(e)));
+            case T_UINT32:
+                return (jl_value_t*)jl_box_uint32(*(uint32_t*)cp_data((cprim_t*)ptr(e)));
+            case T_UINT64:
+                return (jl_value_t*)jl_box_uint64(*(uint64_t*)cp_data((cprim_t*)ptr(e)));
+            default:
+                ;
+            }
         }
         if (isfixnum(e)) {
             int64_t ne = numval(e);
