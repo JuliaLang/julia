@@ -1,15 +1,3 @@
-; TODO:
-; * expand lvalues, e.g. (= (call ref A i) x) => (= A (call assign A i x))
-; * expand operators like +=
-; * expand for into while
-; * expand -> and function into lambda/addmethod
-; * replace (. a b) with (call get a (quote b))
-; * tuple destructuring
-; - validate argument lists, replace a=b in arg lists with keyword exprs
-; - type parameter renaming stuff
-; - use (top x) more consistently
-; * make goto-form safe for inlining (delay label to index mapping)
-
 (define (quoted? e) (memq (car e) '(quote top line break)))
 
 (define (lam:args x) (cadr x))

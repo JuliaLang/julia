@@ -142,7 +142,7 @@ isequal(int64(2),int64(2))
 
 compile_hint(getcwd, ())
 compile_hint(fdio, (Int32,))
-compile_hint(ProcessGroup, (Int32, Array{Any,1}, Array{Any,1}))
+compile_hint(ProcessGroup, (Long, Array{Any,1}, Array{Any,1}))
 compile_hint(select_read, (FDSet, Float64))
 compile_hint(next, (HashTable{Any,Any}, Size))
 compile_hint(next, (HashTable{Any,Any}, Int32))

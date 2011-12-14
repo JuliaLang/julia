@@ -73,20 +73,9 @@ value_t fl_accum_julia_symbol(value_t *args, u_int32_t nargs)
     return symbol(str.buf);
 }
 
-value_t fl_file_mod_time(value_t *args, uint32_t nargs)
-{
-    argcount("file-mod-time", nargs, 1);
-    char *fname = tostring(args[0], "file-mod-time");
-    struct stat buf;
-    if (stat(fname, &buf) == -1)
-        return FL_F;
-    return size_wrap(buf.st_mtime);
-}
-
 static builtinspec_t julia_flisp_func_info[] = {
     { "skip-ws", fl_skipws },
     { "accum-julia-symbol", fl_accum_julia_symbol },
-    { "file-mod-time", fl_file_mod_time },
     { NULL, NULL }
 };
 
