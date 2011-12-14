@@ -1,9 +1,9 @@
 ## semantic version numbers (http://semver.org)
 
 type VersionNumber
-    major::Uint16
-    minor::Uint16
-    patch::Uint16
+    major::Int16
+    minor::Int16
+    patch::Int16
     suffix::String
 
     function VersionNumber(major::Int, minor::Int, patch::Int, suffix::String)
@@ -13,7 +13,7 @@ type VersionNumber
         if !matches(ri"^(?:[a-z-][0-9a-z-]*)?$", suffix)
             error("invalid version suffix: $suffix")
         end
-        new(major, minor, patch, suffix)
+        new(int16(major), int16(minor), int16(patch), suffix)
     end
 end
 VersionNumber(x::Int, y::Int, s::String) = VersionNumber(x, y, 0, s )
