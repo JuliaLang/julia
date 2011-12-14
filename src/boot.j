@@ -128,12 +128,11 @@ bitstype 64 Uint64 <: Uint
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
 
-typealias Index Size
+typealias Size Long
+typealias Index Long
 if is(Size,Int64)
-    typealias Long Int64
     typealias Ulong Uint64
 else
-    typealias Long Int32
     typealias Ulong Uint32
 end
 
