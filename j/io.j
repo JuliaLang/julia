@@ -40,7 +40,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
              int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
         error("could not open file ", fname)
     end
-    if ff && ccall(:ios_seek_end, PtrInt, (Ptr{Void},), s.ios) != 0
+    if ff && ccall(:ios_seek_end, Ulong, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
     return s
