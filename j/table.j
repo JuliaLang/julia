@@ -105,7 +105,7 @@ function hash(a::Array)
 end
 
 hash(x::Any) = uid(x)
-hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Size), s.data, length(s.data))
+hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Long), s.data, length(s.data))
 
 # hash table
 

@@ -1,6 +1,6 @@
 ## system word size ##
 
-const WORD_SIZE = long(Size.nbits)
+const WORD_SIZE = long(Long.nbits)
 
 ## converting pointers to an appropriate uint ##
 
@@ -38,7 +38,7 @@ pointer{T}(::Type{T}, x::PtrInt) = convert(Ptr{T}, x)
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Index) = convert(Ptr{T},x) + (i-1)*sizeof(T)
+pointer{T}(x::AbstractArray{T}, i::Long) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
 uint(x::Ptr) = convert(PtrInt, x)
 ptrint(x) = convert(PtrInt, x)

@@ -150,7 +150,7 @@ read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
 read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
-read{T}(s, t::Type{T}, d1::Size, dims::Size...) =
+read{T}(s, t::Type{T}, d1::Long, dims::Long...) =
     read(s, t, tuple(d1,dims...))
 read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, map(long,tuple(d1,dims...)))
@@ -247,8 +247,8 @@ skip(s::IOStream, delta::Int) =
 position(s::IOStream) = ccall(:ios_pos, Long, (Ptr{Void},), s.ios)
 
 type IOTally
-    nbytes::Size
-    IOTally() = new(zero(Size))
+    nbytes::Long
+    IOTally() = new(zero(Long))
 end
 
 write(s::IOTally, x::Uint8) = (s.nbytes += 1; nothing)

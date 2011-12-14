@@ -128,9 +128,7 @@ bitstype 64 Uint64 <: Uint
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
 
-typealias Size Long
-typealias Index Long
-if is(Size,Int64)
+if is(Long,Int64)
     typealias Ulong Uint64
 else
     typealias Ulong Uint32
@@ -296,48 +294,48 @@ macro L_str(s); s; end
 method_missing(f, args...) = throw(MethodError(f, args))
 
 Array{T}  (::Type{T}, d::(Int,)) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+    ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(d[1]))::Array{T,1}
 Array{T}  (::Type{T}, d::(Int,Int)) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+    ccall(:jl_alloc_array_2d, Any, (Any,Long,Long), Array{T,2},
           long(d[1]), long(d[2]))::Array{T,2}
 
-Array{T}  (::Type{T}, d::(Size,Size,Size)) =
+Array{T}  (::Type{T}, d::(Long,Long,Long)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
 Array{T}  (::Type{T}, d::(Int,Int,Int)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3},
           (long(d[1]),long(d[2]),long(d[3])))::Array{T,3}
-Array{T}  (::Type{T}, d::(Size,Size,Size,Size)) =
+Array{T}  (::Type{T}, d::(Long,Long,Long,Long)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
 Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4},
           (long(d[1]),long(d[2]),long(d[3]),long(d[4])))::Array{T,4}
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,N},
-          convert((Size...), d))::Array{T,N}
+          convert((Long...), d))::Array{T,N}
 
 Array{T}(::Type{T}, m::Int) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+    ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(m))::Array{T,1}
-Array{T}(::Type{T}, m::Size) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Size), Array{T,1},
+Array{T}(::Type{T}, m::Long) =
+    ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(m))::Array{T,1}
 Array{T}(::Type{T}, m::Int,n::Int) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+    ccall(:jl_alloc_array_2d, Any, (Any,Long,Long), Array{T,2},
           long(m), long(n))::Array{T,2}
-Array{T}(::Type{T}, m::Size,n::Size) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Size,Size), Array{T,2},
+Array{T}(::Type{T}, m::Long,n::Long) =
+    ccall(:jl_alloc_array_2d, Any, (Any,Long,Long), Array{T,2},
           long(m), long(n))::Array{T,2}
 
-Array{T}(::Type{T}, m::Size,n::Size,o::Size) = Array{T,3}(m,n,o)
+Array{T}(::Type{T}, m::Long,n::Long,o::Long) = Array{T,3}(m,n,o)
 Array{T}(::Type{T}, m::Int, n::Int, o::Int) =
     Array{T,3}(long(m),long(n),long(o))
-Array{T}(::Type{T}, m::Size,n::Size,o::Size,p::Size) = Array{T,4}(m,n,o,p)
+Array{T}(::Type{T}, m::Long,n::Long,o::Long,p::Long) = Array{T,4}(m,n,o,p)
 Array{T}(::Type{T}, m::Int, n::Int, o::Int, p::Int) =
     Array{T,4}(long(m),long(n),long(o),long(p))
 
-Array{N}(T, d::NTuple{N,Int}) = Array{T,N}(convert((Size...),d))
-Array(T, d::Int...) = Array{T,length(d)}(convert((Size...),d))
+Array{N}(T, d::NTuple{N,Int}) = Array{T,N}(convert((Long...),d))
+Array(T, d::Int...) = Array{T,length(d)}(convert((Long...),d))
 
 function compile_hint(f, args::Tuple)
     if !isgeneric(f)
