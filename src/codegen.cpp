@@ -143,7 +143,6 @@ static Function *to_function(jl_lambda_info_t *li)
     JL_SIGATOMIC_BEGIN();
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    li->name->name, jl_Module);
-    assert(jl_is_expr(li->ast));
     assert(!li->inInference);
     li->functionObject = (void*)f;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -356,11 +355,14 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
 
 // --- lambda ---
 
+extern "C" jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
+
 static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 {
     assert(jl_is_lambda_info(expr));
     size_t i;
-    jl_array_t *capt = jl_lam_capt((jl_expr_t*)((jl_lambda_info_t*)expr)->ast);
+    jl_value_t *ast = ((jl_lambda_info_t*)expr)->ast;
+    jl_array_t *capt = jl_lam_capt((jl_expr_t*)ast);
     if (capt->length == 0) {
         // no captured vars; lift
         jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
@@ -1327,6 +1329,11 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
+    if (jl_is_tuple(ast)) {
+        ast = (jl_expr_t*)jl_uncompress_ast((jl_tuple_t*)ast);
+    }
+    assert(jl_is_expr(ast));
+    jl_gc_preserve((jl_value_t*)ast);
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
@@ -1699,6 +1706,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     //used_roots += ctx.maxDepth;
     //JL_GC_POP();
+    jl_gc_unpreserve();
     jl_gc_unpreserve();
 }
 

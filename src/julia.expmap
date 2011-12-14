@@ -153,6 +153,8 @@
     jl_start_io_thread;
     jl_save_system_image;
     jl_restore_system_image;
+    jl_compress_ast;
+    jl_uncompress_ast;
     jl_current_task;
     jl_get_current_task;
     jl_enter_handler;

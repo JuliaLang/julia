@@ -20,7 +20,7 @@
 //#define MEMPROFILE
 //#define GCTIME
 
-#define GC_PAGE_SZ (2048*sizeof(void*))//bytes
+#define GC_PAGE_SZ (1536*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
     union {
@@ -91,7 +91,7 @@ static bigval_t *big_objects = NULL;
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
-static size_t collect_interval = 4096*1024*sizeof(void*);
+static size_t collect_interval = 3200*1024*sizeof(void*);
 
 static htable_t finalizer_table;
 static arraylist_t to_finalize;
@@ -836,13 +836,16 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
 static void all_pool_stats(void)
 {
     int i;
-    size_t nb=0, w, tw=0;
+    size_t nb=0, w, tw=0, no=0, b;
     for(i=0; i < N_POOLS; i++) {
-        nb += pool_stats(&pools[i], &w);
+        b = pool_stats(&pools[i], &w);
+        nb += b;
+        no += (b/pools[i].osize);
         tw += w;
     }
-    ios_printf(ios_stdout, "%d total allocated, %d total fragments\n",
-               nb, tw);
+    ios_printf(ios_stdout,
+               "%d objects, %d total allocated, %d total fragments\n",
+               no, nb, tw);
 }
 
 static void big_obj_stats(void)

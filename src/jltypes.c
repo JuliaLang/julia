@@ -2491,7 +2491,7 @@ void jl_init_types(void)
                                     jl_symbol(""), jl_symbol(""),
                                     jl_symbol(""), jl_symbol(""),
                                     jl_symbol("inferred")),
-                           jl_tuple(9, jl_expr_type, jl_tuple_type,
+                           jl_tuple(9, jl_any_type, jl_tuple_type,
                                     jl_any_type, jl_sym_type,
                                     jl_any_type, jl_tuple_type,
                                     jl_function_type, jl_tuple_type,
