@@ -92,7 +92,7 @@ type Worker
     fd::Int32
     socket::IOStream
     sendbuf::IOStream
-    id::Size
+    id::Long
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
@@ -175,10 +175,10 @@ type Location
 end
 
 type ProcessGroup
-    myid::Size
+    myid::Long
     workers::Array{Any,1}
     locs::Array{Any,1}
-    np::Size
+    np::Long
 
     # global references
     refs::HashTable
@@ -1464,7 +1464,7 @@ function pmap(f, lsts...)
     results
 end
 
-function preduce(reducer, f, r::Range1{Size})
+function preduce(reducer, f, r::Range1{Long})
     np = nprocs()
     N = length(r)
     each = div(N,np)
@@ -1484,7 +1484,7 @@ function preduce(reducer, f, r::Range1{Size})
     mapreduce(reducer, fetch, results)
 end
 
-function pfor(f, r::Range1{Size})
+function pfor(f, r::Range1{Long})
     np = nprocs()
     N = length(r)
     each = div(N,np)
@@ -1508,7 +1508,7 @@ function make_preduce_body(reducer, var, body)
     ac, lo, hi = gensym(3)
     localize_vars(
     quote
-        function (($lo)::Size, ($hi)::Size)
+        function (($lo)::Long, ($hi)::Long)
             ($var) = ($lo)
             ($ac) = $body
             for ($var) = (($lo)+1):($hi)
@@ -1524,7 +1524,7 @@ function make_pfor_body(var, body)
     lo, hi = gensym(2)
     localize_vars(
     quote
-        function (($lo)::Size, ($hi)::Size)
+        function (($lo)::Long, ($hi)::Long)
             for ($var) = ($lo):($hi)
                 $body
             end

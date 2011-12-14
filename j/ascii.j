@@ -4,11 +4,11 @@
 ## required core functionality ##
 
 length(s::ASCIIString) = length(s.data)
-ref(s::ASCIIString, i::Index) = char(s.data[i])
+ref(s::ASCIIString, i::Long) = char(s.data[i])
 
 ## overload methods for efficiency ##
 
-ref(s::ASCIIString, r::Range1{Index}) = ASCIIString(ref(s.data,r))
+ref(s::ASCIIString, r::Range1{Long}) = ASCIIString(ref(s.data,r))
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
 strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
 

@@ -10,7 +10,7 @@ start(s::String) = 1
 done(s::String,i) = (i > length(s))
 numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
-ref(s::String, i::Index) = next(s,i)[1]
+ref(s::String, i::Long) = next(s,i)[1]
 ref(s::String, x::Real) = s[iround(x)]
 ref(s::String, r::Range1) = s[iround(r.start):iround(r.stop)]
 
@@ -27,7 +27,7 @@ show(s::String) = print_quoted(s)
 (^)(s::String, r::Int) = repeat(s,r)
 
 size(s::String) = (length(s),)
-size(s::String, d::Index) = d == 1 ? length(s) :
+size(s::String, d::Long) = d == 1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
 strlen(s::DirectIndexString) = length(s)
@@ -176,7 +176,7 @@ type CharString <: String
 end
 CharString(x...) = CharString(map(char,x)...)
 
-next(s::CharString, i::Index) = (s.chars[i], i+1)
+next(s::CharString, i::Long) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
 strlen(s::CharString) = length(s)
 
@@ -187,15 +187,15 @@ string(c::Char, x::Char...) = CharString(c, x...)
 
 type SubString <: String
     string::String
-    offset::Index
-    length::Index
+    offset::Long
+    length::Long
 
-    SubString(s::String, i::Index, j::Index) = new(s, i-1, j-i+1)
-    SubString(s::SubString, i::Index, j::Index) =
+    SubString(s::String, i::Long, j::Long) = new(s, i-1, j-i+1)
+    SubString(s::SubString, i::Long, j::Long) =
         new(s.string, i-1+s.offset, j-i+1)
 end
 
-function next(s::SubString, i::Index)
+function next(s::SubString, i::Long)
     if i < 1 || i > s.length
         error("string index out of bounds")
     end
@@ -209,7 +209,7 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-function ref(s::String, r::Range1{Index})
+function ref(s::String, r::Range1{Long})
     if r.start < 1 || length(s) < r.stop
         error("in substring slice: index out of range")
     end
@@ -226,7 +226,7 @@ end
 length(s::RepString) = length(s.string)*s.repeat
 strlen(s::RepString) = strlen(s.string)*s.repeat
 
-function next(s::RepString, i::Index)
+function next(s::RepString, i::Long)
     if i < 1 || i > length(s)
         error("string index out of bounds")
     end
@@ -252,7 +252,7 @@ length(s::RevString) = length(s.string)
 strlen(s::RevString) = strlen(s.string)
 
 start(s::RevString) = (n=length(s); n-thisind(s.string,n)+1)
-function next(s::RevString, i::Index)
+function next(s::RevString, i::Long)
     n = length(s); j = n-i+1
     (s.string[j], n-thisind(s.string,j-1)+1)
 end
@@ -273,7 +273,7 @@ type RopeString <: String
     head::String
     tail::String
     depth::Int32
-    length::Index
+    length::Long
 
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
@@ -297,7 +297,7 @@ end
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
 
-function next(s::RopeString, i::Index)
+function next(s::RopeString, i::Long)
     if i <= length(s.head)
         return next(s.head, i)
     else
@@ -327,7 +327,7 @@ end
 length(s::TransformedString) = length(s.string)
 strlen(s::TransformedString) = strlen(s.string)
 
-function next(s::TransformedString, i::Index)
+function next(s::TransformedString, i::Long)
     c, j = next(s.string,i)
     c = s.transform(c, i)
     return c, j
@@ -366,11 +366,11 @@ end
 
 ## string escaping & unescaping ##
 
-escape_nul(s::String, i::Index) =
+escape_nul(s::String, i::Long) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
 is_hex_digit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
-need_full_hex(s::String, i::Index) = !done(s,i) && is_hex_digit(next(s,i)[1])
+need_full_hex(s::String, i::Long) = !done(s,i) && is_hex_digit(next(s,i)[1])
 
 function print_escaped(s::String, esc::String)
     i = start(s)
@@ -473,7 +473,7 @@ unescape_string(s::String) = print_to_string(length(s), print_unescaped, s)
 ## checking UTF-8 & ACSII validity ##
 
 byte_string_classify(s::ByteString) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Size), s.data, length(s))
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Long), s.data, length(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -834,7 +834,7 @@ function int2str(n::Int, b::Int)
     n = abs(n)
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)
-    sz = convert(Size, ndig)
+    sz = convert(Long, ndig)
     data = Array(Uint8, sz + neg)
     for i=(sz+neg):-1:(1+neg)
         ch = n % b

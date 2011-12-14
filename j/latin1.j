@@ -5,12 +5,12 @@ end
 ## required core functionality ##
 
 length(s::Latin1String) = length(s.data)
-next(s::Latin1String, i::Index) = (char(s.data[i]), i+1)
+next(s::Latin1String, i::Long) = (char(s.data[i]), i+1)
 
 ## overload methods for efficiency ##
 
 cmp(a::Latin1String, b::Latin1String) = lexcmp(a.data, b.data)
-ref(s::Latin1String, r::Range1{Index}) = Latin1String(ref(s.data,r))
+ref(s::Latin1String, r::Range1{Long}) = Latin1String(ref(s.data,r))
 strchr(s::Latin1String, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
 strcat(a::Latin1String, b::Latin1String, c::Latin1String...) = Latin1String(memcat(a,b,c...))
 

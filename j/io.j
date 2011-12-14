@@ -40,7 +40,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
              int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
         error("could not open file ", fname)
     end
-    if ff && ccall(:ios_seek_end, PtrInt, (Ptr{Void},), s.ios) != 0
+    if ff && ccall(:ios_seek_end, Ulong, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
     return s
@@ -150,7 +150,7 @@ read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
 read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
-read{T}(s, t::Type{T}, d1::Size, dims::Size...) =
+read{T}(s, t::Type{T}, d1::Long, dims::Long...) =
     read(s, t, tuple(d1,dims...))
 read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, map(long,tuple(d1,dims...)))
@@ -247,8 +247,8 @@ skip(s::IOStream, delta::Int) =
 position(s::IOStream) = ccall(:ios_pos, Long, (Ptr{Void},), s.ios)
 
 type IOTally
-    nbytes::Size
-    IOTally() = new(zero(Size))
+    nbytes::Long
+    IOTally() = new(zero(Long))
 end
 
 write(s::IOTally, x::Uint8) = (s.nbytes += 1; nothing)

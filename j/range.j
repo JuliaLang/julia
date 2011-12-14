@@ -1,6 +1,6 @@
 ## 1-dimensional ranges ##
 
-typealias Dims (Size...)
+typealias Dims (Long...)
 
 abstract Ranges{T<:Real} <: AbstractArray{T,1}
 
@@ -58,10 +58,10 @@ done(r::Ranges, i::Int) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
                                          r.start+i*step(r) > r.stop)
 done(r::Range1, i::Int) = (r.start+i > r.stop)
 
-ref(r::Range, s::Range{Index}) = Range(r[s[1]],r.step*s.step,r[s[end]])
-ref(r::Range1, s::Range{Index}) = Range(r[s[1]],s.step,r[s[end]])
-ref(r::Range, s::Range1{Index}) = Range(r[s[1]],r.step,r[s[end]])
-ref(r::Range1, s::Range1{Index}) = Range1(r[s[1]],r[s[end]])
+ref(r::Range, s::Range{Long}) = Range(r[s[1]],r.step*s.step,r[s[end]])
+ref(r::Range1, s::Range{Long}) = Range(r[s[1]],s.step,r[s[end]])
+ref(r::Range, s::Range1{Long}) = Range(r[s[1]],r.step,r[s[end]])
+ref(r::Range1, s::Range1{Long}) = Range1(r[s[1]],r[s[end]])
 
 function ref(r::Range, i::Int)
     if i < 1; error(BoundsError); end
@@ -171,7 +171,7 @@ function vcat{T}(r::Ranges{T})
 end
 
 function vcat{T}(rs::Ranges{T}...)
-    n = sum(length,rs)::Size
+    n = sum(length,rs)::Long
     a = Array(T,n)
     i = 1
     for r = rs

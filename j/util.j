@@ -14,7 +14,7 @@ function tic()
     return t0
 end
 
-function toc(noisy::Bool)
+function toq()
     t1 = clock()
     timers = get(tls(), :TIMERS, ())
     if is(timers,())
@@ -22,18 +22,16 @@ function toc(noisy::Bool)
     end
     t0 = timers[1]
     tls(:TIMERS, timers[2])
-    t = t1-t0
-    if noisy
-        println("elapsed time: ", t, " seconds")
-    end
-    t
+    t1-t0
 end
 
-toc() = toc(true)
-toq() = toc(false)
+function toc()
+    t = toq()
+    println("elapsed time: ", t, " seconds")
+    return t
+end
 
-# prints elapsed time
-# returns expression value
+# print elapsed time, return expression value
 macro time(ex)
   t0, val, t1 = gensym(3)
   quote
@@ -45,8 +43,7 @@ macro time(ex)
   end
 end
 
-# prints nothing
-# returns elapsed time
+# print nothing, return elapsed time
 macro elapsed(ex)
   t0, val, t1 = gensym(3)
   quote
@@ -64,18 +61,6 @@ function peakflops()
     floprate = (2*2000.0^3/t)
     println("The peak flop rate is ", floprate*1e-9, " gigaflops")
     floprate
-end
-
-macro benchmark(n,ex,T)
-    s = gensym()
-    quote
-        local $s
-        @time for i=1:long($n)
-            x = convert($T,i)
-            $s = $ex
-        end
-        $s
-    end
 end
 
 # source files, editing

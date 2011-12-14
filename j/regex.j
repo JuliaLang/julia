@@ -70,8 +70,8 @@ end
 type RegexMatch
     match::ByteString
     captures::Tuple
-    offset::Index
-    offsets::Vector{Index}
+    offset::Long
+    offsets::Vector{Long}
 end
 
 function show(m::RegexMatch)

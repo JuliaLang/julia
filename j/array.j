@@ -40,7 +40,7 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
-function reshape{T,N}(a::Array{T}, dims::NTuple{N,Size})
+function reshape{T,N}(a::Array{T}, dims::NTuple{N,Long})
     if prod(dims) != numel(a)
         error("reshape: invalid dimensions")
     end
@@ -58,10 +58,10 @@ similar(a::Array, T, dims::Dims)      = Array(T, dims)
 similar{T}(a::Array{T,1})             = Array(T, size(a,1))
 similar{T}(a::Array{T,2})             = Array(T, size(a,1), size(a,2))
 similar{T}(a::Array{T,1}, dims::Dims) = Array(T, dims)
-similar{T}(a::Array{T,1}, m::Size)    = Array(T, m)
+similar{T}(a::Array{T,1}, m::Long)    = Array(T, m)
 similar{T}(a::Array{T,1}, S)          = Array(S, size(a,1))
 similar{T}(a::Array{T,2}, dims::Dims) = Array(T, dims)
-similar{T}(a::Array{T,2}, m::Size)    = Array(T, m)
+similar{T}(a::Array{T,2}, m::Long)    = Array(T, m)
 similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
 empty(T) = Array(T, 0)
@@ -82,23 +82,23 @@ function fill!{T<:Union(Int,Float)}(a::Array{T}, x)
 end
 
 zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
-zeros(T::Type, dims::Size...) = zeros(T, dims)
+zeros(T::Type, dims::Long...) = zeros(T, dims)
 zeros(dims::Dims) = zeros(Float64, dims)
-zeros(dims::Size...) = zeros(dims)
+zeros(dims::Long...) = zeros(dims)
 
 ones{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), one(T))
-ones(T::Type, dims::Size...) = ones(T, dims)
+ones(T::Type, dims::Long...) = ones(T, dims)
 ones(dims::Dims) = ones(Float64, dims)
-ones(dims::Size...) = ones(dims)
+ones(dims::Long...) = ones(dims)
 
 trues(dims::Dims) = fill!(Array(Bool, dims), true)
-trues(dims::Size...) = trues(dims)
+trues(dims::Long...) = trues(dims)
 
 falses(dims::Dims) = fill!(Array(Bool, dims), false)
-falses(dims::Size...) = falses(dims)
+falses(dims::Long...) = falses(dims)
 
 fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
-fill(v, dims::Size...) = fill(v, dims)
+fill(v, dims::Long...) = fill(v, dims)
 
 function linspace(start::Real, stop::Real, n::Int)
     (start, stop) = promote(start, stop)
@@ -134,14 +134,14 @@ ctranspose{T<:Union(Float64,Float32)}(A::Matrix{T}) = transpose(A)
 
 ## Indexing: ref ##
 
-ref(a::Array, i::Index) = arrayref(a,i)
+ref(a::Array, i::Long) = arrayref(a,i)
 ref(a::Array, i::Int) = arrayref(a,long(i))
 ref{T}(a::Array{T,0}) = arrayref(a,1)
-ref{T}(a::Array{T,1}, i::Index) = arrayref(a,i)
+ref{T}(a::Array{T,1}, i::Long) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Int) = arrayref(a,long(i))
-ref(a::Array{Any,1}, i::Index) = arrayref(a,i)
+ref(a::Array{Any,1}, i::Long) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Int) = arrayref(a,long(i))
-ref{T}(a::Array{T,2}, i::Index, j::Index) = arrayref(a, (j-1)*arraysize(a,1)+i)
+ref{T}(a::Array{T,2}, i::Long, j::Long) = arrayref(a, (j-1)*arraysize(a,1)+i)
 ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a,long((j-1)*arraysize(a,1)+i))
 
 function slicedim(A::Array, d::Int, i::Int)
@@ -237,13 +237,13 @@ end
 
 ## Indexing: assign ##
 
-assign(A::Array{Any}, x::AbstractArray, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::AbstractArray, i::Long) = arrayset(A,i,x)
 assign(A::Array{Any}, x::AbstractArray, i::Int) = arrayset(A,long(i),x)
-assign(A::Array{Any}, x::ANY, i::Index) = arrayset(A,i,x)
+assign(A::Array{Any}, x::ANY, i::Long) = arrayset(A,i,x)
 assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,long(i),x)
-assign{T}(A::Array{T}, x::AbstractArray, i::Index) = arrayset(A,i,convert(T, x))
+assign{T}(A::Array{T}, x::AbstractArray, i::Long) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x::AbstractArray, i::Int) = arrayset(A,long(i),convert(T, x))
-assign{T}(A::Array{T}, x, i::Index) = arrayset(A,i,convert(T, x))
+assign{T}(A::Array{T}, x, i::Long) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Int) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
