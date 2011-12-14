@@ -116,8 +116,8 @@ isequal{T<:Float}(x::T, y::T) = (x == y) || (isnan(x) && isnan(y))
 
 ## floating point traits ##
 
-const Inf32 = boxf32(unbox32(uint32(0x7f800000)))
-const NaN32 = boxf32(unbox32(uint32(0x7fc00000)))
+const Inf32 = boxf32(unbox32(0x7f800000))
+const NaN32 = boxf32(unbox32(0x7fc00000))
 const Inf = boxf64(unbox64(0x7ff0000000000000))
 const NaN = boxf64(unbox64(0x7ff8000000000000))
 
@@ -129,7 +129,7 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     inf{T<:Float}(x::T) = inf(T)
     nan{T<:Float}(x::T) = nan(T)
 
-    isdenormal(x::Float32) = (abs(x) < $boxf32(unbox32(uint32(0x00800000))))
+    isdenormal(x::Float32) = (abs(x) < $boxf32(unbox32(0x00800000)))
     isdenormal(x::Float64) = (abs(x) < $boxf64(unbox64(0x0010000000000000)))
 
     typemin(::Type{Float32}) = $(-Inf32)
@@ -139,9 +139,9 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
-    realmin(::Type{Float32}) = $boxf32(unbox32(uint32(0x00800000)))
+    realmin(::Type{Float32}) = $boxf32(unbox32(0x00800000))
     realmin(::Type{Float64}) = $boxf64(unbox64(0x0010000000000000))
-    realmax(::Type{Float32}) = $boxf32(unbox32(uint32(0x7f7fffff)))
+    realmax(::Type{Float32}) = $boxf32(unbox32(0x7f7fffff))
     realmax(::Type{Float64}) = $boxf64(unbox64(0x7fefffffffffffff))
     realmin{T<:Float}(x::T) = realmin(T)
     realmax{T<:Float}(x::T) = realmax(T)
@@ -154,7 +154,7 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     prevfloat(x::Float) = nextfloat(x,-1)
 
     eps(x::Float) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
-    eps(::Type{Float32}) = $boxf32(unbox32(uint32(0x34000000)))
+    eps(::Type{Float32}) = $boxf32(unbox32(0x34000000))
     eps(::Type{Float64}) = $boxf64(unbox64(0x3cb0000000000000))
     eps() = eps(Float64)
 end

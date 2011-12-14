@@ -4,12 +4,12 @@
 ## basic UTF-8 decoding & iteration ##
 
 const _jl_utf8_offset = [
-    uint32(0),
-    uint32(12416),
-    uint32(925824),
-    uint32(63447168),
-    uint32(4194836608),
-    uint32(2181570688),
+    0x00000000,
+    0x00003080,
+    0x000e2080,
+    0x03c82080,
+    0xfa082080,
+    0x82082080,
 ]
 
 const _jl_utf8_trailing = [
@@ -23,7 +23,7 @@ const _jl_utf8_trailing = [
     2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5,
 ]
 
-is_utf8_start(byte::Uint8) = ((byte&192)!=128)
+is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 
 ## required core functionality ##
 
