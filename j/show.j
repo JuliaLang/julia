@@ -8,7 +8,14 @@ show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 show(b::Bool) = print(b ? "true" : "false")
 show(n::Int)  = show(int64(n))
-show(n::Uint) = show(uint64(n))
+
+function show_trailing_hex(n::Uint64, ndig::Int)
+    for s = ndig-1:-1:0
+        d = (n >> 4*s) & uint64(0xf)
+        print("0123456789abcdef"[long(d+1)])
+    end
+end
+show(n::Uint) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
 
 show_float64(f::Float64, ndig) =
     ccall(:jl_show_float, Void, (Float64, Int32), f, int32(ndig))

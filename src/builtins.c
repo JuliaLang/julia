@@ -1335,7 +1335,6 @@ void jl_init_builtins(void)
 
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_any_type,         jl_f_show_any);
     add_builtin_method1(jl_show_gf, (jl_type_t*)jl_int64_type,       jl_f_show_int64);
-    add_builtin_method1(jl_show_gf, (jl_type_t*)jl_uint64_type,      jl_f_show_uint64);
 
     jl_convert_gf = jl_new_generic_function(jl_symbol("convert"));
     jl_add_method(jl_convert_gf,

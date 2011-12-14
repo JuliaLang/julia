@@ -602,7 +602,7 @@ end
 @assert parse_hex("DeadBeef") == 3735928559
 
 # bits types, printing numbers
-@assert string(uint32(-1)) == "4294967295"
+@assert string(uint32(-1)) == "0xffffffff"
 if WORD_SIZE == 64
     @assert isa((()->box(Ptr{Int8},unbox64(int64(0))))(), Ptr{Int8})
 else
