@@ -54,6 +54,15 @@ macro elapsed(ex)
   end
 end
 
+function peakflops()
+    a = rand(2000,2000)
+    t = @elapsed a*a
+    t = @elapsed a*a
+    floprate = (2*2000.0^3/t)
+    println("The peak flop rate is ", floprate*1e-9, " gigaflops")
+    floprate
+end
+
 # source files, editing
 
 function function_loc(f::Function, types)
