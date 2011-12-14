@@ -223,6 +223,7 @@ end
 
 alignment(x::Any) = (0, strlen(showcompact_to_string(x)))
 alignment(x::Number) = (strlen(showcompact_to_string(x)), 0)
+alignment(x::Int) = (strlen(showcompact_to_string(x)), 0)
 function alignment(x::Real)
     m = match(r"^(.*?)((?:[\.eE].*)?)$", showcompact_to_string(x))
     m == nothing ? (strlen(showcompact_to_string(x)), 0) :
