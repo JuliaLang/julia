@@ -166,7 +166,7 @@ type GenericString <: String
 end
 
 length(s::GenericString) = length(s.string)
-next(s::GenericString, i::Int) = next(s.string, i)
+next(s::GenericString, i::Long) = next(s.string, i)
 
 ## plain old character arrays ##
 
