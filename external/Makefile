@@ -8,6 +8,7 @@ OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
 ARPACK_VER = 96
 FFTW_VER = 3.3
+CLP_VER = 1.14.5
 UNWIND_VER = 0.99
 LIGHTTPD_VER = 1.4.29
 
@@ -329,6 +330,31 @@ clean-unwind:
 distclean-unwind:
 	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
 
+## CLP ##
+
+CLP_OBJ_TARGET = $(EXTROOTLIB)/libClp.$(SHLIB_EXT)
+
+compile-clp: install-clp
+install-clp: $(CLP_OBJ_TARGET)
+
+clp-$(CLP_VER).tgz:
+	curl -O http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
+clp-$(CLP_VER)/configure: Clp-$(CLP_VER).tgz
+	tar jxf $<
+	touch $@
+clp-$(CLP_VER)/config.status: Clp-$(CLP_VER)/configure
+	cd Clp-$(CLP_VER) && \
+	./configure --prefix=$(EXTROOT)
+$(CLP_OBJ_TARGET): Clp-$(CLP_VER)/config.status
+	$(MAKE) -C Clp-$(CLP_VER) install
+	touch $@
+
+clean-clp:
+	$(MAKE) -C Clp-$(CLP_VER) clean
+	rm -f $(CLP_OBJ_TARGET)
+distclean-clp:
+	rm -rf Clp-$(CLP_VER).tar.bz2 Clp-$(CLP_VER)
+
 ## GNU LIGHTTPD ##
 
 LIGHTTPD_OBJ_TARGET = lighttpd-$(LIGHTTPD_VER)/src/lighttpd
@@ -344,7 +370,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	touch $@
 $(LIGHTTPD_OBJ_SOURCE): lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(EXTROOT) --without-pcre --without-zlib --without-bzip2
+	./configure --prefix=$(EXTROOT) --without-clp --without-zlib --without-bzip2
 	$(MAKE)
 	touch $@
 $(LIGHTTPD_OBJ_TARGET): $(LIGHTTPD_OBJ_SOURCE)

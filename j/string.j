@@ -1,8 +1,9 @@
 ## core string functions ##
 
 length{T<:String}(s::T) = error("you must implement length(",T,")")
-next{T<:String}(s::T, i::Int) = error("you must implement next(",T,",Int)")
-next(s::DirectIndexString, i::Int) = (s[i],i+1)
+next{T<:String}(s::T, i::Long) = error("you must implement next(",T,",Long)")
+next(s::DirectIndexString, i::Long) = (s[i],i+1)
+next(s::String, i::Int) = next(s,long(i))
 
 ## generic supplied functions ##
 
@@ -11,8 +12,9 @@ done(s::String,i) = (i > length(s))
 numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Long) = next(s,i)[1]
+ref(s::String, i::Int) = s[long(i)]
 ref(s::String, x::Real) = s[iround(x)]
-ref(s::String, r::Range1) = s[iround(r.start):iround(r.stop)]
+ref{T<:Int}(s::String, r::Range1{T}) = s[long(r.start):long(r.stop)]
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -27,7 +29,7 @@ show(s::String) = print_quoted(s)
 (^)(s::String, r::Int) = repeat(s,r)
 
 size(s::String) = (length(s),)
-size(s::String, d::Long) = d == 1 ? length(s) :
+size(s::String, d::Int) = d==1 ? length(s) :
     error("in size: tupleref: index ",d," out of range")
 
 strlen(s::DirectIndexString) = length(s)
@@ -194,6 +196,7 @@ type SubString <: String
     SubString(s::SubString, i::Long, j::Long) =
         new(s.string, i-1+s.offset, j-i+1)
 end
+SubString(s::String, i::Int, j::Int) = SubString(s, long(i), long(j))
 
 function next(s::SubString, i::Long)
     if i < 1 || i > s.length

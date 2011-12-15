@@ -17,11 +17,11 @@ setlocal define="^\s*macro\>"
 
 " Uncomment the following line if you want operators to be
 " syntax-highlightened
-"let julia_highlight_operators=1
+let julia_highlight_operators=1
 
 " Uncomment the following two lines to force julia source-code style
-"set shiftwidth=4 
-"set expandtab
+set shiftwidth=4
+set expandtab
 
 if has("gui_win32")
 	let b:browsefilter = "Julia Source Files (*.j)\t*.j\n"
