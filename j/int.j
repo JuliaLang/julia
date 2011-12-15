@@ -167,10 +167,10 @@ promote_rule(::Type{Uint32}, ::Type{Int16}) = Int64
 promote_rule(::Type{Uint32}, ::Type{Int32}) = Int64
 promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
 
-promote_rule(::Type{Uint64}, ::Type{Int8} ) = Int64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int16}) = Int64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int32}) = Int64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int64}) = Int64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int32}) = Uint64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64 # LOSSY
 
 ## integer arithmetic ##
 
@@ -182,7 +182,7 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Int64 # LOSSY
 -(x::Uint8 ) = boxsi16(neg_int(zext16(unbox8 (x))))
 -(x::Uint16) = boxsi32(neg_int(zext32(unbox16(x))))
 -(x::Uint32) = boxsi64(neg_int(zext64(unbox32(x))))
--(x::Uint64) = boxsi64(neg_int(zext64(unbox64(x)))) # LOSSY
+-(x::Uint64) = boxsi64(neg_int(unbox64(x))) # LOSSY
 
 +(x::Int8 , y::Int8 ) = boxsi8 (add_int(unbox8 (x), unbox8 (y)))
 +(x::Int16, y::Int16) = boxsi16(add_int(unbox16(x), unbox16(y)))
