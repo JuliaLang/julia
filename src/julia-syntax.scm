@@ -860,25 +860,25 @@
 		       ,body))))))
 
    ; update operators
-   (pattern-lambda (+= a b)     (expand-update-operator '+= a b))
-   (pattern-lambda (-= a b)     (expand-update-operator '-= a b))
-   (pattern-lambda (*= a b)     (expand-update-operator '*= a b))
-   (pattern-lambda (.*= a b)    (expand-update-operator '.*= a b))
-   (pattern-lambda (/= a b)     (expand-update-operator '/= a b))
-   (pattern-lambda (./= a b)    (expand-update-operator './= a b))
-   (pattern-lambda (//= a b)    (expand-update-operator '//= a b))
-   (pattern-lambda (.//= a b)   (expand-update-operator './/= a b))
-   (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\=| a b))
-   (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\=| a b))
-   (pattern-lambda (^= a b)     (expand-update-operator '^= a b))
-   (pattern-lambda (.^= a b)    (expand-update-operator '.^= a b))
-   (pattern-lambda (%= a b)     (expand-update-operator '%= a b))
-   (pattern-lambda (|\|=| a b)  (expand-update-operator '|\|=| a b))
-   (pattern-lambda (&= a b)     (expand-update-operator '&= a b))
-   (pattern-lambda ($= a b)     (expand-update-operator '$= a b))
-   (pattern-lambda (<<= a b)    (expand-update-operator '<<= a b))
-   (pattern-lambda (>>= a b)    (expand-update-operator '>>= a b))
-   (pattern-lambda (>>>= a b)   (expand-update-operator '>>>= a b))
+   (pattern-lambda (+= a b)     (expand-update-operator '+ a b))
+   (pattern-lambda (-= a b)     (expand-update-operator '- a b))
+   (pattern-lambda (*= a b)     (expand-update-operator '* a b))
+   (pattern-lambda (.*= a b)    (expand-update-operator '.* a b))
+   (pattern-lambda (/= a b)     (expand-update-operator '/ a b))
+   (pattern-lambda (./= a b)    (expand-update-operator './ a b))
+   (pattern-lambda (//= a b)    (expand-update-operator '// a b))
+   (pattern-lambda (.//= a b)   (expand-update-operator '.// a b))
+   (pattern-lambda (|\\=| a b)  (expand-update-operator '|\\| a b))
+   (pattern-lambda (|.\\=| a b) (expand-update-operator '|.\\| a b))
+   (pattern-lambda (^= a b)     (expand-update-operator '^ a b))
+   (pattern-lambda (.^= a b)    (expand-update-operator '.^ a b))
+   (pattern-lambda (%= a b)     (expand-update-operator '% a b))
+   (pattern-lambda (|\|=| a b)  (expand-update-operator '|\|| a b))
+   (pattern-lambda (&= a b)     (expand-update-operator '& a b))
+   (pattern-lambda ($= a b)     (expand-update-operator '$ a b))
+   (pattern-lambda (<<= a b)    (expand-update-operator '<< a b))
+   (pattern-lambda (>>= a b)    (expand-update-operator '>> a b))
+   (pattern-lambda (>>>= a b)   (expand-update-operator '>>> a b))
 
    ;; colon
    ;;(pattern-lambda (: a (-/ :))     `(call (top RangeFrom) ,a 1))
@@ -904,6 +904,10 @@
 
    (pattern-lambda (vcat . a)
 		   `(call (top vcat) ,@a))
+
+   ;; transpose operator
+   (pattern-lambda (|'| a) `(call ctranspose ,a))
+   (pattern-lambda (|.'| a) `(call transpose ,a))
 
    )) ; patterns
 
