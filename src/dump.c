@@ -54,6 +54,19 @@ static int32_t read_int32(ios_t *s)
     return b0 | (b1<<8) | (b2<<16) | (b3<<24);
 }
 
+static void write_uint16(ios_t *s, uint16_t i)
+{
+    write_uint8(s, i       & 0xff);
+    write_uint8(s, (i>> 8) & 0xff);
+}
+
+static uint16_t read_uint16(ios_t *s)
+{
+    int b0 = read_uint8(s);
+    int b1 = read_uint8(s);
+    return b0 | (b1<<8);
+}
+
 static void writetag(ios_t *s, void *v)
 {
     write_uint8(s, (uint8_t)(ptrint_t)ptrhash_get(&ser_tag, v));
@@ -191,7 +204,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         // compressing tree
         if (!is_ast_node(v)) {
             writetag(s, (jl_value_t*)LiteralVal_tag);
-            write_int32(s, literal_val_id(v));
+            write_uint16(s, literal_val_id(v));
             return;
         }
     }
@@ -601,7 +614,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return (jl_value_t*)e;
     }
     else if (vtag == (jl_value_t*)LiteralVal_tag) {
-        return jl_cellref(tree_literal_values, read_int32(s));
+        return jl_cellref(tree_literal_values, read_uint16(s));
     }
     else if (vtag == (jl_value_t*)jl_typename_type) {
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s);
@@ -642,11 +655,11 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->tfunc = jl_deserialize_value(s);
         li->name = (jl_sym_t*)jl_deserialize_value(s);
         li->specTypes = jl_deserialize_value(s);
-        li->specializations = (jl_tuple_t*)jl_deserialize_value(s);
+        li->specializations = (jl_array_t*)jl_deserialize_value(s);
         li->inferred = jl_deserialize_value(s);
 
         li->fptr = NULL;
-        li->roots = jl_null;
+        li->roots = NULL;
         li->functionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
@@ -921,6 +934,7 @@ void jl_init_serializer(void)
                      jl_symbol("FuncKind"), jl_symbol("Box"),
                      lambda_sym, vinf_sym, locals_sym, body_sym, return_sym,
                      call_sym, colons_sym, null_sym, goto_ifnot_sym,
+                     assign_sym,
 
                      jl_symbol("a"), jl_symbol("b"), jl_symbol("c"),
                      jl_symbol("d"), jl_symbol("e"), jl_symbol("f"),
@@ -947,6 +961,7 @@ void jl_init_serializer(void)
                      jl_symbol("eq_int"), jl_symbol("slt_int"),
                      jl_symbol("sle_int"), jl_symbol("ne_int"),
                      jl_symbol("arrayset"), jl_symbol("arrayref"),
+                     jl_symbol("convert"), jl_symbol("typeassert"),
                      jl_false, jl_true,
 
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
@@ -960,7 +975,19 @@ void jl_init_serializer(void)
                      jl_box_int32(24), jl_box_int32(25), jl_box_int32(26),
                      jl_box_int32(27), jl_box_int32(28), jl_box_int32(29),
                      jl_box_int32(30), jl_box_int32(31), jl_box_int32(32),
-
+#ifndef __LP64__
+                     jl_box_int32(33), jl_box_int32(34), jl_box_int32(35),
+                     jl_box_int32(36), jl_box_int32(37), jl_box_int32(38),
+                     jl_box_int32(39), jl_box_int32(40), jl_box_int32(41),
+                     jl_box_int32(42), jl_box_int32(43), jl_box_int32(44),
+                     jl_box_int32(45), jl_box_int32(46), jl_box_int32(47),
+                     jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
+                     jl_box_int32(51), jl_box_int32(52), jl_box_int32(53),
+                     jl_box_int32(54), jl_box_int32(55), jl_box_int32(56),
+                     jl_box_int32(57), jl_box_int32(58), jl_box_int32(59),
+                     jl_box_int32(60), jl_box_int32(61), jl_box_int32(62),
+                     jl_box_int32(63), jl_box_int32(64),
+#endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
                      jl_box_int64(6), jl_box_int64(7), jl_box_int64(8),
@@ -972,7 +999,19 @@ void jl_init_serializer(void)
                      jl_box_int64(24), jl_box_int64(25), jl_box_int64(26),
                      jl_box_int64(27), jl_box_int64(28), jl_box_int64(29),
                      jl_box_int64(30), jl_box_int64(31), jl_box_int64(32),
-
+#ifdef __LP64__
+                     jl_box_int64(33), jl_box_int64(34), jl_box_int64(35),
+                     jl_box_int64(36), jl_box_int64(37), jl_box_int64(38),
+                     jl_box_int64(39), jl_box_int64(40), jl_box_int64(41),
+                     jl_box_int64(42), jl_box_int64(43), jl_box_int64(44),
+                     jl_box_int64(45), jl_box_int64(46), jl_box_int64(47),
+                     jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
+                     jl_box_int64(51), jl_box_int64(52), jl_box_int64(53),
+                     jl_box_int64(54), jl_box_int64(55), jl_box_int64(56),
+                     jl_box_int64(57), jl_box_int64(58), jl_box_int64(59),
+                     jl_box_int64(60), jl_box_int64(61), jl_box_int64(62),
+                     jl_box_int64(63), jl_box_int64(64),
+#endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
                      jl_type_type, jl_bottom_type, jl_pointer_type,

@@ -603,21 +603,22 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         newmeth = method;
     else
     */
-    jl_tuple_t *lilist = jl_null;
+    jl_array_t *lilist=NULL;
     jl_lambda_info_t *li=NULL;
-    if (method->linfo) {
+    if (method->linfo && method->linfo->specializations!=NULL) {
         // reuse code already generated for this combination of lambda and
         // arguments types. this happens for inner generic functions where
         // a new closure is generated on each call to the enclosing function.
         lilist = method->linfo->specializations;
-        while (lilist != jl_null) {
-            li = (jl_lambda_info_t*)jl_t0(lilist);
+        int k;
+        for(k=0; k < lilist->length; k++) {
+            li = (jl_lambda_info_t*)jl_cellref(lilist, k);
             if (jl_types_equal(li->specTypes, (jl_value_t*)type))
                 break;
-            lilist = (jl_tuple_t*)jl_t1(lilist);
         }
+        if (k == lilist->length) lilist=NULL;
     }
-    if (lilist != jl_null && !li->inInference) {
+    if (lilist != NULL && !li->inInference) {
         assert(li);
         newmeth = jl_reinstantiate_method(method, li);
         (void)jl_method_cache_insert(mt, type, newmeth);
@@ -658,9 +659,15 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
         newmeth->linfo->specTypes = (jl_value_t*)type;
-        method->linfo->specializations =
-            jl_tuple2((jl_value_t*)newmeth->linfo,
-                      (jl_value_t*)method->linfo->specializations);
+        jl_array_t *spe = method->linfo->specializations;
+        if (spe == NULL) {
+            spe = jl_alloc_cell_1d(1);
+            jl_cellset(spe, 0, newmeth->linfo);
+        }
+        else {
+            jl_cell_1d_push(spe, (jl_value_t*)newmeth->linfo);
+        }
+        method->linfo->specializations = spe;
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();

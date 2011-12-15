@@ -2494,7 +2494,7 @@ void jl_init_types(void)
                            jl_tuple(9, jl_any_type, jl_tuple_type,
                                     jl_any_type, jl_sym_type,
                                     jl_any_type, jl_tuple_type,
-                                    jl_function_type, jl_tuple_type,
+                                    jl_function_type, jl_array_any_type,
                                     jl_bool_type));
     jl_lambda_info_type->fptr = jl_f_no_function;
 

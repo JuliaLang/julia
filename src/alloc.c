@@ -286,14 +286,14 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;
-    li->roots = jl_null;
+    li->roots = NULL;
     li->functionObject = NULL;
     li->specTypes = NULL;
     li->inferred = jl_false;
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
-    li->specializations = jl_null;
+    li->specializations = NULL;
     li->name = jl_symbol("anonymous");
     return li;
 }

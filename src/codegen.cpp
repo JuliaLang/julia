@@ -357,6 +357,17 @@ static void make_gcroot(Value *v, jl_codectx_t *ctx)
 
 extern "C" jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
 
+static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
+{
+    if (li->roots == NULL) {
+        li->roots = jl_alloc_cell_1d(1);
+        jl_cellset(li->roots, 0, val);
+    }
+    else {
+        jl_cell_1d_push(li->roots, val);
+    }
+}
+
 static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 {
     assert(jl_is_lambda_info(expr));
@@ -367,7 +378,7 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         // no captured vars; lift
         jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
                                                   (jl_value_t*)jl_null);
-        ctx->linfo->roots = jl_tuple2(fun, ctx->linfo->roots);
+        jl_add_linfo_root(ctx->linfo, fun);
         return literal_pointer_val(fun);
     }
 
@@ -395,7 +406,6 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     env_tuple = builder.CreateCall(jlntuple_func,
                                    ArrayRef<Value*>(&captured[0],
                                                     1+capt->length));
-    //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
     return builder.CreateCall2(jlclosure_func,
                                literal_pointer_val(expr), env_tuple);
 }
@@ -586,7 +596,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             for(i=0; i < nargs; i++) {
                 jl_tupleset(rt1, i, args[i+1]);
             }
-            ctx->linfo->roots = jl_tuple2(rt1, ctx->linfo->roots);
+            jl_add_linfo_root(ctx->linfo, rt1);
             JL_GC_POP();
             return literal_pointer_val(rt1);
         }
@@ -1054,8 +1064,6 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
-        //if (!jl_is_symbol(jv))
-        //    ctx->linfo->roots = jl_tuple2(jv, ctx->linfo->roots);
         return literal_pointer_val(jv);
     }
     else if (jl_is_gotonode(expr)) {

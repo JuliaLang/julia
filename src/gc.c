@@ -91,7 +91,7 @@ static bigval_t *big_objects = NULL;
 static pool_t pools[N_POOLS];
 
 static size_t allocd_bytes = 0;
-static size_t collect_interval = 3200*1024*sizeof(void*);
+static const size_t collect_interval = 3200*1024*sizeof(void*);
 
 static htable_t finalizer_table;
 static arraylist_t to_finalize;
@@ -216,6 +216,10 @@ static int szclass(size_t sz)
 
 static void *alloc_big(size_t sz, int isobj)
 {
+    if (allocd_bytes-sz > collect_interval) {
+        jl_gc_collect();
+        allocd_bytes = sz;
+    }
     sz = (sz+3) & -4;
     bigval_t *v = (bigval_t*)malloc(sz + BVOFFS*sizeof(void*));
     if (v == NULL)
@@ -293,8 +297,12 @@ static void add_page(pool_t *p)
 
 static void *pool_alloc(pool_t *p)
 {
-    if (p->freelist == NULL)
+    if (allocd_bytes > collect_interval) {
+        jl_gc_collect();
+    }
+    if (p->freelist == NULL) {
         add_page(p);
+    }
     assert(p->freelist != NULL);
     gcval_t *v = p->freelist;
     p->freelist = p->freelist->next;
@@ -693,8 +701,6 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
     sz += sizeof(void*);
     allocd_bytes += sz;
 #ifdef MEMDEBUG
@@ -708,8 +714,6 @@ void *allocb(size_t sz)
 
 void *allocobj(size_t sz)
 {
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
     allocd_bytes += sz;
 #ifdef MEMDEBUG
     return alloc_big(sz, 1);
@@ -729,8 +733,6 @@ void *allocb_permanent(size_t sz)
 
 void *alloc_2w(void)
 {
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
     allocd_bytes += (2*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*), 1);
@@ -744,8 +746,6 @@ void *alloc_2w(void)
 
 void *alloc_3w(void)
 {
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
     allocd_bytes += (3*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*), 1);
@@ -759,8 +759,6 @@ void *alloc_3w(void)
 
 void *alloc_4w(void)
 {
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
     allocd_bytes += (4*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*), 1);

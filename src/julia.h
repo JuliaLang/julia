@@ -80,12 +80,12 @@ typedef struct _jl_lambda_info_t {
     jl_tuple_t *sparams;
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
-    jl_tuple_t *roots;  // pointers in generated code
+    jl_array_t *roots;  // pointers in generated code
     jl_value_t *specTypes;  // argument types this is specialized for
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
     // pairlist of all lambda infos with code generated from this one
-    jl_tuple_t *specializations;
+    jl_array_t *specializations;
     jl_value_t *inferred;
 
     // hidden fields:
