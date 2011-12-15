@@ -59,6 +59,7 @@ libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
 
 # core data structures (used by type inference)
 load("abstractarray.j")
+load("subarray.j")
 load("array.j")
 load("intset.j")
 load("table.j")
