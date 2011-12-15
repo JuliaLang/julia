@@ -18,14 +18,6 @@ ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
 
-function nnz(a::AbstractArray)
-    n = 0
-    for i = 1:numel(a)
-        n += bool(a[i]) ? 1 : 0
-    end
-    return n
-end
-
 function stride(a::AbstractArray, i::Int)
     s = 1
     for n=1:(i-1)
@@ -65,6 +57,16 @@ function reshape(a::AbstractArray, dims::Dims)
 end
 reshape(a::AbstractArray, dims::Long...) = reshape(a, dims)
 
+function squeeze(A::AbstractArray)
+    d = ()
+    for i = size(A)
+        if i != 1
+            d = tuple(d..., i)
+        end
+    end
+    reshape(A, d)
+end
+
 function fill!(A::AbstractArray, x)
     for i = 1:numel(A)
         A[i] = x
@@ -81,23 +83,7 @@ end
 
 copy(a::AbstractArray) = copy_to(similar(a), a)
 
-eye(n::Long) = eye(n, n)
-function eye(m::Long, n::Long)
-    a = zeros(m,n)
-    for i = 1:min(m,n)
-        a[i,i] = 1
-    end
-    return a
-end
-function one{T}(x::AbstractMatrix{T})
-    m, n = size(x)
-    a = zeros(T,size(x))
-    for i = 1:min(m,n)
-        a[i,i] = 1
-    end
-    return a
-end
-zero{T}(x::AbstractArray{T,2}) = zeros(T,size(x))
+zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## Conversions ##
 
@@ -122,58 +108,11 @@ float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
 conj{T<:Real}(x::AbstractArray{T}) = x
 conj!{T<:Real}(x::AbstractArray{T}) = x
 
-function conj!{T<:Number}(A::AbstractArray{T})
-    for i=1:numel(A)
-        A[i] = conj(A[i])
-    end
-    return A
-end
-
 real{T<:Real}(x::AbstractArray{T}) = x
 imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 
-macro unary_op(f)
-    quote
-        function ($f)(A::AbstractArray)
-            F = similar(A)
-            for i=1:numel(A)
-                F[i] = ($f)(A[i])
-            end
-            return F
-        end
-    end
-end
-
-@unary_op (-)
-@unary_op (~)
-@unary_op (conj)
-
-macro unary_c2r_op(f)
-    quote
-        function ($f){T}(A::AbstractArray{T})
-            S = typeof(($f)(zero(T)))
-            F = similar(A, S)
-            for i=1:numel(A)
-                F[i] = ($f)(A[i])
-            end
-            return F
-        end
-    end
-end
-
-@unary_c2r_op (real)
-@unary_c2r_op (imag)
-
 +{T<:Number}(x::AbstractArray{T}) = x
 *{T<:Number}(x::AbstractArray{T}) = x
-
-function !(A::AbstractArray{Bool})
-    F = similar(A)
-    for i=1:numel(A)
-        F[i] = !A[i]
-    end
-    return F
-end
 
 ## Binary arithmetic operators ##
 
@@ -186,157 +125,15 @@ end
 \(A::Number, B::AbstractArray) = B ./ A
 \(A::AbstractArray, B::Number) = B ./ A
 
-./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-./(x::Number,y::Array ) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
-./(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
-
 ./(x::AbstractArray, y::AbstractArray ) = throw(MethodError(./, (x,y)))
 ./(x::Number,y::AbstractArray )         = throw(MethodError(./, (x,y)))
 ./(x::AbstractArray, y::Number)         = throw(MethodError(./, (x,y)))
 
 # ^ is difficult, since negative exponents give a different type
 
-.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
-.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
-.^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
-
 .^(x::AbstractArray, y::AbstractArray ) = throw(MethodError(.^, (x,y)))
 .^(x::Number,y::AbstractArray )         = throw(MethodError(.^, (x,y)))
 .^(x::AbstractArray, y::Number)         = throw(MethodError(.^, (x,y)))
-
-function .^{S<:Int,T<:Int}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); error("argument dimensions must match"); end
-    F = similar(A, Float64)
-    for i=1:numel(A)
-        F[i] = A[i]^B[i]
-    end
-    return F
-end
-
-function .^{T<:Int}(A::Int, B::Array{T})
-    F = similar(B, Float64)
-    for i=1:numel(B)
-        F[i] = A^B[i]
-    end
-    return F
-end
-
-function _jl_power_array_int_body(F, A, B)
-    for i=1:numel(A)
-        F[i] = A[i]^B
-    end
-    return F
-end
-
-function .^{T<:Int}(A::Array{T}, B::Int)
-    F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
-    _jl_power_array_int_body(F, A, B)
-end
-
-macro binary_arithmetic_op(f)
-    quote
-        function ($f){S,T}(A::Array{S}, B::Array{T})
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, promote_type(S,T))
-            for i=1:numel(A)
-                F[i] = ($f)(A[i], B[i])
-            end
-            return F
-        end
-        function ($f){T}(A::Number, B::Array{T})
-            F = similar(B, promote_type(typeof(A),T))
-            for i=1:numel(B)
-                F[i] = ($f)(A, B[i])
-            end
-            return F
-        end
-        function ($f){T}(A::Array{T}, B::Number)
-            F = similar(A, promote_type(T,typeof(B)))
-            for i=1:numel(A)
-                F[i] = ($f)(A[i], B)
-            end
-            return F
-        end
-    end
-end
-
-@binary_arithmetic_op (+)
-@binary_arithmetic_op (-)
-@binary_arithmetic_op (.*)
-@binary_arithmetic_op div
-@binary_arithmetic_op mod
-@binary_arithmetic_op (&)
-@binary_arithmetic_op (|)
-@binary_arithmetic_op ($)
-
-## promotion to complex ##
-
-function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    F = similar(A, typeof(complex(zero(S),zero(T))))
-    for i=1:numel(A)
-        F[i] = complex(A[i], B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Real, B::Array{T})
-    F = similar(B, typeof(complex(A,zero(T))))
-    for i=1:numel(B)
-        F[i] = complex(A, B[i])
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Array{T}, B::Real)
-    F = similar(A, typeof(complex(zero(T),B)))
-    for i=1:numel(A)
-        F[i] = complex(A[i], B)
-    end
-    return F
-end
-
-function complex{T<:Real}(A::Array{T})
-    z = zero(T)
-    F = similar(A, typeof(complex(z,z)))
-    for i=1:numel(A)
-        F[i] = complex(A[i], z)
-    end
-    return F
-end
-
-## Binary comparison operators ##
-
-macro binary_comparison_op(f)
-    quote
-        function ($f)(A::Array, B::Array)
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, Bool)
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B[i])
-            end
-            return F
-        end
-        function ($f)(A::Number, B::Array)
-            F = similar(B, Bool)
-            for i = 1:numel(B)
-                F[i] = ($f)(A, B[i])
-            end
-            return F
-        end
-        function ($f)(A::Array, B::Number)
-            F = similar(A, Bool)
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B)
-            end
-            return F
-        end
-    end
-end
-
-@binary_comparison_op (==)
-@binary_comparison_op (!=)
-@binary_comparison_op (<)
-@binary_comparison_op (<=)
 
 ## code generator for specializing on the number of dimensions ##
 
@@ -518,40 +315,6 @@ function circshift(a, shiftamts)
     end
     a[I...]::typeof(a)
 end
-
-function rotl90(A::AbstractMatrix)
-    m,n = size(A)
-    B = similar(A,(n,m))
-    for i=1:m, j=1:n
-        B[n-j+1,i] = A[i,j]
-    end
-    return B
-end
-function rotr90(A::AbstractMatrix)
-    m,n = size(A)
-    B = similar(A,(n,m))
-    for i=1:m, j=1:n
-        B[j,m-i+1] = A[i,j]
-    end
-    return B
-end
-function rot180(A::AbstractMatrix)
-    m,n = size(A)
-    B = similar(A)
-    for i=1:m, j=1:n
-        B[m-i+1,n-j+1] = A[i,j]
-    end
-    return B
-end
-function rotl90(A::AbstractMatrix, k::Int)
-    k = k % 4
-    k == 1 ? rotl90(A) :
-    k == 2 ? rot180(A) :
-    k == 3 ? rotr90(A) : copy(A)
-end
-rotr90(A::AbstractMatrix, k::Int) = rotl90(A,-k)
-rot180(A::AbstractMatrix, k::Int) = k % 2 == 1 ? rot180(A) : copy(A)
-const rot90 = rotl90
 
 ## Indexing: assign ##
 
@@ -1244,26 +1007,6 @@ end
 
 ## Transpose, Permute ##
 
-reverse(v::AbstractVector) = (n=length(v); [ v[n-i+1] | i=1:n ])
-function reverse!(v::AbstractVector)
-    n = length(v)
-    r = n
-    for i=1:div(n,2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
-    end
-    v
-end
-
-ctranspose(x::AbstractVector) = transpose(x)
-ctranspose(x::AbstractMatrix) = transpose(x)
-
-transpose(x::AbstractVector) = [ x[j] | i=1, j=1:size(x,1) ]
-transpose(x::AbstractMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
-
-ctranspose{T<:Number}(x::AbstractVector{T}) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::AbstractMatrix{T}) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
-
 let permute_cache = nothing
 global permute
 function permute(A::AbstractArray, perm)
@@ -1396,100 +1139,6 @@ function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Long, n::Long)
     return A
 end
 
-function find{T}(A::AbstractArray{T})
-    nnzA = nnz(A)
-    I = Array(Long, nnzA)
-    z = zero(T)
-    count = 1
-    for i=1:length(A)
-        if A[i] != z
-            I[count] = i
-            count += 1
-        end
-    end
-    return I
-end
-
-findn(A::AbstractVector) = find(A)
-
-function findn{T}(A::AbstractMatrix{T})
-    nnzA = nnz(A)
-    I = Array(Long, nnzA)
-    J = Array(Long, nnzA)
-    z = zero(T)
-    count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            count += 1
-        end
-    end
-    return (I, J)
-end
-
-let findn_cache = nothing
-function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
-    quote
-    	Aind = A[$(ivars...)]
-    	if Aind != z
-    	    $(s...)
-    	    count +=1
-    	end
-    end
-end
-
-global findn
-function findn{T}(A::AbstractArray{T})
-    ndimsA = ndims(A)
-    nnzA = nnz(A)
-    I = ntuple(ndimsA, x->Array(Long, nnzA))
-    ranges = ntuple(ndims(A), d->(1:size(A,d)))
-
-    if is(findn_cache,nothing)
-        findn_cache = HashTable()
-    end
-
-    gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:A, :I, :count, :z), A,I,1, zero(T))
-    return I
-end
-end
-
-function findn_nzs{T}(A::AbstractMatrix{T})
-    nnzA = nnz(A)
-    I = zeros(Long, nnzA)
-    J = zeros(Long, nnzA)
-    NZs = zeros(T, nnzA)
-    z = zero(T)
-    count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            NZs[count] = A[i,j]
-            count += 1
-        end
-    end
-    return (I, J, NZs)
-end
-
-function nonzeros{T}(A::AbstractArray{T})
-    nnzA = nnz(A)
-    V = Array(T, nnzA)
-    z = zero(T)
-    count = 1
-    for i=1:length(A)
-        Ai = A[i]
-        if Ai != z
-            V[count] = Ai
-            count += 1
-        end
-    end
-    return V
-end
-
 sub2ind(dims) = 1
 sub2ind(dims, i::Int) = long(i)
 sub2ind(dims, i::Int, j::Int) = sub2ind(long(i), long(j))
@@ -1540,16 +1189,6 @@ function ind2sub(dims::(Int,Int...), ind::Long)
         stride = div(stride, dims[i])
     end
     return tuple(ind, sub...)
-end
-
-function squeeze(A::AbstractArray)
-    d = ()
-    for i = size(A)
-        if i != 1
-            d = tuple(d..., i)
-        end
-    end
-    reshape(A, d)
 end
 
 ## subarrays ##
