@@ -83,6 +83,14 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 # cmp returns -1, 0, +1 indicating ordering
 cmp{T<:Real}(x::T, y::T) = sign(x-y)
 
+# transposed multiply
+aCb(a, b) = ctranspose(a)*b
+abC(a, b) = a*ctranspose(b)
+aCbC(a, b) = ctranspose(a)*ctranspose(b)
+aTb(a, b) = transpose(a)*b
+abT(a, b) = a*transpose(b)
+aTbT(a, b) = transpose(a)*transpose(b)
+
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
 

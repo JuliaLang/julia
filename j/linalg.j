@@ -1,5 +1,8 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
+aCb(x::AbstractVector, y::AbstractVector) = dot(x, y)
+aTb{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = dot(x, y)
+
 function dot(x::AbstractVector, y::AbstractVector)
     s = zero(eltype(x))
     for i=1:length(x)
@@ -17,6 +20,7 @@ cross(a::AbstractVector, b::AbstractVector) =
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
 
+# TODO: support transposed arguments
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
@@ -30,6 +34,7 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     return C
 end
 
+# TODO: support transposed arguments
 function (*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
     nA = size(A, 1)
     nB = size(B, 2)
@@ -45,11 +50,12 @@ function (*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
     return C
 end
 
+# TODO: support transposed arguments
 function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3('N','N',A,B); end
     C = zeros(promote_type(T,S), mA, nB)
     z = zero(eltype(C))
 
@@ -78,12 +84,24 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
 end
 
 # multiply 2x2 matrices
-function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul2x2{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
 
-    A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
-    B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
+    if tA == 'T'
+        A11 = A[1,1]; A12 = A[2,1]; A21 = A[1,2]; A22 = A[2,2]
+    elseif tA == 'C'
+        A11 = conj(A[1,1]); A12 = conj(A[2,1]); A21 = conj(A[1,2]); A22 = conj(A[2,2])
+    else
+        A11 = A[1,1]; A12 = A[1,2]; A21 = A[2,1]; A22 = A[2,2]
+    end
+    if tB == 'T'
+        B11 = B[1,1]; B12 = B[2,1]; B21 = B[1,2]; B22 = B[2,2]
+    elseif tB == 'C'
+        B11 = conj(B[1,1]); B12 = conj(B[2,1]); B21 = conj(B[1,2]); B22 = conj(B[2,2])
+    else
+        B11 = B[1,1]; B12 = B[1,2]; B21 = B[2,1]; B22 = B[2,2]
+    end
 
     C[1,1] = A11*B11 + A12*B21
     C[1,2] = A11*B12 + A12*B22
@@ -93,17 +111,37 @@ function matmul2x2{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
     return C
 end
 
-function matmul3x3{T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
+function matmul3x3{T,S}(tA, tB, A::AbstractMatrix{T}, B::AbstractMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
 
-    A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3];
-    A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3];
-    A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3];
+    if tA == 'T'
+        A11 = A[1,1]; A12 = A[2,1]; A13 = A[3,1];
+        A21 = A[1,2]; A22 = A[2,2]; A23 = A[3,2];
+        A31 = A[1,3]; A32 = A[2,3]; A33 = A[3,3];
+    elseif tA == 'C'
+        A11 = conj(A[1,1]); A12 = conj(A[2,1]); A13 = conj(A[3,1]);
+        A21 = conj(A[1,2]); A22 = conj(A[2,2]); A23 = conj(A[3,2]);
+        A31 = conj(A[1,3]); A32 = conj(A[2,3]); A33 = conj(A[3,3]);
+    else
+        A11 = A[1,1]; A12 = A[1,2]; A13 = A[1,3];
+        A21 = A[2,1]; A22 = A[2,2]; A23 = A[2,3];
+        A31 = A[3,1]; A32 = A[3,2]; A33 = A[3,3];
+    end
 
-    B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3];
-    B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3];
-    B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3];
+    if tB == 'T'
+        B11 = B[1,1]; B12 = B[2,1]; B13 = B[3,1];
+        B21 = B[1,2]; B22 = B[2,2]; B23 = B[3,2];
+        B31 = B[1,3]; B32 = B[2,3]; B33 = B[3,3];
+    elseif tB == 'C'
+        B11 = conj(B[1,1]); B12 = conj(B[2,1]); B13 = conj(B[3,1]);
+        B21 = conj(B[1,2]); B22 = conj(B[2,2]); B23 = conj(B[3,2]);
+        B31 = conj(B[1,3]); B32 = conj(B[2,3]); B33 = conj(B[3,3]);
+    else
+        B11 = B[1,1]; B12 = B[1,2]; B13 = B[1,3];
+        B21 = B[2,1]; B22 = B[2,2]; B23 = B[2,3];
+        B31 = B[3,1]; B32 = B[3,2]; B33 = B[3,3];
+    end
 
     C[1,1] = A11*B11 + A12*B21 + A13*B31
     C[1,2] = A11*B12 + A12*B22 + A13*B32

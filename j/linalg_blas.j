@@ -133,7 +133,7 @@ macro _jl_blas_gemm_macro(fname, eltype)
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-                 transA, transB, int32(m), int32(n), int32(k),
+                 uint8(transA), uint8(transB), int32(m), int32(n), int32(k),
                  alpha, a, int32(lda),
                  b, int32(ldb),
                  beta, c, int32(ldc))
@@ -149,25 +149,79 @@ end
 
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
-    (mA, nA) = size(A)
-    (mB, nB) = size(B)
+    _jl_gemm('N', 'N', A, B)
+end
+
+function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             B::StridedMatrix{T})
+    _jl_gemm('T', 'N', A, B)
+end
+
+function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             B::StridedMatrix{T})
+    _jl_gemm('N', 'T', A, B)
+end
+
+function aTbT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                              B::StridedMatrix{T})
+    _jl_gemm('T', 'T', A, B)
+end
+
+function aCb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             B::StridedMatrix{T})
+    _jl_gemm('C', 'N', A, B)
+end
+
+function abC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                             B::StridedMatrix{T})
+    _jl_gemm('N', 'C', A, B)
+end
+
+function aCbC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+                                                              B::StridedMatrix{T})
+    _jl_gemm('C', 'C', A, B)
+end
+
+function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
+                                                                  A::StridedMatrix{T},
+                                                                  B::StridedMatrix{T})
+    if tA != 'N'
+        (nA, mA) = size(A)
+    else
+        (mA, nA) = size(A)
+    end
+    if tB != 'N'
+        (nB, mB) = size(B)
+    else
+        (mB, nB) = size(B)
+    end
 
     if nA != mB; error("*: argument shapes do not match"); end
 
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(A,B); end
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(tA,tB,A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(tA,tB,A,B); end
 
     if stride(A, 1) != 1 || stride(B, 1) != 1
-        return invoke(*, (AbstractArray, AbstractArray), A, B)
+        if tA == 'T'
+            A = A.'
+        elseif tA == 'C'
+            A = A'
+        end
+        if tB == 'T'
+            B = B.'
+        elseif tB == 'C'
+            B = B'
+        end
+        return invoke(*, (AbstractMatrix, AbstractMatrix), A, B)
     end
 
     # Result array does not need to be initialized as long as beta==0
     C = Array(T, mA, nB)
 
-    _jl_blas_gemm("N", "N", mA, nB, nA,
-                 one(T), A, stride(A, 2),
-                 B, stride(B, 2),
-                 zero(T), C, mA)
+    _jl_blas_gemm(tA, tB, mA, nB, nA,
+                  one(T), A, stride(A, 2),
+                  B, stride(B, 2),
+                  zero(T), C, mA)
     return C
 end
 
@@ -209,6 +263,7 @@ end
 @_jl_blas_gemv_macro :zgemv_ Complex128
 @_jl_blas_gemv_macro :cgemv_ Complex64
 
+# TODO: support transposed arguments
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              X::StridedVector{T})
     (mA, nA) = size(A)
@@ -230,6 +285,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     return Y
 end
 
+# TODO: support transposed arguments
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(X::StridedVector{T},
                                                              A::StridedMatrix{T})
     nX = size(X, 1)

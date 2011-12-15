@@ -909,6 +909,25 @@
    (pattern-lambda (|'| a) `(call ctranspose ,a))
    (pattern-lambda (|.'| a) `(call transpose ,a))
 
+   ;; transposed multiply
+   (pattern-lambda (call (-/ *) (|'| a) b)
+		   `(call aCb ,a ,b))
+
+   (pattern-lambda (call (-/ *) a (|'| b))
+		   `(call abC ,a ,b))
+
+   (pattern-lambda (call (-/ *) (|'| a) (|'| b))
+		   `(call aCbC ,a ,b))
+
+   (pattern-lambda (call (-/ *) (|.'| a) b)
+		   `(call aTb ,a ,b))
+
+   (pattern-lambda (call (-/ *) a (|.'| b))
+		   `(call abT ,a ,b))
+
+   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
+		   `(call aTbT ,a ,b))
+
    )) ; patterns
 
 ; patterns that verify all syntactic sugar was well-formed
