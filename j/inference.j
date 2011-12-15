@@ -1342,8 +1342,7 @@ function inlineable(f, e::Expr, vars)
             aei = argexprs[i]
             # ok for argument to occur more than once if the actual argument
             # is a symbol or constant
-            if !isa(aei,Symbol) && !isa(aei,Number) &&
-               !isa(aei,SymbolNode)
+            if !isa(aei,Symbol) && !isa(aei,Number) && !isa(aei,SymbolNode)
                 return NF
             end
         elseif occ == 0
@@ -1419,6 +1418,22 @@ function inlining_pass(e::Expr, vars)
             f = ET.parameters[1]
         else
             f = eval(arg1)
+        end
+
+        if is(f, ^) || is(f, .^)
+            if length(e.args) == 3 && isa(e.args[3],Int)
+                a1 = e.args[2]
+                if isa(a1,Number) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
+                                      exprtype(a1) <: Number)
+                    if e.args[3]==2
+                        e.args = {_jl_tn(:*), a1, a1}
+                        f = *
+                    elseif e.args[3]==3
+                        e.args = {_jl_tn(:*), a1, a1, a1}
+                        f = *
+                    end
+                end
+            end
         end
 
         body = inlineable(f, e, vars)
