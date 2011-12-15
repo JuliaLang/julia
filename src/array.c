@@ -79,6 +79,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
         // temporarily initialize to make gc-safe
         a->data = NULL;
         a->length = 0;
+        a->reshaped = 0;
         data = alloc_array_buffer(tot, isunboxed);
         jl_gc_unpreserve();
     }
