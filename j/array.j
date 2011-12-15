@@ -716,3 +716,37 @@ function nonzeros{T}(A::StridedArray{T})
     end
     return V
 end
+
+## hist ##
+
+function hist(v::StridedVector, nbins::Int)
+    h = zeros(Long, nbins)
+    if nbins == 0
+        return h
+    end
+    lo, hi = min(v), max(v)
+    if lo == hi
+        lo = lo - div(nbins,2)
+        hi = hi + div(nbins,2)
+    end
+    binsz = (hi-lo)/nbins
+    for x = v
+        if isfinite(x)
+            i = iround((x-lo+binsz/2)/binsz)
+            h[i > nbins ? nbins : i] += 1
+        end
+    end
+    h
+end
+
+hist(x) = hist(x, 10)
+
+function hist(A::StridedMatrix, nbins::Int)
+    m, n = size(A)
+    h = Array(Long, nbins, n)
+    for j=1:n
+        i = 1+(j-1)*m
+        h[:,j] = hist(sub(A, i:(i+m-1)), nbins)
+    end
+    h
+end
