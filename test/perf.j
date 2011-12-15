@@ -1,6 +1,5 @@
 macro timeit(ex,name)
     quote
-        gc()
         t = Inf
         for i=1:5
             t = min(t, @elapsed $ex)
