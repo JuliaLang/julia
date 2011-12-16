@@ -23,12 +23,6 @@ double *myrand(int n) {
     return d;
 }
 
-double *myrandn(int n) {
-    double *d = (double *)malloc(n*sizeof(double));
-    randmtzig_fill_randn(d, n);
-    return d;
-}
-
 #define NITER 5
 
 double clock_now()
@@ -147,17 +141,25 @@ struct double_pair randmatstat(int t) {
     struct double_pair r;
     double *v = (double*)calloc(t, sizeof(double));
     double *w = (double*)calloc(t, sizeof(double));
+    double *a = (double*)malloc(n*n*sizeof(double));
+    double *b = (double*)malloc(n*n*sizeof(double));
+    double *c = (double*)malloc(n*n*sizeof(double));
+    double *d = (double*)malloc(n*n*sizeof(double));
+    double *P = (double*)malloc(4*n*n*sizeof(double));
+    double *Q = (double*)malloc(4*n*n*sizeof(double));
+    double *PtP1 = (double*)malloc(n*n*sizeof(double));
+    double *PtP2 = (double*)malloc(n*n*sizeof(double));
+    double *QtQ1 = (double*)malloc(4*n*n*sizeof(double));
+    double *QtQ2 = (double*)malloc(4*n*n*sizeof(double));
     for (int i=0; i < t; i++) {
-        double *a = myrandn(n*n);
-        double *b = myrandn(n*n);
-        double *c = myrandn(n*n);
-        double *d = myrandn(n*n);
-        double *P = (double*)malloc(4*n*n*sizeof(double));
+        randmtzig_fill_randn(a, n*n);
+        randmtzig_fill_randn(b, n*n);
+        randmtzig_fill_randn(c, n*n);
+        randmtzig_fill_randn(d, n*n);
         memcpy(P+0*n*n, a, n*n*sizeof(double));
         memcpy(P+1*n*n, b, n*n*sizeof(double));
         memcpy(P+2*n*n, c, n*n*sizeof(double));
         memcpy(P+3*n*n, d, n*n*sizeof(double));
-        double *Q = (double*)malloc(4*n*n*sizeof(double));
         for (int j=0; j < n; j++) {
             for (int k=0; k < n; k++) {
                 Q[2*n*j+k]       = a[k];
@@ -166,12 +168,6 @@ struct double_pair randmatstat(int t) {
                 Q[2*n*(n+j)+n+k] = d[k];
             }
         }
-        free(a);
-        free(b);
-        free(c);
-        free(d);
-        double *PtP1 = (double*)malloc(n*n*sizeof(double));
-        double *PtP2 = (double*)malloc(n*n*sizeof(double));
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     n, n, 4*n, 1.0, P, 4*n, P, 4*n, 0.0, PtP1, n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
@@ -180,11 +176,6 @@ struct double_pair randmatstat(int t) {
                     n, n, n, 1.0, PtP2, n, PtP2, n, 0.0, PtP1, n);
         for (int j=0; j < n; j++)
             v[i] += PtP1[(n+1)*j];
-        free(PtP1);
-        free(PtP2);
-        free(P);
-        double *QtQ1 = (double*)malloc(4*n*n*sizeof(double));
-        double *QtQ2 = (double*)malloc(4*n*n*sizeof(double));
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
@@ -193,10 +184,17 @@ struct double_pair randmatstat(int t) {
                     2*n, 2*n, 2*n, 1.0, QtQ2, 2*n, QtQ2, 2*n, 0.0, QtQ1, 2*n);
         for (int j=0; j < 2*n; j++)
             w[i] += QtQ1[(2*n+1)*j];
-        free(QtQ1);
-        free(QtQ2);
-        free(Q);
     }
+    free(PtP1);
+    free(PtP2);
+    free(QtQ1);
+    free(QtQ2);
+    free(P);
+    free(Q);
+    free(a);
+    free(b);
+    free(c);
+    free(d);
     double v1=0.0, v2=0.0, w1=0.0, w2=0.0;
     for (int i=0; i < t; i++) {
         v1 += v[i]; v2 += v[i]*v[i];
