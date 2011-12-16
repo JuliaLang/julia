@@ -148,7 +148,6 @@ struct double_pair randmatstat(int t) {
     double *v = (double*)calloc(t, sizeof(double));
     double *w = (double*)calloc(t, sizeof(double));
     for (int i=0; i < t; i++) {
-        // TODO: use Gaussian random numbers
         double *a = myrandn(n*n);
         double *b = myrandn(n*n);
         double *c = myrandn(n*n);
