@@ -29,7 +29,7 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 
 length(s::UTF8String) = length(s.data)
 
-function next(s::UTF8String, i::Long)
+function next(s::UTF8String, i::Int)
     if !is_utf8_start(s.data[i])
         error("invalid UTF-8 character index")
     end
@@ -51,7 +51,7 @@ end
 
 ## overload methods for efficiency ##
 
-function ref(s::UTF8String, r::Range1{Long})
+function ref(s::UTF8String, r::Range1{Int})
     i = isvalid(s,r.start) ? r.start : nextind(s,r.start)
     j = nextind(s,r.stop) - 1
     UTF8String(s.data[i:j])

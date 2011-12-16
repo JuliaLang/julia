@@ -19,14 +19,14 @@ type IOStream
     make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
 end
 
-fd(s::IOStream) = ccall(:jl_ios_fd, Long, (Ptr{Void},), s.ios)
+fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 # "own" means the descriptor will be closed with the IOStream
 function fdio(fd::Integer, own::Bool)
     s = IOStream()
-    ccall(:ios_fd, Void, (Ptr{Uint8}, Long, Int32, Int32),
+    ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
           s.ios, long(fd), int32(0), int32(own));
     return s
 end
@@ -40,7 +40,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
              int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
         error("could not open file ", fname)
     end
-    if ff && ccall(:ios_seek_end, Ulong, (Ptr{Void},), s.ios) != 0
+    if ff && ccall(:ios_seek_end, Uint, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
     return s
@@ -59,7 +59,7 @@ end
 
 function memio(x::Integer, finalize::Bool)
     s = IOStream(finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Ulong), s.ios, ulong(x))
+    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, ulong(x))
     s
 end
 memio(x::Integer) = memio(x, true)
@@ -150,7 +150,7 @@ read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
 read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
-read{T}(s, t::Type{T}, d1::Long, dims::Long...) =
+read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
 read{T}(s, t::Type{T}, d1::Integer, dims::Integer...) =
     read(s, t, map(long,tuple(d1,dims...)))
@@ -174,8 +174,8 @@ write(s::IOStream, c::Char) =
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Ulong,
-              (Ptr{Void}, Ptr{Void}, Ulong),
+        ccall(:ios_write, Uint,
+              (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, ulong(numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
@@ -183,8 +183,8 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:ios_write, Ulong,
-          (Ptr{Void}, Ptr{Void}, Ulong),
+    ccall(:ios_write, Uint,
+          (Ptr{Void}, Ptr{Void}, Uint),
           s.ios, p, ulong(nb))
 end
 
@@ -206,8 +206,8 @@ end
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
-        if ccall(:ios_readall, Ulong,
-                 (Ptr{Void}, Ptr{Void}, Ulong), s.ios, a, ulong(nb)) < nb
+        if ccall(:ios_readall, Uint,
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, ulong(nb)) < nb
             throw(EOFError())
         end
         a
@@ -224,7 +224,7 @@ end
 
 function readall(s::IOStream)
     dest = memio()
-    ccall(:ios_copyall, Ulong,
+    ccall(:ios_copyall, Uint,
           (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
@@ -234,21 +234,21 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
-    ccall(:ios_trunc, Ulong, (Ptr{Void}, Ulong), s.ios, ulong(n))
+    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, ulong(n))
 
 seek(s::IOStream, n::Integer) =
-    (ccall(:ios_seek, Long, (Ptr{Void}, Long), s.ios, long(n))==0 ||
+    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, long(n))==0 ||
      error("seek failed"))
 
 skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, Long, (Ptr{Void}, Long), s.ios, long(delta))==0 ||
+    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, long(delta))==0 ||
      error("skip failed"))
 
-position(s::IOStream) = ccall(:ios_pos, Long, (Ptr{Void},), s.ios)
+position(s::IOStream) = ccall(:ios_pos, Int, (Ptr{Void},), s.ios)
 
 type IOTally
-    nbytes::Long
-    IOTally() = new(zero(Long))
+    nbytes::Int
+    IOTally() = new(zero(Int))
 end
 
 write(s::IOTally, x::Uint8) = (s.nbytes += 1; nothing)

@@ -31,7 +31,7 @@ macro _jl_rand_matrix_builder(T, f)
             return A
         end
         ($f)(dims::Dims) = ($f!)(Array($T, dims))
-        ($f)(dims::Long...) = ($f)(dims)
+        ($f)(dims::Int...) = ($f)(dims)
     end
 end
 
@@ -45,7 +45,7 @@ macro _jl_rand_matrix_builder_1arg(T, f)
             return A
         end
         ($f)(arg, dims::Dims) = ($f!)(arg, Array($T, dims))
-        ($f)(arg, dims::Long...) = ($f)(arg, dims)
+        ($f)(arg, dims::Int...) = ($f)(arg, dims)
     end
 end
 
@@ -100,7 +100,7 @@ end
 
 rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
 rand(dims::Dims) = rand!(Array(Float64, dims))
-rand(dims::Long...) = rand(dims)
+rand(dims::Int...) = rand(dims)
 
 ## random integers
 
@@ -152,17 +152,17 @@ function randival!{T<:Integer}(lo, hi, A::Array{T})
 end
 randival{T<:Integer}(lo::T, hi::T, dims::Dims) = randival!(lo, hi, Array(T, dims))
 randival(lo, hi, dims::Dims) = randival(promote(lo, hi)..., dims)
-randival(lo, hi, dims::Long...) = randival(lo, hi, dims)
+randival(lo, hi, dims::Int...) = randival(lo, hi, dims)
 
 randi!(max::Integer, A::Array)     = randival!(one(max), max, A)
 randi!(r::(Integer,Integer), A::Array) = randival!(r[1], r[2], A)
 
 randi(max::Integer)                    = randival(one(max), max)
 randi(max::Integer, dims::Dims)        = randival(one(max), max, dims)
-randi(max::Integer, dims::Long...)     = randival(one(max), max, dims)
+randi(max::Integer, dims::Int...)     = randival(one(max), max, dims)
 randi(r::(Integer,Integer))                = randival(r[1], r[2])
 randi(r::(Integer,Integer), dims::Dims)    = randival(r[1], r[2], dims)
-randi(r::(Integer,Integer), dims::Long...) = randival(r[1], r[2], dims)
+randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
 
 ## random Bools
 
@@ -188,7 +188,7 @@ end
 
 randn() = ccall(dlsym(_jl_librandom, :randmtzig_randn), Float64, ())
 randn(dims::Dims) = randn!(Array(Float64, dims))
-randn(dims::Long...) = randn(dims)
+randn(dims::Int...) = randn(dims)
 
 ## randexp() - Exponentially distributed random numbers using Ziggurat algorithm
 
@@ -200,7 +200,7 @@ end
 
 randexp() = ccall(dlsym(_jl_librandom, :randmtzig_exprnd), Float64, ())
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
-randexp(dims::Long...) = randexp(dims)
+randexp(dims::Int...) = randexp(dims)
 
 const exprnd = randexp
 

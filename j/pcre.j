@@ -74,7 +74,7 @@ function pcre_compile(pattern::String, options::Integer)
     end
     size = pcre_info(re_ptr, C_NULL, PCRE_INFO_SIZE, Int32)
     regex = Array(Uint8,size)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), regex, re_ptr, ulong(size))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), regex, re_ptr, ulong(size))
     regex
 end
 

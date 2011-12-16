@@ -86,7 +86,7 @@ hash(x::Integer) = _jl_hash64(uint64(x))
     isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
 end
 
-hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
+hash(s::Symbol) = ccall(:jl_hash_symbol, Uint, (Any,), s)
 
 function hash(t::Tuple)
     h = long(0)
@@ -105,7 +105,7 @@ function hash(a::Array)
 end
 
 hash(x::Any) = uid(x)
-hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Long), s.data, length(s.data))
+hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
 
 # hash table
 

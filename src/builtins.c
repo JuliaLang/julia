@@ -1313,9 +1313,9 @@ void jl_init_primitives(void)
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
 #ifdef __LP64__
-    add_builtin("Long", (jl_value_t*)jl_int64_type);
+    add_builtin("Int", (jl_value_t*)jl_int64_type);
 #else
-    add_builtin("Long", (jl_value_t*)jl_int32_type);
+    add_builtin("Int", (jl_value_t*)jl_int32_type);
 #endif
 
     add_builtin("ANY", jl_ANY_flag);

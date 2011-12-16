@@ -54,7 +54,7 @@ end
 @assert !subtype(Type,TypeVar)
 
 # ntuples
-nttest1{n}(x::NTuple{n,Long}) = n
+nttest1{n}(x::NTuple{n,Int}) = n
 @assert nttest1(()) == 0
 @assert nttest1((1,2)) == 2
 @assert NTuple <: Tuple

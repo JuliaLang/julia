@@ -4,28 +4,28 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
-    strides::Array{Long,1}
-    first_index::Long
+    strides::Array{Int,1}
+    first_index::Int
 
     #linear indexing constructor
     if N == 1 && length(I) == 1 && A <: Array
-        function SubArray(p::A, i::(Long,))
+        function SubArray(p::A, i::(Int,))
             new(p, i, (length(i[1]),), [1], i[1])
         end
-        function SubArray(p::A, i::(Range1{Long},))
+        function SubArray(p::A, i::(Range1{Int},))
             new(p, i, (length(i[1]),), [1], i[1].start)
         end
-        function SubArray(p::A, i::(Range{Long},))
+        function SubArray(p::A, i::(Range{Int},))
             new(p, i, (length(i[1]),), [i[1].step], i[1].start)
         end
     else
         function SubArray(p::A, i::I)
-            newdims = Array(Long, 0)
-            newstrides = Array(Long, 0)
+            newdims = Array(Int, 0)
+            newstrides = Array(Int, 0)
             newfirst = 1
             pstrides = strides(p)
             for j = 1:length(i)
-                if isa(i[j], Long)
+                if isa(i[j], Int)
                     newfirst += (i[j]-1)*pstrides[j]
                 else
                     push(newdims, length(i[j]))
@@ -46,7 +46,7 @@ function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
 end
 
 function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    i = map(j -> isa(j, Long) ? (j:j) : j, i)
+    i = map(j -> isa(j, Int) ? (j:j) : j, i)
     SubArray{T,N,typeof(A),typeof(i)}(A, i)
 end
 sub(A::AbstractArray, i::RangeIndex...) =
@@ -55,10 +55,10 @@ function sub(A::SubArray, i::RangeIndex...)
     j = 1
     newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
-        if isa(A.indexes[k], Long)
+        if isa(A.indexes[k], Int)
             newindexes[k] = A.indexes[k]
         else
-            newindexes[k] = A.indexes[k][isa(i[j],Long) ? (i[j]:i[j]) : i[j]]
+            newindexes[k] = A.indexes[k][isa(i[j],Int) ? (i[j]:i[j]) : i[j]]
             j += 1
         end
     end
@@ -67,7 +67,7 @@ end
 
 function slice{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     n = 0
-    for j = i; if !isa(j, Long); n += 1; end; end
+    for j = i; if !isa(j, Int); n += 1; end; end
     SubArray{T,n,typeof(A),typeof(i)}(A, i)
 end
 
@@ -77,7 +77,7 @@ function slice(A::SubArray, i::RangeIndex...)
     j = 1
     newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
-        if isa(A.indexes[k], Long)
+        if isa(A.indexes[k], Int)
             newindexes[k] = A.indexes[k]
         else
             newindexes[k] = A.indexes[k][i[j]]
@@ -91,7 +91,7 @@ end
 ##squeeze all dimensions of length 1
 #slice{T,N}(a::AbstractArray{T,N}) = sub(a, map(i-> i == 1 ? 1 : (1:i), size(a)))
 #slice{T,N}(s::SubArray{T,N}) =
-#    sub(s.parent, map(i->!isa(i, Long) && length(i)==1 ?i[1] : i, s.indexes))
+#    sub(s.parent, map(i->!isa(i, Int) && length(i)==1 ?i[1] : i, s.indexes))
 #
 ##slice dimensions listed, error if any have length > 1
 ##silently ignores dimensions that are greater than N
@@ -121,7 +121,7 @@ end
 #                if length(next) != 1
 #                    error("slice: dimension ", i," has length greater than 1")
 #                end
-#                next = isa(next, Long) ? next : next.start
+#                next = isa(next, Int) ? next : next.start
 #                break
 #            end
 #        end
@@ -161,14 +161,14 @@ function ref(s::SubArray, is::Integer...)
     s.parent[index]
 end
 
-ref{T}(s::SubArray{T,1}, I::Range1{Long}) =
+ref{T}(s::SubArray{T,1}, I::Range1{Int}) =
     ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
 
-ref{T}(s::SubArray{T,1}, I::Range{Long}) =
+ref{T}(s::SubArray{T,1}, I::Range{Int}) =
     ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
 function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
-    t = Array(Long, length(I))
+    t = Array(Int, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
@@ -182,7 +182,7 @@ function ref(s::SubArray, I::Indices...)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Long) ? t : t[I[j]]
+        newindexes[i] = isa(t, Int) ? t : t[I[j]]
         j += 1
     end
 
@@ -243,20 +243,20 @@ assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Integer, j::Integer) =
 assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Long}) =
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Int}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
 
-assign{T}(s::SubArray{T,1}, v, I::Range1{Long}) =
+assign{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Long}) =
+assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Int}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
-assign{T}(s::SubArray{T,1}, v, I::Range{Long}) =
+assign{T}(s::SubArray{T,1}, v, I::Range{Int}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
 function assign{T,S<:Integer}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
-    t = Array(Long, length(I))
+    t = Array(Int, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
@@ -264,7 +264,7 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVec
 end
 
 function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
-    t = Array(Long, length(I))
+    t = Array(Int, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
@@ -278,7 +278,7 @@ function assign(s::SubArray, v::AbstractArray, I::Indices...)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Long) ? t : t[I[j]]
+        newindexes[i] = isa(t, Int) ? t : t[I[j]]
         j += 1
     end
 
@@ -292,7 +292,7 @@ function assign(s::SubArray, v, I::Indices...)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Long) ? t : t[I[j]]
+        newindexes[i] = isa(t, Int) ? t : t[I[j]]
         j += 1
     end
 
@@ -306,9 +306,9 @@ stride(s::SubArray, i::Integer) = s.strides[i]
 convert{T}(::Type{Ptr}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)
 
-pointer(s::SubArray, i::Long) = pointer(s, ind2sub(size(s), i))
+pointer(s::SubArray, i::Int) = pointer(s, ind2sub(size(s), i))
 
-function pointer{T}(s::SubArray{T}, is::(Long...))
+function pointer{T}(s::SubArray{T}, is::(Int...))
     index = s.first_index
     for n = 1:length(is)
         index += (is[n]-1)*s.strides[n]

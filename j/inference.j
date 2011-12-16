@@ -100,17 +100,17 @@ t_func[Union] = (0, Inf,
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 #t_func[new_generic_function] = (1, 1, s->(Any-->Any))
-t_func[tuplelen] = (1, 1, x->Long)
-t_func[arraylen] = (1, 1, x->Long)
+t_func[tuplelen] = (1, 1, x->Int)
+t_func[arraylen] = (1, 1, x->Int)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
                                   a.parameters[1] : Any))
 t_func[arrayset] = (3, 3, (a,i,v)->a)
-_jl_arraysize_tfunc(a, d) = Long
+_jl_arraysize_tfunc(a, d) = Int
 function _jl_arraysize_tfunc(a)
     if isa(a,CompositeKind) && subtype(a,Array)
-        return NTuple{a.parameters[2],Long}
+        return NTuple{a.parameters[2],Int}
     else
-        return NTuple{Array.parameters[2],Long}
+        return NTuple{Array.parameters[2],Int}
     end
 end
 t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
@@ -299,7 +299,7 @@ apply_type_tfunc = function (A, args...)
     for i=2:length(A)
         if isType(args[i])
             tparams = append(tparams, (args[i].parameters[1],))
-        elseif isa(A[i],Long)
+        elseif isa(A[i],Int)
             tparams = append(tparams, (A[i],))
         # TODO: evaluate Integer static parameter!
         #elseif
@@ -980,7 +980,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
             if !is(cur_hand,())
                 # propagate type info to exception handler
-                l = cur_hand[1]::Long
+                l = cur_hand[1]::Int
                 if stchanged(changes, s[l], vars)
                     add(W, l)
                     s[l] = stupdate(s[l], changes, vars)
@@ -1038,11 +1038,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         end
                     end
                 elseif is(hd,:enter)
-                    l = findlabel(body,stmt.args[1]::Long)
+                    l = findlabel(body,stmt.args[1]::Int)
                     cur_hand = (l,cur_hand)
                     handler_at[l] = cur_hand
                 elseif is(hd,:leave)
-                    for i=1:((stmt.args[1])::Long)
+                    for i=1:((stmt.args[1])::Int)
                         cur_hand = cur_hand[2]
                     end
                 end

@@ -1,21 +1,21 @@
 ## system word size ##
 
-const WORD_SIZE = long(Long.nbits)
+const WORD_SIZE = long(Int.nbits)
 
 ## converting pointers to an appropriate unsigned ##
 
-const C_NULL = box(Ptr{Void}, unbox(Long,0))
+const C_NULL = box(Ptr{Void}, unbox(Int,0))
 
 # pointer to integer
-convert(::Type{Ulong}, x::Ptr) = box(Ulong,unbox(Ulong,x))
+convert(::Type{Uint}, x::Ptr) = box(Uint,unbox(Uint,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Ulong,ulong(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,ulong(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T},unbox(Ulong,p))
+convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T},unbox(Uint,p))
 
 # object to pointer
 convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
@@ -23,15 +23,15 @@ convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a
 convert(::Type{Ptr{Void}}, a::Array{None}) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = convert(Ptr{T}, convert(Ptr{Void}, a))
 
-pointer{T}(::Type{T}, x::Ulong) = convert(Ptr{T}, x)
+pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to
 # pointer. they just map the array element type to the pointer type for
 # convenience in cases that work.
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Long) = convert(Ptr{T},x) + (i-1)*sizeof(T)
+pointer{T}(x::AbstractArray{T}, i::Int) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
-integer(x::Ptr) = convert(Ulong, x)
-unsigned(x::Ptr) = convert(Ulong, x)
+integer(x::Ptr) = convert(Uint, x)
+unsigned(x::Ptr) = convert(Uint, x)
 
 @eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
 

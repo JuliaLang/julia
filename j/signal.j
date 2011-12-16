@@ -86,7 +86,7 @@ end
 fftshift(x) = circshift(x, div([size(x)...],2))
 
 function fftshift(x,dim)
-    s = zeros(Long,ndims(x))
+    s = zeros(Int,ndims(x))
     s[dim] = div(size(x,dim),2)
     circshift(x, s)
 end
@@ -94,7 +94,7 @@ end
 ifftshift(x) = circshift(x, div([size(x)...],-2))
 
 function ifftshift(x,dim)
-    s = zeros(Long,ndims(x))
+    s = zeros(Int,ndims(x))
     s[dim] = -div(size(x,dim),2)
     circshift(x, s)
 end

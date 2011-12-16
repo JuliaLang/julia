@@ -1,8 +1,8 @@
 ## core string functions ##
 
 length{T<:String}(s::T) = error("you must implement length(",T,")")
-next{T<:String}(s::T, i::Long) = error("you must implement next(",T,",Long)")
-next(s::DirectIndexString, i::Long) = (s[i],i+1)
+next{T<:String}(s::T, i::Int) = error("you must implement next(",T,",Int)")
+next(s::DirectIndexString, i::Int) = (s[i],i+1)
 next(s::String, i::Integer) = next(s,long(i))
 
 ## generic supplied functions ##
@@ -11,7 +11,7 @@ start(s::String) = 1
 done(s::String,i) = (i > length(s))
 numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
-ref(s::String, i::Long) = next(s,i)[1]
+ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[long(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[long(r.start):long(r.stop)]
@@ -166,7 +166,7 @@ type GenericString <: String
 end
 
 length(s::GenericString) = length(s.string)
-next(s::GenericString, i::Long) = next(s.string, i)
+next(s::GenericString, i::Int) = next(s.string, i)
 
 ## plain old character arrays ##
 
@@ -178,7 +178,7 @@ type CharString <: String
 end
 CharString(x...) = CharString(map(char,x)...)
 
-next(s::CharString, i::Long) = (s.chars[i], i+1)
+next(s::CharString, i::Int) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
 strlen(s::CharString) = length(s)
 
@@ -189,16 +189,16 @@ string(c::Char, x::Char...) = CharString(c, x...)
 
 type SubString <: String
     string::String
-    offset::Long
-    length::Long
+    offset::Int
+    length::Int
 
-    SubString(s::String, i::Long, j::Long) = new(s, i-1, j-i+1)
-    SubString(s::SubString, i::Long, j::Long) =
+    SubString(s::String, i::Int, j::Int) = new(s, i-1, j-i+1)
+    SubString(s::SubString, i::Int, j::Int) =
         new(s.string, i-1+s.offset, j-i+1)
 end
 SubString(s::String, i::Integer, j::Integer) = SubString(s, long(i), long(j))
 
-function next(s::SubString, i::Long)
+function next(s::SubString, i::Int)
     if i < 1 || i > s.length
         error("string index out of bounds")
     end
@@ -212,7 +212,7 @@ length(s::SubString) = s.length
 # can this be delegated efficiently somehow?
 # that may require additional string interfaces
 
-function ref(s::String, r::Range1{Long})
+function ref(s::String, r::Range1{Int})
     if r.start < 1 || length(s) < r.stop
         error("in substring slice: index out of range")
     end
@@ -229,7 +229,7 @@ end
 length(s::RepString) = length(s.string)*s.repeat
 strlen(s::RepString) = strlen(s.string)*s.repeat
 
-function next(s::RepString, i::Long)
+function next(s::RepString, i::Int)
     if i < 1 || i > length(s)
         error("string index out of bounds")
     end
@@ -255,7 +255,7 @@ length(s::RevString) = length(s.string)
 strlen(s::RevString) = strlen(s.string)
 
 start(s::RevString) = (n=length(s); n-thisind(s.string,n)+1)
-function next(s::RevString, i::Long)
+function next(s::RevString, i::Int)
     n = length(s); j = n-i+1
     (s.string[j], n-thisind(s.string,j-1)+1)
 end
@@ -276,7 +276,7 @@ type RopeString <: String
     head::String
     tail::String
     depth::Int32
-    length::Long
+    length::Int
 
     RopeString(h::RopeString, t::RopeString) =
         depth(h.tail) + depth(t) < depth(h.head) ?
@@ -300,7 +300,7 @@ end
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
 
-function next(s::RopeString, i::Long)
+function next(s::RopeString, i::Int)
     if i <= length(s.head)
         return next(s.head, i)
     else
@@ -330,7 +330,7 @@ end
 length(s::TransformedString) = length(s.string)
 strlen(s::TransformedString) = strlen(s.string)
 
-function next(s::TransformedString, i::Long)
+function next(s::TransformedString, i::Int)
     c, j = next(s.string,i)
     c = s.transform(c, i)
     return c, j
@@ -369,11 +369,11 @@ end
 
 ## string escaping & unescaping ##
 
-escape_nul(s::String, i::Long) =
+escape_nul(s::String, i::Int) =
     !done(s,i) && '0' <= next(s,i)[1] <= '7' ? L"\x00" : L"\0"
 
 is_hex_digit(c::Char) = '0'<=c<='9' || 'a'<=c<='f' || 'A'<=c<='F'
-need_full_hex(s::String, i::Long) = !done(s,i) && is_hex_digit(next(s,i)[1])
+need_full_hex(s::String, i::Int) = !done(s,i) && is_hex_digit(next(s,i)[1])
 
 function print_escaped(s::String, esc::String)
     i = start(s)
@@ -476,7 +476,7 @@ unescape_string(s::String) = print_to_string(length(s), print_unescaped, s)
 ## checking UTF-8 & ACSII validity ##
 
 byte_string_classify(s::ByteString) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Long), s.data, length(s))
+    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), s.data, length(s))
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
@@ -800,13 +800,13 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     return n
 end
 
-parse_bin(s::String) = parse_int(Long, s,  2)
-parse_oct(s::String) = parse_int(Long, s,  8)
-parse_dec(s::String) = parse_int(Long, s, 10)
-parse_hex(s::String) = parse_int(Long, s, 16)
+parse_bin(s::String) = parse_int(Int, s,  2)
+parse_oct(s::String) = parse_int(Int, s,  8)
+parse_dec(s::String) = parse_int(Int, s, 10)
+parse_hex(s::String) = parse_int(Int, s, 16)
 
 integer   (s::String) = parse_dec(s)
-unsigned  (s::String) = parse_int(Ulong, s, 10)
+unsigned  (s::String) = parse_int(Uint, s, 10)
 int8  (s::String) = int8(integer(s))
 uint8 (s::String) = uint8(integer(s))
 int16 (s::String) = int16(integer(s))
@@ -837,7 +837,7 @@ function int2str(n::Integer, b::Integer)
     n = abs(n)
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)
-    sz = convert(Long, ndig)
+    sz = convert(Int, ndig)
     data = Array(Uint8, sz + neg)
     for i=(sz+neg):-1:(1+neg)
         ch = n % b
@@ -911,7 +911,7 @@ strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(dlsym(libc, :memcmp), Int32,
-              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              (Ptr{Uint8}, Ptr{Uint8}, Uint),
               a, b, ulong(min(length(a),length(b))))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
@@ -921,7 +921,7 @@ end
 function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
     q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
-              (Ptr{Uint8}, Int32, Ulong),
+              (Ptr{Uint8}, Int32, Uint),
               p, int32(b), ulong(length(a)))
     q == C_NULL ? 0 : q - p + 1
 end
@@ -941,7 +941,7 @@ function memcat(arrays::Array{Uint8,1}...)
     offset = 0
     for a = arrays
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(a), ulong(length(a)))
         offset += length(a)
     end
@@ -962,7 +962,7 @@ function memcat(strs::ByteString...)
     offset = 0
     for s = strs
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Ulong),
+              (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(s.data), ulong(length(s)))
         offset += length(s)
     end

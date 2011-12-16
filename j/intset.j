@@ -1,6 +1,6 @@
 type IntSet
     bits::Array{Uint32,1}
-    limit::Long
+    limit::Int
 
     IntSet() = IntSet(1024)
     IntSet(max::Integer) = (lim = (max+31) & -32;
