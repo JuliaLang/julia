@@ -3,7 +3,7 @@ _jl_libBLAS = dlopen("libLAPACK")
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 macro _jl_blas_copy_macro(fname, eltype)
     quote
-        function _jl_blas_copy(n::Int, DX::Union(Ptr{$eltype},Array{$eltype}), incx::Int, DY::Union(Ptr{$eltype},Array{$eltype}), incy::Int)
+        function _jl_blas_copy(n::Integer, DX::Union(Ptr{$eltype},Array{$eltype}), incx::Integer, DY::Union(Ptr{$eltype},Array{$eltype}), incy::Integer)
             ccall(dlsym(_jl_libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -18,10 +18,10 @@ end
 @_jl_blas_copy_macro :zcopy_ Complex128
 @_jl_blas_copy_macro :ccopy_ Complex64
 
-#bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+#bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
 #    _jl_blas_copy(n, src, 1, dest, 1)
 
-function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Int)
+function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
@@ -43,8 +43,8 @@ end
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 macro _jl_blas_dot_macro(fname, eltype)
     quote
-        function _jl_blas_dot(n::Int, DX::Array{$eltype}, incx::Int,
-                             DY::Array{$eltype}, incy::Int)
+        function _jl_blas_dot(n::Integer, DX::Array{$eltype}, incx::Integer,
+                             DY::Array{$eltype}, incy::Integer)
             ccall(dlsym(_jl_libBLAS, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -68,7 +68,7 @@ end
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
 macro _jl_blas_nrm2_macro(fname, eltype, ret_type)
     quote
-        function _jl_blas_nrm2(n::Int, X::Array{$eltype}, incx::Int)
+        function _jl_blas_nrm2(n::Integer, X::Array{$eltype}, incx::Integer)
             ccall(dlsym(_jl_libBLAS, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -94,8 +94,8 @@ norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
 #      DOUBLE PRECISION DX(*),DY(*)
 macro _jl_blas_axpy_macro(fname, eltype)
     quote
-        function _jl_blas_axpy(n::Int, x::($eltype), 
-                              DA::Array{$eltype}, incx::Int, DY::Array{$eltype}, incy::Int)
+        function _jl_blas_axpy(n::Integer, x::($eltype), 
+                              DA::Array{$eltype}, incx::Integer, DY::Array{$eltype}, incy::Integer)
             ccall(dlsym(_jl_libBLAS, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -120,10 +120,10 @@ end
 macro _jl_blas_gemm_macro(fname, eltype)
    quote
 
-       function _jl_blas_gemm(transA, transB, m::Int, n::Int, k::Int,
-                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Int,
-                             B::StridedMatrix{$eltype}, ldb::Int,
-                             beta::($eltype), C::StridedMatrix{$eltype}, ldc::Int)
+       function _jl_blas_gemm(transA, transB, m::Integer, n::Integer, k::Integer,
+                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
+                             B::StridedMatrix{$eltype}, ldb::Integer,
+                             beta::($eltype), C::StridedMatrix{$eltype}, ldc::Integer)
            a = pointer(A)
            b = pointer(B)
            c = pointer(C)
@@ -236,10 +236,10 @@ end
 macro _jl_blas_gemv_macro(fname, eltype)
    quote
 
-       function _jl_blas_gemv(trans, m::Int, n::Int, 
-                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Int,
-                             X::StridedVector{$eltype}, incx::Int,
-                             beta::($eltype), Y::StridedVector{$eltype}, incy::Int)
+       function _jl_blas_gemv(trans, m::Integer, n::Integer, 
+                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
+                             X::StridedVector{$eltype}, incx::Integer,
+                             beta::($eltype), Y::StridedVector{$eltype}, incy::Integer)
            a = pointer(A)
            x = pointer(X)
            y = pointer(Y)

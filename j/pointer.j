@@ -8,10 +8,10 @@ const C_NULL = box(Ptr{Void}, unbox(Long,0))
 
 # pointer to int
 convert(::Type{Ulong}, x::Ptr) = box(Ulong,unbox(Ulong,x))
-convert{T<:Int}(::Type{T}, x::Ptr) = convert(T,uint(x))
+convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,uint(x))
 
 # int to pointer
-convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(Ulong,ulong(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Ulong,ulong(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
@@ -40,6 +40,6 @@ uint(x::Ptr) = convert(Ulong, x)
 isequal(x::Ptr, y::Ptr) = ulong(x) == ulong(y)
 -(x::Ptr, y::Ptr) = ulong(x) - ulong(y)
 
-+{T}(x::Ptr{T}, y::Int) = pointer(T, ulong(x) + ulong(y))
--{T}(x::Ptr{T}, y::Int) = pointer(T, ulong(x) - ulong(y))
-+(x::Int, y::Ptr) = y + x
++{T}(x::Ptr{T}, y::Integer) = pointer(T, ulong(x) + ulong(y))
+-{T}(x::Ptr{T}, y::Integer) = pointer(T, ulong(x) - ulong(y))
++(x::Integer, y::Ptr) = y + x

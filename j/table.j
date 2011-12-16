@@ -1,4 +1,4 @@
-function _tablesz(i::Int)
+function _tablesz(i::Integer)
     if i < 16
         return 16
     end
@@ -41,7 +41,7 @@ end
 
 type IdTable <: Associative
     ht::Array{Any,1}
-    IdTable(sz::Int) = new(cell(2*_tablesz(sz)))
+    IdTable(sz::Integer) = new(cell(2*_tablesz(sz)))
     IdTable() = IdTable(0)
 end
 
@@ -79,7 +79,7 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 _jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
-hash(x::Int) = _jl_hash64(uint64(x))
+hash(x::Integer) = _jl_hash64(uint64(x))
 @eval function hash(x::Float)
     # note: float64(typemax(Uint64)) == 2^64
     abs(x) < $float64(typemax(Uint64)) && trunc(x) == x ? hash(uint64(x)) :
@@ -130,7 +130,7 @@ type HashTable{K,V} <: Associative
     end
 end
 HashTable() = HashTable(0)
-HashTable(n::Int) = HashTable{Any,Any}(n)
+HashTable(n::Integer) = HashTable{Any,Any}(n)
 
 # syntax entry point
 hashtable{K,V}(ks::(K...), vs::(V...)) = HashTable{K,V}    (ks, vs)

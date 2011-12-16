@@ -67,7 +67,7 @@ srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
 srand(seed::Int32) = srand(uint32(seed))
 srand(seed::Int64) = srand(uint64(seed))
 
-function srand(filename::String, n::Int)
+function srand(filename::String, n::Integer)
     fd = open(filename)
     a = Array(Uint32, long(n))
     read(fd, a)
@@ -123,7 +123,7 @@ else
 end
 
 # random integer from lo to hi inclusive
-function randival{T<:Int}(lo::T, hi::T)
+function randival{T<:Integer}(lo::T, hi::T)
     m = typemax(T)
     s = randi(T)
     if (hi-lo == m)
@@ -142,7 +142,7 @@ function randival{T<:Int}(lo::T, hi::T)
     return rem(s,r) + lo
 end
 
-function randival!{T<:Int}(lo, hi, A::Array{T})
+function randival!{T<:Integer}(lo, hi, A::Array{T})
     lo = convert(T,lo)
     hi = convert(T,hi)
     for i = 1:numel(A)
@@ -150,19 +150,19 @@ function randival!{T<:Int}(lo, hi, A::Array{T})
     end
     return A
 end
-randival{T<:Int}(lo::T, hi::T, dims::Dims) = randival!(lo, hi, Array(T, dims))
+randival{T<:Integer}(lo::T, hi::T, dims::Dims) = randival!(lo, hi, Array(T, dims))
 randival(lo, hi, dims::Dims) = randival(promote(lo, hi)..., dims)
 randival(lo, hi, dims::Long...) = randival(lo, hi, dims)
 
-randi!(max::Int, A::Array)     = randival!(one(max), max, A)
-randi!(r::(Int,Int), A::Array) = randival!(r[1], r[2], A)
+randi!(max::Integer, A::Array)     = randival!(one(max), max, A)
+randi!(r::(Integer,Integer), A::Array) = randival!(r[1], r[2], A)
 
-randi(max::Int)                    = randival(one(max), max)
-randi(max::Int, dims::Dims)        = randival(one(max), max, dims)
-randi(max::Int, dims::Long...)     = randival(one(max), max, dims)
-randi(r::(Int,Int))                = randival(r[1], r[2])
-randi(r::(Int,Int), dims::Dims)    = randival(r[1], r[2], dims)
-randi(r::(Int,Int), dims::Long...) = randival(r[1], r[2], dims)
+randi(max::Integer)                    = randival(one(max), max)
+randi(max::Integer, dims::Dims)        = randival(one(max), max, dims)
+randi(max::Integer, dims::Long...)     = randival(one(max), max, dims)
+randi(r::(Integer,Integer))                = randival(r[1], r[2])
+randi(r::(Integer,Integer), dims::Dims)    = randival(r[1], r[2], dims)
+randi(r::(Integer,Integer), dims::Long...) = randival(r[1], r[2], dims)
 
 ## random Bools
 

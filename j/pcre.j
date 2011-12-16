@@ -45,7 +45,7 @@ const PCRE_OPTIONS_MASK = PCRE_COMPILE_MASK | PCRE_EXECUTE_MASK
 
 function pcre_info{T}(
     regex::Union(Ptr{Void},Vector{Uint8}),
-    extra::Ptr{Void}, what::Int, ::Type{T}
+    extra::Ptr{Void}, what::Integer, ::Type{T}
 )
     buf = Array(Uint8,sizeof(T))
     ret = ccall(dlsym(libpcre, :pcre_fullinfo), Int32,
@@ -61,7 +61,7 @@ function pcre_info{T}(
     reinterpret(T,buf)[1]
 end
 
-function pcre_compile(pattern::String, options::Int)
+function pcre_compile(pattern::String, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
     re_ptr = (()->ccall(dlsym(libpcre, :pcre_compile), Ptr{Void},
@@ -78,7 +78,7 @@ function pcre_compile(pattern::String, options::Int)
     regex
 end
 
-function pcre_study(regex::Array{Uint8}, options::Int)
+function pcre_study(regex::Array{Uint8}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{Uint8},1)
     extra = (()->ccall(dlsym(libpcre, :pcre_study), Ptr{Void},
@@ -92,7 +92,7 @@ end
 pcre_study(re::Array{Uint8}) = pcre_study(re, int32(0))
 
 function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
-                   str::ByteString, offset::Int, options::Int, cap::Bool)
+                   str::ByteString, offset::Integer, options::Integer, cap::Bool)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
     n = ccall(dlsym(libpcre, :pcre_exec), Int32,

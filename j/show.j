@@ -7,15 +7,15 @@ show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 show(b::Bool) = print(b ? "true" : "false")
-show(n::Int)  = show(int64(n))
+show(n::Integer)  = show(int64(n))
 
-function show_trailing_hex(n::Uint64, ndig::Int)
+function show_trailing_hex(n::Uint64, ndig::Integer)
     for s = ndig-1:-1:0
         d = (n >> 4*s) & uint64(0xf)
         print("0123456789abcdef"[d+1])
     end
 end
-show(n::Uint) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
+show(n::Unsigned) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
 
 show_float64(f::Float64, ndig) =
     ccall(:jl_show_float, Void, (Float64, Int32), f, int32(ndig))
@@ -25,7 +25,7 @@ show(f::Float32) = show_float64(float64(f), 9)
 
 num2str(f::Float, ndig) = print_to_string(show_float64, float64(f), ndig)
 num2str(f::Float) = show_to_string(f)
-num2str(n::Int) = dec(n)
+num2str(n::Integer) = dec(n)
 
 showcompact(f::Float64) = show_float64(f, 8)
 showcompact(f::Float32) = show_float64(float64(f), 8)
@@ -223,7 +223,7 @@ end
 
 alignment(x::Any) = (0, strlen(showcompact_to_string(x)))
 alignment(x::Number) = (strlen(showcompact_to_string(x)), 0)
-alignment(x::Int) = (strlen(showcompact_to_string(x)), 0)
+alignment(x::Integer) = (strlen(showcompact_to_string(x)), 0)
 function alignment(x::Real)
     m = match(r"^(.*?)((?:[\.eE].*)?)$", showcompact_to_string(x))
     m == nothing ? (strlen(showcompact_to_string(x)), 0) :
@@ -252,7 +252,7 @@ end
 function alignment(
     X::AbstractMatrix,
     rows::AbstractVector, cols::AbstractVector,
-    cols_if_complete::Int, cols_otherwise::Int, sep::Int
+    cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
     a = {}
     for j = cols
@@ -273,7 +273,7 @@ end
 
 function print_matrix_row(
     X::AbstractMatrix, A::Vector,
-    i::Int, cols::AbstractVector, sep::String
+    i::Integer, cols::AbstractVector, sep::String
 )
     for k = 1:length(A)
         j = cols[k]
@@ -286,7 +286,7 @@ function print_matrix_row(
     end
 end
 
-function print_matrix_vdots(vdots::String, A::Vector, sep::String, M::Int, m::Int)
+function print_matrix_vdots(vdots::String, A::Vector, sep::String, M::Integer, m::Integer)
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
         if k % M == m
@@ -301,10 +301,10 @@ function print_matrix_vdots(vdots::String, A::Vector, sep::String, M::Int, m::In
 end
 
 function print_matrix(
-    X::AbstractMatrix, rows::Int, cols::Int,
+    X::AbstractMatrix, rows::Integer, cols::Integer,
     pre::String, sep::String, post::String,
     hdots::String, vdots::String,
-    hmod::Int, vmod::Int
+    hmod::Integer, vmod::Integer
 )
     cols -= strlen(pre) + strlen(post)
     presp = repeat(" ", strlen(pre))
@@ -375,7 +375,7 @@ function print_matrix(
         end
     end
 end
-print_matrix(X::AbstractMatrix, rows::Int, cols::Int) =
+print_matrix(X::AbstractMatrix, rows::Integer, cols::Integer) =
     print_matrix(X, rows, cols, " ", "  ", "", "  :  ", ":", 5, 5)
 
 print_matrix(X::AbstractMatrix) = print_matrix(X, tty_rows()-4, tty_cols())

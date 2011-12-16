@@ -80,7 +80,7 @@ end
 function_loc(f::Function) = function_loc(f, (Any...))
 
 edit(file::String) = edit(file, 1)
-function edit(file::String, line::Int)
+function edit(file::String, line::Integer)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = file[end-1:end] == ".j"
     if issrc
@@ -113,7 +113,7 @@ function edit(file::String, line::Int)
 end
 edit(file::String) = edit(file, 1)
 
-function view(file::String, line::Int)
+function view(file::String, line::Integer)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
 end

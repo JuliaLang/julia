@@ -8,7 +8,7 @@ type Regex
     regex::Array{Uint8}
     extra::Ptr{Void}
 
-    function Regex(pat::String, opts::Int, study::Bool)
+    function Regex(pat::String, opts::Integer, study::Bool)
         pat = cstring(pat); opts = int32(opts)
         if (opts & ~PCRE_OPTIONS_MASK) != 0
             error("invalid regex option(s)")
@@ -19,7 +19,7 @@ type Regex
     end
 end
 Regex(p::String, s::Bool) = Regex(p, 0, s)
-Regex(p::String, o::Int)  = Regex(p, o, false)
+Regex(p::String, o::Integer)  = Regex(p, o, false)
 Regex(p::String)          = Regex(p, 0, false)
 
 # TODO: make sure thing are escaped in a way PCRE
@@ -90,10 +90,10 @@ function show(m::RegexMatch)
     print(")")
 end
 
-matches(r::Regex, s::String, o::Int) = pcre_exec(r.regex, r.extra, cstring(s), 1, o, false)
+matches(r::Regex, s::String, o::Integer) = pcre_exec(r.regex, r.extra, cstring(s), 1, o, false)
 matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
 
-function match(re::Regex, str::ByteString, offset::Int, opts::Int)
+function match(re::Regex, str::ByteString, offset::Integer, opts::Integer)
     m, n = pcre_exec(re.regex, re.extra, str, offset, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
@@ -101,8 +101,8 @@ function match(re::Regex, str::ByteString, offset::Int, opts::Int)
     off = map(i->m[2i+1]+1, [1:n])
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, o::Int, p::Int) = match(r, cstring(s), o, p)
-match(r::Regex, s::String, o::Int) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
+match(r::Regex, s::String, o::Integer, p::Integer) = match(r, cstring(s), o, p)
+match(r::Regex, s::String, o::Integer) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, 1)
 
 type RegexMatchIterator

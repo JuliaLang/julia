@@ -128,7 +128,7 @@ function (T, dims...)
                 # Array(T, (m, n))
                 nd = length(dt)
             end
-        elseif !subtype(dt,Int)
+        elseif !subtype(dt,Integer)
             # Array(T, ??)
             nd = Array.parameters[2]
         end
@@ -231,7 +231,7 @@ tupleref_tfunc = function (A, t, i)
     n = length(t)
     last = tupleref(t,n)
     vararg = isseqtype(last)
-    if isa(A[2],Int)
+    if isa(A[2],Integer)
         # index is a constant
         i = A[2]
         if i > n
@@ -301,7 +301,7 @@ apply_type_tfunc = function (A, args...)
             tparams = append(tparams, (args[i].parameters[1],))
         elseif isa(A[i],Long)
             tparams = append(tparams, (A[i],))
-        # TODO: evaluate Int static parameter!
+        # TODO: evaluate Integer static parameter!
         #elseif
         else
             #return args[1]
@@ -1301,7 +1301,7 @@ function inlineable(f, e::Expr, vars)
     sp = meth[2]::Tuple
     spvals = sp[2:2:]
     for i=1:length(spvals)
-        if !isleaftype(spvals[i]) && !isa(spvals[i],Int)
+        if !isleaftype(spvals[i]) && !isa(spvals[i],Integer)
             return NF
         end
     end
@@ -1421,7 +1421,7 @@ function inlining_pass(e::Expr, vars)
         end
 
         if is(f, ^) || is(f, .^)
-            if length(e.args) == 3 && isa(e.args[3],Int)
+            if length(e.args) == 3 && isa(e.args[3],Integer)
                 a1 = e.args[2]
                 if isa(a1,Number) || ((isa(a1,Symbol) || isa(a1,SymbolNode)) &&
                                       exprtype(a1) <: Number)

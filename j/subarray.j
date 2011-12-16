@@ -95,7 +95,7 @@ end
 #
 ##slice dimensions listed, error if any have length > 1
 ##silently ignores dimensions that are greater than N
-#function slice{T,N}(a::AbstractArray{T,N}, sdims::Int...)
+#function slice{T,N}(a::AbstractArray{T,N}, sdims::Integer...)
 #    newdims = ()
 #    for i = 1:N
 #        next = 1:size(a, i)
@@ -112,7 +112,7 @@ end
 #    end
 #    sub(a, newdims)
 #end
-#function slice{T,N}(s::SubArray{T,N}, sdims::Int...)
+#function slice{T,N}(s::SubArray{T,N}, sdims::Integer...)
 #    newdims = ()
 #    for i = 1:length(s.indexes)
 #        next = s.indexes[i]
@@ -140,20 +140,20 @@ similar(s::SubArray, T, dims::Dims) = similar(s.parent, T, dims)
 ref{T}(s::SubArray{T,0,AbstractArray{T,0}}) = s.parent[]
 ref{T}(s::SubArray{T,0}) = s.parent[s.first_index]
 
-ref{T}(s::SubArray{T,1}, i::Int) = s.parent[s.first_index + (i-1)*s.strides[1]]
-ref{T}(s::SubArray{T,2}, i::Int, j::Int) =
+ref{T}(s::SubArray{T,1}, i::Integer) = s.parent[s.first_index + (i-1)*s.strides[1]]
+ref{T}(s::SubArray{T,2}, i::Integer, j::Integer) =
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 
-ref(s::SubArray, i::Int) = s[ind2sub(size(s), i)...]
+ref(s::SubArray, i::Integer) = s[ind2sub(size(s), i)...]
 
-function ref{T}(s::SubArray{T,2}, ind::Int)
+function ref{T}(s::SubArray{T,2}, ind::Integer)
     ld = size(s,1)
     i = rem(ind-1,ld)+1
     j = div(ind-1,ld)+1
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]]
 end
 
-function ref(s::SubArray, is::Int...)
+function ref(s::SubArray, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
         index += (is[i]-1)*s.strides[i]
@@ -167,7 +167,7 @@ ref{T}(s::SubArray{T,1}, I::Range1{Long}) =
 ref{T}(s::SubArray{T,1}, I::Range{Long}) =
     ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
-function ref{T,S<:Int}(s::SubArray{T,1}, I::AbstractVector{S})
+function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     t = Array(Long, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
@@ -189,15 +189,15 @@ function ref(s::SubArray, I::Indices...)
     reshape(ref(s.parent, newindexes...), map(length, I))
 end
 
-assign(s::SubArray, v::AbstractArray, i::Int) =
-    invoke(assign, (SubArray, Any, Int), s, v, i)
+assign(s::SubArray, v::AbstractArray, i::Integer) =
+    invoke(assign, (SubArray, Any, Integer), s, v, i)
 
-assign(s::SubArray, v, i::Int) = assign(s, v, ind2sub(size(s), i)...)
+assign(s::SubArray, v, i::Integer) = assign(s, v, ind2sub(size(s), i)...)
 
-assign{T}(s::SubArray{T,2}, v::AbstractArray, ind::Int) =
-    invoke(assign, (SubArray{T,2}, Any, Int), a, v, ind)
+assign{T}(s::SubArray{T,2}, v::AbstractArray, ind::Integer) =
+    invoke(assign, (SubArray{T,2}, Any, Integer), a, v, ind)
 
-function assign{T}(s::SubArray{T,2}, v, ind::Int)
+function assign{T}(s::SubArray{T,2}, v, ind::Integer)
     ld = size(s,1)
     i = rem(ind-1,ld)+1
     j = div(ind-1,ld)+1
@@ -205,13 +205,13 @@ function assign{T}(s::SubArray{T,2}, v, ind::Int)
     return s
 end
 
-assign(s::SubArray, v::AbstractArray, i::Int, is::Int...) =
-    invoke(assign, (SubArray, Any, Int...), s, v, tuple(i,is...))
+assign(s::SubArray, v::AbstractArray, i::Integer, is::Integer...) =
+    invoke(assign, (SubArray, Any, Integer...), s, v, tuple(i,is...))
 
-assign(s::SubArray, v::AbstractArray, is::Int...) =
-    invoke(assign, (SubArray, Any, Int...), s, v, is)
+assign(s::SubArray, v::AbstractArray, is::Integer...) =
+    invoke(assign, (SubArray, Any, Integer...), s, v, is)
 
-function assign(s::SubArray, v, is::Int...)
+function assign(s::SubArray, v, is::Integer...)
     index = s.first_index
     for i = 1:length(is)
         index += (is[i]-1)*s.strides[i]
@@ -231,16 +231,16 @@ assign{T}(s::SubArray{T,0}, v::AbstractArray) =
 assign{T}(s::SubArray{T,0}, v) = (s.parent[s.first_index]=v; s)
 
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Int) =
+assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Integer) =
     (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
 
-assign{T}(s::SubArray{T,1}, v, i::Int) =
+assign{T}(s::SubArray{T,1}, v, i::Integer) =
     (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
 
-assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Int, j::Int) =
+assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Integer, j::Integer) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
-assign{T}(s::SubArray{T,2}, v, i::Int, j::Int) =
+assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
 assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Long}) =
@@ -255,7 +255,7 @@ assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Long}) =
 assign{T}(s::SubArray{T,1}, v, I::Range{Long}) =
     assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
 
-function assign{T,S<:Int}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
+function assign{T,S<:Integer}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
     t = Array(Long, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
@@ -263,7 +263,7 @@ function assign{T,S<:Int}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{
     assign(s.parent, v, t)
 end
 
-function assign{T,S<:Int}(s::SubArray{T,1}, v, I::AbstractVector{S})
+function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     t = Array(Long, length(I))
     for i = 1:length(I)
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
@@ -301,7 +301,7 @@ end
 
 strides(s::SubArray) = tuple(s.strides...)
 
-stride(s::SubArray, i::Int) = s.strides[i]
+stride(s::SubArray, i::Integer) = s.strides[i]
 
 convert{T}(::Type{Ptr}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)

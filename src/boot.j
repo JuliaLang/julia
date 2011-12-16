@@ -110,20 +110,20 @@ bitstype 8 Bool
 
 abstract Number
 abstract Real  <: Number
-abstract Int   <: Real
-abstract Uint  <: Int
+abstract Integer   <: Real
+abstract Unsigned  <: Integer
 abstract Float <: Real
 
-bitstype 32 Char <: Uint
+bitstype 32 Char <: Unsigned
 
-bitstype 8  Int8   <: Int
-bitstype 8  Uint8  <: Uint
-bitstype 16 Int16  <: Int
-bitstype 16 Uint16 <: Uint
-bitstype 32 Int32  <: Int
-bitstype 32 Uint32 <: Uint
-bitstype 64 Int64  <: Int
-bitstype 64 Uint64 <: Uint
+bitstype 8  Int8   <: Integer
+bitstype 8  Uint8  <: Unsigned
+bitstype 16 Int16  <: Integer
+bitstype 16 Uint16 <: Unsigned
+bitstype 32 Int32  <: Integer
+bitstype 32 Uint32 <: Unsigned
+bitstype 64 Int64  <: Integer
+bitstype 64 Uint64 <: Unsigned
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
@@ -181,7 +181,7 @@ end
 type SystemError <: Exception
     prefix::String
     errnum::Int32
-    SystemError(p::String, e::Int) = new(p, int32(e))
+    SystemError(p::String, e::Integer) = new(p, int32(e))
     SystemError(p::String) = new(p, errno())
 end
 
@@ -293,34 +293,34 @@ macro L_str(s); s; end
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
-Array{T}  (::Type{T}, d::(Int,)) =
+Array{T}  (::Type{T}, d::(Integer,)) =
     ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(d[1]))::Array{T,1}
-Array{T}  (::Type{T}, d::(Int,Int)) =
+Array{T}  (::Type{T}, d::(Integer,Integer)) =
     ccall(:jl_alloc_array_2d, Any, (Any,Long,Long), Array{T,2},
           long(d[1]), long(d[2]))::Array{T,2}
 
 Array{T}  (::Type{T}, d::(Long,Long,Long)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
-Array{T}  (::Type{T}, d::(Int,Int,Int)) =
+Array{T}  (::Type{T}, d::(Integer,Integer,Integer)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3},
           (long(d[1]),long(d[2]),long(d[3])))::Array{T,3}
 Array{T}  (::Type{T}, d::(Long,Long,Long,Long)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
-Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
+Array{T}  (::Type{T}, d::(Integer,Integer,Integer,Integer)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4},
           (long(d[1]),long(d[2]),long(d[3]),long(d[4])))::Array{T,4}
-Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
+Array{T,N}(::Type{T}, d::NTuple{N,Integer}) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,N},
           convert((Long...), d))::Array{T,N}
 
-Array{T}(::Type{T}, m::Int) =
+Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(m))::Array{T,1}
 Array{T}(::Type{T}, m::Long) =
     ccall(:jl_alloc_array_1d, Any, (Any,Long), Array{T,1},
           long(m))::Array{T,1}
-Array{T}(::Type{T}, m::Int,n::Int) =
+Array{T}(::Type{T}, m::Integer,n::Integer) =
     ccall(:jl_alloc_array_2d, Any, (Any,Long,Long), Array{T,2},
           long(m), long(n))::Array{T,2}
 Array{T}(::Type{T}, m::Long,n::Long) =
@@ -328,14 +328,14 @@ Array{T}(::Type{T}, m::Long,n::Long) =
           long(m), long(n))::Array{T,2}
 
 Array{T}(::Type{T}, m::Long,n::Long,o::Long) = Array{T,3}(m,n,o)
-Array{T}(::Type{T}, m::Int, n::Int, o::Int) =
+Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer) =
     Array{T,3}(long(m),long(n),long(o))
 Array{T}(::Type{T}, m::Long,n::Long,o::Long,p::Long) = Array{T,4}(m,n,o,p)
-Array{T}(::Type{T}, m::Int, n::Int, o::Int, p::Int) =
+Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer, p::Integer) =
     Array{T,4}(long(m),long(n),long(o),long(p))
 
-Array{N}(T, d::NTuple{N,Int}) = Array{T,N}(convert((Long...),d))
-Array(T, d::Int...) = Array{T,length(d)}(convert((Long...),d))
+Array{N}(T, d::NTuple{N,Integer}) = Array{T,N}(convert((Long...),d))
+Array(T, d::Integer...) = Array{T,length(d)}(convert((Long...),d))
 
 function compile_hint(f, args::Tuple)
     if !isgeneric(f)

@@ -1,4 +1,4 @@
-type Rational{T<:Int} <: Real
+type Rational{T<:Integer} <: Real
     num::T
     den::T
 
@@ -12,13 +12,13 @@ type Rational{T<:Int} <: Real
         new(num, den)
     end
 end
-Rational{T<:Int}(n::T, d::T) = Rational{T}(n,d)
-Rational(n::Int, d::Int) = Rational(promote(n,d)...)
-Rational(n::Int) = Rational(n,one(n))
+Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
+Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
+Rational(n::Integer) = Rational(n,one(n))
 
-//(n::Int, d::Int) = Rational(n,d)
-//(x::Rational, y::Int) = x.num // (x.den*y)
-//(x::Int, y::Rational) = (x*y.den) // y.num
+//(n::Integer, d::Integer) = Rational(n,d)
+//(x::Rational, y::Integer) = x.num // (x.den*y)
+//(x::Integer, y::Rational) = (x*y.den) // y.num
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 //(x::Real, y::Complex) = x*y'//real(y*y')
 
@@ -36,9 +36,9 @@ function show(x::Rational)
     end
 end
 
-convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
-convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
-function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
+convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
+convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
+function convert{T<:Integer}(::Type{Rational{T}}, x::Float, tol::Real)
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
@@ -54,16 +54,16 @@ function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
         y = 1/y
     end
 end
-convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
+convert{T<:Integer}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
 
-promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
-promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
-promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Int,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
+promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
+promote_rule{T<:Integer,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
-num(x::Int) = x
-den(x::Int) = one(x)
+num(x::Integer) = x
+den(x::Integer) = one(x)
 num(x::Rational) = x.num
 den(x::Rational) = x.den
 
@@ -76,8 +76,8 @@ isnan(x::Rational) = false
 isinf(x::Rational) = x.den == 0
 isfinite(x::Rational) = x.den != 0
 
-typemin{T<:Int}(::Type{Rational{T}}) = -one(T)//zero(T)
-typemax{T<:Int}(::Type{Rational{T}}) = one(T)//zero(T)
+typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
+typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
 integer_valued(x::Rational) = x.den == one(x.den)
 float64_valued(x::Rational) = abs(x.num) <= x.den*maxintfloat(Float64)
@@ -94,16 +94,16 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 /(x::Rational, z::ComplexPair) = inv(z/x)
 
 ==(x::Rational, y::Rational) = x.den == y.den  && x.num == y.num
-==(x::Rational, y::Int     ) = x.den == one(x.den) && x.num == y
-==(x::Int     , y::Rational) = y == x
+==(x::Rational, y::Integer     ) = x.den == one(x.den) && x.num == y
+==(x::Integer     , y::Rational) = y == x
 
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
-< (x::Rational, y::Int     ) = x.num < x.den*y
-< (x::Int     , y::Rational) = x*y.den < y.num
+< (x::Rational, y::Integer     ) = x.num < x.den*y
+< (x::Integer     , y::Rational) = x*y.den < y.num
 
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
-<=(x::Rational, y::Int     ) = x.num <= x.den*y
-<=(x::Int     , y::Rational) = x*y.den <= y.num
+<=(x::Rational, y::Integer     ) = x.num <= x.den*y
+<=(x::Integer     , y::Rational) = x*y.den <= y.num
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)
@@ -115,8 +115,8 @@ fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 
 rational(x::Real) = rational(x, 0)
 rational(x::Rational, tol::Real) = x
-rational(x::Int) = x // one(x)
-rational(x::Int, tol::Real) = x // one(x)
+rational(x::Integer) = x // one(x)
+rational(x::Integer, tol::Real) = x // one(x)
 rational(x::Float32, tol::Real) = convert(Rational{Int32}, x, tol)
 rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
 rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))

@@ -45,19 +45,19 @@
 @assert bool(1//2) == true
 
 # basic type relationships
-@assert Int8 <: Int
-@assert Int32 <: Int
-@assert (Int8,Int8) <: (Int,Int)
+@assert Int8 <: Integer
+@assert Int32 <: Integer
+@assert (Int8,Int8) <: (Integer,Integer)
 @assert !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
 @assert !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
-@assert (Int,Int...) <: (Int,Real...)
-@assert (Int,Float64,Int...) <: (Int,Number...)
-@assert (Int,Float64) <: (Int,Number...)
+@assert (Integer,Integer...) <: (Integer,Real...)
+@assert (Integer,Float64,Integer...) <: (Integer,Number...)
+@assert (Integer,Float64) <: (Integer,Number...)
 @assert (Int32,) <: (Number...)
 @assert () <: (Number...)
 @assert !((Int32...) <: (Int32,))
-@assert !((Int32...) <: (Number,Int))
-@assert !((Int...,) <: (Int,Int,Int...))
+@assert !((Int32...) <: (Number,Integer))
+@assert !((Integer...,) <: (Integer,Integer,Integer...))
 @assert !(Array{Int8,1} <: Array{Any,1})
 @assert !(Array{Any,1} <: Array{Int8,1})
 @assert Array{Int8,1} <: Array{Int8,1}
@@ -71,8 +71,8 @@ let T = typevar(:T)
 end
 @assert is(None, tintersect(Type{Any},Type{ComplexPair}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
-@assert !subtype(Type{Array{Int}},Type{AbstractArray{Int}})
-@assert subtype(Type{Array{Int}},Type{Array{typevar(:T,Int)}})
+@assert !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
+@assert subtype(Type{Array{Integer}},Type{Array{typevar(:T,Integer)}})
 
 # ntuples
 nttest1{n}(x::NTuple{n,Long}) = n
@@ -724,7 +724,7 @@ glotest()
 begin
     local foo, bar
     foo(x::(Any...))=0
-    foo(x::(Int...))=1
+    foo(x::(Integer...))=1
     @assert foo((:a,))==0
     @assert foo(( 2,))==1
     

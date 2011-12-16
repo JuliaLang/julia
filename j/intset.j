@@ -3,12 +3,12 @@ type IntSet
     limit::Long
 
     IntSet() = IntSet(1024)
-    IntSet(max::Int) = (lim = (max+31) & -32;
+    IntSet(max::Integer) = (lim = (max+31) & -32;
                         new(zeros(Uint32,lim>>>5), lim))
 end
 intset(args...) = add_each(IntSet(), args)
 
-function add(s::IntSet, n::Int)
+function add(s::IntSet, n::Integer)
     if n >= s.limit
         lim = long(n + div(n,2))
         olsz = length(s.bits)
@@ -29,7 +29,7 @@ function add_each(s::IntSet, ns)
     return s
 end
 
-function del(s::IntSet, n::Int)
+function del(s::IntSet, n::Integer)
     if n < s.limit
         s.bits[n>>5 + 1] &= ~(1<<(n&31))
     end
@@ -48,7 +48,7 @@ function del_all(s::IntSet)
     return s
 end
 
-function has(s::IntSet, n::Int)
+function has(s::IntSet, n::Integer)
     if n >= s.limit
         false
     else

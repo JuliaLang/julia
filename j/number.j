@@ -4,10 +4,10 @@ isreal(x::Number) = false
 isreal(x::Real) = true
 
 isinteger(x::Number) = false
-isinteger(x::Int) = true
+isinteger(x::Integer) = true
 
 real_valued(x::Real) = true
-integer_valued(x::Int) = true
+integer_valued(x::Integer) = true
 
 size(x::Number) = ()
 ndims(x::Number) = 0

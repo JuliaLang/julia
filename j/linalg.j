@@ -358,7 +358,7 @@ function diagmm(b::Vector, A::Matrix)
     C
 end
 
-^(A::AbstractMatrix, p::Int) = power_by_squaring(A, p)
+^(A::AbstractMatrix, p::Integer) = power_by_squaring(A, p)
 
 function ^(A::AbstractMatrix, p::Number)
     if integer_valued(p)

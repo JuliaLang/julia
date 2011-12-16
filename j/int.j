@@ -96,17 +96,17 @@ convert(::Type{Uint64}, x::Int64  ) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(sext64(fpuiround32(unbox32(x))))
 convert(::Type{Uint64}, x::Float64) = boxui64(fpuiround64(unbox64(x)))
 
-convert(::Type{Int}, x::Bool   ) = convert(Int8,  x)
-convert(::Type{Int}, x::Float32) = convert(Int32, x)
-convert(::Type{Int}, x::Float64) = convert(Int64, x)
+convert(::Type{Integer}, x::Bool   ) = convert(Int8,  x)
+convert(::Type{Integer}, x::Float32) = convert(Int32, x)
+convert(::Type{Integer}, x::Float64) = convert(Int64, x)
 
-convert(::Type{Uint}, x::Bool   ) = convert(Uint8,  x)
-convert(::Type{Uint}, x::Int8   ) = convert(Uint8, x)
-convert(::Type{Uint}, x::Int16  ) = convert(Uint16, x)
-convert(::Type{Uint}, x::Int32  ) = convert(Uint32, x)
-convert(::Type{Uint}, x::Int64  ) = convert(Uint64, x) # LOSSY
-convert(::Type{Uint}, x::Float32) = convert(Uint32, x)
-convert(::Type{Uint}, x::Float64) = convert(Uint64, x)
+convert(::Type{Unsigned}, x::Bool   ) = convert(Uint8,  x)
+convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,  x)
+convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16, x)
+convert(::Type{Unsigned}, x::Int32  ) = convert(Uint32, x)
+convert(::Type{Unsigned}, x::Int64  ) = convert(Uint64, x) # LOSSY
+convert(::Type{Unsigned}, x::Float32) = convert(Uint32, x)
+convert(::Type{Unsigned}, x::Float64) = convert(Uint64, x)
 
 int8  (x) = convert(Int8,   x)
 uint8 (x) = convert(Uint8,  x)
@@ -117,24 +117,24 @@ uint32(x) = convert(Uint32, x)
 int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
-int (x) = convert(Int,  x)
-uint(x) = convert(Uint, x)
+int (x) = convert(Integer,  x)
+uint(x) = convert(Unsigned, x)
 
-signed(x::Int) = x
+signed(x::Integer) = x
 signed(x::Uint8 ) = convert(Int8 , x)
 signed(x::Uint16) = convert(Int16, x)
 signed(x::Uint32) = convert(Int32, x)
 signed(x::Uint64) = convert(Int64, x)
 
-round(x::Int) = x
-trunc(x::Int) = x
-floor(x::Int) = x
-ceil(x::Int)  = x
+round(x::Integer) = x
+trunc(x::Integer) = x
+floor(x::Integer) = x
+ceil(x::Integer)  = x
 
-iround(x::Int) = x
-itrunc(x::Int) = x
-ifloor(x::Int) = x
-iceil(x::Int)  = x
+iround(x::Integer) = x
+itrunc(x::Integer) = x
+ifloor(x::Integer) = x
+iceil(x::Integer)  = x
 
 ## integer promotions ##
 
@@ -214,7 +214,7 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64 # LOSSY
 *(x::Uint32, y::Uint32) = boxui32(mul_int(unbox32(x), unbox32(y)))
 *(x::Uint64, y::Uint64) = boxui64(mul_int(unbox64(x), unbox64(y)))
 
-/(x::Int, y::Int) = float64(x)/float64(y)
+/(x::Integer, y::Integer) = float64(x)/float64(y)
 
 div(x::Int8 , y::Int8 ) = boxsi8 (sdiv_int(unbox8 (x), unbox8 (y)))
 div(x::Int16, y::Int16) = boxsi16(sdiv_int(unbox16(x), unbox16(y)))
@@ -226,7 +226,7 @@ div(x::Uint16, y::Uint16) = boxui16(udiv_int(unbox16(x), unbox16(y)))
 div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
-fld{T<:Uint}(x::T, y::T) = div(x,y)
+fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 # TODO: faster signed int fld?
 
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
@@ -239,8 +239,8 @@ rem(x::Uint16, y::Uint16) = boxui16(urem_int(unbox16(x), unbox16(y)))
 rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
-mod{T<:Uint}(x::T, y::T) = rem(x,y)
-mod{T<:Int }(x::T, y::T) = rem(y+rem(x,y),y)
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
+mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## integer bitwise operations ##
 

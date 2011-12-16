@@ -18,7 +18,7 @@ numel(a::Array) = arraylen(a)
 
 ## copy ##
 
-copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Int) =
+copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Ulong), dest, src, ulong(n*sizeof(T)))
 
 function copy_to{T}(dest::Array{T}, src::Array{T})
@@ -67,11 +67,11 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
 empty(T) = Array(T, 0)
 
-function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Int)
+function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Long), a, int32(x), long(length(a)))
     return a
 end
-function fill!{T<:Union(Int,Float)}(a::Array{T}, x)
+function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     if convert(T,x) == zero(T)
         ccall(:bzero, Void, (Ptr{T}, Long), a, long(length(a)*sizeof(T)))
     else
@@ -118,7 +118,7 @@ function one{T}(x::StridedMatrix{T})
     return a
 end
 
-function linspace(start::Real, stop::Real, n::Int)
+function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
     a = Array(typeof(start), long(n))
     if n == 1
@@ -142,25 +142,25 @@ convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 ## Indexing: ref ##
 
 ref(a::Array, i::Long) = arrayref(a,i)
-ref(a::Array, i::Int) = arrayref(a,long(i))
+ref(a::Array, i::Integer) = arrayref(a,long(i))
 ref{T}(a::Array{T,0}) = arrayref(a,1)
 ref{T}(a::Array{T,1}, i::Long) = arrayref(a,i)
-ref{T}(a::Array{T,1}, i::Int) = arrayref(a,long(i))
+ref{T}(a::Array{T,1}, i::Integer) = arrayref(a,long(i))
 ref(a::Array{Any,1}, i::Long) = arrayref(a,i)
-ref(a::Array{Any,1}, i::Int) = arrayref(a,long(i))
+ref(a::Array{Any,1}, i::Integer) = arrayref(a,long(i))
 ref{T}(a::Array{T,2}, i::Long, j::Long) = arrayref(a, (j-1)*arraysize(a,1)+i)
-ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a,long((j-1)*arraysize(a,1)+i))
+ref{T}(a::Array{T,2}, i::Integer, j::Integer) = arrayref(a,long((j-1)*arraysize(a,1)+i))
 
 ## Indexing: assign ##
 
 assign(A::Array{Any}, x::AbstractArray, i::Long) = arrayset(A,i,x)
-assign(A::Array{Any}, x::AbstractArray, i::Int) = arrayset(A,long(i),x)
+assign(A::Array{Any}, x::AbstractArray, i::Integer) = arrayset(A,long(i),x)
 assign(A::Array{Any}, x::ANY, i::Long) = arrayset(A,i,x)
-assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,long(i),x)
+assign(A::Array{Any}, x::ANY, i::Integer) = arrayset(A,long(i),x)
 assign{T}(A::Array{T}, x::AbstractArray, i::Long) = arrayset(A,i,convert(T, x))
-assign{T}(A::Array{T}, x::AbstractArray, i::Int) = arrayset(A,long(i),convert(T, x))
+assign{T}(A::Array{T}, x::AbstractArray, i::Integer) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T}, x, i::Long) = arrayset(A,i,convert(T, x))
-assign{T}(A::Array{T}, x, i::Int) = arrayset(A,long(i),convert(T, x))
+assign{T}(A::Array{T}, x, i::Integer) = arrayset(A,long(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
 ## Dequeue functionality ##
@@ -192,7 +192,7 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
-function grow{T}(a::Array{T,1}, n::Int)
+function grow{T}(a::Array{T,1}, n::Integer)
     ccall(:jl_array_grow_end, Void, (Any, Ulong), a, ulong(n))
     return a
 end
@@ -216,7 +216,7 @@ function enq{T}(a::Array{T,1}, item)
     return a
 end
 
-function insert{T}(a::Array{T,1}, i::Int, item)
+function insert{T}(a::Array{T,1}, i::Integer, item)
     if i < 1
         throw(BoundsError())
     end
@@ -238,7 +238,7 @@ function insert{T}(a::Array{T,1}, i::Int, item)
     a[i] = item
 end
 
-function del{T}(a::Array{T,1}, i::Int)
+function del{T}(a::Array{T,1}, i::Integer)
     l = length(a)
     if !(1 <= i <= l)
         throw(BoundsError())
@@ -341,7 +341,7 @@ end
 .^(x::Number,y::Array ) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
 .^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
-function .^{S<:Int,T<:Int}(A::Array{S}, B::Array{T})
+function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
     if size(A) != size(B); error("argument dimensions must match"); end
     F = similar(A, Float64)
     for i=1:numel(A)
@@ -350,7 +350,7 @@ function .^{S<:Int,T<:Int}(A::Array{S}, B::Array{T})
     return F
 end
 
-function .^{T<:Int}(A::Int, B::Array{T})
+function .^{T<:Integer}(A::Integer, B::Array{T})
     F = similar(B, Float64)
     for i=1:numel(B)
         F[i] = A^B[i]
@@ -365,7 +365,7 @@ function _jl_power_array_int_body(F, A, B)
     return F
 end
 
-function .^{T<:Int}(A::Array{T}, B::Int)
+function .^{T<:Integer}(A::Array{T}, B::Integer)
     F = similar(A, B < 0 ? Float64 : promote_type(T,typeof(B)))
     _jl_power_array_int_body(F, A, B)
 end
@@ -477,7 +477,7 @@ end
 
 ## data movement ##
 
-function slicedim(A::Array, d::Int, i::Int)
+function slicedim(A::Array, d::Integer, i::Integer)
     d_in = size(A)
     leading = d_in[1:(d-1)]
     d_out = append(leading, (1,), d_in[(d+1):end])
@@ -508,7 +508,7 @@ function slicedim(A::Array, d::Int, i::Int)
     return B
 end
 
-function flipdim{T}(A::Array{T}, d::Int)
+function flipdim{T}(A::Array{T}, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
     if sd == 1
@@ -592,14 +592,14 @@ function rot180(A::StridedMatrix)
     end
     return B
 end
-function rotl90(A::StridedMatrix, k::Int)
+function rotl90(A::StridedMatrix, k::Integer)
     k = k % 4
     k == 1 ? rotl90(A) :
     k == 2 ? rot180(A) :
     k == 3 ? rotr90(A) : copy(A)
 end
-rotr90(A::AbstractMatrix, k::Int) = rotl90(A,-k)
-rot180(A::AbstractMatrix, k::Int) = k % 2 == 1 ? rot180(A) : copy(A)
+rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
+rot180(A::AbstractMatrix, k::Integer) = k % 2 == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] | i=1:n ])
@@ -719,7 +719,7 @@ end
 
 ## hist ##
 
-function hist(v::StridedVector, nbins::Int)
+function hist(v::StridedVector, nbins::Integer)
     h = zeros(Long, nbins)
     if nbins == 0
         return h
@@ -741,7 +741,7 @@ end
 
 hist(x) = hist(x, 10)
 
-function hist(A::StridedMatrix, nbins::Int)
+function hist(A::StridedMatrix, nbins::Integer)
     m, n = size(A)
     h = Array(Long, nbins, n)
     for j=1:n

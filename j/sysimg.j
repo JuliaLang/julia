@@ -8,8 +8,8 @@ if false
     show(s::ASCIIString) = print(s.data)
     show(s::Symbol) = print(s)
     show(b::Bool) = print(b ? "true" : "false")
-    show(n::Int)  = show(int64(n))
-    show(n::Uint) = show(uint64(n))
+    show(n::Integer)  = show(int64(n))
+    show(n::Unsigned) = show(uint64(n))
     print(a...) = for x=a; print(x); end
     function show(e::Expr)
         print(e.head)

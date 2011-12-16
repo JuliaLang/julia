@@ -1,4 +1,4 @@
-function factorial(n::Int)
+function factorial(n::Integer)
     if n < 0
         return zero(n)
     end
@@ -10,7 +10,7 @@ function factorial(n::Int)
 end
 
 # computes n!/k!
-function factorial{T<:Int}(n::T, k::T)
+function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
         return zero(T)
     end
@@ -24,7 +24,7 @@ end
 
 nPr(n, r) = factorial(n, n-r)
 
-function binomial{T<:Int}(n::T, k::T)
+function binomial{T<:Integer}(n::T, k::T)
     if k < 0
         return zero(T)
     end
@@ -72,7 +72,7 @@ end
 
 @in_place_matrix_op shuffle
 
-function randperm(n::Int)
+function randperm(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
@@ -83,7 +83,7 @@ function randperm(n::Int)
     return a
 end
 
-function randcycle(n::Int)
+function randcycle(n::Integer)
     a = Array(typeof(n), n)
     a[1] = 1
     for i = 2:n
@@ -94,7 +94,7 @@ function randcycle(n::Int)
     return a
 end
 
-function nthperm!(a::AbstractVector, k::Int)
+function nthperm!(a::AbstractVector, k::Integer)
     n = length(a)
     k -= 1   # make k 1-indexed
     f = factorial(oftype(k, n-1))
@@ -112,4 +112,4 @@ function nthperm!(a::AbstractVector, k::Int)
     end
     a
 end
-nthperm(a::AbstractVector, k::Int) = nthperm!(copy(a),k)
+nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)

@@ -6,7 +6,7 @@ type VersionNumber
     patch::Int16
     suffix::String
 
-    function VersionNumber(major::Int, minor::Int, patch::Int, suffix::String)
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, suffix::String)
         if major < 0; error("invalid major version: $major"); end
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
@@ -16,16 +16,16 @@ type VersionNumber
         new(int16(major), int16(minor), int16(patch), suffix)
     end
 end
-VersionNumber(x::Int, y::Int, s::String) = VersionNumber(x, y, 0, s )
-VersionNumber(x::Int, s::String)         = VersionNumber(x, 0, 0, s )
-VersionNumber(x::Int, y::Int, z::Int)    = VersionNumber(x, y, z, "")
-VersionNumber(x::Int, y::Int)            = VersionNumber(x, y, 0, "")
-VersionNumber(x::Int)                    = VersionNumber(x, 0, 0, "")
+VersionNumber(x::Integer, y::Integer, s::String) = VersionNumber(x, y, 0, s )
+VersionNumber(x::Integer, s::String)         = VersionNumber(x, 0, 0, s )
+VersionNumber(x::Integer, y::Integer, z::Integer)    = VersionNumber(x, y, z, "")
+VersionNumber(x::Integer, y::Integer)            = VersionNumber(x, y, 0, "")
+VersionNumber(x::Integer)                    = VersionNumber(x, 0, 0, "")
 
 print(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
 show(v::VersionNumber) = print("v\"", v, "\"")
 
-convert(::Type{VersionNumber}, v::Int) = VersionNumber(v)
+convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
 const VERSION_REGEX = ri"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"

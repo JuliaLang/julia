@@ -49,7 +49,7 @@ itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
 iceil(x::Float)  = int(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = int(floor(x)) # TOOD: fast primitive for ifloor
 
-convert(::Type{Int},   x::Float) = iround(x)
+convert(::Type{Integer},   x::Float) = iround(x)
 convert(::Type{Int32}, x::Float) = int32(iround(x))
 convert(::Type{Int64}, x::Float) = int64(iround(x))
 
@@ -148,8 +148,8 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    nextfloat(x::Float32, i::Int) = boxf32(unbox32(boxsi32(unbox32(x))+int32(i)))
-    nextfloat(x::Float64, i::Int) = boxf64(unbox64(boxsi64(unbox64(x))+int64(i)))
+    nextfloat(x::Float32, i::Integer) = boxf32(unbox32(boxsi32(unbox32(x))+int32(i)))
+    nextfloat(x::Float64, i::Integer) = boxf64(unbox64(boxsi64(unbox64(x))+int64(i)))
     nextfloat(x::Float) = nextfloat(x,+1)
     prevfloat(x::Float) = nextfloat(x,-1)
 

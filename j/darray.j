@@ -117,7 +117,7 @@ function pieceindex(s::SubDArray, p, locl::Bool)
     lo = d.dist[p]
     hi = d.dist[p+1]-1
     sdi = s.indexes[dd]
-    if isa(sdi,Int)
+    if isa(sdi,Integer)
         if lo <= sdi <= hi
             r = sdi
             if locl
@@ -185,7 +185,7 @@ end
 function _jl_sub_da_pieces(s::SubDArray)
     dd = s.parent.distdim
     sdi = s.indexes[dd]
-    if isa(sdi,Int)
+    if isa(sdi,Integer)
         p = locate(s.parent, sdi)
         return p:p
     end
@@ -437,7 +437,7 @@ function assign(r::RemoteRef, args...)
 end
 
 # 1d scalar ref
-function ref{T}(d::DArray{T,1}, i::Int)
+function ref{T}(d::DArray{T,1}, i::Integer)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -446,13 +446,13 @@ function ref{T}(d::DArray{T,1}, i::Int)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
-assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
-    invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
+assign{T}(d::DArray{T,1}, v::AbstractArray, i::Integer) =
+    invoke(assign, (DArray{T,1}, Any, Integer), d, v, i)
 
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Long) =
     invoke(assign, (DArray{T,1}, Any, Long), d, v, i)
 
-assign{T}(d::DArray{T,1}, v, i::Int) = assign(d, v, long(i))
+assign{T}(d::DArray{T,1}, v, i::Integer) = assign(d, v, long(i))
 
 # 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Long)
@@ -480,7 +480,7 @@ function ref_elt{T}(d::DArray{T}, sub::(Long...))
     return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
-ref{T}(d::DArray{T}, i::Int)      = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, i::Integer)      = ref_elt(d, ind2sub(d.dims, i))
 ref{T}(d::DArray{T}, I::Long...) = ref_elt(d, I)
 
 ref(d::DArray) = d
@@ -785,22 +785,22 @@ end
 
 ## elementwise operators ##
 
-function .^{T}(A::Int, B::SubOrDArray{T})
+function .^{T}(A::Integer, B::SubOrDArray{T})
     S = promote_type(typeof(A),T)
     darray((T,lsz,da)->.^(A, localize(B, da)),
            S, size(B), distdim(B), procs(B))
 end
-function .^{T}(A::SubOrDArray{T}, B::Int)
+function .^{T}(A::SubOrDArray{T}, B::Integer)
     S = promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procs(A))
 end
 
-function .^{T<:Int}(A::Int, B::SubOrDArray{T})
+function .^{T<:Integer}(A::Integer, B::SubOrDArray{T})
     darray((T,lsz,da)->.^(A, localize(B, da)),
            Float64, size(B), distdim(B), procs(B))
 end
-function .^{T<:Int}(A::SubOrDArray{T}, B::Int)
+function .^{T<:Integer}(A::SubOrDArray{T}, B::Integer)
     S = B < 0 ? Float64 : promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procs(A))
