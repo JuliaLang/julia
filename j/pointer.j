@@ -2,15 +2,15 @@
 
 const WORD_SIZE = long(Long.nbits)
 
-## converting pointers to an appropriate uint ##
+## converting pointers to an appropriate unsigned ##
 
 const C_NULL = box(Ptr{Void}, unbox(Long,0))
 
-# pointer to int
+# pointer to integer
 convert(::Type{Ulong}, x::Ptr) = box(Ulong,unbox(Ulong,x))
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,uint(x))
+convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
-# int to pointer
+# integer to pointer
 convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Ulong,ulong(x)))
 
 # pointer to pointer
@@ -30,8 +30,8 @@ pointer{T}(::Type{T}, x::Ulong) = convert(Ptr{T}, x)
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
 pointer{T}(x::AbstractArray{T}, i::Long) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
-int(x::Ptr) = convert(Ulong, x)
-uint(x::Ptr) = convert(Ulong, x)
+integer(x::Ptr) = convert(Ulong, x)
+unsigned(x::Ptr) = convert(Ulong, x)
 
 @eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
 

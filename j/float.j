@@ -46,8 +46,8 @@ iround(x::Float64) = boxsi64(fpsiround64(unbox64(x)))
 itrunc(x::Float32) = boxsi32(fptosi32(unbox32(x)))
 itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
 
-iceil(x::Float)  = int(ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::Float) = int(floor(x)) # TOOD: fast primitive for ifloor
+iceil(x::Float)  = integer(ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::Float) = integer(floor(x)) # TOOD: fast primitive for ifloor
 
 convert(::Type{Integer},   x::Float) = iround(x)
 convert(::Type{Int32}, x::Float) = int32(iround(x))

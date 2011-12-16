@@ -362,7 +362,7 @@ end
 
 function ^(A::AbstractMatrix, p::Number)
     if integer_valued(p)
-        return A^int(real(p))
+        return A^integer(real(p))
     end
     if size(A,1) != size(A,2)
         error("matrix must be square")

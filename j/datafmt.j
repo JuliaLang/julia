@@ -80,7 +80,7 @@ function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
 end
 
 function _jl_dlmread_setup(fname::String, dlm::Char)
-    nr = int(split(readall(`wc -l $fname`),' ',false)[1])
+    nr = integer(split(readall(`wc -l $fname`),' ',false)[1])
     f = open(fname)
     row = _jl_dlm_readrow(f, dlm)
     nc = length(row)

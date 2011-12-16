@@ -117,8 +117,8 @@ uint32(x) = convert(Uint32, x)
 int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
-int (x) = convert(Integer,  x)
-uint(x) = convert(Unsigned, x)
+integer (x) = convert(Integer,  x)
+unsigned(x) = convert(Unsigned, x)
 
 signed(x::Integer) = x
 signed(x::Uint8 ) = convert(Int8 , x)
@@ -227,7 +227,7 @@ div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
-# TODO: faster signed int fld?
+# TODO: faster signed integer fld?
 
 rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
 rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))

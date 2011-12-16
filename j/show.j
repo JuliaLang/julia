@@ -31,7 +31,7 @@ showcompact(f::Float64) = show_float64(f, 8)
 showcompact(f::Float32) = show_float64(float64(f), 8)
 
 show{T}(p::Ptr{T}) =
-    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(uint(p), WORD_SIZE>>2))")
+    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
 function show(l::LambdaStaticData)
     print("AST(")
