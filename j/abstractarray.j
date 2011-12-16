@@ -349,17 +349,25 @@ assign(A::AbstractMatrix, x, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] =
 assign(A::AbstractMatrix, x::AbstractArray, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] = x)
 
 function assign(A::AbstractMatrix, x, I::Indices, J::Indices)
-    for j=J, i=I
-        A[i,j] = x
+    m = size(A, 1)
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = x
+        end
     end
     return A
 end
 
 function assign(A::AbstractMatrix, X::AbstractArray, I::Indices, J::Indices)
+    m = size(A, 1)
     count = 1
-    for j=J, i=I
-        A[i,j] = X[count]
-        count += 1
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = X[count]
+            count += 1
+        end
     end
     return A
 end
