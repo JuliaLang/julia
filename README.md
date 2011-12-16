@@ -102,7 +102,7 @@ There are more compiler optimizations planned that we hope will close this perfo
 By design, Julia allows you to range from low-level loop and vector code, up to a high-level programming style, sacrificing some performance, but gaining the ability to express complex algorithms easily.
 This continuous spectrum of programming levels is a hallmark of the Julia approach to programming and is very much an intentional feature of the language.
 
-### Designed for Parallelism and Cloud Computing
+### Designed for Parallelism & Cloud Computing
 
 Julia does not impose any particular style of parallelism on the user.
 Instead, it provides a number of [key building blocks for distributed computation](https://github.com/JuliaLang/julia/wiki/Parallel-Computing), making it flexible enough to support a number of styles of parallelism, and allowing users to add more.
@@ -114,17 +114,16 @@ The following simple example demonstrates how to count the number of heads in a 
 
 This computation is automatically distributed across all available compute nodes, and the result, reduced by summation (`+`), is returned at the calling node.
 
-There will eventually be full support for cloud-based operation, including data management, code editing, execution, debugging, collaboration, analysis, data exploration, and visualization. The goal is to allow people who work with big data to stop worrying about administering machines and data and get straight to the real problem:
-exporing their data and creating the algorithms that can solve the problems presented by their big data.
-
-### Plotting
-
 Although it is in the early stages, Julia already supports a fully remote cloud computing mode.
 Here is a screenshot of a web-based interactive Julia session, plotting an oscillating function and a Gaussian random walk:
 
 <a href="http://julialang.github.com/misc/web_repl.png"><img src="http://julialang.github.com/misc/web_repl.png"/></a>
 
-### Free, Open Source and Library-Friendly
+There will eventually be full support for cloud-based operation, including data management, code editing, execution, debugging, collaboration, analysis, data exploration, and visualization.
+The goal is to allow people who work with big data to stop worrying about administering machines and data and get straight to the real problem:
+exporing their data and creating the algorithms that can solve the problems presented by their big data.
+
+### Free, Open Source & Library-Friendly
 
 The core of the Julia implementation is licensed under the [MIT license][MIT].
 Various libraries used by the Julia environment include their own licenses such as the [GPL], [LGPL], and [BSD] (therefore the environment, which consists of the language, user interfaces, and libraries, is under the GPL).
@@ -148,7 +147,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 
 <a name="Required-Build-Tools-External-Libraries"/>
-## Required Build Tools and External Libraries
+## Required Build Tools & External Libraries
 
 - **[GNU make][]** — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
@@ -211,7 +210,7 @@ If everything works correctly, you will see a Julia banner and an interactive pr
 You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Source-Download-Compilation"/>
-## Source Download and Compilation
+## Source Download & Compilation
 
 First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
 
@@ -259,7 +258,7 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
     ui/            source for various front ends
 
 <a name="Editor-Terminal-Setup"/>
-## Editor and Terminal Setup
+## Editor & Terminal Setup
 
 Julia support is currently available for [Emacs](https://github.com/JuliaLang/julia/tree/master/contrib#Emacs), [Vim](https://github.com/JuliaLang/julia/tree/master/contrib#Vim), and [TextMate](https://github.com/JuliaLang/julia/tree/master/contrib#TextMate).
 Support files and instructions for configuring these editors can be found in [`contrib/`](https://github.com/JuliaLang/julia/tree/master/contrib).
