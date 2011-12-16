@@ -170,7 +170,7 @@ function fftn{T<:Union(Float64,Float32)}(X::Vector{T})
     _jl_fftw_destroy_plan(T, plan)
 
     n = length(Y)
-    nconj = long(length(X)/2 - 1)
+    nconj = int(length(X)/2 - 1)
     for i=n:-1:(n-nconj)
         Y[i] = conj(Y[n-i+2])
     end

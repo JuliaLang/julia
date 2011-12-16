@@ -278,7 +278,7 @@ end
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
 darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist::Array{Int,1}) =
-    DArray{T,length(dims),long(distdim)}(init, dims, procs, dist)
+    DArray{T,length(dims),int(distdim)}(init, dims, procs, dist)
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
     sdd = dims[distdim]
@@ -452,7 +452,7 @@ assign{T}(d::DArray{T,1}, v::AbstractArray, i::Integer) =
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
     invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
 
-assign{T}(d::DArray{T,1}, v, i::Integer) = assign(d, v, long(i))
+assign{T}(d::DArray{T,1}, v, i::Integer) = assign(d, v, int(i))
 
 # 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Int)

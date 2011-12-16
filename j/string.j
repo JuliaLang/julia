@@ -3,7 +3,7 @@
 length{T<:String}(s::T) = error("you must implement length(",T,")")
 next{T<:String}(s::T, i::Int) = error("you must implement next(",T,",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)
-next(s::String, i::Integer) = next(s,long(i))
+next(s::String, i::Integer) = next(s,int(i))
 
 ## generic supplied functions ##
 
@@ -12,9 +12,9 @@ done(s::String,i) = (i > length(s))
 numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
-ref(s::String, i::Integer) = s[long(i)]
+ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
-ref{T<:Integer}(s::String, r::Range1{T}) = s[long(r.start):long(r.stop)]
+ref{T<:Integer}(s::String, r::Range1{T}) = s[int(r.start):int(r.stop)]
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -196,7 +196,7 @@ type SubString <: String
     SubString(s::SubString, i::Int, j::Int) =
         new(s.string, i-1+s.offset, j-i+1)
 end
-SubString(s::String, i::Integer, j::Integer) = SubString(s, long(i), long(j))
+SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length

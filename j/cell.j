@@ -44,7 +44,7 @@ function map(f, as::Array{Any,1}...)
     { f(map(a->a[i],as)...) | i=1:n }
 end
 
-cell(dims::(Integer...))   = Array(Any, map(long, dims))
-cell(dims::Integer...)     = Array(Any, map(long, dims))
-cell(d1::Integer)          = Array(Any, long(d1))
-cell(d1::Integer, d2::Integer) = Array(Any, long(d1), long(d2))
+cell(dims::(Integer...))   = Array(Any, map(int, dims))
+cell(dims::Integer...)     = Array(Any, map(int, dims))
+cell(d1::Integer)          = Array(Any, int(d1))
+cell(d1::Integer, d2::Integer) = Array(Any, int(d1), int(d2))

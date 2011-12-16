@@ -10,7 +10,7 @@ intset(args...) = add_each(IntSet(), args)
 
 function add(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = long(n + div(n,2))
+        lim = int(n + div(n,2))
         olsz = length(s.bits)
         newbits = Array(Uint32,(lim+31)>>>5)
         newbits[1:olsz] = s.bits

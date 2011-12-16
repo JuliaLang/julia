@@ -200,7 +200,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     k = min(m,n)
     tau = Array(T, k)
     if iscomplex(A)
-        rwork = zeros(typeof(real(A[1])), long(2*n))
+        rwork = zeros(typeof(real(A[1])), int(2*n))
     end
 
     # Workspace query for QR factorization
@@ -212,7 +212,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
         info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
-    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork))
+    if info == 0; lwork = real(work[1]); work = Array(T, int(lwork))
     else error("error in LAPACK geqp3"); end
 
     # Compute QR factorization
@@ -234,7 +234,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
         info = _jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
-    if info == 0; lwork2 = real(work[1]); work = Array(T, long(lwork2))
+    if info == 0; lwork2 = real(work[1]); work = Array(T, int(lwork2))
     else error("error in LAPACK orgqr/ungqr"); end
 
     # Compute Q
@@ -346,7 +346,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         EV = copy(A)
         W = Array(typeof(real(A[1])), n)
         if iscomplex(A)
-            rwork = Array(typeof(real(A[1])), long(max(3*n-2, 1)))
+            rwork = Array(typeof(real(A[1])), int(max(3*n-2, 1)))
         end
 
         # Workspace query
@@ -359,7 +359,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             info = _jl_lapack_syev(jobz, uplo, n, EV, stride(EV,2), W, work, lwork)
         end
 
-        if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+        if info == 0; lwork = real(work[1]); work = Array(T, int(lwork));
         else error("error in LAPACK syev/heev"); end
 
         # Compute eigenvalues, eigenvectors
@@ -397,7 +397,7 @@ function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             info = _jl_lapack_geev(jobvl, jobvr, n, Acopy, stride(Acopy,2), WR, WI, VL, n, VR, n, work, lwork)
         end
 
-        if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+        if info == 0; lwork = real(work[1]); work = Array(T, int(lwork));
         else error("error in LAPACK geev"); end
 
         # Compute eigenvalues, eigenvectors
@@ -520,7 +520,7 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
-    if info == 0; lwork = real(work[1]); work = Array(T, long(lwork));
+    if info == 0; lwork = real(work[1]); work = Array(T, int(lwork));
     else error("error in LAPACK gesvd"); end
 
     # Compute SVD
@@ -671,7 +671,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         if info == 0
             lwork = real(work[1])
-            work = Array(T, long(lwork))
+            work = Array(T, int(lwork))
         else
             error("error in LAPACK gels")
         end

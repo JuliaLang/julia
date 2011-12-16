@@ -1,5 +1,5 @@
-const sizeof_ios_t = long(ccall(:jl_sizeof_ios_t, Int32, ()))
-const sizeof_fd_set = long(ccall(:jl_sizeof_fd_set, Int32, ()))
+const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
+const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 type IOStream
     ios::Array{Uint8,1}
@@ -27,7 +27,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 function fdio(fd::Integer, own::Bool)
     s = IOStream()
     ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
-          s.ios, long(fd), int32(0), int32(own));
+          s.ios, int(fd), int32(0), int32(own));
     return s
 end
 fdio(fd::Integer) = fdio(fd, false)
@@ -153,7 +153,7 @@ read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
 read{T}(s, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, map(long,tuple(d1,dims...)))
+    read(s, t, map(int,tuple(d1,dims...)))
 
 read{T}(s, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
 
@@ -237,11 +237,11 @@ truncate(s::IOStream, n::Integer) =
     ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, uint(n))
 
 seek(s::IOStream, n::Integer) =
-    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, long(n))==0 ||
+    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, int(n))==0 ||
      error("seek failed"))
 
 skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, long(delta))==0 ||
+    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, int(delta))==0 ||
      error("skip failed"))
 
 position(s::IOStream) = ccall(:ios_pos, Int, (Ptr{Void},), s.ios)
@@ -308,7 +308,7 @@ function del_all(s::FDSet)
 end
 
 begin
-    local tv = Array(Uint8, long(ccall(:jl_sizeof_timeval, Int32, ())))
+    local tv = Array(Uint8, int(ccall(:jl_sizeof_timeval, Int32, ())))
     global select_read
     function select_read(readfds::FDSet, timeout::Real)
         if timeout == Inf

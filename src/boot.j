@@ -134,8 +134,8 @@ else
     typealias Uint Uint32
 end
 
-long(x) = convert(Int, x)
-long(x::Int) = x
+int(x) = convert(Int, x)
+int(x::Int) = x
 uint(x) = convert(Uint, x)
 uint(x::Uint) = x
 
@@ -295,44 +295,44 @@ method_missing(f, args...) = throw(MethodError(f, args))
 
 Array{T}  (::Type{T}, d::(Integer,)) =
     ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          long(d[1]))::Array{T,1}
+          int(d[1]))::Array{T,1}
 Array{T}  (::Type{T}, d::(Integer,Integer)) =
     ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          long(d[1]), long(d[2]))::Array{T,2}
+          int(d[1]), int(d[2]))::Array{T,2}
 
 Array{T}  (::Type{T}, d::(Int,Int,Int)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
 Array{T}  (::Type{T}, d::(Integer,Integer,Integer)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,3},
-          (long(d[1]),long(d[2]),long(d[3])))::Array{T,3}
+          (int(d[1]),int(d[2]),int(d[3])))::Array{T,3}
 Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
 Array{T}  (::Type{T}, d::(Integer,Integer,Integer,Integer)) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,4},
-          (long(d[1]),long(d[2]),long(d[3]),long(d[4])))::Array{T,4}
+          (int(d[1]),int(d[2]),int(d[3]),int(d[4])))::Array{T,4}
 Array{T,N}(::Type{T}, d::NTuple{N,Integer}) =
     ccall(:jl_new_array, Any, (Any,Any), Array{T,N},
           convert((Int...), d))::Array{T,N}
 
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          long(m))::Array{T,1}
+          int(m))::Array{T,1}
 Array{T}(::Type{T}, m::Int) =
     ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          long(m))::Array{T,1}
+          int(m))::Array{T,1}
 Array{T}(::Type{T}, m::Integer,n::Integer) =
     ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          long(m), long(n))::Array{T,2}
+          int(m), int(n))::Array{T,2}
 Array{T}(::Type{T}, m::Int,n::Int) =
     ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          long(m), long(n))::Array{T,2}
+          int(m), int(n))::Array{T,2}
 
 Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer) =
-    Array{T,3}(long(m),long(n),long(o))
+    Array{T,3}(int(m),int(n),int(o))
 Array{T}(::Type{T}, m::Int,n::Int,o::Int,p::Int) = Array{T,4}(m,n,o,p)
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer, p::Integer) =
-    Array{T,4}(long(m),long(n),long(o),long(p))
+    Array{T,4}(int(m),int(n),int(o),int(p))
 
 Array{N}(T, d::NTuple{N,Integer}) = Array{T,N}(convert((Int...),d))
 Array(T, d::Integer...) = Array{T,length(d)}(convert((Int...),d))

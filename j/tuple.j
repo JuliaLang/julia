@@ -4,7 +4,7 @@ length(t::Tuple) = tuplelen(t)
 numel (t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Int) = tupleref(t, i)
-ref(t::Tuple, i::Integer) = tupleref(t, long(i))
+ref(t::Tuple, i::Integer) = tupleref(t, int(i))
 
 ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
 ref(t::Tuple, r::Range1) = accumtuple(t, r, start(r), 1)

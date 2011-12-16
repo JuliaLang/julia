@@ -184,7 +184,7 @@ function find{T}(S::SparseMatrixCSC{T})
 end
 
 function sprand_rng(m, n, density, rng)
-    numnz = long(m*n*density)
+    numnz = int(m*n*density)
     I = randi(m, numnz)
     J = randi(n, numnz)
     V = rng((numnz,))

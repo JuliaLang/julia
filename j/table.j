@@ -89,9 +89,9 @@ end
 hash(s::Symbol) = ccall(:jl_hash_symbol, Uint, (Any,), s)
 
 function hash(t::Tuple)
-    h = long(0)
+    h = int(0)
     for i=1:length(t)
-        h = bitmix(h,long(hash(t[i])))
+        h = bitmix(h,int(hash(t[i])))
     end
     return h
 end
@@ -99,7 +99,7 @@ end
 function hash(a::Array)
     h = hash(size(a))+1
     for i=1:length(a)
-        h = bitmix(h,long(hash(a[i])))
+        h = bitmix(h,int(hash(a[i])))
     end
     return h
 end
@@ -138,7 +138,7 @@ hashtable{K}  (ks::(K...), vs::Tuple ) = HashTable{K,Any}  (ks, vs)
 hashtable{V}  (ks::Tuple , vs::(V...)) = HashTable{Any,V}  (ks, vs)
 hashtable     (ks::Tuple , vs::Tuple)  = HashTable{Any,Any}(ks, vs)
 
-hashindex(key, sz) = (long(hash(key)) & (sz-1)) + 1
+hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
 function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldk = h.keys

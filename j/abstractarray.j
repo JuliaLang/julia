@@ -1140,24 +1140,24 @@ function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Int, n::Int)
 end
 
 sub2ind(dims) = 1
-sub2ind(dims, i::Integer) = long(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(long(i), long(j))
+sub2ind(dims, i::Integer) = int(i)
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(int(i), int(j))
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(long(i0),long(i1),long(i2))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(int(i0),int(i1),int(i2))
 sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(long(i0),long(i1),long(i2),long(i3))
+    sub2ind(int(i0),int(i1),int(i2),int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
 function sub2ind(dims, I::Integer...)
     ndims = length(dims)
-    index = long(I[1])
+    index = int(I[1])
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
-        index += (long(I[k])-1) * stride
+        index += (int(I[k])-1) * stride
     end
     return index
 end
@@ -1165,7 +1165,7 @@ end
 sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
-ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, long(ind))
+ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
 ind2sub(dims::(), ind::Integer) = throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
 ind2sub(dims::(Integer,Integer), ind::Int) =

@@ -69,7 +69,7 @@ srand(seed::Int64) = srand(uint64(seed))
 
 function srand(filename::String, n::Integer)
     fd = open(filename)
-    a = Array(Uint32, long(n))
+    a = Array(Uint32, int(n))
     read(fd, a)
     srand(a)
     close(fd)

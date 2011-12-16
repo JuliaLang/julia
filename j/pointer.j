@@ -1,6 +1,6 @@
 ## system word size ##
 
-const WORD_SIZE = long(Int.nbits)
+const WORD_SIZE = int(Int.nbits)
 
 ## converting pointers to an appropriate unsigned ##
 
