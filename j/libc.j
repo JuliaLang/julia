@@ -14,14 +14,14 @@ system(cmd::String) = ccall(dlsym(libc, :system), Int32, (Ptr{Uint8},), cstring(
 function gethostname()
     hn = Array(Uint8, 128)
     ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Uint),
-          hn, ulong(length(hn)))
+          hn, uint(length(hn)))
     cstring(convert(Ptr{Uint8},hn))
 end
 
 function getipaddr()
     ip = Array(Uint8, 128)
     ccall(:getlocalip, Void, (Ptr{Uint8}, Uint),
-          ip, ulong(length(ip)))
+          ip, uint(length(ip)))
     cstring(convert(Ptr{Uint8},ip))
 end
 
@@ -30,7 +30,7 @@ end
 function getcwd()
     b = Array(Uint8,1024)
     p = ccall(dlsym(libc, :getcwd), Ptr{Uint8}, (Ptr{Uint8}, Uint),
-              b, ulong(length(b)))
+              b, uint(length(b)))
     if p == C_NULL
         error("path too long")
     end

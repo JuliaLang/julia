@@ -912,7 +912,7 @@ strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c = ccall(dlsym(libc, :memcmp), Int32,
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              a, b, ulong(min(length(a),length(b))))
+              a, b, uint(min(length(a),length(b))))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
@@ -922,7 +922,7 @@ function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
     q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
               (Ptr{Uint8}, Int32, Uint),
-              p, int32(b), ulong(length(a)))
+              p, int32(b), uint(length(a)))
     q == C_NULL ? 0 : q - p + 1
 end
 
@@ -942,7 +942,7 @@ function memcat(arrays::Array{Uint8,1}...)
     for a = arrays
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(a), ulong(length(a)))
+              ptr + offset, pointer(a), uint(length(a)))
         offset += length(a)
     end
     return arr
@@ -963,7 +963,7 @@ function memcat(strs::ByteString...)
     for s = strs
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(s.data), ulong(length(s)))
+              ptr + offset, pointer(s.data), uint(length(s)))
         offset += length(s)
     end
     data

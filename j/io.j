@@ -59,7 +59,7 @@ end
 
 function memio(x::Integer, finalize::Bool)
     s = IOStream(finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, ulong(x))
+    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, uint(x))
     s
 end
 memio(x::Integer) = memio(x, true)
@@ -176,7 +176,7 @@ function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         ccall(:ios_write, Uint,
               (Ptr{Void}, Ptr{Void}, Uint),
-              s.ios, a, ulong(numel(a)*sizeof(T)))
+              s.ios, a, uint(numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
     end
@@ -185,7 +185,7 @@ end
 function write(s::IOStream, p::Ptr, nb::Integer)
     ccall(:ios_write, Uint,
           (Ptr{Void}, Ptr{Void}, Uint),
-          s.ios, p, ulong(nb))
+          s.ios, p, uint(nb))
 end
 
 # num bytes available without blocking
@@ -207,7 +207,7 @@ function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
-                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, ulong(nb)) < nb
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, uint(nb)) < nb
             throw(EOFError())
         end
         a
@@ -234,7 +234,7 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
-    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, ulong(n))
+    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, uint(n))
 
 seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, long(n))==0 ||

@@ -136,8 +136,8 @@ end
 
 long(x) = convert(Int, x)
 long(x::Int) = x
-ulong(x) = convert(Uint, x)
-ulong(x::Uint) = x
+uint(x) = convert(Uint, x)
+uint(x::Uint) = x
 
 # function version of field assignment
 setfield(s, f, v) = (s.(f) = v)

@@ -11,7 +11,7 @@ convert(::Type{Uint}, x::Ptr) = box(Uint,unbox(Uint,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,ulong(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,uint(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
@@ -37,9 +37,9 @@ unsigned(x::Ptr) = convert(Uint, x)
 
 ## limited pointer arithmetic & comparison ##
 
-isequal(x::Ptr, y::Ptr) = ulong(x) == ulong(y)
--(x::Ptr, y::Ptr) = ulong(x) - ulong(y)
+isequal(x::Ptr, y::Ptr) = uint(x) == uint(y)
+-(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
-+{T}(x::Ptr{T}, y::Integer) = pointer(T, ulong(x) + ulong(y))
--{T}(x::Ptr{T}, y::Integer) = pointer(T, ulong(x) - ulong(y))
++{T}(x::Ptr{T}, y::Integer) = pointer(T, uint(x) + uint(y))
+-{T}(x::Ptr{T}, y::Integer) = pointer(T, uint(x) - uint(y))
 +(x::Integer, y::Ptr) = y + x

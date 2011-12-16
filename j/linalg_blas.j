@@ -25,7 +25,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, s
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, ulong(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
     end
     return dest
 end
@@ -35,7 +35,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T},
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, ulong(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
     end
     return dest
 end

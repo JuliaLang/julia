@@ -19,7 +19,7 @@ numel(a::Array) = arraylen(a)
 ## copy ##
 
 copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, ulong(n*sizeof(T)))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
 
 function copy_to{T}(dest::Array{T}, src::Array{T})
     if isa(T, BitsKind)
@@ -36,7 +36,7 @@ function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(dlsym(libc, :memcpy),
           Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
-          b, a, ulong(length(b)*sizeof(T)))
+          b, a, uint(length(b)*sizeof(T)))
     return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
@@ -171,13 +171,13 @@ function push{T}(a::Array{T,1}, item)
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(1))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
     a[end] = item
     return a
 end
 
 function push(a::Array{Any,1}, item::ANY)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(1))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
     a[end] = item
     return a
 end
@@ -187,13 +187,13 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
     n = length(items)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(n))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
     a[end-n+1:end] = items
     return a
 end
 
 function grow{T}(a::Array{T,1}, n::Integer)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(n))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
     return a
 end
 
@@ -202,7 +202,7 @@ function pop{T}(a::Array{T,1})
         error("pop: array is empty")
     end
     item = a[end]
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, ulong(1))
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
     return item
 end
 
@@ -211,7 +211,7 @@ function enq{T}(a::Array{T,1}, item)
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
     item = convert(T, item)
-    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, ulong(1))
+    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, uint(1))
     a[1] = item
     return a
 end
@@ -223,14 +223,14 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
     item = convert(T, item)
     l = length(a)
     if i > l
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(i-l))
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(i-l))
     elseif i > div(l,2)
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, ulong(1))
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
         for k=l+1:-1:i+1
             a[k] = a[k-1]
         end
     else
-        ccall(:jl_array_grow_beg, Void, (Any, Uint), a, ulong(1))
+        ccall(:jl_array_grow_beg, Void, (Any, Uint), a, uint(1))
         for k=1:(i-1)
             a[k] = a[k+1]
         end
@@ -247,18 +247,18 @@ function del{T}(a::Array{T,1}, i::Integer)
         for k=i:l-1
             a[k] = a[k+1]
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, ulong(1))
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
     else
         for k=i:-1:2
             a[k] = a[k-1]
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, ulong(1))
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(1))
     end
     a
 end
 
 function del_all{T}(a::Array{T,1})
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, ulong(length(a)))
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(length(a)))
     a
 end
 
