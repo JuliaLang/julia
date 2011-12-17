@@ -889,12 +889,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #print("typeinf ", linfo.name, " ", atypes, "\n")
 
     if redo
+    elseif cop
+        sparams = append(sparams, linfo.sparams)
+        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
     else
         ast = linfo.ast
-        if cop
-            sparams = append(sparams, linfo.sparams)
-            ast = ccall(:jl_prepare_ast, Any, (Any,Any), ast, sparams)::Expr
-        end
     end
 
     assert(is(ast.head,:lambda), "inference.j:745")
@@ -916,6 +915,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
     la = length(args)
     if la > 0
+        if is(atypes,Tuple)
+            atypes = tuple(NTuple{la,Any}..., Tuple[1])
+        end
         lastarg = ast.args[1][la]
         if is_rest_arg(lastarg)
             s[1][args[la]] = limit_tuple_depth(atypes[la:])

@@ -209,8 +209,6 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     return nli;
 }
 
-void jl_specialize_ast(jl_lambda_info_t *li);
-
 JL_CALLABLE(jl_trampoline);
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)

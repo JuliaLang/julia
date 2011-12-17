@@ -88,7 +88,9 @@ typedef struct _bigval_t {
 static bigval_t *big_objects = NULL;
 
 #define N_POOLS 42
-static pool_t pools[N_POOLS];
+static pool_t norm_pools[N_POOLS];
+static pool_t ephe_pools[N_POOLS];
+static pool_t *pools = &norm_pools[0];
 
 static size_t allocd_bytes = 0;
 static const size_t collect_interval = 3200*1024*sizeof(void*);
@@ -364,8 +366,10 @@ static void gc_sweep(void)
 {
     sweep_big();
     int i;
-    for(i=0; i < N_POOLS; i++)
-        sweep_pool(&pools[i]);
+    for(i=0; i < N_POOLS; i++) {
+        sweep_pool(&norm_pools[i]);
+        sweep_pool(&ephe_pools[i]);
+    }
     jl_unmark_symbols();
 }
 
@@ -665,6 +669,9 @@ void jl_gc_enable(void)    { is_gc_enabled = 1; }
 void jl_gc_disable(void)   { is_gc_enabled = 0; }
 int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
+void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
+void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }
+
 #if defined(MEMPROFILE)
 static void all_pool_stats(void);
 static void big_obj_stats(void);
@@ -784,9 +791,13 @@ void jl_gc_init(void)
                          1536, 2048 };
     int i;
     for(i=0; i < N_POOLS; i++) {
-        pools[i].osize = szc[i];
-        pools[i].pages = NULL;
-        pools[i].freelist = NULL;
+        norm_pools[i].osize = szc[i];
+        norm_pools[i].pages = NULL;
+        norm_pools[i].freelist = NULL;
+
+        ephe_pools[i].osize = szc[i];
+        ephe_pools[i].pages = NULL;
+        ephe_pools[i].freelist = NULL;
     }
 
     htable_new(&finalizer_table, 0);
@@ -836,9 +847,14 @@ static void all_pool_stats(void)
     int i;
     size_t nb=0, w, tw=0, no=0, b;
     for(i=0; i < N_POOLS; i++) {
-        b = pool_stats(&pools[i], &w);
+        b = pool_stats(&norm_pools[i], &w);
         nb += b;
-        no += (b/pools[i].osize);
+        no += (b/norm_pools[i].osize);
+        tw += w;
+
+        b = pool_stats(&ephe_pools[i], &w);
+        nb += b;
+        no += (b/ephe_pools[i].osize);
         tw += w;
     }
     ios_printf(ios_stdout,

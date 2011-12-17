@@ -557,6 +557,7 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
 // get array of body forms
 jl_expr_t *jl_lam_body(jl_expr_t *l)
 {
+    assert(jl_is_expr(l));
     jl_value_t *be = jl_exprarg(l, 2);
     assert(jl_is_expr(be));
     assert(((jl_expr_t*)be)->head == body_sym);
@@ -662,10 +663,12 @@ DLLEXPORT
 jl_value_t *jl_prepare_ast(jl_value_t *l_ast, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
-    jl_value_t *ast = NULL;
+    jl_value_t *ast = l_ast;
     JL_GC_PUSH(&spenv, &ast);
+    if (jl_is_tuple(ast))
+        ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
-    ast = copy_ast(l_ast, sparams);
+    ast = copy_ast(ast, sparams);
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
     JL_GC_POP();

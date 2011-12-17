@@ -756,6 +756,9 @@ jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
+jl_value_t *jl_compress_ast(jl_value_t *ast, jl_array_t *vals);
+jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
+
 static inline int jl_vinfo_capt(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&1)!=0;
@@ -838,6 +841,8 @@ void jl_gc_markval(jl_value_t *v);
 void jl_gc_enable(void);
 void jl_gc_disable(void);
 int jl_gc_is_enabled(void);
+void jl_gc_ephemeral_on(void);
+void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);
 void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve(void);

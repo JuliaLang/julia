@@ -854,12 +854,7 @@ JL_CALLABLE(jl_trampoline)
     assert(f->linfo != NULL);
     if (f->linfo->inferred == jl_false) {
         if (!jl_in_inference) {
-            int na = jl_lam_args((jl_expr_t*)f->linfo->ast)->length;
-            jl_tuple_t *atypes = jl_tuple_fill(na+1, (jl_value_t*)jl_any_type);
-            JL_GC_PUSH(&atypes);
-            jl_tupleset(atypes, na, jl_tupleref(jl_tuple_type,0));
-            jl_type_infer(f->linfo, atypes, f->linfo);
-            JL_GC_POP();
+            jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
         }
     }
     jl_compile(f);
@@ -1109,6 +1104,8 @@ static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
     }
 }
 
+extern int jl_boot_file_loaded;
+
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)
 {
@@ -1130,6 +1127,16 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     assert(jl_is_tuple(argtypes));
     check_type_tuple(argtypes, name, "method definition");
     jl_add_method((jl_function_t*)gf, argtypes, f);
+    if (jl_boot_file_loaded &&
+        f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
+        jl_array_t *v = NULL;
+        jl_lambda_info_t *li = f->linfo;
+        JL_GC_PUSH(&v);
+        v = jl_alloc_cell_1d(0);
+        li->ast = jl_compress_ast(li->ast, v);
+        li->ast = (jl_value_t*)jl_tuple3(li->ast, v, jl_any_type);
+        JL_GC_POP();
+    }
     JL_GC_POP();
     return gf;
 }

@@ -905,7 +905,9 @@ jl_value_t *jl_uncompress_ast(jl_tuple_t *data)
     src.size = bytes->length;
     int en = jl_gc_is_enabled();
     jl_gc_disable();
+    jl_gc_ephemeral_on();
     jl_value_t *v = jl_deserialize_value(&src);
+    jl_gc_ephemeral_off();
     if (en)
         jl_gc_enable();
     tree_literal_values = NULL;
