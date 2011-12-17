@@ -357,10 +357,9 @@ distclean-clp:
 
 ## GNU LIGHTTPD ##
 
-LIGHTTPD_OBJ_TARGET = lighttpd-$(LIGHTTPD_VER)/src/lighttpd
-LIGHTTPD_OBJ_SOURCE = $(EXTROOT)/sbin/lighttpd
+LIGHTTPD_OBJ_TARGET = $(EXTROOT)/sbin/lighttpd
 
-compile-lighttpd: $(LIGHTTPD_OBJ_SOURCE)
+compile-lighttpd: install-lighttpd
 install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
 
 lighttpd-$(LIGHTTPD_VER).tar.gz:
@@ -368,12 +367,10 @@ lighttpd-$(LIGHTTPD_VER).tar.gz:
 lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(LIGHTTPD_OBJ_SOURCE): lighttpd-$(LIGHTTPD_VER)/configure
+lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(EXTROOT) --without-clp --without-zlib --without-bzip2
-	$(MAKE)
-	touch $@
-$(LIGHTTPD_OBJ_TARGET): $(LIGHTTPD_OBJ_SOURCE)
+	./configure --prefix=$(EXTROOT) --without-pcre --without-zlib --without-bzip2
+$(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
 	touch $@
 
