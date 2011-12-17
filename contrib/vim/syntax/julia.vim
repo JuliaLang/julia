@@ -9,12 +9,13 @@ elseif exists("b:current_syntax")
   finish
 endif
 
-syntax cluster juliaExpressions		contains=@juliaParItems,@juliaStringItems,@juliaKeywordItems,@juliaBlocksItems,@juliaTypesItems,@juliaMacroItems,@juliaOperatorItems,@juliaNumberItems,@juliaCommentItems,@juliaErrorItems
+syntax cluster juliaExpressions		contains=@juliaParItems,@juliaStringItems,@juliaKeywordItems,@juliaBlocksItems,@juliaTypesItems,@juliaConstItems,@juliaMacroItems,@juliaOperatorItems,@juliaNumberItems,@juliaCommentItems,@juliaErrorItems
 
-syntax cluster juliaParItems		contains=juliaParBlock,juliaSqBraBlock,juliaBraBlock
+syntax cluster juliaParItems		contains=juliaParBlock,juliaSqBraBlock,juliaCurBraBlock
 syntax cluster juliaKeywordItems	contains=juliaKeyword,juliaTypedef
 syntax cluster juliaBlocksItems		contains=juliaConditionalBlock,juliaRepeatBlock,juliaBeginBlock,juliaFunctionBlock,juliaMacroBlock,juliaQuoteBlock,juliaTypeBlock,juliaExceptionBlock,juliaLetBlock
-syntax cluster juliaTypesItems		contains=juliaBuiltin,juliaConst,juliaBoolean
+syntax cluster juliaTypesItems		contains=juliaBuiltinType
+syntax cluster juliaConstItems		contains=juliaConstNum,juliaConstBool,juliaConstIO,juliaConstLimits,juliaConstErrno,juliaConstGeneric
 syntax cluster juliaMacroItems		contains=juliaMacro
 syntax cluster juliaNumberItems		contains=juliaNumbers
 syntax cluster juliaStringItems		contains=juliaChar,juliaString,juliaEString,juliaIString,juliaLString,juliabString,juliaShellString,juliaRegEx
@@ -31,8 +32,9 @@ syntax match   juliaErrorSemicol	display contained ";"
 syntax match   juliaRangeEnd		display contained "\<end\>"
 
 syntax region  juliaParBlock		matchgroup=juliaParDelim start="(" end=")" contains=@juliaExpressions
-syntax region  juliaSqBraBlock		matchgroup=juliaParDelim start="\[" end="\]" contains=@juliaExpressions,juliaRangeEnd
-syntax region  juliaBraBlock		matchgroup=juliaParDelim start="{" end="}" contains=@juliaExpressions
+syntax region  juliaParBlockInRange	matchgroup=juliaParDelim contained start="(" end=")" contains=@juliaExpressions,juliaParBlockInRange,juliaRangeEnd
+syntax region  juliaSqBraBlock		matchgroup=juliaParDelim start="\[" end="\]" contains=@juliaExpressions,juliaParBlockInRange,juliaRangeEnd
+syntax region  juliaCurBraBlock		matchgroup=juliaParDelim start="{" end="}" contains=@juliaExpressions
 
 syntax match   juliaKeyword		"\<\(return\|local\|break\|continue\|global\|module\|import\|export\|const\)\>"
 syntax region  juliaConditionalBlock	matchgroup=juliaConditional start="\<if\>" end="\<end\>" contains=@juliaExpressions,juliaConditionalEIBlock,juliaConditionalEBlock fold
@@ -49,9 +51,14 @@ syntax region  juliaCatchBlock		matchgroup=juliaException transparent contained 
 syntax region  juliaLetBlock		matchgroup=juliaKeyword start="\<let\>" end="\<end\>" contains=@juliaExpressions fold
 syntax match   juliaTypedef		"\<\(abstract\|typealias\|bitstype\)\>"
 
-syntax match   juliaBuiltin		display "\<\(Uint\(\|8\|16\|32\|64\)\|Int\(\|8\|16\|32\|64\)\|Float\(\|32\|64\)\|Complex\(\|64\|128\)\|ComplexNum\|Bool\|Char\|Number\|Scalar\|Real\|Int\|Uint\|Array\|DArray\|AbstractArray\|AbstractVector\|AbstractMatrix\|StridedVector\|StridedMatrix\|VecOrMat\|StridedVecOrMat\|Range\|Range1\|SparseMatrixCSC\|Tuple\|NTuple\|Buffer\|Size\|Index\|Symbol\|Function\|Vector\|Matrix\|Union\|Type\|Any\|Complex\|None\|String\|Ptr\|Void\|Exception\|PtrInt\|Long\|Ulong\|Type\)\>"
-syntax match   juliaConst		display "\<\(nothing\|pi\|NaN\|Inf\)\>"
-syntax match   juliaBoolean		display "\<\(true\|false\)\>"
+syntax match   juliaBuiltinType		display "\<\(Uint\(\|8\|16\|32\|64\)\|Int\(\|8\|16\|32\|64\)\|Float\(\|32\|64\)\|Complex\(\|64\|128\)\|ComplexNum\|Bool\|Char\|Number\|Scalar\|Real\|Integer\|Array\|DArray\|AbstractArray\|AbstractVector\|AbstractMatrix\|StridedVector\|StridedMatrix\|VecOrMat\|StridedVecOrMat\|Range\|Range1\|SparseMatrixCSC\|Tuple\|NTuple\|Buffer\|Size\|Index\|Symbol\|Function\|Vector\|Matrix\|Union\|Type\|Any\|Complex\|None\|String\|Ptr\|Void\|Exception\|PtrInt\|Type\)\>"
+syntax match   juliaConstNum		display "\<\(pi\|NaN\(32\)\?\|Inf\(32\)\?\)\>"
+syntax match   juliaConstBool		display "\<\(true\|false\)\>"
+syntax match   juliaConstIO		display "\<\(std\(out\|in\|err\)_stream\|STD\(OUT\|IN\|ERR\)\|sizeof_\(ios_t\|fd_set\)\)\>"
+syntax match   juliaConstPtr		display "\<\(WORD_SIZE\|C_NULL\)\>"
+syntax match   juliaConstLimits		display "\<\(MAX_\(TYPEUNION_\(LEN\|DEPTH\)\|TUPLE\(_DEPTH\|TYPE_LEN\)\)\)\>"
+syntax match   juliaConstErrno		display "\<E\(2BIG\|ACCES\|ADDRINUSE\|ADDRNOTAVAIL\|ADV\|AFNOSUPPORT\|AGAIN\|ALREADY\|BADE\|BADFD\|BADF\|BADMSG\|BADR\|BADRQC\|BADSLT\|BFONT\|BUSY\|CANCELED\|CHILD\|CHRNG\|COMM\|CONNABORTED\|CONNREFUSED\|CONNRESET\|DEADLK\|DESTADDRREQ\|DOM\|DOTDOT\|DQUOT\|EXIST\|FAULT\|FBIG\|HOSTDOWN\|HOSTUNREACH\|HWPOISON\|IDRM\|ILSEQ\|INPROGRESS\|INTR\|INVAL\|IO\|ISCONN\|ISDIR\|ISNAM\|KEYEXPIRED\|KEYREJECTED\|KEYREVOKED\|L2HLT\|L2NSYNC\|L3HLT\|L3RST\|LIBACC\|LIBBAD\|LIBEXEC\|LIBMAX\|LIBSCN\|LNRNG\|LOOP\|MEDIUMTYPE\|MFILE\|MLINK\|MSGSIZE\|MULTIHOP\|NAMETOOLONG\|NAVAIL\|NETDOWN\|NETRESET\|NETUNREACH\|NFILE\|NOANO\|NOBUFS\|NOCSI\|NODATA\|NODEV\|NOENT\|NOEXEC\|NOKEY\|NOLCK\|NOLINK\|NOMEDIUM\|NOMEM\|NOMSG\|NONET\|NOPKG\|NOPROTOOPT\|NOSPC\|NOSR\|NOSTR\|NOSYS\|NOTBLK\|NOTCONN\|NOTDIR\|NOTEMPTY\|NOTNAM\|NOTRECOVERABLE\|NOTSOCK\|NOTTY\|NOTUNIQ\|NXIO\|OPNOTSUPP\|OVERFLOW\|OWNERDEAD\|PERM\|PFNOSUPPORT\|PIPE\|PROTO\|PROTONOSUPPORT\|PROTOTYPE\|RANGE\|REMCHG\|REMOTE\|REMOTEIO\|RESTART\|RFKILL\|ROFS\|SHUTDOWN\|SOCKTNOSUPPORT\|SPIPE\|SRCH\|SRMNT\|STALE\|STRPIPE\|TIMEDOUT\|TIME\|TOOMANYREFS\|TXTBSY\|UCLEAN\|UNATCH\|USERS\|XDEV\|XFULL\)\>"
+syntax match   juliaConstGeneric	display "\<\(nothing\)\>"
 
 syntax match   juliaMacro		display "@[_[:alpha:]][_[:alnum:]]*"
 
@@ -94,12 +101,12 @@ syntax region  juliaIString		matchgroup=juliaStringDelim start=+I"+ skip=+\(\\\\
 syntax region  juliaLString		matchgroup=juliaStringDelim start=+L"+ skip=+\(\\\\\)*\\"+ end=+"+
 syntax region  juliabString		matchgroup=juliaStringDelim start=+b"+ skip=+\(\\\\\)*\\"+ end=+"+ contains=@juliaSpecialChars
 
-syntax region  juliaShellString		matchgroup=juliaStringDelim start=+`+ skip=+\(\\\\\)*\\`+ end=+1+ contains=@juliaStringVars,juliaSpecialChar
+syntax region  juliaShellString		matchgroup=juliaStringDelim start=+`+ skip=+\(\\\\\)*\\`+ end=+`+ contains=@juliaStringVars,juliaSpecialChar
 
-syntax cluster juliaStringVars		contains=juliaStringVarsPar,juliaStringVarsSqBra,juliaStringVarsBra,juliaStringVarsPla
+syntax cluster juliaStringVars		contains=juliaStringVarsPar,juliaStringVarsSqBra,juliaStringVarsCurBra,juliaStringVarsPla
 syntax region  juliaStringVarsPar	contained matchgroup=juliaStringVarDelim start="$(" end=")" contains=@juliaExpressions
 syntax region  juliaStringVarsSqBra	contained matchgroup=juliaStringVarDelim start="$\[" end="\]" contains=@juliaExpressions
-syntax region  juliaStringVarsBra	contained matchgroup=juliaStringVarDelim start="${" end="}" contains=@juliaExpressions
+syntax region  juliaStringVarsCurBra	contained matchgroup=juliaStringVarDelim start="${" end="}" contains=@juliaExpressions
 syntax match   juliaStringVarsPla	contained "$[_[:alpha:]][_[:alnum:]]*"
 
 " TODO improve RegEx
@@ -124,10 +131,15 @@ hi def link juliaConditional		Conditional
 hi def link juliaRepeat			Repeat
 hi def link juliaException		Exception
 hi def link juliaTypedef		Typedef
-hi def link juliaBuiltin		Type
-hi def link juliaConst			Constant
+hi def link juliaBuiltinType		Type
+hi def link juliaConstNum		Constant
+hi def link juliaConstIO		Constant
+hi def link juliaConstPtr		Constant
+hi def link juliaConstLimits		Constant
+hi def link juliaConstErrno		Constant
+hi def link juliaConstGeneric		Constant
+hi def link juliaConstBool		Boolean
 hi def link juliaRangeEnd		Constant
-hi def link juliaBoolean		Boolean
 
 hi def link juliaMacro			Macro
 
