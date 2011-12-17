@@ -1072,9 +1072,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         linfo.inferred = true
     end
     if !redo
-        vals = {}
-        treedata = ccall(:jl_compress_ast, Any, (Any, Any), fulltree, vals)
-        compressed = (treedata, vals, frame.result)
+        compressed = ccall(:jl_compress_ast, Any, (Any,), fulltree)
         fulltree = compressed
         #compressed = fulltree
         def.tfunc = (atypes, compressed, def.tfunc)

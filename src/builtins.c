@@ -1129,13 +1129,8 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     jl_add_method((jl_function_t*)gf, argtypes, f);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
-        jl_array_t *v = NULL;
         jl_lambda_info_t *li = f->linfo;
-        JL_GC_PUSH(&v);
-        v = jl_alloc_cell_1d(0);
-        li->ast = jl_compress_ast(li->ast, v);
-        li->ast = (jl_value_t*)jl_tuple3(li->ast, v, jl_any_type);
-        JL_GC_POP();
+        li->ast = jl_compress_ast(li->ast);
     }
     JL_GC_POP();
     return gf;

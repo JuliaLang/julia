@@ -547,6 +547,11 @@ jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 // get array of var info records for captured vars
 jl_array_t *jl_lam_capt(jl_expr_t *l)
 {
+    if (jl_is_tuple(l)) {
+        // in compressed form
+        return jl_tupleref(l, 3);
+    }
+    assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_expr(le));
     jl_array_t *vil = (jl_array_t*)jl_exprarg(le,2);

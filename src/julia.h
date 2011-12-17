@@ -759,7 +759,7 @@ jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
-jl_value_t *jl_compress_ast(jl_value_t *ast, jl_array_t *vals);
+jl_value_t *jl_compress_ast(jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)
