@@ -6,16 +6,16 @@ catfile(file::String) = system(strcat("cat ", file))
 
 # timing
 
-clock() = ccall(:clock_now, Float64, ())
+time() = ccall(:clock_now, Float64, ())
 
 function tic()
-    t0 = clock()
+    t0 = time()
     tls(:TIMERS, (t0, get(tls(), :TIMERS, ())))
     return t0
 end
 
 function toq()
-    t1 = clock()
+    t1 = time()
     timers = get(tls(), :TIMERS, ())
     if is(timers,())
         error("toc() without tic()")
@@ -35,9 +35,9 @@ end
 macro time(ex)
   t0, val, t1 = gensym(3)
   quote
-    local $t0 = clock()
+    local $t0 = time()
     local $val = $ex
-    local $t1 = clock()
+    local $t1 = time()
     println("elapsed time: ", $t1-$t0, " seconds")
     $val
   end
@@ -47,9 +47,9 @@ end
 macro elapsed(ex)
   t0, val, t1 = gensym(3)
   quote
-    local $t0 = clock()
+    local $t0 = time()
     local $val = $ex
-    local $t1 = clock()
+    local $t1 = time()
     $t1-$t0
   end
 end
