@@ -914,7 +914,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         if (check_amb) {
             check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
                             method->linfo ? method->linfo->name :
-                            jl_symbol("anonymous"));
+                            anonymous_sym);
         }
         pl = &l->next;
         l = l->next;

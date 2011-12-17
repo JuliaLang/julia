@@ -880,7 +880,7 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b)
         JL_GC_POP();
         return ub;
     }
-    jl_value_t *res = (jl_value_t*)jl_new_typevar(jl_symbol("_"), lb, ub);
+    jl_value_t *res = (jl_value_t*)jl_new_typevar(underscore_sym, lb, ub);
     JL_GC_POP();
     return res;
 }
@@ -901,7 +901,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || jl_is_long(ty))
             return ty;
-        return (jl_value_t*)jl_new_typevar(jl_symbol("_"), tv->lb, ty);
+        return (jl_value_t*)jl_new_typevar(underscore_sym, tv->lb, ty);
     }
     return (jl_value_t*)jl_bottom_type;
 }
@@ -1027,9 +1027,9 @@ static int solve_tvar_constraints(jl_tuple_t *env, jl_tuple_t **soln)
                 }
                 else {
                     v = (jl_value_t*)
-                        jl_new_typevar(jl_symbol("_"),
+                        jl_new_typevar(underscore_sym,
                                        (jl_value_t*)jl_bottom_type, S);
-                    ((jl_tvar_t*)v)->bound = 0;
+                    //((jl_tvar_t*)v)->bound = 0; // ???
                 }
                 *soln = extend(T, v, *soln);
             }
@@ -2576,4 +2576,6 @@ void jl_init_types(void)
     multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
     thunk_sym = jl_symbol("thunk");
+    anonymous_sym = jl_symbol("anonymous");
+    underscore_sym = jl_symbol("_");
 }

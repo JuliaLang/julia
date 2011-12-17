@@ -78,6 +78,7 @@ jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;
 jl_sym_t *new_sym;     jl_sym_t *multivalue_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
+jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 
 /*
 static int sizebins[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
@@ -287,8 +288,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->line = jl_box_long(0);
     if (ast != NULL && jl_is_expr(ast)) {
         jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)ast),0);
-        if (jl_is_expr(body1) &&
-            ((jl_expr_t*)body1)->head == line_sym) {
+        if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
             li->file = jl_exprarg(body1, 1);
             li->line = jl_exprarg(body1, 0);
         }
@@ -304,7 +304,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->inCompile = 0;
     li->unspecialized = NULL;
     li->specializations = NULL;
-    li->name = jl_symbol("anonymous");
+    li->name = anonymous_sym;
     return li;
 }
 
