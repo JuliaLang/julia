@@ -3,8 +3,8 @@
 length(t::Tuple) = tuplelen(t)
 numel (t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
-ref(t::Tuple, i::Long) = tupleref(t, i)
-ref(t::Tuple, i::Int) = tupleref(t, long(i))
+ref(t::Tuple, i::Int) = tupleref(t, i)
+ref(t::Tuple, i::Integer) = tupleref(t, int(i))
 
 ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
 ref(t::Tuple, r::Range1) = accumtuple(t, r, start(r), 1)
@@ -18,7 +18,7 @@ next(t::Tuple, i) = (t[i], i+1)
 
 ## mapping ##
 
-ntuple(n::Int, f) = n<=0 ? () :
+ntuple(n::Integer, f) = n<=0 ? () :
                     n==1 ? (f(1),) :
                     n==2 ? (f(1),f(2),) :
                     n==3 ? (f(1),f(2),f(3),) :

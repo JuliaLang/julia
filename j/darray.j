@@ -1,14 +1,14 @@
 type DArray{T,N,distdim} <: AbstractArray{T,N}
-    dims::NTuple{N,Long}
+    dims::NTuple{N,Int}
     locl::Array{T,N}
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
-    pmap::Array{Long,1}
+    pmap::Array{Int,1}
     # piece i consists of indexes dist[i] through dist[i+1]-1
-    dist::Array{Long,1}
+    dist::Array{Int,1}
     # dimension of distribution
-    distdim::Long
-    localpiece::Long  # my piece #; pmap[localpiece]==myid()
+    distdim::Int
+    localpiece::Int  # my piece #; pmap[localpiece]==myid()
     go::GlobalObject
 
     function DArray(go, initializer, dims, pmap, dist)
@@ -39,7 +39,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 
     # don't use DArray() directly; use darray() below instead
-    function DArray(initializer, dims, procs, dist::Array{Long,1})
+    function DArray(initializer, dims, procs, dist::Array{Int,1})
         go = GlobalObject(procs,
                           g->DArray{T,N,distdim}(g,initializer,dims,procs,dist))
         go.local_identity
@@ -82,7 +82,7 @@ function defaultdist(distdim, dims, np)
     if sdd >= np
         linspace(1, sdd+1, np+1)
     else
-        [[1:(sdd+1)], zeros(Long, np-sdd)]
+        [[1:(sdd+1)], zeros(Int, np-sdd)]
     end
 end
 
@@ -117,7 +117,7 @@ function pieceindex(s::SubDArray, p, locl::Bool)
     lo = d.dist[p]
     hi = d.dist[p+1]-1
     sdi = s.indexes[dd]
-    if isa(sdi,Int)
+    if isa(sdi,Integer)
         if lo <= sdi <= hi
             r = sdi
             if locl
@@ -185,7 +185,7 @@ end
 function _jl_sub_da_pieces(s::SubDArray)
     dd = s.parent.distdim
     sdi = s.indexes[dd]
-    if isa(sdi,Int)
+    if isa(sdi,Integer)
         p = locate(s.parent, sdi)
         return p:p
     end
@@ -206,7 +206,7 @@ function dist(s::SubDArray)
 end
 
 # find which piece holds index i in the distributed dimension
-function locate(d::DArray, i::Long)
+function locate(d::DArray, i::Int)
     p = 1
     while i >= d.dist[p+1]
         p += 1
@@ -215,14 +215,14 @@ function locate(d::DArray, i::Long)
 end
 
 # find which processor holds index i in the distributed dimension
-owner(d::DArray, i::Long) = d.pmap[locate(d, i)]
+owner(d::DArray, i::Int) = d.pmap[locate(d, i)]
 
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist) where pmap[i] contains dist[i]:dist[i+1]-1
-function locate(d::DArray, I::Range1{Long})
+function locate(d::DArray, I::Range1{Int})
     i = I[1]
     imax = I[length(I)]
-    pmap = Array(Long,0)
+    pmap = Array(Int,0)
     dist = [i]
     j = 1
     while i <= imax
@@ -241,13 +241,13 @@ end
 #find which pieces hold which subranges in distributed dimension
 #returns (pmap,dist,perm) where pmap[i] contains dist[i]:dist[i+1]-1
 #and perm is the permutation which sorts I
-function locate(d::DArray, I::AbstractVector{Long})
-    if isa(I, Range{Long}); I = I[:]; end
+function locate(d::DArray, I::AbstractVector{Int})
+    if isa(I, Range{Int}); I = I[:]; end
     (I, perm) = sortperm(I)
 
     i = I[1]
     imax = I[length(I)]
-    pmap = Array(Long,0)
+    pmap = Array(Int,0)
     dist = [i]
     j = 1
     while i <= imax
@@ -277,8 +277,8 @@ end
 
 # initializer is a function accepting (el_type, local_size, darray) where
 # the last argument is the full DArray being constructed.
-darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist::Array{Long,1}) =
-    DArray{T,length(dims),long(distdim)}(init, dims, procs, dist)
+darray{T}(init, ::Type{T}, dims::Dims, distdim, procs, dist::Array{Int,1}) =
+    DArray{T,length(dims),int(distdim)}(init, dims, procs, dist)
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
     sdd = dims[distdim]
@@ -298,13 +298,13 @@ end
 
 darray{T}(init::Function, ::Type{T}, dims::Dims) =
     darray(init,T,dims,maxdim(dims))
-darray(init::Function, T::Type, dims::Long...) = darray(init, T, dims)
+darray(init::Function, T::Type, dims::Int...) = darray(init, T, dims)
 darray(init::Function, dims::Dims) = darray(init, Float64, dims)
-darray(init::Function, dims::Long...) = darray(init, dims)
+darray(init::Function, dims::Int...) = darray(init, dims)
 
 darray(T::Type, args...)     = darray((T,lsz,da)->Array(T,lsz), T, args...)
 darray(dims::Dims, args...)  = darray((T,lsz,da)->Array(T,lsz), dims, args...)
-darray(dims::Long...)        = darray((T,lsz,da)->Array(T,lsz), dims)
+darray(dims::Int...)        = darray((T,lsz,da)->Array(T,lsz), dims)
 
 # construct a DArray as a function of each block of another
 function darray(f::Function, A::SubOrDArray)
@@ -437,7 +437,7 @@ function assign(r::RemoteRef, args...)
 end
 
 # 1d scalar ref
-function ref{T}(d::DArray{T,1}, i::Int)
+function ref{T}(d::DArray{T,1}, i::Integer)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -446,16 +446,16 @@ function ref{T}(d::DArray{T,1}, i::Int)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
+assign{T}(d::DArray{T,1}, v::AbstractArray, i::Integer) =
+    invoke(assign, (DArray{T,1}, Any, Integer), d, v, i)
+
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
     invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
 
-assign{T}(d::DArray{T,1}, v::AbstractArray, i::Long) =
-    invoke(assign, (DArray{T,1}, Any, Long), d, v, i)
-
-assign{T}(d::DArray{T,1}, v, i::Int) = assign(d, v, long(i))
+assign{T}(d::DArray{T,1}, v, i::Integer) = assign(d, v, int(i))
 
 # 1d scalar assign
-function assign{T}(d::DArray{T,1}, v, i::Long)
+function assign{T}(d::DArray{T,1}, v, i::Int)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -467,7 +467,7 @@ function assign{T}(d::DArray{T,1}, v, i::Long)
 end
 
 # Nd scalar ref
-function ref_elt{T}(d::DArray{T}, sub::(Long...))
+function ref_elt{T}(d::DArray{T}, sub::(Int...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -480,12 +480,12 @@ function ref_elt{T}(d::DArray{T}, sub::(Long...))
     return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
-ref{T}(d::DArray{T}, i::Int)      = ref_elt(d, ind2sub(d.dims, i))
-ref{T}(d::DArray{T}, I::Long...) = ref_elt(d, I)
+ref{T}(d::DArray{T}, i::Integer)      = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, I::Int...) = ref_elt(d, I)
 
 ref(d::DArray) = d
 
-function _jl_da_sub(d::DArray, I::Range1{Long}...)
+function _jl_da_sub(d::DArray, I::Range1{Int}...)
     offs = d.dist[d.localpiece]-1
     J = ntuple(ndims(d), i -> (i == d.distdim ? I[i]-offs :
                                                 I[i]))
@@ -493,7 +493,7 @@ function _jl_da_sub(d::DArray, I::Range1{Long}...)
 end
 
 # Nd ref with Range1 indexes
-function ref{T}(d::DArray{T}, I::Range1{Long}...)
+function ref{T}(d::DArray{T}, I::Range1{Int}...)
     (pmap, dist) = locate(d, I[d.distdim])
     np = length(pmap)
     if np == 1 && pmap[1] == d.localpiece
@@ -524,15 +524,15 @@ function ref{T}(d::DArray{T}, I::Range1{Long}...)
 end
 
 # combinations of Range1 and scalar indexes
-ref(d::DArray, I::Range1{Long}, j::Long) = d[I, j:j]
-ref(d::DArray, i::Long, J::Range1{Long}) = d[i:i, J]
+ref(d::DArray, I::Range1{Int}, j::Int) = d[I, j:j]
+ref(d::DArray, i::Int, J::Range1{Int}) = d[i:i, J]
 
-ref(d::DArray, I::Union(Long,Range1{Long})...) =
-    d[ntuple(length(I),i->(isa(I[i],Long) ? (I[i]:I[i]) : I[i] ))...]
+ref(d::DArray, I::Union(Int,Range1{Int})...) =
+    d[ntuple(length(I),i->(isa(I[i],Int) ? (I[i]:I[i]) : I[i] ))...]
 
 
 # Nd ref with vector indexes
-function ref{T}(d::DArray{T}, I::AbstractVector{Long}...)
+function ref{T}(d::DArray{T}, I::AbstractVector{Int}...)
     (pmap, dist, perm) = locate(d,[I[d.distdim]])
     np = length(pmap)
     if np == 1 && pmap[1] == d.localpiece
@@ -575,14 +575,14 @@ function ref{T}(d::DArray{T}, I::AbstractVector{Long}...)
 end
 
 # combinations of vector and scalar indexes
-ref(d::DArray, I::AbstractVector{Long}, j::Long) = d[I, [j]]
-ref(d::DArray, i::Long, J::AbstractVector{Long}) = d[[i], J]
+ref(d::DArray, I::AbstractVector{Int}, j::Int) = d[I, [j]]
+ref(d::DArray, i::Int, J::AbstractVector{Int}) = d[[i], J]
 
-ref(d::DArray, I::Union(Long,AbstractVector{Long})...) =
-    d[ntuple(length(I),i->(isa(I[i],Long) ? [I[i]] : I[i] ))...]
+ref(d::DArray, I::Union(Int,AbstractVector{Int})...) =
+    d[ntuple(length(I),i->(isa(I[i],Int) ? [I[i]] : I[i] ))...]
 
 # Nd scalar assign
-function assign_elt(d::DArray, v, sub::(Long...))
+function assign_elt(d::DArray, v, sub::(Int...))
     p = locate(d, sub[d.distdim])
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -600,25 +600,25 @@ end
 # disambiguating definitions
 assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
 
-assign(d::DArray, v::AbstractArray, i::Long) =
+assign(d::DArray, v::AbstractArray, i::Int) =
     assign_elt(d, v, ind2sub(d.dims, i))
 
-assign{T}(d::DArray{T,2}, v::AbstractArray, i0::Long, i1::Long) =
+assign{T}(d::DArray{T,2}, v::AbstractArray, i0::Int, i1::Int) =
     assign_elt(d, v, (i0,i1))
-assign(d::DArray, v::AbstractArray, i0::Long, i1::Long) =
+assign(d::DArray, v::AbstractArray, i0::Int, i1::Int) =
     assign_elt(d, v, (i0,i1))
 
-assign(d::DArray, v::AbstractArray, i0::Long, I::Long...) =
+assign(d::DArray, v::AbstractArray, i0::Int, I::Int...) =
     assign_elt(d, v, tuple(i0,I...))
 
-assign(d::DArray, v, i::Long) = assign_elt(d, v, ind2sub(d.dims, i))
-assign(d::DArray, v, i0::Long, I::Long...) = assign_elt(d, v, tuple(i0,I...))
+assign(d::DArray, v, i::Int) = assign_elt(d, v, ind2sub(d.dims, i))
+assign(d::DArray, v, i0::Int, I::Int...) = assign_elt(d, v, tuple(i0,I...))
 
 #TODO: Fix this
 assign(d::DArray, v) = error("distributed arrays of dimension 0 not supported")
 
 # Nd assign, scalar fill case, with Range1 indexes
-function assign(d::DArray, v, I::Range1{Long}...)
+function assign(d::DArray, v, I::Range1{Int}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -637,7 +637,7 @@ end
 
 # Nd assign, array copy case, with Range1 indexes
 #TODO: check for same size
-function assign(d::DArray, v::AbstractArray, I::Range1{Long}...)
+function assign(d::DArray, v::AbstractArray, I::Range1{Int}...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -661,7 +661,7 @@ function assign(d::DArray, v::AbstractArray, I::Range1{Long}...)
 end
 
 # Nd assign, scalar fill case, vector indexes
-function assign(d::DArray, v, I::AbstractVector{Long}...)
+function assign(d::DArray, v, I::AbstractVector{Int}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -688,7 +688,7 @@ end
 
 # Nd assign, array copy case, vector indexes
 #TODO: check for same size
-function assign(d::DArray, v::AbstractArray, I::AbstractVector{Long}...)
+function assign(d::DArray, v::AbstractArray, I::AbstractVector{Int}...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -719,12 +719,12 @@ function assign(d::DArray, v::AbstractArray, I::AbstractVector{Long}...)
 end
 
 # assign with combinations of Range1 and scalar indexes
-assign(d::DArray, v, I::Union(Long,Range1{Long})...) =
-    assign(d,v,ntuple(length(I),i->(isa(I[i],Long) ? (I[i]:I[i]) : I[i] ))...)
+assign(d::DArray, v, I::Union(Int,Range1{Int})...) =
+    assign(d,v,ntuple(length(I),i->(isa(I[i],Int) ? (I[i]:I[i]) : I[i] ))...)
 
 # assign with combinations of vector and scalar indexes
-assign(d::DArray, v, I::Union(Long,AbstractVector{Long})...) =
-    assign(d,v,ntuple(length(I),i->(isa(I[i],Long) ? [I[i]] : I[i] ))...)
+assign(d::DArray, v, I::Union(Int,AbstractVector{Int})...) =
+    assign(d,v,ntuple(length(I),i->(isa(I[i],Int) ? [I[i]] : I[i] ))...)
 
 ## matrix multiply ##
 
@@ -785,22 +785,22 @@ end
 
 ## elementwise operators ##
 
-function .^{T}(A::Int, B::SubOrDArray{T})
+function .^{T}(A::Integer, B::SubOrDArray{T})
     S = promote_type(typeof(A),T)
     darray((T,lsz,da)->.^(A, localize(B, da)),
            S, size(B), distdim(B), procs(B))
 end
-function .^{T}(A::SubOrDArray{T}, B::Int)
+function .^{T}(A::SubOrDArray{T}, B::Integer)
     S = promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procs(A))
 end
 
-function .^{T<:Int}(A::Int, B::SubOrDArray{T})
+function .^{T<:Integer}(A::Integer, B::SubOrDArray{T})
     darray((T,lsz,da)->.^(A, localize(B, da)),
            Float64, size(B), distdim(B), procs(B))
 end
-function .^{T<:Int}(A::SubOrDArray{T}, B::Int)
+function .^{T<:Integer}(A::SubOrDArray{T}, B::Integer)
     S = B < 0 ? Float64 : promote_type(T,typeof(B))
     darray((T,lsz,da)->.^(localize(A, da), B),
            S, size(A), distdim(A), procs(A))

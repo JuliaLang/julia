@@ -1,4 +1,4 @@
-function _tablesz(i::Int)
+function _tablesz(i::Integer)
     if i < 16
         return 16
     end
@@ -41,7 +41,7 @@ end
 
 type IdTable <: Associative
     ht::Array{Any,1}
-    IdTable(sz::Int) = new(cell(2*_tablesz(sz)))
+    IdTable(sz::Integer) = new(cell(2*_tablesz(sz)))
     IdTable() = IdTable(0)
 end
 
@@ -79,19 +79,19 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 _jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 
-hash(x::Int) = _jl_hash64(uint64(x))
+hash(x::Integer) = _jl_hash64(uint64(x))
 @eval function hash(x::Float)
     # note: float64(typemax(Uint64)) == 2^64
     abs(x) < $float64(typemax(Uint64)) && trunc(x) == x ? hash(uint64(x)) :
     isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
 end
 
-hash(s::Symbol) = ccall(:jl_hash_symbol, Ulong, (Any,), s)
+hash(s::Symbol) = ccall(:jl_hash_symbol, Uint, (Any,), s)
 
 function hash(t::Tuple)
-    h = long(0)
+    h = int(0)
     for i=1:length(t)
-        h = bitmix(h,long(hash(t[i])))
+        h = bitmix(h,int(hash(t[i])))
     end
     return h
 end
@@ -99,13 +99,13 @@ end
 function hash(a::Array)
     h = hash(size(a))+1
     for i=1:length(a)
-        h = bitmix(h,long(hash(a[i])))
+        h = bitmix(h,int(hash(a[i])))
     end
     return h
 end
 
 hash(x::Any) = uid(x)
-hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Long), s.data, length(s.data))
+hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
 
 # hash table
 
@@ -130,7 +130,7 @@ type HashTable{K,V} <: Associative
     end
 end
 HashTable() = HashTable(0)
-HashTable(n::Int) = HashTable{Any,Any}(n)
+HashTable(n::Integer) = HashTable{Any,Any}(n)
 
 # syntax entry point
 hashtable{K,V}(ks::(K...), vs::(V...)) = HashTable{K,V}    (ks, vs)
@@ -138,7 +138,7 @@ hashtable{K}  (ks::(K...), vs::Tuple ) = HashTable{K,Any}  (ks, vs)
 hashtable{V}  (ks::Tuple , vs::(V...)) = HashTable{Any,V}  (ks, vs)
 hashtable     (ks::Tuple , vs::Tuple)  = HashTable{Any,Any}(ks, vs)
 
-hashindex(key, sz) = (long(hash(key)) & (sz-1)) + 1
+hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
 function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldk = h.keys

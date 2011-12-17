@@ -55,7 +55,7 @@ _jl_fftw_destroy_plan(precision::Union(Type{Float32}, Type{Complex64}), plan) =
 
 macro _jl_fftw_plan_dft_1d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-        function _jl_fftw_plan_dft(X::Vector{$T_out}, Y::Vector{$T_out}, direction::Int)
+        function _jl_fftw_plan_dft(X::Vector{$T_out}, Y::Vector{$T_out}, direction::Integer)
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
                   (Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
@@ -77,7 +77,7 @@ end
 
 macro _jl_fftw_plan_dft_2d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-        function _jl_fftw_plan_dft(X::Matrix{$T_out}, Y::Matrix{$T_out}, direction::Int)
+        function _jl_fftw_plan_dft(X::Matrix{$T_out}, Y::Matrix{$T_out}, direction::Integer)
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
                   (Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
@@ -99,7 +99,7 @@ end
 
 macro _jl_fftw_plan_dft_3d_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-        function _jl_fftw_plan_dft(X::Array{$T_out,3}, Y::Array{$T_out,3}, direction::Int)
+        function _jl_fftw_plan_dft(X::Array{$T_out,3}, Y::Array{$T_out,3}, direction::Integer)
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
                   (Int32, Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
@@ -121,7 +121,7 @@ end
 
 macro _jl_fftw_plan_dft_nd_macro(libname, fname_complex, fname_real, T_in, T_out)
     quote
-        function _jl_fftw_plan_dft(X::Array{$T_out}, Y::Array{$T_out}, direction::Int)
+        function _jl_fftw_plan_dft(X::Array{$T_out}, Y::Array{$T_out}, direction::Integer)
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
@@ -170,7 +170,7 @@ function fftn{T<:Union(Float64,Float32)}(X::Vector{T})
     _jl_fftw_destroy_plan(T, plan)
 
     n = length(Y)
-    nconj = long(length(X)/2 - 1)
+    nconj = int(length(X)/2 - 1)
     for i=n:-1:(n-nconj)
         Y[i] = conj(Y[n-i+2])
     end
@@ -202,7 +202,7 @@ ifft(X) = ifft(X, (), 1)
 macro jl_fft_ifft_macro(fname, fname_compute)
     quote 
         function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(
-            X::Array{T,n}, npoints, dim::Int
+            X::Array{T,n}, npoints, dim::Integer
         )
             if npoints != (); error("the npoints option is not yet supported"); end
             if dim > 2; error("only 2d arrays are supported for now"); end

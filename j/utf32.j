@@ -3,5 +3,5 @@ type UTF32String
 end
 
 length(s::UTF32String) = length(s.data)
-ref(s::UTF32String, i::Long) = s.data[i]
-assign(s::UTF32String, c::Int32, i::Long) = (s.data[i] = c)
+ref(s::UTF32String, i::Int) = s.data[i]
+assign(s::UTF32String, c::Int32, i::Int) = (s.data[i] = c)

@@ -92,7 +92,7 @@ type Worker
     fd::Int32
     socket::IOStream
     sendbuf::IOStream
-    id::Long
+    id::Int
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
@@ -171,19 +171,19 @@ end
 type Location
     host::String
     port::Int16
-    Location(h,p::Int) = new(h,int16(p))
+    Location(h,p::Integer) = new(h,int16(p))
 end
 
 type ProcessGroup
-    myid::Long
+    myid::Int
     workers::Array{Any,1}
     locs::Array{Any,1}
-    np::Long
+    np::Int
 
     # global references
     refs::HashTable
 
-    function ProcessGroup(myid::Int, w::Array{Any,1}, locs::Array{Any,1})
+    function ProcessGroup(myid::Integer, w::Array{Any,1}, locs::Array{Any,1})
         return new(myid, w, locs, length(w), HashTable())
     end
 end
@@ -291,7 +291,7 @@ type RemoteRef
     end
 
     REQ_ID::Int32 = 0
-    function RemoteRef(pid::Int)
+    function RemoteRef(pid::Integer)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
         if mod(REQ_ID,200) == 0
@@ -312,7 +312,7 @@ type RemoteRef
         return new(w, wh, id)
     end
 
-    function WeakRemoteRef(pid::Int)
+    function WeakRemoteRef(pid::Integer)
         rr = WeakRemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
         if mod(REQ_ID,200) == 0
@@ -560,7 +560,7 @@ function remote_call(w::Worker, f, args...)
     rr
 end
 
-remote_call(id::Int, f, args...) = remote_call(worker_from_id(id), f, args...)
+remote_call(id::Integer, f, args...) = remote_call(worker_from_id(id), f, args...)
 
 # faster version of fetch(remote_call(...))
 function remote_call_fetch(w::LocalProcess, f, args...)
@@ -580,7 +580,7 @@ function remote_call_fetch(w::Worker, f, args...)
     force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
 end
 
-remote_call_fetch(id::Int, f, args...) =
+remote_call_fetch(id::Integer, f, args...) =
     remote_call_fetch(worker_from_id(id), f, args...)
 
 # faster version of wait(remote_call(...))
@@ -593,7 +593,7 @@ function remote_call_wait(w::Worker, f, args...)
     yieldto(Scheduler, WaitFor(:wait, rr))
 end
 
-remote_call_wait(id::Int, f, args...) =
+remote_call_wait(id::Integer, f, args...) =
     remote_call_wait(worker_from_id(id), f, args...)
 
 function remote_do(w::LocalProcess, f, args...)
@@ -609,7 +609,7 @@ function remote_do(w::Worker, f, args...)
     nothing
 end
 
-remote_do(id::Int, f, args...) = remote_do(worker_from_id(id), f, args...)
+remote_do(id::Integer, f, args...) = remote_do(worker_from_id(id), f, args...)
 
 function sync_msg(verb::Symbol, r::RemoteRef)
     pg = (PGRP::ProcessGroup)
@@ -1073,7 +1073,7 @@ end #func
 
 worker_local_cmd() = `$JULIA_HOME/julia --worker`
 
-addprocs_local(np::Int) =
+addprocs_local(np::Integer) =
     add_workers(PGRP, start_remote_workers({ "localhost" | i=1:np },
                                            { worker_local_cmd() | i=1:np }))
 
@@ -1235,7 +1235,7 @@ end
 show(g::GlobalObject) = (r = g.refs[myid()];
                          print("GlobalObject($(r.whence),$(r.id))"))
 
-function is_go_member(g::GlobalObject, p::Int)
+function is_go_member(g::GlobalObject, p::Integer)
     for i=1:length(g.refs)
         r = g.refs[i]
         if r.where == p
@@ -1464,7 +1464,7 @@ function pmap(f, lsts...)
     results
 end
 
-function preduce(reducer, f, r::Range1{Long})
+function preduce(reducer, f, r::Range1{Int})
     np = nprocs()
     N = length(r)
     each = div(N,np)
@@ -1484,7 +1484,7 @@ function preduce(reducer, f, r::Range1{Long})
     mapreduce(reducer, fetch, results)
 end
 
-function pfor(f, r::Range1{Long})
+function pfor(f, r::Range1{Int})
     np = nprocs()
     N = length(r)
     each = div(N,np)
@@ -1508,7 +1508,7 @@ function make_preduce_body(reducer, var, body)
     ac, lo, hi = gensym(3)
     localize_vars(
     quote
-        function (($lo)::Long, ($hi)::Long)
+        function (($lo)::Int, ($hi)::Int)
             ($var) = ($lo)
             ($ac) = $body
             for ($var) = (($lo)+1):($hi)
@@ -1524,7 +1524,7 @@ function make_pfor_body(var, body)
     lo, hi = gensym(2)
     localize_vars(
     quote
-        function (($lo)::Long, ($hi)::Long)
+        function (($lo)::Int, ($hi)::Int)
             for ($var) = ($lo):($hi)
                 $body
             end

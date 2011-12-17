@@ -15,7 +15,7 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @assert fib(20) == 6765
 @timeit fib(20) "fib"
 
-## parse int ##
+## parse integer ##
 
 function parseintperf()
     local n

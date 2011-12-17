@@ -22,8 +22,8 @@ function safe_char(x)
     return c
 end
 
-int(x::Char) = int32(x)
-uint(x::Char) = uint32(x)
+integer(x::Char) = int32(x)
+unsigned(x::Char) = uint32(x)
 
 ## char promotions ##
 

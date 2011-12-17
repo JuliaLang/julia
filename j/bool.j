@@ -30,5 +30,5 @@ any(x::Bool, y::Bool) = x | y
 all(x::Bool, y::Bool) = x & y
 count(x::Bool, y::Bool) = count(x) + count(y)
 
-count(x::Int, y::Bool) = x + count(y)
-count(x::Bool, y::Int) = count(x) + y
+count(x::Integer, y::Bool) = x + count(y)
+count(x::Bool, y::Integer) = count(x) + y

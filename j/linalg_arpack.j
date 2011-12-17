@@ -120,7 +120,7 @@ end
 eigs(A) = eigs(A, 6)
 eigs(A, k) = eigs(A, k, "LM")
 
-function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
+function eigs{T}(A::AbstractMatrix{T}, k::Integer, evtype::ASCIIString)
     (m, n) = size(A)
     if m != n; error("matrix argument must be square"); end
 
@@ -249,7 +249,7 @@ function eigs{T}(A::AbstractMatrix{T}, k::Int, evtype::ASCIIString)
 end
 
 
-function svds{T}(A::AbstractMatrix{T}, k::Int)
+function svds{T}(A::AbstractMatrix{T}, k::Integer)
     
     (m, n) = size(A)
     if m < n; error("only the m >= n case is implemented"); end

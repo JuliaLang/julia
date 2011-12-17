@@ -1,6 +1,6 @@
 ## 1-dimensional ranges ##
 
-typealias Dims (Long...)
+typealias Dims (Int...)
 
 abstract Ranges{T<:Real} <: AbstractArray{T,1}
 
@@ -37,8 +37,8 @@ step(r::Range1) = one(r.start)
 show(r::Range)  = print(r.start,':',r.step,':',r.stop)
 show(r::Range1) = print(r.start,':',r.stop)
 
-length{T<:Int}(r::Range{T}) = max(zero(T), div(r.stop-r.start+r.step, r.step))
-length{T<:Int}(r::Range1{T}) = max(zero(T), r.stop-r.start+1)
+length{T<:Integer}(r::Range{T}) = max(zero(T), div(r.stop-r.start+r.step, r.step))
+length{T<:Integer}(r::Range1{T}) = max(zero(T), r.stop-r.start+1)
 length{T}(r::Range{T}) = max(0, itrunc((r.stop-r.start)/r.step+1))
 length{T}(r::Range1{T}) = max(0, itrunc(r.stop-r.start+1))
 size(r::Ranges) = tuple(length(r))
@@ -47,23 +47,23 @@ numel(r::Ranges) = length(r)
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
 isempty(r::Range1) = (r.stop < r.start)
 
-start{T<:Int}(r::Ranges{T}) = r.start
-next{T<:Int}(r::Ranges{T}, i::T) = (i, i+step(r))
-done{T<:Int}(r::Ranges{T}, i::T) = (step(r) < 0 ? i < r.stop : i > r.stop)
-done{T<:Int}(r::Range1{T}, i::T) = (i > r.stop)
+start{T<:Integer}(r::Ranges{T}) = r.start
+next{T<:Integer}(r::Ranges{T}, i::T) = (i, i+step(r))
+done{T<:Integer}(r::Ranges{T}, i::T) = (step(r) < 0 ? i < r.stop : i > r.stop)
+done{T<:Integer}(r::Range1{T}, i::T) = (i > r.stop)
 
 start(r::Ranges) = 0
-next(r::Ranges, i::Int) = (r.start+i*step(r), i+1)
-done(r::Ranges, i::Int) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
+next(r::Ranges, i::Integer) = (r.start+i*step(r), i+1)
+done(r::Ranges, i::Integer) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
                                          r.start+i*step(r) > r.stop)
-done(r::Range1, i::Int) = (r.start+i > r.stop)
+done(r::Range1, i::Integer) = (r.start+i > r.stop)
 
-ref(r::Range, s::Range{Long}) = Range(r[s[1]],r.step*s.step,r[s[end]])
-ref(r::Range1, s::Range{Long}) = Range(r[s[1]],s.step,r[s[end]])
-ref(r::Range, s::Range1{Long}) = Range(r[s[1]],r.step,r[s[end]])
-ref(r::Range1, s::Range1{Long}) = Range1(r[s[1]],r[s[end]])
+ref(r::Range, s::Range{Int}) = Range(r[s[1]],r.step*s.step,r[s[end]])
+ref(r::Range1, s::Range{Int}) = Range(r[s[1]],s.step,r[s[end]])
+ref(r::Range, s::Range1{Int}) = Range(r[s[1]],r.step,r[s[end]])
+ref(r::Range1, s::Range1{Int}) = Range1(r[s[1]],r[s[end]])
 
-function ref(r::Range, i::Int)
+function ref(r::Range, i::Integer)
     if i < 1; error(BoundsError); end
     x = r.start + (i-1)*step(r)
     if step(r) > 0 ? x > r.stop : x < r.stop
@@ -72,7 +72,7 @@ function ref(r::Range, i::Int)
     return x
 end
 
-function ref(r::Range1, i::Int)
+function ref(r::Range1, i::Integer)
     if i < 1; error(BoundsError); end
     x = r.start + (i-1)
     if x > r.stop
@@ -81,7 +81,7 @@ function ref(r::Range1, i::Int)
     return x
 end
 
-last{T<:Int}(r::Range1{T}) = r.stop
+last{T<:Integer}(r::Range1{T}) = r.stop
 last(r::Ranges) = r.start + (length(r)-1)*step(r)
 
 isequal(r::Range1, s::Range1) = r.start==s.start && r.stop==s.stop
@@ -171,7 +171,7 @@ function vcat{T}(r::Ranges{T})
 end
 
 function vcat{T}(rs::Ranges{T}...)
-    n = sum(length,rs)::Long
+    n = sum(length,rs)::Int
     a = Array(T,n)
     i = 1
     for r = rs

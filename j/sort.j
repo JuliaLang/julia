@@ -34,7 +34,7 @@ quote
 # If only numbers are being sorted, a faster quicksort can be used.
 
 # fast sort for small arrays
-function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
+function ($insertionsort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -51,7 +51,7 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
 end
 
 # permutes an auxilliary array mirroring the sort
-function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Long}, lo::Int, hi::Int)
+function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Integer, hi::Integer)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -71,7 +71,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Long}
 end
 
 # very fast but unstable
-function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
+function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
     while hi > lo
         if hi-lo <= 20
             return $expr(:call, insertionsort, args..., :a, :lo, :hi)
@@ -98,7 +98,7 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
 end
 
 # less fast but stable
-function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
+function ($mergesort)($(args...), a::AbstractVector, lo::Integer, hi::Integer, b::AbstractVector)
     if lo < hi
         if hi-lo <= 20
             return ($insertionsort)($(args...), a, lo, hi)
@@ -143,8 +143,8 @@ end
 
 # permutes auxilliary arrays mirroring the sort
 function ($mergesort)($(args...),
-                      a::AbstractVector, p::AbstractVector{Long}, lo::Int, hi::Int,
-                      b::AbstractVector, pb::AbstractVector{Long})
+                      a::AbstractVector, p::AbstractVector{Int}, lo::Integer, hi::Integer,
+                      b::AbstractVector, pb::AbstractVector{Int})
     if lo < hi
         if hi-lo <= 20
             return ($insertionsort)($(args...), a, p, lo, hi)
@@ -243,7 +243,7 @@ function each_row!(f::Function, a::AbstractMatrix)
     return a
 end
 
-function each_vec!(f::Function, a::AbstractMatrix, dim::Int)
+function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
     if dim == 1; return each_col(f,a); end
     if dim == 2; return each_row(f,a); end
     error("invalid matrix dimensions: $dim")
@@ -251,14 +251,14 @@ end
 
 each_col(f::Function, a::AbstractMatrix) = each_col!(f,copy(a))
 each_row(f::Function, a::AbstractMatrix) = each_row!(f,copy(a))
-each_vec(f::Function, a::AbstractMatrix, d::Int) = each_vec!(f,copy(a),d)
+each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
 
 ## other sorting functions defined in terms of sort! ##
 
 macro in_place_matrix_op(out_of_place, args...)
     in_place = symbol("$(out_of_place)!")
     quote
-        function ($in_place)(($args...), a::AbstractMatrix, dim::Long)
+        function ($in_place)(($args...), a::AbstractMatrix, dim::Int)
             m = size(a,1)
             if dim == 1
                 for i = 1:m:numel(a)
@@ -275,7 +275,7 @@ macro in_place_matrix_op(out_of_place, args...)
         ($in_place)(($args...), a::AbstractArray) = ($in_place)($(args...), a,1)
 
         ($out_of_place)(($args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
-        ($out_of_place)(($args...), a::AbstractArray, d::Long) = ($in_place)($(args...), copy(a), d)
+        ($out_of_place)(($args...), a::AbstractArray, d::Int) = ($in_place)($(args...), copy(a), d)
         ($out_of_place)(($args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
     end
 end
@@ -285,7 +285,7 @@ end
 @in_place_matrix_op sortr
 
 # TODO: implement generalized in-place, ditch this
-function sort(a::AbstractArray, dim::Long)
+function sort(a::AbstractArray, dim::Int)
     X = similar(a)
     n = size(a,dim)
     if dim == 1
@@ -303,7 +303,7 @@ end
 
 sortperm{T}(a::AbstractVector{T}) =
     _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
-                  Array(T, length(a)), Array(Long, length(a)))
+                  Array(T, length(a)), Array(Int, length(a)))
 
 function issorted(v::AbstractVector)
   for i = 1:length(v)-1

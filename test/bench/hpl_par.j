@@ -7,9 +7,9 @@
 
 hpl_par(A::Matrix, b::Vector) = hpl_par(A, b, max(1, div(max(size(A)),4)), true)
 
-hpl_par(A::Matrix, b::Vector, bsize::Int) = hpl_par(A, b, bsize, true)
+hpl_par(A::Matrix, b::Vector, bsize::Integer) = hpl_par(A, b, bsize, true)
 
-function hpl_par(A::Matrix, b::Vector, blocksize::Int, run_parallel::Bool)
+function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
 
     n = size(A,1)
     A = [A b]

@@ -358,11 +358,11 @@ function diagmm(b::Vector, A::Matrix)
     C
 end
 
-^(A::AbstractMatrix, p::Int) = power_by_squaring(A, p)
+^(A::AbstractMatrix, p::Integer) = power_by_squaring(A, p)
 
 function ^(A::AbstractMatrix, p::Number)
     if integer_valued(p)
-        return A^int(real(p))
+        return A^integer(real(p))
     end
     if size(A,1) != size(A,2)
         error("matrix must be square")

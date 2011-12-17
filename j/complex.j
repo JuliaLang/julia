@@ -25,7 +25,7 @@ function show(z::Complex)
             print(" + ")
         end
         show(i)
-        if !(isa(i,Int) || isa(i,Rational) ||
+        if !(isa(i,Integer) || isa(i,Rational) ||
              isa(i,Float) && isfinite(i))
             print("*")
         end

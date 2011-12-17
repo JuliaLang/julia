@@ -5,13 +5,13 @@ types = {
 }
 values = [
     typemin(Int64),
-    -int(maxintfloat(Float64))+(-4:1),
+    -integer(maxintfloat(Float64))+(-4:1),
     typemin(Int32),
-    -int(maxintfloat(Float32))+(-4:1),
+    -integer(maxintfloat(Float32))+(-4:1),
     -2:2,
-    int(maxintfloat(Float32))+(-1:4),
+    integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
-    int(maxintfloat(Float64))+(-1:4),
+    integer(maxintfloat(Float64))+(-1:4),
     typemax(Int64),
 ]
 

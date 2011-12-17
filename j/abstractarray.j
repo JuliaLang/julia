@@ -5,10 +5,10 @@
 typealias AbstractVector{T} AbstractArray{T,1}
 typealias AbstractMatrix{T} AbstractArray{T,2}
 
-typealias Indices{T<:Int} Union(Int, AbstractVector{T})
-typealias Region Union(Long,Dims)
+typealias Indices{T<:Integer} Union(Integer, AbstractVector{T})
+typealias Region Union(Int,Dims)
 
-typealias RangeIndex Union(Long, Range{Long}, Range1{Long})
+typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
 ## Basic functions ##
 
@@ -18,7 +18,7 @@ ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
 
-function stride(a::AbstractArray, i::Int)
+function stride(a::AbstractArray, i::Integer)
     s = 1
     for n=1:(i-1)
         s *= size(a, n)
@@ -30,7 +30,7 @@ strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
 strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
 strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
 
-isinteger{T<:Int}(::AbstractArray{T}) = true
+isinteger{T<:Integer}(::AbstractArray{T}) = true
 isinteger(::AbstractArray) = false
 isreal{T<:Real}(::AbstractArray{T}) = true
 isreal(::AbstractArray) = false
@@ -43,8 +43,8 @@ iscomplex(::AbstractArray) = false
 similar{T}(a::AbstractArray{T})                = similar(a, T, size(a))
 similar   (a::AbstractArray, T)                = similar(a, T, size(a))
 similar{T}(a::AbstractArray{T}, dims::Dims)    = similar(a, T, dims)
-similar{T}(a::AbstractArray{T}, dims::Long...) = similar(a, T, dims)
-similar   (a::AbstractArray, T, dims::Long...) = similar(a, T, dims)
+similar{T}(a::AbstractArray{T}, dims::Int...) = similar(a, T, dims)
+similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 empty(a::AbstractArray) = similar(a, 0)
 
@@ -55,7 +55,7 @@ function reshape(a::AbstractArray, dims::Dims)
     end
     return b
 end
-reshape(a::AbstractArray, dims::Long...) = reshape(a, dims)
+reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 function squeeze(A::AbstractArray)
     d = ()
@@ -95,8 +95,8 @@ int32  (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
 uint32 (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
 int64  (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
 uint64 (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
-int    (x::AbstractArray) = copy_to(similar(x,typeof(int(one(eltype(x))))), x)
-uint   (x::AbstractArray) = copy_to(similar(x,typeof(uint(one(eltype(x))))), x)
+integer    (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
+unsigned   (x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
 bool   (x::AbstractArray) = copy_to(similar(x,Bool)   , x)
 char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
@@ -222,26 +222,26 @@ end
 ## Indexing: ref ##
 
 ref(t::AbstractArray) = t
-ref(t::AbstractArray, i::Int) = error("indexing not defined for ", typeof(t))
+ref(t::AbstractArray, i::Integer) = error("indexing not defined for ", typeof(t))
 ref(t::AbstractArray, i::Real) = ref(t, iround(i))
 ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
 ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, iround(i), iround(j), iround(k))
 ref(t::AbstractArray, r::Real...) = ref(t,map(iround,r)...)
 
-ref{T<:Int}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
-ref{T<:Int}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
+ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
+ref{T<:Integer}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
 
-ref{T<:Int}(A::AbstractMatrix, I::Int, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::Int) = [ A[i,j] | i = I, j = J ]
-ref{T<:Int}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::AbstractMatrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::AbstractMatrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 
-ref(A::AbstractArray, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)]
-ref(A::AbstractArray, i0::Int, i1::Int, i2::Int) =
+ref(A::AbstractArray, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)]
+ref(A::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
-ref(A::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
+ref(A::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
 
-function ref(A::AbstractArray, I::Int...)
+function ref(A::AbstractArray, I::Integer...)
     ndims = length(I)
     index = I[1]
     stride = 1
@@ -270,10 +270,10 @@ end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
-slicedim(A::AbstractArray, d::Int, i) =
+slicedim(A::AbstractArray, d::Integer, i) =
     A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
 
-function flipdim(A::AbstractArray, d::Int)
+function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
     if sd == 1
@@ -304,7 +304,7 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Int) = circshift(a, [shiftamt])
+circshift(a, shiftamt::Integer) = circshift(a, [shiftamt])
 function circshift(a, shiftamts)
     n = ndims(a)
     I = cell(n)
@@ -319,9 +319,9 @@ end
 ## Indexing: assign ##
 
 # 1-d indexing is assumed defined on subtypes
-assign(t::AbstractArray, x, i::Int) =
+assign(t::AbstractArray, x, i::Integer) =
     error("assign not defined for ",typeof(t))
-assign(t::AbstractArray, x::AbstractArray, i::Int) =
+assign(t::AbstractArray, x::AbstractArray, i::Integer) =
     error("assign not defined for ",typeof(t))
 
 assign(t::AbstractArray, x, i::Real)          = (t[iround(i)] = x)
@@ -331,54 +331,62 @@ assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
 assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
 assign(t::AbstractArray, x) = error("assign: too few arguments")
 
-function assign{T<:Int}(A::AbstractVector, x, I::AbstractVector{T})
+function assign{T<:Integer}(A::AbstractVector, x, I::AbstractVector{T})
     for i = I
         A[i] = x
     end
     return A
 end
 
-function assign{T<:Int}(A::AbstractVector, X::AbstractArray, I::AbstractVector{T})
+function assign{T<:Integer}(A::AbstractVector, X::AbstractArray, I::AbstractVector{T})
     for i = 1:length(I)
         A[I[i]] = X[i]
     end
     return A
 end
 
-assign(A::AbstractMatrix, x, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
-assign(A::AbstractMatrix, x::AbstractArray, i::Int, j::Int) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] = x)
+assign(A::AbstractMatrix, x::AbstractArray, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] = x)
 
 function assign(A::AbstractMatrix, x, I::Indices, J::Indices)
-    for j=J, i=I
-        A[i,j] = x
+    m = size(A, 1)
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = x
+        end
     end
     return A
 end
 
 function assign(A::AbstractMatrix, X::AbstractArray, I::Indices, J::Indices)
+    m = size(A, 1)
     count = 1
-    for j=J, i=I
-        A[i,j] = X[count]
-        count += 1
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = X[count]
+            count += 1
+        end
     end
     return A
 end
 
-assign(A::AbstractArray, x, I0::Int, I::Int...) = assign_scalarND(A,x,I0,I...)
-assign(A::AbstractArray, x::AbstractArray, I0::Int, I::Int...) =
+assign(A::AbstractArray, x, I0::Integer, I::Integer...) = assign_scalarND(A,x,I0,I...)
+assign(A::AbstractArray, x::AbstractArray, I0::Integer, I::Integer...) =
     assign_scalarND(A,x,I0,I...)
 
-assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
-assign(A::AbstractArray, x, i0::Int, i1::Int) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)] = x
+assign(A::AbstractArray, x, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)] = x
 
-assign(A::AbstractArray, x, i0::Int, i1::Int, i2::Int) =
+assign(A::AbstractArray, x, i0::Integer, i1::Integer, i2::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
-assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int, i2::Int) =
+assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
 
-assign(A::AbstractArray, x, i0::Int, i1::Int, i2::Int, i3::Int) =
+assign(A::AbstractArray, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
-assign(A::AbstractArray, x::AbstractArray, i0::Int, i1::Int, i2::Int, i3::Int) =
+assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
 
 function assign_scalarND(A, x, I0, I...)
@@ -424,7 +432,7 @@ end
 ## Concatenation ##
 
 #TODO: ERROR CHECK
-cat(catdim::Int) = Array(None, 0)
+cat(catdim::Integer) = Array(None, 0)
 
 vcat() = Array(None, 0)
 hcat() = Array(None, 0)
@@ -460,7 +468,7 @@ end
 
 function hcat{T}(A::AbstractMatrix{T}...)
     nargs = length(A)
-    ncols = sum(a->size(a, 2), A)::Long
+    ncols = sum(a->size(a, 2), A)::Int
     nrows = size(A[1], 1)
     for j = 2:nargs
         if size(A[j], 1) != nrows; error("hcat: mismatched dimensions"); end
@@ -478,7 +486,7 @@ end
 
 function vcat{T}(A::AbstractMatrix{T}...)
     nargs = length(A)
-    nrows = sum(a->size(a, 1), A)::Long
+    nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
@@ -496,7 +504,7 @@ end
 
 ## cat: general case
 
-function cat(catdim::Int, X...)
+function cat(catdim::Integer, X...)
     nargs = length(X)
     dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
@@ -540,7 +548,7 @@ function cat(catdim::Int, X...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Long...)
+    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
     C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
 
@@ -558,7 +566,7 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-function cat(catdim::Int, A::AbstractArray...)
+function cat(catdim::Integer, A::AbstractArray...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
@@ -603,7 +611,7 @@ function cat(catdim::Int, A::AbstractArray...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Long...)
+    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(eltype, A)...)
     C = similar(A[1], typeC, dimsC)
 
@@ -623,7 +631,7 @@ hcat(A::AbstractArray...) = cat(2, A...)
 
 # 2d horizontal and vertical concatenation
 
-function hvcat{T}(rows::(Long...), as::AbstractMatrix{T}...)
+function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -666,9 +674,9 @@ function hvcat{T}(rows::(Long...), as::AbstractMatrix{T}...)
     out
 end
 
-hvcat(rows::(Long...)) = []
+hvcat(rows::(Int...)) = []
 
-function hvcat{T<:Number}(rows::(Long...), xs::T...)
+function hvcat{T<:Number}(rows::(Int...), xs::T...)
     nr = length(rows)
     nc = rows[1]
 
@@ -698,7 +706,7 @@ function _jl_hvcat_fill(a, xs)
     a
 end
 
-function hvcat(rows::(Long...), xs::Number...)
+function hvcat(rows::(Int...), xs::Number...)
     nr = length(rows)
     nc = rows[1]
     #error check
@@ -823,7 +831,7 @@ function prod{T}(A::AbstractArray{T})
     v
 end
 
-function min{T<:Int}(A::AbstractArray{T})
+function min{T<:Integer}(A::AbstractArray{T})
     v = typemax(T)
     for i=1:numel(A)
         x = A[i]
@@ -834,7 +842,7 @@ function min{T<:Int}(A::AbstractArray{T})
     v
 end
 
-function max{T<:Int}(A::AbstractArray{T})
+function max{T<:Integer}(A::AbstractArray{T})
     v = typemin(T)
     for i=1:numel(A)
         x = A[i]
@@ -852,7 +860,7 @@ prod{T}(A::AbstractArray{T}, region::Region) = areduce(*,A,region,one(T))
 
 all(A::AbstractArray{Bool}, region::Region) = areduce(all,A,region,true)
 any(A::AbstractArray{Bool}, region::Region) = areduce(any,A,region,false)
-count(A::AbstractArray{Bool}, region::Region) = areduce(count,A,region,0,Long)
+count(A::AbstractArray{Bool}, region::Region) = areduce(count,A,region,0,Int)
 
 function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
@@ -1096,7 +1104,7 @@ end
 ## Other array functions ##
 
 # fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::(Long...), as...)
+function hvcat(rows::(Int...), as...)
     nbr = length(rows)  # number of block rows
     rs = cell(nbr)
     a = 1
@@ -1107,7 +1115,7 @@ function hvcat(rows::(Long...), as...)
     vcat(rs...)
 end
 
-function repmat(a::AbstractMatrix, m::Long, n::Long)
+function repmat(a::AbstractMatrix, m::Int, n::Int)
     o,p = size(a)
     b = similar(a, o*m, p*n)
     for j=1:n
@@ -1123,7 +1131,7 @@ end
 
 accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
 
-function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Long, n::Long)
+function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Int, n::Int)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V
@@ -1131,7 +1139,7 @@ function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Lo
     return A
 end
 
-function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Long, n::Long)
+function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Int, n::Int)
     A = similar(V, m, n)
     for k=1:length(I)
         A[I[k], J[k]] += V[k]
@@ -1140,24 +1148,24 @@ function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Long, n::Long)
 end
 
 sub2ind(dims) = 1
-sub2ind(dims, i::Int) = long(i)
-sub2ind(dims, i::Int, j::Int) = sub2ind(long(i), long(j))
-sub2ind(dims, i::Long, j::Long) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Int, i1::Int, i2::Int) = sub2ind(long(i0),long(i1),long(i2))
-sub2ind(dims, i0::Long, i1::Long, i2::Long) =
+sub2ind(dims, i::Integer) = int(i)
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(int(i), int(j))
+sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(int(i0),int(i1),int(i2))
+sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
+    sub2ind(int(i0),int(i1),int(i2),int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
-    sub2ind(long(i0),long(i1),long(i2),long(i3))
-sub2ind(dims, i0::Long, i1::Long, i2::Long, i3::Long) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
-function sub2ind(dims, I::Int...)
+function sub2ind(dims, I::Integer...)
     ndims = length(dims)
-    index = long(I[1])
+    index = int(I[1])
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
-        index += (long(I[k])-1) * stride
+        index += (int(I[k])-1) * stride
     end
     return index
 end
@@ -1165,16 +1173,16 @@ end
 sub2ind(dims, I::AbstractVector...) =
     [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
 
-ind2sub(dims::(Int...), ind::Int) = ind2sub(dims, long(ind))
-ind2sub(dims::(), ind::Int) = throw(BoundsError())
-ind2sub(dims::(Int,), ind::Long) = (ind,)
-ind2sub(dims::(Int,Int), ind::Long) =
+ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
+ind2sub(dims::(), ind::Integer) = throw(BoundsError())
+ind2sub(dims::(Integer,), ind::Int) = (ind,)
+ind2sub(dims::(Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)
-ind2sub(dims::(Int,Int,Int), ind::Long) =
+ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
      div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
 
-function ind2sub(dims::(Int,Int...), ind::Long)
+function ind2sub(dims::(Integer,Integer...), ind::Int)
     ndims = length(dims)
     stride = dims[1]
     for i=2:ndims-1
@@ -1194,7 +1202,7 @@ end
 ## iteration utilities ##
 
 # slow, but useful
-function cartesian_map(body, t::(Long...), it...)
+function cartesian_map(body, t::(Int...), it...)
     idx = length(t)-length(it)
     if idx == 1
         for i = 1:t[1]
@@ -1219,13 +1227,13 @@ end
 
 cartesian_map(body, t::()) = (body(); nothing)
 
-function cartesian_map(body, t::(Long,))
+function cartesian_map(body, t::(Int,))
     for i = 1:t[1]
         body(i)
     end
 end
 
-function cartesian_map(body, t::(Long,Long))
+function cartesian_map(body, t::(Int,Int))
     for j = 1:t[2]
         for i = 1:t[1]
             body(i,j)
@@ -1233,7 +1241,7 @@ function cartesian_map(body, t::(Long,Long))
     end
 end
 
-function cartesian_map(body, t::(Long,Long,Long))
+function cartesian_map(body, t::(Int,Int,Int))
     for k = 1:t[3]
         for j = 1:t[2]
             for i = 1:t[1]
