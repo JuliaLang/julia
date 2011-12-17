@@ -1259,12 +1259,10 @@ static void print_methlist(char *name, jl_methlist_t *ml)
         }
         else {
             jl_lambda_info_t *li = ml->func->linfo;
-            if (li != NULL && li->ast != NULL && jl_is_expr(li->ast)) {
-                jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)li->ast),0);
-                if (jl_is_expr(body1) &&
-                    ((jl_expr_t*)body1)->head == line_sym) {
-                    long lno = jl_unbox_long(jl_exprarg(body1, 0));
-                    char *fname = ((jl_sym_t*)jl_exprarg(body1, 1))->name;
+            if (li != NULL) {
+                long lno = jl_unbox_long(li->line);
+                if (lno > 0) {
+                    char *fname = ((jl_sym_t*)li->file)->name;
                     char *sep = strrchr(fname, '/');
                     if (sep)
                         fname = sep+1;

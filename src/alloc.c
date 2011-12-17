@@ -281,8 +281,18 @@ DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 13);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 15);
     li->ast = ast;
+    li->file = (jl_value_t*)null_sym;
+    li->line = jl_box_long(0);
+    if (ast != NULL && jl_is_expr(ast)) {
+        jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)ast),0);
+        if (jl_is_expr(body1) &&
+            ((jl_expr_t*)body1)->head == line_sym) {
+            li->file = jl_exprarg(body1, 1);
+            li->line = jl_exprarg(body1, 0);
+        }
+    }
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;

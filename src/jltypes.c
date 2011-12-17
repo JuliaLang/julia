@@ -2482,7 +2482,7 @@ void jl_init_types(void)
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
                            jl_any_type, jl_null,
-                           jl_tuple(9, jl_symbol("ast"), jl_symbol("sparams"),
+                           jl_tuple(11, jl_symbol("ast"), jl_symbol("sparams"),
                                     jl_symbol("tfunc"), jl_symbol("name"),
                                     /*
                                     jl_symbol("roots"), jl_symbol("specTypes"),
@@ -2490,12 +2490,14 @@ void jl_init_types(void)
                                     jl_symbol("specializations")*/
                                     jl_symbol(""), jl_symbol(""),
                                     jl_symbol(""), jl_symbol(""),
-                                    jl_symbol("inferred")),
-                           jl_tuple(9, jl_any_type, jl_tuple_type,
+                                    jl_symbol("inferred"),
+                                    jl_symbol("file"), jl_symbol("line")),
+                           jl_tuple(11, jl_any_type, jl_tuple_type,
                                     jl_any_type, jl_sym_type,
                                     jl_any_type, jl_tuple_type,
                                     jl_function_type, jl_array_any_type,
-                                    jl_bool_type));
+                                    jl_bool_type, jl_sym_type,
+                                    jl_long_type));
     jl_lambda_info_type->fptr = jl_f_no_function;
 
     jl_box_type =

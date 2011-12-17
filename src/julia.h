@@ -87,6 +87,8 @@ typedef struct _jl_lambda_info_t {
     // pairlist of all lambda infos with code generated from this one
     jl_array_t *specializations;
     jl_value_t *inferred;
+    jl_value_t *file;
+    jl_value_t *line;
 
     // hidden fields:
     jl_fptr_t fptr;

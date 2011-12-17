@@ -320,6 +320,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
         jl_serialize_value(s, (jl_value_t*)li->inferred);
+        jl_serialize_value(s, (jl_value_t*)li->file);
+        jl_serialize_value(s, (jl_value_t*)li->line);
     }
     else if (jl_typeis(v, jl_methtable_type)) {
         writetag(s, jl_methtable_type);
@@ -648,7 +650,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
-            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 13);
+            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 15);
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, li);
         li->ast = jl_deserialize_value(s);
         li->sparams = (jl_tuple_t*)jl_deserialize_value(s);
@@ -657,6 +659,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->specTypes = jl_deserialize_value(s);
         li->specializations = (jl_array_t*)jl_deserialize_value(s);
         li->inferred = jl_deserialize_value(s);
+        li->file = jl_deserialize_value(s);
+        li->line = jl_deserialize_value(s);
 
         li->fptr = NULL;
         li->roots = NULL;

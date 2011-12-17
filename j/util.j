@@ -68,10 +68,10 @@ end
 function function_loc(f::Function, types)
     for m = getmethods(f, types)
         if isa(m[3],LambdaStaticData)
-            ast = m[3].ast
-            ln = ast.args[3].args[1]
-            if isa(ln,Expr) && is(ln.head,:line)
-                return (string(ln.args[2]), ln.args[1])
+            lsd = m[3]::LambdaStaticData
+            ln = lsd.line
+            if ln > 0
+                return (string(lsd.file), ln)
             end
         end
     end
