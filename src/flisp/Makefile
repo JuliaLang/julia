@@ -27,7 +27,7 @@ release: $(EXENAME)
 debug: $(EXENAME)-debug
 
 %.o: %.c
-	$(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 
@@ -53,7 +53,7 @@ $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	./$(EXENAME)-debug unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC)$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	./$(EXENAME) unittest.lsp
 
 clean:
