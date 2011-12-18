@@ -64,6 +64,7 @@ convert(::Type{Complex128}, z::Complex) = complex128(real(z),imag(z))
 
 promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex128}, ::Type{Float32}) = Complex128
+promote_rule{S<:Integer}(::Type{Complex128}, ::Type{S}) = Complex128
 promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
      is(P,Float64) ? Complex128 : ComplexPair{P})
@@ -99,6 +100,7 @@ convert(::Type{Complex64}, z::Complex) = complex64(real(z),imag(z))
 
 promote_rule(::Type{Complex64}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
+promote_rule{S<:Integer}(::Type{Complex64}, ::Type{S}) = Complex64
 promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
     (P = promote_type(Float32,S);
      is(P,Float64) ? Complex128 :

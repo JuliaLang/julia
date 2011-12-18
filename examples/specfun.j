@@ -132,17 +132,16 @@ function eta(z::Union(Float64,Complex128))
         z = 1-z
         reflect = true
     end
-    dn = float64(length(eta_coeffs))
     s = zero(z)
     for n = length(eta_coeffs):-1:1
         c = eta_coeffs[n]
-        p = dn^-z
+        p = n^-z
         s += c * p
-        dn -= 1
     end
     if reflect
-        b = 2.0 - 2.0^(z+1)
-        f = 2.0^z - 2
+        z2 = 2.0^z
+        b = 2.0 - (2.0*z2)
+        f = z2 - 2
         piz = pi^z
         
         b = b/f/piz
