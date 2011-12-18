@@ -248,7 +248,7 @@ position(s::IOStream) = ccall(:ios_pos, Int, (Ptr{Void},), s.ios)
 
 type IOTally
     nbytes::Int
-    IOTally() = new(zero(Int))
+    IOTally() = new(0)
 end
 
 write(s::IOTally, x::Uint8) = (s.nbytes += 1; nothing)

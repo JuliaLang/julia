@@ -10,7 +10,7 @@ type Range{T<:Real} <: Ranges{T}
     stop::T
 
     function Range(start::T, step::T, stop::T)
-        if step == zero(T)
+        if step == 0
             error("Range: step cannot be zero")
         end
         new(start, step, stop)

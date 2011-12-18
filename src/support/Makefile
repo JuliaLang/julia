@@ -17,7 +17,7 @@ SHIPFLAGS += $(FLAGS)
 default: release
 
 %.o: %.c
-	$(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c
 	$(CC) $(DEBUGFLAGS) -c $< -o $@
 

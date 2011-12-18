@@ -5,7 +5,7 @@ abstract Complex{T<:Real} <: Number
 iscomplex(x::Complex) = true
 iscomplex(x::Number) = false
 
-real_valued{T<:Real}(z::Complex{T}) = imag(z) == zero(T)
+real_valued{T<:Real}(z::Complex{T}) = imag(z) == 0
 integer_valued(z::Complex) = real_valued(z) && integer_valued(real(z))
 
 real(x::Real) = x
@@ -54,15 +54,17 @@ function complex128(r::Float64, i::Float64)
 end
 
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
+complex128(z) = complex128(real(z), imag(z))
 
 real(c::Complex128) = boxf64(trunc64(unbox(Complex128,c)))
 imag(c::Complex128) = boxf64(trunc64(ashr_int(unbox(Complex128,c), 64)))
 
-convert(::Type{Complex128}, x::Real) = complex128(x,zero(x))
+convert(::Type{Complex128}, x::Real) = complex128(x,0)
 convert(::Type{Complex128}, z::Complex) = complex128(real(z),imag(z))
 
 promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex128}, ::Type{Float32}) = Complex128
+promote_rule{S<:Integer}(::Type{Complex128}, ::Type{S}) = Complex128
 promote_rule{S<:Real}(::Type{Complex128}, ::Type{S}) =
     (P = promote_type(Float64,S);
      is(P,Float64) ? Complex128 : ComplexPair{P})
@@ -88,15 +90,17 @@ function complex64(r::Float32, i::Float32)
 end
 
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
+complex64(z) = complex64(real(z), imag(z))
 
 real(c::Complex64) = boxf32(trunc32(unbox(Complex64,c)))
 imag(c::Complex64) = boxf32(trunc32(ashr_int(unbox(Complex64,c), 32)))
 
-convert(::Type{Complex64}, x::Real) = complex64(x,zero(x))
+convert(::Type{Complex64}, x::Real) = complex64(x,0)
 convert(::Type{Complex64}, z::Complex) = complex64(real(z),imag(z))
 
 promote_rule(::Type{Complex64}, ::Type{Float64}) = Complex128
 promote_rule(::Type{Complex64}, ::Type{Float32}) = Complex64
+promote_rule{S<:Integer}(::Type{Complex64}, ::Type{S}) = Complex64
 promote_rule{S<:Real}(::Type{Complex64}, ::Type{S}) =
     (P = promote_type(Float32,S);
      is(P,Float64) ? Complex128 :
@@ -354,11 +358,16 @@ function ^{T<:Complex}(z::T, p::T)
             end
         end
     end
-    theta = atan2(imag(z), realz)
-    ntheta = realp*theta
-    if imag(p) != 0
-        rp = rp*exp(-imag(p)*theta)
-        ntheta = ntheta + imag(p)*log(r)
+    imagz = imag(z)
+    if imagz==0 && realz>=0
+        ntheta = imag(p)*log(r)
+    else
+        theta = atan2(imagz, realz)
+        ntheta = realp*theta
+        if imag(p) != 0
+            rp = rp*exp(-imag(p)*theta)
+            ntheta = ntheta + imag(p)*log(r)
+        end
     end
     complex(rp*cos(ntheta), rp*sin(ntheta))
 end

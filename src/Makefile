@@ -30,11 +30,11 @@ default: release
 debug release: %: libjulia-%
 
 %.o: %.c julia.h
-	$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c julia.h
 	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(QUIET_CC)$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
 	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 
@@ -65,7 +65,7 @@ $(JULIAHOME)/src/libjulia-debug.a: $(DOBJS) $(FLISP) $(SUPPORT)
 libjulia-debug: $(JULIAHOME)/src/libjulia-debug.a
 
 $(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(FLISP) $(SUPPORT)
-	$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
+	$(QUIET_CC)$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
 $(JULIAHOME)/src/libjulia-release.a: $(OBJS)
 	ar -rcs libjulia-release.a $(OBJS) 
 #libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
