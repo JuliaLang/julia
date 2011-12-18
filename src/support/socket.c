@@ -66,7 +66,7 @@ int open_any_tcp_port(short *portno)
 
 {
     int sockfd;
-    int val;
+    //int val;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_STREAM, IPPROTO_TCP);

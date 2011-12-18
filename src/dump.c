@@ -892,8 +892,9 @@ jl_value_t *jl_compress_ast(jl_value_t *ast)
     //ios_printf(ios_stderr, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
-    v = jl_tuple(4, v, tree_literal_values, jl_lam_body(ast)->etype,
-                 jl_lam_capt(ast));
+    v = (jl_value_t*)jl_tuple(4, v, tree_literal_values,
+                              jl_lam_body((jl_expr_t*)ast)->etype,
+                              jl_lam_capt((jl_expr_t*)ast));
 
     tree_literal_values = NULL;
     if (en)
