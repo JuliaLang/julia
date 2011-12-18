@@ -48,6 +48,8 @@ function lgamma(z::Complex)
     complex(real(z), angle_restrict_symm(imag(z)))
 end
 
+gamma(z::Complex) = exp(lgamma(z))
+
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 
 const eta_coeffs =
@@ -117,49 +119,43 @@ const eta_coeffs =
      -.17889335846010823161e-17,
      .27105054312137610850e-19]
 
-function eta(z)
+function eta(z::Union(Float64,Complex128))
     if z == 0
-        return complex(0.5)
+        return oftype(z, 0.5)
     end
     re, im = reim(z)
-    if im==0 && re < 0 && integer_valued(re) && re==round(re/2)*2
-        return complex(0.0)
+    if im==0 && re < 0 && re==round(re/2)*2
+        return zero(z)
     end
     reflect = false
     if re < 0.5
-        re = 1-re
-        im = -im
+        z = 1-z
         reflect = true
     end
     dn = float64(length(eta_coeffs))
-    sr = 0.0
-    si = 0.0
+    s = zero(z)
     for n = length(eta_coeffs):-1:1
-        p = (dn^-re) * eta_coeffs[n]
-        lnn = -im * log(dn)
-        sr += p * cos(lnn)
-        si += p * sin(lnn)
+        c = eta_coeffs[n]
+        p = dn^-z
+        s += c * p
         dn -= 1
     end
     if reflect
-        z = complex(re, im)
-        b = 2.0 - 2.0^complex(re+1,im)
-        
+        b = 2.0 - 2.0^(z+1)
         f = 2.0^z - 2
         piz = pi^z
         
         b = b/f/piz
         
-        return complex(sr,si) * exp(lgamma(z)) * b * cos(pi/2*z)
+        return s * gamma(z) * b * cos(pi/2*z)
     end
-    return complex(sr, si)
+    return s
 end
 
-eta(x::Real) = real(eta(complex(float64(x))))
+eta(x::Real)    = eta(float64(x))
+eta(z::Complex) = eta(complex128(z))
 
-function zeta(z::Complex)
+function zeta(z::Number)
     zz = 2.0^z
     eta(z) * zz/(zz-2)
 end
-
-zeta(x::Real) = real(zeta(complex(float64(x))))

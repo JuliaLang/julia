@@ -79,7 +79,7 @@ isfinite(x::Rational) = x.den != 0
 typemin{T<:Integer}(::Type{Rational{T}}) = -one(T)//zero(T)
 typemax{T<:Integer}(::Type{Rational{T}}) = one(T)//zero(T)
 
-integer_valued(x::Rational) = x.den == one(x.den)
+integer_valued(x::Rational) = x.den == 1
 float64_valued(x::Rational) = abs(x.num) <= x.den*maxintfloat(Float64)
 
 hash(x::Rational) = integer_valued(x) ? hash(x.num) :
@@ -94,7 +94,7 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 /(x::Rational, z::ComplexPair) = inv(z/x)
 
 ==(x::Rational, y::Rational) = x.den == y.den  && x.num == y.num
-==(x::Rational, y::Integer     ) = x.den == one(x.den) && x.num == y
+==(x::Rational, y::Integer     ) = x.den == 1 && x.num == y
 ==(x::Integer     , y::Rational) = y == x
 
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
