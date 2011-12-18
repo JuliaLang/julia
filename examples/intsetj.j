@@ -24,7 +24,7 @@ end
 
 
 function bitvector_next(b::Array{Uint32,1}, n0::Uint64, n::Uint64)
-	local w::Uint32, i::Uint32, nb::Uint32, nw::Uint32
+	local w::Uint32
 	i = n0>>5
 	nb = n0&31
 	nw = (n+31)>>5
@@ -34,7 +34,7 @@ function bitvector_next(b::Array{Uint32,1}, n0::Uint64, n::Uint64)
 		w = (b[i+1]&lomask(n&31))>>nb
 	end
 	if w != 0
-		nxt = int64(cttz_int(unbox32(w))::Int32 + n0)
+		nxt = int64(trailing_zeros(w) + n0)
 		return nxt
 	end
 	if i == nw-1
@@ -45,14 +45,14 @@ function bitvector_next(b::Array{Uint32,1}, n0::Uint64, n::Uint64)
 	while i < nw-1
 		w = b[i+1]
 		if w != 0
-			nxt = int64(cttz_int(unbox32(w))::Int32 + i<<5)
+			nxt = int64(trailing_zeros(w) + i<<5)
 			return nxt
 		end
 		i += 1
 	end
 	w = b[i+1]
 	nb = n & 31
-	i = int64(cttz_int(unbox32(w))::Int32)
+	i = int64(trailing_zeros(w))
 	if nb == 0
 		nxt = int64(i + (n-32))
 		return nxt
@@ -66,8 +66,6 @@ function bitvector_next(b::Array{Uint32,1}, n0::Uint64, n::Uint64)
 end
 
 function isempty(s::IntSet)
-	#ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64),
-	#      s.bits, uint64(0), uint64(s.limit))==0
 	!bitvector_any1(s.bits, uint64(0), uint64(s.limit))
 end
 

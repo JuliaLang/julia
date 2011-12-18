@@ -1,13 +1,15 @@
 type IntSet
     bits::Array{Uint32,1}
     limit::Int
+	fill1s::Bool
 
     IntSet() = IntSet(1024)
     IntSet(max::Integer) = (lim = (max+31) & -32;
-                        new(zeros(Uint32,lim>>>5), lim))
+                        new(zeros(Uint32,lim>>>5), max, false))
 end
 function IntSet(s::IntSet)
 	s2::IntSet = IntSet(s.limit)
+	s2.fill1s = s.fill1s
 	or!(s2, s)
 	s2
 end
@@ -15,11 +17,15 @@ intset(args...) = add_each(IntSet(), args)
 
 function grow(s::IntSet, max::Integer)
 	if max >= s.limit
+		lim = ((max+31) & -32)>>>5
         olsz = length(s.bits)
-        newbits = Array(Uint32,(max+31)>>>5)
-        newbits[1:olsz] = s.bits
-        for i=(olsz+1):length(newbits); newbits[i] = 0; end
-        s.bits = newbits
+		if olsz < lim
+       		newbits = Array(Uint32,lim)
+	        newbits[1:olsz] = s.bits
+			fill = s.fill1s ? uint32(-1) : uint32(0)
+    	    for i=(olsz+1):length(newbits); newbits[i] = fill; end
+	        s.bits = newbits
+		end
         s.limit = max
 	end
 	s.limit
@@ -28,7 +34,7 @@ end
 function add(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + div(n,2))
-		resize(s, lim)
+		grow(s, lim)
 	end
     s.bits[n>>5 + 1] |= (1<<(n&31))
     return s
@@ -114,53 +120,105 @@ function show(s::IntSet)
         print(n)
         first = false
     end
-    print(")")
+	if s.fill1s
+		print(", ..., Inf)")
+	else
+	    print(")")
+	end
 end
 
 
 # Math functions
 function or!(s::IntSet, s2::IntSet)
 	if s2.limit > s.limit
-		grow(s2, s.limit)
+		grow(s, s2.limit)
 	end
-	for n = 1:(s2.limit+31)>>>5
+	lim = length(s2.bits)
+	for n = 1:lim
 		s.bits[n] |= s2.bits[n]
 	end
+	if s2.fill1s
+		for n=lim+1:length(s.bits)
+			s.bits[n] = uint32(-1)
+		end
+	end
+	s.fill1s |= s2.fill1s;
 	s
 end
 
 function and!(s::IntSet, s2::IntSet)
 	if s2.limit > s.limit
-		grow(s2, s.limit)
+		grow(s, s2.limit)
 	end
-	for n = 1:(s2.limit+31)>>>5
+	lim = length(s2.bits)
+	for n = 1:lim
 		s.bits[n] &= s2.bits[n]
 	end
+	if ~s2.fill1s	
+		for n=lim+1:length(s.bits)
+			s.bits[n] = 0
+		end
+	end
+	s.fill1s &= s2.fill1s
 	s
 end
 
 function not!(s::IntSet)
-	for n = 1:(s.limit+31)>>>5
+	for n = 1:length(s.bits)
 		s.bits[n] = ~s.bits[n]
 	end
+	s.fill1s = ~s.fill1s;
 	s
 end
 
 function xor!(s::IntSet, s2::IntSet)
 	if s2.limit > s.limit
-		grow(s2, s.limit)
+		grow(s, s2.limit)
 	end
-	for n = 1:(s2.limit+31)>>>5
+	lim = length(s2.bits)
+	for n = 1:lim
 		s.bits[n] $= s2.bits[n]
 	end
+	if s2.fill1s
+		for n=lim+1:length(s.bits)
+			s.bits[n] = ~s.bits[n]
+		end
+	end
+	s.fill1s $= s2.fill1s;
 	s
 end
-
 
 |(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(IntSet(s1), s2) : or!(IntSet(s2), s1))
 &(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
 ~(s::IntSet) = not!(IntSet(s))
 ($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(IntSet(s1), s2) : xor!(IntSet(s2), s1))
 
-
+function ==(s1::IntSet, s2::IntSet)
+	if s1.fill1s != s2.fill1s
+		return false
+	end
+	lim1 = length(s1.bits)
+	lim2 = length(s2.bits)
+	for i = 1:min(lim1,lim2)
+		if s1.bits[i] != s2.bits[i]
+			return false
+		end
+	end
+	filln = s1.fill1s ? uint32(-1) : 0
+	if lim1 > lim2
+		for i = lim2:lim1
+			if s1.bits[i] != filln
+				return false
+			end
+		end
+	else
+		for i = lim1:lim2
+			if s2.bits[i] != filln
+				return false
+			end
+		end
+	end
+	return true
+end
+!=(s1::IntSet, s2::IntSet) = ~(s1==s2)
 
