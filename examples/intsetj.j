@@ -7,12 +7,12 @@ himask(n::Uint32) = (~lomask(32-n))
 #start(s::IntSet) = IntSet(s)
 #done(s::IntSet, i) = isempty(i)
 #function next(s::IntSet, i)
-#	#n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64),
-#	#          s.bits, uint64(first), uint64(s.limit))
-#	#return (n, n+1)
-#	n = bitvector_next(i.bits, uint64(0), uint64(i.limit))::Int64
-#	del(i, n)
-#	return (n, i)
+#   #n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64),
+#   #          s.bits, uint64(first), uint64(s.limit))
+#   #return (n, n+1)
+#   n = bitvector_next(i.bits, uint64(0), uint64(i.limit))::Int64
+#   del(i, n)
+#   return (n, i)
 #end
 
 start(s::IntSet) = int64(0)
@@ -24,57 +24,57 @@ end
 
 
 function bitvector_next(b::Array{Uint32,1}, n0::Uint64, n::Uint64)
-	local w::Uint32
-	i = n0>>5
-	nb = n0&31
-	nw = (n+31)>>5
-	if i < nw-1 || (n&31)==0
-		w = b[i+1]>>nb
-	else
-		w = (b[i+1]&lomask(n&31))>>nb
-	end
-	if w != 0
-		nxt = int64(trailing_zeros(w) + n0)
-		return nxt
-	end
-	if i == nw-1
-		nxt = int64(n)
-		return nxt
-	end
-	i += 1
-	while i < nw-1
-		w = b[i+1]
-		if w != 0
-			nxt = int64(trailing_zeros(w) + i<<5)
-			return nxt
-		end
-		i += 1
-	end
-	w = b[i+1]
-	nb = n & 31
-	i = int64(trailing_zeros(w))
-	if nb == 0
-		nxt = int64(i + (n-32))
-		return nxt
-	end
-	if i >= nb
-		nxt = int64(n)
-		return nxt
-	end
-	nxt = int64(i + (n-nb))
-	return nxt
+    local w::Uint32
+    i = n0>>5
+    nb = n0&31
+    nw = (n+31)>>5
+    if i < nw-1 || (n&31)==0
+        w = b[i+1]>>nb
+    else
+        w = (b[i+1]&lomask(n&31))>>nb
+    end
+    if w != 0
+        nxt = int64(trailing_zeros(w) + n0)
+        return nxt
+    end
+    if i == nw-1
+        nxt = int64(n)
+        return nxt
+    end
+    i += 1
+    while i < nw-1
+        w = b[i+1]
+        if w != 0
+            nxt = int64(trailing_zeros(w) + i<<5)
+            return nxt
+        end
+        i += 1
+    end
+    w = b[i+1]
+    nb = n & 31
+    i = int64(trailing_zeros(w))
+    if nb == 0
+        nxt = int64(i + (n-32))
+        return nxt
+    end
+    if i >= nb
+        nxt = int64(n)
+        return nxt
+    end
+    nxt = int64(i + (n-nb))
+    return nxt
 end
 
 function isempty(s::IntSet)
-	!bitvector_any1(s.bits, uint64(0), uint64(s.limit))
+    !bitvector_any1(s.bits, uint64(0), uint64(s.limit))
 end
 
 function bitvector_any1(b::Array{Uint32,1}, offs::Uint64, nbits::Uint64)
     local nw::Uint32, tail::Uint32, mask::Uint32
 
     if (nbits == 0)
-		return false;
-	end
+        return false;
+    end
     nw = (offs+nbits+31)>>5;
 
     if (nw == 1)
@@ -82,35 +82,35 @@ function bitvector_any1(b::Array{Uint32,1}, offs::Uint64, nbits::Uint64)
             mask = (uint32(0xffffffff)<<offs)
         else
             mask = (lomask(nbits)<<offs)
-		end
-		if ((b[1] & mask) != 0)
-			return true
-		end
+        end
+        if ((b[1] & mask) != 0)
+            return true
+        end
         return false
-	end
+    end
 
     mask = ~lomask(offs)
     if ((b[1] & mask) != 0)
-		return true
-	end
+        return true
+    end
 
     for i = 1:nw-1
         if (b[i+1] != 0)
-			return true
-		end
-	end
+            return true
+        end
+    end
 
     tail = (offs+nbits)&31
     if (tail==0)
         if (b[nw] != 0)
-			return true
-		end
+            return true
+        end
     else
         mask = lomask(tail);
         if ((b[nw] & mask) != 0)
-			return true
-		end
-	end
+            return true
+        end
+    end
     return false
 end
 
