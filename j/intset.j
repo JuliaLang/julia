@@ -5,7 +5,7 @@ type IntSet
 
     IntSet() = IntSet(1024)
     IntSet(top::Integer) = (lim = (top+31) & -32;
-                        new(zeros(Uint32,lim>>>5), top, false))
+                            new(zeros(Uint32,lim>>>5), top, false))
 end
 function IntSet(s::IntSet)
     s2::IntSet = IntSet(s.limit)
@@ -75,7 +75,7 @@ function toggle(s::IntSet, n::Integer)
    return s
 end
 
-function toggle_all(s::IntSet, ns)
+function toggle_each(s::IntSet, ns)
    for n = ns
        toggle(s, n)
    end
@@ -123,8 +123,8 @@ end
 
 length(s::IntSet) = numel(s)
 numel(s::IntSet) =
-    int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
-                s.bits, uint64(0), uint64(s.limit)))
+    int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
+              s.bits, uint64(0), uint64(s.limit)))
 
 function show(s::IntSet)
     print("intset(")
@@ -137,7 +137,7 @@ function show(s::IntSet)
         first = false
     end
     if s.fill1s
-        print(", ..., Inf)")
+        print(", ...)")
     else
         print(")")
     end
@@ -161,6 +161,8 @@ function or!(s::IntSet, s2::IntSet)
     s.fill1s |= s2.fill1s;
     s
 end
+
+add_each(s::IntSet, s2::IntSet) = or!(s, s2)
 
 function and!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -213,8 +215,8 @@ union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
 union(s1::IntSet, s2::IntSet) = |(s1, s2)
 intersection!(s1::IntSet, s2::IntSet) = and!(s1, s2)
 intersection(s1::IntSet, s2::IntSet) = &(s1, s2)
-complement!(s1::IntSet, s2::IntSet) = not!(s1, s2)
-complement(s1::IntSet, s2::IntSet) = ~(s1, s2)
+complement!(s1::IntSet) = not!(s1)
+complement(s1::IntSet) = ~s1
 
 
 function ==(s1::IntSet, s2::IntSet)
@@ -228,7 +230,7 @@ function ==(s1::IntSet, s2::IntSet)
             return false
         end
     end
-    filln = s1.fill1s ? uint32(-1) : 0
+    filln = s1.fill1s ? uint32(-1) : uint32(0)
     if lim1 > lim2
         for i = lim2:lim1
             if s1.bits[i] != filln
@@ -244,5 +246,3 @@ function ==(s1::IntSet, s2::IntSet)
     end
     return true
 end
-!=(s1::IntSet, s2::IntSet) = ~(s1==s2)
-
