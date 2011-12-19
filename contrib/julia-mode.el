@@ -18,8 +18,9 @@
     (modify-syntax-entry ?\] ")[ " table)
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
-    (modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
-    (modify-syntax-entry ?'  "w" table)  ; character quote, ignored for now
+    ;(modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
+    (modify-syntax-entry ?'  "." table)  ; character quote or transpose 
+    ;(modify-syntax-entry ?\" "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
     (modify-syntax-entry ?& "." table)
@@ -33,11 +34,24 @@
     table)
   "Syntax table for julia-mode")
 
-; syntax table that holds within strings (uses default emacs behavior)
+;; syntax table that holds within strings
 (defvar julia-mode-string-syntax-table
   (let ((table (make-syntax-table)))
     table)
   "Syntax table for julia-mode")
+
+;; disable " inside char quote
+(defvar julia-mode-char-syntax-table
+  (let ((table (make-syntax-table)))
+    (modify-syntax-entry ?\" "." table)
+    table)
+  "Syntax table for julia-mode")
+
+(defconst julia-string-regex
+  "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
+
+(defconst julia-char-regex
+  "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|$!\\^~\\\\;:]\\|^\\)\\('\\(\\(.*?[^\\\\]\\)\\|\\(\\\\\\\\\\)\\)'\\)")
 
 (defconst julia-font-lock-keywords
   (list '("\\<\\(true\\|false\\|\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexNum\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|PtrInt\\|Long\\|Ulong\\)\\>" .
@@ -52,7 +66,9 @@
 	    "module" "import" "export" "const" "let" "bitstype")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
-    '("\\\\\\s-*\".*?\"" . font-lock-string-face)))
+    (list julia-char-regex 2 'font-lock-string-face)
+    ;(list julia-string-regex 0 'font-lock-string-face)
+))
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
@@ -210,8 +226,11 @@
 ;       (list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
-        (list "\\(\"\\(.\\|\\s-\\)*?[^\\\\]\"\\|\"\"\\)" 0
-              julia-mode-string-syntax-table)))
+	(list julia-char-regex 2
+	      julia-mode-char-syntax-table)
+;        (list julia-string-regex 0
+;              julia-mode-string-syntax-table)
+))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
   (setq indent-tabs-mode nil)
