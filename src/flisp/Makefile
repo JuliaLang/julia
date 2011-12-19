@@ -46,7 +46,7 @@ $(LIBTARGET)-debug.a: $(DOBJS)
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
-	ar rs $@ $(OBJS)
+	$(QUIET_LINK)ar rs $@ $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
 	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
