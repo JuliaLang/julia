@@ -27,7 +27,7 @@ debug: $(DOBJS)
 
 release: $(OBJS)
 	rm -rf $(TARGET)
-	ar rs $(TARGET) $(OBJS)
+	$(QUIET_LINK)ar rs $(TARGET) $(OBJS)
 
 clean:
 	rm -f *.o

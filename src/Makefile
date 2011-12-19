@@ -67,7 +67,7 @@ libjulia-debug: $(JULIAHOME)/src/libjulia-debug.a
 $(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(FLISP) $(SUPPORT)
 	$(QUIET_CC)$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
 $(JULIAHOME)/src/libjulia-release.a: $(OBJS)
-	ar -rcs libjulia-release.a $(OBJS) 
+	$(QUIET_LINK)ar -rcs libjulia-release.a $(OBJS) 
 #libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
 libjulia-release: $(JULIAHOME)/src/libjulia-release.a
 
