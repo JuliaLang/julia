@@ -437,7 +437,7 @@ function assign(r::RemoteRef, args...)
 end
 
 # 1d scalar ref
-function ref{T}(d::DArray{T,1}, i::Integer)
+function ref{T}(d::DArray{T,1}, i::Int)
     p = locate(d, i)
     if p==d.localpiece
         offs = d.dist[p]-1
@@ -446,13 +446,10 @@ function ref{T}(d::DArray{T,1}, i::Integer)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
-assign{T}(d::DArray{T,1}, v::AbstractArray, i::Integer) =
-    invoke(assign, (DArray{T,1}, Any, Integer), d, v, i)
-
 assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
     invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
 
-assign{T}(d::DArray{T,1}, v, i::Integer) = assign(d, v, int(i))
+assign{T}(d::DArray{T,1}, v, i::Int) = assign(d, v, int(i))
 
 # 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Int)
@@ -480,7 +477,7 @@ function ref_elt{T}(d::DArray{T}, sub::(Int...))
     return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
-ref{T}(d::DArray{T}, i::Integer)      = ref_elt(d, ind2sub(d.dims, i))
+ref{T}(d::DArray{T}, i::Int)    = ref_elt(d, ind2sub(d.dims, i))
 ref{T}(d::DArray{T}, I::Int...) = ref_elt(d, I)
 
 ref(d::DArray) = d
