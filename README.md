@@ -243,6 +243,8 @@ On some Linux distributions (for instance Ubuntu 11.10) you may need to change h
 
 On Ubuntu, you may also need to install the package `libncurses5-dev`.
 
+If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architecture of your processor in Make.inc.
+
 <a name="Directories"/>
 ## Directories
 
