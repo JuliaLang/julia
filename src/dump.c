@@ -553,6 +553,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return vtag;
     }
 
+    int usetable = (tree_literal_values == NULL);
+
     size_t i;
     if (vtag == (jl_value_t*)jl_tuple_type ||
         vtag == (jl_value_t*)LongTuple_tag) {
@@ -562,7 +564,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         else
             len = read_int32(s);
         jl_tuple_t *tu = jl_alloc_tuple_uninit(len);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)tu);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)tu);
         for(i=0; i < len; i++)
             jl_tupleset(tu, i, jl_deserialize_value(s));
         return (jl_value_t*)tu;
@@ -577,7 +580,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         char *name = alloca(len);
         ios_read(s, name, len);
         jl_value_t *s = (jl_value_t*)jl_symbol_n(name, len);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
         return s;
     }
     else if (vtag == (jl_value_t*)jl_array_type) {
@@ -588,7 +592,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         for(i=0; i < ndims; i++)
             dims[i] = jl_unbox_long(jl_deserialize_value(s));
         jl_array_t *a = jl_new_array_((jl_type_t*)aty, ndims, dims);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
             size_t tot = a->length * a->elsize;
             ios_read(s, a->data, tot);
@@ -608,7 +613,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         else
             len = read_int32(s);
         jl_expr_t *e = jl_exprn((jl_sym_t*)jl_deserialize_value(s), len);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)e);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)e);
         e->etype = jl_deserialize_value(s);
         for(i=0; i < len; i++) {
             jl_cellset(e->args, i, jl_deserialize_value(s));
@@ -621,14 +627,16 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     else if (vtag == (jl_value_t*)jl_typename_type) {
         jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s);
         jl_typename_t *tn = jl_new_typename(name);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tn);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tn);
         tn->primary = jl_deserialize_value(s);
         tn->cache = jl_deserialize_typecache(s);
         return (jl_value_t*)tn;
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
         jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_type_t*)jl_tvar_type, 4);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tv);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tv);
         tv->name = (jl_sym_t*)jl_deserialize_value(s);
         tv->lb = jl_deserialize_value(s);
         tv->ub = jl_deserialize_value(s);
@@ -638,7 +646,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     else if (vtag == (jl_value_t*)jl_func_kind) {
         jl_value_t *ftype = jl_deserialize_value(s);
         jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)ftype, 3);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, f);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, f);
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         f->env = jl_deserialize_value(s);
         f->fptr = jl_deserialize_fptr(s);
@@ -651,7 +660,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
             (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 15);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, li);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, li);
         li->ast = jl_deserialize_value(s);
         li->sparams = (jl_tuple_t*)jl_deserialize_value(s);
         li->tfunc = jl_deserialize_value(s);
@@ -672,7 +682,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, mt);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, mt);
         mt->type = (jl_type_t*)jl_methtable_type;
         mt->defs = jl_deserialize_methlist(s);
         mt->cache = jl_deserialize_methlist(s);
@@ -705,7 +716,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                 memcpy(jl_bits_data(v), data, nby);
             }
         }
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         return v;
     }
     else if (vtag == (jl_value_t*)jl_struct_kind) {
@@ -718,7 +730,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             v = typ->instance;
         else
             v = newobj((jl_type_t*)typ, nf);
-        ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         for(i=0; i < nf; i++) {
             ((jl_value_t**)v)[i+1] = jl_deserialize_value(s);
         }

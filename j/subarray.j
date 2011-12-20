@@ -271,10 +271,11 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     assign(s.parent, v, t)
 end
 
-function assign(s::SubArray, v::AbstractArray, I::Indices...)
+function assign(s::SubArray, v::AbstractArray, I0::Indices, I::Indices...)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = cell(n)
+    I = tuple(I0, I...)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges

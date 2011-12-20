@@ -354,7 +354,7 @@ cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::String
+    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
 end
 
 ## printing literal quoted string data ##

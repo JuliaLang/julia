@@ -85,18 +85,26 @@ copy(a::AbstractArray) = copy_to(similar(a), a)
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
+## iteration support for arrays as ranges ##
+
+start(a::AbstractArray) = 1
+next(a::AbstractArray,i) = (a[i],i+1)
+done(a::AbstractArray,i) = (i > numel(a))
+isempty(a::AbstractArray) = (numel(a) == 0)
+
 ## Conversions ##
 
-int8   (x::AbstractArray) = copy_to(similar(x,Int8)   , x)
-uint8  (x::AbstractArray) = copy_to(similar(x,Uint8)  , x)
-int16  (x::AbstractArray) = copy_to(similar(x,Int16)  , x)
-uint16 (x::AbstractArray) = copy_to(similar(x,Uint16) , x)
-int32  (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
-uint32 (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
-int64  (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
-uint64 (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
-integer    (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
-unsigned   (x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
+int     (x::AbstractArray) = copy_to(similar(x,Int)    , x)
+int8    (x::AbstractArray) = copy_to(similar(x,Int8)   , x)
+uint8   (x::AbstractArray) = copy_to(similar(x,Uint8)  , x)
+int16   (x::AbstractArray) = copy_to(similar(x,Int16)  , x)
+uint16  (x::AbstractArray) = copy_to(similar(x,Uint16) , x)
+int32   (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
+uint32  (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
+int64   (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
+uint64  (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
+integer (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
+unsigned(x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
 bool   (x::AbstractArray) = copy_to(similar(x,Bool)   , x)
 char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
@@ -128,8 +136,6 @@ imag{T<:Real}(x::AbstractArray{T}) = zero(x)
 ./(x::AbstractArray, y::AbstractArray ) = throw(MethodError(./, (x,y)))
 ./(x::Number,y::AbstractArray )         = throw(MethodError(./, (x,y)))
 ./(x::AbstractArray, y::Number)         = throw(MethodError(./, (x,y)))
-
-# ^ is difficult, since negative exponents give a different type
 
 .^(x::AbstractArray, y::AbstractArray ) = throw(MethodError(.^, (x,y)))
 .^(x::Number,y::AbstractArray )         = throw(MethodError(.^, (x,y)))
@@ -228,19 +234,6 @@ ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
 ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, iround(i), iround(j), iround(k))
 ref(t::AbstractArray, r::Real...) = ref(t,map(iround,r)...)
 
-ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
-ref{T<:Integer}(A::AbstractArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
-
-ref{T<:Integer}(A::AbstractMatrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::AbstractMatrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::AbstractMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
-
-ref(A::AbstractArray, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)]
-ref(A::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
-ref(A::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
-
 function ref(A::AbstractArray, I::Integer...)
     ndims = length(I)
     index = I[1]
@@ -250,22 +243,6 @@ function ref(A::AbstractArray, I::Integer...)
         index += (I[k]-1) * stride
     end
     return A[index]
-end
-
-let ref_cache = nothing
-global ref
-function ref(A::AbstractArray, I::Indices...)
-    X = similar(A, map(length, I))
-
-    if is(ref_cache,nothing)
-        ref_cache = HashTable()
-    end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)];
-            storeind += 1
-        end, I, (:A, :X, :storeind), A, X, 1)
-    return X
-end
 end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
@@ -330,104 +307,6 @@ assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
     (t[iround(i),iround(j),iround(k)] = x)
 assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
 assign(t::AbstractArray, x) = error("assign: too few arguments")
-
-function assign{T<:Integer}(A::AbstractVector, x, I::AbstractVector{T})
-    for i = I
-        A[i] = x
-    end
-    return A
-end
-
-function assign{T<:Integer}(A::AbstractVector, X::AbstractArray, I::AbstractVector{T})
-    for i = 1:length(I)
-        A[I[i]] = X[i]
-    end
-    return A
-end
-
-assign(A::AbstractMatrix, x, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] = x)
-assign(A::AbstractMatrix, x::AbstractArray, i::Integer, j::Integer) = (A[(j-1)*size(A,1) + i] = x)
-
-function assign(A::AbstractMatrix, x, I::Indices, J::Indices)
-    m = size(A, 1)
-    for j=J
-        offset = (j-1)*m
-        for i=I
-            A[offset + i] = x
-        end
-    end
-    return A
-end
-
-function assign(A::AbstractMatrix, X::AbstractArray, I::Indices, J::Indices)
-    m = size(A, 1)
-    count = 1
-    for j=J
-        offset = (j-1)*m
-        for i=I
-            A[offset + i] = X[count]
-            count += 1
-        end
-    end
-    return A
-end
-
-assign(A::AbstractArray, x, I0::Integer, I::Integer...) = assign_scalarND(A,x,I0,I...)
-assign(A::AbstractArray, x::AbstractArray, I0::Integer, I::Integer...) =
-    assign_scalarND(A,x,I0,I...)
-
-assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)] = x
-assign(A::AbstractArray, x, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)] = x
-
-assign(A::AbstractArray, x, i0::Integer, i1::Integer, i2::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
-assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
-
-assign(A::AbstractArray, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
-assign(A::AbstractArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
-
-function assign_scalarND(A, x, I0, I...)
-    index = I0
-    stride = 1
-    for k=1:length(I)
-        stride = stride * size(A, k)
-        index += (I[k]-1) * stride
-    end
-    A[index] = x
-    return A
-end
-
-let assign_cache = nothing
-global assign
-function assign(A::AbstractArray, x, I0::Indices, I::Indices...)
-    if is(assign_cache,nothing)
-        assign_cache = HashTable()
-    end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
-                      tuple(I0, I...),
-                      (:A, :x),
-                      A, x)
-    return A
-end
-end
-
-let assign_cache = nothing
-global assign
-function assign(A::AbstractArray, X::AbstractArray, I0::Indices, I::Indices...)
-    if is(assign_cache,nothing)
-        assign_cache = HashTable()
-    end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
-                                             refind += 1),
-                      tuple(I0, I...),
-                      (:A, :X, :refind),
-                      A, X, 1)
-    return A
-end
-end
 
 ## Concatenation ##
 
@@ -722,145 +601,7 @@ function hvcat(rows::(Int...), xs::Number...)
     _jl_hvcat_fill(Array(T, nr, nc), xs)
 end
 
-## Reductions ##
-
-contains(s::Number, n::Number) = (s == n)
-
-areduce{T}(f::Function, A::AbstractArray{T}, region::Region, v0) =
-        areduce(f,A,region,v0,T)
-
-# TODO:
-# - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
-
-let areduce_cache = nothing
-# generate the body of the N-d loop to compute a reduction
-function gen_areduce_func(n, f)
-    ivars = { gensym() | i=1:n }
-    # limits and vars for reduction loop
-    lo    = { gensym() | i=1:n }
-    hi    = { gensym() | i=1:n }
-    rvars = { gensym() | i=1:n }
-    setlims = { quote
-        # each dim of reduction is either 1:sizeA or ivar:ivar
-        if contains(region,$i)
-            $lo[i] = 1
-            $hi[i] = size(A,$i)
-        else
-            $lo[i] = $hi[i] = $ivars[i]
-        end
-               end | i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
-    body =
-    quote
-        _tot = v0
-        $(setlims...)
-        $make_loop_nest(rvars, rranges,
-                        :(_tot = ($f)(_tot, A[$(rvars...)])))
-        R[_ind] = _tot
-        _ind += 1
-    end
-    quote
-        local _F_
-        function _F_(f, A, region, R, v0)
-            _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
-        end
-        _F_
-    end
-end
-
-global areduce
-function areduce(f::Function, A::AbstractArray, region::Region, v0, RType::Type)
-    dimsA = size(A)
-    ndimsA = ndims(A)
-    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
-    R = similar(A, RType, dimsR)
-
-    if is(areduce_cache,nothing)
-        areduce_cache = HashTable()
-    end
-
-    key = ndimsA
-    fname = :f
-
-    if  (is(f,+)     && (fname=:+;true)) ||
-        (is(f,*)     && (fname=:*;true)) ||
-        (is(f,max)   && (fname=:max;true)) ||
-        (is(f,min)   && (fname=:min;true)) ||
-        (is(f,sum)   && (fname=:+;true)) ||
-        (is(f,prod)  && (fname=:*;true)) ||
-        (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true)) ||
-        (is(f,count) && (fname=:count;true))
-        key = (fname, ndimsA)
-    end
-
-    if !has(areduce_cache,key)
-        fexpr = gen_areduce_func(ndimsA, fname)
-        func = eval(fexpr)
-        areduce_cache[key] = func
-    else
-        func = areduce_cache[key]
-    end
-
-    func(f, A, region, R, v0)
-
-    return R
-end
-end
-
-function sum{T}(A::AbstractArray{T})
-    if isempty(A)
-        return zero(T)
-    end
-    v = A[1]
-    for i=2:numel(A)
-        v += A[i]
-    end
-    v
-end
-
-function prod{T}(A::AbstractArray{T})
-    if isempty(A)
-        return one(T)
-    end
-    v = A[1]
-    for i=2:numel(A)
-        v *= A[i]
-    end
-    v
-end
-
-function min{T<:Integer}(A::AbstractArray{T})
-    v = typemax(T)
-    for i=1:numel(A)
-        x = A[i]
-        if x < v
-            v = x
-        end
-    end
-    v
-end
-
-function max{T<:Integer}(A::AbstractArray{T})
-    v = typemin(T)
-    for i=1:numel(A)
-        x = A[i]
-        if x > v
-            v = x
-        end
-    end
-    v
-end
-
-max{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(max,A,region,typemin(T),T)
-min{T}(A::AbstractArray{T}, b::(), region::Region) = areduce(min,A,region,typemax(T),T)
-sum{T}(A::AbstractArray{T}, region::Region)  = areduce(+,A,region,zero(T))
-prod{T}(A::AbstractArray{T}, region::Region) = areduce(*,A,region,one(T))
-
-all(A::AbstractArray{Bool}, region::Region) = areduce(all,A,region,true)
-any(A::AbstractArray{Bool}, region::Region) = areduce(any,A,region,false)
-count(A::AbstractArray{Bool}, region::Region) = areduce(count,A,region,0,Int)
+## Reductions and scans ##
 
 function isequal(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)
@@ -888,213 +629,10 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     end
 end
 
-## iteration support for arrays as ranges ##
-
-start(a::AbstractArray) = 1
-next(a::AbstractArray,i) = (a[i],i+1)
-done(a::AbstractArray,i) = (i > numel(a))
-isempty(a::AbstractArray) = (numel(a) == 0)
-
-## map over arrays ##
-
-## 1 argument
-function map_to(dest::AbstractArray, f, A::AbstractArray)
-    for i=1:numel(A)
-        dest[i] = f(A[i])
-    end
-    return dest
-end
-function map_to2(first, dest::AbstractArray, f, A::AbstractArray)
-    dest[1] = first
-    for i=2:numel(A)
-        dest[i] = f(A[i])
-    end
-    return dest
-end
-
-function map(f, A::AbstractArray)
-    if isempty(A); return A; end
-    first = f(A[1])
-    dest = similar(A, typeof(first))
-    return map_to2(first, dest, f, A)
-end
-
-## 2 argument
-function map_to(dest::AbstractArray, f, A::AbstractArray, B::AbstractArray)
-    for i=1:numel(A)
-        dest[i] = f(A[i], B[i])
-    end
-    return dest
-end
-function map_to2(first, dest::AbstractArray, f,
-                 A::AbstractArray, B::AbstractArray)
-    dest[1] = first
-    for i=2:numel(A)
-        dest[i] = f(A[i], B[i])
-    end
-    return dest
-end
-
-function map(f, A::AbstractArray, B::AbstractArray)
-    if size(A) != size(B); error("argument dimensions must match"); end
-    if isempty(A); return A; end
-    first = f(A[1], B[1])
-    dest = similar(A, typeof(first))
-    return map_to2(first, dest, f, A, B)
-end
-
-function map_to(dest::AbstractArray, f, A::AbstractArray, B::Number)
-    for i=1:numel(A)
-        dest[i] = f(A[i], B)
-    end
-    return dest
-end
-function map_to2(first, dest::AbstractArray, f, A::AbstractArray, B::Number)
-    dest[1] = first
-    for i=2:numel(A)
-        dest[i] = f(A[i], B)
-    end
-    return dest
-end
-
-function map(f, A::AbstractArray, B::Number)
-    if isempty(A); return A; end
-    first = f(A[1], B)
-    dest = similar(A, typeof(first))
-    return map_to2(first, dest, f, A, B)
-end
-
-function map_to(dest::AbstractArray, f, A::Number, B::AbstractArray)
-    for i=1:numel(B)
-        dest[i] = f(A, B[i])
-    end
-    return dest
-end
-function map_to2(first, dest::AbstractArray, f, A::Number, B::AbstractArray)
-    dest[1] = first
-    for i=2:numel(B)
-        dest[i] = f(A, B[i])
-    end
-    return dest
-end
-
-function map(f, A::Number, B::AbstractArray)
-    if isempty(A); return A; end
-    first = f(A, B[1])
-    dest = similar(B, typeof(first))
-    return map_to2(first, dest, f, A, B)
-end
-
-## N argument
-function map_to(dest::AbstractArray, f, As::AbstractArray...)
-    n = numel(As[1])
-    i = 1
-    ith = a->a[i]
-    for i=1:n
-        dest[i] = f(map(ith, As)...)
-    end
-    return dest
-end
-function map_to2(first, dest::AbstractArray, f, As::AbstractArray...)
-    n = numel(As[1])
-    i = 1
-    ith = a->a[i]
-    dest[1] = first
-    for i=2:n
-        dest[i] = f(map(ith, As)...)
-    end
-    return dest
-end
-
-function map(f, As::AbstractArray...)
-    if isempty(As[1]); return As[1]; end
-    first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first))
-    return map_to2(first, dest, f, As...)
-end
-
-## Transpose, Permute ##
-
-let permute_cache = nothing
-global permute
-function permute(A::AbstractArray, perm)
-    dimsA = size(A)
-    ndimsA = length(dimsA)
-    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
-    P = similar(A, dimsP)
-    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
-    stridenames = {gensym() | i = 1:ndimsA}
-
-    #calculates all the strides
-    strides = Array(Int32,0)
-    for dim = 1:length(perm)
-    	stride = 1
-    	for dim_size = 1:(dim-1)
-            stride = stride*dimsA[dim_size]
-    	end
-    	push(strides, stride)
-    end
-
-    #reorganizes the ordering of the strides
-    strides = { (strides[perm[i]]) | i = 1:ndimsA}
-
-    #Creates offset, because indexing starts at 1
-    offset = 0
-    for i = strides
-        offset+=i
-    end
-    offset = 1-offset
-
-    function permute_one(ivars)
-        len = length(ivars)
-        counts = { gensym() | i=1:len}
-        toReturn = cell(len+1,2)
-        for i = 1:numel(toReturn)
-            toReturn[i] = nothing
-        end
-
-        tmp = counts[end]
-        toReturn[len+1] = quote
-            ind = 1
-            $tmp = $stridenames[end]
-        end
-
-        #inner most loop
-        toReturn[1] = quote
-            P[ind] = A[+($counts...)+offset]
-            ind+=1
-            $counts[1]+= $stridenames[1]
-        end
-        for i = 1:len-1
-            tmp = counts[i]
-            val = i
-            toReturn[(i+1)] = quote
-                $tmp = $stridenames[val]
-            end
-            tmp2 = counts[i+1]
-            val = i+1
-            toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $stridenames[val]
-            end
-        end
-        toReturn
-    end
-
-
-    if is(permute_cache,nothing)
-	permute_cache = HashTable()
-    end
-
-    gen_cartesian_map(permute_cache, permute_one, ranges,
-                      tuple(:A, :P, :perm, :offset, stridenames...),
-                      A, P, perm, offset, strides...)
-
-    return P
-end
-end # let
+## ipermute in terms of permute ##
 
 function ipermute(A::AbstractArray,perm)
-    iperm = zeros(Int32,length(perm))
+    iperm = Array(Int,length(perm))
     for i = 1:length(perm)
 	iperm[perm[i]] = i
     end
@@ -1127,24 +665,6 @@ function repmat(a::AbstractMatrix, m::Int, n::Int)
         end
     end
     return b
-end
-
-accumarray(I::AbstractVector, J::AbstractVector, V) = accumarray (I, J, V, max(I), max(J))
-
-function accumarray{T<:Number}(I::AbstractVector, J::AbstractVector, V::T, m::Int, n::Int)
-    A = similar(V, m, n)
-    for k=1:length(I)
-        A[I[k], J[k]] += V
-    end
-    return A
-end
-
-function accumarray(I::Indices, J::Indices, V::AbstractVector, m::Int, n::Int)
-    A = similar(V, m, n)
-    for k=1:length(I)
-        A[I[k], J[k]] += V[k]
-    end
-    return A
 end
 
 sub2ind(dims) = 1

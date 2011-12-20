@@ -148,8 +148,37 @@ ref{T}(a::Array{T,1}, i::Int) = arrayref(a,i)
 ref{T}(a::Array{T,1}, i::Integer) = arrayref(a,int(i))
 ref(a::Array{Any,1}, i::Int) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Integer) = arrayref(a,int(i))
-ref{T}(a::Array{T,2}, i::Int, j::Int) = arrayref(a, (j-1)*arraysize(a,1)+i)
-ref{T}(a::Array{T,2}, i::Integer, j::Integer) = arrayref(a,int((j-1)*arraysize(a,1)+i))
+
+ref(A::Array, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)]
+ref(A::Array, i0::Integer, i1::Integer, i2::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
+ref(A::Array, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
+
+# note: this is also useful for Ranges
+ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
+
+ref{T<:Integer}(A::StridedArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
+
+ref{T<:Integer}(A::StridedMatrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::StridedMatrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::StridedMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+
+let ref_cache = nothing
+global ref
+function ref(A::Array, I::Indices...)
+    X = similar(A, map(length, I))
+
+    if is(ref_cache,nothing)
+        ref_cache = HashTable()
+    end
+    gen_cartesian_map(ref_cache, ivars -> quote
+            X[storeind] = A[$(ivars...)];
+            storeind += 1
+        end, I, (:A, :X, :storeind), A, X, 1)
+    return X
+end
+end
 
 ## Indexing: assign ##
 
@@ -162,6 +191,138 @@ assign{T}(A::Array{T}, x::AbstractArray, i::Integer) = arrayset(A,int(i),convert
 assign{T}(A::Array{T}, x, i::Int) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Integer) = arrayset(A,int(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
+
+assign(A::Array, x, i0::Integer, i1::Integer) =
+    A[i0 + size(A,1)*(i1-1)] = x
+assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer) =
+    A[i0 + size(A,1)*(i1-1)] = x
+
+assign(A::Array, x, i0::Integer, i1::Integer, i2::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+
+assign(A::Array, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
+    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+
+assign(A::Array, x, I0::Integer, I::Integer...) = assign_scalarND(A,x,I0,I...)
+assign(A::Array, x::AbstractArray, I0::Integer, I::Integer...) =
+    assign_scalarND(A,x,I0,I...)
+
+function assign_scalarND(A, x, I0, I...)
+    index = I0
+    stride = 1
+    for k=1:length(I)
+        stride = stride * size(A, k)
+        index += (I[k]-1) * stride
+    end
+    A[index] = x
+    return A
+end
+
+function assign{T<:Integer}(A::Vector, x, I::AbstractVector{T})
+    for i = I
+        A[i] = x
+    end
+    return A
+end
+
+function assign{T<:Integer}(A::Vector, X::AbstractArray, I::AbstractVector{T})
+    for i = 1:length(I)
+        A[I[i]] = X[i]
+    end
+    return A
+end
+
+function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
+    m = size(A, 1)
+    for j=J
+        A[(j-1)*m + i] = x
+    end
+    return A
+end
+function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+    m = size(A, 1)
+    count = 1
+    for j=J
+        A[(j-1)*m + i] = X[count]
+        count += 1
+    end
+    return A
+end
+
+function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
+    m = size(A, 1)
+    offset = (j-1)*m
+    for i=I
+        A[offset + i] = x
+    end
+    return A
+end
+function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+    m = size(A, 1)
+    offset = (j-1)*m
+    count = 1
+    for i=I
+        A[offset + i] = X[count]
+        count += 1
+    end
+    return A
+end
+
+function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{T})
+    m = size(A, 1)
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = x
+        end
+    end
+    return A
+end
+function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+    m = size(A, 1)
+    count = 1
+    for j=J
+        offset = (j-1)*m
+        for i=I
+            A[offset + i] = X[count]
+            count += 1
+        end
+    end
+    return A
+end
+
+let assign_cache = nothing
+global assign
+function assign(A::Array, x, I0::Indices, I::Indices...)
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
+    end
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+                      tuple(I0, I...),
+                      (:A, :x),
+                      A, x)
+    return A
+end
+end
+
+let assign_cache = nothing
+global assign
+function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    if is(assign_cache,nothing)
+        assign_cache = HashTable()
+    end
+    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
+                                             refind += 1),
+                      tuple(I0, I...),
+                      (:A, :X, :refind),
+                      A, X, 1)
+    return A
+end
+end
 
 ## Dequeue functionality ##
 
@@ -262,26 +423,6 @@ function del_all{T}(a::Array{T,1})
     a
 end
 
-## Transpose ##
-
-function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
-    if numel(A) > 50000
-        return _jl_fftw_transpose(A)
-    else
-        return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
-    end
-end
-ctranspose{T<:Union(Float64,Float32)}(A::Matrix{T}) = transpose(A)
-
-ctranspose(x::StridedVector) = transpose(x)
-ctranspose(x::StridedMatrix) = transpose(x)
-
-transpose(x::StridedVector) = [ x[j] | i=1, j=1:size(x,1) ]
-transpose(x::StridedMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
-
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
-
 ## Unary operators ##
 
 function conj!{T<:Number}(A::StridedArray{T})
@@ -332,6 +473,8 @@ function !(A::StridedArray{Bool})
 end
 
 ## Binary arithmetic operators ##
+
+# ^ is difficult, since negative exponents give a different type
 
 ./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
 ./(x::Number,y::Array ) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
@@ -750,3 +893,352 @@ function hist(A::StridedMatrix, nbins::Integer)
     end
     h
 end
+
+## Reductions ##
+
+contains(s::Number, n::Number) = (s == n)
+
+areduce{T}(f::Function, A::StridedArray{T}, region::Region, v0) =
+    areduce(f,A,region,v0,T)
+
+# TODO:
+# - find out why inner loop with dimsA[i] instead of size(A,i) is way too slow
+
+let areduce_cache = nothing
+# generate the body of the N-d loop to compute a reduction
+function gen_areduce_func(n, f)
+    ivars = { gensym() | i=1:n }
+    # limits and vars for reduction loop
+    lo    = { gensym() | i=1:n }
+    hi    = { gensym() | i=1:n }
+    rvars = { gensym() | i=1:n }
+    setlims = { quote
+        # each dim of reduction is either 1:sizeA or ivar:ivar
+        if contains(region,$i)
+            $lo[i] = 1
+            $hi[i] = size(A,$i)
+        else
+            $lo[i] = $hi[i] = $ivars[i]
+        end
+               end | i=1:n }
+    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+    body =
+    quote
+        _tot = v0
+        $(setlims...)
+        $make_loop_nest(rvars, rranges,
+                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        R[_ind] = _tot
+        _ind += 1
+    end
+    quote
+        local _F_
+        function _F_(f, A, region, R, v0)
+            _ind = 1
+            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
+        end
+        _F_
+    end
+end
+
+global areduce
+function areduce(f::Function, A::StridedArray, region::Region, v0, RType::Type)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
+    R = similar(A, RType, dimsR)
+
+    if is(areduce_cache,nothing)
+        areduce_cache = HashTable()
+    end
+
+    key = ndimsA
+    fname = :f
+
+    if  (is(f,+)     && (fname=:+;true)) ||
+        (is(f,*)     && (fname=:*;true)) ||
+        (is(f,max)   && (fname=:max;true)) ||
+        (is(f,min)   && (fname=:min;true)) ||
+        (is(f,sum)   && (fname=:+;true)) ||
+        (is(f,prod)  && (fname=:*;true)) ||
+        (is(f,any)   && (fname=:any;true)) ||
+        (is(f,all)   && (fname=:all;true)) ||
+        (is(f,count) && (fname=:count;true))
+        key = (fname, ndimsA)
+    end
+
+    if !has(areduce_cache,key)
+        fexpr = gen_areduce_func(ndimsA, fname)
+        func = eval(fexpr)
+        areduce_cache[key] = func
+    else
+        func = areduce_cache[key]
+    end
+
+    func(f, A, region, R, v0)
+
+    return R
+end
+end
+
+function sum{T}(A::StridedArray{T})
+    if isempty(A)
+        return zero(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
+        v += A[i]
+    end
+    v
+end
+
+function prod{T}(A::StridedArray{T})
+    if isempty(A)
+        return one(T)
+    end
+    v = A[1]
+    for i=2:numel(A)
+        v *= A[i]
+    end
+    v
+end
+
+function min{T<:Integer}(A::StridedArray{T})
+    v = typemax(T)
+    for i=1:numel(A)
+        x = A[i]
+        if x < v
+            v = x
+        end
+    end
+    v
+end
+
+function max{T<:Integer}(A::StridedArray{T})
+    v = typemin(T)
+    for i=1:numel(A)
+        x = A[i]
+        if x > v
+            v = x
+        end
+    end
+    v
+end
+
+max{T}(A::StridedArray{T}, b::(), region::Region) = areduce(max,A,region,typemin(T),T)
+min{T}(A::StridedArray{T}, b::(), region::Region) = areduce(min,A,region,typemax(T),T)
+sum{T}(A::StridedArray{T}, region::Region)  = areduce(+,A,region,zero(T))
+prod{T}(A::StridedArray{T}, region::Region) = areduce(*,A,region,one(T))
+
+all(A::StridedArray{Bool}, region::Region) = areduce(all,A,region,true)
+any(A::StridedArray{Bool}, region::Region) = areduce(any,A,region,false)
+count(A::StridedArray{Bool}, region::Region) = areduce(count,A,region,0,Int)
+
+## map over arrays ##
+
+## 1 argument
+function map_to(dest::StridedArray, f, A::StridedArray)
+    for i=1:numel(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+function map_to2(first, dest::StridedArray, f, A::StridedArray)
+    dest[1] = first
+    for i=2:numel(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+
+function map(f, A::StridedArray)
+    if isempty(A); return A; end
+    first = f(A[1])
+    dest = similar(A, typeof(first))
+    return map_to2(first, dest, f, A)
+end
+
+## 2 argument
+function map_to(dest::StridedArray, f, A::StridedArray, B::StridedArray)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+function map_to2(first, dest::StridedArray, f,
+                 A::StridedArray, B::StridedArray)
+    dest[1] = first
+    for i=2:numel(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
+function map(f, A::StridedArray, B::StridedArray)
+    if size(A) != size(B); error("argument dimensions must match"); end
+    if isempty(A); return A; end
+    first = f(A[1], B[1])
+    dest = similar(A, typeof(first))
+    return map_to2(first, dest, f, A, B)
+end
+
+function map_to(dest::StridedArray, f, A::StridedArray, B::Number)
+    for i=1:numel(A)
+        dest[i] = f(A[i], B)
+    end
+    return dest
+end
+function map_to2(first, dest::StridedArray, f, A::StridedArray, B::Number)
+    dest[1] = first
+    for i=2:numel(A)
+        dest[i] = f(A[i], B)
+    end
+    return dest
+end
+
+function map(f, A::StridedArray, B::Number)
+    if isempty(A); return A; end
+    first = f(A[1], B)
+    dest = similar(A, typeof(first))
+    return map_to2(first, dest, f, A, B)
+end
+
+function map_to(dest::StridedArray, f, A::Number, B::StridedArray)
+    for i=1:numel(B)
+        dest[i] = f(A, B[i])
+    end
+    return dest
+end
+function map_to2(first, dest::StridedArray, f, A::Number, B::StridedArray)
+    dest[1] = first
+    for i=2:numel(B)
+        dest[i] = f(A, B[i])
+    end
+    return dest
+end
+
+function map(f, A::Number, B::StridedArray)
+    if isempty(A); return A; end
+    first = f(A, B[1])
+    dest = similar(B, typeof(first))
+    return map_to2(first, dest, f, A, B)
+end
+
+## N argument
+function map_to(dest::StridedArray, f, As::StridedArray...)
+    n = numel(As[1])
+    i = 1
+    ith = a->a[i]
+    for i=1:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+function map_to2(first, dest::StridedArray, f, As::StridedArray...)
+    n = numel(As[1])
+    i = 1
+    ith = a->a[i]
+    dest[1] = first
+    for i=2:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map(f, As::StridedArray...)
+    if isempty(As[1]); return As[1]; end
+    first = f(map(a->a[1], As)...)
+    dest = similar(As[1], typeof(first))
+    return map_to2(first, dest, f, As...)
+end
+
+## Transpose ##
+
+function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
+    if numel(A) > 50000
+        return _jl_fftw_transpose(A)
+    else
+        return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
+    end
+end
+ctranspose{T<:Union(Float64,Float32)}(A::Matrix{T}) = transpose(A)
+
+ctranspose(x::StridedVector) = transpose(x)
+ctranspose(x::StridedMatrix) = transpose(x)
+
+transpose(x::StridedVector) = [ x[j] | i=1, j=1:size(x,1) ]
+transpose(x::StridedMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
+
+ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+
+## Permute ##
+
+let permute_cache = nothing, stridenames::Array{Any,1} = {}
+global permute
+function permute(A::StridedArray, perm)
+    dimsA = size(A)
+    ndimsA = length(dimsA)
+    dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
+    P = similar(A, dimsP)
+    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
+    while length(stridenames) < ndimsA
+        push(stridenames, gensym())
+    end
+
+    #calculates all the strides
+    strides = [ stride(A, perm[dim]) | dim = 1:length(perm) ]
+
+    #Creates offset, because indexing starts at 1
+    offset = 0
+    for i = strides
+        offset+=i
+    end
+    offset = 1-offset
+
+    function permute_one(ivars)
+        len = length(ivars)
+        counts = { gensym() | i=1:len}
+        toReturn = cell(len+1,2)
+        for i = 1:numel(toReturn)
+            toReturn[i] = nothing
+        end
+
+        tmp = counts[end]
+        toReturn[len+1] = quote
+            ind = 1
+            $tmp = $stridenames[len]
+        end
+
+        #inner most loop
+        toReturn[1] = quote
+            P[ind] = A[+($counts...)+offset]
+            ind+=1
+            $counts[1]+= $stridenames[1]
+        end
+        for i = 1:len-1
+            tmp = counts[i]
+            val = i
+            toReturn[(i+1)] = quote
+                $tmp = $stridenames[val]
+            end
+            tmp2 = counts[i+1]
+            val = i+1
+            toReturn[(i+1)+(len+1)] = quote
+                 $tmp2 += $stridenames[val]
+            end
+        end
+        toReturn
+    end
+
+    if is(permute_cache,nothing)
+	permute_cache = HashTable()
+    end
+
+    gen_cartesian_map(permute_cache, permute_one, ranges,
+                      tuple(:A, :P, :perm, :offset, stridenames[1:ndimsA]...),
+                      A, P, perm, offset, strides...)
+
+    return P
+end
+end # let
