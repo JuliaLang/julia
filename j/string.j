@@ -831,9 +831,16 @@ function ndigits(n::Integer, b::Integer)
     return nd
 end
 
-function int2str(n::Integer, b::Integer)
+int2str(n::Integer, b::Integer) = int2str(int64(n), b)
+
+function int2str(n::Union(Int64,Uint64), b::Integer)
     if b < 2 || b > 40; error("int2str: invalid base ", b); end
-    neg = n<zero(n) ? 1 : 0
+    if n == typemin(Int64)
+        # this is really cheap, but the algorithm fails in this case
+        # since abs(n) is still negative.
+        return "-9223372036854775808"
+    end
+    neg = n<0 ? 1 : 0
     n = abs(n)
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)

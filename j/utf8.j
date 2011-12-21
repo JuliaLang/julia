@@ -41,10 +41,10 @@ function next(s::UTF8String, i::Int)
     for j = 1:trailing
         c += s.data[i]
         c <<= 6
-        i += one(i)
+        i += 1
     end
     c += s.data[i]
-    i += one(i)
+    i += 1
     c -= _jl_utf8_offset[trailing+1]
     char(c), i
 end

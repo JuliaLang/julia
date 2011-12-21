@@ -228,7 +228,7 @@ end
 function istril{T}(A::SparseMatrixCSC{T})
     for col = 1:A.n
         for i = A.colptr[col]:(A.colptr[col]-1)
-            if A.rowval[i] < col && A.nzval[i] != zero(T); return false; end
+            if A.rowval[i] < col && A.nzval[i] != 0; return false; end
         end
     end
     return true
@@ -237,7 +237,7 @@ end
 function istriu{T}(A::SparseMatrixCSC{T})
     for col = 1:A.n
         for i = A.colptr[col]:(A.colptr[col]-1)
-            if A.rowval[i] > col && A.nzval[i] != zero(T); return false; end
+            if A.rowval[i] > col && A.nzval[i] != 0; return false; end
         end
     end
     return true
@@ -512,7 +512,7 @@ function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Intege
     i1 = convert(T_int, i1)
     if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
     v = convert(T, v)
-    if v == zero(T) #either do nothing or delete entry if it exists
+    if v == 0 #either do nothing or delete entry if it exists
         first = A.colptr[i1]
         last = A.colptr[i1+1]-1
         loc = -1
@@ -884,7 +884,7 @@ assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Integer) =
     invoke(assign, (SparseAccumulator{T}, Any, Integer), S, v, i)
 
 function assign{T}(S::SparseAccumulator{T}, v, i::Integer)
-    if v == zero(T)
+    if v == 0
         if S.flags[i]
             S.vals[i] = v
             S.flags[i] = false
