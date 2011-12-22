@@ -73,6 +73,22 @@ function conv{T}(u::Vector{T}, v::Vector{T})
     return y
 end
 
+function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
+    m = length(y)+size(A,1)-1
+    n = length(x)+size(A,2)-1
+    B = zeros(T, m, n)
+    B[1:size(A,1),1:size(A,2)] = A
+    y = fft([y;zeros(T,m-length(y))])./m
+    Y = repmat(reshape(y,m,1), 1, n)
+    x = fft([x;zeros(T,n-length(x))])./n
+    X = repmat(reshape(x,1,n), m, 1)
+    C = ifft2(fft(fft(B,(),2).*X,(),1).*Y)
+    if T <: Real
+        return real(C)
+    end
+    return C
+end
+
 function xcorr(u, v)
     su = size(u,1); sv = size(v,1)
     if su < sv

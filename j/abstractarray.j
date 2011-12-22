@@ -325,7 +325,7 @@ function hcat{T}(V::AbstractVector{T}...)
     for j = 2:length(V)
         if length(V[j]) != height; error("hcat: mismatched dimensions"); end
     end
-    [ V[j][i] | i=1:length(V[1]), j=1:length(V) ]
+    [ V[j][i]::T | i=1:length(V[1]), j=1:length(V) ]
 end
 
 function vcat{T}(V::AbstractVector{T}...)
