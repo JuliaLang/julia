@@ -11,7 +11,7 @@ function _tablesz(i::Integer)
     return i<<1
 end
 
-_jl_secret_table_token = (:BOO,)
+const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 function ref(t::Associative, key)
     v = get(t, key, _jl_secret_table_token)
