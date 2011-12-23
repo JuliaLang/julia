@@ -476,7 +476,7 @@ static jl_value_t *build_backtrace(void)
     JL_GC_PUSH(&a);
     
     backtrace(array, 1023);
-    p = array;
+    p = (size_t*)array;
     while ((ip = *(p++)) != 0) {
         push_frame_info_from_ip(a, ip);
     }
