@@ -8,6 +8,7 @@ OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
 ARPACK_VER = 96
 FFTW_VER = 3.3
+SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 0.99
 LIGHTTPD_VER = 1.4.29
@@ -301,6 +302,64 @@ clean-fftw-double:
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
 
+
+## SUITESPARSE ##
+
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libSuiteSparse.$(SHLIB_EXT)
+SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/libSuiteSparse.$(SHLIB_EXT)
+
+compile-SuiteSparse: $(SUITESPARSE_OBJ_SOURCE)
+install-SuiteSparse: $(SUITESPARSE_OBJ_TARGET)
+
+SuiteSparse-$(SUITESPARSE_VER).tar.gz:
+	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz > $@
+SuiteSparse-patch.tar.gz:
+	curl http://www.caam.rice.edu/software/SUITESPARSE/SRC/patch.tar.gz > $@
+SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-patch.tar.gz
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
+	for x in $^; do tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $$x; done
+	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' SuiteSparse-$(SUITESPARSE_VER)/UTIL/second.f
+	touch $@
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+	cd SuiteSparse-$(SUITESPARSE_VER) && \
+	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
+	ar x libSuiteSparse_.a && \
+	$(FC) -shared *.o -o libSuiteSparse.$(SHLIB_EXT)
+$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
+	cp $< $@
+
+clean-SuiteSparse:
+	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) home=`pwd`/SuiteSparse-$(SUITESPARSE_VER) clean MAKE=make
+	rm -f $(SUITESPARSE_OBJ_SOURCE) $(SUITESPARSE_OBJ_TARGET)
+distclean-SuiteSparse:
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-patch.tar.gz SuiteSparse-$(SUITESPARSE_VER)
+
+## CLP ##
+
+CLP_OBJ_TARGET = $(EXTROOTLIB)/libClp.$(SHLIB_EXT)
+
+compile-clp: install-clp
+install-clp: $(CLP_OBJ_TARGET)
+
+clp-$(CLP_VER).tgz:
+	curl -O http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
+clp-$(CLP_VER)/configure: Clp-$(CLP_VER).tgz
+	tar jxf $<
+	touch $@
+clp-$(CLP_VER)/config.status: Clp-$(CLP_VER)/configure
+	cd Clp-$(CLP_VER) && \
+	./configure --prefix=$(EXTROOT)
+$(CLP_OBJ_TARGET): Clp-$(CLP_VER)/config.status
+	$(MAKE) -C Clp-$(CLP_VER) install
+	touch $@
+
+clean-clp:
+	$(MAKE) -C Clp-$(CLP_VER) clean
+	rm -f $(CLP_OBJ_TARGET)
+distclean-clp:
+	rm -rf Clp-$(CLP_VER).tar.bz2 Clp-$(CLP_VER)
+
 ## UNWIND ##
 
 LIBUNWIND_TARGET_OBJ = $(EXTROOTLIB)/libunwind.a
@@ -329,31 +388,6 @@ clean-unwind:
 
 distclean-unwind:
 	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
-
-## CLP ##
-
-CLP_OBJ_TARGET = $(EXTROOTLIB)/libClp.$(SHLIB_EXT)
-
-compile-clp: install-clp
-install-clp: $(CLP_OBJ_TARGET)
-
-clp-$(CLP_VER).tgz:
-	curl -O http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
-clp-$(CLP_VER)/configure: Clp-$(CLP_VER).tgz
-	tar jxf $<
-	touch $@
-clp-$(CLP_VER)/config.status: Clp-$(CLP_VER)/configure
-	cd Clp-$(CLP_VER) && \
-	./configure --prefix=$(EXTROOT)
-$(CLP_OBJ_TARGET): Clp-$(CLP_VER)/config.status
-	$(MAKE) -C Clp-$(CLP_VER) install
-	touch $@
-
-clean-clp:
-	$(MAKE) -C Clp-$(CLP_VER) clean
-	rm -f $(CLP_OBJ_TARGET)
-distclean-clp:
-	rm -rf Clp-$(CLP_VER).tar.bz2 Clp-$(CLP_VER)
 
 ## GNU LIGHTTPD ##
 

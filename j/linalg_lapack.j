@@ -80,34 +80,34 @@ end
 @_jl_lapack_getrf_macro :zgetrf_ Complex128
 @_jl_lapack_getrf_macro :cgetrf_ Complex64
 
-lu(A::StridedMatrix) = lu(A, false)
+lu{T<:Integer}(x::StridedMatrix{T}) = lu(float64(x))
 
-lu{T<:Integer}(x::StridedMatrix{T}) = lu(float64(x), false)
+function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
+    (LU, P) = lu!(copy(A))
+    m, n = size(A)
 
-function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
-                                                            economy::Bool)
+    L = tril(LU, -1) + eye(m,n)
+    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
+    return (L, U, P)
+end
+
+function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("lu: matrix columns must have contiguous elements"); end
     m, n = size(A)
-    LU = A
-    if !economy
-        LU = copy(A)
-    end
     ipiv = Array(Int32, min(m,n))
 
-    info = _jl_lapack_getrf(m, n, LU, stride(LU,2), ipiv)
+    info = _jl_lapack_getrf(m, n, A, stride(A,2), ipiv)
 
     if info > 0; error("matrix is singular"); end
     P = linspace(1, m)
-    for i=1:min(m,n); t = P[i]; P[i] = P[ipiv[i]]; P[ipiv[i]] = t ; end
+    for i=1:min(m,n)
+        t = P[i]
+        P[i] = P[ipiv[i]]
+        P[ipiv[i]] = t
+    end
 
     if info == 0
-        if economy
-            return (LU, P)
-        else
-            L = tril(LU, -1) + eye(m,n)
-            U = m <= n ? triu(LU) : triu(LU)[1:n, :]
-            return (L, U, P)
-        end
+        return (A, P)
     end
     error("error in LU")
 end
