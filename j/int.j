@@ -104,7 +104,7 @@ convert(::Type{Unsigned}, x::Bool   ) = convert(Uint8,  x)
 convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,  x)
 convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16, x)
 convert(::Type{Unsigned}, x::Int32  ) = convert(Uint32, x)
-convert(::Type{Unsigned}, x::Int64  ) = convert(Uint64, x) # LOSSY
+convert(::Type{Unsigned}, x::Int64  ) = convert(Uint64, x)
 convert(::Type{Unsigned}, x::Float32) = convert(Uint32, x)
 convert(::Type{Unsigned}, x::Float64) = convert(Uint64, x)
 
@@ -391,6 +391,25 @@ trailing_zeros(x::Uint64) = boxui64(cttz_int(unbox64(x)))
 <=(x::Uint16, y::Uint16) = ule_int(unbox16(x),unbox16(y))
 <=(x::Uint32, y::Uint32) = ule_int(unbox32(x),unbox32(y))
 <=(x::Uint64, y::Uint64) = ule_int(unbox64(x),unbox64(y))
+
+# this would be unncessary if we had Signed:
+==(x::Unsigned, y::Uint64) = uint64(x) == y
+==(x::Uint64, y::Unsigned) = x == uint64(y)
+!=(x::Unsigned, y::Uint64) = uint64(x) != y
+!=(x::Uint64, y::Unsigned) = x != uint64(y)
+< (x::Unsigned, y::Uint64) = uint64(x) < y
+< (x::Uint64, y::Unsigned) = x < uint64(y)
+<=(x::Unsigned, y::Uint64) = uint64(x) <= y
+<=(x::Uint64, y::Unsigned) = x <= uint64(y)
+
+==(x::Integer, y::Uint64) = x <  0 ? false : uint64(x) == y
+==(x::Uint64, y::Integer) = y <  0 ? false : x == uint64(y)
+!=(x::Integer, y::Uint64) = x <  0 ? true  : uint64(x) != y
+!=(x::Uint64, y::Integer) = y <  0 ? true  : x != uint64(y)
+< (x::Integer, y::Uint64) = x <  0 ? true  : uint64(x) < y
+< (x::Uint64, y::Integer) = y <= 0 ? false : x < uint64(y)
+<=(x::Integer, y::Uint64) = x <= 0 ? true  : uint64(x) <= y
+<=(x::Uint64, y::Integer) = y <  0 ? false : x <= uint64(y)
 
 ## traits ##
 

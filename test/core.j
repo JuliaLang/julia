@@ -256,6 +256,14 @@ end
 @assert (ComplexPair(1,2)/ComplexPair(2.5,3.0))*ComplexPair(2.5,3.0) == ComplexPair(1,2)
 @assert 0.7 < real(sqrt(ComplexPair(0,1))) < 0.707107
 
+for S = {Int8,  Int16,  Int32,  Int64},
+    U = {Uint8, Uint16, Uint32, Uint64}
+    @assert !(-one(S) == typemax(U))
+    @assert -one(S) != typemax(U)
+    @assert -one(S) <  typemax(U)
+    @assert !(typemax(U) <= -one(S))
+end
+
 # check type of constructed rationals
 int_types = {Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64}
 for N = int_types, D = int_types
