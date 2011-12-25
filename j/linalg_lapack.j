@@ -31,8 +31,7 @@ end
 #(uses upper triangular half)
 #Possible TODO: "economy mode"
 
-chol{T<:Real}(x::StridedMatrix{T}) = chol(float64(x))
-chol{T<:Complex}(x::StridedMatrix{T}) = chol(complex(float64(real(x)), float64(imag(x))))
+chol{T<:Integer}(x::StridedMatrix{T}) = chol(float64(x))
 
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
@@ -83,8 +82,7 @@ end
 
 lu(A::StridedMatrix) = lu(A, false)
 
-lu{T<:Real}(x::StridedMatrix{T}) = lu(float64(x), false)
-lu{T<:Complex}(x::StridedMatrix{T}) = lu(complex(float64(real(x)), float64(imag(x))), false)
+lu{T<:Integer}(x::StridedMatrix{T}) = lu(float64(x), false)
 
 function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T},
                                                             economy::Bool)
@@ -193,8 +191,7 @@ end
 
 #possible TODO: economy mode?
 
-qr{T<:Real}(x::StridedMatrix{T}) = qr(float64(x))
-qr{T<:Complex}(x::StridedMatrix{T}) = qr(complex(float64(real(x)), float64(imag(x))))
+qr{T<:Integer}(x::StridedMatrix{T}) = qr(float64(x))
 
 function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     m, n = size(A)
@@ -336,8 +333,7 @@ end
 @_jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
 @_jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
-eig{T<:Real}(x::StridedMatrix{T}) = eig(float64(x))
-eig{T<:Complex}(x::StridedMatrix{T}) = eig(complex(float64(real(x)), float64(imag(x))))
+eig{T<:Integer}(x::StridedMatrix{T}) = eig(float64(x))
 
 function eig{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T})
     m, n = size(A)
@@ -500,8 +496,7 @@ end
 @_jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
 @_jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
-svd{T<:Real}(x::StridedMatrix{T}) = svd(float64(x))
-svd{T<:Complex}(x::StridedMatrix{T}) = svd(complex(float64(real(x)), float64(imag(x))))
+svd{T<:Integer}(x::StridedMatrix{T}) = svd(float64(x))
 
 function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T})
     jobu = "A"
@@ -622,9 +617,7 @@ end
 @_jl_lapack_backslash_macro :zgesv_ :zposv_ :zgels_ :ztrtrs_ Complex128
 @_jl_lapack_backslash_macro :cgesv_ :cposv_ :cgels_ :ctrtrs_ Complex64
 
-(\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
-(\){T1<:Complex, T2<:Complex}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = 
-      (\)(complex(float64(real(A)), float64(imag(A))), complex(float64(real(B)), float64(imag(B))))
+(\){T1<:Integer, T2<:Integer}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}, B::VecOrMat{T})
     m, n = size(A)
