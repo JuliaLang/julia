@@ -237,18 +237,6 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-mean(V::Vector) = sum(V) / length(V)
-
-function std(V::Vector)
-    n = numel(V)
-    m = mean(V)
-    s = 0.0
-    for i=1:n
-        s += (V[i] - m)^2
-    end
-    return sqrt(s/(n-1))
-end
-
 kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
 
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})

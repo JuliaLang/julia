@@ -313,3 +313,41 @@ function issorted(v::AbstractVector)
   end
   return true
 end
+
+function _jl_quickselect(a::AbstractVector, k::Integer, lo::Integer, hi::Integer)
+    if k < lo || k > hi; error("k is out of bounds"); end
+
+    while true
+
+        if lo == hi; return a[lo]; end
+
+        # pivot_ind = partition(a, lo, hi)
+        i, j = lo, hi
+        pivot = a[randival(lo,hi)]
+        while i < j
+            while a[i] < pivot; i += 1; end
+            while a[j] > pivot; j -= 1; end
+            if a[i] == a[j]
+                i += 1
+            elseif i < j
+                a[i], a[j] = a[j], a[i]
+            end
+        end
+        pivot_ind = j
+
+        length = pivot_ind - lo + 1
+        if k == length
+            return a[pivot_ind]
+        elseif k <  length
+            hi = pivot_ind - 1
+        else
+            lo = pivot_ind + 1
+            k = k - length
+        end
+
+    end # while true...
+
+end
+
+select(a::AbstractVector, k::Integer) = _jl_quickselect(copy(a), k, 1, length(a))
+select!(a::AbstractVector, k::Integer) = _jl_quickselect(a, k, 1, length(a))
