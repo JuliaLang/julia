@@ -306,34 +306,31 @@ distclean-fftw:
 ## SUITESPARSE ##
 
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libSuiteSparse.$(SHLIB_EXT)
-SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/libSuiteSparse.$(SHLIB_EXT)
 
-compile-SuiteSparse: $(SUITESPARSE_OBJ_SOURCE)
-install-SuiteSparse: $(SUITESPARSE_OBJ_TARGET)
+compile-suitesparse: install-suitesparse
+install-suitesparse: $(SUITESPARSE_OBJ_TARGET)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz > $@
-SuiteSparse-patch.tar.gz:
-	curl http://www.caam.rice.edu/software/SUITESPARSE/SRC/patch.tar.gz > $@
-SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-patch.tar.gz
+SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
-	for x in $^; do tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $$x; done
-	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' SuiteSparse-$(SUITESPARSE_VER)/UTIL/second.f
+	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
-	ar x libSuiteSparse_.a && \
-	$(FC) -shared *.o -o libSuiteSparse.$(SHLIB_EXT)
-$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cp $< $@
+	$(MAKE) && \
+	mkdir -p lib && \
+	cp `find . -name *.a` lib && cd lib && \
+	for i in *.a; do ar x $$i; done && \
+	g++ -shared -fPIC *.o -o libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) && \
+	cp libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)
+	touch $@
 
 clean-SuiteSparse:
-	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) home=`pwd`/SuiteSparse-$(SUITESPARSE_VER) clean MAKE=make
-	rm -f $(SUITESPARSE_OBJ_SOURCE) $(SUITESPARSE_OBJ_TARGET)
+	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
+	rm -f $(SUITESPARSE_OBJ_TARGET) 
 distclean-SuiteSparse:
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-patch.tar.gz SuiteSparse-$(SUITESPARSE_VER)
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) $(SUITESPARSE_OBJ_TARGET)
 
 ## CLP ##
 
