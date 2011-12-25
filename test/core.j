@@ -260,7 +260,7 @@ for S = {Int8,  Int16,  Int32,  Int64},
     U = {Uint8, Uint16, Uint32, Uint64}
     @assert !(-one(S) == typemax(U))
     @assert -one(S) != typemax(U)
-    @assert -one(S) <  typemax(U)
+    @assert -one(S) < typemax(U)
     @assert !(typemax(U) <= -one(S))
 end
 
