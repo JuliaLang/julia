@@ -326,10 +326,11 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cp libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
-clean-SuiteSparse:
+clean-suitesparse:
+	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -f $(SUITESPARSE_OBJ_TARGET) 
-distclean-SuiteSparse:
+distclean-suitesparse:
 	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) $(SUITESPARSE_OBJ_TARGET)
 
 ## CLP ##
