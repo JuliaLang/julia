@@ -320,9 +320,9 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
-	cp `find . -name *.a` lib && cd lib && \
+	cp `find UMFPACK CHOLMOD *AMD BTF -name *.a` lib && cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	g++ -shared -fPIC *.o -o libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) && \
+	gcc -shared -fPIC *.o -o libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) && \
 	cp libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 

@@ -1,9 +1,9 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
 type SparseMatrixCSC{T,T_int} <: AbstractMatrix{T}
-    m::Int                 # Number of rows
-    n::Int                 # Number of columns
-    colptr::Vector{Int}    # Column i is in colptr[i]:(colptr[i+1]-1)
+    m::Int                  # Number of rows
+    n::Int                  # Number of columns
+    colptr::Vector{Int}     # Column i is in colptr[i]:(colptr[i+1]-1)
     rowval::Vector{T_int}   # Row values of nonzeros
     nzval::Vector{T}        # Nonzero values
 end
