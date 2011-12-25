@@ -392,14 +392,14 @@ trailing_zeros(x::Uint64) = boxui64(cttz_int(unbox64(x)))
 <=(x::Uint32, y::Uint32) = ule_int(unbox32(x),unbox32(y))
 <=(x::Uint64, y::Uint64) = ule_int(unbox64(x),unbox64(y))
 
-==(x::Signed, y::Uint64) = x <  0 ? false : uint64(x) == y
-==(x::Uint64, y::Signed) = y <  0 ? false : x == uint64(y)
-!=(x::Signed, y::Uint64) = x <  0 ? true  : uint64(x) != y
-!=(x::Uint64, y::Signed) = y <  0 ? true  : x != uint64(y)
-< (x::Signed, y::Uint64) = x <  0 ? true  : uint64(x) < y
-< (x::Uint64, y::Signed) = y <= 0 ? false : x < uint64(y)
-<=(x::Signed, y::Uint64) = x <= 0 ? true  : uint64(x) <= y
-<=(x::Uint64, y::Signed) = y <  0 ? false : x <= uint64(y)
+==(x::Signed, y::Uint64) = (x >= 0) & (uint64(x) == y)
+==(x::Uint64, y::Signed) = (y >= 0) & (x == uint64(y))
+!=(x::Signed, y::Uint64) = (x < 0)  | (uint64(x) != y)
+!=(x::Uint64, y::Signed) = (y < 0)  | (x != uint64(y))
+< (x::Signed, y::Uint64) = (x < 0)  | (uint64(x) < y)
+< (x::Uint64, y::Signed) = (y > 0)  & (x < uint64(y))
+<=(x::Signed, y::Uint64) = (x <= 0) | (uint64(x) <= y)
+<=(x::Uint64, y::Signed) = (y >= 0) & (x <= uint64(y))
 
 ## traits ##
 
