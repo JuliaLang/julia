@@ -47,9 +47,9 @@ end
 |(x::Integer, y::Integer)   = |(promote(x,y)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
 
+==(x::Number, y::Number) = (==)(promote(x,y)...)
 < (x::Real, y::Real)     = (< )(promote(x,y)...)
 <=(x::Real, y::Real)     = (<=)(promote(x,y)...)
-==(x::Number, y::Number) = (==)(promote(x,y)...)
 
 div(x::Real, y::Real) = div(promote(x,y)...)
 fld(x::Real, y::Real) = fld(promote(x,y)...)
@@ -72,5 +72,5 @@ no_op_err(name, T) = error(name," not defined for ",T)
 |{T<:Integer}(x::T, y::T) = no_op_err("|", T)
 ($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
 
-<{T<:Real}(x::T, y::T) = no_op_err("<", T)
 =={T<:Number}(x::T, y::T) = no_op_err("==", T)
+<{T<:Real}(x::T, y::T) = no_op_err("<", T)

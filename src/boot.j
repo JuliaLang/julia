@@ -109,24 +109,25 @@ const nothing = Nothing()
 bitstype 8 Bool
 
 abstract Number
-abstract Real  <: Number
-abstract Integer   <: Real
-abstract Unsigned  <: Integer
-abstract Float <: Real
-
-bitstype 32 Char <: Unsigned
-
-bitstype 8  Int8   <: Integer
-bitstype 8  Uint8  <: Unsigned
-bitstype 16 Int16  <: Integer
-bitstype 16 Uint16 <: Unsigned
-bitstype 32 Int32  <: Integer
-bitstype 32 Uint32 <: Unsigned
-bitstype 64 Int64  <: Integer
-bitstype 64 Uint64 <: Unsigned
+abstract Real     <: Number
+abstract Float    <: Real
+abstract Integer  <: Real
+abstract Signed   <: Integer
+abstract Unsigned <: Integer
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
+
+bitstype 32 Char <: Unsigned
+
+bitstype 8  Int8   <: Signed
+bitstype 8  Uint8  <: Unsigned
+bitstype 16 Int16  <: Signed
+bitstype 16 Uint16 <: Unsigned
+bitstype 32 Int32  <: Signed
+bitstype 32 Uint32 <: Unsigned
+bitstype 64 Int64  <: Signed
+bitstype 64 Uint64 <: Unsigned
 
 if is(Int,Int64)
     typealias Uint Uint64

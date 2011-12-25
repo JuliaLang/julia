@@ -20,8 +20,8 @@ isequal(x::Number, y::Number)  = hash(x)==hash(y) && x==y
 <=(x,y) = !(y < x)
 >=(x,y) = y <= x
 
-max(x, y) = x > y ? x : y
-min(x, y) = x < y ? x : y
+max(x,y) = x > y ? x : y
+min(x,y) = x < y ? x : y
 
 ## definitions providing basic traits of arithmetic operators ##
 
@@ -84,12 +84,12 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 cmp{T<:Real}(x::T, y::T) = sign(x-y)
 
 # transposed multiply
-aCb(a, b) = ctranspose(a)*b
-abC(a, b) = a*ctranspose(b)
-aCbC(a, b) = ctranspose(a)*ctranspose(b)
-aTb(a, b) = transpose(a)*b
-abT(a, b) = a*transpose(b)
-aTbT(a, b) = transpose(a)*transpose(b)
+aCb (a,b) = ctranspose(a)*b
+abC (a,b) = a*ctranspose(b)
+aCbC(a,b) = ctranspose(a)*ctranspose(b)
+aTb (a,b) = transpose(a)*b
+abT (a,b) = a*transpose(b)
+aTbT(a,b) = transpose(a)*transpose(b)
 
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
