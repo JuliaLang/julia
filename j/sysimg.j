@@ -98,6 +98,7 @@ load("math.j")
 load("math_libm.j")
 load("sort.j")
 load("combinatorics.j")
+load("statistics.j")
 
 # linear algebra
 load("linalg.j")

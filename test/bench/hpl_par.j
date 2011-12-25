@@ -104,7 +104,7 @@ function panel_factor(A_KI, col_dep)
     @assert col_dep
     
     ## Factorize a panel
-    (A_KI, panel_p) = lu(A_KI, true) # Economy mode
+    (A_KI, panel_p) = lu!(A_KI) # Economy mode
     
     return (A_KI, panel_p)
     
@@ -205,8 +205,8 @@ function panel_factor2(C, i, n)
                            (I = (C.dist[i]):(C.dist[i+1]-1))
     K = I[1]:n
     C_KI = C[K,I]
-    #(C_KI, panel_p) = lu(C_KI, true) #economy mode
-    panel_p = lu(C_KI, true)[2]
+    #(C_KI, panel_p) = lu!(C_KI) #economy mode
+    panel_p = lu!(C_KI)[2]
     C[K,I] = C_KI
 
     return panel_p
