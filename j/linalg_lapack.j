@@ -27,27 +27,30 @@ end
 @_jl_lapack_potrf_macro :zpotrf_ Complex128
 @_jl_lapack_potrf_macro :cpotrf_ Complex64
 
-#does not check that input matrix is symmetric/hermitian
-#(uses upper triangular half)
-#Possible TODO: "economy mode"
+# chol() does not check that input matrix is symmetric/hermitian
+# It simply uses upper triangular half
 
 chol{T<:Integer}(x::StridedMatrix{T}) = chol(float64(x))
 
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
+    R = chol!(copy(A))
+end
+
+function chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     if stride(A,1) != 1; error("chol: matrix columns must have contiguous elements"); end
     n = int32(size(A, 1))
-    R = copy(A)
-    info = _jl_lapack_potrf("U", n, R, stride(R,2))
+    info = _jl_lapack_potrf("U", n, A, stride(A,2))
 
     if info == 0; 
         # Zero out the lower triangular part of the result
         for j=1:n
             for i=(j+1):n
-                R[i,j] = 0
+                A[i,j] = 0
             end
         end
-        return R; 
+        return A 
     end
+
     if info  > 0; error("matrix not positive definite"); end
     error("error in CHOL")
 end
