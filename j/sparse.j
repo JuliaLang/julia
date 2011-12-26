@@ -1,5 +1,6 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
+# Ti is expected to be either Int32 or Int64
 type SparseMatrixCSC{Tv,Ti} <: AbstractMatrix{Tv}
     m::Ti                   # Number of rows
     n::Ti                   # Number of columns

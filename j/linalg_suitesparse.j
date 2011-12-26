@@ -1,5 +1,7 @@
 _jl_libSuiteSparse = dlopen("libSuiteSparse")
 
+## UMFPACK constants
+
 ## Type of solve
 const _jl_UMFPACK_A     =  0     # Ax=b
 const _jl_UMFPACK_At    =  1     # A'x=b
@@ -56,6 +58,7 @@ end
 
 macro _jl_umfpack_macro(eltype, inttype, f_sym, f_num, f_sol, f_symfree, f_numfree)
     quote
+
         function _jl_umfpack_symbolic{Tv<:$eltype,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
             Symbolic = Array(Ptr{Void}, 1)
@@ -98,6 +101,8 @@ end # macro
 @_jl_umfpack_macro Float64 Int32 :umfpack_di_symbolic :umfpack_di_numeric :umfpack_di_solve :umfpack_di_free_symbolic :umfpack_di_free_numeric
 
 ## User-callable functions
+(\){T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
+
 function (\){Tv<:Float64,Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
     S = _jl_convert_to_0_based_indexing(S)
 
