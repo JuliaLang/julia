@@ -53,7 +53,7 @@ External libraries, if used, include their own licenses:
 - FDLIBM:              http://www.netlib.org/fdlibm/fdlibm.h
 - FFTW:                http://fftw.org/doc/License-and-Copyright.html
 - LAPACK:              http://netlib.org/lapack/LICENSE.txt
-- lIBUNWIND:           http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master
+- LIBUNWIND:           http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master
 - LLVM:                http://llvm.org/releases/3.0/LICENSE.TXT
 - MERSENNE TWISTER:    http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt
 - OPENBLAS:            https://raw.github.com/xianyi/OpenBLAS/master/LICENSE
