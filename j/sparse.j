@@ -28,23 +28,15 @@ function show(S::SparseMatrixCSC)
     println(S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
 
     half_screen_rows = div(tty_rows() - 8, 2)
-    numnz = nnz(S)
+    pad = alignment(max(S.m,S.n))[1]
     k = 0
     for col = 1:S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
 
-            if k < half_screen_rows
-                print("\t[")
-                show(S.rowval[k])
-                print(",\t", col, "]\t= ")
-                showcompact(S.nzval[k])
-                println()
-            elseif k > numnz-half_screen_rows
-                print("\t[")
-                show(S.rowval[k])
-                print(",\t", col, "]\t= ")
-                showcompact(S.nzval[k])
-                println()
+            if k < half_screen_rows || k > nnz(S)-half_screen_rows
+                println("\t[", rpad(S.rowval[k], pad), ", ",
+                        lpad(col, pad), "]  =  ", 
+                        showcompact_to_string(S.nzval[k]))
             elseif k == half_screen_rows
                 println("\t."); println("\t."); println("\t.");
             end
