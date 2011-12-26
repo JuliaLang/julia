@@ -999,7 +999,7 @@
       (block 
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call jl_comprehension_zeros ,oneresult ,@(compute-dims ranges 1) ))
+       (= ,result (call _jl_comprehension_zeros ,oneresult ,@(compute-dims ranges 1) ))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))

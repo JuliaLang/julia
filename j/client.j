@@ -129,7 +129,7 @@ function _start()
 
         if repl
             if !quiet
-                banner()
+                _jl_banner()
             end
             run_repl()
         end
