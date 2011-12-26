@@ -16,45 +16,47 @@ const _jl_UMFPACK_Q_Uat =  int64(12)    # QU.'x=b
 const _jl_UMFPACK_Ut    =  int64(13)    # U'x=b   
 const _jl_UMFPACK_Uat   =  int64(14)    # U.'x=b  
 
-function _jl_umfpack_dl_symbolic(S::SparseMatrixCSC)
-    Symbolic = pointer([0])
+function _jl_umfpack_symbolic{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti})
+    # Pointer to store the symbolic factorization returned by UMFPACK
+    Symbolic = pointer([zero(Tv)]) 
     ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_symbolic),
-          Int,
-          (Int, Int, Ptr{Int}, Ptr{Int}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+          Ti,
+          (Ti, Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Tv}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
           S.m, S.n, S.colptr, S.rowval, S.nzval, Symbolic, C_NULL, C_NULL)
     return Symbolic
 end
 
-function _jl_umfpack_dl_numeric(S::SparseMatrixCSC, Symbolic::Ptr)
-    Numeric = pointer([0])
+function _jl_umfpack_numeric{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Symbolic::Ptr{Tv})
+    # Pointer to store the numeric factorization returned by UMFPACK
+    Numeric = pointer([zero(Tv)])
     ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_numeric),
-          Int,
-          (Ptr{Int}, Ptr{Int}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+          Ti,
+          (Ptr{Ti}, Ptr{Ti}, Ptr{Tv}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
           S.colptr, S.rowval, S.nzval, Symbolic, Numeric, C_NULL, C_NULL)
     return Numeric
 end
 
-function _jl_umfpack_dl_solve(S::SparseMatrixCSC, b::Vector, Numeric::Ptr)
+function _jl_umfpack_solve{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv}, Numeric::Ptr{Tv})
     x = similar(b)
     ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_solve),
-          Int,
-          (Int, Ptr{Int}, Ptr{Int}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+          Ti,
+          (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Tv}, Ptr{Tv}, Ptr{Tv}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
           _jl_UMFPACK_A, S.colptr, S.rowval, S.nzval, x, b, Numeric, C_NULL, C_NULL)
-    return b
+    return x
 end
 
-_jl_umfpack_dl_free_symbolic(Symbolic::Ptr) =
+_jl_umfpack_free_symbolic{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Symbolic::Ptr{Tv}) =
     ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_symbolic), Void, (Ptr{Void},), Symbolic)
 
-_jl_umfpack_dl_free_numeric(Numeric::Ptr) = 
+_jl_umfpack_free_numeric{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Numeric::Ptr{Tv}) = 
     ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_numeric), Void, (Ptr{Void},), Numeric)
 
-function (\)(S::SparseMatrixCSC, b::Vector)
-    symbolic = _jl_umfpack_dl_symbolic(S)
-    numeric = _jl_umfpack_dl_numeric(S, symbolic)
-    _jl_umfpack_dl_free_symbolic(symbolic)
-    x = _jl_umfpack_dl_solve(S, b, numeric)
-    _jl_umfpack_dl_free_numeric(numeric)
+function (\){Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+    symbolic = _jl_umfpack_symbolic(S)
+    numeric = _jl_umfpack_numeric(S, symbolic)
+    _jl_umfpack_free_symbolic(S, symbolic)
+    x = _jl_umfpack_solve(S, b, numeric)
+    _jl_umfpack_free_numeric(S, numeric)
 
     return x
 end
