@@ -50,7 +50,7 @@ end
 ## Constructors
 
 function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
-    A = zeros(T, size(S))
+    A = zeros(T, int(S.m), int(S.n))
     for col = 1 : S.n
         for k = S.colptr[col] : (S.colptr[col+1]-1)
             A[S.rowval[k], col] = S.nzval[k]
@@ -211,7 +211,6 @@ end
 ## Structure query functions
 
 function issym(A::SparseMatrixCSC)
-    # Slow implementation
     nnz(A - A.') == 0 ? true : false
 end
 
@@ -235,7 +234,7 @@ end
 
 ## Transpose
 
-#Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+# Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
 function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
