@@ -1,3 +1,5 @@
+## Julia
+
 Julia is licensed under the MIT License.
 
 Copyright (c) 2009-2011, Jeff Bezanson, Stefan Karpinski, Viral B. Shah, Stephan Boyer
@@ -21,7 +23,7 @@ LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
---
+## repl-readline.c
 
 repl-readline.c is licensed under the GNU General Public License Version 2.
 
@@ -42,19 +44,19 @@ repl-readline.c is licensed under the GNU General Public License Version 2.
      with this program; if not, write to the Free Software Foundation, Inc.,
      51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
---
+## External libraries
 
 External libraries, if used, include their own licenses:
 
-ARPACK
-D3
-FDLIBM
-FFTW
-LAPACK
-LLVM
-LIBUNWIND
-MERSENNE TWISTER
-OPENBLAS
-PCRE
-READLINE
-SUITESPARSE
+- ARPACK: 	       http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE
+- D3:                  https://github.com/mbostock/d3/raw/master/LICENSE
+- FDLIBM:              http://www.netlib.org/fdlibm/fdlibm.h
+- FFTW:                http://fftw.org/doc/License-and-Copyright.html
+- LAPACK:              http://netlib.org/lapack/LICENSE.txt
+- LIBUNWIND:           http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master
+- LLVM:                http://llvm.org/releases/3.0/LICENSE.TXT
+- MERSENNE TWISTER:    http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt
+- OPENBLAS:            https://raw.github.com/xianyi/OpenBLAS/master/LICENSE
+- PCRE:                http://www.pcre.org/licence.txt
+- READLINE:            http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+- SUITESPARSE:         http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/
