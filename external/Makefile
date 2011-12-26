@@ -2,7 +2,7 @@
 
 LLVM_VER = 3.0
 READLINE_VER = 6.2
-PCRE_VER = 8.12
+PCRE_VER = 8.21
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
@@ -10,7 +10,7 @@ ARPACK_VER = 96
 FFTW_VER = 3.3
 SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
-UNWIND_VER = 0.99
+UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 
 ## high-level setup ##
@@ -105,7 +105,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties
+	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
 	touch $@
