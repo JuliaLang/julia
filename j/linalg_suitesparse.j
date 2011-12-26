@@ -69,7 +69,7 @@ function _jl_umfpack_numeric{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, S
     status = ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_numeric),
                    Ti,
                    (Ptr{Ti}, Ptr{Ti}, Ptr{Tv}, Ptr{Void}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                   S.colptr, S.rowval, S.nzval, Symbolic[1], Numeric, C_NULL, C_NULL)
+                   S.colptr, S.rowval, S.nzval, Symbolic, Numeric, C_NULL, C_NULL)
     return Numeric
 end
 
@@ -78,27 +78,26 @@ function _jl_umfpack_solve{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, b::
     status = ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_solve),
                    Ti,
                    (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Tv}, Ptr{Tv}, Ptr{Tv}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
-                   _jl_UMFPACK_A, S.colptr, S.rowval, S.nzval, x, b, Numeric[1], C_NULL, C_NULL)
+                   _jl_UMFPACK_A, S.colptr, S.rowval, S.nzval, x, b, Numeric, C_NULL, C_NULL)
     return x
 end
 
-function _jl_umfpack_free_symbolic{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
-    status = ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_symbolic), Void, (Ptr{Void},), Symbolic)
-end
+_jl_umfpack_free_symbolic{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Symbolic) =
+    ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_symbolic), Void, (Ptr{Void},), Symbolic)
 
-function _jl_umfpack_free_numeric{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Numeric)
-    status = ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_numeric), Void, (Ptr{Void},), Numeric)
-end
+_jl_umfpack_free_numeric{Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, Numeric) =
+    ccall(dlsym(_jl_libSuiteSparse, :umfpack_dl_free_numeric), Void, (Ptr{Void},), Numeric)
+
 
 ## User-callable functions
 function (\){Tv<:Float64,Ti<:Int64}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
     S = _jl_convert_to_0_based_indexing(S)
 
     symbolic = _jl_umfpack_symbolic(S)
-    numeric = _jl_umfpack_numeric(S, symbolic)
-    # _jl_umfpack_free_symbolic(S, symbolic)
-    x = _jl_umfpack_solve(S, b, numeric)
-    # _jl_umfpack_free_numeric(S, numeric)
+    numeric = _jl_umfpack_numeric(S, symbolic[1])
+    _jl_umfpack_free_symbolic(S, symbolic)
+    x = _jl_umfpack_solve(S, b, numeric[1])
+    _jl_umfpack_free_numeric(S, numeric)
 
     S = _jl_convert_to_1_based_indexing(S)
     return x
