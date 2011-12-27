@@ -51,7 +51,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       Figure: C++ numbers are absolute benchmark times in milliseconds;
               other timings are relative to C++ (smaller is better).
 
-Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
+Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and the integer parsing benchmark (46% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
@@ -60,8 +60,10 @@ Users who have a licensed copy of MKL can use it with Julia, but the default BLA
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
 scalar arithmetic loops, such as that found in the pi summation benchmark.
-Matlab's JIT for floating-point arithmetic does very well here too.
-However, Julia has a comprehensive approach to eliminating overhead that allows it to optimize not only code involving floating-point scalars, but also code for arbitrary user-defined data types.
+Matlab's JIT for floating-point arithmetic does very well here too, as does the V8 JavaScript engine.
+V8 is very impressive in that it can provide such a dynamic language with C-like performance in so many circumstances.
+JavaScript, however, is unable to utilize technical computing libraries such as LAPACK, resulting in poor performance on benchmarks like matrix multiplication.
+In contrast with both Matlab and JavaScript, Julia has a more comprehensive approach to eliminating overhead that allows it to consistently optimize all kinds of code for arbitrary user-defined data types, not just certain special cases.
 
 To give a quick taste of what Julia looks like, here is the code used in the Mandelbrot and random matrix statistics benchmarks:
 
