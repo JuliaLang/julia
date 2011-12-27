@@ -239,12 +239,15 @@ int main() {
     print_perf("fib", tmin);
 
     // parse_bin
-    assert(parse_int("1111000011110000111100001111", 2) == 252645135);
     tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
         t = clock_now();
+        char s[11];
         for (int k=0; k<1000; ++k) {
-            parse_int("1111000011110000111100001111", 2);
+            uint32_t n = dsfmt_gv_genrand_uint32();
+            sprintf(s, "%x", n);
+            uint32_t m = (uint32_t)parse_int(s, 16);
+            assert(m == n);
         }
         t = clock_now()-t;
         if (t < tmin) tmin = t;

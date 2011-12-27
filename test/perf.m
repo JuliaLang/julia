@@ -26,12 +26,12 @@ end
 %% recursive fib %%
 
 function f = fib(n)
-  if n < 2 
-    f = n;
-    return
-  else
-    f = fib(n-1) + fib(n-2);
-  end
+    if n < 2
+        f = n;
+        return
+    else
+        f = fib(n-1) + fib(n-2);
+    end
 end
 
 f = fib(20);
@@ -40,14 +40,15 @@ timeit('fib', @fib, 20)
 
 %% parse int %%
 
-bin2dec('10');
-function n = parseintperf(ignore)
-    for i=1:1000
-	n=bin2dec('1111000011110000111100001111');
+function n = parseintperf(t)
+    for i = 1:t
+        n = randi([0,2^32-1],1,'uint32');
+        s = dec2hex(n);
+        m = hex2dec(s);
+        assert(m == n);
     end
 end
-assert(parseintperf(true) == 252645135)
-timeit('parse_int', @parseintperf, true)
+timeit('parse_int', @parseintperf, 1000)
 
 %% array constructors %%
 

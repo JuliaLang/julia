@@ -127,12 +127,14 @@ if __name__=="__main__":
         if t < tmin: tmin = t
     print_perf("fib", tmin)
 
-    assert int("1111000011110000111100001111",2) == 252645135
     tmin = float('inf')
     for i in xrange(5):
         t = time.time()
         for i in xrange(1,1000):
-            int("1111000011110000111100001111",2)
+            n = random.randint(0,2**32-1)
+            s = hex(n)
+            m = int(s,16)
+            assert m == n
         t = time.time()-t
         if t < tmin: tmin = t
     print_perf ("parse_int", tmin)

@@ -17,16 +17,18 @@ fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 
 ## parse integer ##
 
-function parseintperf()
+function parseintperf(t)
     local n
-    for i=1:1000
-        n=parse_bin("1111000011110000111100001111")
+    for i=1:t
+        n = randi(Uint32)
+        s = hex(n)
+        m = uint32(parse_hex(s))
+        @assert m == n
     end
     return n
 end
 
-@assert parseintperf() == 252645135
-@timeit parseintperf() "parse_int"
+@timeit parseintperf(1000) "parse_int"
 
 ## array constructors ##
 

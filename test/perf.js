@@ -23,13 +23,16 @@ console.log("javascript,fib," + tmin/1000);
 tmin = Number.POSITIVE_INFINITY;
 for (var i=0; i < 5; i++) {
     t = (new Date).getTime();
-    for (var j=0; j < 100000; j++) {
-        assert(parseInt("1111000011110000111100001111",2) == 252645135);
+    for (var j=0; j < 1000*1000; j++) {
+        var n = Math.floor(4294967295*Math.random());
+        var s = n.toString(16);
+        var m = parseInt(s,16);
+        assert(m == n);
     }
     t = (new Date).getTime()-t;
     if (t < tmin) tmin = t;
 }
-console.log("javascript,parse_int," + tmin/100000);
+console.log("javascript,parse_int," + tmin/1000);
 
 // mandelbrot set //
 
