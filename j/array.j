@@ -51,9 +51,9 @@ end
 
 ## Constructors ##
 
-jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
-jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
-jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
+_jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
+_jl_comprehension_zeros{T}(oneresult::T, dims...) = Array(T, dims...)
+_jl_comprehension_zeros(oneresult::(), dims...) = Array(None, dims...)
 
 similar(a::Array, T, dims::Dims)      = Array(T, dims)
 similar{T}(a::Array{T,1})             = Array(T, size(a,1))

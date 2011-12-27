@@ -119,7 +119,7 @@ b = rand()
 @assert parse_int(Int32,"z",36) == 35
 @assert parse_bin("0") == 0
 @assert parse_oct("7") == 7
-@assert parse_dec("3830974272") == 3830974272
+@assert parse_int(Int64,"3830974272",10) == 3830974272
 @assert parse_hex("0BADF00D") == 195948557
 
 function fooo()

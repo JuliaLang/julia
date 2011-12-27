@@ -596,7 +596,7 @@ end
 @assert parse_dec("1") == 1
 @assert parse_dec("9") == 9
 @assert parse_dec("10") == 10
-@assert parse_dec("3830974272") == 3830974272
+@assert parse_int(Int64,"3830974272",10) == 3830974272
 
 @assert parse_hex("0") == 0
 @assert parse_hex("1") == 1
@@ -605,9 +605,9 @@ end
 @assert parse_hex("f") == 15
 @assert parse_hex("10") == 16
 @assert parse_hex("0BADF00D") == 195948557
-@assert parse_hex("BADCAB1E") == 3135023902
-@assert parse_hex("CafeBabe") == 3405691582
-@assert parse_hex("DeadBeef") == 3735928559
+@assert parse_int(Int64,"BADCAB1E",16) == 3135023902
+@assert parse_int(Int64,"CafeBabe",16) == 3405691582
+@assert parse_int(Int64,"DeadBeef",16) == 3735928559
 
 # bits types, printing numbers
 @assert string(uint32(-1)) == "0xffffffff"

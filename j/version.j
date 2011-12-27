@@ -69,17 +69,17 @@ const VERSION_TIME = readall(
 
 begin
 
-const jl_version_string = "Version $VERSION"
-local jl_version_clean = VERSION_CLEAN ? "" : "*"
-const jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$jl_version_clean"
+const _jl_version_string = "Version $VERSION"
+local _jl_version_clean = VERSION_CLEAN ? "" : "*"
+const _jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$_jl_version_clean"
 
-const jl_banner_plain =
+const _jl_banner_plain =
 I"               _
    _       _ _(_)_     |
   (_)     | (_) (_)    |  A fresh approach to technical computing
    _ _   _| |_  __ _   |
-  | | | | | | |/ _` |  |  $jl_version_string
-  | | |_| | | | (_| |  |  $jl_commit_string
+  | | | | | | |/ _` |  |  $_jl_version_string
+  | | |_| | | | (_| |  |  $_jl_commit_string
  _/ |\__'_|_|_|\__'_|  |
 |__/                   |
 
@@ -91,21 +91,21 @@ local d1 = "\033[34m" # first dot
 local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot
 local d4 = "\033[35m" # fourth dot
-const jl_banner_color =
+const _jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing
    $(jl)_ _   _| |_  __ _$(tx)   |
-  $(jl)| | | | | | |/ _` |$(tx)  |  $jl_version_string
-  $(jl)| | |_| | | | (_| |$(tx)  |  $jl_commit_string
+  $(jl)| | | | | | |/ _` |$(tx)  |  $_jl_version_string
+  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_commit_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
 $(jl)|__/$(tx)                   |
 
 \033[0m"
 
-color_available() =
+_jl_color_available() =
     success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
 
-banner() = print(color_available() ? jl_banner_color : jl_banner_plain)
+_jl_banner() = print(_jl_color_available() ? _jl_banner_color : _jl_banner_plain)
 
 end # begin

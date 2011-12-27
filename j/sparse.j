@@ -1,34 +1,20 @@
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
-type SparseMatrixCSC{T,T_int} <: AbstractMatrix{T}
+type SparseMatrixCSC{Tv,Ti<:Union(Int32,Int64)} <: AbstractMatrix{Tv}
     m::Int                  # Number of rows
     n::Int                  # Number of columns
-    colptr::Vector{Int}     # Column i is in colptr[i]:(colptr[i+1]-1)
-    rowval::Vector{T_int}   # Row values of nonzeros
-    nzval::Vector{T}        # Nonzero values
+    colptr::Vector{Ti}      # Column i is in colptr[i]:(colptr[i+1]-1)
+    rowval::Vector{Ti}      # Row values of nonzeros
+    nzval::Vector{Tv}       # Nonzero values
 end
 
-_jl_best_inttype(x::Integer) = Int32
+function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
+    Ti = Int32
+    colptr = Array(Ti, n+1)
+    rowval = Array(Ti, numnz)
+    nzval = Array(Tv, numnz)
 
-# function _jl_best_inttype(x::Integer)
-#     if x < typemax(Int8)
-#         return Int8
-#     elseif x < typemax(Int16)
-#         return Int16
-#     elseif x < typemax(Int32)
-#         return Int32
-#     else
-#         return Int64
-#     end    
-# end
-
-function SparseMatrixCSC(T::Type, m::Integer, n::Integer, numnz::Integer)
-    inttype = _jl_best_inttype(m)
-    colptr = Array(Int, n+1)
-    rowval = Array(inttype, numnz)
-    nzval = Array(T, numnz)
-
-    return SparseMatrixCSC{T,inttype}(m, n, colptr, rowval, nzval)
+    return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
 issparse(A::AbstractArray) = false
@@ -38,24 +24,28 @@ size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
 function show(S::SparseMatrixCSC)
-    println(S.m, "-by-", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
-    for col = 1:S.n
-        for k = S.colptr[col] : (S.colptr[col+1]-1)
-            print("\t[")
-            show(S.rowval[k])
-            print(",\t", col, "]\t= ")
-            show(S.nzval[k])
-            println()
+    println(S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
+
+    half_screen_rows = div(tty_rows() - 8, 2)
+    pad = alignment(max(S.m,S.n))[1]
+    k = 0
+    for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
+        if k < half_screen_rows || k > nnz(S)-half_screen_rows
+            println("\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ", 
+                    showcompact_to_string(S.nzval[k]))
+        elseif k == half_screen_rows
+            println("\t."); println("\t."); println("\t.");
         end
+        k += 1
     end
 end
 
+## Constructors
+
 function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
-    A = zeros(T, size(S))
-    for col = 1 : S.n
-        for k = S.colptr[col] : (S.colptr[col+1]-1)
-            A[S.rowval[k], col] = S.nzval[k]
-        end
+    A = zeros(T, int(S.m), int(S.n))
+    for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
+        A[S.rowval[k], col] = S.nzval[k]
     end
     return A
 end
@@ -65,30 +55,23 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
 function sparse(A::Matrix)
     m, n = size(A)
     I, J, V = findn_nzs(A)
-    sparse(I, J, V, m, n)
+    sparse(int32(I), int32(J), V, m, n)
 end
 
 sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
 
-function sparse{T1,T2}(I::AbstractVector{T1}, J::AbstractVector{T2}, 
-                       V::Union(Number,AbstractVector), 
-                       m::Integer, n::Integer)
+function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                        V::Union(Number,AbstractVector), 
+                                        m::Int, n::Int)
+
     if length(I) == 0; return spzeros(eltype(V),m,n); end
-
-    create_I_copy = true
-
-    inttype = _jl_best_inttype(m)
-    if T1 != inttype
-        I = copy_to(similar(I, inttype), I)
-        create_I_copy = false
-    end
 
     if !issorted(I)
         (I,p) = sortperm(I)
         J = J[p]
         if isa(V, AbstractVector); V = V[p]; end
     else
-        if create_I_copy; I = copy(I); end
+        I = copy(I)
     end
 
     if !issorted(J)
@@ -104,9 +87,9 @@ end
 # _jl_make_sparse() assumes that I,J are sorted in dictionary order 
 # (with J taking precedence)
 # use sparse() with the same arguments if this is not the case
-function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
-                         V::Union(Number, AbstractVector),
-                         m::Integer, n::Integer)
+function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                                 V::Union(Number, AbstractVector),
+                                                 m::Int, n::Int)
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     if isa(I, Range1) || isa(I, Range); I = [I]; end
@@ -118,7 +101,7 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
         V = fill(V, length(I))
     end
 
-    cols = zeros(Int, n+1)
+    cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
     cols[J[1] + 1] = 1
 
@@ -145,6 +128,7 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
 
     colptr = cumsum(cols)
 
+    # Allow up to 20% slack
     if ndups > 0.2*length(I)
         numnz = length(I)-ndups
         I = I[1:numnz]
@@ -154,23 +138,21 @@ function _jl_make_sparse(I::AbstractVector, J::AbstractVector,
     return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
-function find{T}(S::SparseMatrixCSC{T})
+function find{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     numnz = nnz(S)
-    I = Array(Int, numnz)
-    J = Array(Int, numnz)
-    V = Array(T, numnz)
+    I = Array(Ti, numnz)
+    J = Array(Ti, numnz)
+    V = Array(Tv, numnz)
 
     count = 1
-    for col = 1 : S.n
-        for k = S.colptr[col] : (S.colptr[col+1]-1)
-            if S.nzval[k] != 0 
-                I[count] = S.rowval[k]
-                J[count] = col
-                V[count] = S.nzval[k]
-                count += 1
-            else
-                println("Warning: sparse matrix has explicit stored zeros.")
-            end
+    for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
+        if S.nzval[k] != 0 
+            I[count] = S.rowval[k]
+            J[count] = col
+            V[count] = S.nzval[k]
+            count += 1
+        else
+            println("Warning: sparse matrix has explicit stored zeros.")
         end
     end
 
@@ -183,81 +165,70 @@ function find{T}(S::SparseMatrixCSC{T})
     return (I, J, V)
 end
 
-function sprand_rng(m, n, density, rng)
+function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
+    # TODO: Need to be able to generate int32 random integer arrays.
+    # That will save extra memory utilization in the int32() calls.
     numnz = int(m*n*density)
     I = randi(m, numnz)
     J = randi(n, numnz)
-    V = rng((numnz,))
-    S = sparse(I, J, V, m, n)
+    V = rng((numnz,))    
+    S = sparse(int32(I), int32(J), V, m, n)
 end
 
-sprand(m,n,density) = sprand_rng (m,n,density,rand)
-sprandn(m,n,density) = sprand_rng (m,n,density,randn)
+sprand(m::Int, n::Int, density::Float)  = sprand_rng (m,n,density,rand)
+sprandn(m::Int, n::Int, density::Float) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
 spones{T}(S::SparseMatrixCSC{T}) = 
-     SparseMatrixCSC(S.m, S.n, S.colptr, S.rowval, ones(T, S.colptr[end]-1))
+     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))
 
-spzeros(m::Int) = spzeros(m,m)
-spzeros(m::Int, n::Int) = spzeros(Float64,m,n)
-spzeros(T::Type, m::Int) = spzeros(T,m,m)
-spzeros(T::Type, m::Int, n::Int) =
-    SparseMatrixCSC(m,n,ones(Int,n+1),Array(_jl_best_inttype(m),0),Array(T,0))
+spzeros(m::Int) = spzeros(m, m)
+spzeros(m::Int, n::Int) = spzeros(Float64, m, n)
+spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
+spzeros(Tv::Type, m::Int, n::Int) =
+    SparseMatrixCSC(m, n, ones(Int32, n+1), Array(Int32, 0), Array(Tv, 0))
 
-
-function speye(T::Type, n::Int)
-    L = linspace(1, n)
-    _jl_make_sparse(L, L, ones(T, n), n, n)
-end
-
-speye(n::Int) = speye(Float64, n)
+speye(n::Int) = speye(Float64, n, n)
+speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
-    L = linspace(1, x)
+    L = linspace(int32(1), int32(x))
     _jl_make_sparse(L, L, ones(T, x), m, n)
 end
 
-speye(m::Int, n::Int) = speye(Float64, m, n)
+## Structure query functions
 
-function issym(A::SparseMatrixCSC)
-    # Slow implementation
-    nnz(A - A.') == 0 ? true : false
-end
+issym(A::SparseMatrixCSC) = nnz(A - A.') == 0
 
-function istril{T}(A::SparseMatrixCSC{T})
-    for col = 1:A.n
-        for i = A.colptr[col]:(A.colptr[col]-1)
-            if A.rowval[i] < col && A.nzval[i] != 0; return false; end
-        end
+function istril(A::SparseMatrixCSC)
+    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
+        if A.rowval[i] < col && A.nzval[i] != 0; return false; end
     end
     return true
 end
 
-function istriu{T}(A::SparseMatrixCSC{T})
-    for col = 1:A.n
-        for i = A.colptr[col]:(A.colptr[col]-1)
-            if A.rowval[i] > col && A.nzval[i] != 0; return false; end
-        end
+function istriu(A::SparseMatrixCSC)
+    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
+        if A.rowval[i] > col && A.nzval[i] != 0; return false; end
     end
     return true
 end
 
-#transpose(S::SparseMatrixCSC) = ((I,J,V) = find(S); sparse(J, I, V, S.n, S.m))
+## Transpose
 
-#Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
-function transpose{T}(S::SparseMatrixCSC{T})
+# Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
+function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
-    inttype = _jl_best_inttype(mT)
-    rowval_T = Array(inttype, nnzS)
-    nzval_T = Array(T, nnzS)
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
 
-    w = zeros(Int, nT+1)
+    w = zeros(Ti, nT+1)
     w[1] = 1
     for i=1:nnzS
         w[rowval_S[i]+1] += 1
@@ -265,34 +236,28 @@ function transpose{T}(S::SparseMatrixCSC{T})
     colptr_T = cumsum(w)
     w = copy(colptr_T)
 
-    for j = 1:mT
-        for p = colptr_S[j]:(colptr_S[j+1]-1)
-            ind = rowval_S[p]
-            q = w[ind]
-            w[ind] += 1
-            rowval_T[q] = j
-            nzval_T[q] = nzval_S[p]
-        end
+    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+        ind = rowval_S[p]
+        q = w[ind]
+        w[ind] += 1
+        rowval_T[q] = j
+        nzval_T[q] = nzval_S[p]
     end
     
     return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
 
-# ctranspose{T<:Number}(S::SparseMatrixCSC{T}) =
-#    ((I,J,V) = find(S); sparse(J, I, conj(V), S.n, S.m))
-
-function ctranspose{T}(S::SparseMatrixCSC{T})
+function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     (nT, mT) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
     rowval_S = S.rowval
     nzval_S = S.nzval
 
-    inttype = _jl_best_inttype(mT)
-    rowval_T = Array(inttype, nnzS)
-    nzval_T = Array(T, nnzS)
+    rowval_T = Array(Ti, nnzS)
+    nzval_T = Array(Tv, nnzS)
 
-    w = zeros(Int, nT+1)
+    w = zeros(Ti, nT+1)
     w[1] = 1
     for i=1:nnzS
         w[rowval_S[i]+1] += 1
@@ -300,38 +265,39 @@ function ctranspose{T}(S::SparseMatrixCSC{T})
     colptr_T = cumsum(w)
     w = copy(colptr_T)
 
-    for j = 1:mT
-        for p = colptr_S[j]:(colptr_S[j+1]-1)
-            ind = rowval_S[p]
-            q = w[ind]
-            w[ind] += 1
-            rowval_T[q] = j
-            nzval_T[q] = conj(nzval_S[p])
-        end
+    for j = 1:mT, p = colptr_S[j]:(colptr_S[j+1]-1)
+        ind = rowval_S[p]
+        q = w[ind]
+        w[ind] += 1
+        rowval_T[q] = j
+        nzval_T[q] = conj(nzval_S[p])
     end
     
     return SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
 end
+
+## Binary operators
 
 macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
     quote
 
-        function ($op){T1,T2}(A::SparseMatrixCSC{T1}, B::SparseMatrixCSC{T2})
+        function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
                 error("Incompatible sizes")
             end
 
             (m, n) = size(A)
 
-            typeS = promote_type(T1, T2)
-            # TODO: Need better method to allocate result
-            nnzS = nnz(A) + nnz(B)
-            colptrS = Array(Int, A.n+1)
-            inttype = _jl_best_inttype(m)
-            rowvalS = Array(m, nnzS)
-            nzvalS = Array(typeS, nnzS)
+            TvS = promote_type(TvA, TvB)
+            TiS = promote_type(TiA, TiB)
 
-            zero = convert(typeS, 0)
+            # TODO: Need better method to estimate result space
+            nnzS = nnz(A) + nnz(B)
+            colptrS = Array(TiS, A.n+1)
+            rowvalS = Array(TiS, nnzS)
+            nzvalS = Array(TvS, nnzS)
+
+            zero = convert(TvS, 0)
 
             colptrA = A.colptr
             rowvalA = A.rowval
@@ -421,25 +387,25 @@ end # macro
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
 @_jl_binary_op_A_sparse_B_sparse_res_sparse (-)
 
-(.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .* B)
-(.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, B.colptr, B.rowval, A .* B.nzval)
+(.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
+(.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
 @_jl_binary_op_A_sparse_B_sparse_res_sparse (.*)
 
-(./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval ./ B)
+(./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::Array) = (./)(full(A), B)
 (./)(A::Array, B::SparseMatrixCSC) = (./)(A, full(B))
 (./)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (./)(full(A), full(B))
 
 (.\)(A::SparseMatrixCSC, B::Number) = (.\)(full(A), B)
-(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, B.colptr, B.rowval, B.nzval .\ A)
+(.\)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), B.nzval .\ A)
 (.\)(A::SparseMatrixCSC, B::Array) = (.\)(full(A), B)
 (.\)(A::Array, B::SparseMatrixCSC) = (.\)(A, full(B))
 (.\)(A::SparseMatrixCSC, B::SparseMatrixCSC) = (.\)(full(A), full(B))
 
-(.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, A.colptr, A.rowval, A.nzval .^ B)
+(.^)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .^ B)
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
@@ -447,7 +413,7 @@ end # macro
 
 sum(A::SparseMatrixCSC) = sum(sub(A.nzval,1:nnz(A)))
 
-## ref ##
+## ref
 ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
 ref(A::SparseMatrixCSC, I::(Integer,Integer)) = ref(A, I[1], I[2])
 
@@ -499,7 +465,7 @@ function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector
 
 end
 
-#assign
+## assign
 assign{T,N}(A::SparseMatrixCSC{T},v::AbstractArray{T,N},i::Integer) =
     invoke(assign, (SparseMatrixCSC{T}, Any, Integer), A, v, i)
 assign{T,N}(A::SparseMatrixCSC, v::AbstractArray{T,N}, i0::Integer, i1::Integer) = 
@@ -612,28 +578,34 @@ function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Intege
     return A
 end
 
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, J::AbstractVector{S}) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, J)
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector{S}) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, [i], J)
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Integer) = invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
+assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, J::AbstractVector{S}) = 
+        invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, J)
+
+assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector{S}) = 
+        invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, [i], J)
+
+assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Integer) = 
+        invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
+
 assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
+
 assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
 
-#todo: assign where v is sparse
-function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
+#TODO: assign where v is sparse
+function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
     if size(v,1) != length(I) || size(v,2) != length(J)
         return("error in assign: mismatched dimensions")
     end
     m, n = size(A,1), size(A,2)
-    inttype = _jl_best_inttype(m)
     est = nnz(A) + numel(v)
-    colptr = Array(Int, n+1)
+    colptr = Array(Ti, n+1)
     colptr[:] = A.colptr[:]
-    rowval = Array(inttype, est)
-    nzval = Array(T, est)
+    rowval = Array(Ti, est)
+    nzval = Array(Tv, est)
     Js, Jp = sortperm(J)
     A_col = 1
     j = 1
-    spa = SparseAccumulator(T, inttype, m)
+    spa = SparseAccumulator(Tv, Ti, m)
     j_max = size(v,2)
     while A_col <= n
         if j > j_max
@@ -665,26 +637,24 @@ function assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, 
     A.nzval = nzval
     A
 end
-#TODO: sub
 
-# In matrix-vector multiplication, the right orientation of the vector is assumed.
+
+## Matrix multiplication
+
+# In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
     Y = zeros(promote_type(T1,T2), A.m)
-    for col = 1 : A.n
-        for k = A.colptr[col] : (A.colptr[col+1]-1)
-            Y[A.rowval[k]] += A.nzval[k] * X[col]
-        end
+    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
+        Y[A.rowval[k]] += A.nzval[k] * X[col]
     end
     return Y
 end
 
-# In vector-matrix multiplication, the right orientation of the vector is assumed.
+# In vector-matrix multiplication, the correct orientation of the vector is assumed.
 function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
     Y = zeros(promote_type(T1,T2), A.n)
-    for col = 1 : A.n
-        for k = A.colptr[col] : (A.colptr[col+1]-1)
-            Y[col] += X[A.rowval[k]] * A.nzval[k]
-        end
+    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
+        Y[col] += X[A.rowval[k]] * A.nzval[k]
     end
     return Y
 end
@@ -718,24 +688,24 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
 end
 
 # sparse matmul (sparse * sparse)
-function (*){T1,T2}(X::SparseMatrixCSC{T1}, Y::SparseMatrixCSC{T2}) 
+function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{TvY,TiY}) 
     mX, nX = size(X)
     mY, nY = size(Y)
     if nX != mY; error("error in *: mismatched dimensions"); end
-    T = promote_type(T1,T2)
+    Tv = promote_type(TvX, TvY)
+    Ti = promote_type(TiX, TiY)
 
-    colptr = Array(Int, nY+1)
+    colptr = Array(Ti, nY+1)
     colptr[1] = 1
-    inttype = _jl_best_inttype(mX)
     nnz_res = nnz(X) + nnz(Y)
-    rowval = Array(inttype, nnz_res)  # Need better estimation of result space
-    nzval = Array(T, nnz_res)         # Need better estimation of result space
+    rowval = Array(Ti, nnz_res)  # TODO: Need better estimation of result space
+    nzval = Array(Tv, nnz_res)
 
     colptrY = Y.colptr
     rowvalY = Y.rowval
     nzvalY = Y.nzval
 
-    spa = SparseAccumulator(T, inttype, mX);
+    spa = SparseAccumulator(Tv, Ti, mX);
     for y_col = 1:nY
         for y_elt = colptrY[y_col] : (colptrY[y_col+1]-1)
             x_col = rowvalY[y_elt]
@@ -749,20 +719,20 @@ end
         
 ## SparseAccumulator and related functions
 
-type SparseAccumulator{T,T_int} <: AbstractVector{T}
-    vals::Vector{T}
+type SparseAccumulator{Tv,Ti} <: AbstractVector{Tv}
+    vals::Vector{Tv}
     flags::Vector{Bool}
-    indexes::Vector{T_int}
-    nvals::Int
+    indexes::Vector{Ti}
+    nvals::Integer
 end
 
 show{T}(S::SparseAccumulator{T}) = invoke(show, (Any,), S)
 
-function SparseAccumulator{T,T_int}(::Type{T}, ::Type{T_int}, s::Int) 
-    return SparseAccumulator(zeros(T,s), falses(s), Array(T_int,s), 0)
+function SparseAccumulator{Tv,Ti}(::Type{Tv}, ::Type{Ti}, s::Integer) 
+    return SparseAccumulator(zeros(Tv,int(s)), falses(int(s)), Array(Ti,int(s)), 0)
 end
 
-SparseAccumulator(s::Int) = SparseAccumulator(Float64, Int, s)
+SparseAccumulator(s::Integer) = SparseAccumulator(Float64, Int32, s)
 
 length(S::SparseAccumulator) = length(S.vals)
 numel(S::SparseAccumulator) = S.nvals
@@ -781,7 +751,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         rowval = grow(rowval, length(rowval))
         nzval = grow(nzval, length(nzval))
     end
-    _jl_quicksort(indexes, 1, nvals) #sort indexes[1:nvals]
+    _jl_quicksort(indexes, 1, nvals)
     offs = 1
     for i=1:nvals
         pos = indexes[i]
@@ -800,7 +770,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
     return (rowval, nzval)
 end
 
-#sets S = S + a*x, where x is col j of A
+# S = S + a*x, where x is col j of A
 function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Integer)
     colptrA = A.colptr
     rowvalA = A.rowval
@@ -829,7 +799,8 @@ function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Inte
     
     S.nvals = nvals
 end
-#set spa S to be the i'th column of A
+
+# Set spa S to be the i'th column of A
 function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Integer)
     m = A.m
     if length(S) != m; error("mismatched dimensions"); end
@@ -853,32 +824,7 @@ function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Integ
     S
 end
 
-# # reset spa
-# function _jl_spa_reset{T}(S::SparseAccumulator{T})
-#     z = zero(T)
-#     for i=1:numel(S)
-#         S.vals[i] = z
-#         S.flags[i] = false
-#     end
-#     S.nvals = 0
-# end
-
-# #increments S[i] by v
-# function _jl_spa_incr{T}(S::SparseAccumulator{T}, v, i::Integer)
-#     if v != zero(T)
-#         if S.flags[i]
-#             S.vals[i] += v
-#         else
-#             S.flags[i] = true
-#             S.vals[i] = v
-#             S.nvals += 1
-#             S.indexes[S.nvals] = i            
-#         end
-#     end
-#     return S
-# end
-
-ref{T}(S::SparseAccumulator{T}, i::Int) = S.flags[i] ? S.vals[i] : zero(T)
+ref{T}(S::SparseAccumulator{T}, i::Integer) = S.flags[i] ? S.vals[i] : zero(T)
 
 assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Integer) = 
     invoke(assign, (SparseAccumulator{T}, Any, Integer), S, v, i)

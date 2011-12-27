@@ -916,11 +916,8 @@ value_t return_from_uint64(uint64_t Uaccum)
     if (Uaccum > (uint64_t)S64_MAX) {
         RETURN_NUM_AS(Uaccum, uint64);
     }
-    else if (Uaccum > (uint64_t)UINT_MAX) {
-        RETURN_NUM_AS(Uaccum, int64);
-    }
     else if (Uaccum > (uint64_t)INT_MAX) {
-        RETURN_NUM_AS(Uaccum, uint32);
+        RETURN_NUM_AS(Uaccum, int64);
     }
     RETURN_NUM_AS(Uaccum, int32);
 }
@@ -930,11 +927,8 @@ value_t return_from_int64(int64_t Saccum)
     if (fits_fixnum(Saccum)) {
         return fixnum((fixnum_t)Saccum);
     }
-    if (Saccum > (int64_t)UINT_MAX || Saccum < (int64_t)INT_MIN) {
+    if (Saccum > (int64_t)INT_MAX || Saccum < (int64_t)INT_MIN) {
         RETURN_NUM_AS(Saccum, int64);
-    }
-    else if (Saccum > (int64_t)INT_MAX) {
-        RETURN_NUM_AS(Saccum, uint32);
     }
     RETURN_NUM_AS(Saccum, int32);
 }

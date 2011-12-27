@@ -156,7 +156,8 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
     - **[MT][]**           — a fast Mersenne Twister pseudorandom number generator library.
     - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
-    - **[LAPACK][]**       — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+    - **[LAPACK][]**       — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+    - **[SuiteSparse][]**  - a library of linear algebra routines for sparse matrices
     - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
     - **[FFTW][]**         — library for computing fast Fourier transforms very quickly and efficiently.
     - **[PCRE][]**         — Perl-compatible regular expressions library.
@@ -170,6 +171,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
+[SuiteSparse]:	http://www.cise.ufl.edu/research/sparse/SuiteSparse/
 [ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
