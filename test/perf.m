@@ -1,7 +1,7 @@
 function perf()
 
-function assert(expr)
-   if ~expr
+function assert(bool)
+   if ~bool
      error('Assertion failed')
    end
 end
@@ -124,8 +124,7 @@ end
 
 function v = sortperf(n)
   v = rand(n,1);
-  v = qsort_kernel(v,1,n);
-  %v = sort(v);
+  v = qsort(v);
 end
 assert(issorted(sortperf(5000)))
 timeit ('quicksort', @sortperf, 5000)

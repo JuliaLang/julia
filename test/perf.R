@@ -1,41 +1,66 @@
-## recursive fibonacci 
+library(R.utils)
 
-len = 10
-fibvals = numeric(len)
-fibvals[1] = 1
-fibvals[2] = 1
-for (i in 3:len) { 
-   fibvals[i] = fibvals[i-1] + fibvals[i-2]
-} 
+assert = function(bool) {
+	if (!bool) stop('Assertion failed')
+}
 
+timeit = function(name, f, ...) {
+	tmin = Inf
+	for (t in 1:5) {
+		t = proc.time()
+		f(...)
+		t = (proc.time()-t)["elapsed"]
+		if (t < tmin) tmin = t
+	}
+	cat(sprintf("r,%s,%.8f\n", name, tmin*1000))
+}
 
-## I don't think the above can be vectorized.
+fib = function(n) {
+	if (n < 2) {
+		return(n)
+	} else {
+		return(fib(n-1) + fib(n-2))
+	}
+}
 
-## Binary to Decimal
+assert(fib(20) == 6765)
+timeit("fib", fib, 20)
 
-bin2dec <- function(x)
-{
- x <- as.character(x)
- b <- as.numeric(unlist(strsplit(x, "")))
- pow <- 2 ^ ((length(b) - 1):0)
- sum(pow[b == 1])
-} 
+parseintperf = function(t) {
+	for (i in 1:t) {
+		// R doesn't support uint32 values
+		n = floor(2^31-1*runif(1))
+		s = intToHex(n)
+		m = as.numeric(paste("0x",s,sep=""))
+		assert(m == n)
+	}
+}
 
-bin2dec(10)
+timeit("parse_int", parseintperf, 1000)
 
-## Matrix of all ones
+mandel = function(z) {
+    c = z
+	maxiter = 80
+    for (n in 1:maxiter) {
+        if (Mod(z) > 2) return(n-1)
+        z = z^2+c
+	}
+	return(maxiter)
+}
 
-ones=rep(1,200*200)
-dim(ones)=c(200,200)
+mandelperf = function() {
+	re = seq(-2,0.5,.1)
+	im = seq(-1,1,.1)
+	M = matrix(0.0,nrow=length(re),ncol=length(im))
+	count = 1
+	for (r in re) {
+		for (i in im) {
+			M[count] = mandel(complex(real=r,imag=i))
+			count = count + 1
+		}
+	}
+	return(M)
+}
 
-## A*A'
-ans=ones %*% t(ones)
-
-test=rep(200,200*200)
-dim(test)=c(200,200)
-all.equal(ans,test)
-
-
-
-
-
+assert(sum(mandelperf()) == 14660)
+timeit("mandel", mandelperf)
