@@ -70,6 +70,8 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
+_jl_pivot_middle(a,b,c) = a < b ? (b < c ? b : c) : (a < c ? a : c)
+
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
     while hi > lo
@@ -77,9 +79,11 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
             return $expr(:call, insertionsort, args..., :a, :lo, :hi)
         end
         i, j = lo, hi
-        #pivot = a[div(lo+hi,2)]
-        pivot = a[randival(lo,hi)]
-        # Partition
+        # pivot = (a[lo]+a[hi])/2                                   # 1.14x
+        # pivot = a[div(lo+hi,2)]                                   # 1.15x
+          pivot = (a[lo]+a[hi]+a[div(lo+hi,2)])/3                   # 1.16x
+        # pivot = _jl_pivot_middle(a[lo], a[hi], a[div(lo+hi,2)])   # 1.23x
+        # pivot = a[randival(lo,hi)]                                # 1.28x
         while i <= j
             while $lt(:(a[i]), :pivot); i += 1; end
             while $lt(:pivot, :(a[j])); j -= 1; end
@@ -89,7 +93,6 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
                 j -= 1
             end
         end
-        # Recursion for quicksort
         if lo < j
             $expr(:call, quicksort, args..., :a, :lo, :j)
         end
