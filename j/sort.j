@@ -77,7 +77,8 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
             return $expr(:call, insertionsort, args..., :a, :lo, :hi)
         end
         i, j = lo, hi
-        pivot = a[div(lo+hi,2)]
+        #pivot = a[div(lo+hi,2)]
+        pivot = a[randival(lo,hi)]
         # Partition
         while i <= j
             while $lt(:(a[i]), :pivot); i += 1; end
