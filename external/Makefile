@@ -179,9 +179,10 @@ openblas-$(OPENBLAS_VER).tar.gz:
 openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
+	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC) TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="-O2 -fPIC -static-libgfortran" TARGET=$(TARGET_OPENBLAS_ARCH)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -204,7 +205,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="-O2 -fPIC" FORTRAN=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="-O2 -fPIC -static-libgfortran" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
@@ -237,7 +238,7 @@ arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
 	cd arpack-$(ARPACK_VER) && \
-	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC" && \
+	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC -static-libgfortran" && \
 	ar x libarpack_.a && \
 	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
@@ -263,6 +264,8 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
+
 fftw-$(FFTW_VER).tar.gz:
 	curl -O http://www.fftw.org/$@
 
@@ -272,7 +275,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(EXTROOT) --enable-shared --enable-float --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse --enable-sse2 --enable-avx --enable-fma && \
+	./configure --prefix=$(EXTROOT) $(FFTW_CONFIG) --enable-sse --enable-float && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -285,7 +288,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(EXTROOT) --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-avx --enable-fma && \
+	./configure --prefix=$(EXTROOT) $(FFTW_CONFIG) && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
@@ -368,7 +371,6 @@ install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	cd libunwind-$(UNWIND_VER) && $(MAKE) && $(MAKE) install
-
 
 libunwind-$(UNWIND_VER).tar.gz:
 	curl -O http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz 
