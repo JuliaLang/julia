@@ -20,7 +20,7 @@ our @benchmarks = qw(
 );
 
 our %systems = (
-  "c"          => ["C++ (GCC)"   , "4.2.1 -O*"  ],
+  "c"          => ["C++ (GCC)"   , "4.2.1*"     ],
   "julia"      => ["Julia"       , "54fc2f70"   ],
   "python"     => ["Python/NumPy", "2.7.1/1.5.1"],
   "matlab"     => ["Matlab"      , "R2011a"     ],

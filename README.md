@@ -36,7 +36,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
     _____________________________________________________________________________________________________________________
                     |             |
                     |  C++ (GCC)  |         Julia  Python/NumPy        Matlab        Octave             R    JavaScript
-                    |  4.2.1 -O*  |      54fc2f70   2.7.1/1.5.1        R2011a           3.4         2.9.0   V8 3.6.6.11
+                    |     4.2.1*  |      54fc2f70   2.7.1/1.5.1        R2011a           3.4         2.9.0   V8 3.6.6.11
     ________________|_____________|______________________________________________________________________________________
                     |             |
                 fib |     0.200   |          1.99         28.68       1364.10       2436.51        325.33          1.48
@@ -51,7 +51,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       Figure: C++ numbers are absolute benchmark times in milliseconds;
               other timings are relative to C++ (smaller is better).
 
-      *Best timings taken over all optimization levels (0 to 3).
+      *Best timing for each benchmark taken from all optimization levels (-O0 through -O3).
 
 Julia beats other high-level systems on most micro-benchmarks, with a few exceptions for Matlab and JavaScript.
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
