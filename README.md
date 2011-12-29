@@ -33,20 +33,20 @@ The source code for the various implementations can be found here:
 We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
 The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
-    _____________________________________________________________________________________________________________________
-                    |             |
-                    |  C++ (GCC)  |         Julia  Python/NumPy        Matlab        Octave             R    JavaScript
-                    |     4.2.1*  |      54fc2f70   2.7.1/1.5.1        R2011a           3.4         2.9.0   V8 3.6.6.11
-    ________________|_____________|______________________________________________________________________________________
-                    |             |
-                fib |     0.200   |          1.99         28.68       1364.10       2436.51        325.33          1.48
-          parse_int |     0.242   |          4.36         16.74        842.76       6593.66       1082.67          2.14
-          quicksort |     0.419   |          1.31         61.37        136.92       3356.46        911.91         23.32
-             mandel |     0.249   |          7.52         32.45         69.28        868.83        229.00          6.29
-             pi_sum |    53.525   |          0.74         18.53          1.08        333.38        251.10          0.76
-      rand_mat_stat |     7.279   |          4.78         40.86         11.93         58.54         30.22          9.34
-       rand_mat_mul |   235.499   |          0.98          1.19          0.70          1.70          2.12        289.42
-    ________________|_____________|______________________________________________________________________________________
+    ______________________________________________________________________________________________________________________
+                     |             |
+                     |  C++ (GCC)  |         Julia  Python/NumPy        Matlab        Octave             R    JavaScript
+                     |     4.2.1*  |      54fc2f70   2.7.1/1.5.1        R2011a           3.4         2.9.0   V8 3.6.6.11
+    _________________|_____________|______________________________________________________________________________________
+                     |             |
+      fib            |     0.200   |          2.04         28.51       1346.43       2412.83        324.95          1.47
+      parse_int      |     0.242   |          3.93         16.69        835.95       6571.81       1041.34          2.15
+      quicksort      |     0.420   |          1.39         58.62        134.80       3211.98        869.35         24.68
+      mandel         |     0.249   |          7.48         31.83         67.18        858.55        224.98          6.38
+      pi_sum         |    53.524   |          0.74         18.48          1.08        335.94        238.27          0.75
+      rand_mat_stat  |     7.334   |          4.67         41.73         11.69         55.17         29.72          8.97
+      rand_mat_mul   |   225.894   |          1.00          1.25          0.72          1.81          2.37        286.78
+    _________________|_____________|______________________________________________________________________________________
 
       Figure: C++ numbers are absolute benchmark times in milliseconds;
               other timings are relative to C++ (smaller is better).
@@ -54,7 +54,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
       *Best timing for each benchmark taken from all optimization levels (-O0 through -O3).
 
 Julia beats other high-level systems on most micro-benchmarks, with a few exceptions for Matlab and JavaScript.
-Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
+Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
 Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).

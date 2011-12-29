@@ -12,6 +12,7 @@ bin/perf%: perf.cxx
 
 benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3
 	rm -f $@
+	mkdir -p benchmarks
 	for t in 1 2 3 4 5; do bin/perf0; done >>$@
 	for t in 1 2 3 4 5; do bin/perf1; done >>$@
 	for t in 1 2 3 4 5; do bin/perf2; done >>$@
@@ -54,6 +55,6 @@ benchmark: benchmarks.txt
 
 clean:
 	$(MAKE) -C unicode $@
-	rm -rf bin benchmarks benchmarks.csv
+	rm -rf bin/perf* benchmarks benchmarks.csv
 
 .PHONY: all quick core hashing arrayops unicode perf benchmark clean

@@ -32,29 +32,29 @@ our %systems = (
 our @systems = qw(c julia python matlab octave r javascript);
 our @compare = @systems[1..$#systems];
 
-printf "%s\n", ("_" x (33+14*@compare));
-print "                |             |\n";
-printf "                |  %9s  |", $systems{"c"}[0];
+printf "%s\n", ("_" x (34+14*@compare));
+print "                 |             |\n";
+printf "                 |  %9s  |", $systems{"c"}[0];
 for my $system (@compare) {
   printf "%14s", $systems{$system}[0];
 }
 print "\n";
-printf "                |  %9s  |", $systems{"c"}[1];
+printf "                 |  %9s  |", $systems{"c"}[1];
 for my $system (@compare) {
   printf "%14s", $systems{$system}[1];
 }
 print "\n";
-print "________________|_____________|";
+print "_________________|_____________|";
 printf "%s\n", ("_" x (2+14*@compare));
-print "                |             |\n";
+print "                 |             |\n";
 
 for my $benchmark (@benchmarks) {
-  printf "  %13s |   %7.3f   |", $benchmark, $_{$benchmark}{'c'};
+  printf "  %-14s |   %7.3f   |", $benchmark, $_{$benchmark}{'c'};
   for my $system (@compare) {
     printf "%14.2f", $_{$benchmark}{$system}/$_{$benchmark}{'c'};
   }
   print "\n";
 }
 
-print "________________|_____________|";
+print "_________________|_____________|";
 printf "%s\n", ("_" x (2+14*@compare));
