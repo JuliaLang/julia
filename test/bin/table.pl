@@ -46,6 +46,7 @@ for my $system (@compare) {
 print "\n";
 print "________________|_____________|";
 printf "%s\n", ("_" x (2+14*@compare));
+print "                |             |\n";
 
 for my $benchmark (@benchmarks) {
   printf "  %13s |   %7.3f   |", $benchmark, $_{$benchmark}{'c'};

@@ -213,6 +213,8 @@ double *randmatmul(int n) {
     double *C = (double*)malloc(n*n*sizeof(double));
     cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                 n, n, n, 1.0, A, n, B, n, 0.0, C, n);
+    free(A);
+    free(B);
     return C;
 }
 
@@ -335,6 +337,7 @@ int main() {
         t = clock_now();
         double *C = randmatmul(1000);
         assert(0 <= C[0]);
+        free(C);
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
