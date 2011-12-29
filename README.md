@@ -52,7 +52,7 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
 
       *Best timings taken over all optimization levels (0 to 3).
 
-Julia beats other high-level systems on all micro-benchmarks, except for JavaScript on the Fibonacci benchmark (33% faster) and the integer parsing benchmark (46% faster) and Matlab on the random matrix multiplication benchmark (26% faster).
+Julia beats other high-level systems on most micro-benchmarks, with a few exceptions for Matlab and JavaScript.
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark and by a small margin on random matrix multiplication.
 Relative performance between languages on [other systems](#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
