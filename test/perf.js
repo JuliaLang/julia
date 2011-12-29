@@ -114,14 +114,14 @@ function sortperf(n) {
 tmin = Number.POSITIVE_INFINITY;
 for (var i=0; i < 5; i++) {
     t = (new Date).getTime();
-    for (var j=0; j < 10; j++) {
+    for (var j=0; j < 100; j++) {
         v = sortperf(5000);
         assert(a[0] < 0.99);
     }
     t = (new Date).getTime()-t;
     if (t < tmin) tmin = t;
 }
-console.log("javascript,quicksort," + tmin/10);
+console.log("javascript,quicksort," + tmin/100);
 
 // slow pi series //
 

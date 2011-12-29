@@ -19,7 +19,7 @@ using namespace std;
 
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));
-    dsfmt_gv_fill_array_open_open(d, n);
+    dsfmt_gv_fill_array_close_open(d, n);
     return d;
 }
 
@@ -228,7 +228,7 @@ int main() {
 
     // fib(20)
     assert(fib(20) == 6765);
-    int f=0;
+    int f = 0;
     tmin = INFINITY;
     for (int i=0; i<NITER; ++i) {
         t = clock_now();
@@ -254,30 +254,30 @@ int main() {
     }
     print_perf("parse_int", tmin);
 
-    // array constructor
-    tmin = INFINITY;
-    for (int i=0; i<NITER; ++i) {
-        t = clock_now();
-        double *a = ones(200,200);
-        free(a);
-        t = clock_now()-t;
-        if (t < tmin) tmin = t;
-    }
-    print_perf("ones", tmin);
-
-    // A*A'
-    //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
-    double *b = ones(200, 200);
-    tmin = INFINITY;
-    for (int i=0; i<NITER; ++i) {
-        t = clock_now();
-        double *c = matmul_aat(200, b);
-        free(c);
-        t = clock_now()-t;
-        if (t < tmin) tmin = t;
-    }
-    free(b);
-    print_perf("AtA", tmin);
+    // // array constructor
+    // tmin = INFINITY;
+    // for (int i=0; i<NITER; ++i) {
+    //     t = clock_now();
+    //     double *a = ones(200,200);
+    //     free(a);
+    //     t = clock_now()-t;
+    //     if (t < tmin) tmin = t;
+    // }
+    // print_perf("ones", tmin);
+    // 
+    // // A*A'
+    // //SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
+    // double *b = ones(200, 200);
+    // tmin = INFINITY;
+    // for (int i=0; i<NITER; ++i) {
+    //     t = clock_now();
+    //     double *c = matmul_aat(200, b);
+    //     free(c);
+    //     t = clock_now()-t;
+    //     if (t < tmin) tmin = t;
+    // }
+    // free(b);
+    // print_perf("AtA", tmin);
 
     // mandel
     int mandel_sum;

@@ -54,15 +54,15 @@ timeit('parse_int', @parseintperf, 1000)
 
 o = ones(200,200);
 assert(all(o) == 1)
-timeit('ones', @ones, 200, 200)
+% timeit('ones', @ones, 200, 200)
 
 %% matmul and transpose %%
 
 function oo = matmul(o)
-  oo = o * o.';
+    oo = o * o.';
 end
 assert(all(matmul(o) == 200))
-timeit('AtA', @matmul, o)
+% timeit('AtA', @matmul, o)
 
 %% mandelbrot set: complex arithmetic and comprehensions %%
 
@@ -90,20 +90,19 @@ function M = mandelperf(ignore)
   end
 end
 assert(sum(sum(mandelperf(true))) == 14628)
-timeit ('mandel', @mandelperf, true)
+timeit('mandel', @mandelperf, true)
 
 %% numeric vector quicksort %%
 
-function b = qsort(a) 
-  b = qsort_kernel(a, 1, length(a));
+function b = qsort(a)
+    b = qsort_kernel(a, 1, length(a));
 end
 
 function a = qsort_kernel(a, lo, hi)
     i = lo;
     j = hi;
     while i < hi
-        pivot = a(round((lo+hi)/2));
-    	% Partition
+        pivot = a(floor((lo+hi)/2));
     	while i <= j
               while a(i) < pivot, i = i + 1; end
               while a(j) > pivot, j = j - 1; end
@@ -115,19 +114,18 @@ function a = qsort_kernel(a, lo, hi)
             	 j = j - 1;
        	      end
     	end
-        % Recursion for quicksort
         if lo < j; a=qsort_kernel(a, lo, j); end
         lo = i;
-	j = hi;
+	    j = hi;
     end
 end
 
 function v = sortperf(n)
-  v = rand(n,1);
-  v = qsort(v);
+    v = rand(n,1);
+    v = qsort(v);
 end
 assert(issorted(sortperf(5000)))
-timeit ('quicksort', @sortperf, 5000)
+timeit('quicksort', @sortperf, 5000)
 
 %% slow pi series %%
 
@@ -167,15 +165,15 @@ end
 
 [s1, s2] = randmatstat(1000);
 assert(round(10*s1) > 5 && round(10*s1) < 10);
-timeit ('rand_mat_stat', @randmatstat, 1000)
+timeit('rand_mat_stat', @randmatstat, 1000)
 
 function t = mytranspose(x)
     [m, n] = size(x);
     t = zeros(n, m);
     for i=1:n
-      for j=1:m
-        t(i,j) = x(j,i);
-      end
+        for j=1:m
+            t(i,j) = x(j,i);
+        end
     end
 end
 
@@ -185,6 +183,6 @@ function X = randmatmul(n)
     X = rand(n,n)*rand(n,n);
 end
 
-timeit ('rand_mat_mul', @randmatmul, 1000);
+timeit('rand_mat_mul', @randmatmul, 1000);
 
 end

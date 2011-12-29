@@ -33,20 +33,20 @@ The source code for the various implementations can be found here:
 We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
 The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
 
-    ____________________________________________________________________________________________
-                     |             |
-                     |  C++ (GCC)  |    Julia    Python/NumPy    Matlab    Octave   JavaScript
-                     |  4.2.1 -O3  |   bd7c16a2   2.7.1/1.5.1    R2011a      3.4   V8 3.6.6.11
-    _________________|_____________|____________________________________________________________
-                     |             |
-      fib            |     .205    |     2.14        27.5      1351.      2531.        1.50
-      parse_int      |     .242    |     3.95        16.5       855.      6899.        2.14
-      quicksort      |     .429    |     1.15        61.8       145.      3356.       24.0
-      mandel         |     .269    |     5.87        30.3        61.6      844.        6.09
-      pi_sum         |   53.8      |      .743       18.9         1.13     351.         .793
-      rand_mat_stat  |    9.11     |     3.32        34.1        10.1       48.1       8.78
-      rand_mat_mul   |  240.       |      .972        1.19         .715      1.68    311.
-    _________________|_____________|____________________________________________________________
+    _____________________________________________________________________________________________________________________
+                    |             |
+                    |  C++ (GCC)  |         Julia  Python/NumPy        Matlab        Octave             R    JavaScript
+                    |  4.2.1 -O*  |      54fc2f70   2.7.1/1.5.1        R2011a           3.4         2.9.0   V8 3.6.6.11
+    ________________|_____________|______________________________________________________________________________________
+                fib |     0.200   |          1.98         28.68       1364.10       2436.51        325.33          1.48
+          parse_int |     0.355   |          2.68         11.41        574.48       4494.67        738.02          1.46
+          quicksort |     0.772   |          0.69         33.30         74.29       1821.28        494.82         12.66
+             mandel |     2.516   |          0.72          3.21          6.85         85.95         22.65          0.62
+             pi_sum |    54.368   |          0.73         18.24          1.06        328.21        247.20          0.75
+      rand_mat_stat |    19.310   |          1.79         15.40          4.50         22.07         11.39          3.52
+       rand_mat_mul |   278.803   |          0.82          1.00          0.59          1.44          1.79        244.47
+    ________________|_____________|______________________________________________________________________________________
+      *Best timings taken over all optimization levels (0 to 3).
 
       Figure: C++ numbers are absolute benchmark times in milliseconds;
               other timings are relative to C++ (smaller is better).
