@@ -1,10 +1,10 @@
-_jl_libBLAS = dlopen("libLAPACK")
+_jl_libblas = dlopen("liblapack")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 macro _jl_blas_copy_macro(fname, eltype)
     quote
         function _jl_blas_copy(n::Integer, DX::Union(Ptr{$eltype},Array{$eltype}), incx::Integer, DY::Union(Ptr{$eltype},Array{$eltype}), incy::Integer)
-            ccall(dlsym(_jl_libBLAS, $fname),
+            ccall(dlsym(_jl_libblas, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   int32(n), DX, int32(incx), DY, int32(incy))
@@ -45,7 +45,7 @@ macro _jl_blas_dot_macro(fname, eltype)
     quote
         function _jl_blas_dot(n::Integer, DX::Array{$eltype}, incx::Integer,
                              DY::Array{$eltype}, incy::Integer)
-            ccall(dlsym(_jl_libBLAS, $fname),
+            ccall(dlsym(_jl_libblas, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   int32(n), DX, int32(incx), DY, int32(incy))
@@ -69,7 +69,7 @@ end
 macro _jl_blas_nrm2_macro(fname, eltype, ret_type)
     quote
         function _jl_blas_nrm2(n::Integer, X::Array{$eltype}, incx::Integer)
-            ccall(dlsym(_jl_libBLAS, $fname),
+            ccall(dlsym(_jl_libblas, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   int32(n), X, int32(incx))
@@ -96,7 +96,7 @@ macro _jl_blas_axpy_macro(fname, eltype)
     quote
         function _jl_blas_axpy(n::Integer, x::($eltype), 
                               DA::Array{$eltype}, incx::Integer, DY::Array{$eltype}, incy::Integer)
-            ccall(dlsym(_jl_libBLAS, $fname),
+            ccall(dlsym(_jl_libblas, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
                   int32(n), x, DA, int32(incx), DY, int32(incy))            
@@ -127,7 +127,7 @@ macro _jl_blas_gemm_macro(fname, eltype)
            a = pointer(A)
            b = pointer(B)
            c = pointer(C)
-           ccall(dlsym(_jl_libBLAS, $fname),
+           ccall(dlsym(_jl_libblas, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
@@ -243,7 +243,7 @@ macro _jl_blas_gemv_macro(fname, eltype)
            a = pointer(A)
            x = pointer(X)
            y = pointer(Y)
-           ccall(dlsym(_jl_libBLAS, $fname),
+           ccall(dlsym(_jl_libblas, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},

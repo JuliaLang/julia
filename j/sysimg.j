@@ -100,18 +100,19 @@ load("sort.j")
 load("combinatorics.j")
 load("statistics.j")
 
+# sparse matrices
+load("sparse.j")
+
 # linear algebra
 load("linalg.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
-
-# sparse matrices
-load("sparse.j")
+load("linalg_suitesparse.j")
 
 # signal processing
-load("signal_fftw.j")
 load("signal.j")
+load("signal_fftw.j")
 
 # random number generation
 load("random.j")

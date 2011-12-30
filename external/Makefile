@@ -20,7 +20,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
@@ -191,8 +191,8 @@ distclean-openblas:
 
 ## LAPACK ##
 
-LAPACK_OBJ_TARGET = $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT)
-LAPACK_OBJ_SOURCE = lapack-$(LAPACK_VER)/libLAPACK.$(SHLIB_EXT)
+LAPACK_OBJ_TARGET = $(EXTROOTLIB)/liblapack.$(SHLIB_EXT)
+LAPACK_OBJ_SOURCE = lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
@@ -208,7 +208,7 @@ lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="-O2 -fPIC -static-libgfortran" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o libLAPACK.$(SHLIB_EXT)
+	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -308,7 +308,7 @@ distclean-fftw:
 
 ## SUITESPARSE ##
 
-SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libSuiteSparse.$(SHLIB_EXT)
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 
 compile-suitesparse: install-suitesparse
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET)
@@ -325,8 +325,8 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	mkdir -p lib && \
 	cp `find UMFPACK CHOLMOD *AMD BTF UFconfig -name *.a` lib && cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gcc -shared -fPIC *.o -o libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)/libLAPACK.$(SHLIB_EXT) && \
-	cp libSuiteSparse.$(SHLIB_EXT) $(EXTROOTLIB)
+	gfortran -shared -fPIC -static-libgfortran *.o ../../$(OPENBLAS_OBJ_SOURCE) ../../lapack-$(LAPACK_VER)/liblapack.a -o libsuitesparse.$(SHLIB_EXT) && \
+	cp -f libsuitesparse.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
 clean-suitesparse:

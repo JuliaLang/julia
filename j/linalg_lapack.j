@@ -1,4 +1,4 @@
-_jl_libLAPACK = _jl_libBLAS
+_jl_liblapack = _jl_libblas
 
 macro _jl_lapack_potrf_macro(potrf, eltype)
     quote
@@ -12,7 +12,7 @@ macro _jl_lapack_potrf_macro(potrf, eltype)
         function _jl_lapack_potrf(uplo, n, A::StridedMatrix{$eltype}, lda)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $potrf),
+            ccall(dlsym(_jl_liblapack, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
                   uplo, int32(n), a, int32(lda), info)
@@ -67,7 +67,7 @@ macro _jl_lapack_getrf_macro(getrf, eltype)
         function _jl_lapack_getrf(m, n, A::StridedMatrix{$eltype}, lda, ipiv)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $getrf),
+            ccall(dlsym(_jl_liblapack, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
@@ -128,7 +128,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         function _jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $real_geqp3),
+            ccall(dlsym(_jl_liblapack, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -146,7 +146,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         function _jl_lapack_geqp3(m, n, A::StridedMatrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $complex_geqp3),
+            ccall(dlsym(_jl_liblapack, $complex_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -162,7 +162,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         function _jl_lapack_orgqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $orgqr),
+            ccall(dlsym(_jl_liblapack, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -178,7 +178,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         function _jl_lapack_ungqr(m, n, k, A::StridedMatrix{$celtype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
             a = pointer(A)
-            ccall(dlsym(_jl_libLAPACK, $ungqr),
+            ccall(dlsym(_jl_liblapack, $ungqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
@@ -262,7 +262,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
         function _jl_lapack_syev(jobz, uplo, n, A::StridedMatrix{$eltype}, lda, W, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $syev),
+            ccall(dlsym(_jl_liblapack, $syev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -279,7 +279,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         #      COMPLEX*16         A( LDA, * ), WORK( * )
         function _jl_lapack_heev(jobz, uplo, n, A::StridedMatrix{$celtype}, lda, W, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $heev),
+            ccall(dlsym(_jl_liblapack, $heev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
@@ -298,7 +298,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         function _jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$eltype}, lda, WR, WI, VL, ldvl, 
                                 VR, ldvr, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $real_geev),
+            ccall(dlsym(_jl_liblapack, $real_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
@@ -320,7 +320,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
         function _jl_lapack_geev(jobvl, jobvr, n, A::StridedMatrix{$celtype}, lda, W, VL, ldvl, 
                                 VR, ldvr, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $complex_geev),
+            ccall(dlsym(_jl_liblapack, $complex_geev),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, 
@@ -437,7 +437,7 @@ end
 function trideig(d::Vector{Float64}, e::Vector{Float64})
     dcopy = copy(d)
     ecopy = copy(e)
-    ccall(dlsym(_jl_libLAPACK, :dsteqr_),
+    ccall(dlsym(_jl_liblapack, :dsteqr_),
           Void,
           (Ptr{Uint8},Ptr{Int32},Ptr{Float64},
            Ptr{Float64},Ptr{Float64},Ptr{Int32},
@@ -461,7 +461,7 @@ macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         function _jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$eltype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $real_gesvd),
+            ccall(dlsym(_jl_liblapack, $real_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
@@ -483,7 +483,7 @@ macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
         function _jl_lapack_gesvd(jobu, jobvt, m, n, A::StridedMatrix{$celtype}, lda, S, U, ldu, 
                                  VT, ldvt, work, lwork, rwork)
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_libLAPACK, $complex_gesvd),
+            ccall(dlsym(_jl_liblapack, $complex_gesvd),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
@@ -551,7 +551,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(_jl_libLAPACK, $gesv),
+            ccall(dlsym(_jl_liblapack, $gesv),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -569,7 +569,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(_jl_libLAPACK, $posv),
+            ccall(dlsym(_jl_liblapack, $posv),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -585,7 +585,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(_jl_libLAPACK, $gels),
+            ccall(dlsym(_jl_liblapack, $gels),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
@@ -604,7 +604,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
             info = Array(Int32, 1)
             a = pointer(A)
             b = pointer(B)
-            ccall(dlsym(_jl_libLAPACK, $trtrs),
+            ccall(dlsym(_jl_liblapack, $trtrs),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
