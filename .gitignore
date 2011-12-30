@@ -2,7 +2,6 @@
 *#
 
 /tmp
-/README.html
 
 /julia
 /julia-debug-*
@@ -13,4 +12,4 @@
 /libjulia-release.dylib
 
 /sys.ji
-/boot.j.inc
+/h2j

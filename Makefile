@@ -30,6 +30,9 @@ install: release
 	cp -r examples $(DESTDIR)/usr/share/julia
 	cp -r sys.ji $(DESTDIR)/usr/share/julia
 
+h2j: lib/libLLVM*.a lib/libclang*.a src/h2j.cpp
+	g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
+
 clean:
 	rm -f julia
 	rm -f *~ *#
