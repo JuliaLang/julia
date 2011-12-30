@@ -108,7 +108,7 @@ load("linalg.j")
 load("linalg_blas.j")
 load("linalg_lapack.j")
 load("linalg_arpack.j")
-#load("linalg_suitesparse.j")
+load("linalg_suitesparse.j")
 
 # signal processing
 load("signal.j")

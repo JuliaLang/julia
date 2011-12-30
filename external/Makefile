@@ -325,7 +325,7 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	mkdir -p lib && \
 	cp `find UMFPACK CHOLMOD *AMD BTF UFconfig -name *.a` lib && cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared -fPIC -static-libgfortran *.o ../../$(OPENBLAS_OBJ_SOURCE) ../../lapack-$(LAPACK_VER)/liblapack.a -o libsuitesparse.$(SHLIB_EXT) && \
+	gfortran -shared -fPIC -static-libgfortran *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -o libsuitesparse.$(SHLIB_EXT) && \
 	cp -f libsuitesparse.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
