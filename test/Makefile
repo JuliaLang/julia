@@ -7,7 +7,7 @@ unicode:
 	@$(MAKE) -C $@ -s
 	../julia $@.j
 
-bin/perf%: perf.cxx
+bin/perf%: perf.cpp
 	g++ -O$* ../external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
 
 benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3

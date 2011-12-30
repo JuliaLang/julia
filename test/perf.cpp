@@ -1,5 +1,3 @@
-// g++ -O2 perf.cxx -o perf ../external/openblas-v0.1alpha2.4/libopenblas.a
-
 #include <sys/time.h>
 #include <cstdio>
 #include <cstdlib>
