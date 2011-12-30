@@ -208,7 +208,7 @@ lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="-O2 -fPIC -static-libgfortran" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
+	$(FC) -shared -static-libgfortran SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
