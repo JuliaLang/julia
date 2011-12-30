@@ -107,7 +107,7 @@ function rand(n) {
 
 function sortperf(n) {
     var v = rand(n);
-    v.sort();
+    v.sort(function(a,b) { return a-b; });
     return v;
 }
 
