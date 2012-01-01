@@ -3,7 +3,7 @@
 Julia is licensed under the MIT License.
 
       Copyright (c) 2009-2012, Jeff Bezanson, Stefan Karpinski, Viral B. Shah, 
-      Stephan Boyer, George Xing, and others. All rights reserved.
+      Stephan Boyer, George Xing, and others.
 
       Permission is hereby granted, free of charge, to any person obtaining
       a copy of this software and associated documentation files (the
