@@ -58,7 +58,7 @@ Julia beats other high-level systems on most micro-benchmarks, with a few except
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark.
 Relative performance between languages on [other systems](https://github.com/JuliaLang/julia/blob/master/INSTALL.md#Supported-Platforms) is similar.
 Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication on Intel platforms.
-Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="https://github.com/JuliaLang/julia/blob/master/INSTALL.md#Required-Build-Tools-External-Libraries">below</a> for more details).
+Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="https://github.com/JuliaLang/julia/blob/master/INSTALL.md#Required-Build-Tools-External-Libraries">INSTALL.md</a> for more details).
 
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
