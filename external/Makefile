@@ -311,7 +311,7 @@ distclean-fftw:
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 
 compile-suitesparse: install-suitesparse
-install-suitesparse: $(SUITESPARSE_OBJ_TARGET)
+install-suitesparse: $(SUITESPARSE_OBJ_TARGET) SuiteSparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz > $@
@@ -319,9 +319,11 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
-$(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+SuiteSparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
 	$(CC) -O2 -shared -fPIC -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig SuiteSparse_wrapper.c -o libsuitesparse_wrapper.$(SHLIB_EXT) && \
-	cp -f libsuitesparse_wrapper.$(SHLIB_EXT) $(EXTROOTLIB) && \
+	cp -f libsuitesparse_wrapper.$(SHLIB_EXT) $(EXTROOTLIB)
+	touch $@
+$(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
