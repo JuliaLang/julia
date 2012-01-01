@@ -29,6 +29,7 @@ The source code for the various implementations can be found here:
 [Julia](https://github.com/JuliaLang/julia/blob/master/test/perf.j#L1),
 [Python](https://github.com/JuliaLang/julia/blob/master/test/perf.py#L1),
 [Matlab/Octave](https://github.com/JuliaLang/julia/blob/master/test/perf.m#L1),
+[R](https://github.com/JuliaLang/julia/blob/master/test/perf.R#L1), and 
 [JavaScript](https://github.com/JuliaLang/julia/blob/master/test/perf.js#L1).
 We encourage you to skim the code to get a sense for how easy or difficult numerical programming in each language is.
 The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Intel Core 2 Duo CPU and 8GB of 1066MHz DDR3 RAM:
@@ -55,9 +56,9 @@ The following micro-benchmark results are from a MacBook Pro with a 2.53GHz Inte
 
 Julia beats other high-level systems on most micro-benchmarks, with a few exceptions for Matlab and JavaScript.
 Julia's LLVM JIT code even manages to beat C++ by 25% on the pi summation benchmark.
-Relative performance between languages on [other systems](#Supported-Platforms) is similar.
-Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication.
-Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="#Required-Build-Tools-External-Libraries">below</a> for more details).
+Relative performance between languages on [other systems](https://github.com/JuliaLang/julia/blob/master/INSTALL.md#Supported-Platforms) is similar.
+Matlab's ability to beat both C and Julia by such a large margin on random matrix multiplication comes from its use of the proprietary [Intel Math Kernel Library](http://en.wikipedia.org/wiki/Math_Kernel_Library), which has extremely optimized code for matrix multiplication on Intel platforms.
+Users who have a licensed copy of MKL can use it with Julia, but the default BLAS is a high quality open source implementation (see <a href="https://github.com/JuliaLang/julia/blob/master/INSTALL.md#Required-Build-Tools-External-Libraries">INSTALL.md</a> for more details).
 
 These benchmarks, while not comprehensive, do test compiler performance on a range of common code patterns, such as function calls, string parsing, sorting, numerical loops, random number generation, and array operations.
 Julia is strong in an area that high-level languages have traditionally been weak:
@@ -134,7 +135,7 @@ Various libraries used by the Julia environment include their own licenses such 
 Core functionality is included in a shared library, so users can easily and legally combine Julia with their own C/Fortran code or proprietary third-party libraries.
 Furthermore, Julia makes it [simple to call external functions](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code) in C and Fortran shared libraries, without writing any wrapper code or even recompiling existing code.
 You can try calling external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
-See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of Julia's licensing.
+See [LICENSE.md](https://github.com/JuliaLang/julia/blob/master/LICENSE.md) for the full terms of Julia's licensing.
 
 [MIT]:  http://en.wikipedia.org/wiki/MIT_License
 [GPL]:  http://en.wikipedia.org/wiki/GNU_General_Public_License
@@ -144,7 +145,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 <a name="Installation"/>
 ## Installation
 
-See detailed instructions for installation in [INSTALL.md](https://github.com/JuliaLang/julia/blob/master/INSTALL.md)
+See detailed instructions for installation in [INSTALL.md](https://github.com/JuliaLang/julia/blob/master/INSTALL.md).
 
 <a name="Resources"/>
 ## Resources
