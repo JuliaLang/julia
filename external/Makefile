@@ -152,7 +152,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cp dSFMT.h dsfmt-$(DSFMT_VER)
+	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
@@ -311,13 +311,17 @@ distclean-fftw:
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 
 compile-suitesparse: install-suitesparse
-install-suitesparse: $(SUITESPARSE_OBJ_TARGET)
+install-suitesparse: $(SUITESPARSE_OBJ_TARGET) SuiteSparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz > $@
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	touch $@
+SuiteSparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
+	$(CC) -O2 -shared -fPIC -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig SuiteSparse_wrapper.c -o libsuitesparse_wrapper.$(SHLIB_EXT) && \
+	cp -f libsuitesparse_wrapper.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
@@ -332,9 +336,9 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 clean-suitesparse:
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
-	rm -f $(SUITESPARSE_OBJ_TARGET) 
-distclean-suitesparse:
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) $(SUITESPARSE_OBJ_TARGET)
+	rm -f $(EXTROOTLIB)/libsuitesparse*
+distclean-suitesparse: clean-suitesparse
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
 ## CLP ##
 

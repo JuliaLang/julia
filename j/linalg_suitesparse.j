@@ -1,6 +1,135 @@
-_jl_libsuitesparse = dlopen("libsuitesparse")
+_jl_sparse_lusolve{T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
 
-## UMFPACK constants
+function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+
+    S = _jl_convert_to_0_based_indexing!(S)
+    x = []
+
+    try
+        symbolic = _jl_umfpack_symbolic(S)
+        numeric = _jl_umfpack_numeric(S, symbolic)
+        _jl_umfpack_free_symbolic(S, symbolic)
+        x = _jl_umfpack_solve(S, b, numeric)
+        _jl_umfpack_free_numeric(S, numeric)
+    catch
+        S = _jl_convert_to_1_based_indexing!(S)
+        error("Error calling UMFPACK")
+    end
+    
+    S = _jl_convert_to_1_based_indexing!(S)
+    return x
+end
+
+
+function (\)(A, b) 
+    return _jl_sparse_lusolve(A, b)
+end
+
+function _jl_cholmod_transpose(S::SparseMatrixCSC)
+    cm = Array(Ptr{Void}, 1)
+    _jl_cholmod_start(cm)
+    S = _jl_convert_to_0_based_indexing!(S)
+    cs = _jl_cholmod_sparse(S)
+    cs_T = _jl_cholmod_transpose(cs, cm)
+    S = _jl_convert_to_1_based_indexing!(S)
+    return cs_T
+end
+
+## Library code
+
+_jl_libsuitesparse = dlopen("libsuitesparse")
+_jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
+
+## CHOLMOD
+
+# itype defines the types of integer used:
+const _jl_CHOLMOD_INT  = int32(0)  # all integer arrays are int 
+const _jl_CHOLMOD_LONG = int32(2)  # all integer arrays are UF_long 
+
+# dtype defines what the numerical type is (double or float):
+const _jl_CHOLMOD_DOUBLE = int32(0)        # all numerical values are double 
+const _jl_CHOLMOD_SINGLE = int32(1)        # all numerical values are float 
+
+# xtype defines the kind of numerical values used:
+const _jl_CHOLMOD_PATTERN = int32(0)       # pattern only, no numerical values 
+const _jl_CHOLMOD_REAL    = int32(1)       # a real matrix 
+const _jl_CHOLMOD_COMPLEX = int32(2)       # a complex matrix (ANSI C99 compatible) 
+const _jl_CHOLMOD_ZOMPLEX = int32(3)       # a complex matrix (MATLAB compatible) 
+
+# Definitions for cholmod_common: 
+const _jl_CHOLMOD_MAXMETHODS = int32(9)    # maximum number of different methods that 
+                                    # cholmod_analyze can try. Must be >= 9. 
+
+# Common->status values.  zero means success, negative means a fatal error, positive is a warning. 
+const _jl_CHOLMOD_OK            = int32(0)    # success 
+const _jl_CHOLMOD_NOT_INSTALLED = int32(-1)   # failure: method not installed 
+const _jl_CHOLMOD_OUT_OF_MEMORY = int32(-2)   # failure: out of memory 
+const _jl_CHOLMOD_TOO_LARGE     = int32(-3)   # failure: integer overflow occured 
+const _jl_CHOLMOD_INVALID       = int32(-4)   # failure: invalid input 
+const _jl_CHOLMOD_NOT_POSDEF    = int32(1)    # warning: matrix not pos. def. 
+const _jl_CHOLMOD_DSMALL        = int32(2)    # warning: D for LDL'  or diag(L) or LL' has tiny absolute value 
+
+# ordering method (also used for L->ordering) 
+const _jl_CHOLMOD_NATURAL = int32(0)     # use natural ordering 
+const _jl_CHOLMOD_GIVEN   = int32(1)     # use given permutation 
+const _jl_CHOLMOD_AMD     = int32(2)     # use minimum degree (AMD) 
+const _jl_CHOLMOD_METIS   = int32(3)     # use METIS' nested dissection 
+const _jl_CHOLMOD_NESDIS  = int32(4)     # use _jl_CHOLMOD's version of nested dissection:
+                                         # node bisector applied recursively, followed
+                                         # by constrained minimum degree (CSYMAMD or CCOLAMD) 
+const _jl_CHOLMOD_COLAMD  = int32(5)     # use AMD for A, COLAMD for A*A' 
+
+# POSTORDERED is not a method, but a result of natural ordering followed by a
+# weighted postorder.  It is used for L->ordering, not method [ ].ordering. 
+const _jl_CHOLMOD_POSTORDERED  = int32(6)   # natural ordering, postordered. 
+
+# supernodal strategy (for Common->supernodal) 
+const _jl_CHOLMOD_SIMPLICIAL = int32(0)    # always do simplicial 
+const _jl_CHOLMOD_AUTO       = int32(1)    # select simpl/super depending on matrix 
+const _jl_CHOLMOD_SUPERNODAL = int32(2)    # always do supernodal 
+
+## CHOLMOD functions
+
+function _jl_cholmod_start(cm)
+    ccall(dlsym(_jl_libsuitesparse, :cholmod_start),
+          Void,
+          (Ptr{Void}, ),
+          cm);
+    return
+end
+
+## Call wrapper function to create cholmod_sparse objects
+## Assumes that S has been converted to 0-based indexing in caller
+function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    if     Ti == Int32; itype = _jl_CHOLMOD_INT;
+    elseif Ti == Int64; itype = _jl_CHOLMOD_LONG; end
+
+    if     Tv == Float64    || Tv == Float32;    xtype = _jl_CHOLMOD_REAL;
+    elseif Tv == Complex128 || Tv == Complex64 ; xtype = _jl_CHOLMOD_COMPLEX; end
+
+    if     Tv == Float64 || Tv == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
+    elseif Tv == Float32 || Tv == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
+
+    cs = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
+               Ptr{Void},
+               (Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, 
+                Int32, Int32, Int32, Int32, Int32),
+               int(S.m), int(S.n), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
+               itype, xtype, dtype, int32(1), int32(1)
+               )
+
+    return cs
+end
+
+function _jl_cholmod_transpose(cs::Ptr{Void}, cm::Ptr{Void})
+    t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
+              Ptr{Void},
+              (Ptr{Void}, Int32, Ptr{Void}),
+              cs, 2, cm);
+    return t
+end
+
+## UMFPACK
 
 ## Type of solve
 const _jl_UMFPACK_A     =  0     # Ax=b
@@ -181,31 +310,3 @@ end
 @_jl_umfpack_free_macro :umfpack_dl_free_symbolic :umfpack_dl_free_numeric Float64    Int64
 @_jl_umfpack_free_macro :umfpack_zl_free_symbolic :umfpack_zl_free_numeric Complex128 Int64
 
-_jl_sparse_lusolve{T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
-
-function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
-
-    S = _jl_convert_to_0_based_indexing!(S)
-    x = []
-
-    try
-        symbolic = _jl_umfpack_symbolic(S)
-        numeric = _jl_umfpack_numeric(S, symbolic)
-        _jl_umfpack_free_symbolic(S, symbolic)
-        x = _jl_umfpack_solve(S, b, numeric)
-        _jl_umfpack_free_numeric(S, numeric)
-    catch
-        S = _jl_convert_to_1_based_indexing!(S)
-        error("Error calling UMFPACK")
-    end
-    
-    S = _jl_convert_to_1_based_indexing!(S)
-    return x
-end
-
-
-## User-callable functions
-
-function (\)(A, b) 
-    return _jl_sparse_lusolve(A, b)
-end
