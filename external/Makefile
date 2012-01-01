@@ -320,6 +320,8 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+	$(CC) -O2 -shared -fPIC -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig SuiteSparse_wrapper.c -o libsuitesparse_wrapper.$(SHLIB_EXT) && \
+	cp -f libsuitesparse_wrapper.$(SHLIB_EXT) $(EXTROOTLIB) && \
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
@@ -332,9 +334,9 @@ $(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 clean-suitesparse:
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
-	rm -f $(SUITESPARSE_OBJ_TARGET) 
-distclean-suitesparse:
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) $(SUITESPARSE_OBJ_TARGET)
+	rm -f $(EXTROOTLIB)/libsuitesparse*
+distclean-suitesparse: clean-suitesparse
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
 ## CLP ##
 
