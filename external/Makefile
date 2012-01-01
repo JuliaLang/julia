@@ -152,7 +152,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
-	cp dSFMT.h dsfmt-$(DSFMT_VER)
+	cd dsfmt-$(DSFMT_VER) < ../dSFMT.h.patch
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
