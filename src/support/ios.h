@@ -30,12 +30,8 @@ typedef struct {
     size_t bpos;      // current position in buffer
     size_t ndirty;    // # bytes at &buf[0] that need to be written
 
-    // this is a public field that keeps a running count of bytes
-    // read or written. you can freely use and change it. this is
-    // intended for keeping track of relative positions in streams
-    // that don't have absolute positions (like sockets).
-    size_t tally;
-    size_t lineno;
+    off_t fpos;       // cached file pos
+    size_t lineno;    // current line number
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer

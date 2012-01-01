@@ -298,6 +298,7 @@ static size_t _ios_read(ios_t *s, char *dest, size_t n, int all)
         s->bpos = s->size = 0;
         s->state = bst_rd;
         
+        s->fpos = -1;
         if (n > MOST_OF(s->maxsize)) {
             // doesn't fit comfortably in buffer; go direct
             if (all) {
@@ -382,6 +383,7 @@ DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
     char *data = src->buf;
     size_t n = src->size;
     size_t nwr;
+    dest->fpos = -1;
     _os_write_all(dest->fd, data, n, &nwr);
     return nwr;
 }
@@ -409,6 +411,7 @@ size_t ios_write(ios_t *s, char *data, size_t n)
         wrote = _write_grow(s, data, n);
     }
     else if (s->bm == bm_none) {
+        s->fpos = -1;
         _os_write_all(s->fd, data, n, &wrote);
         return wrote;
     }
@@ -518,9 +521,13 @@ off_t ios_pos(ios_t *s)
     if (s->bm == bm_mem)
         return (off_t)s->bpos;
 
-    off_t fdpos = lseek(s->fd, 0, SEEK_CUR);
-    if (fdpos == (off_t)-1)
-        return fdpos;
+    off_t fdpos = s->fpos;
+    if (fdpos == (off_t)-1) {
+        fdpos = lseek(s->fd, 0, SEEK_CUR);
+        if (fdpos == (off_t)-1)
+            return fdpos;
+        s->fpos = fdpos;
+    }
 
     if (s->state == bst_wr)
         fdpos += s->bpos;
@@ -579,6 +586,7 @@ int ios_flush(ios_t *s)
     }
 
     size_t nw, ntowrite=s->ndirty;
+    s->fpos = -1;
     int err = _os_write_all(s->fd, s->buf, ntowrite, &nw);
     // todo: try recovering from some kinds of errors (e.g. retry)
 
@@ -794,7 +802,7 @@ static void _ios_init(ios_t *s)
     s->size = 0;
     s->bpos = 0;
     s->ndirty = 0;
-    s->tally = 0;
+    s->fpos = -1;
     s->lineno = 1;
     s->fd = -1;
     s->ownbuf = 1;
