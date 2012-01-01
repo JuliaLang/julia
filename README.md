@@ -134,7 +134,7 @@ Various libraries used by the Julia environment include their own licenses such 
 Core functionality is included in a shared library, so users can easily and legally combine Julia with their own C/Fortran code or proprietary third-party libraries.
 Furthermore, Julia makes it [simple to call external functions](https://github.com/JuliaLang/julia/wiki/Calling-C-and-Fortran-Code) in C and Fortran shared libraries, without writing any wrapper code or even recompiling existing code.
 You can try calling external library functions directly from Julia's interactive prompt, playing with the interface and getting immediate feedback until you get it right.
-See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the full terms of Julia's licensing.
+See [LICENSE.md](https://github.com/JuliaLang/julia/blob/master/LICENSE.md) for the full terms of Julia's licensing.
 
 [MIT]:  http://en.wikipedia.org/wiki/MIT_License
 [GPL]:  http://en.wikipedia.org/wiki/GNU_General_Public_License
@@ -144,7 +144,7 @@ See [LICENSE](https://github.com/JuliaLang/julia/blob/master/LICENSE) for the fu
 <a name="Installation"/>
 ## Installation
 
-See detailed instructions for installation in [INSTALL.md](https://github.com/JuliaLang/julia/blob/master/INSTALL.md)
+See detailed instructions for installation in [INSTALL.md](https://github.com/JuliaLang/julia/blob/master/INSTALL.md).
 
 <a name="Resources"/>
 ## Resources
