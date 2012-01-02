@@ -5,7 +5,7 @@ macro timeit(ex,name)
             t = min(t, @elapsed $ex)
         end
         println("julia,", $name, ",", t*1000)
-        gc()
+        #gc()
     end
 end
 
