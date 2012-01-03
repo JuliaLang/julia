@@ -106,14 +106,14 @@
 type Nothing; end
 const nothing = Nothing()
 
-bitstype 8 Bool
-
 abstract Number
 abstract Real     <: Number
 abstract Float    <: Real
 abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
+
+bitstype 8 Bool <: Integer
 
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float

@@ -126,6 +126,9 @@
     jl_gc_add_finalizer;
     jl_gc_collect;
     jl_gc_lookfor;
+    jl_gc_enable;
+    jl_gc_disable;
+    jl_gc_is_enabled;
     jl_errno;
     jl_strerror;
     jl_environ;
