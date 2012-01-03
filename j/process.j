@@ -350,28 +350,43 @@ function spawn(cmd::Cmd)
         # minimize work after fork, in particular no writing
         c.status = ProcessRunning()
         ptrs = isa(c.exec,Vector{ByteString}) ? _jl_pre_exec(c.exec) : nothing
-        close_fds = copy(fds)
+        dup2_fds = Array(Int32, 2*length(c.pipes))
+        close_fds_ = copy(fds)
+        i = 0
         for (f,p) = c.pipes
-            del(close_fds, fd(p))
+            dup2_fds[i+=1] = fd(p).fd
+            dup2_fds[i+=1] = f.fd
+            del(close_fds_, fd(p))
+        end
+        close_fds = Array(Int32, length(close_fds_))
+        i = 0
+        for f = close_fds_
+            close_fds[i+=1] = f.fd
         end
         # now actually do the fork and exec without writes
         pid = fork()
         if pid == 0
-            for (f,p) = c.pipes
+            i = 1
+            n = length(dup2_fds)
+            while i <= n
                 # dup2 manually inlined for performance
-                r = ccall(:dup2, Int32, (Int32, Int32), fd(p).fd, f.fd)
+                r = ccall(:dup2, Int32, (Int32, Int32), dup2_fds[i], dup2_fds[i+1])
                 if r == -1
                     println("dup2: ", strerror())
                     exit(0xff)
                 end
+                i += 2
             end
-            for f = close_fds
+            i = 1
+            n = length(close_fds)
+            while i <= n
                 # close manually inlined for performance
-                r = ccall(:close, Int32, (Int32,), f.fd)
+                r = ccall(:close, Int32, (Int32,), close_fds[i])
                 if r != 0
                     println("close: ", strerror())
                     exit(0xff)
                 end
+                i += 1
             end
             if ptrs != nothing
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
