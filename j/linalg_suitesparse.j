@@ -31,13 +31,16 @@ function (\)(A, b)
     return _jl_sparse_lusolve(A, b)
 end
 
-function _jl_cholmod_transpose(S::SparseMatrixCSC)
+function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})
     cm = _jl_cholmod_start()
     S = _jl_convert_to_0_based_indexing!(S)
-    cs_T = _jl_cholmod_transpose(S, cm)
+
+    St = _jl_cholmod_transpose_unsym(S, cm)
+
     S = _jl_convert_to_1_based_indexing!(S)
+    St = _jl_convert_to_1_based_indexing!(St)
     _jl_cholmod_finish(cm)
-    return cs_T
+    return St
 end
 
 ## Library code
@@ -140,9 +143,9 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
           Ptr{Void},
-          (Ptr{Void}, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+          (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
            Int32, Int32, Int32, Int32, Int32),
-          cs, int(S.m), int(S.n), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
+          cs, int(S.m), int(S.n), int(length(S.nzval)), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
           itype, xtype, dtype, int32(1), int32(1)
           )
 
@@ -156,18 +159,23 @@ function _jl_cholmod_sparse_free(cs::Array{Ptr{Void}, 1})
           cs[1])
 end
 
-function _jl_cholmod_transpose(S, cm::Array{Ptr{Void}, 1})
+function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array{Ptr{Void}, 1})
+    S_t = SparseMatrixCSC(Tv, S.n, S.m, nnz(S)+1)
+
     # Allocate space for a cholmod_sparse object
     cs = _jl_cholmod_sparse(S)
+    cs_t = _jl_cholmod_sparse(S_t)
+    
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose_unsym),
+                   Int32,
+                   (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Int32}, Int32, Ptr{Void}, Ptr{Void}),
+                   cs[1], int32(1), C_NULL, C_NULL, int32(-1), cs_t[1], cm[1]);
 
-    cs_t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
-                 Ptr{Void},
-                 (Ptr{Void}, Int32, Ptr{Void}),
-                 cs[1], int32(2), cm[1]);
-
+    # Deallocate space for cholmod_sparse objects
     _jl_cholmod_sparse_free(cs)
+    _jl_cholmod_sparse_free(cs_t)
 
-    return cs_t
+    return S_t
 end
 
 ## UMFPACK

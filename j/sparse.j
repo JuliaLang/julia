@@ -14,6 +14,8 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
 
+    colptr[1] = 1
+    colptr[end] = numnz+1
     return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
@@ -41,6 +43,12 @@ function show(S::SparseMatrixCSC)
 end
 
 ## Constructors
+
+similar(S::SparseMatrixCSC) =
+    SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
+
+copy(S::SparseMatrixCSC) =
+    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
 function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
     A = zeros(T, int(S.m), int(S.n))
