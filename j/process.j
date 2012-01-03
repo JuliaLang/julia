@@ -124,9 +124,9 @@ end
 function wait(pid::Int32)
     status = Array(Int32,1)
     while true
-        ret = ccall(dlsym(libc, :waitpid), Int32,
-                  (Int32, Ptr{Int32}, Int32),
-                  pid, status, int32(0))
+        ret = ccall(:waitpid, Int32,
+                    (Int32, Ptr{Int32}, Int32),
+                    pid, status, int32(0))
         if ret != -1
             break
         end
@@ -135,16 +135,16 @@ function wait(pid::Int32)
     status[1]
 end
 
-exit(n) = ccall(dlsym(libc, :exit), Void, (Int32,), int32(n))
+exit(n) = ccall(:exit, Void, (Int32,), int32(n))
 exit() = exit(0)
 
 function dup2(fd1::FileDes, fd2::FileDes)
-    ret = ccall(dlsym(libc, :dup2), Int32, (Int32, Int32), fd1.fd, fd2.fd)
+    ret = ccall(:dup2, Int32, (Int32, Int32), fd1.fd, fd2.fd)
     system_error(:dup2, ret == -1)
 end
 
 function close(fd::FileDes)
-    ret = ccall(dlsym(libc, :close), Int32, (Int32,), fd.fd)
+    ret = ccall(:close, Int32, (Int32,), fd.fd)
     system_error(:close, ret != 0)
 end
 
@@ -350,14 +350,25 @@ function spawn(cmd::Cmd)
         pid = fork()
         if pid == 0
             for (f,p) = c.pipes
-                dup2(fd(p), f)
+                # dup2 manually inlined for performance
+                r = ccall(:dup2, Int32, (Int32, Int32), fd(p).fd, f.fd)
+                if r == -1
+                    println("dup2: $(strerror())")
+                    exit(0xff)
+                end
             end
             for f = close_fds
-                close(f)
+                # close manually inlined for performance
+                r = ccall(:close, Int32, (Int32,), f.fd)
+                if r != 0
+                    println("close: $(strerror())")
+                    exit(0xff)
+                end
             end
             if ptrs != nothing
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
                 system_error(:exec, true)
+                exit(0xff)
             end
             # other ways of execing (e.g. a julia function)
             gc_enable()
