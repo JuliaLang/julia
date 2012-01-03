@@ -114,7 +114,7 @@ function _jl_format_parse(s::String)
     if !isempty(s[i:])
         push(sx, check_utf8(unescape_string(s[i:j-1])))
     end
-    args = expr(:tuple, ntuple(arg-1,n->symbol("arg$n"))...)
+    args = expr(:tuple, { symbol("arg$n") | n=1:arg-1 })
     body = expr(:call, :print, sx...)
     return :(($args)->($body))
 end
