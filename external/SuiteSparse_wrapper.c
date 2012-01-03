@@ -1,7 +1,8 @@
 #include <cholmod.h>
 
-extern cholmod_sparse *
-jl_cholmod_sparse( size_t nrow, /* # of rows of A */
+extern void
+jl_cholmod_sparse( void **cs,   /* Store return value in here */
+                   size_t nrow, /* # of rows of A */
                    size_t ncol, /* # of columns of A */
                    void *p,     /* p [0..ncol], the column pointers */
                    void *i,     /* i [0..nzmax-1], the row indices */
@@ -32,7 +33,8 @@ jl_cholmod_sparse( size_t nrow, /* # of rows of A */
     s->sorted = sorted;
     s->packed = packed;
 
-    return s;
+    *cs = s;
+    return;
 }
 
 extern void

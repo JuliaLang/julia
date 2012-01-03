@@ -33,10 +33,11 @@ end
 
 function _jl_cholmod_transpose(S::SparseMatrixCSC)
     cm = Array(Ptr{Void}, 1)
+    cs = Array(Ptr{Void}, 1)
     _jl_cholmod_start(cm)
     S = _jl_convert_to_0_based_indexing!(S)
-    cs = _jl_cholmod_sparse(S)
-    cs_T = _jl_cholmod_transpose(cs, cm)
+    _jl_cholmod_sparse(S, cs)
+    cs_T = _jl_cholmod_transpose(cs[1], cm)
     S = _jl_convert_to_1_based_indexing!(S)
     return cs_T
 end
@@ -106,7 +107,7 @@ end
 
 ## Call wrapper function to create cholmod_sparse objects
 ## Assumes that S has been converted to 0-based indexing in caller
-function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cs::Array{Ptr{Void},1})
     if     Ti == Int32; itype = _jl_CHOLMOD_INT;
     elseif Ti == Int64; itype = _jl_CHOLMOD_LONG; end
 
@@ -116,13 +117,13 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     if     Tv == Float64 || Tv == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif Tv == Float32 || Tv == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    cs = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
-               Ptr{Void},
-               (Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, 
-                Int32, Int32, Int32, Int32, Int32),
-               int(S.m), int(S.n), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
-               itype, xtype, dtype, int32(1), int32(1)
-               )
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
+          Ptr{Void},
+          (Ptr{Void}, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+           Int32, Int32, Int32, Int32, Int32),
+          cs, int(S.m), int(S.n), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
+          itype, xtype, dtype, int32(1), int32(1)
+          )
 
     return cs
 end
@@ -131,7 +132,7 @@ function _jl_cholmod_transpose(cs::Ptr{Void}, cm::Ptr{Void})
     t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
               Ptr{Void},
               (Ptr{Void}, Int32, Ptr{Void}),
-              cs, 2, cm);
+              cs, int32(2), cm);
     return t
 end
 
