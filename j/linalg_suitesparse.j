@@ -32,13 +32,11 @@ function (\)(A, b)
 end
 
 function _jl_cholmod_transpose(S::SparseMatrixCSC)
-    cm = Array(Ptr{Void}, 1)
-    cs = Array(Ptr{Void}, 1)
-    _jl_cholmod_start(cm)
+    cm = _jl_cholmod_start()
     S = _jl_convert_to_0_based_indexing!(S)
-    _jl_cholmod_sparse(S, cs)
-    cs_T = _jl_cholmod_transpose(cs[1], cm)
+    cs_T = _jl_cholmod_transpose(S, cm)
     S = _jl_convert_to_1_based_indexing!(S)
+    _jl_cholmod_finish(cm)
     return cs_T
 end
 
@@ -97,17 +95,40 @@ const _jl_CHOLMOD_SUPERNODAL = int32(2)    # always do supernodal
 
 ## CHOLMOD functions
 
-function _jl_cholmod_start(cm)
-    ccall(dlsym(_jl_libsuitesparse, :cholmod_start),
+function _jl_cholmod_start()
+    # Allocate space for cholmod_common object
+    cm = Array(Ptr{Void}, 1)
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common),
           Void,
-          (Ptr{Void}, ),
-          cm);
-    return
+          (Ptr{Void},),
+          cm)
+
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_start),
+                   Int32,
+                   (Ptr{Void}, ),
+                   cm[1]);
+    if status != int32(1); error("Error calling cholmod_start"); end
+    return cm
 end
+
+function _jl_cholmod_finish(cm::Array{Ptr{Void}, 1})
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_finish),
+                   Int32,
+                   (Ptr{Void}, ),
+                   cm[1]);
+
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common_free),
+          Void,
+          (Ptr{Void},),
+          cm[1])
+end
+
 
 ## Call wrapper function to create cholmod_sparse objects
 ## Assumes that S has been converted to 0-based indexing in caller
-function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cs::Array{Ptr{Void},1})
+function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    cs = Array(Ptr{Void}, 1)
+
     if     Ti == Int32; itype = _jl_CHOLMOD_INT;
     elseif Ti == Int64; itype = _jl_CHOLMOD_LONG; end
 
@@ -128,12 +149,25 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cs::Array{Ptr{Void
     return cs
 end
 
-function _jl_cholmod_transpose(cs::Ptr{Void}, cm::Ptr{Void})
-    t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
-              Ptr{Void},
-              (Ptr{Void}, Int32, Ptr{Void}),
-              cs, int32(2), cm);
-    return t
+function _jl_cholmod_sparse_free(cs::Array{Ptr{Void}, 1})
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_free),
+          Void,
+          (Ptr{Void},),
+          cs[1])
+end
+
+function _jl_cholmod_transpose(S, cm::Array{Ptr{Void}, 1})
+    # Allocate space for a cholmod_sparse object
+    cs = _jl_cholmod_sparse(S)
+
+    cs_t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
+                 Ptr{Void},
+                 (Ptr{Void}, Int32, Ptr{Void}),
+                 cs[1], int32(2), cm[1]);
+
+    _jl_cholmod_sparse_free(cs)
+
+    return cs_t
 end
 
 ## UMFPACK

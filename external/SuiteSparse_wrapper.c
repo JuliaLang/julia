@@ -1,6 +1,13 @@
 #include <cholmod.h>
 
 extern void
+jl_cholmod_common (void **cm)
+{
+    cholmod_common *c = (cholmod_common *) malloc (sizeof(cholmod_common));
+    *cm = c;
+}
+
+extern void
 jl_cholmod_sparse( void **cs,   /* Store return value in here */
                    size_t nrow, /* # of rows of A */
                    size_t ncol, /* # of columns of A */
@@ -35,6 +42,11 @@ jl_cholmod_sparse( void **cs,   /* Store return value in here */
 
     *cs = s;
     return;
+}
+
+extern void
+jl_cholmod_common_free(cholmod_common *c) {
+    free(c);
 }
 
 extern void
