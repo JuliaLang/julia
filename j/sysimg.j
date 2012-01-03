@@ -122,7 +122,7 @@ load("util.j")
 load("datafmt.j")
 
 # version information
-load("version.j")
+# load("version.j")
 
 # front end
 load("client.j")
@@ -156,7 +156,7 @@ compile_hint(isempty, (Array{WorkItem,1},))
 compile_hint(ref, (HashTable{Any,Any}, Int32))
 compile_hint(event_loop, (Bool,))
 compile_hint(_start, ())
-compile_hint(_jl_color_available, ())
+# compile_hint(_jl_color_available, ())
 compile_hint(process_options, (Array{Any,1},))
 compile_hint(run_repl, ())
 compile_hint(anyp, (Function, Array{Any,1}))
