@@ -1,3 +1,5 @@
+type MatrixIllConditionedException <: Exception end
+
 _jl_sparse_lusolve{T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
 
 function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
@@ -11,9 +13,13 @@ function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32
         _jl_umfpack_free_symbolic(S, symbolic)
         x = _jl_umfpack_solve(S, b, numeric)
         _jl_umfpack_free_numeric(S, numeric)
-    catch
+    catch e
         S = _jl_convert_to_1_based_indexing!(S)
-        error("Error calling UMFPACK")
+        if is(e,MatrixIllConditionedException)
+            error("Input matrix is ill conditioned or singular");
+        else
+            error("Error calling UMFPACK")
+        end
     end
     
     S = _jl_convert_to_1_based_indexing!(S)
@@ -234,6 +240,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
                             Ptr{Float64}, Ptr{Float64}),
                            S.colptr, S.rowval, S.nzval, Symbolic[1], Numeric, 
                            C_NULL, C_NULL)
+            if status > 0; throw(MatrixIllConditionedException); end
             if status != _jl_UMFPACK_OK; error("Error in numeric factorization"); end
             return Numeric
         end
@@ -247,6 +254,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
                             Ptr{Float64}, Ptr{Float64}),
                            S.colptr, S.rowval, real(S.nzval), imag(S.nzval), Symbolic[1], Numeric, 
                            C_NULL, C_NULL)
+            if status > 0; throw(MatrixIllConditionedException); end
             if status != _jl_UMFPACK_OK; error("Error in numeric factorization"); end
             return Numeric
         end
