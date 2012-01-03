@@ -44,8 +44,10 @@ end
 
 ## Constructors
 
-similar(S::SparseMatrixCSC) =
-    SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
+function similar(S::SparseMatrixCSC)
+    T = SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
+    T.colptr[end] = length(T.nzval)+1 # Used to compute nnz
+end
 
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
