@@ -16,9 +16,18 @@
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed.
+// NOTE: needs to be defined in ios.c too, due to GC/IObuffer interaction
 //#define MEMDEBUG
+
+// MEMPROFILE prints pool summary statistics after every GC
+// NOTE: define in ios.c too
 //#define MEMPROFILE
+
+// GCTIME prints time taken by each phase of GC
 //#define GCTIME
+
+// OBJPROFILE counts objects by type
+//#define OBJPROFILE
 
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
 
@@ -101,6 +110,10 @@ static arraylist_t to_finalize;
 static arraylist_t preserved_values;
 
 static arraylist_t weak_refs;
+
+#ifdef OBJPROFILE
+static htable_t obj_counts;
+#endif
 
 int jl_gc_n_preserved_values(void)
 {
@@ -456,6 +469,13 @@ static void gc_markval_(jl_value_t *v)
     //assert(v != lookforme);
     if (gc_marked_obj(v)) return;
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+#ifdef OBJPROFILE
+    void **bp = ptrhash_bp(&obj_counts, vt);
+    if (*bp == HT_NOTFOUND)
+        *bp = (void*)2;
+    else
+        (*((ptrint_t*)bp))++;
+#endif
     jl_value_t *vtt = gc_typeof(vt);
     gc_setmark_obj(v);
 
@@ -677,6 +697,28 @@ static void all_pool_stats(void);
 static void big_obj_stats(void);
 #endif
 
+#ifdef OBJPROFILE
+static void print_obj_profile(void)
+{
+    jl_value_t *errstream = jl_get_global(jl_system_module,
+                                          jl_symbol("stderr_stream"));
+    JL_TRY {
+        if (errstream)
+            jl_set_current_output_stream_obj(errstream);
+        ios_t *s = jl_current_output_stream();
+        for(int i=0; i < obj_counts.size; i+=2) {
+            if (obj_counts.table[i+1] != HT_NOTFOUND) {
+                ios_printf(s, "%d ", obj_counts.table[i+1]-1);
+                jl_show(obj_counts.table[i]);
+                ios_printf(s, "\n");
+            }
+        }
+    }
+    JL_CATCH {
+    }
+}
+#endif
+
 void jl_gc_collect(void)
 {
     allocd_bytes = 0;
@@ -703,6 +745,10 @@ void jl_gc_collect(void)
 #endif
         run_finalizers();
         JL_SIGATOMIC_END();
+#ifdef OBJPROFILE
+        print_obj_profile();
+        htable_reset(&obj_counts, 0);
+#endif
     }
 }
 
@@ -804,6 +850,10 @@ void jl_gc_init(void)
     arraylist_new(&to_finalize, 0);
     arraylist_new(&preserved_values, 0);
     arraylist_new(&weak_refs, 0);
+
+#ifdef OBJPROFILE
+    htable_new(&obj_counts, 0);
+#endif
 }
 
 #if defined(MEMPROFILE)
