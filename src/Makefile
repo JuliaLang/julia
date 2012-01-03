@@ -1,19 +1,17 @@
 JULIAHOME = $(shell pwd)/..
 include $(JULIAHOME)/Make.inc
 
-SRCS = jltypes gf ast builtins module codegen interpreter alloc dlload \
-	sys init task array dump
-OBJS = $(SRCS:%=%.o)
-DOBJS = $(SRCS:%=%.do)
-SUPPORTDIR = ./support
-FLISPDIR = ./flisp
-SUPPORT = $(SUPPORTDIR)/libsupport.a
-FLISP = $(FLISPDIR)/libflisp.a
-
-FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	-I$(FLISPDIR) -I$(SUPPORTDIR) -fvisibility=hidden -fno-common \
+SRCS = \
+	jltypes gf ast builtins module codegen interpreter \
+	alloc dlload sys init task array dump
+FLAGS = \
+    -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
+	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
 	-I$(EXTROOT)/include
+
+OBJS = $(SRCS:%=%.o)
+DOBJS = $(SRCS:%=%.do)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
@@ -32,49 +30,51 @@ debug release: %: libjulia-%
 %.o: %.c julia.h
 	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c julia.h
-	$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
 	$(QUIET_CC)$(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
-	$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(QUIET_CC)$(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc boot.j.inc
-julia_flisp.boot.inc: julia_flisp.boot $(FLISP)
-	$(FLISPDIR)/flisp ./bin2hex.scm < $< > $@
+
+julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
+	flisp/flisp ./bin2hex.scm < $< > $@
+
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
-	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm $(FLISP)
-	$(FLISPDIR)/flisp ./mk_julia_flisp_boot.scm
+	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
+	flisp/flisp ./mk_julia_flisp_boot.scm
 
 boot.j.inc: boot.j preparse.scm julia_flisp.boot
-	$(FLISPDIR)/flisp ./preparse.scm $< | $(FLISPDIR)/flisp ./bin2hex.scm > $@
+	flisp/flisp ./preparse.scm $< | flisp/flisp ./bin2hex.scm > $@
 
 codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
 
-$(SUPPORT): $(SUPPORTDIR)/*.h $(SUPPORTDIR)/*.c
-	cd $(SUPPORTDIR) && $(MAKE)
+support/libsupport.a: support/*.h support/*.c
+	$(MAKE) -C support
 
-$(FLISP): $(FLISPDIR)/*.h $(FLISPDIR)/*.c $(SUPPORT)
-	cd $(FLISPDIR) && $(MAKE)
+flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
+	$(MAKE) -C flisp
 
-$(JULIAHOME)/libjulia-debug.$(SHLIB_EXT): $(DOBJS) $(FLISP) $(SUPPORT)
-	$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
-$(JULIAHOME)/src/libjulia-debug.a: $(DOBJS) $(FLISP) $(SUPPORT)
-	ar -rcs libjulia-debug.a $(DOBJS) 
-#libjulia-debug: $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT)
-libjulia-debug: $(JULIAHOME)/src/libjulia-debug.a
+../libjulia-debug.$(SHLIB_EXT): $(DOBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_CC)$(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $(JULIAHOME)/libjulia-debug.$(SHLIB_EXT) $(LIBS)
+libjulia-debug.a: $(DOBJS) flisp/libflisp.a support/libsupport.a
+	@rm -f $@
+	$(QUIET_LINK)ar -rcs $@ $(DOBJS)
+libjulia-debug: libjulia-debug.a ../libjulia-debug.$(SHLIB_EXT)
 
-$(JULIAHOME)/libjulia-release.$(SHLIB_EXT): $(OBJS) $(FLISP) $(SUPPORT)
+../libjulia-release.$(SHLIB_EXT): $(OBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_CC)$(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $(JULIAHOME)/libjulia-release.$(SHLIB_EXT) $(LIBS)
-$(JULIAHOME)/src/libjulia-release.a: $(OBJS) $(FLISP) $(SUPPORT)
-	$(QUIET_LINK)ar -rcs libjulia-release.a $(OBJS) 
-#libjulia-release: $(JULIAHOME)/libjulia-release.$(SHLIB_EXT)
-libjulia-release: $(JULIAHOME)/src/libjulia-release.a
+libjulia-release.a: $(OBJS) flisp/libflisp.a support/libsupport.a
+	@rm -f $@
+	$(QUIET_LINK)ar -rcs $@ $(OBJS)
+libjulia-release: libjulia-release.a ../libjulia-release.$(SHLIB_EXT)
 
 clean:
 	rm -f libjulia*.$(SHLIB_EXT)
 	rm -f libjulia*.a
-	rm -f $(JULIAHOME)/libjulia*.$(SHLIB_EXT)
+	rm -f ../libjulia*.$(SHLIB_EXT)
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
 	rm -f boot.j.inc
@@ -83,10 +83,10 @@ clean:
 	rm -f *~ *#
 
 clean-flisp:
-	$(MAKE) -C $(FLISPDIR) clean
+	$(MAKE) -C flisp clean
 
 clean-support:
-	$(MAKE) -C $(SUPPORTDIR) clean
+	$(MAKE) -C support clean
 
 cleanall: clean clean-flisp clean-support
 

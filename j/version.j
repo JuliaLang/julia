@@ -59,7 +59,7 @@ macro v_str(v); convert(VersionNumber, v); end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,readall(`cat $JULIA_HOME/VERSION`)[1:end-1])
+const VERSION = convert(VersionNumber,chomp(readall(`cat $JULIA_HOME/VERSION`)))
 const VERSION_COMMIT = readall(`git rev-parse HEAD`)[1:end-1]
 const VERSION_CLEAN = success(`git diff --quiet`)
 const VERSION_TIME = readall(

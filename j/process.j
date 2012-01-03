@@ -90,18 +90,35 @@ function fork()
     return pid
 end
 
-function exec(cmd::String, args...)
-    cmd = cstring(cmd)
-    arr = Array(Ptr{Uint8}, length(args)+2)
-    arr[1] = cmd.data
-    for i = 1:length(args)
-        arr[i+1] = cstring(args[i]).data
+# WARNING: do not call this and keep the returned array of pointers
+# around longer than the args vector and then use array of pointers.
+# this could cause a segfault. this is really just for use by the
+# spawn function below so that we can exec more efficiently.
+#
+function _jl_pre_exec(args::Vector{ByteString})
+    if length(args) < 1
+        error("exec: too few words to exec")
     end
-    arr[length(args)+2] = C_NULL
-    ccall(dlsym(libc, :execvp), Int32,
-          (Ptr{Uint8}, Ptr{Ptr{Uint8}}),
-          arr[1], arr)
+    ptrs = Array(Ptr{Uint8}, length(args)+1)
+    for i = 1:length(args)
+        ptrs[i] = args[i].data
+    end
+    ptrs[length(args)+1] = C_NULL
+    return ptrs
+end
+
+function exec(args::Vector{ByteString})
+    ptrs = _jl_pre_exec(args)
+    ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
     system_error(:exec, true)
+end
+
+function exec(args::String...)
+    arr = Array(ByteString, length(args))
+    for i = 1:length(args)
+        arr[i] = cstring(args[i])
+    end
+    exec(arr)
 end
 
 function wait(pid::Int32)
@@ -133,10 +150,9 @@ end
 
 ## Executable: things that can be exec'd ##
 
-typealias Executable Union((String,Tuple),Function)
+typealias Executable Union(Vector{ByteString},Function)
 
-exec(cmd::(String,Tuple)) = exec(cmd[1], cmd[2]...)
-exec(thunk::Function) = thunk()
+exec(thunk::Function) = (thunk(); exit(0))
 
 type Cmd
     exec::Executable
@@ -146,6 +162,9 @@ type Cmd
     status::ProcessStatus
 
     function Cmd(exec::Executable)
+        if isa(exec,Vector{ByteString}) && length(exec) < 1
+            error("Cmd: too few words to exec")
+        end
         this = new(exec,
                    HashTable{FileDes,PipeEnd}(),
                    Set{Cmd}(),
@@ -154,12 +173,11 @@ type Cmd
         add(this.pipeline, this)
         this
     end
-    Cmd(cmd::String, args...) = Cmd((cmd,args))
 end
 
 function show(cmd::Cmd)
-    if isa(cmd.exec,(String,Tuple))
-        esc = shell_escape(cmd.exec[1], cmd.exec[2]...)
+    if isa(cmd.exec,Vector{ByteString})
+        esc = shell_escape(cmd.exec...)
         print('`')
         for c = esc
             if c == '`'
@@ -319,29 +337,45 @@ function spawn(cmd::Cmd)
             add(fds, fd(p))
         end
     end
+    gc_disable()
     for c = cmd.pipeline
-        c.pid = fork()
+        # minimize work after fork, in particular no writing
         c.status = ProcessRunning()
-        if c.pid == 0
+        ptrs = isa(c.exec,Vector{ByteString}) ? _jl_pre_exec(c.exec) : nothing
+        close_fds = copy(fds)
+        for (f,p) = c.pipes
+            del(close_fds, fd(p))
+        end
+        # now actually do the fork and exec without writes
+        pid = fork()
+        if pid == 0
+            for (f,p) = c.pipes
+                dup2(fd(p), f)
+            end
+            for f = close_fds
+                close(f)
+            end
+            if ptrs != nothing
+                ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
+                system_error(:exec, true)
+            end
+            # other ways of execing (e.g. a julia function)
+            gc_enable()
+            c.pid = pid
             try
-                for (f,p) = c.pipes
-                    dup2(fd(p), f)
-                    del(fds, fd(p))
-                end
-                for f = fds
-                    close(f)
-                end
                 exec(c)
             catch err
                 show(err)
                 exit(0xff)
             end
-            exit(0)
+            error("exec should not return but has")
         end
+        c.pid = pid
     end
     for f = fds
         close(f)
     end
+    gc_enable()
 end
 
 # spawn(cmds) starts all pipelines of a set of commands
@@ -412,36 +446,38 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 
 ## implementation of `cmd` syntax ##
 
-arg_gen(x::String) = (x,)
+arg_gen(x::String) = (a=Array(ByteString,1); a[1]=x; a)
 
 function arg_gen(head)
     if applicable(start,head)
-        vals = ()
+        vals = empty(ByteString)
         for x = head
-            vals = append(vals,(string(x),))
+            push(vals,cstring(x))
         end
         return vals
     else
-        return (string(head),)
+        a = Array(ByteString,1)
+        a[1] = cstring(head)
+        return a
     end
 end
 
 function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
-    vals = ()
+    vals = empty(ByteString)
     for h = head, t = tail
-        vals = append(vals,(strcat(h,t),))
+        push(vals, cstring(strcat(h,t)))
     end
     vals
 end
 
 function cmd_gen(parsed)
-    args = ()
+    args = empty(ByteString)
     for arg = parsed
-        args = append(args,arg_gen(arg...))
+        append!(args, arg_gen(arg...))
     end
-    Cmd(args...)
+    Cmd(args)
 end
 
 macro cmd(str)

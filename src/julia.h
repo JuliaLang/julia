@@ -841,9 +841,9 @@ extern DLLEXPORT jl_gcframe_t ** volatile jl_pgcstack;
 
 void jl_gc_init(void);
 void jl_gc_markval(jl_value_t *v);
-void jl_gc_enable(void);
-void jl_gc_disable(void);
-int jl_gc_is_enabled(void);
+DLLEXPORT void jl_gc_enable(void);
+DLLEXPORT void jl_gc_disable(void);
+DLLEXPORT int jl_gc_is_enabled(void);
 void jl_gc_ephemeral_on(void);
 void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);

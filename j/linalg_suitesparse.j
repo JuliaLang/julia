@@ -1,3 +1,33 @@
+type MatrixIllConditionedException <: Exception end
+
+function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})
+    cm = _jl_cholmod_start()
+    S = _jl_convert_to_0_based_indexing!(S)
+
+    St = _jl_cholmod_transpose_unsym(S, cm)
+
+    S = _jl_convert_to_1_based_indexing!(S)
+    St = _jl_convert_to_1_based_indexing!(St)
+    _jl_cholmod_finish(cm)
+    return St
+end
+
+function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+    S = _jl_convert_to_0_based_indexing!(S)
+    cm = _jl_cholmod_start()
+    cs = _jl_cholmod_sparse(S)
+
+    cs_factor = _jl_cholmod_analyze(cs, cm)
+    _jl_cholmod_factorize(cs, cs_factor, cm)
+    sol = _jl_cholmod_solve(cs_factor, b, cm)
+
+    _jl_cholmod_sparse_free(cs)
+    _jl_cholmod_finish(cm)
+    S = _jl_convert_to_1_based_indexing!(S)
+    return sol
+end
+
+
 _jl_sparse_lusolve{T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
 
 function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
@@ -11,9 +41,13 @@ function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32
         _jl_umfpack_free_symbolic(S, symbolic)
         x = _jl_umfpack_solve(S, b, numeric)
         _jl_umfpack_free_numeric(S, numeric)
-    catch
+    catch e
         S = _jl_convert_to_1_based_indexing!(S)
-        error("Error calling UMFPACK")
+        if is(e,MatrixIllConditionedException)
+            error("Input matrix is ill conditioned or singular");
+        else
+            error("Error calling UMFPACK")
+        end
     end
     
     S = _jl_convert_to_1_based_indexing!(S)
@@ -25,22 +59,23 @@ function (\)(A, b)
     return _jl_sparse_lusolve(A, b)
 end
 
-function _jl_cholmod_transpose(S::SparseMatrixCSC)
-    cm = Array(Ptr{Void}, 1)
-    _jl_cholmod_start(cm)
-    S = _jl_convert_to_0_based_indexing!(S)
-    cs = _jl_cholmod_sparse(S)
-    cs_T = _jl_cholmod_transpose(cs, cm)
-    S = _jl_convert_to_1_based_indexing!(S)
-    return cs_T
-end
-
 ## Library code
 
 _jl_libsuitesparse = dlopen("libsuitesparse")
 _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 
 ## CHOLMOD
+
+# Types of systems to solve
+const _jl_CHOLMOD_A    = int32(0)          # solve Ax=b 
+const _jl_CHOLMOD_LDLt = int32(1)          # solve LDL'x=b 
+const _jl_CHOLMOD_LD   = int32(2)          # solve LDx=b 
+const _jl_CHOLMOD_DLt  = int32(3)          # solve DL'x=b 
+const _jl_CHOLMOD_L    = int32(4)          # solve Lx=b 
+const _jl_CHOLMOD_Lt   = int32(5)          # solve L'x=b 
+const _jl_CHOLMOD_D    = int32(6)          # solve Dx=b 
+const _jl_CHOLMOD_P    = int32(7)          # permute x=Px 
+const _jl_CHOLMOD_Pt   = int32(8)          # permute x=P'x 
 
 # itype defines the types of integer used:
 const _jl_CHOLMOD_INT  = int32(0)  # all integer arrays are int 
@@ -90,17 +125,39 @@ const _jl_CHOLMOD_SUPERNODAL = int32(2)    # always do supernodal
 
 ## CHOLMOD functions
 
-function _jl_cholmod_start(cm)
-    ccall(dlsym(_jl_libsuitesparse, :cholmod_start),
+function _jl_cholmod_start()
+    # Allocate space for cholmod_common object
+    cm = Array(Ptr{Void}, 1)
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common),
           Void,
-          (Ptr{Void}, ),
-          cm);
-    return
+          (Ptr{Void},),
+          cm)
+
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_start),
+                   Int32,
+                   (Ptr{Void}, ),
+                   cm[1]);
+    if status != int32(1); error("Error calling cholmod_start"); end
+    return cm
+end
+
+function _jl_cholmod_finish(cm::Array{Ptr{Void}, 1})
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_finish),
+                   Int32,
+                   (Ptr{Void}, ),
+                   cm[1]);
+
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common_free),
+          Void,
+          (Ptr{Void},),
+          cm[1])
 end
 
 ## Call wrapper function to create cholmod_sparse objects
 ## Assumes that S has been converted to 0-based indexing in caller
 function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    cs = Array(Ptr{Void}, 1)
+
     if     Ti == Int32; itype = _jl_CHOLMOD_INT;
     elseif Ti == Int64; itype = _jl_CHOLMOD_LONG; end
 
@@ -110,23 +167,72 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     if     Tv == Float64 || Tv == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif Tv == Float32 || Tv == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    cs = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
-               Ptr{Void},
-               (Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, 
-                Int32, Int32, Int32, Int32, Int32),
-               int(S.m), int(S.n), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
-               itype, xtype, dtype, int32(1), int32(1)
-               )
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
+          Ptr{Void},
+          (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+           Int32, Int32, Int32, Int32, Int32),
+          cs, int(S.m), int(S.n), int(length(S.nzval)), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
+          itype, xtype, dtype, int32(1), int32(1)
+          )
 
     return cs
 end
 
-function _jl_cholmod_transpose(cs::Ptr{Void}, cm::Ptr{Void})
-    t = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose),
-              Ptr{Void},
-              (Ptr{Void}, Int32, Ptr{Void}),
-              cs, 2, cm);
-    return t
+function _jl_cholmod_sparse_free(cs::Array{Ptr{Void}, 1})
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_free),
+          Void,
+          (Ptr{Void},),
+          cs[1])
+end
+
+function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array{Ptr{Void}, 1})
+    S_t = SparseMatrixCSC(Tv, S.n, S.m, nnz(S)+1)
+
+    # Allocate space for a cholmod_sparse object
+    cs = _jl_cholmod_sparse(S)
+    cs_t = _jl_cholmod_sparse(S_t)
+    
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_transpose_unsym),
+                   Int32,
+                   (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Int32}, Int32, Ptr{Void}, Ptr{Void}),
+                   cs[1], int32(1), C_NULL, C_NULL, int32(-1), cs_t[1], cm[1]);
+
+    # Deallocate space for cholmod_sparse objects
+    _jl_cholmod_sparse_free(cs)
+    _jl_cholmod_sparse_free(cs_t)
+
+    return S_t
+end
+
+function _jl_cholmod_analyze{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(cs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
+
+    cs_factor = ccall(dlsym(_jl_libsuitesparse, :cholmod_analyze),
+                       Ptr{Void},
+                       (Ptr{Void}, Ptr{Void}),
+                       cs[1], cm[1])
+           
+    return cs_factor
+end
+
+function _jl_cholmod_factorize{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(cs::Array{Ptr{Void},1}, cs_factor::Ptr{Void}, cm::Array{Ptr{Void},1})
+
+    status = ccall(dlsym(_jl_libsuitesparse, :cholmod_factorize),
+                   Int32,
+                   (Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                   cs[1], cs_factor, cm[1])
+    if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
+end
+
+function _jl_cholmod_solve {Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(cs_factor::Ptr{Void}, RHS::Array{Tv,1}, cm::Array{Ptr{Void},1})
+
+    ## TODO: Create cholmod_dense object for RHS
+
+    sol = ccall(dlsym(_jl_libsuitesparse, :cholmod_spsolve),
+                Ptr{Float64},
+                (Int32, Ptr{Void}, Ptr{Tv}, Ptr{Void}),
+                _jl_CHOLMOD_A, cs_factor, RHS, cm[1])
+
+    return sol
 end
 
 ## UMFPACK
@@ -234,6 +340,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
                             Ptr{Float64}, Ptr{Float64}),
                            S.colptr, S.rowval, S.nzval, Symbolic[1], Numeric, 
                            C_NULL, C_NULL)
+            if status > 0; throw(MatrixIllConditionedException); end
             if status != _jl_UMFPACK_OK; error("Error in numeric factorization"); end
             return Numeric
         end
@@ -247,6 +354,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
                             Ptr{Float64}, Ptr{Float64}),
                            S.colptr, S.rowval, real(S.nzval), imag(S.nzval), Symbolic[1], Numeric, 
                            C_NULL, C_NULL)
+            if status > 0; throw(MatrixIllConditionedException); end
             if status != _jl_UMFPACK_OK; error("Error in numeric factorization"); end
             return Numeric
         end

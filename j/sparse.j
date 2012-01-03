@@ -14,6 +14,8 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
 
+    colptr[1] = 1
+    colptr[end] = numnz+1
     return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
@@ -42,6 +44,14 @@ end
 
 ## Constructors
 
+function similar(S::SparseMatrixCSC)
+    T = SparseMatrixCSC(S.m, S.n, similar(S.colptr), similar(S.rowval), similar(S.nzval))
+    T.colptr[end] = length(T.nzval)+1 # Used to compute nnz
+end
+
+copy(S::SparseMatrixCSC) =
+    SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
+
 function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
     A = zeros(T, int(S.m), int(S.n))
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
@@ -58,11 +68,13 @@ function sparse(A::Matrix)
     sparse(int32(I), int32(J), V, m, n)
 end
 
-sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
+sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+
+sparse(I,J,V,m,n) = sparse(I, J, V, m, n, +)
 
 function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                        V::Union(Number,AbstractVector), 
-                                        m::Int, n::Int)
+                                        V::Union(Number, AbstractVector), 
+                                        m::Int, n::Int, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
@@ -80,7 +92,7 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
         if isa(V, AbstractVector); V = V[p]; end
     end
 
-    return _jl_make_sparse(I, J, V, m, n)
+    return _jl_make_sparse(I, J, V, m, n, +)
 
 end
 
@@ -89,7 +101,7 @@ end
 # use sparse() with the same arguments if this is not the case
 function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                                  V::Union(Number, AbstractVector),
-                                                 m::Int, n::Int)
+                                                 m::Int, n::Int, combine::Function)
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     if isa(I, Range1) || isa(I, Range); I = [I]; end
@@ -112,14 +124,14 @@ function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::Abstr
 
     for k=2:length(I)
         if I[k] == I_lastdup && J[k] == J_lastdup
-            V[lastdup] += V[k]
+            V[lastdup] = combine(V[lastdup], V[k])
             ndups += 1
         else
             cols[J[k] + 1] += 1
             lastdup = k-ndups
+            I_lastdup = I[k]
+            J_lastdup = J[k]
             if ndups != 0
-                I_lastdup = I[k]
-                J_lastdup = J[k]
                 I[lastdup] = I_lastdup
                 V[lastdup] = V[k]
             end
@@ -171,8 +183,10 @@ function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
     numnz = int(m*n*density)
     I = randi(m, numnz)
     J = randi(n, numnz)
-    V = rng((numnz,))    
-    S = sparse(int32(I), int32(J), V, m, n)
+    S = sparse(int32(I), int32(J), 1.0, m, n)
+    S.nzval = rng(nnz(S))
+
+    return S
 end
 
 sprand(m::Int, n::Int, density::Float)  = sprand_rng (m,n,density,rand)
@@ -194,7 +208,7 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
     L = linspace(int32(1), int32(x))
-    _jl_make_sparse(L, L, ones(T, x), m, n)
+    _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
 
 ## Structure query functions
