@@ -90,17 +90,21 @@ function fork()
     return pid
 end
 
-function exec(cmd::String, args...)
-    cmd = cstring(cmd)
-    arr = Array(Ptr{Uint8}, length(args)+2)
-    arr[1] = cmd.data
+function _jl_pre_exec(args::Vector{ByteString})
+    ptrs = Array(Ptr{Uint8}, length(args)+1)
     for i = 1:length(args)
-        arr[i+1] = cstring(args[i]).data
+        ptrs[i] = args[i].data
     end
-    arr[length(args)+2] = C_NULL
-    ccall(dlsym(libc, :execvp), Int32,
-          (Ptr{Uint8}, Ptr{Ptr{Uint8}}),
-          arr[1], arr)
+    ptrs[length(args)+1] = C_NULL
+    return ptrs
+end
+
+function exec(args::Vector{ByteString})
+    if length(args) < 1
+        error("exec: too few words to exec")
+    end
+    ptrs = _jl_pre_exec(args)
+    ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
     system_error(:exec, true)
 end
 
@@ -133,10 +137,9 @@ end
 
 ## Executable: things that can be exec'd ##
 
-typealias Executable Union((String,Tuple),Function)
+typealias Executable Union(Vector{ByteString},Function)
 
-exec(cmd::(String,Tuple)) = exec(cmd[1], cmd[2]...)
-exec(thunk::Function) = thunk()
+exec(thunk::Function) = (thunk(); exit(0))
 
 type Cmd
     exec::Executable
@@ -146,6 +149,9 @@ type Cmd
     status::ProcessStatus
 
     function Cmd(exec::Executable)
+        if isa(exec,Vector{ByteString}) && length(exec) < 1
+            error("Cmd: too few words to exec")
+        end
         this = new(exec,
                    HashTable{FileDes,PipeEnd}(),
                    Set{Cmd}(),
@@ -154,12 +160,11 @@ type Cmd
         add(this.pipeline, this)
         this
     end
-    Cmd(cmd::String, args...) = Cmd((cmd,args))
 end
 
 function show(cmd::Cmd)
-    if isa(cmd.exec,(String,Tuple))
-        esc = shell_escape(cmd.exec[1], cmd.exec[2]...)
+    if isa(cmd.exec,Vector{ByteString})
+        esc = shell_escape(cmd.exec...)
         print('`')
         for c = esc
             if c == '`'
@@ -320,9 +325,10 @@ function spawn(cmd::Cmd)
         end
     end
     for c = cmd.pipeline
-        c.pid = fork()
         c.status = ProcessRunning()
+        c.pid = fork()
         if c.pid == 0
+            gc_disable()
             try
                 for (f,p) = c.pipes
                     dup2(fd(p), f)
@@ -336,7 +342,7 @@ function spawn(cmd::Cmd)
                 show(err)
                 exit(0xff)
             end
-            exit(0)
+            @assert false
         end
     end
     for f = fds
@@ -412,36 +418,38 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 
 ## implementation of `cmd` syntax ##
 
-arg_gen(x::String) = (x,)
+arg_gen(x::String) = (a=Array(ByteString,1); a[1]=x; a)
 
 function arg_gen(head)
     if applicable(start,head)
-        vals = ()
+        vals = empty(ByteString)
         for x = head
-            vals = append(vals,(string(x),))
+            push(vals,cstring(x))
         end
         return vals
     else
-        return (string(head),)
+        a = Array(ByteString,1)
+        a[1] = cstring(head)
+        return a
     end
 end
 
 function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
-    vals = ()
+    vals = empty(ByteString)
     for h = head, t = tail
-        vals = append(vals,(strcat(h,t),))
+        push(vals, cstring(strcat(h,t)))
     end
     vals
 end
 
 function cmd_gen(parsed)
-    args = ()
+    args = empty(ByteString)
     for arg = parsed
-        args = append(args,arg_gen(arg...))
+        append!(args, arg_gen(arg...))
     end
-    Cmd(args...)
+    Cmd(args)
 end
 
 macro cmd(str)
