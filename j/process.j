@@ -90,7 +90,15 @@ function fork()
     return pid
 end
 
+# WARNING: do not call this and keep the returned array of pointers
+# around longer than the args vector and then use array of pointers.
+# this could cause a segfault. this is really just for use by the
+# spawn function below so that we can exec more efficiently.
+#
 function _jl_pre_exec(args::Vector{ByteString})
+    if length(args) < 1
+        error("exec: too few words to exec")
+    end
     ptrs = Array(Ptr{Uint8}, length(args)+1)
     for i = 1:length(args)
         ptrs[i] = args[i].data
@@ -100,12 +108,17 @@ function _jl_pre_exec(args::Vector{ByteString})
 end
 
 function exec(args::Vector{ByteString})
-    if length(args) < 1
-        error("exec: too few words to exec")
-    end
     ptrs = _jl_pre_exec(args)
     ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
     system_error(:exec, true)
+end
+
+function exec(args::String...)
+    arr = Array(ByteString, length(args))
+    for i = 1:length(args)
+        arr[i] = cstring(args[i])
+    end
+    exec(arr)
 end
 
 function wait(pid::Int32)
@@ -324,30 +337,45 @@ function spawn(cmd::Cmd)
             add(fds, fd(p))
         end
     end
+    gc_disable()
     for c = cmd.pipeline
+        # minimize work after fork, in particular no writing
         c.status = ProcessRunning()
-        c.pid = fork()
-        if c.pid == 0
-            gc_disable()
+        ptrs = isa(c.exec,Vector{ByteString}) ? _jl_pre_exec(c.exec) : nothing
+        close_fds = copy(fds)
+        for (f,p) = c.pipes
+            del(close_fds, fd(p))
+        end
+        # now actually do the fork and exec without writes
+        pid = fork()
+        if pid == 0
+            for (f,p) = c.pipes
+                dup2(fd(p), f)
+            end
+            for f = close_fds
+                close(f)
+            end
+            if ptrs != nothing
+                ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
+                system_error(:exec, true)
+            end
+            # other ways of execing (e.g. a julia function)
+            gc_enable()
+            c.pid = pid
             try
-                for (f,p) = c.pipes
-                    dup2(fd(p), f)
-                    del(fds, fd(p))
-                end
-                for f = fds
-                    close(f)
-                end
                 exec(c)
             catch err
                 show(err)
                 exit(0xff)
             end
-            @assert false
+            error("exec should not return but has")
         end
+        c.pid = pid
     end
     for f = fds
         close(f)
     end
+    gc_enable()
 end
 
 # spawn(cmds) starts all pipelines of a set of commands
