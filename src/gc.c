@@ -665,9 +665,9 @@ static void gc_mark(void)
 }
 
 static int is_gc_enabled = 0;
-void jl_gc_enable(void)    { is_gc_enabled = 1; }
-void jl_gc_disable(void)   { is_gc_enabled = 0; }
-int jl_gc_is_enabled(void) { return is_gc_enabled; }
+DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
+DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
+DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 void jl_gc_ephemeral_on(void)  { pools = &ephe_pools[0]; }
 void jl_gc_ephemeral_off(void) { pools = &norm_pools[0]; }

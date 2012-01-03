@@ -244,6 +244,8 @@ finalizer(o, f::Function) =
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 
 gc() = ccall(:jl_gc_collect, Void, ())
+gc_enable() = ccall(:jl_gc_enable, Void, ())
+gc_disable() = ccall(:jl_gc_disable, Void, ())
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
 istaskdone(t::Task) = t.done
