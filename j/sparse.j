@@ -58,11 +58,13 @@ function sparse(A::Matrix)
     sparse(int32(I), int32(J), V, m, n)
 end
 
-sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)))
+sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+
+sparse(I,J,V,m,n) = sparse(I, J, V, m, n, +)
 
 function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                        V::Union(Number,AbstractVector), 
-                                        m::Int, n::Int)
+                                        V::Union(Number, AbstractVector), 
+                                        m::Int, n::Int, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
@@ -80,7 +82,7 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
         if isa(V, AbstractVector); V = V[p]; end
     end
 
-    return _jl_make_sparse(I, J, V, m, n)
+    return _jl_make_sparse(I, J, V, m, n, +)
 
 end
 
@@ -89,7 +91,7 @@ end
 # use sparse() with the same arguments if this is not the case
 function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                                  V::Union(Number, AbstractVector),
-                                                 m::Int, n::Int)
+                                                 m::Int, n::Int, combine::Function)
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     if isa(I, Range1) || isa(I, Range); I = [I]; end
@@ -112,7 +114,7 @@ function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::Abstr
 
     for k=2:length(I)
         if I[k] == I_lastdup && J[k] == J_lastdup
-            V[lastdup] += V[k]
+            V[lastdup] = combine(V[lastdup], V[k])
             ndups += 1
         else
             cols[J[k] + 1] += 1
@@ -196,7 +198,7 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
     L = linspace(int32(1), int32(x))
-    _jl_make_sparse(L, L, ones(T, x), m, n)
+    _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
 
 ## Structure query functions
