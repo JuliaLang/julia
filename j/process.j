@@ -152,7 +152,15 @@ end
 
 typealias Executable Union(Vector{ByteString},Function)
 
-exec(thunk::Function) = (thunk(); exit(0))
+function exec(thunk::Function)
+    try
+        thunk()
+    catch e
+        show(e)
+        exit(0xff)
+    end
+    exit(0)
+end
 
 type Cmd
     exec::Executable
@@ -353,7 +361,7 @@ function spawn(cmd::Cmd)
                 # dup2 manually inlined for performance
                 r = ccall(:dup2, Int32, (Int32, Int32), fd(p).fd, f.fd)
                 if r == -1
-                    println("dup2: $(strerror())")
+                    println("dup2: ", strerror())
                     exit(0xff)
                 end
             end
@@ -361,13 +369,13 @@ function spawn(cmd::Cmd)
                 # close manually inlined for performance
                 r = ccall(:close, Int32, (Int32,), f.fd)
                 if r != 0
-                    println("close: $(strerror())")
+                    println("close: ", strerror())
                     exit(0xff)
                 end
             end
             if ptrs != nothing
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
-                system_error(:exec, true)
+                println("exec: ", strerror())
                 exit(0xff)
             end
             # other ways of execing (e.g. a julia function)
