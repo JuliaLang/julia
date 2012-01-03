@@ -58,7 +58,7 @@ function sparse(A::Matrix)
     sparse(int32(I), int32(J), V, m, n)
 end
 
-sparse(I,J,V) = sparse(I, J, V, max(I), max(J))
+sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)))
 
 function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::Union(Number,AbstractVector), 
@@ -117,9 +117,9 @@ function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::Abstr
         else
             cols[J[k] + 1] += 1
             lastdup = k-ndups
+            I_lastdup = I[k]
+            J_lastdup = J[k]
             if ndups != 0
-                I_lastdup = I[k]
-                J_lastdup = J[k]
                 I[lastdup] = I_lastdup
                 V[lastdup] = V[k]
             end
@@ -171,8 +171,10 @@ function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
     numnz = int(m*n*density)
     I = randi(m, numnz)
     J = randi(n, numnz)
-    V = rng((numnz,))    
-    S = sparse(int32(I), int32(J), V, m, n)
+    S = sparse(int32(I), int32(J), 1.0, m, n)
+    S.nzval = rng(nnz(S))
+
+    return S
 end
 
 sprand(m::Int, n::Int, density::Float)  = sprand_rng (m,n,density,rand)
