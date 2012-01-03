@@ -273,6 +273,22 @@ function issym(A::Matrix)
     return true
 end
 
+# Randomized matrix symmetry test
+# Theorem: Matrix is symmetric iff x'*A*y == y'*A*x, for randomly chosen x and y.
+function issym_rnd(A::AbstractArray)
+    m, n = size(A)
+    if m != n; return false; end
+    ntrials = 5
+
+    for i=1:ntrials
+        x = randn(n)
+        y = randn(n)
+        if (x'*A*y - y'*A*x)[1] > 1e-6; return false; end
+    end
+
+    return true
+end
+
 function ishermitian(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
