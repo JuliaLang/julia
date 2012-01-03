@@ -7,54 +7,36 @@
 #   (h|hh|l|ll|L|j|t|z|q)?  # modifier
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
-const PRINTF_FLAG_ALTERNATE = 0x1 << 0
-const PRINTF_FLAG_ZERO_PAD  = 0x1 << 1
-const PRINTF_FLAG_LEFT_JUST = 0x1 << 2
-const PRINTF_FLAG_PRE_SPACE = 0x1 << 3
-const PRINTF_FLAG_SIGNED    = 0x1 << 4
-const PRINTF_FLAG_SEPARATED = 0x1 << 5
-
 _jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
     error("premature end of format string: ", show_to_string(s))
 
 function _jl_format_parse(s::String)
     sx = {}
     i = j = start(s)
-    n = 1
+    arg = 1
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
             if !isempty(s[i:j-1])
                 push(sx, check_utf8(unescape_string(s[i:j-1])))
             end
-            arg = n
-            flags = 0x0
+            alternate = false
+            pad_zeros = false
+            left_just = false
+            pre_space = false
+            show_sign = false
+            separated = false
             width = 0
             precision = -1
-            modifier = ""
             c, k = _jl_next_or_die(s,k)
-            # # parse arg number
-            # if '1' <= c <= '9'
-            #     arg = c-'0'
-            #     while true
-            #         c, k = _jl_next_or_die(s,k)
-            #         if !('0' <= c <= '9'); break; end
-            #         arg = 10*arg + c-'0'
-            #     end
-            #     if c != '$'
-            #         width = arg
-            #         arg = n
-            #         goto parse_precision
-            #     end
-            # end
             # parse flags
             while true
-                if c == '#'      ; flags |= PRINTF_FLAG_ALTERNATE
-                elseif c == '0'  ; flags |= PRINTF_FLAG_ZERO_PAD
-                elseif c == '-'  ; flags |= PRINTF_FLAG_LEFT_JUST
-                elseif c == ' '  ; flags |= PRINTF_FLAG_PRE_SPACE
-                elseif c == '+'  ; flags |= PRINTF_FLAG_SIGNED
-                elseif c == '\'' ; flags |= PRINTF_FLAG_SEPARATED
+                if     c == '#'  ; alternate = true
+                elseif c == '0'  ; pad_zeros = true
+                elseif c == '-'  ; left_just = true
+                elseif c == ' '  ; pre_space = true
+                elseif c == '+'  ; show_sign = true
+                elseif c == '\'' ; separated = true
                 else             ; break
                 end
                 c, k = _jl_next_or_die(s,k)
@@ -65,7 +47,6 @@ function _jl_format_parse(s::String)
                 c, k = _jl_next_or_die(s,k)
             end
             # parse precision
-        # parse_precision:
             if c == '.'
                 precision = 0
                 c, k = _jl_next_or_die(s,k)
@@ -74,32 +55,58 @@ function _jl_format_parse(s::String)
                     c, k = _jl_next_or_die(s,k)
                 end
             end
-            # parse length modifer
+            # parse length modifer (ignored)
             if c == 'h' || c == 'l'
-                modifier = string(c)
+                prev = c
                 c, k = _jl_next_or_die(s,k)
-                if c == modifier[1]
-                    modifier = strcat(c,c)
+                if c == prev
                     c, k = _jl_next_or_die(s,k)
                 end
             elseif contains("Ljqtz",c)
-                modifier = string(c)
                 c, k = _jl_next_or_die(s,k)
             end
-            # parse conversion
-            conversion = c
-            if !contains("%ACEFGSXacdefgiopsux", conversion)
+            i = j = k
+            # construct conversion expression
+            ex = symbol("arg$arg")
+            if c == '%'
+                if isempty(sx)
+                    push(sx, "%")
+                else
+                    sx[end] *= "%"
+                end
+                continue
+            elseif c == 'd' || c == 'i'
+                ex = :(string(convert(Int64,$ex)))
+            elseif contains("ouxXcCp", c)
+                ex = :(string(convert(Uint64,$ex)))
+            elseif contains("eEfFgGaA", c)
+                ex = :(string(convert(Float64,$ex)))
+            elseif c == 's' || c == 'S'
+                ex = :(string($ex))
+            elseif c == 'n'
+                error("format feature \"%n\" is not supported")
+            else
                 error("invalid format string: ", show_to_string(s))
             end
-            push(sx, {
-                :arg        => arg,
-                :flags      => flags,
-                :width      => width,
-                :precision  => precision,
-                :length     => length,
-                :conversion => conversion,
-            })
-            i = j = k
+            alternate && error("format flag \"#\" not yet supported")
+            pad_zeros && error("format flag \"0\" not yet supported")
+            separated && error("format flag \"'\" not yet supported")
+            if pre_space || show_sign
+                pre = show_sign ? '+' : ' '
+                ex = quote
+                    s = $ex
+                    if s[1] != '-'
+                        s = strcat($pre,s)
+                    end
+                    s
+                end
+            end
+            if width > 0
+                pad = left_just ? (:rpad) : (:lpad)
+                ex = :(($pad)($ex,$width))
+            end
+            push(sx, ex)
+            arg += 1
         else
             j = k
         end
@@ -107,7 +114,9 @@ function _jl_format_parse(s::String)
     if !isempty(s[i:])
         push(sx, check_utf8(unescape_string(s[i:j-1])))
     end
-    # length(sx) == 1 && isa(sx[1],ByteString) ? sx[1] :
-    #     expr(:call, :print_to_string, printer, sx...)
-    return sx
+    args = expr(:tuple, ntuple(arg-1,n->symbol("arg$n"))...)
+    body = expr(:call, :print, sx...)
+    return :(($args)->($body))
 end
+
+macro p_str(f); _jl_format_parse(f); end
