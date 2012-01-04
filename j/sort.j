@@ -1,9 +1,9 @@
 ## standard sort comparisons ##
 
-sortlt(x,y) = x < y
+isless(x,y) = x < y
 
-sortlt(x::Float32, y::Float32) = fpsortlt32(unbox32(x),unbox32(y))
-sortlt(x::Float64, y::Float64) = fpsortlt64(unbox64(x),unbox64(y))
+isless(x::Float32, y::Float32) = fpsortlt32(unbox32(x),unbox32(y))
+isless(x::Float64, y::Float64) = fpsortlt64(unbox64(x),unbox64(y))
 
 _jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox32(x),unbox32(y))
 _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
@@ -189,10 +189,10 @@ end
 
 end; end # quote / macro
 
-@_jl_sort_functions ""    :(sortlt($a,$b))
-@_jl_sort_functions "_r"  :(sortlt($b,$a))
+@_jl_sort_functions ""    :(isless($a,$b))
+@_jl_sort_functions "_r"  :(isless($b,$a))
 @_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
-@_jl_sort_functions "_by" :(sortlt(by($a),by($b))) by::Function
+@_jl_sort_functions "_by" :(isless(by($a),by($b))) by::Function
 
 ## external sorting functions ##
 
@@ -339,7 +339,7 @@ sortperm{T}(a::AbstractVector{T}) =
 
 function issorted(v::AbstractVector)
   for i = 1:length(v)-1
-      if sortlt(v[i+1], v[i])
+      if isless(v[i+1], v[i])
           return false
       end
   end
