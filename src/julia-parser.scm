@@ -659,7 +659,11 @@
 			   `(tuple ,sig)
 			   ;; function foo  =>  syntax error
 			   (error "expected ( in function definition"))
-		       sig))
+		       (if (not (and (pair? sig)
+				     (or (eq? (car sig) 'call)
+					 (eq? (car sig) 'tuple))))
+			   (error "expected ( in function definition")
+			   sig)))
 	    (loc   (line-number-filename-node s))
 	    (body  (parse-block s)))
        (expect-end s)
