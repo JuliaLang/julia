@@ -1,12 +1,9 @@
 ## standard sort comparisons ##
 
 sortlt(x,y) = x < y
-sortle(x,y) = x <= y
 
 sortlt(x::Float32, y::Float32) = fpsortlt32(unbox32(x),unbox32(y))
 sortlt(x::Float64, y::Float64) = fpsortlt64(unbox64(x),unbox64(y))
-sortle(x::Float32, y::Float32) = fpsortle32(unbox32(x),unbox32(y))
-sortle(x::Float64, y::Float64) = fpsortle64(unbox64(x),unbox64(y))
 
 _jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox32(x),unbox32(y))
 _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
@@ -20,12 +17,11 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sge_int(unbox64(x),unbox64(y))
 
 ## internal sorting functionality ##
 
-macro _jl_sort_functions(suffix, lt, le, args...)
+macro _jl_sort_functions(suffix, lt, args...)
 insertionsort = symbol("_jl_insertionsort$suffix")
 quicksort = symbol("_jl_quicksort$suffix")
 mergesort = symbol("_jl_mergesort$suffix")
 lt = @eval (a,b)->$lt
-le = @eval (a,b)->$le
 quote
 
 # sorting should be stable
@@ -39,11 +35,12 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Integer, hi::Intege
         j = i
         x = a[i]
         while j > lo
-            if $le(:(a[j-1]), :x)
-                break
+            if $lt(:x, :(a[j-1]))
+                a[j] = a[j-1]
+                j -= 1
+                continue
             end
-            a[j] = a[j-1]
-            j -= 1
+            break
         end
         a[j] = x
     end
@@ -57,12 +54,13 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
         x = a[i]
         xp = p[i]
         while j > lo
-            if $le(:(a[j-1]), :x)
-                break
+            if $lt(:x, :(a[j-1]))
+                a[j] = a[j-1]
+                p[j] = p[j-1]
+                j -= 1
+                continue
             end
-            a[j] = a[j-1]
-            p[j] = p[j-1]
-            j -= 1
+            break
         end
         a[j] = x
         p[j] = xp
@@ -101,7 +99,7 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
     return a
 end
 
-# less fast but stable
+# less fast & not in-place, but stable
 function ($mergesort)($(args...), a::AbstractVector, lo::Integer, hi::Integer, b::AbstractVector)
     if lo < hi
         if hi-lo <= 20
@@ -124,24 +122,21 @@ function ($mergesort)($(args...), a::AbstractVector, lo::Integer, hi::Integer, b
         i = 1
         k = lo
         while k < j <= hi
-            if $le(:(b[i]), :(a[j]))
-                a[k] = b[i]
-                i += 1
-            else
+            if $lt(:(a[j]), :(b[i]))
                 a[k] = a[j]
                 j += 1
+            else
+                a[k] = b[i]
+                i += 1
             end
             k += 1
         end
-
         while k < j
             a[k] = b[i]
             k += 1
             i += 1
         end
-
-    end # if lo<hi...
-
+    end
     return a
 end
 
@@ -171,14 +166,14 @@ function ($mergesort)($(args...),
         i = 1
         k = lo
         while k < j <= hi
-            if $le(:(b[i]), :(a[j]))
-                a[k] = b[i]
-                p[k] = pb[i]
-                i += 1
-            else
+            if $lt(:(a[j]), :(b[i]))
                 a[k] = a[j]
                 p[k] = p[j]
                 j += 1
+            else
+                a[k] = b[i]
+                p[k] = pb[i]
+                i += 1
             end
             k += 1
         end
@@ -194,23 +189,24 @@ end
 
 end; end # quote / macro
 
-@_jl_sort_functions ""    :(sortlt($a,$b)) :(sortle($a,$b))
-@_jl_sort_functions "_r"  :(sortlt($b,$a)) :(sortle($b,$a))
-@_jl_sort_functions "_lt" :(lt($a,$b))     :(!lt($b,$a))    lt::Function
+@_jl_sort_functions ""    :(sortlt($a,$b))
+@_jl_sort_functions "_r"  :(sortlt($b,$a))
+@_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
 
 ## external sorting functions ##
 
-sort!{T<:Real}(a::AbstractVector{T}) = _jl_quicksort(a, 1, length(a))
+sort!{T<:Real}(a::AbstractVector{T})  = _jl_quicksort(a, 1, length(a))
 sortr!{T<:Real}(a::AbstractVector{T}) = _jl_quicksort_r(a, 1, length(a))
-sort!{T}(a::AbstractVector{T}) = _jl_mergesort(a, 1, length(a), Array(T,length(a)))
+sort!{T}(a::AbstractVector{T})  = _jl_mergesort(a, 1, length(a), Array(T,length(a)))
 sortr!{T}(a::AbstractVector{T}) = _jl_mergesort_r(a, 1, length(a), Array(T,length(a)))
+
 sort!{T}(lt::Function, a::AbstractVector{T}) =
     _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
 
 ## special sorting for floating-point arrays ##
 
-@_jl_sort_functions "_fp_pos" :(_jl_fp_pos_lt($a,$b)) :(_jl_fp_pos_le($a,$b))
-@_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b)) :(_jl_fp_neg_le($a,$b))
+@_jl_sort_functions "_fp_pos" :(_jl_fp_pos_lt($a,$b))
+@_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b))
 
 # push NaNs to the end of a, returning # of non-NaNs
 function _jl_nans_to_end{T<:Float}(a::AbstractVector{T})
