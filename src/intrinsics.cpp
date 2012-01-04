@@ -9,14 +9,11 @@ namespace JL_I {
         sdiv_int, udiv_int, srem_int, urem_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
         // comparison
-        eq_int, ne_int,
+        eq_int,  ne_int,
         slt_int, ult_int,
         sle_int, ule_int,
-        sgt_int, ugt_int,
-        sge_int, uge_int,
         eq_float, ne_float,
         lt_float, le_float,
-        gt_float, ge_float,
         eq_f64_i64, eq_f64_u64,
         fpsortlt32, fpsortlt64,
         fpsortle32, fpsortle64,
@@ -367,14 +364,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateICmpSLE(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(ule_int,2)
         return builder.CreateICmpULE(INT(x), INT(emit_expr(args[2],ctx,true)));
-    HANDLE(sgt_int,2)
-        return builder.CreateICmpSGT(INT(x), INT(emit_expr(args[2],ctx,true)));
-    HANDLE(ugt_int,2)
-        return builder.CreateICmpUGT(INT(x), INT(emit_expr(args[2],ctx,true)));
-    HANDLE(sge_int,2)
-        return builder.CreateICmpSGE(INT(x), INT(emit_expr(args[2],ctx,true)));
-    HANDLE(uge_int,2)
-        return builder.CreateICmpUGE(INT(x), INT(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_float,2)
         return builder.CreateFCmpOEQ(FP(x), FP(emit_expr(args[2],ctx,true)));
@@ -384,10 +373,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFCmpOLT(FP(x), FP(emit_expr(args[2],ctx,true)));
     HANDLE(le_float,2)
         return builder.CreateFCmpOLE(FP(x), FP(emit_expr(args[2],ctx,true)));
-    HANDLE(gt_float,2)
-        return builder.CreateFCmpOGT(FP(x), FP(emit_expr(args[2],ctx,true)));
-    HANDLE(ge_float,2)
-        return builder.CreateFCmpOGE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_f64_i64,2)
         fy = INT(emit_expr(args[2],ctx,true));
@@ -735,11 +720,8 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(eq_int); ADD_I(ne_int);
     ADD_I(slt_int); ADD_I(ult_int);
     ADD_I(sle_int); ADD_I(ule_int);
-    ADD_I(sgt_int); ADD_I(ugt_int);
-    ADD_I(sge_int); ADD_I(uge_int);
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
-    ADD_I(gt_float); ADD_I(ge_float);
     ADD_I(eq_f64_i64); ADD_I(eq_f64_u64);
     ADD_I(fpsortlt32); ADD_I(fpsortlt64);
     ADD_I(fpsortle32); ADD_I(fpsortle64);

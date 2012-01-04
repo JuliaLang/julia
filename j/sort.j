@@ -10,10 +10,10 @@ _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
 _jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox32(x),unbox32(y))
 _jl_fp_pos_le(x::Float64, y::Float64) = sle_int(unbox64(x),unbox64(y))
 
-_jl_fp_neg_lt(x::Float32, y::Float32) = sgt_int(unbox32(x),unbox32(y))
-_jl_fp_neg_lt(x::Float64, y::Float64) = sgt_int(unbox64(x),unbox64(y))
-_jl_fp_neg_le(x::Float32, y::Float32) = sge_int(unbox32(x),unbox32(y))
-_jl_fp_neg_le(x::Float64, y::Float64) = sge_int(unbox64(x),unbox64(y))
+_jl_fp_neg_lt(x::Float32, y::Float32) = slt_int(unbox32(y),unbox32(x))
+_jl_fp_neg_lt(x::Float64, y::Float64) = slt_int(unbox64(y),unbox64(x))
+_jl_fp_neg_le(x::Float32, y::Float32) = sle_int(unbox32(y),unbox32(x))
+_jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox64(y),unbox64(x))
 
 ## internal sorting functionality ##
 
@@ -238,6 +238,7 @@ end
 function sort!{T<:Float}(a::AbstractVector{T})
     i, j = 1, _jl_nans_to_end(a)
     while true
+        # TODO: faster positive negative int check?
         while i <= j && _jl_fp_pos_lt(a[i],zero(T)); i += 1; end
         while i <= j && _jl_fp_pos_le(zero(T),a[j]); j -= 1; end
         if i <= j
