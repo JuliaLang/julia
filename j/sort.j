@@ -213,32 +213,34 @@ sort!{T}(lt::Function, a::AbstractVector{T}) =
 @_jl_sort_functions "_fp_neg" :(_jl_fp_neg_lt($a,$b)) :(_jl_fp_neg_le($a,$b))
 
 # push NaNs to the end of a, returning # of non-NaNs
-function _jl_move_nans!(a)
-    l = length(a)
-    if l < 1
-        return l
+function _jl_nans_to_end{T<:Float}(a::AbstractVector{T})
+    n = length(a)
+    if n <= 1
+        return n
     end
-    n=1
-    nnan=0
+    i = 1
+    while (i < n) & (a[i]==a[i])
+        i += 1
+    end
+    nnan = 0
     while true
-        if isnan(a[n])
-            nnan += 1
+        if a[i]==a[i]
+            i += 1
         else
-            n += 1
+            nnan += 1
         end
-        if n+nnan > l
+        if i+nnan > n
             break
         end
         if nnan > 0
-            a[n], a[n+nnan] = a[n+nnan], a[n]
+            a[i], a[i+nnan] = a[i+nnan], a[i]
         end
     end
-    return l-nnan
+    return n-nnan
 end
 
 function sort!{T<:Float}(a::AbstractVector{T})
-    i = 1
-    j = length(a)
+    i, j = 1, _jl_nans_to_end(a)
     while true
         while i <= j && _jl_fp_pos_lt(a[i],zero(T)); i += 1; end
         while i <= j && _jl_fp_pos_le(zero(T),a[j]); j -= 1; end
