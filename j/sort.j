@@ -239,7 +239,8 @@ function _jl_nans_to_end{T<:Float}(a::AbstractVector{T})
 end
 
 function sort!{T<:Float}(a::AbstractVector{T})
-    i, j = 1, _jl_nans_to_end(a)
+    n = _jl_nans_to_end(a)
+    i, j = 1, n
     while true
         # TODO: faster positive negative int check?
         while i <= j && _jl_fp_pos_lt(a[i],zero(T)); i += 1; end
@@ -253,7 +254,7 @@ function sort!{T<:Float}(a::AbstractVector{T})
         end
     end
     _jl_quicksort_fp_neg(a, 1, j)
-    _jl_quicksort_fp_pos(a, i, length(a))
+    _jl_quicksort_fp_pos(a, i, n)
     return a
 end
 
