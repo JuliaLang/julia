@@ -270,5 +270,4 @@
 (assert (not (equal? (hash (iota 41))
 		     (hash (iota 42)))))
 
-(princ "all tests pass\n")
 #t

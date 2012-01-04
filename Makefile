@@ -1,22 +1,20 @@
-JULIAHOME = $(shell pwd)
-
+JULIAHOME = .
 include ./Make.inc
 
-default: release
-	$(MAKE) -C test quick
+default: release test-quick
 
 debug release: %: julia-% sys.ji
 
 julia-debug julia-release:
-	$(MAKE) -C external
-	$(MAKE) -C src lib$@
-	$(MAKE) -C ui $@
-	$(MAKE) -C j
-	$(MAKE) -C ui/webserver $@
-	ln -f $@-$(DEFAULT_REPL) julia
+	@$(MAKE) -sC external
+	@$(MAKE) -sC src lib$@
+	@$(MAKE) -sC ui $@
+	@$(MAKE) -sC j
+	@$(MAKE) -sC ui/webserver $@
+	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys.ji: VERSION j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
-	./julia -b sysimg.j
+	$(QUIET_JULIA) ./julia -b sysimg.j
 
 install: release
 	rm -fr $(DESTDIR)/*
@@ -31,20 +29,20 @@ install: release
 	cp -r sys.ji $(DESTDIR)/usr/share/julia
 
 h2j: lib/libLLVM*.a lib/libclang*.a src/h2j.cpp
-	g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
+	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
 
 clean:
-	rm -f julia
-	rm -f *~ *#
-	rm -f sys.ji
-	$(MAKE) -C j clean
-	$(MAKE) -C src clean
-	$(MAKE) -C ui clean
-	$(MAKE) -C ui/webserver clean
-	$(MAKE) -C test/unicode clean
+	@rm -f julia
+	@rm -f *~ *#
+	@rm -f sys.ji
+	@$(MAKE) -sC j clean
+	@$(MAKE) -sC src clean
+	@$(MAKE) -sC ui clean
+	@$(MAKE) -sC ui/webserver clean
+	@$(MAKE) -sC test/unicode clean
 
 cleanall: clean
-	$(MAKE) -C src clean-flisp clean-support
+	@$(MAKE) -sC src clean-flisp clean-support
 
 distclean: cleanall
 
@@ -55,13 +53,13 @@ distclean: cleanall
 	test testall test-* sloccount clean cleanall
 
 test: release
-	$(MAKE) -C test quick core
+	@$(MAKE) -sC test quick core
 
 testall: release
-	$(MAKE) -C test all
+	@$(MAKE) -sC test all
 
 test-%: release
-	$(MAKE) -C test $*
+	@$(MAKE) -sC test $*
 
 ## SLOCCOUNT ##
 
@@ -76,5 +74,5 @@ J_FILES = $(shell git ls-files | grep '\.j$$')
 
 sloccount:
 	@for x in $(J_FILES); do cp $$x $${x%.j}.hs; done
-	git ls-files | sed 's/\.j$$/.hs/' | xargs $(SLOCCOUNT) | sed 's/haskell/*julia*/g'
+	@git ls-files | sed 's/\.j$$/.hs/' | xargs $(SLOCCOUNT) | sed 's/haskell/*julia*/g'
 	@for x in $(J_FILES); do rm -f $${x%.j}.hs; done

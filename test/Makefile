@@ -1,11 +1,21 @@
+JULIAHOME = ..
+include ../Make.inc
+
 all: quick core hashing arrayops unicode perf
 
-quick core hashing arrayops perf:
-	../julia $@.j
+quick core hashing arrayops:
+	$(QUIET_JULIA) ../julia $@.j
 
 unicode:
-	@$(MAKE) -C $@ -s
-	../julia $@.j
+	$(QUIET_JULIA)
+	@$(MAKE) -C $@
+	@../julia $@.j
+
+perf:
+	$(QUIET_JULIA)
+	@echo
+	@../julia $@.j | perl -ple 's/^julia,/        /'
+	@echo
 
 bin/perf%: perf.cpp
 	g++ -O$* ../external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
@@ -46,15 +56,15 @@ BENCHMARKS = \
 	benchmarks/javascript.csv
 
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
-	$^ >$@
+	$(QUIET_PERL) $^ >$@
 
 benchmarks.txt: bin/table.pl benchmarks.csv
-	$^ >$@
+	$(QUIET_PERL) $^ >$@
 
 benchmark: benchmarks.txt
 
 clean:
-	$(MAKE) -C unicode $@
-	rm -rf bin/perf* benchmarks benchmarks.csv
+	@$(MAKE) -C unicode $@
+	@rm -rf bin/perf* benchmarks benchmarks.csv
 
 .PHONY: all quick core hashing arrayops unicode perf benchmark clean

@@ -27,13 +27,13 @@ release: $(EXENAME)
 debug: $(EXENAME)-debug
 
 %.o: %.c
-	$(QUIET_CC)$(CC) $(SHIPFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
 %.do: %.c
-	$(CC) $(DEBUGFLAGS) -c $< -o $@
+	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
 
-flisp.o:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
-flisp.do: flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
-flmain.o: flmain.c flisp.h
+flisp.o:   flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
+flisp.do:  flisp.c cvalues.c types.c flisp.h print.c read.c equal.c
+flmain.o:  flmain.c flisp.h
 flmain.do: flmain.c flisp.h
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
@@ -41,19 +41,19 @@ $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
 
 $(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
-	ar rs $@ $(DOBJS)
+	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
 	ln -sf $@ $(LIBTARGET).a
 
 $(LIBTARGET).a: $(OBJS)
 	rm -rf $@
-	$(QUIET_LINK)ar rs $@ $(OBJS)
+	$(QUIET_LINK) ar -rcs $@ $(OBJS)
 
 $(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(LIBTARGET)-debug.a flmain.do
-	$(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(DEBUGFLAGS) $(DOBJS) flmain.do -o $(EXENAME)-debug $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	./$(EXENAME)-debug unittest.lsp
 
 $(EXENAME): $(OBJS) $(LIBFILES) $(LIBTARGET).a flmain.o
-	$(QUIET_CC)$(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
+	$(QUIET_CC) $(CC) $(SHIPFLAGS) $(OBJS) flmain.o -o $(EXENAME) $(LIBS) $(LIBTARGET).a $(OSLIBS)
 	./$(EXENAME) unittest.lsp
 
 clean:

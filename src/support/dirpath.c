@@ -107,7 +107,7 @@ char *get_exename(char *buf, size_t size)
 
     if (GetCurrentProcess(&PSN) < 0 ||
         GetProcessBundleLocation(&PSN, &ref) < 0 ||
-        FSRefMakePath(&ref, buf, size) < 0)
+        FSRefMakePath(&ref, (uint8_t*)buf, size) < 0)
         return NULL;
 
     return buf;

@@ -64,10 +64,19 @@ LIBS = $(shell $(LLVMROOT)/bin/llvm-config --libfiles) $(JULIAHOME)/src/flisp/li
 
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
+PERLCOLOR="\033[35m"
+FLISPCOLOR="\033[32m"
+JULIACOLOR="\033[32;1m"
+
 SRCCOLOR="\033[33m"
 BINCOLOR="\033[37;1m"
-MAKECOLOR="\033[32;1m"
+JULCOLOR="\033[34;1m"
 ENDCOLOR="\033[0m"
 
-QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$@$(ENDCOLOR);
-QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$@$(ENDCOLOR);
+GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $(CURDIR)/$@))
+
+QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
+QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
