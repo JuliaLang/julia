@@ -62,6 +62,15 @@ strchr(s::UTF8String, c::Char) =
 strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
 
+transform_to_utf8(s::String, f::Function) =
+    print_to_string(length(s), @thunk for c=s; print(f(c)); end)
+
+uc(s::UTF8String) = transform_to_utf8(s,uc)
+lc(s::UTF8String) = transform_to_utf8(s,lc)
+
+ucfirst(s::UTF8String) = print_to_string(length(s), print, uc(s[1]), s[2:])
+lcfirst(s::UTF8String) = print_to_string(length(s), print, lc(s[1]), s[2:])
+
 ## outputing UTF-8 strings ##
 
 print(s::UTF8String) = print(s.data)
