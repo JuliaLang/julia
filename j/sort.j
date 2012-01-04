@@ -192,6 +192,7 @@ end; end # quote / macro
 @_jl_sort_functions ""    :(sortlt($a,$b))
 @_jl_sort_functions "_r"  :(sortlt($b,$a))
 @_jl_sort_functions "_lt" :(lt($a,$b)) lt::Function
+@_jl_sort_functions "_by" :(sortlt(by($a),by($b))) by::Function
 
 ## external sorting functions ##
 
@@ -202,6 +203,8 @@ sortr!{T}(a::AbstractVector{T}) = _jl_mergesort_r(a, 1, length(a), Array(T,lengt
 
 sort!{T}(lt::Function, a::AbstractVector{T}) =
     _jl_mergesort_lt(lt, a, 1, length(a), Array(T,length(a)))
+sort_by!{T}(by::Function, a::AbstractVector{T}) =
+    _jl_mergesort_by(by, a, 1, length(a), Array(T,length(a)))
 
 ## special sorting for floating-point arrays ##
 
@@ -310,6 +313,7 @@ end
 @in_place_matrix_op sort
 @in_place_matrix_op sort lt::Function
 @in_place_matrix_op sortr
+@in_place_matrix_op sort_by
 
 # TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Int)
