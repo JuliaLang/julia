@@ -52,3 +52,45 @@ end
 # demo:
 # m = [ mandel(complex(r,i)) | i=-1:.01:1, r=-2:.01:0.5 ];
 # ppmwrite(indexedcolor(m, palette_fire), "mandel.ppm")
+
+function imread(file::String)
+    cmd = `convert -format "%w %h" -identify $file rgb:-`
+    stream = fdio(read_from(cmd).fd, true)
+    spawn(cmd)
+    szline = readline(stream)
+    spc = strchr(szline, ' ')
+    w = parse_dec(szline[1:spc-1])
+    h = parse_dec(szline[spc+1:end-1])
+    img = Array(Uint8, h, w, 3)
+    for i=1:h, j=1:w
+        img[i,j,1] = read(stream, Uint8)
+        img[i,j,2] = read(stream, Uint8)
+        img[i,j,3] = read(stream, Uint8)
+    end
+    img
+end
+
+function imwrite(I, file::String)
+    h, w = size(I)
+    cmd = `convert -size $(w)x$(h) -depth 8 rgb:- $file`
+    stream = fdio(write_to(cmd).fd, true)
+    spawn(cmd)
+    if ndims(I)==3 && size(I,3)==3
+        for i=1:h, j=1:w
+            write(stream, uint8(I[i,j,1]))
+            write(stream, uint8(I[i,j,2]))
+            write(stream, uint8(I[i,j,3]))
+        end
+    elseif is(eltype(I),Int32) || is(eltype(I),Uint32)
+        for i=1:h, j=1:w
+            p = I[i,j]
+            write(stream, uint8(redval(p)))
+            write(stream, uint8(greenval(p)))
+            write(stream, uint8(blueval(p)))
+        end
+    else
+        error("unsupported image data format")
+    end
+    close(stream)
+    wait(cmd)
+end
