@@ -22,11 +22,17 @@ install: release
 	mkdir -p $(DESTDIR)/usr/bin
 	cp julia-release-readline $(DESTDIR)/usr/bin/julia
 	cp julia-release-basic $(DESTDIR)/usr/bin/julia-no-readline
-	cp -a lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT).* lib/libpcrecpp.$(SHLIB_EXT).* lib/libpcreposix.$(SHLIB_EXT).* lib/librandom.$(SHLIB_EXT) lib/libLAPACK.$(SHLIB_EXT)  $(DESTDIR)/usr/lib
+	cp -a lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT).* lib/libpcrecpp.$(SHLIB_EXT).* lib/libpcreposix.$(SHLIB_EXT).* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse* $(DESTDIR)/usr/share/julia/lib
 	cp -r j $(DESTDIR)/usr/share/julia
 	cp -r contrib $(DESTDIR)/usr/share/julia
 	cp -r examples $(DESTDIR)/usr/share/julia
 	cp -r sys.ji $(DESTDIR)/usr/share/julia
+
+deb:
+	fakeroot debian/rules binary
+
+debclean:
+	fakeroot debian/rules clean
 
 h2j: lib/libLLVM*.a lib/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
