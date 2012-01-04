@@ -36,14 +36,14 @@ julia-release-readline: ../julia-release-readline
 julia-debug-readline: ../julia-debug-readline
 
 ../julia-release-basic: repl.o repl-basic.o ../src/libjulia-release.a
-	$(QUIET_CC) $(CXX) $(SHIPFLAGS) $^ -o $@ ../src/libjulia-release.a $(LIBS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ ../src/libjulia-release.a $(LIBS)
 ../julia-debug-basic: repl.do repl-basic.do ../src/libjulia-debug.a
-	$(QUIET_CC) $(CXX) $(DEBUGFLAGS) $^ -o $@ ../src/libjulia-debug.a $(LIBS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ ../src/libjulia-debug.a $(LIBS)
 
 ../julia-release-readline: repl.o repl-readline.o ../src/libjulia-release.a
-	$(QUIET_CC) $(CXX) $(SHIPFLAGS) $^ -o $@ ../src/libjulia-release.a $(READLINE) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ ../src/libjulia-release.a $(READLINE) $(LIBS)
 ../julia-debug-readline: repl.do repl-readline.do ../src/libjulia-debug.a
-	$(QUIET_CC) $(CXX) $(DEBUGFLAGS) $^ -o $@ ../src/libjulia-debug.a $(READLINE) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ ../src/libjulia-debug.a $(READLINE) $(LIBS)
 
 clean:
 	rm -f *.o *.do
