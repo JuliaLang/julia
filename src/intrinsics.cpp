@@ -403,7 +403,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
     HANDLE(fpiseq32,2)
     {
-        fy = emit_expr(args[2],ctx,true);
+        fy = FP(emit_expr(args[2],ctx,true));
+        x = FP(x);
         Value *xi = builder.CreateBitCast(x,  T_int32);
         Value *yi = builder.CreateBitCast(fy, T_int32);
         return builder.CreateOr(
@@ -419,7 +420,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(fpiseq64,2)
     {
-        fy = emit_expr(args[2],ctx,true);
+        fy = FP(emit_expr(args[2],ctx,true));
+        x = FP(x);
         Value *xi = builder.CreateBitCast(x,  T_int64);
         Value *yi = builder.CreateBitCast(fy, T_int64);
         return builder.CreateOr(
@@ -435,7 +437,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(fpislt32,2)
     {
-        fy = emit_expr(args[2],ctx,true);
+        fy = FP(emit_expr(args[2],ctx,true));
+        x = FP(x);
         Value *xi = builder.CreateBitCast(x,  T_int32);
         Value *yi = builder.CreateBitCast(fy, T_int32);
         return builder.CreateOr(
@@ -460,7 +463,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(fpislt64,2)
     {
-        fy = emit_expr(args[2],ctx,true);
+        fy = FP(emit_expr(args[2],ctx,true));
+        x = FP(x);
         Value *xi = builder.CreateBitCast(x,  T_int64);
         Value *yi = builder.CreateBitCast(fy, T_int64);
         return builder.CreateOr(
