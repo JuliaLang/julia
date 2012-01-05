@@ -1,10 +1,5 @@
 ## standard sort comparisons ##
 
-isless(x,y) = x < y
-
-isless(x::Float32, y::Float32) = fpsortlt32(unbox32(x),unbox32(y))
-isless(x::Float64, y::Float64) = fpsortlt64(unbox64(x),unbox64(y))
-
 _jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox32(x),unbox32(y))
 _jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
 _jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox32(x),unbox32(y))

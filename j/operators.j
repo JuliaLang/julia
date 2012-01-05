@@ -20,6 +20,8 @@ isequal(x::Number, y::Number)  = hash(x)==hash(y) && x==y
 <=(x,y) = !(y < x)
 >=(x,y) = y <= x
 
+isless(x,y) = x < y
+
 max(x,y) = x > y ? x : y
 min(x,y) = x < y ? x : y
 

@@ -111,8 +111,10 @@ rem(x::Float64, y::Float64) = boxf64(rem_float(unbox64(x), unbox64(y)))
 <=(x::Float32, y::Float32) = le_float(unbox32(x),unbox32(y))
 <=(x::Float64, y::Float64) = le_float(unbox64(x),unbox64(y))
 
-# TODO: faster bit-twiddling isequal for floats?
-isequal{T<:Float}(x::T, y::T) = (x == y) || (isnan(x) && isnan(y))
+isequal(x::Float32, y::Float32) = fpiseq32(unbox32(x),unbox32(y))
+isequal(x::Float64, y::Float64) = fpiseq64(unbox64(x),unbox64(y))
+isless (x::Float32, y::Float32) = fpislt32(unbox32(x),unbox32(y))
+isless (x::Float64, y::Float64) = fpislt64(unbox64(x),unbox64(y))
 
 ## floating point traits ##
 

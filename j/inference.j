@@ -79,6 +79,12 @@ t_func[eq_float] = (2, 2, cmp_tfunc)
 t_func[ne_float] = (2, 2, cmp_tfunc)
 t_func[lt_float] = (2, 2, cmp_tfunc)
 t_func[le_float] = (2, 2, cmp_tfunc)
+t_func[eq_f64_i64] = (2, 2, cmp_tfunc)
+t_func[eq_f64_u64] = (2, 2, cmp_tfunc)
+t_func[fpiseq32] = (2, 2, cmp_tfunc)
+t_func[fpiseq64] = (2, 2, cmp_tfunc)
+t_func[fpislt32] = (2, 2, cmp_tfunc)
+t_func[fpislt64] = (2, 2, cmp_tfunc)
 t_func[ccall] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
