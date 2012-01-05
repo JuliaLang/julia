@@ -43,3 +43,13 @@ function setcwd(p::String)
     end
     getcwd()
 end
+
+## Memory related ##
+
+function _jl_free(p::Ptr{Void})
+    ccall(dlsym(libc, :free),
+          Void,
+          (Ptr{Void},),
+          p)
+end
+

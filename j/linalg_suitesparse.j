@@ -12,16 +12,29 @@ function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC
     return St
 end
 
-function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+# Assumes matrix is upper triangular
+function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::VecOrMat{Tv})
     S = _jl_convert_to_0_based_indexing!(S)
     cm = _jl_cholmod_start()
-    cs = _jl_cholmod_sparse(S)
+    cs = _jl_cholmod_sparse(S, 1)
+    cd_rhs = _jl_cholmod_dense(b)
+    sol = similar(b)
 
-    cs_factor = _jl_cholmod_analyze(cs, cm)
-    _jl_cholmod_factorize(cs, cs_factor, cm)
-    sol = _jl_cholmod_solve(cs_factor, b, cm)
+    try
+        cs_factor = _jl_cholmod_analyze(cs, cm)
+        _jl_cholmod_factorize(cs, cs_factor, cm)
+        x = _jl_cholmod_solve(cs_factor, cd_rhs, cm)
+        sol = _jl_cholmod_dense_copy_out(x, sol)
+    catch
+        _jl_free(cs[1])
+        _jl_free(cd_rhs[1])
+        _jl_cholmod_finish(cm)
+        S = _jl_convert_to_1_based_indexing!(S)
+        error("Error calling CHOLMOD")
+    end
 
-    _jl_cholmod_sparse_free(cs)
+    _jl_free(cs[1])
+    _jl_free(cd_rhs[1])
     _jl_cholmod_finish(cm)
     S = _jl_convert_to_1_based_indexing!(S)
     return sol
@@ -147,15 +160,13 @@ function _jl_cholmod_finish(cm::Array{Ptr{Void}, 1})
                    (Ptr{Void}, ),
                    cm[1]);
 
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common_free),
-          Void,
-          (Ptr{Void},),
-          cm[1])
+    _jl_free(cm[1])
 end
 
 ## Call wrapper function to create cholmod_sparse objects
-## Assumes that S has been converted to 0-based indexing in caller
-function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+_jl_cholmod_sparse(S) = _jl_cholmod_sparse(S, 0)
+
+function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
     cs = Array(Ptr{Void}, 1)
 
     if     Ti == Int32; itype = _jl_CHOLMOD_INT;
@@ -170,19 +181,43 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-           Int32, Int32, Int32, Int32, Int32),
+           Int32, Int32, Int32, Int32, Int32, Int32),
           cs, int(S.m), int(S.n), int(length(S.nzval)), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
-          itype, xtype, dtype, int32(1), int32(1)
+          int32(stype), itype, xtype, dtype, int32(1), int32(1)
           )
 
     return cs
 end
 
-function _jl_cholmod_sparse_free(cs::Array{Ptr{Void}, 1})
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_free),
+## Call wrapper function to create cholmod_dense objects
+function _jl_cholmod_dense{T}(B::VecOrMat{T})
+    m = size(B, 1)
+    n = isa(B, Matrix) ? size(B, 2) : 1
+
+    cd = Array(Ptr{Void}, 1)
+
+    if     T == Float64    || T == Float32;    xtype = _jl_CHOLMOD_REAL;
+    elseif T == Complex128 || T == Complex64 ; xtype = _jl_CHOLMOD_COMPLEX; end
+
+    if     T == Float64 || T == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
+    elseif T == Float32 || T == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
+
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense),
+          Ptr{Void},
+          (Ptr{Void}, Int, Int, Int, Int, Ptr{T}, Ptr{Void}, Int32, Int32),
+          cd, int(m), int(n), int(numel(B)), int(m), B, C_NULL, xtype, dtype
+          )
+
+    return cd
+end
+
+function _jl_cholmod_dense_copy_out{T}(x::Ptr{Void}, sol::VecOrMat{T})
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out),
           Void,
-          (Ptr{Void},),
-          cs[1])
+          (Ptr{Void}, Ptr{T}),
+          x, sol
+          )
+    return sol
 end
 
 function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array{Ptr{Void}, 1})
@@ -198,8 +233,8 @@ function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array
                    cs[1], int32(1), C_NULL, C_NULL, int32(-1), cs_t[1], cm[1]);
 
     # Deallocate space for cholmod_sparse objects
-    _jl_cholmod_sparse_free(cs)
-    _jl_cholmod_sparse_free(cs_t)
+    _jl_free(cs[1])
+    _jl_free(cs_t[1])
 
     return S_t
 end
@@ -220,17 +255,16 @@ function _jl_cholmod_factorize{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,In
                    Int32,
                    (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                    cs[1], cs_factor, cm[1])
-    if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
+    println(status)
+    #if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
 end
 
-function _jl_cholmod_solve {Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(cs_factor::Ptr{Void}, RHS::Array{Tv,1}, cm::Array{Ptr{Void},1})
+function _jl_cholmod_solve(cs_factor::Ptr{Void}, cd_rhs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
 
-    ## TODO: Create cholmod_dense object for RHS
-
-    sol = ccall(dlsym(_jl_libsuitesparse, :cholmod_spsolve),
-                Ptr{Float64},
-                (Int32, Ptr{Void}, Ptr{Tv}, Ptr{Void}),
-                _jl_CHOLMOD_A, cs_factor, RHS, cm[1])
+    sol = ccall(dlsym(_jl_libsuitesparse, :cholmod_solve),
+                Ptr{Void},
+                (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+                _jl_CHOLMOD_A, cs_factor, cd_rhs[1], cm[1])
 
     return sol
 end
