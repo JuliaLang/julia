@@ -13,9 +13,11 @@ unicode:
 
 perf:
 	$(QUIET_JULIA)
-	@echo
-	@../julia $@.j | perl -ple 's/^julia,/        /'
-	@echo
+ifeq ($(MAKECMDGOALS),all)
+	@../julia $@.j >/dev/null
+else
+	@../julia $@.j | perl -nle '@_=split/,/; printf "     * %-14s %7.3f\n", $$_[1], $$_[2]'
+endif
 
 bin/perf%: perf.cpp
 	g++ -O$* ../external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
