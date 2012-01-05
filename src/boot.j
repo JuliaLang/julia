@@ -116,8 +116,8 @@ abstract Unsigned <: Integer
 bitstype 32 Float32 <: Float
 bitstype 64 Float64 <: Float
 
-bitstype 8  Bool <: Unsigned
-bitstype 32 Char <: Unsigned
+bitstype 8  Bool <: Integer
+bitstype 32 Char <: Integer
 
 bitstype 8  Int8   <: Signed
 bitstype 8  Uint8  <: Unsigned
