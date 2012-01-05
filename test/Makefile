@@ -1,9 +1,11 @@
 JULIAHOME = ..
 include ../Make.inc
 
-all: core numbers strings corelib hashing arrayops unicode perf
+default: core numbers strings corelib hashing arrayops
+extra: unicode perf
+all: default extra
 
-quick core numbers strings corelib hashing arrayops:
+core numbers strings corelib hashing arrayops:
 	$(QUIET_JULIA) ../julia $@.j
 
 unicode:
@@ -12,11 +14,10 @@ unicode:
 	@../julia $@.j
 
 perf:
-	$(QUIET_JULIA)
-ifeq ($(MAKECMDGOALS),all)
-	@../julia $@.j >/dev/null
+ifneq ($(MAKECMDGOALS),perf)
+	$(QUIET_JULIA) ../julia $@.j >/dev/null
 else
-	@../julia $@.j | perl -nle '@_=split/,/; printf "     * %-14s %7.3f\n", $$_[1], $$_[2]'
+	@../julia $@.j | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
 endif
 
 bin/perf%: perf.cpp
@@ -69,4 +70,4 @@ clean:
 	@$(MAKE) -C unicode $@
 	@rm -rf bin/perf* benchmarks benchmarks.csv
 
-.PHONY: all quick core hashing arrayops unicode perf benchmark clean
+.PHONY: all core hashing arrayops unicode perf benchmark clean

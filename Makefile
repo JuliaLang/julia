@@ -1,7 +1,7 @@
 JULIAHOME = .
 include ./Make.inc
 
-default: release test-quick
+default: release
 
 debug release: %: julia-% sys.ji
 
@@ -59,7 +59,7 @@ distclean: cleanall
 	test testall test-* sloccount clean cleanall
 
 test: release
-	@$(MAKE) -sC test quick core
+	@$(MAKE) -sC test default
 
 testall: release
 	@$(MAKE) -sC test all
