@@ -18,6 +18,7 @@ function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int
     cm = _jl_cholmod_start()
     cs = _jl_cholmod_sparse(S, 1)
     cd_rhs = _jl_cholmod_dense(b)
+    sol = []
 
     try
         cs_factor = _jl_cholmod_analyze(cs, cm)
