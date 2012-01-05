@@ -216,140 +216,113 @@
 @assert !isless(+NaN,-NaN)
 @assert !isless(+NaN,+NaN)
 
-for x=1:10, y=1:10
+for x=-5:5, y=-5:5
     @assert (x==y)==(float64(x)==int64(y))
-    @assert (x==y)==(float64(x)==uint64(y))
+    @assert (x!=y)==(float64(x)!=int64(y))
+    @assert (x< y)==(float64(x)< int64(y))
+    @assert (x> y)==(float64(x)> int64(y))
+    @assert (x<=y)==(float64(x)<=int64(y))
+    @assert (x>=y)==(float64(x)>=int64(y))
+
     @assert (x==y)==(int64(x)==float64(y))
+    @assert (x!=y)==(int64(x)!=float64(y))
+    @assert (x< y)==(int64(x)< float64(y))
+    @assert (x> y)==(int64(x)> float64(y))
+    @assert (x<=y)==(int64(x)<=float64(y))
+    @assert (x>=y)==(int64(x)>=float64(y))
+
+    if x < 0 || y < 0; continue; end
+
+    @assert (x==y)==(float64(x)==uint64(y))
+    @assert (x!=y)==(float64(x)!=uint64(y))
+    @assert (x< y)==(float64(x)< uint64(y))
+    @assert (x> y)==(float64(x)> uint64(y))
+    @assert (x<=y)==(float64(x)<=uint64(y))
+    @assert (x>=y)==(float64(x)>=uint64(y))
+
     @assert (x==y)==(uint64(x)==float64(y))
-    @assert (x==y)==(float64(-x)==int64(-y))
-    @assert (x==y)==(int64(-x)==float64(-y))
+    @assert (x!=y)==(uint64(x)!=float64(y))
+    @assert (x< y)==(uint64(x)< float64(y))
+    @assert (x> y)==(uint64(x)> float64(y))
+    @assert (x<=y)==(uint64(x)<=float64(y))
+    @assert (x>=y)==(uint64(x)>=float64(y))
 end
 
-@assert int64(2)^53-2 == 2.0^53-2
-@assert int64(2)^53-2 != 2.0^53-1
-@assert int64(2)^53-2 != 2.0^53
-@assert int64(2)^53-2 != 2.0^53+1
-@assert int64(2)^53-2 != 2.0^53+2
-@assert int64(2)^53-2 != 2.0^53+3
+function _cmp_(x::Union(Int64,Uint64), y::Float64)
+    if x==int64(2)^53-2 && y==2.0^53-2; return  0; end
+    if x==int64(2)^53-2 && y==2.0^53-1; return -1; end
+    if x==int64(2)^53-2 && y==2.0^53  ; return -1; end
+    if x==int64(2)^53-2 && y==2.0^53+2; return -1; end
+    if x==int64(2)^53-2 && y==2.0^53+3; return -1; end
+    if x==int64(2)^53-2 && y==2.0^53+4; return -1; end
 
-@assert int64(2)^53-1 != 2.0^53-2
-@assert int64(2)^53-1 == 2.0^53-1
-@assert int64(2)^53-1 != 2.0^53
-@assert int64(2)^53-1 != 2.0^53+1
-@assert int64(2)^53-1 != 2.0^53+2
-@assert int64(2)^53-1 != 2.0^53+3
+    if x==int64(2)^53-1 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53-1 && y==2.0^53-1; return  0; end
+    if x==int64(2)^53-1 && y==2.0^53  ; return -1; end
+    if x==int64(2)^53-1 && y==2.0^53+2; return -1; end
+    if x==int64(2)^53-1 && y==2.0^53+3; return -1; end
+    if x==int64(2)^53-1 && y==2.0^53+4; return -1; end
 
-@assert int64(2)^53   != 2.0^53-2
-@assert int64(2)^53   != 2.0^53-1
-@assert int64(2)^53   == 2.0^53
-@assert int64(2)^53   == 2.0^53+1 # LOSSY
-@assert int64(2)^53   != 2.0^53+2
-@assert int64(2)^53   != 2.0^53+3
+    if x==int64(2)^53   && y==2.0^53-2; return +1; end
+    if x==int64(2)^53   && y==2.0^53-1; return +1; end
+    if x==int64(2)^53   && y==2.0^53  ; return  0; end
+    if x==int64(2)^53   && y==2.0^53+2; return -1; end
+    if x==int64(2)^53   && y==2.0^53+4; return -1; end
 
-@assert int64(2)^53+1 != 2.0^53-2
-@assert int64(2)^53+1 != 2.0^53-1
-@assert int64(2)^53+1 != 2.0^53
-@assert int64(2)^53+1 != 2.0^53+1 # LOSSY
-@assert int64(2)^53+1 != 2.0^53+2
-@assert int64(2)^53+1 != 2.0^53+3
+    if x==int64(2)^53+1 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53+1 && y==2.0^53-1; return +1; end
+    if x==int64(2)^53+1 && y==2.0^53  ; return +1; end
+    if x==int64(2)^53+1 && y==2.0^53+2; return -1; end
+    if x==int64(2)^53+1 && y==2.0^53+4; return -1; end
 
-@assert int64(2)^53+2 != 2.0^53-2
-@assert int64(2)^53+2 != 2.0^53-1
-@assert int64(2)^53+2 != 2.0^53
-@assert int64(2)^53+2 != 2.0^53+1
-@assert int64(2)^53+2 == 2.0^53+2
-@assert int64(2)^53+2 != 2.0^53+3
+    if x==int64(2)^53+2 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53+2 && y==2.0^53-1; return +1; end
+    if x==int64(2)^53+2 && y==2.0^53  ; return +1; end
+    if x==int64(2)^53+2 && y==2.0^53+2; return  0; end
+    if x==int64(2)^53+2 && y==2.0^53+4; return -1; end
 
-@assert int64(2)^53+3 != 2.0^53-2
-@assert int64(2)^53+3 != 2.0^53-1
-@assert int64(2)^53+3 != 2.0^53
-@assert int64(2)^53+3 != 2.0^53+1
-@assert int64(2)^53+3 != 2.0^53+2
-@assert int64(2)^53+3 != 2.0^53+3 # LOSSY
+    if x==int64(2)^53+3 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53+3 && y==2.0^53-1; return +1; end
+    if x==int64(2)^53+3 && y==2.0^53  ; return +1; end
+    if x==int64(2)^53+3 && y==2.0^53+2; return +1; end
+    if x==int64(2)^53+3 && y==2.0^53+4; return -1; end
 
-@assert -(int64(2)^53-2) == -(2.0^53-2)
-@assert -(int64(2)^53-2) != -(2.0^53-1)
-@assert -(int64(2)^53-2) != -(2.0^53  )
-@assert -(int64(2)^53-2) != -(2.0^53+1)
-@assert -(int64(2)^53-2) != -(2.0^53+2)
-@assert -(int64(2)^53-2) != -(2.0^53+3)
+    if x==int64(2)^53+4 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53+4 && y==2.0^53-1; return +1; end
+    if x==int64(2)^53+4 && y==2.0^53  ; return +1; end
+    if x==int64(2)^53+4 && y==2.0^53+2; return +1; end
+    if x==int64(2)^53+4 && y==2.0^53+4; return  0; end
 
-@assert -(int64(2)^53-1) != -(2.0^53-2)
-@assert -(int64(2)^53-1) == -(2.0^53-1)
-@assert -(int64(2)^53-1) != -(2.0^53  )
-@assert -(int64(2)^53-1) != -(2.0^53+1)
-@assert -(int64(2)^53-1) != -(2.0^53+2)
-@assert -(int64(2)^53-1) != -(2.0^53+3)
+    error("invalid: _cmp_($x,$y)")
+end
 
-@assert -(int64(2)^53  ) != -(2.0^53-2)
-@assert -(int64(2)^53  ) != -(2.0^53-1)
-@assert -(int64(2)^53  ) == -(2.0^53  )
-@assert -(int64(2)^53  ) == -(2.0^53+1) # LOSSY
-@assert -(int64(2)^53  ) != -(2.0^53+2)
-@assert -(int64(2)^53  ) != -(2.0^53+3)
-
-@assert -(int64(2)^53+1) != -(2.0^53-2)
-@assert -(int64(2)^53+1) != -(2.0^53-1)
-@assert -(int64(2)^53+1) != -(2.0^53  )
-@assert -(int64(2)^53+1) != -(2.0^53+1) # LOSSY
-@assert -(int64(2)^53+1) != -(2.0^53+2)
-@assert -(int64(2)^53+1) != -(2.0^53+3)
-
-@assert -(int64(2)^53+2) != -(2.0^53-2)
-@assert -(int64(2)^53+2) != -(2.0^53-1)
-@assert -(int64(2)^53+2) != -(2.0^53  )
-@assert -(int64(2)^53+2) != -(2.0^53+1)
-@assert -(int64(2)^53+2) == -(2.0^53+2)
-@assert -(int64(2)^53+2) != -(2.0^53+3)
-
-@assert -(int64(2)^53+3) != -(2.0^53-2)
-@assert -(int64(2)^53+3) != -(2.0^53-1)
-@assert -(int64(2)^53+3) != -(2.0^53  )
-@assert -(int64(2)^53+3) != -(2.0^53+1)
-@assert -(int64(2)^53+3) != -(2.0^53+2)
-@assert -(int64(2)^53+3) != -(2.0^53+3) # LOSSY
-
-@assert uint64(2)^53-2 == 2.0^53-2
-@assert uint64(2)^53-2 != 2.0^53-1
-@assert uint64(2)^53-2 != 2.0^53
-@assert uint64(2)^53-2 != 2.0^53+1
-@assert uint64(2)^53-2 != 2.0^53+2
-@assert uint64(2)^53-2 != 2.0^53+3
-
-@assert uint64(2)^53-1 != 2.0^53-2
-@assert uint64(2)^53-1 == 2.0^53-1
-@assert uint64(2)^53-1 != 2.0^53
-@assert uint64(2)^53-1 != 2.0^53+1
-@assert uint64(2)^53-1 != 2.0^53+2
-@assert uint64(2)^53-1 != 2.0^53+3
-
-@assert uint64(2)^53   != 2.0^53-2
-@assert uint64(2)^53   != 2.0^53-1
-@assert uint64(2)^53   == 2.0^53
-@assert uint64(2)^53   == 2.0^53+1 # LOSSY
-@assert uint64(2)^53   != 2.0^53+2
-@assert uint64(2)^53   != 2.0^53+3
-
-@assert uint64(2)^53+1 != 2.0^53-2
-@assert uint64(2)^53+1 != 2.0^53-1
-@assert uint64(2)^53+1 != 2.0^53
-@assert uint64(2)^53+1 != 2.0^53+1 # LOSSY
-@assert uint64(2)^53+1 != 2.0^53+2
-@assert uint64(2)^53+1 != 2.0^53+3
-
-@assert uint64(2)^53+2 != 2.0^53-2
-@assert uint64(2)^53+2 != 2.0^53-1
-@assert uint64(2)^53+2 != 2.0^53
-@assert uint64(2)^53+2 != 2.0^53+1
-@assert uint64(2)^53+2 == 2.0^53+2
-@assert uint64(2)^53+2 != 2.0^53+3
-
-@assert uint64(2)^53+3 != 2.0^53-2
-@assert uint64(2)^53+3 != 2.0^53-1
-@assert uint64(2)^53+3 != 2.0^53
-@assert uint64(2)^53+3 != 2.0^53+1
-@assert uint64(2)^53+3 != 2.0^53+2
-@assert uint64(2)^53+3 != 2.0^53+3 # LOSSY
+for x=int64(2)^53-2:int64(2)^53+4, y=int64(2)^53-2:int64(2)^53+3
+    # println("x=$x; y=float64($y);")
+    y = float64(y)
+    c = _cmp_(x,y)
+    if c < 0
+        @assert !(x == y)
+        @assert !(y == x)
+        # @assert  (x <  y)
+        # @assert !(y <  x)
+        # @assert  (x <= y)
+        # @assert !(y <= x)
+    elseif c > 0
+        @assert !(x == y)
+        @assert !(y == x)
+        # @assert !(x <  y)
+        # @assert  (y <  x)
+        # @assert !(x <= y)
+        # @assert  (y <= x)
+    else
+        @assert  (x == y)
+        @assert  (y == x)
+        # @assert !(x <  y)
+        # @assert !(y <  x)
+        # @assert  (x <= y)
+        # @assert  (y <= x)
+    end
+end
 
 @assert int64(2)^62-1 != 2.0^62
 @assert int64(2)^62   == 2.0^62
