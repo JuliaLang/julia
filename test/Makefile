@@ -1,9 +1,9 @@
 JULIAHOME = ..
 include ../Make.inc
 
-all: quick core hashing arrayops unicode perf
+all: core numbers strings corelib hashing arrayops unicode perf
 
-quick core hashing arrayops:
+quick core numbers strings corelib hashing arrayops:
 	$(QUIET_JULIA) ../julia $@.j
 
 unicode:

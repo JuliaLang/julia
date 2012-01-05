@@ -1,3 +1,5 @@
+# quick tests to do on every build as a sanity check
+
 # basic booleans
 @assert true
 @assert !false
@@ -6,62 +8,7 @@
 @assert bool(false) == false
 @assert bool(true) == true
 
-# basic type relationships
-@assert Int8 <: Integer
-@assert Int32 <: Integer
-@assert (Int8,Int8) <: (Integer,Integer)
-@assert !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
-@assert !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
-@assert (Integer,Integer...) <: (Integer,Real...)
-@assert (Integer,Float64,Integer...) <: (Integer,Number...)
-@assert (Integer,Float64) <: (Integer,Number...)
-@assert (Int32,) <: (Number...)
-@assert () <: (Number...)
-@assert !((Int32...) <: (Int32,))
-@assert !((Int32...) <: (Number,Integer))
-@assert !((Integer...,) <: (Integer,Integer,Integer...))
-@assert !(Array{Int8,1} <: Array{Any,1})
-@assert !(Array{Any,1} <: Array{Int8,1})
-@assert Array{Int8,1} <: Array{Int8,1}
-@assert !subtype(Type{None}, Type{Int32})
-@assert !subtype(Vector{Float64},Vector{Union(Float64,Float32)})
-@assert is(None, tintersect(Vector{Float64},Vector{Union(Float64,Float32)}))
-
-@assert !isa(Array,Type{Any})
-@assert subtype(Type{ComplexPair},CompositeKind)
-@assert isa(ComplexPair,Type{ComplexPair})
-@assert subtype(Type{Ptr{None}},Type{Ptr})
-let T = typevar(:T)
-    @assert !is(None, tintersect(Array{None},AbstractArray{T}))
-    @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
-                                 (Type{Ptr{T}},Ptr{T})))
-    @assert !subtype(Type{T},TypeVar)
-end
-let N = typevar(:N)
-    @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer,Integer), (Integer...))),
-                    ((Integer,Integer), (Integer,Integer)))
-    @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
-                               ((Integer...), (Integer,Integer))),
-                    ((Integer,Integer), (Integer,Integer)))
-end
-@assert is(None, tintersect(Type{Any},Type{ComplexPair}))
-@assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
-@assert !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
-@assert subtype(Type{Array{Integer}},Type{Array{typevar(:T,Integer)}})
-@assert is(None, tintersect(Type{Function},BitsKind))
-@assert is(Type{Int32}, tintersect(Type{Int32},BitsKind))
-@assert !subtype(Type,TypeVar)
-
-# ntuples
-nttest1{n}(x::NTuple{n,Int}) = n
-@assert nttest1(()) == 0
-@assert nttest1((1,2)) == 2
-@assert NTuple <: Tuple
-@assert NTuple{typevar(:T),Int32} <: (Int32...)
-@assert !(NTuple{typevar(:T),Int32} <: (Int32,Int32...))
-@assert (Int32...) <: NTuple{typevar(:T),Int32}
-@assert (Int32,Int32...) <: NTuple{typevar(:T),Int32}
+load("core.j")
 
 # basic arithmetic and indexing
 @assert 2+3 == 5
@@ -83,9 +30,6 @@ b = a+a
 
 a = [1 2; 3 4]
 @assert a' == [1 3; 2 4]
-
-x = (2,3)
-@assert +(x...) == 5
 
 a = rand()
 b = rand()
@@ -121,70 +65,6 @@ b = rand()
 @assert parse_oct("7") == 7
 @assert parse_int(Int64,"3830974272",10) == 3830974272
 @assert parse_hex("0BADF00D") == 195948557
-
-function fooo()
-    local x::Int8
-    x = 1000
-    x
-end
-@assert int32(fooo()) == -24
-
-# closures
-function clotest()
-    c = 0
-    function inc()
-        c += 1
-    end
-    function dec()
-        c -= 1
-    end
-    inc(); inc()
-    @assert c == 2
-    dec()
-    @assert c == 1
-    @assert (()->c)() == 1
-    return (n->(c+=n), ()->c)
-end
-let T = clotest()
-    (inc, C) = T
-    inc(11)
-    @assert C() == 12
-end
-
-Yc(f) = (h->f(x->h(h)(x)))(h->f(x->h(h)(x)))
-yfib = Yc(fib->(n->(n < 2 ? n : fib(n-1) + fib(n-2))))
-@assert yfib(20) == 6765
-
-@assert map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
-@assert map((x,y)->x+y,
-            (100001,100002,100003),
-            (100004,100005,100006)) == (200005,200007,200009)
-
-# variable scope, globals
-glob_x = 23
-function glotest()
-    global glob_x
-    glob_x = 24
-    loc_x = 8
-    function inner()
-        global loc_x = 10
-        glob_x = 88
-    end
-    function inner2()
-        local glob_x  # override
-        global loc_x
-        glob_x = 2
-        @assert glob_x == 2
-        @assert loc_x == 10
-    end
-    inner()
-    inner2()
-    @assert glob_x == 88
-    @assert loc_x == 8
-end
-glotest()
-@assert glob_x == 88
-@assert loc_x == 10
 
 # ranges
 @assert size(10:1:0) == (0,)
