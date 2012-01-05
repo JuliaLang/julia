@@ -11,16 +11,15 @@ isequal(x,y) = is(x,y)
 ==(x,y) = isequal(x,y)
 !=(x,y) = !(x==y)
 
-# this definition allows Number types to implement
-# == instead of isequal, which is more idiomatic:
-isequal{T<:Number}(x::T, y::T) = x==y
-isequal(x::Number, y::Number)  = hash(x)==hash(y) && x==y
-
+< (x,y) = isless(x,y)
 > (x,y) = y < x
 <=(x,y) = !(y < x)
->=(x,y) = y <= x
+>=(x,y) = !(x < y)
 
-isless(x,y) = x < y
+# these definitions allow Number types to implement
+# == and < instead of isequal and isless, which is more idiomatic:
+isequal{T<:Number}(x::T, y::T) = x==y
+isless{T<:Number}(x::T, y::T) = x<y
 
 max(x,y) = x > y ? x : y
 min(x,y) = x < y ? x : y
