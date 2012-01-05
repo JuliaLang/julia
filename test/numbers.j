@@ -374,6 +374,8 @@ for a = -5:5, b = -5:5
     end
 end
 
+@assert sqrt(2) == 1.4142135623730951
+
 @assert 1+1.5 == 2.5
 @assert 1.5+1 == 2.5
 @assert 1+1.5+2 == 4.5
