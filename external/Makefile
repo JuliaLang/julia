@@ -15,7 +15,7 @@ LIGHTTPD_VER = 1.4.29
 
 ## high-level setup ##
 
-JULIAHOME = $(shell pwd)/..
+JULIAHOME = ..
 include ../Make.inc
 
 OS = $(shell uname)
@@ -51,7 +51,7 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	./configure --prefix=$(EXTROOT) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && \
+	./configure --prefix=$(abspath $(EXTROOT)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
@@ -78,7 +78,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(EXTROOT) --disable-shared --enable-static --with-curses && \
+	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -105,7 +105,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(EXTROOT) --enable-utf8 --enable-unicode-properties --enable-jit
+	./configure --prefix=$(abspath $(EXTROOT)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
 	touch $@
@@ -275,7 +275,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(EXTROOT) $(FFTW_CONFIG) --enable-sse --enable-float && \
+	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-sse --enable-float && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -288,7 +288,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(EXTROOT) $(FFTW_CONFIG) && \
+	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
@@ -309,33 +309,34 @@ distclean-fftw:
 ## SUITESPARSE ##
 
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
+SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
 
-compile-suitesparse: install-suitesparse
+compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/SuiteSparse-$(SUITESPARSE_VER).tar.gz > $@
+	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ > $@
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
-	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
-	$(QUIET_LINK)$(CC) -O2 -shared -fPIC -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
-	touch $@
-$(SUITESPARSE_OBJ_TARGET): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
-	cp `find UMFPACK CHOLMOD *AMD BTF UFconfig -name *.a` lib && cd lib && \
+	cp `find UMFPACK CHOLMOD *AMD BTF UFconfig -name *.a` lib && \
+	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared -fPIC -static-libgfortran *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -o libsuitesparse.$(SHLIB_EXT) && \
-	cp -f libsuitesparse.$(SHLIB_EXT) $(EXTROOTLIB)
-	touch $@
+	gfortran -shared -fPIC -static-libgfortran *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -o libsuitesparse.$(SHLIB_EXT)
+$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+	cp -f $< $@
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
+	$(CC) -O2 -shared -fPIC -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 clean-suitesparse:
-	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
-	rm -f $(EXTROOTLIB)/libsuitesparse*
+	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
+	rm -f $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 distclean-suitesparse: clean-suitesparse
 	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
@@ -346,28 +347,29 @@ CLP_OBJ_TARGET = $(EXTROOTLIB)/libClp.$(SHLIB_EXT)
 compile-clp: install-clp
 install-clp: $(CLP_OBJ_TARGET)
 
-clp-$(CLP_VER).tgz:
-	curl -O http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
-clp-$(CLP_VER)/configure: Clp-$(CLP_VER).tgz
-	tar jxf $<
+clp-$(CLP_VER).tar.gz:
+	curl http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz >$@
+clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
+	mkdir -p clp-$(CLP_VER)
+	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
 	touch $@
-clp-$(CLP_VER)/config.status: Clp-$(CLP_VER)/configure
-	cd Clp-$(CLP_VER) && \
-	./configure --prefix=$(EXTROOT)
-$(CLP_OBJ_TARGET): Clp-$(CLP_VER)/config.status
-	$(MAKE) -C Clp-$(CLP_VER) install
+clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
+	cd clp-$(CLP_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT))
+$(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
+	$(MAKE) -C clp-$(CLP_VER) install
 	touch $@
 
 clean-clp:
-	$(MAKE) -C Clp-$(CLP_VER) clean
+	$(MAKE) -C clp-$(CLP_VER) clean
 	rm -f $(CLP_OBJ_TARGET)
 distclean-clp:
-	rm -rf Clp-$(CLP_VER).tar.bz2 Clp-$(CLP_VER)
+	rm -rf clp-$(CLP_VER).tar.bz2 clp-$(CLP_VER)
 
 ## UNWIND ##
 
 LIBUNWIND_TARGET_OBJ = $(EXTROOTLIB)/libunwind.a
-LIBUNWIND_TARGET_SOURCE = $(JULIAHOME)/external/libunwind-$(UNWIND_VER)/Makefile
+LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/Makefile
 
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
@@ -383,7 +385,7 @@ open-unwind: libunwind-$(UNWIND_VER).tar.gz
 	touch $@
 
 $(LIBUNWIND_TARGET_SOURCE): open-unwind
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(EXTROOT) 
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(abspath $(EXTROOT))
 
 clean-unwind:
 	$(MAKE) -C libunwind-$(UNWIND_VER) clean
@@ -406,7 +408,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	touch $@
 lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(EXTROOT) --without-pcre --without-zlib --without-bzip2
+	./configure --prefix=$(abspath $(EXTROOT)) --without-pcre --without-zlib --without-bzip2
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
 	touch $@
