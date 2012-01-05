@@ -221,6 +221,8 @@ for x=1:10, y=1:10
     @assert (x==y)==(float64(x)==uint64(y))
     @assert (x==y)==(int64(x)==float64(y))
     @assert (x==y)==(uint64(x)==float64(y))
+    @assert (x==y)==(float64(-x)==int64(-y))
+    @assert (x==y)==(int64(-x)==float64(-y))
 end
 
 @assert int64(2)^53-2 == 2.0^53-2

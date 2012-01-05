@@ -380,8 +380,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         ci = dyn_cast<ConstantInt>(fy);
         if (ci != NULL) {
             int64_t yval = ci->getSExtValue();
-            if (-DBL_MAXINT <= yval && yval <= DBL_MAXINT)
-                return builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64));
+            if (yval < 0) yval = -yval;
+            return __builtin_clzll(yval)+__builtin_ctzll(yval) > 10 ?
+                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)) :
+                ConstantInt::get(T_int1, 0);
         }
         return builder.CreateAnd(
             builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
@@ -394,8 +396,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         ci = dyn_cast<ConstantInt>(fy);
         if (ci != NULL) {
             uint64_t yval = ci->getZExtValue();
-            if (yval <= DBL_MAXINT)
-                return builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64));
+            return __builtin_clzll(yval)+__builtin_ctzll(yval) > 10 ?
+                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)) :
+                ConstantInt::get(T_int1, 0);
         }
         return builder.CreateAnd(
             builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
