@@ -23,20 +23,18 @@ isequal(x::Bool, y::Bool) = eq_int(unbox8(x),unbox8(y))
 
 any() = false
 all() = true
-count() = 0
 
 any(x::Bool)  = x
 all(x::Bool)  = x
-count(x::Bool) = (x ? 1 : 0)
 
 any(x::Bool, y::Bool) = x | y
 all(x::Bool, y::Bool) = x & y
-count(x::Bool, y::Bool) = count(x) + count(y)
-
-count(x::Integer, y::Bool) = x + count(y)
-count(x::Bool, y::Integer) = count(x) + y
 
 ## do arithmetic as Int ##
+
+sign(x::Bool) = int(x)
+signbit(x::Bool) = 1
+abs(x::Bool) = int(x)
 
 <(x::Bool, y::Bool) = y&!x
 ==(x::Bool, y::Bool) = eq_int(unbox8(x),unbox8(y))

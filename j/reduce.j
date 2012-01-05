@@ -163,8 +163,6 @@ function count(itr)
     return c
 end
 
-count(args::Bool...) = count(args)
-
 function countp(pred, itr)
     c = 0
     for x = itr

@@ -662,7 +662,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
 
     nnd = 0
     for i = 1:nd
-        nnd += count(size(A,i)==1 || i==d)
+        nnd += int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension
@@ -959,11 +959,8 @@ function areduce(f::Function, A::StridedArray, region::Region, v0, RType::Type)
         (is(f,*)     && (fname=:*;true)) ||
         (is(f,max)   && (fname=:max;true)) ||
         (is(f,min)   && (fname=:min;true)) ||
-        (is(f,sum)   && (fname=:+;true)) ||
-        (is(f,prod)  && (fname=:*;true)) ||
         (is(f,any)   && (fname=:any;true)) ||
-        (is(f,all)   && (fname=:all;true)) ||
-        (is(f,count) && (fname=:count;true))
+        (is(f,all)   && (fname=:all;true))
         key = (fname, ndimsA)
     end
 
@@ -1032,7 +1029,12 @@ prod{T}(A::StridedArray{T}, region::Region) = areduce(*,A,region,one(T))
 
 all(A::StridedArray{Bool}, region::Region) = areduce(all,A,region,true)
 any(A::StridedArray{Bool}, region::Region) = areduce(any,A,region,false)
-count(A::StridedArray{Bool}, region::Region) = areduce(count,A,region,0,Int)
+sum(A::StridedArray{Bool}, region::Region) = areduce(+,A,region,0,Int)
+sum(A::StridedArray{Bool}) = count(A)
+prod(A::StridedArray{Bool}) =
+    error("use all() instead of prod() for boolean arrays")
+prod(A::StridedArray{Bool}, region::Region) =
+    error("use all() instead of prod() for boolean arrays")
 
 ## map over arrays ##
 
