@@ -43,6 +43,10 @@ jl_cholmod_sparse( void **cs,    /* Store return value in here */
                    void *nz,     /* nz [0..ncol-1], the # of nonzeros in each col if unpacked */
                    void *x,      /* size nzmax or 2*nzmax, if present */
                    void *z,      /* size nzmax, if present */
+                   int stype,    /*  0: matrix is unsymmetric and possibly rectangular
+                                    >0: matrix is square and upper triangular
+                                    <0: matrix is square and lower triangular
+                                 */
                    int itype,    /* CHOLMOD_INT:     p, i, and nz are int.
                                   * CHOLMOD_INTLONG: p is UF_long, i and nz are int.
                                   * CHOLMOD_LONG:    p, i, and nz are UF_long.  */
@@ -62,6 +66,7 @@ jl_cholmod_sparse( void **cs,    /* Store return value in here */
     s->nz = nz;
     s->x = x;
     s->z = z;
+    s->stype = stype;
     s->itype = itype;
     s->xtype = xtype;
     s->dtype = dtype;

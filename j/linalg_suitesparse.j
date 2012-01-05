@@ -12,10 +12,11 @@ function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC
     return St
 end
 
+# Assumes matrix is upper triangular
 function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::VecOrMat{Tv})
     S = _jl_convert_to_0_based_indexing!(S)
     cm = _jl_cholmod_start()
-    cs = _jl_cholmod_sparse(S)
+    cs = _jl_cholmod_sparse(S, 1)
     cd_rhs = _jl_cholmod_dense(b)
 
     try
@@ -161,8 +162,9 @@ function _jl_cholmod_finish(cm::Array{Ptr{Void}, 1})
 end
 
 ## Call wrapper function to create cholmod_sparse objects
-## Assumes that S has been converted to 0-based indexing in caller
-function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+_jl_cholmod_sparse(S) = _jl_cholmod_sparse(S, 0)
+
+function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
     cs = Array(Ptr{Void}, 1)
 
     if     Ti == Int32; itype = _jl_CHOLMOD_INT;
@@ -177,14 +179,15 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-           Int32, Int32, Int32, Int32, Int32),
+           Int32, Int32, Int32, Int32, Int32, Int32),
           cs, int(S.m), int(S.n), int(length(S.nzval)), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
-          itype, xtype, dtype, int32(1), int32(1)
+          int32(stype), itype, xtype, dtype, int32(1), int32(1)
           )
 
     return cs
 end
 
+## Call wrapper function to create cholmod_dense objects
 function _jl_cholmod_dense{T}(B::VecOrMat{T})
     m = size(B, 1)
     n = isa(B, Matrix) ? size(B, 2) : 1
@@ -247,7 +250,7 @@ end
 
 function _jl_cholmod_solve(cs_factor::Ptr{Void}, cd_rhs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
 
-    sol = ccall(dlsym(_jl_libsuitesparse, :cholmod_spsolve),
+    sol = ccall(dlsym(_jl_libsuitesparse, :cholmod_solve),
                 Ptr{Void},
                 (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}),
                 _jl_CHOLMOD_A, cs_factor, cd_rhs[1], cm[1])
