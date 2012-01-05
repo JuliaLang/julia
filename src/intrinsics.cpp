@@ -401,24 +401,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 ConstantInt::get(T_int1, 0);
         }
         return builder.CreateAnd(
-            builder.CreateICmpSGT(
-                builder.CreateAdd(
-                    builder.CreateCall(
-                        Intrinsic::getDeclaration(
-                            jl_Module, Intrinsic::ctlz,
-                            ArrayRef<Type*>(T_int64)
-                        ), fy
-                    ),
-                    builder.CreateCall(
-                        Intrinsic::getDeclaration(
-                            jl_Module, Intrinsic::cttz,
-                            ArrayRef<Type*>(T_int64)
-                        ), fy
-                    )
-                ),
-                ConstantInt::get(T_int64, 10)
-            ),
-            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64))
+            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateICmpEQ(builder.CreateFPToUI(x, T_int64), fy)
         );
     }
     HANDLE(fpiseq32,2) {
