@@ -1,5 +1,3 @@
-@assert rand() != rand()
-
 # ranges
 @assert size(10:1:0) == (0,)
 @assert length(1:.2:2) == 6
@@ -21,44 +19,6 @@ boo32_64() = [ foo32_64(i) | i=1:2 ]
 let a36 = boo32_64()
     @assert a36[1]==1 && a36[2]==2
 end
-
-# blas, lapack
-n = 10
-a = rand(n,n)
-asym = a+a'+n*eye(n)
-b = rand(n)
-r = chol(asym)
-@assert sum(r'*r - asym) < 1e-8
-(l,u,p) = lu(a)
-@assert sum(l[p,:]*u - a) < 1e-8
-(q,r,p) = qr(a)
-@assert sum(q*r[:,p] - a) < 1e-8
-(d,v) = eig(asym)
-@assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
-(d,v) = eig(a)
-@assert abs(sum(a*v[:,1]-d[1]*v[:,1])) < 1e-8
-(u,s,vt) = svd(a)
-@assert sum(u*diagm(s)*vt - a) < 1e-8
-x = a \ b
-@assert sum(a*x-b) < 1e-8
-x = triu(a) \ b
-@assert sum(triu(a)*x-b) < 1e-8
-x = tril(a) \ b
-@assert sum(tril(a)*x-b) < 1e-8
-
-# arpack
-if WORD_SIZE==64
-    # TODO: hangs on 32-bit
-    (d,v) = eigs(asym, 3)
-    @assert sum(asym*v[:,1]-d[1]*v[:,1]) < 1e-8
-
-    (d,v) = eigs(a,3)
-    @assert abs(sum(a*v[:,2]-d[2]*v[:,2])) < 1e-8
-end
-
-# fft
-a = rand(8) + im*rand(8)
-@assert norm((1/length(a))*ifft(fft(a)) - a) < 1e-8
 
 # hash table
 h = HashTable()

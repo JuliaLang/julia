@@ -1,11 +1,11 @@
 JULIAHOME = ..
 include ../Make.inc
 
-default: core numbers strings corelib hashing arrayops
+default: core numbers strings corelib hashing arrayops sparse lapack fft arpack random
 extra: unicode
 all: default extra
 
-core numbers strings corelib hashing arrayops:
+core numbers strings corelib hashing arrayops sparse lapack fft arpack random:
 	$(QUIET_JULIA) ../julia $@.j
 
 unicode:
