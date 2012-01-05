@@ -224,7 +224,7 @@ function norm(A::Matrix, p)
 end
 
 norm(A::Matrix) = norm(A, 2)
-rank(A::Matrix, tol::Real) = count(svd(A)[2] > tol)
+rank(A::Matrix, tol::Real) = sum(svd(A)[2] > tol)
 rank(A::Matrix) = rank(A, 0)
 
 # trace(A::Matrix) = sum(diag(A))

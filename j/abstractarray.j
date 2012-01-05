@@ -259,7 +259,7 @@ function flipdim(A::AbstractArray, d::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += count(size(A,i)==1 || i==d)
+        nnd += int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension
