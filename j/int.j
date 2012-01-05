@@ -96,11 +96,22 @@ convert(::Type{Uint64}, x::Int64  ) = boxui64(unbox64(x))
 convert(::Type{Uint64}, x::Float32) = boxui64(sext64(fpuiround32(unbox32(x))))
 convert(::Type{Uint64}, x::Float64) = boxui64(fpuiround64(unbox64(x)))
 
-convert(::Type{Integer}, x::Bool   ) = convert(Int8,  x)
-convert(::Type{Integer}, x::Float32) = convert(Int32, x)
-convert(::Type{Integer}, x::Float64) = convert(Int64, x)
+convert(::Type{Integer}, x::Bool   ) = convert(Int8,   x)
+convert(::Type{Integer}, x::Char   ) = convert(Uint32, x)
+convert(::Type{Integer}, x::Float32) = convert(Int32,  x)
+convert(::Type{Integer}, x::Float64) = convert(Int64,  x)
+
+convert(::Type{Signed}, x::Bool   ) = convert(Int8,   x)
+convert(::Type{Signed}, x::Char   ) = convert(Int32,  x)
+convert(::Type{Signed}, x::Uint8  ) = convert(Int8,  x)
+convert(::Type{Signed}, x::Uint16 ) = convert(Int16, x)
+convert(::Type{Signed}, x::Uint32 ) = convert(Int32, x)
+convert(::Type{Signed}, x::Uint64 ) = convert(Int64, x)
+convert(::Type{Signed}, x::Float32) = convert(Int32, x)
+convert(::Type{Signed}, x::Float64) = convert(Int64, x)
 
 convert(::Type{Unsigned}, x::Bool   ) = convert(Uint8,  x)
+convert(::Type{Unsigned}, x::Char   ) = convert(Uint32, x)
 convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,  x)
 convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16, x)
 convert(::Type{Unsigned}, x::Int32  ) = convert(Uint32, x)
@@ -118,23 +129,18 @@ int64 (x) = convert(Int64,  x)
 uint64(x) = convert(Uint64, x)
 
 integer (x) = convert(Integer,  x)
+signed  (x) = convert(Signed,   x)
 unsigned(x) = convert(Unsigned, x)
-
-signed(x::Integer) = x
-signed(x::Uint8 ) = convert(Int8 , x)
-signed(x::Uint16) = convert(Int16, x)
-signed(x::Uint32) = convert(Int32, x)
-signed(x::Uint64) = convert(Int64, x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x
 floor(x::Integer) = x
-ceil(x::Integer)  = x
+ceil (x::Integer) = x
 
 iround(x::Integer) = x
 itrunc(x::Integer) = x
 ifloor(x::Integer) = x
-iceil(x::Integer)  = x
+iceil (x::Integer) = x
 
 ## integer promotions ##
 
