@@ -1,12 +1,7 @@
 JULIAHOME = ../..
 include $(JULIAHOME)/Make.inc
 
-perf:
-ifneq ($(MAKECMDGOALS),perf)
-	$(QUIET_JULIA) $(JULIAHOME)/julia $@.j >/dev/null
-else
-	@$(JULIAHOME)/julia $@.j | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
-endif
+benchmark: benchmarks.txt
 
 bin/perf%: perf.cpp
 	$(CXX) -O$* $(JULIAHOME)/external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
@@ -51,8 +46,6 @@ benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 
 benchmarks.txt: bin/table.pl benchmarks.csv
 	$(QUIET_PERL) $^ >$@
-
-benchmark: benchmarks.txt
 
 clean:
 	@rm -rf bin/perf* benchmarks benchmarks.csv

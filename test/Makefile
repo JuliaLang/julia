@@ -1,19 +1,33 @@
 JULIAHOME = ..
 include ../Make.inc
 
-default: core numbers strings corelib hashing arrayops sparse lapack fft arpack random
-extra: unicode
-all: default extra
+default::
 
-core numbers strings corelib hashing arrayops sparse lapack fft arpack random:
+all extra unicode::
+	@$(MAKE) -sC unicode
+
+default all extra \
+core numbers strings corelib hashing arrayops \
+sparse lapack fft arpack random unicode::
 	$(QUIET_JULIA) ../julia $@.j
 
-unicode:
-	$(QUIET_JULIA)
-	@$(MAKE) -C $@
-	@../julia $@.j
+perf:
+ifneq ($(MAKECMDGOALS),perf)
+	$(QUIET_JULIA) ../julia perf/$@.j
+else
+	@../julia perf/$@.j | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
+endif
+
+benchmark:
+	@$(MAKE) -C perf $@
 
 clean:
 	@$(MAKE) -C unicode $@
+	@$(MAKE) -C perf $@
 
-.PHONY: all core hashing arrayops unicode clean
+.PHONY: \
+	default all extra \
+	core numbers strings corelib hashing arrayops \
+	sparse lapack fft arpack random \
+	unicode perf \
+	benchmark clean
