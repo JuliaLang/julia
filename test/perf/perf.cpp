@@ -7,11 +7,11 @@
 #include <complex>
 #include <algorithm>
 
-#include "../external/openblas-v0.1alpha2.4/cblas.h"
+#include "../../external/openblas-v0.1alpha2.4/cblas.h"
 
 #define DSFMT_MEXP 19937
-#include "../external/random/dsfmt-2.1/dSFMT.c"
-#include "../external/random/randmtzig.c"
+#include "../../external/random/dsfmt-2.1/dSFMT.c"
+#include "../../external/random/randmtzig.c"
 
 using namespace std;
 
