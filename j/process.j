@@ -195,7 +195,7 @@ function show(cmd::Cmd)
         end
         print('`')
     else
-        invoke(show, (Any,), cmd)
+        invoke(show, (Any,), cmd.exec)
     end
 end
 
