@@ -18,12 +18,13 @@ function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int
     cm = _jl_cholmod_start()
     cs = _jl_cholmod_sparse(S, 1)
     cd_rhs = _jl_cholmod_dense(b)
-    sol = []
+    sol = similar(b)
 
     try
         cs_factor = _jl_cholmod_analyze(cs, cm)
         _jl_cholmod_factorize(cs, cs_factor, cm)
-        sol = _jl_cholmod_solve(cs_factor, cd_rhs, cm)
+        x = _jl_cholmod_solve(cs_factor, cd_rhs, cm)
+        sol = _jl_cholmod_dense_copy_out(x, sol)
     catch
         _jl_free(cs[1])
         _jl_free(cd_rhs[1])
@@ -210,6 +211,15 @@ function _jl_cholmod_dense{T}(B::VecOrMat{T})
     return cd
 end
 
+function _jl_cholmod_dense_copy_out{T}(x::Ptr{Void}, sol::VecOrMat{T})
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out),
+          Void,
+          (Ptr{Void}, Ptr{T}),
+          x, sol
+          )
+    return sol
+end
+
 function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array{Ptr{Void}, 1})
     S_t = SparseMatrixCSC(Tv, S.n, S.m, nnz(S)+1)
 
@@ -246,7 +256,7 @@ function _jl_cholmod_factorize{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,In
                    (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                    cs[1], cs_factor, cm[1])
     println(status)
-    if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
+    #if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
 end
 
 function _jl_cholmod_solve(cs_factor::Ptr{Void}, cd_rhs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
