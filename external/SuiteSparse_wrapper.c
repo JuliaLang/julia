@@ -1,10 +1,36 @@
 #include <cholmod.h>
 
 extern void
-jl_cholmod_common (void **cm)
+jl_cholmod_common(void **cm)
 {
     cholmod_common *c = (cholmod_common *) malloc (sizeof(cholmod_common));
     *cm = c;
+}
+
+extern void
+jl_cholmod_dense( void **cd,        /* Store return value in here */
+                  size_t nrow,      /* the matrix is nrow-by-ncol */
+                  size_t ncol,
+                  size_t nzmax,     /* maximum number of entries in the matrix */
+                  size_t d,         /* leading dimension (d >= nrow must hold) */
+                  void *x,          /* size nzmax or 2*nzmax, if present */
+                  void *z,          /* size nzmax, if present */
+                  int xtype,        /* pattern, real, complex, or zomplex */
+                  int dtype         /* x and z double or float */
+                  )
+{
+    cholmod_dense *mat = (cholmod_dense *) malloc (sizeof(cholmod_dense));
+    mat->nrow = nrow;
+    mat->ncol = ncol;
+    mat->nzmax = nzmax;
+    mat->d = d;
+    mat->x = x;
+    mat->z = z;
+    mat->xtype = xtype;
+    mat->dtype = dtype;
+
+    *cd = mat;
+    return;
 }
 
 extern void
@@ -44,14 +70,4 @@ jl_cholmod_sparse( void **cs,    /* Store return value in here */
 
     *cs = s;
     return;
-}
-
-extern void
-jl_cholmod_common_free(cholmod_common *c) {
-    free(c);
-}
-
-extern void
-jl_cholmod_sparse_free(cholmod_sparse *s) {
-    free(s);
 }
