@@ -375,12 +375,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFCmpOLE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
     HANDLE(eq_f64_i64,2)
-        fy = INT(emit_expr(args[2],ctx,true));
         x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
         ci = dyn_cast<ConstantInt>(fy);
         if (ci != NULL) {
             int64_t yval = ci->getSExtValue();
-            if (yval <= DBL_MAXINT && yval >= -DBL_MAXINT)
+            if (-DBL_MAXINT <= yval && yval <= DBL_MAXINT)
                 return builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64));
         }
         return builder.CreateAnd(
@@ -388,8 +388,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             builder.CreateICmpEQ(builder.CreateFPToSI(x, T_int64), fy)
         );
     HANDLE(eq_f64_u64,2)
-        fy = INT(emit_expr(args[2],ctx,true));
         x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
         ci = dyn_cast<ConstantInt>(fy);
         if (ci != NULL) {
             uint64_t yval = ci->getZExtValue();

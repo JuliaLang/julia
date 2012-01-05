@@ -290,6 +290,124 @@ b = rand()
 @assert !isless(+NaN,-NaN)
 @assert !isless(+NaN,+NaN)
 
+for x=1:10, y=1:10
+    @assert (x==y)==(float64(x)==int64(y))
+    @assert (x==y)==(float64(x)==uint64(y))
+    @assert (x==y)==(int64(x)==float64(y))
+    @assert (x==y)==(uint64(x)==float64(y))
+end
+
+@assert int64(2)^53-2 == 2.0^53-2
+@assert int64(2)^53-2 != 2.0^53-1
+@assert int64(2)^53-2 != 2.0^53
+@assert int64(2)^53-2 != 2.0^53+1
+@assert int64(2)^53-2 != 2.0^53+2
+@assert int64(2)^53-2 != 2.0^53+3
+
+@assert int64(2)^53-1 != 2.0^53-2
+@assert int64(2)^53-1 == 2.0^53-1
+@assert int64(2)^53-1 != 2.0^53
+@assert int64(2)^53-1 != 2.0^53+1
+@assert int64(2)^53-1 != 2.0^53+2
+@assert int64(2)^53-1 != 2.0^53+3
+
+@assert int64(2)^53   != 2.0^53-2
+@assert int64(2)^53   != 2.0^53-1
+@assert int64(2)^53   == 2.0^53
+@assert int64(2)^53   == 2.0^53+1 # LOSSY
+@assert int64(2)^53   != 2.0^53+2
+@assert int64(2)^53   != 2.0^53+3
+
+@assert int64(2)^53+1 != 2.0^53-2
+@assert int64(2)^53+1 != 2.0^53-1
+@assert int64(2)^53+1 != 2.0^53
+@assert int64(2)^53+1 != 2.0^53+1 # LOSSY
+@assert int64(2)^53+1 != 2.0^53+2
+@assert int64(2)^53+1 != 2.0^53+3
+
+@assert int64(2)^53+2 != 2.0^53-2
+@assert int64(2)^53+2 != 2.0^53-1
+@assert int64(2)^53+2 != 2.0^53
+@assert int64(2)^53+2 != 2.0^53+1
+@assert int64(2)^53+2 == 2.0^53+2
+@assert int64(2)^53+2 != 2.0^53+3
+
+@assert int64(2)^53+3 != 2.0^53-2
+@assert int64(2)^53+3 != 2.0^53-1
+@assert int64(2)^53+3 != 2.0^53
+@assert int64(2)^53+3 != 2.0^53+1
+@assert int64(2)^53+3 != 2.0^53+2
+@assert int64(2)^53+3 != 2.0^53+3 # LOSSY
+
+@assert uint64(2)^53-2 == 2.0^53-2
+@assert uint64(2)^53-2 != 2.0^53-1
+@assert uint64(2)^53-2 != 2.0^53
+@assert uint64(2)^53-2 != 2.0^53+1
+@assert uint64(2)^53-2 != 2.0^53+2
+@assert uint64(2)^53-2 != 2.0^53+3
+
+@assert uint64(2)^53-1 != 2.0^53-2
+@assert uint64(2)^53-1 == 2.0^53-1
+@assert uint64(2)^53-1 != 2.0^53
+@assert uint64(2)^53-1 != 2.0^53+1
+@assert uint64(2)^53-1 != 2.0^53+2
+@assert uint64(2)^53-1 != 2.0^53+3
+
+@assert uint64(2)^53   != 2.0^53-2
+@assert uint64(2)^53   != 2.0^53-1
+@assert uint64(2)^53   == 2.0^53
+@assert uint64(2)^53   == 2.0^53+1 # LOSSY
+@assert uint64(2)^53   != 2.0^53+2
+@assert uint64(2)^53   != 2.0^53+3
+
+@assert uint64(2)^53+1 != 2.0^53-2
+@assert uint64(2)^53+1 != 2.0^53-1
+@assert uint64(2)^53+1 != 2.0^53
+@assert uint64(2)^53+1 != 2.0^53+1 # LOSSY
+@assert uint64(2)^53+1 != 2.0^53+2
+@assert uint64(2)^53+1 != 2.0^53+3
+
+@assert uint64(2)^53+2 != 2.0^53-2
+@assert uint64(2)^53+2 != 2.0^53-1
+@assert uint64(2)^53+2 != 2.0^53
+@assert uint64(2)^53+2 != 2.0^53+1
+@assert uint64(2)^53+2 == 2.0^53+2
+@assert uint64(2)^53+2 != 2.0^53+3
+
+@assert uint64(2)^53+3 != 2.0^53-2
+@assert uint64(2)^53+3 != 2.0^53-1
+@assert uint64(2)^53+3 != 2.0^53
+@assert uint64(2)^53+3 != 2.0^53+1
+@assert uint64(2)^53+3 != 2.0^53+2
+@assert uint64(2)^53+3 != 2.0^53+3 # LOSSY
+
+@assert int64(2)^62-1 != 2.0^62
+@assert int64(2)^62   == 2.0^62
+@assert int64(2)^62+1 != 2.0^62
+@assert 2.0^62 != int64(2)^62-1
+@assert 2.0^62 == int64(2)^62
+@assert 2.0^62 != int64(2)^62+1
+
+@assert typemax(Int64)   != +2.0^63
+@assert typemin(Int64)   == -2.0^63
+@assert typemin(Int64)+1 != -2.0^63
+
+@assert uint64(2)^60-1 != 2.0^60
+@assert uint64(2)^60   == 2.0^60
+@assert uint64(2)^60+1 != 2.0^60
+@assert 2.0^60 != uint64(2)^60-1
+@assert 2.0^60 == uint64(2)^60
+@assert 2.0^60 != uint64(2)^60+1
+
+@assert uint64(2)^63-1 != 2.0^63
+@assert uint64(2)^63   == 2.0^63
+@assert uint64(2)^63+1 != 2.0^63
+@assert 2.0^63 != uint64(2)^63-1
+@assert 2.0^63 == uint64(2)^63
+@assert 2.0^63 != uint64(2)^63+1
+
+@assert typemax(Uint64) != 2.0^64
+
 @assert 1//1 == 1
 @assert 2//2 == 1
 @assert 1//1 == 1//1
@@ -829,7 +947,7 @@ begin
     foo(x::(Integer...))=1
     @assert foo((:a,))==0
     @assert foo(( 2,))==1
-    
+
     bar{T}(x::(T,T,T,T))=1
     bar(x::(Any,Any,Any,Any))=2
     @assert bar((1,1,1,1)) == 1
