@@ -401,8 +401,24 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 ConstantInt::get(T_int1, 0);
         }
         return builder.CreateAnd(
-            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-            builder.CreateICmpEQ(builder.CreateFPToUI(x, T_int64), fy)
+            builder.CreateICmpSGT(
+                builder.CreateAdd(
+                    builder.CreateCall(
+                        Intrinsic::getDeclaration(
+                            jl_Module, Intrinsic::ctlz,
+                            ArrayRef<Type*>(T_int64)
+                        ), fy
+                    ),
+                    builder.CreateCall(
+                        Intrinsic::getDeclaration(
+                            jl_Module, Intrinsic::cttz,
+                            ArrayRef<Type*>(T_int64)
+                        ), fy
+                    )
+                ),
+                ConstantInt::get(T_int64, 10)
+            ),
+            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64))
         );
     }
     HANDLE(fpiseq32,2) {
@@ -504,36 +520,24 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateAShr(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
     HANDLE(bswap_int,1)
         x = INT(x);
-        fxt = x->getType();
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::bswap,
-                                      ArrayRef<Type*>(fxt)),
-            x
-        );
+                                      ArrayRef<Type*>(x->getType())), x);
     HANDLE(ctpop_int,1)
         x = INT(x);
-        fxt = x->getType();
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
-                                      ArrayRef<Type*>(fxt)),
-            x
-        );
+                                      ArrayRef<Type*>(x->getType())), x);
     HANDLE(ctlz_int,1)
         x = INT(x);
-        fxt = x->getType();
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
-                                      ArrayRef<Type*>(fxt)),
-            x
-        );
+                                      ArrayRef<Type*>(x->getType())), x);
     HANDLE(cttz_int,1)
         x = INT(x);
-        fxt = x->getType();
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz,
-                                      ArrayRef<Type*>(fxt)),
-            x
-        );
+                                      ArrayRef<Type*>(x->getType())), x);
 
     HANDLE(sext16,1)
         return builder.CreateSExt(INT(x), T_int16);
