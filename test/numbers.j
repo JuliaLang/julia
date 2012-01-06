@@ -293,34 +293,72 @@ function _cmp_(x::Union(Int64,Uint64), y::Float64)
     if x==int64(2)^53+4 && y==2.0^53+2; return +1; end
     if x==int64(2)^53+4 && y==2.0^53+4; return  0; end
 
+    if x==int64(2)^53+5 && y==2.0^53-2; return +1; end
+    if x==int64(2)^53+5 && y==2.0^53-1; return +1; end
+    if x==int64(2)^53+5 && y==2.0^53  ; return +1; end
+    if x==int64(2)^53+5 && y==2.0^53+2; return +1; end
+    if x==int64(2)^53+5 && y==2.0^53+4; return +1; end
+
     error("invalid: _cmp_($x,$y)")
 end
 
-for x=int64(2)^53-2:int64(2)^53+4, y=int64(2)^53-2:int64(2)^53+3
-    # println("x=$x; y=float64($y);")
-    y = float64(y)
+lt(x::Float64, y::Int64) = (itrunc(x) < y) & (x < nextfloat(float(y)))
+lt(x::Int64, y::Float64) = (x < itrunc(y)) & (float(x) < nextfloat(y))
+
+lt(x::Float64, y::Uint64) = (itrunc(x) < y) & (x < nextfloat(float(y)))
+lt(x::Uint64, y::Float64) = (x < itrunc(y)) & (float(x) < nextfloat(y))
+
+for x=int64(2)^53-2:int64(2)^53+5,
+    y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
+    u = uint64(x)
+    # println("x=$x; y=float64($(itrunc(y)));")
+    @assert y == float64(itrunc(y))
     c = _cmp_(x,y)
     if c < 0
         @assert !(x == y)
         @assert !(y == x)
-        # @assert  (x <  y)
-        # @assert !(y <  x)
-        # @assert  (x <= y)
-        # @assert !(y <= x)
+        @assert  lt(x,y)
+        @assert !lt(y,x)
+
+        # @assert !(-x == -y)
+        # @assert !(-y == -x)
+        # @assert !lt(-x,-y)
+        # @assert  lt(-y,-x)
+
+        @assert !(u == y)
+        @assert !(y == u)
+        @assert  lt(u,y)
+        @assert !lt(y,u)
     elseif c > 0
         @assert !(x == y)
         @assert !(y == x)
-        # @assert !(x <  y)
-        # @assert  (y <  x)
-        # @assert !(x <= y)
-        # @assert  (y <= x)
+        @assert !lt(x,y)
+        @assert  lt(y,x)
+
+        # @assert !(-x == -y)
+        # @assert !(-y == -x)
+        # @assert  lt(-x,-y)
+        # @assert !lt(-y,-x)
+
+        @assert !(u == y)
+        @assert !(y == u)
+        @assert !lt(u,y)
+        @assert  lt(y,u)
     else
         @assert  (x == y)
         @assert  (y == x)
-        # @assert !(x <  y)
-        # @assert !(y <  x)
-        # @assert  (x <= y)
-        # @assert  (y <= x)
+        @assert !lt(x,y)
+        @assert !lt(y,x)
+
+        # @assert  (-x == -y)
+        # @assert  (-y == -x)
+        # @assert  lt(-x,-y)
+        # @assert  lt(-y,-x)
+
+        @assert  (u == y)
+        @assert  (y == u)
+        @assert !lt(u,y)
+        @assert !lt(y,u)
     end
 end
 
