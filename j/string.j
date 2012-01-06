@@ -150,9 +150,8 @@ function cmp(a::String, b::String)
     !done(a,i) && done(b,j) ? +1 : 0
 end
 
-(< )(a::String, b::String)    = cmp(a,b) <  0
-(<=)(a::String, b::String)    = cmp(a,b) <= 0
 isequal(a::String, b::String) = cmp(a,b) == 0
+isless(a::String, b::String)  = cmp(a,b) <  0
 
 # faster comparisons for byte strings
 

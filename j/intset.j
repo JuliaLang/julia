@@ -219,7 +219,7 @@ complement!(s1::IntSet) = not!(s1)
 complement(s1::IntSet) = ~s1
 
 
-function ==(s1::IntSet, s2::IntSet)
+function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s
         return false
     end

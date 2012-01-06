@@ -42,20 +42,22 @@ end
 
 macro v_str(v); convert(VersionNumber, v); end
 
-<(a::VersionNumber, b::VersionNumber) =
+isless(a::VersionNumber, b::VersionNumber) =
     a.major < b.major || a.major == b.major &&
     (a.minor < b.minor || a.minor == b.minor &&
      (a.patch < b.patch || a.patch == b.patch &&
       (!isempty(a.suffix) && (isempty(b.suffix) || a.suffix < b.suffix))))
 
-==(a::VersionNumber, b::VersionNumber) =
+isequal(a::VersionNumber, b::VersionNumber) =
     a.major == b.major && a.minor == b.minor &&
     a.patch == b.patch && a.suffix == b.suffix
 
-<(a::VersionNumber, b) = a < convert(VersionNumber,b)
-<(a, b::VersionNumber) = convert(VersionNumber,a) < b
-==(a::VersionNumber, b) = a == convert(VersionNumber,b)
-==(a, b::VersionNumber) = convert(VersionNumber,a) == b
+isequal(a::VersionNumber, b::Union(String,Integer,Tuple)) =
+    a < convert(VersionNumber,b)
+isequal(a::Union(String,Integer,Tuple), b::VersionNumber) =
+    convert(VersionNumber,a) < b
+isless(a::VersionNumber, b) = a == convert(VersionNumber,b)
+isless(a, b::VersionNumber) = convert(VersionNumber,a) == b
 
 ## julia version info
 
