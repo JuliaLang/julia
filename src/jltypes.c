@@ -1304,14 +1304,8 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
             env[i*2+1] = (jl_value_t*)tv;
         }
         else {
-            if (!jl_is_typevar(params[i]) &&
-                // TODO: Undef should not be special here; fix.
-                // maybe introduce Top == Union(Any,Undef), and make this
-                // the default upper bound.
-                !jl_subtype(params[i], (jl_value_t*)tv, 0)) {
-                jl_type_error_rt(tname, tv->name->name,
-                                 tv->ub, params[i]);
-            }
+            // NOTE: type checking deferred to inst_type_w_ to make sure
+            // supertype parameters are checked recursively.
             if (jl_is_typector(params[i]))
                 env[i*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
             else
@@ -1458,8 +1452,11 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         jl_tuple_t *tp = tt->parameters;
         if (jl_is_null(tp))
             return (jl_type_t*)t;
+        jl_typename_t *tn = tt->name;
+        jl_value_t *tc = tn->primary;
         jl_type_t *result;
         size_t ntp = tp->length;
+        assert(ntp == ((jl_tag_type_t*)tc)->parameters->length);
         jl_value_t **iparams = (jl_value_t**)alloca((ntp+2) * sizeof(void*));
         for(i=0; i < ntp+2; i++) iparams[i] = NULL;
         jl_value_t **rt1 = &iparams[ntp+0];  // some extra gc roots
@@ -1467,12 +1464,26 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         JL_GC_PUSHARGS(iparams, ntp+2);
         for(i=0; i < ntp; i++) {
             jl_value_t *elt = jl_tupleref(tp, i);
-            if (elt == t)
+            if (elt == t) {
                 iparams[i] = t;
-            else
+            }
+            else {
                 iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack);
+                jl_value_t *tv =
+                    jl_tupleref(((jl_tag_type_t*)tc)->parameters, i);
+                if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
+                    // TODO: Undef should not be special here; fix.
+                    // maybe introduce Top == Union(Any,Undef), and make this
+                    // the default upper bound.
+                    if (!jl_subtype(iparams[i], tv, 0)) {
+                        jl_type_error_rt(tt->name->name->name,
+                                         ((jl_tvar_t*)tv)->name->name,
+                                         ((jl_tvar_t*)tv)->ub,
+                                         iparams[i]);
+                    }
+                }
+            }
         }
-        jl_typename_t *tn = tt->name;
 
         // if an identical instantiation is already in process somewhere
         // up the stack, return it. this computes a fixed point for
@@ -1486,7 +1497,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 
         // always use original type constructor (?)
         // only necessary for special cases like NTuple
-        jl_value_t *tc = tn->primary;
         if (tc == (jl_value_t*)jl_ntuple_type && tc != t) {
             //(tc != NULL && tc != t)
             result = (jl_type_t*)jl_apply_type_(tc, iparams, ntp);
