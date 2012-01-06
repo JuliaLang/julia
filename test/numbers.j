@@ -585,3 +585,29 @@ for nr = {
         end
     end
 end
+
+# rounding difficult values
+
+for x = 2^53-10:2^53+10
+    y = float64(x)
+    i = itrunc(y)
+    @assert int(trunc(y)) == i
+    @assert int(round(y)) == i
+    @assert int(floor(y)) == i
+    @assert int(ceil(y))  == i
+    @assert iround(y)     == i
+    @assert ifloor(y)     == i
+    @assert iceil(y)      == i
+end
+
+for x = 2^24-10:2^24+10
+    y = float32(x)
+    i = itrunc(y)
+    @assert int(trunc(y)) == i
+    @assert int(round(y)) == i
+    @assert int(floor(y)) == i
+    @assert int(ceil(y))  == i
+    @assert iround(y)     == i
+    @assert ifloor(y)     == i
+    @assert iceil(y)      == i
+end
