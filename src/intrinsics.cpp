@@ -564,6 +564,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     {
         // itrunc(x + copysign(0.5,x))
         Value *bits = INT(x);
+        // values with exponent >= nbits are already integers, and this
+        // rounding method doesn't always give the right answer there.
+        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int64,23));
+        expo = builder.CreateAnd(expo, ConstantInt::get(T_int32,0xff));
+        Value *isint = builder.CreateICmpSGE(expo,
+                                             ConstantInt::get(T_int32,127+23));
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float32, 0.5),
                                             T_int32);
         Value *signedhalf =
@@ -575,16 +581,24 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                         builder.CreateBitCast(signedhalf,
                                                               T_float32));
         if (f == fpuiround32) {
-            return builder.CreateFPToUI(sum, T_int32);
+            return builder.CreateSelect(isint,
+                                        builder.CreateFPToUI(x, T_int32),
+                                        builder.CreateFPToUI(sum, T_int32));
         }
         else {
-            return builder.CreateFPToSI(sum, T_int32);
+            return builder.CreateSelect(isint,
+                                        builder.CreateFPToSI(x, T_int32),
+                                        builder.CreateFPToSI(sum, T_int32));
         }
     }
     HANDLE(fpsiround64,1)
     HANDLE(fpuiround64,1)
     {
         Value *bits = INT(x);
+        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int64,52));
+        expo = builder.CreateAnd(expo, ConstantInt::get(T_int64,0x7ff));
+        Value *isint = builder.CreateICmpSGE(expo,
+                                             ConstantInt::get(T_int64,1023+52));
         Value *half = builder.CreateBitCast(ConstantFP::get(T_float64, 0.5),
                                             T_int64);
         Value *signedhalf =
@@ -596,10 +610,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                         builder.CreateBitCast(signedhalf,
                                                               T_float64));
         if (f == fpuiround64) {
-            return builder.CreateFPToUI(sum, T_int64);
+            return builder.CreateSelect(isint,
+                                        builder.CreateFPToUI(x, T_int64),
+                                        builder.CreateFPToUI(sum, T_int64));
         }
         else {
-            return builder.CreateFPToSI(sum, T_int64);
+            return builder.CreateSelect(isint,
+                                        builder.CreateFPToSI(x, T_int64),
+                                        builder.CreateFPToSI(sum, T_int64));
         }
     }
     HANDLE(uitofp32,1)
