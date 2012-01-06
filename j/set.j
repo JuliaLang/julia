@@ -11,7 +11,7 @@ Set{T}(x::T...) = Set{T}(x...)
 show(s::Set) = (show(typeof(s)); show_comma_array(s,'(',')'))
 
 isempty(s::Set) = isempty(s.hash)
-length(s::Set)  = length(s.hash)
+numel(s::Set)  = numel(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
@@ -24,7 +24,7 @@ add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
 del_each(s::Set, xs) = (for x=xs; del(s,x); end; s)
 
 similar{T}(s::Set{T}) = Set{T}()
-copy{T}(s::Set{T}) = Set{T}(s...)
+copy(s::Set) = add_each(similar(s), s)
 
 del_all{T}(s::Set{T}) = (s.hash = HashTable{T,Bool}(); s)
 

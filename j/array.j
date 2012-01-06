@@ -157,12 +157,13 @@ ref(A::Array, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
 
 # note: this is also useful for Ranges
 ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
+ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i = I ]
 
-ref{T<:Integer}(A::StridedArray{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
+ref{T<:Integer}(A::Array{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
 
-ref{T<:Integer}(A::StridedMatrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::StridedMatrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::StridedMatrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 
 let ref_cache = nothing
 global ref
@@ -353,12 +354,12 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
-function grow{T}(a::Array{T,1}, n::Integer)
+function grow(a::Vector, n::Integer)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
     return a
 end
 
-function pop{T}(a::Array{T,1})
+function pop(a::Vector)
     if isempty(a)
         error("pop: array is empty")
     end
@@ -399,7 +400,7 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
     a[i] = item
 end
 
-function del{T}(a::Array{T,1}, i::Integer)
+function del(a::Vector, i::Integer)
     l = length(a)
     if !(1 <= i <= l)
         throw(BoundsError())
@@ -418,7 +419,7 @@ function del{T}(a::Array{T,1}, i::Integer)
     a
 end
 
-function del_all{T}(a::Array{T,1})
+function del_all(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(length(a)))
     a
 end

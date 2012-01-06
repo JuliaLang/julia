@@ -284,7 +284,7 @@ function connect(ports::Ports, pend::PipeEnd)
 end
 
 function merge(cmds::Cmds)
-    if length(cmds) > 1
+    if numel(cmds) > 1
         pipeline = Set{Cmd}()
         for cmd = cmds
             add_each(pipeline, cmd.pipeline)
@@ -350,7 +350,7 @@ function spawn(cmd::Cmd)
         # minimize work after fork, in particular no writing
         c.status = ProcessRunning()
         ptrs = isa(c.exec,Vector{ByteString}) ? _jl_pre_exec(c.exec) : nothing
-        dup2_fds = Array(Int32, 2*length(c.pipes))
+        dup2_fds = Array(Int32, 2*numel(c.pipes))
         close_fds_ = copy(fds)
         i = 0
         for (f,p) = c.pipes
@@ -358,7 +358,7 @@ function spawn(cmd::Cmd)
             dup2_fds[i+=1] = f.fd
             del(close_fds_, fd(p))
         end
-        close_fds = Array(Int32, length(close_fds_))
+        close_fds = Array(Int32, numel(close_fds_))
         i = 0
         for f = close_fds_
             close_fds[i+=1] = f.fd

@@ -121,7 +121,6 @@ function pop(s::IntSet)
     n
 end
 
-length(s::IntSet) = numel(s)
 numel(s::IntSet) =
     int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
               s.bits, uint64(0), uint64(s.limit)))

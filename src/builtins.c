@@ -326,6 +326,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
     }
     JL_TRY {
+        jl_register_toplevel_eh();
         // handle syntax error
         if (((jl_expr_t*)ast)->head == error_sym) {
             jl_interpret_toplevel_expr(ast);

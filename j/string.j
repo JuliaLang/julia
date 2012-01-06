@@ -1,7 +1,7 @@
 ## core string functions ##
 
-length{T<:String}(s::T) = error("you must implement length(",T,")")
-next{T<:String}(s::T, i::Int) = error("you must implement next(",T,",Int)")
+length(s::String) = error("you must implement length(",typeof(s),")")
+next(s::String, i::Int) = error("you must implement next(",typeof(s),",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)
 next(s::String, i::Integer) = next(s,int(i))
 
