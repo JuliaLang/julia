@@ -36,6 +36,8 @@ isreal{T<:Real}(::AbstractArray{T}) = true
 isreal(::AbstractArray) = false
 iscomplex{T<:Complex}(::AbstractArray{T}) = true
 iscomplex(::AbstractArray) = false
+isbool(::AbstractArray{Bool}) = true
+isbool(::AbstractArray) = false
 
 ## Constructors ##
 
