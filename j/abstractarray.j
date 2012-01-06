@@ -615,6 +615,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
+function isless(A::AbstractArray, B::AbstractArray)
+    nA, nB = numel(A), numel(B)
+    for i = 1:min(nA, nB)
+        if !isequal(A[i], B[i])
+            return isless(A[i], B[i])
+        end
+    end
+    return nA < nB
+end
+
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)
