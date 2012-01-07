@@ -258,8 +258,8 @@ function _jl_cholmod_factorize{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,In
                    Int32,
                    (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                    cs[1], cs_factor, cm[1])
-    #println(status)
-    if status == 0; error("CHOLMOD could not factorize the matrix"); end
+
+    if status == _jl_CHOLMOD_FALSE; error("CHOLMOD could not factorize the matrix"); end
 end
 
 function _jl_cholmod_solve(cs_factor::Ptr{Void}, cd_rhs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
