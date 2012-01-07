@@ -79,6 +79,9 @@ _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 
 ## CHOLMOD
 
+const _jl_CHOLMOD_TRUE  = int32(1)
+const _jl_CHOLMOD_FALSE = int32(0)
+
 # Types of systems to solve
 const _jl_CHOLMOD_A    = int32(0)          # solve Ax=b 
 const _jl_CHOLMOD_LDLt = int32(1)          # solve LDL'x=b 
@@ -183,7 +186,7 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
           (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
            Int32, Int32, Int32, Int32, Int32, Int32),
           cs, int(S.m), int(S.n), int(length(S.nzval)), S.colptr, S.rowval, C_NULL, S.nzval, C_NULL,
-          int32(stype), itype, xtype, dtype, int32(1), int32(1)
+          int32(stype), itype, xtype, dtype, _jl_CHOLMOD_TRUE, _jl_CHOLMOD_TRUE
           )
 
     return cs
@@ -255,8 +258,8 @@ function _jl_cholmod_factorize{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,In
                    Int32,
                    (Ptr{Void}, Ptr{Void}, Ptr{Void}),
                    cs[1], cs_factor, cm[1])
-    println(status)
-    #if status != _jl_CHOLMOD_OK; error("CHOLMOD could not factorize the matrix"); end
+    #println(status)
+    if status == 0; error("CHOLMOD could not factorize the matrix"); end
 end
 
 function _jl_cholmod_solve(cs_factor::Ptr{Void}, cd_rhs::Array{Ptr{Void},1}, cm::Array{Ptr{Void},1})
