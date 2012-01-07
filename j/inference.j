@@ -559,10 +559,10 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
-        if isleaftype(t) || isa(t,TypeVar)
-            t = Type{t}
+        if isa(t,TypeVar)
+            t = Type{t.ub}
         else
-            t = Type{typevar(:_,t)}
+            t = Type{t}
         end
     else
         t = Any

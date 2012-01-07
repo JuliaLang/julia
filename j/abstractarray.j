@@ -36,6 +36,8 @@ isreal{T<:Real}(::AbstractArray{T}) = true
 isreal(::AbstractArray) = false
 iscomplex{T<:Complex}(::AbstractArray{T}) = true
 iscomplex(::AbstractArray) = false
+isbool(::AbstractArray{Bool}) = true
+isbool(::AbstractArray) = false
 
 ## Constructors ##
 
@@ -613,6 +615,16 @@ function isequal(A::AbstractArray, B::AbstractArray)
         end
     end
     return true
+end
+
+function isless(A::AbstractArray, B::AbstractArray)
+    nA, nB = numel(A), numel(B)
+    for i = 1:min(nA, nB)
+        if !isequal(A[i], B[i])
+            return isless(A[i], B[i])
+        end
+    end
+    return nA < nB
 end
 
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )

@@ -159,8 +159,6 @@ ref(A::Array, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
 ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
 ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i = I ]
 
-ref{T<:Integer}(A::Array{Any,1}, I::AbstractVector{T}) = { A[i] | i = I }
-
 ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
 ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
 ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
@@ -180,6 +178,30 @@ function ref(A::Array, I::Indices...)
     return X
 end
 end
+
+# logical indexing
+
+function _jl_ref_bool_1d(A::Array, I::AbstractArray{Bool})
+    n = sum(I)
+    out = similar(A, n)
+    c = 1
+    for i = 1:numel(I)
+        if I[i]
+            out[c] = A[i]
+            c += 1
+        end
+    end
+    out
+end
+
+ref(A::Vector, I::AbstractVector{Bool}) = _jl_ref_bool_1d(A, I)
+ref(A::Vector, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
+ref(A::Array, I::AbstractVector{Bool}) = _jl_ref_bool_1d(A, I)
+ref(A::Array, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
+
+ref(A::Matrix, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
+ref(A::Matrix, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
+ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
 
 ## Indexing: assign ##
 
@@ -223,14 +245,14 @@ function assign_scalarND(A, x, I0, I...)
     return A
 end
 
-function assign{T<:Integer}(A::Vector, x, I::AbstractVector{T})
+function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
     for i = I
         A[i] = x
     end
     return A
 end
 
-function assign{T<:Integer}(A::Vector, X::AbstractArray, I::AbstractVector{T})
+function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
     for i = 1:length(I)
         A[I[i]] = X[i]
     end
@@ -324,6 +346,44 @@ function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     return A
 end
 end
+
+# logical indexing
+
+function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
+    n = sum(I)
+    for i = 1:numel(I)
+        if I[i]
+            A[i] = x
+        end
+    end
+    A
+end
+
+function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+    n = sum(I)
+    c = 1
+    for i = 1:numel(I)
+        if I[i]
+            A[i] = X[c]
+            c += 1
+        end
+    end
+    A
+end
+
+assign(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
+assign(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
+assign(A::Array, x, I::AbstractVector{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
+assign(A::Array, x, I::AbstractArray{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
+
+assign(A::Matrix, x::AbstractArray, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+assign(A::Matrix, x, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+
+assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
+assign(A::Matrix, x, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
+
+assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
+assign(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
 
 ## Dequeue functionality ##
 

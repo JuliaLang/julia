@@ -148,9 +148,14 @@ function show(e::TypeError)
         print("type error: non-boolean ($(typeof(e.got))) ",
               "used in boolean context")
     else
+        if isa(e.got,Type)
+            tstr = "Type{$(e.got)}"
+        else
+            tstr = string(typeof(e.got))
+        end
         print("type error: $(e.func): ",
               "$(ctx)expected $(e.expected), ",
-              "got $(typeof(e.got))")
+              "got $tstr")
     end
 end
 

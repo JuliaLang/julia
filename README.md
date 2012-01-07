@@ -153,6 +153,6 @@ See detailed instructions for installation in [INSTALL.md](https://github.com/Ju
 - **Homepage:** <http://julialang.org>
 - **Discussion:** <http://groups.google.com/group/julia-dev/>
 - **Source code:** <https://github.com/JuliaLang/julia>
-- **Git clone URL:** <git://github.com/JuliaLang/julia.git> (see [below](#Download-Compilation))
+- **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Documentation:** <https://github.com/JuliaLang/julia/wiki>
 

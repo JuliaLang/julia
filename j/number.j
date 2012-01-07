@@ -9,6 +9,10 @@ isinteger(x::Integer) = true
 real_valued(x::Real) = true
 integer_valued(x::Integer) = true
 
+isbool(x::Number) = false
+isbool(x::Bool) = true
+const islogical = isbool
+
 size(x::Number) = ()
 ndims(x::Number) = 0
 numel(x::Number) = 1
