@@ -1,11 +1,11 @@
 # ranges
 @assert size(10:1:0) == (0,)
 @assert length(1:.2:2) == 6
-@assert length(Range(1.,.2,2.)) == 6
+@assert length(1.:.2:2.) == 6
 @assert length(2:-.2:1) == 6
-@assert length(Range(2.,-.2,1.)) == 6
+@assert length(2.:-.2:1.) == 6
 @assert length(2:.2:1) == 0
-@assert length(Range(2.,.2,1.)) == 0
+@assert length(2.:.2:1.) == 0
 
 # comprehensions
 X = [ i+2j | i=1:5, j=1:5 ]

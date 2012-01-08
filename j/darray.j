@@ -401,11 +401,11 @@ end
 
 function _jl_da_reshape(T, sz, da, A)
     mi = myindexes(da)
-    i0s = map(r->r.start, mi)
-    i1s = map(r->r.stop, mi)
+    i0s = map(first, mi)
+    i1s = map(last, mi)
     i0 = sub2ind(size(da), i0s...)
     i1 = sub2ind(size(da), i1s...)
-    I = map(Range1, ind2sub(size(A), i0), ind2sub(size(A), i1))
+    I = map(colon, ind2sub(size(A), i0), ind2sub(size(A), i1))
     reshape(A[I...], sz)
 end
 

@@ -121,21 +121,21 @@
 
 ; translate index x from colons to ranges
 (define (expand-index-colon x)
-  (cond ((eq? x ':) `(call (top Range1) 1 end))
+  (cond ((eq? x ':) `(call (top colon) 1 end))
 	((and (pair? x)
 	      (eq? (car x) ':))
 	 (cond ((length= x 3)
 		(if (eq? (caddr x) ':)
 		    ;; (: a :) a:
-		    `(call (top Range1) ,(cadr x) end)
+		    `(call (top colon) ,(cadr x) end)
 		    ;; (: a b)
-		    `(call (top Range1) ,(cadr x) ,(caddr x))))
+		    `(call (top colon) ,(cadr x) ,(caddr x))))
 	       ((length= x 4)
 		(if (eq? (cadddr x) ':)
 		    ;; (: a b :) a:b:
-		    `(call (top Range) ,(cadr x) ,(caddr x) end)
+		    `(call (top colon) ,(cadr x) ,(caddr x) end)
 		    ;; (: a b c)
-		    `(call (top Range) ,@(cdr x))))
+		    `(call (top colon) ,@(cdr x))))
 	       (else x)))
 	(else x)))
 
@@ -880,12 +880,6 @@
    (pattern-lambda (>>= a b)    (expand-update-operator '>> a b))
    (pattern-lambda (>>>= a b)   (expand-update-operator '>>> a b))
 
-   ;; colon
-   ;;(pattern-lambda (: a (-/ :))     `(call (top RangeFrom) ,a 1))
-   ;;(pattern-lambda (: a b (-/ :))   `(call (top RangeFrom) ,a ,b))
-   ;;(pattern-lambda (: (: b (-/ :))) `(call (top RangeBy) ,b))
-   ;;(pattern-lambda (: (: b c))      `(call (top RangeTo) ,b ,c))
-   ;;(pattern-lambda (: c)            `(call (top RangeTo) 1 ,c))
    (pattern-lambda (: a (-/ :))     (error "invalid ':' outside indexing"))
    (pattern-lambda (: a b (-/ :))   (error "invalid ':' outside indexing"))
    (pattern-lambda (: (: b (-/ :))) (error "invalid ':' outside indexing"))
@@ -893,7 +887,7 @@
    (pattern-lambda (: c)            (error "invalid ':' outside indexing"))
 
    (pattern-lambda (: a b c)
-		   `(call (top colon) ,a ,c ,b))
+		   `(call (top colon) ,a ,b ,c))
 
    (pattern-lambda (: a b)
 		   `(call (top colon) ,a ,b))

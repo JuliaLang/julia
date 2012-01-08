@@ -52,8 +52,8 @@ end
 ## overload methods for efficiency ##
 
 function ref(s::UTF8String, r::Range1{Int})
-    i = isvalid(s,r.start) ? r.start : nextind(s,r.start)
-    j = nextind(s,r.stop) - 1
+    i = isvalid(s,first(r)) ? first(r) : nextind(s,first(r))
+    j = nextind(s,last(r)) - 1
     UTF8String(s.data[i:j])
 end
 

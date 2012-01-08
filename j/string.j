@@ -14,7 +14,7 @@ isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
-ref{T<:Integer}(s::String, r::Range1{T}) = s[int(r.start):int(r.stop)]
+ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -212,10 +212,10 @@ length(s::SubString) = s.length
 # that may require additional string interfaces
 
 function ref(s::String, r::Range1{Int})
-    if r.start < 1 || length(s) < r.stop
+    if first(r) < 1 || length(s) < last(r)
         error("in substring slice: index out of range")
     end
-    SubString(s, r.start, r.stop)
+    SubString(s, first(r), last(r))
 end
 
 ## efficient representation of repeated strings ##

@@ -17,6 +17,8 @@ eltype{T,n}(::AbstractArray{T,n}) = T
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
 length(a::AbstractArray) = numel(a)
+first(a::AbstractArray) = a[1]
+last(a::AbstractArray) = a[end]
 
 function stride(a::AbstractArray, i::Integer)
     s = 1

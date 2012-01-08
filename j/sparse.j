@@ -213,7 +213,7 @@ end
 
 ## Structure query functions
 
-issym(A::SparseMatrixCSC) = nnz(A - A.') == 0
+issym(A::SparseMatrixCSC) = nnz(A - A.') == 0 #'
 
 function istril(A::SparseMatrixCSC)
     for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
@@ -460,8 +460,8 @@ function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector
     nI = length(I)
     nJ = length(J)
 
-    is_I_colon = (isa(I, Range1) || isa(I, Range)) && I.start == 1 && I.stop == nr && step(I) == 1
-    is_J_colon = (isa(J, Range1) || isa(J, Range)) && J.start == 1 && J.stop == nc && step(J) == 1
+    is_I_colon = (isa(I,Range1)||isa(I,Range)) && first(I)==1 && last(I)==nr && step(I)==1
+    is_J_colon = (isa(J,Range1)||isa(J,Range)) && first(J)==1 && last(J)==nc && step(J)==1
 
     if is_I_colon && is_J_colon
         return A

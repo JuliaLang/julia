@@ -13,10 +13,10 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
             new(p, i, (length(i[1]),), [1], i[1])
         end
         function SubArray(p::A, i::(Range1{Int},))
-            new(p, i, (length(i[1]),), [1], i[1].start)
+            new(p, i, (length(i[1]),), [1], first(i[1]))
         end
         function SubArray(p::A, i::(Range{Int},))
-            new(p, i, (length(i[1]),), [i[1].step], i[1].start)
+            new(p, i, (length(i[1]),), [step(i[1])], first(i[1]))
         end
     else
         function SubArray(p::A, i::I)
@@ -29,10 +29,10 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
                     newfirst += (i[j]-1)*pstrides[j]
                 else
                     push(newdims, length(i[j]))
-                    #may want to return error if i[j].step <= 0
+                    #may want to return error if step(i[j]) <= 0
                     push(newstrides, isa(i[j],Range1) ? pstrides[j] :
-                         pstrides[j] * i[j].step)
-                    newfirst += (i[j].start-1)*pstrides[j]
+                         pstrides[j] * step(i[j]))
+                    newfirst += (first(i[j])-1)*pstrides[j]
                 end
             end
             new(p, i, tuple(newdims...), newstrides, newfirst)
@@ -121,7 +121,7 @@ end
 #                if length(next) != 1
 #                    error("slice: dimension ", i," has length greater than 1")
 #                end
-#                next = isa(next, Int) ? next : next.start
+#                next = isa(next, Int) ? next : first(next)
 #                break
 #            end
 #        end
@@ -162,10 +162,10 @@ function ref(s::SubArray, is::Integer...)
 end
 
 ref{T}(s::SubArray{T,1}, I::Range1{Int}) =
-    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+    ref(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
 ref{T}(s::SubArray{T,1}, I::Range{Int}) =
-    ref(s.parent, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+    ref(s.parent, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
 
 function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
     t = Array(Int, length(I))
@@ -244,16 +244,16 @@ assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
     (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
 
 assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Int}) =
-    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
 assign{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
-    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):s.strides[1]:(s.first_index+(I.stop-1)*s.strides[1]))
+    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
 assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Int}) =
-    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
 
 assign{T}(s::SubArray{T,1}, v, I::Range{Int}) =
-    assign(s.parent, v, (s.first_index+(I.start-1)*s.strides[1]):(s.strides[1]*I.step):(s.first_index+(I.stop-1)*s.strides[1]))
+    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
 
 function assign{T,S<:Integer}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
     t = Array(Int, length(I))

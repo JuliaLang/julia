@@ -7,91 +7,102 @@ abstract Ranges{T<:Real} <: AbstractArray{T,1}
 type Range{T<:Real} <: Ranges{T}
     start::T
     step::T
-    stop::T
+    len::Int64
 
-    function Range(start::T, step::T, stop::T)
+    function Range(start::T, step::T, len::Int64)
         if step != step; error("Range: step cannot be NaN"); end
-        if step == 0; error("Range: step cannot be zero"); end
-        new(start, step, stop)
+        if step == 0;    error("Range: step cannot be zero"); end
+        if !(len >= 0);  error("Range: length must be non-negative"); end
+        new(start, step, len)
     end
+    Range(start::T, step::T, len::Integer) = Range(start, step, int64(len))
 end
-Range{T}(start::T, step::T, stop::T) = Range{T}(start, step, stop)
-Range(start, step, stop) = Range(promote(start, step, stop)...)
+Range{T}(start::T, step::T, len::Integer) = Range{T}(start, step, len)
 
 type Range1{T<:Real} <: Ranges{T}
     start::T
-    stop::T
-end
-Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
-Range1(start, stop) = Range1(promote(start, stop)...)
+    len::Int64
 
-colon(start::Real, stop::Real, step::Real) = Range(start, step, stop)
-colon(start::Real, stop::Real) = Range1(start, stop)
+    function Range1(start::T, len::Int64)
+        if !(len >= 0); error("Range: length must be non-negative"); end
+        new(start, len)
+    end
+    Range1(start::T, len::Integer) = Range1(start, int64(len))
+end
+Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
+
+colon{T<:Integer}(start::T, step::T, stop::T) =
+    Range(start, step, max(0, div(stop-start+step, step)))
+colon{T<:Integer}(start::T, stop::T) =
+    Range1(start, max(0, stop-start+1))
+
+colon{T<:Real}(start::T, step::T, stop::T) =
+    Range(start, step, max(0, itrunc((stop-start)/step+1))) # TODO: ifloor, +1 outside
+colon{T<:Real}(start::T, stop::T) =
+    Range1(start, max(0, itrunc(stop-start+1))) # TODO: ifloor, +1 outside
+
+colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
+colon(start::Real, stop::Real) = colon(promote(start, stop)...)
 
 similar(r::Ranges, T::Type, dims::Dims) = Array(T, dims)
+
+length(r::Ranges) = r.len
+size(r::Ranges) = (r.len,)
+numel(r::Ranges) = r.len
+isempty(r::Ranges) = r.len==0
+first(r::Ranges) = r.start
+last{T}(r::Range{T}) = r.start + oftype(T,r.len-1)*step(r)
+last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
 
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
-show(r::Range)  = print(r.start,':',r.step,':',r.stop)
-show(r::Range1) = print(r.start,':',r.stop)
+function ref{T}(r::Range{T}, i::Integer)
+    if !(1 <= i <= r.len); error(BoundsError); end
+    r.start + oftype(T,i-1)*step(r)
+end
+function ref{T}(r::Range1{T}, i::Integer)
+    if !(1 <= i <= r.len); error(BoundsError); end
+    r.start + oftype(T,i-1)
+end
 
-length{T<:Integer}(r::Range{T}) = max(0, int(div(r.stop-r.start+r.step, r.step)))
-length{T<:Integer}(r::Range1{T}) = max(0, int(r.stop-r.start+1))
-length(r::Range) = max(0, int(itrunc((r.stop-r.start)/r.step)+1))
-length(r::Range1) = max(0, int(itrunc(r.stop-r.start)+1))
-size(r::Ranges) = (length(r),)
-numel(r::Ranges) = length(r)
+ref(r::Range, s::Range{Int}) =
+    r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step*s.step, s.len)
+ref(r::Range1, s::Range{Int}) =
+    r.len < last(s) ? error(BoundsError) : Range(r[s.start], s.step, s.len)
+ref(r::Range, s::Range1{Int}) =
+    r.len < last(s) ? error(BoundsError) : Range(r[s.start], r.step, s.len)
+ref(r::Range1, s::Range1{Int}) =
+    r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
-isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
-isempty(r::Range1) = (r.stop < r.start)
+show(r::Range)  = print(r.start,':',r.step,':',last(r))
+show(r::Range1) = print(r.start,':',last(r))
 
 start{T<:Integer}(r::Ranges{T}) = r.start
-next{T<:Integer}(r::Ranges{T}, i::T) = (i, i+step(r))
-done{T<:Integer}(r::Ranges{T}, i::T) = (step(r) < 0 ? i < r.stop : i > r.stop)
-done{T<:Integer}(r::Range1{T}, i::T) = (i > r.stop)
+next{T<:Integer}(r::Range{T},  i::T) = (i, i+step(r))
+next{T<:Integer}(r::Range1{T}, i::T) = (i, i+one(T))
+done{T<:Integer}(r::Range{T},  i::T) = (r.start + r.len*r.step <= i)
+done{T<:Integer}(r::Range1{T}, i::T) = (r.start + r.len <= i)
 
 start(r::Ranges) = 0
-next(r::Ranges, i::Integer) = (r.start+i*step(r), i+1)
+next{T}(r::Range{T}, i::Integer) = (r.start + oftype(T,i)*step(r), i+1)
+next{T}(r::Range1{T}, i::Integer) = (r.start + oftype(T,i), i+1)
 done(r::Ranges, i::Integer) = (length(r) <= i)
 
-ref(r::Range, s::Range{Int}) = Range(r[s[1]],r.step*s.step,r[s[end]])
-ref(r::Range1, s::Range{Int}) = Range(r[s[1]],s.step,r[s[end]])
-ref(r::Range, s::Range1{Int}) = Range(r[s[1]],r.step,r[s[end]])
-ref(r::Range1, s::Range1{Int}) = Range1(r[s[1]],r[s[end]])
+isequal(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
+isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 
-function ref(r::Range, i::Integer)
-    if i < 1; error(BoundsError); end
-    x = r.start + (i-1)*step(r)
-    if step(r) > 0 ? x > r.stop : x < r.stop
-        error(BoundsError)
-    end
-    return x
-end
+# TODO: isless?
 
-function ref(r::Range1, i::Integer)
-    if i < 1; error(BoundsError); end
-    x = r.start + (i-1)
-    if x > r.stop
-        error(BoundsError)
-    end
-    return x
-end
+intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(r))
 
-last{T<:Integer}(r::Range1{T}) = r.stop
-last(r::Ranges) = r.start + (length(r)-1)*step(r)
-
-isequal(r::Range1, s::Range1) = r.start==s.start && r.stop==s.stop
-isequal(r::Ranges, s::Ranges) = r.start==s.start && step(r)==step(s) && last(r)==last(s)
-
-intersect(r::Range1, s::Range1) = max(r.start,s.start):min(r.stop,s.stop)
-
+# TODO: general intersect?
 function intersect(r::Range1, s::Range)
-    sta = start(s)
+    sta = first(s)
     ste = step(s)
-    sto = s[end]
-    lo = r.start
-    hi = r.stop
+    sto = last(s)
+    lo = first(r)
+    hi = last(r)
     i0 = max(lo, sta + ste*div((lo-sta)+ste-1, ste))
     i1 = min(hi, sta + ste*div((hi-sta), ste))
     i0 = max(i0, sta)
@@ -102,29 +113,33 @@ intersect(r::Range, s::Range1) = intersect(s, r)
 
 ## linear operations on ranges ##
 
--(r::Ranges) = Range(-r.start, -step(r), -r.stop)
+-(r::Ranges) = Range(-r.start, -step(r), r.len)
 
-+(x::Real, r::Range ) = Range(x+r.start, r.step, x+r.stop)
-+(x::Real, r::Range1) = Range1(x+r.start, x+r.stop)
++(x::Real, r::Range ) = Range(x+r.start, r.step, r.len)
++(x::Real, r::Range1) = Range1(x+r.start, r.len)
 +(r::Ranges, x::Real) = x+r
 
--(x::Real, r::Ranges) = Range(x-r.start, -step(r), x-r.stop)
--(r::Range , x::Real) = Range(r.start-x, r.step, r.stop-x)
--(r::Range1, x::Real) = Range1(r.start-x, r.stop-x)
+-(x::Real, r::Ranges) = Range(x-r.start, -step(r), r.len)
+-(r::Range , x::Real) = Range(r.start-x, r.step, r.len)
+-(r::Range1, x::Real) = Range1(r.start-x, r.len)
 
-.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), x*r.stop)
+.*(x::Real, r::Ranges) = Range(x*r.start, x*step(r), r.len)
 .*(r::Ranges, x::Real) = x*r
 
-./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.stop/x)
+./(r::Ranges, x::Real) = Range(r.start/x, step(r)/x, r.len)
 
 function +(r1::Ranges, r2::Ranges)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start+r2.start, step(r1)+step(r2), last(r1)+last(r2))
+    if r1.len != r2.len
+        error("argument dimensions must match")
+    end
+    Range(r1.start+r2.start, step(r1)+step(r2), r1.len)
 end
 
 function -(r1::Ranges, r2::Ranges)
-    if length(r1) != length(r2); error("shape mismatch"); end
-    Range(r1.start-r2.start, step(r1)-step(r2), last(r1)-last(r2))
+    if r1.len != r2.len
+        error("argument dimensions must match")
+    end
+    Range(r1.start-r2.start, step(r1)-step(r2), r1.len)
 end
 
 ## non-linear operations on ranges ##
@@ -164,7 +179,7 @@ function vcat{T}(r::Ranges{T})
         a[i] = x
         i += 1
     end
-    a
+    return a
 end
 
 function vcat{T}(rs::Ranges{T}...)
@@ -177,26 +192,27 @@ function vcat{T}(rs::Ranges{T}...)
             i += 1
         end
     end
-    a
+    return a
 end
 
-reverse{T<:Real}(v::Ranges{T}) = (last(v)):(-step(v)):(v.start)
+reverse{T<:Real}(r::Ranges{T}) = Range(last(r), -step(r), r.len)
 
 ## sorting ##
 
-issorted(v::Range1) = true
-issorted(v::Range) = v.step >= 0
+issorted(r::Range1) = true
+issorted(r::Range) = r.step > 0
 
-sort(v::Range1) = v
-sort!(v::Range1) = v
+sort(r::Range1) = r
+sort!(r::Range1) = r
 
-sort{T<:Real}(v::Range{T}) = issorted(v) ? v : reverse(v)
+sort{T<:Real}(r::Range{T}) = issorted(r) ? r : reverse(r)
 
-sortperm(v::Range1) = (v, 1:length(v))
-sortperm{T<:Real}(v::Range{T}) = issorted(v) ? (v, 1:1:length(v)) : (reverse(v),length(v):-1:1) 
+sortperm(r::Range1) = (r, 1:length(r))
+sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (r, 1:1:length(r)) :
+                                               (reverse(r), length(r):-1:1)
 
-function sum(v::Range1)
-    n1 = v.start-1
-    n2 = v.stop
-    return div((n2*(n2+1) - n1*(n1+1)), 2)
+function sum(r::Range1)
+    n1, n2 = r.start, last(r)
+    div((n2*(n2+1) - (n1-1)*n1), 2)
+    # TODO: verify that this is actually correct
 end

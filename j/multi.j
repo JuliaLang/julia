@@ -1470,11 +1470,11 @@ function preduce(reducer, f, r::Range1{Int})
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        return fetch(@spawn f(r.start, r.start+N-1))
+        return fetch(@spawn f(first(r), first(r)+N-1))
     end
     results = cell(np)
     for i=1:np
-        lo = r.start + (i-1)*each
+        lo = first(r) + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest
@@ -1490,11 +1490,11 @@ function pfor(f, r::Range1{Int})
     each = div(N,np)
     rest = rem(N,np)
     if each < 1
-        @spawn f(r.start, r.start+N-1)
+        @spawn f(first(r), first(r)+N-1)
         return
     end
     for i=1:np
-        lo = r.start + (i-1)*each
+        lo = first(r) + (i-1)*each
         hi = lo + each-1
         if i==np
             hi += rest

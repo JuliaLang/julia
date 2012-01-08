@@ -1244,7 +1244,7 @@ function permute(A::StridedArray, perm)
     ndimsA = length(dimsA)
     dimsP = ntuple(ndimsA, i->dimsA[perm[i]])
     P = similar(A, dimsP)
-    ranges = ntuple(ndimsA, i->(Range1(1,dimsP[i])))
+    ranges = ntuple(ndimsA, i->(colon(1,dimsP[i])))
     while length(stridenames) < ndimsA
         push(stridenames, gensym())
     end

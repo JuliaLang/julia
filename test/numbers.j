@@ -309,13 +309,8 @@ for x=int64(2)^53-2:int64(2)^53+5,
     # println("x=$x; y=float64($(itrunc(y)));")
 
     @assert (x==y)==(y==x)
-    @assert (-x==y)==(y==-x)
-    @assert (x==-y)==(-y==x)
-    @assert (-x==-y)==(-y==-x)
-
     @assert (x!=y)==!(x==y)
-    @assert (-x!=y)==!(-x==y)
-    @assert (x!=-y)==!(x==-y)
+    @assert (-x==-y)==(-y==-x)
     @assert (-x!=-y)==!(-x==-y)
 
     @assert (x<y)==(x<=y)&(x!=y)
@@ -517,13 +512,13 @@ end
 
 # div, fld, rem, mod
 for nr = {
-    Range1(1,6),
-    Range(0.25,0.25,6.0),
-    Range(1//4,1//4,6//1)
+    1:6,
+    0.25:0.25:6.0,
+    1//4:1//4:6//1
 }, ar = {
-    Range1(0,6),
-    Range(0.0,0.25,6.0),
-    Range(0//1,1//4,6//1)
+    0:6,
+    0.0:0.25:6.0,
+    0//1:1//4:6//1
 }
     for n = nr, a = ar
         # check basic div functionality

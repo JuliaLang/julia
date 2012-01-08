@@ -1,4 +1,4 @@
-if false
+if true
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
@@ -55,7 +55,7 @@ load("complex.j")
 load("rational.j")
 
 # load libc - julia already links against it so process handle works
-libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL)
+libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL);
 
 # core data structures (used by type inference)
 load("abstractarray.j")
@@ -67,7 +67,7 @@ load("set.j")
 
 # compiler
 load("inference.j")
-ccall(:jl_enable_inference, Void, ())
+ccall(:jl_enable_inference, Void, ());
 
 # I/O, strings & printing
 load("io.j")

@@ -5,10 +5,7 @@ numel (t::Tuple) = tuplelen(t)
 size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension")
 ref(t::Tuple, i::Int) = tupleref(t, i)
 ref(t::Tuple, i::Integer) = tupleref(t, int(i))
-
-ref(t::Tuple, r::Range)  = accumtuple(t, r, start(r), r.step)
-ref(t::Tuple, r::Range1) = accumtuple(t, r, start(r), 1)
-accumtuple(t::Tuple, r, i, step) = ntuple(length(r), n->t[i+step*(n-1)])
+ref(t::Tuple, r::Ranges) = ntuple(length(r), i->t[r[i]])
 
 ## iterating ##
 
@@ -25,6 +22,8 @@ ntuple(n::Integer, f) = n<=0 ? () :
                     n==4 ? (f(1),f(2),f(3),f(4),) :
                     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
                     tuple(ntuple(n-2,f)..., f(n-1), f(n))
+
+accumtuple(t::Tuple, r, i, step) = ntuple(length(r), n->t[i+step*(n-1)])
 
 # 0 argument function
 map(f) = f()
