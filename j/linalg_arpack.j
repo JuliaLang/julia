@@ -129,6 +129,8 @@ function eigs{T}(A::AbstractMatrix{T}, k::Integer, evtype::ASCIIString)
 
     nev = k
     ncv = min(max(nev*2, 20), n)
+    if ncv-nev < 2 || ncv > n; error("Compute fewer eigenvalues using eigs(A, k)"); end
+
     bmat = "I"
     which = evtype
     if iscomplex(A)
