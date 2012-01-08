@@ -302,63 +302,98 @@ function _cmp_(x::Union(Int64,Uint64), y::Float64)
     error("invalid: _cmp_($x,$y)")
 end
 
-lt(x::Float64, y::Int64) = (itrunc(x) < y) & (x < nextfloat(float(y)))
-lt(x::Int64, y::Float64) = (x < itrunc(y)) & (float(x) < nextfloat(y))
-
-lt(x::Float64, y::Uint64) = (itrunc(x) < y) & (x < nextfloat(float(y)))
-lt(x::Uint64, y::Float64) = (x < itrunc(y)) & (float(x) < nextfloat(y))
-
 for x=int64(2)^53-2:int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = uint64(x)
-    # println("x=$x; y=float64($(itrunc(y)));")
     @assert y == float64(itrunc(y))
+    # println("x=$x; y=float64($(itrunc(y)));")
+
+    @assert (x==y)==(y==x)
+    @assert (-x==y)==(y==-x)
+    @assert (x==-y)==(-y==x)
+    @assert (-x==-y)==(-y==-x)
+
+    @assert (x!=y)==!(x==y)
+    @assert (-x!=y)==!(-x==y)
+    @assert (x!=-y)==!(x==-y)
+    @assert (-x!=-y)==!(-x==-y)
+
+    @assert (x<y)==(x<=y)&(x!=y)
+    @assert (x<=y)==(x<y)|(x==y)
+    @assert (x==y)==(x<=y)&!(x<y)
+
+    @assert -x != x
+    @assert -y != y
+    @assert -x != y
+    @assert -y != x
+    @assert -x <  x
+    @assert -y <  y
+    @assert -x <  y
+    @assert -y <  x
+    @assert -x <= x
+    @assert -y <= y
+    @assert -x <= y
+    @assert -y <= x
+
+    @assert -y != u
+    @assert -y <  u
+    @assert -y <= u
+
     c = _cmp_(x,y)
     if c < 0
         @assert !(x == y)
-        @assert !(y == x)
-        @assert  lt(x,y)
-        @assert !lt(y,x)
-
-        # @assert !(-x == -y)
-        # @assert !(-y == -x)
-        # @assert !lt(-x,-y)
-        # @assert  lt(-y,-x)
+        @assert  (x <  y)
+        @assert !(y <  x)
+        @assert  (x <= y)
+        @assert !(y <= x)
 
         @assert !(u == y)
-        @assert !(y == u)
-        @assert  lt(u,y)
-        @assert !lt(y,u)
+        @assert  (u <  y)
+        @assert !(y <  u)
+        @assert  (u <= y)
+        @assert !(y <= u)
+
+        @assert !(-x == -y)
+        @assert !(-x <  -y)
+        @assert  (-y <  -x)
+        @assert !(-x <= -y)
+        @assert  (-y <= -x)
     elseif c > 0
         @assert !(x == y)
-        @assert !(y == x)
-        @assert !lt(x,y)
-        @assert  lt(y,x)
-
-        # @assert !(-x == -y)
-        # @assert !(-y == -x)
-        # @assert  lt(-x,-y)
-        # @assert !lt(-y,-x)
+        @assert !(x <  y)
+        @assert  (y <  x)
+        @assert !(x <= y)
+        @assert  (y <= x)
 
         @assert !(u == y)
-        @assert !(y == u)
-        @assert !lt(u,y)
-        @assert  lt(y,u)
+        @assert !(u <  y)
+        @assert  (y <  u)
+        @assert !(u <= y)
+        @assert  (y <= u)
+
+        @assert !(-x == -y)
+        @assert  (-x <  -y)
+        @assert !(-y <  -x)
+        @assert  (-x <= -y)
+        @assert !(-y <= -x)
     else
         @assert  (x == y)
-        @assert  (y == x)
-        @assert !lt(x,y)
-        @assert !lt(y,x)
-
-        # @assert  (-x == -y)
-        # @assert  (-y == -x)
-        # @assert  lt(-x,-y)
-        # @assert  lt(-y,-x)
+        @assert !(x <  y)
+        @assert !(y <  x)
+        @assert  (x <= y)
+        @assert  (y <= x)
 
         @assert  (u == y)
-        @assert  (y == u)
-        @assert !lt(u,y)
-        @assert !lt(y,u)
+        @assert !(u <  y)
+        @assert !(y <  u)
+        @assert  (u <= y)
+        @assert  (y <= u)
+
+        @assert  (-x == -y)
+        @assert !(-x <  -y)
+        @assert !(-y <  -x)
+        @assert  (-x <= -y)
+        @assert  (-y <= -x)
     end
 end
 

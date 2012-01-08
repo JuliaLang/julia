@@ -14,7 +14,11 @@ namespace JL_I {
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
-        eq_f64_i64, eq_f64_u64,
+        eqfsi64, eqfui64,
+        ltfsi64, ltfui64,
+        lefsi64, lefui64,
+        ltsif64, ltuif64,
+        lesif64, leuif64,
         fpiseq32, fpiseq64,
         fpislt32, fpislt64,
         // bitwise operators
@@ -272,7 +276,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Type *fxt;
     Value *fx, *fy;
     Value *den;
-    ConstantInt *ci=NULL;
     switch (f) {
     HANDLE(boxui8,1)
         if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
@@ -374,37 +377,161 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(le_float,2)
         return builder.CreateFCmpOLE(FP(x), FP(emit_expr(args[2],ctx,true)));
 
-    HANDLE(eq_f64_i64,2) {
+    HANDLE(eqfsi64,2) {
         x = FP(x);
         fy = INT(emit_expr(args[2],ctx,true));
-        ci = dyn_cast<ConstantInt>(fy);
-        if (ci != NULL) {
-            int64_t yval = ci->getSExtValue();
-            if (yval < 0) yval = -yval;
-            return __builtin_clzll(yval)+__builtin_ctzll(yval) > 10 ?
-                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)) :
-                ConstantInt::get(T_int1, 0);
-        }
         return builder.CreateAnd(
             builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
-            builder.CreateICmpEQ(builder.CreateFPToSI(x, T_int64), fy)
+            builder.CreateICmpEQ(
+                fy, builder.CreateFPToSI(
+                    builder.CreateSIToFP(fy, T_float64),
+                    T_int64
+                )
+            )
         );
     }
-    HANDLE(eq_f64_u64,2) {
+    HANDLE(eqfui64,2) {
         x = FP(x);
         fy = INT(emit_expr(args[2],ctx,true));
-        ci = dyn_cast<ConstantInt>(fy);
-        if (ci != NULL) {
-            uint64_t yval = ci->getZExtValue();
-            return __builtin_clzll(yval)+__builtin_ctzll(yval) > 10 ?
-                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)) :
-                ConstantInt::get(T_int1, 0);
-        }
         return builder.CreateAnd(
             builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-            builder.CreateICmpEQ(builder.CreateFPToUI(x, T_int64), fy)
+            builder.CreateICmpEQ(
+                fy, builder.CreateFPToUI(
+                    builder.CreateUIToFP(fy, T_float64),
+                    T_int64
+                )
+            )
         );
     }
+    HANDLE(ltfsi64,2) {
+        x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(x, builder.CreateSIToFP(fy, T_float64)),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
+                builder.CreateICmpSGT(
+                    fy, builder.CreateFPToSI(
+                        builder.CreateSIToFP(fy, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(ltfui64,2) {
+        x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
+                builder.CreateICmpUGT(
+                    fy, builder.CreateFPToUI(
+                        builder.CreateUIToFP(fy, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(lefsi64,2) {
+        x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(x, builder.CreateSIToFP(fy, T_float64)),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
+                builder.CreateICmpSGE(
+                    fy, builder.CreateFPToSI(
+                        builder.CreateSIToFP(fy, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(lefui64,2) {
+        x = FP(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(x, builder.CreateUIToFP(fy, T_float64)),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
+                builder.CreateICmpUGE(
+                    fy, builder.CreateFPToUI(
+                        builder.CreateUIToFP(fy, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(ltsif64,2) {
+        x = INT(x);
+        fy = FP(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(builder.CreateSIToFP(x, T_float64), fy),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(builder.CreateSIToFP(x, T_float64), fy),
+                builder.CreateICmpSLT(
+                    x, builder.CreateFPToSI(
+                        builder.CreateSIToFP(x, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(ltuif64,2) {
+        x = INT(x);
+        fy = FP(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(builder.CreateUIToFP(x, T_float64), fy),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(builder.CreateUIToFP(x, T_float64), fy),
+                builder.CreateICmpULT(
+                    x, builder.CreateFPToUI(
+                        builder.CreateUIToFP(x, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(lesif64,2) {
+        x = INT(x);
+        fy = FP(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(builder.CreateSIToFP(x, T_float64), fy),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(builder.CreateSIToFP(x, T_float64), fy),
+                builder.CreateICmpSLE(
+                    x, builder.CreateFPToSI(
+                        builder.CreateSIToFP(x, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+    HANDLE(leuif64,2) {
+        x = INT(x);
+        fy = FP(emit_expr(args[2],ctx,true));
+        return builder.CreateOr(
+            builder.CreateFCmpOLT(builder.CreateUIToFP(x, T_float64), fy),
+            builder.CreateAnd(
+                builder.CreateFCmpOEQ(builder.CreateUIToFP(x, T_float64), fy),
+                builder.CreateICmpULE(
+                    x, builder.CreateFPToUI(
+                        builder.CreateUIToFP(x, T_float64),
+                        T_int64
+                    )
+                )
+            )
+        );
+    }
+
     HANDLE(fpiseq32,2) {
         x = FP(x);
         fy = FP(emit_expr(args[2],ctx,true));
@@ -750,7 +877,11 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(sle_int); ADD_I(ule_int);
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
-    ADD_I(eq_f64_i64); ADD_I(eq_f64_u64);
+    ADD_I(eqfsi64); ADD_I(eqfui64);
+    ADD_I(ltfsi64); ADD_I(ltfui64);
+    ADD_I(lefsi64); ADD_I(lefui64);
+    ADD_I(ltsif64); ADD_I(ltuif64);
+    ADD_I(lesif64); ADD_I(leuif64);
     ADD_I(fpiseq32); ADD_I(fpiseq64);
     ADD_I(fpislt32); ADD_I(fpislt64);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
