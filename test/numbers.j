@@ -424,6 +424,15 @@ end
 
 @assert typemax(Uint64) != 2.0^64
 
+@assert !(NaN <= 1)
+@assert !(NaN >= 1)
+@assert !(NaN < 1)
+@assert !(NaN > 1)
+@assert !(1 <= NaN)
+@assert !(1 >= NaN)
+@assert !(1 < NaN)
+@assert !(1 > NaN)
+
 @assert 1//1 == 1
 @assert 2//2 == 1
 @assert 1//1 == 1//1

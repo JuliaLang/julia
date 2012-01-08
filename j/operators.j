@@ -14,7 +14,7 @@ isequal(x,y) = is(x,y)
 < (x,y) = isless(x,y)
 > (x,y) = y < x
 <=(x,y) = !(y < x)
->=(x,y) = !(x < y)
+>=(x,y) = (y <= x)
 
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
