@@ -128,6 +128,9 @@ end
 ^(x::Float64, y::Float64) = ccall(dlsym(_jl_libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(_jl_libfdm, :powf), Float32, (Float32,Float32), x, y)
 
+^(x::Float64, y::Integer) = x^float64(y)
+^(x::Float32, y::Integer) = x^float32(y)
+
 # alias
 const pow = ^
 
