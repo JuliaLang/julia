@@ -9,11 +9,22 @@ type Range{T<:Real} <: Ranges{T}
     step::T
     stop::T
 
-    function Range(start::T, step::T, stop::T)
-        if step == 0
-            error("Range: step cannot be zero")
+    if subtype(T,Float)
+        function Range(start::T, step::T, stop::T)
+            # note: the comparison uses !(x >= y) to catch NaNs too
+            if !(( step >= eps(stop)  && start==start) ||
+                 (-step >= eps(start) && stop==stop))
+                error("Range: invalid parameters")
+            end
+            new(start, step, stop)
         end
-        new(start, step, stop)
+    else
+        function Range(start::T, step::T, stop::T)
+            if step == 0
+                error("Range: step cannot be zero")
+            end
+            new(start, step, stop)
+        end
     end
 end
 Range{T}(start::T, step::T, stop::T) = Range{T}(start, step, stop)
@@ -22,6 +33,18 @@ Range(start, step, stop) = Range(promote(start, step, stop)...)
 type Range1{T<:Real} <: Ranges{T}
     start::T
     stop::T
+
+    if subtype(T,Float)
+        function Range1(start::T, stop::T)
+            # note: the comparison uses !(x >= y) to catch NaNs too
+            if !(1.0 >= eps(stop) && start==start)
+                error("Range1: invalid parameters")
+            end
+            new(start, stop)
+        end
+    else
+        Range1(start::T, stop::T) = new(start, stop)
+    end
 end
 Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
 Range1(start, stop) = Range1(promote(start, stop)...)
