@@ -94,17 +94,17 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 /(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::ComplexPair) = inv(z/x)
 
-==(x::Rational, y::Rational) = x.den == y.den  && x.num == y.num
-==(x::Rational, y::Integer     ) = x.den == 1 && x.num == y
-==(x::Integer     , y::Rational) = y == x
+==(x::Rational, y::Rational) = x.den == y.den && x.num == y.num
+==(x::Rational, y::Integer ) = x.den == 1 && x.num == y
+==(x::Integer , y::Rational) = y == x
 
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
-< (x::Rational, y::Integer     ) = x.num < x.den*y
-< (x::Integer     , y::Rational) = x*y.den < y.num
+< (x::Rational, y::Integer ) = x.num < x.den*y
+< (x::Integer , y::Rational) = x*y.den < y.num
 
 <=(x::Rational, y::Rational) = x.den == y.den ? x.num <= y.num : x.num*y.den <= x.den*y.num
-<=(x::Rational, y::Integer     ) = x.num <= x.den*y
-<=(x::Integer     , y::Rational) = x*y.den <= y.num
+<=(x::Rational, y::Integer ) = x.num <= x.den*y
+<=(x::Integer , y::Rational) = x*y.den <= y.num
 
 div(x::Rational, y::Rational) = div(x.num*y.den, x.den*y.num)
 div(x::Rational, y::Real    ) = div(x.num, x.den*y)
@@ -123,3 +123,5 @@ rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
 rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
 rational(z::Complex, tol::Real) =
     (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
+
+itrunc(x::Rational) = div(x.num,x.den)

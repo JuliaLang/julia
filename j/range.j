@@ -9,22 +9,10 @@ type Range{T<:Real} <: Ranges{T}
     step::T
     stop::T
 
-    if subtype(T,Float)
-        function Range(start::T, step::T, stop::T)
-            # note: the comparison uses !(x >= y) to catch NaNs too
-            if !(( step >= eps(stop)  && start==start) ||
-                 (-step >= eps(start) && stop==stop))
-                error("Range: invalid parameters")
-            end
-            new(start, step, stop)
-        end
-    else
-        function Range(start::T, step::T, stop::T)
-            if step == 0
-                error("Range: step cannot be zero")
-            end
-            new(start, step, stop)
-        end
+    function Range(start::T, step::T, stop::T)
+        if step != step; error("Range: step cannot be NaN"); end
+        if step == 0; error("Range: step cannot be zero"); end
+        new(start, step, stop)
     end
 end
 Range{T}(start::T, step::T, stop::T) = Range{T}(start, step, stop)
@@ -33,18 +21,6 @@ Range(start, step, stop) = Range(promote(start, step, stop)...)
 type Range1{T<:Real} <: Ranges{T}
     start::T
     stop::T
-
-    if subtype(T,Float)
-        function Range1(start::T, stop::T)
-            # note: the comparison uses !(x >= y) to catch NaNs too
-            if !(1.0 >= eps(stop) && start==start)
-                error("Range1: invalid parameters")
-            end
-            new(start, stop)
-        end
-    else
-        Range1(start::T, stop::T) = new(start, stop)
-    end
 end
 Range1{T}(start::T, stop::T) = Range1{T}(start, stop)
 Range1(start, stop) = Range1(promote(start, stop)...)
@@ -62,9 +38,9 @@ show(r::Range1) = print(r.start,':',r.stop)
 
 length{T<:Integer}(r::Range{T}) = max(0, int(div(r.stop-r.start+r.step, r.step)))
 length{T<:Integer}(r::Range1{T}) = max(0, int(r.stop-r.start+1))
-length{T}(r::Range{T}) = max(0, int(itrunc((r.stop-r.start)/r.step+1)))
-length{T}(r::Range1{T}) = max(0, int(itrunc(r.stop-r.start+1)))
-size(r::Ranges) = tuple(length(r))
+length{T}(r::Range{T}) = max(0, int(itrunc((r.stop-r.start)/r.step)+1))
+length{T}(r::Range1{T}) = max(0, int(itrunc(r.stop-r.start)+1))
+size(r::Ranges) = (length(r),)
 numel(r::Ranges) = length(r)
 
 isempty(r::Range) = (r.step > 0 ? r.stop < r.start : r.stop > r.start)
@@ -77,9 +53,7 @@ done{T<:Integer}(r::Range1{T}, i::T) = (i > r.stop)
 
 start(r::Ranges) = 0
 next(r::Ranges, i::Integer) = (r.start+i*step(r), i+1)
-done(r::Ranges, i::Integer) = (step(r) < 0 ? r.start+i*step(r) < r.stop :
-                                         r.start+i*step(r) > r.stop)
-done(r::Range1, i::Integer) = (r.start+i > r.stop)
+done(r::Ranges, i::Integer) = (length(r) <= i)
 
 ref(r::Range, s::Range{Int}) = Range(r[s[1]],r.step*s.step,r[s[end]])
 ref(r::Range1, s::Range{Int}) = Range(r[s[1]],s.step,r[s[end]])
