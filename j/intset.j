@@ -36,7 +36,7 @@ function add(s::IntSet, n::Integer)
         lim = int(n + div(n,2))
         grow(s, lim)
     end
-    s.bits[n>>5 + 1] |= (1<<(n&31))
+    s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
     return s
 end
 
@@ -49,7 +49,7 @@ end
 
 function del(s::IntSet, n::Integer)
     if n < s.limit
-        s.bits[n>>5 + 1] &= ~(1<<(n&31))
+        s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
     end
     return s
 end
@@ -71,7 +71,7 @@ function toggle(s::IntSet, n::Integer)
         lim = int(n + dim(n,2))
         grow(s, lim)
     end
-    s.bits[n>>5 + 1] $= (1<<(n&31))
+    s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
    return s
 end
 
@@ -91,7 +91,7 @@ function has(s::IntSet, n::Integer)
     if n >= s.limit
         false
     else
-        (s.bits[n>>5 + 1] & (1<<(n&31))) != 0
+        (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
 end
 
@@ -173,7 +173,7 @@ function and!(s::IntSet, s2::IntSet)
     end
     if ~s2.fill1s   
         for n=lim+1:length(s.bits)
-            s.bits[n] = 0
+            s.bits[n] = uint32(0)
         end
     end
     s.fill1s &= s2.fill1s
@@ -205,9 +205,9 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
+~(s::IntSet) = not!(IntSet(s))
 |(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(IntSet(s1), s2) : or!(IntSet(s2), s1))
 &(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
-~(s::IntSet) = not!(IntSet(s))
 ($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(IntSet(s1), s2) : xor!(IntSet(s2), s1))
 
 union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
@@ -216,7 +216,6 @@ intersection!(s1::IntSet, s2::IntSet) = and!(s1, s2)
 intersection(s1::IntSet, s2::IntSet) = &(s1, s2)
 complement!(s1::IntSet) = not!(s1)
 complement(s1::IntSet) = ~s1
-
 
 function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s

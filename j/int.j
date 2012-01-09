@@ -329,8 +329,8 @@ trailing_zeros(x::Uint32) = boxui32(cttz_int(unbox32(x)))
 trailing_zeros(x::Int64)  = boxsi64(cttz_int(unbox64(x)))
 trailing_zeros(x::Uint64) = boxui64(cttz_int(unbox64(x)))
 
-count_zeros(x::Integer) = count_ones(~x)
-leading_ones(x::Integer) = leading_zeros(~x)
+count_zeros  (x::Integer) = count_ones(~x)
+leading_ones (x::Integer) = leading_zeros(~x)
 trailing_ones(x::Integer) = trailing_zeros(~x)
 
 ## integer comparisons ##
