@@ -187,7 +187,7 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 
 -(x::Int)    = boxsint(neg_int(unboxwd(x)))
 -(x::Int64)  = boxsi64(neg_int(unbox64(x)))
--(x::Uint64) = boxsi64(neg_int(unbox64(x)))
+-(x::Uint64) = boxui64(neg_int(unbox64(x)))
 
 +(x::Int,    y::Int)    = boxsint(add_int(unboxwd(x), unboxwd(y)))
 +(x::Int64,  y::Int64)  = boxsi64(add_int(unbox64(x), unbox64(y)))

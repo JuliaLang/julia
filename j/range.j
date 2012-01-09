@@ -79,15 +79,15 @@ show(r::Range)  = print(r.start,':',r.step,':',last(r))
 show(r::Range1) = print(r.start,':',last(r))
 
 start{T<:Integer}(r::Ranges{T}) = r.start
-next{T<:Integer}(r::Range{T},  i::T) = (i, i+step(r))
-next{T<:Integer}(r::Range1{T}, i::T) = (i, i+one(T))
-done{T<:Integer}(r::Range{T},  i::T) = (r.start + r.len*r.step <= i)
-done{T<:Integer}(r::Range1{T}, i::T) = (r.start + r.len <= i)
+next{T<:Integer}(r::Range{T},  i) = (i, i+step(r))
+next{T<:Integer}(r::Range1{T}, i) = (i, i+one(T))
+done{T<:Integer}(r::Range{T},  i) = (r.start + r.len*r.step <= i)
+done{T<:Integer}(r::Range1{T}, i) = (r.start + r.len <= i)
 
 start(r::Ranges) = 0
-next{T}(r::Range{T}, i::Integer) = (r.start + oftype(T,i)*step(r), i+1)
-next{T}(r::Range1{T}, i::Integer) = (r.start + oftype(T,i), i+1)
-done(r::Ranges, i::Integer) = (length(r) <= i)
+next(r::Range,  i) = (r.start + oftype(r.start,i)*step(r), i+1)
+next(r::Range1, i) = (r.start + oftype(r.start,i), i+1)
+done(r::Ranges, i) = (length(r) <= i)
 
 isequal(r::Ranges, s::Ranges) = (r.start==s.start) & (step(r)==step(s)) & (r.len==s.len)
 isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
