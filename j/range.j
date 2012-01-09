@@ -38,8 +38,8 @@ show(r::Range1) = print(r.start,':',r.stop)
 
 length{T<:Integer}(r::Range{T}) = max(0, int(div(r.stop-r.start+r.step, r.step)))
 length{T<:Integer}(r::Range1{T}) = max(0, int(r.stop-r.start+1))
-length{T}(r::Range{T}) = max(0, int(itrunc((r.stop-r.start)/r.step)+1))
-length{T}(r::Range1{T}) = max(0, int(itrunc(r.stop-r.start)+1))
+length(r::Range) = max(0, int(itrunc((r.stop-r.start)/r.step)+1))
+length(r::Range1) = max(0, int(itrunc(r.stop-r.start)+1))
 size(r::Ranges) = (length(r),)
 numel(r::Ranges) = length(r)
 

@@ -480,12 +480,12 @@ function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector
 end
 
 ## assign
-assign{T,N}(A::SparseMatrixCSC{T},v::AbstractArray{T,N},i::Integer) =
-    invoke(assign, (SparseMatrixCSC{T}, Any, Integer), A, v, i)
-assign{T,N}(A::SparseMatrixCSC, v::AbstractArray{T,N}, i0::Integer, i1::Integer) = 
-    invoke(assign, (SparseMatrixCSC{T}, Any, Integer, Integer), A, v, i0, i1)
-assign{T}(A::SparseMatrixCSC{T}, v, i::Integer) = assign(A, v, ind2sub(size(A),i))
-assign{T}(A::SparseMatrixCSC{T}, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
+assign(A::SparseMatrixCSC,v::AbstractArray,i::Integer) =
+    invoke(assign, (SparseMatrixCSC, Any, Integer), A, v, i)
+assign(A::SparseMatrixCSC, v::AbstractArray, i0::Integer, i1::Integer) = 
+    invoke(assign, (SparseMatrixCSC, Any, Integer, Integer), A, v, i0, i1)
+assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i))
+assign(A::SparseMatrixCSC, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
 
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
@@ -601,9 +601,9 @@ assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::Ab
 assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Integer) = 
         invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
 
-assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
+assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
 
-assign{T}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
+assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
 
 #TODO: assign where v is sparse
 function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractMatrix, I::AbstractVector, J::AbstractVector)
@@ -840,10 +840,10 @@ end
 
 ref{T}(S::SparseAccumulator{T}, i::Integer) = S.flags[i] ? S.vals[i] : zero(T)
 
-assign{T,N}(S::SparseAccumulator{T}, v::AbstractArray{T,N}, i::Integer) = 
-    invoke(assign, (SparseAccumulator{T}, Any, Integer), S, v, i)
+assign(S::SparseAccumulator, v::AbstractArray, i::Integer) = 
+    invoke(assign, (SparseAccumulator, Any, Integer), S, v, i)
 
-function assign{T}(S::SparseAccumulator{T}, v, i::Integer)
+function assign(S::SparseAccumulator, v, i::Integer)
     if v == 0
         if S.flags[i]
             S.vals[i] = v

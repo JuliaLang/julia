@@ -477,8 +477,8 @@ function ref_elt{T}(d::DArray{T}, sub::(Int...))
     return remote_call_fetch(d.pmap[p], ref_elt, d, sub)::T
 end
 
-ref{T}(d::DArray{T}, i::Int)    = ref_elt(d, ind2sub(d.dims, i))
-ref{T}(d::DArray{T}, I::Int...) = ref_elt(d, I)
+ref(d::DArray, i::Int)    = ref_elt(d, ind2sub(d.dims, i))
+ref(d::DArray, I::Int...) = ref_elt(d, I)
 
 ref(d::DArray) = d
 
@@ -878,15 +878,15 @@ end
 
 macro binary_darray_comparison_op(f)
     quote
-        function ($f){T}(A::Number, B::SubOrDArray{T})
+        function ($f)(A::Number, B::SubOrDArray)
             darray((T,lsz,da)->($f)(A, localize(B, da)),
                    Bool, size(B), distdim(B), procs(B))
         end
-        function ($f){T}(A::SubOrDArray{T}, B::Number)
+        function ($f)(A::SubOrDArray, B::Number)
             darray((T,lsz,da)->($f)(localize(A, da), B),
                    Bool, size(A), distdim(A), procs(A))
         end
-        function ($f){T,S}(A::SubOrDArray{T}, B::SubOrDArray{S})
+        function ($f)(A::SubOrDArray, B::SubOrDArray)
             if size(A) != size(B)
                 error("argument dimensions must match")
             end

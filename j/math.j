@@ -15,8 +15,8 @@ asech(y) = acosh(1 ./y)
 acsch(y) = asinh(1 ./y)
 acoth(y) = atanh(1 ./y)
 
-sinc{T<:Number}(x::T) = x==0 ? one(x)  : (pix=pi*x; convert(T,sin(pix)/pix))
-cosc{T<:Number}(x::T) = x==0 ? zero(x) : (pix=pi*x; convert(T,cos(pix)/x-sin(pix)/(pix*x)))
+sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
+cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
 
 log(b,x) = log(x)/log(b)
 

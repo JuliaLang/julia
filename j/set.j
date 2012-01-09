@@ -17,8 +17,8 @@ eltype{T}(s::Set{T}) = T
 has(s::Set, x) = has(s.hash, x)
 get(s::Set, x, deflt) = get(s.hash, x, false)
 
-add{T}(s::Set, x) = (s.hash[x] = true; s)
-del{T}(s::Set, x) = (del(s.hash, x); s)
+add(s::Set, x) = (s.hash[x] = true; s)
+del(s::Set, x) = (del(s.hash, x); s)
 
 add_each(s::Set, xs) = (for x=xs; add(s,x); end; s)
 del_each(s::Set, xs) = (for x=xs; del(s,x); end; s)

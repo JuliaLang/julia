@@ -309,7 +309,7 @@ convert{T}(::Type{Ptr}, x::SubArray{T}) =
 
 pointer(s::SubArray, i::Int) = pointer(s, ind2sub(size(s), i))
 
-function pointer{T}(s::SubArray{T}, is::(Int...))
+function pointer(s::SubArray, is::(Int...))
     index = s.first_index
     for n = 1:length(is)
         index += (is[n]-1)*s.strides[n]
@@ -317,5 +317,5 @@ function pointer{T}(s::SubArray{T}, is::(Int...))
     return pointer(s.parent, index)
 end
 
-summary{T,N}(s::SubArray{T,N}) =
+summary(s::SubArray) =
     strcat(dims2string(size(s)), " SubArray of ", summary(s.parent))
