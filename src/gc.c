@@ -231,12 +231,15 @@ static int szclass(size_t sz)
 
 static void *alloc_big(size_t sz, int isobj)
 {
-    if (allocd_bytes-sz > collect_interval) {
+    if (allocd_bytes > collect_interval) {
         jl_gc_collect();
-        allocd_bytes = sz;
     }
+    allocd_bytes += sz;
     sz = (sz+3) & -4;
-    bigval_t *v = (bigval_t*)malloc(sz + BVOFFS*sizeof(void*));
+    size_t offs = BVOFFS*sizeof(void*);
+    if (sz + offs < offs)  // overflow in adding offs, size was "negative"
+        jl_raise(jl_memory_exception);
+    bigval_t *v = (bigval_t*)malloc(sz + offs);
     if (v == NULL)
         jl_raise(jl_memory_exception);
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
@@ -754,25 +757,25 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
-    sz += sizeof(void*);
-    allocd_bytes += sz;
 #ifdef MEMDEBUG
-    return alloc_big(sz-sizeof(void*), 0);
+    return alloc_big(sz, 0);
 #endif
     if (sz > 2048)
-        return alloc_big(sz-sizeof(void*), 0);
+        return alloc_big(sz, 0);
+    sz += sizeof(void*);
+    allocd_bytes += sz;
     void *b = pool_alloc(&pools[szclass(sz)]);
     return (void*)((void**)b + 1);
 }
 
 void *allocobj(size_t sz)
 {
-    allocd_bytes += sz;
 #ifdef MEMDEBUG
     return alloc_big(sz, 1);
 #endif
     if (sz > 2048)
         return alloc_big(sz, 1);
+    allocd_bytes += sz;
     return pool_alloc(&pools[szclass(sz)]);
 }
 
@@ -786,10 +789,10 @@ void *allocb_permanent(size_t sz)
 
 void *alloc_2w(void)
 {
-    allocd_bytes += (2*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(2*sizeof(void*), 1);
 #endif
+    allocd_bytes += (2*sizeof(void*));
 #ifdef __LP64__
     return pool_alloc(&pools[2]);
 #else
@@ -799,10 +802,10 @@ void *alloc_2w(void)
 
 void *alloc_3w(void)
 {
-    allocd_bytes += (3*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(3*sizeof(void*), 1);
 #endif
+    allocd_bytes += (3*sizeof(void*));
 #ifdef __LP64__
     return pool_alloc(&pools[4]);
 #else
@@ -812,10 +815,10 @@ void *alloc_3w(void)
 
 void *alloc_4w(void)
 {
-    allocd_bytes += (4*sizeof(void*));
 #ifdef MEMDEBUG
     return alloc_big(4*sizeof(void*), 1);
 #endif
+    allocd_bytes += (4*sizeof(void*));
 #ifdef __LP64__
     return pool_alloc(&pools[6]);
 #else
