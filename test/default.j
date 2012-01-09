@@ -5,7 +5,7 @@ runtests("strings")
 runtests("corelib")
 runtests("hashing")
 runtests("arrayops")
-# runtests("sparse") # TODO: FIXME!
+runtests("sparse")
 runtests("lapack")
 runtests("fft")
 runtests("arpack")
