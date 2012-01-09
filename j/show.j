@@ -246,7 +246,7 @@ function alignment(x::Rational)
 end
 function alignment(v::AbstractVector)
     l = r = 0
-    for x = v
+    for x in v
         a = alignment(x)
         l = max(l, a[1])
         r = max(r, a[2])
@@ -260,7 +260,7 @@ function alignment(
     cols_if_complete::Integer, cols_otherwise::Integer, sep::Integer
 )
     a = {}
-    for j = cols
+    for j in cols
         push(a, alignment(X[rows,j][:]))
         # TODO: remove [:] once X[rows,j] returns a vector
         if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
@@ -345,7 +345,7 @@ function print_matrix(
         I = [1:t; m-div(rows-1,2)+1:m]
         A = alignment(X,I,1:n,cols,cols,ss)
         if n <= length(A) # rows don't fit, cols do
-            for i = I
+            for i in I
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,A,i,1:n,sep)
                 print(i == m ? post : postsp)
@@ -362,7 +362,7 @@ function print_matrix(
             c = cols - sum(map(sum,R)) - (length(R)-1)*ss - strlen(hdots)
             L = alignment(X,I,1:n,c,c,ss)
             r = (length(R)-n+1) % vmod
-            for i = I
+            for i in I
                 print(i == 1 ? pre : presp)
                 print_matrix_row(X,L,i,1:length(L),sep)
                 print(i % hmod == 1 ? hdots : repeat(" ", strlen(hdots)))

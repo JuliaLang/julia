@@ -187,7 +187,7 @@ function show(cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
         print('`')
-        for c = esc
+        for c in esc
             if c == '`'
                 print('\\')
             end
@@ -212,7 +212,7 @@ fd(cmd::Cmd, f::FileDes) = Port(cmd,f)
 
 function fd(cmds::Set{Cmd}, f::FileDes)
     set = Set{Port}()
-    for cmd = cmds
+    for cmd in cmds
         if !has(cmd.pipes, f)
             add(set, fd(cmd,f))
         end
@@ -234,7 +234,7 @@ cmds(port::Port) = Set(port.cmd)
 
 function cmds(ports::Ports)
     c = Set{Cmd}()
-    for port = ports
+    for port in ports
         add(c, port.cmd)
     end
     return c
@@ -247,7 +247,7 @@ add_cmds(set::Set{Cmd}, cmds::Set{Cmd}) = add_each(set, cmds)
 
 function (&)(cmds::Cmds...)
     set = Set{Cmd}()
-    for cmd = cmds
+    for cmd in cmds
         add_cmds(set, cmd)
     end
     set
@@ -258,7 +258,7 @@ add_ports(set::Set{Port}, ports::Set{Port}) = add_each(set, ports)
 
 function (&)(ports::Ports...)
     set = Set{Port}()
-    for port = ports
+    for port in ports
         add_ports(set, port)
     end
     set
@@ -277,7 +277,7 @@ function connect(port::Port, pend::PipeEnd)
 end
 
 function connect(ports::Ports, pend::PipeEnd)
-    for port = ports
+    for port in ports
         connect(port, pend)
     end
     return pend
@@ -286,10 +286,10 @@ end
 function merge(cmds::Cmds)
     if numel(cmds) > 1
         pipeline = Set{Cmd}()
-        for cmd = cmds
+        for cmd in cmds
             add_each(pipeline, cmd.pipeline)
         end
-        for cmd = pipeline
+        for cmd in pipeline
             cmd.pipeline = pipeline
         end
     end
@@ -360,7 +360,7 @@ function spawn(cmd::Cmd)
         end
         close_fds = Array(Int32, numel(close_fds_))
         i = 0
-        for f = close_fds_
+        for f in close_fds_
             close_fds[i+=1] = f.fd
         end
         # now actually do the fork and exec without writes
@@ -406,7 +406,7 @@ function spawn(cmd::Cmd)
         end
         c.pid = pid
     end
-    for f = fds
+    for f in fds
         close(f)
     end
     gc_enable()
@@ -416,7 +416,7 @@ end
 #   they may not be connected, e.g.: `foo` & `bar`
 
 function spawn(cmds::Cmds)
-    for cmd = cmds
+    for cmd in cmds
         if !running(cmd)
             spawn(cmd)
         end
@@ -434,7 +434,7 @@ end
 
 function wait(cmds::Cmds)
     success = true
-    for cmd = cmds
+    for cmd in cmds
         success &= wait(cmd)
     end
     success
@@ -485,7 +485,7 @@ arg_gen(x::String) = (a=Array(ByteString,1); a[1]=x; a)
 function arg_gen(head)
     if applicable(start,head)
         vals = empty(ByteString)
-        for x = head
+        for x in head
             push(vals,cstring(x))
         end
         return vals
@@ -508,7 +508,7 @@ end
 
 function cmd_gen(parsed)
     args = empty(ByteString)
-    for arg = parsed
+    for arg in parsed
         append!(args, arg_gen(arg...))
     end
     Cmd(args)

@@ -749,7 +749,7 @@ function tmerge(typea::ANY, typeb::ANY)
         return None
     end
     if badunion(t)
-        for elt = t
+        for elt in t
             if subtype(Undef,elt)
                 return Top
             end
@@ -918,7 +918,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     add(W,1)
     # initial types
     s[1] = IdTable()
-    for v=vars
+    for v in vars
         s[1][v] = Undef
     end
     la = length(args)
@@ -1038,7 +1038,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     if tchanged(rt, frame.result)
                         frame.result = tmerge(frame.result, rt)
                         # revisit states that recursively depend on this
-                        for r=recpts
+                        for r in recpts
                             #if dbg
                             #    print("will revisit ")
                             #    show(r)
@@ -1166,7 +1166,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
 
     vinf = append(ast.args[2].args[2],ast.args[2].args[3])::Array{Any,1}
     # add declarations for variables that are always the same type
-    for vi = vinf
+    for vi in vinf
         if has(decls,vi[1])
             vi[2] = decls[vi[1]]
         end
@@ -1177,12 +1177,12 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         return ast
     end
 
-    for li = closures
+    for li in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
             vinf = a.args[2].args[3]::Array{Any,1}
-            for vi = vinf
+            for vi in vinf
                 if has(decls,vi[1])
                     vi[2] = decls[vi[1]]
                 end
@@ -1268,7 +1268,7 @@ end
 
 function without_linenums(a::Array{Any,1})
     l = {}
-    for x = a
+    for x in a
         if (isa(x,Expr) && is(x.head,:line)) || isa(x,LineNumberNode)
         else
             push(l, x)

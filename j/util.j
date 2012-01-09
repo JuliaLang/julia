@@ -213,7 +213,7 @@ end
 
 function _jl_print_help_entries(entries)
     first = true
-    for desc = entries
+    for desc in entries
         if !first
             println()
         end

@@ -9,7 +9,7 @@ function append(a1::Array{Any,1}, as::Array{Any,1}...)
         arrayset(a,i,arrayref(a1,i))
     end
     i = arraylen(a1)+1
-    for x = as
+    for x in as
         for j = 1:length(x)
             arrayset(a,i,x[j])
             i += 1

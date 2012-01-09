@@ -99,7 +99,7 @@ end
 #    newdims = ()
 #    for i = 1:N
 #        next = 1:size(a, i)
-#        for j = sdims
+#        for j in sdims
 #            if i == j
 #                if size(a, i) != 1
 #                    error("slice: dimension ", i, " has length greater than 1")
@@ -116,7 +116,7 @@ end
 #    newdims = ()
 #    for i = 1:length(s.indexes)
 #        next = s.indexes[i]
-#        for j = sdims
+#        for j in sdims
 #            if i == j
 #                if length(next) != 1
 #                    error("slice: dimension ", i," has length greater than 1")

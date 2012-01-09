@@ -139,7 +139,7 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
     ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
-    for arg=args
+    for arg in args
         serialize(buf, arg)
     end
     ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
@@ -375,7 +375,7 @@ function del_client(id, client)
 end
 
 function del_clients(pairs::(Any,Any)...)
-    for p=pairs
+    for p in pairs
         del_client(p[1], p[2])
     end
 end
@@ -397,7 +397,7 @@ function add_client(id, client)
 end
 
 function add_clients(pairs::(Any,Any)...)
-    for p=pairs
+    for p in pairs
         add_client(p[1], p[2])
     end
 end
@@ -1036,7 +1036,7 @@ function start_remote_workers(machines, cmds)
             end
         end
     end
-    for c = cmds
+    for c in cmds
         spawn(c)
     end
     w = cell(n)
@@ -1212,7 +1212,7 @@ type GlobalObject
             end
         end
         rids = { rr2id(r[i]) | i=1:np }
-        for p=procs
+        for p in procs
             if p != mi
                 remote_do(p, init_GlobalObject, p, procs, rids, initializer)
             end
@@ -1307,7 +1307,7 @@ function sync_end()
     end
     refs = spawns[1]
     tls(:SPAWNS, spawns[2])
-    for r = refs
+    for r in refs
         wait(r)
     end
 end
@@ -1338,7 +1338,7 @@ let lastp = 1
         p = -1
         env = ccall(:jl_closure_env, Any, (Any,), thunk)
         if isa(env,Tuple)
-            for v = env
+            for v in env
                 if isa(v,Box)
                     v = v.contents
                 end
@@ -1660,7 +1660,7 @@ end
 function interrupt_waiting_task(wi::WorkItem, with_value)
     global Waiting
     for (oid, jobs) = Waiting
-        for j = jobs
+        for j in jobs
             if is(j[2], wi)
                 deliver_result((), j[1], oid, ()->with_value)
                 return

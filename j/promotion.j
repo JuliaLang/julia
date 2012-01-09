@@ -28,7 +28,7 @@ function promote{T,S,U}(x::T, y::S, z::U)
 end
 function promote{T,S}(x::T, y::S, zs...)
     R = promote_type(T,S)
-    for z = zs
+    for z in zs
         R = promote_type(R,typeof(z))
     end
     convert((R...), tuple(x,y,zs...))

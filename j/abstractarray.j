@@ -334,7 +334,7 @@ end
 
 function vcat{T}(V::AbstractVector{T}...)
     n = 0
-    for Vk = V
+    for Vk in V
         n += length(Vk)
     end
     a = similar(V[1], n)

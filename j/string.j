@@ -130,7 +130,7 @@ contains(s::String, c::Char) = (strchr(s,c)!=0)
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
-    for c = s
+    for c in s
         cx[i += 1] = c
     end
     return cx
@@ -619,7 +619,7 @@ function _jl_shell_parse(s::String, interp::Bool)
 
     # construct an expression
     exprs = {}
-    for arg = args
+    for arg in args
         push(exprs, expr(:tuple, arg))
     end
     expr(:tuple,exprs)
@@ -630,7 +630,7 @@ _jl_shell_parse(s::String) = _jl_shell_parse(s,true)
 function shell_split(s::String)
     parsed = _jl_shell_parse(s,false)
     args = empty(String)
-    for arg = parsed
+    for arg in parsed
        push(args, strcat(arg...))
     end
     args
@@ -642,7 +642,7 @@ function print_shell_word(word::String)
     end
     has_single = false
     has_special = false
-    for c = word
+    for c in word
         if iswspace(c) || c=='\\' || c=='\'' || c=='"' || c=='$'
             has_special = true
             if c == '\''
@@ -656,7 +656,7 @@ function print_shell_word(word::String)
         print('\'', word, '\'')
     else
         print('"')
-        for c = word
+        for c in word
             if c == '"' || c == '$'
                 print('\\')
             end
@@ -668,7 +668,7 @@ end
 
 function print_shell_escaped(cmd::String, args::String...)
     print_shell_word(cmd)
-    for arg = args
+    for arg in args
         print(' ')
         print_shell_word(arg)
     end
@@ -786,7 +786,7 @@ chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
 function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     n::T = 0
     base = convert(T,base)
-    for c = s
+    for c in s
         d = '0' <= c <= '9' ? c-'0' :
             'A' <= c <= 'Z' ? c-'A'+int32(10) :
             'a' <= c <= 'z' ? c-'a'+int32(10) :
@@ -939,13 +939,13 @@ memcat(a::Array{Uint8,1}) = copy(a)
 
 function memcat(arrays::Array{Uint8,1}...)
     n = 0
-    for a = arrays
+    for a in arrays
         n += length(a)
     end
     arr = Array(Uint8, n)
     ptr = pointer(arr)
     offset = 0
-    for a = arrays
+    for a in arrays
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(a), uint(length(a)))
@@ -960,13 +960,13 @@ memcat(s::ByteString) = memcat(s.data)
 
 function memcat(strs::ByteString...)
     n = 0
-    for s = strs
+    for s in strs
         n += length(s)
     end
     data = Array(Uint8, n)
     ptr = pointer(data)
     offset = 0
-    for s = strs
+    for s in strs
         ccall(dlsym(libc, :memcpy), Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(s.data), uint(length(s)))

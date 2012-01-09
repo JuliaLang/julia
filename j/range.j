@@ -175,7 +175,7 @@ function vcat{T}(r::Ranges{T})
     n = length(r)
     a = Array(T,n)
     i = 1
-    for x = r
+    for x in r
         a[i] = x
         i += 1
     end
@@ -186,8 +186,8 @@ function vcat{T}(rs::Ranges{T}...)
     n = sum(length,rs)::Int
     a = Array(T,n)
     i = 1
-    for r = rs
-        for x = r
+    for r in rs
+        for x in r
             a[i] = x
             i += 1
         end

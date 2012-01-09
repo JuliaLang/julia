@@ -41,7 +41,7 @@ function add(s::IntSet, n::Integer)
 end
 
 function add_each(s::IntSet, ns)
-    for n = ns
+    for n in ns
         add(s, n)
     end
     return s
@@ -55,7 +55,7 @@ function del(s::IntSet, n::Integer)
 end
 
 function del_each(s::IntSet, ns)
-    for n = ns
+    for n in ns
         del(s, n)
     end
     return s
@@ -76,7 +76,7 @@ function toggle(s::IntSet, n::Integer)
 end
 
 function toggle_each(s::IntSet, ns)
-   for n = ns
+   for n in ns
        toggle(s, n)
    end
    return s
@@ -128,7 +128,7 @@ numel(s::IntSet) =
 function show(s::IntSet)
     print("intset(")
     first = true
-    for n = s
+    for n in s
         if !first
             print(", ")
         end

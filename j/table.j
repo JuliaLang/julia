@@ -147,7 +147,7 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldd = h.deleted
     newht = HashTable{K,V}(newsz)
 
-    for i = oldu
+    for i in oldu
         if !has(oldd,i)
             newht[oldk[i]] = oldv[i]
         end

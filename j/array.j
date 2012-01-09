@@ -246,7 +246,7 @@ function assign_scalarND(A, x, I0, I...)
 end
 
 function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
-    for i = I
+    for i in I
         A[i] = x
     end
     return A
@@ -261,7 +261,7 @@ end
 
 function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
     m = size(A, 1)
-    for j=J
+    for j in J
         A[(j-1)*m + i] = x
     end
     return A
@@ -269,7 +269,7 @@ end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
     m = size(A, 1)
     count = 1
-    for j=J
+    for j in J
         A[(j-1)*m + i] = X[count]
         count += 1
     end
@@ -279,7 +279,7 @@ end
 function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     m = size(A, 1)
     offset = (j-1)*m
-    for i=I
+    for i in I
         A[offset + i] = x
     end
     return A
@@ -288,7 +288,7 @@ function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j
     m = size(A, 1)
     offset = (j-1)*m
     count = 1
-    for i=I
+    for i in I
         A[offset + i] = X[count]
         count += 1
     end
@@ -297,9 +297,9 @@ end
 
 function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{T})
     m = size(A, 1)
-    for j=J
+    for j in J
         offset = (j-1)*m
-        for i=I
+        for i in I
             A[offset + i] = x
         end
     end
@@ -308,9 +308,9 @@ end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
     m = size(A, 1)
     count = 1
-    for j=J
+    for j in J
         offset = (j-1)*m
-        for i=I
+        for i in I
             A[offset + i] = X[count]
             count += 1
         end
@@ -934,7 +934,7 @@ function hist(v::StridedVector, nbins::Integer)
         hi = hi + div(nbins,2)
     end
     binsz = (hi-lo)/nbins
-    for x = v
+    for x in v
         if isfinite(x)
             i = iround((x-lo+binsz/2)/binsz)
             h[i > nbins ? nbins : i] += 1
@@ -1254,7 +1254,7 @@ function permute(A::StridedArray, perm)
 
     #Creates offset, because indexing starts at 1
     offset = 0
-    for i = strides
+    for i in strides
         offset+=i
     end
     offset = 1-offset

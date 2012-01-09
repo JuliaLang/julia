@@ -81,24 +81,24 @@ end
 function reduce(op::Function, v0, itr)
     v = v0
     if is(op,max)
-        for x = itr
+        for x in itr
             v = max(v,x)
         end
     elseif is(op,min)
-        for x = itr
+        for x in itr
             v = min(v,x)
         end
     elseif is(op,+)
-        for x = itr
+        for x in itr
             v = v+x
         end
     elseif is(op,*)
-        for x = itr
+        for x in itr
             v = v*x
         end
     else
         u = v0
-        for x = itr
+        for x in itr
             u = op(u,x)
         end
         return u
@@ -122,14 +122,14 @@ end
 
 function mapreduce(op::Function, f::Function, v0, itr)
     v = v0
-    for x = itr
+    for x in itr
         v = op(v,f(x))
     end
     return v
 end
 
 function any(itr)
-    for x = itr
+    for x in itr
         if x
             return true
         end
@@ -138,7 +138,7 @@ function any(itr)
 end
 any(args::Bool...) = any(args)
 function all(itr)
-    for x = itr
+    for x in itr
         if !x
             return false
         end
@@ -157,7 +157,7 @@ count(f::Function, itr) = countp(f, itr)
 
 function count(itr)
     c = 0
-    for x = itr
+    for x in itr
         c += (x ? 1 : 0)
     end
     return c
@@ -165,7 +165,7 @@ end
 
 function countp(pred, itr)
     c = 0
-    for x = itr
+    for x in itr
         if pred(x)
             c += 1
         end
@@ -174,7 +174,7 @@ function countp(pred, itr)
 end
 
 function anyp(pred, itr)
-    for x = itr
+    for x in itr
         if pred(x)
             return true
         end
@@ -183,7 +183,7 @@ function anyp(pred, itr)
 end
 
 function allp(pred, itr)
-    for x = itr
+    for x in itr
         if !pred(x)
             return false
         end
@@ -192,7 +192,7 @@ function allp(pred, itr)
 end
 
 function contains(itr, x)
-    for y=itr
+    for y in itr
         if isequal(y,x)
             return true
         end

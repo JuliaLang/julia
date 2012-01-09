@@ -150,9 +150,9 @@ read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
 read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
 read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
 
-read(s, t::Type, d1::Int, dims::Int...) =
+read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
-read(s, t::Type, d1::Integer, dims::Integer...) =
+read{T}(s, t::Type{T}, d1::Integer, dims::Integer...) =
     read(s, t, map(int,tuple(d1,dims...)))
 
 read{T}(s, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
@@ -343,7 +343,7 @@ each_line(stream::IOStream) = LineIterator(stream)
 function readlines(s, fx::Function...)
     a = {}
     for l = each_line(s)
-        for f = fx
+        for f in fx
           l = f(l)
         end
         push(a, l)
