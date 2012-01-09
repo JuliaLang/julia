@@ -114,6 +114,14 @@ fld(x::Rational, y::Rational) = fld(x.num*y.den, x.den*y.num)
 fld(x::Rational, y::Real    ) = fld(x.num, x.den*y)
 fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 
+itrunc(x::Rational) = div(x.num,x.den)
+ifloor(x::Rational) = fld(x.num,x.den)
+iceil (x::Rational) = -fld(-x.num,x.den)
+
+trunc(x::Rational) = Rational(itrunc(x))
+floor(x::Rational) = Rational(ifloor(x))
+ceil (x::Rational) = Rational(iceil(x))
+
 rational(x::Real) = rational(x, 0)
 rational(x::Rational, tol::Real) = x
 rational(x::Integer) = x // one(x)
@@ -123,5 +131,3 @@ rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
 rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
 rational(z::Complex, tol::Real) =
     (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
-
-itrunc(x::Rational) = div(x.num,x.den)

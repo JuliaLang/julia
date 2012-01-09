@@ -37,9 +37,9 @@ colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
 
 colon{T<:Real}(start::T, step::T, stop::T) =
-    Range(start, step, max(0, itrunc((stop-start)/step+1))) # TODO: ifloor, +1 outside
+    Range(start, step, max(0, ifloor((stop-start)/step)+1))
 colon{T<:Real}(start::T, stop::T) =
-    Range1(start, max(0, itrunc(stop-start+1))) # TODO: ifloor, +1 outside
+    Range1(start, max(0, ifloor(stop-start)+1))
 
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
 colon(start::Real, stop::Real) = colon(promote(start, stop)...)
