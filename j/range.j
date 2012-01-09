@@ -79,8 +79,8 @@ show(r::Range)  = print(r.start,':',r.step,':',last(r))
 show(r::Range1) = print(r.start,':',last(r))
 
 start{T<:Integer}(r::Ranges{T}) = r.start
-next{T<:Integer}(r::Range{T},  i) = (i, i+step(r))
-next{T<:Integer}(r::Range1{T}, i) = (i, i+one(T))
+next{T<:Integer}(r::Range{T},  i) = (i, convert(T,i+step(r)))
+next{T<:Integer}(r::Range1{T}, i) = (i, convert(T,i+1))
 done{T<:Integer}(r::Range{T},  i) = (r.start + r.len*r.step <= i)
 done{T<:Integer}(r::Range1{T}, i) = (r.start + r.len <= i)
 
