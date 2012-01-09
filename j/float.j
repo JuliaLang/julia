@@ -1,6 +1,7 @@
 ## conversions to floating-point ##
 
 convert(::Type{Float32}, x::Bool)    = boxf32(sitofp32(unbox8(x)))
+convert(::Type{Float32}, x::Char)    = boxf32(uitofp32(unbox32(x)))
 convert(::Type{Float32}, x::Int8)    = boxf32(sitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Int16)   = boxf32(sitofp32(unbox16(x)))
 convert(::Type{Float32}, x::Int32)   = boxf32(sitofp32(unbox32(x)))
@@ -8,11 +9,11 @@ convert(::Type{Float32}, x::Int64)   = boxf32(sitofp32(unbox64(x)))
 convert(::Type{Float32}, x::Uint8)   = boxf32(uitofp32(unbox8(x)))
 convert(::Type{Float32}, x::Uint16)  = boxf32(uitofp32(unbox16(x)))
 convert(::Type{Float32}, x::Uint32)  = boxf32(uitofp32(unbox32(x)))
-convert(::Type{Float32}, x::Char)    = boxf32(uitofp32(unbox32(x)))
 convert(::Type{Float32}, x::Uint64)  = boxf32(uitofp32(unbox64(x)))
 convert(::Type{Float32}, x::Float64) = boxf32(fptrunc32(unbox64(x)))
 
 convert(::Type{Float64}, x::Bool)    = boxf64(sitofp64(unbox8(x)))
+convert(::Type{Float64}, x::Char)    = boxf64(uitofp64(unbox32(x)))
 convert(::Type{Float64}, x::Int8)    = boxf64(sitofp64(unbox8(x)))
 convert(::Type{Float64}, x::Int16)   = boxf64(sitofp64(unbox16(x)))
 convert(::Type{Float64}, x::Int32)   = boxf64(sitofp64(unbox32(x)))
@@ -20,20 +21,19 @@ convert(::Type{Float64}, x::Int64)   = boxf64(sitofp64(unbox64(x)))
 convert(::Type{Float64}, x::Uint8)   = boxf64(uitofp64(unbox8(x)))
 convert(::Type{Float64}, x::Uint16)  = boxf64(uitofp64(unbox16(x)))
 convert(::Type{Float64}, x::Uint32)  = boxf64(uitofp64(unbox32(x)))
-convert(::Type{Float64}, x::Char)    = boxf64(uitofp64(unbox32(x)))
 convert(::Type{Float64}, x::Uint64)  = boxf64(uitofp64(unbox64(x)))
 convert(::Type{Float64}, x::Float32) = boxf64(fpext64(unbox32(x)))
 
-convert(::Type{Float}, x::Bool)    = convert(Float32, x)
-convert(::Type{Float}, x::Int8)    = convert(Float32, x)
-convert(::Type{Float}, x::Int16)   = convert(Float32, x)
-convert(::Type{Float}, x::Int32)   = convert(Float64, x)
-convert(::Type{Float}, x::Int64)   = convert(Float64, x) # LOSSY
-convert(::Type{Float}, x::Uint8)   = convert(Float32, x)
-convert(::Type{Float}, x::Uint16)  = convert(Float32, x)
-convert(::Type{Float}, x::Uint32)  = convert(Float64, x)
-convert(::Type{Float}, x::Char)    = convert(Float32, x)
-convert(::Type{Float}, x::Uint64)  = convert(Float64, x) # LOSSY
+convert(::Type{Float}, x::Bool)   = convert(Float32, x)
+convert(::Type{Float}, x::Char)   = convert(Float32, x)
+convert(::Type{Float}, x::Int8)   = convert(Float32, x)
+convert(::Type{Float}, x::Int16)  = convert(Float32, x)
+convert(::Type{Float}, x::Int32)  = convert(Float64, x)
+convert(::Type{Float}, x::Int64)  = convert(Float64, x) # LOSSY
+convert(::Type{Float}, x::Uint8)  = convert(Float32, x)
+convert(::Type{Float}, x::Uint16) = convert(Float32, x)
+convert(::Type{Float}, x::Uint32) = convert(Float64, x)
+convert(::Type{Float}, x::Uint64) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)

@@ -32,8 +32,8 @@ all(x::Bool, y::Bool) = x & y
 
 ## do arithmetic as Int ##
 
+signbit(x::Bool) = 0
 sign(x::Bool) = int(x)
-signbit(x::Bool) = 1
 abs(x::Bool) = int(x)
 
 <(x::Bool, y::Bool) = y&!x

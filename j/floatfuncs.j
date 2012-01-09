@@ -21,8 +21,8 @@ copysign(x::Float32, y::Real) = copysign(x, float32(y))
 copysign(x::Float64, y::Real) = copysign(x, float64(y))
 @vectorize_2arg Real copysign
 
-signbit(x::Float64) = copysign(1.0, x)
-signbit(x::Float32) = copysign(float32(1.0), x)
+signbit(x::Float64) = signbit(reinterpret(Int64,x))
+signbit(x::Float32) = signbit(reinterpret(Int32,x))
 
 exponent(x::Float64) = ccall(:double_exponent, Int32, (Float64,), x)
 exponent(x::Float32) = ccall(:float_exponent,  Int32, (Float32,), x)

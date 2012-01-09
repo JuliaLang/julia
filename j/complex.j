@@ -18,7 +18,7 @@ function _jl_show(z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
         compact ? showcompact(r) : show(r)
-        if signbit(i) == -1 && !isnan(i)
+        if signbit(i)==1 && !isnan(i)
             i = -i
             print(compact ? "-" : " - ")
         else

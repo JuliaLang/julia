@@ -16,11 +16,11 @@ type VersionNumber
         new(int16(major), int16(minor), int16(patch), suffix)
     end
 end
-VersionNumber(x::Integer, y::Integer, s::String) = VersionNumber(x, y, 0, s )
-VersionNumber(x::Integer, s::String)         = VersionNumber(x, 0, 0, s )
-VersionNumber(x::Integer, y::Integer, z::Integer)    = VersionNumber(x, y, z, "")
-VersionNumber(x::Integer, y::Integer)            = VersionNumber(x, y, 0, "")
-VersionNumber(x::Integer)                    = VersionNumber(x, 0, 0, "")
+VersionNumber(x::Integer, y::Integer, s::String)  = VersionNumber(x, y, 0, s )
+VersionNumber(x::Integer, s::String)              = VersionNumber(x, 0, 0, s )
+VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, "")
+VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, "")
+VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, "")
 
 print(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
 show(v::VersionNumber) = print("v\"", v, "\"")

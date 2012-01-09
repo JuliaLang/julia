@@ -12,11 +12,11 @@ iseven(n::Integer) = !isodd(n)
 sign{T<:Integer}(x::T) = convert(T,(x > 0)-(x < 0))
 sign{T<:Unsigned}(x::T) = convert(T,(x > 0))
 
-signbit(x::Unsigned ) = one(x)
-signbit(x::Int8 ) = one(x)-((x>>>7) <<1)
-signbit(x::Int16) = one(x)-((x>>>15)<<1)
-signbit(x::Int32) = one(x)-((x>>>31)<<1)
-signbit(x::Int64) = one(x)-((x>>>63)<<1)
+signbit(x::Unsigned) = 0
+signbit(x::Int8 ) = int(x>>>7)
+signbit(x::Int16) = int(x>>>15)
+signbit(x::Int32) = int(x>>>31)
+signbit(x::Int64) = int(x>>>63)
 
 copysign(x::Integer, y::Real) = y < 0 ? -abs(x) : abs(x)
 copysign(x::Integer, y::Integer) = copysign(promote(x,y)...)

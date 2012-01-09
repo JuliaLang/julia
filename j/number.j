@@ -19,7 +19,7 @@ numel(x::Number) = 1
 length(x::Number) = 1
 ref(x::Number) = x
 
-signbit(x::Real) = x < 0 ? -one(x) : one(x)
+signbit(x::Real) = int(x < 0)
 sign(x::Real) = x < 0 ? -one(x) : x > 0 ? one(x) : x
 abs(x::Real) = x < 0 ? -x : x
 abs2(x::Real) = x*x
