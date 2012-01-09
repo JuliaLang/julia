@@ -82,7 +82,7 @@ const % = mod
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 
 # cmp returns -1, 0, +1 indicating ordering
-cmp{T<:Real}(x::T, y::T) = sign(x-y)
+cmp{T<:Real}(x::T, y::T) = int(sign(x-y))
 
 # transposed multiply
 aCb (a,b) = ctranspose(a)*b

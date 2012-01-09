@@ -144,28 +144,28 @@ iceil (x::Integer) = x
 
 ## integer promotions ##
 
-promote_rule(::Type{Int16}, ::Type{Int8} ) = Int16
-promote_rule(::Type{Int32}, ::Type{Int8} ) = Int32
-promote_rule(::Type{Int32}, ::Type{Int16}) = Int32
+promote_rule(::Type{Int16}, ::Type{Int8} ) = Int
+promote_rule(::Type{Int32}, ::Type{Int8} ) = Int
+promote_rule(::Type{Int32}, ::Type{Int16}) = Int
 promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
 promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
 promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
 
-promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Uint16
-promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Uint32
-promote_rule(::Type{Uint32}, ::Type{Uint16}) = Uint32
+promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Int
+promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Int
+promote_rule(::Type{Uint32}, ::Type{Uint16}) = Int
 promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
 
-promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int16
-promote_rule(::Type{Uint8} , ::Type{Int16}) = Int16
-promote_rule(::Type{Uint8} , ::Type{Int32}) = Int32
+promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int
+promote_rule(::Type{Uint8} , ::Type{Int16}) = Int
+promote_rule(::Type{Uint8} , ::Type{Int32}) = Int
 promote_rule(::Type{Uint8} , ::Type{Int64}) = Int64
 
-promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int32
-promote_rule(::Type{Uint16}, ::Type{Int16}) = Int32
-promote_rule(::Type{Uint16}, ::Type{Int32}) = Int32
+promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int
+promote_rule(::Type{Uint16}, ::Type{Int16}) = Int
+promote_rule(::Type{Uint16}, ::Type{Int32}) = Int
 promote_rule(::Type{Uint16}, ::Type{Int64}) = Int64
 
 promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int64
@@ -173,77 +173,50 @@ promote_rule(::Type{Uint32}, ::Type{Int16}) = Int64
 promote_rule(::Type{Uint32}, ::Type{Int32}) = Int64
 promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
 
-promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int32}) = Uint64 # LOSSY
-promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64 # LOSSY
+promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int32}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 
 ## integer arithmetic ##
 
--(x::Int8 ) = boxsi8 (neg_int(unbox8 (x)))
--(x::Int16) = boxsi16(neg_int(unbox16(x)))
--(x::Int32) = boxsi32(neg_int(unbox32(x)))
--(x::Int64) = boxsi64(neg_int(unbox64(x)))
+-(x::Integer) = -int(x)
++{T<:Integer}(x::T, y::T) = int(x) + int(y)
+-{T<:Integer}(x::T, y::T) = int(x) - int(y)
+*{T<:Integer}(x::T, y::T) = int(x) * int(y)
 
--(x::Uint8 ) = boxsi16(neg_int(zext16(unbox8 (x))))
--(x::Uint16) = boxsi32(neg_int(zext32(unbox16(x))))
--(x::Uint32) = boxsi64(neg_int(zext64(unbox32(x))))
--(x::Uint64) = boxui64(neg_int(unbox64(x))) # LOSSY
+-(x::Int)    = boxsint(neg_int(unboxwd(x)))
+-(x::Int64)  = boxsi64(neg_int(unbox64(x)))
+-(x::Uint64) = boxsi64(neg_int(unbox64(x)))
 
-+(x::Int8 , y::Int8 ) = boxsi8 (add_int(unbox8 (x), unbox8 (y)))
-+(x::Int16, y::Int16) = boxsi16(add_int(unbox16(x), unbox16(y)))
-+(x::Int32, y::Int32) = boxsi32(add_int(unbox32(x), unbox32(y)))
-+(x::Int64, y::Int64) = boxsi64(add_int(unbox64(x), unbox64(y)))
-
-+(x::Uint8 , y::Uint8 ) = boxui8 (add_int(unbox8 (x), unbox8 (y)))
-+(x::Uint16, y::Uint16) = boxui16(add_int(unbox16(x), unbox16(y)))
-+(x::Uint32, y::Uint32) = boxui32(add_int(unbox32(x), unbox32(y)))
++(x::Int,    y::Int)    = boxsint(add_int(unboxwd(x), unboxwd(y)))
++(x::Int64,  y::Int64)  = boxsi64(add_int(unbox64(x), unbox64(y)))
 +(x::Uint64, y::Uint64) = boxui64(add_int(unbox64(x), unbox64(y)))
 
--(x::Int8 , y::Int8 ) = boxsi8 (sub_int(unbox8 (x), unbox8 (y)))
--(x::Int16, y::Int16) = boxsi16(sub_int(unbox16(x), unbox16(y)))
--(x::Int32, y::Int32) = boxsi32(sub_int(unbox32(x), unbox32(y)))
--(x::Int64, y::Int64) = boxsi64(sub_int(unbox64(x), unbox64(y)))
-
--(x::Uint8 , y::Uint8 ) = boxui8 (sub_int(unbox8 (x), unbox8 (y)))
--(x::Uint16, y::Uint16) = boxui16(sub_int(unbox16(x), unbox16(y)))
--(x::Uint32, y::Uint32) = boxui32(sub_int(unbox32(x), unbox32(y)))
+-(x::Int,    y::Int)    = boxsint(sub_int(unboxwd(x), unboxwd(y)))
+-(x::Int64,  y::Int64)  = boxsi64(sub_int(unbox64(x), unbox64(y)))
 -(x::Uint64, y::Uint64) = boxui64(sub_int(unbox64(x), unbox64(y)))
 
-*(x::Int8 , y::Int8 ) = boxsi8 (mul_int(unbox8 (x), unbox8 (y)))
-*(x::Int16, y::Int16) = boxsi16(mul_int(unbox16(x), unbox16(y)))
-*(x::Int32, y::Int32) = boxsi32(mul_int(unbox32(x), unbox32(y)))
-*(x::Int64, y::Int64) = boxsi64(mul_int(unbox64(x), unbox64(y)))
-
-*(x::Uint8 , y::Uint8 ) = boxui8 (mul_int(unbox8 (x), unbox8 (y)))
-*(x::Uint16, y::Uint16) = boxui16(mul_int(unbox16(x), unbox16(y)))
-*(x::Uint32, y::Uint32) = boxui32(mul_int(unbox32(x), unbox32(y)))
+*(x::Int,    y::Int)    = boxsint(mul_int(unboxwd(x), unboxwd(y)))
+*(x::Int64,  y::Int64)  = boxsi64(mul_int(unbox64(x), unbox64(y)))
 *(x::Uint64, y::Uint64) = boxui64(mul_int(unbox64(x), unbox64(y)))
 
 /(x::Integer, y::Integer) = float64(x)/float64(y)
 
-div(x::Int8 , y::Int8 ) = boxsi8 (sdiv_int(unbox8 (x), unbox8 (y)))
-div(x::Int16, y::Int16) = boxsi16(sdiv_int(unbox16(x), unbox16(y)))
-div(x::Int32, y::Int32) = boxsi32(sdiv_int(unbox32(x), unbox32(y)))
-div(x::Int64, y::Int64) = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
+div{T<:Integer}(x::T, y::T) = div(int(x),int(y))
+rem{T<:Integer}(x::T, y::T) = rem(int(x),int(y))
+mod{T<:Integer}(x::T, y::T) = mod(int(x),int(y))
 
-div(x::Uint8 , y::Uint8 ) = boxui8 (udiv_int(unbox8 (x), unbox8 (y)))
-div(x::Uint16, y::Uint16) = boxui16(udiv_int(unbox16(x), unbox16(y)))
-div(x::Uint32, y::Uint32) = boxui32(udiv_int(unbox32(x), unbox32(y)))
+div(x::Int,    y::Int)    = boxsint(sdiv_int(unboxwd(x), unboxwd(y)))
+div(x::Int64,  y::Int64)  = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
+
+rem(x::Int,    y::Int)    = boxsint(srem_int(unboxwd(x), unboxwd(y)))
+rem(x::Int64,  y::Int64)  = boxsi64(srem_int(unbox64(x), unbox64(y)))
+rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 # TODO: faster signed integer fld?
-
-rem(x::Int8 , y::Int8 ) = boxsi8 (srem_int(unbox8 (x), unbox8 (y)))
-rem(x::Int16, y::Int16) = boxsi16(srem_int(unbox16(x), unbox16(y)))
-rem(x::Int32, y::Int32) = boxsi32(srem_int(unbox32(x), unbox32(y)))
-rem(x::Int64, y::Int64) = boxsi64(srem_int(unbox64(x), unbox64(y)))
-
-rem(x::Uint8 , y::Uint8 ) = boxui8 (urem_int(unbox8 (x), unbox8 (y)))
-rem(x::Uint16, y::Uint16) = boxui16(urem_int(unbox16(x), unbox16(y)))
-rem(x::Uint32, y::Uint32) = boxui32(urem_int(unbox32(x), unbox32(y)))
-rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)

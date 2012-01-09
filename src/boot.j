@@ -130,8 +130,14 @@ bitstype 64 Uint64 <: Unsigned
 
 if is(Int,Int64)
     typealias Uint Uint64
+    const unboxwd = unbox64
+    const boxsint = boxsi64
+    const boxuint = boxui64
 else
     typealias Uint Uint32
+    const unboxwd = unbox32
+    const boxsint = boxsi32
+    const boxuint = boxui32
 end
 
 int(x) = convert(Int, x)
