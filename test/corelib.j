@@ -7,6 +7,16 @@
 @assert length(2:.2:1) == 0
 @assert length(2.:.2:1.) == 0
 
+@assert length(1:0) == 0
+@assert length(0.0:-0.5) == 0
+@assert length(1:2:0) == 0
+L32 = linspace(int32(1), int32(4))
+L64 = linspace(int64(1), int64(4))
+@assert L32[1] == 1 && L64[1] == 1
+@assert L32[2] == 2 && L64[2] == 2
+@assert L32[3] == 3 && L64[3] == 3
+@assert L32[4] == 4 && L64[4] == 4
+
 # comprehensions
 X = [ i+2j | i=1:5, j=1:5 ]
 @assert X[2,3] == 8
