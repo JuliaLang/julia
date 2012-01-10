@@ -234,8 +234,8 @@ static void *alloc_big(size_t sz, int isobj)
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
     }
-    allocd_bytes += sz;
     sz = (sz+3) & -4;
+    allocd_bytes += sz;
     size_t offs = BVOFFS*sizeof(void*);
     if (sz + offs < offs)  // overflow in adding offs, size was "negative"
         jl_raise(jl_memory_exception);
@@ -760,7 +760,7 @@ void *allocb(size_t sz)
 #ifdef MEMDEBUG
     return alloc_big(sz, 0);
 #endif
-    if (sz > 2048)
+    if (sz > 2048-sizeof(void*))
         return alloc_big(sz, 0);
     sz += sizeof(void*);
     allocd_bytes += sz;
