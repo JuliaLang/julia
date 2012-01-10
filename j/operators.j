@@ -71,7 +71,7 @@ end
 
 # fallback div, fld, rem & mod implementations
 div{T<:Real}(x::T, y::T) = convert(T,itrunc(x/y))
-fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
+fld{T<:Real}(x::T, y::T) = convert(T,ifloor(x/y))
 rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
 mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 

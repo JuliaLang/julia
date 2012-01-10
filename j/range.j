@@ -36,10 +36,20 @@ colon{T<:Integer}(start::T, step::T, stop::T) =
 colon{T<:Integer}(start::T, stop::T) =
     Range1(start, max(0, stop-start+1))
 
-colon{T<:Real}(start::T, step::T, stop::T) =
-    Range(start, step, max(0, ifloor((stop-start)/step)+1))
-colon{T<:Real}(start::T, stop::T) =
-    Range1(start, max(0, ifloor(stop-start)+1))
+function colon{T<:Real}(start::T, step::T, stop::T)
+    len = (stop-start)/step
+    if len >= typemax(Int64)
+        error("Range: length ",len," is too large")
+    end
+    Range(start, step, max(0, ifloor(len)+1))
+end
+function colon{T<:Real}(start::T, stop::T)
+    len = stop-start
+    if len >= typemax(Int64)
+    error("Range: length ",len," is too large")
+    end
+    Range1(start, max(0, ifloor(len)+1))
+end
 
 colon(start::Real, step::Real, stop::Real) = colon(promote(start, step, stop)...)
 colon(start::Real, stop::Real) = colon(promote(start, stop)...)
