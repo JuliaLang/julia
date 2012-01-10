@@ -1295,25 +1295,27 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     if (n > tp->length)
         jl_errorf("too many parameters for type %s", tname);
     jl_value_t **env = alloca(2 * tp->length * sizeof(jl_value_t*));
+    size_t ne = 0;
     for(i=0; i < tp->length; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tp,i);
         if (!jl_is_typevar(tv))
             continue;
-        env[i*2+0] = (jl_value_t*)tv;
+        env[ne*2+0] = (jl_value_t*)tv;
         if (i >= n) {
-            env[i*2+1] = (jl_value_t*)tv;
+            env[ne*2+1] = (jl_value_t*)tv;
         }
         else {
             // NOTE: type checking deferred to inst_type_w_ to make sure
             // supertype parameters are checked recursively.
             if (jl_is_typector(params[i]))
-                env[i*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
+                env[ne*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
             else
-                env[i*2+1] = params[i];
+                env[ne*2+1] = params[i];
         }
+        ne++;
     }
     if (jl_is_typector(tc)) tc = (jl_value_t*)((jl_typector_t*)tc)->body;
-    return (jl_value_t*)jl_instantiate_type_with((jl_type_t*)tc, env, i);
+    return (jl_value_t*)jl_instantiate_type_with((jl_type_t*)tc, env, ne);
 }
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
