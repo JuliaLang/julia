@@ -4,12 +4,9 @@
 ## basic UTF-8 decoding & iteration ##
 
 const _jl_utf8_offset = [
-    0x00000000,
-    0x00003080,
-    0x000e2080,
-    0x03c82080,
-    0xfa082080,
-    0x82082080,
+    0x00000000, 0x00003080,
+    0x000e2080, 0x03c82080,
+    0xfa082080, 0x82082080,
 ]
 
 const _jl_utf8_trailing = [
@@ -62,14 +59,15 @@ end
 
 strchr(s::UTF8String, c::Char) =
     c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
+
 strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
 
 transform_to_utf8(s::String, f::Function) =
     print_to_string(length(s), @thunk for c=s; print(f(c)); end)
 
-uc(s::UTF8String) = transform_to_utf8(s,uc)
-lc(s::UTF8String) = transform_to_utf8(s,lc)
+uc(s::UTF8String) = transform_to_utf8(s, uc)
+lc(s::UTF8String) = transform_to_utf8(s, lc)
 
 ucfirst(s::UTF8String) = print_to_string(length(s), print, uc(s[1]), s[2:])
 lcfirst(s::UTF8String) = print_to_string(length(s), print, lc(s[1]), s[2:])
