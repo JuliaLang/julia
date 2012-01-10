@@ -70,8 +70,8 @@ end
 >>>(x,y::Integer) = x >>> convert(Int32,y)
 
 # fallback div, fld, rem & mod implementations
-div{T<:Real}(x::T, y::T) = convert(T,itrunc(x/y))
-fld{T<:Real}(x::T, y::T) = convert(T,ifloor(x/y))
+div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
+fld{T<:Real}(x::T, y::T) = convert(T,floor(x/y))
 rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
 mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 
