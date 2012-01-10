@@ -49,7 +49,7 @@ function strlen(s::String)
     end
 end
 
-isvalid(s::DirectIndexString, i::Integer) = true
+isvalid(s::DirectIndexString, i::Integer) = (start(s) <= i <= length(s))
 function isvalid(s::String, i::Integer)
     try
         next(s,i)

@@ -51,6 +51,9 @@ end
 
 ## overload methods for efficiency ##
 
+isvalid(s::UTF8String, i::Integer) =
+    (1 <= i <= length(s.data)) && is_utf8_start(s.data[i])
+
 function ref(s::UTF8String, r::Range1{Int})
     i = isvalid(s,first(r)) ? first(r) : nextind(s,first(r))
     j = nextind(s,last(r)) - 1
