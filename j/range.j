@@ -7,27 +7,27 @@ abstract Ranges{T<:Real} <: AbstractArray{T,1}
 type Range{T<:Real} <: Ranges{T}
     start::T
     step::T
-    len::Int64
+    len::Int
 
-    function Range(start::T, step::T, len::Int64)
+    function Range(start::T, step::T, len::Int)
         if step != step; error("Range: step cannot be NaN"); end
         if step == 0;    error("Range: step cannot be zero"); end
         if !(len >= 0);  error("Range: length must be non-negative"); end
         new(start, step, len)
     end
-    Range(start::T, step::T, len::Integer) = Range(start, step, int64(len))
+    Range(start::T, step::T, len::Integer) = Range(start, step, int(len))
 end
 Range{T}(start::T, step::T, len::Integer) = Range{T}(start, step, len)
 
 type Range1{T<:Real} <: Ranges{T}
     start::T
-    len::Int64
+    len::Int
 
-    function Range1(start::T, len::Int64)
+    function Range1(start::T, len::Int)
         if !(len >= 0); error("Range: length must be non-negative"); end
         new(start, len)
     end
-    Range1(start::T, len::Integer) = Range1(start, int64(len))
+    Range1(start::T, len::Integer) = Range1(start, int(len))
 end
 Range1{T}(start::T, len::Integer) = Range1{T}(start, len)
 
@@ -38,14 +38,14 @@ colon{T<:Integer}(start::T, stop::T) =
 
 function colon{T<:Real}(start::T, step::T, stop::T)
     len = (stop-start)/step
-    if len >= typemax(Int64)
+    if len >= typemax(Int)
         error("Range: length ",len," is too large")
     end
     Range(start, step, max(0, ifloor(len)+1))
 end
 function colon{T<:Real}(start::T, stop::T)
     len = stop-start
-    if len >= typemax(Int64)
+    if len >= typemax(Int)
     error("Range: length ",len," is too large")
     end
     Range1(start, max(0, ifloor(len)+1))
