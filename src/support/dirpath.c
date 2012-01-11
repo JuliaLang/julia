@@ -30,7 +30,9 @@
 void get_cwd(char *buf, size_t size)
 {
 #ifndef WIN32
-    getcwd(buf, size);
+    // TODO: handle error more gracefully.
+    if (getcwd(buf, size) == NULL)
+        perror("getcwd error");
 #else
     GetCurrentDirectory(size, buf);
 #endif
