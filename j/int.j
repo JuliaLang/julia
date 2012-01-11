@@ -186,18 +186,22 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 *{T<:Integer}(x::T, y::T) = int(x) * int(y)
 
 -(x::Int)    = boxsint(neg_int(unboxwd(x)))
+-(x::Uint)   = boxuint(neg_int(unboxwd(x)))
 -(x::Int64)  = boxsi64(neg_int(unbox64(x)))
 -(x::Uint64) = boxui64(neg_int(unbox64(x)))
 
 +(x::Int,    y::Int)    = boxsint(add_int(unboxwd(x), unboxwd(y)))
++(x::Uint,   y::Uint)   = boxuint(add_int(unboxwd(x), unboxwd(y)))
 +(x::Int64,  y::Int64)  = boxsi64(add_int(unbox64(x), unbox64(y)))
 +(x::Uint64, y::Uint64) = boxui64(add_int(unbox64(x), unbox64(y)))
 
 -(x::Int,    y::Int)    = boxsint(sub_int(unboxwd(x), unboxwd(y)))
+-(x::Uint,   y::Uint)   = boxuint(sub_int(unboxwd(x), unboxwd(y)))
 -(x::Int64,  y::Int64)  = boxsi64(sub_int(unbox64(x), unbox64(y)))
 -(x::Uint64, y::Uint64) = boxui64(sub_int(unbox64(x), unbox64(y)))
 
 *(x::Int,    y::Int)    = boxsint(mul_int(unboxwd(x), unboxwd(y)))
+*(x::Uint,   y::Uint)   = boxuint(mul_int(unboxwd(x), unboxwd(y)))
 *(x::Int64,  y::Int64)  = boxsi64(mul_int(unbox64(x), unbox64(y)))
 *(x::Uint64, y::Uint64) = boxui64(mul_int(unbox64(x), unbox64(y)))
 
@@ -208,10 +212,12 @@ rem{T<:Integer}(x::T, y::T) = rem(int(x),int(y))
 mod{T<:Integer}(x::T, y::T) = mod(int(x),int(y))
 
 div(x::Int,    y::Int)    = boxsint(sdiv_int(unboxwd(x), unboxwd(y)))
+div(x::Uint,   y::Uint)   = boxuint(udiv_int(unboxwd(x), unboxwd(y)))
 div(x::Int64,  y::Int64)  = boxsi64(sdiv_int(unbox64(x), unbox64(y)))
 div(x::Uint64, y::Uint64) = boxui64(udiv_int(unbox64(x), unbox64(y)))
 
 rem(x::Int,    y::Int)    = boxsint(srem_int(unboxwd(x), unboxwd(y)))
+rem(x::Uint,   y::Uint)   = boxuint(urem_int(unboxwd(x), unboxwd(y)))
 rem(x::Int64,  y::Int64)  = boxsi64(srem_int(unbox64(x), unbox64(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
