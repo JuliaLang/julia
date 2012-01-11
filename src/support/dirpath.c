@@ -50,18 +50,6 @@ int set_cwd(char *buf)
     return 0;
 }
 
-// destructively convert path to directory part
-void path_to_dirname(char *path)
-{
-    char *sep = strrchr(path, PATHSEP);
-    if (sep != NULL) {
-        *sep = '\0';
-    }
-    else {
-        path[0] = '\0';
-    }
-}
-
 #ifdef __linux
 char *get_exename(char *buf, size_t size)
 {

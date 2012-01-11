@@ -302,38 +302,6 @@ static value_t fl_time_now(value_t *args, u_int32_t nargs)
     return mk_double(clock_now());
 }
 
-static double todouble(value_t a, char *fname)
-{
-    if (isfixnum(a))
-        return (double)numval(a);
-    if (iscprim(a)) {
-        cprim_t *cp = (cprim_t*)ptr(a);
-        numerictype_t nt = cp_numtype(cp);
-        return conv_to_double(cp_data(cp), nt);
-    }
-    type_error(fname, "number", a);
-}
-
-static value_t fl_time_string(value_t *args, uint32_t nargs)
-{
-    argcount("time.string", nargs, 1);
-    double t = todouble(args[0], "time.string");
-    char buf[64];
-    timestring(t, buf, sizeof(buf));
-    return string_from_cstr(buf);
-}
-
-static value_t fl_time_fromstring(value_t *args, uint32_t nargs)
-{
-    argcount("time.fromstring", nargs, 1);
-    char *ptr = tostring(args[0], "time.fromstring");
-    double t = parsetime(ptr);
-    int64_t it = (int64_t)t;
-    if ((double)it == t && fits_fixnum(it))
-        return fixnum(it);
-    return mk_double(t);
-}
-
 static value_t fl_path_cwd(value_t *args, uint32_t nargs)
 {
     if (nargs > 1)
@@ -422,8 +390,6 @@ static builtinspec_t builtin_info[] = {
     { "vector.alloc", fl_vector_alloc },
 
     { "time.now", fl_time_now },
-    { "time.string", fl_time_string },
-    { "time.fromstring", fl_time_fromstring },
 
     { "path.cwd", fl_path_cwd },
     { "path.exists?", fl_path_exists },

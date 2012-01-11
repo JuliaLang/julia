@@ -71,56 +71,6 @@ double clock_now(void)
 #endif
 }
 
-void timestring(double seconds, char *buffer, size_t len)
-{
-    time_t tme = (time_t)seconds;
-
-#ifdef __linux
-    char *fmt = "%c"; /* needed to suppress GCC warning */
-    struct tm tm;
-
-    localtime_r(&tme, &tm);
-    strftime(buffer, len, fmt, &tm);
-#else
-    static char *wdaystr[] = {"Sun","Mon","Tue","Wed","Thu","Fri","Sat"};
-    static char *monthstr[] = {"Jan","Feb","Mar","Apr","May","Jun","Jul","Aug",
-                               "Sep","Oct","Nov","Dec"};
-    struct tm *tm;
-    int hr;
-
-    tm = localtime(&tme);
-    hr = tm->tm_hour;
-    if (hr > 12) hr -= 12;
-    if (hr == 0) hr = 12;
-    snprintf(buffer, len, "%s %02d %s %d %02d:%02d:%02d %s %s",
-             wdaystr[tm->tm_wday], tm->tm_mday, monthstr[tm->tm_mon],
-             tm->tm_year+1900, hr, tm->tm_min, tm->tm_sec,
-             tm->tm_hour>11 ? "PM" : "AM", "");
-#endif
-}
-
-#if defined(__linux) || defined(__APPLE__)
-extern char *strptime(const char *s, const char *format, struct tm *tm);
-double parsetime(const char *str)
-{
-    char *fmt = "%c"; /* needed to suppress GCC warning */
-    char *res;
-    time_t t;
-    struct tm tm;
-
-    res = strptime(str, fmt, &tm);
-    if (res != NULL) {
-        t = mktime(&tm);
-        if (t == ((time_t)-1))
-            return -1;
-        return (double)t;
-    }
-    return -1;
-}
-#else
-// TODO
-#endif
-
 void sleep_ms(int ms)
 {
     if (ms == 0)
@@ -134,23 +84,5 @@ void sleep_ms(int ms)
     timeout.tv_sec = ms/1000;
     timeout.tv_usec = (ms % 1000) * 1000;
     select(0, NULL, NULL, NULL, &timeout);
-#endif
-}
-
-void timeparts(int32_t *buf, double t)
-{
-    time_t tme = (time_t)t;
-
-#ifndef WIN32
-    struct tm tm;
-    localtime_r(&tme, &tm);
-    tm.tm_year += 1900;
-    memcpy(buf, (char*)&tm, sizeof(struct tm));
-#else
-    struct tm *tm;
-
-    tm = localtime(&tme);
-    tm->tm_year += 1900;
-    memcpy(buf, (char*)tm, sizeof(struct tm));
 #endif
 }

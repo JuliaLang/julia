@@ -42,6 +42,7 @@
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
+#include <libgen.h>
 #include "libsupport.h"
 #include "flisp.h"
 #include "opcodes.h"
@@ -2310,7 +2311,7 @@ static void lisp_init(size_t initial_heapsize)
     char buf[1024];
     char *exename = get_exename(buf, sizeof(buf));
     if (exename != NULL) {
-        path_to_dirname(exename);
+        exename = dirname(exename);
         setc(symbol("*install-dir*"), cvalue_static_cstring(strdup(exename)));
     }
 
