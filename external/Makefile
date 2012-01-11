@@ -3,6 +3,7 @@
 LLVM_VER = 3.0
 READLINE_VER = 6.2
 PCRE_VER = 8.21
+GRISU_VER = d7beed8d6e0e
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
@@ -115,6 +116,37 @@ clean-pcre:
 	rm -f $(PCRE_OBJ_TARGET)
 distclean-pcre:
 	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
+
+## Grisu floating-point printing library ##
+
+GRISU_OPTS = -fPIC -O3 -visibility=hidden
+
+compile-grisu: grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+install-grisu: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
+
+grisu-$(GRISU_VER)/Makefile:
+	wget -nv -r -np -nH --cut-dirs=2 -P grisu-$(GRISU_VER) http://double-conversion.googlecode.com/hg-history/$(GRISU_VER)/
+	find grisu-$(GRISU_VER) -type f -name '*\?r=*' | perl -nle '$$x=$$_; s/\?r=.*//; print "mv $$x $$_"' | sh
+grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/Makefile
+	cd grisu-$(GRISU_VER) && \
+	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/diy-fp.o -Isrc src/diy-fp.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/double-conversion.o -Isrc src/double-conversion.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
+	$(CXX) -c $(GRISU_OPTS) -o src/libgrisu.o -I.. -Isrc ../grisu_wrapper.cpp && \
+	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
+$(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	cp -f $< $@
+
+clean-grisu:
+	rm -f grisu-$(GRISU_VER)/src/*.o
+	rm -f grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+distclean-grisu:
+	rm -rf grisu-$(GRISU_VER)
 
 ## fdlibm ##
 
