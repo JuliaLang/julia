@@ -625,6 +625,9 @@ for nr = {
     end
 end
 
+@assert div(1e50,1) == 1e50
+@assert fld(1e50,1) == 1e50
+
 # rounding difficult values
 
 for x = 2^53-10:2^53+10
