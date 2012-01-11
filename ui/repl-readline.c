@@ -19,6 +19,8 @@
 
 #include "repl.h"
 
+extern int asprintf(char **strp, const char *fmt, ...);
+
 #include <readline/readline.h>
 #include <readline/history.h>
 
