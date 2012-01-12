@@ -119,7 +119,7 @@ distclean-pcre:
 
 ## Grisu floating-point printing library ##
 
-GRISU_OPTS = -fPIC -O3 -visibility=hidden
+GRISU_OPTS = -fPIC -O3 -fvisibility=hidden
 
 compile-grisu: grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 install-grisu: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)

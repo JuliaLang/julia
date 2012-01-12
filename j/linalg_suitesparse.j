@@ -41,9 +41,7 @@ function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int
 end
 
 
-_jl_sparse_lusolve{T1,T2}(S::SparseMatrixCSC{T1}, b::Vector{T2}) = S \ convert(Array{T1,1}, b)
-
-function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+function _jl_sparse_lusolve(S, b)
 
     S = _jl_convert_to_0_based_indexing!(S)
     x = []
@@ -68,9 +66,12 @@ function _jl_sparse_lusolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int32
 end
 
 
-function (\)(A, b) 
-    return _jl_sparse_lusolve(A, b)
+function (\){Tv<:Union(Float64,Complex128),
+             Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
+    return _jl_sparse_lusolve(S, b)
 end
+
+(\){T}(S::SparseMatrixCSC{T}, b::Vector) = S \ convert(Array{T,1}, b)
 
 ## Library code
 
