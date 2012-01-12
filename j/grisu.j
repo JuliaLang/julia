@@ -1,4 +1,4 @@
-libgrisu = dlopen("libgrisu")
+_jl_libgrisu = dlopen("libgrisu")
 
 const GRISU_SHORTEST        = int32(0)
 const GRISU_SHORTEST_SINGLE = int32(1)
@@ -8,7 +8,7 @@ const GRISU_PRECISION       = int32(3)
 let sign = Array(Int32, 1), len = Array(Int32, 1), pt = Array(Int32, 1)
     global grisu
     function grisu(x::Float64, mode::Int32, digits::Integer, buf::Array{Uint8})
-        ccall(dlsym(libgrisu, :grisu), Void,
+        ccall(dlsym(_jl_libgrisu, :grisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
               x, mode, int32(digits), buf, int32(length(buf)+1), sign, len, pt)

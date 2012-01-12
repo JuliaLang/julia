@@ -2,9 +2,9 @@
 
 load("pcre_h.j")
 
-libpcre = dlopen("libpcre")
+_jl_libpcre = dlopen("libpcre")
 
-const PCRE_VERSION = cstring(ccall(dlsym(libpcre, :pcre_version), Ptr{Uint8}, ()))
+const PCRE_VERSION = cstring(ccall(dlsym(_jl_libpcre, :pcre_version), Ptr{Uint8}, ()))
 
 # supported options for different use cases
 
@@ -48,7 +48,7 @@ function pcre_info{T}(
     extra::Ptr{Void}, what::Integer, ::Type{T}
 )
     buf = Array(Uint8,sizeof(T))
-    ret = ccall(dlsym(libpcre, :pcre_fullinfo), Int32,
+    ret = ccall(dlsym(_jl_libpcre, :pcre_fullinfo), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
                 regex, extra, int32(what), buf)
     if ret != 0
@@ -64,9 +64,9 @@ end
 function pcre_compile(pattern::String, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
-    re_ptr = (()->ccall(dlsym(libpcre, :pcre_compile), Ptr{Void},
-                       (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                       cstring(pattern), int32(options), errstr, erroff, C_NULL))()
+    re_ptr = (()->ccall(dlsym(_jl_libpcre, :pcre_compile), Ptr{Void},
+                        (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
+                        cstring(pattern), int32(options), errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
         error("pcre_compile: $(errstr[1])",
               " at position $(erroff[1]+1)",
@@ -81,7 +81,7 @@ end
 function pcre_study(regex::Array{Uint8}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{Uint8},1)
-    extra = (()->ccall(dlsym(libpcre, :pcre_study), Ptr{Void},
+    extra = (()->ccall(dlsym(_jl_libpcre, :pcre_study), Ptr{Void},
                        (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
                        regex, int32(options), errstr))()
     if errstr[1] != C_NULL
@@ -95,11 +95,11 @@ function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
                    str::ByteString, offset::Integer, options::Integer, cap::Bool)
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
-    n = ccall(dlsym(libpcre, :pcre_exec), Int32,
-                (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
-                 Int32, Int32, Ptr{Int32}, Int32),
-                regex, extra, str, int32(length(str)),
-                int32(offset-1), int32(options), ovec, int32(length(ovec)))
+    n = ccall(dlsym(_jl_libpcre, :pcre_exec), Int32,
+              (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+               Int32, Int32, Ptr{Int32}, Int32),
+              regex, extra, str, int32(length(str)),
+              int32(offset-1), int32(options), ovec, int32(length(ovec)))
     if n < -1
         error("pcre_exec: error $n")
     end
