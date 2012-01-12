@@ -878,6 +878,16 @@ oct(n::Integer, l::Integer) = lpad(oct(n), l, '0')
 dec(n::Integer, l::Integer) = lpad(dec(n), l, '0')
 hex(n::Integer, l::Integer) = lpad(hex(n), l, '0')
 
+bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8 ,x),  8)
+bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
+bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x), 32)
+bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
+
+nibs(x::Union(Bool,Int8,Uint8))           = hex(reinterpret(Uint8 ,x),  2)
+nibs(x::Union(Int16,Uint16))              = hex(reinterpret(Uint16,x),  4)
+nibs(x::Union(Char,Int32,Uint32,Float32)) = hex(reinterpret(Uint32,x),  8)
+nibs(x::Union(Int64,Uint64,Float64))      = hex(reinterpret(Uint64,x), 16)
+
 ## string to float functions ##
 
 function float64_isvalid(s::String, out::Array{Float64,1})
