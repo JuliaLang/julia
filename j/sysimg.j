@@ -77,6 +77,7 @@ load("ascii.j")
 load("utf8.j")
 load("regex.j")
 load("show.j")
+load("grisu.j")
 
 # system & environment
 load("libc.j")

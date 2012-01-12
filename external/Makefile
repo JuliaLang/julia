@@ -21,7 +21,7 @@ include ../Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse grisu
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
