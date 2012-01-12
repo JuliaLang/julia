@@ -155,6 +155,19 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     return _new_array(atype, ndims, adims);
 }
 
+jl_array_t *jl_new_arrayv(jl_type_t *atype, ...)
+{
+    va_list args;
+    size_t ndims = jl_unbox_long(jl_tparam1(atype));
+    size_t *adims = alloca(ndims*sizeof(size_t));
+    size_t i;
+    va_start(args, atype);
+    for(i=0; i < ndims; i++)
+        adims[i] = va_arg(args, size_t);
+    va_end(args);
+    return _new_array(atype, ndims, adims);
+}
+
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
     return _new_array(atype, 1, &nr);
@@ -164,33 +177,6 @@ jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc)
 {
     size_t d[2] = {nr, nc};
     return _new_array(atype, 2, &d[0]);
-}
-
-JL_CALLABLE(jl_new_array_internal)
-{
-    jl_struct_type_t *atype = (jl_struct_type_t*)env;
-    jl_value_t *ndims = jl_tupleref(atype->parameters,1);
-    size_t nd = jl_unbox_long(ndims);
-    jl_value_t **dargs;
-    if (nargs == 1 && jl_is_tuple(args[0])) {
-        jl_tuple_t *d = (jl_tuple_t*)args[0];
-        if (d->length != nd) {
-            jl_error("Array: wrong number of dimensions");
-        }
-        dargs = &jl_tupleref(d, 0);
-    }
-    else {
-        JL_NARGS(Array, nd, nd);
-        dargs = args;
-    }
-    size_t i;
-    size_t *adims = alloca(nd*sizeof(size_t));
-    for(i=0; i < nd; i++) {
-        jl_value_t *di = dargs[i];
-        JL_TYPECHK(Array, long, di);
-        adims[i] = jl_unbox_long(di);
-    }
-    return (jl_value_t*)_new_array((jl_type_t*)atype, nd, adims);
 }
 
 jl_array_t *jl_pchar_to_array(char *str, size_t len)

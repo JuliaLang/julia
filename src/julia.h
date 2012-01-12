@@ -621,6 +621,7 @@ double jl_unbox_float64(jl_value_t *v);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
+DLLEXPORT jl_array_t *jl_new_arrayv(jl_type_t *atype, ...);
 jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims);
 DLLEXPORT jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
                                        jl_tuple_t *dims);

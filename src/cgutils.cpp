@@ -426,12 +426,13 @@ static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
         if (nb == 64) return T_int64;
         else          return Type::getIntNTy(getGlobalContext(), nb);
     }
-    if (jt == (jl_value_t*)jl_any_type)
-        return jl_pvalue_llvmt;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    emit_type_error(literal_pointer_val(jt), (jl_value_t*)jl_bits_kind,
-                    "conversion to native type", ctx);
-    return NULL;
+    //if (jt == (jl_value_t*)jl_any_type)
+    //    return jl_pvalue_llvmt;
+    return jl_pvalue_llvmt;
+    //emit_type_error(literal_pointer_val(jt), (jl_value_t*)jl_bits_kind,
+    //                "conversion to native type", ctx);
+    //return NULL;
 }
 
 // NOTE: llvm cannot express all julia types (for example unsigned),

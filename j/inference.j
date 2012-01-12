@@ -122,34 +122,6 @@ function _jl_arraysize_tfunc(a)
     end
 end
 t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
-t_func[Array] =
-    (1, Inf,
-function (T, dims...)
-    nd = length(dims)
-    if nd==1
-        dt = dims[1]
-        if isa(dt,Tuple)
-            if length(dt) > 0 && isseqtype(dt[length(dt)])
-                # Array(T, (d...))
-                nd = Array.parameters[2]
-            else
-                # Array(T, (m, n))
-                nd = length(dt)
-            end
-        elseif !subtype(dt,Integer)
-            # Array(T, ??)
-            nd = Array.parameters[2]
-        end
-    end
-    if isType(T)
-        et = T.parameters[1]
-    elseif isa(T,TypeVar)
-        et = T
-    else
-        et = Array.parameters[1]
-    end
-    Array{et,nd}
-end)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)

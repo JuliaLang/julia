@@ -6,7 +6,6 @@
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_new_box);
 JL_CALLABLE(jl_weakref_ctor);
-JL_CALLABLE(jl_new_array_internal);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_is);
 JL_CALLABLE(jl_f_no_function);

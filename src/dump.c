@@ -1070,8 +1070,7 @@ void jl_init_serializer(void)
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
     void *fptrs[] = { jl_f_new_expr, jl_f_new_box,
-                      jl_weakref_ctor, jl_new_array_internal, 
-                      jl_f_throw, jl_f_is, 
+                      jl_weakref_ctor, jl_f_throw, jl_f_is, 
                       jl_f_no_function, jl_f_typeof, 
                       jl_f_subtype, jl_f_isa, 
                       jl_f_typeassert, jl_f_apply, 

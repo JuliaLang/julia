@@ -450,19 +450,13 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
     return t;
 }
 
-JL_CALLABLE(jl_new_array_internal);
-
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
 void jl_specialize_ast(jl_lambda_info_t *li);
 
 void jl_add_constructors(jl_struct_type_t *t)
 {
     if (t->name == jl_array_typename) {
-        if (!jl_has_typevars(jl_tparam0(t)) &&
-            jl_is_long(jl_tupleref(t->parameters,1)))
-            t->fptr = jl_new_array_internal;
-        else
-            t->fptr = jl_f_no_function;
+        t->fptr = jl_f_no_function;
         return;
     }
 

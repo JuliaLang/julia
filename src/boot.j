@@ -302,40 +302,45 @@ macro L_str(s); s; end
 method_missing(f, args...) = throw(MethodError(f, args))
 
 Array{T}  (::Type{T}, d::(Integer,)) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          int(d[1]))::Array{T,1}
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
+          int(d[1]))
 Array{T}  (::Type{T}, d::(Integer,Integer)) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          int(d[1]), int(d[2]))::Array{T,2}
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
+          int(d[1]), int(d[2]))
 
 Array{T}  (::Type{T}, d::(Int,Int,Int)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,3}, d)::Array{T,3}
+    ccall(:jl_new_array, Array{T,3}, (Any,Any), Array{T,3}, d)
 Array{T}  (::Type{T}, d::(Integer,Integer,Integer)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,3},
-          (int(d[1]),int(d[2]),int(d[3])))::Array{T,3}
+    ccall(:jl_new_arrayv, Array{T,3}, (Any,Int...), Array{T,3},
+          int(d[1]), int(d[2]), int(d[3]))
 Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,4}, d)::Array{T,4}
+    ccall(:jl_new_array, Array{T,4}, (Any,Any), Array{T,4}, d)
 Array{T}  (::Type{T}, d::(Integer,Integer,Integer,Integer)) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,4},
-          (int(d[1]),int(d[2]),int(d[3]),int(d[4])))::Array{T,4}
+    ccall(:jl_new_arrayv, Array{T,4}, (Any,Int...), Array{T,4},
+          int(d[1]), int(d[2]), int(d[3]), int(d[4]))
+
 Array{T,N}(::Type{T}, d::NTuple{N,Integer}) =
-    ccall(:jl_new_array, Any, (Any,Any), Array{T,N},
-          convert((Int...), d))::Array{T,N}
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N},
+          convert((Int...), d))
+Array{N}(T, d::NTuple{N,Integer}) =
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N},
+          convert((Int...), d))
 
 Array{T}(::Type{T}, m::Integer) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          int(m))::Array{T,1}
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
+          int(m))
 Array{T}(::Type{T}, m::Integer,n::Integer) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          int(m), int(n))::Array{T,2}
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
+          int(m), int(n))
 
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer) =
-    Array{T,3}(int(m),int(n),int(o))
+    ccall(:jl_new_arrayv, Array{T,3}, (Any,Int...), Array{T,3},
+          int(m), int(n), int(o))
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer, p::Integer) =
-    Array{T,4}(int(m),int(n),int(o),int(p))
+    ccall(:jl_new_arrayv, Array{T,4}, (Any,Int...), Array{T,4},
+          int(m), int(n), int(o), int(p))
 
-Array{N}(T, d::NTuple{N,Integer}) = Array{T,N}(convert((Int...),d))
-Array(T, d::Integer...) = Array{T,length(d)}(convert((Int...),d))
+Array(T, d::Integer...) = Array(T, d)
 
 function compile_hint(f, args::Tuple)
     if !isgeneric(f)

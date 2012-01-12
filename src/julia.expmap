@@ -30,6 +30,7 @@
     jl_new_lambda_info;
     jl_new_closure_internal;
     jl_new_array;
+    jl_new_arrayv;
     jl_reshape_array;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
