@@ -79,7 +79,8 @@ write(io, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
 
-# NOTE: returns ASCIIString OR UTF8String object:
-utf8(s::ByteString) = s
-utf8(a::Array{Uint8,1}) = check_utf8(UTF8String(a))
-utf8(s::String) = cstring(s)
+utf8(x) = convert(UTF8String, x)
+convert(::Type{UTF8String}, s::UTF8String) = s
+convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
+convert(::Type{UTF8String}, a::Array{Uint8,1}) = check_utf8(UTF8String(a))
+convert(::Type{UTF8String}, s::String) = utf8(cstring(s))

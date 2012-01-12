@@ -356,6 +356,12 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
 end
 
+## string promotion rules ##
+
+promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
+promote_rule(::Type{UTF8String} , ::Type{CharString} ) = UTF8String
+promote_rule(::Type{ASCIIString}, ::Type{CharString} ) = UTF8String
+
 ## printing literal quoted string data ##
 
 # TODO: this is really the inverse of print_unbackslashed
@@ -704,16 +710,17 @@ function lpad(s::String, n::Integer, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    p^q*p[1:chr2ind(p,r)]*s
+    t = promote_type(typeof(s),typeof(p))
+    convert(t, p^q*p[1:chr2ind(p,r)]*s)
 end
-
 function rpad(s::String, n::Integer, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    s*p^q*p[1:chr2ind(p,r)]
+    t = promote_type(typeof(s),typeof(p))
+    convert(t, s*p^q*p[1:chr2ind(p,r)])
 end
 
 lpad(s, n::Integer, p) = lpad(string(s), n, string(p))

@@ -67,7 +67,8 @@ write(io, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
 
-ascii(s::ASCIIString) = s
-ascii(a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
-ascii(s::UTF8String) = ascii(s.data)
-ascii(s::String) = ascii(cstring(s))
+ascii(x) = convert(ASCIIString, x)
+convert(::Type{ASCIIString}, s::ASCIIString) = s
+convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
+convert(::Type{ASCIIString}, a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
+convert(::Type{ASCIIString}, s::String) = ascii(cstring(s))
