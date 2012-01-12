@@ -17,19 +17,6 @@ function show_trailing_hex(n::Uint64, ndig::Integer)
 end
 show(n::Unsigned) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
 
-show_float64(f::Float64, ndig) =
-    ccall(:jl_show_float, Void, (Float64, Int32), f, int32(ndig))
-
-show(f::Float64) = show_float64(f, 17)
-show(f::Float32) = show_float64(float64(f), 9)
-
-num2str(f::Float, ndig) = print_to_string(show_float64, float64(f), ndig)
-num2str(f::Float) = show_to_string(f)
-num2str(n::Integer) = dec(n)
-
-showcompact(f::Float64) = show_float64(f, 8)
-showcompact(f::Float32) = show_float64(float64(f), 8)
-
 show{T}(p::Ptr{T}) =
     print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 

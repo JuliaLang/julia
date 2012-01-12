@@ -30,15 +30,17 @@ grisu(x::Real, n::Integer) = n >= 0 ? grisu(float64(x), GRISU_PRECISION, int32(n
                                       grisu(float64(x), GRISU_FIXED,    -int32(n))
 
 # normal:
-#   0 <= pt < n         ####.####           n+1
-#   pt < 0              .000########        n-pt+1
+#   0 < pt < n          ####.####           n+1
+#   pt <= 0             .000########        n-pt+1
 #   n <= pt (dot)       ########000.        pt+1
 #   n <= pt (no dot)    ########000         pt
 # exponential:
-#   pt < 0              ########e-###       n+k+2
-#   0 <= pt             ########e###        n+k+1
+#   pt <= 0             ########e-###       n+k+2
+#   0 < pt              ########e###        n+k+1
 
 function print_shortest(x::Real, dot::Bool)
+    if isnan(x); return print("NaN"); end
+    if isinf(x); return print(x < 0 ? "-Inf" : "Inf"); end
     sign, digits, pt = grisu(x)
     n = length(digits)
     if sign
@@ -51,7 +53,7 @@ function print_shortest(x::Real, dot::Bool)
         print(digits)
         print('e')
         print(e)
-    elseif pt < 0
+    elseif pt <= 0
         # => .000########
         print('.')
         while pt < 0
@@ -69,10 +71,54 @@ function print_shortest(x::Real, dot::Bool)
         if dot
             print('.')
         end
-    else # 0 <= pt <= n
+    else # => ####.####
         print(digits[1:pt])
         print('.')
         print(digits[pt+1:])
     end
 end
 print_shortest(x::Real) = print_shortest(x, false)
+
+function show(x::Float)
+    if isnan(x); return print("NaN"); end
+    if isinf(x); return print(x < 0 ? "-Inf" : "Inf"); end
+    sign, digits, pt = grisu(x)
+    n = length(digits)
+    if sign
+        print('-')
+    end
+    if pt <= -4 || pt > 6 # .00001 to 100000.
+        # => #.#######e###
+        print(digits[1])
+        print('.')
+        if n > 1
+            print(digits[2:])
+        else
+            print('0')
+        end
+        print('e')
+        print(pt-1)
+    elseif pt <= 0
+        # => 0.00########
+        print("0.")
+        while pt < 0
+            print('0')
+            pt += 1
+        end
+        print(digits)
+    elseif pt >= n
+        # => ########00.0
+        print(digits)
+        while pt > n
+            print('0')
+            n += 1
+        end
+        print(".0")
+    else # => ####.####
+        print(digits[1:pt])
+        print('.')
+        print(digits[pt+1:])
+    end
+end
+
+showcompact(x::Float) = print(float32(x))
