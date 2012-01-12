@@ -12,7 +12,7 @@ let sign = Array(Int32, 1), len = Array(Int32, 1), pt = Array(Int32, 1)
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
               x, mode, int32(digits), buf, int32(length(buf)+1), sign, len, pt)
-        bool(sign[1]), int(len[1]), int(pt[1])
+        bool(uint8(sign[1])), int(len[1]), int(pt[1])
     end
 end
 let buf = Array(Uint8, 17) # maximum decimal digits for Float64
@@ -45,7 +45,7 @@ function print_shortest(x::Real, dot::Bool)
         print('-')
     end
     e = pt-n
-    k = -9<=e<=9 ? 1 : -99<=e<=99 ? 2 : 3
+    k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
         # => ########e###
         print(digits)
