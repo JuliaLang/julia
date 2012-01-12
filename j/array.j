@@ -155,6 +155,17 @@ ref(A::Array, i0::Integer, i1::Integer, i2::Integer) =
 ref(A::Array, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))]
 
+function ref(A::Array, I::Integer...)
+    ndims = length(I)
+    index = I[1]
+    stride = 1
+    for k=2:ndims
+        stride = stride * size(A, k-1)
+        index += (I[k]-1) * stride
+    end
+    return A[index]
+end
+
 # note: this is also useful for Ranges
 ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
 ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i = I ]
@@ -234,7 +245,7 @@ assign(A::Array, x, I0::Integer, I::Integer...) = assign_scalarND(A,x,I0,I...)
 assign(A::Array, x::AbstractArray, I0::Integer, I::Integer...) =
     assign_scalarND(A,x,I0,I...)
 
-function assign_scalarND(A, x, I0, I...)
+function assign_scalarND(A, x, I0::Integer, I::Integer...)
     index = I0
     stride = 1
     for k=1:length(I)

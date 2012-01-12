@@ -231,23 +231,11 @@ end
 
 ## Indexing: ref ##
 
-ref(t::AbstractArray) = t
 ref(t::AbstractArray, i::Integer) = error("indexing not defined for ", typeof(t))
 ref(t::AbstractArray, i::Real) = ref(t, iround(i))
 ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
 ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, iround(i), iround(j), iround(k))
 ref(t::AbstractArray, r::Real...) = ref(t,map(iround,r)...)
-
-function ref(A::AbstractArray, I::Integer...)
-    ndims = length(I)
-    index = I[1]
-    stride = 1
-    for k=2:ndims
-        stride = stride * size(A, k-1)
-        index += (I[k]-1) * stride
-    end
-    return A[index]
-end
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -310,7 +298,6 @@ assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
 assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
     (t[iround(i),iround(j),iround(k)] = x)
 assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
-assign(t::AbstractArray, x) = error("assign: too few arguments")
 
 ## Concatenation ##
 

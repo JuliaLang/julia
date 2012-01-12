@@ -30,6 +30,26 @@ assert(a[1,1] == 1. && a[1,2] == 2. &&
 assert(b[1,1] == 1. && b[2,1] == 2. &&
        b[1,2] == 3. && b[2,2] == 4.)
 
+a = Array(Float64, 2, 2, 2, 2, 2)
+a[1,1,1,1,1] = 10
+a[1,2,1,1,2] = 20
+a[1,1,2,2,1] = 30
+
+@assert a[1,1,1,1,1] == 10
+@assert a[1,2,1,1,2] == 20
+@assert a[1,1,2,2,1] == 30
+
+b = reshape(a, (32,))
+@assert b[1]  == 10
+@assert b[19] == 20
+@assert b[13] == 30
+
+b = rand(32)
+a = reshape(b, (2, 2, 2, 2, 2))
+@assert ndims(a) == 5
+@assert a[2,1,2,2,1] == b[14]
+@assert a[2,2,2,2,2] == b[end]
+
 ## arrays as dequeues
 l = {1,2,3}
 push(l,8)

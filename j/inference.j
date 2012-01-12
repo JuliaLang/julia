@@ -1,6 +1,6 @@
 # parameters limiting potentially-infinite types
-const MAX_TYPEUNION_LEN = 3
-const MAX_TYPEUNION_DEPTH = 3
+const MAX_TYPEUNION_LEN = 2
+const MAX_TYPEUNION_DEPTH = 2
 const MAX_TUPLETYPE_LEN  = 10
 const MAX_TUPLE_DEPTH = 4
 
@@ -309,7 +309,6 @@ apply_type_tfunc = function (A, args...)
             tparams = append(tparams, (args[i].parameters[1],))
         elseif isa(A[i],Int)
             tparams = append(tparams, (A[i],))
-        # TODO: evaluate Integer static parameter!
         #elseif
         else
             #return args[1]

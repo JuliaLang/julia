@@ -325,20 +325,12 @@ Array{T,N}(::Type{T}, d::NTuple{N,Integer}) =
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
           int(m))::Array{T,1}
-Array{T}(::Type{T}, m::Int) =
-    ccall(:jl_alloc_array_1d, Any, (Any,Int), Array{T,1},
-          int(m))::Array{T,1}
 Array{T}(::Type{T}, m::Integer,n::Integer) =
     ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
           int(m), int(n))::Array{T,2}
-Array{T}(::Type{T}, m::Int,n::Int) =
-    ccall(:jl_alloc_array_2d, Any, (Any,Int,Int), Array{T,2},
-          int(m), int(n))::Array{T,2}
 
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) = Array{T,3}(m,n,o)
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer) =
     Array{T,3}(int(m),int(n),int(o))
-Array{T}(::Type{T}, m::Int,n::Int,o::Int,p::Int) = Array{T,4}(m,n,o,p)
 Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer, p::Integer) =
     Array{T,4}(int(m),int(n),int(o),int(p))
 

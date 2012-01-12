@@ -1290,9 +1290,22 @@ void jl_init_primitives(void)
     add_builtin("Tuple", (jl_value_t*)jl_tuple_type);
     add_builtin("NTuple", (jl_value_t*)jl_ntuple_type);
     add_builtin("Type", (jl_value_t*)jl_type_type);
-    add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("...", (jl_value_t*)jl_seq_type);
+    add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
+    add_builtin("CompositeKind", (jl_value_t*)jl_struct_kind);
+    add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
+    add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
+    add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
+    // todo: this should only be visible to compiler components
+    add_builtin("Undef", (jl_value_t*)jl_undef_type);
+
+    add_builtin("Symbol", (jl_value_t*)jl_sym_type);
+    add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
+    add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
+    add_builtin("Box", (jl_value_t*)jl_box_type);
+
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
 
@@ -1302,18 +1315,6 @@ void jl_init_primitives(void)
     add_builtin("GotoNode", (jl_value_t*)jl_gotonode_type);
     add_builtin("QuoteNode", (jl_value_t*)jl_quotenode_type);
     add_builtin("TopNode", (jl_value_t*)jl_topnode_type);
-    add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
-    add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
-    add_builtin("Box", (jl_value_t*)jl_box_type);
-    add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
-    // todo: this should only be visible to compiler components
-    add_builtin("Undef", (jl_value_t*)jl_undef_type);
-
-    add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
-    add_builtin("CompositeKind", (jl_value_t*)jl_struct_kind);
-    add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
-    add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
-    add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
 
 #ifdef __LP64__
     add_builtin("Int", (jl_value_t*)jl_int64_type);

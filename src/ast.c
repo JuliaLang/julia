@@ -594,7 +594,18 @@ void jl_specialize_ast(jl_lambda_info_t *li);
 
 static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
-    if (jl_is_lambda_info(expr)) {
+    if (jl_is_symbol(expr)) {
+        // pre-evaluate certain static parameters to help type inference
+        for(int i=0; i < sp->length; i+=2) {
+            assert(jl_is_typevar(jl_tupleref(sp,i)));
+            if ((jl_sym_t*)expr == ((jl_tvar_t*)jl_tupleref(sp,i))->name) {
+                jl_value_t *spval = jl_tupleref(sp,i+1);
+                if (jl_is_long(spval))
+                    return spval;
+            }
+        }
+    }
+    else if (jl_is_lambda_info(expr)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
         /*
         if (sp == jl_null && li->ast &&
@@ -609,7 +620,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         JL_GC_POP();
         return (jl_value_t*)li;
     }
-    if (jl_typeis(expr,jl_array_any_type)) {
+    else if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
         jl_array_t *na = jl_alloc_cell_1d(a->length);
         JL_GC_PUSH(&na);
@@ -619,7 +630,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         JL_GC_POP();
         return (jl_value_t*)na;
     }
-    if (jl_is_expr(expr)) {
+    else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         jl_expr_t *ne = jl_exprn(e->head, e->args->length);
         JL_GC_PUSH(&ne);
