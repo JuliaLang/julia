@@ -30,12 +30,12 @@ grisu(x::Real, n::Integer) = n >= 0 ? grisu(float64(x), GRISU_PRECISION, int32(n
                                       grisu(float64(x), GRISU_FIXED,    -int32(n))
 
 # normal:
-#   0 <= pt <= n                ####.####           n+1
-#   pt < 0                      .000########        n-pt+1
-#   n < pt                      ########000.        pt+1
-# scientific:
-#   pt <= 0                     #.#######e-###      n+3+k
-#   0 < pt                      #.#######e###       n+2+k
+#   0 <= pt <= n    ####.####           n+1
+#   pt < 0          .000########        n-pt+1
+#   n < pt          ########000.        pt+1
+# exponential:
+#   pt < 0          ########e-###       n+k+2
+#   0 <= pt         ########e###        n+k+1
 
 function print_shortest_float(x::Real)
     sign, digits, pt = grisu(x)
@@ -43,17 +43,13 @@ function print_shortest_float(x::Real)
     if sign
         print('-')
     end
-    k = -9<=pt<=9 ? 1 : -99<=pt<=99 ? 2 : 3
-    if n == 1
-        k -= 1
-    end
-    if pt < -k-2 || pt > n+k+1
-        # => #.#######e###
-        print(digits[1])
-        if n != 1
-            print('.')
-        end
-        print(digits[2:],'e',pt-1)
+    e = pt-n
+    k = -9<=e<=9 ? 1 : -99<=e<=99 ? 2 : 3
+    if pt < -k-1 || e > k
+        # => ########e###
+        print(digits)
+        print('e')
+        print(e)
     elseif pt < 0
         # => .000########
         print('.')
@@ -62,15 +58,17 @@ function print_shortest_float(x::Real)
             pt += 1
         end
         print(digits)
-    elseif pt > n
+    elseif e > 0
         # => ########000.
         print(digits)
-        while pt > n
+        while e > 0
             print('0')
-            n += 1
+            e -= 1
         end
         print('.')
     else # 0 <= pt <= n
-        print(digits[1:pt],'.',digits[pt+1:])
+        print(digits[1:pt])
+        print('.')
+        print(digits[pt+1:])
     end
 end
