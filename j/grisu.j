@@ -72,3 +72,46 @@ function print_shortest_float(x::Real)
         print(digits[pt+1:])
     end
 end
+
+# normal:
+#   0 <= pt < n     ####.####           n+1
+#   pt < 0          .000########        n-pt+1
+#   n <= pt         ########000         pt
+# exponential:
+#   pt < 0          ########e-###       n+k+2
+#   0 <= pt         ########e###        n+k+1
+
+function print_shortest(x::Real)
+    sign, digits, pt = grisu(x)
+    n = length(digits)
+    if sign
+        print('-')
+    end
+    e = pt-n
+    k = -9<=e<=9 ? 1 : -99<=e<=99 ? 2 : 3
+    if pt < -k-1 || e > k+1
+        # => ########e###
+        print(digits)
+        print('e')
+        print(e)
+    elseif pt < 0
+        # => .000########
+        print('.')
+        while pt < 0
+            print('0')
+            pt += 1
+        end
+        print(digits)
+    elseif e >= 0
+        # => ########000
+        print(digits)
+        while e > 0
+            print('0')
+            e -= 1
+        end
+    else # 0 <= pt < n
+        print(digits[1:pt])
+        print('.')
+        print(digits[pt+1:])
+    end
+end
