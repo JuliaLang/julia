@@ -5,21 +5,21 @@ const GRISU_SHORTEST_SINGLE = int32(1)
 const GRISU_FIXED           = int32(2)
 const GRISU_PRECISION       = int32(3)
 
-let sign = Array(Int32, 1), len = Array(Int32, 1), pt = Array(Int32, 1)
+let neg = Array(Bool,1), len = Array(Int32,1), pt = Array(Int32,1)
     global grisu
     function grisu(x::Float64, mode::Int32, digits::Integer, buf::Array{Uint8})
         ccall(dlsym(_jl_libgrisu, :grisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
-               Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-              x, mode, int32(digits), buf, int32(length(buf)+1), sign, len, pt)
-        bool(uint8(sign[1])), int(len[1]), int(pt[1])
+               Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
+              x, mode, int32(digits), buf, int32(length(buf)+1), neg, len, pt)
+        neg[1], int(len[1]), int(pt[1])
     end
 end
-let buf = Array(Uint8, 17) # maximum decimal digits for Float64
+let buf = Array(Uint8,17) # maximum decimal digits for Float64
     global grisu
     function grisu(x::Float64, mode::Int32, digits::Integer)
-        sign, len, pt = grisu(x, mode, int32(digits), buf)
-        sign, ASCIIString(buf[1:len]), pt
+        neg, len, pt = grisu(x, mode, int32(digits), buf)
+        neg, ASCIIString(buf[1:len]), pt
     end
 end
 
@@ -41,9 +41,9 @@ grisu(x::Real, n::Integer) = n >= 0 ? grisu(float64(x), GRISU_PRECISION, int32(n
 function print_shortest(x::Real, dot::Bool)
     if isnan(x); return print("NaN"); end
     if isinf(x); return print(x < 0 ? "-Inf" : "Inf"); end
-    sign, digits, pt = grisu(x)
+    neg, digits, pt = grisu(x)
     n = length(digits)
-    if sign
+    if neg
         print('-')
     end
     e = pt-n
@@ -82,9 +82,9 @@ print_shortest(x::Real) = print_shortest(x, false)
 function show(x::Float)
     if isnan(x); return print("NaN"); end
     if isinf(x); return print(x < 0 ? "-Inf" : "Inf"); end
-    sign, digits, pt = grisu(x)
+    neg, digits, pt = grisu(x)
     n = length(digits)
-    if sign
+    if neg
         print('-')
     end
     if pt <= -4 || pt > 6 # .00001 to 100000.
