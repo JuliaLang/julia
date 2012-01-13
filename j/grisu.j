@@ -14,21 +14,22 @@ macro grisu_ccall(value, mode, ndigits)
     end
 end
 
-let digits = Array(Uint8,17), # maximum decimal digits for Float64
+let digits = Array(Uint8,309), # 308 is the largest possible exponent.
     _neg = Array(Bool, 1),
     _len = Array(Int32,1),
     _pt  = Array(Int32,1)
 
 const buflen = int32(length(digits)+1)
 
-const SHORTEST        = int32(0)
-const SHORTEST_SINGLE = int32(1)
-const FIXED           = int32(2)
-const PRECISION       = int32(3)
+const SHORTEST        = int32(0) # shortest exact representation for doubles
+const SHORTEST_SINGLE = int32(1) # shortest exact representation for singles
+const FIXED           = int32(2) # fixed number of trailing decimal points
+const PRECISION       = int32(3) # fixed precision regardless of magnitude
 
 # wrapper for the core grisu function, primarily for debugging
 global grisu
-function grisu(x::Float64, mode::Int32, ndigits::Integer)
+function grisu(x::Float64, mode::Integer, ndigits::Integer)
+    if !isfinite(x); error("non-finite value: $x"); end
     @grisu_ccall x mode ndigits
     neg, ASCIIString(digits[1:len]), pt
 end
