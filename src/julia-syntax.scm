@@ -805,19 +805,25 @@
 	  (error "invalid for loop syntax: expected symbol"))
       (let ((cnt (gensy))
 	    (lim (gensy))
-	    (aa  (if (number? a) a (gensy)))
-	    (bb  (if (number? b) b (gensy))))
+	    (aa  (gensy))
+	    (bb  (gensy)))
 	`(scope-block
 	  (block
-	   ,@(if (eq? aa a) '() `((= ,aa ,a)))
-	   ,@(if (eq? bb b) '() `((= ,bb ,b)))
+	   (= (tuple ,aa ,bb) (call (top promote) ,a ,b))
 	   (= ,cnt 0)
 	   (= ,lim
-	      (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb))))
+	      (call
+	       (top int)
+	       (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb)))))
 	   (break-block loop-exit
 			(_while (call < ,cnt ,lim)
 				(block
-				 (= ,var (call + ,aa (call * ,cnt ,bb)))
+				 (= ,var (call + ,aa (call *
+							   (call
+							    (top oftype)
+							    ,aa
+							    ,cnt)
+							   ,bb)))
 				 (break-block loop-cont
 					      ,body)
 				 (= ,cnt (call + 1 ,cnt))))))))))
@@ -839,12 +845,9 @@
 				 (= ,var ,cnt)
 				 (break-block loop-cont
 					      ,body)
-				 (= ,cnt (call +
-					       (call (top convert)
-						     (call (top typeof)
-							   ,cnt)
-						     1)
-					       ,cnt))))))))))
+				 (= ,cnt (call (top convert)
+					       (call (top typeof) ,cnt)
+					       (call + 1 ,cnt)))))))))))
 
    ; for loop over arbitrary vectors
    (pattern-lambda
