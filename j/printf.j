@@ -119,4 +119,11 @@ function _jl_format_parse(s::String)
     return :(($args)->($body))
 end
 
-macro p_str(f); _jl_format_parse(f); end
+macro f_str(f); _jl_format_parse(f); end
+
+printf(f::Function, args...) = f(args...)
+printf(f::String, args...) = eval(_jl_format_parse(f))(args...)
+printf(s::IOStream, args...) = with_output_stream(s, printf, args...)
+
+sprintf(f::Function, args...) = print_to_string(printf, f, args...)
+sprintf(f::String, args...) = print_to_string(printf, f, args...)
