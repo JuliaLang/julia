@@ -538,10 +538,26 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
-        if isa(t,TypeVar)
-            t = Type{t.ub}
-        else
+        if isleaftype(t)
             t = Type{t}
+        elseif isleaftype(inference_stack.types)
+            if isa(t,TypeVar)
+                t = Type{t.ub}
+            else
+                t = Type{t}
+            end
+        else
+            # if there is any type uncertainty in the arguments, we are
+            # effectively predicting what static_typeof will say when
+            # the function is compiled with actual arguments. in that case
+            # abstract types yield Type{<:T} instead of Type{T}.
+            # this doesn't really model the situation perfectly, but
+            # "isleaftype(inference_stack.types)" should be good enough.
+            if isa(t,TypeVar)
+                t = Type{t}
+            else
+                t = Type{typevar(:_,t)}
+            end
         end
     else
         t = Any
