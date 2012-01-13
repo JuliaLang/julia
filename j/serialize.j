@@ -104,9 +104,7 @@ function serialize{T,N}(s, a::SubArray{T,N,Array})
     writetag(s, Array)
     serialize(s, T)
     serialize(s, size(a))
-    colsz = size(a,1)*sizeof(T)
-    cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
-                  tuple(1, size(a)[2:]...))
+    write(s, a)
 end
 
 function serialize(s, e::Expr)

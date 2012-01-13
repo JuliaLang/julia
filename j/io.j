@@ -130,7 +130,7 @@ write(s, x::Bool)    = write(s, uint8(x))
 write(s, x::Float32) = write(s, boxsi32(unbox32(x)))
 write(s, x::Float64) = write(s, boxsi64(unbox64(x)))
 
-function write(s, a::Array)
+function write(s, a::AbstractArray)
     for i = 1:numel(a)
         write(s, a[i])
     end
@@ -186,6 +186,19 @@ function write(s::IOStream, p::Ptr, nb::Integer)
     ccall(:ios_write, Uint,
           (Ptr{Void}, Ptr{Void}, Uint),
           s.ios, p, uint(nb))
+end
+
+function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
+    if !isa(T,BitsKind) || stride(a,1)!=1
+        return invoke(write, (Any, AbstractArray), s, a)
+    end
+    colsz = size(a,1)*sizeof(T)
+    if N==1
+        write(s, pointer(a, 1), colsz)
+    else
+        cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
+                      tuple(1, size(a)[2:]...))
+    end
 end
 
 # num bytes available without blocking
