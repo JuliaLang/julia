@@ -18,6 +18,8 @@ values = [
 for T=types, S=types, x=values
     a = convert(T,x)
     b = convert(S,x)
+    #println("$(typeof(a)) $a")
+    #println("$(typeof(b)) $b")
     @assert !isequal(a,b) || hash(a)==hash(b)
     # for y=values
     #     println("T=$T; S=$S; x=$x; y=$y")

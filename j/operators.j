@@ -18,8 +18,8 @@ isequal(x,y) = is(x,y)
 
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
-isequal{T<:Number}(x::T, y::T) = x==y
-isless{T<:Number}(x::T, y::T) = x<y
+isequal(x::Number, y::Number) = x==y
+isless(x::Number, y::Number) = x<y
 
 max(x,y) = x > y ? x : y
 min(x,y) = x < y ? x : y

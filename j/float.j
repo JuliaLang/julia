@@ -121,15 +121,30 @@ isless (x::Float64, y::Float64) = fpislt64(unbox64(x),unbox64(y))
 ==(x::Int64  , y::Float64) = eqfsi64(unbox64(y),unbox64(x))
 ==(x::Uint64 , y::Float64) = eqfui64(unbox64(y),unbox64(x))
 
+==(x::Float32, y::Int64  ) = eqfsi64(unbox64(float64(x)),unbox64(y))
+==(x::Float32, y::Uint64 ) = eqfui64(unbox64(float64(x)),unbox64(y))
+==(x::Int64  , y::Float32) = eqfsi64(unbox64(float64(y)),unbox64(x))
+==(x::Uint64 , y::Float32) = eqfui64(unbox64(float64(y)),unbox64(x))
+
 < (x::Float64, y::Int64  ) = ltfsi64(unbox64(x),unbox64(y))
 < (x::Float64, y::Uint64 ) = ltfui64(unbox64(x),unbox64(y))
 < (x::Int64  , y::Float64) = ltsif64(unbox64(x),unbox64(y))
 < (x::Uint64 , y::Float64) = ltuif64(unbox64(x),unbox64(y))
 
+< (x::Float32, y::Int64  ) = ltfsi64(unbox64(float64(x)),unbox64(y))
+< (x::Float32, y::Uint64 ) = ltfui64(unbox64(float64(x)),unbox64(y))
+< (x::Int64  , y::Float32) = ltsif64(unbox64(x),unbox64(float64(y)))
+< (x::Uint64 , y::Float32) = ltuif64(unbox64(x),unbox64(float64(y)))
+
 <=(x::Float64, y::Int64  ) = lefsi64(unbox64(x),unbox64(y))
 <=(x::Float64, y::Uint64 ) = lefui64(unbox64(x),unbox64(y))
 <=(x::Int64  , y::Float64) = lesif64(unbox64(x),unbox64(y))
 <=(x::Uint64 , y::Float64) = leuif64(unbox64(x),unbox64(y))
+
+<=(x::Float32, y::Int64  ) = lefsi64(unbox64(float64(x)),unbox64(y))
+<=(x::Float32, y::Uint64 ) = lefui64(unbox64(float64(x)),unbox64(y))
+<=(x::Int64  , y::Float32) = lesif64(unbox64(x),unbox64(float64(y)))
+<=(x::Uint64 , y::Float32) = leuif64(unbox64(x),unbox64(float64(y)))
 
 ## floating point traits ##
 
