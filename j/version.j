@@ -10,7 +10,7 @@ type VersionNumber
         if major < 0; error("invalid major version: $major"); end
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
-        if !matches(ri"^(?:[a-z-][0-9a-z-]*)?$", suffix)
+        if !matches(r"^(?:[a-z-][0-9a-z-]*)?$"i, suffix)
             error("invalid version suffix: $suffix")
         end
         new(int16(major), int16(minor), int16(patch), suffix)
@@ -28,7 +28,7 @@ show(v::VersionNumber) = print("v\"", v, "\"")
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
-const VERSION_REGEX = ri"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"
+const VERSION_REGEX = r"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"i
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)

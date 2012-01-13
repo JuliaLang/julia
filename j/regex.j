@@ -26,44 +26,32 @@ Regex(p::String)          = Regex(p, 0, false)
 # likes so that Julia all the Julia string quoting
 # constructs are correctly handled.
 
-begin
-    local i = PCRE_CASELESS
-    local m = PCRE_MULTILINE
-    local s = PCRE_DOTALL
-    local x = PCRE_EXTENDED
+macro r_str(pattern, flags...)
+    options = 0
+    for fx in flags, f in fx
+        options |= f=='i' ? PCRE_CASELESS  :
+                   f=='m' ? PCRE_MULTILINE :
+                   f=='s' ? PCRE_DOTALL    :
+                   f=='x' ? PCRE_EXTENDED  :
+                   error("unknown regex flag: $f")
+    end
+    Regex(pattern, options)
+end
 
-    macro r_str(p);     Regex(p);          end
-    macro ri_str(p);    Regex(p, i);       end
-    macro rm_str(p);    Regex(p, m);       end
-    macro rs_str(p);    Regex(p, s);       end
-    macro rx_str(p);    Regex(p, x);       end
-    macro rim_str(p);   Regex(p, i|m);     end
-    macro ris_str(p);   Regex(p, i|s);     end
-    macro rix_str(p);   Regex(p, i|x);     end
-    macro rms_str(p);   Regex(p, m|s);     end
-    macro rmx_str(p);   Regex(p, m|x);     end
-    macro rsx_str(p);   Regex(p, s|x);     end
-    macro rims_str(p);  Regex(p, i|m|s);   end
-    macro rimx_str(p);  Regex(p, i|m|x);   end
-    macro risx_str(p);  Regex(p, i|s|x);   end
-    macro rmsx_str(p);  Regex(p, m|s|x);   end
-    macro rimsx_str(p); Regex(p, i|m|s|x); end
-
-    function show(re::Regex)
-        if (re.options & ~(i|m|s|x)) == 0
-            print('r')
-            if (re.options & i) != 0; print('i'); end
-            if (re.options & m) != 0; print('m'); end
-            if (re.options & s) != 0; print('s'); end
-            if (re.options & x) != 0; print('x'); end
-            print_quoted_literal(re.pattern)
-        else
-            print("Regex(")
-            show(re.pattern)
-            print(',')
-            show(re.options)
-            print(')')
-        end
+function show(re::Regex)
+    if (re.options & ~(PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED))==0
+        print('r')
+        print_quoted_literal(re.pattern)
+        if (re.options & PCRE_CASELESS ) != 0; print('i'); end
+        if (re.options & PCRE_MULTILINE) != 0; print('m'); end
+        if (re.options & PCRE_DOTALL   ) != 0; print('s'); end
+        if (re.options & PCRE_EXTENDED ) != 0; print('x'); end
+    else
+        print("Regex(")
+        show(re.pattern)
+        print(',')
+        show(re.options)
+        print(')')
     end
 end
 
