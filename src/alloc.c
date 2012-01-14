@@ -45,6 +45,7 @@ jl_struct_type_t *jl_topnode_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
 jl_struct_type_t *jl_lambda_info_type;
+jl_struct_type_t *jl_module_type;
 jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
@@ -282,7 +283,8 @@ DLLEXPORT
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
-        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 15);
+        (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type,
+                                  LAMBDA_INFO_NW);
     li->ast = ast;
     li->file = (jl_value_t*)null_sym;
     li->line = jl_box_long(0);
@@ -293,6 +295,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
             li->line = jl_exprarg(body1, 0);
         }
     }
+    li->module = jl_system_module;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;

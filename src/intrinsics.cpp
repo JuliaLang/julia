@@ -851,6 +851,10 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
     return FunctionType::get(ret, args2, false);
 }
 
+#define BOX_F(ct,jl_ct)                                                       \
+    box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
+                                   "jl_box_"#ct, (void*)&jl_box_##ct);
+
 static void add_intrinsic(const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
@@ -858,11 +862,8 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 }
 
 #define ADD_I(name) add_intrinsic(#name, name)
-#define BOX_F(ct,jl_ct)                                                       \
-    box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
-                                   "jl_box_"#ct, (void*)&jl_box_##ct);
 
-extern "C" void jl_init_intrinsic_functions()
+extern "C" void jl_init_intrinsic_functions(void)
 {
     ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
     ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
@@ -902,49 +903,4 @@ extern "C" void jl_init_intrinsic_functions()
     ADD_I(abs_float32); ADD_I(abs_float64);
     ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(ccall);
-    
-    BOX_F(int8,int32);  BOX_F(uint8,uint32);
-    BOX_F(int16,int16); BOX_F(uint16,uint16);
-    BOX_F(int32,int32); BOX_F(uint32,uint32);
-    BOX_F(int64,int64); BOX_F(uint64,uint64);
-    BOX_F(float32,float32); BOX_F(float64,float64);
-    BOX_F(char,char);
-
-    box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
-                              "jl_box8", (void*)*jl_box8);
-    box16_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int16),
-                              "jl_box16", (void*)*jl_box16);
-    box32_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int32),
-                              "jl_box32", (void*)*jl_box32);
-    box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
-                              "jl_box64", (void*)*jl_box64);
-
-    std::vector<Type*> toptrargs(0);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(T_int32);
-    value_to_pointer_func =
-        Function::Create(FunctionType::get(T_pint8, toptrargs, false),
-                         Function::ExternalLinkage, "jl_value_to_pointer",
-                         jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
-                                         (void*)&jl_value_to_pointer);
-
-    temp_arg_area = (char*)allocb_permanent(arg_area_sz);
-    arg_area_loc = 0;
-
-    std::vector<Type*> noargs(0);
-    save_arg_area_loc_func =
-        Function::Create(FunctionType::get(T_uint64, noargs, false),
-                         Function::ExternalLinkage, "save_arg_area_loc",
-                         jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(save_arg_area_loc_func,
-                                         (void*)&save_arg_area_loc);
-
-    restore_arg_area_loc_func =
-        Function::Create(ft1arg(T_void, T_uint64),
-                         Function::ExternalLinkage, "restore_arg_area_loc",
-                         jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
-                                         (void*)&restore_arg_area_loc);
 }

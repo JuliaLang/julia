@@ -89,15 +89,18 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *inferred;
     jl_value_t *file;
     jl_value_t *line;
+    struct _jl_module_t *module;
 
     // hidden fields:
     jl_fptr_t fptr;
     void *functionObject;
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
-    uptrint_t inInference;
-    uptrint_t inCompile;
+    uptrint_t inInference : 1;
+    uptrint_t inCompile : 1;
 } jl_lambda_info_t;
+
+#define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
 
 #define JL_FUNC_FIELDS                          \
     jl_fptr_t fptr;                             \
@@ -195,11 +198,10 @@ typedef struct {
 } jl_binding_t;
 
 typedef struct _jl_module_t {
-    // not first-class
+    JL_STRUCT_TYPE
     jl_sym_t *name;
     htable_t bindings;
     htable_t macros;
-    htable_t modules;
     arraylist_t imports;
 } jl_module_t;
 
@@ -266,6 +268,7 @@ extern jl_struct_type_t *jl_bits_kind;
 extern jl_type_t *jl_bottom_type;
 extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
+extern jl_struct_type_t *jl_module_type;
 extern jl_tag_type_t *jl_seq_type;
 extern jl_typector_t *jl_function_type;
 extern jl_tag_type_t *jl_abstractarray_type;
@@ -685,7 +688,6 @@ void jl_init_frontend(void);
 void jl_shutdown_frontend(void);
 void jl_init_primitives(void);
 void jl_init_builtins(void);
-void jl_init_modules(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
@@ -708,7 +710,6 @@ jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_system_module;
-extern DLLEXPORT jl_module_t *jl_user_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var);
@@ -787,9 +788,6 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr(f->env, args, nargs);
 }
-
-void jl_add_builtin(const char *name, jl_value_t *v);
-void jl_add_builtin_func(const char *name, jl_fptr_t f);
 
 JL_CALLABLE(jl_f_no_function);
 JL_CALLABLE(jl_f_tuple);

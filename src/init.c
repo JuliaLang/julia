@@ -120,7 +120,6 @@ void julia_init(char *imageFile)
 #endif
     jl_init_frontend();
     jl_init_types();
-    jl_init_modules();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
@@ -128,6 +127,10 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
+        jl_system_module = jl_new_module(jl_symbol("System"));
+        jl_set_const(jl_system_module, jl_symbol("System"),
+                     (jl_value_t*)jl_system_module);
+        jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_load_boot_j();
         jl_get_builtin_hooks();

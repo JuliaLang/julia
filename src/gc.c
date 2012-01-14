@@ -456,6 +456,27 @@ static void gc_mark_methlist(jl_methlist_t *ml)
     }
 }
 
+static void gc_mark_module(jl_module_t *m)
+{
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            gc_setmark(b);
+            if (b->value != NULL)
+                GC_Markval(b->value);
+            GC_Markval(b->type);
+        }
+    }
+    table = m->macros.table;
+    for(i=1; i < m->macros.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            GC_Markval((jl_value_t*)table[i]);
+        }
+    }
+}
+
 void jl_mark_type_cache(void *c);
 
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
@@ -553,6 +574,9 @@ static void gc_markval_(jl_value_t *v)
         gc_mark_methlist(mt->cache);
         if (mt->cache_1arg) GC_Markval(mt->cache_1arg);
     }
+    else if (vt == (jl_value_t*)jl_module_type) {
+        gc_mark_module((jl_module_t*)v);
+    }
     else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;
         GC_Markval(ta->on_exit);
@@ -604,28 +628,6 @@ static void gc_markval_(jl_value_t *v)
     }
 }
 
-static void gc_mark_module(jl_module_t *m)
-{
-    size_t i;
-    void **table = m->bindings.table;
-    gc_setmark(m);
-    for(i=1; i < m->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            gc_setmark(b);
-            if (b->value != NULL)
-                GC_Markval(b->value);
-            GC_Markval(b->type);
-        }
-    }
-    table = m->macros.table;
-    for(i=1; i < m->macros.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            GC_Markval((jl_value_t*)table[i]);
-        }
-    }
-}
-
 void jl_mark_box_caches(void);
 
 extern jl_value_t * volatile jl_task_arg_in_transit;
@@ -642,8 +644,7 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    gc_mark_module(jl_system_module);
-    gc_mark_module(jl_user_module);
+    GC_Markval(jl_system_module);
 
     // invisible builtin values
     GC_Markval(jl_methtable_type);

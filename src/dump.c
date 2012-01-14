@@ -33,6 +33,11 @@ static ptrint_t VALUE_TAGS;
 // pointers to non-AST-ish objects in a compressed tree
 static jl_array_t *tree_literal_values=NULL;
 
+// queue of IdTables to rehash
+static jl_array_t *idtable_list=NULL;
+static jl_value_t *jl_idtable_type=NULL;
+void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
+
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -163,6 +168,33 @@ static void jl_serialize_typecache(ios_t *s, jl_typename_t *tn)
             jl_serialize_value(s, tc->key[i]);
         }
         tc = tc->next;
+    }
+    jl_serialize_value(s, NULL);
+}
+
+static void jl_serialize_module(ios_t *s, jl_module_t *m)
+{
+    writetag(s, jl_module_type);
+    jl_serialize_value(s, m->name);
+    size_t i;
+    void **table = m->bindings.table;
+    for(i=1; i < m->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            jl_serialize_value(s, b->name);
+            jl_serialize_value(s, b->value);
+            jl_serialize_value(s, b->type);
+            write_int8(s, b->constp);
+            write_int8(s, b->exportp);
+        }
+    }
+    jl_serialize_value(s, NULL);
+    table = m->macros.table;
+    for(i=1; i < m->macros.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_serialize_value(s, table[i-1]);
+            jl_serialize_value(s, table[i]);
+        }
     }
     jl_serialize_value(s, NULL);
 }
@@ -322,6 +354,10 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->inferred);
         jl_serialize_value(s, (jl_value_t*)li->file);
         jl_serialize_value(s, (jl_value_t*)li->line);
+        jl_serialize_value(s, (jl_value_t*)li->module);
+    }
+    else if (jl_typeis(v, jl_module_type)) {
+        jl_serialize_module(s, (jl_module_t*)v);
     }
     else if (jl_typeis(v, jl_methtable_type)) {
         writetag(s, jl_methtable_type);
@@ -353,36 +389,14 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 jl_value_t *fld = ((jl_value_t**)v)[i+1];
                 jl_serialize_value(s, fld);
             }
+            if (t == jl_idtable_type) {
+                jl_cell_1d_push(idtable_list, v);
+            }
         }
         else {
             assert(0);
         }
     }
-}
-
-static void jl_serialize_module(ios_t *s, jl_module_t *m)
-{
-    size_t i;
-    void **table = m->bindings.table;
-    for(i=1; i < m->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_serialize_value(s, b->name);
-            jl_serialize_value(s, b->value);
-            jl_serialize_value(s, b->type);
-            write_int8(s, b->constp);
-            write_int8(s, b->exportp);
-        }
-    }
-    jl_serialize_value(s, NULL);
-    table = m->macros.table;
-    for(i=1; i < m->macros.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_serialize_value(s, table[i-1]);
-            jl_serialize_value(s, table[i]);
-        }
-    }
-    jl_serialize_value(s, NULL);
 }
 
 htable_t *jl_gc_get_finalizer_table();
@@ -527,9 +541,6 @@ static typekey_stack_t *jl_deserialize_typecache(ios_t *s)
     return tk;
 }
 
-jl_struct_type_t *jl_idtable_type=NULL;
-void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
-
 static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
@@ -659,7 +670,8 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
-            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type, 15);
+            (jl_lambda_info_t*)newobj((jl_type_t*)jl_lambda_info_type,
+                                      LAMBDA_INFO_NW);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, li);
         li->ast = jl_deserialize_value(s);
@@ -671,6 +683,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->inferred = jl_deserialize_value(s);
         li->file = jl_deserialize_value(s);
         li->line = jl_deserialize_value(s);
+        li->module = (jl_module_t*)jl_deserialize_value(s);
 
         li->fptr = NULL;
         li->roots = NULL;
@@ -679,6 +692,30 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->inCompile = 0;
         li->unspecialized = NULL;
         return (jl_value_t*)li;
+    }
+    else if (vtag == (jl_value_t*)jl_module_type) {
+        jl_module_t *m = jl_new_module(anonymous_sym);
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, m);
+        m->name = (jl_sym_t*)jl_deserialize_value(s);
+        while (1) {
+            jl_value_t *name = jl_deserialize_value(s);
+            if (name == NULL)
+                break;
+            jl_binding_t *b = jl_get_binding(m, (jl_sym_t*)name);
+            b->value = jl_deserialize_value(s);
+            b->type = (jl_type_t*)jl_deserialize_value(s);
+            b->constp = read_int8(s);
+            b->exportp = read_int8(s);
+        }
+        while (1) {
+            jl_value_t *name = jl_deserialize_value(s);
+            if (name == NULL)
+                break;
+            jl_set_expander(m, (jl_sym_t*)name,
+                            (jl_function_t*)jl_deserialize_value(s));
+        }
+        return (jl_value_t*)m;
     }
     else if (vtag == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
@@ -737,10 +774,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         }
         if (nf == 0 && typ->instance==NULL)
             typ->instance = v;
-        if (typ == jl_idtable_type) {
-            jl_idtable_rehash(&((jl_array_t**)v)[1],
-                              ((jl_array_t**)v)[1]->length);
-        }
         // TODO: put WeakRefs on the weak_refs list
         return v;
     }
@@ -751,26 +784,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     return NULL;
 }
 
-static void jl_deserialize_module(ios_t *s, jl_module_t *m)
-{
-    while (1) {
-        jl_value_t *name = jl_deserialize_value(s);
-        if (name == NULL)
-            break;
-        jl_binding_t *b = jl_get_binding(m, (jl_sym_t*)name);
-        b->value = jl_deserialize_value(s);
-        b->type = (jl_type_t*)jl_deserialize_value(s);
-        b->constp = read_int8(s);
-        b->exportp = read_int8(s);
-    }
-    while (1) {
-        jl_value_t *name = jl_deserialize_value(s);
-        if (name == NULL)
-            break;
-        jl_set_expander(m, (jl_sym_t*)name,
-                        (jl_function_t*)jl_deserialize_value(s));
-    }
-}
 /*
 static void jl_deserialize_finalizers(ios_t *s)
 {
@@ -797,8 +810,9 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
-    jl_serialize_value(&f, jl_get_global(jl_system_module,
-                                         jl_symbol("IdTable")));
+    jl_idtable_type = jl_get_global(jl_system_module, jl_symbol("IdTable"));
+    idtable_list = jl_alloc_cell_1d(0);
+
     jl_serialize_value(&f, jl_array_type->env);
     jl_serialize_typecache(&f, jl_array_type->name);
     jl_serialize_typecache(&f, jl_type_type->name);
@@ -806,7 +820,10 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_typecache(&f, jl_seq_type->name);
     jl_serialize_typecache(&f, jl_abstractarray_type->name);
 
-    jl_serialize_module(&f, jl_system_module);
+    jl_serialize_value(&f, jl_system_module);
+
+    jl_serialize_value(&f, idtable_list);
+
     //jl_serialize_finalizers(&f);
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
@@ -845,7 +862,6 @@ void jl_restore_system_image(char *fname)
     jl_gc_disable();
 #endif
 
-    jl_idtable_type = (jl_struct_type_t*)jl_deserialize_value(&f);
     jl_array_type->env = jl_deserialize_value(&f);
     jl_array_type->name->cache = jl_deserialize_typecache(&f);
     jl_type_type->name->cache = jl_deserialize_typecache(&f);
@@ -853,7 +869,15 @@ void jl_restore_system_image(char *fname)
     jl_seq_type->name->cache = jl_deserialize_typecache(&f);
     jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
     
-    jl_deserialize_module(&f, jl_system_module);
+    jl_system_module = (jl_module_t*)jl_deserialize_value(&f);
+
+    jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
+    // rehash IdTables
+    for(int i=0; i < idtl->length; i++) {
+        jl_value_t *v = jl_cellref(idtl, i);
+        jl_idtable_rehash(&((jl_array_t**)v)[1],
+                          ((jl_array_t**)v)[1]->length);
+    }
 
     jl_get_builtin_hooks();
     jl_array_uint8_type =
@@ -951,6 +975,7 @@ void jl_init_serializer(void)
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      jl_intrinsic_type, jl_methtable_type,
                      jl_typename_type, jl_lambda_info_type, jl_tvar_type,
+                     jl_module_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
@@ -1051,7 +1076,8 @@ void jl_init_serializer(void)
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_tvar_type->name,
                      jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
-                     jl_lambda_info_type->name, jl_box_type->name,
+                     jl_lambda_info_type->name, jl_module_type->name,
+                     jl_box_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
                      jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,

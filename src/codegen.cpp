@@ -2024,7 +2024,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->doInitialization();
 }
 
-extern "C" void jl_init_codegen()
+extern "C" void jl_init_codegen(void)
 {
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
@@ -2040,9 +2040,53 @@ extern "C" void jl_init_codegen()
 
     init_julia_llvm_env(jl_Module);
 
-    jl_init_intrinsic_functions();
     jl_jit_events = new JuliaJITEventListener();
     jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
+
+    BOX_F(int8,int32);  BOX_F(uint8,uint32);
+    BOX_F(int16,int16); BOX_F(uint16,uint16);
+    BOX_F(int32,int32); BOX_F(uint32,uint32);
+    BOX_F(int64,int64); BOX_F(uint64,uint64);
+    BOX_F(float32,float32); BOX_F(float64,float64);
+    BOX_F(char,char);
+
+    box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
+                              "jl_box8", (void*)*jl_box8);
+    box16_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int16),
+                              "jl_box16", (void*)*jl_box16);
+    box32_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int32),
+                              "jl_box32", (void*)*jl_box32);
+    box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
+                              "jl_box64", (void*)*jl_box64);
+
+    std::vector<Type*> toptrargs(0);
+    toptrargs.push_back(jl_pvalue_llvmt);
+    toptrargs.push_back(jl_pvalue_llvmt);
+    toptrargs.push_back(T_int32);
+    value_to_pointer_func =
+        Function::Create(FunctionType::get(T_pint8, toptrargs, false),
+                         Function::ExternalLinkage, "jl_value_to_pointer",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
+                                         (void*)&jl_value_to_pointer);
+
+    temp_arg_area = (char*)allocb_permanent(arg_area_sz);
+    arg_area_loc = 0;
+
+    std::vector<Type*> noargs(0);
+    save_arg_area_loc_func =
+        Function::Create(FunctionType::get(T_uint64, noargs, false),
+                         Function::ExternalLinkage, "save_arg_area_loc",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(save_arg_area_loc_func,
+                                         (void*)&save_arg_area_loc);
+
+    restore_arg_area_loc_func =
+        Function::Create(ft1arg(T_void, T_uint64),
+                         Function::ExternalLinkage, "restore_arg_area_loc",
+                         jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(restore_arg_area_loc_func,
+                                         (void*)&restore_arg_area_loc);
 }
 
 /*

@@ -1230,16 +1230,6 @@ static void add_builtin_func(const char *name, jl_fptr_t f)
     add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL));
 }
 
-void jl_add_builtin_func(const char *name, jl_fptr_t f)
-{
-    return add_builtin_func(name, f);
-}
-
-void jl_add_builtin(const char *name, jl_value_t *v)
-{
-    return add_builtin(name, v);
-}
-
 void jl_init_primitives(void)
 {
     add_builtin_func("is", jl_f_is);
@@ -1256,6 +1246,7 @@ void jl_init_primitives(void)
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isbound", jl_f_isbound);
+    add_builtin_func("yieldto", jl_f_yieldto);
     
     // functions for internal use
     add_builtin_func("tupleref",  jl_f_tupleref);
@@ -1299,12 +1290,14 @@ void jl_init_primitives(void)
     // todo: this should only be visible to compiler components
     add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
+    add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);
+    add_builtin("Task", (jl_value_t*)jl_task_type);
 
     add_builtin("AbstractArray", (jl_value_t*)jl_abstractarray_type);
     add_builtin("Array", (jl_value_t*)jl_array_type);
