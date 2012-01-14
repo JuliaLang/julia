@@ -890,10 +890,7 @@ bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
 bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x), 32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
-nibs(x::Union(Bool,Int8,Uint8))           = hex(reinterpret(Uint8 ,x),  2)
-nibs(x::Union(Int16,Uint16))              = hex(reinterpret(Uint16,x),  4)
-nibs(x::Union(Char,Int32,Uint32,Float32)) = hex(reinterpret(Uint32,x),  8)
-nibs(x::Union(Int64,Uint64,Float64))      = hex(reinterpret(Uint64,x), 16)
+num2hex(x::Integer) = hex(unsigned(x), sizeof(x)*2)
 
 ## string to float functions ##
 

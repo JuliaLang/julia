@@ -1235,10 +1235,10 @@ function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
         return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
     end
 end
-ctranspose{T<:Union(Float64,Float32)}(A::Matrix{T}) = transpose(A)
 
-ctranspose(x::StridedVector) = transpose(x)
-ctranspose(x::StridedMatrix) = transpose(x)
+ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
+
+ctranspose(x::StridedVecOrMat) = transpose(x)
 
 transpose(x::StridedVector) = [ x[j] | i=1, j=1:size(x,1) ]
 transpose(x::StridedMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
