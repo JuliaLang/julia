@@ -205,6 +205,7 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     jl_lambda_info_t *nli = jl_new_lambda_info(l->ast, sp);
     nli->name = l->name;
     nli->fptr = l->fptr;
+    nli->module = l->module;
     JL_GC_POP();
     return nli;
 }

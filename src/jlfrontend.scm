@@ -51,8 +51,8 @@
     ;; vars assigned anywhere, if they have been defined as global
     (filter defined-julia-global (find-possible-globals e)))))
 
-; return a lambda expression representing a thunk for a top-level expression
-(define (expand-toplevel-expr e)
+;; return a lambda expression representing a thunk for a top-level expression
+(define (expand-toplevel-expr- e)
   (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
       e
       (let* ((ex (julia-expand0 e))
@@ -64,11 +64,42 @@
 			     ,ex))))))
 	(if (null? (cdr (cadr (caddr th))))
 	    ;; if no locals, return just body of function
-	    (let ((body (cadddr th)))
-	      body)
+	    (cadddr th)
 	    `(thunk ,th)))))
 
-(define (jl-just-parse-string s pos0 greedy)
+;; (body (= v _) (return v)) => (= v _)
+(define (simple-assignment? e)
+  (and (length= e 3) (eq? (car e) 'body)
+       (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
+       (eq? (cadr (caddr e)) (cadadr e))))
+
+(define (lambda-ex? e)
+  (and (pair? e) (eq? (car e) 'lambda)))
+
+(define (expand-toplevel-expr e)
+  (let ((ex (expand-toplevel-expr- e)))
+    (cond ((simple-assignment? ex)  (cadr ex))
+	  ((and (length= ex 2) (eq? (car ex) 'body)
+		(not (lambda-ex? (cadadr ex))))
+	   ;; (body (return x)) => x
+	   ;; if x is not a lambda expr, so we don't think it is a thunk
+	   ;; to be called immediately.
+	   (cadadr ex))
+	  (else ex))))
+
+(define (has-macrocalls? e)
+  (or (and (pair? e) (eq? (car e) 'macrocall))
+      (and (not (and (pair? e) (eq? (car e) 'quote)))
+	   (any has-macrocalls? e))))
+
+;; expand expression right after parsing if it's OK to do so
+(define (pre-expand-toplevel-expr e)
+  (if (or (and (pair? e) (eq? (car e) 'module))
+	  (has-macrocalls? e))
+      e
+      (expand-toplevel-expr e)))
+
+(define (jl-parse-one-string s pos0 greedy)
   (set! current-filename 'string)
   (let ((inp (open-input-string s)))
     (io.seek inp pos0)
@@ -86,53 +117,22 @@
 			(expr (julia-parse inp)))
 		   (if (not (eof-object? (julia-parse inp)))
 		       (error "extra input after end of expression")
-		       (expand-toplevel-expr expr))))))
-
-(define (has-macrocalls? e)
-  (or (and (pair? e) (eq? (car e) 'macrocall))
-      (and (not (and (pair? e) (eq? (car e) 'quote)))
-	   (any has-macrocalls? e))))
-
-;; (body (= v _) (return v)) => (= v _)
-(define (simple-assignment? e)
-  (and (length= e 3) (eq? (car e) 'body)
-       (pair? (cadr e)) (eq? (caadr e) '=) (symbol? (cadadr e))
-       (eq? (cadr (caddr e)) (cadadr e))))
-
-(define (lambda-ex? e)
-  (and (pair? e) (eq? (car e) 'lambda)))
-
-;; in a file, we want to expand in advance as many expressions as possible.
-;; we can't do this for expressions with macro calls, because the needed
-;; macros might not have been defined yet (since that is done by the
-;; evaluator). or, in the case of saving pre-lowered code, macros might be
-;; defined in other files, creating implicit dependencies.
-(define (file-toplevel-expr e)
-  (if (has-macrocalls? e)
-      `(unexpanded ,e)
-      (let ((ex (expand-toplevel-expr e)))
-	(cond ((simple-assignment? ex)  (cadr ex))
-	      ((and (length= ex 2) (eq? (car ex) 'body)
-		    (not (lambda-ex? (cadadr ex))))
-	       (cadadr ex))
-	      (else ex)))))
+		       (pre-expand-toplevel-expr expr))))))
 
 (define (jl-parse-named-stream name stream)
   (parser-wrap (lambda ()
-		 (cons 'file (map file-toplevel-expr
-				  (julia-parse-file name stream))))))
+		 (cons 'file (map pre-expand-toplevel-expr
+				  (julia-parse-stream name stream))))))
 
-(define (jl-parse-source-string str)
+;; parse file-in-a-string
+(define (jl-parse-string-stream str)
   (jl-parse-named-stream "string" (open-input-string str)))
 
-(define (jl-parse-source s)
+(define (jl-parse-file s)
   (let ((infile (open-input-file s)))
     (begin0
      (jl-parse-named-stream s infile)
      (io.close infile))))
-
-(define (jl-parse-file s)
-  (jl-parse-source s))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

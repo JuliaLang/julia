@@ -128,6 +128,7 @@ void julia_init(char *imageFile)
 
     if (!imageFile) {
         jl_system_module = jl_new_module(jl_symbol("System"));
+        jl_current_module = jl_system_module;
         jl_set_const(jl_system_module, jl_symbol("System"),
                      (jl_value_t*)jl_system_module);
         jl_init_intrinsic_functions();

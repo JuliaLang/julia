@@ -870,6 +870,7 @@ void jl_restore_system_image(char *fname)
     jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
     
     jl_system_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_current_module = jl_system_module;
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash IdTables

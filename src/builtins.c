@@ -212,6 +212,52 @@ JL_CALLABLE(jl_f_apply)
 
 // eval -----------------------------------------------------------------------
 
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
+                                  volatile size_t *plineno);
+
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
+{
+    assert(ex->head == module_sym);
+    jl_module_t *last_module = jl_current_module;
+    jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 0);
+    assert(jl_is_symbol(name));
+    jl_binding_t *b = jl_get_binding(jl_current_module, name);
+    jl_declare_constant(b);
+    if (b->value != NULL) {
+        ios_printf(ios_stderr, "Warning: redefinition of module %s ignored\n",
+                   name->name);
+        return jl_nothing;
+    }
+    jl_module_t *newm = jl_new_module(name);
+    b->value = (jl_value_t*)newm;
+    JL_GC_PUSH(&last_module);
+    jl_current_module = newm;
+    // TODO: set up imports and exports
+
+    jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 1))->args;
+    JL_TRY {
+        for(int i=0; i < exprs->length; i++) {
+            // process toplevel form
+            jl_value_t *form = jl_cellref(exprs, i);
+            if (jl_is_linenode(form) && plineno) {
+                *plineno = jl_linenode_line(form);
+            }
+            else {
+                jl_mark_lambda_module(form, jl_current_module);
+                (void)jl_toplevel_eval_flex(form, 0, plineno);
+            }
+        }
+    }
+    JL_CATCH {
+        JL_GC_POP();
+        jl_current_module = last_module;
+        jl_raise(jl_exception_in_transit);
+    }
+    JL_GC_POP();
+    jl_current_module = last_module;
+    return jl_nothing;
+}
+
 static int is_intrinsic(jl_sym_t *s)
 {
     jl_value_t **bp = jl_get_bindingp(jl_system_module, s);
@@ -264,13 +310,39 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 
 jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
+                                  volatile size_t *plineno)
 {
     //jl_show(ex);
     //ios_printf(ios_stdout, "\n");
-    jl_lambda_info_t *thk;
+    if (!jl_is_expr(e))
+        return jl_interpret_toplevel_expr(e);
+
+    jl_expr_t *ex = (jl_expr_t*)e;
+    if (ex->head == null_sym || ex->head == isbound_sym ||
+        ex->head == error_sym) {
+        // expression types simple enough not to need expansion
+        return jl_interpret_toplevel_expr(e);
+    }
+
+    if (ex->head == module_sym) {
+        return jl_eval_module_expr(ex, plineno);
+    }
+
+    jl_value_t *thunk=NULL;
+    jl_value_t *result;
+    jl_lambda_info_t *thk=NULL;
     int ewc = 0;
-    if (jl_is_expr(ex) && ((jl_expr_t*)ex)->head == thunk_sym) {
+    JL_GC_PUSH(&thunk, &thk, &ex);
+
+    if (ex->head == body_sym || ex->head == thunk_sym) {
+        // already expanded
+    }
+    else {
+        ex = (jl_expr_t*)jl_expand(e);
+    }
+
+    if (jl_is_expr(ex) && ex->head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
         ewc = eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
@@ -288,16 +360,16 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
     }
     else {
         if (jl_is_expr(ex) && eval_with_compiler_p((jl_expr_t*)ex, fast)) {
-            thk = jl_wrap_expr(ex);
+            thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
         else {
-            return jl_interpret_toplevel_expr(ex);
+            result = jl_interpret_toplevel_expr((jl_value_t*)ex);
+            JL_GC_POP();
+            return result;
         }
     }
-    jl_value_t *thunk=NULL;
-    jl_value_t *result;
-    JL_GC_PUSH(&thunk, &thk);
+
     if (ewc) {
         thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
         result = jl_apply((jl_function_t*)thunk, NULL, 0);
@@ -311,7 +383,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *ex, int fast)
 
 jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
-    return jl_toplevel_eval_flex(v, 1);
+    return jl_toplevel_eval_flex(v, 1, NULL);
 }
 
 int asprintf(char **strp, const char *fmt, ...);
@@ -331,26 +403,16 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         if (((jl_expr_t*)ast)->head == error_sym) {
             jl_interpret_toplevel_expr(ast);
         }
-        jl_value_t *form=NULL;
-        JL_GC_PUSH(&form);
         for(i=0; i < b->length; i++) {
             // process toplevel form
-            form = jl_cellref(b, i);
+            jl_value_t *form = jl_cellref(b, i);
             if (jl_is_linenode(form)) {
                 lineno = jl_linenode_line(form);
             }
             else {
-                if (jl_is_expr(form) &&
-                    ((jl_expr_t*)form)->head == unexpanded_sym) {
-                    // delayed expansion, for macro calls
-                    form = jl_exprarg(form, 0);
-                    form = jl_expand(form);
-                }
-                //(void)jl_interpret_toplevel_thunk(form);
-                (void)jl_toplevel_eval_flex(form, 0);
+                (void)jl_toplevel_eval_flex(form, 0, &lineno);
             }
         }
-        JL_GC_POP();
     }
     JL_CATCH {
         jl_value_t *fn=NULL, *ln=NULL;
@@ -428,27 +490,7 @@ void jl_load(const char *fname)
 JL_CALLABLE(jl_f_top_eval)
 {
     JL_NARGS(eval, 1, 1);
-    jl_value_t *e = args[0];
-    if (!jl_is_expr(e))
-        return jl_interpret_toplevel_expr(e);
-    jl_expr_t *ex = (jl_expr_t*)e;
-    if (ex->head == null_sym ||
-        ex->head == isbound_sym || ex->head == error_sym) {
-        // expression types simple enough not to need expansion
-        return jl_interpret_toplevel_expr(e);
-    }
-    jl_value_t *exex = NULL;
-    JL_GC_PUSH(&exex);
-    if (ex->head == body_sym || ex->head == thunk_sym) {
-        // already expanded
-        exex = e;
-    }
-    else {
-        exex = jl_expand(e);
-    }
-    jl_value_t *result = jl_toplevel_eval(exex);
-    JL_GC_POP();
-    return result;
+    return jl_toplevel_eval(args[0]);
 }
 
 JL_CALLABLE(jl_f_isbound)

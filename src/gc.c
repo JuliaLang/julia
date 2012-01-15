@@ -645,6 +645,7 @@ static void gc_mark(void)
 
     // modules
     GC_Markval(jl_system_module);
+    GC_Markval(jl_current_module);
 
     // invisible builtin values
     GC_Markval(jl_methtable_type);

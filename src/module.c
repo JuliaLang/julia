@@ -14,6 +14,8 @@
 
 jl_module_t *jl_system_module=NULL;
 
+jl_module_t *jl_current_module;
+
 static jl_binding_t *varlist_binding=NULL;
 
 jl_module_t *jl_new_module(jl_sym_t *name)
@@ -97,8 +99,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
         //jl_errorf("cannot redefine constant %s", b->name->name);
-        ios_printf(ios_stderr,
-                   "Warning: redefinition of constant %s ignored\n",
+        ios_printf(ios_stderr, "Warning: redefinition of constant %s ignored\n",
                    b->name->name);
     }
     else {

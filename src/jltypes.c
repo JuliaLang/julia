@@ -2579,7 +2579,7 @@ void jl_init_types(void)
     lambda_sym = jl_symbol("lambda");
     vinf_sym = jl_symbol("vinf");
     macro_sym = jl_symbol("macro");
-    unexpanded_sym = jl_symbol("unexpanded");
+    module_sym = jl_symbol("module");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     isbound_sym = jl_symbol("isbound");

@@ -726,6 +726,12 @@
 			 (eq? (car assgn) 'local))))
 	   (error "expected assignment after const")
 	   `(const ,assgn))))
+    ((module)
+     (let ((name (parse-atom s)))
+       (if (not (symbol? name))
+	   (error (string "invalid module name " name)))
+       (begin0 (list word name (parse-block s))
+	       (expect-end s))))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
@@ -1160,7 +1166,7 @@
       (error (string "extra input after end of expression: "
 		     (peek-token s)))))
 
-(define (julia-parse-file filename stream)
+(define (julia-parse-stream filename stream)
   (set! current-filename (symbol filename))
   (let ((s (make-token-stream stream)))
     (with-exception-catcher

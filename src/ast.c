@@ -404,6 +404,9 @@ static value_t julia_to_scm(jl_value_t *v)
                        fl_cons(julia_to_scm(jl_fieldref(v,0)),
                                FL_NIL));
     }
+    if (jl_is_long(v) && fits_fixnum(jl_unbox_long(v))) {
+        return fixnum(jl_unbox_long(v));
+    }
     if (jl_is_array(v)) {
         return array_to_list((jl_array_t*)v);
     }
@@ -428,7 +431,7 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
 {
     value_t s = cvalue_static_cstring(str);
-    value_t p = fl_applyn(3, symbol_value(symbol("jl-just-parse-string")),
+    value_t p = fl_applyn(3, symbol_value(symbol("jl-parse-one-string")),
                           s, fixnum(pos0), greedy?FL_T:FL_F);
     jl_value_t *expr=NULL, *pos1=NULL;
     JL_GC_PUSH(&expr, &pos1);
@@ -458,7 +461,7 @@ jl_value_t *jl_parse_file(const char *fname)
 
 jl_value_t *jl_parse_file_string(const char *text)
 {
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-source-string")),
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
                           cvalue_static_cstring(text));
     if (!iscons(e))
         return (jl_value_t*)jl_null;
@@ -588,6 +591,24 @@ int jl_is_rest_arg(jl_value_t *ex)
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;
     return 1;
+}
+
+void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m)
+{
+    if (jl_is_lambda_info(expr)) {
+        jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
+        li->module = m;
+    }
+    else if (jl_typeis(expr,jl_array_any_type)) {
+        jl_array_t *a = (jl_array_t*)expr;
+        for(size_t i=0; i < a->length; i++)
+            jl_mark_lambda_module(jl_cellref(a,i), m);
+    }
+    else if (jl_is_expr(expr)) {
+        jl_expr_t *e = (jl_expr_t*)expr;
+        for(size_t i=0; i < e->args->length; i++)
+            jl_mark_lambda_module(jl_exprarg(e,i), m);
+    }
 }
 
 void jl_specialize_ast(jl_lambda_info_t *li);

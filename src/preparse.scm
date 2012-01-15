@@ -3,6 +3,6 @@
 (with-bindings
  ((*print-pretty* #f))
  (print
-  (jl-parse-source (cadr *argv*))))
+  (jl-parse-file (cadr *argv*))))
 
 (newline)

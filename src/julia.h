@@ -349,14 +349,13 @@ extern jl_sym_t *line_sym;
 extern jl_sym_t *multivalue_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;
-extern jl_sym_t *vinf_sym;
+extern jl_sym_t *vinf_sym;    extern jl_sym_t *module_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
 extern jl_sym_t *isbound_sym; extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *unexpanded_sym;
 extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
@@ -710,6 +709,7 @@ jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_system_module;
+extern jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var);
@@ -760,6 +760,7 @@ jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
+void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m);
 
 jl_value_t *jl_compress_ast(jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
