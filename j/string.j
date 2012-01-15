@@ -710,8 +710,7 @@ function lpad(s::String, n::Integer, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    t = promote_type(typeof(s),typeof(p))
-    convert(t, p^q*p[1:chr2ind(p,r)]*s)
+    cstring(p^q*p[1:chr2ind(p,r)]*s)
 end
 function rpad(s::String, n::Integer, p::String)
     m = n - strlen(s)
@@ -719,8 +718,7 @@ function rpad(s::String, n::Integer, p::String)
     l = strlen(p)
     q = div(m,l)
     r = m - q*l
-    t = promote_type(typeof(s),typeof(p))
-    convert(t, s*p^q*p[1:chr2ind(p,r)])
+    cstring(s*p^q*p[1:chr2ind(p,r)])
 end
 
 lpad(s, n::Integer, p) = lpad(string(s), n, string(p))
@@ -756,17 +754,6 @@ end
 split(s::String, x) = split(s, x, true)
 split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
-function print_joined(strings, delim)
-    i = start(strings)
-    while !done(strings,i)
-        str, i = next(strings,i)
-        print(str)
-        if !done(strings,i)
-            print(delim)
-        end
-    end
-end
-
 function print_joined(strings, delim, last)
     i = start(strings)
     if done(strings,i)
@@ -781,8 +768,19 @@ function print_joined(strings, delim, last)
     end
 end
 
-join(strings, delim) = print_to_string(print_joined, strings, delim)
-join(strings, delim, last) = print_to_string(print_joined, strings, delim, last)
+function print_joined(strings, delim)
+    i = start(strings)
+    while !done(strings,i)
+        str, i = next(strings,i)
+        print(str)
+        if !done(strings,i)
+            print(delim)
+        end
+    end
+end
+print_joined(strings) = print_joined(strings, "")
+
+join(args...) = print_to_string(print_joined, args...)
 
 chop(s::String) = s[1:thisind(s,length(s))-1]
 chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
@@ -826,6 +824,7 @@ uint64(s::String) = parse_int(Uint64, s, 10)
 
 ## integer to string functions ##
 
+# TODO: this can be done faster for Int32, Int64
 function ndigits(n::Integer, b::Integer)
     nd = 1
     ba = convert(typeof(n), b)
@@ -839,8 +838,6 @@ function ndigits(n::Integer, b::Integer)
     return nd
 end
 
-int2str(n::Integer, b::Integer) = int2str(int64(n), b)
-
 function int2str(n::Union(Int64,Uint64), b::Integer)
     if b < 2 || b > 40; error("int2str: invalid base ", b); end
     if n == typemin(Int64)
@@ -848,12 +845,12 @@ function int2str(n::Union(Int64,Uint64), b::Integer)
         # since abs(n) is still negative.
         return "-9223372036854775808"
     end
-    neg = n<0 ? 1 : 0
+    neg = n < 0
     n = abs(n)
     b = convert(typeof(n), b)
     ndig = ndigits(n, b)
     sz = convert(Int, ndig)
-    data = Array(Uint8, sz + neg)
+    data = Array(Uint8, sz+neg)
     for i=(sz+neg):-1:(1+neg)
         ch = n % b
         if ch < 10
@@ -866,11 +863,12 @@ function int2str(n::Union(Int64,Uint64), b::Integer)
             break
         end
     end
-    if neg>0
+    if neg
         data[1] = '-'
     end
     ASCIIString(data)
 end
+int2str(n::Integer, b::Integer) = int2str(int64(n), b)
 int2str(n::Integer, b::Integer, len::Integer) = lpad(int2str(n,b),len,'0')
 
 # TODO: support signed Ints too
