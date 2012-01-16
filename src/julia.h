@@ -332,7 +332,6 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_show_gf;
 extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
-extern jl_function_t *jl_append_any_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 
@@ -436,6 +435,7 @@ void *allocb_permanent(size_t sz);
 #define jl_is_topnode(v)     jl_typeis(v,jl_topnode_type)
 #define jl_is_linenode(v)    jl_typeis(v,jl_linenumbernode_type)
 #define jl_is_lambda_info(v) jl_typeis(v,jl_lambda_info_type)
+#define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
 #define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
@@ -708,6 +708,7 @@ DLLEXPORT void jl_show(jl_value_t *v);
 jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
+extern jl_module_t *jl_base_module;
 extern DLLEXPORT jl_module_t *jl_system_module;
 extern jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
@@ -733,6 +734,7 @@ DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 char *jl_find_file_in_path(const char *fname);
 DLLEXPORT void jl_load(const char *fname);
 void jl_load_file_expr(char *fname, jl_value_t *ast);

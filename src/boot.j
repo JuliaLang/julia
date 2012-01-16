@@ -61,11 +61,20 @@
 #type Array{T,N} <: AbstractArray{T,N}
 #end
 
+#type Module
+#    name::Symbol
+#end
+
 #type LambdaStaticData
 #    ast::Expr
 #    sparams::Tuple
 #    tfunc
 #    name::Symbol
+#    specializations
+#    inferred
+#    file::Symbol
+#    line::Int
+#    module::Module
 #end
 
 #type Box{T}
@@ -229,27 +238,6 @@ type BackTrace <: Exception
     e
     trace::Array{Any,1}
 end
-
-function append_any(xs...)
-    # used by apply() and quote
-    # must be a separate function from append(), since apply() needs this
-    # exact function.
-    n = 0
-    for x = xs
-        n += numel(x)
-    end
-    out = Array(Any, n)
-    i = 1
-    for x = xs
-        for y = x
-            arrayset(out, i, y)
-            i += 1
-        end
-    end
-    out
-end
-
-append(xs...) = append_any(xs...)
 
 method_missing(f, args...) = throw(MethodError(f, args))
 

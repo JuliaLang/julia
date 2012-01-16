@@ -820,7 +820,8 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_typecache(&f, jl_seq_type->name);
     jl_serialize_typecache(&f, jl_abstractarray_type->name);
 
-    jl_serialize_value(&f, jl_system_module);
+    jl_serialize_value(&f, jl_base_module);
+    jl_serialize_value(&f, jl_current_module);
 
     jl_serialize_value(&f, idtable_list);
 
@@ -869,8 +870,10 @@ void jl_restore_system_image(char *fname)
     jl_seq_type->name->cache = jl_deserialize_typecache(&f);
     jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
     
-    jl_system_module = (jl_module_t*)jl_deserialize_value(&f);
-    jl_current_module = jl_system_module;
+    jl_base_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_current_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_system_module = (jl_module_t*)jl_get_global(jl_base_module,
+                                                   jl_symbol("System"));
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash IdTables

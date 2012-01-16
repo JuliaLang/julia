@@ -81,7 +81,6 @@ static Value *V_null;
 static GlobalVariable *jltrue_var;
 static GlobalVariable *jlfalse_var;
 static GlobalVariable *jlnull_var;
-static GlobalVariable *jlsysmod_var;
 static GlobalVariable *jlfloat32temp_var;
 #ifdef JL_GC_MARKSWEEP
 static GlobalVariable *jlpgcstack_var;
@@ -1372,7 +1371,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.labels = &labels;
     ctx.savestates = &savestates;
     ctx.jmpbufs = &jmpbufs;
-    ctx.module = jl_system_module; //TODO
+    ctx.module = lam->module;
     ctx.ast = ast;
     ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
     //JL_GC_PUSH(&ctx.sp);
@@ -1818,7 +1817,6 @@ static void init_julia_llvm_env(Module *m)
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
-    jlsysmod_var = global_to_llvm("jl_system_module", (void*)&jl_system_module);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
     jlfloat32temp_var =

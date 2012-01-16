@@ -19,7 +19,7 @@ gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
 
-current_task() = ccall(:jl_get_current_task, Any, ())::Task
+current_task() = ccall(:jl_get_current_task, Task, ())
 istaskdone(t::Task) = t.done
 
 cstring(str::ByteString) = str
@@ -38,6 +38,27 @@ dlopen(fname::String) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), cstring(fname))
 
 identity(x) = x
+
+function append_any(xs...)
+    # used by apply() and quote
+    # must be a separate function from append(), since apply() needs this
+    # exact function.
+    n = 0
+    for x = xs
+        n += numel(x)
+    end
+    out = Array(Any, n)
+    i = 1
+    for x = xs
+        for y = x
+            arrayset(out, i, y)
+            i += 1
+        end
+    end
+    out
+end
+
+append(xs...) = append_any(xs...)
 
 macro thunk(ex); :(()->$ex); end
 macro L_str(s); s; end

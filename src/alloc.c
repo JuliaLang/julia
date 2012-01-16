@@ -294,7 +294,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
             li->line = jl_exprarg(body1, 0);
         }
     }
-    li->module = jl_system_module;
+    li->module = jl_current_module;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
     li->fptr = NULL;

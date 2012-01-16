@@ -37,7 +37,7 @@ value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
     argcount("defined-julia-global", nargs, 1);
     (void)tosymbol(args[0], "defined-julia-global");
     char *name = symbol_name(args[0]);
-    return jl_boundp(jl_system_module, jl_symbol(name)) ? FL_T : FL_F;
+    return jl_boundp(jl_current_module, jl_symbol(name)) ? FL_T : FL_F;
 }
 
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
@@ -46,7 +46,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
         argcount("invoke-julia-macro", nargs, 1);
     (void)tosymbol(args[0], "invoke-julia-macro");
     jl_sym_t *name = jl_symbol(symbol_name(args[0]));
-    jl_function_t *f = jl_get_expander(jl_system_module, name);
+    jl_function_t *f = jl_get_expander(jl_current_module, name);
     if (f == NULL)
         return FL_F;
     jl_value_t **margs;

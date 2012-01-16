@@ -14,16 +14,17 @@ end
 
 type CallStack
     ast
+    mod::Module
     types::Tuple
     n::Int32
     recurred::Bool
     result
     prev::Union(EmptyCallStack,CallStack)
 
-    CallStack(ast, types, prev::EmptyCallStack) =
-        new(ast, types, 0, false, None, prev)
-    CallStack(ast, types, prev::CallStack) =
-        new(ast, types, prev.n+1, false, None, prev)
+    CallStack(ast, mod, types, prev::EmptyCallStack) =
+        new(ast, mod, types, 0, false, None, prev)
+    CallStack(ast, mod, types, prev::CallStack) =
+        new(ast, mod, types, prev.n+1, false, None, prev)
 end
 
 # TODO thread local
@@ -42,12 +43,21 @@ isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
 isgeneric(f) = ccall(:jl_is_genericfunc, Int32, (Any,), f) != 0
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
-isconstant(s::Symbol) =
-    isbound(s) && (ccall(:jl_is_const, Int32, (Any,), s) != 0)
-isconstant(s::SymbolNode) = isconstant(s.name)
-isconstant(s::TopNode) = isconstant(s.name)
-isconstant(x::Expr) = false
-isconstant(x) = true
+isconst(s::Symbol) =
+    ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
+
+function _iisconst(s::Symbol)
+    m = (inference_stack::CallStack).mod
+    isbound(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
+end
+
+_ieval(x) = eval((inference_stack::CallStack).mod, x)
+_iisbound(x) = isbound((inference_stack::CallStack).mod, x)
+
+_iisconst(s::SymbolNode) = _iisconst(s.name)
+_iisconst(s::TopNode) = _iisconst(s.name)
+_iisconst(x::Expr) = false
+_iisconst(x) = true
 
 cmp_tfunc = (x,y)->Bool
 
@@ -99,6 +109,7 @@ t_func[ccall] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
+t_func[isbound] = (1, 2, (args...)->Bool)
 t_func[Union] = (0, Inf,
                  (args...)->(if allp(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
@@ -195,7 +206,7 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isa(t,Tuple) && allp(isType,t) ?
                            tintersect(v,map(t->t.parameters[1],t)) :
-                       isconstant(A[2]) ? tintersect(v,eval(A[2])) :
+                       _iisconst(A[2]) ? tintersect(v,_ieval(A[2])) :
                        Any))
 
 tupleref_tfunc = function (A, t, i)
@@ -356,13 +367,13 @@ end
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
         abstract_eval(f, vtypes, sv)  # to pick up a type annotation
-        return isconstant(f.name) && f.name
+        return _iisconst(f.name) && f.name
     end
     if isa(f,SymbolNode)
         f = f.name
     end
     return isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
-           isconstant(f) && f
+           _iisconst(f) && f
 end
 
 isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
@@ -459,7 +470,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && isbound(af)
+            if !is(af,false) && _iisbound(af)
                 aargtypes = argtypes[2:]
                 if allp(x->isa(x,Tuple), aargtypes) &&
                    !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
@@ -468,7 +479,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     # can be collapsed to a call to the applied func
                     at = length(aargtypes) > 0 ?
                          limit_tuple_type(append(aargtypes...)) : ()
-                    return abstract_call(eval(af), (), at, vtypes, sv, ())
+                    return abstract_call(_ieval(af), (), at, vtypes, sv, ())
                 end
             end
         end
@@ -510,11 +521,11 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         return Any
     end
     #print("call ", e.args[1], argtypes, " ")
-    if !isbound(func)
+    if !_iisbound(func)
         #print("=> ", Any, "\n")
         return Any
     end
-    f = eval(func)
+    f = _ieval(func)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
@@ -594,11 +605,11 @@ end
 # typealias Top Union(Any,Undef)
 
 function abstract_eval_global(s::Symbol)
-    if !isbound(s)
+    if !_iisbound(s)
         return Top
     end
-    if isconstant(s)
-        return abstract_eval_constant(eval(s))
+    if _iisconst(s)
+        return abstract_eval_constant(_ieval(s))
     else
         # TODO: change to Undef if there's a way to clear variables
         return Any
@@ -945,7 +956,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     sv = StaticVarInfo(sparams, cenv)
 
     # our stack frame
-    frame = CallStack(ast0, atypes, inference_stack)
+    frame = CallStack(ast0, linfo.module, atypes, inference_stack)
     frame.result = curtype
     inference_stack = frame
 
@@ -1412,7 +1423,7 @@ function inlining_pass(e::Expr, vars)
         if isType(ET)
             f = ET.parameters[1]
         else
-            f = eval(arg1)
+            f = _ieval(arg1)
         end
 
         if is(f, ^) || is(f, .^)
@@ -1456,7 +1467,7 @@ function inlining_pass(e::Expr, vars)
             e.args = append({e.args[2]}, newargs...)
 
             # now try to inline the simplified call
-            body = inlineable(eval(e.args[1]), e, vars)
+            body = inlineable(_ieval(e.args[1]), e, vars)
             if !is(body,NF)
                 return body
             end
@@ -1466,7 +1477,7 @@ function inlining_pass(e::Expr, vars)
         farg = arg1
         # special inlining for some builtin functions that return types
         if isa(farg,TopNode) &&
-            (is(eval(farg),apply_type) || is(eval(farg),fieldtype)) &&
+            (is(_ieval(farg),apply_type) || is(_ieval(farg),fieldtype)) &&
             isType(e.typ) && isleaftype(e.typ.parameters[1])
             return e.typ.parameters[1]
         end

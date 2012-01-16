@@ -99,11 +99,6 @@ void jl_get_builtin_hooks(void);
 
 void *jl_dl_handle;
 
-static jl_value_t *global(char *name)
-{
-    return *jl_get_bindingp(jl_system_module, jl_symbol(name));
-}
-
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jmp_buf *where);
 extern jmp_buf * volatile jl_jmp_target;
@@ -127,10 +122,8 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
-        jl_system_module = jl_new_module(jl_symbol("System"));
-        jl_current_module = jl_system_module;
-        jl_set_const(jl_system_module, jl_symbol("System"),
-                     (jl_value_t*)jl_system_module);
+        jl_base_module = jl_new_module(jl_symbol("Base"));
+        jl_current_module = jl_base_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_load_boot_j();
@@ -212,8 +205,6 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
 }
 
 jl_function_t *jl_typeinf_func=NULL;
-jl_function_t *jl_append_any_func=NULL;
-jl_function_t *jl_method_missing_func=NULL;
 
 static void clear_tfunc_caches(void)
 {
@@ -291,7 +282,13 @@ DLLEXPORT void jl_enable_inference(void)
     }
 }
 
+static jl_value_t *global(char *name)
+{
+    return *jl_get_bindingp(jl_base_module, jl_symbol(name));
+}
+
 JL_CALLABLE(jl_weakref_ctor);
+jl_function_t *jl_method_missing_func=NULL;
 
 // fetch references to things defined in boot.j
 void jl_get_builtin_hooks(void)
@@ -335,6 +332,5 @@ void jl_get_builtin_hooks(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)global("MemoryError"),NULL,0);
 
-    jl_append_any_func = (jl_function_t*)global("append_any");
     jl_method_missing_func = (jl_function_t*)global("method_missing");
 }

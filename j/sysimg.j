@@ -1,3 +1,5 @@
+module System
+
 load("base.j")
 
 if false
@@ -212,3 +214,5 @@ compile_hint(istaskdone, (Task,))
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys.ji"), cstring("j/start_image.j"))
+
+end # module

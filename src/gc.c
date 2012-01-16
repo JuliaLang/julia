@@ -644,7 +644,7 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    GC_Markval(jl_system_module);
+    GC_Markval(jl_base_module);
     GC_Markval(jl_current_module);
 
     // invisible builtin values
