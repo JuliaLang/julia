@@ -72,7 +72,7 @@
 	    "module" "import" "export" "const" "let" "bitstype")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
-    '("\\<\\(true\\|false\\|C_NULL\\)\\>" . font-lock-constant-face)
+    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\)\\>" . font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
