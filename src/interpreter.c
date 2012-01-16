@@ -102,14 +102,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         size_t i;
         for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
-                locals[i*2+1] = eval(args[1], locals, nl);
-                return (jl_value_t*)jl_nothing;
+                return (locals[i*2+1] = eval(args[1], locals, nl));
             }
         }
         jl_binding_t *b = jl_get_binding(jl_current_module, (jl_sym_t*)sym);
         jl_value_t *rhs = eval(args[1], locals, nl);
         jl_checked_assignment(b, rhs);
-        return (jl_value_t*)jl_nothing;
+        return rhs;
     }
     else if (ex->head == new_sym) {
         jl_value_t *thetype = eval(args[0], locals, nl);

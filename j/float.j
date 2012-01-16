@@ -180,9 +180,9 @@ const NaN = boxf64(unbox64(0x7ff8000000000000))
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
-    nextfloat(x::Float32, i::Integer) = boxf32(unbox32(boxsi32(unbox32(x))+int32(i)))
-    nextfloat(x::Float64, i::Integer) = boxf64(unbox64(boxsi64(unbox64(x))+int64(i)))
-    nextfloat(x::Float) = nextfloat(x,+1)
+    nextfloat(x::Float32, i::Integer) = boxf32(add_int(unbox32(x),unbox32(int32(i))))
+    nextfloat(x::Float64, i::Integer) = boxf64(add_int(unbox64(x),unbox64(int64(i))))
+    nextfloat(x::Float) = nextfloat(x,1)
     prevfloat(x::Float) = nextfloat(x,-1)
 
     eps(x::Float) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)

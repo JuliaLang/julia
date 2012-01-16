@@ -14,7 +14,7 @@ macro grisu_ccall(value, mode, ndigits)
     end
 end
 
-let digits = Array(Uint8,309), # 308 is the largest possible exponent.
+let digits = Array(Uint8,309), # 308 is the largest possible decimal exponent.
     _neg = Array(Bool, 1),
     _len = Array(Int32,1),
     _pt  = Array(Int32,1)

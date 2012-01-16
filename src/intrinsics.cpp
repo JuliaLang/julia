@@ -318,29 +318,29 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return emit_unbox(T_int64, T_pint64, x);
 
     HANDLE(neg_int,1)
-        return builder.CreateSub(ConstantInt::get(t, 0), x);
+        return builder.CreateSub(ConstantInt::get(t, 0), INT(x));
     HANDLE(add_int,2)
-        return builder.CreateAdd(x, emit_expr(args[2],ctx,true));
+        return builder.CreateAdd(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(sub_int,2)
-        return builder.CreateSub(x, emit_expr(args[2],ctx,true));
+        return builder.CreateSub(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(mul_int,2)
-        return builder.CreateMul(x, emit_expr(args[2],ctx,true));
+        return builder.CreateMul(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(sdiv_int,2)
-        den = emit_expr(args[2],ctx,true);
+        den = INT(emit_expr(args[2],ctx,true));
         call_error_func_unless(builder.CreateICmpNE(den,
                                                     ConstantInt::get(t,0)),
                                jldiverror_func, ctx);
-        return builder.CreateSDiv(x, den);
+        return builder.CreateSDiv(INT(x), den);
     HANDLE(udiv_int,2)
-        den = emit_expr(args[2],ctx,true);
+        den = INT(emit_expr(args[2],ctx,true));
         call_error_func_unless(builder.CreateICmpNE(den,
                                                     ConstantInt::get(t,0)),
                                jldiverror_func, ctx);
-        return builder.CreateUDiv(x, den);
+        return builder.CreateUDiv(INT(x), den);
     HANDLE(srem_int,2)
-        return builder.CreateSRem(x, emit_expr(args[2],ctx,true));
+        return builder.CreateSRem(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(urem_int,2)
-        return builder.CreateURem(x, emit_expr(args[2],ctx,true));
+        return builder.CreateURem(INT(x), INT(emit_expr(args[2],ctx,true)));
 
     HANDLE(neg_float,1)
         return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
@@ -616,19 +616,19 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
 
     HANDLE(and_int,2)
-        return builder.CreateAnd(INT(x), emit_expr(args[2],ctx,true));
+        return builder.CreateAnd(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(or_int,2)
-        return builder.CreateOr(INT(x), emit_expr(args[2],ctx,true));
+        return builder.CreateOr(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(xor_int,2)
-        return builder.CreateXor(INT(x), emit_expr(args[2],ctx,true));
+        return builder.CreateXor(INT(x), INT(emit_expr(args[2],ctx,true)));
     HANDLE(not_int,1)
         return builder.CreateXor(INT(x), ConstantInt::get(t, -1));
     HANDLE(shl_int,2)
-        return builder.CreateShl(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
+        return builder.CreateShl(INT(x), uint_cnvt(t,INT(emit_unboxed(args[2],ctx))));
     HANDLE(lshr_int,2)
-        return builder.CreateLShr(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
+        return builder.CreateLShr(INT(x), uint_cnvt(t,INT(emit_unboxed(args[2],ctx))));
     HANDLE(ashr_int,2)
-        return builder.CreateAShr(INT(x), uint_cnvt(t,emit_unboxed(args[2],ctx)));
+        return builder.CreateAShr(INT(x), uint_cnvt(t,INT(emit_unboxed(args[2],ctx))));
     HANDLE(bswap_int,1)
         x = INT(x);
         return builder.CreateCall(
@@ -748,13 +748,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         }
     }
     HANDLE(uitofp32,1)
-        return builder.CreateUIToFP(x, T_float32);
+        return builder.CreateUIToFP(INT(x), T_float32);
     HANDLE(sitofp32,1)
-        return builder.CreateSIToFP(x, T_float32);
+        return builder.CreateSIToFP(INT(x), T_float32);
     HANDLE(uitofp64,1)
-        return builder.CreateUIToFP(x, T_float64);
+        return builder.CreateUIToFP(INT(x), T_float64);
     HANDLE(sitofp64,1)
-        return builder.CreateSIToFP(x, T_float64);
+        return builder.CreateSIToFP(INT(x), T_float64);
     HANDLE(fptrunc32,1)
         return builder.CreateFPTrunc(FP(x), T_float32);
     HANDLE(fpext64,1)
@@ -778,22 +778,22 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                        fx);
     HANDLE(abs_float32,1)
     {
-        Value *bits = builder.CreateBitCast(x, T_int32);
+        Value *bits = builder.CreateBitCast(FP(x), T_int32);
         Value *absbits = builder.CreateAnd(bits,
                                            ConstantInt::get(T_int32, ~BIT31));
         return builder.CreateBitCast(absbits, T_float32);
     }
     HANDLE(abs_float64,1)
     {
-        Value *bits = builder.CreateBitCast(x, T_int64);
+        Value *bits = builder.CreateBitCast(FP(x), T_int64);
         Value *absbits = builder.CreateAnd(bits,
                                            ConstantInt::get(T_int64, ~BIT63));
         return builder.CreateBitCast(absbits, T_float64);
     }
     HANDLE(copysign_float32,2)
     {
-        fy = emit_expr(args[2],ctx,true);
-        Value *bits = builder.CreateBitCast(x, T_int32);
+        fy = FP(emit_expr(args[2],ctx,true));
+        Value *bits = builder.CreateBitCast(FP(x), T_int32);
         Value *sbits = builder.CreateBitCast(fy, T_int32);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
@@ -806,8 +806,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(copysign_float64,2)
     {
-        fy = emit_expr(args[2],ctx,true);
-        Value *bits = builder.CreateBitCast(x, T_int64);
+        fy = FP(emit_expr(args[2],ctx,true));
+        Value *bits = builder.CreateBitCast(FP(x), T_int64);
         Value *sbits = builder.CreateBitCast(fy, T_int64);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,

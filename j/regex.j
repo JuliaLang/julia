@@ -18,9 +18,9 @@ type Regex
         new(pat, opts, re, ex)
     end
 end
-Regex(p::String, s::Bool) = Regex(p, 0, s)
-Regex(p::String, o::Integer)  = Regex(p, o, false)
-Regex(p::String)          = Regex(p, 0, false)
+Regex(p::String, s::Bool)    = Regex(p, 0, s)
+Regex(p::String, o::Integer) = Regex(p, o, false)
+Regex(p::String)             = Regex(p, 0, false)
 
 # TODO: make sure thing are escaped in a way PCRE
 # likes so that Julia all the Julia string quoting
