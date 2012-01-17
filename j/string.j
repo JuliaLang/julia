@@ -708,14 +708,21 @@ function lpad(s::String, n::Integer, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
     l = strlen(p)
+    if l==1
+        return p^m * s
+    end
     q = div(m,l)
     r = m - q*l
     cstring(p^q*p[1:chr2ind(p,r)]*s)
 end
+
 function rpad(s::String, n::Integer, p::String)
     m = n - strlen(s)
     if m <= 0; return s; end
     l = strlen(p)
+    if l==1
+        return s * p^m
+    end
     q = div(m,l)
     r = m - q*l
     cstring(s*p^q*p[1:chr2ind(p,r)])
