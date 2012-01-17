@@ -1044,12 +1044,15 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
 {
     char *str=NULL;
     int c;
+    va_list al;
+    va_copy(al, args);
 
     if (s->state == bst_wr && s->bpos < s->maxsize && s->bm != bm_none) {
         size_t avail = s->maxsize - s->bpos;
         char *start = s->buf + s->bpos;
         c = vsnprintf(start, avail, format, args);
         if (c < 0) {
+            va_end(al);
             return c;
         }
         if (c < avail) {
@@ -1058,16 +1061,18 @@ int ios_vprintf(ios_t *s, const char *format, va_list args)
             // TODO: only works right if newline is at end
             if (s->bm == bm_line && memrchr(start, '\n', (size_t)c))
                 ios_flush(s);
+            va_end(al);
             return c;
         }
     }
-    c = vasprintf(&str, format, args);
+    c = vasprintf(&str, format, al);
 
     if (c >= 0) {
         ios_write(s, str, c);
 
         LLT_FREE(str);
     }
+    va_end(al);
     return c;
 }
 
