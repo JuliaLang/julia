@@ -888,8 +888,7 @@ end
 # activity on accept fd
 function accept_handler(accept_fd, sockets)
     global PGRP
-    connectfd = ccall(dlsym(libc, :accept), Int32,
-                      (Int32, Ptr{Void}, Ptr{Void}),
+    connectfd = ccall(:accept, Int32, (Int32, Ptr{Void}, Ptr{Void}),
                       accept_fd, C_NULL, C_NULL)
     #print("accepted.\n")
     if connectfd==-1
@@ -997,7 +996,7 @@ function start_worker(wrfd)
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
-    ccall(dlsym(libc, :close), Int32, (Int32,), int32(0))
+    ccall(:close, Int32, (Int32,), int32(0))
 
     global const Scheduler = current_task()
 
@@ -1010,8 +1009,8 @@ function start_worker(wrfd)
         print("unhandled exception on $(myid()): $e\nexiting.\n")
     end
 
-    ccall(dlsym(libc, :close), Int32, (Int32,), sockfd)
-    ccall(dlsym(libc, :exit) , Void , (Int32,), int32(0))
+    ccall(:close, Int32, (Int32,), sockfd)
+    ccall(:exit , Void , (Int32,), int32(0))
 end
 
 # establish an SSH tunnel to a remote worker
@@ -1360,7 +1359,7 @@ end
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if !isbound(e) || isconstant(e)
+        if !isbound(e) || isconst(e)
             # exclude global constants
         else
             push(lst, e)

@@ -12,9 +12,9 @@
 #include <math.h>
 #include "julia.h"
 
+jl_module_t *jl_base_module=NULL;
 jl_module_t *jl_system_module=NULL;
-
-jl_module_t *jl_current_module;
+jl_module_t *jl_current_module=NULL;
 
 static jl_binding_t *varlist_binding=NULL;
 
@@ -25,6 +25,9 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->name = name;
     htable_new(&m->bindings, 0);
     htable_new(&m->macros, 0);
+    jl_set_const(m, name, (jl_value_t*)m);
+    if (jl_current_module)
+        jl_set_const(m, jl_current_module->name, (jl_value_t*)jl_current_module);
     //arraylist_new(&m->imports, 0);
     return m;
 }
@@ -32,8 +35,17 @@ jl_module_t *jl_new_module(jl_sym_t *name)
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    jl_binding_t *b;
     if (*bp == HT_NOTFOUND) {
-        jl_binding_t *b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
+        if (jl_base_module && m != jl_base_module) {
+            // for now, always chain to Base module.
+            // todo: imports/exports, maybe separate rules for read/write
+            b = (jl_binding_t*)ptrhash_get(&jl_base_module->bindings, var);
+            if (b != HT_NOTFOUND) {
+                return b;
+            }
+        }
+        b = (jl_binding_t*)allocb(sizeof(jl_binding_t));
         b->name = var;
         b->value = NULL;
         b->type = (jl_type_t*)jl_any_type;
@@ -60,14 +72,22 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 int jl_boundp(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
+    if (b == HT_NOTFOUND && jl_base_module && m != jl_base_module) {
+        return jl_boundp(jl_base_module, var);
+    }
     return (b != HT_NOTFOUND && b->value != NULL);
 }
 
 jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var)
 {
+    if (m == NULL) return NULL;
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
-    if (b == HT_NOTFOUND)
+    if (b == HT_NOTFOUND) {
+        if (jl_base_module && m != jl_base_module) {
+            return jl_get_global(jl_base_module, var);
+        }
         return NULL;
+    }
     return b->value;
 }
 
@@ -88,10 +108,10 @@ void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     }
 }
 
-DLLEXPORT
-int jl_is_const(jl_sym_t *var)
+DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var)
 {
-    jl_binding_t *bp = jl_get_binding(jl_system_module, var);
+    if (m == NULL) m = jl_current_module;
+    jl_binding_t *bp = jl_get_binding(m, var);
     return bp->constp;
 }
 
@@ -138,4 +158,15 @@ void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
 {
     jl_function_t **bp = (jl_function_t**)ptrhash_bp(&m->macros, macroname);
     *bp = f;
+}
+
+DLLEXPORT jl_value_t *jl_get_current_module()
+{
+    return (jl_value_t*)jl_current_module;
+}
+
+DLLEXPORT void jl_set_current_module(jl_value_t *m)
+{
+    assert(jl_typeis(m, jl_module_type));
+    jl_current_module = (jl_module_t*)m;
 }

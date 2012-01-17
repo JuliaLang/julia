@@ -41,6 +41,14 @@ static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
     return result;
 }
 
+jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
+{
+    jl_value_t **bp = jl_get_bindingp(m, e);
+    if (*bp == NULL)
+        jl_errorf("%s not defined", e->name);
+    return *bp;
+}
+
 static jl_value_t **var_bp(jl_sym_t *s, jl_value_t **locals, size_t nl)
 {
     size_t i;
@@ -49,7 +57,7 @@ static jl_value_t **var_bp(jl_sym_t *s, jl_value_t **locals, size_t nl)
             return &locals[i*2+1];
         }
     }
-    return jl_get_bindingp(jl_system_module, s);
+    return jl_get_bindingp(jl_current_module, s);
 }
 
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
@@ -67,7 +75,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return jl_fieldref(e,0);
     }
     if (jl_is_topnode(e)) {
-        jl_value_t **bp = jl_get_bindingp(jl_system_module,
+        jl_value_t **bp = jl_get_bindingp(jl_current_module,
                                           (jl_sym_t*)jl_fieldref(e,0));
         if (*bp == NULL)
             jl_errorf("%s not defined", ((jl_sym_t*)jl_fieldref(e,0))->name);
@@ -97,7 +105,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 return (locals[i*2+1] = eval(args[1], locals, nl));
             }
         }
-        jl_binding_t *b = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
+        jl_binding_t *b = jl_get_binding(jl_current_module, (jl_sym_t*)sym);
         jl_value_t *rhs = eval(args[1], locals, nl);
         jl_checked_assignment(b, rhs);
         return rhs;
@@ -138,7 +146,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         if (bp == NULL) {
-            b = jl_get_binding(jl_system_module, fname);
+            b = jl_get_binding(jl_current_module, fname);
             bp = &b->value;
         }
         jl_value_t *atypes=NULL, *meth=NULL;
@@ -158,7 +166,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 return (jl_value_t*)jl_nothing;
             }
         }
-        jl_binding_t *b = jl_get_binding(jl_system_module, (jl_sym_t*)sym);
+        jl_binding_t *b = jl_get_binding(jl_current_module, (jl_sym_t*)sym);
         jl_declare_constant(b);
         return (jl_value_t*)jl_nothing;
     }

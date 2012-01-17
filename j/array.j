@@ -34,8 +34,7 @@ end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    ccall(dlsym(libc, :memcpy),
-          Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
+    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
           b, a, uint(length(b)*sizeof(T)))
     return b
 end

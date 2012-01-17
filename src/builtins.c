@@ -160,6 +160,8 @@ JL_CALLABLE(jl_f_typeassert)
     return args[0];
 }
 
+static jl_function_t *jl_append_any_func;
+
 JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
@@ -178,8 +180,13 @@ JL_CALLABLE(jl_f_apply)
         }
         else {
             if (jl_append_any_func == NULL) {
-                // error if append_any not available
-                JL_TYPECHK(apply, tuple, args[i]);
+                jl_append_any_func =
+                    (jl_function_t*)jl_get_global(jl_system_module,
+                                                  jl_symbol("append_any"));
+                if (jl_append_any_func == NULL) {
+                    // error if append_any not available
+                    JL_TYPECHK(apply, tuple, args[i]);
+                }
             }
             goto fancy_apply;
         }
@@ -221,6 +228,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
     jl_module_t *last_module = jl_current_module;
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 0);
     assert(jl_is_symbol(name));
+    if (name == jl_current_module->name) {
+        jl_errorf("module name %s conflicts with enclosing module", name->name);
+    }
     jl_binding_t *b = jl_get_binding(jl_current_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
@@ -230,6 +240,11 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
     }
     jl_module_t *newm = jl_new_module(name);
     b->value = (jl_value_t*)newm;
+    if (jl_current_module == jl_base_module && name == jl_symbol("System")) {
+        // pick up system module during bootstrap, and stay within it
+        // after loading.
+        jl_system_module = last_module = newm;
+    }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
     // TODO: set up imports and exports
@@ -260,7 +275,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
 
 static int is_intrinsic(jl_sym_t *s)
 {
-    jl_value_t **bp = jl_get_bindingp(jl_system_module, s);
+    jl_value_t **bp = jl_get_bindingp(jl_current_module, s);
     return (*bp != NULL && jl_typeof(*bp)==(jl_type_t*)jl_intrinsic_type);
 }
 
@@ -489,15 +504,51 @@ void jl_load(const char *fname)
 
 JL_CALLABLE(jl_f_top_eval)
 {
-    JL_NARGS(eval, 1, 1);
-    return jl_toplevel_eval(args[0]);
+    jl_value_t *v=NULL;
+    if (nargs == 1) {
+        return jl_toplevel_eval(args[0]);
+    }
+    if (nargs != 2) {
+        JL_NARGS(eval, 1, 1);
+    }
+    JL_TYPECHK(eval, module, args[0]);
+    jl_module_t *m = (jl_module_t*)args[0];
+    if (jl_is_symbol(args[1])) {
+        return jl_eval_global_var(m, (jl_sym_t*)args[1]);
+    }
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = m;
+        v = jl_toplevel_eval(args[1]);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
+    assert(v);
+    return v;
 }
 
 JL_CALLABLE(jl_f_isbound)
 {
-    JL_NARGS(isbound, 1, 1);
-    JL_TYPECHK(isbound, symbol, args[0]);
-    return jl_boundp(jl_system_module, (jl_sym_t*)args[0]) ? jl_true : jl_false;
+    jl_module_t *m = jl_current_module;
+    jl_sym_t *s=NULL;
+    if (nargs == 1) {
+        JL_TYPECHK(isbound, symbol, args[0]);
+        s = (jl_sym_t*)args[0];
+    }
+    if (nargs != 2) {
+        JL_NARGS(isbound, 1, 1);
+    }
+    else {
+        JL_TYPECHK(isbound, module, args[0]);
+        JL_TYPECHK(isbound, symbol, args[1]);
+        m = (jl_module_t*)args[0];
+        s = (jl_sym_t*)args[1];
+    }
+    assert(s);
+    return jl_boundp(m, s) ? jl_true : jl_false;
 }
 
 // tuples ---------------------------------------------------------------------
@@ -808,29 +859,6 @@ static void show_type(jl_value_t *t)
     }
 }
 
-DLLEXPORT
-void jl_show_float(double d, int ndec)
-{
-    ios_t *s = jl_current_output_stream();
-    char buf[64];
-    if (!DFINITE(d)) {
-        char *rep = isnan(d) ? "NaN" : sign_bit(d) ? "-Inf" : "Inf";
-        ios_puts(rep, s);
-    }
-    else if (d == 0) {
-        if (1/d < 0)
-            ios_puts("-0.0", s);
-        else
-            ios_puts("0.0", s);
-    }
-    else {
-        snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
-        int hasdec = (strpbrk(buf, ".eE") != NULL);
-        ios_puts(buf, s);
-        if (!hasdec) ios_puts(".0", s);
-    }
-}
-
 JL_CALLABLE(jl_f_show_int64)
 {
     ios_t *s = jl_current_output_stream();
@@ -1086,7 +1114,7 @@ JL_CALLABLE(jl_f_def_macro)
     assert(jl_is_symbol(nm));
     jl_function_t *f = (jl_function_t*)args[1];
     assert(jl_is_function(f));
-    jl_set_expander(jl_system_module, nm, f);
+    jl_set_expander(jl_current_module, nm, f);
     return (jl_value_t*)jl_nothing;
 }
 
@@ -1264,7 +1292,7 @@ static void add_builtin_method1(jl_function_t *gf, jl_type_t *t, jl_fptr_t f)
 
 static void add_builtin(const char *name, jl_value_t *v)
 {
-    jl_set_const(jl_system_module, jl_symbol(name), v);
+    jl_set_const(jl_base_module, jl_symbol(name), v);
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t f)

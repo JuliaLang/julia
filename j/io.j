@@ -67,8 +67,7 @@ memio() = memio(0, true)
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
-current_output_stream() =
-    ccall(:jl_current_output_stream_obj, Any, ())::IOStream
+current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
 
 set_current_output_stream(s::IOStream) =
     ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
@@ -331,7 +330,7 @@ begin
                   tv, float64(timeout))
             tout = convert(Ptr{Void}, tv)
         end
-        ccall(dlsym(libc, :select), Int32,
+        ccall(:select, Int32,
               (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
               readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
     end

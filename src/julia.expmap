@@ -45,6 +45,8 @@
     jl_is_genericfunc;
     jl_genericfunc_name;
     jl_is_const;
+    jl_get_current_module;
+    jl_set_current_module;
     jl_func_type_tfunc;
     jl_compute_type_union;
     jl_union_too_complex;
