@@ -611,8 +611,6 @@ void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m)
     }
 }
 
-void jl_specialize_ast(jl_lambda_info_t *li);
-
 static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_symbol(expr)) {
@@ -637,7 +635,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         // been evaluated.
         JL_GC_PUSH(&li);
         li = jl_add_static_parameters(li, sp);
-        jl_specialize_ast(li);
+        li->ast = jl_prepare_ast(li, li->sparams);
         JL_GC_POP();
         return (jl_value_t*)li;
     }
@@ -697,9 +695,11 @@ jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
 // on to all enclosed functions.
 // this tree can then be further mutated by optimization passes.
 DLLEXPORT
-jl_value_t *jl_prepare_ast(jl_value_t *l_ast, jl_tuple_t *sparams)
+jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
 {
     jl_tuple_t *spenv = NULL;
+    jl_value_t *l_ast = li->ast;
+    if (l_ast == NULL) return NULL;
     jl_value_t *ast = l_ast;
     JL_GC_PUSH(&spenv, &ast);
     if (jl_is_tuple(ast))
@@ -710,11 +710,4 @@ jl_value_t *jl_prepare_ast(jl_value_t *l_ast, jl_tuple_t *sparams)
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
     JL_GC_POP();
     return ast;
-}
-
-void jl_specialize_ast(jl_lambda_info_t *li)
-{
-    if (li->ast == NULL) return;
-    jl_value_t *ast = jl_prepare_ast(li->ast, li->sparams);
-    li->ast = ast;
 }

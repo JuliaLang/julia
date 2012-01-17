@@ -1328,14 +1328,13 @@ static jl_type_t *lookup_type(typekey_stack_t *table,
 {
     if (n==0) return NULL;
     while (table != NULL) {
-        assert(table->n > 0);
-        if (table->n == n && table->tn == tn) {
+        if (table->type->name == tn && n == table->type->parameters->length) {
             size_t i;
             for(i=0; i < n; i++) {
-                if (!type_eqv_(table->key[i], key[i], NULL))
+                if (!type_eqv_(jl_tupleref(table->type->parameters,i),key[i],NULL))
                     break;
             }
-            if (i==n) return table->type;
+            if (i==n) return (jl_type_t*)table->type;
         }
         table = table->next;
     }
@@ -1353,10 +1352,11 @@ int jl_assign_type_uid(void)
 }
 
 // TODO: synchronize
-static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
+static void cache_type_(jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevars_((jl_value_t*)type,1) || n==0)
+    if (jl_has_typevars_((jl_value_t*)type,1) ||
+        ((jl_tag_type_t*)type)->parameters->length == 0)
         return;
     // assign uid
     if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
@@ -1366,27 +1366,14 @@ static void cache_type_(jl_value_t **key, size_t n, jl_type_t *type)
     typekey_stack_t *tc =
         (typekey_stack_t*)((jl_tag_type_t*)type)->name->cache;
     typekey_stack_t *tk = (typekey_stack_t*)allocb(sizeof(typekey_stack_t));
-    tk->tn = ((jl_tag_type_t*)type)->name;
-    tk->type = type;
+    tk->type = (jl_tag_type_t*)type;
     tk->next = tc;
     ((jl_tag_type_t*)type)->name->cache = tk;
-    tk->n = 0;
-    tk->key = NULL;
-
-    tk->key = (jl_value_t**)allocb(n * sizeof(void*));
-    size_t i;
-    for(i=0; i < n; i++) tk->key[i] = key[i];
-    tk->n = n;
 }
 
-void jl_cache_type_(jl_tuple_t *params, jl_value_t *type)
+void jl_cache_type_(jl_tag_type_t *type)
 {
-    cache_type_(&params->data[0], params->length, (jl_type_t*)type);
-}
-
-jl_type_t *jl_lookup_type_(jl_typename_t *tn, jl_tuple_t *params)
-{
-    return lookup_type(tn->cache, tn, &params->data[0], params->length);
+    cache_type_((jl_type_t*)type);
 }
 
 #ifdef JL_GC_MARKSWEEP
@@ -1395,10 +1382,6 @@ void jl_mark_type_cache(void *tc)
     typekey_stack_t *tk = (typekey_stack_t*)tc;
     while (tk != NULL) {
         jl_gc_setmark(tk);
-        if (tk->key) jl_gc_setmark(tk->key);
-        size_t i;
-        for(i=0; i < tk->n; i++)
-            jl_gc_markval(tk->key[i]);
         jl_gc_markval((jl_value_t*)tk->type);
         tk = tk->next;
     }
@@ -1515,10 +1498,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_tag_type_t *ntt =
                 (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
             *rt2 = (jl_value_t*)ntt;
-            top.tn = tn;
-            top.key = iparams;
-            top.n = ntp;
-            top.type = (jl_type_t*)ntt;
+            top.type = (jl_tag_type_t*)ntt;
             top.next = stack;
             stack = &top;
             ntt->name = tn;
@@ -1530,7 +1510,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ntt->super = jl_any_type;
             ntt->parameters = iparams_tuple;
             ntt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)tagt->super,env,n,stack);
-            cache_type_(iparams, ntp, (jl_type_t*)ntt);
+            cache_type_((jl_type_t*)ntt);
             result = (jl_type_t*)ntt;
         }
         else if (jl_is_bits_type(t)) {
@@ -1538,10 +1518,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_bits_type_t *nbt =
                 (jl_bits_type_t*)newobj((jl_type_t*)jl_bits_kind, BITS_TYPE_NW);
             *rt2 = (jl_value_t*)nbt;
-            top.tn = tn;
-            top.key = iparams;
-            top.n = ntp;
-            top.type = (jl_type_t*)nbt;
+            top.type = (jl_tag_type_t*)nbt;
             top.next = stack;
             stack = &top;
             nbt->name = tn;
@@ -1554,7 +1531,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
             nbt->uid = 0;
-            cache_type_(iparams, ntp, (jl_type_t*)nbt);
+            cache_type_((jl_type_t*)nbt);
             result = (jl_type_t*)nbt;
         }
         else {
@@ -1567,10 +1544,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             *rt2 = (jl_value_t*)nst;
             // associate these parameters with the new struct type on
             // the stack, in case one of its field types references it.
-            top.tn = tn;
-            top.key = iparams;
-            top.n = ntp;
-            top.type = (jl_type_t*)nst;
+            top.type = (jl_tag_type_t*)nst;
             top.next = stack;
             stack = &top;
             nst->name = tn;
@@ -1596,7 +1570,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                                           env,n,stack));
                 }
             }
-            cache_type_(iparams, ntp, (jl_type_t*)nst);
+            cache_type_((jl_type_t*)nst);
             result = (jl_type_t*)nst;
         }
     done_inst_tt:

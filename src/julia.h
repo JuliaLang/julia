@@ -742,6 +742,8 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
                                             jl_value_t **locals, size_t nl);
+jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                          jl_value_t **locals, size_t nl);
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
 
@@ -763,6 +765,8 @@ jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m);
+
+jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
 jl_value_t *jl_compress_ast(jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);

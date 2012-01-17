@@ -14,7 +14,7 @@ julia-debug julia-release:
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys.ji: VERSION j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
-	$(QUIET_JULIA) ./julia -b sysimg.j
+	$(QUIET_JULIA) ./julia -b stage0.j
 
 install: release
 	rm -fr $(DESTDIR)/*

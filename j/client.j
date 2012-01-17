@@ -117,10 +117,6 @@ function _start()
 
         # Load customized startup
         try
-            load(strcat(getcwd(),"/custom.j"))
-        catch
-        end
-        try
             load(strcat(getcwd(),"/startup.j"))
         catch
         end
