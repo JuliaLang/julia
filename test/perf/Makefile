@@ -1,7 +1,7 @@
 JULIAHOME = ../..
 include $(JULIAHOME)/Make.inc
 
-benchmark: benchmarks.txt
+benchmark: benchmarks.txt benchmarks.html
 
 bin/perf%: perf.cpp
 	$(CXX) -O$* $(JULIAHOME)/external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
@@ -45,7 +45,10 @@ benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	$(QUIET_PERL) $^ >$@
 
 benchmarks.txt: bin/table.pl benchmarks.csv
-	$(QUIET_PERL) $^ >$@
+	$(QUIET_PERL) $^ txt >$@
+
+benchmarks.html: bin/table.pl benchmarks.csv
+	$(QUIET_PERL) $^ html >$@
 
 clean:
 	@rm -rf bin/perf* benchmarks benchmarks.csv
