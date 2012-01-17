@@ -4,6 +4,10 @@ error(e::Exception) = throw(e)
 error{E<:Exception}(::Type{E}) = throw(E())
 error(s...) = throw(ErrorException(cstring(s...)))
 
+macro unexpected()
+    :(error("unexpected branch reached"))
+end
+
 ## system error handling ##
 
 errno() = ccall(:jl_errno, Int32, ())

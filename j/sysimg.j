@@ -40,6 +40,7 @@ load("utf8.j")
 load("regex.j")
 load("show.j")
 load("grisu.j")
+load("printf.j")
 
 # system & environment
 load("libc.j")
