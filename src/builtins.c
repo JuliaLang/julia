@@ -859,29 +859,6 @@ static void show_type(jl_value_t *t)
     }
 }
 
-DLLEXPORT
-void jl_show_float(double d, int ndec)
-{
-    ios_t *s = jl_current_output_stream();
-    char buf[64];
-    if (!DFINITE(d)) {
-        char *rep = isnan(d) ? "NaN" : sign_bit(d) ? "-Inf" : "Inf";
-        ios_puts(rep, s);
-    }
-    else if (d == 0) {
-        if (1/d < 0)
-            ios_puts("-0.0", s);
-        else
-            ios_puts("0.0", s);
-    }
-    else {
-        snprint_real(buf, sizeof(buf), d, 0, ndec, 3, 10);
-        int hasdec = (strpbrk(buf, ".eE") != NULL);
-        ios_puts(buf, s);
-        if (!hasdec) ios_puts(".0", s);
-    }
-}
-
 JL_CALLABLE(jl_f_show_int64)
 {
     ios_t *s = jl_current_output_stream();

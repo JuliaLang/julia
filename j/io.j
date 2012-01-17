@@ -330,7 +330,7 @@ begin
                   tv, float64(timeout))
             tout = convert(Ptr{Void}, tv)
         end
-        ccall(dlsym(libc, :select), Int32,
+        ccall(:select, Int32,
               (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
               readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
     end

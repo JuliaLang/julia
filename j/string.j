@@ -337,8 +337,8 @@ end
 
 ## uppercase and lowercase transformations ##
 
-uc(c::Char) = ccall(dlsym(libc, :towupper), Char, (Char,), c)
-lc(c::Char) = ccall(dlsym(libc, :towlower), Char, (Char,), c)
+uc(c::Char) = ccall(:towupper, Char, (Char,), c)
+lc(c::Char) = ccall(:towlower, Char, (Char,), c)
 
 uc(s::String) = TransformedString((c,i)->uc(c), s)
 lc(s::String) = TransformedString((c,i)->lc(c), s)
@@ -932,7 +932,7 @@ strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    c = ccall(dlsym(libc, :memcmp), Int32,
+    c = ccall(:memcmp, Int32,
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
               a, b, uint(min(length(a),length(b))))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
@@ -942,7 +942,7 @@ end
 
 function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
-    q = ccall(dlsym(libc, :memchr), Ptr{Uint8},
+    q = ccall(:memchr, Ptr{Uint8},
               (Ptr{Uint8}, Int32, Uint),
               p, int32(b), uint(length(a)))
     q == C_NULL ? 0 : q - p + 1
@@ -962,7 +962,7 @@ function memcat(arrays::Array{Uint8,1}...)
     ptr = pointer(arr)
     offset = 0
     for a in arrays
-        ccall(dlsym(libc, :memcpy), Ptr{Uint8},
+        ccall(:memcpy, Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(a), uint(length(a)))
         offset += length(a)
@@ -983,7 +983,7 @@ function memcat(strs::ByteString...)
     ptr = pointer(data)
     offset = 0
     for s in strs
-        ccall(dlsym(libc, :memcpy), Ptr{Uint8},
+        ccall(:memcpy, Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
               ptr + offset, pointer(s.data), uint(length(s)))
         offset += length(s)

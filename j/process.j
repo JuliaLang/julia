@@ -77,7 +77,7 @@ other(p::PipeOut) = p.pipe.in
 
 function make_pipe()
     fds = Array(Int32, 2)
-    ret = ccall(dlsym(libc, :pipe), Int32, (Ptr{Int32},), fds)
+    ret = ccall(:pipe, Int32, (Ptr{Int32},), fds)
     system_error(:make_pipe, ret != 0)
     Pipe(FileDes(fds[2]), FileDes(fds[1]))
 end
@@ -85,7 +85,7 @@ end
 ## core system calls for processes ##
 
 function fork()
-    pid = ccall(dlsym(libc, :fork), Int32, ())
+    pid = ccall(:fork, Int32, ())
     system_error(:fork, pid < 0)
     return pid
 end

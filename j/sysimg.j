@@ -58,9 +58,6 @@ load("reduce.j")
 load("complex.j")
 load("rational.j")
 
-# load libc - julia already links against it so process handle works
-libc = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), C_NULL);
-
 # core data structures (used by type inference)
 load("abstractarray.j")
 load("subarray.j")
@@ -164,7 +161,7 @@ compile_hint(_start, ())
 compile_hint(_jl_color_available, ())
 compile_hint(process_options, (Array{Any,1},))
 compile_hint(run_repl, ())
-compile_hint(anyp, (Function, Array{Any,1}))
+compile_hint(anyp, (Any-->Any, Array{Any,1}))
 compile_hint(HashTable, (Int,))
 compile_hint(HashTable{Any,Any}, (Int,))
 compile_hint(Set, ())

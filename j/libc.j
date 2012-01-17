@@ -1,9 +1,7 @@
-# libc = dlopen("libc")
-
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-sleep(s::Real) = ccall(dlsym(libc, :usleep), Void, (Uint32,), uint32(iround(s*1e6)))
+sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
 
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)
@@ -31,14 +29,14 @@ end
 
 ## process-related functions ##
 
-getpid() = ccall(dlsym(libc, :getpid), Uint32, ())
-system(cmd::String) = ccall(dlsym(libc, :system), Int32, (Ptr{Uint8},), cstring(cmd))
+getpid() = ccall(:getpid, Uint32, ())
+system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cstring(cmd))
 
 ## network functions ##
 
 function gethostname()
     hn = Array(Uint8, 128)
-    ccall(dlsym(libc,:gethostname), Int32, (Ptr{Uint8}, Uint),
+    ccall(:gethostname, Int32, (Ptr{Uint8}, Uint),
           hn, uint(length(hn)))
     cstring(convert(Ptr{Uint8},hn))
 end
@@ -54,7 +52,7 @@ end
 
 function getcwd()
     b = Array(Uint8,1024)
-    p = ccall(dlsym(libc, :getcwd), Ptr{Uint8}, (Ptr{Uint8}, Uint),
+    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint),
               b, uint(length(b)))
     if p == C_NULL
         error("path too long")
@@ -63,7 +61,7 @@ function getcwd()
 end
 
 function setcwd(p::String)
-    if ccall(dlsym(libc, :chdir), Int32, (Ptr{Uint8},), p) == -1
+    if ccall(:chdir, Int32, (Ptr{Uint8},), p) == -1
         throw(SystemError("setcwd"))
     end
     getcwd()
@@ -71,4 +69,4 @@ end
 
 ## Memory related ##
 
-_jl_free(p::Ptr{Void}) = ccall(dlsym(libc, :free), Void, (Ptr{Void},), p)
+_jl_free(p::Ptr{Void}) = ccall(:free, Void, (Ptr{Void},), p)

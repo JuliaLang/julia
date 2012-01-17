@@ -1,12 +1,10 @@
 ## core libc calls ##
 
 hasenv(var::String) =
-    ccall(dlsym(libc, :getenv),
-          Ptr{Uint8}, (Ptr{Uint8},), cstring(var)) != C_NULL
+    ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var)) != C_NULL
 
 function getenv(var::String)
-    val = ccall(dlsym(libc, :getenv),
-                Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
     if val == C_NULL
         error("getenv: undefined variable: ", var)
     end
@@ -14,8 +12,7 @@ function getenv(var::String)
 end
 
 function setenv(var::String, val::String, overwrite::Bool)
-    ret = ccall(dlsym(libc, :setenv), Int32,
-                (Ptr{Uint8}, Ptr{Uint8}, Int32),
+    ret = ccall(:setenv, Int32, (Ptr{Uint8}, Ptr{Uint8}, Int32),
                 cstring(var), cstring(val), int32(overwrite))
     system_error(:setenv, ret != 0)
 end
@@ -23,7 +20,7 @@ end
 setenv(var::String, val::String) = setenv(var, val, true)
 
 function unsetenv(var::String)
-    ret = ccall(dlsym(libc, :unsetenv), Int32, (Ptr{Uint8},), var)
+    ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
     system_error(:unsetenv, ret != 0)
 end
 
@@ -34,7 +31,7 @@ type EnvHash <: Associative; end
 const ENV = EnvHash()
 
 function ref(::EnvHash, k::String)
-    val = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
     if val == C_NULL
         throw(KeyError(k))
     end
@@ -42,7 +39,7 @@ function ref(::EnvHash, k::String)
 end
 
 function get(::EnvHash, k::String, deflt)
-    val = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
     if val == C_NULL
         return deflt
     end

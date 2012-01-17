@@ -246,6 +246,7 @@ static void clear_method_caches(void)
 */
 DLLEXPORT void jl_enable_inference(void)
 {
+    if (jl_typeinf_func != NULL) return;
     if (jl_boundp(jl_system_module, jl_symbol("typeinf_ext"))) {
         //clear_method_caches();
         jl_typeinf_func =
