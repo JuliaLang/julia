@@ -20,6 +20,7 @@ More libraries continue to be added over time.
 Julia programs are organized around defining functions, and overloading them for different combinations of argument types (which can also be user-defined).
 For a more in-depth discussion of the rationale and advantages of Julia over other systems, see the following highlights or read the [introduction](https://github.com/JuliaLang/julia/wiki/Introduction) in the [manual](https://github.com/JuliaLang/julia/wiki/).
 
+<a name="High-Performance-JIT-Compiler"/>
 ### High-Performance JIT Compiler
 
 Julia's LLVM-based JIT compiler combined with the language's design allow it to approach and often match the performance of C/C++.
