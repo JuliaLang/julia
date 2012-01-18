@@ -897,6 +897,9 @@ bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
 num2hex(x::Integer) = hex(unsigned(x), sizeof(x)*2)
 
+string(x::Signed) = dec(int64(x))
+cstring(x::Signed) = dec(int64(x))
+
 ## string to float functions ##
 
 function float64_isvalid(s::String, out::Array{Float64,1})
