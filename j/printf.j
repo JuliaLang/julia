@@ -12,6 +12,7 @@ function _jl_printf_gen(s::String)
                 push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
             end
             flags, width, precision, c, k = _jl_printf_parse1(s,k)
+            # TODO: warn about silly flag/conversion combinations
             if contains(flags,'\'')
                 error("printf format flag ' not yet supported")
             end
@@ -186,13 +187,95 @@ function _jl_print_fixed(out, pdigits, ndigits, pt, precision)
     end
 end
 
-function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, C::Char)
+function _jl_printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print integer:
+    #  [dDiu]: print decimal digits
+    #  [o]:    print octal digits
+    #  [x]:    print hex digits, lowercase
+    #  [X]:    print hex digits, uppercase
+    #
+    # flags:
+    #  (#): prefix hex with 0x/0X; octal leads with 0
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    #
+    x, ex, blk = _jl_special_handler(flags,width)
+    # interpret the number
+    prefix = ""
+    if lc(c)=='o'
+        fix8 = contains(flags,'#') ? :_jl_fix8alt : :_jl_fix8
+        push(blk.args, :((neg,pdigits,ndigits,pt) = ($fix8)($x,0)))
+    elseif c=='x'
+        if contains(flags,'#'); prefix = "0x"; end
+        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix16($x,0)))
+    elseif c=='X'
+        if contains(flags,'#'); prefix = "0X"; end
+        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix16uc($x,0)))
+    else
+        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix10($x,0)))
+    end
+    # calculate padding
+    width -= strlen(prefix)
+    space_pad = width > max(1,precision) && contains(flags,'-') ||
+                precision < 0 && width > 1 && !contains(flags,'0') ||
+                precision >= 0 && width > precision
+    padding = nothing
+    if precision < 1; precision = 1; end
+    if space_pad
+        if contains(flags,'+') || contains(flags,' ')
+            width -= 1
+            if width > precision
+                padding = :($width-(pt > $precision ? pt : $precision))
+            end
+        else
+            if width > precision
+                padding = :($width-neg-(pt > $precision ? pt : $precision))
+            end
+        end
+    end
+    # print space padding
+    if padding != nothing && !contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width-precision, padding, ' '))
+    end
+    # print sign
+    contains(flags,'+') ? push(blk.args, :(print(neg?'-':'+'))) :
+    contains(flags,' ') ? push(blk.args, :(print(neg?'-':' '))) :
+                          push(blk.args, :(neg && print('-')))
+    # print prefix
+    for ch in prefix
+        push(blk.args, :(write(out, $ch)))
+    end
+    # print zero padding & leading zeros
+    if space_pad && precision > 1
+        push(blk.args, _jl_printf_pad(precision-1, :($precision-pt), '0'))
+    elseif !space_pad && width > 1
+        zeros = contains(flags,'+') || contains(flags,' ') ?
+            :($width-pt) : :($width-neg-pt)
+        push(blk.args, _jl_printf_pad(width-1, zeros, '0'))
+    end
+    # print integer
+    push(blk.args, :(_jl_print_integer(out,pdigits,ndigits,pt)))
+    # print padding
+    if padding != nothing && contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width-precision, padding, ' '))
+    end
+    # return arg, expr
+    :(($x)::Real), ex
+end
+
+function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print to fixed trailing precision
+    #  [fF]: the only choice
+    #
+    # flags
     #  (#): always print a decimal point
     #  (0): pad left with zeros
     #  (-): left justify
     #  ( ): precede non-negative values with " "
     #  (+): precede non-negative values with "+"
+    #
     x, ex, blk = _jl_special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
@@ -241,52 +324,69 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, C::Char)
     :(($x)::Real), ex
 end
 
-let _digits = Array(Uint8,20) # long enough for typemax(Uint64)
+let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
+_digits[1] = '0' # leading zero for hacky use by octal alternate format (%#o)
 
 # TODO: to be replaced with more efficient integer decoders...
 
-global _jl_fix, _jl_sig
+global _jl_fix, _jl_sig, _jl_fix8alt
 
-function _jl_fix(base::Int, x::Integer, n::Int)
+function _jl_fix(base::Int, x::Integer, n::Int, u::Bool)
     digits = int2str(abs(x), base)
+    if u; digits = uc(digits); end
     ndigits = 0
-    for i = 1:length(digits)
+    for i = 1:strlen(digits)
         if digits[i]!='0'; ndigits=i; end
-        _digits[i] = digits[i]
+        _digits[i+1] = digits[i]
     end
-    (x < 0, pointer(_digits), ndigits, length(digits))
+    (x < 0, pointer(_digits)+1, ndigits, strlen(digits))
 end
+_jl_fix(base::Int, x::Integer, n::Int) = _jl_fix(base,x,n,false)
 
 function _jl_sig(base::Int, x::Integer, n::Int)
     digits = int2str(abs(x), base)
-    if length(digits) > n && digits[n+1]-'0' >= base/2
+    if strlen(digits) > n && digits[n+1]-'0' >= base/2
         digits.data[n] += 1
     end
     ndigits = 0
     for i = 1:n
         if digits[i]!='0'; ndigits=i; end
-        _digits[i] = digits[i]
+        _digits[i+1] = digits[i]
     end
-    (x < 0, pointer(_digits), ndigits, length(digits))
+    (x < 0, pointer(_digits)+1, ndigits, strlen(digits))
+end
+
+function _jl_fix8alt(x::Integer, n::Int)
+    neg, pdigits, ndigits, pt = _jl_fix(8,x,n)
+    if ndigits > 0 && _digits[2] != '0'
+        pdigits -= 1
+        ndigits += 1
+        pt += 1
+    end
+    neg, pdigits, ndigits, pt
 end
 
 end # let
 
-_jl_fix8 (x::Integer, n::Int) = _jl_fix(8 , x, n)
-_jl_fix10(x::Integer, n::Int) = _jl_fix(10, x, n)
-_jl_fix16(x::Integer, n::Int) = _jl_fix(16, x, n)
+_jl_fix8(x::Integer, n::Int) = _jl_fix(8,x,n)
+_jl_fix10(x::Integer, n::Int) = _jl_fix(10,x,n)
+_jl_fix16(x::Integer, n::Int) = _jl_fix(16,x,n)
+_jl_fix16uc(x::Integer, n::Int) = _jl_fix(16,x,n,true)
 
-_jl_sig8 (x::Integer, n::Int) = _jl_fix(8 , x, n)
-_jl_sig10(x::Integer, n::Int) = _jl_fix(10, x, n)
-_jl_sig16(x::Integer, n::Int) = _jl_fix(16, x, n)
+_jl_sig8 (x::Integer, n::Int) = _jl_fix(8,x,n)
+_jl_sig10(x::Integer, n::Int) = _jl_fix(10,x,n)
+_jl_sig16(x::Integer, n::Int) = _jl_fix(16,x,n)
+_jl_sig16uc(x::Integer, n::Int) = _jl_fix(16,x,n,true)
 
 _jl_fix8 (x::Real, n::Int) = error("octal float formatting not supported")
 _jl_fix10(x::Real, n::Int) = grisu_fix(x, n)
 _jl_fix16(x::Real, n::Int) = error("hex float formatting not implemented")
+_jl_fix16uc(x::Real, n::Int) = error("hex float formatting not implemented")
 
 _jl_sig8 (x::Real, n::Int) = error("octal float formatting not supported")
 _jl_sig10(x::Real, n::Int) = grisu_sig(x, n)
 _jl_sig16(x::Real, n::Int) = error("hex float formatting not implemented")
+_jl_sig16uc(x::Real, n::Int) = error("hex float formatting not implemented")
 
 ## external printf interface ##
 
