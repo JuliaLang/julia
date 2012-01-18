@@ -49,6 +49,45 @@ _jl_sig16(x::Real, n::Int) = error("hex float formatting not implemented")
 _jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
     error("premature end of printf format string: ", show_to_string(s))
 
+function _jl_parse_format(s::String, k::Integer)
+    j = k
+    width = 0
+    precision = -1
+    c, k = _jl_next_or_die(s,k)
+    # parse flags
+    while contains("#0- + '", c)
+        c, k = _jl_next_or_die(s,k)
+    end
+    flags = s[j:k-2]
+    contains(flags,'\'') && error("format flag \"'\" not yet supported")
+    # parse width
+    while '0' <= c <= '9'
+        width = 10*width + c-'0'
+        c, k = _jl_next_or_die(s,k)
+    end
+    # parse precision
+    if c == '.'
+        precision = 0
+        c, k = _jl_next_or_die(s,k)
+        while '0' <= c <= '9'
+            precision = 10*precision + c-'0'
+            c, k = _jl_next_or_die(s,k)
+        end
+    end
+    # parse length modifer (ignored)
+    if c == 'h' || c == 'l'
+        prev = c
+        c, k = _jl_next_or_die(s,k)
+        if c == prev
+            c, k = _jl_next_or_die(s,k)
+        end
+    elseif contains("Ljqtz",c)
+        c, k = _jl_next_or_die(s,k)
+    end
+
+    flags, width, precision, c, k
+end
+
 function _printf_gen(s::String)
     args = {}
     exprs = {}
@@ -59,52 +98,7 @@ function _printf_gen(s::String)
             if !isempty(s[i:j-1])
                 push(exprs, check_utf8(unescape_string(s[i:j-1])))
             end
-            alternate = false
-            pad_zeros = false
-            left_just = false
-            pre_space = false
-            show_sign = false
-            separated = false
-            width = 0
-            precision = -1
-            c, k = _jl_next_or_die(s,k)
-            # parse flags
-            while true
-                if     c == '#'  ; alternate = true
-                elseif c == '0'  ; pad_zeros = true
-                elseif c == '-'  ; left_just = true
-                elseif c == ' '  ; pre_space = true
-                elseif c == '+'  ; show_sign = true
-                elseif c == '\'' ; separated = true
-                else             ; break
-                end
-                c, k = _jl_next_or_die(s,k)
-            end
-            separated && error("format flag \"'\" not yet supported")
-            # parse width
-            while '0' <= c <= '9'
-                width = 10*width + c-'0'
-                c, k = _jl_next_or_die(s,k)
-            end
-            # parse precision
-            if c == '.'
-                precision = 0
-                c, k = _jl_next_or_die(s,k)
-                while '0' <= c <= '9'
-                    precision = 10*precision + c-'0'
-                    c, k = _jl_next_or_die(s,k)
-                end
-            end
-            # parse length modifer (ignored)
-            if c == 'h' || c == 'l'
-                prev = c
-                c, k = _jl_next_or_die(s,k)
-                if c == prev
-                    c, k = _jl_next_or_die(s,k)
-                end
-            elseif contains("Ljqtz",c)
-                c, k = _jl_next_or_die(s,k)
-            end
+            flags, width, precision, c, k = _jl_parse_format(s,k)
             i = j = k
             # construct conversion expression
             arg = symbol("arg$(length(args)+1)")
@@ -149,9 +143,9 @@ function _printf_gen(s::String)
                     @unexpected
                 end
                 # number formatting parameters
-                plus   = show_sign ? "+" : pre_space ? " " : ""
-                prefix = C=='x' && alternate || C=='a' ? "0x" :
-                         C=='X' && alternate || C=='A' ? "0X" : ""
+                plus   = contains(flags,'+') ? "+" : contains(flags,' ') ? " " : ""
+                prefix = C=='x' && contains(flags,'#') || C=='a' ? "0x" :
+                         C=='X' && contains(flags,'#') || C=='A' ? "0X" : ""
                 expstr = c=='a' ? "p" : c=='A' ? "P" : c==C ? "e" : "E"
                 padded = false
                 # generate formatting code
@@ -160,12 +154,12 @@ function _printf_gen(s::String)
                 end
                 if contains("dioux", c)
                     push(blk.args, :(x = rpad(digits,pt,"0")))
-                    if c=='o' && alternate
-                        push(blk.args, :(if x[1]!='0'; x = "0"*x; end))
+                    if c=='o' && contains(flags,'#')
+                        push(blk.args, :(if x[1]!='0'; x="0"*x; end))
                     end
                     if precision > 0
-                        push(blk.args, :(x = lpad(x, $precision, "0")))
-                    elseif width > 0 && pad_zeros && !left_just
+                        push(blk.args, :(x = lpad(x,$precision,"0")))
+                    elseif width > 0 && contains(flags,'0') && !contains(flags,'-')
                         n = width-length(prefix)-1 # for sign
                         push(blk.args, :(x = lpad(x,$n,"0")))
                         if isempty(plus)
@@ -175,10 +169,10 @@ function _printf_gen(s::String)
                     end
                 elseif c == 'f'
                     if precision < 0; precision = 6; end
-                    if precision > 0 || alternate
+                    if precision > 0 || contains(flags,'#')
                         push(blk.args, quote
                             if length(digits) <= pt
-                                x = rpad(digits,pt,"0")*"."*$("0"^precision)
+                                x = rpad(digits,pt,"0")*$("."*"0"^precision)
                             elseif pt <= 0
                                 x = "0."*"0"^-pt*digits*"0"^($precision-length(digits)+pt)
                             else # 0 < pt < length(digits)
@@ -186,9 +180,9 @@ function _printf_gen(s::String)
                             end
                         end)
                     else
-                        push(blk.args, :(x = rpad(digits, max(1,pt), "0")))
+                        push(blk.args, :(x = rpad(digits,max(1,pt),"0")))
                     end
-                    if width > 0 && pad_zeros && !left_just
+                    if width > 0 && contains(flags,'0') && !contains(flags,'-')
                         n = width-length(prefix)-1 # for sign
                         push(blk.args, :(x = lpad(x,$n,"0")))
                         if isempty(plus)
@@ -203,7 +197,7 @@ function _printf_gen(s::String)
                             x = digits[1:1]*"."*rpad(digits[2:],$precision,"0")
                         end)
                     else
-                        if alternate
+                        if contains(flags,'#')
                             push(blk.args, :(x = digits[1:1]*"."))
                         else
                             push(blk.args, :(x = digits[1:1]))
@@ -213,7 +207,7 @@ function _printf_gen(s::String)
                     push(blk.args, :(x *= $expstr*(e<0?"-":"+")*int2str(abs(e),10,2)))
                 elseif c == 'g'
                     if precision < 0; precision = 6; end
-                    if !alternate
+                    if !contains(flags,'#')
                         push(blk.args, quote
                             e = pt-1
                             digits = _jl_strip_trz(digits)
@@ -264,7 +258,7 @@ function _printf_gen(s::String)
                     end
                 end
                 if width > 0
-                    pad = left_just ? :rpad : :lpad
+                    pad = contains(flags,'-') ? :rpad : :lpad
                     push(abn.args, :(x = ($pad)(x,$width)))
                 end
                 blk = quote
@@ -278,11 +272,11 @@ function _printf_gen(s::String)
             elseif c == 'c'
                 arg = :(($arg)::Integer)
                 push(blk.args, :(x = char($arg)))
-                if alternate
+                if contains(flags,'#')
                     push(blk.args, :(x = show_to_string(x)))
                 end
             elseif c == 's'
-                if alternate
+                if contains(flags,'#')
                     push(blk.args, :(x = show_to_string($arg)))
                 else
                     push(blk.args, :(x = string($arg)))
@@ -296,7 +290,7 @@ function _printf_gen(s::String)
                 error("invalid printf format string: ", show_to_string(s))
             end
             if width > 0 && !padded
-                pad = left_just ? :rpad : :lpad
+                pad = contains(flags,'-') ? :rpad : :lpad
                 push(blk.args, :(x = ($pad)(x,$width)))
             end
             push(blk.args, :x)
