@@ -1,25 +1,276 @@
-function _jl_strip_trz(digits::ASCIIString)
-    n = length(digits)
-    while n > 1 && digits[n] == '0'
-        n -= 1
+## printf format string => function expression ##
+
+function _jl_printf_gen(s::String)
+    args = {}
+    blk = expr(:block, :(out = current_output_stream()))
+    i = j = start(s)
+    while !done(s,j)
+        c, k = next(s,j)
+        if c == '%'
+            if !isempty(s[i:j-1])
+                str = check_utf8(unescape_string(s[i:j-1]))
+                push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
+            end
+            flags, width, precision, c, k = _jl_printf_parse1(s,k)
+            if contains(flags,'\'')
+                error("printf format flag ' not yet supported")
+            end
+            if c=='a'; error("printf feature %a not yet supported"); end
+            if c=='n'; error("printf feature %n not supported"); end
+            if c=='%'
+                push(blk.args, :(print('%')))
+            else
+                # construct conversion expression
+                C = c; c = lc(c)
+                arg, ex = c=='f' ? _jl_printf_f(flags, width, precision, C) :
+                          c=='e' ? _jl_printf_e(flags, width, precision, C) :
+                          c=='g' ? _jl_printf_g(flags, width, precision, C) :
+                          c=='c' ? _jl_printf_c(flags, width, precision, C) :
+                          c=='s' ? _jl_printf_s(flags, width, precision, C) :
+                          c=='p' ? _jl_printf_p(flags, width, precision, C) :
+                                   _jl_printf_d(flags, width, precision, C)
+                push(args, arg)
+                push(blk.args, ex)
+            end
+            i = j = k
+        else
+            j = k
+        end
     end
-    digits[1:n]
+    if !isempty(s[i:])
+        str = check_utf8(unescape_string(s[i:]))
+        push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
+    end
+    # return args, exprs
+    args = expr(:tuple, args)
+    return :(($args)->($blk))
 end
+
+## parse a single printf specifier ##
+
+# printf specifiers:
+#   %                       # start
+#   (\d+\$)?                # arg (not supported)
+#   [\-\+#0' ]*             # flags
+#   (\d+)?                  # width
+#   (\.\d*)?                # precision
+#   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
+#   [diouxXeEfFgGaAcCsSp%]  # conversion
+
+_jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
+    error("invalid printf format string: ", show_to_string(s))
+
+function _jl_printf_parse1(s::String, k::Integer)
+    j = k
+    width = 0
+    precision = -1
+    c, k = _jl_next_or_die(s,k)
+    # handle %%
+    if c == '%'
+        return "", width, precision, c, k
+    end
+    # parse flags
+    while contains("#0- + '", c)
+        c, k = _jl_next_or_die(s,k)
+    end
+    flags = ascii(s[j:k-2])
+    # parse width
+    while '0' <= c <= '9'
+        width = 10*width + c-'0'
+        c, k = _jl_next_or_die(s,k)
+    end
+    # parse precision
+    if c == '.'
+        c, k = _jl_next_or_die(s,k)
+        if '0' <= c <= '9'
+            precision = 0
+            while '0' <= c <= '9'
+                precision = 10*precision + c-'0'
+                c, k = _jl_next_or_die(s,k)
+            end
+        end
+    end
+    # parse length modifer (ignored)
+    if c == 'h' || c == 'l'
+        prev = c
+        c, k = _jl_next_or_die(s,k)
+        if c == prev
+            c, k = _jl_next_or_die(s,k)
+        end
+    elseif contains("Ljqtz",c)
+        c, k = _jl_next_or_die(s,k)
+    end
+    # validate conversion
+    if !contains("diouxXDOUeEfFgGaAcCsSn", c)
+        error("invalid printf format string: ", show_to_string(s))
+    end
+    flags, width, precision, c, k
+end
+
+## printf formatter generation ##
+
+function _jl_special_handler(flags::ASCIIString, width::Int)
+    x = gensym()
+    blk = expr(:block)
+    pad = contains(flags,'-') ? rpad : lpad
+    pos = contains(flags,'+') ? "+" :
+          contains(flags,' ') ? " " : ""
+    abn = quote
+        isnan($x) ? $(cstring(pad("NaN", width))) :
+         $x < 0   ? $(cstring(pad("-Inf", width))) :
+                    $(cstring(pad("$(pos)Inf", width)))
+    end
+    ex = :(isfinite($x) ? $blk : write(out, $abn))
+    x, ex, blk
+end
+
+function _jl_printf_pad(m::Int, n::Union(Symbol,Expr), c::Char)
+    if m <= 1
+        :($n > 0 && print($c))
+    else
+        i = gensym()
+        quote
+            $i = $n
+            while $i > 0
+                print($c)
+                $i -= 1
+            end
+        end
+    end
+end
+
+function _jl_print_integer(out, pdigits, ndigits, pt)
+    if ndigits == 0
+        write(out, '0')
+    else
+        write(out, pdigits, ndigits)
+        pt -= ndigits
+        while pt > 0
+            write(out, '0')
+            pt -= 1
+        end
+    end
+end
+
+function _jl_print_fixed(out, pdigits, ndigits, pt, precision)
+    if pt <= 0
+        # 0.0dddd0
+        write(out, '0')
+        write(out, '.')
+        precision += pt
+        while pt < 0
+            write(out, '0')
+            pt += 1
+        end
+        write(out, pdigits, ndigits)
+        precision -= ndigits
+    elseif ndigits <= pt
+        # dddd000.000000
+        write(out, pdigits, ndigits)
+        while ndigits < pt
+            write(out, '0')
+            ndigits += 1
+        end
+        write(out, '.')
+    else # 0 < pt < ndigits
+        # dd.dd0000
+        ndigits -= pt
+        write(out, pdigits, pt)
+        write(out, '.')
+        write(out, pdigits+pt, ndigits)
+        precision -= ndigits
+    end
+    while precision > 0
+        write(out, '0')
+        precision -= 1
+    end
+end
+
+function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, C::Char)
+    # print to fixed trailing precision
+    #  (#): always print a decimal point
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    x, ex, blk = _jl_special_handler(flags,width)
+    # interpret the number
+    if precision < 0; precision = 6; end
+    push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix10($x,$precision)))
+    # calculate padding
+    padding = nothing
+    if width > 1
+        if precision > 0 || contains(flags,'#')
+            width -= precision+1
+        end
+        if contains(flags,'+') || contains(flags,' ')
+            width -= 1
+            if width > 1
+                padding = :($width-pt)
+            end
+        else
+            if width > 1
+                padding = :($width-pt-neg)
+            end
+        end
+    end
+    # print space padding
+    if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
+        push(blk.args, _jl_printf_pad(width-1, padding, ' '))
+    end
+    # print sign
+    contains(flags,'+') ? push(blk.args, :(print(neg?'-':'+'))) :
+    contains(flags,' ') ? push(blk.args, :(print(neg?'-':' '))) :
+                          push(blk.args, :(neg && print('-')))
+    # print zero padding
+    if padding != nothing && !contains(flags,'-') && contains(flags,'0')
+        push(blk.args, _jl_printf_pad(width-1, padding, '0'))
+    end
+    # print digits
+    if precision > 0
+        push(blk.args, :(_jl_print_fixed(out,pdigits,ndigits,pt,$precision)))
+    else
+        push(blk.args, :(_jl_print_integer(out,pdigits,ndigits,pt)))
+        contains(flags,'#') && push(blk.args, :(print('.')))
+    end
+    # print space padding
+    if padding != nothing && contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width-1, padding, ' '))
+    end
+    # return arg, expr
+    :(($x)::Real), ex
+end
+
+let _digits = Array(Uint8,20) # long enough for typemax(Uint64)
+
+# TODO: to be replaced with more efficient integer decoders...
+
+global _jl_fix, _jl_sig
 
 function _jl_fix(base::Int, x::Integer, n::Int)
     digits = int2str(abs(x), base)
-    (x < 0, _jl_strip_trz(digits), length(digits))
+    ndigits = 0
+    for i = 1:length(digits)
+        if digits[i]!='0'; ndigits=i; end
+        _digits[i] = digits[i]
+    end
+    (x < 0, pointer(_digits), ndigits, length(digits))
 end
 
 function _jl_sig(base::Int, x::Integer, n::Int)
     digits = int2str(abs(x), base)
-    pt = length(digits)
-    if length(digits) > n && digits.data[n+1] >= base/2
+    if length(digits) > n && digits[n+1]-'0' >= base/2
         digits.data[n] += 1
-        digits = digits[1:n]
     end
-    (x < 0, _jl_strip_trz(digits), pt)
+    ndigits = 0
+    for i = 1:n
+        if digits[i]!='0'; ndigits=i; end
+        _digits[i] = digits[i]
+    end
+    (x < 0, pointer(_digits), ndigits, length(digits))
 end
+
+end # let
 
 _jl_fix8 (x::Integer, n::Int) = _jl_fix(8 , x, n)
 _jl_fix10(x::Integer, n::Int) = _jl_fix(10, x, n)
@@ -37,282 +288,12 @@ _jl_sig8 (x::Real, n::Int) = error("octal float formatting not supported")
 _jl_sig10(x::Real, n::Int) = grisu_sig(x, n)
 _jl_sig16(x::Real, n::Int) = error("hex float formatting not implemented")
 
-# printf formats:
-#   %                       # start
-#   (\d+\$)?                # arg (not supported)
-#   [\-\+#0' ]*             # flags
-#   (\d+)?                  # width
-#   (\.\d+)?                # precision
-#   (h|hh|l|ll|L|j|t|z|q)?  # modifier
-#   [diouxXeEfFgGaAcCsSp%]  # conversion
+## external printf interface ##
 
-_jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
-    error("premature end of printf format string: ", show_to_string(s))
-
-function _jl_parse_format(s::String, k::Integer)
-    j = k
-    width = 0
-    precision = -1
-    c, k = _jl_next_or_die(s,k)
-    # parse flags
-    while contains("#0- + '", c)
-        c, k = _jl_next_or_die(s,k)
-    end
-    flags = s[j:k-2]
-    contains(flags,'\'') && error("format flag \"'\" not yet supported")
-    # parse width
-    while '0' <= c <= '9'
-        width = 10*width + c-'0'
-        c, k = _jl_next_or_die(s,k)
-    end
-    # parse precision
-    if c == '.'
-        precision = 0
-        c, k = _jl_next_or_die(s,k)
-        while '0' <= c <= '9'
-            precision = 10*precision + c-'0'
-            c, k = _jl_next_or_die(s,k)
-        end
-    end
-    # parse length modifer (ignored)
-    if c == 'h' || c == 'l'
-        prev = c
-        c, k = _jl_next_or_die(s,k)
-        if c == prev
-            c, k = _jl_next_or_die(s,k)
-        end
-    elseif contains("Ljqtz",c)
-        c, k = _jl_next_or_die(s,k)
-    end
-
-    flags, width, precision, c, k
-end
-
-function _printf_gen(s::String)
-    args = {}
-    exprs = {}
-    i = j = start(s)
-    while !done(s,j)
-        c, k = next(s,j)
-        if c == '%'
-            if !isempty(s[i:j-1])
-                push(exprs, check_utf8(unescape_string(s[i:j-1])))
-            end
-            flags, width, precision, c, k = _jl_parse_format(s,k)
-            i = j = k
-            # construct conversion expression
-            arg = symbol("arg$(length(args)+1)")
-            blk = expr(:block)
-            C = c; c = lc(c)
-            if c == '%'
-                if s[thisind(s,k-1)] != '%'
-                    error("invalid printf format string: ", show_to_string(s))
-                end
-                if isempty(exprs)
-                    push(exprs, "%")
-                else
-                    exprs[end] *= "%"
-                end
-                continue
-            end
-            if contains("diouxefga", c)
-                arg = :(($arg)::Real)
-                # number interpretation
-                if c == 'u'
-                    push(blk.args, :(x = unsigned(x)))
-                end
-                if contains("diu", c)
-                    push(blk.args, :((neg, digits, pt) = _jl_fix10(x,0)))
-                elseif c == 'o'
-                    push(blk.args, :((neg, digits, pt) = _jl_fix8(x,0)))
-                elseif c == 'x'
-                    push(blk.args, :((neg, digits, pt) = _jl_fix16(x,0)))
-                elseif c == 'f'
-                    n = precision < 0 ? 6 : precision
-                    push(blk.args, :((neg, digits, pt) = _jl_fix10(x,$n)))
-                elseif c == 'e'
-                    n = precision < 0 ? 7 : precision+1
-                    push(blk.args, :((neg, digits, pt) = _jl_sig10(x,$n)))
-                elseif c == 'g'
-                    n = precision < 0 ? 6 : precision
-                    push(blk.args, :((neg, digits, pt) = _jl_sig10(x,$n)))
-                elseif c == 'a'
-                    n = precision < 0 ? 7 : precision+1
-                    push(blk.args, :((neg, digits, pt) = _jl_sig16(x,$n)))
-                else
-                    @unexpected
-                end
-                # number formatting parameters
-                plus   = contains(flags,'+') ? "+" : contains(flags,' ') ? " " : ""
-                prefix = C=='x' && contains(flags,'#') || C=='a' ? "0x" :
-                         C=='X' && contains(flags,'#') || C=='A' ? "0X" : ""
-                expstr = c=='a' ? "p" : c=='A' ? "P" : c==C ? "e" : "E"
-                padded = false
-                # generate formatting code
-                if C == 'X' || C == 'A'
-                    push(blk.args, :(digits = uc(digits)))
-                end
-                if contains("dioux", c)
-                    push(blk.args, :(x = rpad(digits,pt,"0")))
-                    if c=='o' && contains(flags,'#')
-                        push(blk.args, :(if x[1]!='0'; x="0"*x; end))
-                    end
-                    if precision > 0
-                        push(blk.args, :(x = lpad(x,$precision,"0")))
-                    elseif width > 0 && contains(flags,'0') && !contains(flags,'-')
-                        n = width-length(prefix)-1 # for sign
-                        push(blk.args, :(x = lpad(x,$n,"0")))
-                        if isempty(plus)
-                            plus = "0"
-                        end
-                        padded = true
-                    end
-                elseif c == 'f'
-                    if precision < 0; precision = 6; end
-                    if precision > 0 || contains(flags,'#')
-                        push(blk.args, quote
-                            if length(digits) <= pt
-                                x = rpad(digits,pt,"0")*$("."*"0"^precision)
-                            elseif pt <= 0
-                                x = "0."*"0"^-pt*digits*"0"^($precision-length(digits)+pt)
-                            else # 0 < pt < length(digits)
-                                x = digits[1:pt]*"."*rpad(digits[pt+1:],$precision,"0")
-                            end
-                        end)
-                    else
-                        push(blk.args, :(x = rpad(digits,max(1,pt),"0")))
-                    end
-                    if width > 0 && contains(flags,'0') && !contains(flags,'-')
-                        n = width-length(prefix)-1 # for sign
-                        push(blk.args, :(x = lpad(x,$n,"0")))
-                        if isempty(plus)
-                            plus = "0"
-                        end
-                        padded = true
-                    end
-                elseif c == 'e'
-                    if precision < 0; precision = 6; end
-                    if precision > 0
-                        push(blk.args, quote
-                            x = digits[1:1]*"."*rpad(digits[2:],$precision,"0")
-                        end)
-                    else
-                        if contains(flags,'#')
-                            push(blk.args, :(x = digits[1:1]*"."))
-                        else
-                            push(blk.args, :(x = digits[1:1]))
-                        end
-                    end
-                    push(blk.args, :(e = pt-1))
-                    push(blk.args, :(x *= $expstr*(e<0?"-":"+")*int2str(abs(e),10,2)))
-                elseif c == 'g'
-                    if precision < 0; precision = 6; end
-                    if !contains(flags,'#')
-                        push(blk.args, quote
-                            e = pt-1
-                            digits = _jl_strip_trz(digits)
-                            if e < -4 || e >= $precision
-                                x = length(digits) > 1 ?
-                                    (digits[1:1]*"."*digits[2:]) : digits[1:1]
-                                x *= $expstr*(e<0?"-":"+")*int2str(abs(e),10,2)
-                            elseif pt <= 0
-                                x = "0."*"0"^-pt*digits
-                            elseif pt >= length(digits)
-                                x = rpad(digits,pt,"0")
-                            else
-                                x = digits[1:pt]*"."*digits[pt+1:]
-                            end
-                        end)
-                    else
-                        push(blk.args, quote
-                            e = pt-1
-                            digits = rpad(digits,$precision,"0")
-                            if e < -4 || e >= $precision
-                                x = digits[1:1]*"."*digits[2:]
-                                x *= $expstr*(e<0?"-":"+")*int2str(abs(e),10,2)
-                            elseif pt <= 0
-                                x = "0."*"0"^-pt*digits
-                            elseif pt >= length(digits) # only equality possible
-                                x = rpad(digits,pt,"0")*"."
-                            else
-                                x = digits[1:pt]*"."*digits[pt+1:]
-                            end
-                        end)
-                    end
-                elseif c == 'a'
-                    error("printf feature \"%$C\" is not yet implemented")
-                else
-                    @unexpected
-                end
-                if length(prefix) > 0
-                    push(blk.args, :(x = $prefix*x))
-                end
-                push(blk.args, :(x = (neg?"-":$plus)*x))
-                abn = quote
-                    if isnan(x)
-                        x = "NaN"
-                    elseif x < 0
-                        x = "-Inf"
-                    else
-                        x = "Inf"
-                    end
-                end
-                if width > 0
-                    pad = contains(flags,'-') ? :rpad : :lpad
-                    push(abn.args, :(x = ($pad)(x,$width)))
-                end
-                blk = quote
-                    x = $arg
-                    if isfinite(x)
-                        $blk
-                    else
-                        $abn
-                    end
-                end
-            elseif c == 'c'
-                arg = :(($arg)::Integer)
-                push(blk.args, :(x = char($arg)))
-                if contains(flags,'#')
-                    push(blk.args, :(x = show_to_string(x)))
-                end
-            elseif c == 's'
-                if contains(flags,'#')
-                    push(blk.args, :(x = show_to_string($arg)))
-                else
-                    push(blk.args, :(x = string($arg)))
-                end
-            elseif c == 'p'
-                arg = :(($arg)::Ptr)
-                push(blk.args, :(x = "0x"*hex(unsigned($arg), $(WORD_SIZE>>2))))
-            elseif c == 'n'
-                error("printf feature \"%n\" is not supported")
-            else
-                error("invalid printf format string: ", show_to_string(s))
-            end
-            if width > 0 && !padded
-                pad = contains(flags,'-') ? :rpad : :lpad
-                push(blk.args, :(x = ($pad)(x,$width)))
-            end
-            push(blk.args, :x)
-            push(exprs, blk)
-            push(args, arg)
-        else
-            j = k
-        end
-    end
-    if !isempty(s[i:])
-        push(exprs, check_utf8(unescape_string(s[i:j-1])))
-    end
-    # return args, exprs
-    args = expr(:tuple, args)
-    body = expr(:call, :print, exprs...)
-    return :(($args)->($body))
-end
-
-macro f_str(f); _printf_gen(f); end
+macro f_str(f); _jl_printf_gen(f); end
 
 printf(f::Function, args...) = f(args...)
-printf(f::String,   args...) = eval(_printf_gen(f))(args...)
+printf(f::String,   args...) = eval(_jl_printf_gen(f))(args...)
 printf(s::IOStream, args...) = with_output_stream(s, printf, args...)
 
 sprintf(f::Function, args...) = print_to_string(printf, f, args...)

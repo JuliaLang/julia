@@ -32,7 +32,7 @@ function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
     @grisu_ccall x mode ndigits
-    neg, ASCIIString(_digits[1:len]), pt
+    neg, pointer(_digits), len, pt
 end
 grisu(x::Float64) = grisu(x, SHORTEST, int32(0))
 grisu(x::Float32) = grisu(float64(x), SHORTEST_SINGLE, int32(0))

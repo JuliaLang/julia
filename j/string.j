@@ -59,8 +59,11 @@ function isvalid(s::String, i::Integer)
     end
 end
 
+prevind(s::DirectIndexString, i::Integer) = i-1
 thisind(s::DirectIndexString, i::Integer) = i
 nextind(s::DirectIndexString, i::Integer) = i+1
+
+prevind(s::String, i::Integer) = thisind(s,thisind(s,i)-1)
 
 function thisind(s::String, i::Integer)
     for j = i:-1:1
@@ -832,7 +835,7 @@ uint64(s::String) = parse_int(Uint64, s, 10)
 ## integer to string functions ##
 
 # TODO: this can be done faster for Int32, Int64
-function ndigits(n::Integer, b::Integer)
+function _jl_ndigits(n::Integer, b::Integer)
     nd = 1
     ba = convert(typeof(n), b)
     while true
@@ -855,7 +858,7 @@ function int2str(n::Union(Int64,Uint64), b::Integer)
     neg = n < 0
     n = abs(n)
     b = convert(typeof(n), b)
-    ndig = ndigits(n, b)
+    ndig = _jl_ndigits(n, b)
     sz = convert(Int, ndig)
     data = Array(Uint8, sz+neg)
     for i=(sz+neg):-1:(1+neg)
