@@ -26,6 +26,24 @@ jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
     return eval(e, locals, nl);
 }
 
+jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
+                                          jl_value_t **locals, size_t nl)
+{
+    jl_value_t *v=NULL;
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = m;
+        v = eval(e, locals, nl);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
+    assert(v);
+    return v;
+}
+
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
                            jl_value_t **locals, size_t nl)
 {

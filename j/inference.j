@@ -286,6 +286,9 @@ apply_type_tfunc = function (A, args...)
         return Any
     end
     headtype = args[1].parameters[1]
+    if isa(headtype,UnionKind) || isa(headtype,Tuple)
+        return args[1]
+    end
     tparams = ()
     for i=2:length(A)
         if isType(args[i])
@@ -897,7 +900,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     if redo
     elseif cop
         sparams = append(sparams, linfo.sparams)
-        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo.ast, sparams)::Expr
+        ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo, sparams)::Expr
     else
         ast = linfo.ast
     end
@@ -1586,6 +1589,8 @@ function finfer(f, types)
 end
 
 tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
+
+ccall(:jl_enable_inference, Void, ())
 
 # stuff for testing
 

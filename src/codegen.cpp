@@ -286,7 +286,8 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             jl_value_t *f = jl_exprarg(e,0);
             if (expr_is_symbol(f)) {
                 if (is_constant(f, ctx, false)) {
-                    jl_value_t *fv = jl_interpret_toplevel_expr(f);
+                    jl_value_t *fv =
+                        jl_interpret_toplevel_expr_in(ctx->module, f, NULL, 0);
                     if (jl_typeis(fv, jl_intrinsic_type)) {
                         JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
                         if (fi != JL_I::ccall) {
@@ -790,9 +791,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
         if (i > nargs) {
             jl_value_t *ty =
-                jl_interpret_toplevel_expr_with(expr,
-                                                &jl_tupleref(ctx->sp,0),
-                                                ctx->sp->length/2);
+                jl_interpret_toplevel_expr_in(ctx->module, expr,
+                                              &jl_tupleref(ctx->sp,0),
+                                              ctx->sp->length/2);
             if (jl_is_leaf_type(ty)) {
                 JL_GC_POP();
                 return literal_pointer_val(ty);

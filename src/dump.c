@@ -38,6 +38,9 @@ static jl_array_t *idtable_list=NULL;
 static jl_value_t *jl_idtable_type=NULL;
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
 
+// queue of types to cache
+static jl_array_t *tagtype_list=NULL;
+
 #define write_uint8(s, n) ios_putc((n), (s))
 #define read_uint8(s) ((uint8_t)ios_getc(s))
 #define write_int8(s, n) write_uint8(s, n)
@@ -161,12 +164,6 @@ static void jl_serialize_typecache(ios_t *s, jl_typename_t *tn)
     typekey_stack_t *tc = (typekey_stack_t*)tn->cache;
     while (tc != NULL) {
         jl_serialize_value(s, tc->type);
-        jl_serialize_value(s, tc->tn);
-        write_int32(s, tc->n);
-        int i;
-        for(i=0; i < tc->n; i++) {
-            jl_serialize_value(s, tc->key[i]);
-        }
         tc = tc->next;
     }
     jl_serialize_value(s, NULL);
@@ -446,7 +443,13 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         st->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         st->fptr = jl_deserialize_fptr(s);
         st->instance = NULL;
-        st->uid = read_int32(s);
+        st->uid = read_int32(s);;
+        if (st->name == jl_array_type->name) {
+            // builtin types are not serialized, so their caches aren't
+            // explicitly saved. so we reconstruct the caches of builtin
+            // parametric types here.
+            jl_cell_1d_push(tagtype_list, (jl_value_t*)st);
+        }
         return (jl_value_t*)st;
     }
     else if (kind == jl_bits_kind) {
@@ -473,6 +476,9 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         bt->linfo = NULL;
         bt->super = (jl_tag_type_t*)jl_deserialize_value(s);
         bt->uid = read_int32(s);
+        if (bt->name == jl_pointer_type->name) {
+            jl_cell_1d_push(tagtype_list, (jl_value_t*)bt);
+        }
         return (jl_value_t*)bt;
     }
     else {
@@ -486,6 +492,10 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         tt->fptr = NULL;
         tt->env = NULL;
         tt->linfo = NULL;
+        if (tt->name == jl_type_type->name || tt->name == jl_seq_type->name ||
+            tt->name == jl_abstractarray_type->name) {
+            jl_cell_1d_push(tagtype_list, (jl_value_t*)tt);
+        }
         return (jl_value_t*)tt;
     }
     assert(0);
@@ -525,15 +535,7 @@ static typekey_stack_t *jl_deserialize_typecache(ios_t *s)
         if (type == NULL)
             break;
         typekey_stack_t *tc = (typekey_stack_t*)allocb(sizeof(typekey_stack_t));
-        tc->type = (jl_type_t*)type;
-        tc->tn = (jl_typename_t*)jl_deserialize_value(s);
-        int n = read_int32(s);
-        tc->n = n;
-        tc->key = (jl_value_t**)allocb(n * sizeof(void*));
-        int i;
-        for(i=0; i < n; i++) {
-            tc->key[i] = jl_deserialize_value(s);
-        }
+        tc->type = (jl_tag_type_t*)type;
         tc->next = NULL;
         *pnext = tc;
         pnext = &tc->next;
@@ -810,15 +812,38 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
+    if (jl_current_module != jl_system_module) {
+        // set up for stage 1 bootstrap, where the System module is already
+        // loaded and we are loading an updated copy in a separate module.
+
+        // step 1: set Base.System = current_module
+        jl_binding_t *b = jl_get_binding(jl_base_module, jl_symbol("System"));
+        b->value = (jl_value_t*)jl_current_module;
+        assert(b->constp);
+
+        // step 2: set current_module.Base = Base
+        jl_set_const(jl_current_module, jl_symbol("Base"), (jl_value_t*)jl_base_module);
+
+        // step 3: current_module.System = current_module
+        b = jl_get_binding(jl_current_module, jl_symbol("System"));
+        b->value = (jl_value_t*)jl_current_module;
+        assert(b->constp);
+
+        // step 4: remove current_module.current_module
+        b = jl_get_binding(jl_current_module, jl_current_module->name);
+        b->value = NULL; b->constp = 0;
+
+        // step 5: rename current_module to System
+        jl_current_module->name = jl_symbol("System");
+
+        // step 6: orphan old system module
+        jl_system_module = jl_current_module;
+    }
+
     jl_idtable_type = jl_get_global(jl_system_module, jl_symbol("IdTable"));
     idtable_list = jl_alloc_cell_1d(0);
 
     jl_serialize_value(&f, jl_array_type->env);
-    jl_serialize_typecache(&f, jl_array_type->name);
-    jl_serialize_typecache(&f, jl_type_type->name);
-    jl_serialize_typecache(&f, jl_pointer_type->name);
-    jl_serialize_typecache(&f, jl_seq_type->name);
-    jl_serialize_typecache(&f, jl_abstractarray_type->name);
 
     jl_serialize_value(&f, jl_base_module);
     jl_serialize_value(&f, jl_current_module);
@@ -863,12 +888,9 @@ void jl_restore_system_image(char *fname)
     jl_gc_disable();
 #endif
 
+    tagtype_list = jl_alloc_cell_1d(0);
+
     jl_array_type->env = jl_deserialize_value(&f);
-    jl_array_type->name->cache = jl_deserialize_typecache(&f);
-    jl_type_type->name->cache = jl_deserialize_typecache(&f);
-    jl_pointer_type->name->cache = jl_deserialize_typecache(&f);
-    jl_seq_type->name->cache = jl_deserialize_typecache(&f);
-    jl_abstractarray_type->name->cache = jl_deserialize_typecache(&f);
     
     jl_base_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_current_module = (jl_module_t*)jl_deserialize_value(&f);
@@ -883,11 +905,22 @@ void jl_restore_system_image(char *fname)
                           ((jl_array_t**)v)[1]->length);
     }
 
+    // cache builtin parametric types
+    for(int i=0; i < tagtype_list->length; i++) {
+        jl_value_t *v = jl_cellref(tagtype_list, i);
+        uint32_t uid=0;
+        if (jl_is_struct_type(v))
+            uid = ((jl_struct_type_t*)v)->uid;
+        else if (jl_is_bits_type(v))
+            uid = ((jl_bits_type_t*)v)->uid;
+        jl_cache_type_((jl_tag_type_t*)v);
+        if (jl_is_struct_type(v))
+            ((jl_struct_type_t*)v)->uid = uid;
+        else if (jl_is_bits_type(v))
+            ((jl_bits_type_t*)v)->uid = uid;
+    }
+
     jl_get_builtin_hooks();
-    jl_array_uint8_type =
-        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
-                                  jl_tuple2(jl_uint8_type,
-                                            jl_box_long(1)));
     jl_boot_file_loaded = 1;
     jl_typeinf_func =
         (jl_function_t*)*(jl_get_bindingp(jl_system_module,

@@ -171,18 +171,20 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_NARGSV(ccall, 3);
     jl_value_t *ptr=NULL, *rt=NULL, *at=NULL;
     JL_GC_PUSH(&ptr, &rt, &at);
-    ptr = jl_interpret_toplevel_expr(args[1]);
-    rt  = jl_interpret_toplevel_expr_with(args[2],
-                                          &jl_tupleref(ctx->sp,0),
-                                          ctx->sp->length/2);
+    ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
+    rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
     if (jl_is_tuple(rt)) {
         std::string msg = "in " + ctx->funcName +
             ": ccall: missing return type";
         jl_error(msg.c_str());
     }
-    at  = jl_interpret_toplevel_expr_with(args[3],
-                                          &jl_tupleref(ctx->sp,0),
-                                          ctx->sp->length/2);
+    at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
+                                        &jl_tupleref(ctx->sp,0),
+                                        ctx->sp->length/2);
     void *fptr;
     if (jl_is_symbol(ptr)) {
         // just symbol, default to JuliaDLHandle

@@ -453,7 +453,6 @@ jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
 }
 
 jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp);
-void jl_specialize_ast(jl_lambda_info_t *li);
 
 void jl_add_constructors(jl_struct_type_t *t)
 {
@@ -488,7 +487,8 @@ void jl_add_constructors(jl_struct_type_t *t)
             }
             cfactory = jl_instantiate_method((jl_function_t*)t->ctor_factory,
                                              sparams);
-            jl_specialize_ast(cfactory->linfo);
+            cfactory->linfo->ast = jl_prepare_ast(cfactory->linfo,
+                                                  cfactory->linfo->sparams);
             
             // call user-defined constructor factory on (type,)
             jl_value_t *cfargs[1] = { (jl_value_t*)t };

@@ -1,42 +1,4 @@
-module System
-
 load("base.j")
-
-if false
-    # simple print definitions for debugging. enable these if something
-    # goes wrong during bootstrap before printing code is available.
-    length(a::Array) = arraylen(a)
-    print(s::ASCIIString) = print(s.data)
-    print(x) = show(x)
-    println(x) = (print(x);print("\n"))
-    show(s::ASCIIString) = print(s.data)
-    show(s::Symbol) = print(s)
-    show(b::Bool) = print(b ? "true" : "false")
-    show(n::Integer)  = show(int64(n))
-    show(n::Unsigned) = show(uint64(n))
-    print(a...) = for x=a; print(x); end
-    function show(e::Expr)
-        print(e.head)
-        print("(")
-        for i=1:arraylen(e.args)
-            show(arrayref(e.args,i))
-            print(", ")
-        end
-        print(")\n")
-    end
-    function show(bt::BackTrace)
-        show(bt.e)
-        i = 1
-        t = bt.trace
-        while i < length(t)
-            print("\n")
-            lno = t[i+2]
-            print("in ", t[i], ", ", t[i+1], ":", lno)
-            i += 3
-        end
-        print("\n")
-    end
-end
 
 # core operations & types
 load("range.j")
@@ -68,11 +30,10 @@ load("set.j")
 
 # compiler
 load("inference.j")
-ccall(:jl_enable_inference, Void, ());
 
 # I/O, strings & printing
 load("io.j")
-set_current_output_stream(make_stdout_stream()) # for error reporting
+#set_current_output_stream(make_stdout_stream()) # for error reporting
 load("string.j")
 load("ascii.j")
 load("utf8.j")
@@ -209,8 +170,3 @@ compile_hint(dims2string, (Tuple,))
 compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int32))
 compile_hint(istaskdone, (Task,))
-
-ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      cstring("sys.ji"), cstring("j/start_image.j"))
-
-end # module

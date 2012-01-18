@@ -11,7 +11,7 @@
 #define GET_FUNCTION_FROM_MODULE GetProcAddress
 #define CLOSE_MODULE FreeLibrary
 typedef HINSTANCE module_handle_t;
-static char *extensions[] = { "", ".dll" };
+static char *extensions[] = { ".dll", "" };
 #define N_EXTENSIONS 2
 
 #elif defined(__linux)
@@ -20,7 +20,7 @@ static char *extensions[] = { "", ".dll" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { "", ".so" };
+static char *extensions[] = { ".so", "" };
 #define N_EXTENSIONS 2
 
 #elif defined(__APPLE__)
@@ -29,7 +29,7 @@ static char *extensions[] = { "", ".so" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { "", ".bundle", ".dylib" };
+static char *extensions[] = { ".dylib", ".bundle", "" };
 #define N_EXTENSIONS 3
 
 #endif
@@ -69,27 +69,19 @@ void *jl_load_dynamic_library(char *fname)
         path[0] = '\0';
         handle = NULL;
         if (modname[0] != '/') {
-            cwd = getcwd(path, PATHBUF);
-            if (cwd != NULL) {
-                /* first, try load from current directory */
-                strncat(path, "/", PATHBUF-1-strlen(path));
+            if (julia_home) {
+                /* try julia_home/lib */
+                strncpy(path, julia_home, PATHBUF-1);
+                strncat(path, "/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 handle = dlopen(path, RTLD_NOW);
                 if (handle != NULL) return handle;
             }
-            if (julia_home) {
-                /* now try julia home */
-                strncpy(path, julia_home, PATHBUF-1);
+            cwd = getcwd(path, PATHBUF);
+            if (cwd != NULL) {
+                /* next try load from current directory */
                 strncat(path, "/", PATHBUF-1-strlen(path));
-                strncat(path, modname, PATHBUF-1-strlen(path));
-                strncat(path, ext, PATHBUF-1-strlen(path));
-                handle = dlopen(path, RTLD_NOW);
-                if (handle != NULL) return handle;
-
-                /* now try julia_home/lib */
-                strncpy(path, julia_home, PATHBUF-1);
-                strncat(path, "/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 handle = dlopen(path, RTLD_NOW);
