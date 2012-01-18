@@ -158,23 +158,27 @@ function static_convert(to::ANY, from::ANY)
         end
         # tuple conversion calls convert recursively
         if isseqtype(ce)
-            R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
+            #R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
+            R = static_convert(pe, ce.parameters[1])
             isType(R) && (R = R.parameters[1])
             result[i] = ...{R}
         else
-            R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
+            #R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
+            R = static_convert(pe, ce)
             isType(R) && (R = R.parameters[1])
             result[i] = R
         end
     end
     a2t(result)
 end
-t_func[:convert] =
-    (2, 2, (t,x)->(if isa(t,Tuple) && allp(isType,t)
-                       t = Type{map(t->t.parameters[1],t)}
-                   end;
-                   isType(t) ? static_convert(t.parameters[1],x) :
-                   Any))
+t_func[convert_default] =
+    (3, 3, (t,x,f)->(isType(t) ? static_convert(t.parameters[1],x) : Any))
+t_func[convert_tuple] =
+    (3, 3, (t,x,f)->(if isa(t,Tuple) && allp(isType,t)
+                         t = Type{map(t->t.parameters[1],t)}
+                     end;
+                     isType(t) ? static_convert(t.parameters[1],x) :
+                     Any))
 typeof_tfunc = function (t)
     if isType(t)
         t = t.parameters[1]
@@ -486,6 +490,9 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 end
             end
         end
+        if !is(f,apply) && isa(e,Expr) && isa(f,Function)
+            e.head = :call1
+        end
         rt = builtin_tfunction(f, fargs, argtypes)
         #print("=> ", rt, "\n")
         return rt
@@ -497,8 +504,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
 end
 
-ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any,
-                               (Any, Any), ft, argtypes)
+ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any, (Any, Any),
+                               ft, argtypes)
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = a2t_butfirst(e.args)
@@ -828,10 +835,6 @@ end
 typeinf(linfo,atypes,sparams) = typeinf(linfo,atypes,sparams,linfo,true)
 typeinf(linfo,atypes,sparams,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
 
-abstract RecPending{T}
-
-isRecPending(t) = isa(t, AbstractKind) && is(t.name, RecPending.name)
-
 ast_rettype(ast) = ast.args[3].typ
 
 # def is the original unspecialized version of a method. we aggregate all
@@ -840,8 +843,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #dbg = 
     #dotrace = true#is(linfo,sizestr)
     local ast::Expr
-    redo = false
-    curtype = None
     # check cached t-functions
     tf = def.tfunc
     while !is(tf,())
@@ -853,15 +854,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             # if the frame above this one recurred, rerun type inf
             # here instead of returning, and update the cache, until the new
             # inferred type equals the cached type (fixed point)
-            rt = ast_rettype(tf[2])
-            if isRecPending(rt)
-                curtype = rt.parameters[1]
-                redo = true
-                ast = tf[2]
-                break
-            else
-                return (tf[2], rt)
-            end
+            ast = tf[2]
+            rt = ast_rettype(ast)
+            return (ast, rt)
         end
         tf = tf[3]
     end
@@ -893,12 +888,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         f = f.prev
     end
 
-    rec = false
-
     #print("typeinf ", linfo.name, " ", atypes, "\n")
 
-    if redo
-    elseif cop
+    if cop
         sparams = append(sparams, linfo.sparams)
         ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo, sparams)::Expr
     else
@@ -910,8 +902,20 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     locals = (ast.args[2].args[1].args)::Array{Any,1}
     vars = append(args, locals)
     body = (ast.args[3].args)::Array{Any,1}
-
     n = length(body)
+
+    # our stack frame
+    frame = CallStack(ast0, linfo.module, atypes, inference_stack)
+    inference_stack = frame
+    curtype = None
+    frame.result = curtype
+
+    local s, sv
+
+    while true
+
+    rec = false
+
     s = { () | i=1:n }
     recpts = IntSet(n+1)  # statements that depend recursively on our value
     W = IntSet(n+1)
@@ -957,11 +961,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
     sv = StaticVarInfo(sparams, cenv)
-
-    # our stack frame
-    frame = CallStack(ast0, linfo.module, atypes, inference_stack)
-    frame.result = curtype
-    inference_stack = frame
 
     # exception handlers
     cur_hand = ()
@@ -1069,23 +1068,23 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
     #print("\n",ast,"\n")
     #print("==> ", frame.result,"\n")
-    if redo && typeseq(curtype, frame.result)
-        rec = false
+    if !rec || typeseq(curtype, frame.result)
+        break
     end
-    fulltree = type_annotate(ast, s, sv,
-                             rec ? RecPending{frame.result} : frame.result,
-                             vars)
-    if !rec
-        fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
-        tuple_elim_pass(fulltree)
-        linfo.inferred = true
-    end
-    if !redo
-        compressed = ccall(:jl_compress_ast, Any, (Any,), fulltree)
-        fulltree = compressed
-        #compressed = fulltree
-        def.tfunc = (atypes, compressed, def.tfunc)
-    end
+    curtype = frame.result
+    end # while
+    
+    fulltree = type_annotate(ast, s, sv, frame.result, vars)
+    
+    fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
+    tuple_elim_pass(fulltree)
+    linfo.inferred = true
+    
+    compressed = ccall(:jl_compress_ast, Any, (Any,), fulltree)
+    fulltree = compressed
+    #compressed = fulltree
+    def.tfunc = (atypes, compressed, def.tfunc)
+    
     inference_stack = (inference_stack::CallStack).prev
     return (fulltree, frame.result)
 end
@@ -1171,11 +1170,6 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         if has(decls,vi[1])
             vi[2] = decls[vi[1]]
         end
-    end
-
-    # do inference on inner functions
-    if isRecPending(rettype)
-        return ast
     end
 
     for li in closures
@@ -1286,6 +1280,15 @@ end
 function inlineable(f, e::Expr, vars)
     argexprs = a2t_butfirst(e.args)
     atypes = map(exprtype, argexprs)
+
+    if is(f, convert_default) && length(atypes)==3
+        # builtin case of convert. convert(T,x::S) => x, when S<:T
+        if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
+            # todo: if T expression has side effects??!
+            return e.args[3]
+        end
+    end
+
     meth = getmethods(f, atypes)
     if length(meth) != 1
         return NF
@@ -1296,13 +1299,6 @@ function inlineable(f, e::Expr, vars)
     # subset of the method signature.
     if !subtype(atypes, meth[1])
         return NF
-    end
-    if is(meth[3],:convert) && length(atypes)==2
-        # builtin case of convert. convert(T,x::S) => x, when S<:T
-        if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
-            # todo: if T expression has side effects??!
-            return e.args[3]
-        end
     end
     if !isa(meth[3],LambdaStaticData) || !is(meth[4],())
         return NF

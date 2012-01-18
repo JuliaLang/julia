@@ -32,7 +32,6 @@ jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
 jl_struct_type_t *jl_weakref_type;
-jl_tag_type_t *jl_string_type;
 jl_struct_type_t *jl_ascii_string_type;
 jl_struct_type_t *jl_utf8_string_type;
 jl_struct_type_t *jl_expr_type;
@@ -70,7 +69,7 @@ jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
-jl_sym_t *isbound_sym; jl_sym_t *macro_sym;
+jl_sym_t *macro_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *Any_sym;     jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
@@ -623,18 +622,6 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
     tc->parameters = params;
     tc->body = body;
     return (jl_typector_t*)tc;
-}
-
-// struct constructors --------------------------------------------------------
-
-JL_CALLABLE(jl_weakref_ctor)
-{
-    if (nargs > 1) {
-        JL_NARGS(WeakRef, 1, 1);
-    }
-    if (nargs == 1)
-        return (jl_value_t*)jl_gc_new_weakref(args[0]);
-    return (jl_value_t*)jl_gc_new_weakref((jl_value_t*)jl_nothing);
 }
 
 // bits constructors ----------------------------------------------------------

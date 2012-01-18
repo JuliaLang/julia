@@ -149,79 +149,9 @@ else
     const boxuint = boxui32
 end
 
-type WeakRef
-    value
-end
-
-abstract String
-abstract DirectIndexString <: String
-
-type ASCIIString <: DirectIndexString
-    data::Array{Uint8,1}
-end
-type UTF8String <: String
-    data::Array{Uint8,1}
-end
-
-typealias ByteString Union(ASCIIString,UTF8String)
-
-abstract Associative
-
-type SymbolNode
-    name::Symbol
-    typ
-end
-
 abstract Exception
 
-type ErrorException <: Exception
-    msg::String
-end
-
-type SystemError <: Exception
-    prefix::String
-    errnum::Int32
-    SystemError(p::String, e::Integer) = new(p, int32(e))
-    SystemError(p::String) = new(p, errno())
-end
-
-type TypeError <: Exception
-    func::Symbol
-    context::String
-    expected::Type
-    got
-end
-
-type ParseError <: Exception
-    msg::String
-end
-
-type ArgumentError <: Exception
-    msg::String
-end
-
-type BoundsError <: Exception
-end
-
-type UnboundError <: Exception
-    var::Symbol
-end
-
-type KeyError <: Exception
-    key
-end
-
-type LoadError <: Exception
-    file::String
-    line::Int32
-    error
-end
-
-type MethodError <: Exception
-    f
-    args
-end
-
+type BoundsError        <: Exception end
 type DivideByZeroError  <: Exception end
 type MemoryError        <: Exception end
 type IOError            <: Exception end
@@ -230,15 +160,34 @@ type EOFError           <: Exception end
 type UndefRefError      <: Exception end
 type InterruptException <: Exception end
 
-type UnionTooComplexError <: Exception
-    types::Tuple
+abstract String
+abstract DirectIndexString <: String
+
+abstract Associative
+
+# simple convert for use by constructors of types in Base
+convert(T, x) = convert_default(T, x, convert)
+
+type SymbolNode
+    name::Symbol
+    typ
+    SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
-type BackTrace <: Exception
-    e
-    trace::Array{Any,1}
+type WeakRef
+    value
+    WeakRef() = WeakRef(nothing)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, WeakRef, (Any,), v)
 end
 
-method_missing(f, args...) = throw(MethodError(f, args))
+type ASCIIString <: DirectIndexString
+    data::Array{Uint8,1}
+end
+
+type UTF8String <: String
+    data::Array{Uint8,1}
+end
+
+typealias ByteString Union(ASCIIString,UTF8String)
 
 load(fname::ByteString) = ccall(:jl_load, Void, (Ptr{Uint8},), fname)

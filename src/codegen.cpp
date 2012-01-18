@@ -94,7 +94,6 @@ static Function *jlerror_func;
 static Function *jluniniterror_func;
 static Function *jldiverror_func;
 static Function *jltypeerror_func;
-static Function *jlgetbindingp_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
 static Function *jltuple_func;
@@ -248,18 +247,15 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
                     }
                 }
             }
-            if (jl_boundp(ctx->module, sym)) {
-                jl_binding_t *b = jl_get_binding(ctx->module, sym);
-                if (b->constp)
-                    return true;
-            }
+            if (jl_is_const(ctx->module, sym))
+                return true;
         }
         return false;
     }
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(ctx->module,
                                          (jl_sym_t*)jl_fieldref(ex,0));
-        if (b->constp && b->value)
+        if (b && b->constp && b->value)
             return true;
     }
     if (jl_is_bits_type(jl_typeof(ex)))
@@ -822,14 +818,14 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
         jl_boundp(ctx->module, (jl_sym_t*)a0)) {
         b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
-        if (!b->constp)
+        if (!b || !b->constp)
             b = NULL;
     }
     if (jl_is_topnode(a0)) {
         headIsGlobal = true;
         // (top x) is also global
         b = jl_get_binding(ctx->module, (jl_sym_t*)jl_fieldref(a0,0));
-        if (b->value==NULL || !b->constp)
+        if (!b || b->value==NULL || !b->constp)
             b = NULL;
     }
     jl_value_t *f = NULL;
@@ -906,28 +902,9 @@ static bool isBoxed(char *varname, jl_codectx_t *ctx)
     return (*ctx->isAssigned)[varname] && (*ctx->isCaptured)[varname];
 }
 
-static Value *globalvar_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
-                                        jl_codectx_t *ctx)
-{
-    jl_value_t **bp;
-    if (pbnd) {
-        *pbnd = jl_get_binding(ctx->module, s);
-        bp = &(*pbnd)->value;
-    }
-    else {
-        bp = jl_get_bindingp(ctx->module, s);
-    }
-    return literal_pointer_val(bp, jl_ppvalue_llvmt);
-    /*
-    return builder.CreateCall2(jlgetbindingp_func,
-                               literal_pointer_val(ctx->module, T_pint8),
-                               literal_pointer_val(s, T_pint8));
-    */
-}
-
 // yields a jl_value_t** giving the binding location of a variable
 static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
-                                  jl_codectx_t *ctx)
+                                  bool assign, jl_codectx_t *ctx)
 {
     if (jl_is_symbolnode(s))
         s = jl_symbolnode_sym(s);
@@ -947,7 +924,15 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         }
         return l;
     }
-    return globalvar_binding_pointer(s, pbnd, ctx);
+    jl_binding_t *b=NULL;
+    if (!assign)
+        b = jl_get_binding(ctx->module, s);
+    // if b is NULL, this might be a global that is not set yet but will be,
+    // so get a pointer for writing even when not assigning.
+    if (assign || b==NULL)
+        b = jl_get_binding_wr(ctx->module, s);
+    if (pbnd) *pbnd = b;
+    return literal_pointer_val(&b->value, jl_ppvalue_llvmt);
 }
 
 static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
@@ -996,7 +981,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx)
             }
         }
     }
-    Value *bp = var_binding_pointer(sym, NULL, ctx);
+    Value *bp = var_binding_pointer(sym, NULL, false, ctx);
     Value *arg = (*ctx->arguments)[sym->name];
     // arguments are always defined
     if (arg != NULL ||
@@ -1017,7 +1002,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     else
         assert(false);
     jl_binding_t *bnd=NULL;
-    Value *bp = var_binding_pointer(s, &bnd, ctx);
+    Value *bp = var_binding_pointer(s, &bnd, true, ctx);
     if (bnd) {
         builder.CreateCall2(jlcheckassign_func,
                             literal_pointer_val((void*)bnd),
@@ -1079,8 +1064,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     else if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_value_t *etype = jl_fieldref(expr,1);
-        jl_binding_t *b;
-        Value *bp = globalvar_binding_pointer(var, &b, ctx);
+        jl_binding_t *b = jl_get_binding(ctx->module, var);
+        if (b == NULL)
+            b = jl_get_binding_wr(ctx->module, var);
+        Value *bp = literal_pointer_val(&b->value, jl_ppvalue_llvmt);
         if ((b->constp && b->value!=NULL) ||
             (etype!=(jl_value_t*)jl_any_type &&
              !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
@@ -1165,7 +1152,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
-        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, ctx);
+        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, true, ctx);
         Value *a1 = emit_expr(args[1], ctx, true);
         make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx, true);
@@ -1175,39 +1162,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         ctx->argDepth = last_depth;
         return m;
     }
-    else if (ex->head == isbound_sym) {
-        jl_sym_t *sy=NULL;
-        jl_value_t *a = args[0];
-        if (jl_is_symbol(a))
-            sy = (jl_sym_t*)a;
-        else if (jl_is_symbolnode(a))
-            sy = jl_symbolnode_sym(a);
-        else
-            assert(false);
-        Value *bp = var_binding_pointer(sy, NULL, ctx);
-        if (bp->getType()->getContainedType(0) != jl_pvalue_llvmt) {
-            // unboxed vars will never be referenced undefined
-            return ConstantInt::get(T_int1, 1);
-        }
-        jl_value_t *st = expr_type(args[0]);
-        if (st == (jl_value_t*)jl_undef_type) {
-            // type==Undef => definitely not assigned
-            return ConstantInt::get(T_int1, 0);
-        }
-        if (ctx->linfo->specTypes != NULL &&
-            !is_var_closed(sy, ctx) &&
-            !jl_subtype((jl_value_t*)jl_undef_type, st, 0)) {
-            // Undef ⊄ expr_type => definitely assigned
-            return ConstantInt::get(T_int1, 1);
-        }
-        Value *v = builder.CreateLoad(bp, false);
-        Value *isbnd = builder.CreateICmpNE(v, V_null);
-        return isbnd;
-    }
     else if (ex->head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
         jl_binding_t *bnd = NULL;
-        (void)var_binding_pointer(sym, &bnd, ctx);
+        (void)var_binding_pointer(sym, &bnd, true, ctx);
         if (bnd) {
             builder.CreateCall(jldeclareconst_func,
                                literal_pointer_val((void*)bnd));
@@ -1884,16 +1842,6 @@ static void init_julia_llvm_env(Module *m)
     jltypeerror_func->setDoesNotReturn();
     jl_ExecutionEngine->addGlobalMapping(jltypeerror_func,
                                          (void*)&jl_type_error_rt);
-
-    std::vector<Type *> args2(0);
-    args2.push_back(T_pint8);
-    args2.push_back(T_pint8);
-    jlgetbindingp_func =
-        Function::Create(FunctionType::get(jl_ppvalue_llvmt, args2, false),
-                         Function::ExternalLinkage,
-                         "jl_get_bindingp", jl_Module);
-    jl_ExecutionEngine->addGlobalMapping(jlgetbindingp_func,
-                                         (void*)&jl_get_bindingp);
 
     std::vector<Type *> args_2ptrs(0);
     args_2ptrs.push_back(T_pint8);

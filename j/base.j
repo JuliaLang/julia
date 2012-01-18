@@ -1,5 +1,67 @@
 # important core definitions
 
+convert(T, x)               = convert_default(T, x, convert)
+convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
+
+type ErrorException <: Exception
+    msg::String
+end
+
+type SystemError <: Exception
+    prefix::String
+    errnum::Int32
+    SystemError(p::String, e::Integer) = new(p, int32(e))
+    SystemError(p::String) = new(p, errno())
+end
+
+type TypeError <: Exception
+    func::Symbol
+    context::String
+    expected::Type
+    got
+end
+
+type ParseError <: Exception
+    msg::String
+end
+
+type ArgumentError <: Exception
+    msg::String
+end
+
+type UnboundError <: Exception
+    var::Symbol
+end
+
+type KeyError <: Exception
+    key
+end
+
+type LoadError <: Exception
+    file::String
+    line::Int32
+    error
+end
+
+type MethodError <: Exception
+    f
+    args
+end
+
+type UnionTooComplexError <: Exception
+    types::Tuple
+end
+
+type BackTrace <: Exception
+    e
+    trace::Array{Any,1}
+end
+
+method_missing(f, args...) = throw(MethodError(f, args))
+
+ccall(:jl_get_system_hooks, Void, ())
+
+
 int(x) = convert(Int, x)
 int(x::Int) = x
 uint(x) = convert(Uint, x)
@@ -71,6 +133,9 @@ function compile_hint(f, args::Tuple)
     ccall(:jl_get_specialization, Any, (Any, Any), f, args)
     nothing
 end
+
+# we share Array with Base so we can add definitions to it
+const Array = eval(Base, :Array)
 
 Array{T}  (::Type{T}, d::(Integer,)) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},

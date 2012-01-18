@@ -5,7 +5,6 @@
 
 JL_CALLABLE(jl_f_new_expr);
 JL_CALLABLE(jl_f_new_box);
-JL_CALLABLE(jl_weakref_ctor);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_is);
 JL_CALLABLE(jl_f_no_function);
@@ -27,14 +26,10 @@ JL_CALLABLE(jl_f_arrayref);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_arraysize);
 JL_CALLABLE(jl_f_instantiate_type);
-JL_CALLABLE(jl_f_convert);
+JL_CALLABLE(jl_f_convert_default);
 JL_CALLABLE(jl_f_convert_tuple);
-JL_CALLABLE(jl_f_print_array_uint8);
-JL_CALLABLE(jl_f_show_int64);
-JL_CALLABLE(jl_f_show_uint64);
 JL_CALLABLE(jl_f_show_linfo);
 JL_CALLABLE(jl_f_show_any);
-JL_CALLABLE(jl_f_print_symbol);
 JL_CALLABLE(jl_trampoline);
 JL_CALLABLE(jl_f_new_struct_type);
 JL_CALLABLE(jl_f_new_struct_fields);

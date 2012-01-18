@@ -302,12 +302,12 @@ int true_main(int argc, char *argv[])
     }
 
     jl_array_t *args = jl_alloc_cell_1d(argc);
-    jl_set_global(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
+    jl_set_global(jl_current_module, jl_symbol("ARGS"), (jl_value_t*)args);
     int i;
     for (i=0; i < argc; i++) {
         jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_string(argv[i]));
     }
-    jl_set_const(jl_base_module, jl_symbol("JULIA_HOME"),
+    jl_set_const(jl_current_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
 
     // run program if specified, otherwise enter REPL

@@ -130,7 +130,7 @@ void jl_gc_unpreserve(void)
     (void)arraylist_pop(&preserved_values);
 }
 
-jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
     jl_weakref_t *wr = (jl_weakref_t*)alloc_2w();
     wr->type = (jl_type_t*)jl_weakref_type;

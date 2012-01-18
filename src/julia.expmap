@@ -132,6 +132,8 @@
     jl_gc_enable;
     jl_gc_disable;
     jl_gc_is_enabled;
+    jl_gc_new_weakref;
+    jl_get_system_hooks;
     jl_errno;
     jl_strerror;
     jl_environ;
@@ -166,7 +168,10 @@
     jl_enter_handler;
     jl_exception_in_transit;
     jl_show;
-    jl_show_float;
+    jl_show_any;
+    jl_print_array_uint8;
+    jl_print_symbol;
+    jl_print_int64;
     jl_pgcstack;
     jl_symbol;
     jl_system_module;

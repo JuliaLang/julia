@@ -275,7 +275,6 @@ extern jl_tag_type_t *jl_abstractarray_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_weakref_type;
-extern jl_tag_type_t *jl_string_type;
 extern jl_struct_type_t *jl_ascii_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
 extern jl_struct_type_t *jl_errorexception_type;
@@ -329,8 +328,6 @@ DLLEXPORT extern jl_value_t *jl_nothing;
 
 extern jl_func_type_t *jl_any_func;
 
-extern jl_function_t *jl_show_gf;
-extern jl_function_t *jl_convert_gf;
 extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
@@ -353,7 +350,7 @@ extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *isbound_sym; extern jl_sym_t *macro_sym;
+extern jl_sym_t *macro_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
@@ -443,7 +440,6 @@ void *allocb_permanent(size_t sz);
 #define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
 #define jl_is_byte_string(v) (jl_is_ascii_string(v) || jl_is_utf8_string(v))
-#define jl_is_string(v)      jl_subtype(v,(jl_value_t*)jl_string_type,1)
 #define jl_is_cpointer(v)    jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
@@ -686,7 +682,6 @@ void jl_init_box_caches(void);
 void jl_init_frontend(void);
 void jl_shutdown_frontend(void);
 void jl_init_primitives(void);
-void jl_init_builtins(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
@@ -705,16 +700,18 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *v);
-jl_value_t *jl_convert(jl_type_t *to, jl_value_t *x);
 
 // modules
 extern jl_module_t *jl_base_module;
 extern DLLEXPORT jl_module_t *jl_system_module;
 extern jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
+// get binding for reading
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
-jl_value_t **jl_get_bindingp(jl_module_t *m, jl_sym_t *var);
+// get binding for assignment
+jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
+DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);

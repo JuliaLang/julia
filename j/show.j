@@ -1,3 +1,8 @@
+# formerly built-in methods. can be replaced any time.
+print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
+print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
+show(x) = ccall(:jl_show_any, Void, (Any,), x)
+
 print(x) = show(x)
 showcompact(x) = show(x)
 show_to_string(x) = print_to_string(show, x)
@@ -7,7 +12,7 @@ show(s::Symbol) = print(s)
 show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 show(b::Bool) = print(b ? "true" : "false")
-show(n::Integer)  = show(int64(n))
+show(n::Integer)  = print(dec(int64(n)))
 
 function show_trailing_hex(n::Uint64, ndig::Integer)
     for s = ndig-1:-1:0

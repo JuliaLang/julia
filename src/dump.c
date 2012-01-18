@@ -344,7 +344,12 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, li->ast);
         jl_serialize_value(s, (jl_value_t*)li->sparams);
-        jl_serialize_value(s, (jl_value_t*)li->tfunc);
+        // don't save cached type info for code in the Base module, because
+        // it might reference types in the old System module.
+        if (li->module == jl_base_module)
+            jl_serialize_value(s, (jl_value_t*)jl_null);
+        else
+            jl_serialize_value(s, (jl_value_t*)li->tfunc);
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
@@ -704,7 +709,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             jl_value_t *name = jl_deserialize_value(s);
             if (name == NULL)
                 break;
-            jl_binding_t *b = jl_get_binding(m, (jl_sym_t*)name);
+            jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)name);
             b->value = jl_deserialize_value(s);
             b->type = (jl_type_t*)jl_deserialize_value(s);
             b->constp = read_int8(s);
@@ -817,7 +822,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
         // loaded and we are loading an updated copy in a separate module.
 
         // step 1: set Base.System = current_module
-        jl_binding_t *b = jl_get_binding(jl_base_module, jl_symbol("System"));
+        jl_binding_t *b = jl_get_binding_wr(jl_base_module, jl_symbol("System"));
         b->value = (jl_value_t*)jl_current_module;
         assert(b->constp);
 
@@ -825,12 +830,12 @@ void jl_save_system_image(char *fname, char *startscriptname)
         jl_set_const(jl_current_module, jl_symbol("Base"), (jl_value_t*)jl_base_module);
 
         // step 3: current_module.System = current_module
-        b = jl_get_binding(jl_current_module, jl_symbol("System"));
+        b = jl_get_binding_wr(jl_current_module, jl_symbol("System"));
         b->value = (jl_value_t*)jl_current_module;
         assert(b->constp);
 
         // step 4: remove current_module.current_module
-        b = jl_get_binding(jl_current_module, jl_current_module->name);
+        b = jl_get_binding_wr(jl_current_module, jl_current_module->name);
         b->value = NULL; b->constp = 0;
 
         // step 5: rename current_module to System
@@ -868,6 +873,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
 extern jl_function_t *jl_typeinf_func;
 extern int jl_boot_file_loaded;
 extern void jl_get_builtin_hooks(void);
+extern void jl_get_system_hooks(void);
 
 DLLEXPORT
 void jl_restore_system_image(char *fname)
@@ -921,12 +927,10 @@ void jl_restore_system_image(char *fname)
     }
 
     jl_get_builtin_hooks();
+    jl_get_system_hooks();
     jl_boot_file_loaded = 1;
-    jl_typeinf_func =
-        (jl_function_t*)*(jl_get_bindingp(jl_system_module,
-                                          jl_symbol("typeinf_ext")));
-    jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("show"));
-    jl_convert_gf = (jl_function_t*)jl_get_global(jl_system_module,jl_symbol("convert"));
+    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_system_module,
+                                                    jl_symbol("typeinf_ext"));
     jl_init_box_caches();
 
     //jl_deserialize_finalizers(&f);
@@ -1133,7 +1137,7 @@ void jl_init_serializer(void)
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
     void *fptrs[] = { jl_f_new_expr, jl_f_new_box,
-                      jl_weakref_ctor, jl_f_throw, jl_f_is, 
+                      jl_f_throw, jl_f_is, 
                       jl_f_no_function, jl_f_typeof, 
                       jl_f_subtype, jl_f_isa, 
                       jl_f_typeassert, jl_f_apply, 
@@ -1143,10 +1147,8 @@ void jl_init_serializer(void)
                       jl_f_set_field, jl_f_field_type, 
                       jl_f_arraylen, jl_f_arrayref, 
                       jl_f_arrayset, jl_f_arraysize, 
-                      jl_f_instantiate_type, jl_f_convert, 
-                      jl_f_convert_tuple, jl_f_print_array_uint8, 
-                      jl_f_show_int64, jl_f_show_uint64, 
-                      jl_f_show_any, jl_f_print_symbol, 
+                      jl_f_instantiate_type,
+                      jl_f_convert_default, jl_f_convert_tuple,
                       jl_trampoline, jl_f_new_struct_type, 
                       jl_f_new_struct_fields, jl_f_new_type_constructor, 
                       jl_f_new_tag_type, jl_f_new_tag_type_super, 

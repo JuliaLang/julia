@@ -2556,7 +2556,6 @@ void jl_init_types(void)
     module_sym = jl_symbol("module");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
-    isbound_sym = jl_symbol("isbound");
     body_sym = jl_symbol("body");
     locals_sym = jl_symbol("locals");
     colons_sym = jl_symbol("::");
