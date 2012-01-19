@@ -44,6 +44,7 @@ function _jl_printf_gen(s::String)
     end
     # return args, exprs
     args = expr(:tuple, args)
+    push(blk.args, :nothing)
     return :(($args)->($blk))
 end
 
@@ -121,7 +122,7 @@ function _jl_special_handler(flags::ASCIIString, width::Int)
          $x < 0   ? $(cstring(pad("-Inf", width))) :
                     $(cstring(pad("$(pos)Inf", width)))
     end
-    ex = :(isfinite($x) ? $blk : write(out, $abn); nothing)
+    ex = :(isfinite($x) ? $blk : write(out, $abn))
     x, ex, blk
 end
 
@@ -399,7 +400,7 @@ end
 
 function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a character:
-    #  [cC]: both the same for us
+    #  [cC]: both the same for us (Unicode)
     #
     # flags:
     #  (0): pad left with zeros
@@ -415,8 +416,40 @@ function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if width > 1 && contains(flags,'-')
         push(blk.args, _jl_printf_pad(width-1, width-1, ' '))
     end
-    push(blk.args, :nothing)
     :(($x)::Integer), blk
+end
+
+function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print a string:
+    #  [sS]: both the same for us (Unicode)
+    #
+    # flags:
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #
+    x = gensym()
+    blk = expr(:block)
+    if width > 0
+        if !contains(flags,'#')
+            push(blk.args, :($x = string($x)))
+        else
+            push(blk.args, :($x = show_to_string($x)))
+        end
+        if !contains(flags,'-')
+            push(blk.args, _jl_printf_pad(width, :($width-strlen($x)), ' '))
+        end
+        push(blk.args, :(write(out, $x)))
+        if contains(flags,'-')
+            push(blk.args, _jl_printf_pad(width, :($width-strlen($x)), ' '))
+        end
+    else
+        if !contains(flags,'#')
+            push(blk.args, :(print($x)))
+        else
+            push(blk.args, :(show($x)))
+        end
+    end
+    x, blk
 end
 
 let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
