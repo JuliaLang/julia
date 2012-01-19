@@ -14,7 +14,7 @@ macro grisu_ccall(value, mode, ndigits)
     end
 end
 
-let _digits = Array(Uint8,309), # 308 is the largest possible decimal exponent.
+let _digits = Array(Uint8,309+17),
     _neg = Array(Bool, 1),
     _len = Array(Int32,1),
     _pt  = Array(Int32,1)
@@ -31,15 +31,22 @@ global grisu, grisu_fix, grisu_sig
 function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
-    if ndigits > 309; ndigits = 309; end
     @grisu_ccall x mode ndigits
     neg, pointer(_digits), len, pt
 end
+
 grisu(x::Float64) = grisu(x, SHORTEST, int32(0))
 grisu(x::Float32) = grisu(float64(x), SHORTEST_SINGLE, int32(0))
 grisu(x::Real) = grisu(float(x))
-grisu_fix(x::Real, n::Integer) = grisu(float64(x), FIXED, int32(n))
-grisu_sig(x::Real, n::Integer) = grisu(float64(x), PRECISION, int32(n))
+
+function grisu_fix(x::Real, n::Integer)
+    if n > 17; n = 17; end
+    grisu(float64(x), FIXED, int32(n))
+end
+function grisu_sig(x::Real, n::Integer)
+    if n > 309; n = 309; end
+    grisu(float64(x), PRECISION, int32(n))
+end
 
 function _show(x::Float, mode::Int32)
     s = current_output_stream()
