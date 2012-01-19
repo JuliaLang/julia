@@ -103,7 +103,7 @@ function _jl_printf_parse1(s::String, k::Integer)
         c, k = _jl_next_or_die(s,k)
     end
     # validate conversion
-    if !contains("diouxXDOUeEfFgGaAcCsSn", c)
+    if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
         error("invalid printf format string: ", show_to_string(s))
     end
     flags, width, precision, c, k
@@ -450,6 +450,28 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     end
     x, blk
+end
+
+# TODO: faster pointer printing.
+
+function _jl_printf_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print pointer:
+    #  [p]: the only option
+    #
+    x = gensym()
+    blk = expr(:block)
+    ptrwidth = WORD_SIZE>>2
+    width -= ptrwidth+2
+    if width > 0 && !contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width, width, ' '))
+    end
+    push(blk.args, :(write(out, '0')))
+    push(blk.args, :(write(out, 'x')))
+    push(blk.args, :(write(out, cstring(hex(unsigned($x), $ptrwidth)))))
+    if width > 0 && contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width, width, ' '))
+    end
+    :(($x)::Ptr), blk
 end
 
 let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
