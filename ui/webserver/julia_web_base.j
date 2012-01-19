@@ -179,7 +179,8 @@ function __socket_callback(fd)
 end
 
 # event handler for socket input
-add_fd_handler(__connectfd, __socket_callback)
+add_fd_handler(__connectfd, fd->(enq_work(()->__socket_callback(fd));
+				 perform_work()))
 
 ###########################################
 # wait forever while asynchronous processing happens

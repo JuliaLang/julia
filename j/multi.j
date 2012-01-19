@@ -1448,7 +1448,7 @@ function pmap(f, lsts...)
     next_idx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
-            @spawnlocal begin
+            @spawnat myid() begin
                 while true
                     idx = next_idx()
                     if idx > n
