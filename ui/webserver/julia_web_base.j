@@ -35,7 +35,7 @@ end
 println(__ports[1])
 
 # wait for the server to connect to the socket
-__connectfd = ccall(dlsym(libc, :accept), Int32, (Int32, Ptr{Void}, Ptr{Void}), __sockfd, C_NULL, C_NULL)
+__connectfd = ccall(:accept, Int32, (Int32, Ptr{Void}, Ptr{Void}), __sockfd, C_NULL, C_NULL)
 
 # create an io object from the file descriptor
 __io = fdio(__connectfd)
