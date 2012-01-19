@@ -121,7 +121,7 @@ function _jl_special_handler(flags::ASCIIString, width::Int)
          $x < 0   ? $(cstring(pad("-Inf", width))) :
                     $(cstring(pad("$(pos)Inf", width)))
     end
-    ex = :(isfinite($x) ? $blk : write(out, $abn))
+    ex = :(isfinite($x) ? $blk : write(out, $abn); nothing)
     x, ex, blk
 end
 
@@ -187,6 +187,18 @@ function _jl_print_fixed(out, pdigits, ndigits, pt, precision)
     end
 end
 
+function _jl_print_exp(out, exp)
+    write(out, exp < 0 ? '-' : '+')
+    exp = abs(exp)
+    d = div(exp,100)
+    d > 0 && write(out, char('0'+d))
+    exp = rem(exp,100)
+    write(out, char('0'+div(exp,10)))
+    write(out, char('0'+rem(exp,10)))
+end
+
+# TODO: use _jl_intN($x) that has precision 0 and treats -0.0 as 0.0
+
 function _jl_printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer:
     #  [dDiu]: print decimal digits
@@ -240,9 +252,9 @@ function _jl_printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, _jl_printf_pad(width-precision, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push(blk.args, :(print(neg?'-':'+'))) :
-    contains(flags,' ') ? push(blk.args, :(print(neg?'-':' '))) :
-                          push(blk.args, :(neg && print('-')))
+    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
+                          push(blk.args, :(neg && write(out, '-')))
     # print prefix
     for ch in prefix
         push(blk.args, :(write(out, $ch)))
@@ -282,19 +294,17 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix10($x,$precision)))
     # calculate padding
     padding = nothing
-    if width > 1
-        if precision > 0 || contains(flags,'#')
-            width -= precision+1
+    if precision > 0 || contains(flags,'#')
+        width -= precision+1
+    end
+    if contains(flags,'+') || contains(flags,' ')
+        width -= 1
+        if width > 1
+            padding = :($width-pt)
         end
-        if contains(flags,'+') || contains(flags,' ')
-            width -= 1
-            if width > 1
-                padding = :($width-pt)
-            end
-        else
-            if width > 1
-                padding = :($width-pt-neg)
-            end
+    else
+        if width > 1
+            padding = :($width-pt-neg)
         end
     end
     # print space padding
@@ -302,9 +312,9 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, _jl_printf_pad(width-1, padding, ' '))
     end
     # print sign
-    contains(flags,'+') ? push(blk.args, :(print(neg?'-':'+'))) :
-    contains(flags,' ') ? push(blk.args, :(print(neg?'-':' '))) :
-                          push(blk.args, :(neg && print('-')))
+    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
+                          push(blk.args, :(neg && write(out, '-')))
     # print zero padding
     if padding != nothing && !contains(flags,'-') && contains(flags,'0')
         push(blk.args, _jl_printf_pad(width-1, padding, '0'))
@@ -314,11 +324,76 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, :(_jl_print_fixed(out,pdigits,ndigits,pt,$precision)))
     else
         push(blk.args, :(_jl_print_integer(out,pdigits,ndigits,pt)))
-        contains(flags,'#') && push(blk.args, :(print('.')))
+        contains(flags,'#') && push(blk.args, :(write(out, '.')))
     end
     # print space padding
     if padding != nothing && contains(flags,'-')
         push(blk.args, _jl_printf_pad(width-1, padding, ' '))
+    end
+    # return arg, expr
+    :(($x)::Real), ex
+end
+
+function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print float in scientific form:
+    #  [e]: use 'e' to introduce exponent
+    #  [E]: use 'E' to introduce exponent 
+    #
+    # flags:
+    #  (#): always print a decimal point
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #  ( ): precede non-negative values with " "
+    #  (+): precede non-negative values with "+"
+    #
+    x, ex, blk = _jl_special_handler(flags,width)
+    # interpret the number
+    if precision < 0; precision = 6; end
+    push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_sig10($x,$(precision+1))))
+    push(blk.args, :(exp = pt-1))
+    expmark = c=='E' ? "E" : "e"
+    if precision==0 && contains(flags,'#')
+        expmark = strcat(".",expmark)
+    end
+    # calculate padding
+    padding = nothing
+    width -= precision+strlen(expmark)+(precision>0)+4
+    # 4 = leading + expsign + 2 exp digits
+    if contains(flags,'+') || contains(flags,' ')
+        width -= 1 # for the sign indicator
+        if width > 1
+            padding = :($width-((exp<=-100)|(100<=exp)))
+        end
+    else
+        if width > 1
+            padding = :($width-((exp<=-100)|(100<=exp))-neg)
+        end
+    end
+    # print space padding
+    if padding != nothing && !contains(flags,'-') && !contains(flags,'0')
+        push(blk.args, _jl_printf_pad(width, padding, ' '))
+    end
+    # print sign
+    contains(flags,'+') ? push(blk.args, :(write(out, neg?'-':'+'))) :
+    contains(flags,' ') ? push(blk.args, :(write(out, neg?'-':' '))) :
+                          push(blk.args, :(neg && write(out, '-')))
+    # print zero padding
+    if padding != nothing && !contains(flags,'-') && contains(flags,'0')
+        push(blk.args, _jl_printf_pad(width, padding, '0'))
+    end
+    # print digits
+    push(blk.args, :(write(out, pdigits, 1)))
+    if precision > 0
+        push(blk.args, :(write(out, '.')))
+        push(blk.args, :(write(out, pdigits+1, ndigits-1)))
+    end
+    for ch in expmark
+        push(blk.args, :(write(out, $ch)))
+    end
+    push(blk.args, :(_jl_print_exp(out, exp)))
+    # print space padding
+    if padding != nothing && contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width, padding, ' '))
     end
     # return arg, expr
     :(($x)::Real), ex
@@ -334,7 +409,7 @@ global _jl_fix, _jl_sig, _jl_fix8alt
 function _jl_fix(base::Int, x::Integer, n::Int, u::Bool)
     digits = int2str(abs(x), base)
     if u; digits = uc(digits); end
-    ndigits = 0
+    ndigits = 1
     for i = 1:strlen(digits)
         if digits[i]!='0'; ndigits=i; end
         _digits[i+1] = digits[i]
@@ -348,7 +423,7 @@ function _jl_sig(base::Int, x::Integer, n::Int)
     if strlen(digits) > n && digits[n+1]-'0' >= base/2
         digits.data[n] += 1
     end
-    ndigits = 0
+    ndigits = 1
     for i = 1:n
         if digits[i]!='0'; ndigits=i; end
         _digits[i+1] = digits[i]
@@ -379,12 +454,12 @@ _jl_sig16(x::Integer, n::Int) = _jl_fix(16,x,n)
 _jl_sig16uc(x::Integer, n::Int) = _jl_fix(16,x,n,true)
 
 _jl_fix8 (x::Real, n::Int) = error("octal float formatting not supported")
-_jl_fix10(x::Real, n::Int) = grisu_fix(x, n)
+_jl_fix10(x::Real, n::Int) = grisu_fix(x,n)
 _jl_fix16(x::Real, n::Int) = error("hex float formatting not implemented")
 _jl_fix16uc(x::Real, n::Int) = error("hex float formatting not implemented")
 
 _jl_sig8 (x::Real, n::Int) = error("octal float formatting not supported")
-_jl_sig10(x::Real, n::Int) = grisu_sig(x, n)
+_jl_sig10(x::Real, n::Int) = grisu_sig(x,n)
 _jl_sig16(x::Real, n::Int) = error("hex float formatting not implemented")
 _jl_sig16uc(x::Real, n::Int) = error("hex float formatting not implemented")
 

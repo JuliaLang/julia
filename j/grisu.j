@@ -31,6 +31,7 @@ global grisu, grisu_fix, grisu_sig
 function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
+    if ndigits > 309; ndigits = 309; end
     @grisu_ccall x mode ndigits
     neg, pointer(_digits), len, pt
 end
