@@ -125,15 +125,15 @@ function _jl_special_handler(flags::ASCIIString, width::Int)
     x, ex, blk
 end
 
-function _jl_printf_pad(m::Int, n::Union(Symbol,Expr), c::Char)
+function _jl_printf_pad(m::Int, n, c::Char)
     if m <= 1
-        :($n > 0 && print($c))
+        :($n > 0 && write(out,$c))
     else
         i = gensym()
         quote
             $i = $n
             while $i > 0
-                print($c)
+                write(out,$c)
                 $i -= 1
             end
         end
@@ -395,6 +395,28 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # return arg, expr
     :(($x)::Real), ex
+end
+
+function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
+    # print a character:
+    #  [cC]: both the same for us
+    #
+    # flags:
+    #  (0): pad left with zeros
+    #  (-): left justify
+    #
+    x = gensym()
+    blk = expr(:block)
+    if width > 1 && !contains(flags,'-')
+        p = contains(flags,'0') ? '0' : ' '
+        push(blk.args, _jl_printf_pad(width-1, width-1, p))
+    end
+    push(blk.args, :(write(out, char($x))))
+    if width > 1 && contains(flags,'-')
+        push(blk.args, _jl_printf_pad(width-1, width-1, ' '))
+    end
+    push(blk.args, :nothing)
+    :(($x)::Integer), blk
 end
 
 let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
