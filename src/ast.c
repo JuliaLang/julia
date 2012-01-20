@@ -116,22 +116,6 @@ DLLEXPORT void jl_shutdown_frontend(void)
     //fl_applyn(0, symbol_value(symbol("show-profiles")));
 }
 
-static char boot_j[] = {
-#include "boot.j.inc"
-};
-
-void jl_load_boot_j(void)
-{
-    value_t bootc = cvalue(iostreamtype, sizeof(ios_t));
-    ios_t *pi = value2c(ios_t*, bootc);
-    ios_static_buffer(pi, boot_j, sizeof(boot_j));
-    value_t sexpr = fl_read_sexpr(bootc);
-    jl_value_t *ast = scm_to_julia(sexpr);
-    JL_GC_PUSH(&ast);
-    jl_load_file_expr("boot.j", ast);
-    JL_GC_POP();
-}
-
 static jl_sym_t *scmsym_to_julia(value_t s)
 {
     assert(issymbol(s));

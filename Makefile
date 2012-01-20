@@ -13,8 +13,16 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui/webserver $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys.ji: VERSION j/sysimg.j j/start_image.j src/boot.j src/dump.c j/*.j
+sys0.ji: src/boot.j src/dump.c
 	$(QUIET_JULIA) ./julia -b stage0.j
+
+# if sys.ji exists, use it to rebuild, otherwise use sys0.ji
+sys.ji: sys0.ji VERSION j/sysimg.j j/start_image.j j/*.j
+ifeq ($(wildcard sys.ji),)
+	$(QUIET_JULIA) ./julia -J sys0.ji stage1.j
+else
+	$(QUIET_JULIA) ./julia stage1.j
+endif
 
 install: release
 	install -d $(DESTDIR)/usr/share/julia/lib
@@ -39,6 +47,7 @@ h2j: lib/libLLVM*.a lib/libclang*.a src/h2j.cpp
 clean:
 	@rm -f julia
 	@rm -f *~ *#
+	@rm -f sys0.ji
 	@rm -f sys.ji
 	@$(MAKE) -sC j clean
 	@$(MAKE) -sC src clean

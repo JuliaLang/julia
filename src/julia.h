@@ -686,7 +686,6 @@ void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
-void jl_load_boot_j(void);
 
 void jl_save_system_image(char *fname, char *startscriptname);
 void jl_restore_system_image(char *fname);

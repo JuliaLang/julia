@@ -42,6 +42,6 @@ end
 load("sysimg.j")
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      cstring("sys.ji"), cstring("j/start_image.j"))
+      cstring("sys0.ji"), cstring("j/start_image.j"))
 
 end # module

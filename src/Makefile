@@ -36,7 +36,7 @@ release debug: %: libjulia-%
 %.do: %.cpp julia.h
 	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
 
-ast.o ast.do: julia_flisp.boot.inc boot.j.inc
+ast.o ast.do: julia_flisp.boot.inc
 
 julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
 	$(QUIET_FLISP) flisp/flisp ./bin2hex.scm < $< > $@
@@ -44,9 +44,6 @@ julia_flisp.boot.inc: julia_flisp.boot flisp/libflisp.a
 julia_flisp.boot: julia-parser.scm julia-syntax.scm \
 	match.scm utils.scm jlfrontend.scm mk_julia_flisp_boot.scm flisp/libflisp.a
 	$(QUIET_FLISP) flisp/flisp ./mk_julia_flisp_boot.scm
-
-boot.j.inc: boot.j preparse.scm julia_flisp.boot
-	$(QUIET_FLISP) flisp/flisp ./preparse.scm $< | flisp/flisp ./bin2hex.scm > $@
 
 codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
@@ -77,7 +74,6 @@ clean:
 	rm -f ../libjulia*.$(SHLIB_EXT)
 	rm -f julia_flisp.boot
 	rm -f julia_flisp.boot.inc
-	rm -f boot.j.inc
 	rm -f *.do
 	rm -f *.o
 	rm -f *~ *#
