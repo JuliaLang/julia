@@ -216,6 +216,14 @@ double *randmatmul(int n) {
     return C;
 }
 
+void printfd(int n) {
+    FILE *f = fopen("/dev/null", "w");
+    int i = 0;
+    for (i = 0; i < n; i++)
+        fprintf(f, "%d %d", i, i);
+    fclose(f);
+}
+
 void print_perf(const char *name, double t) {
     printf("c,%s,%.6f\n", name, t*1000);
 }
@@ -340,6 +348,16 @@ int main() {
         if (t < tmin) tmin = t;
     }
     print_perf("rand_mat_mul", tmin);
+
+    // printfd
+    tmin = INFINITY;
+    for (int i=0; i<NITER; ++i) {
+        t = clock_now();
+        printfd(100000);
+        t = clock_now()-t;
+        if (t < tmin) tmin = t;
+    }
+    print_perf("printfd", tmin);
 
     return 0;
 }

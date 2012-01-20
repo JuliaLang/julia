@@ -111,3 +111,16 @@ end
 ## largish random number gen & matmul ##
 
 @timeit rand(1000,1000)*rand(1000,1000) "rand_mat_mul"
+
+## printfd ##
+
+function printfd(n)
+    f = open("/dev/null","w")
+    for i = 1:n
+        printf(f, f"%d %d", i, i)
+    end
+    close(f)
+end
+
+printfd(1)
+@timeit printfd(100000) "printfd"
