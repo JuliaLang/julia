@@ -983,6 +983,8 @@ JL_CALLABLE(jl_f_new_struct_type)
 
 void jl_add_constructors(jl_struct_type_t *t);
 
+void jl_reinstantiate_inner_types(jl_tag_type_t *t);
+
 static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 JL_CALLABLE(jl_f_new_struct_fields)
@@ -1006,6 +1008,14 @@ JL_CALLABLE(jl_f_new_struct_fields)
     assert(jl_is_tag_type(super));
 
     st->types = ftypes;
+
+    if (st->parameters->length > 0) {
+        // once the full structure is built, use instantiate_type to walk it
+        // and tie up self-references.
+        st->name->cache = NULL;
+        jl_reinstantiate_inner_types((jl_tag_type_t*)st);
+    }
+
     jl_add_constructors(st);
     return (jl_value_t*)jl_nothing;
 }
@@ -1044,6 +1054,10 @@ JL_CALLABLE(jl_f_new_tag_type_super)
     jl_value_t *super = args[1];
     check_supertype(super, tt->name->name->name);
     tt->super = (jl_tag_type_t*)super;
+    if (tt->parameters->length > 0) {
+        tt->name->cache = NULL;
+        jl_reinstantiate_inner_types((jl_tag_type_t*)tt);
+    }
     return (jl_value_t*)jl_nothing;
 }
 

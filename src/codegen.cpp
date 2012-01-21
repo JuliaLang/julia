@@ -258,8 +258,6 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
         if (b && b->constp && b->value)
             return true;
     }
-    if (jl_is_bits_type(jl_typeof(ex)))
-        return true;
     if (jl_is_quotenode(ex))
         return true;
     if (!jl_is_expr(ex) && !jl_is_lambda_info(ex))
