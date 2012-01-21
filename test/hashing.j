@@ -28,3 +28,7 @@ for T=types, S=types, x=values
     #     @assert !isequal(a,b) || hash(a)==hash(b)
     # end
 end
+
+f = prevfloat(float64(typemax(Uint64)))
+@assert hash(f) == hash(0xfffffffffffff800)
+@assert hash(f) == hash(-2048)

@@ -81,8 +81,20 @@ _jl_hash64(x::Union(Int64,Uint64,Float64)) =
 
 hash(x::Integer) = _jl_hash64(uint64(x))
 @eval function hash(x::Float)
-    # note: float64(typemax(Uint64)) == 2^64
-    abs(x) < $float64(typemax(Uint64)) && trunc(x) == x ? hash(uint64(x)) :
+    if trunc(x) == x
+        # hash as integer if equal to some integer. note the result of
+        # float to int conversion is only defined for in-range values.
+        if x < 0
+            if $float64(typemin(Int64)) <= x
+                return hash(int64(x))
+            end
+        else
+            # note: float64(typemax(Uint64)) == 2^64
+            if x < $float64(typemax(Uint64))
+                return hash(uint64(x))
+            end
+        end
+    end
     isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
 end
 
