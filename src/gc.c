@@ -586,10 +586,18 @@ static void gc_markval_(jl_value_t *v)
         if (ta->result)
             GC_Markval(ta->result);
         GC_Markval(ta->state.eh_task);
+        if (ta->stkbuf != NULL)
+            gc_setmark(ta->stkbuf);
 #ifdef COPY_STACKS
-        ptrint_t offset = (ta == jl_current_task ? 0 :
-                           (ta->stkbuf - (ta->stackbase-ta->ssize)));
-        gc_mark_stack(ta->state.gcstack, offset);
+        ptrint_t offset;
+        if (ta == jl_current_task) {
+            offset = 0;
+            gc_mark_stack(jl_pgcstack, offset);
+        }
+        else {
+            offset = ta->stkbuf - (ta->stackbase-ta->ssize);
+            gc_mark_stack(ta->state.gcstack, offset);
+        }
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
             GC_Markval(ss->ostream_obj);
@@ -598,8 +606,6 @@ static void gc_markval_(jl_value_t *v)
                 ss = (jl_savestate_t*)((char*)ss + offset);
         }
 #else
-        if (ta->stkbuf != NULL)
-            gc_setmark(ta->stkbuf);
         gc_mark_stack(ta->state.gcstack);
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {

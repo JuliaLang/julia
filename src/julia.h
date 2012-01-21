@@ -822,21 +822,20 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x, *y; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT jl_gcframe_t ** volatile jl_pgcstack;
+extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                 \
   void *__gc_rts[] = {__VA_ARGS__};                                     \
   jl_gcframe_t __gc_stkf_ = { (jl_value_t***)__gc_rts, VA_NARG(__VA_ARGS__), \
-                              1, *jl_pgcstack };                        \
-  *jl_pgcstack = &__gc_stkf_;
+                              1, jl_pgcstack };                         \
+  jl_pgcstack = &__gc_stkf_;
 
 #define JL_GC_PUSHARGS(rts,n)                           \
   jl_gcframe_t __gc_stkf_ = { (jl_value_t***)rts, (n),  \
-                              0, *jl_pgcstack };        \
-  *jl_pgcstack = &__gc_stkf_;
+                              0, jl_pgcstack };         \
+  jl_pgcstack = &__gc_stkf_;
 
-#define JL_GC_POP() \
-    (*jl_pgcstack = __gc_stkf_.prev)
+#define JL_GC_POP() (jl_pgcstack = __gc_stkf_.prev)
 
 void jl_gc_init(void);
 void jl_gc_markval(jl_value_t *v);
@@ -950,7 +949,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     jl_current_task->state.current_output_stream = ss->current_output_stream;
     jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
-    jl_current_task->state.gcstack = ss->gcstack;
+    jl_pgcstack = ss->gcstack;
 #endif
     JL_SIGATOMIC_END();
 }

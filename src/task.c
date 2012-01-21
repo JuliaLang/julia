@@ -177,10 +177,7 @@ jl_value_t * volatile jl_task_arg_in_transit;
 static volatile int n_args_in_transit;
 jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
-// temporary GC root stack for use during init, before tasks exist
-// GC should be disabled during this time.
-static jl_gcframe_t *dummy_pgcstack;
-jl_gcframe_t ** volatile jl_pgcstack = &dummy_pgcstack;
+jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
 static void start_task(jl_task_t *t);
@@ -194,8 +191,7 @@ static void save_stack(jl_task_t *t)
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
-        free(t->stkbuf);
-        buf = malloc(nb);
+        buf = allocb(nb);
         t->stkbuf = buf;
         t->bufsz = nb;
     }
@@ -261,10 +257,11 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 #endif
 
         // set up global state for new task
-        jl_current_task = t;
 #ifdef JL_GC_MARKSWEEP
-        jl_pgcstack = &jl_current_task->state.gcstack;
+        jl_current_task->state.gcstack = jl_pgcstack;
+        jl_pgcstack = t->state.gcstack;
 #endif
+        jl_current_task = t;
 
 #ifdef COPY_STACKS
         save_stack(lastt);
@@ -396,7 +393,7 @@ static void start_task(jl_task_t *t)
     JL_GC_PUSH(&arg);
 
 #ifdef COPY_STACKS
-    ptrint_t local_sp = (ptrint_t)*jl_pgcstack;
+    ptrint_t local_sp = (ptrint_t)jl_pgcstack;
     // here we attempt to figure out how big our stack frame is, since we
     // might need to copy all of it later. this is a bit of a fuzzy guess.
     local_sp += sizeof(jl_gcframe_t);
@@ -583,18 +580,16 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     init_task(t);
     JL_GC_POP();
-#endif
     jl_gc_add_finalizer((jl_value_t*)t, jl_unprotect_stack_func);
+#endif
 
     return t;
 }
 
 JL_CALLABLE(jl_unprotect_stack)
 {
+#ifndef COPY_STACKS
     jl_task_t *t = (jl_task_t*)args[0];
-#ifdef COPY_STACKS
-    free(t->stkbuf);
-#else
     char *stk = t->stack-jl_page_size;
     // unprotect stack so it can be reallocated for something else
     mprotect(stk, jl_page_size-1, PROT_READ|PROT_WRITE|PROT_EXEC);
@@ -684,7 +679,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;
-    jl_pgcstack = &jl_current_task->state.gcstack;
 #endif
 
     jl_root_task = jl_current_task;

@@ -1460,11 +1460,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                             builder.CreateConstGEP2_32(gcframe, 0, 1));
         builder.CreateStore(ConstantInt::get(T_int32, 0),
                             builder.CreateConstGEP2_32(gcframe, 0, 2));
-        builder.CreateStore(builder.CreateLoad
-                            (builder.CreateLoad(jlpgcstack_var, false), false),
+        builder.CreateStore(builder.CreateLoad(jlpgcstack_var, false),
                             builder.CreateConstGEP2_32(gcframe, 0, 3));
-        builder.CreateStore(gcframe,
-                            builder.CreateLoad(jlpgcstack_var, false));
+        builder.CreateStore(gcframe, jlpgcstack_var, false);
         // initialize stack roots to null
         for(i=0; i < (size_t)n_roots; i++) {
             Value *argTempi = builder.CreateConstGEP1_32(ctx.argTemp,i);
@@ -1652,7 +1650,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             // JL_GC_POP();
             if (n_roots > 0) {
                 builder.CreateStore(builder.CreateLoad(builder.CreateConstGEP2_32(gcframe, 0, 3), false),
-                                    builder.CreateLoad(jlpgcstack_var, false));
+                                    jlpgcstack_var);
             }
 #endif
             builder.CreateRet(retval);
@@ -1766,8 +1764,7 @@ static void init_julia_llvm_env(Module *m)
     T_gcframe = gcfst;
 
     jlpgcstack_var =
-        new GlobalVariable(*jl_Module,
-                           PointerType::get(PointerType::get(T_gcframe,0),0),
+        new GlobalVariable(*jl_Module, PointerType::get(T_gcframe,0),
                            true, GlobalVariable::ExternalLinkage,
                            NULL, "jl_pgcstack");
     jl_ExecutionEngine->addGlobalMapping(jlpgcstack_var, (void*)&jl_pgcstack);

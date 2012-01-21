@@ -93,7 +93,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     ss->current_output_stream = jl_current_task->state.current_output_stream;
     ss->prev = jl_current_task->state.prev;
 #ifdef JL_GC_MARKSWEEP
-    ss->gcstack = jl_current_task->state.gcstack;
+    ss->gcstack = jl_pgcstack;
 #endif
 
     jl_current_task->state.prev = ss;
