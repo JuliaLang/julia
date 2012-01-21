@@ -480,6 +480,40 @@ function _jl_printf_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
+global const _jl_sign   = Array(Bool,1)
+global const _jl_digits = Array(Uint8,309+17)
+global const _jl_length = Array(Int32,1)
+global const _jl_point  = Array(Int32,1)
+
+global const _jl_hex_lc = "0123456789abcdef".data
+global const _jl_hex_uc = "0123456789ABCDEF".data
+
+function decode_hex(x::Unsigned, symbols::Array{Uint8,1})
+    pt = (sizeof(x)<<1)-(leading_zeros(x)>>2)
+    tz = trailing_zeros(x)>>2
+    _jl_point[1] = pt
+    _jl_length[1] = i = pt-tz
+    x >>= tz<<2
+    while x > 0
+        _jl_digits[i] = symbols[(x&0xf)+1]
+        i -= 1; x >>= 4
+    end
+end
+decode_hex(x::Unsigned)    = decode_hex(x,_jl_hex_lc)
+decode_hex_uc(x::Unsigned) = decode_hex(x,_jl_hex_uc)
+
+function decode_oct(x::Unsigned)
+    pt = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
+    tz = div(trailing_zeros(x),3)
+    _jl_point[1] = pt
+    _jl_length[1] = i = pt-tz
+    x >>= 3*tz
+    while x > 0
+        _jl_digits[i] = '0'+(x&0x7)
+        i -= 1; x >>= 3
+    end
+end
+
 let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
 _digits[1] = '0' # leading zero for hacky use by octal alternate format (%#o)
 
@@ -526,7 +560,7 @@ function _jl_int10(x::Real)
     if x == 0.0
         return false, pointer(_digits), 1, 1
     end
-    grisu_fix(x,n)
+    grisu_fix(x,0)
 end
 
 end # let

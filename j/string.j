@@ -165,6 +165,8 @@ isequal(a::ByteString, b::ByteString) = length(a)==length(b) && cmp(a,b)==0
 
 width(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Char,), c)))
 width(s::String) = (w=0; for c in s; w += width(c); end; w)
+# TODO: implement and use u8_strnwidth that takes a length argument
+width(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
 
 ## generic string uses only length and next ##
 
