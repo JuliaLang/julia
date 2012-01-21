@@ -595,9 +595,10 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             len = read_uint8(s);
         else
             len = read_int32(s);
-        char *name = alloca(len);
+        char *name = alloca(len+1);
         ios_read(s, name, len);
-        jl_value_t *s = (jl_value_t*)jl_symbol_n(name, len);
+        name[len] = '\0';
+        jl_value_t *s = (jl_value_t*)jl_symbol(name);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, s);
         return s;

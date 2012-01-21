@@ -649,7 +649,6 @@ static void gc_mark(void)
 
     // invisible builtin values
     GC_Markval(jl_methtable_type);
-    GC_Markval(jl_bottom_func);
     GC_Markval(jl_any_func);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);

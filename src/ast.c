@@ -16,8 +16,6 @@
 
 #include "flisp.h"
 
-static htable_t gensym_table;
-
 static char flisp_system_image[] = {
 #include "julia_flisp.boot.inc"
 };
@@ -103,8 +101,6 @@ void jl_init_frontend(void)
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));
 
-    htable_new(&gensym_table, 0);
-
     jvtype = define_opaque_type(symbol("julia_value"), sizeof(void*),
                                 NULL, NULL);
 
@@ -120,12 +116,11 @@ static jl_sym_t *scmsym_to_julia(value_t s)
 {
     assert(issymbol(s));
     if (fl_isgensym(s)) {
-        uptrint_t n = ((gensym_t*)ptr(s))->id + 100;
-        void **bp = ptrhash_bp(&gensym_table, (void*)n);
-        if (*bp == HT_NOTFOUND) {
-            *bp = jl_gensym();
-        }
-        return (jl_sym_t*)*bp;
+        static char gsname[16];
+        char *n = uint2str(&gsname[1], sizeof(gsname)-1,
+                           ((gensym_t*)ptr(s))->id, 10);
+        *(--n) = '#';
+        return jl_symbol(n);
     }
     return jl_symbol(symbol_name(s));
 }

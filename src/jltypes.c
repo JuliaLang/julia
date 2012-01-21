@@ -57,7 +57,6 @@ jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
 
 jl_func_type_t *jl_any_func;
-jl_function_t *jl_bottom_func;
 
 void jl_add_constructors(jl_struct_type_t *t);
 
@@ -2215,20 +2214,20 @@ void jl_init_types(void)
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
     jl_tag_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
     jl_tag_type_type = jl_tag_kind;
-    jl_func_kind = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
-
     jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
     jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
     jl_symbol_type = jl_sym_type;
 
-    jl_any_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
-    jl_type_type = (jl_tag_type_t*)newobj((jl_type_t*)jl_tag_kind, TAG_TYPE_NW);
     jl_tuple_type = jl_alloc_tuple(1);
     jl_tuple_type->type = (jl_type_t*)jl_tuple_type;
 
     jl_null = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, 1);
     jl_null->length = 0;
     jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
+
+    jl_any_type = jl_new_tagtype((jl_value_t*)jl_symbol("Any"), NULL, jl_null);
+    jl_any_type->super = jl_any_type;
+    jl_type_type = jl_new_tagtype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_null);
 
     // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
@@ -2263,19 +2262,6 @@ void jl_init_types(void)
     jl_tag_kind->instance = NULL;
     jl_tag_kind->uid = jl_assign_type_uid();
 
-    jl_func_kind->name = jl_new_typename(jl_symbol("FuncKind"));
-    jl_func_kind->name->primary = (jl_value_t*)jl_func_kind;
-    jl_func_kind->super = jl_type_type;
-    jl_func_kind->parameters = jl_null;
-    jl_func_kind->names = jl_tuple(2, jl_symbol("from"), jl_symbol("to"));
-    jl_func_kind->types = jl_tuple(2, jl_type_type, jl_type_type);
-    jl_func_kind->fptr = jl_f_no_function;
-    jl_func_kind->env = NULL;
-    jl_func_kind->linfo = NULL;
-    jl_func_kind->ctor_factory = NULL;
-    jl_func_kind->instance = NULL;
-    jl_func_kind->uid = jl_assign_type_uid();
-
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
     jl_typename_type->super = jl_any_type;
@@ -2302,20 +2288,13 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
 
-    jl_any_type->name = jl_new_typename(jl_symbol("Any"));
-    jl_any_type->name->primary = (jl_value_t*)jl_any_type;
-    jl_any_type->super = jl_any_type;
-    jl_any_type->parameters = jl_null;
-    jl_any_type->fptr = NULL;
-    jl_any_type->env = NULL;
-    jl_any_type->linfo = NULL;
-
-    jl_type_type->name = jl_new_typename(jl_symbol("Type"));
-    jl_type_type->name->primary = (jl_value_t*)jl_type_type;
-    jl_type_type->super = jl_any_type;
-    jl_type_type->fptr = NULL;
-    jl_type_type->env = NULL;
-    jl_type_type->linfo = NULL;
+    jl_func_kind =
+        jl_new_struct_type(jl_symbol("FuncKind"), jl_type_type,
+                           jl_null,
+                           jl_tuple(2, jl_symbol("from"), jl_symbol("to")),
+                           jl_tuple(2, jl_type_type, jl_type_type)); 
+    jl_func_kind->fptr = jl_f_no_function;
+    jl_func_kind->env = NULL;
 
     // now they can be used to create the remaining base kinds and types
     jl_methtable_type =
@@ -2337,8 +2316,6 @@ void jl_init_types(void)
     // generic functions have the type Any-->Any, as they take any arguments
     // but don't satisfy any particular return-type requirements.
     jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
-
-    jl_bottom_func = jl_new_closure(jl_f_no_function, NULL);
 
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), jl_type_type,
@@ -2542,7 +2519,6 @@ void jl_init_types(void)
     quote_sym = jl_symbol("quote");
     top_sym = jl_symbol("top");
     dots_sym = jl_symbol("...");
-    dollar_sym = jl_symbol("$");
     line_sym = jl_symbol("line");
     jl_continue_sym = jl_symbol("continue");
     error_sym = jl_symbol("error");
@@ -2563,7 +2539,6 @@ void jl_init_types(void)
     exc_sym = jl_symbol("the_exception");
     enter_sym = jl_symbol("enter");
     leave_sym = jl_symbol("leave");
-    Any_sym = jl_symbol("Any");
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
     multivalue_sym = jl_symbol("multiple_value");

@@ -1260,24 +1260,16 @@ static void print_methlist(char *name, jl_methlist_t *ml)
         }
         else {
             jl_lambda_info_t *li = ml->func->linfo;
-            if (li != NULL) {
-                long lno = jl_unbox_long(li->line);
-                if (lno > 0) {
-                    char *fname = ((jl_sym_t*)li->file)->name;
-                    char *sep = strrchr(fname, '/');
-                    if (sep)
-                        fname = sep+1;
-                    ios_printf(s, " at %s:%d", fname, lno);
-                }
-            }
-            else {
-                ios_printf(s, " is a built-in");
+            assert(li);
+            long lno = jl_unbox_long(li->line);
+            if (lno > 0) {
+                char *fname = ((jl_sym_t*)li->file)->name;
+                char *sep = strrchr(fname, '/');
+                if (sep)
+                    fname = sep+1;
+                ios_printf(s, " at %s:%d", fname, lno);
             }
         }
-        //if (ml->func && ml->func->linfo && ml->func->linfo->ast &&
-        //    ml->func->linfo->inferred) {
-        //    jl_show(ml->func->linfo->ast);
-        //}
         if (ml->next != NULL)
             ios_printf(s, "\n");
         ml = ml->next;
@@ -1375,37 +1367,24 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
           more generally, we can stop when the type is a subtype of the
           union of all the signatures examined so far.
         */
-        //int shadowed = 0;
-        if (1/*!shadowed*/) {
-            matc = match_method(type, ml->func, ml->sig, ml->tvars, name);
-            if (matc != NULL) {
-                len++;
-                if (lim >= 0 && len > lim) {
-                    JL_GC_POP();
-                    return jl_false;
-                }
-                if (len == 1) {
-                    t = jl_alloc_cell_1d(1);
-                    jl_cellref(t,0) = (jl_value_t*)matc;
-                }
-                else {
-                    jl_cell_1d_push(t, (jl_value_t*)matc);
-                }
-                // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
-                if (jl_types_equal(jl_t0(matc), type)) {
-                    JL_GC_POP();
-                    return (jl_value_t*)t;
-                }
-                /*
-                if (ml->has_tvars) {
-                    if (jl_type_match((jl_type_t*)type, ml->sig) != jl_false)
-                        return t;
-                }
-                else {
-                    if (jl_subtype(type, (jl_value_t*)ml->sig, 0))
-                        return t;
-                }
-                */
+        matc = match_method(type, ml->func, ml->sig, ml->tvars, name);
+        if (matc != NULL) {
+            len++;
+            if (lim >= 0 && len > lim) {
+                JL_GC_POP();
+                return jl_false;
+            }
+            if (len == 1) {
+                t = jl_alloc_cell_1d(1);
+                jl_cellref(t,0) = (jl_value_t*)matc;
+            }
+            else {
+                jl_cell_1d_push(t, (jl_value_t*)matc);
+            }
+            // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
+            if (jl_types_equal(jl_t0(matc), type)) {
+                JL_GC_POP();
+                return (jl_value_t*)t;
             }
         }
         ml = ml->next;

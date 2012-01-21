@@ -50,6 +50,7 @@ jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
 jl_struct_type_t *jl_uniontoocomplex_type;
 jl_struct_type_t *jl_backtrace_type;
+jl_bits_type_t *jl_pointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
 jl_value_t *jl_stackovf_exception;
 jl_value_t *jl_divbyzero_exception;
@@ -57,11 +58,9 @@ jl_value_t *jl_undefref_exception;
 jl_value_t *jl_interrupt_exception;
 jl_value_t *jl_memory_exception;
 
-jl_bits_type_t *jl_pointer_type;
-
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;   jl_sym_t *module_sym;
-jl_sym_t *dollar_sym;  jl_sym_t *quote_sym;
+jl_sym_t *quote_sym;
 jl_sym_t *top_sym;     jl_sym_t *vinf_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_continue_sym;
 // head symbols for each expression type
@@ -69,48 +68,14 @@ jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
 jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
-jl_sym_t *macro_sym;
+jl_sym_t *macro_sym;   jl_sym_t *method_sym;
 jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
-jl_sym_t *Any_sym;     jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;
 jl_sym_t *new_sym;     jl_sym_t *multivalue_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
-
-/*
-static int sizebins[] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-                         0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
-
-// distribution of object sizes
-(gdb) p sizebins[0]   $1 = 0
-(gdb) p sizebins[1]   $2 = 0
-(gdb) p sizebins[2]   $3 = 2
-(gdb) p sizebins[3]   $4 = 762210
-(gdb) p sizebins[4]   $5 = 2575571
-(gdb) p sizebins[5]   $6 = 365939
-(gdb) p sizebins[6]   $7 = 3015
-(gdb) p sizebins[7]   $8 = 28131
-(gdb) p sizebins[8]   $9 = 85
-(gdb) p sizebins[9]   $10 = 19
-(gdb) p sizebins[10]  $11 = 2
-(gdb) p sizebins[11]  $12 = 0
-(gdb) p sizebins[12]  $13 = 1
-(gdb) p sizebins[13]  $14 = 0
-(gdb) p sizebins[14]  $15 = 0
-(gdb) p sizebins[15]  $16 = 1
-(gdb) p sizebins[16]  $17 = 0
-void *allocb(size_t nb)
-{
-    int i = 30;
-    while (1<<i > nb && i>0) {
-        i--;
-    }
-    sizebins[i]++;
-    return GC_MALLOC(nb);
-}
-*/
 
 DLLEXPORT
 jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
@@ -383,10 +348,10 @@ void jl_set_gs_ctr(uint32_t ctr) { gs_ctr = ctr; }
 
 DLLEXPORT jl_sym_t *jl_gensym(void)
 {
-    char name[32];
+    static char name[16];
     char *n;
-    n = uint2str(name, sizeof(name)-1, gs_ctr, 10);
-    *(--n) = '#';
+    n = uint2str(&name[2], sizeof(name)-2, gs_ctr, 10);
+    *(--n) = '#'; *(--n) = '#';
     gs_ctr++;
     return jl_symbol(n);
 }

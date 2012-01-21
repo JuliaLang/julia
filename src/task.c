@@ -674,7 +674,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->tls = NULL;
     jl_current_task->done = jl_false;
-    jl_current_task->start = jl_bottom_func;
+    jl_current_task->start = NULL;
     jl_current_task->result = NULL;
     jl_current_task->state.err = 0;
     jl_current_task->state.eh_task = jl_current_task;

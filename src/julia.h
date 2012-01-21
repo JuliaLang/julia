@@ -328,7 +328,6 @@ DLLEXPORT extern jl_value_t *jl_nothing;
 
 extern jl_func_type_t *jl_any_func;
 
-extern jl_function_t *jl_bottom_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 
@@ -338,7 +337,6 @@ extern void *jl_dl_handle;
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
-extern jl_sym_t *dollar_sym;
 extern jl_sym_t *quote_sym;
 extern jl_sym_t *top_sym;
 extern jl_sym_t *line_sym;
@@ -350,9 +348,8 @@ extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
 extern jl_sym_t *null_sym;    extern jl_sym_t *body_sym;
-extern jl_sym_t *macro_sym;
+extern jl_sym_t *macro_sym;   extern jl_sym_t *method_sym;
 extern jl_sym_t *locals_sym;  extern jl_sym_t *colons_sym;
-extern jl_sym_t *Any_sym;     extern jl_sym_t *method_sym;
 extern jl_sym_t *enter_sym;   extern jl_sym_t *leave_sym;
 extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
