@@ -1479,9 +1479,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         lkup = lookup_type(tn->cache, tn, iparams, ntp);
         if (lkup != NULL) { result = lkup; goto done_inst_tt; }
 
-        // always use original type constructor (?)
-        // only necessary for special cases like NTuple
-        if (tc == (jl_value_t*)jl_ntuple_type && tc != t) {
+        // always use original type constructor
+        if (tc != t) {
             //(tc != NULL && tc != t)
             result = (jl_type_t*)jl_apply_type_(tc, iparams, ntp);
             goto done_inst_tt;
@@ -1582,6 +1581,24 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n)
 {
     return inst_type_w_((jl_value_t*)t, env, n, NULL);
+}
+
+void jl_reinstantiate_inner_types(jl_tag_type_t *t)
+{
+    typekey_stack_t top;
+    top.type = t;
+    top.next = NULL;
+    size_t n = t->parameters->length;
+    jl_value_t **env = alloca(n*2*sizeof(void*));
+    for(int i=0; i < n; i++) {
+        env[i*2] = jl_tupleref(t->parameters,i);
+        env[i*2+1] = env[i*2];
+    }
+    t->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)t->super, env, n, &top);
+    if (jl_is_struct_type(t)) {
+        jl_struct_type_t *st = (jl_struct_type_t*)t;
+        st->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)st->types, env, n, &top);
+    }
 }
 
 static int jl_subtype_le(jl_value_t *a,jl_value_t *b,int ta,int morespecific,

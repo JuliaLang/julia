@@ -57,6 +57,31 @@ nttest1{n}(x::NTuple{n,Int}) = n
 @assert (Int32...) <: NTuple{typevar(:T),Int32}
 @assert (Int32,Int32...) <: NTuple{typevar(:T),Int32}
 
+# type declarations
+
+abstract Sup_{A,B}
+abstract Qux_{T} <: Sup_{Qux_{Int},T}
+
+@assert subtype(Qux_{Int}.super, Sup_)
+@assert is(Qux_{Int}, Qux_{Int}.super.parameters[1])
+@assert is(Qux_{Int}.super.parameters[2], Int)
+@assert subtype(Qux_{Char}.super, Sup_)
+@assert is(Qux_{Int}, Qux_{Char}.super.parameters[1])
+@assert is(Qux_{Char}.super.parameters[2], Char)
+
+@assert subtype(Qux_.super.parameters[1].super, Sup_)
+@assert is(Qux_{Int}, Qux_.super.parameters[1].super.parameters[1])
+@assert is(Int, Qux_.super.parameters[1].super.parameters[2])
+
+type Foo_{T} x::Foo_{Int} end
+
+@assert is(Foo_.types[1], Foo_{Int})
+@assert is(Foo_.types[1].types[1], Foo_{Int})
+
+type Circ_{T} x::Circ_{T} end
+# this does not necessarily have to be true, but it's nice
+@assert is(Circ_, Circ_.types[1])
+
 x = (2,3)
 @assert +(x...) == 5
 
