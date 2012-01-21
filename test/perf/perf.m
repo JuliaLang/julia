@@ -185,4 +185,17 @@ end
 
 timeit('rand_mat_mul', @randmatmul, 1000);
 
+%% printf %%
+
+function printfd(n)
+    f = fopen('/dev/null','w');
+    for i = 1:n
+        fprintf(f, '%d %d', i, i);
+    end
+    fclose(f);
+end
+
+printfd(1)
+timeit('printfd', @printfd, 100000)
+
 end
