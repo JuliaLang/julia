@@ -842,40 +842,35 @@ uint64(s::String) = parse_int(Uint64, s, 10)
 # TODO: this can be done faster for Int32, Int64
 function _jl_ndigits(n::Integer, b::Integer)
     nd = 1
-    ba = convert(typeof(n), b)
-    while true
-        n = div(n, ba)
-        if n == 0
-            break
+    if -200000000000000000 <= n <= 200000000000000000
+        # multiplication method is faster, but doesn't work for extreme values
+        n = abs(n)
+        d = b
+        while n >= d
+            nd += 1
+            d *= b
         end
-        nd += 1
+    else
+        while true
+            n = div(n, b)
+            if n == 0
+                break
+            end
+            nd += 1
+        end
     end
     return nd
 end
 
 function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
     if b < 2 || b > 40; error("int2str: invalid base ", b); end
-    if n == typemin(Int64)
-        # this is really cheap, but the algorithm fails in this case
-        # since abs(n) is still negative.
-        if l > 19
-            # NOTE: should use lpad, but we don't infer a precise type for it
-            d = Array(Uint8, l+1)
-            d[1] = '-'
-            d[2:(1+l-19)] = '0'
-            d[(2+l-19):end] = "9223372036854775808".data
-            return ASCIIString(d)
-        end
-        return "-9223372036854775808"
-    end
     neg = n < 0
-    n = abs(n)
     b = convert(typeof(n), b)
     ndig = _jl_ndigits(n, b)
     sz = max(convert(Int, ndig), l) + neg
     data = Array(Uint8, sz)
     for i=sz:-1:(1+neg)
-        ch = n % b
+        ch = abs(rem(n, b))
         if ch < 10
             data[i] = ch+'0'
         else
