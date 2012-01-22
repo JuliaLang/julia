@@ -853,20 +853,23 @@ function _jl_ndigits(n::Integer, b::Integer)
     return nd
 end
 
-function int2str(n::Union(Int64,Uint64), b::Integer)
+function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
     if b < 2 || b > 40; error("int2str: invalid base ", b); end
     if n == typemin(Int64)
         # this is really cheap, but the algorithm fails in this case
         # since abs(n) is still negative.
+        if l > 19
+            return "-"*lpad("9223372036854775808", l, '0')
+        end
         return "-9223372036854775808"
     end
     neg = n < 0
     n = abs(n)
     b = convert(typeof(n), b)
     ndig = _jl_ndigits(n, b)
-    sz = convert(Int, ndig)
-    data = Array(Uint8, sz+neg)
-    for i=(sz+neg):-1:(1+neg)
+    sz = max(convert(Int, ndig), l) + neg
+    data = Array(Uint8, sz)
+    for i=sz:-1:(1+neg)
         ch = n % b
         if ch < 10
             data[i] = ch+'0'
@@ -874,29 +877,23 @@ function int2str(n::Union(Int64,Uint64), b::Integer)
             data[i] = ch-10+'a';
         end
         n = div(n,b)
-        if n==0
-            break
-        end
     end
     if neg
         data[1] = '-'
     end
     ASCIIString(data)
 end
-int2str(n::Integer, b::Integer) = int2str(int64(n), b)
-int2str(n::Integer, b::Integer, len::Integer) = lpad(int2str(n,b),len,'0')
+int2str(n::Integer, b::Integer) = int2str(int64(n), b, 0)
 
-# TODO: support signed Ints too
+bin(n::Integer, l::Integer) = int2str(n,  2, l)
+oct(n::Integer, l::Integer) = int2str(n,  8, l)
+dec(n::Integer, l::Integer) = int2str(n, 10, l)
+hex(n::Integer, l::Integer) = int2str(n, 16, l)
 
-bin(n::Integer) = int2str(n,  2)
-oct(n::Integer) = int2str(n,  8)
-dec(n::Integer) = int2str(n, 10)
-hex(n::Integer) = int2str(n, 16)
-
-bin(n::Integer, l::Integer) = lpad(bin(n), l, '0')
-oct(n::Integer, l::Integer) = lpad(oct(n), l, '0')
-dec(n::Integer, l::Integer) = lpad(dec(n), l, '0')
-hex(n::Integer, l::Integer) = lpad(hex(n), l, '0')
+bin(n::Integer) = bin(n, 0)
+oct(n::Integer) = oct(n, 0)
+dec(n::Integer) = dec(n, 0)
+hex(n::Integer) = hex(n, 0)
 
 bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8 ,x),  8)
 bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
