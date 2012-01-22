@@ -859,7 +859,12 @@ function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
         # this is really cheap, but the algorithm fails in this case
         # since abs(n) is still negative.
         if l > 19
-            return "-"*lpad("9223372036854775808", l, '0')
+            # NOTE: should use lpad, but we don't infer a precise type for it
+            d = Array(Uint8, l+1)
+            d[1] = '-'
+            d[2:(1+l-19)] = '0'
+            d[(2+l-19):end] = "9223372036854775808".data
+            return ASCIIString(d)
         end
         return "-9223372036854775808"
     end
@@ -883,7 +888,8 @@ function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
     end
     ASCIIString(data)
 end
-int2str(n::Integer, b::Integer) = int2str(int64(n), b, 0)
+int2str(n::Integer, b::Integer)         = int2str(int64(n), b, 0)
+int2str(n::Integer, b::Integer, l::Int) = int2str(int64(n), b, l)
 
 bin(n::Integer, l::Integer) = int2str(n,  2, l)
 oct(n::Integer, l::Integer) = int2str(n,  8, l)
