@@ -845,6 +845,14 @@ void jl_save_system_image(char *fname, char *startscriptname)
         // step 6: orphan old system module
         jl_system_module = jl_current_module;
     }
+    else {
+        // delete cached slow ASCIIString constructor
+        jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
+        mt->cache = NULL;
+        mt->cache_1arg = NULL;
+        mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
+        mt->defs->func->linfo->specializations = NULL;
+    }
 
     jl_idtable_type = jl_get_global(jl_system_module, jl_symbol("IdTable"));
     idtable_list = jl_alloc_cell_1d(0);
