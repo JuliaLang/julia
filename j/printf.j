@@ -529,6 +529,29 @@ function ndigits(x::Unsigned)
     nd -= x < _jl_powers_of_10[nd]
 end
 
+function decode_dec(x::Unsigned)
+    if x == 0
+        _jl_point[1] = 0
+        _jl_length[1] = 0
+        return
+    end
+    _jl_point[1] = i = ndigits(x)
+    d = mod(x,10)
+    while d == 0
+        x = div(x,10)
+        d = mod(x,10)
+        i -= 1
+    end
+    _jl_length[1] = i
+    while true
+        _jl_digits[i] = '0'+d
+        x = div(x,10)
+        if x == 0; break; end
+        d = mod(x,10)
+        i -= 1
+    end
+end
+
 let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
 _digits[1] = '0' # leading zero for hacky use by octal alternate format (%#o)
 
