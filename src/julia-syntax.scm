@@ -471,7 +471,9 @@
 			      (stmts ()))
 		     (if (null? binds)
 			 `(call (-> (tuple ,@args)
-				    (block (local (vars ,@locls))
+				    (block ,@(if (null? locls)
+						 '()
+						 `((local ,@locls)))
 					   ,@stmts
 					   ,ex))
 				,@inits)
@@ -542,13 +544,17 @@
 	      ,@(map (lambda (x) `(,what ,x)) vars)
 	      ,@(reverse assigns)))
 	(let ((x (car b)))
-	  (if (and (pair? x) (memq (car x) assignment-ops))
-	      (loop (cdr b)
-		    (cons (cadr x) vars)
-		    (cons `(,(car x)
-			    ,(decl-var (cadr x)) ,(caddr x))
-			  assigns))
-	      (loop (cdr b) (cons x vars) assigns))))))
+	  (cond ((and (pair? x) (memq (car x) assignment-ops))
+		 (loop (cdr b)
+		       (cons (cadr x) vars)
+		       (cons `(,(car x) ,(decl-var (cadr x)) ,(caddr x))
+			     assigns)))
+		((and (pair? x) (eq? (car x) '|::|))
+		 (loop (cdr b)
+		       (cons (decl-var x) vars)
+		       (cons x assigns)))
+		(else
+		 (loop (cdr b) (cons x vars) assigns)))))))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))
@@ -752,12 +758,15 @@
 					args)
 				 ,name))))
 
-   ; local x,y,z => local x;local y;local z
-   (pattern-lambda (local (vars . binds))
+   ;; expand anything but "local x" with one symbol
+   ;; local x,y,z => local x;local y;local z
+   (pattern-lambda (local (-s)) __)
+   (pattern-lambda (local . binds)
 		   (expand-decls 'local binds))
 
-   ; global x,y,z => global x;global y;global z
-   (pattern-lambda (global (vars . binds))
+   ;; global x,y,z => global x;global y;global z
+   (pattern-lambda (global (-s)) __)
+   (pattern-lambda (global . binds)
 		   (expand-decls 'global binds))
 
    ; x::T = rhs => x::T; x = rhs
@@ -775,9 +784,9 @@
    (pattern-lambda (const (= lhs rhs))
 		   `(block (const ,(const-check-symbol (decl-var lhs)))
 			   (= ,lhs ,rhs)))
-   (pattern-lambda (const (global (vars . binds)))
+   (pattern-lambda (const (global . binds))
 		   (qualified-const-expr binds __))
-   (pattern-lambda (const (local (vars . binds)))
+   (pattern-lambda (const (local . binds))
 		   (qualified-const-expr binds __))
 
    ;; incorrect multiple return syntax [a, b, ...] = foo
@@ -1579,9 +1588,7 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(= ,(cadr e) ,(analyze-vars (caddr e) env captvars)))
 	((or (eq? (car e) 'local) (eq? (car e) 'local!))
-	 (if (pair? (cadr e))
-	     (analyze-vars (cadr e) env captvars)
-	     '(null)))
+	 '(null))
 	((eq? (car e) 'typeassert)
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
