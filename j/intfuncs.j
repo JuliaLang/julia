@@ -133,12 +133,24 @@ function powermod(x::Integer, p::Integer, m::Integer)
 end
 
 # smallest power of 2 >= i
-function nextpow2(i::Integer)
-    if i&(i-1) == 0
-        return i
-    end
-    while (i&(i-1) != 0)
-        i = i&(i-1)
-    end
-    return i<<1
+nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
+nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
+
+# decimal digits in an unsigned integer
+global const _jl_powers_of_ten = [
+    0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
+    0x0000000000002710, 0x00000000000186a0, 0x00000000000f4240, 0x0000000000989680,
+    0x0000000005f5e100, 0x000000003b9aca00, 0x00000002540be400, 0x000000174876e800,
+    0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
+    0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
+]
+function ndigits0z(x::Unsigned)
+    lz = (sizeof(x)<<3)-leading_zeros(x)
+    nd = (1233*lz)>>12+1
+    nd -= x < _jl_powers_of_ten[nd]
 end
+ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
+# TODO: custom versions for each unsigned type?
+
+ndigits(x::Unsigned) = x==0 ? 1 : ndigits0z(x)
+ndigits(x::Integer) = ndigits(unsigned(abs(x)))

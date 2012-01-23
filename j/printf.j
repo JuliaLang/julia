@@ -141,20 +141,10 @@ function _jl_printf_pad(m::Int, n, c::Char)
     end
 end
 
-function _jl_print_integer(out, pdigits, ndigits, pt)
-    if ndigits == 0
-        write(out, '0')
-    else
-        write(out, pdigits, ndigits)
-        pt -= ndigits
-        while pt > 0
-            write(out, '0')
-            pt -= 1
-        end
-    end
-end
-
-function _jl_print_fixed(out, pdigits, ndigits, pt, precision)
+function _jl_print_fixed(out, precision)
+    pdigits = pointer(_jl_digits)
+    ndigits = _jl_length[1]
+    pt = _jl_point[1]
     if pt <= 0
         # 0.0dddd0
         write(out, '0')
@@ -216,17 +206,19 @@ function _jl_printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     prefix = ""
     if lc(c)=='o'
-        f = contains(flags,'#') ? :_jl_int8alt : :_jl_int8
-        push(blk.args, :((neg,pdigits,ndigits,pt) = ($f)($x)))
+        f = contains(flags,'#') ? :_jl_int_0ct : :_jl_int_oct
+        push(blk.args, :(($f)($x)))
     elseif c=='x'
         if contains(flags,'#'); prefix = "0x"; end
-        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_int16($x)))
+        push(blk.args, :(_jl_int_hex($x)))
     elseif c=='X'
         if contains(flags,'#'); prefix = "0X"; end
-        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_int16uc($x)))
+        push(blk.args, :(_jl_int_HEX($x)))
     else
-        push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_int10($x)))
+        push(blk.args, :(_jl_int_dec($x)))
     end
+    push(blk.args, :(neg = _jl_neg[1]))
+    push(blk.args, :(pt  = _jl_point[1]))
     # calculate padding
     width -= strlen(prefix)
     space_pad = width > max(1,precision) && contains(flags,'-') ||
@@ -263,11 +255,11 @@ function _jl_printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, _jl_printf_pad(precision-1, :($precision-pt), '0'))
     elseif !space_pad && width > 1
         zeros = contains(flags,'+') || contains(flags,' ') ?
-            :($width-pt) : :($width-neg-pt)
+            :($(width-1)-pt) : :($width-neg-pt)
         push(blk.args, _jl_printf_pad(width-1, zeros, '0'))
     end
     # print integer
-    push(blk.args, :(_jl_print_integer(out,pdigits,ndigits,pt)))
+    push(blk.args, :(write(out, pointer(_jl_digits), pt)))
     # print padding
     if padding != nothing && contains(flags,'-')
         push(blk.args, _jl_printf_pad(width-precision, padding, ' '))
@@ -290,7 +282,10 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _jl_special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_fix10($x,$precision)))
+    push(blk.args, :(_jl_fix_dec($x,$precision)))
+    push(blk.args, :(neg = _jl_neg[1]))
+    push(blk.args, :(pt  = _jl_point[1]))
+    push(blk.args, :(len = _jl_length[1]))
     # calculate padding
     padding = nothing
     if precision > 0 || contains(flags,'#')
@@ -320,9 +315,9 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     # print digits
     if precision > 0
-        push(blk.args, :(_jl_print_fixed(out,pdigits,ndigits,pt,$precision)))
+        push(blk.args, :(_jl_print_fixed(out,$precision)))
     else
-        push(blk.args, :(_jl_print_integer(out,pdigits,ndigits,pt)))
+        push(blk.args, :(write(out, pointer(_jl_digits), pt)))
         contains(flags,'#') && push(blk.args, :(write(out, '.')))
     end
     # print space padding
@@ -348,8 +343,9 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _jl_special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push(blk.args, :((neg,pdigits,ndigits,pt) = _jl_sig10($x,$(precision+1))))
-    push(blk.args, :(exp = pt-1))
+    push(blk.args, :(_jl_ini_dec($x,$(precision+1))))
+    push(blk.args, :(neg = _jl_neg[1]))
+    push(blk.args, :(exp = _jl_point[1]-1))
     expmark = c=='E' ? "E" : "e"
     if precision==0 && contains(flags,'#')
         expmark = strcat(".",expmark)
@@ -360,11 +356,11 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # 4 = leading + expsign + 2 exp digits
     if contains(flags,'+') || contains(flags,' ')
         width -= 1 # for the sign indicator
-        if width > 1
+        if width > 0
             padding = :($width-((exp<=-100)|(100<=exp)))
         end
     else
-        if width > 1
+        if width > 0
             padding = :($width-((exp<=-100)|(100<=exp))-neg)
         end
     end
@@ -381,10 +377,10 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, _jl_printf_pad(width, padding, '0'))
     end
     # print digits
-    push(blk.args, :(write(out, pdigits, 1)))
+    push(blk.args, :(write(out, _jl_digits[1])))
     if precision > 0
         push(blk.args, :(write(out, '.')))
-        push(blk.args, :(write(out, pdigits+1, ndigits-1)))
+        push(blk.args, :(write(out, pointer(_jl_digits)+1, $precision)))
     end
     for ch in expmark
         push(blk.args, :(write(out, $ch)))
@@ -480,160 +476,248 @@ function _jl_printf_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
-global const _jl_sign   = Array(Bool,1)
-global const _jl_digits = Array(Uint8,309+17)
-global const _jl_length = Array(Int32,1)
-global const _jl_point  = Array(Int32,1)
+### core unsigned integer decoding functions ###
 
-global const _jl_hex_lc = "0123456789abcdef".data
-global const _jl_hex_uc = "0123456789ABCDEF".data
-
-function decode_hex(x::Unsigned, symbols::Array{Uint8,1})
-    pt = (sizeof(x)<<1)-(leading_zeros(x)>>2)
-    tz = trailing_zeros(x)>>2
-    _jl_point[1] = pt
-    _jl_length[1] = i = pt-tz
-    x >>= tz<<2
-    while x > 0
-        _jl_digits[i] = symbols[(x&0xf)+1]
-        i -= 1; x >>= 4
+macro handle_zero()
+    quote
+        if x == 0
+            _jl_point[1] = 1
+            _jl_digits[1] = '0'
+            return
+        end
     end
 end
-decode_hex(x::Unsigned)    = decode_hex(x,_jl_hex_lc)
-decode_hex_uc(x::Unsigned) = decode_hex(x,_jl_hex_uc)
 
-function decode_oct(x::Unsigned)
-    pt = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
-    tz = div(trailing_zeros(x),3)
-    _jl_point[1] = pt
-    _jl_length[1] = i = pt-tz
-    x >>= 3*tz
-    while x > 0
+function _jl_decode_oct(x::Unsigned)
+    @handle_zero
+    _jl_point[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
+    while i > 0
         _jl_digits[i] = '0'+(x&0x7)
-        i -= 1; x >>= 3
+        x >>= 3
+        i -= 1
     end
 end
 
-# TODO: custom versions for each unsigned type?
-
-global const _jl_powers_of_10 = [
-    0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
-    0x0000000000002710, 0x00000000000186a0, 0x00000000000f4240, 0x0000000000989680,
-    0x0000000005f5e100, 0x000000003b9aca00, 0x00000002540be400, 0x000000174876e800,
-    0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
-    0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
-]
-function ndigits(x::Unsigned)
-    lz = (sizeof(x)<<3)-leading_zeros(x)
-    nd = (1233*lz)>>12+1
-    nd -= x < _jl_powers_of_10[nd]
+function _jl_decode_0ct(x::Unsigned)
+    _jl_point[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
+    while i > 0
+        _jl_digits[i] = '0'+(x&0x7)
+        x >>= 3
+        i -= 1
+    end
 end
 
-function decode_dec(x::Unsigned)
-    if x == 0
-        _jl_point[1] = 0
-        _jl_length[1] = 0
+function _jl_decode_dec(x::Unsigned)
+    @handle_zero
+    _jl_point[1] = i = ndigits0z(x)
+    while i > 0
+        _jl_digits[i] = '0'+mod(x,10)
+        x = div(x,10)
+        i -= 1
+    end
+end
+
+function _jl_decode_hex(x::Unsigned, symbols::Array{Uint8,1})
+    @handle_zero
+    _jl_point[1] = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
+    while i > 0
+        _jl_digits[i] = symbols[(x&0xf)+1]
+        x >>= 4
+        i -= 1
+    end
+end
+
+const _jl_hex_symbols = "0123456789abcdef".data
+const _jl_HEX_symbols = "0123456789ABCDEF".data
+
+_jl_decode_hex(x::Unsigned) = _jl_decode_hex(x,_jl_hex_symbols)
+_jl_decode_HEX(x::Unsigned) = _jl_decode_hex(x,_jl_HEX_symbols)
+
+### decoding functions directly used by printf generated code ###
+
+# _jl_int_*(x)   => fixed precision, to 0th place, filled out
+# _jl_fix_*(x,n) => fixed precision, to nth place, not filled out
+# _jl_ini_*(x,n) => n initial digits, filled out
+# _jl_sig_*(x,n) => n initial digits, zero-stripped
+
+# alternate versions:
+#   _jl_*_0ct(x,n) => ensure that the first octal digits is zero
+#   _jl_*_HEX(x,n) => use uppercase digits for hexadecimal
+
+## "int" decoding functions ##
+#
+# - sets _jl_neg[1]
+# - sets _jl_point[1]
+# - implies _jl_length[1] = _jl_point[1]
+#
+
+_jl_int_oct(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_oct(x))
+_jl_int_0ct(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_0ct(x))
+_jl_int_dec(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_dec(x))
+_jl_int_hex(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_hex(x))
+_jl_int_HEX(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_HEX(x))
+
+macro handle_negative()
+    quote
+        if x < 0
+            _jl_neg[1] = true
+            x = -x
+        else
+            _jl_neg[1] = false
+        end
+    end
+end
+
+_jl_int_oct(x::Integer) = (@handle_negative; _jl_decode_oct(unsigned(x)))
+_jl_int_0ct(x::Integer) = (@handle_negative; _jl_decode_0ct(unsigned(x)))
+_jl_int_dec(x::Integer) = (@handle_negative; _jl_decode_dec(unsigned(x)))
+_jl_int_hex(x::Integer) = (@handle_negative; _jl_decode_hex(unsigned(x)))
+_jl_int_HEX(x::Integer) = (@handle_negative; _jl_decode_HEX(unsigned(x)))
+
+_jl_int_oct(x::Real) = _jl_int_oct(integer(x)) # TODO: real float decoding.
+_jl_int_0ct(x::Real) = _jl_int_0ct(integer(x)) # TODO: real float decoding.
+_jl_int_dec(x::Real) = _jl_int_dec(float(x))
+_jl_int_hex(x::Real) = _jl_int_hex(integer(x)) # TODO: real float decoding.
+_jl_int_HEX(x::Real) = _jl_int_HEX(integer(x)) # TODO: real float decoding.
+
+function _jl_int_dec(x::Float)
+    if x == 0.0
+        _jl_neg[1] = false
+        _jl_point[1] = 1
+        _jl_digits[1] = '0'
         return
     end
-    _jl_point[1] = i = ndigits(x)
-    d = mod(x,10)
-    while d == 0
-        x = div(x,10)
-        d = mod(x,10)
-        i -= 1
-    end
-    _jl_length[1] = i
-    while true
-        _jl_digits[i] = '0'+d
-        x = div(x,10)
-        if x == 0; break; end
-        d = mod(x,10)
-        i -= 1
+    @grisu_ccall x GRISU_FIXED 0
+    for i = _jl_length[1]+1:_jl_point[1]
+        _jl_digits[i] = '0'
     end
 end
 
-let _digits = Array(Uint8,23) # long enough for oct(typemax(Uint64))+1
-_digits[1] = '0' # leading zero for hacky use by octal alternate format (%#o)
+## fix decoding functions ##
+#
+# - sets _jl_neg[1]
+# - sets _jl_point[1]
+# - sets _jl_length[1]; if less than _jl_point[1], trailing zeros implied
+#
 
-# TODO: to be replaced with more efficient integer decoders...
+_jl_fix_dec(x::Integer, n::Int) = (_jl_int_dec(x); _jl_length[1]=_jl_point[1])
+_jl_fix_dec(x::Real, n::Int) = _jl_fix_dec(float(x),n)
 
-global _jl_fix, _jl_sig, _jl_fix8alt, _jl_int10
-
-function _jl_fix(base::Int, x::Integer, n::Int, u::Bool)
-    digits = int2str(abs(x), base)
-    if u; digits = uc(digits); end
-    ndigits = 1
-    for i = 1:strlen(digits)
-        if digits[i]!='0'; ndigits=i; end
-        _digits[i+1] = digits[i]
-    end
-    (x < 0, pointer(_digits)+1, ndigits, strlen(digits))
-end
-_jl_fix(base::Int, x::Integer, n::Int) = _jl_fix(base,x,n,false)
-
-function _jl_sig(base::Int, x::Integer, n::Int)
-    digits = int2str(abs(x), base)
-    if strlen(digits) > n && digits[n+1]-'0' >= base/2
-        digits.data[n] += 1
-    end
-    ndigits = 1
-    for i = 1:n
-        if digits[i]!='0'; ndigits=i; end
-        _digits[i+1] = digits[i]
-    end
-    (x < 0, pointer(_digits)+1, ndigits, strlen(digits))
+function _jl_fix_dec(x::Float, n::Int)
+    @grisu_ccall x GRISU_FIXED n
 end
 
-function _jl_fix8alt(x::Integer, n::Int)
-    neg, pdigits, ndigits, pt = _jl_fix(8,x,n)
-    if ndigits > 0 && _digits[2] != '0'
-        pdigits -= 1
-        ndigits += 1
-        pt += 1
+## ini decoding functions ##
+#
+# - sets _jl_neg[1]
+# - sets _jl_point[1]
+# - implies _jl_length[1] = n (requested digits)
+#
+
+function _jl_ini_dec(x::Unsigned, n::Int)
+    k = ndigits(x)
+    if k <= n
+        _jl_point[1] = k
+        for i = k:-1:1
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
+        end
+        for i = k+1:n
+            _jl_digits[i] = '0'
+        end
+    else
+        p = _jl_powers_of_ten[k-n+1]
+        r = mod(x,p)
+        if r >= (p>>1)
+            x += p
+            if x >= _jl_powers_of_ten[k+1]
+                p *= 10
+                k += 1
+            end
+        end
+        _jl_point[1] = k
+        x = div(x,p)
+        for i = n:-1:1
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
+        end
     end
-    neg, pdigits, ndigits, pt
 end
 
-function _jl_int10(x::Real)
+_jl_ini_dec(x::Integer, n::Int) = (@handle_negative; _jl_ini_dec(unsigned(x),n))
+_jl_ini_dec(x::Real, n::Int) = _jl_ini_dec(float(x),n)
+
+function _jl_ini_dec(x::Float, n::Int)
     if x == 0.0
-        return false, pointer(_digits), 1, 1
+        _jl_point[1] = 1
+        _jl_neg[1] = signbit(x)
+        ccall(:memset, Void, (Ptr{Uint8}, Int32, Int),
+              pointer(_jl_digits), int32('0'), n)
+    else
+        @grisu_ccall x GRISU_PRECISION n
     end
-    grisu_fix(x,0)
 end
 
-end # let
+## sig decoding functions ##
+#
+# - sets _jl_neg[1]
+# - sets _jl_point[1]
+# - sets _jl_length[1]
+#
 
-_jl_int8(x::Integer) = _jl_fix8(x,0)
-_jl_int8alt(x::Integer) = _jl_fix8alt(x,0)
-_jl_int10(x::Integer) = _jl_fix10(x,0)
-_jl_int16(x::Integer) = _jl_fix16(x,0)
-_jl_int16uc(x::Integer) = _jl_fix16uc(x,0)
+function _jl_sig_dec(x::Unsigned, n::Int)
+    if x == 0
+        _jl_neg[1] = false
+        _jl_point[1] = 1
+        _jl_length[1] = 1
+        _jl_digits[1] = '0'
+        return
+    end
+    k = ndigits0z(x)
+    if k <= n
+        _jl_point[1] = k
+        for i = k:-1:1
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
+        end
+        while _jl_digits[k] == '0'
+            k -= 1
+        end
+        _jl_length[1] = k
+    else
+        p = _jl_powers_of_ten[k-n+1]
+        r = mod(x,p)
+        if r >= (p>>1)
+            x += p
+            if x >= _jl_powers_of_ten[k+1]
+                p *= 10
+                k += 1
+            end
+        end
+        _jl_point[1] = k
+        x = div(x,p)
+        for i = n:-1:1
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
+        end
+        while _jl_digits[n] == '0'
+            n -= 1
+        end
+        _jl_length[1] = n
+    end
+end
 
-_jl_fix8(x::Integer, n::Int) = _jl_fix(8,x,n)
-_jl_fix10(x::Integer, n::Int) = _jl_fix(10,x,n)
-_jl_fix16(x::Integer, n::Int) = _jl_fix(16,x,n)
-_jl_fix16uc(x::Integer, n::Int) = _jl_fix(16,x,n,true)
+_jl_sig_dec(x::Integer, n::Int) = (@handle_negative; _jl_sig_dec(unsigned(x),n))
+_jl_sig_dec(x::Real, n::Int) = _jl_sig_dec(float(x),n)
 
-_jl_sig8 (x::Integer, n::Int) = _jl_fix(8,x,n)
-_jl_sig10(x::Integer, n::Int) = _jl_fix(10,x,n)
-_jl_sig16(x::Integer, n::Int) = _jl_fix(16,x,n)
-_jl_sig16uc(x::Integer, n::Int) = _jl_fix(16,x,n,true)
-
-_jl_int8(x::Real)    = _jl_int8(integer(x))    # TODO: replace with float decoding
-_jl_int8alt(x::Real) = _jl_int8alt(integer(x)) # TODO: replace with float decoding
-_jl_int16(x::Real)   = _jl_int16(integer(x))   # TODO: replace with float decoding
-_jl_int16uc(x::Real) = _jl_int16uc(integer(x)) # TODO: replace with float decoding
-
-_jl_fix8(x::Real, n::Int)    = error("octal float formatting not supported")
-_jl_fix16(x::Real, n::Int)   = error("hex float formatting not implemented")
-_jl_fix16uc(x::Real, n::Int) = error("hex float formatting not implemented")
-
-_jl_sig8(x::Real, n::Int)    = error("octal float formatting not supported")
-_jl_sig16(x::Real, n::Int)   = error("hex float formatting not implemented")
-_jl_sig16uc(x::Real, n::Int) = error("hex float formatting not implemented")
-
-_jl_fix10(x::Real, n::Int) = grisu_fix(x,n)
-_jl_sig10(x::Real, n::Int) = grisu_sig(x,n)
+function _jl_sig_dec(x::Float, n::Int)
+    @grisu_ccall x GRISU_PRECISION n
+    if x == 0.0; return; end
+    while _jl_digits[n] == '0'
+        n -= 1
+    end
+    _jl_length[1] = n
+end
 
 ## external printf interface ##
 
