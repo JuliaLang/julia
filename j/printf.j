@@ -343,7 +343,8 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = _jl_special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    push(blk.args, :(_jl_ini_dec($x,$(precision+1))))
+    ndigits = min(precision+1,_jl_buflen-1)
+    push(blk.args, :(_jl_ini_dec($x,$ndigits)))
     push(blk.args, :(neg = _jl_neg[1]))
     push(blk.args, :(exp = _jl_point[1]-1))
     expmark = c=='E' ? "E" : "e"
@@ -380,7 +381,11 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     push(blk.args, :(write(out, _jl_digits[1])))
     if precision > 0
         push(blk.args, :(write(out, '.')))
-        push(blk.args, :(write(out, pointer(_jl_digits)+1, $precision)))
+        push(blk.args, :(write(out, pointer(_jl_digits)+1, $(ndigits-1))))
+        if ndigits < precision+1
+            n = precision+1-ndigits
+            push(blk.args, _jl_printf_pad(n, n, '0'))
+        end
     end
     for ch in expmark
         push(blk.args, :(write(out, $ch)))
@@ -604,6 +609,7 @@ _jl_fix_dec(x::Integer, n::Int) = (_jl_int_dec(x); _jl_length[1]=_jl_point[1])
 _jl_fix_dec(x::Real, n::Int) = _jl_fix_dec(float(x),n)
 
 function _jl_fix_dec(x::Float, n::Int)
+    if n > 17; n = 17; end
     @grisu_ccall x GRISU_FIXED n
 end
 
