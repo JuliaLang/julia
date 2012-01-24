@@ -19,3 +19,6 @@ _jl_libfftw = dlopen("libfftw3")
 _jl_libfftwf = dlopen("libfftw3f")
 _jl_libsuitesparse = dlopen("libsuitesparse");
 _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper");
+
+# load personal startup file
+try load(strcat(ENV["HOME"],"/.juliarc")) end
