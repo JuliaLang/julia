@@ -42,10 +42,8 @@ function _jl_printf_gen(s::String)
         str = check_utf8(unescape_string(s[i:]))
         push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
     end
-    # return args, exprs
-    args = expr(:tuple, args)
     push(blk.args, :nothing)
-    return :(($args)->($blk))
+    return args, blk
 end
 
 ## parse a single printf specifier ##
@@ -456,7 +454,7 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
             push(blk.args, :(show($x)))
         end
     end
-    x, blk
+    :(($x)::Any), blk
 end
 
 # TODO: faster pointer printing.
@@ -736,9 +734,28 @@ function _jl_sig_dec(x::Float, n::Int)
     _jl_length[1] = n
 end
 
-## external printf interface ##
+### external printf interface ###
 
-macro f_str(f); _jl_printf_gen(f); end
+macro f_str(f)
+    args, blk = _jl_printf_gen(f)
+    :(($expr(:tuple, args))->($blk))
+end
+
+function _jl_printf_gen_m(f, exps...)
+    args, blk = _jl_printf_gen(f)
+    if length(args) != length(exps)
+        error("printf: wrong number of arguments")
+    end
+    for i = length(args):-1:1
+        arg = args[i].args[1]
+        unshift(blk.args, :($arg = $(exps[i])))
+    end
+    blk
+end
+
+macro printf(f, exps...)
+    _jl_printf_gen_m(f, exps...)
+end
 
 printf(f::Function, args...) = f(args...)
 printf(f::String,   args...) = eval(_jl_printf_gen(f))(args...)

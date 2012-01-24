@@ -119,6 +119,11 @@ function printfd(n)
     for i = 1:n
         printf(f, f"%d %d\n", i, i)
     end
+    # with_output_stream(f, @thunk begin
+    #     for i = 1:n
+    #         @printf "%d %d\n" i i
+    #     end
+    # end)
     close(f)
 end
 
