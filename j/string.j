@@ -841,51 +841,40 @@ uint64  (s::String) = parse_int(Uint64, s, 10)
 
 ## integer to string functions ##
 
-# TODO: this can be done faster for Int32, Int64
-function _jl_ndigits(n::Integer, b::Integer)
-    nd = 1
-    if -200000000000000000 <= n <= 200000000000000000
-        # multiplication method is faster, but doesn't work for extreme values
-        n = abs(n)
-        d = b
-        while n >= d
-            nd += 1
-            d *= b
-        end
-    else
-        while true
-            n = div(n, b)
-            if n == 0
-                break
-            end
-            nd += 1
-        end
-    end
-    return nd
-end
+const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
 
 function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
-    if b < 2 || b > 40; error("int2str: invalid base ", b); end
+    if b < 2 || b > 36; error("int2str: invalid base ", b); end
     neg = n < 0
+    n = unsigned(abs(n))
     b = convert(typeof(n), b)
-    ndig = _jl_ndigits(n, b)
+    ndig = ndigits(n, b)
     sz = max(convert(Int, ndig), l) + neg
     data = Array(Uint8, sz)
-    for i=sz:-1:(1+neg)
-        ch = abs(rem(n, b))
-        if ch < 10
-            data[i] = ch+'0'
-        else
-            data[i] = ch-10+'a';
+    i = sz
+    if ispow2(b)
+        digmask = b-1
+        shift = trailing_zeros(b)
+        while i > neg
+            ch = n & digmask
+            data[i] = _jl_dig_syms[int(ch)+1]
+            n >>= shift
+            i -= 1
         end
-        n = div(n,b)
+    else
+        while i > neg
+            ch = n % b
+            data[i] = _jl_dig_syms[int(ch)+1]
+            n = div(n,b)
+            i -= 1
+        end
     end
     if neg
         data[1] = '-'
     end
     ASCIIString(data)
 end
-int2str(n::Integer, b::Integer)         = int2str(int64(n), b, 0)
+int2str(n::Integer, b::Integer)         = int2str(n, b, 0)
 int2str(n::Integer, b::Integer, l::Int) = int2str(int64(n), b, l)
 
 string(x::Signed) = dec(int64(x))

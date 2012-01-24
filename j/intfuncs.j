@@ -136,6 +136,8 @@ end
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
+ispow2(x::Integer) = (x&(x-1))==0
+
 # decimal digits in an unsigned integer
 global const _jl_powers_of_ten = [
     0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
@@ -154,6 +156,33 @@ ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
 ndigits(x::Unsigned) = x==0 ? 1 : ndigits0z(x)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
+
+ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)), b)
+
+function ndigits(n::Unsigned, b::Integer)
+    if b == 2  return (sizeof(n)<<3-leading_zeros(n)); end
+    if b == 8  return div((sizeof(n)<<3)-leading_zeros(n)+2,3); end
+    if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
+    if b == 10 return n==0 ? 1 : ndigits0z(n); end
+    nd = 1
+    if n <= 500000000000000000
+        # multiplication method is faster, but doesn't work for extreme values
+        d = b
+        while n >= d
+            nd += 1
+            d *= b
+        end
+    else
+        while true
+            n = div(n, b)
+            if n == 0
+                break
+            end
+            nd += 1
+        end
+    end
+    return nd
+end
 
 ## integer to string functions ##
 

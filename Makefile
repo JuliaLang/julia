@@ -13,7 +13,7 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui/webserver $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.j src/dump.c
+sys0.ji: src/boot.j src/dump.c j/stage0.j
 	$(QUIET_JULIA) ./julia -b stage0.j
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
