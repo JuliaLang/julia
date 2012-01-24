@@ -1,8 +1,8 @@
 ## printf format string => function expression ##
 
 function _jl_printf_gen(s::String)
-    args = {}
-    blk = expr(:block, :(out = current_output_stream()))
+    args = {:(out::IOStream)}
+    blk = expr(:block)
     i = j = start(s)
     while !done(s,j)
         c, k = next(s,j)
@@ -757,9 +757,7 @@ macro printf(f, exps...)
     _jl_printf_gen_m(f, exps...)
 end
 
-printf(f::Function, args...) = f(args...)
-printf(f::String,   args...) = eval(_jl_printf_gen(f))(args...)
-printf(s::IOStream, args...) = with_output_stream(s, printf, args...)
-
-sprintf(f::Function, args...) = print_to_string(printf, f, args...)
-sprintf(f::String,   args...) = print_to_string(printf, f, args...)
+printf(s::IOStream, f::Function, args...) = f(s, args...)
+printf(s::IOStream, fmt::String, args...) = printf(s, _jl_printf_gen(fmt), args...)
+printf(f::Union(Function,String), args...) = printf(current_output_stream(), f, args...)
+sprintf(f::Union(Function,String), args...) = print_to_string(printf, f, args...)

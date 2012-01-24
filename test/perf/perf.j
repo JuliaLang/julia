@@ -121,7 +121,7 @@ function printfd(n)
     end
     # with_output_stream(f, @thunk begin
     #     for i = 1:n
-    #         @printf "%d %d\n" i i
+    #         @printf "%d %d\n" f i i
     #     end
     # end)
     close(f)
