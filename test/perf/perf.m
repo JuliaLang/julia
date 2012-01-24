@@ -190,7 +190,7 @@ timeit('rand_mat_mul', @randmatmul, 1000);
 function printfd(n)
     f = fopen('/dev/null','w');
     for i = 1:n
-        fprintf(f, '%d %d', i, i);
+        fprintf(f, '%d %d\n', i, i);
     end
     fclose(f);
 end

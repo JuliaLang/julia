@@ -218,9 +218,9 @@ double *randmatmul(int n) {
 
 void printfd(int n) {
     FILE *f = fopen("/dev/null", "w");
-    int i = 0;
+    long i = 0;
     for (i = 0; i < n; i++)
-        fprintf(f, "%d %d", i, i);
+        fprintf(f, "%ld %ld\n", i, i);
     fclose(f);
 }
 

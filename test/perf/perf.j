@@ -117,7 +117,7 @@ end
 function printfd(n)
     f = open("/dev/null","w")
     for i = 1:n
-        printf(f, f"%d %d", i, i)
+        printf(f, f"%d %d\n", i, i)
     end
     close(f)
 end

@@ -80,7 +80,7 @@ end
 function_loc(f::Function) = function_loc(f, (Any...))
 
 edit(file::String) = edit(file, 1)
-function edit(file::String, line::Integer)
+function edit(file::String, line::Int)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = file[end-1:end] == ".j"
     if issrc
@@ -112,16 +112,16 @@ function edit(file::String, line::Integer)
 end
 edit(file::String) = edit(file, 1)
 
-function view(file::String, line::Integer)
+function less(file::String, line::Int)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
 end
-view(file::String) = view(file, 1)
+less(file::String) = less(file, 1)
 
 edit(f::Function)    = edit(function_loc(f)...)
 edit(f::Function, t) = edit(function_loc(f,t)...)
-view(f::Function)    = view(function_loc(f)...)
-view(f::Function, t) = view(function_loc(f,t)...)
+less(f::Function)    = less(function_loc(f)...)
+less(f::Function, t) = less(function_loc(f,t)...)
 
 function parse_help(stream)
     helpdb = HashTable()
