@@ -160,14 +160,13 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 macro _jl_int_stringifier(sym)
     quote
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
-        ($sym)(x::Unsigned)         = ($sym)(x,0,false)
+        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),0,x<0)
+        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end
 end
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
-    if x == 0; return "0"; end
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
     a = Array(Uint8,i)
     while i > neg
@@ -180,7 +179,6 @@ function bin(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function oct(x::Unsigned, pad::Int, neg::Bool)
-    if x == 0; return "0"; end
     i = neg + max(pad,div((sizeof(x)<<3)-leading_zeros(x)+2,3))
     a = Array(Uint8,i)
     while i > neg
@@ -193,7 +191,6 @@ function oct(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function dec(x::Unsigned, pad::Int, neg::Bool)
-    if x == 0; return "0"; end
     i = neg + max(pad,ndigits0z(x))
     a = Array(Uint8,i)
     while i > neg
@@ -206,7 +203,6 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
 end
 
 function hex(x::Unsigned, pad::Int, neg::Bool)
-    if x == 0; return "0"; end
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
