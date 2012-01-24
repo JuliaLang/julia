@@ -8,6 +8,24 @@ symbol(a::Array{Uint8,1}) =
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 gensym(n::Integer) = ntuple(n, i->gensym())
 
+type UniqueNames
+    names::Array{Any,1}
+    UniqueNames() = new({})
+end
+
+let _names = {}
+global gensym
+function gensym(u::UniqueNames)
+    nu = length(u.names)
+    if nu >= length(_names)
+        push(_names, gensym())
+    end
+    s = _names[nu+1]
+    push(u.names, s)
+    return s
+end
+end
+
 ## expressions ##
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)

@@ -638,6 +638,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
         jl_value_t *aty = expr_type(args[1]); rt1 = aty;
         if (jl_is_array_type(aty)) {
+            // todo: also allow e.g. Union of several array types
             Value *arg1 = emit_expr(args[1], ctx, true);
             JL_GC_POP();
             return emit_arraylen(arg1);

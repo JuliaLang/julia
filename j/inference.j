@@ -845,20 +845,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     local ast::Expr
     # check cached t-functions
     tf = def.tfunc
-    while !is(tf,())
-        if typeseq(tf[1],atypes)
-            if isa(tf[2],Tuple)
-                # compressed tree format
-                return (tf[2], tf[2][3])
+    if !is(tf,())
+        typearr = tf[1]::Array{Any,1}
+        codearr = tf[2]::Array{Any,1}
+        for i = 1:length(codearr)
+            if typeseq(typearr[i],atypes)
+                code = codearr[i]
+                if isa(code, Tuple)
+                    # compressed tree format
+                    return (code, code[3])
+                end
+                return (code, ast_rettype(code))
             end
-            # if the frame above this one recurred, rerun type inf
-            # here instead of returning, and update the cache, until the new
-            # inferred type equals the cached type (fixed point)
-            ast = tf[2]
-            rt = ast_rettype(ast)
-            return (ast, rt)
         end
-        tf = tf[3]
     end
 
     ast0 = def.ast
@@ -1076,14 +1075,18 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     
-    fulltree.args[3] = inlining_pass(fulltree.args[3], s[1])
+    fulltree.args[3] = inlining_pass(fulltree.args[3], vars)
     tuple_elim_pass(fulltree)
     linfo.inferred = true
     
     compressed = ccall(:jl_compress_ast, Any, (Any,), fulltree)
     fulltree = compressed
     #compressed = fulltree
-    def.tfunc = (atypes, compressed, def.tfunc)
+    if is(def.tfunc,())
+        def.tfunc = ({},{})
+    end
+    push(def.tfunc[1]::Array{Any,1}, atypes)
+    push(def.tfunc[2]::Array{Any,1}, compressed)
     
     inference_stack = (inference_stack::CallStack).prev
     return (fulltree, frame.result)
@@ -1113,10 +1116,11 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
         if isa(s,SymbolNode)
-            s.typ = abstract_eval(s.name, vtypes, sv)
+            # we don't use types on assignment LHS
+            #s.typ = abstract_eval(s.name, vtypes, sv)
             s = s.name
         else
-            e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
+            #e.args[1] = SymbolNode(s, abstract_eval(s, vtypes, sv))
         end
         e.args[2] = eval_annotate(e.args[2], vtypes, sv, decls, clo)
         # TODO: if this def does not reach any uses, maybe don't do this
@@ -1362,7 +1366,7 @@ function inlineable(f, e::Expr, vars)
     end
     # avoid capture if the function has free variables with the same name
     # as our vars
-    if occurs_more(expr, x->(has(vars,x)&&!contains_is(args,x)), 0) > 0
+    if occurs_more(expr, x->(contains_is(vars,x)&&!contains_is(args,x)), 0) > 0
         return NF
     end
     # ok, substitute argument expressions for argument names in the body
