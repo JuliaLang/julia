@@ -593,8 +593,14 @@ function _jl_int_dec(x::Float)
         return
     end
     @grisu_ccall x GRISU_FIXED 0
-    for i = _jl_length[1]+1:_jl_point[1]
-        _jl_digits[i] = '0'
+    if _jl_length[1] == 0
+        _jl_neg[1] = false
+        _jl_point[1] = 1
+        _jl_digits[1] = '0'
+    else
+        for i = _jl_length[1]+1:_jl_point[1]
+            _jl_digits[i] = '0'
+        end
     end
 end
 
@@ -611,6 +617,11 @@ _jl_fix_dec(x::Real, n::Int) = _jl_fix_dec(float(x),n)
 function _jl_fix_dec(x::Float, n::Int)
     if n > 17; n = 17; end
     @grisu_ccall x GRISU_FIXED n
+    if _jl_length[1] == 0
+        _jl_neg[1] = false
+        _jl_point[1] = 1
+        _jl_digits[1] = '0'
+    end
 end
 
 ## ini decoding functions ##
