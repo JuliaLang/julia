@@ -97,7 +97,6 @@ function edit(file::String, line::Integer)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
-        load(file)
     else
         if editor == "emacs"
             run(`emacs $file --eval "(goto-line $line)"`)
