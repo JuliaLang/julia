@@ -93,7 +93,7 @@ function edit(file::String, line::Int)
         elseif editor == "vim"
             run(`vim $file +$line`)
         elseif editor == "textmate"
-            run(`mate -w $file -l $line`)
+            run(`mate $file -l $line`)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
