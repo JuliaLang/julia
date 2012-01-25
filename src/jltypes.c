@@ -1613,10 +1613,10 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
     while(1) {
         int cseq = !ta && (ci<cl) && jl_is_seq_type(child[ci]);
         int pseq = (pi<pl) && jl_is_seq_type(parent[pi]);
+        if ((!morespecific||mode) && cseq && !pseq)
+            return mode;
         if (ci >= cl)
             return (pi>=pl || pseq);
-        if (cseq && !pseq)
-            return mode;
         if (pi >= pl)
             return 0;
         jl_value_t *ce = child[ci];
