@@ -3,11 +3,6 @@ include ../Make.inc
 
 LLTDIR = ../src/support
 FLISPDIR = ../src/flisp
-ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline -lncurses -lcurses
-else
-READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
-endif
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	    -I../src -I$(LLTDIR) -I$(EXTROOT)/include $(CFLAGS)

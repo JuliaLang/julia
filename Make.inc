@@ -39,16 +39,41 @@ endif
 
 # OS specific stuff
 
-USE_SYSTEM_READLINE=0
-
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
 TARGET_OPENBLAS_ARCH=
 
+USE_SYSTEM_LIBUNWIND=0
+USE_SYSTEM_LLVM=0
+USE_SYSTEM_READLINE=0
+
+ifeq ($(USE_DEBIAN), 1)
+USE_SYSTEM_LIBUNWIND=1
+USE_SYSTEM_LLVM=1
+USE_SYSTEM_READLINE=1
+endif
+
+ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
+LIBUNWIND=-lunwind -lunwind-generic
+else
+LIBUNWIND=$(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
+endif
+
+ifeq ($(USE_SYSTEM_LLVM), 1)
+LLVM_CONFIG=llvm-config
+else
+LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
+endif
+
+ifeq ($(USE_SYSTEM_READLINE), 1)
+READLINE = -lreadline -lncurses -lcurses
+else
+READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
@@ -58,7 +83,7 @@ OSLIBS += -Wl,-w -framework ApplicationServices
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVMROOT)/bin/llvm-config --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread $(shell $(LLVMROOT)/bin/llvm-config --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

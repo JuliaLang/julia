@@ -7,7 +7,7 @@ SRCS = \
 FLAGS = \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
-	-I$(shell $(LLVMROOT)/bin/llvm-config --includedir) \
+	-I$(shell $(LLVM_CONFIG) --includedir) \
 	-I$(EXTROOT)/include
 
 OBJS = $(SRCS:%=%.o)
@@ -32,9 +32,9 @@ release debug: %: libjulia-%
 %.do: %.c julia.h
 	$(QUIET_CC) $(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 %.o: %.cpp julia.h
-	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(SHIPFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
 %.do: %.cpp julia.h
-	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVMROOT)/bin/llvm-config --cppflags) -c $< -o $@
+	$(QUIET_CC) $(CXX) $(CXXFLAGS) $(DEBUGFLAGS) $(shell $(LLVM_CONFIG) --cppflags) -c $< -o $@
 
 ast.o ast.do: julia_flisp.boot.inc
 
