@@ -447,7 +447,7 @@ function pop(a::Vector)
     return item
 end
 
-function unshift{T}(a::Array{T,1}, item)
+function enqueue{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
@@ -457,7 +457,7 @@ function unshift{T}(a::Array{T,1}, item)
     return a
 end
 
-enqueue(a::Vector, item) = unshift(a, item)
+const unshift = enqueue
 
 function shift(a::Vector)
     if isempty(a)
