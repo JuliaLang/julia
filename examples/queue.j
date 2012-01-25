@@ -12,7 +12,7 @@ end
 
 isempty(q::Queue) = is(q.head,())
 
-function enq(q::Queue, elt)
+function enqueue(q::Queue, elt)
     if isempty(q)
         q.head = Pair(elt,())
         q.tail = q.head

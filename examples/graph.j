@@ -675,7 +675,7 @@ function search(G::Graph, start_test, end_test, move_test, bfs::Bool)
                     break;
                 end
                 if bfs
-                    enq(paths, newPath)
+                    enqueue(paths, newPath)
                 else
                     push(paths, newPath)
                 end

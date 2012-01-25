@@ -448,6 +448,8 @@ function unshift{T}(a::Array{T,1}, item)
     return a
 end
 
+enqueue(a::Vector, item) = unshift(a, item)
+
 function shift(a::Vector)
     if isempty(a)
         error("shift: array is empty")
