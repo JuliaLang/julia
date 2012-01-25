@@ -976,6 +976,33 @@ function hist(A::StridedMatrix, nbins::Integer)
     h
 end
 
+function histc(v::StridedVector, edg)
+    n = length(edg)
+    h = zeros(Int, n)
+    first = edg[1]
+    last = edg[n]
+    for x in v
+        if !isless(last, x) && !isless(x, first)
+            i = searchsorted(edg, x)
+            while isless(x, edg[i])
+                i -= 1
+            end
+            h[i] += 1
+        end
+    end
+    h
+end
+
+function histc(A::StridedMatrix, edg)
+    m, n = size(A)
+    h = Array(Int, length(edg), n)
+    for j=1:n
+        i = 1+(j-1)*m
+        h[:,j] = histc(sub(A, i:(i+m-1)), edg)
+    end
+    h
+end
+
 ## Reductions ##
 
 contains(s::Number, n::Number) = (s == n)
