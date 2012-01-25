@@ -29,6 +29,10 @@ ifeq ($(USE_SYSTEM_READLINE), 0)
 LIBS += readline
 endif
 
+ifeq ($(USE_DEBIAN), 1)
+LIBS = fdlibm dsfmt grisu
+endif
+
 default: install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))

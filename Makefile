@@ -6,7 +6,7 @@ default: release
 debug release: %: julia-% sys.ji
 
 julia-debug julia-release:
-	@$(MAKE) -sC external
+#	@$(MAKE) -sC external
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC ui $@
 	@$(MAKE) -sC j
