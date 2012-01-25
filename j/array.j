@@ -456,7 +456,6 @@ function enqueue{T}(a::Array{T,1}, item)
     a[1] = item
     return a
 end
-
 const unshift = enqueue
 
 function shift(a::Vector)
@@ -473,12 +472,12 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
         throw(BoundsError())
     end
     item = convert(T, item)
-    l = length(a)
-    if i > l
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(i-l))
-    elseif i > div(l,2)
+    n = length(a)
+    if i > n
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(i-n))
+    elseif i > div(n,2)
         ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
-        for k=l+1:-1:i+1
+        for k=n+1:-1:i+1
             a[k] = a[k-1]
         end
     else
@@ -491,27 +490,52 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
 end
 
 function del(a::Vector, i::Integer)
-    l = length(a)
-    if !(1 <= i <= l)
+    n = length(a)
+    if !(1 <= i <= n)
         throw(BoundsError())
     end
-    if i > div(l,2)
-        for k=i:l-1
-            a[k] = a[k+1]
-        end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
-    else
-        for k=i:-1:2
+    if i < div(n,2)
+        for k = i:-1:2
             a[k] = a[k-1]
         end
         ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(1))
+    else
+        for k = i:n-1
+            a[k] = a[k+1]
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
     end
-    a
+    return a
+end
+
+function del{T<:Integer}(a::Vector, r::Range1{T})
+    n = length(a)
+    f = first(r)
+    l = last(r)
+    if !(1 <= f && l <= n)
+        throw(BoundsError())
+    end
+    if l < f
+        return a
+    end
+    d = l-f+1
+    if f-1 < n-l
+        for k = l:-1:1+d
+            a[k] = a[k-d]
+        end
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(d))
+    else
+        for k = f:n-d
+            a[k] = a[k+d]
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(d))
+    end
+    return a
 end
 
 function del_all(a::Vector)
     ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(length(a)))
-    a
+    return a
 end
 
 ## Unary operators ##
