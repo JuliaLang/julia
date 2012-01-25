@@ -378,3 +378,20 @@ end
 
 select(a::AbstractVector, k::Integer) = _jl_quickselect(copy(a), k, 1, length(a))
 select!(a::AbstractVector, k::Integer) = _jl_quickselect(a, k, 1, length(a))
+
+function searchsorted(a, x)
+    hi = length(a)
+    if isless(a[hi], x)
+        return hi+1
+    end
+    lo = 1
+    while lo < hi-1
+        i = div(lo+hi,2)
+        if isless(x,a[i])
+            hi = i
+        else
+            lo = i
+        end
+    end
+    return isless(a[lo],x) ? hi : lo
+end
