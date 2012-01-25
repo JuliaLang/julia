@@ -480,26 +480,24 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 
 ## implementation of `cmd` syntax ##
 
-arg_gen(x::String) = (a=Array(ByteString,1); a[1]=x; a)
+arg_gen(x::String) = ByteString[x]
 
 function arg_gen(head)
     if applicable(start,head)
-        vals = empty(ByteString)
+        vals = ByteString[]
         for x in head
             push(vals,cstring(x))
         end
         return vals
     else
-        a = Array(ByteString,1)
-        a[1] = cstring(head)
-        return a
+        return ByteString[cstring(head)]
     end
 end
 
 function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
-    vals = empty(ByteString)
+    vals = ByteString[]
     for h = head, t = tail
         push(vals, cstring(strcat(h,t)))
     end
@@ -507,7 +505,7 @@ function arg_gen(head, tail...)
 end
 
 function cmd_gen(parsed)
-    args = empty(ByteString)
+    args = ByteString[]
     for arg in parsed
         append!(args, arg_gen(arg...))
     end

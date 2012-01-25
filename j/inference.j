@@ -1161,7 +1161,7 @@ end
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
     decls = IdTable()
-    closures = empty(LambdaStaticData)
+    closures = LambdaStaticData[]
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls, closures)

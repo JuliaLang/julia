@@ -64,7 +64,14 @@ similar{T}(a::Array{T,2}, dims::Dims) = Array(T, dims)
 similar{T}(a::Array{T,2}, m::Int)     = Array(T, m)
 similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 
-empty(T) = Array(T, 0)
+# T[x...] constructs Array{T,1}
+function ref{T}(::Type{T}, vals...)
+    a = Array(T,length(vals))
+    for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, int32(x), int(length(a)))
@@ -399,7 +406,7 @@ assign(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find
 
 function push{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
@@ -416,7 +423,7 @@ end
 
 function append!{T}(a::Array{T,1}, items::Array{T,1})
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
     n = length(items)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
@@ -440,7 +447,7 @@ end
 
 function unshift{T}(a::Array{T,1}, item)
     if is(T,None)
-        error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
     item = convert(T, item)
     ccall(:jl_array_grow_beg, Void, (Any, Uint), a, uint(1))

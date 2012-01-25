@@ -645,7 +645,7 @@ _jl_shell_parse(s::String) = _jl_shell_parse(s,true)
 
 function shell_split(s::String)
     parsed = _jl_shell_parse(s,false)
-    args = empty(String)
+    args = String[]
     for arg in parsed
        push(args, strcat(arg...))
     end
@@ -746,7 +746,7 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 
 function split(s::String, delims, include_empty::Bool)
     i = 1
-    strs = empty(String)
+    strs = String[]
     len = length(s)
     while true
         tokstart = tokend = i

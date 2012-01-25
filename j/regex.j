@@ -110,7 +110,7 @@ each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
 function split(s::String, regex::Regex, include_empty::Bool)
     s = cstring(s)
     i = j = start(s)
-    strs = empty(typeof(s))
+    strs = typeof(s)[]
     while !done(s,i)
         m = match(regex,s,j)
         if m == nothing
@@ -126,7 +126,7 @@ function split(s::String, regex::Regex, include_empty::Bool)
     if include_empty || i < length(s)
         push(strs, s[i:end])
     end
-    strs
+    return strs
 end
 
 split(s::String, x::String, incl::Bool) = split(s, Regex(strcat("\\Q",x)), incl)
