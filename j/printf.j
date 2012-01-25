@@ -7,15 +7,15 @@ function _jl_printf_gen(s::String)
         if isa(x,String)
             push(blk.args, :(write(out, $(strlen(x)==1 ? x[1] : x))))
         else
-            flags, width, precision, conversion = x
-            c = lc(conversion)
-            arg, ex = c=='f' ? _jl_printf_f(flags, width, precision, conversion) :
-                      c=='e' ? _jl_printf_e(flags, width, precision, conversion) :
-                      c=='g' ? _jl_printf_g(flags, width, precision, conversion) :
-                      c=='c' ? _jl_printf_c(flags, width, precision, conversion) :
-                      c=='s' ? _jl_printf_s(flags, width, precision, conversion) :
-                      c=='p' ? _jl_printf_p(flags, width, precision, conversion) :
-                               _jl_printf_d(flags, width, precision, conversion)
+            c = lc(x[end])
+            f = c=='f' ? _jl_printf_f :
+                c=='e' ? _jl_printf_e :
+                c=='g' ? _jl_printf_g :
+                c=='c' ? _jl_printf_c :
+                c=='s' ? _jl_printf_s :
+                c=='p' ? _jl_printf_p :
+                         _jl_printf_d
+            arg, ex = f(x...)
             push(args, arg)
             push(blk.args, ex)
         end
