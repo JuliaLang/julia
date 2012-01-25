@@ -117,7 +117,7 @@ end
 function printfd(n)
     f = open("/dev/null","w")
     for i = 1:n
-        printf(f, f"%d %d\n", i, i)
+        fprintf(f, f"%d %d\n", i, i)
     end
     # with_output_stream(f, @thunk begin
     #     for i = 1:n

@@ -736,12 +736,14 @@ end
 
 ### external printf interface ###
 
-macro f_str(f)
+function f_str_f(f)
     args, blk = _jl_printf_gen(f)
     :(($expr(:tuple, args))->($blk))
 end
 
-function _jl_printf_gen_m(f, exps...)
+macro f_str(f); f_str_f(f); end
+
+macro printf(f, exps...)
     args, blk = _jl_printf_gen(f)
     if length(args) != length(exps)
         error("printf: wrong number of arguments")
@@ -753,11 +755,7 @@ function _jl_printf_gen_m(f, exps...)
     blk
 end
 
-macro printf(f, exps...)
-    _jl_printf_gen_m(f, exps...)
-end
-
-printf(s::IOStream, f::Function, args...) = f(s, args...)
-printf(s::IOStream, fmt::String, args...) = printf(s, _jl_printf_gen(fmt), args...)
-printf(f::Union(Function,String), args...) = printf(current_output_stream(), f, args...)
+fprintf(s::IOStream, f::Function, args...) = f(s, args...)
+fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
+printf(f::Union(Function,String), args...) = fprintf(current_output_stream(), f, args...)
 sprintf(f::Union(Function,String), args...) = print_to_string(printf, f, args...)

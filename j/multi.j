@@ -733,7 +733,7 @@ end
 
 function enq_work(wi::WorkItem)
     global Workqueue
-    enq(Workqueue, wi)
+    unshift(Workqueue, wi)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))
