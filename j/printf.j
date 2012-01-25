@@ -741,6 +741,8 @@ function f_str_f(f)
     :(($expr(:tuple, args))->($blk))
 end
 
+macro f_str(f); f_str_f(f); end
+
 macro printf(f, exps...)
     args, blk = _jl_printf_gen(f)
     if length(args) != length(exps)
