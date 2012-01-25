@@ -103,26 +103,40 @@ function dlmread(fname::String, dlm::Char)
     return a
 end
 
-dlmwrite(fname::String, a) = dlmwrite(fname, a, ',')
+csvread(f)          = dlmread(f, ',')
+csvread(f, T::Type) = dlmread(f, ',', T)
 
 # todo: keyword argument for # of digits to print
+function dlmwrite(f, a, dlm::Char)
+    nr, nc = size(a)
+    try
+        set_current_output_stream(f)
+        for i=1:nr
+            for j=1:nc
+                elt = a[i,j]
+                if isa(elt,Float)
+                    print_shortest(elt)
+                else
+                    print(elt)
+                end
+                if j < nc
+                    write(f, dlm)
+                end
+            end
+            write(f, '\n')
+        end
+    catch e
+        throw(e)
+    end
+    nothing
+end
+
 function dlmwrite(fname::String, a, dlm::Char)
     f = open(fname, "w")
-    nr, nc = size(a)
-    for i=1:nr
-        for j=1:nc
-            write(f, string(a[i,j]))
-            if j < nc
-                write(f, dlm)
-            end
-        end
-        write(f, '\n')
-    end
+    dlmwrite(f, a, dlm)
     close(f)
     nothing
 end
 
-csvread(fname::String) = dlmread(fname, ',')
-csvread(fname::String, T::Type) = dlmread(fname, ',', T)
-
-csvwrite(fname::String, a) = dlmwrite(fname, a, ',')
+dlmwrite(f, a) = dlmwrite(f, a, ',')
+csvwrite(f, a) = dlmwrite(f, a, ',')
