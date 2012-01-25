@@ -438,7 +438,7 @@ function pop(a::Vector)
     return item
 end
 
-function enq{T}(a::Array{T,1}, item)
+function unshift{T}(a::Array{T,1}, item)
     if is(T,None)
         error("[] cannot grow. Instead, initialize the array with \"empty(element_type)\".")
     end
@@ -447,17 +447,15 @@ function enq{T}(a::Array{T,1}, item)
     a[1] = item
     return a
 end
-const unshift = enq
 
-function deq(a::Vector)
+function shift(a::Vector)
     if isempty(a)
-        error("deq: array is empty")
+        error("shift: array is empty")
     end
     item = a[1]
     ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(1))
     return item
 end
-const shift = deq
 
 function insert{T}(a::Array{T,1}, i::Integer, item)
     if i < 1
