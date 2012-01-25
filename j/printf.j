@@ -1,49 +1,66 @@
-## printf format string => function expression ##
+### printf formatter generation ###
 
 function _jl_printf_gen(s::String)
     args = {:(out::IOStream)}
-    blk = expr(:block)
+    blk = expr(:block, :(local neg, pt, len, exp))
+    for x in _jl_printf_parse(s)
+        if isa(x,String)
+            push(blk.args, :(write(out, $(strlen(x)==1 ? x[1] : x))))
+        else
+            flags, width, precision, conversion = x
+            c = lc(conversion)
+            arg, ex = c=='f' ? _jl_printf_f(flags, width, precision, conversion) :
+                      c=='e' ? _jl_printf_e(flags, width, precision, conversion) :
+                      c=='g' ? _jl_printf_g(flags, width, precision, conversion) :
+                      c=='c' ? _jl_printf_c(flags, width, precision, conversion) :
+                      c=='s' ? _jl_printf_s(flags, width, precision, conversion) :
+                      c=='p' ? _jl_printf_p(flags, width, precision, conversion) :
+                               _jl_printf_d(flags, width, precision, conversion)
+            push(args, arg)
+            push(blk.args, ex)
+        end
+    end
+    push(blk.args, :nothing)
+    return args, blk
+end
+
+### printf format string parsing ###
+
+function _jl_printf_parse(s::String)
+    # parse format string in to stings and format tuples
+    list = {}
     i = j = start(s)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
-            if !isempty(s[i:j-1])
-                str = check_utf8(unescape_string(s[i:j-1]))
-                push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
-            end
-            flags, width, precision, c, k = _jl_printf_parse1(s,k)
-            # TODO: warn about silly flag/conversion combinations
-            if contains(flags,'\'')
-                error("printf format flag ' not yet supported")
-            end
-            if c=='a'; error("printf feature %a not yet supported"); end
-            if c=='n'; error("printf feature %n not supported"); end
-            if c=='%'
-                push(blk.args, :(print('%')))
-            else
-                # construct conversion expression
-                C = c; c = lc(c)
-                arg, ex = c=='f' ? _jl_printf_f(flags, width, precision, C) :
-                          c=='e' ? _jl_printf_e(flags, width, precision, C) :
-                          c=='g' ? _jl_printf_g(flags, width, precision, C) :
-                          c=='c' ? _jl_printf_c(flags, width, precision, C) :
-                          c=='s' ? _jl_printf_s(flags, width, precision, C) :
-                          c=='p' ? _jl_printf_p(flags, width, precision, C) :
-                                   _jl_printf_d(flags, width, precision, C)
-                push(args, arg)
-                push(blk.args, ex)
-            end
+            isempty(s[i:j-1]) || push(list, utf8(unescape_string(s[i:j-1])))
+            flags, width, precision, conversion, k = _jl_printf_parse1(s,k)
+            contains(flags,'\'') && error("printf format flag ' not yet supported")
+            conversion == 'a'    && error("printf feature %a not yet supported")
+            conversion == 'n'    && error("printf feature %n not supported")
+            push(list, conversion == '%' ? "%" : (flags,width,precision,conversion))
             i = j = k
         else
             j = k
         end
     end
-    if !isempty(s[i:])
-        str = check_utf8(unescape_string(s[i:]))
-        push(blk.args, :(write(out, $(strlen(str)==1?str[1]:str))))
+    isempty(s[i:]) || push(list, utf8(unescape_string(s[i:])))
+    # coalesce adjacent strings
+    i = 1
+    while i < length(list)
+        if isa(list[i],String)
+            for j = i+1:length(list)
+                if !isa(list[j],String)
+                    j -= 1
+                    break
+                end
+                list[i] *= list[j]
+            end
+            del(list,i+1:j)
+        end
+        i += 1
     end
-    push(blk.args, :nothing)
-    return args, blk
+    return list
 end
 
 ## parse a single printf specifier ##
@@ -104,10 +121,11 @@ function _jl_printf_parse1(s::String, k::Integer)
     if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
         error("invalid printf format string: ", show_to_string(s))
     end
+    # TODO: warn about silly flag/conversion combinations
     flags, width, precision, c, k
 end
 
-## printf formatter generation ##
+### printf formatter generation ###
 
 function _jl_special_handler(flags::ASCIIString, width::Int)
     x = gensym()
