@@ -251,10 +251,23 @@ static jl_value_t *scm_to_julia_(value_t e)
             size_t i;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
-                value_t largs = car_(cdr_(e));
+                e = cdr_(e);
+                value_t largs = car_(e);
                 jl_cellset(ex->args, 0, full_list(largs));
-                e = cdr_(cdr_(e));
-                for(i=1; i < n; i++) {
+                e = cdr_(e);
+                
+                value_t ee = car_(e);
+                jl_array_t *vinf = jl_alloc_cell_1d(3);
+                jl_cellset(vinf, 0, full_list(car_(ee)));
+                ee = cdr_(ee);
+                jl_cellset(vinf, 1, full_list_of_lists(car_(ee)));
+                ee = cdr_(ee);
+                jl_cellset(vinf, 2, full_list_of_lists(car_(ee)));
+                assert(!iscons(cdr_(ee)));
+                jl_cellset(ex->args, 1, vinf);
+                e = cdr_(e);
+                
+                for(i=2; i < n; i++) {
                     assert(iscons(e));
                     jl_cellset(ex->args, i, scm_to_julia_(car_(e)));
                     e = cdr_(e);
@@ -262,22 +275,7 @@ static jl_value_t *scm_to_julia_(value_t e)
                 return
                     (jl_value_t*)jl_new_lambda_info((jl_value_t*)ex, jl_null);
             }
-            if (sym == vinf_sym) {
-                jl_expr_t *ex = jl_exprn(sym, n);
-                e = cdr_(e);
-                jl_cellset(ex->args, 0, scm_to_julia_(car_(e)));
-                e = cdr_(e);
-                jl_cellset(ex->args, 1, full_list_of_lists(car_(e)));
-                e = cdr_(e);
-                jl_cellset(ex->args, 2, full_list_of_lists(car_(e)));
-                e = cdr_(e);
-                for(i=3; i < n; i++) {
-                    assert(iscons(e));
-                    jl_cellset(ex->args, i, scm_to_julia_(car_(e)));
-                    e = cdr_(e);
-                }
-                return (jl_value_t*)ex;
-            }
+
             e = cdr_(e);
             if (sym == line_sym && n==1) {
                 return jl_new_struct(jl_linenumbernode_type,
@@ -469,15 +467,17 @@ jl_value_t *jl_expand(jl_value_t *expr)
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
-    // `(lambda () (vinf (locals) () () ()) ,expr)
-    jl_expr_t *le=NULL, *vi=NULL, *lo=NULL, *bo=NULL;
+    // `(lambda () (() () ()) ,expr)
+    jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_cell;
-    JL_GC_PUSH(&le, &vi, &lo, &bo);
+    JL_GC_PUSH(&le, &vi, &bo);
     le = jl_exprn(lambda_sym, 3);
-    vi = jl_exprn(vinf_sym, 4);
-    lo = jl_exprn(locals_sym, 0);
     jl_cellset(le->args, 0, mt);
-    jl_cellset(le->args, 1, (jl_value_t*)vi);
+    vi = (jl_value_t*)jl_alloc_cell_1d(3);
+    jl_cellset(vi, 0, mt);
+    jl_cellset(vi, 1, mt);
+    jl_cellset(vi, 2, mt);
+    jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
         jl_cellset(bo->args, 0, (jl_value_t*)jl_exprn(return_sym, 1));
@@ -485,10 +485,6 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
         expr = (jl_value_t*)bo;
     }
     jl_cellset(le->args, 2, expr);
-    jl_cellset(vi->args, 0, (jl_value_t*)lo);
-    jl_cellset(vi->args, 1, mt);
-    jl_cellset(vi->args, 2, mt);
-    jl_cellset(vi->args, 3, mt);
     jl_lambda_info_t *li = jl_new_lambda_info((jl_value_t*)le, jl_null);
     JL_GC_POP();
     return li;
@@ -509,21 +505,20 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
 jl_array_t *jl_lam_locals(jl_expr_t *l)
 {
     jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_expr(le));
-    jl_expr_t *lle = (jl_expr_t*)jl_exprarg(le,0);
-    assert(jl_is_expr(lle));
-    assert(lle->head == locals_sym);
-    return lle->args;
+    assert(jl_is_array(le));
+    jl_value_t *ll = jl_cellref(le, 0);
+    assert(jl_is_array(ll));
+    return (jl_array_t*)ll;
 }
 
 // get array of var info records
 jl_array_t *jl_lam_vinfo(jl_expr_t *l)
 {
     jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_expr(le));
-    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,1);
-    assert(jl_is_array(vil));
-    return vil;
+    assert(jl_is_array(le));
+    jl_value_t *ll = jl_cellref(le, 1);
+    assert(jl_is_array(ll));
+    return (jl_array_t*)ll;
 }
 
 // get array of var info records for captured vars
@@ -535,10 +530,10 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     }
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
-    assert(jl_is_expr(le));
-    jl_array_t *vil = (jl_array_t*)jl_exprarg(le,2);
-    assert(jl_is_array(vil));
-    return vil;
+    assert(jl_is_array(le));
+    jl_value_t *ll = jl_cellref(le, 2);
+    assert(jl_is_array(ll));
+    return (jl_array_t*)ll;
 }
 
 // get array of body forms
@@ -564,8 +559,7 @@ int jl_is_rest_arg(jl_value_t *ex)
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
     jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
     if (!jl_is_expr(atype)) return 0;
-    if (atype->head != call_sym ||
-        atype->args->length != 3)
+    if (atype->head != call_sym || atype->args->length != 3)
         return 0;
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;

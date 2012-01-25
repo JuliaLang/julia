@@ -898,7 +898,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     assert(is(ast.head,:lambda), "inference.j:745")
     args = f_argnames(ast)
-    locals = (ast.args[2].args[1].args)::Array{Any,1}
+    locals = (ast.args[2][1])::Array{Any,1}
     vars = append(args, locals)
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
@@ -941,14 +941,14 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
     # types of closed vars
     cenv = IdTable()
-    for vi = ((ast.args[2].args[3])::Array{Any,1})
+    for vi = ((ast.args[2][3])::Array{Any,1})
         vi::Array{Any,1}
         vname = vi[1]
         vtype = vi[2]
         cenv[vname] = vtype
         s[1][vname] = vtype
     end
-    for vi = ((ast.args[2].args[2])::Array{Any,1})
+    for vi = ((ast.args[2][2])::Array{Any,1})
         vi::Array{Any,1}
         if (vi[3]&4)!=0
             # variables assigned by inner functions are treated like
@@ -1168,7 +1168,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
     end
     ast.args[3].typ = rettype
 
-    vinf = append(ast.args[2].args[2],ast.args[2].args[3])::Array{Any,1}
+    vinf = append(ast.args[2][2], ast.args[2][3])::Array{Any,1}
     # add declarations for variables that are always the same type
     for vi in vinf
         if has(decls,vi[1])
@@ -1180,7 +1180,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
-            vinf = a.args[2].args[3]::Array{Any,1}
+            vinf = a.args[2][3]::Array{Any,1}
             for vi in vinf
                 if has(decls,vi[1])
                     vi[2] = decls[vi[1]]
@@ -1322,7 +1322,7 @@ function inlineable(f, e::Expr, vars)
         ast = ccall(:jl_uncompress_ast, Any, (Any,), ast)
     end
     ast = ast::Expr
-    for vi = ast.args[2].args[2]
+    for vi = ast.args[2][2]
         if (vi[3]&1)!=0
             # captures variables (TODO)
             return NF
@@ -1490,14 +1490,14 @@ end
 
 function add_variable(ast, name, typ)
     vinf = {name,typ,2}
-    locllist = (ast.args[2].args[1]::Expr).args
-    vinflist = ast.args[2].args[2]::Array{Any,1}
+    locllist = ast.args[2][1]::Array{Any,1}
+    vinflist = ast.args[2][2]::Array{Any,1}
     push(locllist, name)
     push(vinflist, vinf)
 end
 
 function unique_name(ast)
-    locllist = (ast.args[2].args[1]::Expr).args
+    locllist = ast.args[2][1]::Array{Any,1}
     g = gensym()
     while contains_is(locllist, g)
         g = gensym()

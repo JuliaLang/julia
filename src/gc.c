@@ -29,7 +29,7 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
-#define GC_PAGE_SZ (1536*sizeof(void*))//bytes
+#define GC_PAGE_SZ (1536*sizeof(void*)+8)//bytes
 
 typedef struct _gcpage_t {
     union {

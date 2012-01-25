@@ -61,7 +61,7 @@ jl_value_t *jl_memory_exception;
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;   jl_sym_t *module_sym;
 jl_sym_t *quote_sym;
-jl_sym_t *top_sym;     jl_sym_t *vinf_sym;
+jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_continue_sym;
 // head symbols for each expression type
 jl_sym_t *goto_sym;    jl_sym_t *goto_ifnot_sym;
@@ -69,7 +69,6 @@ jl_sym_t *label_sym;   jl_sym_t *return_sym;
 jl_sym_t *lambda_sym;  jl_sym_t *assign_sym;
 jl_sym_t *null_sym;    jl_sym_t *body_sym;
 jl_sym_t *macro_sym;   jl_sym_t *method_sym;
-jl_sym_t *locals_sym;  jl_sym_t *colons_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;

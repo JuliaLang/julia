@@ -18,7 +18,7 @@ let i = 2
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :FuncKind, :Box,
-             :lambda, :vinf, :locals, :body, :return, :call, symbol("::"),
+             :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,

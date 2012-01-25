@@ -1575,7 +1575,7 @@ So far only the second case can actually occur.
 	(else (unique (apply nconc (map free-vars (cdr e)))))))
 
 ; convert each lambda's (locals ...) to
-;   (vinf (locals ...) var-info-lst captured-var-infos)
+;   ((localvars...) var-info-lst captured-var-infos)
 ; where var-info-lst is a list of var-info records
 (define (analyze-vars e env captvars)
   (cond ((or (atom? e) (quoted? e)) e)
@@ -1634,7 +1634,7 @@ So far only the second case can actually occur.
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args
-	      (vinf ,(caddr e) ,vi ,cv ())
+	      (,(cdaddr e) ,vi ,cv)
 	      ,bod)))
 	((eq? (car e) 'localize)
 	 ;; special feature for @spawn that wraps a piece of code in a "let"
@@ -1755,8 +1755,8 @@ So far only the second case can actually occur.
 	    (else  (emit (goto-form e))))))
     (cond ((or (not (pair? e)) (quoted? e)) e)
 	  ((eq? (car e) 'lambda)
-	   (compile (cadddr e) '() (append (caddr (caddr e))
-					   (cadddr (caddr e))))
+	   (compile (cadddr e) '() (append (cadr (caddr e))
+					   (caddr (caddr e))))
 	   `(lambda ,(cadr e) ,(caddr e)
 		    ,(cons 'body (reverse code))))
 	  (else (cons (car e)
