@@ -47,13 +47,15 @@ load("libc.j")
 load("env.j")
 load("errno_h.j")
 
-# concurrency
+# concurrency and parallelism
 load("iterator.j")
 load("task.j")
 load("process.j")
 load("serialize.j")
 load("multi.j")
-load("darray.j")
+
+# front end
+load("client.j")
 
 # core math functions
 load("intfuncs.j")
@@ -64,8 +66,21 @@ load("sort.j")
 load("combinatorics.j")
 load("statistics.j")
 
+# random number generation
+load("random.j")
+
 # sparse matrices
 load("sparse.j")
+
+# distributed arrays
+load("darray.j")
+
+# utilities - version, timing, help, edit
+load("version.j")
+load("util.j")
+load("datafmt.j")
+
+## External libraries
 
 # linear algebra
 load("linalg.j")
@@ -78,18 +93,6 @@ load("linalg_suitesparse.j")
 load("signal.j")
 load("signal_fftw.j")
 
-# random number generation
-load("random.j")
-
-# utilities - timing, help, edit, import/export
-load("util.j")
-load("datafmt.j")
-
-# version information
-load("version.j")
-
-# front end
-load("client.j")
 
 # prime method cache with some things we know we'll need right after startup
 length(1:2:3)
