@@ -164,9 +164,9 @@ isequal(a::ByteString, b::ByteString) = length(a)==length(b) && cmp(a,b)==0
 ## character column width function ##
 
 charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Char,), c)))
-strwidth(s::String) = (w=0; for c in s; w += width(c); end; w)
-# TODO: implement and use u8_strnwidth that takes a length argument
+strwidth(s::String) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = ccall(:u8_strwidth, Int, (Ptr{Uint8},), s.data)
+# TODO: implement and use u8_strnwidth that takes a length argument
 
 ## generic string uses only length and next ##
 

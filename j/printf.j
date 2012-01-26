@@ -347,7 +347,7 @@ end
 function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
-    #  [E]: use 'E' to introduce exponent 
+    #  [E]: use 'E' to introduce exponent
     #
     # flags:
     #  (#): always print a decimal point
