@@ -108,7 +108,7 @@ char *u8_memrchr(const char *s, u_int32_t ch, size_t sz);
 size_t u8_strlen(const char *s);
 
 /* number of columns occupied by a string */
-size_t u8_strwidth(const char *s);
+DLLEXPORT size_t u8_strwidth(const char *s);
 
 int u8_is_locale_utf8(const char *locale);
 

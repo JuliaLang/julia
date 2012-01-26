@@ -347,7 +347,7 @@ end
 function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
-    #  [E]: use 'E' to introduce exponent 
+    #  [E]: use 'E' to introduce exponent
     #
     # flags:
     #  (#): always print a decimal point
@@ -415,9 +415,6 @@ function _jl_printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-# TODO: implement and use charwidth for wide Unicode character handling
-#       replace instances of -1 below with -charwidth($x).
-
 function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a character:
     #  [cC]: both the same for us (Unicode)
@@ -427,20 +424,17 @@ function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (-): left justify
     #
     x = gensym()
-    blk = expr(:block)
+    blk = expr(:block, :($x = char($x)))
     if width > 1 && !contains(flags,'-')
         p = contains(flags,'0') ? '0' : ' '
-        push(blk.args, _jl_printf_pad(width-1, width-1, p))
+        push(blk.args, _jl_printf_pad(width-1, :($width-charwidth($x)), p))
     end
-    push(blk.args, :(write(out, char($x))))
+    push(blk.args, :(write(out, $x)))
     if width > 1 && contains(flags,'-')
-        push(blk.args, _jl_printf_pad(width-1, width-1, ' '))
+        push(blk.args, _jl_printf_pad(width-1, :($width-charwidth($x)), ' '))
     end
     :(($x)::Integer), blk
 end
-
-# TODO: implement and use strwidth for wide Unicode character handling
-#       replace instances of strlen($x) below with strwidth($x).
 
 function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a string:
@@ -459,11 +453,11 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
             push(blk.args, :($x = show_to_string($x)))
         end
         if !contains(flags,'-')
-            push(blk.args, _jl_printf_pad(width, :($width-strlen($x)), ' '))
+            push(blk.args, _jl_printf_pad(width, :($width-strwidth($x)), ' '))
         end
         push(blk.args, :(write(out, $x)))
         if contains(flags,'-')
-            push(blk.args, _jl_printf_pad(width, :($width-strlen($x)), ' '))
+            push(blk.args, _jl_printf_pad(width, :($width-strwidth($x)), ' '))
         end
     else
         if !contains(flags,'#')
