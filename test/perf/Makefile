@@ -8,29 +8,28 @@ bin/perf%: perf.cpp
 
 benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3
 	rm -f $@
-	mkdir -p benchmarks
 	for t in 1 2 3 4 5; do bin/perf0; done >>$@
 	for t in 1 2 3 4 5; do bin/perf1; done >>$@
 	for t in 1 2 3 4 5; do bin/perf2; done >>$@
 	for t in 1 2 3 4 5; do bin/perf3; done >>$@
 
 benchmarks/julia.csv: perf.j
-	../../julia $< >$@
+	for t in 1 2 3 4 5; do ../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
-	python $< >$@
+	for t in 1 2 3 4 5; do python $<; done >$@
 
 benchmarks/matlab.csv: perf.m
-	matlab -nosplash -nodesktop -nojvm -r 'perf;exit' 2>/dev/null | grep '^matlab,' >$@
+	for t in 1 2 3 4 5; do matlab -nosplash -nodesktop -nojvm -r 'perf;exit' 2>/dev/null | grep '^matlab,'; done >$@
 
 benchmarks/octave.csv: perf.m
-	octave -q --eval perf 2>/dev/null >$@
+	for t in 1 2 3 4 5; do octave -q --eval perf 2>/dev/null; done >$@
 
 benchmarks/r.csv: perf.R
-	cat $< | R --vanilla --slave 2>/dev/null >$@
+	for t in 1 2 3 4 5; do cat $< | R --vanilla --slave 2>/dev/null; done >$@
 
 benchmarks/javascript.csv: perf.js
-	node $< >$@
+	for t in 1 2 3 4 5; do node $<; done >$@
 
 BENCHMARKS = \
 	benchmarks/c.csv \
@@ -51,6 +50,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	$(QUIET_PERL) $^ html >$@
 
 clean:
-	@rm -rf bin/perf* benchmarks benchmarks.csv
+	@rm -rf bin/perf* benchmarks/*.csv benchmarks.csv
 
 .PHONY: all perf clean
