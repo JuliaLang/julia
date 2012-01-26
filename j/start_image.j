@@ -7,11 +7,14 @@ const stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 
 # restore shared library handles
 
+# Essential libraries
+_jl_libpcre = dlopen("libpcre")
+_jl_libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
-_jl_libpcre = dlopen("libpcre")
-_jl_libgrisu = dlopen("libgrisu")
+
+# Optional libraries
 _jl_libblas = dlopen("liblapack")
 _jl_liblapack = _jl_libblas
 _jl_libarpack = dlopen("libarpack")

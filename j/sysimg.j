@@ -1,3 +1,5 @@
+## Load essential files and libraries
+
 load("base.j")
 
 # core operations & types
@@ -80,7 +82,7 @@ load("version.j")
 load("util.j")
 load("datafmt.j")
 
-## External libraries
+## Load optional external libraries
 
 # linear algebra
 load("linalg.j")
