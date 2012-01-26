@@ -1,3 +1,5 @@
+# -*- mode: makefile-gmake -*-
+
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
@@ -15,13 +17,15 @@ USE_COPY_STACKS = 1
 
 # Compiler specific stuff
 
+FC = gfortran
+FFLAGS = -O2 -fPIC -static-libgfortran
+
 USEGCC = 1
 USECLANG = 0
 
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-FC = gfortran
 CFLAGS = -pipe -std=gnu99 -fPIC
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
@@ -105,3 +109,4 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+

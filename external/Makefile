@@ -218,7 +218,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="-O2 -fPIC -static-libgfortran" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -241,10 +241,10 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="-O2 -fPIC -static-libgfortran" FORTRAN=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="$(FFLAGS)" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared -static-libgfortran SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -274,9 +274,9 @@ arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
 	cd arpack-$(ARPACK_VER) && \
-	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="-O3 -fPIC -static-libgfortran" && \
+	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="$(FFLAGS)" && \
 	ar x libarpack_.a && \
-	$(FC) -shared *.o -o libarpack.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) *.o -o libarpack.$(SHLIB_EXT)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -363,7 +363,7 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared -fPIC -static-libgfortran *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -o libsuitesparse.$(SHLIB_EXT)
+	gfortran -shared $(FFLAGS) *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
