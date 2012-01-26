@@ -90,12 +90,12 @@ When installing from source, these libraries are automatically downloaded and co
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
-[curl]:         http://curl.haxx.se/
+[wget]:         http://www.gnu.org/software/wget/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
-[SuiteSparse]:	http://www.cise.ufl.edu/research/sparse/SuiteSparse/
+[SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
 [ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
