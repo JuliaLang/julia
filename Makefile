@@ -38,7 +38,7 @@ install: release
 dist: release
 	rm -fr dist julia-*.tar.gz
 	$(MAKE) install DESTDIR=dist
-	cd dist/usr/share && tar zcvf ../../../julia-`uname`.tar.gz *
+	cd dist/usr/share && tar zcvf ../../../julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz *
 
 deb:
 	fakeroot debian/rules binary
