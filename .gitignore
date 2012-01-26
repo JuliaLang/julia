@@ -1,7 +1,9 @@
 *~
 *#
 
+/*.tar.gz
 /tmp
+/dist
 
 /julia
 /julia-debug-*
@@ -11,6 +13,7 @@
 /libjulia-release.so
 /libjulia-release.dylib
 
+/boot.j.inc
 /sys.ji
 /sys0.ji
 /h2j

@@ -33,7 +33,12 @@ install: release
 	install -v -C sys.ji $(DESTDIR)/usr/share/julia
 	install -v -C j/* $(DESTDIR)/usr/share/julia/j
 	install -v -C examples/* $(DESTDIR)/usr/share/julia/examples
-	install -v -C lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse.$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) $(DESTDIR)/usr/share/julia/lib
+	install -v -C lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) $(DESTDIR)/usr/share/julia/lib
+
+dist: release
+	rm -fr dist julia-*.tar.gz
+	$(MAKE) install DESTDIR=dist
+	cd dist/usr/share && tar zcvf ../../../julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz *
 
 deb:
 	fakeroot debian/rules binary
