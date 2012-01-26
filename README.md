@@ -67,32 +67,6 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
 
 If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architecture of your processor in Make.inc.
 
-<a name="Binary-Installation"/>
-## Binary Installation
-
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
-
-- **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
-- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
-- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-618b93c22c-Linux-i686.tar.gz>
-
-Download the appropriate tarball and untar it somewhere;
-for example, if you are on an OS X (Darwin) x86/64 system, do the following:
-
-    curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
-    tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
-
-You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
-
-    export PATH="$(pwd)/julia:$PATH"
-
-Now you should be able to run julia like this:
-
-    julia
-
-If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
-
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
@@ -142,6 +116,32 @@ When installing from source, these libraries are automatically downloaded and co
     src/           source for julia language core
     test/          unit and function tests for julia itself
     ui/            source for various front ends
+
+<a name="Binary-Installation"/>
+## Binary Installation
+
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
+
+- **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
+- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
+- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-618b93c22c-Linux-i686.tar.gz>
+
+Download the appropriate tarball and untar it somewhere;
+for example, if you are on an OS X (Darwin) x86/64 system, do the following:
+
+    curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
+    tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
+
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
+
+    export PATH="$(pwd)/julia:$PATH"
+
+Now you should be able to run julia like this:
+
+    julia
+
+If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
+You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
