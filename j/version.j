@@ -62,10 +62,9 @@ isless(a, b::VersionNumber) = convert(VersionNumber,a) == b
 ## julia version info
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
-const VERSION_COMMIT = readall(`git rev-parse HEAD`)[1:end-1]
+const VERSION_COMMIT = chomp(readall(`git rev-parse HEAD`))
 const VERSION_CLEAN = success(`git diff --quiet`)
-const VERSION_TIME = strftime("%F %T",
-                              int(readall(`git log -1 --pretty=format:%ct`)))
+const VERSION_TIME = strftime("%F %T",int(readall(`git log -1 --pretty=format:%ct`)))
 
 begin
 

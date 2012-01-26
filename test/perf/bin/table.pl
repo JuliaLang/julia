@@ -21,9 +21,11 @@ our @benchmarks = qw(
   rand_mat_mul
 );
 
+our $julia_ver = `julia -e 'print(VERSION_COMMIT[1:8])'`;
+
 our %systems = (
   "c"          => ["C++ (GCC)"   , "4.2.1*"     ],
-  "julia"      => ["Julia"       , "54fc2f70"   ],
+  "julia"      => ["Julia"       , $julia_ver   ],
   "python"     => ["NumPy"       , "1.5.1"      ],
   "matlab"     => ["Matlab"      , "R2011a"     ],
   "octave"     => ["Octave"      , "3.4"        ],
