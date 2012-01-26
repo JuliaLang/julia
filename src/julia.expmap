@@ -55,6 +55,7 @@
     jl_types_equal;
     jl_current_output_stream_obj;
     jl_set_current_output_stream_obj;
+    jl_disable_color;
     jl_takebuf_array;
     jl_takebuf_string;
     jl_readuntil;

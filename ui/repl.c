@@ -17,7 +17,7 @@ int tab_width = 2;
 int prompt_length = 0;
 int have_color = 1;
 
-void jl_disable_color() { have_color = 0; }
+DLLEXPORT void jl_disable_color() { have_color = 0; }
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
