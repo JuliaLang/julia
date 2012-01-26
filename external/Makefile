@@ -49,7 +49,7 @@ compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
 llvm-$(LLVM_VER).tar.gz:
-	curl -O http://llvm.org/releases/$(LLVM_VER)/$@
+	wget http://llvm.org/releases/$(LLVM_VER)/$@
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
@@ -77,7 +77,7 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	curl -O ftp://ftp.gnu.org/gnu/readline/$@
+	wget ftp://ftp.gnu.org/gnu/readline/$@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -104,7 +104,7 @@ compile-pcre: install-pcre
 install-pcre: $(PCRE_OBJ_TARGET)
 
 pcre-$(PCRE_VER).tar.bz2:
-	curl -O ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
+	wget ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	tar jxf $<
 	touch $@
@@ -182,8 +182,8 @@ compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
-	cd random && \
-	curl -o dsfmt-$(DSFMT_VER).tar.gz http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	wget -O $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	touch $@
 random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
 	mkdir -p dsfmt-$(DSFMT_VER) && \
@@ -211,7 +211,7 @@ compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: compile-openblas
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	curl -Lk https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) > $@
+	wget -O $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
@@ -234,7 +234,7 @@ compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
 
 lapack-$(LAPACK_VER).tgz:
-	curl -O http://www.netlib.org/lapack/$@
+	wget http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
@@ -264,9 +264,9 @@ compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
 arpack-$(ARPACK_VER).tar.gz:
-	curl http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz > $@
+	wget -O $@ http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz 
 arpack-patch.tar.gz:
-	curl http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz > $@
+	wget -O $@ http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
 arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
 	mkdir -p arpack-$(ARPACK_VER)
 	for x in $^; do tar -C arpack-$(ARPACK_VER) --strip-components 1 -zxf $$x; done
@@ -303,7 +303,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
 
 fftw-$(FFTW_VER).tar.gz:
-	curl -O http://www.fftw.org/$@
+	wget http://www.fftw.org/$@
 
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
@@ -351,7 +351,7 @@ compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	curl http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ > $@
+	wget http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
@@ -384,7 +384,7 @@ compile-clp: install-clp
 install-clp: $(CLP_OBJ_TARGET)
 
 clp-$(CLP_VER).tar.gz:
-	curl http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz >$@
+	wget -O $@ http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
 clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	mkdir -p clp-$(CLP_VER)
 	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
@@ -414,7 +414,7 @@ $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
 	cd libunwind-$(UNWIND_VER) && $(MAKE) && $(MAKE) install
 
 libunwind-$(UNWIND_VER).tar.gz:
-	curl -O http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz 
+	wget http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz 
 
 open-unwind: libunwind-$(UNWIND_VER).tar.gz
 	tar xvfz $<
@@ -438,7 +438,7 @@ compile-lighttpd: install-lighttpd
 install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
 
 lighttpd-$(LIGHTTPD_VER).tar.gz:
-	curl -O http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
+	wget http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
 lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	tar zxf $<
 	touch $@

@@ -54,7 +54,7 @@ USE_SYSTEM_READLINE=1
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
-LIBUNWIND=-lunwind -lunwind-generic
+LIBUNWIND=-lunwind-generic -lunwind
 else
 LIBUNWIND=$(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
 endif
