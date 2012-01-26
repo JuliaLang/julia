@@ -116,18 +116,17 @@ function _start()
         global const VARIABLES = {}
 
         # Load customized startup
-        try
-            load(strcat(getcwd(),"/startup.j"))
-        catch
-        end
+        try load(strcat(getcwd(),"/startup.j")) end
+        try load(strcat(ENV["HOME"],"/.juliarc")) end
 
         (quiet,repl) = process_options(ARGS)
-
         if repl
             if !quiet
                 _jl_banner()
             end
             run_repl()
+        else
+            ccall(:jl_disable_color, Void, ())
         end
     catch e
         show(e)

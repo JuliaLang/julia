@@ -17,6 +17,8 @@ int tab_width = 2;
 int prompt_length = 0;
 int have_color = 1;
 
+void jl_disable_color() { have_color = 0; }
+
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
     " -v --version             Display version information\n"
@@ -24,8 +26,8 @@ static const char *opts =
     " -H --home=<dir>          Load files relative to <dir>\n"
     " -T --tab=<size>          Set REPL tab width to <size>\n\n"
 
-    " -e --eval=<expr>         Evaluate <expr> and don't print\n"
-    " -E --print=<expr>        Evaluate and print <expr>\n"
+    " -e --eval=<expr>         Evaluate <expr>\n"
+    " -E --print=<expr>        Evaluate and show <expr>\n"
     " -P --post-boot=<expr>    Evaluate <expr> right after boot\n"
     " -L --load=file           Load <file> right after boot\n"
     " -b --bare                Bare: don't load default startup files\n"
@@ -138,8 +140,7 @@ static int detect_color(void)
     if (tput == 0) return 1;
     if (tput == 1) return 0;
     char *term = getenv("TERM");
-    if (term == NULL) return 0;
-    return (!strcmp(term,"xterm") || !strcmp(term,"xterm-color"));
+    return term && !strncmp(term,"xterm",5);
 #endif
 }
 
@@ -176,8 +177,8 @@ static void exit_repl(int code)
 
     if (have_color) {
         ios_printf(ios_stdout, jl_color_normal);
-        ios_flush(ios_stdout);
     }
+    ios_flush(ios_stdout);
 #ifdef JL_GF_PROFILE
     print_profile();
 #endif
