@@ -151,7 +151,7 @@ function show(e::TypeError)
     end
 end
 
-show(e::LoadError) = (show(e.error); print(" $(e.file):$(e.line)"))
+show(e::LoadError) = (show(e.error); print("\nat $(e.file):$(e.line)"))
 show(e::SystemError) = print("$(e.prefix): $(strerror(e.errnum))")
 show(::DivideByZeroError) = print("error: integer divide by zero")
 show(::StackOverflowError) = print("error: stack overflow")
@@ -173,23 +173,6 @@ end
 function show(e::UnionTooComplexError)
     print("union type pattern too complex: ")
     show(e.types)
-end
-
-function show(bt::BackTrace)
-    show(bt.e)
-    i = 1
-    t = bt.trace
-    while i < length(t)
-        println()
-        lno = t[i+2]
-        if lno < 1
-            line = ""
-        else
-            line = ":$lno"
-        end
-        print("in $(t[i]), $(t[i+1])$line")
-        i += 3
-    end
 end
 
 function dump(x)

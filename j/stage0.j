@@ -1,6 +1,6 @@
 module System
 
-if false
+if true
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
@@ -24,18 +24,6 @@ if false
             print(", ")
         end
         print(")\n")
-    end
-    function show(bt::BackTrace)
-        show(bt.e)
-        i = 1
-        t = bt.trace
-        while i < length(t)
-            print("\n")
-            lno = t[i+2]
-            print("in ", t[i], ", ", t[i+1], ":", lno)
-            i += 3
-        end
-        print("\n")
     end
 end
 
