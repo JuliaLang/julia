@@ -1108,10 +1108,10 @@ function eval_annotate(e::Expr, vtypes, sv, decls, clo)
     head = e.head
     if is(head,:static_typeof) || is(head,:line) || is(head,:const)
         return e
-    elseif is(head,:gotoifnot) || is(head,:return)
-        e.typ = Any
+    #elseif is(head,:gotoifnot) || is(head,:return)
+    #    e.typ = Any
     elseif is(head,:(=))
-        e.typ = Any
+    #    e.typ = Any
         s = e.args[1]
         # assignment LHS not subject to all-same-type variable checking,
         # but the type of the RHS counts as one of its types.
