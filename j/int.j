@@ -151,27 +151,27 @@ promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
 promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
 promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
 
-promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Int
-promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Int
-promote_rule(::Type{Uint32}, ::Type{Uint16}) = Int
+promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Uint
+promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Uint
+promote_rule(::Type{Uint32}, ::Type{Uint16}) = Uint
 promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
 
-promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int
-promote_rule(::Type{Uint8} , ::Type{Int16}) = Int
-promote_rule(::Type{Uint8} , ::Type{Int32}) = Int
-promote_rule(::Type{Uint8} , ::Type{Int64}) = Int64
+promote_rule(::Type{Uint8} , ::Type{Int8} ) = Uint
+promote_rule(::Type{Uint8} , ::Type{Int16}) = Uint
+promote_rule(::Type{Uint8} , ::Type{Int32}) = Uint
+promote_rule(::Type{Uint8} , ::Type{Int64}) = Uint64
 
-promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int16}) = Int
-promote_rule(::Type{Uint16}, ::Type{Int32}) = Int
-promote_rule(::Type{Uint16}, ::Type{Int64}) = Int64
+promote_rule(::Type{Uint16}, ::Type{Int8} ) = Uint
+promote_rule(::Type{Uint16}, ::Type{Int16}) = Uint
+promote_rule(::Type{Uint16}, ::Type{Int32}) = Uint
+promote_rule(::Type{Uint16}, ::Type{Int64}) = Uint64
 
-promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int64
-promote_rule(::Type{Uint32}, ::Type{Int16}) = Int64
-promote_rule(::Type{Uint32}, ::Type{Int32}) = Int64
-promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
+promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
+promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
+promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
+promote_rule(::Type{Uint32}, ::Type{Int64}) = Uint64
 
 promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64
@@ -381,14 +381,14 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 <=(x::Uint32, y::Uint32) = ule_int(unbox32(x),unbox32(y))
 <=(x::Uint64, y::Uint64) = ule_int(unbox64(x),unbox64(y))
 
-==(x::Signed, y::Uint64) = (x >= 0) & (uint64(x) == y)
-==(x::Uint64, y::Signed) = (y >= 0) & (x == uint64(y))
-!=(x::Signed, y::Uint64) = (x <  0) | (uint64(x) != y)
-!=(x::Uint64, y::Signed) = (y <  0) | (x != uint64(y))
-< (x::Signed, y::Uint64) = (x <  0) | (uint64(x) < y)
-< (x::Uint64, y::Signed) = (y >  0) & (x < uint64(y))
-<=(x::Signed, y::Uint64) = (x <= 0) | (uint64(x) <= y)
-<=(x::Uint64, y::Signed) = (y >= 0) & (x <= uint64(y))
+==(x::Signed  , y::Unsigned) = (x >= 0) & (unsigned(x) == y)
+==(x::Unsigned, y::Signed  ) = (y >= 0) & (x == unsigned(y))
+!=(x::Signed  , y::Unsigned) = (x <  0) | (unsigned(x) != y)
+!=(x::Unsigned, y::Signed  ) = (y <  0) | (x != unsigned(y))
+< (x::Signed  , y::Unsigned) = (x <  0) | (unsigned(x) <  y)
+< (x::Unsigned, y::Signed  ) = (y >  0) & (x <  unsigned(y))
+<=(x::Signed  , y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
+<=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
 
 ## traits ##
 
