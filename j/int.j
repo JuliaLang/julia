@@ -179,10 +179,16 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 
 ## integer arithmetic ##
 
--(x::Integer) = -int(x)
-+{T<:Integer}(x::T, y::T) = int(x) + int(y)
--{T<:Integer}(x::T, y::T) = int(x) - int(y)
-*{T<:Integer}(x::T, y::T) = int(x) * int(y)
+-(x::Signed) = -int(x)
+-(x::Unsigned) = -uint(x)
+
++{T<:Signed}(x::T, y::T) = int(x) + int(y)
+-{T<:Signed}(x::T, y::T) = int(x) - int(y)
+*{T<:Signed}(x::T, y::T) = int(x) * int(y)
+
++{T<:Unsigned}(x::T, y::T) = uint(x) + uint(y)
+-{T<:Unsigned}(x::T, y::T) = uint(x) - uint(y)
+*{T<:Unsigned}(x::T, y::T) = uint(x) * uint(y)
 
 -(x::Int)    = boxsint(neg_int(unboxwd(x)))
 -(x::Uint)   = boxuint(neg_int(unboxwd(x)))
