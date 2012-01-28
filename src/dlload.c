@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/stat.h>
 
 #if defined(__linux)
 #include <unistd.h>
@@ -8,8 +9,8 @@
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { ".so", "" };
-#define N_EXTENSIONS 2
+static char *extensions[] = { ".so" };
+#define N_EXTENSIONS 1
 
 #elif defined(__APPLE__)
 #include <unistd.h>
@@ -17,8 +18,8 @@ static char *extensions[] = { ".so", "" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { ".dylib", ".bundle", "" };
-#define N_EXTENSIONS 3
+static char *extensions[] = { ".dylib", ".bundle" };
+#define N_EXTENSIONS 2
 #endif
 
 #include "julia.h"
@@ -53,6 +54,12 @@ void *jl_load_dynamic_library(char *fname)
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 handle = dlopen(path, RTLD_NOW);
                 if (handle != NULL) return handle;
+                // if file exists but didn't load, show error details
+                struct stat sbuf;
+                if (stat(path, &sbuf) != -1) {
+                    ios_printf(ios_stderr, "%s\n", dlerror());
+                    jl_errorf("could not load module %s", fname);
+                }
             }
             cwd = getcwd(path, PATHBUF);
             if (cwd != NULL) {
