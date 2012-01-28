@@ -38,9 +38,9 @@ First, acquire the source code either by cloning the git repository (requires **
 
     git clone git://github.com/JuliaLang/julia.git
 
-or, if you don't have git installed, by using curl and tar to fetch and unpack the source:
+or, if you don't have git installed, by using wget and tar to fetch and unpack the source:
 
-    mkdir julia && curl -Lk https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
+    mkdir julia && wget -O - https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
@@ -96,7 +96,7 @@ When installing from source, these libraries are automatically downloaded and co
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
-[ARPACK]:       http://www.caam.rice.edu/software/ARPACK/
+[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
@@ -110,7 +110,6 @@ When installing from source, these libraries are automatically downloaded and co
     contrib/       emacs and textmate support for julia
     examples/      example julia programs
     external/      external dependencies
-    install/       used for creating binary installs
     j/             source code for julia's standard library
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
@@ -123,14 +122,14 @@ When installing from source, these libraries are automatically downloaded and co
 Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
 
 - **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
-- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz>
 - **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-618b93c22c-Linux-i686.tar.gz>
+- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz>
 
 Download the appropriate tarball and untar it somewhere;
 for example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
-    curl -OLk https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Darwin-x86_64.tar.gz
-    tar zxvf julia-08b1e294ed-Darwin-x86_64.tar.gz
+    wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
+    tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
 
