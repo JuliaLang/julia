@@ -98,6 +98,10 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 ==(x::Rational, y::Integer ) = x.den == 1 && x.num == y
 ==(x::Integer , y::Rational) = y == x
 
+# needed to avoid ambiguity between ==(x::Real, z::Complex) and ==(x::Rational, y::Number)
+==(z::Complex , x::Rational) = real_valued(z) && real(z) == x
+==(x::Rational, z::Complex ) = real_valued(z) && real(z) == x
+
 ==(x::Rational, y::Number  ) = x.num == x.den*y
 ==(x::Number  , y::Rational) = y == x
 ==(x::Rational, y::Float   ) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
