@@ -747,7 +747,10 @@ static int args_morespecific(jl_value_t *a, jl_value_t *b)
     int msp = jl_type_morespecific(a,b,0);
     if (jl_has_typevars(b)) {
         if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
-            return 0;
+            if (jl_has_typevars(a)) {
+                return 0;
+            }
+            return msp;
         }
         if (jl_has_typevars(a)) {
             if (jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false) {

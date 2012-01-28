@@ -241,7 +241,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 -fPIC -static-libgfortran" OPTS="$(FFLAGS)" FORTRAN=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS)" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
@@ -269,14 +269,10 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-mpi --with-lapack=../lapack-$(LAPACK_VER)/liblapack.a -with-blas=../openblas-$(OPENBLAS_VER)/libopenblas.a
-	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/config.status
-	$(MAKE) -C arpack-ng-$(ARPACK_VER)
-	cd arpack-ng-$(ARPACK_VER) && \
-	$(FC) -shared $(FFLAGS) SRC/*.o UTIL/*.o ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
+	rm -f UTIL/second_NONE.f && \
+	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
 	cp libarpack.$(SHLIB_EXT) $(JULIALIB)
 	touch $@
 

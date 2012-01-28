@@ -1170,7 +1170,12 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
     if (a == b) return 1;
     if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
-    if (jl_is_typevar(a)) return 0;
+    if (jl_is_typevar(a)) {
+        if (jl_is_typevar(b)) {
+            return type_eqv_(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub, stack) &&
+                type_eqv_(((jl_tvar_t*)a)->lb, ((jl_tvar_t*)b)->lb, stack);
+        }
+    }
     if (jl_is_long(a)) {
         if (jl_is_long(b))
             return (jl_unbox_long(a) == jl_unbox_long(b));
@@ -1629,7 +1634,9 @@ static int jl_tuple_subtype_(jl_value_t **child, size_t cl,
 
         if (morespecific) {
             // stop as soon as one element is strictly more specific
-            if (!jl_types_equal(ce,pe)) {
+            if (!(jl_types_equal(ce,pe) ||
+                  (jl_is_typevar(pe) &&
+                   jl_types_equal(ce,((jl_tvar_t*)pe)->ub)))) {
                 mode = 1;
                 assert(!ta);
                 // here go into a different mode where we return 1
