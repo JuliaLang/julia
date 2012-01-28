@@ -16,7 +16,7 @@ LIGHTTPD_VER = 1.4.29
 
 ## high-level setup ##
 
-JULIAHOME = ..
+JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 OS = $(shell uname)
@@ -274,7 +274,10 @@ arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
 	./configure --prefix=$(abspath $(EXTROOT)) --disable-mpi --with-lapack=../lapack-$(LAPACK_VER)/liblapack.a -with-blas=../openblas-$(OPENBLAS_VER)/libopenblas.a
 	touch $@
 $(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/config.status
-	$(MAKE) -C arpack-ng-$(ARPACK_VER) install
+	$(MAKE) -C arpack-ng-$(ARPACK_VER)
+	cd arpack-ng-$(ARPACK_VER) && \
+	$(FC) -shared $(FFLAGS) SRC/*.o UTIL/*.o ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
+	cp libarpack.$(SHLIB_EXT) $(JULIALIB)
 	touch $@
 
 clean-arpack:
