@@ -212,9 +212,23 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 
 /(x::Integer, y::Integer) = float64(x)/float64(y)
 
-div{T<:Integer}(x::T, y::T) = div(int(x),int(y))
-rem{T<:Integer}(x::T, y::T) = rem(int(x),int(y))
-mod{T<:Integer}(x::T, y::T) = mod(int(x),int(y))
+div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
+rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))
+
+div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
+rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
+
+div(x::Signed, y::Unsigned) = copysign(signed(div(unsigned(abs(x)),y)),x)
+div(x::Unsigned, y::Signed) = copysign(signed(div(x,unsigned(abs(y)))),y)
+
+rem(x::Signed, y::Unsigned) = copysign(signed(rem(unsigned(abs(x)),y)),x)
+rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
+
+fld(x::Signed, y::Unsigned) = div(x-signed(mod(x,y)),y)
+fld(x::Unsigned, y::Signed) = div(x-unsigned(mod(x,y)),y)
+
+mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
+mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)
 
 div(x::Int,    y::Int)    = boxsint(sdiv_int(unboxwd(x), unboxwd(y)))
 div(x::Uint,   y::Uint)   = boxuint(udiv_int(unboxwd(x), unboxwd(y)))
@@ -226,11 +240,11 @@ rem(x::Uint,   y::Uint)   = boxuint(urem_int(unboxwd(x), unboxwd(y)))
 rem(x::Int64,  y::Int64)  = boxsi64(srem_int(unbox64(x), unbox64(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
-fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x-mod(x,y),y)
+fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 ## integer bitwise operations ##
 

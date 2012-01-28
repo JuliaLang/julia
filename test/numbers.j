@@ -628,6 +628,32 @@ end
 @assert div(1e50,1) == 1e50
 @assert fld(1e50,1) == 1e50
 
+for x=0:5, y=1:5
+    @assert div(uint(x),uint(y)) == div(x,y)
+    @assert div(uint(x),y) == div(x,y)
+    @assert div(x,uint(y)) == div(x,y)
+    @assert div(uint(x),-y) == div(x,-y)
+    @assert div(-x,uint(y)) == div(-x,y)
+
+    @assert fld(uint(x),uint(y)) == fld(x,y)
+    @assert fld(uint(x),y) == fld(x,y)
+    @assert fld(x,uint(y)) == fld(x,y)
+    @assert fld(uint(x),-y) == fld(x,-y)
+    @assert fld(-x,uint(y)) == fld(-x,y)
+
+    @assert rem(uint(x),uint(y)) == rem(x,y)
+    @assert rem(uint(x),y) == rem(x,y)
+    @assert rem(x,uint(y)) == rem(x,y)
+    @assert rem(uint(x),-y) == rem(x,-y)
+    @assert rem(-x,uint(y)) == rem(-x,y)
+
+    @assert mod(uint(x),uint(y)) == mod(x,y)
+    @assert mod(uint(x),y) == mod(x,y)
+    @assert mod(x,uint(y)) == mod(x,y)
+    @assert mod(uint(x),-y) == mod(x,-y)
+    @assert mod(-x,uint(y)) == mod(-x,y)
+end
+
 # rounding difficult values
 
 for x = 2^53-10:2^53+10
