@@ -269,11 +269,7 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
-	cd arpack-ng-$(ARPACK_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-mpi --with-pic --with-lapack=../lapack-$(LAPACK_VER)/liblapack.a -with-blas=../openblas-$(OPENBLAS_VER)/libopenblas.a
-	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/config.status
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
 	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
