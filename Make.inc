@@ -18,7 +18,7 @@ USE_COPY_STACKS = 1
 # Compiler specific stuff
 
 FC = gfortran
-FFLAGS = -O2 -fPIC -static-libgfortran
+FFLAGS = -O2 -fPIC
 
 USEGCC = 1
 USECLANG = 0
