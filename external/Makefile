@@ -7,7 +7,7 @@ GRISU_VER = d7beed8d6e0e
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
-ARPACK_VER = 96
+ARPACK_VER = 3.0.2
 FFTW_VER = 3.3
 SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
@@ -263,29 +263,25 @@ ARPACK_OBJ_SOURCE = arpack-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
-arpack-$(ARPACK_VER).tar.gz:
-	wget -O $@ http://www.caam.rice.edu/software/ARPACK/SRC/arpack$(ARPACK_VER).tar.gz 
-arpack-patch.tar.gz:
-	wget -O $@ http://www.caam.rice.edu/software/ARPACK/SRC/patch.tar.gz
-arpack-$(ARPACK_VER)/Makefile: arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz
-	mkdir -p arpack-$(ARPACK_VER)
-	for x in $^; do tar -C arpack-$(ARPACK_VER) --strip-components 1 -zxf $$x; done
-	perl -i -nle 'print unless /EXTERNAL\s+ETIME/' arpack-$(ARPACK_VER)/UTIL/second.f
+arpack-ng-$(ARPACK_VER).tar.gz:
+	wget -O $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
 	touch $@
-$(ARPACK_OBJ_SOURCE): arpack-$(ARPACK_VER)/Makefile
-	cd arpack-$(ARPACK_VER) && \
-	$(MAKE) lib MAKE=make PLAT= home=`pwd` FC=$(FC) FFLAGS="$(FFLAGS)" && \
-	ar x libarpack_.a && \
-	$(FC) -shared $(FFLAGS) *.o -o libarpack.$(SHLIB_EXT)
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cp $< $@
+arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
+	tar zxf $<
+	touch $@
+arpack-ng-$(ARPACK_VER)/config.status: arpack-ng-$(ARPACK_VER)/configure
+	cd arpack-ng-$(ARPACK_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT)) --disable-mpi --with-lapack=../lapack-$(LAPACK_VER)/liblapack.a
+	touch $@
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/config.status
+	$(MAKE) -C arpack-ng-$(ARPACK_VER) install
+	touch $@
 
 clean-arpack:
-	$(MAKE) -C arpack-$(ARPACK_VER) home=`pwd`/arpack-$(ARPACK_VER) clean MAKE=make
+	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-patch.tar.gz arpack-$(ARPACK_VER)
+	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
 ## FFTW ##
 
