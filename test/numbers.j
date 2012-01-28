@@ -654,6 +654,27 @@ for x=0:5, y=1:5
     @assert mod(-x,uint(y)) == mod(-x,y)
 end
 
+@assert div(typemax(Int64), 1) ==  typemax(Int64)
+@assert div(typemax(Int64),-1) == -typemax(Int64)
+@assert div(typemin(Int64), 1) ==  typemin(Int64)
+# @assert div(typemin(Int64),-1) ==  typemin(Int64)
+
+@assert div(typemax(Uint64), 2) ==  typemax(Int64)
+@assert div(typemax(Uint64),-2) == -typemax(Int64)
+
+# @assert uint(div(typemax(Uint64)  , 1)) ==  typemax(Uint64)
+# @assert uint(div(typemax(Uint64)  ,-1)) == -typemax(Uint64)
+# @assert uint(div(typemax(Uint64)-1, 1)) ==  typemax(Uint64)-1
+# @assert uint(div(typemax(Uint64)-1,-1)) == -typemax(Uint64)+1
+# @assert uint(div(typemax(Uint64)-2, 1)) ==  typemax(Uint64)-2
+# @assert uint(div(typemax(Uint64)-2,-1)) == -typemax(Uint64)+2
+# @assert div(uint(typemax(Int64))+2, 1) ==  typemax(Int64)+2
+# @assert div(uint(typemax(Int64))+2,-1) == -typemax(Int64)-2
+@assert div(uint(typemax(Int64))+1, 1) ==  typemax(Int64)+1
+@assert div(uint(typemax(Int64))+1,-1) == -typemax(Int64)-1
+@assert div(uint(typemax(Int64))  , 1) ==  typemax(Int64)
+@assert div(uint(typemax(Int64))  ,-1) == -typemax(Int64)
+
 # rounding difficult values
 
 for x = 2^53-10:2^53+10
