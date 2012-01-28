@@ -219,7 +219,7 @@ div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
 rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
 
 div(x::Signed, y::Unsigned) = copysign(signed(div(unsigned(abs(x)),y)),x)
-div(x::Unsigned, y::Signed) = copysign(signed(div(x,unsigned(abs(y)))),y)
+div(x::Unsigned, y::Signed) = (d=signed(div(x,unsigned(abs(y)))); y<0?-d:d)
 
 rem(x::Signed, y::Unsigned) = copysign(signed(rem(unsigned(abs(x)),y)),x)
 rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))

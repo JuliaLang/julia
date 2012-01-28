@@ -662,14 +662,15 @@ end
 @assert div(typemax(Uint64), 2) ==  typemax(Int64)
 @assert div(typemax(Uint64),-2) == -typemax(Int64)
 
-# @assert uint(div(typemax(Uint64)  , 1)) ==  typemax(Uint64)
-# @assert uint(div(typemax(Uint64)  ,-1)) == -typemax(Uint64)
-# @assert uint(div(typemax(Uint64)-1, 1)) ==  typemax(Uint64)-1
-# @assert uint(div(typemax(Uint64)-1,-1)) == -typemax(Uint64)+1
-# @assert uint(div(typemax(Uint64)-2, 1)) ==  typemax(Uint64)-2
-# @assert uint(div(typemax(Uint64)-2,-1)) == -typemax(Uint64)+2
-# @assert div(uint(typemax(Int64))+2, 1) ==  typemax(Int64)+2
-# @assert div(uint(typemax(Int64))+2,-1) == -typemax(Int64)-2
+@assert uint(div(typemax(Uint64)  , 1)) ==  typemax(Uint64)
+@assert uint(div(typemax(Uint64)  ,-1)) == -typemax(Uint64)
+@assert uint(div(typemax(Uint64)-1, 1)) ==  typemax(Uint64)-1
+@assert uint(div(typemax(Uint64)-1,-1)) == -typemax(Uint64)+1
+@assert uint(div(typemax(Uint64)-2, 1)) ==  typemax(Uint64)-2
+@assert uint(div(typemax(Uint64)-2,-1)) == -typemax(Uint64)+2
+
+@assert div(uint(typemax(Int64))+2, 1) ==  typemax(Int64)+2
+@assert div(uint(typemax(Int64))+2,-1) == -typemax(Int64)-2
 @assert div(uint(typemax(Int64))+1, 1) ==  typemax(Int64)+1
 @assert div(uint(typemax(Int64))+1,-1) == -typemax(Int64)-1
 @assert div(uint(typemax(Int64))  , 1) ==  typemax(Int64)
