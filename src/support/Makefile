@@ -1,4 +1,4 @@
-JULIAHOME = $(shell pwd)/../..
+JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \

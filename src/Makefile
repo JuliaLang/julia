@@ -1,5 +1,5 @@
-JULIAHOME = ..
-include ../Make.inc
+JULIAHOME = $(abspath ..)
+include $(JULIAHOME)/Make.inc
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \

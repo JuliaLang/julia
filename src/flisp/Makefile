@@ -1,4 +1,4 @@
-JULIAHOME = $(shell pwd)/../..
+JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
 NAME = flisp

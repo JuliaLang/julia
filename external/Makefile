@@ -17,7 +17,7 @@ LIGHTTPD_VER = 1.4.29
 ## high-level setup ##
 
 JULIAHOME = $(abspath ..)
-include ../Make.inc
+include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)

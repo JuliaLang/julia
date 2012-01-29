@@ -1,4 +1,4 @@
-JULIAHOME = .
+JULIAHOME = $(abspath .)
 include ./Make.inc
 
 default: release
@@ -10,7 +10,6 @@ julia-debug julia-release:
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC ui $@
 	@$(MAKE) -sC j
-	@$(MAKE) -sC ui/webserver $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys0.ji: src/boot.j src/dump.c j/stage0.j
@@ -79,4 +78,3 @@ testall: release
 
 test-%: release
 	@$(MAKE) -sC test $*
-
