@@ -75,6 +75,7 @@ When installing from source, these libraries are automatically downloaded and co
 
 - **[GNU make][]** — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[perl]** - Preprocessing of header files of libraries.
 - **[wget][]** — to automatically download external libraries:
     - **[LLVM][]**         — compiler infrastructure.
     - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
@@ -91,6 +92,7 @@ When installing from source, these libraries are automatically downloaded and co
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
 [wget]:         http://www.gnu.org/software/wget/
+[perl]:		http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
