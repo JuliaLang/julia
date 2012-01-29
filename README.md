@@ -73,26 +73,26 @@ If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architect
 Julia depends on a number of mature, state-of-the art C and Fortran libraries.
 When installing from source, these libraries are automatically downloaded and compiled.
 
-- **[GNU make][]** — building dependencies.
+- **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
-- **[perl]** - Preprocessing of header files of libraries.
-- **[wget][]** — to automatically download external libraries:
-    - **[LLVM][]**         — compiler infrastructure.
-    - **[fdlibm][]**       — a portable implementation of much of the system-dependent libm math library's functionality.
-    - **[MT][]**           — a fast Mersenne Twister pseudorandom number generator library.
-    - **[OpenBLAS][]**     — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
-    - **[LAPACK][]**       — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-    - **[SuiteSparse][]**  - a library of linear algebra routines for sparse matrices
-    - **[ARPACK][]**       — a collection of subroutines designed to solve large, sparse eigenvalue problems.
-    - **[FFTW][]**         — library for computing fast Fourier transforms very quickly and efficiently.
-    - **[PCRE][]**         — Perl-compatible regular expressions library.
-    - **[GNU readline][]** — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-    - **[D3][]**           — JavaScript visualization library.
+- **[Perl]**                    — preprocessing of header files of libraries.
+- **[wget]**                    — to automatically download external libraries:
+    - **[LLVM]**                — compiler infrastructure.
+    - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
+    - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
+    - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+    - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+    - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices
+    - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+    - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
+    - **[PCRE]**                — Perl-compatible regular expressions library.
+    - **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+    - **[D3]**                  — JavaScript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
 [wget]:         http://www.gnu.org/software/wget/
-[perl]:		http://www.perl.org/
+[Perl]:         http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
