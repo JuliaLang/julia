@@ -12,11 +12,17 @@ WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp jsoncpp.cpp
 
 julia-release julia-debug: %: %-webserver
 
-julia-release-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $(JULIAHOME)/$@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+release debug:
+	$(MAKE) julia-$@
 
-julia-debug-webserver: $(WEBSERVER_SRCS)
-	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $(JULIAHOME)$@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+julia-release-webserver: $(JULIAHOME)/julia-release-webserver
+julia-debug-webserver: $(JULIAHOME)/julia-debug-webserver
+
+$(JULIAHOME)/julia-release-webserver: $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
+
+$(JULIAHOME)/julia-debug-webserver: $(WEBSERVER_SRCS)
+	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
 clean:
 	rm -f *.o *.do

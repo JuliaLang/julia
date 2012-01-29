@@ -1,5 +1,5 @@
 JULIAHOME = $(abspath .)
-include ./Make.inc
+include $(JULIAHOME)/Make.inc
 
 default: release
 
