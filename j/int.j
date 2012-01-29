@@ -218,10 +218,10 @@ rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))
 div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
 rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
 
-div(x::Signed, y::Unsigned) = copysign(signed(div(unsigned(abs(x)),y)),x)
-div(x::Unsigned, y::Signed) = (d=signed(div(x,unsigned(abs(y)))); y<0?-d:d)
+div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
+div(x::Unsigned, y::Signed) = flipsign(signed(div(x,unsigned(abs(y)))),y)
 
-rem(x::Signed, y::Unsigned) = copysign(signed(rem(unsigned(abs(x)),y)),x)
+rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)),y)),x)
 rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
 
 fld(x::Signed, y::Unsigned) = div(x-signed(mod(x,y)),y)
