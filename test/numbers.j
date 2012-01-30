@@ -231,21 +231,22 @@ for x=-5:5, y=-5:5
     @assert (x<=y)==(int64(x)<=float64(y))
     @assert (x>=y)==(int64(x)>=float64(y))
 
-    if x < 0 || y < 0; continue; end
-
-    @assert (x==y)==(float64(x)==uint64(y))
-    @assert (x!=y)==(float64(x)!=uint64(y))
-    @assert (x< y)==(float64(x)< uint64(y))
-    @assert (x> y)==(float64(x)> uint64(y))
-    @assert (x<=y)==(float64(x)<=uint64(y))
-    @assert (x>=y)==(float64(x)>=uint64(y))
-
-    @assert (x==y)==(uint64(x)==float64(y))
-    @assert (x!=y)==(uint64(x)!=float64(y))
-    @assert (x< y)==(uint64(x)< float64(y))
-    @assert (x> y)==(uint64(x)> float64(y))
-    @assert (x<=y)==(uint64(x)<=float64(y))
-    @assert (x>=y)==(uint64(x)>=float64(y))
+    if x >= 0
+        @assert (x==y)==(uint64(x)==float64(y))
+        @assert (x!=y)==(uint64(x)!=float64(y))
+        @assert (x< y)==(uint64(x)< float64(y))
+        @assert (x> y)==(uint64(x)> float64(y))
+        @assert (x<=y)==(uint64(x)<=float64(y))
+        @assert (x>=y)==(uint64(x)>=float64(y))
+    end
+    if y >= 0
+        @assert (x==y)==(float64(x)==uint64(y))
+        @assert (x!=y)==(float64(x)!=uint64(y))
+        @assert (x< y)==(float64(x)< uint64(y))
+        @assert (x> y)==(float64(x)> uint64(y))
+        @assert (x<=y)==(float64(x)<=uint64(y))
+        @assert (x>=y)==(float64(x)>=uint64(y))
+    end
 end
 
 function _cmp_(x::Union(Int64,Uint64), y::Float64)
