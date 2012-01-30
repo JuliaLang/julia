@@ -1175,6 +1175,9 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b, jl_value_pair_t *stack)
             return type_eqv_(((jl_tvar_t*)a)->ub, ((jl_tvar_t*)b)->ub, stack) &&
                 type_eqv_(((jl_tvar_t*)a)->lb, ((jl_tvar_t*)b)->lb, stack);
         }
+        else {
+            return 0;
+        }
     }
     if (jl_is_long(a)) {
         if (jl_is_long(b))
