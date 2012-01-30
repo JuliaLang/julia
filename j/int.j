@@ -240,11 +240,11 @@ rem(x::Uint,   y::Uint)   = boxuint(urem_int(unboxwd(x), unboxwd(y)))
 rem(x::Int64,  y::Int64)  = boxsi64(srem_int(unbox64(x), unbox64(y)))
 rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 
-fld{T<:Integer }(x::T, y::T) = div(x-mod(x,y),y)
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
+fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
 
-mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)
 mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
+mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)
 
 ## integer bitwise operations ##
 

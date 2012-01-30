@@ -511,87 +511,87 @@ for A = real_types, B = real_types
 end
 
 # div, fld, rem, mod
-for nr = {
+for yr = {
     1:6,
     0.25:0.25:6.0,
     1//4:1//4:6//1
-}, ar = {
+}, xr = {
     0:6,
     0.0:0.25:6.0,
     0//1:1//4:6//1
 }
-    for n = nr, a = ar
+    for y = yr, x = xr
         # check basic div functionality
-        if 0n <= a < 1n
-            @assert div(+a,+n) == 0
-            @assert div(+a,-n) == 0
-            @assert div(-a,+n) == 0
-            @assert div(-a,-n) == 0
+        if 0y <= x < 1y
+            @assert div(+x,+y) == 0
+            @assert div(+x,-y) == 0
+            @assert div(-x,+y) == 0
+            @assert div(-x,-y) == 0
         end
-        if 1n <= a < 2n
-            @assert div(+a,+n) == +1
-            @assert div(+a,-n) == -1
-            @assert div(-a,+n) == -1
-            @assert div(-a,-n) == +1
+        if 1y <= x < 2y
+            @assert div(+x,+y) == +1
+            @assert div(+x,-y) == -1
+            @assert div(-x,+y) == -1
+            @assert div(-x,-y) == +1
         end
-        if 2n <= a < 3n
-            @assert div(+a,+n) == +2
-            @assert div(+a,-n) == -2
-            @assert div(-a,+n) == -2
-            @assert div(-a,-n) == +2
+        if 2y <= x < 3y
+            @assert div(+x,+y) == +2
+            @assert div(+x,-y) == -2
+            @assert div(-x,+y) == -2
+            @assert div(-x,-y) == +2
         end
 
         # check basic fld functionality
-        if 0n == a
-            @assert fld(+a,+n) == 0
-            @assert fld(+a,-n) == 0
-            @assert fld(-a,+n) == 0
-            @assert fld(-a,-n) == 0
+        if 0y == x
+            @assert fld(+x,+y) == 0
+            @assert fld(+x,-y) == 0
+            @assert fld(-x,+y) == 0
+            @assert fld(-x,-y) == 0
         end
-        if 0n < a < 1n
-            @assert fld(+a,+n) == +0
-            @assert fld(+a,-n) == -1
-            @assert fld(-a,+n) == -1
-            @assert fld(-a,-n) == +0
+        if 0y < x < 1y
+            @assert fld(+x,+y) == +0
+            @assert fld(+x,-y) == -1
+            @assert fld(-x,+y) == -1
+            @assert fld(-x,-y) == +0
         end
-        if 1n == a
-            @assert fld(+a,+n) == +1
-            @assert fld(+a,-n) == -1
-            @assert fld(-a,+n) == -1
-            @assert fld(-a,-n) == +1
+        if 1y == x
+            @assert fld(+x,+y) == +1
+            @assert fld(+x,-y) == -1
+            @assert fld(-x,+y) == -1
+            @assert fld(-x,-y) == +1
         end
-        if 1n < a < 2n
-            @assert fld(+a,+n) == +1
-            @assert fld(+a,-n) == -2
-            @assert fld(-a,+n) == -2
-            @assert fld(-a,-n) == +1
+        if 1y < x < 2y
+            @assert fld(+x,+y) == +1
+            @assert fld(+x,-y) == -2
+            @assert fld(-x,+y) == -2
+            @assert fld(-x,-y) == +1
         end
-        if 2n == a
-            @assert fld(+a,+n) == +2
-            @assert fld(+a,-n) == -2
-            @assert fld(-a,+n) == -2
-            @assert fld(-a,-n) == +2
+        if 2y == x
+            @assert fld(+x,+y) == +2
+            @assert fld(+x,-y) == -2
+            @assert fld(-x,+y) == -2
+            @assert fld(-x,-y) == +2
         end
-        if 2n < a < 3n
-            @assert fld(+a,+n) == +2
-            @assert fld(+a,-n) == -3
-            @assert fld(-a,+n) == -3
-            @assert fld(-a,-n) == +2
+        if 2y < x < 3y
+            @assert fld(+x,+y) == +2
+            @assert fld(+x,-y) == -3
+            @assert fld(-x,+y) == -3
+            @assert fld(-x,-y) == +2
         end
 
         # check everything else in terms of div & fld
-        d = div(a,n)
-        f = fld(a,n)
-        r = rem(a,n)
-        m = mod(a,n)
+        d = div(x,y)
+        f = fld(x,y)
+        r = rem(x,y)
+        m = mod(x,y)
 
-        t1 = isa(a,Rational) && isa(n,Rational) ?
-                               promote_type(typeof(num(a)),typeof(num(n))) :
-             isa(a,Rational) ? promote_type(typeof(num(a)),typeof(n)) :
-             isa(n,Rational) ? promote_type(typeof(a),typeof(num(n))) :
-                               promote_type(typeof(a),typeof(n))
+        t1 = isa(x,Rational) && isa(y,Rational) ?
+                               promote_type(typeof(num(x)),typeof(num(y))) :
+             isa(x,Rational) ? promote_type(typeof(num(x)),typeof(y)) :
+             isa(y,Rational) ? promote_type(typeof(x),typeof(num(y))) :
+                               promote_type(typeof(x),typeof(y))
 
-        t2 = promote_type(typeof(a),typeof(n))
+        t2 = promote_type(typeof(x),typeof(y))
 
         @assert typeof(d) <: t1
         @assert typeof(f) <: t1
@@ -600,30 +600,72 @@ for nr = {
 
         @assert d == f
         @assert r == m
-        @assert 0 <= r < n
-        @assert a == n*d + r
+        @assert 0 <= r < y
+        @assert x == y*d + r
 
         for A=[-1,1], N=[-1,1]
-            sa = A*a
-            sn = N*n
+            sx = A*x
+            sy = N*y
 
-            sd = div(sa,sn)
-            sf = fld(sa,sn)
-            sr = rem(sa,sn)
-            sm = mod(sa,sn)
+            sd = div(sx,sy)
+            sf = fld(sx,sy)
+            sr = rem(sx,sy)
+            sm = mod(sx,sy)
 
             @assert typeof(sd) <: t1
             @assert typeof(sf) <: t1
             @assert typeof(sr) <: t2
             @assert typeof(sm) <: t2
 
-            @assert sa < 0 ? -n < sr <= 0 : 0 <= sr < +n
-            @assert sn < 0 ? -n < sm <= 0 : 0 <= sm < +n
-            @assert sa == sn*sd + sr
-            @assert sa == sn*sf + sm
+            @assert sx < 0 ? -y < sr <= 0 : 0 <= sr < +y
+            @assert sy < 0 ? -y < sm <= 0 : 0 <= sm < +y
+            @assert sx == sy*sd + sr
+            @assert sx == sy*sf + sm
         end
     end
 end
+
+@assert div(typemax(Int64), 1) ==  9223372036854775807
+@assert div(typemax(Int64), 2) ==  4611686018427387903
+@assert div(typemax(Int64), 7) ==  1317624576693539401
+@assert div(typemax(Int64),-1) == -9223372036854775807
+@assert div(typemax(Int64),-2) == -4611686018427387903
+@assert div(typemax(Int64),-7) == -1317624576693539401
+
+@assert div(-typemax(Int64), 1) == -9223372036854775807
+@assert div(-typemax(Int64), 2) == -4611686018427387903
+@assert div(-typemax(Int64), 7) == -1317624576693539401
+@assert div(-typemax(Int64),-1) ==  9223372036854775807
+@assert div(-typemax(Int64),-2) ==  4611686018427387903
+@assert div(-typemax(Int64),-7) ==  1317624576693539401
+
+@assert div(typemin(Int64), 1) == -9223372036854775807-1
+@assert div(typemin(Int64), 2) == -4611686018427387904
+@assert div(typemin(Int64), 7) == -1317624576693539401
+#@assert div(typemin(Int64),-1) == -9223372036854775807-1 # FIXME!
+@assert div(typemin(Int64),-2) ==  4611686018427387904
+@assert div(typemin(Int64),-7) ==  1317624576693539401
+
+@assert fld(typemax(Int64), 1) ==  9223372036854775807
+@assert fld(typemax(Int64), 2) ==  4611686018427387903
+@assert fld(typemax(Int64), 7) ==  1317624576693539401
+@assert fld(typemax(Int64),-1) == -9223372036854775807
+@assert fld(typemax(Int64),-2) == -4611686018427387904
+@assert fld(typemax(Int64),-7) == -1317624576693539401
+
+@assert fld(-typemax(Int64), 1) == -9223372036854775807
+@assert fld(-typemax(Int64), 2) == -4611686018427387904
+@assert fld(-typemax(Int64), 7) == -1317624576693539401
+@assert fld(-typemax(Int64),-1) ==  9223372036854775807
+@assert fld(-typemax(Int64),-2) ==  4611686018427387903
+@assert fld(-typemax(Int64),-7) ==  1317624576693539401
+
+@assert fld(typemin(Int64), 1) == -9223372036854775807-1
+@assert fld(typemin(Int64), 2) == -4611686018427387904
+@assert fld(typemin(Int64), 7) == -1317624576693539402
+#@assert fld(typemin(Int64),-1) == -9223372036854775807-1 # FIXME!
+@assert fld(typemin(Int64),-2) ==  4611686018427387904
+@assert fld(typemin(Int64),-7) ==  1317624576693539401
 
 @assert div(1e50,1) == 1e50
 @assert fld(1e50,1) == 1e50
