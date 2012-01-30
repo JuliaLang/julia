@@ -117,13 +117,10 @@ end
 function printfd(n)
     f = open("/dev/null","w")
     for i = 1:n
-        fprintf(f, f"%d %d\n", i, i)
+        # fprintf(f, f"%d %d\n", i, i)
+        # f"%d %d\n"(f,i,i)
+        @printf "%d %d\n" f i i
     end
-    # with_output_stream(f, @thunk begin
-    #     for i = 1:n
-    #         @printf "%d %d\n" f i i
-    #     end
-    # end)
     close(f)
 end
 
