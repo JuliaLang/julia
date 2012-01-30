@@ -35,6 +35,7 @@ namespace JL_I {
         // functions
         sqrt_float, abs_float32, abs_float64,
         copysign_float32, copysign_float64,
+        flipsign_int32, flipsign_int64,
         // c interface
         ccall,
     };
@@ -818,6 +819,42 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                                 BIT63)));
         return builder.CreateBitCast(rbits, T_float64);
     }
+    HANDLE(flipsign_int32,2)
+    {
+        x = INT(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        ConstantInt *cx = dyn_cast<ConstantInt>(x);
+        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
+        if (cx && cy) {
+            int32_t ix = cx->getSExtValue();
+            int32_t iy = cy->getSExtValue();
+            return ConstantInt::get(T_int32, iy >= 0 ? ix : -ix);
+        }
+        if (cy) {
+            int32_t iy = cy->getSExtValue();
+            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int32,0), x);
+        }
+        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int32,31));
+        return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
+    }
+    HANDLE(flipsign_int64,2)
+    {
+        x = INT(x);
+        fy = INT(emit_expr(args[2],ctx,true));
+        ConstantInt *cx = dyn_cast<ConstantInt>(x);
+        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
+        if (cx && cy) {
+            int64_t ix = cx->getSExtValue();
+            int64_t iy = cy->getSExtValue();
+            return ConstantInt::get(T_int64, iy >= 0 ? ix : -ix);
+        }
+        if (cy) {
+            int64_t iy = cy->getSExtValue();
+            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int64,0), x);
+        }
+        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int64,63));
+        return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
+    }
     default:
         assert(false);
     }
@@ -902,5 +939,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sqrt_float);
     ADD_I(abs_float32); ADD_I(abs_float64);
     ADD_I(copysign_float32); ADD_I(copysign_float64);
+    ADD_I(flipsign_int32); ADD_I(flipsign_int64);
     ADD_I(ccall);
 }
