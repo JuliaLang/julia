@@ -2534,7 +2534,10 @@ void jl_init_types(void)
                         );
 
     // Type{T}
-    jl_typetype_tvar = tvar("T");
+    jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),
+                                      (jl_value_t*)jl_bottom_type,
+                                      jl_top_type);
+    jl_typetype_tvar->bound = 0;
     jl_typetype_type = (jl_tag_type_t*)
         jl_apply_type((jl_value_t*)jl_type_type,
                       jl_tuple(1,jl_typetype_tvar));
