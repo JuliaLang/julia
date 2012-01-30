@@ -320,6 +320,7 @@ DLLEXPORT void jl_input_line_callback(char *input)
         free(input);
     }
 
+    rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
 }
 
@@ -471,11 +472,6 @@ DLLEXPORT void repl_callback_enable(void)
 {
     if (jl_have_event_loop)
         rl_callback_handler_install(prompt_string, jl_input_line_callback);
-}
-
-void repl_callback_disable(void)
-{
-    rl_callback_handler_remove();
 }
 
 void repl_stdin_callback(void)

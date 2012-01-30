@@ -690,12 +690,9 @@ type WorkItem
     notify::Tuple
     argument  # value to pass task next time it is restarted
     clientset::IntSet
-    requeue::Bool
 
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64),
-                                    true)
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64),
-                               true)
+    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64))
+    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64))
 end
 
 function work_result(w::WorkItem)
@@ -709,26 +706,9 @@ function work_result(w::WorkItem)
     v
 end
 
-type FinalValue
-    value
-end
-
 type WaitFor
     msg::Symbol
     rr
-end
-
-# to be used as a re-usable Task for executing thunks
-# if a work item finishes, you get a FinalValue. if you get something else,
-# the thunk was interrupted and is not done yet.
-function _jl_taskrunner()
-    parent = current_task().parent
-    result = ()
-    while true
-        (parent, thunk) = yieldto(parent, FinalValue(result))
-        result = ()
-        result = thunk()
-    end
 end
 
 function enq_work(wi::WorkItem)
@@ -739,8 +719,6 @@ end
 enq_work(f::Function) = enq_work(WorkItem(f))
 enq_work(t::Task) = enq_work(WorkItem(t))
 
-let runner = ()
-global perform_work
 function perform_work()
     global Workqueue
     job = pop(Workqueue)
@@ -757,63 +735,44 @@ function perform_work(job::WorkItem)
             job.argument = ()
             result = yieldto(job.task, arg)
         else
-            if is(runner,())
-                # make new task to use
-                runner = Task(_jl_taskrunner, 1024*1024)
-                runner.tls = nothing
-                yieldto(runner)
-            end
-            job.task = runner
-            result = yieldto(runner, current_task(), job.thunk)
+            job.task = Task(job.thunk)
+            job.task.tls = nothing
+            result = yieldto(job.task)
         end
     catch e
         #show(e)
         print("exception on ", myid(), ": ")
         show(e)
         println()
-        result = FinalValue(e)
-        job.task = ()  # task is toast. would be better to reuse it somehow.
-        runner = ()
+        result = e
     end
-    if isa(result,FinalValue)
+    if istaskdone(job.task)
         # job done
         job.done = true
-        job.result = result.value
+        job.result = result
     end
     if job.done
-        if isa(job.task,Task)
-            runner = job.task::Task  # Task now free to be shared
-            runner.tls = nothing
-        end
         job.task = ()
         # do notifications
         notify_done(job)
         job.thunk = bottom_func  # avoid reference retention
+    elseif isa(result,WaitFor)
+        # add to waiting set to wait on a sync event
+        wf::WaitFor = result
+        rr = wf.rr
+        #println("$(myid()) waiting for $rr")
+        oid = rr2id(rr)
+        waitinfo = (wf.msg, job, rr)
+        waiters = get(Waiting, oid, false)
+        if isequal(waiters,false)
+            Waiting[oid] = {waitinfo}
+        else
+            push(waiters, waitinfo)
+        end
     else
-        # job interrupted
-        if is(job.task,runner)
-            # need to continue, so this task can't be shared yet
-            runner = ()
-        end
-        if isa(result,WaitFor)
-            # add to waiting set to wait on a sync event
-            wf::WaitFor = result
-            rr = wf.rr
-            #println("$(myid()) waiting for $rr")
-            oid = rr2id(rr)
-            waitinfo = (wf.msg, job, rr)
-            waiters = get(Waiting, oid, false)
-            if isequal(waiters,false)
-                Waiting[oid] = {waitinfo}
-            else
-                push(waiters, waitinfo)
-            end
-        elseif !istaskdone(job.task) && job.requeue
-            # otherwise return to queue
-            enq_work(job)
-        end
+        # otherwise return to queue
+        enq_work(job)
     end
-end
 end
 
 function deliver_result(sock::IOStream, msg, oid, value)
@@ -1532,14 +1491,6 @@ function make_pfor_body(var, body)
                   )
 end
 
-macro pfor(reducer, range, body)
-    var = range.args[1]
-    r = range.args[2]
-    quote
-        preduce($reducer, $make_pfor_body(var, body), $r)
-    end
-end
-
 macro parallel(args...)
     na = length(args)
     if na==1
@@ -1594,9 +1545,6 @@ function make_scheduled(t::Task)
 end
 
 yield() = yieldto(Scheduler)
-
-task_exit() = task_exit(nothing)
-task_exit(val) = yieldto(Scheduler, FinalValue(val))
 
 const _jl_fd_handlers = HashTable()
 

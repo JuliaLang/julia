@@ -40,7 +40,6 @@ extern int ends_with_semicolon(const char *input);
 extern char *ios_readline(ios_t *s);
 DLLEXPORT extern void repl_callback_enable();
 DLLEXPORT extern void jl_disable_color();
-extern void repl_callback_disable();
 extern void repl_stdin_callback();
 extern void repl_print_prompt();
 

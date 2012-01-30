@@ -1,13 +1,5 @@
 show(t::Task) = print("Task")
 
-function wait(t::Task)
-    @assert !is(t,current_task())
-    while !istaskdone(t)
-        yieldto(t)
-    end
-    yieldto(t)  # return last value
-end
-
 # task-local storage
 function tls()
     t = current_task()

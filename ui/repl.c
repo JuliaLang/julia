@@ -208,12 +208,6 @@ static void repl_show_value(jl_value_t *v)
 
 DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
 {
-    if (jl_have_event_loop) {
-        // with multi.j loaded the command line input callback can return
-        // before the command finishes running, so we have to
-        // disable rl to prevent the prompt from reappearing too soon.
-        repl_callback_disable();
-    }
     JL_GC_PUSH(&ast);
     assert(ast != NULL);
     int iserr = 0;

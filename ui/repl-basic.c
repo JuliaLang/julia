@@ -46,10 +46,6 @@ DLLEXPORT void repl_callback_enable(void)
     ios_flush(ios_stdout);
 }
 
-void repl_callback_disable(void)
-{
-}
-
 void repl_stdin_callback(void)
 {
     char *input = ios_readline(ios_stdin);

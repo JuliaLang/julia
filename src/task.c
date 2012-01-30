@@ -383,6 +383,10 @@ static void finish_task(jl_task_t *t, jl_value_t *resultval)
     assert(t->done==jl_false);
     t->done = jl_true;
     t->result = resultval;
+    // TODO: early free of t->stkbuf
+#ifdef COPY_STACKS
+    t->stkbuf = NULL;
+#endif
 }
 
 static void start_task(jl_task_t *t)
