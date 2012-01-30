@@ -6,6 +6,7 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
+    del_fd_handler(STDIN.fd)
     put(_jl_repl_channel, (ast, show_value))
 end
 
@@ -16,7 +17,6 @@ function run_repl()
     while true
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
         (ast, show_value) = take(_jl_repl_channel)
-        del_fd_handler(STDIN.fd)
         ccall(:jl_eval_user_input, Void, (Any, Int32), ast, show_value)
     end
 end
