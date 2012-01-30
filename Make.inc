@@ -50,11 +50,13 @@ TARGET_OPENBLAS_ARCH=
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_LLVM=0
 USE_SYSTEM_READLINE=0
+USE_SYSTEM_PCRE=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LIBUNWIND=1
 USE_SYSTEM_LLVM=1
 USE_SYSTEM_READLINE=1
+USE_SYSTEM_PCRE=1
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
@@ -73,6 +75,12 @@ ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline -lncurses -lcurses
 else
 READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+endif
+
+ifeq ($(USE_SYSTEM_PCRE), 1)
+PCRE_CONFIG = pcre-config
+else
+PCRE_CONFIG = $(EXTROOT)/bin/pcre-config
 endif
 
 ifeq ($(OS), Linux)

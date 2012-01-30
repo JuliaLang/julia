@@ -12,29 +12,21 @@ signbit(x::Int16) = int(x>>>15)
 signbit(x::Int32) = int(x>>>31)
 signbit(x::Int64) = int(x>>>63)
 
-abs(x::Unsigned) = x
-abs(x::Int8 ) = boxsi8 (add_int(unbox8 (x),unbox8 (x>> 7)))$(x>> 7)
-abs(x::Int16) = boxsi16(add_int(unbox16(x),unbox16(x>>15)))$(x>>15)
-abs(x::Int32) = boxsi32(add_int(unbox32(x),unbox32(x>>31)))$(x>>31)
-abs(x::Int64) = boxsi64(add_int(unbox64(x),unbox64(x>>63)))$(x>>63)
+flipsign(x::Int32, y::Int32) = boxsi32(flipsign_int32(unbox32(x),unbox32(y)))
+flipsign(x::Int64, y::Int64) = boxsi64(flipsign_int64(unbox64(x),unbox64(y)))
 
-copysign(x::Int8 , y::Int8 ) = (t=(x$y)>>7 ; boxsi8 (add_int(unbox8 (x),unbox8 (t)))$t)
-copysign(x::Int16, y::Int16) = (t=(x$y)>>15; boxsi16(add_int(unbox16(x),unbox16(t)))$t)
-copysign(x::Int32, y::Int32) = (t=(x$y)>>31; boxsi32(add_int(unbox32(x),unbox32(t)))$t)
-copysign(x::Int64, y::Int64) = (t=(x$y)>>63; boxsi64(add_int(unbox64(x),unbox64(t)))$t)
+flipsign(x::Signed, y::Signed)  = flipsign(int(x),int(y))
+flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
+flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
+flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
 
+copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
 copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
 
-flipsign(x::Int8 , y::Int8 ) = (t=y>>7 ; boxsi8 (add_int(unbox8 (x),unbox8 (t)))$t)
-flipsign(x::Int16, y::Int16) = (t=y>>15; boxsi16(add_int(unbox16(x),unbox16(t)))$t)
-flipsign(x::Int32, y::Int32) = (t=y>>31; boxsi32(add_int(unbox32(x),unbox32(t)))$t)
-flipsign(x::Int64, y::Int64) = (t=y>>63; boxsi64(add_int(unbox64(x),unbox64(t)))$t)
-
-flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
-flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
-flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
+abs(x::Unsigned) = x
+abs(x::Signed) = flipsign(x,x)
 
 ## number-theoretic functions ##
 
