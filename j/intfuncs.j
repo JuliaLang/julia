@@ -13,10 +13,10 @@ signbit(x::Int32) = int(x>>>31)
 signbit(x::Int64) = int(x>>>63)
 
 abs(x::Unsigned) = x
-abs(x::Int8 ) = (t=x>>7 ; boxsi8 (add_int(unbox8 (x),unbox8 (t)))$t)
-abs(x::Int16) = (t=x>>15; boxsi16(add_int(unbox16(x),unbox16(t)))$t)
-abs(x::Int32) = (t=x>>31; boxsi32(add_int(unbox32(x),unbox32(t)))$t)
-abs(x::Int64) = (t=x>>63; boxsi64(add_int(unbox64(x),unbox64(t)))$t)
+abs(x::Int8 ) = boxsi8 (add_int(unbox8 (x),unbox8 (x>> 7)))$(x>> 7)
+abs(x::Int16) = boxsi16(add_int(unbox16(x),unbox16(x>>15)))$(x>>15)
+abs(x::Int32) = boxsi32(add_int(unbox32(x),unbox32(x>>31)))$(x>>31)
+abs(x::Int64) = boxsi64(add_int(unbox64(x),unbox64(x>>63)))$(x>>63)
 
 copysign(x::Int8 , y::Int8 ) = (t=(x$y)>>7 ; boxsi8 (add_int(unbox8 (x),unbox8 (t)))$t)
 copysign(x::Int16, y::Int16) = (t=(x$y)>>15; boxsi16(add_int(unbox16(x),unbox16(t)))$t)
