@@ -224,8 +224,8 @@ div(x::Unsigned, y::Signed) = flipsign(signed(div(x,unsigned(abs(y)))),y)
 rem(x::Signed, y::Unsigned) = flipsign(signed(rem(unsigned(abs(x)),y)),x)
 rem(x::Unsigned, y::Signed) = rem(x,unsigned(abs(y)))
 
-fld(x::Signed, y::Unsigned) = div(x-signed(mod(x,y)),y)
-fld(x::Unsigned, y::Signed) = div(x-unsigned(mod(x,y)),y)
+fld(x::Signed, y::Unsigned) = div(x,y)-(signbit(x)&(rem(x,y)!=0))
+fld(x::Unsigned, y::Signed) = div(x,y)-(signbit(y)&(rem(x,y)!=0))
 
 mod(x::Signed, y::Unsigned) = rem(y+unsigned(rem(x,y)),y)
 mod(x::Unsigned, y::Signed) = rem(y+signed(rem(x,y)),y)

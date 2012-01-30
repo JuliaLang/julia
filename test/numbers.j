@@ -625,47 +625,107 @@ for yr = {
     end
 end
 
-@assert div(typemax(Int64), 1) ==  9223372036854775807
-@assert div(typemax(Int64), 2) ==  4611686018427387903
-@assert div(typemax(Int64), 7) ==  1317624576693539401
-@assert div(typemax(Int64),-1) == -9223372036854775807
-@assert div(typemax(Int64),-2) == -4611686018427387903
-@assert div(typemax(Int64),-7) == -1317624576693539401
+@assert div(typemax(Int64)  , 1) ==  9223372036854775807
+@assert div(typemax(Int64)  , 2) ==  4611686018427387903
+@assert div(typemax(Int64)  , 7) ==  1317624576693539401
+@assert div(typemax(Int64)  ,-1) == -9223372036854775807
+@assert div(typemax(Int64)  ,-2) == -4611686018427387903
+@assert div(typemax(Int64)  ,-7) == -1317624576693539401
+@assert div(typemax(Int64)-1, 1) ==  9223372036854775806
+@assert div(typemax(Int64)-1, 2) ==  4611686018427387903
+@assert div(typemax(Int64)-1, 7) ==  1317624576693539400
+@assert div(typemax(Int64)-1,-1) == -9223372036854775806
+@assert div(typemax(Int64)-1,-2) == -4611686018427387903
+@assert div(typemax(Int64)-1,-7) == -1317624576693539400
+@assert div(typemax(Int64)-2, 1) ==  9223372036854775805
+@assert div(typemax(Int64)-2, 2) ==  4611686018427387902
+@assert div(typemax(Int64)-2, 7) ==  1317624576693539400
+@assert div(typemax(Int64)-2,-1) == -9223372036854775805
+@assert div(typemax(Int64)-2,-2) == -4611686018427387902
+@assert div(typemax(Int64)-2,-7) == -1317624576693539400
 
-@assert div(-typemax(Int64), 1) == -9223372036854775807
-@assert div(-typemax(Int64), 2) == -4611686018427387903
-@assert div(-typemax(Int64), 7) == -1317624576693539401
-@assert div(-typemax(Int64),-1) ==  9223372036854775807
-@assert div(-typemax(Int64),-2) ==  4611686018427387903
-@assert div(-typemax(Int64),-7) ==  1317624576693539401
+@assert div(typemin(Int64)  , 1) == -9223372036854775807-1
+@assert div(typemin(Int64)  , 2) == -4611686018427387904
+@assert div(typemin(Int64)  , 7) == -1317624576693539401
+#@assert div(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
+@assert div(typemin(Int64)  ,-2) ==  4611686018427387904
+@assert div(typemin(Int64)  ,-7) ==  1317624576693539401
+@assert div(typemin(Int64)+1, 1) == -9223372036854775807
+@assert div(typemin(Int64)+1, 2) == -4611686018427387903
+@assert div(typemin(Int64)+1, 7) == -1317624576693539401
+@assert div(typemin(Int64)+1,-1) ==  9223372036854775807
+@assert div(typemin(Int64)+1,-2) ==  4611686018427387903
+@assert div(typemin(Int64)+1,-7) ==  1317624576693539401
+@assert div(typemin(Int64)+2, 1) == -9223372036854775806
+@assert div(typemin(Int64)+2, 2) == -4611686018427387903
+@assert div(typemin(Int64)+2, 7) == -1317624576693539400
+@assert div(typemin(Int64)+2,-1) ==  9223372036854775806
+@assert div(typemin(Int64)+2,-2) ==  4611686018427387903
+@assert div(typemin(Int64)+2,-7) ==  1317624576693539400
+@assert div(typemin(Int64)+3, 1) == -9223372036854775805
+@assert div(typemin(Int64)+3, 2) == -4611686018427387902
+@assert div(typemin(Int64)+3, 7) == -1317624576693539400
+@assert div(typemin(Int64)+3,-1) ==  9223372036854775805
+@assert div(typemin(Int64)+3,-2) ==  4611686018427387902
+@assert div(typemin(Int64)+3,-7) ==  1317624576693539400
 
-@assert div(typemin(Int64), 1) == -9223372036854775807-1
-@assert div(typemin(Int64), 2) == -4611686018427387904
-@assert div(typemin(Int64), 7) == -1317624576693539401
-#@assert div(typemin(Int64),-1) == -9223372036854775807-1 # FIXME!
-@assert div(typemin(Int64),-2) ==  4611686018427387904
-@assert div(typemin(Int64),-7) ==  1317624576693539401
+@assert fld(typemax(Int64)  , 1) ==  9223372036854775807
+@assert fld(typemax(Int64)  , 2) ==  4611686018427387903
+@assert fld(typemax(Int64)  , 7) ==  1317624576693539401
+@assert fld(typemax(Int64)  ,-1) == -9223372036854775807
+@assert fld(typemax(Int64)  ,-2) == -4611686018427387904
+@assert fld(typemax(Int64)  ,-7) == -1317624576693539401
+@assert fld(typemax(Int64)-1, 1) ==  9223372036854775806
+@assert fld(typemax(Int64)-1, 2) ==  4611686018427387903
+@assert fld(typemax(Int64)-1, 7) ==  1317624576693539400
+@assert fld(typemax(Int64)-1,-1) == -9223372036854775806
+@assert fld(typemax(Int64)-1,-2) == -4611686018427387903
+@assert fld(typemax(Int64)-1,-7) == -1317624576693539401
+@assert fld(typemax(Int64)-2, 1) ==  9223372036854775805
+@assert fld(typemax(Int64)-2, 2) ==  4611686018427387902
+@assert fld(typemax(Int64)-2, 7) ==  1317624576693539400
+@assert fld(typemax(Int64)-2,-1) == -9223372036854775805
+@assert fld(typemax(Int64)-2,-2) == -4611686018427387903
+@assert fld(typemax(Int64)-2,-7) == -1317624576693539401
 
-@assert fld(typemax(Int64), 1) ==  9223372036854775807
-@assert fld(typemax(Int64), 2) ==  4611686018427387903
-@assert fld(typemax(Int64), 7) ==  1317624576693539401
-@assert fld(typemax(Int64),-1) == -9223372036854775807
-@assert fld(typemax(Int64),-2) == -4611686018427387904
-@assert fld(typemax(Int64),-7) == -1317624576693539401
+@assert fld(typemin(Int64)  , 1) == -9223372036854775807-1
+@assert fld(typemin(Int64)  , 2) == -4611686018427387904
+@assert fld(typemin(Int64)  , 7) == -1317624576693539402
+#@assert fld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
+@assert fld(typemin(Int64)  ,-2) ==  4611686018427387904
+@assert fld(typemin(Int64)  ,-7) ==  1317624576693539401
+@assert fld(typemin(Int64)+1, 1) == -9223372036854775807
+@assert fld(typemin(Int64)+1, 2) == -4611686018427387904
+@assert fld(typemin(Int64)+1, 7) == -1317624576693539401
+@assert fld(typemin(Int64)+1,-1) ==  9223372036854775807
+@assert fld(typemin(Int64)+1,-2) ==  4611686018427387903
+@assert fld(typemin(Int64)+1,-7) ==  1317624576693539401
+@assert fld(typemin(Int64)+2, 1) == -9223372036854775806
+@assert fld(typemin(Int64)+2, 2) == -4611686018427387903
+@assert fld(typemin(Int64)+2, 7) == -1317624576693539401
+@assert fld(typemin(Int64)+2,-1) ==  9223372036854775806
+@assert fld(typemin(Int64)+2,-2) ==  4611686018427387903
+@assert fld(typemin(Int64)+2,-7) ==  1317624576693539400
+@assert fld(typemin(Int64)+3, 1) == -9223372036854775805
+@assert fld(typemin(Int64)+3, 2) == -4611686018427387903
+@assert fld(typemin(Int64)+3, 7) == -1317624576693539401
+@assert fld(typemin(Int64)+3,-1) ==  9223372036854775805
+@assert fld(typemin(Int64)+3,-2) ==  4611686018427387902
+@assert fld(typemin(Int64)+3,-7) ==  1317624576693539400
 
-@assert fld(-typemax(Int64), 1) == -9223372036854775807
-@assert fld(-typemax(Int64), 2) == -4611686018427387904
-@assert fld(-typemax(Int64), 7) == -1317624576693539401
-@assert fld(-typemax(Int64),-1) ==  9223372036854775807
-@assert fld(-typemax(Int64),-2) ==  4611686018427387903
-@assert fld(-typemax(Int64),-7) ==  1317624576693539401
-
-@assert fld(typemin(Int64), 1) == -9223372036854775807-1
-@assert fld(typemin(Int64), 2) == -4611686018427387904
-@assert fld(typemin(Int64), 7) == -1317624576693539402
-#@assert fld(typemin(Int64),-1) == -9223372036854775807-1 # FIXME!
-@assert fld(typemin(Int64),-2) ==  4611686018427387904
-@assert fld(typemin(Int64),-7) ==  1317624576693539401
+for x={typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
+       typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
+       typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)},
+    y={-7,-2,-1,1,2,7}
+    if x >= 0
+        @assert div(uint(x),y) == div(x,y)
+        @assert fld(uint(x),y) == fld(x,y)
+    end
+    if isa(x,Signed) && y >= 0
+        @assert div(x,uint(y)) == div(x,y)
+        @assert fld(x,uint(y)) == fld(x,y)
+    end
+end
 
 @assert div(1e50,1) == 1e50
 @assert fld(1e50,1) == 1e50
@@ -695,14 +755,6 @@ for x=0:5, y=1:5
     @assert mod(uint(x),-y) == mod(x,-y)
     @assert mod(-x,uint(y)) == mod(-x,y)
 end
-
-@assert div(typemax(Int64), 1) ==  typemax(Int64)
-@assert div(typemax(Int64),-1) == -typemax(Int64)
-@assert div(typemin(Int64), 1) ==  typemin(Int64)
-# @assert div(typemin(Int64),-1) ==  typemin(Int64)
-
-@assert div(typemax(Uint64), 2) ==  typemax(Int64)
-@assert div(typemax(Uint64),-2) == -typemax(Int64)
 
 @assert uint(div(typemax(Uint64)  , 1)) ==  typemax(Uint64)
 @assert uint(div(typemax(Uint64)  ,-1)) == -typemax(Uint64)
