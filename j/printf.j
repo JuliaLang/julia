@@ -526,8 +526,8 @@ function _jl_decode_dec(x::Unsigned)
     @handle_zero
     _jl_point[1] = i = ndigits0z(x)
     while i > 0
-        _jl_digits[i] = '0'+mod(x,uint(10))
-        x = div(x,uint(10))
+        _jl_digits[i] = '0'+mod(x,10)
+        x = div(x,10)
         i -= 1
     end
 end
@@ -646,8 +646,8 @@ function _jl_ini_dec(x::Unsigned, n::Int)
     if k <= n
         _jl_point[1] = k
         for i = k:-1:1
-            _jl_digits[i] = '0'+mod(x,uint(10))
-            x = div(x,uint(10))
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
         end
         for i = k+1:n
             _jl_digits[i] = '0'
@@ -665,8 +665,8 @@ function _jl_ini_dec(x::Unsigned, n::Int)
         _jl_point[1] = k
         x = div(x,p)
         for i = n:-1:1
-            _jl_digits[i] = '0'+mod(x,uint(10))
-            x = div(x,uint(10))
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
         end
     end
 end
@@ -704,8 +704,8 @@ function _jl_sig_dec(x::Unsigned, n::Int)
     if k <= n
         _jl_point[1] = k
         for i = k:-1:1
-            _jl_digits[i] = '0'+mod(x,uint(10))
-            x = div(x,uint(10))
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
         end
         while _jl_digits[k] == '0'
             k -= 1
@@ -724,8 +724,8 @@ function _jl_sig_dec(x::Unsigned, n::Int)
         _jl_point[1] = k
         x = div(x,p)
         for i = n:-1:1
-            _jl_digits[i] = '0'+mod(x,uint(10))
-            x = div(x,uint(10))
+            _jl_digits[i] = '0'+mod(x,10)
+            x = div(x,10)
         end
         while _jl_digits[n] == '0'
             n -= 1
