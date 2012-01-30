@@ -175,6 +175,21 @@ function show(e::UnionTooComplexError)
     show(e.types)
 end
 
+function show(bt::BackTrace)
+    show(bt.e)
+    i = 1
+    t = bt.trace
+    while i < length(t)
+        print("\n")
+        lno = t[i+2]
+        print("in ", t[i], ", ", t[i+1])
+        if lno >= 1
+            print(":", lno)
+        end
+        i += 3
+    end
+end
+
 function dump(x)
     T = typeof(x)
     if isa(x,Array)

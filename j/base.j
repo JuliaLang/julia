@@ -57,20 +57,7 @@ type BackTrace <: Exception
     trace::Array{Any,1}
 end
 
-function show(bt::BackTrace)
-    show(bt.e)
-    i = 1
-    t = bt.trace
-    while i < length(t)
-        print("\n")
-        lno = t[i+2]
-        print("in ", t[i], ", ", t[i+1])
-        if lno >= 1
-            print(":", lno)
-        end
-        i += 3
-    end
-end
+show(bt::BackTrace) = show(bt.e)
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
