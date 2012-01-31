@@ -102,9 +102,4 @@ $(jl)|__/$(tx)                   |
 
 \033[0m"
 
-_jl_color_available() =
-    success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
-
-_jl_banner() = print(_jl_color_available() ? _jl_banner_color : _jl_banner_plain)
-
 end # begin

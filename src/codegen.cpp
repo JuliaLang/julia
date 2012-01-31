@@ -1946,6 +1946,8 @@ static void init_julia_llvm_env(Module *m)
     
     //addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
     addPass(FPM, createReassociatePass());          // Reassociate expressions
+    //addPass(FPM, createEarlyCSEPass()); //// ****
+    //addPass(FPM, createLoopIdiomPass()); //// ****
     addPass(FPM, createLoopRotatePass());           // Rotate loops.
     addPass(FPM, createLICMPass());                 // Hoist loop invariants
     addPass(FPM, createLoopUnswitchPass());         // Unswitch loops.
@@ -1962,6 +1964,8 @@ static void init_julia_llvm_env(Module *m)
     
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
+    //addPass(FPM, createSinkingPass()); ////////////// ****
+    //addPass(FPM, createInstructionSimplifierPass());///////// ****
     addPass(FPM, createInstructionCombiningPass());
     addPass(FPM, createJumpThreadingPass());         // Thread jumps
     addPass(FPM, createDeadStoreEliminationPass());  // Delete dead stores

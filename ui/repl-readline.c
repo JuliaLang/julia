@@ -25,7 +25,16 @@ extern int asprintf(char **strp, const char *fmt, ...);
 #include <readline/history.h>
 
 char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
+char prompt_plain[] = "julia> ";
+char *prompt_string = prompt_plain;
+int prompt_length;
 static char *history_file = NULL;
+static jl_value_t *rl_ast = NULL;
+
+DLLEXPORT void jl_enable_color(void)
+{
+    prompt_string = jl_prompt_color;
+}
 
 // yes, readline uses inconsistent indexing internally.
 #define history_rem(n) remove_history(n-history_base)
@@ -324,11 +333,10 @@ DLLEXPORT void jl_input_line_callback(char *input)
     handle_input(rl_ast, end, doprint);
 }
 
-void read_expr(char *prompt)
+char *read_expr(char *prompt)
 {
     rl_ast = NULL;
-    char *input = readline(prompt);
-    jl_input_line_callback(input);
+    return readline(prompt);
 }
 
 static int common_prefix(const char *s1, const char *s2)
@@ -458,28 +466,18 @@ static void init_rl(void)
 
 void init_repl_environment(void)
 {
+    prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }
 
-void exit_repl_environment(void)
+void repl_callback_enable()
 {
-    rl_callback_handler_remove();
+    rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
-DLLEXPORT void repl_callback_enable(void)
-{
-    if (jl_have_event_loop)
-        rl_callback_handler_install(prompt_string, jl_input_line_callback);
-}
-
-void repl_stdin_callback(void)
+void jl_stdin_callback(void)
 {
     rl_callback_read_char();
-}
-
-void repl_print_prompt(void)
-{
-    // handled by readline
 }

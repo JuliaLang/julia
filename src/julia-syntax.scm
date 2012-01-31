@@ -453,7 +453,6 @@
 				     (eq? (car a) 'tuple))
 				(cdr a)
 				(list a))))
-					; TODO: anonymous generic function
 		     (function-expr a
 				    `(block
 				      ,@(map (lambda (d)
@@ -573,8 +572,7 @@
     `(block ,@(map (lambda (v) `(const ,v)) vs)
 	    ,(cadr __))))
 
-;; convert (lhss...) = x to assignments, eliminating the tuple
-;; assumes x is of the form (tuple ...)
+;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss x)
   (let ((temps (map (lambda (x) (gensy)) (cdr x))))
     `(block

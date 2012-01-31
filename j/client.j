@@ -1,24 +1,98 @@
 ## client.j - frontend handling command line options, environment setup,
 ##            and REPL
 
-const _jl_roottask = current_task()
-const _jl_roottask_wi = WorkItem(_jl_roottask)
+const _jl_color_normal = "\033[0m"
+
+function _jl_answer_color()
+    c = get(ENV, "JL_ANSWER_COLOR", "")
+    return c == "black"   ? "\033[1m\033[30m" :
+           c == "red"     ? "\033[1m\033[31m" :
+           c == "green"   ? "\033[1m\033[32m" :
+           c == "yellow"  ? "\033[1m\033[33m" :
+           c == "magenta" ? "\033[1m\033[35m" :
+           c == "cyan"    ? "\033[1m\033[36m" :
+           c == "white"   ? "\033[1m\033[37m" :
+           "\033[1m\033[34m"
+end
+
+_jl_color_available() =
+    success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+
+_jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
+    del_fd_handler(STDIN.fd)
     put(_jl_repl_channel, (ast, show_value))
+end
+
+# called to show a REPL result
+function repl_show(v)
+    if isa(v,Function) && !isa(v,CompositeKind)
+        return ccall(:jl_show_full_function, Void, (Any,), v)
+    end
+    show(v)
+    if isa(v,CompositeKind)
+        if isgeneric(v)
+            println()
+            ccall(:jl_show_full_function, Void, (Any,), v)
+        end
+    end
+end
+
+function _jl_eval_user_input(ast, show_value)
+    iserr, lasterr = false, ()
+    while true
+        try
+            ccall(:jl_register_toplevel_eh, Void, ())
+            if _jl_have_color
+                print(_jl_color_normal)
+            end
+            if iserr
+                show(lasterr)
+                println()
+                iserr, lasterr = false, ()
+            else
+                value = eval(ast)
+                global ans = value
+                if value != nothing && show_value
+                    if _jl_have_color
+                        print(_jl_answer_color())
+                    end
+                    repl_show(value)
+                    println()
+                end
+            end
+            break
+        catch e
+            iserr, lasterr = true, e
+        end
+    end
+    println()
 end
 
 function run_repl()
     global const _jl_repl_channel = RemoteRef()
-    ccall(:repl_callback_enable, Void, ())
+
+    if _jl_have_color
+        ccall(:jl_enable_color, Void, ())
+    end
 
     while true
+        ccall(:repl_callback_enable, Void, ())
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
         (ast, show_value) = take(_jl_repl_channel)
-        del_fd_handler(STDIN.fd)
-        ccall(:jl_eval_user_input, Void, (Any, Int32), ast, show_value)
+        if show_value == -1
+            # exit flag
+            break
+        end
+        _jl_eval_user_input(ast, show_value!=0)
     end
+
+    if _jl_have_color
+        print(_jl_color_normal)
+    end
+    println()
 end
 
 function parse_input_line(s::String)
@@ -93,6 +167,9 @@ function process_options(args::Array{Any,1})
     return (quiet,repl)
 end
 
+const _jl_roottask = current_task()
+const _jl_roottask_wi = WorkItem(_jl_roottask)
+
 function _start()
     try
         ccall(:jl_register_toplevel_eh, Void, ())
@@ -119,12 +196,11 @@ function _start()
 
         (quiet,repl) = process_options(ARGS)
         if repl
+            global _jl_have_color = _jl_color_available()
             if !quiet
                 _jl_banner()
             end
             run_repl()
-        else
-            ccall(:jl_disable_color, Void, ())
         end
     catch e
         show(e)

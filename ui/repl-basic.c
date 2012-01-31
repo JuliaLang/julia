@@ -1,13 +1,15 @@
 #include "repl.h"
 
 char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
+char *prompt_string = "julia> ";
 
 void init_repl_environment(void)
 {
 }
 
-void exit_repl_environment(void)
+DLLEXPORT void jl_enable_color(void)
 {
+    prompt_string = jl_prompt_color;
 }
 
 DLLEXPORT void jl_input_line_callback(char *input)
@@ -17,12 +19,10 @@ DLLEXPORT void jl_input_line_callback(char *input)
 
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
-        ast = NULL;
+        ast = jl_nothing;
     }
     else {
         ast = jl_parse_input_line(input);
-        if (ast == (jl_value_t*)jl_nothing)
-            ast = NULL;
         // TODO
         //if (jl_is_expr(ast) && ((jl_expr_t*)ast)->head == jl_continue_sym)
         doprint = !ends_with_semicolon(input);
@@ -30,31 +30,25 @@ DLLEXPORT void jl_input_line_callback(char *input)
     handle_input(ast, end, doprint);
 }
 
-void read_expr(char *prompt)
+char *read_expr(char *prompt)
 {
     char *input;
-    //ios_printf(ios_stdout, prompt);
-    //ios_flush(ios_stdout);
+    ios_printf(ios_stdout, prompt);
+    ios_flush(ios_stdout);
     input = ios_readline(ios_stdin);
     ios_purge(ios_stdin);
-    jl_input_line_callback(input);
+    return input;
 }
 
-DLLEXPORT void repl_callback_enable(void)
+void repl_callback_enable()
 {
     ios_printf(ios_stdout, prompt_string);
     ios_flush(ios_stdout);
 }
 
-void repl_stdin_callback(void)
+void jl_stdin_callback(void)
 {
     char *input = ios_readline(ios_stdin);
     ios_purge(ios_stdin);
     jl_input_line_callback(input);
-}
-
-void repl_print_prompt(void)
-{
-    ios_printf(ios_stdout, prompt_string);
-    ios_flush(ios_stdout);
 }

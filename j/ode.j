@@ -17,7 +17,7 @@
 #   ODE23 uses the Runge-Kutta (2,3) method of Bogacki and Shampine (BS23).
 #
 #   Example    
-#      tspan = [0 2*pi()]
+#      tspan = [0 2*pi]
 #      y_0 = [1 0]'
 #      F = (t, y) -> [0 1; -1 0]*y
 #      ode23(F, tspan, y_0)

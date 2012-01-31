@@ -1532,7 +1532,7 @@ hello_from(i) = print("message from $i to $(myid())\n")
 function buffon(niter)
     nc =
     @parallel (+) for i=1:niter
-        rand() <= sin(rand()*pi()/2) ? 1 : 0
+        rand() <= sin(rand()*pi/2) ? 1 : 0
     end
     2/(nc/niter)
 end

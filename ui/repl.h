@@ -22,25 +22,18 @@
 #include "julia.h"
 
 extern char jl_prompt_color[];
-extern int prompt_length;
-extern int have_color;
 extern int tab_width;
-extern jl_value_t *rl_ast;
-extern char *prompt_string;
 extern DLLEXPORT char *julia_home;
-extern int jl_have_event_loop;
 
 extern char *jl_answer_color();
 extern void init_repl_environment();
-extern void exit_repl_environment();
-extern void read_expr(char *prompt);
+extern char *read_expr(char *prompt);
 DLLEXPORT extern void jl_input_line_callback(char *input);
 extern void handle_input(jl_value_t *ast, int end, int show_value);
 extern int ends_with_semicolon(const char *input);
 extern char *ios_readline(ios_t *s);
 DLLEXPORT extern void repl_callback_enable();
-DLLEXPORT extern void jl_disable_color();
-extern void repl_stdin_callback();
-extern void repl_print_prompt();
+DLLEXPORT extern void jl_enable_color();
+DLLEXPORT extern void jl_stdin_callback();
 
 #endif // JL_REPL_H

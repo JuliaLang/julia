@@ -102,9 +102,6 @@ ans = nothing
 
 # callback for that event handler
 function __socket_callback(fd)
-    # keep track of the previous result
-    global ans
-
     # read the message
     __msg = __read_message()
 
@@ -159,32 +156,39 @@ function __socket_callback(fd)
         # tell the browser all the lines were parsed
         __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {}))
 
-        # try to evaluate the expressions
-        for i=1:length(__parsed_exprs)
-            # evaluate the expression and stop if any exceptions happen
-            try
-                ans = eval(__parsed_exprs[i])
-            catch __error
-                return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {print_to_string(show, __error)}))
-            end
-        end
-
-        # send the result of the last expression
-        if ans == nothing
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
-        else
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {print_to_string(show, ans)}))
-        end
+        put(__eval_channel, __parsed_exprs)
     end
 end
 
 # event handler for socket input
-add_fd_handler(__connectfd, fd->(enq_work(()->__socket_callback(fd));
-				 perform_work()))
+add_fd_handler(__connectfd, __socket_callback)
+
+function __eval_exprs(__parsed_exprs)
+    global ans
+    # try to evaluate the expressions
+    for i=1:length(__parsed_exprs)
+        # evaluate the expression and stop if any exceptions happen
+        try
+            ans = eval(__parsed_exprs[i])
+        catch __error
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {print_to_string(show, __error)}))
+        end
+    end
+    
+    # send the result of the last expression
+    if ans == nothing
+        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {""}))
+    else
+        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {print_to_string(show, ans)}))
+    end
+end
 
 ###########################################
 # wait forever while asynchronous processing happens
 ###########################################
 
-# this is better than an infinite loop because it doesn't consume the cpu
-wait(RemoteRef())
+__eval_channel = RemoteRef()
+
+while true
+    __eval_exprs(take(__eval_channel))
+end

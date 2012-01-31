@@ -55,7 +55,7 @@
     jl_types_equal;
     jl_current_output_stream_obj;
     jl_set_current_output_stream_obj;
-    jl_disable_color;
+    jl_enable_color;
     jl_takebuf_array;
     jl_takebuf_string;
     jl_readuntil;
@@ -154,7 +154,6 @@
     jl_input_line_callback_no_readline;
     jl_stdin_callback;
     repl_callback_enable;
-    jl_eval_user_input;
     jl_toplevel_eval;
     jl_enq_send_req;
     jl_buf_mutex_lock;

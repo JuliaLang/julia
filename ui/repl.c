@@ -5,19 +5,10 @@
 
 #include "repl.h"
 
-char *prompt_string;
-static char jl_prompt_plain[] = "julia> ";
-static char jl_color_normal[] = "\033[0m";
 static int lisp_prompt = 0;
-int jl_have_event_loop = 0;
 static char *program = NULL;
 char *image_file = "sys.ji";
-jl_value_t *rl_ast = NULL;
 int tab_width = 2;
-int prompt_length = 0;
-int have_color = 1;
-
-DLLEXPORT void jl_disable_color() { have_color = 0; }
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -104,22 +95,6 @@ void parse_opts(int *argcp, char ***argvp) {
     }
 }
 
-char *jl_answer_color(void) {
-    char *answer_color = getenv("JL_ANSWER_COLOR");
-    if (answer_color) {
-        switch (answer_color[0]) {
-        case 'b': if (!strcmp(answer_color,"black"))   return "\033[1m\033[30m"; break;
-        case 'r': if (!strcmp(answer_color,"red"))     return "\033[1m\033[31m"; break;
-        case 'g': if (!strcmp(answer_color,"green"))   return "\033[1m\033[32m"; break;
-        case 'y': if (!strcmp(answer_color,"yellow"))  return "\033[1m\033[33m"; break;
-        case 'm': if (!strcmp(answer_color,"magenta")) return "\033[1m\033[35m"; break;
-        case 'c': if (!strcmp(answer_color,"cyan"))    return "\033[1m\033[36m"; break;
-        case 'w': if (!strcmp(answer_color,"white"))   return "\033[1m\033[37m"; break;
-        }
-    }
-    return "\033[1m\033[34m";
-}
-
 int ends_with_semicolon(const char *input)
 {
     char *p = strrchr(input, ';');
@@ -129,25 +104,6 @@ int ends_with_semicolon(const char *input)
             return 1;
     }
     return 0;
-}
-
-static int detect_color(void)
-{
-#ifdef WIN32
-    return 0;
-#else
-    int tput = system("tput setaf 0 >/dev/null");
-    if (tput == 0) return 1;
-    if (tput == 1) return 0;
-    char *term = getenv("TERM");
-    return term && !strncmp(term,"xterm",5);
-#endif
-}
-
-// called when we detect an event on stdin
-DLLEXPORT void jl_stdin_callback(void)
-{
-    repl_stdin_callback();
 }
 
 static int exec_program(void)
@@ -171,101 +127,17 @@ static int exec_program(void)
     return 0;
 }
 
-static void exit_repl(int code)
-{
-    exit_repl_environment();
-
-    if (have_color) {
-        ios_printf(ios_stdout, jl_color_normal);
-    }
-    ios_flush(ios_stdout);
-#ifdef JL_GF_PROFILE
-    print_profile();
-#endif
-    exit(code);
-}
-
-void jl_show_full_function(jl_value_t *v);
-
-static void repl_show_value(jl_value_t *v)
-{
-    if (jl_is_function(v) && !jl_is_struct_type(v)) {
-        // show method table when a function is shown at the top level.
-        jl_show_full_function(v);
-        return;
-    }
-    jl_show(v);
-    if (jl_is_struct_type(v)) {
-        ios_t *s = jl_current_output_stream();
-        // for convenience, show constructor methods when
-        // a type is shown at the top level.
-        if (jl_is_gf(v)) {
-            ios_putc('\n', s);
-            jl_show_full_function(v);
-        }
-    }
-}
-
-DLLEXPORT void jl_eval_user_input(jl_value_t *ast, int show_value)
-{
-    JL_GC_PUSH(&ast);
-    assert(ast != NULL);
-    int iserr = 0;
-
- again:
-    ;
-    JL_TRY {
-        jl_register_toplevel_eh();
-        if (have_color) {
-            ios_printf(ios_stdout, jl_color_normal);
-        }
-        if (iserr) {
-            jl_show(jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
-            JL_EH_POP();
-            break; // leave JL_TRY
-        }
-        jl_value_t *value = jl_toplevel_eval(ast);
-        jl_set_global(jl_current_module, jl_symbol("ans"), value);
-        if (value != (jl_value_t*)jl_nothing && show_value) {
-            if (have_color) {
-                ios_printf(ios_stdout, jl_answer_color());
-            }
-            repl_show_value(value);
-            ios_printf(ios_stdout, "\n");
-        }
-    }
-    JL_CATCH {
-        iserr = 1;
-        goto again;
-    }
-    ios_printf(ios_stdout, "\n");
-    JL_GC_POP();
-    repl_callback_enable();
-}
-
 // handle a command line input event
 void handle_input(jl_value_t *ast, int end, int show_value)
 {
     if (end) {
-        ios_printf(ios_stdout, "\n");
-        exit_repl(0);
+        show_value = -1;
+        ast = jl_nothing;
     }
-    if (ast == NULL) {
-        ios_printf(ios_stdout, "\n");
-        repl_print_prompt();
-        return;
-    }
-    if (!jl_have_event_loop) {
-        jl_eval_user_input(ast, show_value);
-    }
-    else {
-        jl_value_t *f = 
-            jl_get_global(jl_system_module,jl_symbol("repl_callback"));
-        assert(f != NULL);
-        jl_value_t *fargs[] = { ast, jl_box_int32(show_value) };
-        jl_apply((jl_function_t*)f, fargs, 2);
-    }
+    jl_value_t *f = jl_get_global(jl_system_module,jl_symbol("repl_callback"));
+    assert(f);
+    jl_value_t *fargs[] = { ast, jl_box_long(show_value) };
+    jl_apply((jl_function_t*)f, fargs, 2);
 }
 
 void jl_lisp_prompt();
@@ -312,45 +184,41 @@ int true_main(int argc, char *argv[])
 
     init_repl_environment();
 
-    have_color = detect_color();
-    char *prompt = have_color ? jl_prompt_color : jl_prompt_plain;
-    prompt_length = strlen(jl_prompt_plain);
-    prompt_string = prompt;
-
     jl_function_t *start_client =
-        (jl_function_t*)
-        jl_get_global(jl_system_module, jl_symbol("_start"));
+        (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("_start"));
 
-    if (start_client == NULL) {
-        repl_print_prompt();
-        // client event loop not available; use fallback blocking version
-        int iserr = 0;
-    again:
-        ;
-        JL_TRY {
-            if (iserr) {
-                if (have_color) {
-                    ios_printf(ios_stdout, jl_color_normal);
-                }
-                jl_show(jl_exception_in_transit);
-                ios_printf(ios_stdout, "\n\n");
-                iserr = 0;
-            }
-            while (1) {
-                read_expr(prompt);
-            }
-        }
-        JL_CATCH {
-            iserr = 1;
-            goto again;
-        }
-    }
-    else {
-        jl_have_event_loop = 1;
+    if (start_client) {
         jl_apply(start_client, NULL, 0);
+        return 0;
     }
 
-    exit_repl(0);
+    // client event loop not available; use fallback blocking version
+    int iserr = 0;
+ again:
+    ;
+    JL_TRY {
+        if (iserr) {
+            jl_show(jl_exception_in_transit);
+            ios_printf(ios_stdout, "\n\n");
+            iserr = 0;
+        }
+        while (1) {
+            char *input = read_expr("julia> ");
+            if (!input || ios_eof(ios_stdin)) {
+                ios_printf(ios_stdout, "\n");
+                break;
+            }
+            jl_value_t *ast = jl_parse_input_line(input);
+            jl_value_t *value = jl_toplevel_eval(ast);
+            jl_show(value);
+            ios_printf(ios_stdout, "\n\n");
+        }
+    }
+    JL_CATCH {
+        iserr = 1;
+        goto again;
+    }
+
     return 0;
 }
 
