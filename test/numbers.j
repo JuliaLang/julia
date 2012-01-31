@@ -719,8 +719,8 @@ for x={typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
        typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)},
     y={-7,-2,-1,1,2,7}
     if x >= 0
-        @assert div(uint(x),y) == div(x,y)
-        @assert fld(uint(x),y) == fld(x,y)
+        @assert div(uint(x),y) == uint(div(x,y))
+        @assert fld(uint(x),y) == uint(fld(x,y))
     end
     if isa(x,Signed) && y >= 0
         @assert div(x,uint(y)) == div(x,y)
@@ -732,13 +732,13 @@ for x=0:5, y=1:5
     @assert div(uint(x),uint(y)) == div(x,y)
     @assert div(uint(x),y) == div(x,y)
     @assert div(x,uint(y)) == div(x,y)
-    @assert div(uint(x),-y) == div(x,-y)
+    @assert div(uint(x),-y) == uint(div(x,-y))
     @assert div(-x,uint(y)) == div(-x,y)
 
     @assert fld(uint(x),uint(y)) == fld(x,y)
     @assert fld(uint(x),y) == fld(x,y)
     @assert fld(x,uint(y)) == fld(x,y)
-    @assert fld(uint(x),-y) == fld(x,-y)
+    @assert fld(uint(x),-y) == uint(fld(x,-y))
     @assert fld(-x,uint(y)) == fld(-x,y)
 
     @assert rem(uint(x),uint(y)) == rem(x,y)
@@ -754,49 +754,49 @@ for x=0:5, y=1:5
     @assert mod(-x,uint(y)) == mod(-x,y)
 end
 
-@assert uint(div(typemax(Uint64)  , 1)) ==  typemax(Uint64)
-@assert uint(div(typemax(Uint64)  ,-1)) == -typemax(Uint64)
-@assert uint(div(typemax(Uint64)-1, 1)) ==  typemax(Uint64)-1
-@assert uint(div(typemax(Uint64)-1,-1)) == -typemax(Uint64)+1
-@assert uint(div(typemax(Uint64)-2, 1)) ==  typemax(Uint64)-2
-@assert uint(div(typemax(Uint64)-2,-1)) == -typemax(Uint64)+2
+@assert div(typemax(Uint64)  , 1) ==  typemax(Uint64)
+@assert div(typemax(Uint64)  ,-1) == -typemax(Uint64)
+@assert div(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
+@assert div(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
+@assert div(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
+@assert div(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@assert div(uint(typemax(Int64))+2, 1) ==  typemax(Int64)+2
-@assert div(uint(typemax(Int64))+2,-1) == -typemax(Int64)-2
-@assert div(uint(typemax(Int64))+1, 1) ==  typemax(Int64)+1
-@assert div(uint(typemax(Int64))+1,-1) == -typemax(Int64)-1
-@assert div(uint(typemax(Int64))  , 1) ==  typemax(Int64)
-@assert div(uint(typemax(Int64))  ,-1) == -typemax(Int64)
+@assert int(div(uint(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@assert int(div(uint(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@assert int(div(uint(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@assert int(div(uint(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@assert int(div(uint(typemax(Int64))  , 1)) ==  typemax(Int64)
+@assert int(div(uint(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@assert div(typemax(Uint),typemax(Int))        ==  2
-@assert div(typemax(Uint),(typemax(Int)>>1)+1) ==  3
-@assert div(typemax(Uint),typemax(Int)>>1)     ==  4
-@assert div(typemax(Uint),typemin(Int))        == -1
-@assert div(typemax(Uint),typemin(Int)+1)      == -2
-@assert div(typemax(Uint),typemin(Int)>>1)     == -3
-@assert div(typemax(Uint),(typemin(Int)>>1)+1) == -4
+@assert int(div(typemax(Uint),typemax(Int)))        ==  2
+@assert int(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@assert int(div(typemax(Uint),typemax(Int)>>1))     ==  4
+@assert int(div(typemax(Uint),typemin(Int)))        == -1
+@assert int(div(typemax(Uint),typemin(Int)+1))      == -2
+@assert int(div(typemax(Uint),typemin(Int)>>1))     == -3
+@assert int(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
 
-@assert uint(fld(typemax(Uint64)  , 1)) ==  typemax(Uint64)
-@assert uint(fld(typemax(Uint64)  ,-1)) == -typemax(Uint64)
-@assert uint(fld(typemax(Uint64)-1, 1)) ==  typemax(Uint64)-1
-@assert uint(fld(typemax(Uint64)-1,-1)) == -typemax(Uint64)+1
-@assert uint(fld(typemax(Uint64)-2, 1)) ==  typemax(Uint64)-2
-@assert uint(fld(typemax(Uint64)-2,-1)) == -typemax(Uint64)+2
+@assert fld(typemax(Uint64)  , 1) ==  typemax(Uint64)
+@assert fld(typemax(Uint64)  ,-1) == -typemax(Uint64)
+@assert fld(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
+@assert fld(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
+@assert fld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
+@assert fld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
 
-@assert fld(uint(typemax(Int64))+2, 1) ==  typemax(Int64)+2
-@assert fld(uint(typemax(Int64))+2,-1) == -typemax(Int64)-2
-@assert fld(uint(typemax(Int64))+1, 1) ==  typemax(Int64)+1
-@assert fld(uint(typemax(Int64))+1,-1) == -typemax(Int64)-1
-@assert fld(uint(typemax(Int64))  , 1) ==  typemax(Int64)
-@assert fld(uint(typemax(Int64))  ,-1) == -typemax(Int64)
+@assert int(fld(uint(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
+@assert int(fld(uint(typemax(Int64))+2,-1)) == -typemax(Int64)-2
+@assert int(fld(uint(typemax(Int64))+1, 1)) ==  typemax(Int64)+1
+@assert int(fld(uint(typemax(Int64))+1,-1)) == -typemax(Int64)-1
+@assert int(fld(uint(typemax(Int64))  , 1)) ==  typemax(Int64)
+@assert int(fld(uint(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@assert fld(typemax(Uint),typemax(Int))        ==  2
-@assert fld(typemax(Uint),(typemax(Int)>>1)+1) ==  3
-@assert fld(typemax(Uint),typemax(Int)>>1)     ==  4
-@assert fld(typemax(Uint),typemin(Int))        == -2
-@assert fld(typemax(Uint),typemin(Int)+1)      == -3
-@assert fld(typemax(Uint),typemin(Int)>>1)     == -4
-@assert fld(typemax(Uint),(typemin(Int)>>1)+1) == -5
+@assert int(fld(typemax(Uint),typemax(Int)))        ==  2
+@assert int(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
+@assert int(fld(typemax(Uint),typemax(Int)>>1))     ==  4
+@assert int(fld(typemax(Uint),typemin(Int)))        == -2
+@assert int(fld(typemax(Uint),typemin(Int)+1))      == -3
+@assert int(fld(typemax(Uint),typemin(Int)>>1))     == -4
+@assert int(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
 @assert div(1e50,1) == 1e50
 @assert fld(1e50,1) == 1e50

@@ -1061,6 +1061,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
             BasicBlock *bb = (*ctx->labels)[labelname];
             assert(bb);
             builder.CreateBr(bb);
+            BasicBlock *after = BasicBlock::Create(getGlobalContext(), 
+                                                   "br", ctx->f);
+            builder.SetInsertPoint(after);
         }
         return NULL;
     }

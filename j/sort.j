@@ -25,7 +25,7 @@ quote
 # If only numbers are being sorted, a faster quicksort can be used.
 
 # fast sort for small arrays
-function ($insertionsort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
+function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -43,7 +43,7 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Integer, hi::Intege
 end
 
 # permutes an auxilliary array mirroring the sort
-function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Integer, hi::Integer)
+function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int)
     for i = lo+1:hi
         j = i
         x = a[i]
@@ -66,16 +66,16 @@ end
 _jl_pivot_middle(a,b,c) = a < b ? (b < c ? b : c) : (a < c ? a : c)
 
 # very fast but unstable
-function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
+function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= 20
             return $expr(:call, insertionsort, args..., :a, :lo, :hi)
         end
         i, j = lo, hi
         # pivot = (a[lo]+a[hi])/2                                   # 1.14x
-        # pivot = a[div(lo+hi,2)]                                   # 1.15x
-          pivot = (a[lo]+a[hi]+a[div(lo+hi,2)])/3                   # 1.16x
-        # pivot = _jl_pivot_middle(a[lo], a[hi], a[div(lo+hi,2)])   # 1.23x
+        # pivot = a[(lo+hi)>>>1]                                    # 1.15x
+          pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
+        # pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
         # pivot = a[randival(lo,hi)]                                # 1.28x
         while i <= j
             while $lt(:(a[i]), :pivot); i += 1; end
@@ -95,13 +95,13 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Integer, hi::Integer)
 end
 
 # less fast & not in-place, but stable
-function ($mergesort)($(args...), a::AbstractVector, lo::Integer, hi::Integer, b::AbstractVector)
+function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::AbstractVector)
     if lo < hi
         if hi-lo <= 20
             return ($insertionsort)($(args...), a, lo, hi)
         end
 
-        m = div(lo+hi, 2)
+        m = (lo+hi)>>>1
         ($mergesort)($(args...), a, lo, m, b)
         ($mergesort)($(args...), a, m+1, hi, b)
 
@@ -137,14 +137,14 @@ end
 
 # permutes auxilliary arrays mirroring the sort
 function ($mergesort)($(args...),
-                      a::AbstractVector, p::AbstractVector{Int}, lo::Integer, hi::Integer,
+                      a::AbstractVector, p::AbstractVector{Int}, lo::Int, hi::Int,
                       b::AbstractVector, pb::AbstractVector{Int})
     if lo < hi
         if hi-lo <= 20
             return ($insertionsort)($(args...), a, p, lo, hi)
         end
 
-        m = div(lo+hi, 2)
+        m = (lo+hi)>>>1
         ($mergesort)($(args...), a, p, lo, m, b, pb)
         ($mergesort)($(args...), a, p, m+1, hi, b, pb)
 
@@ -341,16 +341,15 @@ function issorted(v::AbstractVector)
   return true
 end
 
-function _jl_quickselect(a::AbstractVector, k::Integer, lo::Integer, hi::Integer)
+function _jl_quickselect(a::AbstractVector, k::Int, lo::Int, hi::Int)
     if k < lo || k > hi; error("k is out of bounds"); end
 
     while true
 
         if lo == hi; return a[lo]; end
 
-        # pivot_ind = partition(a, lo, hi)
         i, j = lo, hi
-        pivot = a[randival(lo,hi)]
+        pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])
         while i < j
             while a[i] < pivot; i += 1; end
             while a[j] > pivot; j -= 1; end
@@ -376,8 +375,8 @@ function _jl_quickselect(a::AbstractVector, k::Integer, lo::Integer, hi::Integer
 
 end
 
-select(a::AbstractVector, k::Integer) = _jl_quickselect(copy(a), k, 1, length(a))
-select!(a::AbstractVector, k::Integer) = _jl_quickselect(a, k, 1, length(a))
+select(a::AbstractVector, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
+select!(a::AbstractVector, k::Int) = _jl_quickselect(a, k, 1, length(a))
 
 function searchsorted(a, x)
     hi = length(a)
@@ -386,7 +385,7 @@ function searchsorted(a, x)
     end
     lo = 1
     while lo < hi-1
-        i = div(lo+hi,2)
+        i = (lo+hi)>>>1
         if isless(x,a[i])
             hi = i
         else
