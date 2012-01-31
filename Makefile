@@ -16,12 +16,8 @@ sys0.ji: src/boot.j src/dump.c j/stage0.j
 	$(QUIET_JULIA) ./julia -b stage0.j
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-sys.ji: sys0.ji VERSION j/sysimg.j j/start_image.j j/*.j
-ifeq ($(wildcard sys.ji),)
-	$(QUIET_JULIA) ./julia -J sys0.ji stage1.j
-else
-	$(QUIET_JULIA) ./julia stage1.j
-endif
+sys.ji: VERSION sys0.ji j/stage1.j j/sysimg.j j/start_image.j j/*.j
+	$(QUIET_JULIA) ./julia `test -f sys.ji && echo stage1.j || echo -J sys0.ji stage1.j`
 
 install: release
 	install -d $(DESTDIR)/usr/share/julia/lib
