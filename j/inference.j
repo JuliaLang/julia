@@ -30,8 +30,8 @@ end
 # TODO thread local
 inference_stack = EmptyCallStack()
 
-tintersect(a,b) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-tmatch(a,b) = ccall(:jl_type_match, Any, (Any,Any), a, b)
+tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
+tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
 getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
 getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
@@ -383,7 +383,7 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
            _iisconst(f) && f
 end
 
-isvatuple(t) = (n = length(t); n > 0 && isseqtype(t[n]))
+isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
 
 limit_tuple_depth(t) = limit_tuple_depth(t,0)
 
@@ -1242,7 +1242,7 @@ end
 occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
-function contains_is(arr, item)
+function contains_is(arr, item::ANY)
     for i = 1:length(arr)
         if is(arr[i],item)
             return true

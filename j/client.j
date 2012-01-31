@@ -40,7 +40,7 @@ function repl_show(v)
     end
 end
 
-function _jl_eval_user_input(ast, show_value)
+function _jl_eval_user_input(ast::ANY, show_value)
     iserr, lasterr = false, ()
     while true
         try
