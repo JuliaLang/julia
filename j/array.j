@@ -21,16 +21,21 @@ numel(a::Array) = arraylen(a)
 copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
 
-function copy_to{T}(dest::Array{T}, src::Array{T})
+function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
+    if so+N-1 > numel(src) || do+N-1 > numel(dest) || do < 1 || so < 1
+        throw(BoundsError())
+    end
     if isa(T, BitsKind)
-        copy_to(pointer(dest), pointer(src), numel(src))
+        copy_to(pointer(dest, do), pointer(src, so), N)
     else
-        for i=1:numel(src)
-            dest[i] = copy(src[i])
+        for i=0:N-1
+            dest[i+do] = copy(src[i+so])
         end
     end
     return dest
 end
+
+copy_to(dest::Array, src::Array) = copy_to(dest, 1, src, 1, numel(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))

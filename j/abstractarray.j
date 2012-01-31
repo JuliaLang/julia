@@ -336,20 +336,34 @@ function vcat{T}(V::AbstractVector{T}...)
     a
 end
 
-function hcat{T}(A::AbstractMatrix{T}...)
+function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
     nargs = length(A)
-    ncols = sum(a->size(a, 2), A)::Int
     nrows = size(A[1], 1)
-    for j = 2:nargs
-        if size(A[j], 1) != nrows; error("hcat: mismatched dimensions"); end
+    ncols = 0
+    dense = true
+    for j = 1:nargs
+        Aj = A[j]
+        dense &= isa(Aj,Array)
+        nd = ndims(Aj)
+        ncols += (nd==2 ? size(Aj,2) : 1)
+        if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
     end
     B = similar(A[1], nrows, ncols)
     pos = 1
-    for k=1:nargs
-        Ak = A[k]
-        p1 = pos+size(Ak,2)-1
-        B[:, pos:p1] = Ak
-        pos = p1+1
+    if dense
+        for k=1:nargs
+            Ak = A[k]
+            n = numel(Ak)
+            copy_to(B, pos, Ak, 1, n)
+            pos += n
+        end
+    else
+        for k=1:nargs
+            Ak = A[k]
+            p1 = pos+(isa(Ak,AbstractMatrix) ? size(Ak, 2) : 1)-1
+            B[:, pos:p1] = Ak
+            pos = p1+1
+        end
     end
     return B
 end
