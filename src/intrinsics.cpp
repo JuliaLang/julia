@@ -694,7 +694,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *bits = INT(x);
         // values with exponent >= nbits are already integers, and this
         // rounding method doesn't always give the right answer there.
-        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int64,23));
+        Value *expo = builder.CreateAShr(bits, ConstantInt::get(T_int32,23));
         expo = builder.CreateAnd(expo, ConstantInt::get(T_int32,0xff));
         Value *isint = builder.CreateICmpSGE(expo,
                                              ConstantInt::get(T_int32,127+23));
