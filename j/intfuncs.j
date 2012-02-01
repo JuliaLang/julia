@@ -153,18 +153,12 @@ function ndigits0z(x::Unsigned)
     nd -= x < _jl_powers_of_ten[nd]
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
-# TODO: custom versions for each unsigned type?
 
-ndigits(x::Unsigned) = x==0 ? 1 : ndigits0z(x)
-ndigits(x::Integer) = ndigits(unsigned(abs(x)))
-
-ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)), b)
-
-function ndigits(n::Unsigned, b::Integer)
+function ndigits0z(n::Unsigned, b::Integer)
     if b == 2  return (sizeof(n)<<3-leading_zeros(n)); end
     if b == 8  return div((sizeof(n)<<3)-leading_zeros(n)+2,3); end
     if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
-    if b == 10 return n==0 ? 1 : ndigits0z(n); end
+    if b == 10 return ndigits0z(n); end
     nd = 1
     if n <= 500000000000000000
         # multiplication method is faster, but doesn't work for extreme values
@@ -184,6 +178,13 @@ function ndigits(n::Unsigned, b::Integer)
     end
     return nd
 end
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),b)
+
+ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,b)
+ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
+
+ndigits(x::Integer, b::Integer) = ndigits(unsigned(abs(x)),b)
+ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
