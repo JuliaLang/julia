@@ -171,6 +171,12 @@ end
 @assert parse_int(Int32,"Z",36) == 35
 @assert parse_int(Int32,"z",36) == 35
 
+@assert parse_int("0") == 0
+@assert parse_int("1") == 1
+@assert parse_int("9") == 9
+@assert parse_int("10") == 10
+@assert parse_int(Int64,"3830974272") == 3830974272
+
 @assert parse_bin("0") == 0
 @assert parse_bin("1") == 1
 @assert parse_bin("10") == 2
@@ -184,12 +190,6 @@ end
 @assert parse_oct("11") == 9
 @assert parse_oct("72") == 58
 @assert parse_oct("3172207320") == 434704080
-
-@assert parse_dec("0") == 0
-@assert parse_dec("1") == 1
-@assert parse_dec("9") == 9
-@assert parse_dec("10") == 10
-@assert parse_int(Int64,"3830974272",10) == 3830974272
 
 @assert parse_hex("0") == 0
 @assert parse_hex("1") == 1

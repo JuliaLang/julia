@@ -810,34 +810,42 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     base = convert(T,base)
     for c in s
         d = '0' <= c <= '9' ? c-'0' :
-            'A' <= c <= 'Z' ? c-'A'+int32(10) :
-            'a' <= c <= 'z' ? c-'a'+int32(10) :
+            'A' <= c <= 'Z' ? c-'A'+10 :
+            'a' <= c <= 'z' ? c-'a'+10 :
             error(c, " is not an alphanumeric digit")
         if base <= d
             error(c, " is not a valid digit in base ", base)
         end
+        # TODO: overflow detection?
         n = n*base + d
     end
     return n
 end
 
+parse_int(s::String, base::Integer) = parse_int(Int, s, base)
+parse_int(T::Type, s::String)       = parse_int(T,   s, 10)
+parse_int(s::String)                = parse_int(Int, s, 10)
+
+parse_bin(T::Type, s::String) = parse_int(T, s,  2)
+parse_oct(T::Type, s::String) = parse_int(T, s,  8)
+parse_hex(T::Type, s::String) = parse_int(T, s, 16)
+
 parse_bin(s::String) = parse_int(Int, s,  2)
 parse_oct(s::String) = parse_int(Int, s,  8)
-parse_dec(s::String) = parse_int(Int, s, 10)
 parse_hex(s::String) = parse_int(Int, s, 16)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
-int     (s::String) = parse_dec(s)
-uint    (s::String) = parse_int(Uint, s, 10)
-int8    (s::String) = int8(integer(s))
-uint8   (s::String) = uint8(integer(s))
-int16   (s::String) = int16(integer(s))
-uint16  (s::String) = uint16(integer(s))
-int32   (s::String) = int32(integer(s))
-uint32  (s::String) = uint32(integer(s))
-int64   (s::String) = parse_int(Int64, s, 10)
-uint64  (s::String) = parse_int(Uint64, s, 10)
+int     (s::String) = parse_int(Int, s)
+uint    (s::String) = parse_int(Uint, s)
+int8    (s::String) = parse_int(Int8, s)
+uint8   (s::String) = parse_int(Uint8, s)
+int16   (s::String) = parse_int(Int16, s)
+uint16  (s::String) = parse_int(Uint16, s)
+int32   (s::String) = parse_int(Int32, s)
+uint32  (s::String) = parse_int(Uint32, s)
+int64   (s::String) = parse_int(Int64, s)
+uint64  (s::String) = parse_int(Uint64, s)
 
 ## integer to string functions ##
 

@@ -34,9 +34,9 @@ function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing; error("invalid version string: $v"); end
     major, minor, patch, suffix = m.captures
-    major = parse_dec(major)
-    minor = minor == nothing ? 0 : parse_dec(minor)
-    patch = patch == nothing ? 0 : parse_dec(patch)
+    major = parse_int(major)
+    minor = minor == nothing ? 0 : parse_int(minor)
+    patch = patch == nothing ? 0 : parse_int(patch)
     VersionNumber(major, minor, patch, suffix)
 end
 
