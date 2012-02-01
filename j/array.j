@@ -35,7 +35,7 @@ function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
     return dest
 end
 
-copy_to(dest::Array, src::Array) = copy_to(dest, 1, src, 1, numel(src))
+copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
