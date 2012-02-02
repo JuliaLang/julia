@@ -1,63 +1,132 @@
 ## semantic version numbers (http://semver.org)
 
 type VersionNumber
-    major::Int16
-    minor::Int16
-    patch::Int16
-    suffix::String
+    major::Int
+    minor::Int
+    patch::Int
+    prerelease::Vector{Union(Int,ASCIIString)}
+    build::Vector{Union(Int,ASCIIString)}
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, suffix::String)
+    function VersionNumber(major::Int, minor::Int, patch::Int, pre::Vector, bld::Vector)
         if major < 0; error("invalid major version: $major"); end
         if minor < 0; error("invalid minor version: $minor"); end
         if patch < 0; error("invalid patch version: $patch"); end
-        if !matches(r"^(?:[a-z-][0-9a-z-]*)?$"i, suffix)
-            error("invalid version suffix: $suffix")
+        prerelease = Array(Union(Int,ASCIIString),length(pre))
+        for i in 1:length(pre)
+            ident = ascii(string(pre[i]))
+            if !matches(r"^(?:[0-9a-z-]+)?$"i, ident)
+                error("invalid pre-release identifier: $ident")
+            end
+            if matches(r"^\d+$", ident)
+                ident = parse_int(ident)
+            end
+            prerelease[i] = ident
         end
-        new(int16(major), int16(minor), int16(patch), suffix)
+        build = Array(Union(Int,ASCIIString),length(bld))
+        for i in 1:length(bld)
+            ident = ascii(string(bld[i]))
+            if !matches(r"^(?:[0-9a-z-]+)?$"i, ident)
+                error("invalid build identifier: $ident")
+            end
+            if matches(r"^\d+$", ident)
+                ident = parse_int(ident)
+            end
+            build[i] = ident
+        end
+        new(major, minor, patch, prerelease, build)
     end
 end
-VersionNumber(x::Integer, y::Integer, s::String)  = VersionNumber(x, y, 0, s )
-VersionNumber(x::Integer, s::String)              = VersionNumber(x, 0, 0, s )
-VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, "")
-VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, "")
-VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, "")
+VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, [], [])
+VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [])
+VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
 
-print(v::VersionNumber) = print("$(v.major).$(v.minor).$(v.patch)$(v.suffix)")
-show(v::VersionNumber) = print("v\"", v, "\"")
+function print(v::VersionNumber)
+    print(v.major)
+    print('.')
+    print(v.minor)
+    print('.')
+    print(v.patch)
+    if !isempty(v.prerelease)
+        print('-')
+        print_joined(v.prerelease,'.')
+    end
+    if !isempty(v.build)
+        print('+')
+        print_joined(v.build,'.')
+    end
+end
+show(v::VersionNumber) = print("v\"",v,"\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
 
-const VERSION_REGEX = r"^v?(\d+)(?:\.(\d+)(?:\.(\d+))?)?((?:[a-z-][0-9a-z-]*)?)$"i
+const VERSION_REGEX = r"^
+    v?                                      # prefix        (optional)
+    (\d+)                                   # major         (required)
+    (?:\.(\d+))?                            # minor         (optional)
+    (?:\.(\d+))?                            # patch         (optional)
+    (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
+    (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
+$"ix
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing; error("invalid version string: $v"); end
-    major, minor, patch, suffix = m.captures
+    major, minor, patch, prerl, build = m.captures
     major = parse_int(major)
-    minor = minor == nothing ? 0 : parse_int(minor)
-    patch = patch == nothing ? 0 : parse_int(patch)
-    VersionNumber(major, minor, patch, suffix)
+    minor = minor==nothing ?  0 : parse_int(minor)
+    patch = patch==nothing ?  0 : parse_int(patch)
+    prerl = prerl==nothing ? [] : split(prerl,'.')
+    build = build==nothing ? [] : split(build,'.')
+    VersionNumber(major, minor, patch, prerl, build)
 end
 
 macro v_str(v); convert(VersionNumber, v); end
 
-isless(a::VersionNumber, b::VersionNumber) =
-    a.major < b.major || a.major == b.major &&
-    (a.minor < b.minor || a.minor == b.minor &&
-     (a.patch < b.patch || a.patch == b.patch &&
-      (!isempty(a.suffix) && (isempty(b.suffix) || a.suffix < b.suffix))))
+_jl_ident_cmp(a::Int, b::Int) = cmp(a,b)
+_jl_ident_cmp(a::Int, b::ASCIIString) = -1
+_jl_ident_cmp(a::ASCIIString, b::Int) = +1
+_jl_ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-isequal(a::VersionNumber, b::VersionNumber) =
-    a.major == b.major && a.minor == b.minor &&
-    a.patch == b.patch && a.suffix == b.suffix
+function _jl_ident_cmp(A::Vector{Union(Int,ASCIIString)},
+                       B::Vector{Union(Int,ASCIIString)})
+    i = start(A)
+    j = start(B)
+    while !done(A,i) && !done(B,i)
+       a,i = next(A,i)
+       b,j = next(B,j)
+       c = _jl_ident_cmp(a,b)
+       (c != 0) && return c
+    end
+    done(A,i) && !done(B,j) ? -1 :
+    !done(A,i) && done(B,j) ? +1 : 0
+end
 
-isequal(a::VersionNumber, b::Union(String,Integer,Tuple)) =
-    a < convert(VersionNumber,b)
-isequal(a::Union(String,Integer,Tuple), b::VersionNumber) =
-    convert(VersionNumber,a) < b
-isless(a::VersionNumber, b) = a == convert(VersionNumber,b)
-isless(a, b::VersionNumber) = convert(VersionNumber,a) == b
+function isequal(a::VersionNumber, b::VersionNumber)
+    (a.major != b.major) && return false
+    (a.minor != b.minor) && return false
+    (a.patch != b.patch) && return false
+    (_jl_ident_cmp(a.prerelease,b.prerelease) != 0) && return false
+    (_jl_ident_cmp(a.build,b.build) != 0) && return false
+    return true
+end
+
+function isless(a::VersionNumber, b::VersionNumber)
+    (a.major < b.major) && return true
+    (a.major > b.major) && return false
+    (a.minor < b.minor) && return true
+    (a.minor > b.minor) && return false
+    (a.patch < b.patch) && return true
+    (a.patch > b.patch) && return false
+    (!isempty(a.prerelease) && isempty(b.prerelease)) && return true
+    (isempty(a.prerelease) && !isempty(b.prerelease)) && return false
+    c = _jl_ident_cmp(a.prerelease,b.prerelease)
+    (c < 0) && return true
+    (c > 0) && return false
+    c = _jl_ident_cmp(a.build,b.build)
+    (c < 0) && return true
+    return false
+end
 
 ## julia version info
 
