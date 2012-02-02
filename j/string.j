@@ -807,19 +807,36 @@ chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
 
 function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     n::T = 0
+    neg = false
     base = convert(T,base)
-    for c in s
+    i = start(s)
+    if done(s,i)
+        error("premature end of integer (in ",show_to_string(s),")")
+    end
+    c,i = next(s,i)
+    if T <: Signed && c == '-'
+        neg = true
+        if done(s,i)
+            error("premature end of integer (in ",show_to_string(s),")")
+        end
+        c,i = next(s,i)
+    end
+    while true
         d = '0' <= c <= '9' ? c-'0' :
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 :
-            error(c, " is not an alphanumeric digit")
-        if base <= d
-            error(c, " is not a valid digit in base ", base)
+            error(c," is not an alphanumeric digit (in ",show_to_string(s),")")
+        if d >= base
+            error(c," is not a valid base ",base," digit (in ",show_to_string(s),")")
         end
         # TODO: overflow detection?
         n = n*base + d
+        if done(s,i)
+            break
+        end
+        c,i = next(s,i)
     end
-    return n
+    return neg ? -n : n
 end
 
 parse_int(s::String, base::Integer) = parse_int(Int, s, base)

@@ -172,35 +172,62 @@ end
 @assert parse_int(Int32,"z",36) == 35
 
 @assert parse_int("0") == 0
+@assert parse_int("-0") == 0
 @assert parse_int("1") == 1
+@assert parse_int("-1") == -1
 @assert parse_int("9") == 9
+@assert parse_int("-9") == -9
 @assert parse_int("10") == 10
+@assert parse_int("-10") == -10
 @assert parse_int(Int64,"3830974272") == 3830974272
+@assert parse_int(Int64,"-3830974272") == -3830974272
 
 @assert parse_bin("0") == 0
+@assert parse_bin("-0") == 0
 @assert parse_bin("1") == 1
+@assert parse_bin("-1") == -1
 @assert parse_bin("10") == 2
+@assert parse_bin("-10") == -2
 @assert parse_bin("11") == 3
+@assert parse_bin("-11") == -3
 @assert parse_bin("1111000011110000111100001111") == 252645135
+@assert parse_bin("-1111000011110000111100001111") == -252645135
 
 @assert parse_oct("0") == 0
+@assert parse_oct("-0") == 0
 @assert parse_oct("1") == 1
+@assert parse_oct("-1") == -1
 @assert parse_oct("7") == 7
+@assert parse_oct("-7") == -7
 @assert parse_oct("10") == 8
+@assert parse_oct("-10") == -8
 @assert parse_oct("11") == 9
+@assert parse_oct("-11") == -9
 @assert parse_oct("72") == 58
+@assert parse_oct("-72") == -58
 @assert parse_oct("3172207320") == 434704080
+@assert parse_oct("-3172207320") == -434704080
 
 @assert parse_hex("0") == 0
+@assert parse_hex("-0") == 0
 @assert parse_hex("1") == 1
+@assert parse_hex("-1") == -1
 @assert parse_hex("9") == 9
+@assert parse_hex("-9") == -9
 @assert parse_hex("a") == 10
+@assert parse_hex("-a") == -10
 @assert parse_hex("f") == 15
+@assert parse_hex("-f") == -15
 @assert parse_hex("10") == 16
+@assert parse_hex("-10") == -16
 @assert parse_hex("0BADF00D") == 195948557
+@assert parse_hex("-0BADF00D") == -195948557
 @assert parse_int(Int64,"BADCAB1E",16) == 3135023902
+@assert parse_int(Int64,"-BADCAB1E",16) == -3135023902
 @assert parse_int(Int64,"CafeBabe",16) == 3405691582
+@assert parse_int(Int64,"-CafeBabe",16) == -3405691582
 @assert parse_int(Int64,"DeadBeef",16) == 3735928559
+@assert parse_int(Int64,"-DeadBeef",16) == -3735928559
 
 # printing numbers
 @assert string(uint32(-1)) == "0xffffffff"
