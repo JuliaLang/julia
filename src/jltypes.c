@@ -190,6 +190,11 @@ static void flatten_type_union(jl_tuple_t *types, jl_value_t **out, size_t *idx)
     }
 }
 
+static int union_elt_morespecific(const void *a, const void *b)
+{
+    return jl_args_morespecific(*(jl_value_t**)a, *(jl_value_t**)b) ? -1 : 1;
+}
+
 DLLEXPORT
 jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
@@ -223,6 +228,8 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         }
     }
     assert(j == n-ndel);
+    // TODO: maybe warn about ambiguities
+    qsort(result->data, j, sizeof(jl_value_t*), union_elt_morespecific);
     JL_GC_POP();
     return result;
 }
@@ -254,7 +261,9 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < t->length; i++) {
-        jl_tupleset(t, i, jl_type_intersection(jl_tupleref(a->types,i),b));
+        jl_tupleset(t, i,
+                    jl_type_intersect(jl_tupleref(a->types,i), b,
+                                      penv, eqc, var));
     }
     // problem: an intermediate union type we make here might be too
     // complex, even though the final type after typevars are replaced

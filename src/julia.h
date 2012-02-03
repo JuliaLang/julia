@@ -532,6 +532,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types);
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars);
 DLLEXPORT jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b);
+int jl_args_morespecific(jl_value_t *a, jl_value_t *b);
 
 // type constructors
 jl_typename_t *jl_new_typename(jl_sym_t *name);

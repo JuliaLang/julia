@@ -573,7 +573,14 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                                (jl_tuple_t*)temp));
         }
         else {
-            jl_tupleset(type, i, jl_tupleref(decl,decl->length-1));
+            jl_value_t *lastdeclt = jl_tupleref(decl,decl->length-1);
+            if (sparams->length > 0) {
+                lastdeclt = (jl_value_t*)
+                    jl_instantiate_type_with((jl_type_t*)lastdeclt,
+                                             sparams->data,
+                                             sparams->length/2);
+            }
+            jl_tupleset(type, i, lastdeclt);
         }
         // now there is a problem: the computed signature is more
         // general than just the given arguments, so it might conflict
@@ -742,7 +749,7 @@ static int sigs_eq(jl_value_t *a, jl_value_t *b)
     return jl_types_equal(a, b);
 }
 
-static int args_morespecific(jl_value_t *a, jl_value_t *b)
+int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
 {
     int msp = jl_type_morespecific(a,b,0);
     if (jl_has_typevars(b)) {
@@ -798,11 +805,11 @@ static int is_va_tuple(jl_tuple_t *t)
 static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
                             jl_tuple_t *sig, jl_sym_t *fname)
 {
-    // we know !args_morespecific(type, sig)
+    // we know !jl_args_morespecific(type, sig)
     if ((type->length==sig->length ||
          (type->length==sig->length+1 && is_va_tuple(type)) ||
          (type->length+1==sig->length && is_va_tuple(sig))) &&
-        !args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
+        !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
         if (isect == (jl_value_t*)jl_bottom_type)
@@ -913,7 +920,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     pl = pml;
     l = *pml;
     while (l != NULL) {
-        if (args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
+        if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
         if (check_amb) {
             check_ambiguous(*pml, (jl_tuple_t*)type, (jl_tuple_t*)l->sig,
@@ -947,8 +954,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             next = item->next;
             pnext = &item->next;
             while (l != newrec->next) {
-                if (args_morespecific((jl_value_t*)item->sig,
-                                      (jl_value_t*)l->sig)) {
+                if (jl_args_morespecific((jl_value_t*)item->sig,
+                                         (jl_value_t*)l->sig)) {
                     // reinsert item earlier in the list
                     *pitem = next;
                     item->next = l;
