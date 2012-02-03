@@ -210,24 +210,12 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
         for(j=0; j < n; j++) {
             if (j != i && temp[i] && temp[j]) {
                 if (temp[i] == temp[j] ||
-                    type_eqv_(temp[i], temp[j], NULL) ||
-                    (jl_subtype(temp[i], temp[j], 0) /*&&
-                     (temp[i] == (jl_value_t*)jl_bottom_type ||
-                     !jl_has_typevars(temp[j]))*/)) {
+                    (!jl_has_typevars(temp[i]) &&
+                     !jl_has_typevars(temp[j]) &&
+                     (type_eqv_(temp[i], temp[j], NULL) ||
+                      jl_subtype(temp[i], temp[j], 0)))) {
                     temp[i] = NULL;
                     ndel++;
-                }
-                else if (jl_is_typevar(temp[i]) && jl_is_typevar(temp[j])) {
-                    jl_tvar_t *ti = (jl_tvar_t*)temp[i];
-                    jl_tvar_t *tj = (jl_tvar_t*)temp[j];
-                    if (jl_subtype(ti->lb,tj->lb,0) &&
-                        jl_subtype(ti->lb,tj->ub,0) &&
-                        jl_subtype(ti->ub,tj->ub,0)) {
-                        temp[j] =
-                            (jl_value_t*)
-                            jl_new_typevar(tj->name, ti->lb, tj->ub);
-                        temp[i] = NULL;
-                    }
                 }
             }
         }
@@ -258,20 +246,6 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
     return tu;
 }
 
-static jl_value_t *unsafe_type_union(jl_tuple_t *types)
-{
-    types = jl_compute_type_union(types);
-    if (types->length == 1)
-        return jl_tupleref(types, 0);
-    if (types->length == 0)
-        return (jl_value_t*)jl_bottom_type;
-    JL_GC_PUSH(&types);
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
-    t->types = types;
-    JL_GC_POP();
-    return (jl_value_t*)t;
-}
-
 typedef enum {invariant, covariant} variance_t;
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
@@ -291,7 +265,7 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     // problem: an intermediate union type we make here might be too
     // complex, even though the final type after typevars are replaced
     // might be ok.
-    jl_value_t *tu = unsafe_type_union(t);
+    jl_value_t *tu = jl_type_union(t);
     JL_GC_POP();
     return tu;
 }

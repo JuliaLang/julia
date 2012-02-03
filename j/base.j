@@ -39,17 +39,13 @@ end
 
 type LoadError <: Exception
     file::String
-    line::Int32
+    line::Int
     error
 end
 
 type MethodError <: Exception
     f
     args
-end
-
-type UnionTooComplexError <: Exception
-    types::Tuple
 end
 
 type BackTrace <: Exception

@@ -266,7 +266,6 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_errorexception_type = (jl_struct_type_t*)sysmod("ErrorException");
     jl_typeerror_type = (jl_struct_type_t*)sysmod("TypeError");
     jl_loaderror_type = (jl_struct_type_t*)sysmod("LoadError");
-    jl_uniontoocomplex_type = (jl_struct_type_t*)sysmod("UnionTooComplexError");
     jl_backtrace_type = (jl_struct_type_t*)sysmod("BackTrace");
 
     jl_method_missing_func = (jl_function_t*)sysmod("method_missing");

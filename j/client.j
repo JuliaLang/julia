@@ -27,7 +27,7 @@ function repl_callback(ast::ANY, show_value)
 end
 
 # called to show a REPL result
-function repl_show(v)
+function repl_show(v::ANY)
     if isa(v,Function) && !isa(v,CompositeKind)
         return ccall(:jl_show_full_function, Void, (Any,), v)
     end
@@ -55,7 +55,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
             else
                 value = eval(ast)
                 global ans = value
-                if value != nothing && show_value
+                if !is(value,nothing) && show_value
                     if _jl_have_color
                         print(_jl_answer_color())
                     end

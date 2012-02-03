@@ -16,15 +16,11 @@ type CallStack
     ast
     mod::Module
     types::Tuple
-    n::Int32
     recurred::Bool
     result
     prev::Union(EmptyCallStack,CallStack)
 
-    CallStack(ast, mod, types, prev::EmptyCallStack) =
-        new(ast, mod, types, 0, false, None, prev)
-    CallStack(ast, mod, types, prev::CallStack) =
-        new(ast, mod, types, prev.n+1, false, None, prev)
+    CallStack(ast, mod, types, prev) = new(ast, mod, types, false, None, prev)
 end
 
 # TODO thread local
@@ -708,8 +704,6 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     return false
 end
 
-badunion(t) = ccall(:jl_union_too_complex, Int32, (Any,), t) != 0
-
 function type_too_complex(t, d)
     if d > MAX_TYPEUNION_DEPTH
         return true
@@ -748,23 +742,7 @@ function tmerge(typea::ANY, typeb::ANY)
     if subtype(typeb,typea)
         return typea
     end
-    t = ccall(:jl_compute_type_union,Any,(Any,), (typea, typeb))
-    #if length(t)==1
-    #    return t[1]
-    #else
-    #end
-    if length(t)==0
-        return None
-    end
-    if badunion(t)
-        for elt in t
-            if subtype(Undef,elt)
-                return Top
-            end
-        end
-        return Any
-    end
-    u = Union(t...)
+    u = Union(typea, typeb)
     if length(u.types) > MAX_TYPEUNION_LEN || type_too_complex(u, 0)
         # don't let type unions get too big
         # TODO: something smarter, like a common supertype
@@ -1387,8 +1365,6 @@ function remove_call1(e)
     e
 end
 
-inlining_pass(x, vars) = x
-
 _jl_tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
 
@@ -1418,7 +1394,10 @@ function inlining_pass(e::Expr, vars)
         i0 = 1
     end
     for i=i0:length(e.args)
-        e.args[i] = inlining_pass(e.args[i], vars)
+        ei = e.args[i]
+        if isa(ei,Expr)
+            e.args[i] = inlining_pass(ei, vars)
+        end
     end
     if is(e.head,:call1)
         e.head = :call

@@ -48,7 +48,6 @@ jl_struct_type_t *jl_module_type;
 jl_struct_type_t *jl_errorexception_type=NULL;
 jl_struct_type_t *jl_typeerror_type;
 jl_struct_type_t *jl_loaderror_type;
-jl_struct_type_t *jl_uniontoocomplex_type;
 jl_struct_type_t *jl_backtrace_type;
 jl_bits_type_t *jl_pointer_type;
 jl_value_t *jl_an_empty_cell=NULL;
@@ -544,32 +543,8 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     return t;
 }
 
-DLLEXPORT
-int jl_union_too_complex(jl_tuple_t *types)
-{
-    size_t i, j;
-    for(i=0; i < types->length; i++) {
-        for(j=0; j < types->length; j++) {
-            if (j != i) {
-                jl_value_t *a = jl_tupleref(types, i);
-                jl_value_t *b = jl_tupleref(types, j);
-                if (jl_has_typevars(b) &&
-                    (!jl_is_typevar(b) || jl_has_typevars(a))) {
-                    jl_value_t *env = jl_type_match(a, b);
-                    if (env != jl_false && env != (jl_value_t*)jl_null)
-                        return 1;
-                }
-            }
-        }
-    }
-    return 0;
-}
-
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
-    if (jl_union_too_complex(types)) {
-        jl_raise(jl_new_struct(jl_uniontoocomplex_type, (jl_value_t*)types));
-    }
     jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
     // don't make unions of 1 type; Union(T)==T
     assert(types->length != 1);

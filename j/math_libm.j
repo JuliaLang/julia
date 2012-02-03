@@ -106,8 +106,8 @@ min(x::Float64, y::Float64) = ccall(dlsym(_jl_libm, :fmin),  Float64, (Float64,F
 min(x::Float32, y::Float32) = ccall(dlsym(_jl_libm, :fminf), Float32, (Float32,Float32), x, y)
 @vectorize_2arg Real min
 
-ldexp(x::Float64,e::Int32) = ccall(dlsym(_jl_libfdm, :ldexp),  Float64, (Float64,Int32), x, e)
-ldexp(x::Float32,e::Int32) = ccall(dlsym(_jl_libfdm, :ldexpf), Float32, (Float32,Int32), x, e)
+ldexp(x::Float64,e::Int) = ccall(dlsym(_jl_libfdm, :ldexp),  Float64, (Float64,Int32), x, int32(e))
+ldexp(x::Float32,e::Int) = ccall(dlsym(_jl_libfdm, :ldexpf), Float32, (Float32,Int32), x, int32(e))
 # TODO: vectorize does not do the right thing for these argument types
 #@vectorize_2arg Real ldexp
 
@@ -116,11 +116,11 @@ begin
     global frexp
     function frexp(x::Float64)
         s = ccall(dlsym(_jl_libfdm,:frexp), Float64, (Float64, Ptr{Int32}), x, exp)
-        (s, exp[1])
+        (s, int(exp[1]))
     end
     function frexp(x::Float32)
         s = ccall(dlsym(_jl_libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
-        (s, exp[1])
+        (s, int(exp[1]))
     end
 end
 #@vectorize_1arg Real frexp

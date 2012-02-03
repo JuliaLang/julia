@@ -49,7 +49,6 @@
     jl_set_current_module;
     jl_func_type_tfunc;
     jl_compute_type_union;
-    jl_union_too_complex;
     jl_type_match;
     jl_type_intersection;
     jl_types_equal;

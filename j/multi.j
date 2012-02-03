@@ -274,9 +274,9 @@ end
 const _jl_client_refs = WeakKeyHashTable()
 
 type RemoteRef
-    where::Int32
-    whence::Int32
-    id::Int32
+    where::Int
+    whence::Int
+    id::Int
     # TODO: cache value if it's fetched, but don't serialize the cached value
 
     function RemoteRef(w, wh, id)
@@ -290,7 +290,7 @@ type RemoteRef
         r
     end
 
-    REQ_ID::Int32 = 0
+    REQ_ID::Int = 0
     function RemoteRef(pid::Integer)
         rr = RemoteRef(pid, myid(), REQ_ID)
         REQ_ID += 1
@@ -910,7 +910,7 @@ function message_handler(fd, sockets)
                 _jl_identify_socket(otherid, fd, sock)
             else
                 # the synchronization messages
-                oid = force(deserialize(sock))::(Int32,Int32)
+                oid = force(deserialize(sock))::(Int,Int)
                 wi = lookup_ref(oid)
                 if wi.done
                     deliver_result(sock, msg, oid, work_result(wi))
