@@ -735,8 +735,7 @@ DLLEXPORT void jl_print_int64(int64_t i)
     ios_printf(s, "%lld", i);
 }
 
-DLLEXPORT
-int jl_strtod(char *str, double *out)
+DLLEXPORT int jl_strtod(char *str, double *out)
 {
     char *p;
     errno = 0;
@@ -746,8 +745,7 @@ int jl_strtod(char *str, double *out)
     return 0;
 }
 
-DLLEXPORT
-int jl_strtof(char *str, float *out)
+DLLEXPORT int jl_strtof(char *str, float *out)
 {
     char *p;
     errno = 0;
@@ -789,26 +787,10 @@ static void show_function(jl_value_t *v)
 {
     ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
-        ios_putc('(', s);
         ios_puts(jl_gf_name(v)->name, s);
-        ios_putc(')', s);
     }
     else {
         ios_puts("#<function>", s);
-    }
-}
-
-void jl_show_full_function(jl_value_t *v)
-{
-    ios_t *s = jl_current_output_stream();
-    if (jl_is_gf(v)) {
-        ios_puts("Methods for generic function ", s);
-        ios_puts(jl_gf_name(v)->name, s);
-        ios_putc('\n', s);
-        jl_show_method_table((jl_function_t*)v);
-    }
-    else {
-        show_function(v);
     }
 }
 
@@ -1012,7 +994,7 @@ JL_CALLABLE(jl_f_new_struct_fields)
     if (st->parameters->length > 0) {
         // once the full structure is built, use instantiate_type to walk it
         // and tie up self-references.
-        st->name->cache = NULL;
+        st->name->cache = jl_null;
         jl_reinstantiate_inner_types((jl_tag_type_t*)st);
     }
 
@@ -1055,7 +1037,7 @@ JL_CALLABLE(jl_f_new_tag_type_super)
     check_supertype(super, tt->name->name->name);
     tt->super = (jl_tag_type_t*)super;
     if (tt->parameters->length > 0) {
-        tt->name->cache = NULL;
+        tt->name->cache = jl_null;
         jl_reinstantiate_inner_types((jl_tag_type_t*)tt);
     }
     return (jl_value_t*)jl_nothing;
@@ -1220,8 +1202,7 @@ JL_CALLABLE(jl_f_invoke)
                         (jl_tuple_t*)args[1], &args[2], nargs-2);
 }
 
-DLLEXPORT
-jl_value_t *jl_closure_env(jl_function_t *f)
+DLLEXPORT jl_value_t *jl_closure_env(jl_function_t *f)
 {
     if (jl_is_tuple(f->env) && ((jl_tuple_t*)f->env)->length==2 &&
         jl_tupleref(f->env,0) == (jl_value_t*)f)
@@ -1229,8 +1210,7 @@ jl_value_t *jl_closure_env(jl_function_t *f)
     return f->env;
 }
 
-DLLEXPORT
-jl_value_t *jl_closure_linfo(jl_function_t *f)
+DLLEXPORT jl_value_t *jl_closure_linfo(jl_function_t *f)
 {
     if (jl_is_gf(f))
         return (jl_value_t*)jl_gf_name(f);

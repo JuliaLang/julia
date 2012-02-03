@@ -36,9 +36,6 @@ maxintfloat() = maxintfloat(Float64)
 
 integer_valued(x::Float) = trunc(x) == x
 
-#sqrt(x::Float64) = boxf64(sqrt_float(unbox64(x)))
-#sqrt(x::Float32) = boxf32(sqrt_float(unbox32(x)))
-
 sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))
 cos(x::Real) = cos(float(x))

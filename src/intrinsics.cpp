@@ -33,7 +33,7 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        sqrt_float, abs_float32, abs_float64,
+        abs_float32, abs_float64,
         copysign_float32, copysign_float64,
         flipsign_int32, flipsign_int64,
         // c interface
@@ -274,8 +274,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = emit_unboxed(args[1], ctx);
     Type *t = x->getType();
-    Type *fxt;
-    Value *fx, *fy;
+    Value *fy;
     Value *den;
     switch (f) {
     HANDLE(boxui8,1)
@@ -769,14 +768,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPExt(builder.CreateLoad(jlfloat32temp_var, true),
                                    T_float64);
 
-    HANDLE(sqrt_float,1)
-        fx = FP(x);
-        fxt = fx->getType();
-        return builder.
-            CreateCall(Intrinsic::getDeclaration(jl_Module,
-                                                 Intrinsic::sqrt,
-                                                 ArrayRef<Type*>(fxt)),
-                       fx);
     HANDLE(abs_float32,1)
     {
         Value *bits = builder.CreateBitCast(FP(x), T_int32);
@@ -936,7 +927,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
-    ADD_I(sqrt_float);
     ADD_I(abs_float32); ADD_I(abs_float64);
     ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(flipsign_int32); ADD_I(flipsign_int64);

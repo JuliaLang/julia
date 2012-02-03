@@ -33,6 +33,12 @@ typedef struct {
     jl_value_t *data[1];
 } jl_tuple_t;
 
+typedef struct {
+    JL_STRUCT_TYPE
+    size_t length;
+    jl_value_t *data[2];
+} jl_tuple2_t;
+
 // how much space we're willing to waste if an array outgrows its
 // original object
 #define ARRAY_INLINE_NBYTES (1024*sizeof(void*))
@@ -126,7 +132,7 @@ typedef struct {
     // a type alias, for example, might make a type constructor that is
     // not the original.
     jl_value_t *primary;
-    void *cache;
+    jl_tuple_t *cache;
 } jl_typename_t;
 
 typedef struct {
@@ -738,8 +744,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
 
-void jl_show_method_table(jl_function_t *gf);
-DLLEXPORT void jl_show_full_function(jl_value_t *v);
+DLLEXPORT void jl_show_method_table(jl_function_t *gf);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
                                         int cache);

@@ -218,13 +218,6 @@ jl_array_t *jl_alloc_cell_1d(size_t n)
     return jl_alloc_array_1d(jl_array_any_type, n);
 }
 
-jl_array_t *jl_memcpy(jl_array_t *a)
-{
-    jl_array_t *b = jl_alloc_array_1d(jl_array_uint8_type, a->length);
-    memcpy(b->data, a->data, a->length);
-    return b;
-}
-
 // array primitives -----------------------------------------------------------
 
 JL_CALLABLE(jl_f_arraylen)

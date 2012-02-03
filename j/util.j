@@ -271,7 +271,7 @@ function help(f::Function)
     if is(f,help)
         return help()
     end
-    help_for(string(f)[2:end-1])
+    help_for(string(f))
 end
 
 help(t::CompositeKind) = help_for(string(t.name))

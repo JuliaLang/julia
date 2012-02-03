@@ -477,8 +477,6 @@ static void gc_mark_module(jl_module_t *m)
     }
 }
 
-void jl_mark_type_cache(void *c);
-
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
 
 // for chasing down unwanted references
@@ -542,12 +540,6 @@ static void gc_markval_(jl_value_t *v)
                 if (elt != NULL) GC_Markval(elt);
             }
         }
-    }
-    else if (vt == (jl_value_t*)jl_typename_type) {
-        jl_typename_t *tn = (jl_typename_t*)v;
-        if (tn->primary != NULL)
-            GC_Markval(tn->primary);
-        jl_mark_type_cache(tn->cache);
     }
     else if (vt == (jl_value_t*)jl_struct_kind) {
         jl_struct_type_t *st = (jl_struct_type_t*)v;

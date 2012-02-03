@@ -159,16 +159,6 @@ static void jl_serialize_methlist(ios_t *s, jl_methlist_t *ml)
     jl_serialize_value(s, NULL);
 }
 
-static void jl_serialize_typecache(ios_t *s, jl_typename_t *tn)
-{
-    typekey_stack_t *tc = (typekey_stack_t*)tn->cache;
-    while (tc != NULL) {
-        jl_serialize_value(s, tc->type);
-        tc = tc->next;
-    }
-    jl_serialize_value(s, NULL);
-}
-
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
     writetag(s, jl_module_type);
@@ -310,12 +300,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_some_tag_type(v)) {
         jl_serialize_tag_type(s, v);
-    }
-    else if (jl_is_typename(v)) {
-        writetag(s, jl_typename_type);
-        jl_serialize_value(s, ((jl_typename_t*)v)->name);
-        jl_serialize_value(s, ((jl_typename_t*)v)->primary);
-        jl_serialize_typecache(s, (jl_typename_t*)v);
     }
     else if (jl_is_typevar(v)) {
         writetag(s, jl_tvar_type);
@@ -530,24 +514,6 @@ static jl_methlist_t *jl_deserialize_methlist(ios_t *s)
     return ml;
 }
 
-static typekey_stack_t *jl_deserialize_typecache(ios_t *s)
-{
-    typekey_stack_t *tk = NULL;
-    typekey_stack_t **pnext = &tk;
-
-    while (1) {
-        jl_value_t *type = jl_deserialize_value(s);
-        if (type == NULL)
-            break;
-        typekey_stack_t *tc = (typekey_stack_t*)allocb(sizeof(typekey_stack_t));
-        tc->type = (jl_tag_type_t*)type;
-        tc->next = NULL;
-        *pnext = tc;
-        pnext = &tc->next;
-    }
-    return tk;
-}
-
 static jl_value_t *jl_deserialize_value(ios_t *s)
 {
     int pos = ios_pos(s);
@@ -642,15 +608,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     }
     else if (vtag == (jl_value_t*)LiteralVal_tag) {
         return jl_cellref(tree_literal_values, read_uint16(s));
-    }
-    else if (vtag == (jl_value_t*)jl_typename_type) {
-        jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(s);
-        jl_typename_t *tn = jl_new_typename(name);
-        if (usetable)
-            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, tn);
-        tn->primary = jl_deserialize_value(s);
-        tn->cache = jl_deserialize_typecache(s);
-        return (jl_value_t*)tn;
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
         jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_type_t*)jl_tvar_type, 4);
@@ -770,18 +727,12 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         if (typ == jl_struct_kind || typ == jl_bits_kind)
             return jl_deserialize_tag_type(s, typ, pos);
         size_t nf = typ->names->length;
-        jl_value_t *v;
-        if (nf == 0 && typ->instance)
-            v = typ->instance;
-        else
-            v = newobj((jl_type_t*)typ, nf);
+        jl_value_t *v = jl_new_struct_uninit(typ);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         for(i=0; i < nf; i++) {
             ((jl_value_t**)v)[i+1] = jl_deserialize_value(s);
         }
-        if (nf == 0 && typ->instance==NULL)
-            typ->instance = v;
         // TODO: put WeakRefs on the weak_refs list
         return v;
     }

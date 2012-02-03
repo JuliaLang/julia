@@ -28,15 +28,18 @@ end
 
 # called to show a REPL result
 function repl_show(v::ANY)
-    if isa(v,Function) && !isa(v,CompositeKind)
-        return ccall(:jl_show_full_function, Void, (Any,), v)
+    if !(isa(v,Function) && isgeneric(v))
+        show(v)
     end
-    show(v)
-    if isa(v,CompositeKind)
-        if isgeneric(v)
+    if isgeneric(v)
+        if isa(v,CompositeKind)
             println()
-            ccall(:jl_show_full_function, Void, (Any,), v)
+            name = v.name.name
+        else
+            name = string(v)
         end
+        println("Methods for generic function ", name)
+        ccall(:jl_show_method_table, Void, (Any,), v)
     end
 end
 

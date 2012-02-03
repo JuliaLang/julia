@@ -179,7 +179,7 @@
     jl_set_const;
     jl_func_kind;
     jl_struct_kind;
-    jl_show_full_function;
+    jl_show_method_table;
     jl_current_output_stream;
     jl_apply_generic;
     julia_init;

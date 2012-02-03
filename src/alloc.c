@@ -361,7 +361,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
     tn->name = name;
     tn->primary = NULL;
-    tn->cache = NULL;
+    tn->cache = jl_null;
     return tn;
 }
 
