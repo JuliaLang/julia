@@ -191,7 +191,7 @@ static int is_ast_node(jl_value_t *v)
 {
     return jl_is_symbol(v) || jl_is_expr(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
-        jl_is_int32(v) || jl_is_int64(v) ||
+        jl_is_union_type(v) || jl_is_int32(v) || jl_is_int64(v) ||
         jl_is_symbolnode(v) || jl_is_bool(v) || jl_is_typevar(v) ||
         jl_is_topnode(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v);
@@ -352,7 +352,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_methlist(s, mt->defs);
         jl_serialize_methlist(s, mt->cache);
         jl_serialize_value(s, mt->cache_1arg);
-        write_int8(s, mt->sealed);
         write_int32(s, mt->max_args);
     }
     else if (jl_typeis(v, jl_task_type)) {
@@ -698,7 +697,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         mt->defs = jl_deserialize_methlist(s);
         mt->cache = jl_deserialize_methlist(s);
         mt->cache_1arg = (jl_array_t*)jl_deserialize_value(s);
-        mt->sealed = read_int8(s);
         mt->max_args = read_int32(s);
         return (jl_value_t*)mt;
     }

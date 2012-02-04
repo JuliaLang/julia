@@ -216,11 +216,12 @@
 			     (cons '(top Any) bounds)))
 	((and (length= (car sparams) 4)
 	      (eq? (caar sparams) 'comparison)
-	      (eq? (caddar sparams) '|<:|))
+	      (eq? (caddar sparams) '|<:|)
+	      (symbol? (cadar sparams)))
 	 (sparam-name-bounds (cdr sparams) (cons (cadr (car sparams)) names)
 			     (cons (cadddr (car sparams)) bounds)))
 	(else
-	 (error "malformed static parameter list"))))
+	 (error "malformed type parameter list"))))
 
 (define (generic-function-def-expr name sparams argl body)
   (let* ((argl  (fsig-to-lambda-list argl))

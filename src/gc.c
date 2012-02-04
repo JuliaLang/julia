@@ -44,11 +44,7 @@ typedef struct _gcval_t {
         struct _gcval_t *next;
         uptrint_t flags;
         uptrint_t data0;  // overlapped
-        struct {
-            uptrint_t marked:1;
-            //uptrint_t finalize:1;
-            //uptrint_t typed:1;
-        };
+        uptrint_t marked:1;
     };
 } gcval_t;
 
@@ -71,8 +67,6 @@ typedef struct _bigval_t {
         struct {
             uptrint_t marked:1;
             uptrint_t isobj:1;
-            //uptrint_t finalize:1;
-            //uptrint_t typed:1;
         };
     };
     char _data[1];
@@ -776,14 +770,6 @@ void *allocobj(size_t sz)
         return alloc_big(sz, 1);
     allocd_bytes += sz;
     return pool_alloc(&pools[szclass(sz)]);
-}
-
-void *allocb_permanent(size_t sz)
-{
-    // we need 1 word before to allow marking
-    char *ptr = (char*)malloc(sz+sizeof(void*));
-    *((uptrint_t*)ptr) = 0;
-    return ptr+sizeof(void*);
 }
 
 void *alloc_2w(void)

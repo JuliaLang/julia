@@ -314,7 +314,7 @@ static int down_callback(int count, int key) {
     }
 }
 
-DLLEXPORT void jl_input_line_callback(char *input)
+void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
     if (!input || ios_eof(ios_stdin)) {

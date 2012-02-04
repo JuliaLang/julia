@@ -593,9 +593,14 @@ function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
     return t
 end
 
+const _jl_Type_Array = Type{Array}
+
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
         isa(x,FuncKind) || isa(x,UnionKind) || isa(x,TypeConstructor)
+        if is(x,Array)
+            return _jl_Type_Array
+        end
         return Type{x}
     end
     if isa(x,LambdaStaticData)

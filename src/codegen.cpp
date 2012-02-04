@@ -1086,10 +1086,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         // numeric literals
         int needroot = 0;
         if (jl_is_int32(expr)) {
-            needroot = !((uint32_t)(jl_unbox_int32(expr)+1024) < 2048);
+            needroot = !((uint32_t)(jl_unbox_int32(expr)+512) < 1024);
         }
         else if (jl_is_int64(expr)) {
-            needroot = !((uint64_t)(jl_unbox_int64(expr)+1024) < 2048);
+            needroot = !((uint64_t)(jl_unbox_int64(expr)+512) < 1024);
         }
         else if (jl_is_uint64(expr)) {
         }
@@ -2029,7 +2029,7 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine->addGlobalMapping(value_to_pointer_func,
                                          (void*)&jl_value_to_pointer);
 
-    temp_arg_area = (char*)allocb_permanent(arg_area_sz);
+    temp_arg_area = (char*)malloc(arg_area_sz);
     arg_area_loc = 0;
 
     std::vector<Type*> noargs(0);

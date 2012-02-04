@@ -923,16 +923,6 @@ JL_CALLABLE(jl_f_instantiate_type)
     return jl_apply_type_(args[0], &args[1], nargs-1);
 }
 
-static int all_typevars(jl_tuple_t *p)
-{
-    size_t i;
-    for(i=0; i < p->length; i++) {
-        if (!jl_is_typevar(jl_tupleref(p,i)))
-            return 0;
-    }
-    return 1;
-}
-
 static void check_supertype(jl_value_t *super, char *name)
 {
     if (!jl_is_tag_type(super) || super == (jl_value_t*)jl_sym_type ||
@@ -954,8 +944,6 @@ JL_CALLABLE(jl_f_new_struct_type)
     jl_sym_t *name = (jl_sym_t*)args[0];
     jl_tuple_t *params = (jl_tuple_t*)args[1];
     jl_tuple_t *fnames = (jl_tuple_t*)args[2];
-    if (!all_typevars(params))
-        jl_errorf("invalid type parameter list for %s", name->name);
 
     jl_struct_type_t *nst =
         jl_new_struct_type(name, jl_any_type, params, fnames, NULL);
@@ -1009,9 +997,6 @@ JL_CALLABLE(jl_f_new_type_constructor)
     if (!jl_is_type(args[1]))
         jl_type_error("typealias", (jl_value_t*)jl_type_type, args[1]);
     jl_tuple_t *p = (jl_tuple_t*)args[0];
-    if (!all_typevars(p)) {
-        jl_errorf("typealias: invalid type parameter list");
-    }
     return (jl_value_t*)jl_new_type_ctor(p, (jl_type_t*)args[1]);
 }
 
@@ -1021,10 +1006,6 @@ JL_CALLABLE(jl_f_new_tag_type)
     JL_TYPECHK(new_tag_type, symbol, args[0]);
     JL_TYPECHK(new_tag_type, tuple, args[1]);
     jl_tuple_t *p = (jl_tuple_t*)args[1];
-    if (!all_typevars(p)) {
-        jl_errorf("invalid type parameter list for %s",
-                  ((jl_sym_t*)args[0])->name);
-    }
     return (jl_value_t*)jl_new_tagtype((jl_value_t*)args[0], jl_any_type, p);
 }
 
@@ -1050,10 +1031,6 @@ JL_CALLABLE(jl_f_new_bits_type)
     JL_TYPECHK(new_bits_type, tuple, args[1]);
     JL_TYPECHK(new_bits_type, long, args[2]);
     jl_tuple_t *p = (jl_tuple_t*)args[1];
-    if (!all_typevars(p)) {
-        jl_errorf("invalid type parameter list for %s",
-                  ((jl_sym_t*)args[0])->name);
-    }
     int32_t nb = jl_unbox_long(args[2]);
     if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
         jl_errorf("invalid number of bits in type %s",
@@ -1062,12 +1039,19 @@ JL_CALLABLE(jl_f_new_bits_type)
                                         nb);
 }
 
+extern int jl_boot_file_loaded;
+
 JL_CALLABLE(jl_f_def_macro)
 {
     jl_sym_t *nm = (jl_sym_t*)args[0];
     assert(jl_is_symbol(nm));
     jl_function_t *f = (jl_function_t*)args[1];
     assert(jl_is_function(f));
+    if (jl_boot_file_loaded &&
+        f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
+        jl_lambda_info_t *li = f->linfo;
+        li->ast = jl_compress_ast(li->ast);
+    }
     jl_set_expander(jl_current_module, nm, f);
     return (jl_value_t*)jl_nothing;
 }
@@ -1128,8 +1112,6 @@ static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
         }
     }
 }
-
-extern int jl_boot_file_loaded;
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f)

@@ -21,14 +21,11 @@
 
 #include "julia.h"
 
-extern char jl_prompt_color[];
 extern int tab_width;
 extern DLLEXPORT char *julia_home;
 
-extern char *jl_answer_color();
 extern void init_repl_environment();
 extern char *read_expr(char *prompt);
-DLLEXPORT extern void jl_input_line_callback(char *input);
 extern void handle_input(jl_value_t *ast, int end, int show_value);
 extern int ends_with_semicolon(const char *input);
 extern char *ios_readline(ios_t *s);

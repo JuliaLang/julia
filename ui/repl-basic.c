@@ -12,7 +12,7 @@ DLLEXPORT void jl_enable_color(void)
     prompt_string = jl_prompt_color;
 }
 
-DLLEXPORT void jl_input_line_callback(char *input)
+void jl_input_line_callback(char *input)
 {
     jl_value_t *ast;
     int end=0, doprint=1;

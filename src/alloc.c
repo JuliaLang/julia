@@ -591,7 +591,7 @@ BOX_FUNC(uint64,  uint64_t, jl_new_box, 3)
 BOX_FUNC(float64, double,   jl_box, 3)
 #endif
 
-#define NBOX_C 2048
+#define NBOX_C 1024
 
 #define SIBOX_FUNC(typ,c_type,nw)                       \
 static jl_value_t *boxed_##typ##_cache[NBOX_C];         \

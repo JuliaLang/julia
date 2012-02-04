@@ -24,7 +24,6 @@ static jl_methtable_t *new_method_table(void)
     mt->defs = NULL;
     mt->cache = NULL;
     mt->cache_1arg = NULL;
-    mt->sealed = 0;
     mt->max_args = 0;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
@@ -1300,8 +1299,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
     f->fptr = jl_apply_generic;
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, jl_null);
-    jl_t2(f->env) = (jl_value_t*)f;
+    f->env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, (jl_value_t*)f);
     JL_GC_POP();
 }
 
@@ -1321,8 +1319,6 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     assert(jl_is_func(meth));
     assert(jl_is_tuple(gf->env));
     assert(jl_is_mtable(jl_t0(gf->env)));
-    if (jl_gf_mtable(gf)->sealed)
-        jl_errorf("cannot add methods to %s", jl_gf_name(gf)->name);
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth);

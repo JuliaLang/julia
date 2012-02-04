@@ -234,7 +234,6 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *defs;
     jl_methlist_t *cache;
     jl_array_t *cache_1arg;
-    int sealed;
     int max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
     int ncalls;
@@ -370,12 +369,10 @@ extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 void *allocb(size_t sz);
 void *allocobj(size_t sz);
 #define alloc_pod(nb) allocb(nb)
-void *allocb_permanent(size_t sz);
 #else
 #define allocb(nb)    malloc(nb)
 #define allocobj(nb)  malloc(nb)
 #define alloc_pod(nb) malloc(nb)
-#define allocb_permanent(nb) malloc(nb)
 #endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
