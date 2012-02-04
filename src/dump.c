@@ -25,6 +25,7 @@ static const ptrint_t LongSymbol_tag = 23;
 static const ptrint_t LongTuple_tag  = 24;
 static const ptrint_t LongExpr_tag   = 25;
 static const ptrint_t LiteralVal_tag = 26;
+static const ptrint_t SmallInt64_tag = 27;
 static const ptrint_t Null_tag       = 254;
 static const ptrint_t BackRef_tag    = 255;
 
@@ -189,9 +190,9 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
 static int is_ast_node(jl_value_t *v)
 {
     return jl_is_symbol(v) || jl_is_expr(v) ||
-        jl_typeis(v, jl_array_any_type) ||
-        jl_is_tuple(v) || jl_is_typevar(v) ||
-        jl_is_symbolnode(v) || jl_is_bool(v) ||
+        jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
+        jl_is_int32(v) || jl_is_int64(v) ||
+        jl_is_symbolnode(v) || jl_is_bool(v) || jl_is_typevar(v) ||
         jl_is_topnode(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v);
 }
@@ -360,11 +361,18 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_bits_type(t)) {
-            int nb = ((jl_bits_type_t*)t)->nbits;
             void *data = jl_bits_data(v);
-            writetag(s, jl_bits_kind);
-            jl_serialize_value(s, t);
-            ios_write(s, data, nb/8);
+            if (t == (jl_value_t*)jl_int64_type &&
+                *(int64_t*)data >= S32_MIN && *(int64_t*)data <= S32_MAX) {
+                writetag(s, (jl_value_t*)SmallInt64_tag);
+                write_int32(s, (int32_t)*(int64_t*)data);
+            }
+            else {
+                int nb = ((jl_bits_type_t*)t)->nbits;
+                writetag(s, jl_bits_kind);
+                jl_serialize_value(s, t);
+                ios_write(s, data, nb/8);
+            }
         }
         else if (jl_is_struct_type(t)) {
             writetag(s, jl_struct_kind);
@@ -694,6 +702,12 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         mt->max_args = read_int32(s);
         return (jl_value_t*)mt;
     }
+    else if (vtag == (jl_value_t*)SmallInt64_tag) {
+        jl_value_t *v = jl_box_int64(read_int32(s));
+        if (usetable)
+            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
+        return v;
+    }
     else if (vtag == (jl_value_t*)jl_bits_kind) {
         jl_bits_type_t *bt = (jl_bits_type_t*)jl_deserialize_value(s);
         int nby = bt->nbits/8;
@@ -930,6 +944,8 @@ jl_value_t *jl_compress_ast(jl_value_t *ast)
     //ios_printf(ios_stderr, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
+    if (tree_literal_values->length == 0)
+        tree_literal_values = (jl_array_t*)jl_an_empty_cell;
     v = (jl_value_t*)jl_tuple(4, v, tree_literal_values,
                               jl_lam_body((jl_expr_t*)ast)->etype,
                               jl_lam_capt((jl_expr_t*)ast));
@@ -974,9 +990,9 @@ void jl_init_serializer(void)
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
-                     jl_intrinsic_type, jl_methtable_type,
+                     (void*)SmallInt64_tag,
+                     jl_intrinsic_type, jl_methtable_type, jl_module_type,
                      jl_typename_type, jl_lambda_info_type, jl_tvar_type,
-                     jl_module_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),

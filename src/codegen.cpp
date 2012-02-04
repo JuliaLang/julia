@@ -1052,6 +1052,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
+        assert(jl_is_symbol(jv));
         return literal_pointer_val(jv);
     }
     else if (jl_is_gotonode(expr)) {
@@ -1083,9 +1084,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     if (!jl_is_expr(expr)) {
         // numeric literals
+        int needroot = 0;
         if (jl_is_int32(expr)) {
+            needroot = !((uint32_t)(jl_unbox_int32(expr)+1024) < 2048);
         }
         else if (jl_is_int64(expr)) {
+            needroot = !((uint64_t)(jl_unbox_int64(expr)+1024) < 2048);
         }
         else if (jl_is_uint64(expr)) {
         }
@@ -1097,8 +1101,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         else if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
         }
-        // TODO: for now just return the direct pointer
-        //ctx->linfo->roots = jl_tuple2(expr, ctx->linfo->roots);
+        if (needroot) {
+            jl_add_linfo_root(ctx->linfo, expr);
+        }
         return literal_pointer_val(expr);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
