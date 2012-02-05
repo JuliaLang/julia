@@ -28,8 +28,6 @@ JL_CALLABLE(jl_f_arraysize);
 JL_CALLABLE(jl_f_instantiate_type);
 JL_CALLABLE(jl_f_convert_default);
 JL_CALLABLE(jl_f_convert_tuple);
-JL_CALLABLE(jl_f_show_linfo);
-JL_CALLABLE(jl_f_show_any);
 JL_CALLABLE(jl_trampoline);
 JL_CALLABLE(jl_f_new_struct_type);
 JL_CALLABLE(jl_f_new_struct_fields);

@@ -150,7 +150,6 @@ static void jl_serialize_methlist(ios_t *s, jl_methlist_t *ml)
     while (ml != NULL) {
         jl_serialize_value(s, ml->sig);
         assert(jl_is_tuple(ml->sig));
-        write_int8(s, ml->has_tvars);
         write_int8(s, ml->va);
         jl_serialize_value(s, ml->tvars);
         jl_serialize_value(s, ml->func);
@@ -509,7 +508,6 @@ static jl_methlist_t *jl_deserialize_methlist(ios_t *s)
         jl_methlist_t *node = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
         node->sig = (jl_tuple_t*)sig;
         assert(jl_is_tuple(sig));
-        node->has_tvars = read_int8(s);
         node->va = read_int8(s);
         node->tvars = (jl_tuple_t*)jl_deserialize_value(s);
         node->func = (jl_function_t*)jl_deserialize_value(s);

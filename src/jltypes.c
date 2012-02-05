@@ -1097,10 +1097,19 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
             pe = (jl_tuple_t*)jl_t2(pe);
         }
 
-        t = tvars;
         jl_tuple_t *env0 = eqc;
-        while (t != jl_null) {
-            jl_value_t *tv = jl_t0(t);
+        jl_value_t **tvs;
+        int tvarslen;
+        if (jl_is_typevar(tvars)) {
+            tvs = (jl_value_t**)&tvars;
+            tvarslen = 1;
+        }
+        else {
+            tvs = &jl_t0(tvars);
+            tvarslen = tvars->length;
+        }
+        for(int tk=0; tk < tvarslen; tk++) {
+            jl_value_t *tv = tvs[tk];
             int found = 0;
             jl_tuple_t *pe = env0;
             while (pe != jl_null) {
@@ -1114,7 +1123,6 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
             // during type intersection.
             if (!found)
                 eqc = jl_tuple3(tv, tv, eqc);
-            t = (jl_tuple_t*)jl_t1(t);
         }
 
         t = jl_flatten_pairs(eqc);
@@ -2122,25 +2130,6 @@ jl_value_t *jl_type_match_morespecific(jl_value_t *a, jl_value_t *b)
     jl_value_t *m = type_match_(a, b, &env, 1, 0);
     JL_GC_POP();
     return m;
-}
-
-// given a (possibly-generic) function type and some argument types,
-// determine the result type. this is using a function type A-->B as a
-// transfer function.
-DLLEXPORT
-jl_value_t *jl_func_type_tfunc(jl_func_type_t *ft, jl_tuple_t *argtypes)
-{
-    if (!jl_has_typevars((jl_value_t*)ft->from)) {
-        return (jl_value_t*)ft->to;
-    }
-    jl_value_t *env=jl_type_match((jl_value_t*)argtypes,(jl_value_t*)ft->from);
-    jl_tuple_t *te = (env == jl_false) ? jl_null : (jl_tuple_t*)env;
-    JL_GC_PUSH(&te);
-    te = jl_flatten_pairs(te);
-    jl_value_t *ty =
-        (jl_value_t*)jl_instantiate_type_with(ft->to, &jl_t0(te), te->length/2);
-    JL_GC_POP();
-    return ty;
 }
 
 // initialization -------------------------------------------------------------

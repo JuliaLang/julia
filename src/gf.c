@@ -252,12 +252,10 @@ jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
     return nf;
 }
 
-jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
-                                      jl_function_t *method);
-
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
-                                     jl_function_t *method, int check_amb);
+                                     jl_function_t *method, jl_tuple_t *tvars,
+                                     int check_amb);
 
 static
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
@@ -280,7 +278,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
             return method;
         }
     }
-    return jl_method_list_insert(&mt->cache, type, method, 0)->func;
+    return jl_method_list_insert(&mt->cache, type, method, jl_null, 0)->func;
 }
 
 extern jl_function_t *jl_typeinf_func;
@@ -459,7 +457,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 // can't generalize type if there's an overlapping definition
                 // with typevars
                 while (curr != NULL && curr->func!=method) {
-                    if (curr->has_tvars &&
+                    if (curr->tvars!=jl_null &&
                         jl_type_intersection((jl_value_t*)curr->sig,
                                              (jl_value_t*)type) !=
                         (jl_value_t*)jl_bottom_type) {
@@ -687,7 +685,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     jl_value_t *env = (jl_value_t*)jl_false;
 
     while (m != NULL) {
-        if (m->has_tvars) {
+        if (m->tvars!=jl_null) {
             env = jl_type_match((jl_value_t*)tt, (jl_value_t*)m->sig);
             if (env != (jl_value_t*)jl_false) break;
         }
@@ -843,43 +841,6 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
     }
 }
 
-static jl_tuple_t *find_tvars(jl_value_t *v, jl_tuple_t *env)
-{
-    if (jl_is_typevar(v) && ((jl_tvar_t*)v)->bound) {
-        jl_tuple_t *pe = env;
-        while (pe != jl_null) {
-            if (jl_t0(pe) == v)
-                return env;
-            pe = (jl_tuple_t*)jl_t1(pe);
-        }
-        return jl_tuple2(v, env);
-    }
-    JL_GC_PUSH(&env);
-    if (jl_is_func_type(v)) {
-        env = find_tvars((jl_value_t*)((jl_func_type_t*)v)->from, env);
-        env = find_tvars((jl_value_t*)((jl_func_type_t*)v)->to  , env);
-        goto done_find_tvars;
-    }
-    jl_tuple_t *params;
-    if (jl_is_tuple(v))
-        params = (jl_tuple_t*)v;
-    else if (jl_is_union_type(v))
-        params = ((jl_uniontype_t*)v)->types;
-    else if (jl_is_some_tag_type(v))
-        params = ((jl_tag_type_t*)v)->parameters;
-    else
-        goto done_find_tvars;
-    int i;
-    for(i=0; i < params->length; i++) {
-        jl_value_t *p = jl_tupleref(params, i);
-        if (p != v)
-            env = find_tvars(p, env);
-    }
- done_find_tvars:
-    JL_GC_POP();
-    return env;
-}
-
 static int has_unions(jl_tuple_t *type)
 {
     int i;
@@ -894,7 +855,8 @@ static int has_unions(jl_tuple_t *type)
 
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
-                                     jl_function_t *method, int check_amb)
+                                     jl_function_t *method, jl_tuple_t *tvars,
+                                     int check_amb)
 {
     jl_methlist_t *l, **pl;
 
@@ -905,8 +867,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             // method overwritten
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
-            l->tvars = find_tvars((jl_value_t*)type, jl_null);
-            l->has_tvars = (l->tvars != jl_null);
+            l->tvars = tvars;
             l->va = (type->length > 0 &&
                      jl_is_seq_type(jl_tupleref(type,type->length-1)));
             l->invokes = NULL;
@@ -929,12 +890,9 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         pl = &l->next;
         l = l->next;
     }
-    jl_tuple_t *tv = find_tvars((jl_value_t*)type, jl_null);
-    JL_GC_PUSH(&tv);
     jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
     newrec->sig = type;
-    newrec->tvars = tv;
-    newrec->has_tvars = (newrec->tvars != jl_null);
+    newrec->tvars = tvars;
     newrec->va = (type->length > 0 &&
                   jl_is_seq_type(jl_tupleref(type,type->length-1)));
     newrec->func = method;
@@ -970,15 +928,16 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         }
     }
     JL_SIGATOMIC_END();
-    JL_GC_POP();
     return newrec;
 }
 
 jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
-                                      jl_function_t *method)
+                                      jl_function_t *method, jl_tuple_t *tvars)
 {
+    if (tvars->length == 1)
+        tvars = (jl_tuple_t*)jl_t0(tvars);
     JL_SIGATOMIC_BEGIN();
-    jl_methlist_t *ml = jl_method_list_insert(&mt->defs, type, method, 1);
+    jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1);
     // invalidate cached methods that overlap this definition
     jl_methlist_t *l = mt->cache;
     jl_methlist_t **pthis = &mt->cache;
@@ -1181,7 +1140,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     jl_value_t *env = (jl_value_t*)jl_false;
 
     while (m != NULL) {
-        if (m->has_tvars) {
+        if (m->tvars!=jl_null) {
             env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
             if (env != (jl_value_t*)jl_false) break;
         }
@@ -1226,7 +1185,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         if (m->invokes == NULL) {
             m->invokes = new_method_table();
             // this private method table has just this one definition
-            jl_method_list_insert(&m->invokes->defs, m->sig, m->func, 0);
+            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0);
         }
 
         tt = arg_type_tuple(args, nargs);
@@ -1312,7 +1271,8 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
     return f;
 }
 
-void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
+void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
+                   jl_tuple_t *tvars)
 {
     assert(jl_is_function(gf));
     assert(jl_is_tuple(types));
@@ -1321,7 +1281,7 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth)
     assert(jl_is_mtable(jl_t0(gf->env)));
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);
-    (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth);
+    (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
 }
 
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,

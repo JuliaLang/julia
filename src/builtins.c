@@ -1114,7 +1114,7 @@ static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 }
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                          jl_tuple_t *argtypes, jl_function_t *f)
+                          jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
 {
     jl_value_t *gf;
     if (bnd) {
@@ -1133,7 +1133,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
     check_type_tuple(argtypes, name, "method definition");
-    jl_add_method((jl_function_t*)gf, argtypes, f);
+    jl_add_method((jl_function_t*)gf, argtypes, f, t);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;

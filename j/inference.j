@@ -500,9 +500,6 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     end
 end
 
-ft_tfunc(ft, argtypes) = ccall(:jl_func_type_tfunc, Any, (Any, Any),
-                               ft, argtypes)
-
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = a2t_butfirst(e.args)
     argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
@@ -513,10 +510,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     if is(func,false)
         # TODO: lambda expression (let)
         ft = abstract_eval(e.args[1], vtypes, sv)
-        if isa(ft,FuncKind)
-            # use inferred function type
-            return ft_tfunc(ft, argtypes)
-        elseif isType(ft) && isa(ft.parameters[1],CompositeKind)
+        if isType(ft) && isa(ft.parameters[1],CompositeKind)
             st = ft.parameters[1]
             if isgeneric(st) && isleaftype(st)
                 return abstract_call_gf(st, fargs, argtypes, e)

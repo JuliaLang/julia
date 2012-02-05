@@ -565,6 +565,44 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
 
 // bits constructors ----------------------------------------------------------
 
+#define BOXN_FUNC(nb,nw)                                        \
+jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)        \
+{                                                               \
+    assert(jl_is_bits_type(t));                                 \
+    assert(jl_bitstype_nbits(t)/8 == sizeof(x));                \
+    jl_value_t *v = alloc_##nw##w();                            \
+    v->type = (jl_type_t*)t;                                    \
+    *(int##nb##_t*)jl_bits_data(v) = x;                         \
+    return v;                                                   \
+}
+BOXN_FUNC(8,  2)
+BOXN_FUNC(16, 2)
+BOXN_FUNC(32, 2)
+#ifdef __LP64__
+BOXN_FUNC(64, 2)
+#else
+BOXN_FUNC(64, 3)
+#endif
+
+#define UNBOX_FUNC(j_type,c_type)                                       \
+c_type jl_unbox_##j_type(jl_value_t *v)                                 \
+{                                                                       \
+    assert(jl_is_bits_type(v->type));                                   \
+    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
+    return *(c_type*)jl_bits_data(v);                                   \
+}
+UNBOX_FUNC(int8,   int8_t)
+UNBOX_FUNC(uint8,  uint8_t)
+UNBOX_FUNC(int16,  int16_t)
+UNBOX_FUNC(uint16, uint16_t)
+UNBOX_FUNC(int32,  int32_t)
+UNBOX_FUNC(uint32, uint32_t)
+UNBOX_FUNC(int64,  int64_t)
+UNBOX_FUNC(uint64, uint64_t)
+UNBOX_FUNC(bool,   int8_t)
+UNBOX_FUNC(float32, float)
+UNBOX_FUNC(float64, double)
+
 #define BOX_FUNC(typ,c_type,pfx,nw)             \
 jl_value_t *pfx##_##typ(c_type x)               \
 {                                               \
@@ -573,22 +611,11 @@ jl_value_t *pfx##_##typ(c_type x)               \
     *(c_type*)jl_bits_data(v) = x;              \
     return v;                                   \
 }
-BOX_FUNC(int8,    int8_t,   jl_new_box, 2)
-BOX_FUNC(uint8,   uint8_t,  jl_new_box, 2)
-BOX_FUNC(int16,   int16_t,  jl_new_box, 2)
-BOX_FUNC(uint16,  uint16_t, jl_new_box, 2)
-BOX_FUNC(int32,   int32_t,  jl_new_box, 2)
-BOX_FUNC(uint32,  uint32_t, jl_new_box, 2)
-BOX_FUNC(char,    uint32_t, jl_new_box, 2)
-BOX_FUNC(float32, float,    jl_box, 2)
+BOX_FUNC(float32, float,  jl_box, 2)
 #ifdef __LP64__
-BOX_FUNC(int64,   int64_t,  jl_new_box, 2)
-BOX_FUNC(uint64,  uint64_t, jl_new_box, 2)
-BOX_FUNC(float64, double,   jl_box, 2)
+BOX_FUNC(float64, double, jl_box, 2)
 #else
-BOX_FUNC(int64,   int64_t,  jl_new_box, 3)
-BOX_FUNC(uint64,  uint64_t, jl_new_box, 3)
-BOX_FUNC(float64, double,   jl_box, 3)
+BOX_FUNC(float64, double, jl_box, 3)
 #endif
 
 #define NBOX_C 1024
@@ -643,8 +670,8 @@ void jl_init_int32_int64_cache(void)
 {
     int64_t i;
     for(i=0; i < NBOX_C; i++) {
-        boxed_int32_cache[i]  = jl_new_box_int32(i-NBOX_C/2);
-        boxed_int64_cache[i]  = jl_new_box_int64(i-NBOX_C/2);
+        boxed_int32_cache[i]  = jl_box32(jl_int32_type, i-NBOX_C/2);
+        boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
     }
 }
 
@@ -652,15 +679,15 @@ void jl_init_box_caches(void)
 {
     int64_t i;
     for(i=0; i < 256; i++) {
-        boxed_int8_cache[i]  = jl_new_box_int8(i);
-        boxed_uint8_cache[i] = jl_new_box_uint8(i);
+        boxed_int8_cache[i]  = jl_box8(jl_int8_type, i);
+        boxed_uint8_cache[i] = jl_box8(jl_uint8_type, i);
     }
     for(i=0; i < NBOX_C; i++) {
-        boxed_int16_cache[i]  = jl_new_box_int16(i-NBOX_C/2);
-        boxed_uint16_cache[i] = jl_new_box_uint16(i);
-        boxed_uint32_cache[i] = jl_new_box_uint32(i);
-        boxed_char_cache[i]   = jl_new_box_char(i);
-        boxed_uint64_cache[i] = jl_new_box_uint64(i);
+        boxed_int16_cache[i]  = jl_box16(jl_int16_type, i-NBOX_C/2);
+        boxed_uint16_cache[i] = jl_box16(jl_uint16_type, i);
+        boxed_uint32_cache[i] = jl_box32(jl_uint32_type, i);
+        boxed_char_cache[i]   = jl_box32(jl_char_type, i);
+        boxed_uint64_cache[i] = jl_box64(jl_uint64_type, i);
     }
 }
 
@@ -690,44 +717,6 @@ jl_value_t *jl_box_bool(int8_t x)
         return jl_true;
     return jl_false;
 }
-
-#define BOXN_FUNC(nb,nw)                                        \
-jl_value_t *jl_box##nb(jl_bits_type_t *t, int##nb##_t x)        \
-{                                                               \
-    assert(jl_is_bits_type(t));                                 \
-    assert(jl_bitstype_nbits(t)/8 == sizeof(x));                \
-    jl_value_t *v = alloc_##nw##w();                            \
-    v->type = (jl_type_t*)t;                                    \
-    *(int##nb##_t*)jl_bits_data(v) = x;                         \
-    return v;                                                   \
-}
-BOXN_FUNC(8,  2)
-BOXN_FUNC(16, 2)
-BOXN_FUNC(32, 2)
-#ifdef __LP64__
-BOXN_FUNC(64, 2)
-#else
-BOXN_FUNC(64, 3)
-#endif
-
-#define UNBOX_FUNC(j_type,c_type)                                       \
-c_type jl_unbox_##j_type(jl_value_t *v)                                 \
-{                                                                       \
-    assert(jl_is_bits_type(v->type));                                   \
-    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
-    return *(c_type*)jl_bits_data(v);                                   \
-}
-UNBOX_FUNC(int8,   int8_t)
-UNBOX_FUNC(uint8,  uint8_t)
-UNBOX_FUNC(int16,  int16_t)
-UNBOX_FUNC(uint16, uint16_t)
-UNBOX_FUNC(int32,  int32_t)
-UNBOX_FUNC(uint32, uint32_t)
-UNBOX_FUNC(int64,  int64_t)
-UNBOX_FUNC(uint64, uint64_t)
-UNBOX_FUNC(bool,   int8_t)
-UNBOX_FUNC(float32, float)
-UNBOX_FUNC(float64, double)
 
 // Expr constructor for internal use ------------------------------------------
 

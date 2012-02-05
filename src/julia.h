@@ -214,7 +214,6 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     // not first-class
     jl_tuple_t *sig;
-    int has_tvars;
     int va;
     jl_tuple_t *tvars;
     jl_function_t *func;
@@ -571,9 +570,11 @@ jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
-void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth);
+void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
+                   jl_tuple_t *tvars);
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
-                          jl_tuple_t *argtypes, jl_function_t *f);
+                          jl_tuple_t *argtypes, jl_function_t *f,
+                          jl_tuple_t *tvars);
 jl_value_t *jl_box_bool(int8_t x);
 jl_value_t *jl_box_int8(int32_t x);
 jl_value_t *jl_box_uint8(uint32_t x);
@@ -582,8 +583,6 @@ jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
 jl_value_t *jl_box_char(uint32_t x);
-jl_value_t *jl_new_box_int8(int8_t x);
-jl_value_t *jl_new_box_int32(int32_t x);
 jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);

@@ -329,6 +329,9 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             max_arg_depth(jl_exprarg(e,2), max, sp, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
+            max_arg_depth(jl_exprarg(e,3), max, sp, ctx);
+            (*sp)++;
+            if (*sp > *max) *max = *sp;
             (*sp)-=2;
         }
         else {
@@ -1168,10 +1171,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx, true);
         make_gcroot(boxed(a2), ctx);
-        Value *m = builder.CreateCall5(jlmethod_func, name, bp,
-                                       literal_pointer_val((void*)bnd), a1, a2);
+        Value *a3 = emit_expr(args[3], ctx, true);
+        make_gcroot(boxed(a3), ctx);
+        Value *mdargs[6] = { name, bp, literal_pointer_val((void*)bnd),
+                             a1, a2, a3 };
+        builder.CreateCall(jlmethod_func, ArrayRef<Value*>(&mdargs[0], 6));
         ctx->argDepth = last_depth;
-        return m;
+        return literal_pointer_val((jl_value_t*)jl_nothing);
     }
     else if (ex->head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
@@ -1904,6 +1910,7 @@ static void init_julia_llvm_env(Module *m)
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_ppvalue_llvmt);
     mdargs.push_back(T_pint8);
+    mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     mdargs.push_back(jl_pvalue_llvmt);
     jlmethod_func =

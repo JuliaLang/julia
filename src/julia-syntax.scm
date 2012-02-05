@@ -201,13 +201,6 @@
       (map (lambda (x)    `(call (top typevar) ',x)) sl)
       (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
 
-(define (gf-def-expr- name argl argtypes body)
-  (if (not (symbol? name))
-      (error (string "invalid method name " name)))
-  `(block
-    (method ,name ,argtypes ,(method-lambda-expr argl body))
-    (null)))
-
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
 	 (values (reverse names) (reverse bounds)))
@@ -223,24 +216,21 @@
 	(else
 	 (error "malformed type parameter list"))))
 
-(define (generic-function-def-expr name sparams argl body)
+(define (method-def-expr name sparams argl body)
+  (if (not (symbol? name))
+      (error (string "invalid method name " name)))
   (let* ((argl  (fsig-to-lambda-list argl))
-	 (types (llist-types argl)))
-    (gf-def-expr-
-     name argl
-     (if (null? sparams)
-	 `(tuple ,@types)
-	 (receive
-	  (names bounds) (sparam-name-bounds sparams '() '())
-	  `(scope-block
-	    (block
-	     ,@(map (lambda (var) `(local ,var))
-		    names)
-	     ,@(map (lambda (var val) `(= ,var ,val))
-		    names
-		    (symbols->typevars names bounds))
-	     (tuple ,@types)))))
-     body)))
+	 (types (llist-types argl))
+	 (body  (method-lambda-expr argl body)))
+    (if (null? sparams)
+	`(method ,name (tuple ,@types) ,body (tuple))
+	(receive
+	 (names bounds) (sparam-name-bounds sparams '() '())
+	 (let ((f (gensy)))
+	   `(call (lambda (,@names ,f)
+		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
+		  ,@(symbols->typevars names bounds)
+		  ,body))))))
 
 (define (struct-def-expr name params super fields)
   (receive
@@ -433,11 +423,11 @@
   (pattern-set
    ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (generic-function-def-expr name sparams argl body))
+		   (method-def-expr name sparams argl body))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
-		   (generic-function-def-expr name '() argl body))
+		   (method-def-expr name '() argl body))
 
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
@@ -1674,7 +1664,8 @@ So far only the second case can actually occur.
 		     (vinfo:set-iasg! vi #t)))))
 	 `(method ,(cadr e)
 		  ,(analyze-vars (caddr  e) env captvars)
-		  ,(analyze-vars (cadddr e) env captvars)))
+		  ,(analyze-vars (cadddr e) env captvars)
+		  ,(cadddr (cdr e))))
 	(else (cons (car e)
 		    (map (lambda (x) (analyze-vars x env captvars))
 			 (cdr e))))))
