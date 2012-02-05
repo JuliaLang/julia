@@ -1269,6 +1269,10 @@ function inlineable(f, e::Expr, vars)
             return e.args[3]
         end
     end
+    if (is(f,apply_type) || is(f,fieldtype)) &&
+        isType(e.typ) && isleaftype(e.typ.parameters[1])
+        return e.typ.parameters[1]
+    end
 
     meth = getmethods(f, atypes)
     if length(meth) != 1
@@ -1453,14 +1457,6 @@ function inlining_pass(e::Expr, vars)
                 return body
             end
             return e
-        end
-    elseif is(e.head,:call)
-        farg = arg1
-        # special inlining for some builtin functions that return types
-        if isa(farg,TopNode) &&
-            (is(_ieval(farg),apply_type) || is(_ieval(farg),fieldtype)) &&
-            isType(e.typ) && isleaftype(e.typ.parameters[1])
-            return e.typ.parameters[1]
         end
     end
     e
