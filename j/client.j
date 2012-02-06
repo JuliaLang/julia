@@ -139,7 +139,7 @@ function process_options(args::Array{Any,1})
             eval(parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
-            load(args[i])
+            include(args[i])
         elseif args[i]=="-p"
             i+=1
             np = int32(args[i])
@@ -160,7 +160,7 @@ function process_options(args::Array{Any,1})
             global ARGS
             # remove julia's arguments
             ARGS = ARGS[i:end]
-            load(args[i])
+            include(args[i])
             exit(0)
         else
             error("unknown option: ", args[i])
@@ -194,8 +194,8 @@ function _start()
         global const VARIABLES = {}
 
         # Load customized startup
-        try load(strcat(getcwd(),"/startup.j")) end
-        try load(strcat(ENV["HOME"],"/.juliarc")) end
+        try include(strcat(getcwd(),"/startup.j")) end
+        try include(strcat(ENV["HOME"],"/.juliarc")) end
 
         (quiet,repl) = process_options(ARGS)
         if repl

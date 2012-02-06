@@ -135,30 +135,19 @@ end
 # we share Array with Base so we can add definitions to it
 const Array = eval(Base, :Array)
 
-Array{T}  (::Type{T}, d::(Integer,)) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
-          int(d[1]))
-Array{T}  (::Type{T}, d::(Integer,Integer)) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
-          int(d[1]), int(d[2]))
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+Array{N}(T, d::NTuple{N,Int}) =
+    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
 
-Array{T}  (::Type{T}, d::(Int,Int,Int)) =
-    ccall(:jl_new_array, Array{T,3}, (Any,Any), Array{T,3}, d)
-Array{T}  (::Type{T}, d::(Integer,Integer,Integer)) =
-    ccall(:jl_new_arrayv, Array{T,3}, (Any,Int...), Array{T,3},
-          int(d[1]), int(d[2]), int(d[3]))
-Array{T}  (::Type{T}, d::(Int,Int,Int,Int)) =
-    ccall(:jl_new_array, Array{T,4}, (Any,Any), Array{T,4}, d)
-Array{T}  (::Type{T}, d::(Integer,Integer,Integer,Integer)) =
-    ccall(:jl_new_arrayv, Array{T,4}, (Any,Int...), Array{T,4},
-          int(d[1]), int(d[2]), int(d[3]), int(d[4]))
+Array{T}(::Type{T}, m::Int) =
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
+Array{T}(::Type{T}, m::Int,n::Int) =
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m,n)
+Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
 
-Array{T,N}(::Type{T}, d::NTuple{N,Integer}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N},
-          convert((Int...), d))
-Array{N}(T, d::NTuple{N,Integer}) =
-    ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N},
-          convert((Int...), d))
+Array(T, d::Int...) = Array(T, d)
 
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
@@ -166,12 +155,6 @@ Array{T}(::Type{T}, m::Integer) =
 Array{T}(::Type{T}, m::Integer,n::Integer) =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
           int(m), int(n))
-
-Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer) =
-    ccall(:jl_new_arrayv, Array{T,3}, (Any,Int...), Array{T,3},
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3},
           int(m), int(n), int(o))
-Array{T}(::Type{T}, m::Integer, n::Integer, o::Integer, p::Integer) =
-    ccall(:jl_new_arrayv, Array{T,4}, (Any,Int...), Array{T,4},
-          int(m), int(n), int(o), int(p))
-
-Array(T, d::Integer...) = Array(T, d)

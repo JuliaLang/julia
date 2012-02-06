@@ -14,24 +14,6 @@
 
 // array constructors ---------------------------------------------------------
 
-static void *alloc_array_buffer(size_t nbytes, int isunboxed)
-{
-    void *data;
-    if (nbytes > 0) {
-        if (isunboxed) {
-            data = alloc_pod(nbytes);
-        }
-        else {
-            data = allocb(nbytes);
-            memset(data, 0, nbytes);
-        }
-    }
-    else {
-        data = NULL;
-    }
-    return data;
-}
-
 static jl_array_t *_new_array(jl_type_t *atype,
                               uint32_t ndims, size_t *dims)
 {
@@ -80,7 +62,9 @@ static jl_array_t *_new_array(jl_type_t *atype,
         a->data = NULL;
         a->length = 0;
         a->reshaped = 0;
-        data = alloc_array_buffer(tot, isunboxed);
+        data = allocb(tot);
+        if (!isunboxed)
+            memset(data, 0, tot);
         jl_gc_unpreserve();
     }
 
@@ -155,19 +139,6 @@ jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
     return _new_array(atype, ndims, adims);
 }
 
-jl_array_t *jl_new_arrayv(jl_type_t *atype, ...)
-{
-    va_list args;
-    size_t ndims = jl_unbox_long(jl_tparam1(atype));
-    size_t *adims = alloca(ndims*sizeof(size_t));
-    size_t i;
-    va_start(args, atype);
-    for(i=0; i < ndims; i++)
-        adims[i] = va_arg(args, size_t);
-    va_end(args);
-    return _new_array(atype, ndims, adims);
-}
-
 jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr)
 {
     return _new_array(atype, 1, &nr);
@@ -179,16 +150,17 @@ jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc)
     return _new_array(atype, 2, &d[0]);
 }
 
+jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc, size_t z)
+{
+    size_t d[3] = {nr, nc, z};
+    return _new_array(atype, 3, &d[0]);
+}
+
 jl_array_t *jl_pchar_to_array(char *str, size_t len)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, len);
     memcpy(a->data, str, len);
     return a;
-}
-
-jl_array_t *jl_cstr_to_array(char *str)
-{
-    return jl_pchar_to_array(str, strlen(str));
 }
 
 jl_value_t *jl_array_to_string(jl_array_t *a)
@@ -365,7 +337,9 @@ static void *array_new_buffer(jl_array_t *a, size_t newlen)
         nbytes++;
     }
     int isunboxed = jl_is_bits_type(jl_tparam0(jl_typeof(a)));
-    char *newdata = alloc_array_buffer(nbytes, isunboxed);
+    char *newdata = allocb(nbytes);
+    if (!isunboxed)
+        memset(newdata, 0, nbytes);
     if (a->elsize == 1) newdata[nbytes-1] = '\0';
     return newdata;
 }

@@ -1,6 +1,6 @@
 ## low-level pcre interface ##
 
-load("pcre_h.j")
+include("pcre_h.j")
 
 _jl_libpcre = dlopen("libpcre")
 

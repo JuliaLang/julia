@@ -426,13 +426,16 @@ jl_value_t *jl_parse_file(const char *fname)
     return scm_to_julia(e);
 }
 
-jl_value_t *jl_parse_file_string(const char *text)
+void jl_load_file_string(const char *text)
 {
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
                           cvalue_static_cstring(text));
-    if (!iscons(e))
-        return (jl_value_t*)jl_null;
-    return scm_to_julia(e);
+    if (iscons(e)) {
+        jl_value_t *fexpr = scm_to_julia(e);
+        JL_GC_PUSH(&fexpr);
+        jl_load_file_expr("string", fexpr);
+        JL_GC_POP();
+    }
 }
 
 // returns either an expression or a thunk

@@ -1,99 +1,99 @@
 ## Load essential files and libraries
 
-load("base.j")
+include("base.j")
 
 # core operations & types
-load("range.j")
-load("tuple.j")
-load("cell.j")
-load("expr.j")
-load("error.j")
+include("range.j")
+include("tuple.j")
+include("cell.j")
+include("expr.j")
+include("error.j")
 
 # core numeric operations & types
-load("bool.j")
-load("number.j")
-load("int.j")
-load("float.j")
-load("pointer.j")
-load("char.j")
-load("operators.j")
-load("promotion.j")
-load("reduce.j")
-load("complex.j")
-load("rational.j")
+include("bool.j")
+include("number.j")
+include("int.j")
+include("float.j")
+include("pointer.j")
+include("char.j")
+include("operators.j")
+include("promotion.j")
+include("reduce.j")
+include("complex.j")
+include("rational.j")
 
 # core data structures (used by type inference)
-load("abstractarray.j")
-load("subarray.j")
-load("array.j")
-load("intset.j")
-load("table.j")
-load("set.j")
+include("abstractarray.j")
+include("subarray.j")
+include("array.j")
+include("intset.j")
+include("table.j")
+include("set.j")
 
 # compiler
-load("inference.j")
+include("inference.j")
 
 # I/O, strings & printing
-load("io.j")
+include("io.j")
 #set_current_output_stream(make_stdout_stream()) # for error reporting
-load("string.j")
-load("ascii.j")
-load("utf8.j")
-load("regex.j")
-load("show.j")
-load("grisu.j")
-load("printf.j")
+include("string.j")
+include("ascii.j")
+include("utf8.j")
+include("regex.j")
+include("show.j")
+include("grisu.j")
+include("printf.j")
 
 # system & environment
-load("libc.j")
-load("env.j")
-load("errno_h.j")
+include("libc.j")
+include("env.j")
+include("errno_h.j")
 
 # concurrency and parallelism
-load("iterator.j")
-load("task.j")
-load("process.j")
-load("serialize.j")
-load("multi.j")
+include("iterator.j")
+include("task.j")
+include("process.j")
+include("serialize.j")
+include("multi.j")
 
 # front end
-load("client.j")
+include("client.j")
 
 # core math functions
-load("intfuncs.j")
-load("floatfuncs.j")
-load("math.j")
-load("math_libm.j")
-load("sort.j")
-load("combinatorics.j")
-load("statistics.j")
+include("intfuncs.j")
+include("floatfuncs.j")
+include("math.j")
+include("math_libm.j")
+include("sort.j")
+include("combinatorics.j")
+include("statistics.j")
 
 # random number generation
-load("random.j")
+include("random.j")
 
 # sparse matrices
-load("sparse.j")
+include("sparse.j")
 
 # distributed arrays
-load("darray.j")
+include("darray.j")
 
 # utilities - version, timing, help, edit
-load("version.j")
-load("util.j")
-load("datafmt.j")
+include("version.j")
+include("util.j")
+include("datafmt.j")
 
 ## Load optional external libraries
 
 # linear algebra
-load("linalg.j")
-load("linalg_blas.j")
-load("linalg_lapack.j")
-load("linalg_arpack.j")
-load("linalg_suitesparse.j")
+include("linalg.j")
+include("linalg_blas.j")
+include("linalg_lapack.j")
+include("linalg_arpack.j")
+include("linalg_suitesparse.j")
 
 # signal processing
-load("signal.j")
-load("signal_fftw.j")
+include("signal.j")
+include("signal_fftw.j")
 
 
 # prime method cache with some things we know we'll need right after startup

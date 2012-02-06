@@ -851,13 +851,8 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = jl_find_file_in_path(fname);
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        if (jl_errorexception_type == NULL) {
-            ios_printf(ios_stderr, "system image file not found\n");
-            exit(1);
-        }
-        else {
-            jl_error("system image file not found");
-        }
+        ios_printf(ios_stderr, "system image file not found\n");
+        exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
@@ -918,12 +913,9 @@ void jl_restore_system_image(char *fname)
     if (en) jl_gc_enable();
 #endif
 
-    jl_value_t *fexpr = jl_parse_file_string(ss.buf);
-    JL_GC_PUSH(&fexpr);
-    ios_close(&ss);
     // TODO: there is no exception handler here!
-    jl_load_file_expr(fname, fexpr);
-    JL_GC_POP();
+    jl_load_file_string(ss.buf);
+    ios_close(&ss);
 }
 
 DLLEXPORT

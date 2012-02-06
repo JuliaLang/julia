@@ -1,6 +1,6 @@
 module NewSystem
 
-load("sysimg.j")
+include("sysimg.j")
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.

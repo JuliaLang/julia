@@ -39,7 +39,7 @@
 ## @parallel (r) for i=1:n ... end -
 ##     parallel loop. the results from each iteration are reduced using (r).
 ##
-## @everywhere expr - run expr everywhere. useful for load().
+## @everywhere expr - run expr everywhere.
 
 # todo:
 # - more indexing
@@ -1083,7 +1083,7 @@ end
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
 SGE(n) = addprocs_sge(n)
 
-#load("vcloud.j")
+#include("vcloud.j")
 
 ## global objects and collective operations ##
 

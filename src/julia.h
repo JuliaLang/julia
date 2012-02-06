@@ -53,14 +53,10 @@ typedef struct {
     uint32_t offset;  // for 1-d only. does not need to get big.
     size_t nrows;
     union {
-        struct {
-            // 1d
-            size_t maxsize;
-        };
-        struct {
-            // Nd
-            size_t ncols;
-        };
+        // 1d
+        size_t maxsize;
+        // Nd
+        size_t ncols;
     };
     union {
         char _space[1];
@@ -367,11 +363,9 @@ extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 #ifdef JL_GC_MARKSWEEP
 void *allocb(size_t sz);
 void *allocobj(size_t sz);
-#define alloc_pod(nb) allocb(nb)
 #else
 #define allocb(nb)    malloc(nb)
 #define allocobj(nb)  malloc(nb)
-#define alloc_pod(nb) malloc(nb)
 #endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
@@ -620,8 +614,9 @@ DLLEXPORT jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
                                        jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
+DLLEXPORT jl_array_t *jl_alloc_array_3d(jl_type_t *atype, size_t nr, size_t nc,
+                                        size_t z);
 DLLEXPORT jl_array_t *jl_pchar_to_array(char *str, size_t len);
-DLLEXPORT jl_array_t *jl_cstr_to_array(char *str);
 DLLEXPORT jl_value_t *jl_pchar_to_string(char *str, size_t len);
 DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
 DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
@@ -687,7 +682,7 @@ void jl_restore_system_image(char *fname);
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
 jl_value_t *jl_parse_file(const char *fname);
-jl_value_t *jl_parse_file_string(const char *text);
+DLLEXPORT void jl_load_file_string(const char *text);
 jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 

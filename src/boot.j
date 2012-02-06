@@ -190,4 +190,6 @@ end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 
-load(fname::ByteString) = ccall(:jl_load, Void, (Ptr{Uint8},), fname)
+include(fname::ByteString) = ccall(:jl_load, Void, (Ptr{Uint8},), fname)
+include_string(txt::ByteString) =
+    ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)

@@ -123,6 +123,90 @@ edit(f::Function, t) = edit(function_loc(f,t)...)
 less(f::Function)    = less(function_loc(f)...)
 less(f::Function, t) = less(function_loc(f,t)...)
 
+# remote/parallel load
+
+function is_file_readable(path)
+    local f
+    try
+        f = open(cstring(path))
+    catch
+        return false
+    end
+    close(f)
+    return true
+end
+
+function find_in_path(fname)
+    if fname[1] == '/'
+        return fname
+    end
+    loadpath = { "", "$JULIA_HOME/", "$JULIA_HOME/j/" }
+    for pfx in loadpath
+        pfxd = strcat(pfx,fname)
+        if is_file_readable(pfxd)
+            return pfxd
+        end
+    end
+    return fname
+end
+
+begin
+local in_load = false
+local in_remote_load = false
+local load_dict = {}
+global load, remote_load
+
+load(fname::String) = load(cstring(fname))
+function load(fname::ByteString)
+    if in_load
+        path = find_in_path(fname)
+        push(load_dict, fname)
+        f = open(path)
+        push(load_dict, readall(f))
+        close(f)
+        include(path)
+        return
+    elseif in_remote_load
+        for i=1:2:length(load_dict)
+            if load_dict[i] == fname
+                return include_string(load_dict[i+1])
+            end
+        end
+    else
+        in_load = true
+        iserr, err = false, ()
+        try
+            load(fname)
+            for p = 1:nprocs()
+                if p != myid()
+                    remote_do(p, remote_load, load_dict)
+                end
+            end
+        catch e
+            iserr, err = true, e
+        end
+        load_dict = {}
+        in_load = false
+        if iserr throw(err); end
+    end
+end
+
+function remote_load(dict)
+    load_dict = dict
+    in_remote_load = true
+    try
+        load(dict[1])
+    catch e
+        in_remote_load = false
+        throw(e)
+    end
+    in_remote_load = false
+    nothing
+end
+end
+
+# help
+
 function parse_help(stream)
     helpdb = HashTable()
     for l = each_line(stream)
