@@ -161,7 +161,7 @@ function process_options(args::Array{Any,1})
             # remove julia's arguments
             ARGS = ARGS[i:end]
             load(args[i])
-            exit(0)
+            break
         else
             error("unknown option: ", args[i])
         end
@@ -210,4 +210,5 @@ function _start()
         println()
         exit(1)
     end
+    flush(stdout_stream)
 end
