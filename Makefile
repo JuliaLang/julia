@@ -14,7 +14,7 @@ julia-debug julia-release:
 
 sys0.ji: src/boot.j src/dump.c j/stage0.j
 	$(QUIET_JULIA) ./julia -b stage0.j
-	rm -f sys.ji
+	@rm -f sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
 sys.ji: VERSION sys0.ji j/stage1.j j/sysimg.j j/start_image.j j/*.j
