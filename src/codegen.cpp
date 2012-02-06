@@ -1094,15 +1094,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         else if (jl_is_int64(expr)) {
             needroot = !((uint64_t)(jl_unbox_int64(expr)+512) < 1024);
         }
-        else if (jl_is_uint64(expr)) {
-        }
-        else if (jl_is_float64(expr)) {
-        }
-        else if (jl_is_array(expr)) {
-            // string literal
-        }
         else if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
+        }
+        else if (jl_is_tuple(expr)) {
+            needroot = 1;
         }
         if (needroot) {
             jl_add_linfo_root(ctx->linfo, expr);
