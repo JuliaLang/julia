@@ -566,24 +566,6 @@ int jl_is_rest_arg(jl_value_t *ex)
     return 1;
 }
 
-void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m)
-{
-    if (jl_is_lambda_info(expr)) {
-        jl_lambda_info_t *li = (jl_lambda_info_t*)expr;
-        li->module = m;
-    }
-    else if (jl_typeis(expr,jl_array_any_type)) {
-        jl_array_t *a = (jl_array_t*)expr;
-        for(size_t i=0; i < a->length; i++)
-            jl_mark_lambda_module(jl_cellref(a,i), m);
-    }
-    else if (jl_is_expr(expr)) {
-        jl_expr_t *e = (jl_expr_t*)expr;
-        for(size_t i=0; i < e->args->length; i++)
-            jl_mark_lambda_module(jl_exprarg(e,i), m);
-    }
-}
-
 static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_symbol(expr)) {

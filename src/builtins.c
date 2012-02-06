@@ -254,11 +254,11 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
         for(int i=0; i < exprs->length; i++) {
             // process toplevel form
             jl_value_t *form = jl_cellref(exprs, i);
-            if (jl_is_linenode(form) && plineno) {
-                *plineno = jl_linenode_line(form);
+            if (jl_is_linenode(form)) {
+                if (plineno)
+                    *plineno = jl_linenode_line(form);
             }
             else {
-                jl_mark_lambda_module(form, jl_current_module);
                 (void)jl_toplevel_eval_flex(form, 0, plineno);
             }
         }
