@@ -805,29 +805,28 @@ chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
 
 ## string to integer functions ##
 
-function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
-    n::T = 0
-    neg = false
-    base = convert(T,base)
+function _jl_parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     i = start(s)
     if done(s,i)
         error("premature end of integer (in ",show_to_string(s),")")
     end
     c,i = next(s,i)
+    sgn = one(T)
     if T <: Signed && c == '-'
-        neg = true
+        sgn = -sgn
         if done(s,i)
             error("premature end of integer (in ",show_to_string(s),")")
         end
         c,i = next(s,i)
     end
+    base = convert(T,base)
+    n::T = 0
     while true
         d = '0' <= c <= '9' ? c-'0' :
             'A' <= c <= 'Z' ? c-'A'+10 :
-            'a' <= c <= 'z' ? c-'a'+10 :
-            error(c," is not an alphanumeric digit (in ",show_to_string(s),")")
+            'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            error(c," is not a valid base ",base," digit (in ",show_to_string(s),")")
+            error(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")
         end
         # TODO: overflow detection?
         n = n*base + d
@@ -836,33 +835,37 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         end
         c,i = next(s,i)
     end
-    return neg ? -n : n
+    return flipsign(n,sgn)
+end
+function parse_int(T::Type, s::String, base::Integer)
+    if !(2 <= base <= 36); error("invalid base: ",base); end
+    _jl_parse_int(Int, s, base)
 end
 
-parse_int(s::String, base::Integer) = parse_int(Int, s, base)
-parse_int(T::Type, s::String)       = parse_int(T,   s, 10)
-parse_int(s::String)                = parse_int(Int, s, 10)
+parse_int(s::String, base::Integer) = parse_int(Int,s,base)
+parse_int(T::Type, s::String)       = _jl_parse_int(T,s,10)
+parse_int(s::String)                = _jl_parse_int(Int,s,10)
 
-parse_bin(T::Type, s::String) = parse_int(T, s,  2)
-parse_oct(T::Type, s::String) = parse_int(T, s,  8)
-parse_hex(T::Type, s::String) = parse_int(T, s, 16)
+parse_bin(T::Type, s::String) = _jl_parse_int(T,s,2)
+parse_oct(T::Type, s::String) = _jl_parse_int(T,s,8)
+parse_hex(T::Type, s::String) = _jl_parse_int(T,s,16)
 
-parse_bin(s::String) = parse_int(Int, s,  2)
-parse_oct(s::String) = parse_int(Int, s,  8)
-parse_hex(s::String) = parse_int(Int, s, 16)
+parse_bin(s::String) = _jl_parse_int(Int,s,2)
+parse_oct(s::String) = _jl_parse_int(Int,s,8)
+parse_hex(s::String) = _jl_parse_int(Int,s,16)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)
-int     (s::String) = parse_int(Int, s)
-uint    (s::String) = parse_int(Uint, s)
-int8    (s::String) = parse_int(Int8, s)
-uint8   (s::String) = parse_int(Uint8, s)
-int16   (s::String) = parse_int(Int16, s)
-uint16  (s::String) = parse_int(Uint16, s)
-int32   (s::String) = parse_int(Int32, s)
-uint32  (s::String) = parse_int(Uint32, s)
-int64   (s::String) = parse_int(Int64, s)
-uint64  (s::String) = parse_int(Uint64, s)
+int     (s::String) = parse_int(Int,s)
+uint    (s::String) = parse_int(Uint,s)
+int8    (s::String) = parse_int(Int8,s)
+uint8   (s::String) = parse_int(Uint8,s)
+int16   (s::String) = parse_int(Int16,s)
+uint16  (s::String) = parse_int(Uint16,s)
+int32   (s::String) = parse_int(Int32,s)
+uint32  (s::String) = parse_int(Uint32,s)
+int64   (s::String) = parse_int(Int64,s)
+uint64  (s::String) = parse_int(Uint64,s)
 
 ## integer to string functions ##
 
