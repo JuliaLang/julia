@@ -986,9 +986,8 @@ void jl_init_serializer(void)
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
-                     (void*)SmallInt64_tag,
-                     jl_intrinsic_type, jl_methtable_type, jl_module_type,
-                     jl_typename_type, jl_lambda_info_type, jl_tvar_type,
+                     (void*)SmallInt64_tag, jl_methtable_type, jl_module_type,
+                     jl_lambda_info_type, jl_tvar_type,
 
                      jl_null, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
@@ -1022,6 +1021,9 @@ void jl_init_serializer(void)
                      jl_symbol("sle_int"), jl_symbol("ne_int"),
                      jl_symbol("arrayset"), jl_symbol("arrayref"),
                      jl_symbol("convert"), jl_symbol("typeassert"),
+                     jl_symbol("getfield"), jl_symbol("_setfield"),
+                     jl_symbol("tupleref"), jl_symbol("tuplelen"),
+                     jl_symbol("apply_type"), jl_symbol("tuple"),
                      jl_false, jl_true,
 
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
@@ -1077,10 +1079,10 @@ void jl_init_serializer(void)
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_seq_type, jl_ntuple_type, jl_abstractarray_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_top_type,
-                     jl_any_func,
+                     jl_any_func, jl_typename_type,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
-                     jl_array_any_type,
+                     jl_array_any_type, jl_intrinsic_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
@@ -1105,6 +1107,7 @@ void jl_init_serializer(void)
         ptrhash_put(&deser_tag, (void*)i, tags[i-2]);
         i += 1;
     }
+    assert(i <= Null_tag);
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
     void *fptrs[] = { jl_f_new_expr, jl_f_new_box,

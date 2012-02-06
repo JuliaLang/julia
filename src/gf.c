@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <math.h>
 #include "julia.h"
+#include "builtin_proto.h"
 
 static jl_methtable_t *new_method_table(void)
 {
