@@ -199,8 +199,8 @@ typedef struct {
     jl_sym_t *name;
     jl_value_t *value;
     jl_type_t *type;
-    int constp;
-    int exportp;
+    int constp:1;
+    int exportp:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {
@@ -675,7 +675,6 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 void jl_init_types(void);
 void jl_init_box_caches(void);
 void jl_init_frontend(void);
-void jl_shutdown_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
@@ -784,11 +783,6 @@ jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
     return f->fptr(f->env, args, nargs);
 }
-
-JL_CALLABLE(jl_f_no_function);
-JL_CALLABLE(jl_f_tuple);
-JL_CALLABLE(jl_f_arrayset);
-DLLEXPORT JL_CALLABLE(jl_apply_generic);
 
 #define JL_NARGS(fname, min, max)                               \
     if (nargs < min) jl_too_few_args(#fname, min);              \

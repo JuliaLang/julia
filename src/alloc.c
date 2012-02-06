@@ -12,6 +12,7 @@
 #include <math.h>
 #include "julia.h"
 #include "newobj_internal.h"
+#include "builtin_proto.h"
 
 jl_value_t *jl_true;
 jl_value_t *jl_false;

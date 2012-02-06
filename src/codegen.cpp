@@ -1035,8 +1035,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     if (jl_is_symbolnode(expr)) {
         if (!value) return NULL;
-        return emit_var(jl_symbolnode_sym(expr),
-                        jl_symbolnode_type(expr), ctx);
+        return emit_var(jl_symbolnode_sym(expr), jl_symbolnode_type(expr), ctx);
     }
     else if (jl_is_labelnode(expr)) {
         assert(!value);
@@ -1716,12 +1715,6 @@ extern "C" jl_value_t *jl_new_box(jl_value_t *v)
     return box;
 }
 
-static void addPass(FunctionPassManager *PM, Pass *P)
-{
-    // Add the pass to the pass manager...
-    PM->add(P);
-}
-
 static void init_julia_llvm_env(Module *m)
 {
     T_int1  = Type::getInt1Ty(getGlobalContext());
@@ -1945,43 +1938,43 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
     
     // list of passes from vmkit
-    addPass(FPM, createCFGSimplificationPass()); // Clean up disgusting code
-    addPass(FPM, createPromoteMemoryToRegisterPass());// Kill useless allocas
+    FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
+    FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
     
-    addPass(FPM, createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    addPass(FPM, createScalarReplAggregatesPass()); // Break up aggregate allocas
-    addPass(FPM, createInstructionCombiningPass()); // Cleanup for scalarrepl.
-    addPass(FPM, createJumpThreadingPass());        // Thread jumps.
-    addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
-    //addPass(FPM, createInstructionCombiningPass()); // Combine silly seq's
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
+    FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
+    FPM->add(createJumpThreadingPass());        // Thread jumps.
+    FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    //FPM->add(createInstructionCombiningPass()); // Combine silly seq's
     
-    //addPass(FPM, createCFGSimplificationPass());    // Merge & remove BBs
-    addPass(FPM, createReassociatePass());          // Reassociate expressions
-    //addPass(FPM, createEarlyCSEPass()); //// ****
-    //addPass(FPM, createLoopIdiomPass()); //// ****
-    addPass(FPM, createLoopRotatePass());           // Rotate loops.
-    addPass(FPM, createLICMPass());                 // Hoist loop invariants
-    addPass(FPM, createLoopUnswitchPass());         // Unswitch loops.
-    addPass(FPM, createInstructionCombiningPass()); 
-    addPass(FPM, createIndVarSimplifyPass());       // Canonicalize indvars
-    //addPass(FPM, createLoopDeletionPass());         // Delete dead loops
-    addPass(FPM, createLoopUnrollPass());           // Unroll small loops
-    //addPass(FPM, createLoopStrengthReducePass());   // (jwb added)
+    //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
+    FPM->add(createReassociatePass());          // Reassociate expressions
+    //FPM->add(createEarlyCSEPass()); //// ****
+    //FPM->add(createLoopIdiomPass()); //// ****
+    FPM->add(createLoopRotatePass());           // Rotate loops.
+    FPM->add(createLICMPass());                 // Hoist loop invariants
+    FPM->add(createLoopUnswitchPass());         // Unswitch loops.
+    FPM->add(createInstructionCombiningPass()); 
+    FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
+    //FPM->add(createLoopDeletionPass());         // Delete dead loops
+    FPM->add(createLoopUnrollPass());           // Unroll small loops
+    //FPM->add(createLoopStrengthReducePass());   // (jwb added)
     
-    addPass(FPM, createInstructionCombiningPass()); // Clean up after the unroller
-    addPass(FPM, createGVNPass());                  // Remove redundancies
-    //addPass(FPM, createMemCpyOptPass());            // Remove memcpy / form memset  
-    addPass(FPM, createSCCPPass());                 // Constant prop with SCCP
+    FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
+    FPM->add(createGVNPass());                  // Remove redundancies
+    //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset  
+    FPM->add(createSCCPPass());                 // Constant prop with SCCP
     
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
-    //addPass(FPM, createSinkingPass()); ////////////// ****
-    //addPass(FPM, createInstructionSimplifierPass());///////// ****
-    addPass(FPM, createInstructionCombiningPass());
-    addPass(FPM, createJumpThreadingPass());         // Thread jumps
-    addPass(FPM, createDeadStoreEliminationPass());  // Delete dead stores
-    addPass(FPM, createAggressiveDCEPass());         // Delete dead instructions
-    addPass(FPM, createCFGSimplificationPass());     // Merge & remove BBs
+    //FPM->add(createSinkingPass()); ////////////// ****
+    //FPM->add(createInstructionSimplifierPass());///////// ****
+    FPM->add(createInstructionCombiningPass());
+    FPM->add(createJumpThreadingPass());         // Thread jumps
+    FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
+    FPM->add(createAggressiveDCEPass());         // Delete dead instructions
+    FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
 
     FPM->doInitialization();
 }

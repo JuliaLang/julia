@@ -107,11 +107,6 @@ void jl_init_frontend(void)
     assign_global_builtins(julia_flisp_ast_ext);
 }
 
-DLLEXPORT void jl_shutdown_frontend(void)
-{
-    //fl_applyn(0, symbol_value(symbol("show-profiles")));
-}
-
 static jl_sym_t *scmsym_to_julia(value_t s)
 {
     assert(issymbol(s));
@@ -125,16 +120,11 @@ static jl_sym_t *scmsym_to_julia(value_t s)
     return jl_symbol(symbol_name(s));
 }
 
-static size_t scm_list_length(value_t x)
-{
-    return llength(x);
-}
-
 static jl_value_t *scm_to_julia_(value_t e);
 
 static jl_value_t *full_list(value_t e)
 {
-    size_t ln = scm_list_length(e);
+    size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
     size_t i=0;
@@ -148,7 +138,7 @@ static jl_value_t *full_list(value_t e)
 
 static jl_value_t *full_list_of_lists(value_t e)
 {
-    size_t ln = scm_list_length(e);
+    size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
     size_t i=0;
@@ -247,7 +237,7 @@ static jl_value_t *scm_to_julia_(value_t e)
                body  file new
                line  enter  leave
             */
-            size_t n = scm_list_length(e)-1;
+            size_t n = llength(e)-1;
             size_t i;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);

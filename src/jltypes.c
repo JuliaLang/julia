@@ -17,6 +17,7 @@
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"
+#include "builtin_proto.h"
 
 jl_tag_type_t *jl_any_type;
 jl_tag_type_t *jl_type_type;
@@ -260,10 +261,6 @@ static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
 {
     if (var == val)
         return;
-    /*  ios_printf(ios_stdout,
-                   "adding %s@%x = %s@%x\n",
-                   ((jl_tvar_t*)var)->name->name, var,
-                   ((jl_tvar_t*)val)->name->name, val); */
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
@@ -2143,25 +2140,6 @@ static jl_tvar_t *tvar(const char *name)
     return tv;
 }
 
-static jl_tuple_t *jl_typevars(size_t n, ...)
-{
-#ifdef JL_GC_MARKSWEEP
-    assert(!jl_gc_is_enabled());
-#endif
-    va_list args;
-    va_start(args, n);
-    jl_tuple_t *t = jl_alloc_tuple(n);
-    size_t i;
-    for(i=0; i < n; i++) {
-        jl_tupleset(t, i, (jl_value_t*)tvar(va_arg(args, char*)));
-    }
-    va_end(args);
-    return t;
-}
-
-JL_CALLABLE(jl_f_new_expr);
-JL_CALLABLE(jl_f_new_box);
-
 extern void jl_init_int32_int64_cache(void);
 
 void jl_init_types(void)
@@ -2304,7 +2282,7 @@ void jl_init_types(void)
 
     jl_tuple_t *tv;
 
-    tv = jl_typevars(1, "T");
+    tv = jl_tuple1(tvar("T"));
     jl_seq_type = jl_new_tagtype((jl_value_t*)jl_symbol("..."),
                                  jl_any_type, tv);
 
@@ -2312,7 +2290,7 @@ void jl_init_types(void)
                 (jl_value_t*)jl_apply_type((jl_value_t*)jl_seq_type,
                                            jl_tuple(1,jl_any_type)));
 
-    tv = jl_typevars(2, "N", "T");
+    tv = jl_tuple2(tvar("N"), tvar("T"));
     jl_ntuple_type = jl_new_tagtype((jl_value_t*)jl_symbol("NTuple"),
                                     jl_any_type, tv);
     jl_ntuple_typename = jl_ntuple_type->name;
@@ -2335,11 +2313,11 @@ void jl_init_types(void)
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
-    tv = jl_typevars(2, "T", "N");
+    tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_abstractarray_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
                                            jl_any_type, tv);
 
-    tv = jl_typevars(2, "T", "N");
+    tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_array_type = 
         jl_new_struct_type(jl_symbol("Array"),
                            (jl_tag_type_t*)
@@ -2366,38 +2344,32 @@ void jl_init_types(void)
     jl_expr_type->fptr = jl_f_new_expr;
 
     jl_linenumbernode_type =
-        jl_new_struct_type(jl_symbol("LineNumberNode"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("LineNumberNode"), jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("line")),
                            jl_tuple(1, jl_long_type));
 
     jl_labelnode_type =
-        jl_new_struct_type(jl_symbol("LabelNode"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("LabelNode"), jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("label")),
                            jl_tuple(1, jl_long_type));
 
     jl_gotonode_type =
-        jl_new_struct_type(jl_symbol("GotoNode"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("GotoNode"), jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("label")),
                            jl_tuple(1, jl_long_type));
 
     jl_quotenode_type =
-        jl_new_struct_type(jl_symbol("QuoteNode"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("QuoteNode"), jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("value")),
                            jl_tuple(1, jl_any_type));
 
     jl_topnode_type =
-        jl_new_struct_type(jl_symbol("TopNode"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("TopNode"), jl_any_type, jl_null,
                            jl_tuple(2, jl_symbol("name"), jl_symbol("typ")),
                            jl_tuple(2, jl_sym_type, jl_any_type));
 
     jl_module_type =
-        jl_new_struct_type(jl_symbol("Module"),
-                           jl_any_type, jl_null,
+        jl_new_struct_type(jl_symbol("Module"), jl_any_type, jl_null,
                            jl_tuple(1, jl_symbol("name")),
                            jl_tuple(1, jl_sym_type));
 
@@ -2440,7 +2412,7 @@ void jl_init_types(void)
                                     jl_symbol("body")),
                            jl_tuple(2, jl_tuple_type, jl_any_type));
 
-    tv = jl_typevars(2, "A", "B");
+    tv = jl_tuple2(tvar("A"), tvar("B"));
     jl_function_type =
         jl_new_type_ctor(tv,
                          (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
@@ -2449,15 +2421,10 @@ void jl_init_types(void)
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
 
-    tv = jl_typevars(1, "T");
+    tv = jl_tuple1(tvar("T"));
     jl_pointer_type =
         jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
-#ifdef __LP64__
-                        64
-#else
-                        32
-#endif
-                        );
+                        sizeof(void*)*8);
 
     // Type{T}
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),

@@ -191,7 +191,6 @@
     jl_parse_input_line;
     jl_box_int32;
     jl_lisp_prompt;
-    jl_shutdown_frontend;
     libsupport_init;
     get_exename;
     jl_expr_type;

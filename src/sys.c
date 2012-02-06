@@ -60,28 +60,24 @@ DLLEXPORT void jl_fd_zero(fd_set *set)
     FD_ZERO(set);
 }
 
-DLLEXPORT
-uint32_t jl_getutf8(ios_t *s)
+DLLEXPORT uint32_t jl_getutf8(ios_t *s)
 {
     uint32_t wc=0;
     ios_getutf8(s, &wc);
     return wc;
 }
 
-DLLEXPORT
-size_t jl_ios_size(ios_t *s)
+DLLEXPORT size_t jl_ios_size(ios_t *s)
 {
     return s->size;
 }
 
-DLLEXPORT
-long jl_ios_fd(ios_t *s)
+DLLEXPORT long jl_ios_fd(ios_t *s)
 {
     return s->fd;
 }
 
-DLLEXPORT
-int32_t jl_nb_available(ios_t *s)
+DLLEXPORT int32_t jl_nb_available(ios_t *s)
 {
     return (int32_t)(s->size - s->bpos);
 }
@@ -292,8 +288,7 @@ static void *run_io_thr(void *arg)
     return NULL;
 }
 
-DLLEXPORT
-void jl_buf_mutex_lock(ios_t *s)
+DLLEXPORT void jl_buf_mutex_lock(ios_t *s)
 {
     if (!s->mutex_initialized) {
         pthread_mutex_init(&s->mutex, NULL);
@@ -302,14 +297,12 @@ void jl_buf_mutex_lock(ios_t *s)
     pthread_mutex_lock(&s->mutex);
 }
 
-DLLEXPORT
-void jl_buf_mutex_unlock(ios_t *s)
+DLLEXPORT void jl_buf_mutex_unlock(ios_t *s)
 {
     pthread_mutex_unlock(&s->mutex);
 }
 
-DLLEXPORT
-void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
+DLLEXPORT void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
 {
     pthread_mutex_lock(&q_mut);
     sendreq_t *req = ioq;
@@ -362,8 +355,7 @@ void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
     pthread_cond_signal(&wake_cond);
 }
 
-DLLEXPORT
-void jl_start_io_thread(void)
+DLLEXPORT void jl_start_io_thread(void)
 {
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);

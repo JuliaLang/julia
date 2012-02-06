@@ -142,5 +142,3 @@
 ; run whole frontend on a string. useful for testing.
 (define (fe str)
   (expand-toplevel-expr (julia-parse str)))
-
-;(load "profile.scm")

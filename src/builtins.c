@@ -449,36 +449,18 @@ char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
-    // try adding just .j
-    if (fid == -1) {
-        asprintf(&fpath, "%s.j", fname);
-        fid = open (fpath, O_RDONLY);
-    }
-    // try adding julia home, then julia home, then julia_home/j/ and .j
+    // try adding julia home, then julia_home/j/
     if (fid == -1 && julia_home && fname[0] != '/') {
-        assert(fpath != fname);
-        free(fpath);
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
-        if (fid == -1) {
-            free(fpath);
-            asprintf(&fpath, "%s/%s.j", julia_home, fname);
-            fid = open (fpath, O_RDONLY);
-        }
         if (fid == -1) {
             free(fpath);
             asprintf(&fpath, "%s/j/%s", julia_home, fname);
             fid = open (fpath, O_RDONLY);
         }
-        if (fid == -1) {
-            free(fpath);
-            asprintf(&fpath, "%s/j/%s.j", julia_home, fname);
-            fid = open (fpath, O_RDONLY);
-        }
     }
     if (fid == -1) {
-        assert(fpath != fname);
-        free(fpath);
+        if (fpath != fname) free(fpath);
         if (jl_errorexception_type == NULL) {
             ios_printf(ios_stderr, "could not open file %s\n", fname);
             exit(1);

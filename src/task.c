@@ -17,6 +17,7 @@
 #include <libgen.h>
 #include <unistd.h>
 #include "julia.h"
+#include "builtin_proto.h"
 #if defined(__APPLE__)
 #include <execinfo.h>
 #else
@@ -26,11 +27,6 @@
 #endif
 
 /* This probing code is derived from Douglas Jones' user thread library */
-
-/* the list of offsets in jmp_buf to be adjusted */
-/* # of offsets cannot be greater than jmp_buf */
-static int _offsets[sizeof(jmp_buf) / sizeof(int)];
-static int _offsets_len;
 
 /* true if stack grows up, false if down */
 static int _stack_grows_up;
@@ -80,41 +76,6 @@ static void fill(struct _probe_data *p)
     boundlow(p);
 }
 
-static void _infer_jmpbuf_offsets(struct _probe_data *pb)
-{
-    /* following line views jump buffer as array of long intptr_t */
-    unsigned i;
-    intptr_t * p = (intptr_t *)pb->probe_env;
-    intptr_t * sameAR = (intptr_t *)pb->probe_sameAR;
-    intptr_t * samePC = (intptr_t *)pb->probe_samePC;
-    intptr_t prior_diff = pb->probe_local - pb->prior_local;
-    intptr_t min_frame = pb->probe_local;
-
-    for (i = 0; i < sizeof(jmp_buf) / sizeof(intptr_t); ++i) {
-        intptr_t pi = p[i], samePCi = samePC[i];
-        if (pi != samePCi) {
-            if (pi != sameAR[i]) {
-                ios_printf(ios_stderr, "could not initialize task support\n");
-                exit(1);
-            }
-            if ((pi - samePCi) == prior_diff) {
-                /* the i'th pointer field in jmp_buf needs to be save/restored */
-                _offsets[_offsets_len++] = i;
-                if ((_stack_grows_up && min_frame > pi) || (!_stack_grows_up && min_frame < pi)) {
-                    min_frame = pi;
-                }
-            }
-        }
-    }
-
-    /*
-    _frame_offset = (_stack_grows_up
-                     ? pb->probe_local - min_frame
-                     : min_frame - pb->probe_local);
-    */
-    _frame_offset = labs(prior_diff);
-}
-
 static void _infer_direction_from(int *first_addr)
 {
     int second;
@@ -158,7 +119,8 @@ static void _probe_arch(void)
     mangle_pointers = 0;
 #endif
 
-    _infer_jmpbuf_offsets(&p);
+    intptr_t prior_diff = p.probe_local - p.prior_local;
+    _frame_offset = labs(prior_diff);
 }
 
 /* end probing code */
@@ -361,11 +323,7 @@ static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
     s[1] += diff;
     s[2] += diff;
 #else
-    // use automated guess and hope for the best
-    int i;
-    for (i=0; i < _offsets_len; i++) {
-        s[_offsets[i]] += diff;
-    }
+#error "COPY_STACKS must be defined on this platform."
 #endif
 }
 
