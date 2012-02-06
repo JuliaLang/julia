@@ -254,6 +254,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
     if (!setjmp(jl_current_task->ctx)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
+        save_stack(lastt);
 #endif
 
         // set up global state for new task
@@ -264,7 +265,6 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
         jl_current_task = t;
 
 #ifdef COPY_STACKS
-        save_stack(lastt);
         jl_jmp_target = where;
         longjmp(lastt->base_ctx, 1);
 #else
