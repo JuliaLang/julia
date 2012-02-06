@@ -427,6 +427,7 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         jl_struct_type_t *st =
             (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
                                       STRUCT_TYPE_NW);
+        st->instance = NULL;
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, st);
         st->name = (jl_typename_t*)jl_deserialize_value(s);
         st->parameters = (jl_tuple_t*)jl_deserialize_value(s);
@@ -437,7 +438,6 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         st->env = jl_deserialize_value(s);
         st->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         st->fptr = jl_deserialize_fptr(s);
-        st->instance = NULL;
         st->uid = read_int32(s);;
         if (st->name == jl_array_type->name) {
             // builtin types are not serialized, so their caches aren't

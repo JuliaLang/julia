@@ -1782,7 +1782,8 @@ So far only the second case can actually occur.
   (goto-form e))
 
 (define (expand-backquote e)
-  (cond ((symbol? e)          `(quote ,e))
+  (cond ((or (eq? e 'true) (eq? e 'false))  e)
+	((symbol? e)          `(quote ,e))
         ((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((eq? (car e) 'bquote)
