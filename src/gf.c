@@ -682,7 +682,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     jl_methlist_t *m = mt->defs;
     size_t nargs = tt->length;
     size_t i;
-    jl_value_t *env = (jl_value_t*)jl_false;
+    jl_value_t *env = jl_false;
 
     while (m != NULL) {
         if (m->tvars!=jl_null) {
@@ -707,12 +707,11 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         return NULL;
     }
 
-    jl_tuple_t *tpenv=NULL;
     jl_tuple_t *newsig=NULL;
-    JL_GC_PUSH(&env, &tpenv, &newsig);
+    JL_GC_PUSH(&env, &newsig);
 
     assert(jl_is_tuple(env));
-    tpenv = jl_flatten_pairs((jl_tuple_t*)env);
+    jl_tuple_t *tpenv = (jl_tuple_t*)env;
     // don't bother computing this if no arguments are tuples
     for(i=0; i < tt->length; i++) {
         if (jl_is_tuple(jl_tupleref(tt,i)))
@@ -1180,7 +1179,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         jl_tuple_t *tpenv=jl_null;
         jl_tuple_t *newsig=NULL;
         jl_tuple_t *tt=NULL;
-        JL_GC_PUSH(&env, &tpenv, &newsig, &tt);
+        JL_GC_PUSH(&env, &newsig, &tt);
 
         if (m->invokes == NULL) {
             m->invokes = new_method_table();
@@ -1193,7 +1192,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         newsig = (jl_tuple_t*)m->sig;
 
         if (env != (jl_value_t*)jl_false) {
-            tpenv = jl_flatten_pairs((jl_tuple_t*)env);
+            tpenv = (jl_tuple_t*)env;
             // don't bother computing this if no arguments are tuples
             for(i=0; i < tt->length; i++) {
                 if (jl_is_tuple(jl_tupleref(tt,i)))
@@ -1258,7 +1257,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
     f->fptr = jl_apply_generic;
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_tuple3(nmt, (jl_value_t*)name, (jl_value_t*)f);
+    f->env = (jl_value_t*)jl_tuple(3, nmt, (jl_value_t*)name, (jl_value_t*)f);
     JL_GC_POP();
 }
 

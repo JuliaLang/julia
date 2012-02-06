@@ -379,7 +379,6 @@ void *allocobj(size_t sz);
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
 #define jl_t2(t) jl_tupleref(t,2)
-#define jl_nextpair(p) jl_t2(p)
 
 #define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
 #define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)))
@@ -557,12 +556,10 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);
 jl_tuple_t *jl_tuple2(void *a, void *b);
-jl_tuple_t *jl_tuple3(void *a, void *b, void *c);
 jl_tuple_t *jl_alloc_tuple(size_t n);
 jl_tuple_t *jl_alloc_tuple_uninit(size_t n);
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b);
 jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
-jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym(void);
@@ -757,7 +754,6 @@ jl_array_t *jl_lam_capt(jl_expr_t *l);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
 jl_sym_t *jl_decl_var(jl_value_t *ex);
 DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
-void jl_mark_lambda_module(jl_value_t *expr, jl_module_t *m);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
@@ -831,11 +827,11 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
   jl_pgcstack = &__gc_stkf_;
 
 #define JL_GC_PUSHARGS(rts,n)                           \
-  jl_gcframe_t __gc_stkf_ = { (jl_value_t***)rts, (n),  \
-                              0, jl_pgcstack };         \
-  jl_pgcstack = &__gc_stkf_;
+  jl_gcframe_t __gc_stkf2_ = { (jl_value_t***)rts, (n),  \
+                               0, jl_pgcstack };         \
+  jl_pgcstack = &__gc_stkf2_;
 
-#define JL_GC_POP() (jl_pgcstack = __gc_stkf_.prev)
+#define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
 void jl_gc_init(void);
 void jl_gc_markval(jl_value_t *v);

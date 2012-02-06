@@ -75,8 +75,7 @@ jl_sym_t *new_sym;     jl_sym_t *multivalue_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 
-DLLEXPORT
-jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
+DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     if (type->instance != NULL) return type->instance;
     va_list args;
@@ -92,8 +91,7 @@ jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
     return jv;
 }
 
-DLLEXPORT
-jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
+DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
 {
     if (type->instance != NULL) return type->instance;
     size_t nf = type->names->length;
@@ -106,18 +104,13 @@ jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
     return jv;
 }
 
-DLLEXPORT
-jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
+DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
 {
-    if (type->instance != NULL) return type->instance;
-    size_t nf = type->names->length;
-    assert(nf == t->length);
-    size_t i;
-    jl_value_t *jv = newobj((jl_type_t*)type, nf);
-    for(i=0; i < nf; i++) {
+    assert(type->names->length == t->length);
+    jl_value_t *jv = jl_new_struct_uninit(type);
+    for(size_t i=0; i < t->length; i++) {
         ((jl_value_t**)jv)[i+1] = jl_tupleref(t, i);
     }
-    if (nf == 0) type->instance = jv;
     return jv;
 }
 
@@ -152,17 +145,6 @@ jl_tuple_t *jl_tuple2(void *a, void *b)
     t->length = 2;
     jl_tupleset(t, 0, a);
     jl_tupleset(t, 1, b);
-    return t;
-}
-
-jl_tuple_t *jl_tuple3(void *a, void *b, void *c)
-{
-    jl_tuple_t *t = (jl_tuple_t*)allocobj(5*sizeof(void*));
-    t->type = (jl_type_t*)jl_tuple_type;
-    t->length = 3;
-    jl_tupleset(t, 0, a);
-    jl_tupleset(t, 1, b);
-    jl_tupleset(t, 2, c);
     return t;
 }
 
@@ -209,25 +191,6 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
         jl_tupleset(tup, i, v);
     }
     return tup;
-}
-
-// convert (a, b, (c, d, (... ()))) to (a, b, c, d, ...)
-jl_tuple_t *jl_flatten_pairs(jl_tuple_t *t)
-{
-    size_t i, n = 0;
-    jl_tuple_t *t0 = t;
-    while (t != jl_null) {
-        n++;
-        t = (jl_tuple_t*)jl_nextpair(t);
-    }
-    jl_tuple_t *nt = jl_alloc_tuple_uninit(n*2);
-    t = t0;
-    for(i=0; i < n*2; i+=2) {
-        jl_tupleset(nt, i,   jl_t0(t));
-        jl_tupleset(nt, i+1, jl_t1(t));
-        t = (jl_tuple_t*)jl_nextpair(t);
-    }
-    return nt;
 }
 
 jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)

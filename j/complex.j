@@ -133,8 +133,6 @@ ComplexPair(x::Real) = ComplexPair(x, zero(x))
 real(z::ComplexPair) = z.re
 imag(z::ComplexPair) = z.im
 
-convert{T<:Real}(::Type{ComplexPair{T}}, x::T) =
-    ComplexPair(x, convert(T,0))
 convert{T<:Real}(::Type{ComplexPair{T}}, x::Real) =
     ComplexPair(convert(T,x), convert(T,0))
 convert{T<:Real}(::Type{ComplexPair{T}}, z::Complex) =
