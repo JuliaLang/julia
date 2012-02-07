@@ -590,8 +590,10 @@ function _jl_shell_parse(s::String, interp::Bool)
                 j = k
             end
         elseif interp && !in_single_quotes && c == '$'
-            update_arg(s[i:j-1]); i = k
-            j = k
+            update_arg(s[i:j-1]); i = k; j = k
+            if iswspace(s[k])
+                error("space not allowed right after \$")
+            end
             ex, j = parseatom(s,j)
             update_arg(ex); i = j
         else

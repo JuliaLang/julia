@@ -22,9 +22,6 @@ function process_status(s::Int32)
     error("process status error")
 end
 
-process_success(s::ProcessStatus) = false
-process_success(s::ProcessExited) = (s.status == 0)
-
 ## file descriptors and pipes ##
 
 type FileDes; fd::Int32; end
@@ -168,6 +165,7 @@ type Cmd
     pipeline::Set{Cmd}
     pid::Int32
     status::ProcessStatus
+    successful::Function
 
     function Cmd(exec::Executable)
         if isa(exec,Vector{ByteString}) && length(exec) < 1
@@ -176,12 +174,16 @@ type Cmd
         this = new(exec,
                    HashTable{FileDes,PipeEnd}(),
                    Set{Cmd}(),
-                   0,
-                   ProcessNotRun())
+                   0, # TODO: use -1?
+                   ProcessNotRun(),
+                   status->status==0)
         add(this.pipeline, this)
         this
     end
 end
+
+setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
+ignorestatus(cmd::Cmd) = setsuccess(cmd, status->true)
 
 function show(cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
@@ -425,9 +427,12 @@ end
 
 # wait for a single command process to finish
 
+successful(cmd::Cmd) = isa(cmd.status, ProcessExited) &&
+                       cmd.successful(cmd.status.status)
+
 function wait(cmd::Cmd)
     cmd.status = process_status(wait(cmd.pid))
-    process_success(cmd.status)
+    successful(cmd)
 end
 
 # wait for a set of command processes to finish
@@ -446,7 +451,7 @@ pipeline_error(cmd::Cmd) = error("failed process: ", cmd)
 function pipeline_error(cmds::Cmds)
     failed = Cmd[]
     for cmd in cmds
-        if !process_success(cmd.status)
+        if !successful(cmd)
             push(failed, cmd)
         end
     end
