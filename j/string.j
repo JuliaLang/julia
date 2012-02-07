@@ -591,6 +591,9 @@ function _jl_shell_parse(s::String, interp::Bool)
             end
         elseif interp && !in_single_quotes && c == '$'
             update_arg(s[i:j-1]); i = k; j = k
+            if done(s,k)
+                error("\$ right before end of command")
+            end
             if iswspace(s[k])
                 error("space not allowed right after \$")
             end
