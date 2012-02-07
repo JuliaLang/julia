@@ -702,12 +702,9 @@
        (case nxt
 	 ((end)   (list 'try try-block #f '(block)))
 	 ((catch) (let* ((var
-			  (if (symbol? (peek-token s))
-			      (let ((v (parse-atom s)))
-				(if (not (symbol? v))
-				    (error "expected variable in catch"))
-				v)
-			      #f))
+			  (if (eqv? (peek-token s) #\newline)
+			      #f
+			      (parse-atom s)))
 			 (catch-block (parse-block s)))
 		    (expect-end s)
 		    (list 'try try-block var catch-block)))
