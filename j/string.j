@@ -603,11 +603,10 @@ function _jl_shell_parse(s::String, interp::Bool)
                 update_arg(s[i:j-1]); i = k
             elseif c == '\\'
                 if in_double_quotes
-                    # TODO: handle \$ in double quotes
                     if done(s,k)
                         error("unterminated double quote")
                     end
-                    if s[k] == '"'
+                    if s[k] == '"' || s[k] == '$'
                         update_arg(s[i:j-1]); i = k
                         c, k = next(s,k)
                     end
@@ -640,7 +639,6 @@ function _jl_shell_parse(s::String, interp::Bool)
     end
     expr(:tuple,exprs)
 end
-
 _jl_shell_parse(s::String) = _jl_shell_parse(s,true)
 
 function shell_split(s::String)

@@ -7,9 +7,9 @@ type ProcessExited   <: ProcessStatus; status::Int32; end
 type ProcessSignaled <: ProcessStatus; signal::Int32; end
 type ProcessStopped  <: ProcessStatus; signal::Int32; end
 
-process_exited(s::Int32)   = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
+process_exited  (s::Int32) = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
 process_signaled(s::Int32) = ccall(:jl_process_signaled, Int32, (Int32,), s) != 0
-process_stopped(s::Int32)  = ccall(:jl_process_stopped,  Int32, (Int32,), s) != 0
+process_stopped (s::Int32) = ccall(:jl_process_stopped,  Int32, (Int32,), s) != 0
 
 process_exit_status(s::Int32) = ccall(:jl_process_exit_status, Int32, (Int32,), s)
 process_term_signal(s::Int32) = ccall(:jl_process_term_signal, Int32, (Int32,), s)
@@ -477,7 +477,7 @@ function _readall(ports::Ports, cmds::Cmds)
 end
 
 readall(ports::Ports) = _readall(ports, cmds(ports))
-readall(cmds::Cmds) = _readall(stdout(cmds), cmds)
+readall(cmds::Cmds)   = _readall(stdout(cmds), cmds)
 
 function _each_line(ports::Ports, cmds::Cmds)
     local fh
@@ -492,7 +492,7 @@ function _each_line(ports::Ports, cmds::Cmds)
 end
 
 each_line(ports::Ports) = _each_line(ports, cmds(ports))
-each_line(cmds::Cmds) = _each_line(stdout(cmds), cmds)
+each_line(cmds::Cmds)   = _each_line(stdout(cmds), cmds)
 
 cmd_stdin_stream (cmds::Cmds) = fdio(write_to(cmds).fd)
 cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
