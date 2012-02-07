@@ -1,15 +1,14 @@
-mean(V::AbstractVector) = sum(V) / length(V)
+mean(v::AbstractVector) = sum(v) / length(v)
+mean(v::AbstractArray, dim::Int) = sum(v,dim) / size(v,dim)
 
-mean(V::AbstractArray, dim::Int) = sum(V,dim) / size(V,dim)
-
-function std(V::AbstractVector)
-    n = numel(V)
-    m = mean(V)
+function std(v::AbstractVector)
+    n = numel(v)
+    m = mean(v)
     s = 0.0
     for i=1:n
-        s += (V[i] - m)^2
+        s += (v[i]-m)^2
     end
     return sqrt(s/(n-1))
 end
 
-median(V::AbstractVector) = select(V, div(numel(V),2))
+median(v::AbstractVector) = select(v, div(numel(v),2))

@@ -440,10 +440,29 @@ function wait(cmds::Cmds)
     success
 end
 
+# report what went wrong with a pipeline
+
+pipeline_error(cmd::Cmd) = error("failed process: ", cmd)
+function pipeline_error(cmds::Cmds)
+    failed = Cmd[]
+    for cmd in cmds
+        if !process_success(cmd.status)
+            push(failed, cmd)
+        end
+    end
+    if numel(failed) == 0
+        error("pipeline error but no processes failed!?")
+    end
+    if numel(failed) == 1
+        error("failed process: ", failed[1])
+    end
+    error("failed processes: ", join(failed, ", "))
+end
+
 # spawn and wait for a set of commands
 
 success(cmds::Cmds) = (spawn(cmds); wait(cmds))
-run(cmds::Cmds) = success(cmds) ? nothing : error("pipeline failed: $cmds")
+run(cmds::Cmds) = success(cmds) ? nothing : pipeline_error(cmds)
 
 # run some commands and read all output
 
@@ -452,7 +471,7 @@ function _readall(ports::Ports, cmds::Cmds)
     spawn(cmds)
     o = readall(fdio(r.fd, true))
     if !wait(cmds)
-        error("pipeline failed: $cmds")
+        pipeline_error(cmds)
     end
     return o
 end
