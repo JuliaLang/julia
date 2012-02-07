@@ -262,6 +262,22 @@ inv(a::Matrix) = a \ one(a)
 cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::Matrix) = cond(a, 2)
 
+function randsym(n)
+    a = rand(n,n)
+    for j=1:n-1, i=j+1:n
+        a[i,j] = a[j,i]
+    end
+    a
+end
+
+function randnsym(n)
+    a = randn(n,n)
+    for j=1:n-1, i=j+1:n
+        a[i,j] = a[j,i]
+    end
+    a
+end
+
 function issym(A::Matrix)
     m, n = size(A)
     if m != n; error("matrix must be square, got $(m)x$(n)"); end
