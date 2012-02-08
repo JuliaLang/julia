@@ -1307,11 +1307,13 @@ extern "C" jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t);
 static void emit_function(jl_lambda_info_t *lam, Function *f)
 {
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
+    jl_tuple_t *sparams = NULL;
+    JL_GC_PUSH(&ast, &sparams);
     if (jl_is_tuple(ast)) {
         ast = (jl_expr_t*)jl_uncompress_ast((jl_tuple_t*)ast);
     }
     assert(jl_is_expr(ast));
-    jl_gc_preserve((jl_value_t*)ast);
+    sparams = jl_tuple_tvars_to_symbols(lam->sparams);
     //jl_print((jl_value_t*)ast);
     //ios_printf(ios_stdout, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
@@ -1344,9 +1346,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.jmpbufs = &jmpbufs;
     ctx.module = lam->module;
     ctx.ast = ast;
-    ctx.sp = jl_tuple_tvars_to_symbols(lam->sparams);
-    //JL_GC_PUSH(&ctx.sp);
-    jl_gc_preserve((jl_value_t*)ctx.sp);
+    ctx.sp = sparams;
     ctx.linfo = lam;
     ctx.envArg = &envArg;
     ctx.argArray = &argArray;
@@ -1681,9 +1681,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         builder.CreateRet(V_null);
     }
     //used_roots += ctx.maxDepth;
-    //JL_GC_POP();
-    jl_gc_unpreserve();
-    jl_gc_unpreserve();
+    JL_GC_POP();
 }
 
 // --- initialization ---

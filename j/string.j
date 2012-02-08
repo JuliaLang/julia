@@ -808,7 +808,8 @@ chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
 
 ## string to integer functions ##
 
-function _jl_parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
+function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
+    if !(2 <= base <= 36); error("invalid base: ",base); end
     i = start(s)
     if done(s,i)
         error("premature end of integer (in ",show_to_string(s),")")
@@ -840,22 +841,18 @@ function _jl_parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     end
     return flipsign(n,sgn)
 end
-function parse_int(T::Type, s::String, base::Integer)
-    if !(2 <= base <= 36); error("invalid base: ",base); end
-    _jl_parse_int(Int, s, base)
-end
 
 parse_int(s::String, base::Integer) = parse_int(Int,s,base)
-parse_int(T::Type, s::String)       = _jl_parse_int(T,s,10)
-parse_int(s::String)                = _jl_parse_int(Int,s,10)
+parse_int(T::Type, s::String)       = parse_int(T,s,10)
+parse_int(s::String)                = parse_int(Int,s,10)
 
-parse_bin(T::Type, s::String) = _jl_parse_int(T,s,2)
-parse_oct(T::Type, s::String) = _jl_parse_int(T,s,8)
-parse_hex(T::Type, s::String) = _jl_parse_int(T,s,16)
+parse_bin(T::Type, s::String) = parse_int(T,s,2)
+parse_oct(T::Type, s::String) = parse_int(T,s,8)
+parse_hex(T::Type, s::String) = parse_int(T,s,16)
 
-parse_bin(s::String) = _jl_parse_int(Int,s,2)
-parse_oct(s::String) = _jl_parse_int(Int,s,8)
-parse_hex(s::String) = _jl_parse_int(Int,s,16)
+parse_bin(s::String) = parse_int(Int,s,2)
+parse_oct(s::String) = parse_int(Int,s,8)
+parse_hex(s::String) = parse_int(Int,s,16)
 
 integer (s::String) = int(s)
 unsigned(s::String) = uint(s)

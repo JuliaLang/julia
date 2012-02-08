@@ -190,7 +190,7 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    X = similar(A, map(length, I))
+    X = similar(A, map(length, I)::Dims)
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()

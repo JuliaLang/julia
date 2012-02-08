@@ -401,7 +401,6 @@ end
 
 function rref{T}(A::Matrix{T})
     (L,U) = lu(A)
-    U = U::Matrix{T}
     e = eps(norm(U,Inf))
     nr, nc = size(U)
     for i = 1:nr

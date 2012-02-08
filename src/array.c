@@ -56,7 +56,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
     }
     else {
         a = allocobj(sizeof(jl_array_t) + (ndimwords-1)*sizeof(size_t));
-        jl_gc_preserve((jl_value_t*)a);
+        JL_GC_PUSH(&a);
         a->type = atype;
         // temporarily initialize to make gc-safe
         a->data = NULL;
@@ -65,7 +65,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
         data = allocb(tot);
         if (!isunboxed)
             memset(data, 0, tot);
-        jl_gc_unpreserve();
+        JL_GC_POP();
     }
 
     a->data = data;
