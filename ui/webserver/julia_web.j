@@ -3,17 +3,17 @@
 ###########################################
 
 # number of points to plot for functions
-__PLOT_POINTS = 450
+const __PLOT_POINTS = 450
 
 # the aspect ratio of plots
-__PLOT_ASPECT_RATIO = 1.95
+const __PLOT_ASPECT_RATIO = 1.95
 
 # how similar the domain and range needs to be for aspect ratio preservation
-__PRESERVE_ASPECT_RATIO_THRESHOLD = 0.05
+const __PRESERVE_ASPECT_RATIO_THRESHOLD = 0.05
 
 # how much extra padding to add around the plot
-__HORIZONTAL_PADDING = 0.05
-__VERTICAL_PADDING = 0.05
+const __HORIZONTAL_PADDING = 0.05
+const __VERTICAL_PADDING = 0.05
 
 # helper functions
 function __safe_min(x::Array{Float64, 1})

@@ -92,7 +92,7 @@ end
 
 show(x::Float64) = _show(x, GRISU_SHORTEST)
 show(x::Float32) = _show(x, GRISU_SHORTEST_SINGLE)
-showcompact(x::Float) = _show(x, GRISU_SHORTEST_SINGLE) # TODO: better short float printing.
+#showcompact(x::Float) = _show(x, GRISU_SHORTEST_SINGLE) # TODO: better short float printing.
 
 # normal:
 #   0 < pt < len        ####.####           len+1
