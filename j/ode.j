@@ -361,4 +361,4 @@ function ode45_fb(F, tspan, x0)
 end # ode45_fb
 
 # Use Dormand Prince version of ode45 by default
-ode45 = ode45_dp
+const ode45 = ode45_dp

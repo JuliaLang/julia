@@ -990,7 +990,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     v = (jl_value_t*)
                         jl_new_typevar(underscore_sym,
                                        (jl_value_t*)jl_bottom_type, S);
-                    ((jl_tvar_t*)v)->bound = 0; // ???
+                    ((jl_tvar_t*)v)->bound = 1; // ???
                 }
                 extend(T, v, soln);
             }

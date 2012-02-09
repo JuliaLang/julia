@@ -21,7 +21,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse grisu
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse grisu amos
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
@@ -172,6 +172,27 @@ clean-fdlibm:
 	cd fdlibm && $(MAKE) clean
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
+
+## amos ##
+
+AMOS_OBJ_TARGET = $(EXTROOTLIB)/libamos.$(SHLIB_EXT)
+AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
+
+compile-amos: $(AMOS_OBJ_SOURCE)
+install-amos: $(AMOS_OBJ_TARGET)
+
+$(AMOS_OBJ_SOURCE): amos/*.f
+	cd amos && \
+	$(MAKE) && \
+	$(FC) -shared *.o -o libamos.$(SHLIB_EXT)
+$(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
+	cp $< $@
+
+clean-amos:
+	cd amos && $(MAKE) clean
+	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
+distclean-amos: clean-amos
 
 ## DSFMT ##
 

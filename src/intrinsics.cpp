@@ -27,8 +27,7 @@ namespace JL_I {
         // conversion
         sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
-        fptoui8, fptosi8, fptoui16, fptosi16, fptoui32, fptosi32,
-        fptoui64, fptosi64, 
+        fptoui32, fptosi32, fptoui64, fptosi64, 
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
@@ -670,14 +669,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateTrunc(INT(x), T_int32);
     HANDLE(trunc64,1)
         return builder.CreateTrunc(INT(x), T_int64);
-    HANDLE(fptoui8,1)
-        return builder.CreateFPToUI(FP(x), T_int8);
-    HANDLE(fptosi8,1)
-        return builder.CreateFPToSI(FP(x), T_int8);
-    HANDLE(fptoui16,1)
-        return builder.CreateFPToUI(FP(x), T_int16);
-    HANDLE(fptosi16,1)
-        return builder.CreateFPToSI(FP(x), T_int16);
     HANDLE(fptoui32,1)
         return builder.CreateFPToUI(FP(x), T_int32);
     HANDLE(fptosi32,1)
@@ -920,9 +911,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
     ADD_I(trunc_int);
-    ADD_I(fptoui8); ADD_I(fptosi8);
-    ADD_I(fptoui16); ADD_I(fptosi16); ADD_I(fptoui32); ADD_I(fptosi32);
-    ADD_I(fptoui64); ADD_I(fptosi64);
+    ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
     ADD_I(fpsiround32); ADD_I(fpsiround64);
     ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);

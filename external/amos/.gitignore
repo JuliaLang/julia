@@ -1,0 +1,3 @@
+*.o
+/libamos.dylib
+/libamos.so

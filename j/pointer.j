@@ -1,7 +1,3 @@
-## system word size ##
-
-const WORD_SIZE = int(Int.nbits)
-
 ## converting pointers to an appropriate unsigned ##
 
 const C_NULL = box(Ptr{Void}, unbox(Int,0))

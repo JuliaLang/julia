@@ -1,5 +1,6 @@
 _jl_libfdm = dlopen("libfdm")
 _jl_libm = dlopen("libm")
+_jl_libamos = dlopen("libamos")
 
 macro _jl_libmfunc_1arg_float(T,f)
     quote
@@ -62,7 +63,7 @@ end
 @_jl_libfdmfunc_1arg_float Real   ceil
 @_jl_libfdmfunc_1arg_float Real   floor
 #@_jl_libfdmfunc_1arg_float Real   rint
-@_jl_libfdmfunc_1arg_float Number lgamma
+#@_jl_libfdmfunc_1arg_float Number lgamma
 
 @_jl_libmfunc_1arg_float Number sqrt
 @_jl_libmfunc_1arg_float Number exp2
@@ -89,6 +90,11 @@ fpart(x) = x - trunc(x)
 #abs(x::Float64) = ccall(dlsym(_jl_libfdm, :fabs),  Float64, (Float64,), x)
 #abs(x::Float32) = ccall(dlsym(_jl_libfdm, :fabsf), Float32, (Float32,), x)
 #@vectorize_1arg Number abs
+
+lgamma(x::Float64) = ccall(dlsym(_jl_libamos,:dgamln_),Float64,(Ptr{Float64},Ptr{Int32}),x,int32(0))
+lgamma(x::Float32) = ccall(dlsym(_jl_libamos,:gamln_),Float32,(Ptr{Float32},Ptr{Int32}),x,int32(0))
+lgamma(x::Real) = lgamma(float(x))
+@vectorize_1arg Number lgamma
 
 gamma(x::Float64) = ccall(dlsym(_jl_libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
@@ -147,3 +153,39 @@ bessely0(x::Float32) = ccall(dlsym(_jl_libfdm, :y0f), Float32, (Float32,), x)
 bessely1(x::Float64) = ccall(dlsym(_jl_libfdm, :y1),  Float64, (Float64,), x)
 bessely1(x::Float32) = ccall(dlsym(_jl_libfdm, :y1f), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
+
+let
+    const ai::Array{Float64,1} = Array(Float64,2)
+    const ae::Array{Int32,1} = Array(Int32,2)
+global airy
+function airy(k::Int, z::Complex128)
+    id = int32(k==1 || k==3)
+    if k == 0 || k == 1
+        ccall(dlsym(_jl_libamos, :zairy_), Void,
+              (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+              real(z), imag(z),
+              id, int32(1),
+              pointer(ai,1), pointer(ai,2),
+              pointer(ae,1), pointer(ae,2))
+        return complex(ai[1],ai[2])
+    elseif k == 2 || k == 3
+        ccall(dlsym(_jl_libamos, :zbiry_), Void,
+              (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+               Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+              real(z), imag(z),
+              id, int32(1),
+              pointer(ai,1), pointer(ai,2),
+              pointer(ae,1), pointer(ae,2))
+        return complex(ai[1],ai[2])
+    else
+        error("airy: invalid argument")
+    end
+end
+end
+
+airy(z) = airy(0,z)
+airy(k, x::Float) = oftype(x, real(airy(k, complex(x))))
+airy(k, x::Real) = airy(k, float(x))
+airy(k, z::Complex64) = complex64(airy(k, complex128(z)))
+airy(k, z::Complex) = airy(k, complex128(z))
