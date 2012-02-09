@@ -51,6 +51,7 @@ end
 gamma(z::Complex) = exp(lgamma(z))
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
+lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
 
 const eta_coeffs =
     [.99999999999999999997,
