@@ -1,7 +1,7 @@
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 2
 const MAX_TYPEUNION_DEPTH = 2
-const MAX_TUPLETYPE_LEN  = 10
+const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
 type NotFound
@@ -843,6 +843,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #    print("typeinf ", linfo.name, " ", uid(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
+    # if isbound(:stdout_stream)
+    #     write(stdout_stream, "typeinf ")
+    #     write(stdout_stream, string(linfo.name))
+    #     write(stdout_stream, string(atypes))
+    #     write(stdout_stream, '\n')
+    # end
     #print("typeinf ", ast0, " ", sparams, " ", atypes, "\n")
 
     global inference_stack
