@@ -369,7 +369,6 @@ end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
-        abstract_eval(f, vtypes, sv)  # to pick up a type annotation
         return _iisconst(f.name) && f.name
     end
     if isa(f,SymbolNode)
@@ -582,9 +581,7 @@ function abstract_eval(e::QuoteNode, vtypes, sv::StaticVarInfo)
 end
 
 function abstract_eval(e::TopNode, vtypes, sv::StaticVarInfo)
-    t = abstract_eval_global(e.name)
-    e.typ = t
-    return t
+    return abstract_eval_global(e.name)
 end
 
 const _jl_Type_Array = Type{Array}
@@ -1239,6 +1236,8 @@ function exprtype(x::ANY)
         return x.typ
     elseif isa(x,SymbolNode)
         return x.typ
+    elseif isa(x,TopNode)
+        return abstract_eval_global(x.name)
     elseif isa(x,Symbol)
         return Any
     elseif isa(x,Type)

@@ -141,7 +141,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         */
     }
     else if (jl_is_cpointer_type(jt)) {
-        jl_value_t *aty = expr_type(argex);
+        jl_value_t *aty = expr_type(argex, ctx);
         if (jl_is_array_type(aty) &&
             (jl_tparam0(jt) == jl_tparam0(aty) ||
              jl_tparam0(jt) == (jl_value_t*)jl_bottom_type)) {
@@ -274,7 +274,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         // make sure args are rooted
         if (largty->isPointerTy() &&
             (largty == jl_pvalue_llvmt ||
-             !jl_is_bits_type(expr_type(args[i])))) {
+             !jl_is_bits_type(expr_type(args[i], ctx)))) {
             make_gcroot(boxed(arg), ctx);
         }
 #endif
