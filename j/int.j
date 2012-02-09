@@ -436,3 +436,7 @@ sizeof(::Type{Int32})  = 4
 sizeof(::Type{Uint32}) = 4
 sizeof(::Type{Int64})  = 8
 sizeof(::Type{Uint64}) = 8
+
+## system word size ##
+
+const WORD_SIZE = int(Int.nbits)
