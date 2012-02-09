@@ -155,8 +155,8 @@ bessely1(x::Float32) = ccall(dlsym(_jl_libfdm, :y1f), Float32, (Float32,), x)
 @vectorize_1arg Real bessely1
 
 let
-    const ai = Array(Float64,2)
-    const ae = Array(Int32,2)
+    const ai::Array{Float64,1} = Array(Float64,2)
+    const ae::Array{Int32,1} = Array(Int32,2)
 global airy
 function airy(k::Int, z::Complex128)
     id = int32(k==1 || k==3)
