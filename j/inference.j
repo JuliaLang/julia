@@ -405,7 +405,7 @@ function limit_tuple_type(t)
             last = last.parameters[1]
         end
         tail = tuple(t[MAX_TUPLETYPE_LEN:(n-1)]..., last)
-        tail = reduce(tmerge, None, tail)
+        tail = tintersect(reduce(tmerge, None, tail), Any)
         return tuple(t[1:(MAX_TUPLETYPE_LEN-1)]..., ...{tail})
     end
     return t
@@ -419,6 +419,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # It is important for N to be >= the number of methods in the error()
     # function, so we can still know that error() is always None.
     # here I picked 4.
+    argtypes = limit_tuple_type(argtypes)
     applicable = getmethods(f, argtypes, 4)
     rettype = None
     if is(applicable,false)
@@ -876,8 +877,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         ast = linfo.ast
     end
 
-    assert(is(ast.head,:lambda), "inference.j:745")
     args = f_argnames(ast)
+    la = length(args)
+    assert(is(ast.head,:lambda), "inference.j:745")
     locals = (ast.args[2][1])::Array{Any,1}
     vars = append(args, locals)
     body = (ast.args[3].args)::Array{Any,1}
@@ -905,7 +907,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     for v in vars
         s[1][v] = Undef
     end
-    la = length(args)
     if la > 0
         if is(atypes,Tuple)
             atypes = tuple(NTuple{la,Any}..., Tuple[1])
@@ -1265,7 +1266,7 @@ end
 # meaning they are fully known.
 function inlineable(f, e::Expr, vars)
     argexprs = a2t_butfirst(e.args)
-    atypes = map(exprtype, argexprs)
+    atypes = limit_tuple_type(map(exprtype, argexprs))
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
