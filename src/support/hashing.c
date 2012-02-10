@@ -57,20 +57,27 @@ u_int32_t int64to32hash(u_int64_t key)
     return (u_int32_t)key;
 }
 
-#include "lookup3.c"
+#include "MurmurHash3.c"
 
-u_int64_t memhash(const char* buf, size_t n)
+#define _MHASH_SEED_ 0xcafe8881
+
+uint64_t memhash(const char* buf, size_t n)
 {
-    u_int32_t c=0xcafe8881, b=0x4d6a087c;
+    uint64_t out[2];
 
-    hashlittle2(buf, n, &c, &b);
-    return (u_int64_t)c | (((u_int64_t)b)<<32);
+    // TODO: expose 128-bit hash
+#ifdef __LP64__
+    MurmurHash3_x64_128(buf, n, _MHASH_SEED_, out);
+#else
+    MurmurHash3_x86_128(buf, n, _MHASH_SEED_, out);
+#endif
+    return out[1];
 }
 
-u_int32_t memhash32(const char* buf, size_t n)
+uint32_t memhash32(const char* buf, size_t n)
 {
-    u_int32_t c=0xcafe8881, b=0x4d6a087c;
+    uint32_t out;
 
-    hashlittle2(buf, n, &c, &b);
-    return c;
+    MurmurHash3_x86_32(buf, n, _MHASH_SEED_, &out);
+    return out;
 }
