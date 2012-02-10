@@ -12,7 +12,7 @@ typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
 ## Basic functions ##
 
-size(t::AbstractArray, d) = size(t)[d]
+size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
 eltype{T,n}(::AbstractArray{T,n}) = T
 ndims{T,n}(::AbstractArray{T,n}) = n
 numel(t::AbstractArray) = prod(size(t))
@@ -22,6 +22,9 @@ last(a::AbstractArray) = a[end]
 
 function stride(a::AbstractArray, i::Integer)
     s = 1
+    if i > ndims(a)
+        return numel(a)
+    end
     for n=1:(i-1)
         s *= size(a, n)
     end

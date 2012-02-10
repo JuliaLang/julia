@@ -661,15 +661,37 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         JL_GC_POP();
                         return emit_arraysize(ary, idx);
                     }
+                    else if (idx > ndims) {
+                        JL_GC_POP();
+                        return ConstantInt::get(T_size, 1);
+                    }
                 }
                 else {
                     Value *idx = emit_unbox(T_size, T_psize,
                                             emit_unboxed(args[2], ctx));
-                    emit_bounds_check(idx, ConstantInt::get(T_size,ndims),
-                                      "arraysize: dimension out of range",
-                                      ctx);
+                    error_unless(builder.CreateICmpSGT(idx,
+                                                      ConstantInt::get(T_size,0)),
+                                 "arraysize: dimension out of range", ctx);
+                    BasicBlock *outBB = BasicBlock::Create(getGlobalContext(),"outofrange",ctx->f);
+                    BasicBlock *inBB = BasicBlock::Create(getGlobalContext(),"inrange");
+                    BasicBlock *ansBB = BasicBlock::Create(getGlobalContext(),"arraysize");
+                    builder.CreateCondBr(builder.CreateICmpSLE(idx,
+                                                              ConstantInt::get(T_size, ndims)),
+                                         inBB, outBB);
+                    builder.SetInsertPoint(outBB);
+                    Value *v_one = ConstantInt::get(T_size, 1);
+                    builder.CreateBr(ansBB);
+                    ctx->f->getBasicBlockList().push_back(inBB);
+                    builder.SetInsertPoint(inBB);
+                    Value *v_sz = emit_arraysize(ary, idx);
+                    builder.CreateBr(ansBB);
+                    ctx->f->getBasicBlockList().push_back(ansBB);
+                    builder.SetInsertPoint(ansBB);
+                    PHINode *result = builder.CreatePHI(T_size, 2);
+                    result->addIncoming(v_one, outBB);
+                    result->addIncoming(v_sz, inBB);
                     JL_GC_POP();
-                    return emit_arraysize(ary, idx);
+                    return result;
                 }
             }
         }
