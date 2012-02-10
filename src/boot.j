@@ -109,7 +109,6 @@
 
 #type TopNode
 #    name::Symbol
-#    typ
 #end
 
 type Nothing; end

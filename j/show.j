@@ -115,7 +115,7 @@ show(e::SymbolNode) = (print(e.name); show_expr_type(e.typ))
 show(e::LineNumberNode) = print("line($(e.line))")
 show(e::LabelNode) = print("$(e.label): ")
 show(e::GotoNode) = print("goto $(e.label)")
-show(e::TopNode) = (print("top($(e.name))"); show_expr_type(e.typ))
+show(e::TopNode) = print("top($(e.name))")
 
 function show(e::QuoteNode)
     a1 = e.value

@@ -413,13 +413,13 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
 
 // --- generating function calls ---
 
-static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n)
+static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n, jl_codectx_t *ctx)
 {
     jl_tuple_t *t = jl_alloc_tuple(n);
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < n; i++) {
-        jl_value_t *ty = expr_type(args[i]);
+        jl_value_t *ty = expr_type(args[i], ctx);
         if (!jl_is_leaf_type(ty)) {
             t = NULL;
             break;
@@ -452,7 +452,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         //*theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
         *theEnv = literal_pointer_val(f->env);
         if (ctx->linfo->specTypes != NULL) {
-            jl_tuple_t *aty = call_arg_types(&args[1], nargs);
+            jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
             // attempt compile-time specialization for inferred types
             if (aty != NULL) {
@@ -476,8 +476,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_is && nargs==2) {
-        jl_value_t *rt1 = expr_type(args[1]);
-        jl_value_t *rt2  = expr_type(args[2]);
+        jl_value_t *rt1 = expr_type(args[1], ctx);
+        jl_value_t *rt2  = expr_type(args[2], ctx);
         if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
             !jl_is_typevar(jl_tparam0(rt1)) &&
             !jl_is_typevar(jl_tparam0(rt2)) &&
@@ -493,7 +493,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         return builder.CreateICmpEQ(arg1, arg2);
     }
     else if (f->fptr == &jl_f_typeof && nargs==1) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (!jl_is_typevar(aty) && aty != (jl_value_t*)jl_any_type &&
             jl_type_intersection(aty,(jl_value_t*)jl_tuple_type)==(jl_value_t*)jl_bottom_type) {
             if (jl_is_leaf_type(aty)) {
@@ -508,8 +508,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_typeassert && nargs==2) {
-        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
-        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
@@ -525,8 +525,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_isa && nargs==2) {
-        jl_value_t *arg = expr_type(args[1]); rt1 = arg;
-        jl_value_t *ty  = expr_type(args[2]); rt2 = ty;
+        jl_value_t *arg = expr_type(args[1], ctx); rt1 = arg;
+        jl_value_t *ty  = expr_type(args[2], ctx); rt2 = ty;
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
             jl_value_t *tp0 = jl_tparam0(ty);
             if (jl_subtype(arg, tp0, 0)) {
@@ -547,7 +547,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_tuple(aty)) {
             Value *arg1 = emit_expr(args[1], ctx, true);
             JL_GC_POP();
@@ -555,8 +555,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_tupleref && nargs==2) {
-        jl_value_t *tty = expr_type(args[1]); rt1 = tty;
-        jl_value_t *ity = expr_type(args[2]); rt2 = ity;
+        jl_value_t *tty = expr_type(args[1], ctx); rt1 = tty;
+        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
         if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_long_type) {
             Value *arg1 = emit_expr(args[1], ctx, true);
             if (jl_is_long(args[2])) {
@@ -639,7 +639,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         return builder.CreateCall(jlraise_func, arg1);
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_array_type(aty)) {
             // todo: also allow e.g. Union of several array types
             Value *arg1 = emit_expr(args[1], ctx, true);
@@ -648,8 +648,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_arraysize && nargs==2) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
-        jl_value_t *ity = expr_type(args[2]); rt2 = ity;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
+        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
         if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ndp = jl_tparam1(aty);
             if (jl_is_long(ndp)) {
@@ -661,22 +661,44 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         JL_GC_POP();
                         return emit_arraysize(ary, idx);
                     }
+                    else if (idx > ndims) {
+                        JL_GC_POP();
+                        return ConstantInt::get(T_size, 1);
+                    }
                 }
                 else {
                     Value *idx = emit_unbox(T_size, T_psize,
                                             emit_unboxed(args[2], ctx));
-                    emit_bounds_check(idx, ConstantInt::get(T_size,ndims),
-                                      "arraysize: dimension out of range",
-                                      ctx);
+                    error_unless(builder.CreateICmpSGT(idx,
+                                                      ConstantInt::get(T_size,0)),
+                                 "arraysize: dimension out of range", ctx);
+                    BasicBlock *outBB = BasicBlock::Create(getGlobalContext(),"outofrange",ctx->f);
+                    BasicBlock *inBB = BasicBlock::Create(getGlobalContext(),"inrange");
+                    BasicBlock *ansBB = BasicBlock::Create(getGlobalContext(),"arraysize");
+                    builder.CreateCondBr(builder.CreateICmpSLE(idx,
+                                                              ConstantInt::get(T_size, ndims)),
+                                         inBB, outBB);
+                    builder.SetInsertPoint(outBB);
+                    Value *v_one = ConstantInt::get(T_size, 1);
+                    builder.CreateBr(ansBB);
+                    ctx->f->getBasicBlockList().push_back(inBB);
+                    builder.SetInsertPoint(inBB);
+                    Value *v_sz = emit_arraysize(ary, idx);
+                    builder.CreateBr(ansBB);
+                    ctx->f->getBasicBlockList().push_back(ansBB);
+                    builder.SetInsertPoint(ansBB);
+                    PHINode *result = builder.CreatePHI(T_size, 2);
+                    result->addIncoming(v_one, outBB);
+                    result->addIncoming(v_sz, inBB);
                     JL_GC_POP();
-                    return emit_arraysize(ary, idx);
+                    return result;
                 }
             }
         }
     }
     else if (f->fptr == &jl_f_arrayref && nargs==2) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
-        jl_value_t *ity = expr_type(args[2]); rt2 = ity;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
+        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
         if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
             if (!jl_is_typevar(ety)) {
@@ -710,9 +732,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_arrayset && nargs==3) {
-        jl_value_t *aty = expr_type(args[1]); rt1 = aty;
-        jl_value_t *ity = expr_type(args[2]); rt2 = ity;
-        jl_value_t *vty = expr_type(args[3]); rt3 = vty;
+        jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
+        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
+        jl_value_t *vty = expr_type(args[3], ctx); rt3 = vty;
         if (jl_is_array_type(aty) &&
             ity == (jl_value_t*)jl_long_type) {
             jl_value_t *ety = jl_tparam0(aty);
@@ -748,7 +770,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_get_field && nargs==2) {
-        jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
+        jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         if (jl_is_struct_type(sty) && jl_is_quotenode(args[2]) &&
             jl_is_symbol(jl_fieldref(args[2],0))) {
@@ -764,7 +786,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_set_field && nargs==3) {
-        jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1]);
+        jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1], ctx);
         rt1 = (jl_value_t*)sty;
         if (jl_is_struct_type(sty) && jl_is_quotenode(args[2]) &&
             jl_is_symbol(jl_fieldref(args[2],0))) {
@@ -772,7 +794,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                           (jl_sym_t*)jl_fieldref(args[2],0));
             if (offs != (size_t)-1) {
                 jl_value_t *ft = jl_tupleref(sty->types, offs);
-                jl_value_t *rhst = expr_type(args[3]);
+                jl_value_t *rhst = expr_type(args[3], ctx);
                 rt2 = rhst;
                 if (jl_subtype(rhst, ft, 0)) {
                     Value *strct = emit_expr(args[1], ctx, true);
@@ -848,7 +870,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         if (result != NULL) return result;
     }
     int last_depth = ctx->argDepth;
-    hdtype = expr_type(a00);
+    hdtype = expr_type(a00, ctx);
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
 #ifdef JL_GC_MARKSWEEP
@@ -1072,7 +1094,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
     }
     else if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
-        jl_value_t *etype = jl_fieldref(expr,1);
+        jl_value_t *etype = expr_type(expr, ctx);
         jl_binding_t *b = jl_get_binding(ctx->module, var);
         if (b == NULL)
             b = jl_get_binding_wr(ctx->module, var);
@@ -1115,7 +1137,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         int labelname = jl_unbox_long(args[1]);
         Value *condV = emit_expr(cond, ctx, true);
 #ifdef CONDITION_REQUIRES_BOOL
-        if (expr_type(cond) != (jl_value_t*)jl_bool_type &&
+        if (expr_type(cond, ctx) != (jl_value_t*)jl_bool_type &&
             condV->getType() != T_int1) {
             emit_typecheck(condV, (jl_value_t*)jl_bool_type, "if", ctx);
         }
@@ -1188,7 +1210,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val((jl_value_t*)jl_nothing);
     }
     else if (ex->head == static_typeof_sym) {
-        jl_value_t *extype = expr_type((jl_value_t*)ex);
+        jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
         if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
             if (jl_is_typevar(extype))
@@ -1200,7 +1222,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value)
         return literal_pointer_val(extype);
     }
     else if (ex->head == new_sym) {
-        jl_value_t *ty = expr_type(args[0]);
+        jl_value_t *ty = expr_type(args[0], ctx);
         if (jl_is_type_type(ty) &&
             jl_is_struct_type(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {

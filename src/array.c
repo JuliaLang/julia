@@ -207,8 +207,10 @@ JL_CALLABLE(jl_f_arraysize)
     if (nargs == 2) {
         JL_TYPECHK(arraysize, long, args[1]);
         int dno = jl_unbox_long(args[1]);
-        if (dno < 1 || dno > nd)
+        if (dno < 1)
             jl_error("arraysize: dimension out of range");
+        if (dno > nd)
+            return jl_box_long(1);
         return jl_box_long((&a->nrows)[dno-1]);
     }
     else {

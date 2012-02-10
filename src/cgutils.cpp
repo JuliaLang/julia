@@ -212,20 +212,28 @@ static Value *julia_bool(Value *cond)
 
 // --- get the inferred type of an AST node ---
 
-static jl_value_t *expr_type(jl_value_t *e)
+static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_expr(e))
         return ((jl_expr_t*)e)->etype;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
-    if (jl_is_topnode(e))
-        return jl_fieldref(e,1);
     if (jl_is_quotenode(e))
         return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
     if (jl_is_symbol(e))
         return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
         return (jl_value_t*)jl_any_func;
+    if (jl_is_topnode(e)) {
+        jl_binding_t *b = jl_get_binding(ctx->module,
+                                         (jl_sym_t*)jl_fieldref(e,0));
+        if (!b || !b->value)
+            return jl_top_type;
+        if (b->constp)
+            e = b->value;
+        else
+            return (jl_value_t*)jl_any_type;
+    }
     if (jl_is_some_tag_type(e))
         return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);

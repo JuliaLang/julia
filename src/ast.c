@@ -285,7 +285,7 @@ static jl_value_t *scm_to_julia_(value_t e)
             }
             if (sym == top_sym) {
                 return jl_new_struct(jl_topnode_type,
-                                     scm_to_julia_(car_(e)), jl_any_type);
+                                     scm_to_julia_(car_(e)));
             }
             jl_expr_t *ex = jl_exprn(sym, n);
             for(i=0; i < n; i++) {

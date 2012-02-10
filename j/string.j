@@ -30,7 +30,7 @@ show(s::String) = print_quoted(s)
 
 size(s::String) = (length(s),)
 size(s::String, d::Integer) = d==1 ? length(s) :
-    error("in size: tupleref: index ",d," out of range")
+    error("in size: dimension ",d," out of range")
 
 strlen(s::DirectIndexString) = length(s)
 function strlen(s::String)
