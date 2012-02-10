@@ -140,9 +140,12 @@ function find_in_path(fname)
     if fname[1] == '/'
         return fname
     end
-    loadpath = { "", "$JULIA_HOME/", "$JULIA_HOME/j/" }
-    for pfx in loadpath
-        pfxd = strcat(pfx,fname)
+    for pfx in LOAD_PATH
+        if pfx != "" && pfx[end] != '/'
+            pfxd = strcat(pfx,"/",fname)
+        else
+            pfxd = strcat(pfx,fname)
+        end
         if is_file_readable(pfxd)
             return pfxd
         end
