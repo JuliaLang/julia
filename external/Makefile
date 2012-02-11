@@ -130,7 +130,7 @@ install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	wget http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
-double-conversion-$(GRISU_VER)/Makefile:
+double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
 	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
 double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
