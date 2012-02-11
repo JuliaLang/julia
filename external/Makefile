@@ -30,7 +30,7 @@ LIBS += readline
 endif
 
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion
+LIBS = fdlibm dsfmt double-conversion amos
 endif
 
 default: install
