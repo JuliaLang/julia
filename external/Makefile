@@ -3,7 +3,7 @@
 LLVM_VER = 3.0
 READLINE_VER = 6.2
 PCRE_VER = 8.21
-GRISU_VER = 3acc4e41aa42a9276bb9c23e157b48f698fc07fd
+GRISU_VER = 1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
@@ -21,7 +21,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse grisu amos
+LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse double-conversion amos
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
@@ -30,7 +30,7 @@ LIBS += readline
 endif
 
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt grisu
+LIBS = fdlibm dsfmt double-conversion
 endif
 
 default: install
@@ -125,14 +125,16 @@ distclean-pcre:
 
 GRISU_OPTS = -fPIC -O3 -fvisibility=hidden
 
-compile-grisu: grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-install-grisu: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
+compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
 
-grisu-$(GRISU_VER)/Makefile:
-	wget -nv -r -np -nH --cut-dirs=2 -P grisu-$(GRISU_VER) http://double-conversion.googlecode.com/git-history/$(GRISU_VER)/
-	find grisu-$(GRISU_VER) -type f -name '*\?r=*' | perl -nle '$$x=$$_; s/\?r=.*//; print "mv $$x $$_"' | sh
-grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/Makefile
-	cd grisu-$(GRISU_VER) && \
+double-conversion-$(GRISU_VER).tar.gz:
+	wget http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
+double-conversion-$(GRISU_VER)/Makefile:
+	mkdir -p double-conversion-$(GRISU_VER) && \
+	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
+double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/Makefile
+	cd double-conversion-$(GRISU_VER) && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum.o -Isrc src/bignum.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/bignum-dtoa.o -Isrc src/bignum-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/cached-powers.o -Isrc src/cached-powers.cc && \
@@ -141,16 +143,16 @@ grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/Makefile
 	$(CXX) -c $(GRISU_OPTS) -o src/fast-dtoa.o -Isrc src/fast-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/fixed-dtoa.o -Isrc src/fixed-dtoa.cc && \
 	$(CXX) -c $(GRISU_OPTS) -o src/strtod.o -Isrc src/strtod.cc && \
-	$(CXX) -c $(GRISU_OPTS) -o src/libgrisu.o -I.. -Isrc ../grisu_wrapper.cpp && \
+	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
-$(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+$(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 	cp -f $< $@
 
-clean-grisu:
-	rm -f grisu-$(GRISU_VER)/src/*.o
-	rm -f grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-distclean-grisu:
-	rm -rf grisu-$(GRISU_VER)
+clean-double-conversion:
+	rm -f double-conversion-$(GRISU_VER)/src/*.o
+	rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+distclean-double-conversion:
+	rm -rf double-conversion-$(GRISU_VER)
 
 ## fdlibm ##
 
