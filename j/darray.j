@@ -901,8 +901,16 @@ end # macro
 @binary_darray_comparison_op (<)
 @binary_darray_comparison_op (<=)
 
-sum(d::DArray) = error("not yet implemented")
-prod(d::DArray) = error("not yet implemented")
+function reduce(f, v::DArray)
+    mapreduce(f, fetch,
+              { @spawnat p reduce(f,localize(v)) | p = procs(v) })
+end
+
+sum(d::DArray) = reduce(+, d)
+prod(d::DArray) = reduce(*, d)
+min(d::DArray) = reduce(min, d)
+max(d::DArray) = reduce(max, d)
+
 areduce(f::Function, d::DArray, r::Region, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
