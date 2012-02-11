@@ -76,8 +76,13 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
           xor_int(unbox64(a), or_int(lshr_int(unbox64(b), 32),
                                      shl_int(unbox64(b), 32))))
 
+if WORD_SIZE == 64
 _jl_hash64(x::Union(Int64,Uint64,Float64)) =
     ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
+else
+_jl_hash64(x::Union(Int64,Uint64,Float64)) =
+    ccall(:int64to32hash, Uint32, (Uint64,), boxui64(unbox64(x)))
+end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
 @eval function hash(x::Float)
@@ -105,7 +110,7 @@ function hash(t::Tuple)
     for i=1:length(t)
         h = bitmix(h,int(hash(t[i])))
     end
-    return h
+    return uint(h)
 end
 
 function hash(a::Array)
@@ -113,11 +118,16 @@ function hash(a::Array)
     for i=1:length(a)
         h = bitmix(h,int(hash(a[i])))
     end
-    return h
+    return uint(h)
 end
 
 hash(x::Any) = uid(x)
+
+if WORD_SIZE == 64
+hash(s::ByteString) = ccall(:memhash, Uint64, (Ptr{Void}, Int), s.data, length(s.data))
+else
 hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
+end
 
 # hash table
 

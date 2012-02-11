@@ -3,7 +3,7 @@
 LLVM_VER = 3.0
 READLINE_VER = 6.2
 PCRE_VER = 8.21
-GRISU_VER = d7beed8d6e0e
+GRISU_VER = 3acc4e41aa42a9276bb9c23e157b48f698fc07fd
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1alpha2.4
 LAPACK_VER = 3.4.0
@@ -129,7 +129,7 @@ compile-grisu: grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 install-grisu: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
 
 grisu-$(GRISU_VER)/Makefile:
-	wget -nv -r -np -nH --cut-dirs=2 -P grisu-$(GRISU_VER) http://double-conversion.googlecode.com/hg-history/$(GRISU_VER)/
+	wget -nv -r -np -nH --cut-dirs=2 -P grisu-$(GRISU_VER) http://double-conversion.googlecode.com/git-history/$(GRISU_VER)/
 	find grisu-$(GRISU_VER) -type f -name '*\?r=*' | perl -nle '$$x=$$_; s/\?r=.*//; print "mv $$x $$_"' | sh
 grisu-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): grisu-$(GRISU_VER)/Makefile
 	cd grisu-$(GRISU_VER) && \
