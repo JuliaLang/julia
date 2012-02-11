@@ -174,7 +174,7 @@ type Cmd
         this = new(exec,
                    HashTable{FileDes,PipeEnd}(),
                    Set{Cmd}(),
-                   0, # TODO: use -1?
+                   0,
                    ProcessNotRun(),
                    status->status==0)
         add(this.pipeline, this)
@@ -183,7 +183,7 @@ type Cmd
 end
 
 setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
-ignorestatus(cmd::Cmd) = setsuccess(cmd, status->true)
+ignorestatus(cmd::Cmd) = setsuccess(cmd, status->status!=0xff)
 
 function show(cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
@@ -331,17 +331,17 @@ end
 (|)(src::Ports, dst::Cmds) = (src | stdin(dst); dst)
 (|)(src::Cmds,  dst::Cmds) = (stdout(src)| stdin(dst); src & dst)
 
-## running commands and pipelines ##
-
-running(cmd::Cmd) = (cmd.pid > 0)
-
 # spawn(cmd) starts all processes connected to cmd
 
 function spawn(cmd::Cmd)
     fds = Set{FileDes}()
     for c = cmd.pipeline
-        if running(c)
-            error("already running: ", c)
+        if !isa(cmd.status,ProcessNotRun)
+            if isa(cmd.status,ProcessRunning)
+                error("already running: ", c)
+            else
+                error("already run: ", c)
+            end
         end
         for (f,p) = c.pipes
             add(fds, fd(p))
@@ -419,7 +419,7 @@ end
 
 function spawn(cmds::Cmds)
     for cmd in cmds
-        if !running(cmd)
+        if isa(cmd.status,ProcessNotRun)
             spawn(cmd)
         end
     end
