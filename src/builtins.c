@@ -281,8 +281,10 @@ static int is_intrinsic(jl_sym_t *s)
 
 static int has_intrinsics(jl_expr_t *e)
 {
-    if (e->head == call_sym && jl_is_symbol(jl_exprarg(e,0)) &&
-        is_intrinsic((jl_sym_t*)jl_exprarg(e,0)))
+    jl_value_t *e0 = jl_exprarg(e,0);
+    if (e->head == call_sym &&
+        ((jl_is_symbol(e0) && is_intrinsic((jl_sym_t*)e0)) ||
+         (jl_is_topnode(e0) && is_intrinsic((jl_sym_t*)jl_fieldref(e0,0)))))
         return 1;
     int i;
     for(i=0; i < e->args->length; i++) {

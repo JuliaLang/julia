@@ -99,7 +99,7 @@ t_func[fpiseq32] = (2, 2, cmp_tfunc)
 t_func[fpiseq64] = (2, 2, cmp_tfunc)
 t_func[fpislt32] = (2, 2, cmp_tfunc)
 t_func[fpislt64] = (2, 2, cmp_tfunc)
-t_func[ccall] =
+t_func[eval(Base,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
@@ -1394,7 +1394,8 @@ function inlining_pass(e::Expr, vars)
     end
     arg1 = e.args[1]
     if is(e.head,:call) && (is(arg1, :ccall) ||
-                            (isa(arg1,SymbolNode) && is(arg1.name, :ccall)))
+                            (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
+                            (isa(arg1,TopNode) && is(arg1.name, :ccall)))
         if length(e.args)>1
             e.args[2] = remove_call1(e.args[2])
         end

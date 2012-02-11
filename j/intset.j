@@ -207,13 +207,13 @@ end
 
 ~(s::IntSet) = not!(IntSet(s))
 |(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(IntSet(s1), s2) : or!(IntSet(s2), s1))
-&(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
+(&)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
 ($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(IntSet(s1), s2) : xor!(IntSet(s2), s1))
 
 union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
-union(s1::IntSet, s2::IntSet) = |(s1, s2)
+union(s1::IntSet, s2::IntSet) = s1 | s2
 intersection!(s1::IntSet, s2::IntSet) = and!(s1, s2)
-intersection(s1::IntSet, s2::IntSet) = &(s1, s2)
+intersection(s1::IntSet, s2::IntSet) = s1 & s2
 complement!(s1::IntSet) = not!(s1)
 complement(s1::IntSet) = ~s1
 

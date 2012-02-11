@@ -923,6 +923,11 @@
    (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
 		   `(call aTbT ,a ,b))
 
+   (pattern-lambda (ccall name RT (tuple . argtypes) . args)
+		   `(call (top ccall) ,name ,RT ,(cadddr __)
+			  ,@args)
+		   )
+
    )) ; patterns
 
 ; patterns that verify all syntactic sugar was well-formed

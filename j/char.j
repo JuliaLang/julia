@@ -50,7 +50,7 @@ rem(x::Char, y::Char) = rem(int(x), int(y))
 mod(x::Char, y::Char) = rem(int(x), int(y))
 
 ~(x::Char)            = ~uint32(x)
-&(x::Char, y::Char)   = uint32(x) & uint32(y)
+(&)(x::Char, y::Char) = uint32(x) & uint32(y)
 |(x::Char, y::Char)   = uint32(x) | uint32(y)
 ($)(x::Char, y::Char) = uint32(x) $ uint32(y)
 

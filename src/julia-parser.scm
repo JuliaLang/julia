@@ -53,21 +53,21 @@
 
 (define assignment-ops (prec-ops 0))
 
-(define unary-ops '(+ - ! ~ $ |<:| |>:|))
+(define unary-ops '(+ - ! ~ $ & |<:| |>:|))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $))
+(define unary-and-binary-ops '(+ - $ &))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
       <<= >>= >>>= -> --> |\|\|| && : |::| |.|))
-(define syntactic-unary-operators '($))
+(define syntactic-unary-operators '($ &))
 
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
 			 abstract typealias type bitstype
-			 module import export))
+			 module import export ccall))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -728,6 +728,11 @@
 	   (error (string "invalid module name " name)))
        (begin0 (list word name (parse-block s))
 	       (expect-end s))))
+    ((ccall)
+     (if (not (eqv? (peek-token s) #\())
+	 (error "expected ( after ccall"))
+     (take-token s)
+     (cons 'ccall (parse-arglist s #\) )))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."

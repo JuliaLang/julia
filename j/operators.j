@@ -28,14 +28,14 @@ min(x,y) = x < y ? x : y
 
 +() = 0
 *() = 1
-&() = error("zero-argument & is ambiguous")
-|() = error("zero-argument | is ambiguous")
+(&)() = error("zero-argument & is ambiguous")
+(|)() = error("zero-argument | is ambiguous")
 ($)() = error("zero-argument \$ is ambiguous")
 
 +(x::Number) = x
 *(x::Number) = x
-&(x::Integer) = x
-|(x::Integer) = x
+(&)(x::Integer) = x
+(|)(x::Integer) = x
 ($)(x::Integer) = x
 
 for op = (:+, :*, :&, :|, :$, :min, :max)
