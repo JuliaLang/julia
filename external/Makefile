@@ -423,27 +423,26 @@ distclean-clp:
 ## UNWIND ##
 
 LIBUNWIND_TARGET_OBJ = $(EXTROOTLIB)/libunwind.a
-LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/Makefile
+LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
-$(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	cd libunwind-$(UNWIND_VER) && $(MAKE) && $(MAKE) install
-
 libunwind-$(UNWIND_VER).tar.gz:
-	wget http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz 
-
-open-unwind: libunwind-$(UNWIND_VER).tar.gz
-	tar xvfz $<
-	touch $@
-
-$(LIBUNWIND_TARGET_SOURCE): open-unwind
+	wget http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
+libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
+	tar xfz $<
 	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(abspath $(EXTROOT))
+
+$(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
+	cd libunwind-$(UNWIND_VER) && $(MAKE)
+
+$(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
+	cd libunwind-$(UNWIND_VER) && $(MAKE) install
 
 clean-unwind:
 	$(MAKE) -C libunwind-$(UNWIND_VER) clean
-	rm -rf $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
+	rm -f $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 
 distclean-unwind:
 	rm -rf libunwind-$(UNWIND_VER).tar.gz libunwind-$(UNWIND_VER)
