@@ -639,7 +639,7 @@ fetch(r::RemoteRef) = sync_msg(:fetch, r)
 fetch(x::ANY) = x
 
 # writing to an uninitialized ref
-function put_ref(rid, val)
+function put_ref(rid, val::ANY)
     wi = lookup_ref(rid)
     if wi.done
         wi.notify = ((), :take, rid, wi.notify)
@@ -650,7 +650,7 @@ function put_ref(rid, val)
     notify_done(wi)
 end
 
-function put(rr::RemoteRef, val)
+function put(rr::RemoteRef, val::ANY)
     rid = rr2id(rr)
     if rr.where == myid()
         put_ref(rid, val)
