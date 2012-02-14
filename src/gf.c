@@ -145,8 +145,9 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
 {
     if (FASTER_1ARG && types->length == 1) {
         jl_value_t *ty = jl_t0(types);
-        if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
-            uptrint_t uid = ((jl_struct_type_t*)ty)->uid;
+        uptrint_t uid;
+        if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
+            (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
             assert(uid > 0);
             if (mt->cache_1arg && uid < jl_array_len(mt->cache_1arg)) {
                 jl_function_t *m = (jl_function_t*)jl_cellref(mt->cache_1arg, uid);
@@ -173,8 +174,9 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
 {
     if (FASTER_1ARG && n == 1) {
         jl_value_t *ty = (jl_value_t*)jl_typeof(args[0]);
-        if (jl_is_struct_type(ty) || jl_is_bits_type(ty)) {
-            uptrint_t uid = ((jl_struct_type_t*)ty)->uid;
+        uptrint_t uid;
+        if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
+            (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
             if (uid > 0 && mt->cache_1arg &&
                 uid < jl_array_len(mt->cache_1arg)) {
                 jl_function_t *m = (jl_function_t*)jl_cellref(mt->cache_1arg, uid);

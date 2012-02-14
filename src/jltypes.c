@@ -2178,12 +2178,13 @@ void jl_init_types(void)
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(5, jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(7, jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
-                                     jl_symbol("names"), jl_symbol("types"));
-    jl_struct_kind->types = jl_tuple(5, jl_typename_type, jl_type_type,
+                                     jl_symbol("names"), jl_symbol("types"),
+                                     jl_symbol(""), jl_symbol(""));
+    jl_struct_kind->types = jl_tuple(7, jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
-                                     jl_tuple_type);
+                                     jl_tuple_type, jl_any_type, jl_any_type);
     jl_struct_kind->fptr = jl_f_no_function;
     jl_struct_kind->env = NULL;
     jl_struct_kind->linfo = NULL;

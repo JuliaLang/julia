@@ -158,11 +158,11 @@ typedef struct {
     jl_tuple_t *parameters;
     jl_tuple_t *names;
     jl_tuple_t *types;
-    // hidden fields:
-    uptrint_t uid;
     // to create a set of constructors for this sort of type
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
+    // hidden fields:
+    uptrint_t uid;
 } jl_struct_type_t;
 
 typedef struct {
@@ -174,7 +174,7 @@ typedef struct {
     jl_value_t *bnbits;
     // hidden fields:
     size_t nbits;
-    uptrint_t uid;   // must be at same offset as in jl_struct_type_t
+    uptrint_t uid;
 } jl_bits_type_t;
 
 typedef struct {
