@@ -862,7 +862,7 @@ DLLEXPORT void jl_show_any(jl_value_t *v)
 JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
-    assert(F->linfo != NULL);
+    assert(((jl_function_t*)F)->linfo != NULL);
     /* // to run inference on all thunks. slows down loading files.
     if (F->linfo->inferred == jl_false) {
         if (!jl_in_inference) {
@@ -870,9 +870,9 @@ JL_CALLABLE(jl_trampoline)
         }
     }*/
     jl_compile((jl_function_t*)F);
-    assert(F->fptr == &jl_trampoline);
+    assert(((jl_function_t*)F)->fptr == &jl_trampoline);
     jl_generate_fptr((jl_function_t*)F);
-    assert(F->fptr != NULL);
+    assert(((jl_function_t*)F)->fptr != NULL);
     return jl_apply((jl_function_t*)F, args, nargs);
 }
 
