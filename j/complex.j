@@ -192,6 +192,7 @@ conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
 abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
+sign(z::Complex) = z/abs(z)
 
 -(z::Complex) = complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
