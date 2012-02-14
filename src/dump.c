@@ -634,7 +634,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         f->fptr = jl_deserialize_fptr(s);
         if (f->fptr == NULL) {
             f->fptr = &jl_trampoline;
-            f->env = (jl_value_t*)jl_tuple2((jl_value_t*)f, f->env);
         }
         return (jl_value_t*)f;
     }

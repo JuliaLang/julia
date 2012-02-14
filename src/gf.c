@@ -218,11 +218,6 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
         return f;
     jl_function_t *nf = jl_new_closure(f->fptr, f->env);
     JL_GC_PUSH(&nf);
-    if (f->env != NULL && jl_is_tuple(f->env) &&
-        ((jl_tuple_t*)f->env)->length == 2 &&
-        jl_t0(f->env) == (jl_value_t*)f) {
-        nf->env = (jl_value_t*)jl_tuple2((jl_value_t*)nf, jl_t1(f->env));
-    }
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     JL_GC_POP();
     return nf;
@@ -234,21 +229,11 @@ jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
     jl_function_t *nf = jl_new_closure(NULL, NULL);
     nf->linfo = li;
     JL_GC_PUSH(&nf);
-    jl_value_t *env;
-    if (f->fptr == &jl_trampoline) {
-        env = jl_t1(f->env);
-    }
-    else {
-        env = f->env;
-    }
-    if (li->fptr != NULL) {
+    nf->env = f->env;
+    if (li->fptr != NULL)
         nf->fptr = li->fptr;
-        nf->env = env;
-    }
-    else {
+    else
         nf->fptr = &jl_trampoline;
-        nf->env = (jl_value_t*)jl_tuple2((jl_value_t*)nf, env);
-    }
     JL_GC_POP();
     return nf;
 }
@@ -644,8 +629,6 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     /*
     if (newmeth->linfo&&newmeth->linfo->ast&&newmeth->fptr!=&jl_trampoline) {
         newmeth->fptr = &jl_trampoline;
-        newmeth->env =
-            (jl_value_t*)jl_tuple2((jl_value_t*)newmeth, newmeth->env);
     }
     */
 
@@ -1040,7 +1023,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     assert(jl_is_gf(f));
     if (!jl_is_leaf_type((jl_value_t*)types))
         return NULL;
-    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(f->env);
+    jl_methtable_t *mt = jl_gf_mtable(f);
     jl_function_t *sf = jl_method_lookup_by_type(mt, types, 1);
     if (sf == NULL) {
         return NULL;
@@ -1064,6 +1047,7 @@ static void enable_trace(int x) { trace_en=x; }
 
 JL_CALLABLE(jl_apply_generic)
 {
+    jl_value_t *env = ((jl_function_t*)F)->env;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
@@ -1109,7 +1093,7 @@ JL_CALLABLE(jl_apply_generic)
     }
 
     if (mfunc == NULL) {
-        return jl_no_method_error((jl_function_t*)jl_t2(env), args, nargs);
+        return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
 
@@ -1246,8 +1230,8 @@ static void print_methlist(char *name, jl_methlist_t *ml)
 
 void jl_show_method_table(jl_function_t *gf)
 {
-    char *name = ((jl_sym_t*)jl_t1(gf->env))->name;
-    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(gf->env);
+    char *name = jl_gf_name(gf)->name;
+    jl_methtable_t *mt = jl_gf_mtable(gf);
     print_methlist(name, mt->defs);
     //ios_printf(ios_stdout, "\ncache:\n");
     //print_methlist(name, mt->cache);
@@ -1258,7 +1242,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
     f->fptr = jl_apply_generic;
     jl_value_t *nmt = (jl_value_t*)new_method_table();
     JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_tuple(3, nmt, (jl_value_t*)name, (jl_value_t*)f);
+    f->env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
     JL_GC_POP();
 }
 
@@ -1278,7 +1262,7 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     assert(jl_is_tuple(types));
     assert(jl_is_func(meth));
     assert(jl_is_tuple(gf->env));
-    assert(jl_is_mtable(jl_t0(gf->env)));
+    assert(jl_is_mtable(jl_gf_mtable(gf)));
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
@@ -1303,10 +1287,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
         else {
             jl_value_t *cenv;
             if (func->env != NULL) {
-                if (func->fptr == &jl_trampoline)
-                    cenv = jl_t1(func->env);
-                else
-                    cenv = func->env;
+                cenv = func->env;
             }
             else {
                 cenv = (jl_value_t*)jl_null;

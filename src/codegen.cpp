@@ -206,7 +206,7 @@ typedef struct {
     jl_expr_t *ast;
     jl_tuple_t *sp;
     jl_lambda_info_t *linfo;
-    const Argument *envArg;
+    Value *envArg;
     const Argument *argArray;
     const Argument *argCount;
     AllocaInst *argTemp;
@@ -434,7 +434,7 @@ extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *ty
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
-                              Value **theFptr, Value **theEnv,
+                              Value **theFptr, Value **theF,
                               jl_value_t *expr)
 {
     if (jl_typeis(ff, jl_intrinsic_type)) {
@@ -449,8 +449,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     jl_function_t *f = (jl_function_t*)ff;
     if (f->fptr == &jl_apply_generic) {
         *theFptr = jlapplygeneric_func;
-        //*theFptr = literal_pointer_val((void*)f->fptr, jl_fptr_llvmt);
-        *theEnv = literal_pointer_val(f->env);
+        *theF = literal_pointer_val(f);
         if (ctx->linfo->specTypes != NULL) {
             jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
@@ -467,10 +466,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (f != NULL) {
                     assert(f->linfo->functionObject != NULL);
                     *theFptr = (Value*)f->linfo->functionObject;
-                    if (f->fptr == &jl_trampoline)
-                        *theEnv = literal_pointer_val(jl_t1(f->env));
-                    else
-                        *theEnv = literal_pointer_val(f->env);
+                    *theF = literal_pointer_val(f);
                 }
             }
         }
@@ -833,7 +829,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
                         jl_value_t *expr)
 {
     size_t nargs = arglen-1;
-    Value *theFptr=NULL, *theEnv=NULL;
+    Value *theFptr=NULL, *theF=NULL;
     jl_binding_t *b=NULL;
     jl_value_t *a0 = args[0];
     jl_value_t *a00 = args[0];
@@ -865,7 +861,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         f = a0;
     }
     if (f != NULL) {
-        Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theEnv,
+        Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theF,
                                         expr);
         if (result != NULL) return result;
     }
@@ -895,7 +891,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             // TODO: try extractelement instead
             theFptr =
                 builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
-            theEnv = emit_nthptr(theFunc, 2);
+            theF = theFunc;
         }
     }
     // emit arguments
@@ -916,7 +912,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     else {
         myargs = Constant::getNullValue(jl_ppvalue_llvmt);
     }
-    Value *result = builder.CreateCall3(theFptr, theEnv, myargs,
+    Value *result = builder.CreateCall3(theFptr, theF, myargs,
                                         ConstantInt::get(T_int32,nargs));
 
     ctx->argDepth = last_depth;
@@ -1352,7 +1348,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     jl_array_t *largs = jl_lam_args(ast);
     jl_array_t *lvars = jl_lam_locals(ast);
     Function::arg_iterator AI = f->arg_begin();
-    const Argument &envArg = *AI++;
+    const Argument &fArg = *AI++;
     const Argument &argArray = *AI++;
     const Argument &argCount = *AI++;
     jl_codectx_t ctx;
@@ -1370,7 +1366,6 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.ast = ast;
     ctx.sp = sparams;
     ctx.linfo = lam;
-    ctx.envArg = &envArg;
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
     ctx.funcName = lam->name->name;
@@ -1469,6 +1464,11 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         else {
             n_roots++;
         }
+    }
+
+    // fetch env out of function object if we need it
+    if (vinfos->length > 0) {
+        ctx.envArg = emit_nthptr((Value*)&fArg, 2);
     }
 
     int32_t argdepth=0, vsp=0;
