@@ -178,6 +178,25 @@ end
 
 diff(a::Matrix) = diff(a, 1)
 
+gradient(F::Vector) = gradient(F, [1:length(F)])
+gradient(F::Vector, h::Real) = gradient(F, [h*(1:length(F))])
+function gradient(F::Vector, h::Vector)
+    n = length(F)
+    g = similar(F)
+    if n > 0
+        g[1] = 0
+    end
+    if n > 1
+        g[1] = (F[2] - F[1]) / (h[2] - h[1])
+        g[n] = (F[n] - F[n-1]) / (h[end] - h[end-1])
+    end
+    if n > 2
+        h = h[3:n] - h[1:n-2]
+        g[2:n-1] = (F[3:n] - F[1:n-2]) ./ h
+    end
+    return g
+end
+
 diag(A::Vector) = error("Perhaps you meant to use diagm().")
 diag(A::Matrix) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
 
