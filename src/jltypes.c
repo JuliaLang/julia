@@ -987,9 +987,13 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     v = S;
                 }
                 else {
-                    v = (jl_value_t*)
-                        jl_new_typevar(underscore_sym,
-                                       (jl_value_t*)jl_bottom_type, S);
+                    assert(jl_is_typevar(T));
+                    v = meet(S, T);
+                    if (!jl_is_typevar(v)) {
+                        v = (jl_value_t*)
+                            jl_new_typevar(underscore_sym,
+                                           (jl_value_t*)jl_bottom_type, v);
+                    }
                     ((jl_tvar_t*)v)->bound = 1; // ???
                 }
                 extend(T, v, soln);
