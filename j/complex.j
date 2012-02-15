@@ -297,6 +297,9 @@ function log(z::Complex)
     complex(re, atan2(imag(z), real(z)))
 end
 
+log10(z::Complex) = log(z)/2.302585092994046
+log2(z::Complex) = log(z)/0.6931471805599453
+
 function exp(z::Complex)
     er = exp(real(z))
     complex(er*cos(imag(z)), er*sin(imag(z)))
