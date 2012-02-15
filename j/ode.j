@@ -30,8 +30,8 @@
 
 function ode23(F::Function, tspan::Vector, y_0)
 
-    rtol = 1.e-3
-    atol = 1.e-6
+    rtol = 1.e-5
+    atol = 1.e-8
 
     t0 = tspan[1]
     tfinal = tspan[2]
@@ -170,7 +170,7 @@ end # ode23
 
 # Dormand Prince
 function ode45_dp(F, tspan, x0)
-    tol = 1.0e-3
+    tol = 1.0e-5
     
     # see p.91 in the Ascher & Petzold reference for more infomation.
     pow = 1/6; 
@@ -273,7 +273,7 @@ end # ode45_dp
 
 # Fehlberg
 function ode45_fb(F, tspan, x0)
-    tol = 1.0e-3
+    tol = 1.0e-5
 
     # see p.91 in the Ascher & Petzold reference for more infomation.
     pow = 1/6; 

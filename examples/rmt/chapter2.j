@@ -4,7 +4,9 @@ function patiencesort(p)
     for i = 1:length(p)
         idx = 1+sum(p[i]>piles)
         if idx > length(piles)
-            grow(piles, idx-length(piles))
+            d = idx-length(piles)
+            grow(piles, d)
+            piles[end-d+1:end] = 0
         end
         piles[idx] = p[i]
     end
@@ -28,4 +30,17 @@ function unitarylis()
         c = c + int(patiencesort(nthperm([1:n],i))<=k)
     end
     return [z c]
+end
+
+# code 2.7
+function tracywidomlis()
+    t = 10000
+    n = 6^5
+    dx = 1/6
+    v = zeros(t)
+    for i=1:t
+        v[i] = patiencesort(randperm(n))
+    end
+    w = (v-2sqrt(n))/n^(1/6)
+    return hist(w, 42)/(t*dx)
 end
