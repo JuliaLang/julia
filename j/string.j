@@ -960,7 +960,7 @@ function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8},
               (Ptr{Uint8}, Int32, Uint),
-              p, int32(b), uint(length(a)))
+              p, b, length(a))
     q == C_NULL ? 0 : q - p + 1
 end
 
@@ -980,7 +980,7 @@ function memcat(arrays::Array{Uint8,1}...)
     for a in arrays
         ccall(:memcpy, Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(a), uint(length(a)))
+              ptr + offset, pointer(a), length(a))
         offset += length(a)
     end
     return arr
@@ -1001,7 +1001,7 @@ function memcat(strs::ByteString...)
     for s in strs
         ccall(:memcpy, Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(s.data), uint(length(s)))
+              ptr + offset, s.data, length(s))
         offset += length(s)
     end
     data

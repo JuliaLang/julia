@@ -123,7 +123,7 @@ function wait(pid::Int32)
     while true
         ret = ccall(:waitpid, Int32,
                     (Int32, Ptr{Int32}, Int32),
-                    pid, status, int32(0))
+                    pid, status, 0)
         if ret != -1
             break
         end

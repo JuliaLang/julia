@@ -3,7 +3,7 @@
 symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{Uint8,1}) =
-    ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, int32(length(a)))::Symbol
+    ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 gensym(n::Integer) = ntuple(n, i->gensym())

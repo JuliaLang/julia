@@ -54,13 +54,13 @@ end
 function srand(seed::Uint32)
     global RANDOM_SEED = seed
     ccall(dlsym(_jl_librandom, :dsfmt_gv_init_gen_rand),
-          Void, (Uint32,), uint32(seed))
+          Void, (Uint32,), seed)
 end
 
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
     ccall(dlsym(_jl_librandom, :dsfmt_gv_init_by_array),
-          Void, (Ptr{Uint32}, Int32), seed, int32(length(seed)))
+          Void, (Ptr{Uint32}, Int32), seed, length(seed))
 end
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
@@ -90,7 +90,7 @@ function rand!(A::Array{Float64})
         end
     else
         ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_close_open),
-              Void, (Ptr{Void}, Int32), A, int32(n & 0xfffffffe))
+              Void, (Ptr{Void}, Int32), A, n & 0xfffffffe)
         if isodd(n)
             A[n] = rand()
         end
@@ -182,7 +182,7 @@ _jl_randn_zig_init() =
 
 function randn!(A::Array{Float64})
     ccall(dlsym(_jl_librandom, :randmtzig_fill_randn),
-          Void, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
+          Void, (Ptr{Float64}, Uint32), A, numel(A))
     return A
 end
 
@@ -194,7 +194,7 @@ randn(dims::Int...) = randn(dims)
 
 function randexp!(A::Array{Float64})
     ccall(dlsym(_jl_librandom, :randmtzig_fill_exprnd),
-          Void, (Ptr{Float64}, Uint32), A, uint32(numel(A)))
+          Void, (Ptr{Float64}, Uint32), A, numel(A))
     return A
 end
 

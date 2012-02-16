@@ -300,10 +300,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             // first 3 arguments are static
                             for(i=4; i < (size_t)alen; i++) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
-                                (*sp)++;
-                                if (*sp > *max) *max = *sp;
                             }
-                            (*sp) = lastsp;
                             return;
                         }
                     }
@@ -449,7 +446,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     jl_function_t *f = (jl_function_t*)ff;
     if (f->fptr == &jl_apply_generic) {
         *theFptr = jlapplygeneric_func;
-        *theF = literal_pointer_val(f);
+        *theF = literal_pointer_val((jl_value_t*)f);
         if (ctx->linfo->specTypes != NULL) {
             jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
@@ -466,7 +463,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (f != NULL) {
                     assert(f->linfo->functionObject != NULL);
                     *theFptr = (Value*)f->linfo->functionObject;
-                    *theF = literal_pointer_val(f);
+                    *theF = literal_pointer_val((jl_value_t*)f);
                 }
             }
         }

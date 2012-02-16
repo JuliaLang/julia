@@ -50,7 +50,7 @@ function pcre_info{T}(
     buf = Array(Uint8,sizeof(T))
     ret = ccall(dlsym(_jl_libpcre, :pcre_fullinfo), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
-                regex, extra, int32(what), buf)
+                regex, extra, what, buf)
     if ret != 0
         error("pcre_info: ",
               ret == PCRE_ERROR_NULL      ? "NULL regex object" :
@@ -66,7 +66,7 @@ function pcre_compile(pattern::String, options::Integer)
     erroff = Array(Int32,1)
     re_ptr = (()->ccall(dlsym(_jl_libpcre, :pcre_compile), Ptr{Void},
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                        cstring(pattern), int32(options), errstr, erroff, C_NULL))()
+                        cstring(pattern), options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
         error("pcre_compile: $(errstr[1])",
               " at position $(erroff[1]+1)",
@@ -74,7 +74,7 @@ function pcre_compile(pattern::String, options::Integer)
     end
     size = pcre_info(re_ptr, C_NULL, PCRE_INFO_SIZE, Int32)
     regex = Array(Uint8,size)
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), regex, re_ptr, uint(size))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), regex, re_ptr, size)
     regex
 end
 
@@ -83,7 +83,7 @@ function pcre_study(regex::Array{Uint8}, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     extra = (()->ccall(dlsym(_jl_libpcre, :pcre_study), Ptr{Void},
                        (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
-                       regex, int32(options), errstr))()
+                       regex, options, errstr))()
     if errstr[1] != C_NULL
         error("pcre_study: $(errstr[1])")
     end
@@ -98,8 +98,8 @@ function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
     n = ccall(dlsym(_jl_libpcre, :pcre_exec), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
-              regex, extra, str, int32(length(str)),
-              int32(offset-1), int32(options), ovec, int32(length(ovec)))
+              regex, extra, str, length(str),
+              offset-1, options, ovec, length(ovec))
     if n < -1
         error("pcre_exec: error $n")
     end

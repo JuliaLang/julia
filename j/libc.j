@@ -6,7 +6,7 @@ sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)
     tmstruct = Array(Int32, 14)
-    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Int32}), int(t), tmstruct)
+    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Int32}), &int(t), tmstruct)
     timestr = Array(Uint8, 128)
     n = ccall(:strftime, Int, (Ptr{Uint8}, Int, Ptr{Uint8}, Ptr{Int32}),
               timestr, length(timestr), fmt, tmstruct)
@@ -36,15 +36,13 @@ system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cstring(cmd))
 
 function gethostname()
     hn = Array(Uint8, 128)
-    ccall(:gethostname, Int32, (Ptr{Uint8}, Uint),
-          hn, uint(length(hn)))
+    ccall(:gethostname, Int32, (Ptr{Uint8}, Uint), hn, length(hn))
     cstring(convert(Ptr{Uint8},hn))
 end
 
 function getipaddr()
     ip = Array(Uint8, 128)
-    ccall(:getlocalip, Void, (Ptr{Uint8}, Uint),
-          ip, uint(length(ip)))
+    ccall(:getlocalip, Void, (Ptr{Uint8}, Uint), ip, length(ip))
     cstring(convert(Ptr{Uint8},ip))
 end
 
@@ -52,8 +50,7 @@ end
 
 function getcwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint),
-              b, uint(length(b)))
+    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     if p == C_NULL
         error("path too long")
     end
@@ -69,4 +66,4 @@ end
 
 ## Memory related ##
 
-_jl_free(p::Ptr{Void}) = ccall(:free, Void, (Ptr{Void},), p)
+_c_free(p::Ptr{Void}) = ccall(:free, Void, (Ptr{Void},), p)

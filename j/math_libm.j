@@ -91,8 +91,8 @@ fpart(x) = x - trunc(x)
 #abs(x::Float32) = ccall(dlsym(_jl_libfdm, :fabsf), Float32, (Float32,), x)
 #@vectorize_1arg Number abs
 
-lgamma(x::Float64) = ccall(dlsym(_jl_libamos,:dgamln_),Float64,(Ptr{Float64},Ptr{Int32}),x,int32(0))
-lgamma(x::Float32) = ccall(dlsym(_jl_libamos,:gamln_),Float32,(Ptr{Float32},Ptr{Int32}),x,int32(0))
+lgamma(x::Float64) = ccall(dlsym(_jl_libamos,:dgamln_),Float64,(Ptr{Float64},Ptr{Int32}),&x,&int32(0))
+lgamma(x::Float32) = ccall(dlsym(_jl_libamos,:gamln_),Float32,(Ptr{Float32},Ptr{Int32}),&x,&int32(0))
 lgamma(x::Real) = lgamma(float(x))
 @vectorize_1arg Number lgamma
 
@@ -164,8 +164,8 @@ function airy(k::Int, z::Complex128)
         ccall(dlsym(_jl_libamos, :zairy_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z),
-              id, int32(1),
+              &real(z), &imag(z),
+              &id, &int32(1),
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
@@ -173,8 +173,8 @@ function airy(k::Int, z::Complex128)
         ccall(dlsym(_jl_libamos, :zbiry_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z),
-              id, int32(1),
+              &real(z), &imag(z),
+              &id, &int32(1),
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])

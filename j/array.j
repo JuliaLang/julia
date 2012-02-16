@@ -19,7 +19,7 @@ numel(a::Array) = arraylen(a)
 ## copy ##
 
 copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
 
 function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
     if so+N-1 > numel(src) || do+N-1 > numel(dest) || do < 1 || so < 1
@@ -40,7 +40,7 @@ copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
     ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
-          b, a, uint(length(b)*sizeof(T)))
+          b, a, length(b)*sizeof(T))
     return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
@@ -81,12 +81,12 @@ ref{T}(::Type{T}) = Array(T,0)
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
-    ccall(:memset, Void, (Ptr{T}, Int32, Int), a, int32(x), int(length(a)))
+    ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
     return a
 end
 function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     if convert(T,x) == 0
-        ccall(:bzero, Void, (Ptr{T}, Int), a, int(length(a)*sizeof(T)))
+        ccall(:bzero, Void, (Ptr{T}, Int), a, length(a)*sizeof(T))
     else
         for i = 1:numel(a)
             a[i] = x
@@ -417,13 +417,13 @@ function push{T}(a::Array{T,1}, item)
     end
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
     a[end] = item
     return a
 end
 
 function push(a::Array{Any,1}, item::ANY)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
     a[end] = item
     return a
 end
@@ -433,13 +433,13 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
     n = length(items)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     a[end-n+1:end] = items
     return a
 end
 
 function grow(a::Vector, n::Integer)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(n))
+    ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     return a
 end
 
@@ -448,7 +448,7 @@ function pop(a::Vector)
         error("pop: array is empty")
     end
     item = a[end]
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
     return item
 end
 
@@ -457,7 +457,7 @@ function enqueue{T}(a::Array{T,1}, item)
         error("[] cannot grow. Instead, initialize the array with \"T[]\".")
     end
     item = convert(T, item)
-    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, uint(1))
+    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
     a[1] = item
     return a
 end
@@ -468,7 +468,7 @@ function shift(a::Vector)
         error("shift: array is empty")
     end
     item = a[1]
-    ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(1))
+    ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
     return item
 end
 
@@ -479,14 +479,14 @@ function insert{T}(a::Array{T,1}, i::Integer, item)
     item = convert(T, item)
     n = length(a)
     if i > n
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(i-n))
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, i-n)
     elseif i > div(n,2)
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, uint(1))
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
         for k=n+1:-1:i+1
             a[k] = a[k-1]
         end
     else
-        ccall(:jl_array_grow_beg, Void, (Any, Uint), a, uint(1))
+        ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
         for k=1:(i-1)
             a[k] = a[k+1]
         end
@@ -503,12 +503,12 @@ function del(a::Vector, i::Integer)
         for k = i:-1:2
             a[k] = a[k-1]
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(1))
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
     else
         for k = i:n-1
             a[k] = a[k+1]
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(1))
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
     end
     return a
 end
@@ -528,18 +528,18 @@ function del{T<:Integer}(a::Vector, r::Range1{T})
         for k = l:-1:1+d
             a[k] = a[k-d]
         end
-        ccall(:jl_array_del_beg, Void, (Any, Uint), a, uint(d))
+        ccall(:jl_array_del_beg, Void, (Any, Uint), a, d)
     else
         for k = f:n-d
             a[k] = a[k+d]
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(d))
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, d)
     end
     return a
 end
 
 function del_all(a::Vector)
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, uint(length(a)))
+    ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
     return a
 end
 

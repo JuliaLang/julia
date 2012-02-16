@@ -58,10 +58,6 @@ static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
 // warning: cannot allocate memory except using alloc_temp_arg_space
 extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 {
-    // this is a custom version of convert_to_ptr that is able to use
-    // the temporary argument space.
-    if (jl_is_cpointer(v))
-        return (void*)jl_unbox_long(v);
     if ((jl_value_t*)jl_typeof(v) == jt) {
         assert(jl_is_bits_type(jt));
         size_t osz = jl_bitstype_nbits(jt)/8;
@@ -104,43 +100,39 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
 }
 
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
-                              jl_value_t *argex, int argn, jl_codectx_t *ctx)
+                              jl_value_t *argex, bool addressOf,
+                              int argn, jl_codectx_t *ctx)
 {
     Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv);
     }
-    else if (ty == vt) {
+    else if (ty == vt && !addressOf) {
         return jv;
     }
     else if (vt != jl_pvalue_llvmt) {
-        if ((vt->isIntegerTy() && ty->isIntegerTy()) ||
-            (vt->isFloatingPointTy() && ty->isFloatingPointTy()) ||
-            (vt->isPointerTy() && ty->isPointerTy())) {
+        // argument value is unboxed
+        if (addressOf) {
+            if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
+                // pass the address of an alloca'd thing, not a box
+                // since those are immutable.
+                Value *slot = builder.CreateAlloca(vt);
+                builder.CreateStore(jv, slot);
+                return builder.CreateBitCast(slot, ty);
+            }
+        }
+        else if ((vt->isIntegerTy() && ty->isIntegerTy()) ||
+                 (vt->isFloatingPointTy() && ty->isFloatingPointTy()) ||
+                 (vt->isPointerTy() && ty->isPointerTy())) {
             if (vt->getPrimitiveSizeInBits() ==
                 ty->getPrimitiveSizeInBits()) {
                 return builder.CreateBitCast(jv, ty);
             }
         }
-        if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
-            // we have an unboxed variable x, and need to pass &x
-            // pass the address of an alloca'd thing, not a box
-            // since that might be reused (box cache)
-            Value *slot = builder.CreateAlloca(vt);
-            builder.CreateStore(jv, slot);
-            return builder.CreateBitCast(slot, ty);
-        }
-        else {
-            // error. box for error handling.
-            jv = boxed(jv);
-        }
-        /*
-        else {
-            assert(false && "Unsupported native type.");
-        }
-        */
+        // error. box for error handling.
+        jv = boxed(jv);
     }
-    else if (jl_is_cpointer_type(jt)) {
+    else if (jl_is_cpointer_type(jt) && addressOf) {
         jl_value_t *aty = expr_type(argex, ctx);
         if (jl_is_array_type(aty) &&
             (jl_tparam0(jt) == jl_tparam0(aty) ||
@@ -154,6 +146,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         assert(ty->isPointerTy());
         return builder.CreateBitCast(p, ty);
     }
+    // TODO: error for & with non-pointer argument type
     assert(jl_is_bits_type(jt));
     std::stringstream msg;
     msg << "ccall argument ";
@@ -219,6 +212,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);
         }
+        // TODO: only haspointers for & arguments
         haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
         if (!isVa)
@@ -259,7 +253,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     int last_depth = ctx->argDepth;
     int nargty = tt->length;
     for(i=4; i < nargs+1; i++) {
-        Value *arg = emit_expr(args[i], ctx, true);
+        jl_value_t *argi = args[i];
+        bool addressOf = false;
+        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
+            addressOf = true;
+            argi = jl_exprarg(argi,0);
+        }
+        Value *arg = emit_expr(argi, ctx, true);
         Type *largty;
         jl_value_t *jargty;
         if (isVa && (int)(i-4) >= nargty-1) {
@@ -270,6 +270,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             largty = fargt[i-4];
             jargty = jl_tupleref(tt,i-4);
         }
+        /*
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
         if (largty->isPointerTy() &&
@@ -278,7 +279,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             make_gcroot(boxed(arg), ctx);
         }
 #endif
-        argvals[i-4] = julia_to_native(largty,jargty,arg,args[i],i-3,ctx);
+        */
+        argvals[i-4] = julia_to_native(largty, jargty, arg, argi, addressOf,
+                                       i-3, ctx);
     }
     // the actual call
     Value *result = builder.CreateCall(llvmf,

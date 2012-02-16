@@ -679,7 +679,7 @@ function _jl_ini_dec(x::Float, n::Int)
         _jl_point[1] = 1
         _jl_neg[1] = signbit(x)
         ccall(:memset, Void, (Ptr{Uint8}, Int32, Int),
-              pointer(_jl_digits), int32('0'), n)
+              _jl_digits, int32('0'), n)
     else
         @grisu_ccall x GRISU_PRECISION n
     end

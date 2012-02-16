@@ -99,13 +99,13 @@ start(s::IntSet) = int64(0)
 done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
 function next(s::IntSet, i)
     n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64),
-              s.bits, uint64(i), uint64(s.limit))
+              s.bits, i, s.limit)
     (n, n+1)
 end
 
 isempty(s::IntSet) =
     ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64),
-          s.bits, uint64(0), uint64(s.limit))==0
+          s.bits, 0, s.limit)==0
 
 function choose(s::IntSet)
     n = next(s,0)[1]
@@ -123,7 +123,7 @@ end
 
 numel(s::IntSet) =
     int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
-              s.bits, uint64(0), uint64(s.limit)))
+              s.bits, 0, s.limit))
 
 function show(s::IntSet)
     print("intset(")

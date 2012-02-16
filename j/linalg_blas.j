@@ -7,7 +7,7 @@ macro _jl_blas_copy_macro(fname, eltype)
             ccall(dlsym(_jl_libblas, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(n), DX, int32(incx), DY, int32(incy))
+                  &int32(n), DX, &int32(incx), DY, &int32(incy))
             return DY
         end
     end
@@ -25,7 +25,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, s
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
     return dest
 end
@@ -35,7 +35,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T},
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
     return dest
 end
@@ -48,7 +48,7 @@ macro _jl_blas_dot_macro(fname, eltype)
             ccall(dlsym(_jl_libblas, $fname),
                   $eltype,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(n), DX, int32(incx), DY, int32(incy))
+                  &int32(n), DX, &int32(incx), DY, &int32(incy))
         end
     end
 end
@@ -72,7 +72,7 @@ macro _jl_blas_nrm2_macro(fname, eltype, ret_type)
             ccall(dlsym(_jl_libblas, $fname),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(n), X, int32(incx))
+                  &int32(n), X, &int32(incx))
         end
     end
 end
@@ -99,7 +99,7 @@ macro _jl_blas_axpy_macro(fname, eltype)
             ccall(dlsym(_jl_libblas, $fname),
                   Void,
                   (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(n), x, DA, int32(incx), DY, int32(incy))            
+                  &int32(n), x, DA, &int32(incx), DY, &int32(incy))            
         end
     end
 end
@@ -124,19 +124,16 @@ macro _jl_blas_gemm_macro(fname, eltype)
                              alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
                              B::StridedMatrix{$eltype}, ldb::Integer,
                              beta::($eltype), C::StridedMatrix{$eltype}, ldc::Integer)
-           a = pointer(A)
-           b = pointer(B)
-           c = pointer(C)
            ccall(dlsym(_jl_libblas, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-                 uint8(transA), uint8(transB), int32(m), int32(n), int32(k),
-                 alpha, a, int32(lda),
-                 b, int32(ldb),
-                 beta, c, int32(ldc))
+                 &uint8(transA), &uint8(transB), &int32(m), &int32(n), &int32(k),
+                 &alpha, A, &int32(lda),
+                 B, &int32(ldb),
+                 &beta, C, &int32(ldc))
        end
 
    end
@@ -240,19 +237,16 @@ macro _jl_blas_gemv_macro(fname, eltype)
                              alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
                              X::StridedVector{$eltype}, incx::Integer,
                              beta::($eltype), Y::StridedVector{$eltype}, incy::Integer)
-           a = pointer(A)
-           x = pointer(X)
-           y = pointer(Y)
            ccall(dlsym(_jl_libblas, $fname),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{Int32},
                   Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
-                 trans, int32(m), int32(n),
-                 alpha, a, int32(lda),
-                 x, int32(incx),
-                 beta, y, int32(incy))
+                 trans, &int32(m), &int32(n),
+                 &alpha, A, &int32(lda),
+                 X, &int32(incx),
+                 &beta, Y, &int32(incy))
        end
 
    end

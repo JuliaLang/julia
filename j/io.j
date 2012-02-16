@@ -27,7 +27,7 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 function fdio(fd::Integer, own::Bool)
     s = IOStream()
     ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
-          s.ios, int(fd), int32(0), int32(own));
+          s.ios, fd, 0, own);
     return s
 end
 fdio(fd::Integer) = fdio(fd, false)
@@ -36,8 +36,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream()
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-             s.ios, cstring(fname),
-             int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
+             s.ios, cstring(fname), rd, wr, cr, tr) == C_NULL
         error("could not open file ", fname)
     end
     if ff && ccall(:ios_seek_end, Uint, (Ptr{Void},), s.ios) != 0
@@ -59,7 +58,7 @@ end
 
 function memio(x::Integer, finalize::Bool)
     s = IOStream(finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, uint(x))
+    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
     s
 end
 memio(x::Integer) = memio(x, true)
@@ -166,7 +165,7 @@ end
 ## low-level calls ##
 
 write(s::IOStream, b::Uint8) =
-    ccall(:ios_putc, Int32, (Int32, Ptr{Void}), int32(b), s.ios)
+    ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
 
 write(s::IOStream, c::Char) =
     ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
@@ -175,7 +174,7 @@ function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         ccall(:ios_write, Uint,
               (Ptr{Void}, Ptr{Void}, Uint),
-              s.ios, a, uint(numel(a)*sizeof(T)))
+              s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
     end
@@ -183,8 +182,7 @@ end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
     ccall(:ios_write, Uint,
-          (Ptr{Void}, Ptr{Void}, Uint),
-          s.ios, p, uint(nb))
+          (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
 function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
@@ -219,7 +217,7 @@ function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
-                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, uint(nb)) < nb
+                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
             throw(EOFError())
         end
         a
@@ -246,14 +244,14 @@ readline(s::IOStream) = readuntil(s, uint8('\n'))
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
-    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, uint(n))
+    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, n)
 
 seek(s::IOStream, n::Integer) =
-    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, int(n))==0 ||
+    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, n)==0 ||
      error("seek failed"))
 
 skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, int(delta))==0 ||
+    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, delta)==0 ||
      error("skip failed"))
 
 position(s::IOStream) = ccall(:ios_pos, Int, (Ptr{Void},), s.ios)
@@ -285,7 +283,7 @@ function add(s::FDSet, i::Integer)
     if !(0 <= i < sizeof_fd_set*8)
         error("invalid descriptor ", i)
     end
-    ccall(:jl_fd_set, Void, (Ptr{Void}, Int32), s.data, int32(i))
+    ccall(:jl_fd_set, Void, (Ptr{Void}, Int32), s.data, i)
     if i >= s.nfds
         s.nfds = i+1
     end
@@ -295,14 +293,14 @@ end
 function has(s::FDSet, i::Integer)
     if 0 <= i < sizeof_fd_set*8
         return ccall(:jl_fd_isset, Int32,
-                     (Ptr{Void}, Int32), s.data, int32(i))!=0
+                     (Ptr{Void}, Int32), s.data, i)!=0
     end
     return false
 end
 
 function del(s::FDSet, i::Integer)
     if 0 <= i < sizeof_fd_set*8
-        ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, int32(i))
+        ccall(:jl_fd_clr, Void, (Ptr{Void}, Int32), s.data, i)
         if i == s.nfds-1
             s.nfds -= 1
             while s.nfds>0 && !has(s, s.nfds-1)
@@ -327,7 +325,7 @@ begin
             tout = C_NULL
         else
             ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64),
-                  tv, float64(timeout))
+                  tv, timeout)
             tout = convert(Ptr{Void}, tv)
         end
         ccall(:select, Int32,

@@ -13,7 +13,7 @@ end
 
 function setenv(var::String, val::String, overwrite::Bool)
     ret = ccall(:setenv, Int32, (Ptr{Uint8}, Ptr{Uint8}, Int32),
-                cstring(var), cstring(val), int32(overwrite))
+                cstring(var), cstring(val), overwrite)
     system_error(:setenv, ret != 0)
 end
 
@@ -51,9 +51,9 @@ del(::EnvHash, k::String) = unsetenv(k)
 assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
 
 start(::EnvHash) = 0
-done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), int32(i)) == nothing)
+done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
 function next(::EnvHash, i)
-    env = ccall(:jl_environ, Any, (Int32,), int32(i))
+    env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
         error("environ: index out of range")
     end

@@ -14,8 +14,8 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv), 
+                  iparam, ipntr, workd, workl, &int32(lworkl), info)
         end
 
         #  call dnaupd
@@ -29,8 +29,8 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv), 
+                  iparam, ipntr, workd, workl, &int32(lworkl), info)
         end
 
         #  call znaupd
@@ -44,8 +44,8 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32},
                    Ptr{Int32}, Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  ido, bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv), 
+                  iparam, ipntr, workd, workl, &int32(lworkl), rwork, info)
         end
 
     end
@@ -69,9 +69,9 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, 
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, d, v, &int32(ldv), sigma, 
+                  bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv),
+                  iparam, ipntr, workd, workl, &int32(lworkl), info)
         end
 
         #  call dneupd  
@@ -88,9 +88,9 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, dr, di, v, int32(ldv), sigmar, sigmai, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, dr, di, v, &int32(ldv), sigmar, sigmai, workev,
+                  bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv),
+                  iparam, ipntr, workd, workl, &int32(lworkl), info)
         end
 
         #  call zneupd 
@@ -106,9 +106,9 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{$Tc}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  &rvec, all, select, d, v, &int32(ldv), sigma, workev,
+                  bmat, &int32(n), which, &int32(nev), tol, resid, &int32(ncv), v, &int32(ldv),
+                  iparam, ipntr, workd, workl, &int32(lworkl), rwork, info)
         end
 
     end

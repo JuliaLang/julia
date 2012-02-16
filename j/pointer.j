@@ -18,6 +18,7 @@ convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any
 convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 convert(::Type{Ptr{Void}}, a::Array{None}) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = convert(Ptr{T}, convert(Ptr{Void}, a))
+convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
 
 pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
 # note: these definitions don't mean any AbstractArray is convertible to

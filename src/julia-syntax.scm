@@ -58,6 +58,10 @@
 (define (decl-type v)
   (if (decl? v) (caddr v) 'Any))
 
+(define (sym-dot? e)
+  (and (length= e 3) (eq? (car e) '|.|)
+       (symbol? (cadr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -67,11 +71,15 @@
     (if (not (pair? e))
 	(cons e '())
 	(cons (map (lambda (x)
-		     (if (and (pair? x) (not (quoted? x)))
+		     (if (and (pair? x) (not (quoted? x))
+			      (not (sym-dot? x)))
 			 (let ((g (gensy)))
-			   (if (eq? (car x) '...)
-			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
-				      `(... ,g))
+			   (if (or (eq? (car x) '...) (eq? (car x) '&))
+			       (if (and (pair? (cadr x))
+					(not (quoted? (cadr x))))
+				   (begin (set! a (cons `(= ,g ,(cadr x)) a))
+					  `(,(car x) ,g))
+				   x)
 			       (begin (set! a (cons `(= ,g ,x) a))
 				      g)))
 			 x))
@@ -417,6 +425,30 @@
 				   (-/ |<:|) super)
 		       (values name params super)) ex)
       (error "invalid type signature")))
+
+;; insert calls to convert() in ccall, and pull out expressions that might
+;; need to be rooted before conversion.
+(define (lower-ccall name RT atypes args)
+  (define (ccall-conversion T x)
+    (if (and (pair? x) (eq? (car x) '&))
+	x
+	`(call (top convert) ,T ,x)))
+  (let* ((ee (remove-argument-side-effects args))
+	 (el (car ee))
+	 (stmts (cdr ee)))
+    (let loop ((F atypes) ;; formals
+	       (A el)     ;; actuals
+	       (C '()))   ;; converted
+      (if (or (null? F) (null? A))
+	  `(block
+	    ,@stmts
+	    (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
+		  ,@A))
+	  (if (and (pair? (car F)) (eq? (caar F) '...))
+	      (loop F (cdr A)
+		    (cons (ccall-conversion (cadar F) (car A)) C))
+	      (loop (cdr F) (cdr A)
+		    (cons (ccall-conversion (car F)   (car A)) C)))))))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
@@ -924,9 +956,7 @@
 		   `(call aTbT ,a ,b))
 
    (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   `(call (top ccall) ,name ,RT ,(cadddr __)
-			  ,@args)
-		   )
+		   (lower-ccall name RT argtypes args))
 
    )) ; patterns
 

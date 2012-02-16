@@ -15,7 +15,7 @@ macro _jl_lapack_potrf_macro(potrf, eltype)
             ccall(dlsym(_jl_liblapack, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, int32(n), a, int32(lda), info)
+                  uplo, &int32(n), a, &int32(lda), info)
             return info[1]
         end
 
@@ -71,7 +71,7 @@ macro _jl_lapack_getrf_macro(getrf, eltype)
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), a, int32(lda), ipiv, info)
+                  &int32(m), &int32(n), a, &int32(lda), ipiv, info)
             return info[1]
         end
 
@@ -132,7 +132,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), a, int32(lda), jpvt, tau, work, int32(lwork), info)
+                  &int32(m), &int32(n), a, &int32(lda), jpvt, tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -150,7 +150,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  int32(m), int32(n), a, int32(lda), jpvt, tau, work, int32(lwork), rwork, info)
+                  &int32(m), &int32(n), a, &int32(lda), jpvt, tau, work, &int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -166,7 +166,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), int32(k), a, int32(lda), tau, work, int32(lwork), info)
+                  &int32(m), &int32(n), &int32(k), a, &int32(lda), tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -182,7 +182,7 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(m), int32(n), int32(k), a, int32(lda), tau, work, int32(lwork), info)
+                  &int32(m), &int32(n), &int32(k), a, &int32(lda), tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -266,7 +266,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobz, uplo, int32(n), A, int32(lda), W, work, int32(lwork), info)
+                  jobz, uplo, &int32(n), A, &int32(lda), W, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -283,7 +283,7 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  jobz, uplo, int32(n), A, int32(lda), W, work, int32(lwork), rwork, info)
+                  jobz, uplo, &int32(n), A, &int32(lda), W, work, &int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -303,8 +303,8 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, 
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobvl, jobvr, int32(n), A, int32(lda), WR, WI, VL, int32(ldvl),
-                  VR, int32(ldvr), work, int32(lwork), info)
+                  jobvl, jobvr, &int32(n), A, &int32(lda), WR, WI, VL, &int32(ldvl),
+                  VR, &int32(ldvr), work, &int32(lwork), info)
             return info[1]
         end
 
@@ -325,8 +325,8 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, eltype, celtype)
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, 
                    Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  jobvl, jobvr, int32(n), A, int32(lda), W, VL, int32(ldvl), 
-                  VR, int32(ldvr), work, int32(lwork), rwork, info)
+                  jobvl, jobvr, &int32(n), A, &int32(lda), W, VL, &int32(ldvl), 
+                  VR, &int32(ldvr), work, &int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -442,8 +442,8 @@ function trideig(d::Vector{Float64}, e::Vector{Float64})
           (Ptr{Uint8},Ptr{Int32},Ptr{Float64},
            Ptr{Float64},Ptr{Float64},Ptr{Int32},
            Ptr{Float64},Ptr{Int32}),
-          "N", int32(numel(d)), dcopy, ecopy,
-          [0.0], int32(numel(d)), [0.0], [int32(0)])
+          "N", &int32(numel(d)), dcopy, ecopy,
+          &0.0, &int32(numel(d)), &0.0, &int32(0))
     return dcopy
 end
 
@@ -466,8 +466,8 @@ macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  jobu, jobvt, int32(m), int32(n), A, int32(lda), S, U, int32(ldu), 
-                  VT, int32(ldvt), work, int32(lwork), info)
+                  jobu, jobvt, &int32(m), &int32(n), A, &int32(lda), S, U, &int32(ldu), 
+                  VT, &int32(ldvt), work, &int32(lwork), info)
             return info[1]
         end
 
@@ -488,8 +488,8 @@ macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, eltype, celtype)
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  jobu, jobvt, int32(m), int32(n), A, int32(lda), S, U, int32(ldu), 
-                  VT, int32(ldvt), work, int32(lwork), rwork, info)
+                  jobu, jobvt, &int32(m), &int32(n), A, &int32(lda), S, U, &int32(ldu), 
+                  VT, &int32(ldvt), work, &int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -555,7 +555,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  int32(n), int32(nrhs), a, int32(lda), ipiv, b, int32(ldb), info)
+                  &int32(n), &int32(nrhs), a, &int32(lda), ipiv, b, &int32(ldb), info)
             return info[1]
         end
 
@@ -573,7 +573,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, int32(n), int32(nrhs), a, int32(lda), b, int32(ldb), info)
+                  uplo, &int32(n), &int32(nrhs), a, &int32(lda), b, &int32(ldb), info)
             return info[1]
         end
 
@@ -589,8 +589,8 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  trans, int32(m), int32(n), int32(nrhs), a, int32(lda), 
-                  b, int32(ldb), work, int32(lwork), info)
+                  trans, &int32(m), &int32(n), &int32(nrhs), a, &int32(lda), 
+                  b, &int32(ldb), work, &int32(lwork), info)
             return info[1]
         end
 
@@ -608,7 +608,7 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, trans, diag, int32(n), int32(nrhs), a, int32(lda), b, int32(ldb), info)
+                  uplo, trans, diag, &int32(n), &int32(nrhs), a, &int32(lda), b, &int32(ldb), info)
             return info[1]
         end
 
