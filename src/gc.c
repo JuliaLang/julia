@@ -506,8 +506,12 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(elt);
         }
     }
-    else if (vtt == (jl_value_t*)jl_struct_kind && 
-        ((jl_struct_type_t*)(vt))->name == jl_array_typename) {
+    else if (vtt == (jl_value_t*)jl_func_kind) {
+        jl_function_t *f = (jl_function_t*)v;
+        if (f->env  !=NULL) GC_Markval(f->env);
+        if (f->linfo!=NULL) GC_Markval(f->linfo);
+    }
+    else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         int ndims = jl_array_ndims(a);
         int ndimwords = (ndims > 2 ? (ndims-2) : 0);
@@ -534,25 +538,6 @@ static void gc_markval_(jl_value_t *v)
                 if (elt != NULL) GC_Markval(elt);
             }
         }
-    }
-    else if (vt == (jl_value_t*)jl_struct_kind) {
-        jl_struct_type_t *st = (jl_struct_type_t*)v;
-        if (st->env  !=NULL) GC_Markval(st->env);
-        if (st->linfo!=NULL) GC_Markval(st->linfo);
-        GC_Markval(st->name);
-        GC_Markval(st->super);
-        GC_Markval(st->parameters);
-        GC_Markval(st->names);
-        GC_Markval(st->types);
-        if (st->ctor_factory != NULL)
-            GC_Markval(st->ctor_factory);
-        if (st->instance != NULL)
-            GC_Markval(st->instance);
-    }
-    else if (vtt == (jl_value_t*)jl_func_kind) {
-        jl_function_t *f = (jl_function_t*)v;
-        if (f->env  !=NULL) GC_Markval(f->env);
-        if (f->linfo!=NULL) GC_Markval(f->linfo);
     }
     else if (vt == (jl_value_t*)jl_methtable_type) {
         jl_methtable_t *mt = (jl_methtable_t*)v;
@@ -607,9 +592,9 @@ static void gc_markval_(jl_value_t *v)
         assert(vtt == (jl_value_t*)jl_struct_kind);
         size_t nf = ((jl_struct_type_t*)vt)->names->length;
         size_t i=0;
-        if (vt == (jl_value_t*)jl_bits_kind ||
-            vt == (jl_value_t*)jl_tag_kind) {
-            i = 3;
+        if (vt == (jl_value_t*)jl_bits_kind || vt == (jl_value_t*)jl_tag_kind ||
+            vt == (jl_value_t*)jl_struct_kind) {
+            i++;
             nf += 3;
         }
         for(; i < nf; i++) {

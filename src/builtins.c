@@ -861,21 +861,19 @@ DLLEXPORT void jl_show_any(jl_value_t *v)
 
 JL_CALLABLE(jl_trampoline)
 {
-    jl_function_t *f = (jl_function_t*)jl_t0(env);
-    assert(jl_is_func(f));
-    assert(f->linfo != NULL);
+    assert(jl_is_func(F));
+    assert(((jl_function_t*)F)->linfo != NULL);
     /* // to run inference on all thunks. slows down loading files.
-    if (f->linfo->inferred == jl_false) {
+    if (F->linfo->inferred == jl_false) {
         if (!jl_in_inference) {
-            jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            jl_type_infer(F->linfo, jl_tuple_type, F->linfo);
         }
     }*/
-    jl_compile(f);
-    assert(f->fptr == &jl_trampoline);
-    jl_generate_fptr(f);
-    assert(f->fptr != NULL);
-    f->env = jl_t1(env);
-    return jl_apply(f, args, nargs);
+    jl_compile((jl_function_t*)F);
+    assert(((jl_function_t*)F)->fptr == &jl_trampoline);
+    jl_generate_fptr((jl_function_t*)F);
+    assert(((jl_function_t*)F)->fptr != NULL);
+    return jl_apply((jl_function_t*)F, args, nargs);
 }
 
 DLLEXPORT
@@ -886,14 +884,7 @@ jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
     jl_function_t *f=NULL;
     // note: env is pushed here to make codegen a little easier
     JL_GC_PUSH(&f, &env);
-    if (li->fptr != NULL) {
-        // function has been compiled
-        f = jl_new_closure(li->fptr, env);
-    }
-    else {
-        f = jl_new_closure(jl_trampoline, NULL);
-        f->env = (jl_value_t*)jl_tuple2((jl_value_t*)f, env);
-    }
+    f = jl_new_closure(li->fptr ? li->fptr : jl_trampoline, env);
     f->linfo = li;
     JL_GC_POP();
     return (jl_value_t*)f;
@@ -1170,9 +1161,6 @@ JL_CALLABLE(jl_f_invoke)
 
 DLLEXPORT jl_value_t *jl_closure_env(jl_function_t *f)
 {
-    if (jl_is_tuple(f->env) && ((jl_tuple_t*)f->env)->length==2 &&
-        jl_tupleref(f->env,0) == (jl_value_t*)f)
-        return jl_tupleref(f->env,1);
     return f->env;
 }
 

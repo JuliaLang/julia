@@ -158,11 +158,11 @@ typedef struct {
     jl_tuple_t *parameters;
     jl_tuple_t *names;
     jl_tuple_t *types;
-    // hidden fields:
-    uptrint_t uid;
     // to create a set of constructors for this sort of type
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
+    // hidden fields:
+    uptrint_t uid;
 } jl_struct_type_t;
 
 typedef struct {
@@ -174,7 +174,7 @@ typedef struct {
     jl_value_t *bnbits;
     // hidden fields:
     size_t nbits;
-    uptrint_t uid;   // must be at same offset as in jl_struct_type_t
+    uptrint_t uid;
 } jl_bits_type_t;
 
 typedef struct {
@@ -372,7 +372,6 @@ void *allocobj(size_t sz);
 #define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
-#define jl_t2(t) jl_tupleref(t,2)
 
 #define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
 #define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)))
@@ -771,12 +770,12 @@ static inline int jl_vinfo_assigned_inner(jl_array_t *vi)
 
 // for writing julia functions in C
 #define JL_CALLABLE(name) \
-    jl_value_t *name(jl_value_t *env, jl_value_t **args, uint32_t nargs)
+    jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 
 static inline
 jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
-    return f->fptr(f->env, args, nargs);
+    return f->fptr((jl_value_t*)f, args, nargs);
 }
 
 #define JL_NARGS(fname, min, max)                               \

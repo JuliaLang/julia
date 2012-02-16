@@ -567,6 +567,7 @@ end
 @unary_op (-)
 @unary_op (~)
 @unary_op (conj)
+@unary_op (sign)
 
 macro unary_c2r_op(f)
     quote

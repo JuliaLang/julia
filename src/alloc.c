@@ -426,8 +426,8 @@ void jl_add_constructors(jl_struct_type_t *t)
 
 JL_CALLABLE(jl_f_ctor_trampoline)
 {
-    jl_add_constructors((jl_struct_type_t*)env);
-    return jl_apply((jl_function_t*)env, args, nargs);
+    jl_add_constructors((jl_struct_type_t*)F);
+    return jl_apply((jl_function_t*)F, args, nargs);
 }
 
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
