@@ -47,7 +47,7 @@ function __safe_max(x::Array{Float64, 1})
 end
 
 # plot an array (window determined manually)
-function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number)
+function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure we have arrays of numbers
     x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
     y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
@@ -80,7 +80,7 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
 
     # send the message to the browser
     __write_message(__Message(__MSG_OUTPUT_PLOT, {
-        "line",
+        plottype,
         strcat("[", join([string(i) | i=x_safe], ","), "]"),
         strcat("[", join([string(i) | i=y_safe], ","), "]"),
         string(float64(xmin)),
@@ -91,7 +91,7 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
 end
 
 # plot an array (window determined automatically)
-function plot(x::Array, y::Array)
+function plot(x::Array, y::Array, plottype::String)
     # make sure we have arrays of numbers
     x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
     y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
@@ -128,19 +128,20 @@ function plot(x::Array, y::Array)
         wy = w+2.0*w*__VERTICAL_PADDING
 
         # add some horizontal padding to preserve the aspect ratio
-        plot(x_safe, y_safe, cx-wx*__PLOT_ASPECT_RATIO, cx+wx*__PLOT_ASPECT_RATIO, cy-wy, cy+wy)
+        plot(x_safe, y_safe, cx-wx*__PLOT_ASPECT_RATIO, cx+wx*__PLOT_ASPECT_RATIO, cy-wy, cy+wy, plottype)
     else
         # nope -- just add some padding
         plot(x_safe, y_safe,
             xmin-(xmax-xmin)*__HORIZONTAL_PADDING,
             xmax+(xmax-xmin)*__HORIZONTAL_PADDING,
             ymin-(ymax-ymin)*__VERTICAL_PADDING,
-            ymax+(ymax-ymin)*__VERTICAL_PADDING)
+            ymax+(ymax-ymin)*__VERTICAL_PADDING,
+            plottype)
     end
 end
 
 # plot an array (window determined automatically)
-function plot(y::Array)
+function plot(y::Array, plottype)
     # make sure we have an array of numbers
     y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
 
@@ -177,19 +178,20 @@ function plot(y::Array)
         wy = w+2.0*w*__VERTICAL_PADDING
 
         # add some horizontal padding to preserve the aspect ratio
-        plot(x_safe, y_safe, cx-wx*__PLOT_ASPECT_RATIO, cx+wx*__PLOT_ASPECT_RATIO, cy-wy, cy+wy)
+        plot(x_safe, y_safe, cx-wx*__PLOT_ASPECT_RATIO, cx+wx*__PLOT_ASPECT_RATIO, cy-wy, cy+wy, plottype)
     else
         # nope -- just add some padding
         plot(x_safe, y_safe,
             xmin-(xmax-xmin)*__HORIZONTAL_PADDING,
             xmax+(xmax-xmin)*__HORIZONTAL_PADDING,
             ymin-(ymax-ymin)*__VERTICAL_PADDING,
-            ymax+(ymax-ymin)*__VERTICAL_PADDING)
+            ymax+(ymax-ymin)*__VERTICAL_PADDING,
+            plottype)
     end
 end
 
 # plot a function (vertical window determined automatically)
-function plot(f::Function, xmin::Number, xmax::Number)
+function plot(f::Function, xmin::Number, xmax::Number, plottype::String)
     # make sure the window is okay
     if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
     if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
@@ -200,11 +202,11 @@ function plot(f::Function, xmin::Number, xmax::Number)
     y = [try float64(f(i)) catch 0 end | i=x]
 
     # make the plot
-    plot(x, y)
+    plot(x, y, plottype)
 end
 
 # plot a function (window determined manually)
-function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number)
+function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure the window is okay
     if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
     if xmax == Inf || xmax == -Inf || isequal(xmax, NaN) return error(strcat("invalid xmax: ", string(xmax))) end
@@ -218,5 +220,5 @@ function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Numbe
     y = [try float64(f(i)) catch 0 end | i=x]
 
     # make the plot
-    plot(x, y, xmin, xmax, ymin, ymax)
+    plot(x, y, xmin, xmax, ymin, ymax, plottype)
 end
