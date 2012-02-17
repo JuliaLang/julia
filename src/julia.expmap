@@ -10,18 +10,7 @@
     jl_uid;
     jl_strtod;
     jl_strtof;
-    rand_double;
-    rand_float;
-    genrand_int32;
-    randomseed32;
-    randomseed64;
-    randn;
     clock_now;
-    uint2str;
-    double_exponent;
-    double_mantissa;
-    float_exponent;
-    float_mantissa;
     bitvector_next;
     bitvector_count;
     bitvector_any1;
@@ -47,8 +36,6 @@
     jl_is_const;
     jl_get_current_module;
     jl_set_current_module;
-    jl_func_type_tfunc;
-    jl_compute_type_union;
     jl_type_match;
     jl_type_intersection;
     jl_types_equal;
@@ -66,7 +53,6 @@
     jl_prepare_ast;
     jl_is_leaf_type;
     jl_gensym;
-    jl_new_eqtable;
     jl_eqtable_put;
     jl_eqtable_get;
     jl_eqtable_del;
@@ -80,7 +66,6 @@
     jl_stdout_stream;
     ios_fd;
     jl_ios_mem;
-    ios_mem;
     jl_boundp;
     jl_get_root_symbol;
     julia_free;
@@ -150,8 +135,6 @@
     jl_load_file_string;
     jl_dlsym;
     jl_load_dynamic_library;
-    jl_input_line_callback_readline;
-    jl_input_line_callback_no_readline;
     jl_stdin_callback;
     repl_callback_enable;
     jl_toplevel_eval;

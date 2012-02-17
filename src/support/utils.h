@@ -2,9 +2,6 @@
 #define __UTILS_H_
 
 DLLEXPORT int double_exponent(double d);
-DLLEXPORT double double_mantissa(double d);
-DLLEXPORT int float_exponent(float f);
-DLLEXPORT float float_mantissa(float f);
 void snprint_real(char *s, size_t cnt, double r,
                   int width,    // printf field width, or 0
                   int dec,      // # decimal digits desired, recommend 16

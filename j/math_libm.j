@@ -55,7 +55,7 @@ end
 @_jl_libfdmfunc_1arg_float Number log2
 @_jl_libfdmfunc_1arg_float Number log10
 @_jl_libfdmfunc_1arg_float Real   log1p
-@_jl_libfdmfunc_1arg_float Real   logb
+#@_jl_libfdmfunc_1arg_float Real   logb
 @_jl_libfdmfunc_1arg_float Number exp
 @_jl_libfdmfunc_1arg_float Real   expm1
 @_jl_libfdmfunc_1arg_float Number erf
@@ -73,7 +73,7 @@ end
 
 #@_jl_libmfunc_1arg_int Real lrint
 #@_jl_libmfunc_1arg_int Real lround iround
-@_jl_libmfunc_1arg_int Real ilogb
+#@_jl_libmfunc_1arg_int Real ilogb
 
 @_jl_libfdmfunc_2arg Number atan2
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
@@ -128,8 +128,25 @@ begin
         s = ccall(dlsym(_jl_libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), x, exp)
         (s, int(exp[1]))
     end
+    function frexp(A::Array{Float64})
+        f = similar(A)
+        e = Array(Int, size(A))
+        for i = 1:numel(A)
+            f[i] = ccall(dlsym(_jl_libfdm,:frexp), Float64, (Float64, Ptr{Int32}), A[i], exp)
+            e[i] = exp[1]
+        end
+        return (f, e)
+    end
+    function frexp(A::Array{Float32})
+        f = similar(A)
+        e = Array(Int, size(A))
+        for i = 1:numel(A)
+            f[i] = ccall(dlsym(_jl_libfdm,:frexpf), Float32, (Float32, Ptr{Int32}), A[i], exp)
+            e[i] = exp[1]
+        end
+        return (f, e)
+    end
 end
-#@vectorize_1arg Real frexp
 
 ^(x::Float64, y::Float64) = ccall(dlsym(_jl_libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(_jl_libfdm, :powf), Float32, (Float32,Float32), x, y)
