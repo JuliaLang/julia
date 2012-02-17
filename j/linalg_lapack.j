@@ -11,11 +11,10 @@ macro _jl_lapack_potrf_macro(potrf, eltype)
         #       DOUBLE PRECISION   A( LDA, * )
         function _jl_lapack_potrf(uplo, n, A::StridedMatrix{$eltype}, lda)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $potrf),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, &int32(n), a, &int32(lda), info)
+                  uplo, &int32(n), A, &int32(lda), info)
             return info[1]
         end
 
@@ -66,12 +65,11 @@ macro _jl_lapack_getrf_macro(getrf, eltype)
         #       DOUBLE PRECISION   A( LDA, * )
         function _jl_lapack_getrf(m, n, A::StridedMatrix{$eltype}, lda, ipiv)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $getrf),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), a, &int32(lda), ipiv, info)
+                  &int32(m), &int32(n), A, &int32(lda), ipiv, info)
             return info[1]
         end
 
@@ -127,12 +125,11 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function _jl_lapack_geqp3(m, n, A::StridedMatrix{$eltype}, lda, jpvt, tau, work, lwork)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $real_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), a, &int32(lda), jpvt, tau, work, &int32(lwork), info)
+                  &int32(m), &int32(n), A, &int32(lda), jpvt, tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -145,12 +142,11 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         #       COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function _jl_lapack_geqp3(m, n, A::StridedMatrix{$celtype}, lda, jpvt, tau, work, lwork, rwork)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $complex_geqp3),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celtype}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
-                  &int32(m), &int32(n), a, &int32(lda), jpvt, tau, work, &int32(lwork), rwork, info)
+                  &int32(m), &int32(n), A, &int32(lda), jpvt, tau, work, &int32(lwork), rwork, info)
             return info[1]
         end
 
@@ -161,12 +157,11 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
         function _jl_lapack_orgqr(m, n, k, A::StridedMatrix{$eltype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $orgqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype},
                    Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), &int32(k), a, &int32(lda), tau, work, &int32(lwork), info)
+                  &int32(m), &int32(n), &int32(k), A, &int32(lda), tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -177,12 +172,11 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, eltype, celty
         #      COMPLEX*16         A( LDA, * ), TAU( * ), WORK( * )
         function _jl_lapack_ungqr(m, n, k, A::StridedMatrix{$celtype}, lda, tau, work, lwork)
             info = Array(Int32, 1)
-            a = pointer(A)
             ccall(dlsym(_jl_liblapack, $ungqr),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celtype},
                    Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), &int32(k), a, &int32(lda), tau, work, &int32(lwork), info)
+                  &int32(m), &int32(n), &int32(k), A, &int32(lda), tau, work, &int32(lwork), info)
             return info[1]
         end
 
@@ -549,13 +543,11 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function _jl_lapack_gesv(n, nrhs, A::StridedMatrix{$eltype}, lda, ipiv, B, ldb)
             info = Array(Int32, 1)
-            a = pointer(A)
-            b = pointer(B)
             ccall(dlsym(_jl_liblapack, $gesv),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(n), &int32(nrhs), a, &int32(lda), ipiv, b, &int32(ldb), info)
+                  &int32(n), &int32(nrhs), A, &int32(lda), ipiv, B, &int32(ldb), info)
             return info[1]
         end
 
@@ -567,13 +559,11 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function _jl_lapack_posv(uplo, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
-            a = pointer(A)
-            b = pointer(B)
             ccall(dlsym(_jl_liblapack, $posv),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, &int32(n), &int32(nrhs), a, &int32(lda), b, &int32(ldb), info)
+                  uplo, &int32(n), &int32(nrhs), A, &int32(lda), B, &int32(ldb), info)
             return info[1]
         end
 
@@ -583,14 +573,12 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
         function _jl_lapack_gels(trans, m, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb, work, lwork)
             info = Array(Int32, 1)
-            a = pointer(A)
-            b = pointer(B)
             ccall(dlsym(_jl_liblapack, $gels),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  trans, &int32(m), &int32(n), &int32(nrhs), a, &int32(lda), 
-                  b, &int32(ldb), work, &int32(lwork), info)
+                  trans, &int32(m), &int32(n), &int32(nrhs), A, &int32(lda), 
+                  B, &int32(ldb), work, &int32(lwork), info)
             return info[1]
         end
 
@@ -602,13 +590,11 @@ macro _jl_lapack_backslash_macro(gesv, posv, gels, trtrs, eltype)
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
         function _jl_lapack_trtrs(uplo, trans, diag, n, nrhs, A::StridedMatrix{$eltype}, lda, B, ldb)
             info = Array(Int32, 1)
-            a = pointer(A)
-            b = pointer(B)
             ccall(dlsym(_jl_liblapack, $trtrs),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, trans, diag, &int32(n), &int32(nrhs), a, &int32(lda), b, &int32(ldb), info)
+                  uplo, trans, diag, &int32(n), &int32(nrhs), A, &int32(lda), B, &int32(ldb), info)
             return info[1]
         end
 

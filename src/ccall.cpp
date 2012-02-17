@@ -212,8 +212,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);
         }
-        // TODO: only haspointers for & arguments
-        haspointers = haspointers || (t->isPointerTy() && t!=jl_pvalue_llvmt);
         fargt.push_back(t);
         if (!isVa)
             fargt_sig.push_back(t);
@@ -228,6 +226,15 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         JL_GC_POP();
         return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),T_pint8),
                                rt);
+    }
+
+    // see if there are & arguments
+    for(i=4; i < nargs+1; i++) {
+        jl_value_t *argi = args[i];
+        if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
+            haspointers = true;
+            break;
+        }
     }
 
     // make LLVM function object for the target

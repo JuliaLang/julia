@@ -3,6 +3,8 @@
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
+ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
+
 type ErrorException <: Exception
     msg::String
 end

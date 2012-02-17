@@ -430,25 +430,39 @@
 ;; need to be rooted before conversion.
 (define (lower-ccall name RT atypes args)
   (define (ccall-conversion T x)
-    (if (and (pair? x) (eq? (car x) '&))
+    (if (or (eq? T 'Any) (and (pair? x) (eq? (car x) '&)))
 	x
 	`(call (top convert) ,T ,x)))
-  (let* ((ee (remove-argument-side-effects args))
-	 (el (car ee))
-	 (stmts (cdr ee)))
-    (let loop ((F atypes) ;; formals
-	       (A el)     ;; actuals
-	       (C '()))   ;; converted
-      (if (or (null? F) (null? A))
-	  `(block
-	    ,@stmts
-	    (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
-		  ,@A))
-	  (if (and (pair? (car F)) (eq? (caar F) '...))
-	      (loop F (cdr A)
-		    (cons (ccall-conversion (cadar F) (car A)) C))
-	      (loop (cdr F) (cdr A)
-		    (cons (ccall-conversion (car F)   (car A)) C)))))))
+  (let loop ((F atypes)  ;; formals
+	     (A args)    ;; actuals
+	     (stmts '()) ;; initializers
+	     (C '()))    ;; converted
+    (if (or (null? F) (null? A))
+	`(block
+	  ,.(reverse! stmts)
+	  (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
+		,@A))
+	(let* ((a     (car A))
+	       (isseq (and (pair? (car F)) (eq? (caar F) '...)))
+	       (ty    (if isseq (cadar F) (car F)))
+	       (ca (cond ((eq? ty 'Any)
+			  a)
+			 ((and (pair? a) (eq? (car a) '&))
+			  (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
+			      (let ((g (gensy)))
+				(begin
+				  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
+				  `(& ,g)))
+			      a))
+			 ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
+			  (let ((g (gensy)))
+			    (begin
+			      (set! stmts (cons `(= ,g ,a) stmts))
+			      g)))
+			 (else
+			  a))))
+	  (loop (if isseq F (cdr F)) (cdr A) stmts
+		(cons (ccall-conversion ty ca) C))))))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns

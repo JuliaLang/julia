@@ -980,7 +980,7 @@ function memcat(arrays::Array{Uint8,1}...)
     for a in arrays
         ccall(:memcpy, Ptr{Uint8},
               (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(a), length(a))
+              ptr + offset, a, length(a))
         offset += length(a)
     end
     return arr
@@ -991,18 +991,5 @@ end
 memcat(s::ByteString) = memcat(s.data)
 
 function memcat(strs::ByteString...)
-    n = 0
-    for s in strs
-        n += length(s)
-    end
-    data = Array(Uint8, n)
-    ptr = pointer(data)
-    offset = 0
-    for s in strs
-        ccall(:memcpy, Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, s.data, length(s))
-        offset += length(s)
-    end
-    data
+    return memcat(map(s->s.data, strs)...)
 end

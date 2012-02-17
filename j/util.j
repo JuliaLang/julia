@@ -125,6 +125,9 @@ less(f::Function, t) = less(function_loc(f,t)...)
 
 # remote/parallel load
 
+include_string(txt::ByteString) =
+    ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
+
 function is_file_readable(path)
     local f
     try
