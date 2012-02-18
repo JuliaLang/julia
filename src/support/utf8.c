@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
+#include <stdint.h>
 #include <wchar.h>
 #include <wctype.h>
 
@@ -31,7 +32,7 @@
 
 #include "utf8.h"
 
-static const u_int32_t offsetsFromUTF8[6] = {
+static const uint32_t offsetsFromUTF8[6] = {
     0x00000000UL, 0x00003080UL, 0x000E2080UL,
     0x03C82080UL, 0xFA082080UL, 0x82082080UL
 };
@@ -55,7 +56,7 @@ size_t u8_seqlen(const char *s)
 
 /* returns the # of bytes needed to encode a certain character
    0 means the character cannot (or should not) be encoded. */
-size_t u8_charlen(u_int32_t ch)
+size_t u8_charlen(uint32_t ch)
 {
     if (ch < 0x80)
         return 1;
@@ -68,7 +69,7 @@ size_t u8_charlen(u_int32_t ch)
     return 0;
 }
 
-size_t u8_codingsize(u_int32_t *wcstr, size_t n)
+size_t u8_codingsize(uint32_t *wcstr, size_t n)
 {
     size_t i, c=0;
 
@@ -85,9 +86,9 @@ size_t u8_codingsize(u_int32_t *wcstr, size_t n)
    returns # characters converted
    if sz == srcsz+1 (i.e. 4*srcsz+4 bytes), there will always be enough space.
 */
-size_t u8_toucs(u_int32_t *dest, size_t sz, const char *src, size_t srcsz)
+size_t u8_toucs(uint32_t *dest, size_t sz, const char *src, size_t srcsz)
 {
-    u_int32_t ch;
+    uint32_t ch;
     const char *src_end = src + srcsz;
     size_t nb;
     size_t i=0;
@@ -127,9 +128,9 @@ size_t u8_toucs(u_int32_t *dest, size_t sz, const char *src, size_t srcsz)
    returns # bytes stored in dest
    the destination string will never be bigger than the source string.
 */
-size_t u8_toutf8(char *dest, size_t sz, const u_int32_t *src, size_t srcsz)
+size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz)
 {
-    u_int32_t ch;
+    uint32_t ch;
     size_t i = 0;
     char *dest0 = dest;
     char *dest_end = dest + sz;
@@ -167,7 +168,7 @@ size_t u8_toutf8(char *dest, size_t sz, const u_int32_t *src, size_t srcsz)
     return (dest-dest0);
 }
 
-size_t u8_wc_toutf8(char *dest, u_int32_t ch)
+size_t u8_wc_toutf8(char *dest, uint32_t ch)
 {
     if (ch < 0x80) {
         dest[0] = (char)ch;
@@ -244,7 +245,7 @@ int wcwidth(wchar_t c);
 
 size_t u8_strwidth(const char *s)
 {
-    u_int32_t ch;
+    uint32_t ch;
     size_t nb, tot=0;
     int w;
     signed char sc;
@@ -276,9 +277,9 @@ size_t u8_strwidth(const char *s)
 }
 
 /* reads the next utf-8 sequence out of a string, updating an index */
-u_int32_t u8_nextchar(const char *s, size_t *i)
+uint32_t u8_nextchar(const char *s, size_t *i)
 {
-    u_int32_t ch = 0;
+    uint32_t ch = 0;
     size_t sz = 0;
 
     do {
@@ -292,9 +293,9 @@ u_int32_t u8_nextchar(const char *s, size_t *i)
 }
 
 /* next character without NUL character terminator */
-u_int32_t u8_nextmemchar(const char *s, size_t *i)
+uint32_t u8_nextmemchar(const char *s, size_t *i)
 {
-    u_int32_t ch = 0;
+    uint32_t ch = 0;
     size_t sz = 0;
 
     do {
@@ -352,10 +353,10 @@ char read_escape_control_char(char c)
 
 /* assumes that src points to the character after a backslash
    returns number of input characters processed, 0 if error */
-size_t u8_read_escape_sequence(const char *str, size_t ssz, u_int32_t *dest)
+size_t u8_read_escape_sequence(const char *str, size_t ssz, uint32_t *dest)
 {
     assert(ssz > 0);
-    u_int32_t ch;
+    uint32_t ch;
     char digs[10];
     int dno=0, ndig;
     size_t i=1;
@@ -380,7 +381,7 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, u_int32_t *dest)
         ch = strtol(digs, NULL, 16);
     }
     else {
-        ch = (u_int32_t)read_escape_control_char(c0);
+        ch = (uint32_t)read_escape_control_char(c0);
     }
     *dest = ch;
 
@@ -393,7 +394,7 @@ size_t u8_read_escape_sequence(const char *str, size_t ssz, u_int32_t *dest)
 size_t u8_unescape(char *buf, size_t sz, const char *src)
 {
     size_t c=0, amt;
-    u_int32_t ch = 0;
+    uint32_t ch = 0;
     char temp[4];
 
     while (*src && c < sz) {
@@ -402,7 +403,7 @@ size_t u8_unescape(char *buf, size_t sz, const char *src)
             amt = u8_read_escape_sequence(src, 1000, &ch);
         }
         else {
-            ch = (u_int32_t)*src;
+            ch = (uint32_t)*src;
             amt = 1;
         }
         src += amt;
@@ -425,7 +426,7 @@ static inline int buf_put2c(char *buf, const char *src)
     return 2;
 }
 
-int u8_escape_wchar(char *buf, size_t sz, u_int32_t ch)
+int u8_escape_wchar(char *buf, size_t sz, uint32_t ch)
 {
     assert(sz > 2);
     if (ch == L'\n')
@@ -449,7 +450,7 @@ int u8_escape_wchar(char *buf, size_t sz, u_int32_t ch)
     else if (ch < 32 || ch == 0x7f)
         return snprintf(buf, sz, "\\x%.2hhx", (unsigned char)ch);
     else if (ch > 0xFFFF)
-        return snprintf(buf, sz, "\\U%.8x", (u_int32_t)ch);
+        return snprintf(buf, sz, "\\U%.8x", (uint32_t)ch);
     else if (ch >= 0x80)
         return snprintf(buf, sz, "\\u%.4hx", (unsigned short)ch);
 
@@ -462,7 +463,7 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
                  int escape_quotes, int ascii)
 {
     size_t i = *pi, i0;
-    u_int32_t ch;
+    uint32_t ch;
     char *start = buf;
     char *blim = start + sz-11;
     assert(sz > 11);
@@ -496,10 +497,10 @@ size_t u8_escape(char *buf, size_t sz, const char *src, size_t *pi, size_t end,
     return (buf-start);
 }
 
-char *u8_strchr(const char *s, u_int32_t ch, size_t *charn)
+char *u8_strchr(const char *s, uint32_t ch, size_t *charn)
 {
     size_t i = 0, lasti=0;
-    u_int32_t c;
+    uint32_t c;
 
     *charn = 0;
     while (s[i]) {
@@ -514,10 +515,10 @@ char *u8_strchr(const char *s, u_int32_t ch, size_t *charn)
     return NULL;
 }
 
-char *u8_memchr(const char *s, u_int32_t ch, size_t sz, size_t *charn)
+char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn)
 {
     size_t i = 0, lasti=0;
-    u_int32_t c;
+    uint32_t c;
     int csz;
 
     *charn = 0;
@@ -539,10 +540,10 @@ char *u8_memchr(const char *s, u_int32_t ch, size_t sz, size_t *charn)
     return NULL;
 }
 
-char *u8_memrchr(const char *s, u_int32_t ch, size_t sz)
+char *u8_memrchr(const char *s, uint32_t ch, size_t sz)
 {
     size_t i = sz-1, tempi=0;
-    u_int32_t c;
+    uint32_t c;
 
     if (sz == 0) return NULL;
 
@@ -589,7 +590,7 @@ size_t u8_vprintf(const char *fmt, va_list ap)
 {
     size_t cnt, sz=0, nc, needfree=0;
     char *buf;
-    u_int32_t *wcs;
+    uint32_t *wcs;
 
     sz = 512;
     buf = (char*)alloca(sz);
@@ -601,7 +602,7 @@ size_t u8_vprintf(const char *fmt, va_list ap)
         needfree = 1;
         vsnprintf(buf, cnt+1, fmt, ap);
     }
-    wcs = (u_int32_t*)alloca((cnt+1) * sizeof(u_int32_t));
+    wcs = (uint32_t*)alloca((cnt+1) * sizeof(uint32_t));
     nc = u8_toucs(wcs, cnt+1, buf, cnt);
     wcs[nc] = 0;
     printf("%ls", (wchar_t*)wcs);
