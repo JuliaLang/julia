@@ -33,6 +33,13 @@ ifeq ($(USE_DEBIAN), 1)
 LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper
 endif
 
+WGET = wget
+WGET_DASH_O = wget -O
+ifeq ($(OS), Darwin)
+WGET = curl -LO
+WGET_DASH_O = curl -Lo
+endif
+
 default: install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
@@ -49,7 +56,7 @@ compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
 llvm-$(LLVM_VER).tar.gz:
-	wget http://llvm.org/releases/$(LLVM_VER)/$@
+	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
@@ -77,7 +84,7 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	wget ftp://ftp.gnu.org/gnu/readline/$@
+	$(WGET) ftp://ftp.gnu.org/gnu/readline/$@
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
 	touch $@
@@ -104,7 +111,7 @@ compile-pcre: install-pcre
 install-pcre: $(PCRE_OBJ_TARGET)
 
 pcre-$(PCRE_VER).tar.bz2:
-	wget ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
+	$(WGET) ftp://ftp.csx.cam.ac.uk/pub/software/programming/pcre/$@
 pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	tar jxf $<
 	touch $@
@@ -129,7 +136,7 @@ compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_E
 install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
 
 double-conversion-$(GRISU_VER).tar.gz:
-	wget http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
+	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
 double-conversion-$(GRISU_VER)/Makefile: double-conversion-$(GRISU_VER).tar.gz
 	mkdir -p double-conversion-$(GRISU_VER) && \
 	tar -C double-conversion-$(GRISU_VER) --strip-components 1 -xf double-conversion-$(GRISU_VER).tar.gz
@@ -206,7 +213,7 @@ compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
-	wget -O $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
 	touch $@
 random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	cd random && \
@@ -235,7 +242,7 @@ compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: compile-openblas
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	wget -O $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
+	$(WGET_DASH_O) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
 openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
@@ -258,7 +265,7 @@ compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
 
 lapack-$(LAPACK_VER).tgz:
-	wget http://www.netlib.org/lapack/$@
+	$(WGET) http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
@@ -288,7 +295,7 @@ compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
 arpack-ng-$(ARPACK_VER).tar.gz:
-	wget -O $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
+	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
 	touch $@
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
@@ -322,7 +329,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
 
 fftw-$(FFTW_VER).tar.gz:
-	wget http://www.fftw.org/$@
+	$(WGET) http://www.fftw.org/$@
 
 fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
@@ -370,7 +377,7 @@ compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
-	wget http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
+	$(WGET) http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
@@ -419,7 +426,7 @@ compile-clp: install-clp
 install-clp: $(CLP_OBJ_TARGET)
 
 clp-$(CLP_VER).tar.gz:
-	wget -O $@ http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
+	$(WGET_DASH_O) $@ http://www.coin-or.org/download/source/Clp/Clp-1.14.5.tgz
 clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	mkdir -p clp-$(CLP_VER)
 	tar -C clp-$(CLP_VER) --strip-components 1 -zxf $<
@@ -446,7 +453,7 @@ compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	wget http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
+	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
 	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(abspath $(EXTROOT))
@@ -472,7 +479,7 @@ compile-lighttpd: install-lighttpd
 install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
 
 lighttpd-$(LIGHTTPD_VER).tar.gz:
-	wget http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
+	$(WGET) http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
 lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	tar zxf $<
 	touch $@
