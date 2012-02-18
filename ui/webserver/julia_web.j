@@ -47,6 +47,10 @@ function __safe_max(x::Array{Float64, 1})
 end
 
 # plot an array (window determined manually)
+
+plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number) =
+    plot(x, y, xmin, xmax, ymin, ymax, "line")
+
 function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure we have arrays of numbers
     x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
@@ -91,6 +95,9 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
 end
 
 # plot an array (window determined automatically)
+
+plot(x::Array, y::Array) = plot(x, y, "line")
+
 function plot(x::Array, y::Array, plottype::String)
     # make sure we have arrays of numbers
     x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
@@ -141,6 +148,9 @@ function plot(x::Array, y::Array, plottype::String)
 end
 
 # plot an array (window determined automatically)
+
+plot(y::Array) = plot(y, "line")
+
 function plot(y::Array, plottype)
     # make sure we have an array of numbers
     y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
@@ -191,6 +201,9 @@ function plot(y::Array, plottype)
 end
 
 # plot a function (vertical window determined automatically)
+
+plot(f::Function, xmin::Number, xmax::Number) = plot(f, xmin, xmax, "line")
+
 function plot(f::Function, xmin::Number, xmax::Number, plottype::String)
     # make sure the window is okay
     if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
@@ -206,6 +219,10 @@ function plot(f::Function, xmin::Number, xmax::Number, plottype::String)
 end
 
 # plot a function (window determined manually)
+
+plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number) =
+    plot(f, xmin, xmax, ymin, ymax, "line")
+
 function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure the window is okay
     if xmin == Inf || xmin == -Inf || isequal(xmin, NaN) return error(strcat("invalid xmin: ", string(xmin))) end
