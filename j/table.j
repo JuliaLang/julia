@@ -125,11 +125,12 @@ hash(x::Any) = uid(x)
 
 if WORD_SIZE == 64
 hash(s::ByteString) = ccall(:memhash, Uint64, (Ptr{Void}, Int), s.data, length(s.data))
+hash(s::ByteString, seed::Uint32) = ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32), s.data, length(s.data), seed)
 else
 hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
+hash(s::ByteString, seed::Uint32) = ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32), s.data, length(s.data), seed)
 end
 
-hash(s::ByteString, seed::Uint32) = ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32), s.data, length(s.data), seed)
 
 
 # hash table
