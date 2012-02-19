@@ -263,7 +263,7 @@ let
         if nu < 0
             return _bessely(-nu,z)cos(pi*nu) - _besselj(-nu,z)sin(pi*nu)
         else
-            return _besselj(nu, z)
+            return _bessely(nu, z)
         end
     end
 end
