@@ -274,6 +274,7 @@ function besselj(nu::Float, x::Float)
 end
 
 besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
+besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
 besselj(nu::Int, x::Real) = besselj(nu, float(x))
 besselj(nu::Real, x::Real) = besselj(float(nu), float(x))
 
