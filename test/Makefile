@@ -8,7 +8,7 @@ all extra unicode::
 
 default all extra \
 core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode::
+sparse lapack fft arpack random unicode amos::
 	$(QUIET_JULIA) ../julia $@.j
 
 perf:
@@ -28,6 +28,6 @@ clean:
 .PHONY: \
 	default all extra \
 	core numbers strings corelib hashing arrayops \
-	sparse lapack fft arpack random \
+	sparse lapack fft arpack random amos \
 	unicode perf \
 	benchmark clean
