@@ -81,3 +81,11 @@ uint32_t memhash32(const char* buf, size_t n)
     MurmurHash3_x86_32(buf, n, _MHASH_SEED_, &out);
     return out;
 }
+
+uint32_t memhash32_seed(const char* buf, size_t n, uint32_t seed)
+{
+    uint32_t out;
+
+    MurmurHash3_x86_32(buf, n, seed, &out);
+    return out;
+}

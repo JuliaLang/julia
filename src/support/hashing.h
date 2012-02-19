@@ -12,5 +12,5 @@ DLLEXPORT u_int32_t int64to32hash(u_int64_t key);
 #endif
 DLLEXPORT u_int64_t memhash(const char* buf, size_t n);
 DLLEXPORT u_int32_t memhash32(const char* buf, size_t n);
-
+DLLEXPORT u_int32_t memhash32_seed(const char* buf, size_t n, u_int32_t seed);
 #endif

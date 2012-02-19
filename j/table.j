@@ -129,6 +129,9 @@ else
 hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
 end
 
+hash(s::ByteString, seed::Uint32) = ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32), s.data, length(s.data), seed)
+
+
 # hash table
 
 type HashTable{K,V} <: Associative
