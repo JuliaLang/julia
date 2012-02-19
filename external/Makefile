@@ -21,12 +21,18 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = llvm pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+
 ifeq ($(OS), Linux)
 LIBS += unwind
 endif
+
 ifeq ($(USE_SYSTEM_READLINE), 0)
 LIBS += readline
+endif
+
+ifeq ($(USE_SYSTEM_LLVM), 0)
+LIBS += llvm
 endif
 
 ifeq ($(USE_DEBIAN), 1)
