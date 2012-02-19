@@ -36,8 +36,8 @@ endif
 WGET = wget
 WGET_DASH_O = wget -O
 ifeq ($(OS), Darwin)
-WGET = curl -LO
-WGET_DASH_O = curl -Lo
+WGET = curl -kLO
+WGET_DASH_O = curl -kLo
 endif
 
 default: install
