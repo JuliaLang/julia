@@ -123,7 +123,7 @@ When installing from source, these libraries are automatically downloaded and co
 
 Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
 
-- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-48d39c542f-Linux-i686.tar.gz>
+- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-77bdd202ec-Linux-i686.tar.gz>
 - **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz>
 
 Download the appropriate tarball and untar it somewhere;
