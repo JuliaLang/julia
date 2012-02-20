@@ -74,10 +74,31 @@ uint64_t memhash(const char* buf, size_t n)
     return out[1];
 }
 
+uint64_t memhash_seed(const char* buf, size_t n, uint32_t seed)
+{
+    uint64_t out[2];
+
+    // TODO: expose 128-bit hash
+#ifdef __LP64__
+    MurmurHash3_x64_128(buf, n, seed, out);
+#else
+    MurmurHash3_x86_128(buf, n, seed, out);
+#endif
+    return out[1];
+}
+
 uint32_t memhash32(const char* buf, size_t n)
 {
     uint32_t out;
 
     MurmurHash3_x86_32(buf, n, _MHASH_SEED_, &out);
+    return out;
+}
+
+uint32_t memhash32_seed(const char* buf, size_t n, uint32_t seed)
+{
+    uint32_t out;
+
+    MurmurHash3_x86_32(buf, n, seed, &out);
     return out;
 }

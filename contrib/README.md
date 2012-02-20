@@ -13,12 +13,8 @@ where `JULIA_PATH` is the location of the top-level julia directory.
 <a name="Vim"/>
 ### Vim
 
-Copy (or symlink) the vim Julia subdirectories contents into the vim application support directory:
+Instructions for installing Vim support for Julia can be found in the [julia-vim repo](https://github.com/JuliaLang/julia-vim), which provides pathogen, vbundle, and manual installation options.
 
-    cp -r JULIA_PATH/contrib/vim/* ~/.vim
-
-where `JULIA_PATH` is the location of the top-level julia directory.
-Julia should appear as a file type and be automatically detected for files with the `.j` extension.
 <a name="TextMate"/>
 ### TextMate
 

@@ -4,9 +4,9 @@
        _       _ _(_)_     |
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
-      | | | | | | |/ _` |  |           http://julialang.org
+      | | | | | | |/ _` |  |          http://julialang.org
       | | |_| | | | (_| |  |       julia-dev@googlegroups.com
-     _/ |\__'_|_|_|\__'_|  |
+     _/ |\__'_|_|_|\__'_|  |           #julia on freenode
     |__/                   |
 
 
@@ -67,6 +67,13 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
 
 If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architecture of your processor in Make.inc.
 
+On OS X, you may need to install gfortran. Either download and install
+[gfortran.dmg](http://cran.r-project.org/bin/macosx/tools/gfortran-4.2.3.dmg),
+or install homebrew and run
+
+    brew install gfortran
+    ln -s /usr/local/bin/gfortran-4.2 /usr/local/bin/gfortran
+
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
@@ -123,9 +130,7 @@ When installing from source, these libraries are automatically downloaded and co
 
 Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
 
-- **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-08b1e294ed-Linux-x86_64.tar.gz>
-- **GNU/Linux x86:** <https://github.com/downloads/JuliaLang/julia/julia-618b93c22c-Linux-i686.tar.gz>
-- **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz>
+- **All platforms:** <https://github.com/JuliaLang/julia/downloads>
 
 Download the appropriate tarball and untar it somewhere;
 for example, if you are on an OS X (Darwin) x86/64 system, do the following:

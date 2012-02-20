@@ -14,34 +14,6 @@ int double_exponent(double d)
     return dl.ieee.exponent - IEEE754_DOUBLE_BIAS;
 }
 
-double double_mantissa(double d)
-{
-    union ieee754_double dl;
-
-    dl.d = d;
-    dl.ieee.exponent = IEEE754_DOUBLE_BIAS;
-    dl.ieee.negative = 0;
-    return dl.d;
-}
-
-int float_exponent(float f)
-{
-    union ieee754_float fl;
-
-    fl.f = f;
-    return fl.ieee.exponent - IEEE754_FLOAT_BIAS;
-}
-
-float float_mantissa(float f)
-{
-    union ieee754_float fl;
-
-    fl.f = f;
-    fl.ieee.exponent = IEEE754_FLOAT_BIAS;
-    fl.ieee.negative = 0;
-    return fl.f;
-}
-
 void snprint_real(char *s, size_t cnt, double r,
                   int width,    // printf field width, or 0
                   int dec,      // # decimal digits desired, recommend 16
