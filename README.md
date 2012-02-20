@@ -88,7 +88,7 @@ source, some of these are included in the source, and others are
 automatically downloaded and compiled.
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
-- **[FemtoLisp]**	    - Packaged with julia source, and used to implement the compiler.
+- **[FemtoLisp]**	    - Packaged with julia source, and used to implement the compiler front-end.
 - **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
 - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
@@ -115,7 +115,7 @@ automatically downloaded and compiled.
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
 [LLVM]:         http://www.llvm.org/
-[FemtoLisp]:	http://code.google.com/p/femtolisp/
+[FemtoLisp]:	https://github.com/JeffBezanson/femtolisp
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [D3]:           http://mbostock.github.com/d3/
 
