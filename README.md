@@ -30,7 +30,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 ## Currently Supported Platforms
 
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
-- **Darwin/OS X:** x86/64 (64-bit)
+- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
