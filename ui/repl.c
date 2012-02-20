@@ -3,7 +3,6 @@
   system startup, main(), and console interaction
 */
 
-#include <locale.h>
 #include "repl.h"
 
 static int lisp_prompt = 0;
@@ -225,7 +224,6 @@ int true_main(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    setlocale(LC_NUMERIC, "C");
     libsupport_init();
     parse_opts(&argc, &argv);
     julia_init(lisp_prompt ? NULL : image_file);
