@@ -356,6 +356,16 @@ lc(s::String) = TransformedString((c,i)->lc(c), s)
 ucfirst(s::String) = TransformedString((c,i)->i==1 ? uc(c) : c, s)
 lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 
+## string map ##
+
+function map(f::Function, s::String)
+    out = memio(length(s))
+    for c in s
+        write(out, f(c)::Char)
+    end
+    takebuf_string(out)
+end
+
 ## conversion of general objects to strings ##
 
 string(x) = print_to_string(show, x)
