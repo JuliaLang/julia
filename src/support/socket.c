@@ -179,7 +179,7 @@ void getlocalip(char *buf, size_t len)
     getifaddrs(&ifAddrStruct);
 
     for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa ->ifa_addr->sa_family==AF_INET) { // check it is IP4
+        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) { // check it is IP4
             // is a valid IP4 Address
             tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
             inet_ntop(AF_INET, tmpAddrPtr, buf, len);
@@ -188,7 +188,7 @@ void getlocalip(char *buf, size_t len)
             //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
         }
         /*
-        else if (ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
+        else if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
             // is a valid IP6 Address
             tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
             char addressBuffer[INET6_ADDRSTRLEN];
