@@ -171,10 +171,14 @@ function show(e::MethodError)
 end
 
 function show(bt::BackTrace)
+    # We may not declare :_jl_eval_user_input
+    # directly so that we get a compile error
+    # in case its name changes in the future
+    const _jl_eval_function = symbol(string(_jl_eval_user_input))
     show(bt.e)
     i = 1
     t = bt.trace
-    while i < length(t)
+    while i < length(t) && t[i] != _jl_eval_function
         print("\n")
         lno = t[i+2]
         print("in ", t[i], ", ", t[i+1])
