@@ -88,13 +88,13 @@ source, some of these are included in the source, and others are
 automatically downloaded and compiled.
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
-- **[FemtoLisp]**	    - Packaged with julia source, and used to implement the compiler front-end.
+- **[FemtoLisp]**           — Packaged with julia source, and used to implement the compiler front-end.
 - **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
 - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[AMOS]**		    - Subroutines for computing Bessel functions and Airy functions.
+- **[AMOS]**                — Subroutines for computing Bessel functions and Airy functions.
 - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
@@ -135,12 +135,9 @@ automatically downloaded and compiled.
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also available for download:
-
-- **All platforms:** <https://github.com/JuliaLang/julia/downloads>
-
-Download the appropriate tarball and untar it somewhere;
-for example, if you are on an OS X (Darwin) x86/64 system, do the following:
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
+To install from source, download the appropriate tarball and untar it somewhere.
+For example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
     wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
     tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
