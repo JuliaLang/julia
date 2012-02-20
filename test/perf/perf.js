@@ -99,9 +99,11 @@ console.log("javascript,mandel," + tmin/1000);
 
 function rand(n) {
     var v = new Array(n);
-    var i = 0;
-    for (i = 0; i < n; i++)
+    
+    for (var i = 0; i < n; i++) {
         v[i] = Math.random();
+    }
+    
     return v;
 }
 
@@ -311,25 +313,41 @@ console.log("javascript,rand_mat_stat," + tmin/10);
 
 // random matrix multiply //
 
+function randFloat64(n) {
+    var v = new Float64Array(n);
+    
+    for (var i = 0; i < n; i++) {
+        v[i] = Math.random();
+    }
+    
+    return v;
+}
+
 function matmul(A,B,m,l,n) {
     var C = new Array(m*n);
     var i = 0;
     var j = 0;
     var k = 0;
+    
     for (i = 0; i < m; i++) {
         for (j = 0; j < n; j++) {
-            C[i*n+j] = 0.0;
+            var total = 0;
+            
             for (k = 0; k < l; k++) {
-                C[i*n+j] += A[i*l+k]*B[k*n+j];
+                total += A[i*l+k]*B[k*n+j];
             }
+            
+            C[i*n+j] = total;
         }
     }
+    
     return C;
 }
 
 function randmatmul(n) {
-    var A = rand(n*n);
-    var B = rand(n*n);
+    var A = randFloat64(n*n);
+    var B = randFloat64(n*n);
+    
     return matmul(A, B, n, n, n);
 }
 
