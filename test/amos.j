@@ -16,11 +16,11 @@ end
 @assert_approx_eq airy(3, 1.8) 2.98554
 
 # besseli
-mathematica_i33 = 0.959754
-@assert_approx_eq besseli(3,3) mathematica_i33
-@assert_approx_eq besseli(-3,3) mathematica_i33
-@assert_approx_eq besseli(3,-3) -mathematica_i33
-@assert_approx_eq besseli(-3,-3) -mathematica_i33
+true_i33 = 0.959754
+@assert_approx_eq besseli(3,3) true_i33
+@assert_approx_eq besseli(-3,3) true_i33
+@assert_approx_eq besseli(3,-3) -true_i33
+@assert_approx_eq besseli(-3,-3) -true_i33
 
 # besselj
 @assert besselj(0,0) == 1
@@ -48,12 +48,12 @@ j43 = besselj(4,3.)
 @assert_approx_eq besselj(1, 3im) 3.95337im
 
 # besselk
-mathematica_k33 = 0.12217
-@assert_approx_eq besselk(3,3) mathematica_k33
-@assert_approx_eq besselk(-3,3) mathematica_k33
-mathematica_k3m3 = -0.122170 - 3.015155im
-@assert_approx_eq besselk(3,-3) mathematica_k3m3
-@assert_approx_eq besselk(-3,-3) mathematica_k3m3
+true_k33 = 0.12217
+@assert_approx_eq besselk(3,3) true_k33
+@assert_approx_eq besselk(-3,3) true_k33
+true_k3m3 = -0.122170 - 3.015155im
+@assert_approx_eq besselk(3,-3) true_k3m3
+@assert_approx_eq besselk(-3,-3) true_k3m3
 
 # bessely
 y33 = bessely(3,3.)
