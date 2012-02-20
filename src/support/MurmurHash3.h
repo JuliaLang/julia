@@ -2,8 +2,8 @@
 // MurmurHash3 was written by Austin Appleby, and is placed in the public
 // domain. The author hereby disclaims copyright to this source code.
 
-#ifndef _MURMURHASH3_H_
-#define _MURMURHASH3_H_
+#ifndef MURMURHASH3_H
+#define MURMURHASH3_H
 
 //-----------------------------------------------------------------------------
 // Platform-specific functions and macros
@@ -34,4 +34,4 @@ void MurmurHash3_x64_128 ( const void * key, int len, uint32_t seed, void * out 
 
 //-----------------------------------------------------------------------------
 
-#endif // _MURMURHASH3_H_
+#endif // MURMURHASH3_H

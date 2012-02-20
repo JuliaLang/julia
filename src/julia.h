@@ -1,5 +1,5 @@
-#ifndef _JULIA_H_
-#define _JULIA_H_
+#ifndef JULIA_H
+#define JULIA_H
 
 #include "libsupport.h"
 

@@ -1,5 +1,5 @@
-#ifndef __HASHING_H_
-#define __HASHING_H_
+#ifndef HASHING_H
+#define HASHING_H
 
 uint_t nextipow2(uint_t i);
 DLLEXPORT u_int32_t int32hash(u_int32_t a);

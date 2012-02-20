@@ -1,5 +1,5 @@
-#ifndef __HTABLE_H_
-#define __HTABLE_H_
+#ifndef HTABLE_H
+#define HTABLE_H
 
 #define HT_N_INLINE 32
 

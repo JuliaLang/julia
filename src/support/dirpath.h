@@ -1,5 +1,5 @@
-#ifndef __DIRPATH_H_
-#define __DIRPATH_H_
+#ifndef DIRPATH_H
+#define DIRPATH_H
 
 #ifdef WIN32
 #define PATHSEP '\\'

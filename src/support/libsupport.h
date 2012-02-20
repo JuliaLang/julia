@@ -1,5 +1,5 @@
-#ifndef __LIBSUPPORT_H_
-#define __LIBSUPPORT_H_
+#ifndef LIBSUPPORT_H
+#define LIBSUPPORT_H
 
 #include <stdarg.h>
 #include "dtypes.h"

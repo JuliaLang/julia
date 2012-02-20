@@ -1,5 +1,5 @@
-#ifndef __IOS_H_
-#define __IOS_H_
+#ifndef IOS_H
+#define IOS_H
 
 #include <stdarg.h>
 #include <pthread.h>

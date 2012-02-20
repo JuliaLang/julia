@@ -1,5 +1,5 @@
-#ifndef __DTYPES_H_
-#define __DTYPES_H_
+#ifndef DTYPES_H
+#define DTYPES_H
 
 /*
   This file defines sane integer types for our target platforms. This

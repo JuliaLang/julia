@@ -1,5 +1,5 @@
-#ifndef __EQUALHASH_H_
-#define __EQUALHASH_H_
+#ifndef EQUALHASH_H
+#define EQUALHASH_H
 
 #include "htableh.inc"
 
