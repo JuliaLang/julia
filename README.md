@@ -165,3 +165,40 @@ The second binding allows `Shift-Enter` to insert a newline without evaluating t
 On Linux systems, the `Shift-Enter` binding can be set by placing the following line in the file `.xmodmaprc` in your home directory:
 
     keysym Return = Return Linefeed
+
+<a name="Web-REPL-and-grahpics">
+## Web REPL and graphics
+
+Julia has a web REPL with very preliminary graphics
+capabilities. Follow these instructions for setting up the web repl
+locally. In external, doing `make install-lighttpd` will download and
+build lighttpd. Use the launch-webserver script to start the webserver
+and web-repl.
+
+Try `plot(cumsum(randn(1000)))`
+
+### System installed lighttpd
+
+If you want to use your own lighttpd, then the process is something like this:
+
+1) Install lighttpd
+
+2) Configure lighttpd
+
+The config file is /etc/lighttpd/lighttpd.conf:
+- Add "mod_scgi" to server.modules
+- Set server.document-root to point to path_to_julia/ui/website
+- Add something like this to the bottom (you can use whatever port you want):
+    scgi.server = (
+      ".scgi" =>
+      (( "host" => "127.0.0.1",
+         "port" => 1026
+      ))
+    )
+
+3) Start lighttpd and the julia server:
+
+   a) sudo /etc/init.d/lighttpd start
+   b) your_path_to_julia/julia-release-webserver -p port_num
+
+4) Open your browser and go to localhost
