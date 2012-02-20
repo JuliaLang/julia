@@ -134,6 +134,8 @@ Because of the rapid pace of development at this point, we recommend installing 
 - **GNU/Linux x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-1fdd1e4e56-Linux-x86_64.tar.gz>
 - **Darwin/OS X x86/64:** <https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz>
 
+- **All platforms:** <https://github.com/JuliaLang/julia/downloads>
+
 Download the appropriate tarball and untar it somewhere;
 for example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
