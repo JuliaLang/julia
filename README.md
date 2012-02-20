@@ -20,11 +20,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Resources"/>
 
 - **Homepage:** <http://julialang.org>
-- **Discussion:** <http://groups.google.com/group/julia-dev/>
+- **Mailing list:** <http://groups.google.com/group/julia-dev/>
+- **IRC:** <http://webchat.freenode.net/?channels=julia>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
 - **Documentation:** <http://julialang.org/manual/>
-- **IRC:** #julia on irc.freenode.net
 
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
