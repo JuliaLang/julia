@@ -25,11 +25,11 @@ install: release
 	install -d $(DESTDIR)/usr/share/julia/j
 	install -d $(DESTDIR)/usr/share/julia/contrib
 	install -d $(DESTDIR)/usr/share/julia/examples
-	install -v -C julia* $(DESTDIR)/usr/share/julia
-	install -v -C sys.ji $(DESTDIR)/usr/share/julia
-	install -v -C j/* $(DESTDIR)/usr/share/julia/j
-	install -v -C examples/*.j $(DESTDIR)/usr/share/julia/examples
-	install -v -C lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)/usr/share/julia/lib
+	install -v julia* $(DESTDIR)/usr/share/julia
+	install -v sys.ji $(DESTDIR)/usr/share/julia
+	install -v j/* $(DESTDIR)/usr/share/julia/j
+	install -v examples/*.j $(DESTDIR)/usr/share/julia/examples
+	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)/usr/share/julia/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
