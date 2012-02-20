@@ -4,9 +4,9 @@
        _       _ _(_)_     |
       (_)     | (_) (_)    |   A fresh approach to technical computing
        _ _   _| |_  __ _   |
-      | | | | | | |/ _` |  |           http://julialang.org
+      | | | | | | |/ _` |  |          http://julialang.org
       | | |_| | | | (_| |  |       julia-dev@googlegroups.com
-     _/ |\__'_|_|_|\__'_|  |
+     _/ |\__'_|_|_|\__'_|  |           #julia on freenode
     |__/                   |
 
 
