@@ -23,10 +23,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Discussion:** <http://groups.google.com/group/julia-dev/>
 - **Source code:** <https://github.com/JuliaLang/julia>
 - **Git clone URL:** <git://github.com/JuliaLang/julia.git>
-- **Documentation:** <https://github.com/JuliaLang/julia/wiki>
+- **Documentation:** <http://julialang.org/manual/>
+- **IRC:** #julia on irc.freenode.net
 
-<a name="Supported-Platforms"/>
-## Supported Platforms
+<a name="Currently-Supported-Platforms"/>
+## Currently Supported Platforms
 
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
 - **Darwin/OS X:** x86/64 (64-bit)
@@ -78,23 +79,28 @@ or install homebrew and run
 ## Required Build Tools & External Libraries
 
 Julia depends on a number of mature, state-of-the art C and Fortran libraries.
-When installing from source, these libraries are automatically downloaded and compiled.
 
 - **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[Perl]**                    — preprocessing of header files of libraries.
 - **[wget]**                    — to automatically download external libraries:
-    - **[LLVM]**                — compiler infrastructure.
-    - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
-    - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
-    - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
-    - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-    - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices
-    - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
-    - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
-    - **[PCRE]**                — Perl-compatible regular expressions library.
-    - **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-    - **[D3]**                  — JavaScript visualization library.
+
+Julia uses the following external libraries. When installing from
+source, some of these are included in the source, and others are
+automatically downloaded and compiled.
+
+- **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
+- **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+- **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
+- **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
+- **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[AMOS]**		    - Subroutines for computing Bessel functions and Airy functions.
+- **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
+- **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+- **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
+- **[PCRE]**                — Perl-compatible regular expressions library.
+- **[D3]**                  — JavaScript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -105,11 +111,12 @@ When installing from source, these libraries are automatically downloaded and co
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
+[AMOS]:		http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/
 [FFTW]:         http://www.fftw.org/
 [PCRE]:         http://www.pcre.org/
-[GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [LLVM]:         http://www.llvm.org/
+[GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [D3]:           http://mbostock.github.com/d3/
 
 <a name="Directories"/>
