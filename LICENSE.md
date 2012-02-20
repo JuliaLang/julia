@@ -46,6 +46,7 @@ External libraries, if used, include their own licenses:
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [D3](https://github.com/mbostock/d3/raw/master/LICENSE)
 - [FDLIBM](http://www.netlib.org/fdlibm/fdlibm.h)
+- [FEMTOLISP](http://code.google.com/p/femtolisp/)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
