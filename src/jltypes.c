@@ -687,7 +687,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     }
     if ((jl_type_t*)super == jl_bottom_type) {
         JL_GC_POP();
-        return (jl_value_t*)super;
+        return (jl_value_t*)jl_bottom_type;
     }
 
     size_t n = sub->parameters->length;

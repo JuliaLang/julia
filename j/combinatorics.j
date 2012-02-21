@@ -175,7 +175,7 @@ function integer_partitions(n::Int64, m::Int64)
     throw("Assumed n >= m >= 2!")
   end
   # H1
-  a = [n - m + 1, ones(m), -1]
+  a = [n - m + 1, ones(Int64, m), -1]
   # H2
   while true
     produce(a[1:m])
@@ -216,24 +216,26 @@ end
 
 # Algorithm H from TAoCP 7.2.1.5
 # Set partitions
-function partitions(s::AbstractVector)
+function partitions{T}(s::AbstractVector{T})
 
   n = length(s)
   # H1
-  a = zeros(n)
-  b = ones(n-1)
+  a = zeros(Int,n)
+  b = ones(Int,n-1)
   m = 1
 
   while true
     # H2
     # convert from restricted growth string a[1:n] to set of sets
-    sets = HashTable()
+    temp = [ Array(T,0) | k = 1:n ]
     for k = 1:n
-      assign(sets, add(get(sets, a[k], Set()), s[k]), a[k])
+      push(temp[a[k]+1], s[k])
     end
-    result = Set()
-    for k = 1:n
-      add(result, get(sets, a[k], false))
+    result = Array(Array{T,1},0)
+    for arr in temp
+      if !isempty(arr)
+        push(result, arr)
+      end
     end
     #produce(a[1:n]) # this is the string representing set assignment
     produce(result)
@@ -264,4 +266,3 @@ function partitions(s::AbstractVector)
     a[n] = 0
   end
 end
-
