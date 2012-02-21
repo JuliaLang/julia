@@ -66,11 +66,11 @@ strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c
 transform_to_utf8(s::String, f::Function) =
     print_to_string(length(s), @thunk for c=s; print(f(c)); end)
 
-uc(s::UTF8String) = transform_to_utf8(s, uc)
-lc(s::UTF8String) = transform_to_utf8(s, lc)
+uppercase(s::UTF8String) = transform_to_utf8(s, uppercase)
+lowercase(s::UTF8String) = transform_to_utf8(s, lowercase)
 
-ucfirst(s::UTF8String) = print_to_string(length(s), print, uc(s[1]), s[2:])
-lcfirst(s::UTF8String) = print_to_string(length(s), print, lc(s[1]), s[2:])
+ucfirst(s::UTF8String) = print_to_string(length(s), print, uppercase(s[1]), s[2:])
+lcfirst(s::UTF8String) = print_to_string(length(s), print, lowercase(s[1]), s[2:])
 
 ## outputing UTF-8 strings ##
 

@@ -347,17 +347,17 @@ end
 
 ## uppercase and lowercase transformations ##
 
-uc(c::Char) = ccall(:towupper, Char, (Char,), c)
-lc(c::Char) = ccall(:towlower, Char, (Char,), c)
+uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
+lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 
-uc(s::String) = TransformedString((c,i)->uc(c), s)
-lc(s::String) = TransformedString((c,i)->lc(c), s)
+uppercase(s::String) = TransformedString((c,i)->uppercase(c), s)
+lowercase(s::String) = TransformedString((c,i)->lowercase(c), s)
 
-ucfirst(s::String) = TransformedString((c,i)->i==1 ? uc(c) : c, s)
-lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
+ucfirst(s::String) = TransformedString((c,i)->i==1 ? uppercase(c) : c, s)
+lcfirst(s::String) = TransformedString((c,i)->i==1 ? lowercase(c) : c, s)
 
-uppercase = uc
-lowercase = lc
+const uc = uppercase
+const lc = lowercase
 
 ## string map ##
 
