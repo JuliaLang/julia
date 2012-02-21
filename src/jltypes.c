@@ -655,42 +655,39 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         return (jl_value_t*)intersect_tag(tta, ttb, penv, eqc, var);
     jl_tag_type_t *super = NULL;
     jl_tag_type_t *sub = NULL;
-    jl_value_t *ti = NULL;
     jl_value_t *env = NULL;
     jl_tuple_t *p = NULL;
     JL_GC_PUSH(&super, &sub, &env, &p);
     while (tta != jl_any_type) {
         if (tta->name == ttb->name) {
-            ti = intersect_tag(tta, ttb, penv, eqc, var);
-            if (ti == (jl_value_t*)jl_bottom_type) {
-                JL_GC_POP();
-                return ti;
-            }
-            super = (jl_tag_type_t*)ti;
             sub = (jl_tag_type_t*)a;
             break;
         }
         tta = tta->super;
     }
-    if (super == NULL) {
+    if (sub == NULL) {
         tta = (jl_tag_type_t*)a;
         while (ttb != jl_any_type) {
             if (tta->name == ttb->name) {
-                ti = intersect_tag(tta, ttb, penv, eqc, var);
-                if (ti == (jl_value_t*)jl_bottom_type) {
-                    JL_GC_POP();
-                    return ti;
-                }
-                super = (jl_tag_type_t*)ti;
                 sub = (jl_tag_type_t*)b;
                 break;
             }
             ttb = ttb->super;
         }
+        if (sub == NULL) {
+            JL_GC_POP();
+            return (jl_value_t*)jl_bottom_type;
+        }
+        // sub == b
+        super = (jl_tag_type_t*)jl_type_intersect(a, (jl_value_t*)((jl_tag_type_t*)b)->super, penv,eqc,var);
     }
-    if (super == NULL) {
+    else {
+        // sub == a
+        super = (jl_tag_type_t*)jl_type_intersect((jl_value_t*)((jl_tag_type_t*)a)->super, b, penv,eqc,var);
+    }
+    if ((jl_type_t*)super == jl_bottom_type) {
         JL_GC_POP();
-        return (jl_value_t*)jl_bottom_type;
+        return (jl_value_t*)super;
     }
 
     size_t n = sub->parameters->length;
