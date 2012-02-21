@@ -94,6 +94,8 @@ function edit(file::String, line::Int)
             run(`vim $file +$line`)
         elseif editor == "textmate"
             run(`mate $file -l $line`)
+        elseif editor == "subl"
+            run(`subl $file:$line`)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
@@ -104,6 +106,8 @@ function edit(file::String, line::Int)
             run(`vim $file +$line`)
         elseif editor == "textmate"
             run(`mate $file -l $line`)
+        elseif editor == "subl"
+            run(`subl $file:$line`)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
