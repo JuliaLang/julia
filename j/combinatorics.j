@@ -115,3 +115,153 @@ function nthperm!(a::AbstractVector, k::Integer)
     a
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
+
+# Algorithm T from TAoCP 7.2.1.3
+function combinations(a::AbstractVector, t::Integer)
+  # T1
+  n = length(a)
+  c = [0:t-1, n, 0]
+  j = t
+  if (t >= n) 
+    # Algorithm T assumes t < n, just return a
+    produce(a)
+  else
+    while true
+      # T2
+      produce([ a[c[i]+1] | i=1:t ])
+
+      if j > 0
+        x = j
+      else
+        # T3
+        if c[1] + 1 < c[2]
+          c[1] = c[1] + 1
+          continue # to T2
+        else
+          j = 2
+        end
+
+        # T4
+        need_j = true
+        while need_j
+          need_j = false
+
+          c[j-1] = j-2
+          x = c[j] + 1
+          if x == c[j + 1]
+            j = j + 1
+            need_j = true # loop to T4
+          end
+        end
+
+        # T5
+        if j > t
+          # terminate
+          break
+        end
+      end
+
+      # T6
+      c[j] = x 
+      j = j - 1
+    end
+  end
+end
+
+# Algorithm H from TAoCP 7.2.1.4
+# Partition n into m parts
+function integer_partitions(n::Int64, m::Int64)
+  if n < m || m < 2
+    throw("Assumed n >= m >= 2!")
+  end
+  # H1
+  a = [n - m + 1, ones(m), -1]
+  # H2
+  while true
+    produce(a[1:m])
+    if a[2] < a[1] - 1
+      # H3
+      a[1] = a[1] - 1
+      a[2] = a[2] + 1
+      continue # to H2
+    end
+    # H4
+    j = 3
+    s = a[1] + a[2] - 1
+    if a[j] >= a[1] - 1
+      while true
+        s = s + a[j]
+        j = j + 1
+        if a[j] < a[1] - 1
+          break # end loop
+        end
+      end
+    end
+    # H5
+    if j > m 
+      break # terminate
+    end
+    x = a[j] + 1
+    a[j] = x
+    j = j - 1
+    # H6
+    while j > 1
+      a[j] = x
+      s = s - x
+      j = j - 1
+    end
+    a[1] = s
+  end
+end
+
+# Algorithm H from TAoCP 7.2.1.5
+# Set partitions
+function partitions(s::AbstractVector)
+
+  n = length(s)
+  # H1
+  a = zeros(n)
+  b = ones(n-1)
+  m = 1
+
+  while true
+    # H2
+    # convert from restricted growth string a[1:n] to set of sets
+    sets = HashTable()
+    for k = 1:n
+      assign(sets, add(get(sets, a[k], Set()), s[k]), a[k])
+    end
+    result = Set()
+    for k = 1:n
+      add(result, get(sets, a[k], false))
+    end
+    #produce(a[1:n]) # this is the string representing set assignment
+    produce(result)
+
+    if a[n] != m
+      # H3
+      a[n] = a[n] + 1
+      continue # to H2
+    end
+    # H4
+    j = n - 1
+    while a[j] == b[j]
+      j = j - 1
+    end
+    # H5
+    if j == 1
+      break # terminate
+    end
+    a[j] = a[j] + 1
+    # H6
+    m = b[j] + (a[j] == b[j])
+    j = j + 1
+    while j < n
+      a[j] = 0
+      b[j] = m
+      j = j + 1
+    end
+    a[n] = 0
+  end
+end
+
