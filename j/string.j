@@ -356,6 +356,9 @@ lc(s::String) = TransformedString((c,i)->lc(c), s)
 ucfirst(s::String) = TransformedString((c,i)->i==1 ? uc(c) : c, s)
 lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
 
+uppercase = uc
+lowercase = lc
+
 ## string map ##
 
 function map(f::Function, s::String)
@@ -781,6 +784,7 @@ function split(s::String, delims, include_empty::Bool)
     strs
 end
 
+split(s::String) = split(s, " ", false)
 split(s::String, x) = split(s, x, true)
 split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
@@ -815,6 +819,33 @@ join(args...) = print_to_string(print_joined, args...)
 chop(s::String) = s[1:thisind(s,length(s))-1]
 chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
 chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
+
+function lstrip(s::String)
+    i = start(s)
+    while !done(s,i)
+        c, j = next(s,i)
+        if !iswspace(c)
+            return s[i:end]
+        end
+        i = j
+    end
+    ""
+end
+
+function rstrip(s::String)
+    r = reverse(s)
+    i = start(r)
+    while !done(r,i)
+        c, j = next(r,i)
+        if !iswspace(c)
+            return s[1:end-i+1]
+        end
+        i = j
+    end
+    ""
+end
+
+strip(s::String) = lstrip(rstrip(s))
 
 ## string to integer functions ##
 
