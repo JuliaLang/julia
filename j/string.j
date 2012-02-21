@@ -825,7 +825,7 @@ function lstrip(s::String)
     while !done(s,i)
         c, j = next(s,i)
         if !iswspace(c)
-            return s[i:end]
+            return s[i:thisind(s,length(s))]
         end
         i = j
     end
@@ -838,7 +838,7 @@ function rstrip(s::String)
     while !done(r,i)
         c, j = next(r,i)
         if !iswspace(c)
-            return s[1:end-i+1]
+            return s[1:thisind(s,length(s))-i+1]
         end
         i = j
     end
