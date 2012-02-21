@@ -238,3 +238,6 @@ end
 @assert int2str(typemin(Int64), 10) == "-9223372036854775808"
 @assert int2str(typemin(Int16), 10) == "-32768"
 @assert int2str(typemin(Int8 ), 10) == "-128"
+
+# string manipulation
+@assert strip("\t  hi   \n") == "hi"
