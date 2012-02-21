@@ -251,7 +251,7 @@ end
 
 _jl_helpdb = nothing
 
-const _jl_help_url = "https://raw.github.com/wiki/JuliaLang/julia/Standard-Library-Reference.md"
+const _jl_help_url = "https://raw.github.com/JuliaLang/julialang.github.com/master/manual/standard-library-reference/index.md"
 
 function _jl_init_help()
     global _jl_helpdb
