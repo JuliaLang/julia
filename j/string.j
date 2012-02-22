@@ -784,7 +784,7 @@ function split(s::String, delims, include_empty::Bool)
     strs
 end
 
-split(s::String) = split(s, " ", false)
+split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
 split(s::String, x) = split(s, x, true)
 split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
