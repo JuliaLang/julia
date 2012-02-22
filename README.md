@@ -31,6 +31,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 
 - **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
 - **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
+- **FreeBSD:** x86/64 (64-bit); x86 (32-bit).
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
@@ -74,6 +75,50 @@ On OS X, you may need to install `gfortran`. Either download and install [gfortr
     brew install gfortran
     ln -s /usr/local/bin/gfortran-4.2 /usr/local/bin/gfortran
 
+On FreeBSD the prerequisites can be installed from ports like this:
+
+    cd /usr/ports/devel/gmake
+    make install
+
+    cd /usr/ports/ftp/curl
+    make install
+ 
+    cd /usr/ports/devel/libunwind
+    make install
+
+    cd /usr/ports/lang/gcc45
+    make install
+    ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
+
+Other versions of gcc are also available but gfortran45 is the one use by all the ports that depend on fortran currently.
+
+**Use the gmake command on FreeBSD instead of make**
+
+On FreeBSD two of the unit tests of flisp fail at the moment.  Until this is fixed you can comment them out:
+
+    diff --git a/src/flisp/unittest.lsp b/src/flisp/unittest.lsp
+    index 9ebd491..3b0df0e 100644
+    --- a/src/flisp/unittest.lsp
+    +++ b/src/flisp/unittest.lsp
+    @@ -77,7 +77,7 @@
+     (assert (equal? (string 'sym #byte(65) #wchar(945) "blah") "symA\u03B1blah"))
+
+     ; NaNs
+    -(assert (equal? +nan.0 +nan.0))
+    +;;;(assert (equal? +nan.0 +nan.0))
+     (assert (not (= +nan.0 +nan.0)))
+     (assert (not (= +nan.0 -nan.0)))
+     (assert (equal? (< +nan.0 3) (> 3 +nan.0)))
+    @@ -92,7 +92,7 @@
+
+     ; -0.0 etc.
+     (assert (not (equal? 0.0 0)))
+    -(assert (equal? 0.0 0.0))
+    +;;;(assert (equal? 0.0 0.0))
+     (assert (not (equal? -0.0 0.0)))
+     (assert (not (equal? -0.0 0)))
+     (assert (not (eqv? 0.0 0)))
+
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
@@ -82,7 +127,7 @@ Buliding Julia requires that the following software be installed:
 - **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]** or **[curl]**          — to automatically download external libraries (Linux defaults to `wget`, OS X to `curl`).
+- **[wget]** or **[curl]**          — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
 
 With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded and compiled from source (or in a few cases, included in the Julia source repository) the first time you run `make`:

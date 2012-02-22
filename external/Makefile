@@ -27,6 +27,10 @@ ifeq ($(OS), Linux)
 LIBS += unwind
 endif
 
+ifeq ($(OS), FreeBSD)
+LIBS += unwind
+endif
+
 ifeq ($(USE_SYSTEM_READLINE), 0)
 LIBS += readline
 endif
@@ -42,6 +46,11 @@ endif
 WGET = wget
 WGET_DASH_O = wget -O
 ifeq ($(OS), Darwin)
+WGET = curl -kLO
+WGET_DASH_O = curl -kLo
+endif
+
+ifeq ($(OS), FreeBSD)
 WGET = curl -kLO
 WGET_DASH_O = curl -kLo
 endif
