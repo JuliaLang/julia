@@ -88,12 +88,6 @@ ref(r::Range1, s::Range1{Int}) =
 show(r::Range)  = print(r.start,':',r.step,':',last(r))
 show(r::Range1) = print(r.start,':',last(r))
 
-start{T<:Integer}(r::Ranges{T}) = r.start
-next{T<:Integer}(r::Range{T},  i) = (i, convert(T,i+step(r)))
-next{T<:Integer}(r::Range1{T}, i) = (i, convert(T,i+1))
-done{T<:Integer}(r::Range{T},  i) = (r.start + r.len*r.step <= i)
-done{T<:Integer}(r::Range1{T}, i) = (r.start + r.len <= i)
-
 start(r::Ranges) = 0
 next(r::Range,  i) = (r.start + oftype(r.start,i)*step(r), i+1)
 next(r::Range1, i) = (r.start + oftype(r.start,i), i+1)
