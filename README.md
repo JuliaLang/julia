@@ -85,7 +85,7 @@ On FreeBSD the prerequisites can be installed from ports like this:
 
     cd /usr/ports/lang/gcc45
     make install
-    ln -s /usr/local/bin/gfortran45 gfortran
+    ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
 
 Other versions of gcc are also available but gfortran45 is the one use by all the ports that depend on fortran currently.
 
