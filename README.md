@@ -77,6 +77,9 @@ On OS X, you may need to install `gfortran`. Either download and install [gfortr
 
 On FreeBSD the prerequisites can be installed from ports like this:
 
+    cd /usr/ports/devel/gmake
+    make install
+
     cd /usr/ports/ftp/curl
     make install
  
@@ -88,6 +91,8 @@ On FreeBSD the prerequisites can be installed from ports like this:
     ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
 
 Other versions of gcc are also available but gfortran45 is the one use by all the ports that depend on fortran currently.
+
+**Use the gmake command on FreeBSD instead of make**
 
 On FreeBSD two of the unit tests of flisp fail at the moment.  Until this is fixed you can comment them out:
 
