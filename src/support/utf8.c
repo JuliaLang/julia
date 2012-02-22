@@ -26,7 +26,9 @@
 #include <malloc.h>
 #define snprintf _snprintf
 #else
+#ifndef __FreeBSD__
 #include <alloca.h>
+#endif /* __FreeBSD__ */
 #endif
 #include <assert.h>
 

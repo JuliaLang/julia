@@ -27,6 +27,10 @@ ifeq ($(OS), Linux)
 LIBS += unwind
 endif
 
+ifeq ($(OS), FreeBSD)
+LIBS += unwind
+endif
+
 ifeq ($(USE_SYSTEM_READLINE), 0)
 LIBS += readline
 endif
