@@ -19,7 +19,7 @@ isequal(x,y) = is(x,y)
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
 isequal(x::Number, y::Number) = x==y
-isless(x::Number, y::Number) = x<y
+isless(x::Real, y::Real) = x<y
 
 max(x,y) = x > y ? x : y
 min(x,y) = x < y ? x : y
