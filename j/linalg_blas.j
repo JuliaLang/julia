@@ -284,25 +284,3 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
                  zero(T), Y, 1)
     return Y
 end
-
-# TODO: support transposed arguments
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(X::StridedVector{T},
-                                                             A::StridedMatrix{T})
-    nX = size(X, 1)
-    (mA, nA) = size(A)
-
-    if mA != nX; error("*: argument shapes do not match"); end
-
-    if stride(A, 1) != 1
-        return invoke(*, (AbstractVector, AbstractMatrix), X, A)
-    end
-
-    # Result array does not need to be initialized as long as beta==0
-    Y = Array(T, nA)
-
-    _jl_blas_gemv("T", mA, nA,
-                 one(T), A, stride(A, 2),
-                 X, stride(X, 1),
-                 zero(T), Y, 1)
-    return Y
-end

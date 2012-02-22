@@ -34,20 +34,8 @@ function (*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
     return C
 end
 
-# TODO: support transposed arguments
 function (*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
-    nA = size(A, 1)
-    nB = size(B, 2)
-    R = promote_type(T,S)
-    C = Array(R, nB)
-    for j = 1:nB
-        s = zero(R)
-        for i = 1:nA
-            s += A[i] * B[i, j]
-        end
-        C[j] = s
-    end
-    return C
+    return reshape(A,length(A),1)*B
 end
 
 # TODO: support transposed arguments
