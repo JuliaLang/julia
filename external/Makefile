@@ -50,6 +50,11 @@ WGET = curl -kLO
 WGET_DASH_O = curl -kLo
 endif
 
+ifeq ($(OS), FreeBSD)
+WGET = curl -kLO
+WGET_DASH_O = curl -kLo
+endif
+
 default: install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
