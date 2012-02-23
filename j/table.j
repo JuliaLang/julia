@@ -306,6 +306,7 @@ next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
 
 isempty(t::HashTable) = done(t, start(t))
 numel(t::HashTable) = numel(t.used)-numel(t.deleted)
+length(t::HashTable) = numel(t::HashTable)
 
 function add_weak_key(t::HashTable, k, v)
     if is(t.deleter, identity)
