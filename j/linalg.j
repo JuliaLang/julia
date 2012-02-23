@@ -1,7 +1,7 @@
 ## linalg.j: Basic Linear Algebra functions ##
 
-aCb(x::AbstractVector, y::AbstractVector) = dot(x, y)
-aTb{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = dot(x, y)
+aCb(x::AbstractVector, y::AbstractVector) = [dot(x, y)]
+aTb{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T}) = [dot(x, y)]
 
 function dot(x::AbstractVector, y::AbstractVector)
     s = zero(eltype(x))
