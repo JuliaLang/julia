@@ -3,7 +3,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 
-#if defined(__linux)
+#if defined(__linux) || defined(__FreeBSD__)
 #include <unistd.h>
 #include <dlfcn.h>
 #define GET_FUNCTION_FROM_MODULE dlsym

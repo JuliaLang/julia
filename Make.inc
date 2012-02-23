@@ -85,17 +85,22 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
+OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+endif
+
+ifeq ($(OS), FreeBSD)
+SHLIB_EXT = so
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-OSLIBS += -Wl,-w -framework ApplicationServices
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 #CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 
