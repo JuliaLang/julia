@@ -1218,9 +1218,6 @@ static void print_methlist(char *name, jl_methlist_t *ml)
             long lno = jl_unbox_long(li->line);
             if (lno > 0) {
                 char *fname = ((jl_sym_t*)li->file)->name;
-                char *sep = strrchr(fname, '/');
-                if (sep)
-                    fname = sep+1;
                 ios_printf(s, " at %s:%d", fname, lno);
             }
         }
