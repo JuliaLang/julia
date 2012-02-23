@@ -51,8 +51,8 @@ WGET_DASH_O = curl -kLo
 endif
 
 ifeq ($(OS), FreeBSD)
-WGET = curl -kLO
-WGET_DASH_O = curl -kLo
+WGET = curl -LO
+WGET_DASH_O = curl -Lo
 endif
 
 default: install
