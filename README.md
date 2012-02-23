@@ -70,10 +70,7 @@ On Ubuntu, you may also need to install the package `libncurses5-dev`.
 
 If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architecture of your processor in Make.inc.
 
-On OS X, you may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries), or install homebrew and run
-
-    brew install gfortran
-    ln -s /usr/local/bin/gfortran-4.2 /usr/local/bin/gfortran
+On OS X, you may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
 
 On FreeBSD the prerequisites can be installed from ports like this:
 
