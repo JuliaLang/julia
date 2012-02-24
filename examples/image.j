@@ -40,10 +40,9 @@ function ppmwrite(img, file::String)
     n, m = size(img)
     write(s, "$m $n 255\n")
     for i=1:n, j=1:m
-        p = img[i, j]
-        write(s, uint8(redval(p)))
-        write(s, uint8(greenval(p)))
-        write(s, uint8(blueval(p)))
+        write(s, uint8(img[i,j,1]))
+        write(s, uint8(img[i,j,2]))
+        write(s, uint8(img[i,j,3]))
     end
 
     close(s)
