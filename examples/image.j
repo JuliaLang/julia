@@ -93,3 +93,10 @@ function imwrite(I, file::String)
     close(stream)
     wait(cmd)
 end
+
+function imshow(img)
+    tmp::String = "./tmp.ppm"
+    ppmwrite(img, tmp)
+    cmd = `feh $tmp`
+    spawn(cmd)
+end
