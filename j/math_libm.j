@@ -212,6 +212,16 @@ let
     const ae::Array{Int32,1} = Array(Int32,2)
     const wrk::Array{Float64,1} = Array(Float64,2)
 
+    function _besselh(nu::Float64, k::Integer, z::Complex128)
+        ccall(dlsym(_jl_libamos, :zbesh_), Void,
+              (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
+               Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
+              real(z), imag(z), nu, int32(1), int32(k), int32(1),
+              pointer(cy,1), pointer(cy,2),
+              pointer(ae,1), pointer(ae,2))
+        return complex(cy[1],cy[2])
+    end
+
     function _besseli(nu::Float64, z::Complex128)
         ccall(dlsym(_jl_libamos, :zbesi_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
@@ -252,6 +262,15 @@ let
               pointer(ae,1), pointer(wrk,1),
               pointer(wrk,2), pointer(ae,2))
         return complex(cy[1],cy[2])
+    end
+
+    global besselh
+    function besselh(nu::Float64, k::Integer, z::Complex128)
+        if nu < 0
+            s = (k == 1) ? 1 : -1
+            return _besselh(-nu, k, z) * exp(-s*nu*im*pi)
+        end
+        return _besselh(nu, k, z)
     end
 
     global besseli
@@ -300,6 +319,11 @@ let
     end
 end
 
+besselh(nu, z) = besselh(nu, 1, z)
+besselh(nu::Real, k::Integer, z::Complex64) = complex64(besselh(float64(nu), k, complex128(z)))
+besselh(nu::Real, k::Integer, z::Complex) = besselh(float64(nu), k, complex128(z))
+besselh(nu::Real, k::Integer, x::Real) = besselh(float64(nu), k, complex128(x))
+
 besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Real) = besseli(float64(nu), complex128(x))
@@ -322,5 +346,5 @@ bessely(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 bessely(nu::Real, z::Complex) = bessely(float64(nu), complex128(z))
 bessely(nu::Real, x::Real) = bessely(float64(nu), complex128(x))
 
-hankelh1(nu, z) = besselj(nu, z) + bessely(nu, z)im
-hankelh2(nu, z) = besselj(nu, z) - bessely(nu, z)im
+hankelh1(nu, z) = besselh(nu, 1, z)
+hankelh2(nu, z) = besselh(nu, 2, z)

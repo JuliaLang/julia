@@ -15,6 +15,13 @@ end
 @assert_approx_eq airy(2, 1.8) 2.59587
 @assert_approx_eq airy(3, 1.8) 2.98554
 
+# besselh
+true_h133 = 0.309063 - 0.538542im
+@assert_approx_eq besselh(3,1,3) true_h133
+@assert_approx_eq besselh(-3,1,3) -true_h133
+@assert_approx_eq besselh(3,2,3) conj(true_h133)
+@assert_approx_eq besselh(-3,2,3) -conj(true_h133)
+
 # besseli
 true_i33 = 0.959754
 @assert_approx_eq besseli(3,3) true_i33
