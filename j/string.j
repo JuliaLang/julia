@@ -9,7 +9,6 @@ next(s::String, i::Integer) = next(s,int(i))
 
 start(s::String) = 1
 done(s::String,i) = (i > length(s))
-numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]

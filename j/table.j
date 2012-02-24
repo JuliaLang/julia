@@ -201,7 +201,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if numel(h.deleted) >= ((3*sz)>>2)
+    if length(h.deleted) >= ((3*sz)>>2)
         rehash(h, sz)
     end
 
@@ -305,7 +305,7 @@ next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
                           skip_deleted(t.used,t.deleted,nxt)))
 
 isempty(t::HashTable) = done(t, start(t))
-numel(t::HashTable) = numel(t.used)-numel(t.deleted)
+length(t::HashTable) = length(t.used)-length(t.deleted)
 
 function add_weak_key(t::HashTable, k, v)
     if is(t.deleter, identity)
