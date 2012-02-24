@@ -465,10 +465,9 @@ static jl_value_t *build_backtrace(void)
 }
 #endif
 
-static jmp_buf *toplevel_eh_ctx = NULL;
 DLLEXPORT void jl_register_toplevel_eh(void)
 {
-    toplevel_eh_ctx = jl_current_task->state.eh_task->state.eh_ctx;
+    jl_current_task->state.eh_task->state.bt = 1;
 }
 
 // yield to exception handler
@@ -477,7 +476,7 @@ void jl_raise(jl_value_t *e)
     jl_task_t *eh = jl_current_task->state.eh_task;
     eh->state.err = 1;
     jl_exception_in_transit = e;
-    if (eh->state.eh_ctx == toplevel_eh_ctx) {
+    if (eh->state.bt) {
         jl_value_t *tracedata, *bt;
         tracedata = build_backtrace();
         JL_GC_PUSH(&tracedata);
@@ -515,6 +514,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->start = start;
     t->result = NULL;
     t->state.err = 0;
+    t->state.bt = 0;
     t->state.eh_task = jl_current_task->state.eh_task;
     // there is no active exception handler available on this stack yet
     t->state.eh_ctx = NULL;
@@ -634,6 +634,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
     jl_current_task->state.err = 0;
+    jl_current_task->state.bt = 0;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
