@@ -272,7 +272,7 @@ let
         end
     end
 
-    function besselj(nu::Int, x::Float)
+    function besselj(nu::Integer, x::Float)
         if x == 0
             return (nu == 0) ? one(x) : zero(x)
         end
@@ -281,7 +281,7 @@ let
             x = -x
         end
         ans = _besselj(float64(nu), complex128(abs(x)))
-        if (x < 0) && (nu % 2 == 1)
+        if (x < 0) && isodd(nu)
             ans = -ans
         end
         oftype(x, real(ans))
@@ -311,7 +311,7 @@ end
 
 besselj(nu::Real, z::Complex64) = complex64(besselj(float64(nu), complex128(z)))
 besselj(nu::Real, z::Complex) = besselj(float64(nu), complex128(z))
-besselj(nu::Int, x::Real) = besselj(nu, float(x))
+besselj(nu::Integer, x::Real) = besselj(nu, float(x))
 besselj(nu::Real, x::Real) = besselj(float(nu), float(x))
 
 besselk(nu::Real, z::Complex64) = complex64(besselk(float64(nu), complex128(z)))
