@@ -136,3 +136,66 @@ function rgb2gray(img)
     end
     out
 end
+
+function fspecial(filter::String, filter_size, sigma)
+    for i = filter_size
+        if mod(i, 2) != 1
+            error("filter size must be odd")
+        end
+    end
+
+    if length(filter_size) == 2
+        m = filter_size[1]
+        n = filter_size[2]
+    elseif length(filter_size) == 1
+        m = filter_size
+        n = m
+    elseif length(filter_size) == 0
+        m = 3
+        n = 3
+    else
+        error("filter size must consist of one or two values")
+    end
+
+    if filter == "average"
+        out = ones(Float, m, n)/(m*n)
+    elseif filter == "sobel"
+        out = [1.0 2.0 1.0; 0 0 0; -1.0 -2.0 -1.0]
+    elseif filter == "prewitt"
+        out = [1.0 1.0 1.0; 0 0 0; -1.0 -1.0 -1.0]
+    elseif filter == "gaussian"
+        out = gaussian2d(sigma, [m n])
+    else
+        error("unkown filter type")
+    end
+end
+
+function gaussian2d(sigma, filter_size)
+    for i = filter_size
+        if mod(i, 2) != 1
+            error("filter size must be odd")
+        end
+    end
+
+    if length(sigma) == 0
+        sigma = 0.5
+    end
+
+    if length(filter_size) == 2
+        m = filter_size[1]
+        n = filter_size[2]
+    elseif length(filter_size) == 1
+        m = filter_size
+        n = m
+    elseif length(filter_size) == 0
+        # choose 'good' size 
+        m = 4*ceil(sigma)+1
+        n = m
+    else
+        error("filter size must consist of one or two values")
+    end
+
+    X, Y = meshgrid(-floor(n/2):floor(n/2), -floor(m/2):floor(m/2))
+    g = exp(-(X.^2+Y.^2)/(2*sigma^2))
+    gaussian = g/sum(g)
+end
