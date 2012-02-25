@@ -39,10 +39,21 @@ function ppmwrite(img, file::String)
     write(s, "# ppm file written by julia\n")
     n, m = size(img)
     write(s, "$m $n 255\n")
-    for i=1:n, j=1:m
-        write(s, uint8(img[i,j,1]))
-        write(s, uint8(img[i,j,2]))
-        write(s, uint8(img[i,j,3]))
+    if ndims(img)==3 && size(img,3)==3
+        for i=1:n, j=1:m
+            write(s, uint8(img[i,j,1]))
+            write(s, uint8(img[i,j,2]))
+            write(s, uint8(img[i,j,3]))
+        end
+    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
+        for i=1:n, j=1:m
+            p = img[i,j]
+            write(s, uint8(redval(p)))
+            write(s, uint8(greenval(p)))
+            write(s, uint8(blueval(p)))
+        end
+    else
+        error("unsupported array type")
     end
 
     close(s)
