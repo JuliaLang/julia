@@ -109,11 +109,29 @@ function imwrite(I, file::String)
     wait(cmd)
 end
 
-function imshow(img)
+function imshow(img, range)
+    if ndims(img) == 2 && (is(eltype(img), Int8) || is(eltype(img), Uint8))
+        # only makes sense for gray scale images
+        img = imadjustintensity(img, range)
+    end
     tmp::String = "./tmp.ppm"
     ppmwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
+end
+
+function imadjustintensity(img, range)
+    if length(range) == 0
+        range = [min(img) max(img)]
+    elseif length(range) == 1
+        error("wrong range")
+    end
+
+    tmp = (float(img)-range[1])/(range[2] - range[1])
+    tmp[tmp > 1] = 1
+    tmp[tmp < 0] = 0
+
+    out = uint8(255*tmp)
 end
 
 function rgb2gray(img)
