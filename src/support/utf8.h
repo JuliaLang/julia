@@ -1,34 +1,21 @@
-#ifndef __UTF8_H_
-#define __UTF8_H_
-
-#if !defined(__APPLE__)
-#if !defined(__DTYPES_H_) && !defined(_SYS_TYPES_H)
-typedef char int8_t;
-typedef short int16_t;
-typedef int int32_t;
-typedef long long int64_t;
-typedef unsigned char u_int8_t;
-typedef unsigned short u_int16_t;
-typedef unsigned int u_int32_t;
-typedef unsigned long long u_int64_t;
-#endif
-#endif
+#ifndef UTF8_H
+#define UTF8_H
 
 extern int locale_is_utf8;
 
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)
 
-#define UEOF ((u_int32_t)-1)
+#define UEOF ((uint32_t)-1)
 
 /* convert UTF-8 data to wide character */
-size_t u8_toucs(u_int32_t *dest, size_t sz, const char *src, size_t srcsz);
+size_t u8_toucs(uint32_t *dest, size_t sz, const char *src, size_t srcsz);
 
 /* the opposite conversion */
-size_t u8_toutf8(char *dest, size_t sz, const u_int32_t *src, size_t srcsz);
+size_t u8_toutf8(char *dest, size_t sz, const uint32_t *src, size_t srcsz);
 
 /* single character to UTF-8, returns # bytes written */
-size_t u8_wc_toutf8(char *dest, u_int32_t ch);
+size_t u8_wc_toutf8(char *dest, uint32_t ch);
 
 /* character number to byte offset */
 size_t u8_offset(const char *str, size_t charnum);
@@ -37,10 +24,10 @@ size_t u8_offset(const char *str, size_t charnum);
 size_t u8_charnum(const char *s, size_t offset);
 
 /* return next character, updating an index variable */
-u_int32_t u8_nextchar(const char *s, size_t *i);
+uint32_t u8_nextchar(const char *s, size_t *i);
 
 /* next character without NUL character terminator */
-u_int32_t u8_nextmemchar(const char *s, size_t *i);
+uint32_t u8_nextmemchar(const char *s, size_t *i);
 
 /* move to next character */
 void u8_inc(const char *s, size_t *i);
@@ -52,22 +39,22 @@ void u8_dec(const char *s, size_t *i);
 size_t u8_seqlen(const char *s);
 
 /* returns the # of bytes needed to encode a certain character */
-size_t u8_charlen(u_int32_t ch);
+size_t u8_charlen(uint32_t ch);
 
 /* computes the # of bytes needed to encode a WC string as UTF-8 */
-size_t u8_codingsize(u_int32_t *wcstr, size_t n);
+size_t u8_codingsize(uint32_t *wcstr, size_t n);
 
 char read_escape_control_char(char c);
 
 /* assuming src points to the character after a backslash, read an
    escape sequence, storing the result in dest and returning the number of
    input characters processed */
-size_t u8_read_escape_sequence(const char *src, size_t ssz, u_int32_t *dest);
+size_t u8_read_escape_sequence(const char *src, size_t ssz, uint32_t *dest);
 
 /* given a wide character, convert it to an ASCII escape sequence stored in
    buf, where buf is "sz" bytes. returns the number of characters output.
    sz must be at least 3. */
-int u8_escape_wchar(char *buf, size_t sz, u_int32_t ch);
+int u8_escape_wchar(char *buf, size_t sz, uint32_t ch);
 
 /* convert a string "src" containing escape sequences to UTF-8 */
 size_t u8_unescape(char *buf, size_t sz, const char *src);
@@ -96,13 +83,13 @@ int hex_digit(char c);
 
 /* return a pointer to the first occurrence of ch in s, or NULL if not
    found. character index of found character returned in *charn. */
-char *u8_strchr(const char *s, u_int32_t ch, size_t *charn);
+char *u8_strchr(const char *s, uint32_t ch, size_t *charn);
 
 /* same as the above, but searches a buffer of a given size instead of
    a NUL-terminated string. */
-char *u8_memchr(const char *s, u_int32_t ch, size_t sz, size_t *charn);
+char *u8_memchr(const char *s, uint32_t ch, size_t sz, size_t *charn);
 
-char *u8_memrchr(const char *s, u_int32_t ch, size_t sz);
+char *u8_memrchr(const char *s, uint32_t ch, size_t sz);
 
 /* count the number of characters in a UTF-8 string */
 size_t u8_strlen(const char *s);

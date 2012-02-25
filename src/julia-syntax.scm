@@ -589,8 +589,10 @@
 		 (loop (cdr b)
 		       (cons (decl-var x) vars)
 		       (cons x assigns)))
+		((symbol? x)
+		 (loop (cdr b) (cons x vars) assigns))
 		(else
-		 (loop (cdr b) (cons x vars) assigns)))))))
+		 (error (string "invalid syntax in " what " declaration"))))))))
 
 (define (make-assignment l r) `(= ,l ,r))
 (define (assignment? e) (and (pair? e) (eq? (car e) '=)))

@@ -106,7 +106,7 @@ function append_any(xs...)
     # exact function.
     n = 0
     for x = xs
-        n += numel(x)
+        n += length(x)
     end
     out = Array(Any, n)
     i = 1

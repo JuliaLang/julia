@@ -1,5 +1,5 @@
-#ifndef _NEWOBJ_INTERNAL_H_
-#define _NEWOBJ_INTERNAL_H_
+#ifndef NEWOBJ_INTERNAL_H
+#define NEWOBJ_INTERNAL_H
 
 static inline jl_value_t *newobj(jl_type_t *type, size_t nfields)
 {

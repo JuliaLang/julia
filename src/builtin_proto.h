@@ -1,5 +1,5 @@
-#ifndef _BUILTIN_PROTO_H_
-#define _BUILTIN_PROTO_H_
+#ifndef BUILTIN_PROTO_H
+#define BUILTIN_PROTO_H
 
 // declarations for julia-callable builtin functions
 

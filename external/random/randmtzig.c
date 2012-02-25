@@ -49,8 +49,6 @@
 #include <time.h>
 #include <sys/time.h>
 
-#include "jl_random.h"
-
 typedef int randmtzig_idx_type;
 typedef signed char randmtzig_int8_t;
 typedef unsigned char randmtzig_uint8_t;

@@ -24,11 +24,6 @@ copysign(x::Float64, y::Real) = copysign(x, float64(y))
 signbit(x::Float64) = signbit(reinterpret(Int64,x))
 signbit(x::Float32) = signbit(reinterpret(Int32,x))
 
-exponent(x::Float64) = ccall(:double_exponent, Int32, (Float64,), x)
-exponent(x::Float32) = ccall(:float_exponent,  Int32, (Float32,), x)
-mantissa(x::Float64) = ccall(:double_mantissa, Float64, (Float64,), x)
-mantissa(x::Float32) = ccall(:float_mantissa,  Float32, (Float32,), x)
-
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = float32(16777216.)
 maxintfloat{T<:Float}(x::T)  = maxintfloat(T)

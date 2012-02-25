@@ -1,5 +1,5 @@
-#ifndef _FLISP_H_
-#define _FLISP_H_
+#ifndef FLISP_H
+#define FLISP_H
 
 #include "libsupport.h"
 

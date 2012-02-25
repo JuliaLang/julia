@@ -55,3 +55,7 @@ end
 macro eval(x)
     :(eval($expr(:quote,x)))
 end
+
+macro task(ex)
+    :(Task(()->$ex))
+end

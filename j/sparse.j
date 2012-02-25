@@ -746,7 +746,6 @@ end
 SparseAccumulator(s::Integer) = SparseAccumulator(Float64, Int32, s)
 
 length(S::SparseAccumulator) = length(S.vals)
-numel(S::SparseAccumulator) = S.nvals
 
 # store spa and reset
 function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nzval)

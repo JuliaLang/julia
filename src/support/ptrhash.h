@@ -1,5 +1,5 @@
-#ifndef __PTRHASH_H_
-#define __PTRHASH_H_
+#ifndef PTRHASH_H
+#define PTRHASH_H
 
 #include "htableh.inc"
 

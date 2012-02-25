@@ -29,7 +29,7 @@ function lcfirst(s::ASCIIString)
     return s
 end
 
-function uc(s::ASCIIString)
+function uppercase(s::ASCIIString)
     for i = 1:length(s)
         if 'a' <= s[i] <= 'z'
             t = strcpy(s)
@@ -44,7 +44,7 @@ function uc(s::ASCIIString)
     end
     return s
 end
-function lc(s::ASCIIString)
+function lowercase(s::ASCIIString)
     for i = 1:length(s)
         if 'A' <= s[i] <= 'Z'
             t = strcpy(s)

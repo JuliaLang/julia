@@ -1,5 +1,5 @@
-#ifndef _JULIA_H_
-#define _JULIA_H_
+#ifndef JULIA_H
+#define JULIA_H
 
 #include "libsupport.h"
 
@@ -878,7 +878,8 @@ typedef struct _jl_savestate_t {
     struct _jl_task_t *eh_task;
     // eh_ctx is where I go to handle an exception yielded to me
     jmp_buf *eh_ctx;
-    ptrint_t err;
+    ptrint_t err : 1;
+    ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
     jl_value_t *ostream_obj;
     ios_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP

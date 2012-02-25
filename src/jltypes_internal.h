@@ -1,5 +1,5 @@
-#ifndef _JLTYPES_INTERNAL_H_
-#define _JLTYPES_INTERNAL_H_
+#ifndef JLTYPES_INTERNAL_H
+#define JLTYPES_INTERNAL_H
 
 void jl_cache_type_(jl_tag_type_t *type);
 
