@@ -45,6 +45,10 @@ function ppmwrite(img, file::String)
             write(s, uint8(img[i,j,2]))
             write(s, uint8(img[i,j,3]))
         end
+    elseif ndims(img)==2 && (is(eltype(img),Int8) || is(eltype(img), Uint8))
+        for i=1:n, j=1:m, k = 1:3
+            write(s, uint8(img[i,j]))
+        end
     elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
         for i=1:n, j=1:m
             p = img[i,j]
@@ -110,4 +114,25 @@ function imshow(img)
     ppmwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
+end
+
+function rgb2gray(img)
+    n, m = size(img)
+    red_weight = 0.30
+    green_weight = 0.59
+    blue_weight = 0.11
+    out = Array(Uint8, n, m)
+    if ndims(img)==3 && size(img,3)==3
+        for i=1:n, j=1:m
+            out[i,j] = red_weight*img[i,j,1]+green_weight*img[i,j,2]+blue_weight*img[i,j,3];
+        end
+    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
+        for i=1:n, j=1:m
+            p = img[i,j]
+            out[i,j] = red_weight*redval(p)+green_weight*greenval(p)+blue_weight*blueval(p);
+        end
+    else
+        error("unsupported array type")
+    end
+    out
 end
