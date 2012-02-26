@@ -309,7 +309,7 @@ end
 @in_place_matrix_op sort
 @in_place_matrix_op sort lt::Function
 @in_place_matrix_op sortr
-@in_place_matrix_op sort_by
+@in_place_matrix_op sort_by by::Function
 
 # TODO: implement generalized in-place, ditch this
 function sort(a::AbstractArray, dim::Int)

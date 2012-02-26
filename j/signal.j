@@ -1,6 +1,6 @@
-function filter(b,a,x)
+function filt(b,a,x)
     if a[1]==0
-        error("filter: a[1] must be nonzero")
+        error("filt: a[1] must be nonzero")
     end
 
     sz = max(size(a,1),size(b,1))
@@ -60,7 +60,7 @@ function deconv{T}(b::Vector{T}, a::Vector{T})
     lx = lb-la+1
     x = zeros(T, lx)
     x[1] = 1
-    filter(b, a, x)
+    filt(b, a, x)
 end
 
 function conv{T}(u::Vector{T}, v::Vector{T})
