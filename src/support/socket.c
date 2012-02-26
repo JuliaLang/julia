@@ -18,7 +18,7 @@
 
 int mysocket(int domain, int type, int protocol)
 {
-    int val;
+    /*int val;
     int s = socket(domain, type, protocol);
     if (s < 0)
         return s;
@@ -26,7 +26,7 @@ int mysocket(int domain, int type, int protocol)
     setsockopt(s, SOL_SOCKET, SO_RCVBUF, (char*)&val, sizeof(int));
     val = 131072;
     setsockopt(s, SOL_SOCKET, SO_SNDBUF, (char*)&val, sizeof(int));
-    return s;
+    return s;*/
 }
 
 #ifdef WIN32
@@ -39,7 +39,7 @@ void bzero(void *s, size_t n)
 /* returns a socket on which to accept() connections */
 int open_tcp_port(short portno)
 {
-    int sockfd;
+    /*int sockfd;
     //int val;
     struct sockaddr_in serv_addr;
 
@@ -57,7 +57,7 @@ int open_tcp_port(short portno)
     }
 
     listen(sockfd, 4);
-    return sockfd;
+    return sockfd;*/
 }
 
 /* returns a socket on which to accept() connections, finding some
@@ -65,7 +65,7 @@ int open_tcp_port(short portno)
 int open_any_tcp_port(short *portno)
 
 {
-    int sockfd;
+   /* int sockfd;
     //int val;
     struct sockaddr_in serv_addr;
 
@@ -84,14 +84,14 @@ int open_any_tcp_port(short *portno)
     }
 
     listen(sockfd, 4);
-    return sockfd;
+    return sockfd;*/
 }
 
 /* returns a socket on which to accept() connections, finding some
    available port (portno is value-return) */
 int open_any_udp_port(short *portno)
 {
-    int sockfd;
+    /*int sockfd;
     struct sockaddr_in serv_addr;
 
     sockfd = mysocket(PF_INET, SOCK_DGRAM, 0);
@@ -106,7 +106,7 @@ int open_any_udp_port(short *portno)
         serv_addr.sin_port = htons(*portno);
     }
 
-    return sockfd;
+    return sockfd;*/
 }
 
 #ifndef WIN32
@@ -119,7 +119,7 @@ void closesocket(int fd)
 /* returns a socket to use to send data to the given address */
 int connect_to_host(char *hostname, short portno)
 {
-    struct hostent *host_info;
+   /* struct hostent *host_info;
     int sockfd, yes=1;
     struct sockaddr_in host_addr;
 
@@ -146,12 +146,12 @@ int connect_to_host(char *hostname, short portno)
         return -1;
     }
 
-    return sockfd;
+    return sockfd;*/
 }
 
 int connect_to_addr(struct sockaddr_in *host_addr)
 {
-    int sockfd, yes=1;
+   /* int sockfd, yes=1;
 
     sockfd = mysocket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (sockfd < 0) {
@@ -165,13 +165,14 @@ int connect_to_addr(struct sockaddr_in *host_addr)
         return -1;
     }
 
-    return sockfd;
+    return sockfd;*/
 }
+
 
 DLLEXPORT
 void getlocalip(char *buf, size_t len)
 {
-    struct ifaddrs * ifAddrStruct=NULL;
+ /*   struct ifaddrs * ifAddrStruct=NULL;
     struct ifaddrs * ifa=NULL;
     void * tmpAddrPtr=NULL;
     buf[0] = '\0';
@@ -195,7 +196,7 @@ void getlocalip(char *buf, size_t len)
             inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
             printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer); 
         }
-        */
+        *//*
     }
-    if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
+    if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);*/
 }

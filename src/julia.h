@@ -2,6 +2,7 @@
 #define _JULIA_H_
 
 #include "libsupport.h"
+#include <stdint.h>
 
 #define JL_GC_MARKSWEEP
 
