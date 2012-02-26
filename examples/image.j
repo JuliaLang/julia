@@ -120,17 +120,17 @@ function imshow(img, range)
     spawn(cmd)
 end
 
+imshow(img) = imshow(img, [])
+
 function imadjustintensity(img, range)
     if length(range) == 0
         range = [min(img) max(img)]
     elseif length(range) == 1
         error("wrong range")
     end
-
     tmp = (float(img)-range[1])/(range[2] - range[1])
     tmp[tmp > 1] = 1
     tmp[tmp < 0] = 0
-
     out = uint8(255*tmp)
 end
 
@@ -176,7 +176,7 @@ function fspecial(filter::String, filter_size, sigma)
     end
 
     if filter == "average"
-        out = ones(Float, m, n)/(m*n)
+        out = ones(Float64, m, n)/(m*n)
     elseif filter == "sobel"
         out = [1.0 2.0 1.0; 0 0 0; -1.0 -2.0 -1.0]
     elseif filter == "prewitt"
@@ -187,6 +187,9 @@ function fspecial(filter::String, filter_size, sigma)
         error("unkown filter type")
     end
 end
+
+fspecial(filter::String, filter_size) = fspecial(filter::String, filter_size, 0.5)
+fspecial(filter::String) = fspecial(filter::String, [], 0.5)
 
 function gaussian2d(sigma, filter_size)
     for i = filter_size
@@ -213,7 +216,9 @@ function gaussian2d(sigma, filter_size)
         error("filter size must consist of one or two values")
     end
 
-    X, Y = meshgrid(-floor(n/2):floor(n/2), -floor(m/2):floor(m/2))
-    g = exp(-(X.^2+Y.^2)/(2*sigma^2))
+    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=[-floor(m/2):floor(m/2)], Y=[-floor(n/2):floor(n/2)]]
     gaussian = g/sum(g)
 end
+
+gaussian2d(sigma) = gaussian2d(sigma, [])
+gaussian2d() = gaussian2d(0.5, [])
