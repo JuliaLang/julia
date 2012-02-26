@@ -21,7 +21,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -39,6 +39,19 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
 endif
 
+ifeq ($(USE_SYSTEM_PCRE), 0)
+LIBS += pcre
+endif
+
+ifeq ($(USE_SYSTEM_BLAS), 0)
+LIBS += openblas
+endif
+
+ifeq ($(USE_SYSTEM_LAPACK), 0)
+LIBS += lapack
+endif
+
+# Hard-coded setup for libraries on Debian
 ifeq ($(USE_DEBIAN), 1)
 LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper
 endif
@@ -318,7 +331,7 @@ arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 $(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
+	$(FC) -shared $(LDFLAGS) $(FFLAGS) SRC/*.f UTIL/*.f -o libarpack.$(SHLIB_EXT) $(LIBBLAS) $(LIBLAPACK) && \
 	cp libarpack.$(SHLIB_EXT) $(JULIALIB)
 	touch $@
 
