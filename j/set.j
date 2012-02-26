@@ -11,7 +11,7 @@ Set{T}(x::T...) = Set{T}(x...)
 show(s::Set) = (show(typeof(s)); show_comma_array(s,'(',')'))
 
 isempty(s::Set) = isempty(s.hash)
-numel(s::Set)  = numel(s.hash)
+length(s::Set)  = length(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)

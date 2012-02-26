@@ -1,5 +1,5 @@
-#ifndef __ARRAYLIST_H_
-#define __ARRAYLIST_H_
+#ifndef ARRAYLIST_H
+#define ARRAYLIST_H
 
 #define AL_N_INLINE 29
 

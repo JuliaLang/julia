@@ -198,6 +198,7 @@ typedef struct {
     std::map<std::string, int> *closureEnv;
     std::map<std::string, bool> *isAssigned;
     std::map<std::string, bool> *isCaptured;
+    std::map<std::string, bool> *escapes;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *savestates;
@@ -214,6 +215,9 @@ typedef struct {
     //int maxDepth;
     int argSpace;
     std::string funcName;
+    jl_sym_t *vaName;  // name of vararg argument
+    bool vaStack;      // varargs stack-allocated
+    int nReqArgs;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool value);
@@ -265,6 +269,13 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
     return false;
 }
 
+static bool symbol_eq(jl_value_t *e, jl_sym_t *sym)
+{
+    return ((jl_is_symbol(e) && ((jl_sym_t*)e)==sym) ||
+            (jl_is_symbolnode(e) && jl_symbolnode_sym(e)==sym) ||
+            (jl_is_topnode(e) && ((jl_sym_t*)jl_fieldref(e,0))==sym));
+}
+
 // --- gc root counting ---
 
 static bool expr_is_symbol(jl_value_t *e)
@@ -272,10 +283,16 @@ static bool expr_is_symbol(jl_value_t *e)
     return (jl_is_symbol(e) || jl_is_symbolnode(e) || jl_is_topnode(e));
 }
 
+// some analysis. determine max needed "evaluation stack" space for
+// gc-rooting function arguments.
+// also a very simple, conservative escape analysis that is sufficient for
+// eliding allocation of varargs tuples.
+// "esc" means "in escaping context"
 static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
-                          jl_codectx_t *ctx)
+                          bool esc, jl_codectx_t *ctx)
 {
     if (jl_is_expr(expr)) {
+        esc = true;
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i;
         if (e->head == call_sym || e->head == call1_sym) {
@@ -287,19 +304,21 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                     jl_value_t *fv =
                         jl_interpret_toplevel_expr_in(ctx->module, f, NULL, 0);
                     if (jl_typeis(fv, jl_intrinsic_type)) {
+                        esc = false;
                         JL_I::intrinsic fi = (JL_I::intrinsic)jl_unbox_int32(fv);
                         if (fi != JL_I::ccall) {
                             // here we need space for each argument, but
                             // not for each of their results
                             for(i=1; i < (size_t)alen; i++) {
-                                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
                             }
                             return;
                         }
                         else {
+                            esc = true;
                             // first 3 arguments are static
                             for(i=4; i < (size_t)alen; i++) {
-                                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
                                 (*sp)++;
                                 if (*sp > *max) *max = *sp;
                             }
@@ -307,37 +326,54 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             return;
                         }
                     }
+                    else if (jl_is_function(fv)) {
+                        jl_function_t *ff = (jl_function_t*)fv;
+                        if (ff->fptr == jl_f_tuplelen ||
+                            ff->fptr == jl_f_tupleref) {
+                            esc = false;
+                        }
+                    }
                 }
             }
             else if (jl_is_expr(f) || jl_is_lambda_info(f)) {
-                max_arg_depth(f, max, sp, ctx);
+                max_arg_depth(f, max, sp, esc, ctx);
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
 
             for(i=1; i < (size_t)alen; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
                 (*sp)++;
                 if (*sp > *max) *max = *sp;
             }
             (*sp) = lastsp;
         }
         else if (e->head == method_sym) {
-            max_arg_depth(jl_exprarg(e,1), max, sp, ctx);
+            max_arg_depth(jl_exprarg(e,1), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
-            max_arg_depth(jl_exprarg(e,2), max, sp, ctx);
+            max_arg_depth(jl_exprarg(e,2), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
-            max_arg_depth(jl_exprarg(e,3), max, sp, ctx);
+            max_arg_depth(jl_exprarg(e,3), max, sp, esc, ctx);
             (*sp)++;
             if (*sp > *max) *max = *sp;
             (*sp)-=2;
         }
         else {
             for(i=0; i < e->args->length; i++) {
-                max_arg_depth(jl_exprarg(e,i), max, sp, ctx);
+                max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
             }
+        }
+    }
+    else if (jl_is_symbolnode(expr)) {
+        expr = (jl_value_t*)jl_symbolnode_sym(expr);
+    }
+    if (jl_is_symbol(expr)) {
+        char *vname = ((jl_sym_t*)expr)->name;
+        if (ctx->escapes->find(vname) != ctx->escapes->end()) {
+            bool did_escape = (*ctx->escapes)[vname];
+            (*ctx->escapes)[vname] = did_escape || esc;
         }
     }
 }
@@ -449,7 +485,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     jl_function_t *f = (jl_function_t*)ff;
     if (f->fptr == &jl_apply_generic) {
         *theFptr = jlapplygeneric_func;
-        *theF = literal_pointer_val(f);
+        *theF = literal_pointer_val((jl_value_t*)f);
         if (ctx->linfo->specTypes != NULL) {
             jl_tuple_t *aty = call_arg_types(&args[1], nargs, ctx);
             rt1 = (jl_value_t*)aty;
@@ -466,7 +502,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (f != NULL) {
                     assert(f->linfo->functionObject != NULL);
                     *theFptr = (Value*)f->linfo->functionObject;
-                    *theF = literal_pointer_val(f);
+                    *theF = literal_pointer_val((jl_value_t*)f);
                 }
             }
         }
@@ -545,15 +581,33 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_tuplelen && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
         if (jl_is_tuple(aty)) {
-            Value *arg1 = emit_expr(args[1], ctx, true);
-            JL_GC_POP();
-            return emit_tuplelen(arg1);
+            if (symbol_eq(args[1], ctx->vaName) &&
+                !(*ctx->isAssigned)[ctx->vaName->name]) {
+                JL_GC_POP();
+                return emit_n_varargs(ctx);
+            }
+            else {
+                Value *arg1 = emit_expr(args[1], ctx, true);
+                JL_GC_POP();
+                return emit_tuplelen(arg1);
+            }
         }
     }
     else if (f->fptr == &jl_f_tupleref && nargs==2) {
         jl_value_t *tty = expr_type(args[1], ctx); rt1 = tty;
         jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
         if (jl_is_tuple(tty) && ity==(jl_value_t*)jl_long_type) {
+            if (ctx->vaStack && symbol_eq(args[1], ctx->vaName)) {
+                Value *valen = emit_n_varargs(ctx);
+                Value *idx = emit_unbox(T_size, T_psize,
+                                        emit_unboxed(args[2], ctx));
+                idx = emit_bounds_check(idx, valen,
+                                        "tupleref: index out of range", ctx);
+                idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
+                JL_GC_POP();
+                return builder.
+                    CreateLoad(builder.CreateGEP((Value*)ctx->argArray,idx),false);
+            }
             Value *arg1 = emit_expr(args[1], ctx, true);
             if (jl_is_long(args[2])) {
                 uint32_t idx = (uint32_t)jl_unbox_long(args[2]);
@@ -869,6 +923,12 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     hdtype = expr_type(a00, ctx);
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx, true);
+        if (theFunc->getType() != jl_pvalue_llvmt || jl_is_tuple(hdtype)) {
+            // we know it's not a function
+            emit_type_error(theFunc, (jl_value_t*)jl_function_type, "apply", ctx);
+            ctx->argDepth = last_depth;
+            return V_null;
+        }
 #ifdef JL_GC_MARKSWEEP
         if (!headIsGlobal && (jl_is_expr(a0) || jl_is_lambda_info(a0))) {
             make_gcroot(boxed(theFunc), ctx);
@@ -880,19 +940,10 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
               jl_is_struct_type(jl_tparam0(hdtype)))) {
             emit_func_check(theFunc, ctx);
         }
-        if (theFunc->getType() != jl_pvalue_llvmt) {
-            // we know it's not a function, in fact it has been declared
-            // not to be. the above error should therefore trigger.
-            ctx->argDepth = last_depth;
-            return V_null;
-        }
-        else {
-            // extract pieces of the function object
-            // TODO: try extractelement instead
-            theFptr =
-                builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
-            theF = theFunc;
-        }
+        // extract pieces of the function object
+        // TODO: try extractelement instead
+        theFptr = builder.CreateBitCast(emit_nthptr(theFunc, 1), jl_fptr_llvmt);
+        theF = theFunc;
     }
     // emit arguments
     size_t i;
@@ -1341,6 +1392,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::map<std::string, int> closureEnv;
     std::map<std::string, bool> isAssigned;
     std::map<std::string, bool> isCaptured;
+    std::map<std::string, bool> escapes;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
     std::map<int, Value*> savestates;
@@ -1358,6 +1410,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.closureEnv = &closureEnv;
     ctx.isAssigned = &isAssigned;
     ctx.isCaptured = &isCaptured;
+    ctx.escapes = &escapes;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
     ctx.savestates = &savestates;
@@ -1369,6 +1422,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.argArray = &argArray;
     ctx.argCount = &argCount;
     ctx.funcName = lam->name->name;
+    ctx.vaName = NULL;
+    ctx.vaStack = false;
 
     // look for initial (line num filename) node
     jl_array_t *stmts = jl_lam_body(ast)->args;
@@ -1420,7 +1475,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     if (nreq > 0 && jl_is_rest_arg(jl_cellref(largs,nreq-1))) {
         nreq--;
         va = 1;
+        ctx.vaName = jl_decl_var(jl_cellref(largs,nreq));
     }
+    ctx.nReqArgs = nreq;
 
     jl_array_t *vinfos = jl_lam_vinfo(ast);
     size_t i;
@@ -1429,7 +1486,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         assert(jl_is_array(vi));
         char *vname = ((jl_sym_t*)jl_cellref(vi,0))->name;
         isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
-        isCaptured[vname] = (jl_vinfo_capt(vi)!=0);
+        bool iscapt = (jl_vinfo_capt(vi)!=0);
+        isCaptured[vname] = iscapt;
+        escapes[vname] = iscapt;
         declTypes[vname] = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -1440,6 +1499,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         closureEnv[vname] = i;
         isAssigned[vname] = (jl_vinfo_assigned(vi)!=0);
         isCaptured[vname] = true;
+        escapes[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }
 
@@ -1472,7 +1532,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
 
     int32_t argdepth=0, vsp=0;
-    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp, &ctx);
+    max_arg_depth((jl_value_t*)ast, &argdepth, &vsp, true, &ctx);
     n_roots += argdepth;
     //total_roots += n_roots;
     ctx.argDepth = 0;
@@ -1622,19 +1682,24 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     // allocate rest argument if necessary
     if (va) {
-        // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
-        Value *restTuple =
-            builder.CreateCall3(jltuple_func, V_null,
-                                builder.CreateGEP((Value*)&argArray,
-                                                  ConstantInt::get(T_int32,nreq)),
-                                builder.CreateSub((Value*)&argCount,
-                                                  ConstantInt::get(T_int32,nreq)));
-        char *argname = jl_decl_var(jl_cellref(largs,nreq))->name;
-        Value *lv = localVars[argname];
-        if (isBoxed(argname, &ctx))
-            builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
-        else
-            builder.CreateStore(restTuple, lv);
+        if (!escapes[ctx.vaName->name] && !isAssigned[ctx.vaName->name]) {
+            ctx.vaStack = true;
+        }
+        else {
+            // restarg = jl_f_tuple(NULL, &args[nreq], nargs-nreq)
+            Value *restTuple =
+                builder.CreateCall3(jltuple_func, V_null,
+                                    builder.CreateGEP((Value*)&argArray,
+                                                      ConstantInt::get(T_int32,nreq)),
+                                    builder.CreateSub((Value*)&argCount,
+                                                      ConstantInt::get(T_int32,nreq)));
+            char *argname = ctx.vaName->name;
+            Value *lv = localVars[argname];
+            if (isBoxed(argname, &ctx))
+                builder.CreateStore(builder.CreateCall(jlbox_func, restTuple), lv);
+            else
+                builder.CreateStore(restTuple, lv);
+        }
     }
 
     // associate labels with basic blocks so forward jumps can be resolved

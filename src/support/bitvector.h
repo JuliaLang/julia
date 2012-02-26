@@ -1,5 +1,5 @@
-#ifndef __BITVECTOR_H_
-#define __BITVECTOR_H_
+#ifndef BITVECTOR_H
+#define BITVECTOR_H
 
 // a mask with n set lo or hi bits
 #define lomask(n) (u_int32_t)((((u_int32_t)1)<<(n))-1)

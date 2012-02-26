@@ -94,6 +94,8 @@ function edit(file::String, line::Int)
             run(`vim $file +$line`)
         elseif editor == "textmate"
             run(`mate $file -l $line`)
+        elseif editor == "subl"
+            run(`subl $file:$line`)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
@@ -104,6 +106,8 @@ function edit(file::String, line::Int)
             run(`vim $file +$line`)
         elseif editor == "textmate"
             run(`mate $file -l $line`)
+        elseif editor == "subl"
+            run(`subl $file:$line`)
         else
             error("Invalid JULIA_EDITOR value: $(show_to_string(editor))")
         end
@@ -251,7 +255,7 @@ end
 
 _jl_helpdb = nothing
 
-const _jl_help_url = "https://raw.github.com/wiki/JuliaLang/julia/Standard-Library-Reference.md"
+const _jl_help_url = "https://raw.github.com/JuliaLang/julialang.github.com/master/manual/standard-library-reference/index.md"
 
 function _jl_init_help()
     global _jl_helpdb

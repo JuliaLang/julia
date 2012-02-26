@@ -40,10 +40,9 @@ function ppmwrite(img, file::String)
     n, m = size(img)
     write(s, "$m $n 255\n")
     for i=1:n, j=1:m
-        p = img[i, j]
-        write(s, uint8(redval(p)))
-        write(s, uint8(greenval(p)))
-        write(s, uint8(blueval(p)))
+        write(s, uint8(img[i,j,1]))
+        write(s, uint8(img[i,j,2]))
+        write(s, uint8(img[i,j,3]))
     end
 
     close(s)
@@ -59,8 +58,8 @@ function imread(file::String)
     spawn(cmd)
     szline = readline(stream)
     spc = strchr(szline, ' ')
-    w = parse_dec(szline[1:spc-1])
-    h = parse_dec(szline[spc+1:end-1])
+    w = parse_int(szline[1:spc-1])
+    h = parse_int(szline[spc+1:end-1])
     img = Array(Uint8, h, w, 3)
     for i=1:h, j=1:w
         img[i,j,1] = read(stream, Uint8)
@@ -93,4 +92,11 @@ function imwrite(I, file::String)
     end
     close(stream)
     wait(cmd)
+end
+
+function imshow(img)
+    tmp::String = "./tmp.ppm"
+    ppmwrite(img, tmp)
+    cmd = `feh $tmp`
+    spawn(cmd)
 end

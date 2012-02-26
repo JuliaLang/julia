@@ -15,7 +15,6 @@ const islogical = isbool
 
 size(x::Number) = ()
 ndims(x::Number) = 0
-numel(x::Number) = 1
 length(x::Number) = 1
 ref(x::Number) = x
 
