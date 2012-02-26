@@ -201,4 +201,5 @@ sizeof(::Type{Float64}) = 8
 
 ## mathematical constants ##
 
+const e  = 2.71828182845904523536
 const pi = 3.14159265358979323846
