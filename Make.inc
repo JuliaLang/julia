@@ -72,9 +72,9 @@ LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline -lncurses -lcurses
+READLINE = -lreadline
 else
-READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -85,17 +85,22 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
+OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+endif
+
+ifeq ($(OS), FreeBSD)
+SHLIB_EXT = so
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-OSLIBS += -Wl,-w -framework ApplicationServices
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 #CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -ldl -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

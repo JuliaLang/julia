@@ -8,7 +8,7 @@
 #include <stdarg.h>
 #include <setjmp.h>
 #include <assert.h>
-#if defined(__linux) || defined(__APPLE__)
+#if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -32,7 +32,7 @@ size_t jl_page_size;
 static void jl_find_stack_bottom(void)
 {
     size_t stack_size;
-#if defined(__linux) || defined(__APPLE__)
+#if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     stack_size = rl.rlim_cur;
@@ -43,6 +43,7 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
+#ifndef __WIN32__
 void fpe_handler(int arg)
 {
     (void)arg;
@@ -76,9 +77,12 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
+#endif
+
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
+#ifndef __WIN32__
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -94,19 +98,35 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         jl_raise(jl_interrupt_exception);
     }
 }
+#endif
 
 void jl_get_builtin_hooks(void);
 
-void *jl_dl_handle;
+uv_lib_t jl_dl_handle;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jmp_buf *where);
 extern jmp_buf * volatile jl_jmp_target;
 #endif
 
+static long chachedPagesize = 0;
+long getPageSize (void) {
+#ifdef __WIN32__
+    if (!chachedPagesize) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        chachedPagesize = systemInfo.dwPageSize;
+    }
+    return chachedPagesize;
+#else
+	return sysconf(_SC_PAGESIZE);
+#endif
+}
+
+
 void julia_init(char *imageFile)
 {
-    jl_page_size = sysconf(_SC_PAGESIZE);
+    jl_page_size = getPageSize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
 #ifdef JL_GC_MARKSWEEP
@@ -144,6 +164,8 @@ void julia_init(char *imageFile)
         }
     }
 
+#ifndef __WIN32__
+	
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -162,6 +184,7 @@ void julia_init(char *imageFile)
         ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
         exit(1);
     }
+	
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
@@ -180,6 +203,8 @@ void julia_init(char *imageFile)
         ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
+	
+	#endif
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();

@@ -9,7 +9,6 @@ next(s::String, i::Integer) = next(s,int(i))
 
 start(s::String) = 1
 done(s::String,i) = (i > length(s))
-numel(s::String) = length(s)
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
@@ -347,14 +346,27 @@ end
 
 ## uppercase and lowercase transformations ##
 
-uc(c::Char) = ccall(:towupper, Char, (Char,), c)
-lc(c::Char) = ccall(:towlower, Char, (Char,), c)
+uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
+lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 
-uc(s::String) = TransformedString((c,i)->uc(c), s)
-lc(s::String) = TransformedString((c,i)->lc(c), s)
+uppercase(s::String) = TransformedString((c,i)->uppercase(c), s)
+lowercase(s::String) = TransformedString((c,i)->lowercase(c), s)
 
-ucfirst(s::String) = TransformedString((c,i)->i==1 ? uc(c) : c, s)
-lcfirst(s::String) = TransformedString((c,i)->i==1 ? lc(c) : c, s)
+ucfirst(s::String) = TransformedString((c,i)->i==1 ? uppercase(c) : c, s)
+lcfirst(s::String) = TransformedString((c,i)->i==1 ? lowercase(c) : c, s)
+
+const uc = uppercase
+const lc = lowercase
+
+## string map ##
+
+function map(f::Function, s::String)
+    out = memio(length(s))
+    for c in s
+        write(out, f(c)::Char)
+    end
+    takebuf_string(out)
+end
 
 ## conversion of general objects to strings ##
 
@@ -771,6 +783,7 @@ function split(s::String, delims, include_empty::Bool)
     strs
 end
 
+split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
 split(s::String, x) = split(s, x, true)
 split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
@@ -805,6 +818,33 @@ join(args...) = print_to_string(print_joined, args...)
 chop(s::String) = s[1:thisind(s,length(s))-1]
 chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
 chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
+
+function lstrip(s::String)
+    i = start(s)
+    while !done(s,i)
+        c, j = next(s,i)
+        if !iswspace(c)
+            return s[i:end]
+        end
+        i = j
+    end
+    ""
+end
+
+function rstrip(s::String)
+    r = reverse(s)
+    i = start(r)
+    while !done(r,i)
+        c, j = next(r,i)
+        if !iswspace(c)
+            return s[1:end-i+1]
+        end
+        i = j
+    end
+    ""
+end
+
+strip(s::String) = lstrip(rstrip(s))
 
 ## string to integer functions ##
 

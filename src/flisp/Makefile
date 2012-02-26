@@ -6,7 +6,7 @@ EXENAME = $(NAME)
 LIBTARGET = lib$(NAME)
 
 SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
-	julia_extensions.c
+	julia_extensions.c asprintf.c
 OBJS = $(SRCS:%.c=%.o)
 DOBJS = $(SRCS:%.c=%.do)
 LLTDIR = ../support

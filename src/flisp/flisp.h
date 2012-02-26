@@ -1,7 +1,8 @@
-#ifndef _FLISP_H_
-#define _FLISP_H_
+#ifndef FLISP_H
+#define FLISP_H
 
 #include "libsupport.h"
+#include <stdint.h>
 
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;
@@ -10,6 +11,7 @@ typedef int_t fixnum_t;
 #else
 #define T_FIXNUM T_INT32
 #endif
+
 
 typedef struct {
     value_t car;

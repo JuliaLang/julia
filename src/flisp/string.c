@@ -46,7 +46,8 @@ value_t fl_string_count(value_t *args, u_int32_t nargs)
     return size_wrap(u8_charnum(str+start, stop-start));
 }
 
-extern int wcwidth(wchar_t c);
+
+extern int mk_wcwidth(wchar_t c);
 
 value_t fl_string_width(value_t *args, u_int32_t nargs)
 {
@@ -54,7 +55,7 @@ value_t fl_string_width(value_t *args, u_int32_t nargs)
     if (iscprim(args[0])) {
         cprim_t *cp = (cprim_t*)ptr(args[0]);
         if (cp_class(cp) == wchartype) {
-            int w = wcwidth(*(uint32_t*)cp_data(cp));
+            int w = mk_wcwidth(*(uint32_t*)cp_data(cp));
             if (w < 0)
                 return FL_F;
             return fixnum(w);

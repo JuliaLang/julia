@@ -177,7 +177,7 @@
 	       (read-digs)
 	       (disallow #\.)))
     (let* ((s (get-output-string str))
-	   (n (string->number s)))
+	   (n (string->number s (if (eq? pred char-hex?) 16 10))))
       (if n
 	  (if (eq? pred char-hex?)
 	      (sized-uint-literal n s)

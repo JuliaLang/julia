@@ -1,5 +1,5 @@
-#ifndef __UTILS_H_
-#define __UTILS_H_
+#ifndef UTILS_H
+#define UTILS_H
 
 DLLEXPORT int double_exponent(double d);
 void snprint_real(char *s, size_t cnt, double r,

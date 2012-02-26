@@ -1,5 +1,5 @@
-#ifndef __LLTSOCKET_H_
-#define __LLTSOCKET_H_
+#ifndef LLTSOCKET_H
+#define LLTSOCKET_H
 
 #ifdef WIN32
 #include <winsock2.h>

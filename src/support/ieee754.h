@@ -1,5 +1,5 @@
-#ifndef __IEEE754_H_
-#define __IEEE754_H_
+#ifndef IEEE754_H
+#define IEEE754_H
 
 #ifdef __linux
 
@@ -70,6 +70,6 @@ union ieee854_long_double {
 
 #define IEEE854_LONG_DOUBLE_BIAS 0x3fff
 
-#endif // ifdef __APPLE__ ...
+#endif
 
 #endif

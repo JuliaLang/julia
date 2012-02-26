@@ -19,7 +19,7 @@ isequal(x,y) = is(x,y)
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
 isequal(x::Number, y::Number) = x==y
-isless(x::Number, y::Number) = x<y
+isless(x::Real, y::Real) = x<y
 
 max(x,y) = x > y ? x : y
 min(x,y) = x < y ? x : y
@@ -97,6 +97,7 @@ oftype{T}(x::T,c) = convert(T,c)
 
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
+two(x)  = oftype(x,2)
 
 sizeof(T::Type) = error(strcat("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)

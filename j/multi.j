@@ -950,8 +950,9 @@ function start_worker(wrfd)
         error("could not bind socket")
     end
     io = fdio(wrfd)
-    write(io, port[1])        # print port
-    write(io, getipaddr())  # print hostname
+    write(io, "julia_worker:")  # print header
+    fprintf(io, "%d#", port[1]) # print port
+    write(io, getipaddr())      # print hostname
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
@@ -999,8 +1000,16 @@ function start_remote_workers(machines, cmds)
     end
     w = cell(n)
     for i=1:n
-        port = read(outs[i],Int16)
-        hostname = readline(outs[i])[1:end-1]
+        local hostname::String, port::Int16
+        while true
+            conninfo = readline(outs[i])
+            m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
+            if m != nothing
+                port = parse_int(Int16, m.captures[1])
+                hostname = m.captures[2]
+                break
+            end
+        end
         w[i] = Worker(hostname, port)
     end
     w

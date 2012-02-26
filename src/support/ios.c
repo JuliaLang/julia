@@ -15,12 +15,17 @@
 #include <fcntl.h>
 #define fileno _fileno
 #else
+
+#endif
+
 #include <unistd.h>
 #include <sys/time.h>
-#include <sys/select.h>
+//#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <fcntl.h>
-#endif
+
+#define fileno_fileno
 
 #include "utils.h"
 #include "utf8.h"
@@ -39,6 +44,50 @@
 #else
 #define BVOFFS 2
 #endif
+
+/** vasprintf windows implelemntation by Michael Clark <michael@metaparadigm.com> as part of http://oss.metaparadigm.com/json-c/ lincensed under the MIT LICENSE */
+
+#ifdef defined(__WIN32__) and !defined(WIN32)
+#define WIN32
+#endif
+
+
+
+#if !HAVE_VASPRINTF
+/* CAW: compliant version of vasprintf */
+static int vasprintf(char **buf, const char *fmt, va_list ap)
+{
+#ifndef WIN32
+        static char _T_emptybuffer = '\0';
+#endif /* !defined(WIN32) */
+        int chars;
+        char *b;
+
+        if(!buf) { return -1; }
+
+#ifdef WIN32
+        chars = _vscprintf(fmt, ap)+1;
+#else /* !defined(WIN32) */
+        /* CAW: RAWR! We have to hope to god here that vsnprintf doesn't overwrite
+           our buffer like on some 64bit sun systems.... but hey, its time to move on */
+        chars = vsnprintf(&_T_emptybuffer, 0, fmt, ap)+1;
+        if(chars < 0) { chars *= -1; } /* CAW: old glibc versions have this problem */
+#endif /* defined(WIN32) */
+
+        b = (char*)malloc(sizeof(char)*chars);
+        if(!b) { return -1; }
+
+        if((chars = vsprintf(b, fmt, ap)) < 0)
+        {
+                free(b);
+        } else {
+                *buf = b;
+        }
+
+        return chars;
+}
+#endif /* !HAVE_VASPRINTF */
+
 
 // allocate a buffer that can be used as a bigval_t in julia's GC
 void *julia_malloc(size_t n)
@@ -67,7 +116,7 @@ void *julia_realloc(void *b, size_t n)
 
 /* OS-level primitive wrappers */
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__WIN32__)
 void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = s + n;
@@ -99,8 +148,7 @@ static int _fd_available(long fd)
 
 static int _enonfatal(int err)
 {
-    return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
-            err == EWOULDBLOCK);
+    return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/);
 }
 
 #define SLEEP_TIME 5//ms
@@ -825,7 +873,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
+    fd = open(fname, flags, S_IRUSR|S_IWUSR/*|S_IRGRP|S_IROTH644*/);
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);

@@ -1,5 +1,5 @@
-#ifndef __TIMEFUNCS_H_
-#define __TIMEFUNCS_H_
+#ifndef TIMEFUNCS_H
+#define TIMEFUNCS_H
 
 u_int64_t i64time(void);
 DLLEXPORT double clock_now(void);

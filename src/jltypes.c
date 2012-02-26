@@ -655,40 +655,37 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         return (jl_value_t*)intersect_tag(tta, ttb, penv, eqc, var);
     jl_tag_type_t *super = NULL;
     jl_tag_type_t *sub = NULL;
-    jl_value_t *ti = NULL;
     jl_value_t *env = NULL;
     jl_tuple_t *p = NULL;
     JL_GC_PUSH(&super, &sub, &env, &p);
     while (tta != jl_any_type) {
         if (tta->name == ttb->name) {
-            ti = intersect_tag(tta, ttb, penv, eqc, var);
-            if (ti == (jl_value_t*)jl_bottom_type) {
-                JL_GC_POP();
-                return ti;
-            }
-            super = (jl_tag_type_t*)ti;
             sub = (jl_tag_type_t*)a;
             break;
         }
         tta = tta->super;
     }
-    if (super == NULL) {
+    if (sub == NULL) {
         tta = (jl_tag_type_t*)a;
         while (ttb != jl_any_type) {
             if (tta->name == ttb->name) {
-                ti = intersect_tag(tta, ttb, penv, eqc, var);
-                if (ti == (jl_value_t*)jl_bottom_type) {
-                    JL_GC_POP();
-                    return ti;
-                }
-                super = (jl_tag_type_t*)ti;
                 sub = (jl_tag_type_t*)b;
                 break;
             }
             ttb = ttb->super;
         }
+        if (sub == NULL) {
+            JL_GC_POP();
+            return (jl_value_t*)jl_bottom_type;
+        }
+        // sub == b
+        super = (jl_tag_type_t*)jl_type_intersect(a, (jl_value_t*)((jl_tag_type_t*)b)->super, penv,eqc,var);
     }
-    if (super == NULL) {
+    else {
+        // sub == a
+        super = (jl_tag_type_t*)jl_type_intersect((jl_value_t*)((jl_tag_type_t*)a)->super, b, penv,eqc,var);
+    }
+    if ((jl_type_t*)super == jl_bottom_type) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
@@ -1003,8 +1000,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
     return 1;
 }
 
-#if 0
-static char *type_summary(jl_value_t *t)
+ char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
     if (jl_is_func_type(t)) return "Function";
@@ -1012,7 +1008,7 @@ static char *type_summary(jl_value_t *t)
         return ((jl_tag_type_t*)t)->name->name->name;
     return "?";
 }
-static void print_env(cenv_t *soln)
+void print_env(cenv_t *soln)
 {
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
@@ -1024,7 +1020,6 @@ static void print_env(cenv_t *soln)
     }
     ios_printf(ios_stdout, "\n");
 }
-#endif
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)

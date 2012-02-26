@@ -1,5 +1,5 @@
-#ifndef __UTF8_H_
-#define __UTF8_H_
+#ifndef UTF8_H
+#define UTF8_H
 
 extern int locale_is_utf8;
 

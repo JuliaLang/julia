@@ -20,6 +20,10 @@
 	#include <netdb.h>
 #endif
 
+#ifdef __FreeBSD__
+	#include <netinet/in.h>
+#endif
+
 namespace network
 {
 	// error class for exception handling
