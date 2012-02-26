@@ -97,7 +97,8 @@
   (if (or (and (pair? e) (eq? (car e) 'module))
 	  (has-macrocalls? e))
       e
-      (expand-toplevel-expr e)))
+      (parser-wrap (lambda ()
+		     (expand-toplevel-expr e)))))
 
 (define (jl-parse-one-string s pos0 greedy)
   (set! current-filename 'string)

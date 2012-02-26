@@ -89,6 +89,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     JL_SIGATOMIC_BEGIN();
     ss->eh_task = jl_current_task->state.eh_task;
     ss->eh_ctx = jl_current_task->state.eh_ctx;
+    ss->bt = jl_current_task->state.bt;
     ss->ostream_obj = jl_current_task->state.ostream_obj;
     ss->current_output_stream = jl_current_task->state.current_output_stream;
     ss->prev = jl_current_task->state.prev;
@@ -99,6 +100,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     jl_current_task->state.prev = ss;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = handlr;
+    jl_current_task->state.bt = 0;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.
     JL_SIGATOMIC_END();
