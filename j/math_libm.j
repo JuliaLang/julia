@@ -148,6 +148,40 @@ begin
     end
 end
 
+begin
+    global modf
+    function modf(x::Float64)
+        iptr = zeros(Float64,1)
+        f = ccall(dlsym(_jl_libfdm,:modf), Float64, (Float64, Ptr{Float64}), x, iptr)
+        (f, float64(iptr[1]))
+    end
+    function modf(x::Float32)
+        iptr = zeros(Float32,1)
+        f = ccall(dlsym(_jl_libfdm,:modff), Float32, (Float32, Ptr{Float32}), x, iptr)
+        (f, float32(iptr[1]))
+    end
+    function modf(A::Array{Float64})
+        fp = similar(A)
+        ip = similar(A)
+        iptr = zeros(Float64,1)
+        for i = 1:numel(A)
+            fp[i] = ccall(dlsym(_jl_libfdm,:modf), Float64, (Float64, Ptr{Float64}), A[i], iptr)
+            ip[i] = iptr[1]
+        end
+        return (fp, ip)
+    end
+    function modf(A::Array{Float32})
+        fp = similar(A)
+        ip = similar(A)
+        iptr = zeros(Float32,1)
+        for i = 1:numel(A)
+            fp[i] = ccall(dlsym(_jl_libfdm,:modff), Float32, (Float32, Ptr{Float32}), A[i], iptr)
+            ip[i] = iptr[1]
+        end
+        return (fp, ip)
+    end
+end
+
 ^(x::Float64, y::Float64) = ccall(dlsym(_jl_libfdm, :pow),  Float64, (Float64,Float64), x, y)
 ^(x::Float32, y::Float32) = ccall(dlsym(_jl_libfdm, :powf), Float32, (Float32,Float32), x, y)
 
