@@ -151,9 +151,9 @@ static Function *to_function(jl_lambda_info_t *li)
     nested_compile = last_n_c;
     FPM->run(*f);
     //n_compile++;
-    // print out the function's LLVM code
+    //print out the function's LLVM code
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -1440,8 +1440,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
-    
-    dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
+	
+    // TODO: Fix when moving to new LLVM version
+    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =

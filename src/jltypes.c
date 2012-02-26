@@ -1000,8 +1000,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
     return 1;
 }
 
-#if 0
-static char *type_summary(jl_value_t *t)
+ char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
     if (jl_is_func_type(t)) return "Function";
@@ -1009,7 +1008,7 @@ static char *type_summary(jl_value_t *t)
         return ((jl_tag_type_t*)t)->name->name->name;
     return "?";
 }
-static void print_env(cenv_t *soln)
+void print_env(cenv_t *soln)
 {
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
@@ -1021,7 +1020,6 @@ static void print_env(cenv_t *soln)
     }
     ios_printf(ios_stdout, "\n");
 }
-#endif
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)

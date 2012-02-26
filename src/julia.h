@@ -3,6 +3,7 @@
 
 #include "libsupport.h"
 #include <stdint.h>
+#include "uv.h"
 
 #define JL_GC_MARKSWEEP
 
@@ -331,7 +332,7 @@ extern jl_func_type_t *jl_any_func;
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 
-extern void *jl_dl_handle;
+extern uv_lib_t jl_dl_handle;
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -712,8 +713,8 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
-DLLEXPORT void *jl_load_dynamic_library(char *fname);
-DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
+DLLEXPORT uv_lib_t jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym(uv_lib_t handle, char *symbol);
 
 // compiler
 void jl_compile(jl_function_t *f);

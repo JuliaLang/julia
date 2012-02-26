@@ -1047,6 +1047,8 @@ static int trace_en = 0;
 static void enable_trace(int x) { trace_en=x; }
 #endif
 
+extern char *type_summary(jl_value_t *t);
+
 JL_CALLABLE(jl_apply_generic)
 {
     jl_value_t *env = ((jl_function_t*)F)->env;
@@ -1054,8 +1056,7 @@ JL_CALLABLE(jl_apply_generic)
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
 #endif
-#ifdef JL_TRACE
-    if (trace_en) {
+
         ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
         size_t i;
         for(i=0; i < nargs; i++) {
@@ -1063,8 +1064,7 @@ JL_CALLABLE(jl_apply_generic)
             ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
         }
         ios_printf(ios_stdout, ")\n");
-    }
-#endif
+
     /*
       search order:
       look at concrete signatures

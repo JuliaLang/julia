@@ -21,6 +21,7 @@
 
 extern int asprintf(char **strp, const char *fmt, ...);
 
+#define USE_READLINE_STATIC
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -68,7 +69,11 @@ static void init_history(void) {
             char *p = strchr(first->line, '\0');
             for (k = i+1; k < j; k++) {
                 *p = '\n';
+				#ifndef __WIN32__
                 p = stpcpy(p+1, history_get(i+1)->line);
+				#else
+				p = strcpy(p+1, history_get(i+1)->line);
+				#endif
                 free_history_entry(history_rem(i+1));
             }
         }
@@ -407,6 +412,30 @@ int tab_complete(const char *line, char **answer, int *plen)
 }
 
 static char *strtok_saveptr;
+
+#if defined(_WIN32) && !defined(__MINGW_H)
+#define strtok_r(s,d,p) strtok_s(s,d,p)
+#else
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if( !save )
+        return strtok(str, delim);
+    if( !str && !(str = *save) )
+        return NULL;
+    last = str + strlen(str);
+    if( (*save = res = strtok(str, delim)) )
+    {
+        *save += strlen(res);
+        if( *save < last )
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
 
 static char *do_completions(const char *ch, int c)
 {

@@ -81,8 +81,14 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (i >= nl) {
             v = jl_get_global(jl_current_module, (jl_sym_t*)e);
         }
-        if (v == NULL)
+        if (v == NULL) {
+        if (jl_errorexception_type == NULL) {
+            ios_printf(ios_stderr, "%s not defined", ((jl_sym_t*)e)->name);
+            exit(1);
+        } else {
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
+		}
+		}
         return v;
     }
     if (jl_is_symbolnode(e)) {

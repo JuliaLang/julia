@@ -81,7 +81,7 @@ ref{T}(::Type{T}) = Array(T,0)
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
-    ccall(:memset, Void, (Ptr{T}, Int32, Int), a, int32(x), int(length(a)))
+    #ccall(:memset, Void, (Ptr{T}, Int32, Int), a, int32(x), int(length(a)))
     return a
 end
 function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)

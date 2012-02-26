@@ -72,9 +72,9 @@ LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline -lncurses -lcurses
+READLINE = -lreadline
 else
-READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -100,7 +100,7 @@ OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

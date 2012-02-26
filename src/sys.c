@@ -10,7 +10,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
+//#include <sys/wait.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
@@ -204,6 +204,21 @@ jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
+#if defined _MSC_VER || defined __MINGW32__
+
+/* Native Woe32 API.  */
+#include <process.h>
+#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
+#define WAIT_T int
+#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
+#define WCOREDUMP(x) 0
+#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
+#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
+#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
+#define WIFSTOPPED(x) 0
+#define WSTOPSIG(x) 0 //Is this correct?
+#endif
+
 int jl_process_exited(int status)      { return WIFEXITED(status); }
 int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
 int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
@@ -239,12 +254,13 @@ int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
 
 static void *run_io_thr(void *arg)
 {
-    sigset_t set;
+//@TODO
+    /*sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGFPE);
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGSEGV);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);
+    pthread_sigmask(SIG_BLOCK, &set, NULL);*/
 
     while (1) {
         if (ioq == NULL) {
@@ -265,8 +281,12 @@ static void *run_io_thr(void *arg)
             if (waittime > 0) {
                 struct timespec wt;
                 wt.tv_sec = 0;
+				#ifdef __WIN32__
+				Sleep(waittime);
+				#else
                 wt.tv_nsec = waittime * 1000;
                 nanosleep(&wt, NULL);
+				#endif
             }
         }
 

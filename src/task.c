@@ -9,7 +9,7 @@
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <limits.h>
 #include <errno.h>
 #include <math.h>
@@ -20,6 +20,8 @@
 #include "builtin_proto.h"
 #if defined(__APPLE__)
 #include <execinfo.h>
+#elif defined(__WIN32__)
+#include <Winbase.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -437,6 +439,47 @@ static jl_value_t *build_backtrace(void)
     backtrace(array, 1023);
     p = (size_t*)array;
     while ((ip = *(p++)) != 0) {
+        push_frame_info_from_ip(a, ip);
+    }
+    JL_GC_POP();
+    return (jl_value_t*)a;
+}
+#elif defined(__WIN32__)
+static jl_value_t *build_backtrace(void)
+{
+    void *array[1024];
+    size_t ip;
+    size_t *p;
+    jl_array_t *a;
+	unsigned short num;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+
+	/** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
+	#if defined(__MINGW_H)
+	HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
+
+	if(kernel32 != NULL){
+		typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
+		CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+
+		if(func==NULL){
+			FreeLibrary(kernel32);
+			kernel32 = NULL;
+			func = NULL;
+			return (jl_value_t*)a;
+		}else
+		{
+			num = func( 0, 1023, array, NULL );
+		}
+	}
+	FreeLibrary(kernel32);
+	#else
+	num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+	#endif
+
+    p = (size_t*)array;
+    while ((ip = *(p++)) != 0 && (num--)>0) {
         push_frame_info_from_ip(a, ip);
     }
     JL_GC_POP();

@@ -20,24 +20,42 @@ static char *extensions[] = { ".so" };
 typedef void * module_handle_t;
 static char *extensions[] = { ".dylib", ".bundle" };
 #define N_EXTENSIONS 2
+#elif defined(__WIN32__)
+#define GET_FUNCTION_FROM_MODULE dlsym
+#define CLOSE_MODULE dlclose
+typedef void * module_handle_t;
+static char *extensions[] = { "dll" };
+#define N_EXTENSIONS 1
 #endif
 
 #include "julia.h"
+#include "uv.h"
+
+#include <windef.h>
+#include <windows.h>
 
 #define PATHBUF 512
 
 extern char *julia_home;
 
-void *jl_load_dynamic_library(char *fname)
+uv_lib_t jl_load_dynamic_library(char *fname)
 {
-    module_handle_t handle;
+    uv_lib_t handle;
+    uv_err_t error;
     char *modname, *ext;
     char path[PATHBUF];
     int i;
 
     modname = fname;
     if (modname == NULL) {
-        return (void*)dlopen(NULL, RTLD_NOW);
+#ifdef __WIN32__
+		HMODULE this_process;
+		this_process=GetModuleHandle(NULL);
+                handle=this_process;
+#else
+        uv_dlopen(NULL, handle);
+#endif
+        return handle;
     }
     char *cwd;
 
@@ -52,12 +70,12 @@ void *jl_load_dynamic_library(char *fname)
                 strncat(path, "/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
-                handle = dlopen(path, RTLD_NOW);
-                if (handle != NULL) return handle;
+                error = uv_dlopen(path, handle);
+                if (!error.code) return handle;
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
-                    ios_printf(ios_stderr, "%s\n", dlerror());
+                    ios_printf(ios_stderr, "%d\n", error.code);
                     jl_errorf("could not load module %s", fname);
                 }
             }
@@ -67,30 +85,34 @@ void *jl_load_dynamic_library(char *fname)
                 strncat(path, "/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
-                handle = dlopen(path, RTLD_NOW);
-                if (handle != NULL) return handle;
+                error = uv_dlopen(path, handle);
+                if (!error.code) return handle;
             }
         }
         /* try loading from standard library path */
         strncpy(path, modname, PATHBUF-1);
         strncat(path, ext, PATHBUF-1-strlen(path));
-        handle = dlopen(path, RTLD_NOW);
-        if (handle != NULL) return handle;
+        error = uv_dlopen(path, handle);
+        if (!error.code) return handle;
     }
     assert(handle == NULL);
-    ios_printf(ios_stderr, "%s\n", dlerror());
+    ios_printf(ios_stderr, "Error: %d\n", error.code);
     jl_errorf("could not load module %s", fname);
 
     return NULL;
 }
 
-void *jl_dlsym(void *handle, char *symbol)
+void *jl_dlsym(uv_lib_t handle, char *symbol)
 {
-    (void)dlerror();
-    void *ptr = dlsym(handle, symbol);
-    char *msg = dlerror();
-    if (msg != NULL) {
-        jl_errorf("dlsym: %s", msg);
+    void *ptr;
+    uv_err_t error = uv_dlsym(handle, symbol, &ptr);
+    if (error.code != 0) {
+        if(jl_errorexception_type==NULL) {
+            ios_printf(ios_stderr, "Error: %d\n", error.code);
+            exit(1);
+        }
+        else
+            jl_errorf("dlsym: %d", error.code);
     }
     return ptr;
 }
