@@ -192,10 +192,11 @@ elseif( USE_OPTIMIZED_BLAS )
   find_package( BLAS )
 endif (BLAS_LIBRARIES)
 
+set(OpenBlasLIB ${CMAKE_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas.${CMAKE_STATIC_LIBRARY_SUFFIX})
 # Neither user specified or optimized BLAS libraries can be used
 if(NOT BLAS_FOUND)
   message(STATUS "Using OpenBlas")
-  set( BLAS_LIBRARIES ${CMAKE_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas.lib)
+  set( BLAS_LIBRARIES ${OpenBlasLIB})
   set( BUILD_OPENBLAS ON)
   set( BLAS_TARGET openblas)
 else()
