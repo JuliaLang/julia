@@ -9,6 +9,10 @@ extern void* _jl_mpz_init()
   return integ;
 }
 
+extern void _jl_mpz_clear(mpz_t* rop) {
+  mpz_clear(*rop);
+}
+
 extern void _jl_mpz_set_string(mpz_t* rop, char* s) {
   mpz_set_str(*rop, s, 0);
 }
@@ -37,6 +41,10 @@ extern void _jl_mpz_abs(mpz_t* rop, mpz_t* op1) {
   mpz_abs(*rop, *op1);
 }
 
+extern int _jl_mpz_cmp(mpz_t* op1, mpz_t* op2) {
+  return mpz_cmp(*op1, *op2);
+}
+
 extern char*  _jl_mpz_printf(mpz_t* rop) {
   char** pp;
   gmp_asprintf(pp, "%Zd", *rop);
@@ -57,6 +65,8 @@ int main( int argc, const char* argv[] )
   _jl_mpz_add(rop, op1, op2);
 
   printf("The sum is %s\n", _jl_mpz_printf(rop));
+
+  _jl_mpz_clear(rop);
 }
 
 
