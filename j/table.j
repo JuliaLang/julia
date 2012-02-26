@@ -157,6 +157,26 @@ end
 HashTable() = HashTable(0)
 HashTable(n::Integer) = HashTable{Any,Any}(n)
 
+function serialize(s, t::HashTable)
+    serialize_type(s, typeof(t))
+    write(s, int32(length(t)))
+    for (k,v) in t
+        serialize(s, k)
+        serialize(s, v)
+    end
+end
+
+function deserialize(s, T::Type{HashTable})
+    n = read(s, Int32)
+    t = T(n)
+    for i = 1:n
+        k = force(deserialize(s))
+        v = force(deserialize(s))
+        t[k] = v
+    end
+    return t
+end
+
 # syntax entry point
 hashtable{K,V}(ks::(K...), vs::(V...)) = HashTable{K,V}    (ks, vs)
 hashtable{K}  (ks::(K...), vs::Tuple ) = HashTable{K,Any}  (ks, vs)
