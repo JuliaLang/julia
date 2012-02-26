@@ -46,9 +46,7 @@ endif()
 endforeach(package)
 ## General Setup ##
 
-if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-	set(CMAKE_INSTALL_PREFIX "root")
-endif(NOT DEFINED CMAKE_INSTALL_PREFIX)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/"root")
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed.
@@ -61,7 +59,6 @@ endif()
 ## LLVM Setup
 
 set(LLVM_ENABLE_THREADS OFF)
-set(CMAKE_BUILD_TYPE "RELEASE")
 set(LLVM_TARGETS_TO_BUILD X86)
 add_subdirectory(llvm-${LLVM_VER})
 
