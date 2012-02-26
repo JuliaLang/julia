@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp
+LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -538,6 +538,20 @@ clean-gmp:
 	rm -f $(GMP_OBJ_TARGET)
 distclean-gmp:
 	rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
+
+##GMP Wrapper
+
+GMP_INC = -I gmp-$(GMP_VER)/
+GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
+
+$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c
+	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+	touch $@
+install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+
+clean-gmp-wrapper:
+	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## phony targets ##
 
