@@ -209,7 +209,7 @@ add_subdirectory(cmake)
 
 set(LapackLIB ${CMAKE_CURRENT_BINARY_DIR}/lib/liblapack.${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-add_custom_command(OUTPUT ${OpenBlasLIB})
+add_custom_command(OUTPUT ${OpenBlasLIB}
 COMMAND perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}.system
 COMMAND $(MAKE) openblas-${openblas_VER} DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH}
 COMMAND $(MAKE) PREFIX=${CMAKE_INSTALL_PREFIX}
