@@ -67,6 +67,18 @@ function *(x::BigInt, y::BigInt)
 	BigInt(z)
 end
 
+function div (x::BigInt, y::BigInt)
+	z= _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+	BigInt(z)
+end
+
+function rem (x::BigInt, y::BigInt)
+	z= _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_rem), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
+	BigInt(z)
+end
+
 function cmp(x::BigInt, y::BigInt) 
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
@@ -88,7 +100,7 @@ function show(x::BigInt)
 	print (string(x))
 end	
 
-function _jl_bigint_clear(x::Ptr{Void}) 
+function _jl_bigint_clear(x::BigInt) 
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_clear), Void, (Ptr{Void},),x.mpz)
 end
 

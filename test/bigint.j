@@ -35,3 +35,6 @@ e=2^63-1
 @assert string(c) == "246913578024691357802469135780"
 @assert string(d) == "-246913578024691357802469135780"
 @assert string(a) == "123456789012345678901234567890"
+
+@assert div(BigInt(3), BigInt(2)) == BigInt(1)
+@assert rem(BigInt(3), BigInt(2)) == BigInt(1)

@@ -33,6 +33,14 @@ extern void _jl_mpz_mul(mpz_t* rop, mpz_t* op1, mpz_t* op2) {
   mpz_mul(*rop, *op1, *op2);
 }
 
+extern void _jl_mpz_div(mpz_t* rop, mpz_t* op1, mpz_t* op2) {
+  mpz_fdiv_q(*rop, *op1, *op2);
+}
+
+extern void _jl_mpz_rem(mpz_t* rop, mpz_t* op1, mpz_t* op2) {
+  mpz_fdiv_r(*rop, *op1, *op2);
+}
+
 extern void _jl_mpz_neg(mpz_t* rop, mpz_t* op1) {
   mpz_neg(*rop, *op1);
 }
