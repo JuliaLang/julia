@@ -26,17 +26,20 @@ type BigInt <: Integer
 	end
 end
 
-#BigInt(x::Int64) = BigInt(string(x))
+convert(::Type{BigInt}, x::Int8) = BigInt(int(x))
+convert(::Type{BigInt}, x::Int16) = BigInt(int(x))
+convert(::Type{BigInt}, x::Int) = BigInt(x)
 
-#convert(::Type{BigInt}, x::Integer) = BigInt(string(x))
-function convert(::Type{BigInt}, x::Int64) 
-	if is(Int, Int64) 
-		BigInt(int(x))
+macro define_bigint_convert ()
+	if WORD_SIZE == 64
+		:(convert(::Type{BigInt}, x::Int32) = BigInt(int(x)))
+
 	else
-		BigInt(string(x))
+		:(convert(::Type{BigInt}, x::Int64) = BigInt(string(x)))
 	end
-
 end
+
+@define_bigint_convert
 
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 promote_rule(::Type{BigInt}, ::Type{Int16}) = BigInt
@@ -83,11 +86,11 @@ function cmp(x::BigInt, y::BigInt)
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
-==(x::BigInt, y::BigInt)  = cmp(x,y) == 0 
+==(x::BigInt, y::BigInt) = cmp(x,y) == 0 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0 
->= (x::BigInt, y::BigInt) = cmp(x,y) >= 0 
-< (x::BigInt, y::BigInt) = cmp(x,y) < 0 
-> (x::BigInt, y::BigInt) = cmp(x,y) > 0 
+>=(x::BigInt, y::BigInt) = cmp(x,y) >= 0 
+<(x::BigInt, y::BigInt) = cmp(x,y) < 0 
+>(x::BigInt, y::BigInt) = cmp(x,y) > 0 
 
 function string(x::BigInt) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
