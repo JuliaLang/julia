@@ -141,6 +141,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
+- **[GMP]**                 - the GNU multiple precision arithmetic library, needed for bigint support
 - **[D3]**                  — JavaScript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
@@ -160,6 +161,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [LLVM]:         http://www.llvm.org/
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+[GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 
 <a name="Directories"/>

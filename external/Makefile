@@ -13,6 +13,7 @@ SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
+GMP_VER=5.0.4
 
 ## high-level setup ##
 
@@ -21,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -514,6 +515,47 @@ clean-lighttpd:
 	rm -f $(LIGHTTPD_OBJ_TARGET)
 distclean-lighttpd:
 	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+
+## GMP ##
+
+GMP_OBJ_TARGET = $(EXTROOTLIB)/libgmp.$(SHLIB_EXT)
+
+compile-gmp: install-gmp
+install-gmp: $(GMP_OBJ_TARGET)
+
+gmp-$(GMP_VER).tar.bz2:
+	$(WGET) ftp://ftp.gmplib.org/pub/gmp-5.0.4/$@
+gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
+	tar jxf $<
+	touch $@
+gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
+	cd gmp-$(GMP_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT)) 
+$(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
+	$(MAKE) -C gmp-$(GMP_VER) 
+	$(MAKE) -C gmp-$(GMP_VER) check
+	$(MAKE) -C gmp-$(GMP_VER) install
+	touch $@
+
+clean-gmp:
+	$(MAKE) -C gmp-$(GMP_VER) clean
+	rm -f $(GMP_OBJ_TARGET)
+distclean-gmp:
+	rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
+
+##GMP Wrapper
+
+GMP_INC = -I gmp-$(GMP_VER)/
+GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
+
+$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c
+	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+	touch $@
+install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+
+clean-gmp-wrapper:
+	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## phony targets ##
 
