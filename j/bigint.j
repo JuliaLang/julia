@@ -67,35 +67,21 @@ function *(x::BigInt, y::BigInt)
 	BigInt(z)
 end
 
-function ==(x::BigInt, y::BigInt) 
-	r = ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
-	r==0
+function cmp(x::BigInt, y::BigInt) 
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
-function <=(x::BigInt, y::BigInt) 
-	r = ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
-	r <= 0
-end
-
-function >= (x::BigInt, y::BigInt) 
-	r = ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
-	r >= 0
-end
-
-function < (x::BigInt, y::BigInt) 
-	r = ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
-	r < 0
-end
-
-function > (x::BigInt, y::BigInt) 
-	r = ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
-	r > 0
-end
+==(x::BigInt, y::BigInt)  = cmp(x,y) == 0 
+<=(x::BigInt, y::BigInt) = cmp(x,y) <= 0 
+>= (x::BigInt, y::BigInt) = cmp(x,y) >= 0 
+< (x::BigInt, y::BigInt) = cmp(x,y) < 0 
+> (x::BigInt, y::BigInt) = cmp(x,y) > 0 
 
 function string(x::BigInt) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
-	cstring(s)
-	#There is a memory leak here!! s needs to be free'd
+	ret = cstring(s) #This copies s. 
+	_jl_free(convert(Ptr{Void},s))
+	ret
 end
 
 function show(x::BigInt) 

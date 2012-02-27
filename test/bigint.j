@@ -28,3 +28,10 @@ d = BigInt("-246913578024691357802469135780")
 e=2^63-1
 @assert typeof(BigInt(e)) == BigInt
 @assert BigInt(e)+1 == BigInt("9223372036854775808")
+
+#Multiple calls for sanity check, since we're doing direct memory manipulation
+@assert string(a) == "123456789012345678901234567890"
+@assert string(b) == "123456789012345678901234567891"
+@assert string(c) == "246913578024691357802469135780"
+@assert string(d) == "-246913578024691357802469135780"
+@assert string(a) == "123456789012345678901234567890"
