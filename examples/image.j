@@ -217,7 +217,7 @@ function gaussian2d(sigma, filter_size)
     end
 
     g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
-    gaussian = g/sum(g)
+    return g/sum(g)
 end
 
 gaussian2d(sigma) = gaussian2d(sigma, [])
