@@ -182,7 +182,7 @@ function fspecial(filter::String, filter_size, sigma)
     elseif filter == "prewitt"
         out = [1.0 1.0 1.0; 0 0 0; -1.0 -1.0 -1.0]
     elseif filter == "gaussian"
-        out = gaussian2d(sigma, [m n])
+        out = gaussian2d(sigma, filter_size)
     else
         error("unkown filter type")
     end
@@ -216,9 +216,31 @@ function gaussian2d(sigma, filter_size)
         error("filter size must consist of one or two values")
     end
 
-    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=[-floor(m/2):floor(m/2)], Y=[-floor(n/2):floor(n/2)]]
+    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
     gaussian = g/sum(g)
 end
 
 gaussian2d(sigma) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
+
+function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String)
+    si, sf = size(img), size(filter)
+    if border == "replicate"
+        A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
+        s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
+        A[s1:end-s1-1, s2:end-s2-1] = img;
+        A[s1:end-s1-1, 1:s2-1] = repmat(img[:,1], 1, s2)
+        A[s1:end-s1-1, end-s2+1:end] = repmat(img[:,end], 1, s2)
+        A[1:s1-1, s2:end-s2-1] = repmat(img[1,:], s1, 1)
+        A[end-s1+1:end, s2:end-s2-1] = repmat(img[end,:], s1, 1)
+        A[1:s1, 1:s2] = flipud(fliplr(img[1:s1, 1:s2]))
+        A[end-s1+1:end, 1:s2] = flipud(fliplr(img[end-s1+1:end, 1:s2]))
+        A[1:s1, end-s2+1:end] = flipud(fliplr(img[1:s1, end-s2+1:end]))
+        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))
+    end
+    C = conv2(A, filter)
+    sc = size(C)
+    out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
+end
+
+imfilter(img, filter) = imfilter(img, filter, "replicate")
