@@ -89,6 +89,19 @@ function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
     return C
 end
 
+function conv2{T}(A::Matrix{T}, B::Matrix{T})
+    sa, sb = size(A), size(B)
+    At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    At[1:sa[1], 1:sa[2]] = A
+    Bt[1:sb[1], 1:sb[2]] = B
+    C = ifft2(fft2(At).*fft2(Bt))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1))
+    if T <: Real
+        return real(C)
+    end
+    return C
+end
+
 function xcorr(u, v)
     su = size(u,1); sv = size(v,1)
     if su < sv

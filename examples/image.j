@@ -39,10 +39,25 @@ function ppmwrite(img, file::String)
     write(s, "# ppm file written by julia\n")
     n, m = size(img)
     write(s, "$m $n 255\n")
-    for i=1:n, j=1:m
-        write(s, uint8(img[i,j,1]))
-        write(s, uint8(img[i,j,2]))
-        write(s, uint8(img[i,j,3]))
+    if ndims(img)==3 && size(img,3)==3
+        for i=1:n, j=1:m
+            write(s, uint8(img[i,j,1]))
+            write(s, uint8(img[i,j,2]))
+            write(s, uint8(img[i,j,3]))
+        end
+    elseif ndims(img)==2 && (is(eltype(img),Int8) || is(eltype(img), Uint8))
+        for i=1:n, j=1:m, k = 1:3
+            write(s, uint8(img[i,j]))
+        end
+    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
+        for i=1:n, j=1:m
+            p = img[i,j]
+            write(s, uint8(redval(p)))
+            write(s, uint8(greenval(p)))
+            write(s, uint8(blueval(p)))
+        end
+    else
+        error("unsupported array type")
     end
 
     close(s)
@@ -94,9 +109,138 @@ function imwrite(I, file::String)
     wait(cmd)
 end
 
-function imshow(img)
+function imshow(img, range)
+    if ndims(img) == 2 && (is(eltype(img), Int8) || is(eltype(img), Uint8))
+        # only makes sense for gray scale images
+        img = imadjustintensity(img, range)
+    end
     tmp::String = "./tmp.ppm"
     ppmwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
 end
+
+imshow(img) = imshow(img, [])
+
+function imadjustintensity(img, range)
+    if length(range) == 0
+        range = [min(img) max(img)]
+    elseif length(range) == 1
+        error("wrong range")
+    end
+    tmp = (float(img)-range[1])/(range[2] - range[1])
+    tmp[tmp > 1] = 1
+    tmp[tmp < 0] = 0
+    out = uint8(255*tmp)
+end
+
+function rgb2gray(img)
+    n, m = size(img)
+    red_weight = 0.30
+    green_weight = 0.59
+    blue_weight = 0.11
+    out = Array(Uint8, n, m)
+    if ndims(img)==3 && size(img,3)==3
+        for i=1:n, j=1:m
+            out[i,j] = red_weight*img[i,j,1]+green_weight*img[i,j,2]+blue_weight*img[i,j,3];
+        end
+    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
+        for i=1:n, j=1:m
+            p = img[i,j]
+            out[i,j] = red_weight*redval(p)+green_weight*greenval(p)+blue_weight*blueval(p);
+        end
+    else
+        error("unsupported array type")
+    end
+    out
+end
+
+function fspecial(filter::String, filter_size, sigma)
+    for i = filter_size
+        if mod(i, 2) != 1
+            error("filter size must be odd")
+        end
+    end
+
+    if length(filter_size) == 2
+        m = filter_size[1]
+        n = filter_size[2]
+    elseif length(filter_size) == 1
+        m = filter_size
+        n = m
+    elseif length(filter_size) == 0
+        m = 3
+        n = 3
+    else
+        error("filter size must consist of one or two values")
+    end
+
+    if filter == "average"
+        out = ones(Float64, m, n)/(m*n)
+    elseif filter == "sobel"
+        out = [1.0 2.0 1.0; 0 0 0; -1.0 -2.0 -1.0]
+    elseif filter == "prewitt"
+        out = [1.0 1.0 1.0; 0 0 0; -1.0 -1.0 -1.0]
+    elseif filter == "gaussian"
+        out = gaussian2d(sigma, filter_size)
+    else
+        error("unkown filter type")
+    end
+end
+
+fspecial(filter::String, filter_size) = fspecial(filter::String, filter_size, 0.5)
+fspecial(filter::String) = fspecial(filter::String, [], 0.5)
+
+function gaussian2d(sigma, filter_size)
+    for i = filter_size
+        if mod(i, 2) != 1
+            error("filter size must be odd")
+        end
+    end
+
+    if length(sigma) == 0
+        sigma = 0.5
+    end
+
+    if length(filter_size) == 2
+        m = filter_size[1]
+        n = filter_size[2]
+    elseif length(filter_size) == 1
+        m = filter_size
+        n = m
+    elseif length(filter_size) == 0
+        # choose 'good' size 
+        m = 4*ceil(sigma)+1
+        n = m
+    else
+        error("filter size must consist of one or two values")
+    end
+
+    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
+    gaussian = g/sum(g)
+end
+
+gaussian2d(sigma) = gaussian2d(sigma, [])
+gaussian2d() = gaussian2d(0.5, [])
+
+function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String)
+    si, sf = size(img), size(filter)
+    if border == "replicate"
+        A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
+        s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
+        A[s1:end-s1-1, s2:end-s2-1] = img;
+        A[s1:end-s1-1, 1:s2-1] = repmat(img[:,1], 1, s2)
+        A[s1:end-s1-1, end-s2:end] = repmat(img[:,end], 1, s2+1)
+        A[1:s1-1, s2:end-s2-1] = repmat(img[1,:], s1, 1)
+        A[end-s1:end, s2:end-s2-1] = repmat(img[end,:], s1+1, 1)
+        A[1:s1, 1:s2] = flipud(fliplr(img[1:s1, 1:s2]))
+        A[end-s1:end, 1:s2] = flipud(fliplr(img[end-s1:end, 1:s2]))
+        A[1:s1, end-s2:end] = flipud(fliplr(img[1:s1, end-s2:end]))
+        A[end-s1:end, end-s2:end] = flipud(fliplr(img[end-s1:end, end-s2:end]))
+    end
+    C = conv2(A, filter)
+    sc = size(C)
+    out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
+end
+
+imfilter(img, filter) = imfilter(img, filter, "replicate")
