@@ -223,24 +223,59 @@ end
 gaussian2d(sigma) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
 
-function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String)
+function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
+    A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
+    s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
     if border == "replicate"
-        A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
-        s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
-        A[s1:end-s1-1, s2:end-s2-1] = img;
-        A[s1:end-s1-1, 1:s2-1] = repmat(img[:,1], 1, s2)
-        A[s1:end-s1-1, end-s2:end] = repmat(img[:,end], 1, s2+1)
-        A[1:s1-1, s2:end-s2-1] = repmat(img[1,:], s1, 1)
-        A[end-s1:end, s2:end-s2-1] = repmat(img[end,:], s1+1, 1)
-        A[1:s1, 1:s2] = flipud(fliplr(img[1:s1, 1:s2]))
-        A[end-s1:end, 1:s2] = flipud(fliplr(img[end-s1:end, 1:s2]))
-        A[1:s1, end-s2:end] = flipud(fliplr(img[1:s1, end-s2:end]))
-        A[end-s1:end, end-s2:end] = flipud(fliplr(img[end-s1:end, end-s2:end]))
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = repmat(img[:,1], 1, s2)
+        A[s1+1:end-s1, end-s2+1:end] = repmat(img[:,end], 1, s2)
+        A[1:s1, s2+1:end-s2] = repmat(img[1,:], s1, 1)
+        A[end-s1+1:end, s2+1:end-s2] = repmat(img[end,:], s1, 1)
+        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
+        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
+        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
+        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+    elseif border == "circular"
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = img[:, end-s2:end]
+        A[s1+1:end-s1, end-s2+1:end] = img[:, 1:s2]
+        A[1:s1, s2+1:end-s2] = img[end-s1+1:end, :]
+        A[end-s1+1:end, s2+1:end-s2] = img[1:s1, :]
+        A[1:s1, 1:s2] = img[end-s1+1:end, end-s2+1:end]
+        A[end-s1+1:end, 1:s2] = img[1:s1, end-s2+1:end]
+        A[1:s1, end-s2+1:end] = img[end-s1+1:end, 1:s2]
+        A[end-s1+1:end, end-s2+1:end] = img[1:s1, 1:s2]
+    elseif border == "mirror"
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = fliplr(img[:, 1:s2])
+        A[s1+1:end-s1, end-s2+1:end] = fliplr(img[:, end-s2:end])
+        A[1:s1, s2+1:end-s2] = flipud(img[1:s1, :])
+        A[end-s1+1:end, s2+1:end-s2] = flipud(img[end-s1+1:end, :])
+        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
+        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
+        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
+        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+    elseif border == "value"
+        A += value
+        A[s1+1:end-s1, s2+1:end-s2] = img
+    else
+        error("wrong border treatment")
     end
     C = conv2(A, filter)
     sc = size(C)
     out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
 end
 
-imfilter(img, filter) = imfilter(img, filter, "replicate")
+function imfilter{T}(img::Array{T,3}, filter::Matrix{T}, border::String, value)
+    x, y, c = size(img)
+    out = zeros(T, x, y, c)
+    for i = 1:c
+        out[:,:,i] = imfilter(squeeze(img[:,:,i]), filter, border, value)
+    end
+    out
+end
+
+imfilter(img, filter) = imfilter(img, filter, "replicate", 0)
+imfilter(img, filter, border) = imfilter(img, filter, border, 0)
