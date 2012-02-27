@@ -21,19 +21,19 @@ sys.ji: VERSION sys0.ji j/stage1.j j/sysimg.j j/start_image.j j/*.j
 	$(QUIET_JULIA) ./julia `test -f sys.ji && echo stage1.j || echo -J sys0.ji stage1.j`
 
 install: release
-	install -d $(DESTDIR)/usr/share/julia/lib
-	install -d $(DESTDIR)/usr/share/julia/j
-	install -d $(DESTDIR)/usr/share/julia/contrib
-	install -d $(DESTDIR)/usr/share/julia/examples
-	install -v julia* $(DESTDIR)/usr/share/julia
-	install -v sys.ji $(DESTDIR)/usr/share/julia
-	install -v j/* $(DESTDIR)/usr/share/julia/j
-	install -v examples/*.j $(DESTDIR)/usr/share/julia/examples
-	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)/usr/share/julia/lib
+	install -d $(DESTDIR)$(PREFIX)/share/julia/lib
+	install -d $(DESTDIR)$(PREFIX)/share/julia/j
+	install -d $(DESTDIR)$(PREFIX)/share/julia/contrib
+	install -d $(DESTDIR)$(PREFIX)/share/julia/examples
+	install -v julia* $(DESTDIR)$(PREFIX)/share/julia
+	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
+	install -v j/* $(DESTDIR)$(PREFIX)/share/julia/j
+	install -v examples/*.j $(DESTDIR)$(PREFIX)/share/julia/examples
+	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
-	$(MAKE) install DESTDIR=dist
+	$(MAKE) install DESTDIR=dist PREFIX=/usr
 	cd dist/usr/share && tar zcvf ../../../julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz *
 
 deb:

@@ -257,14 +257,19 @@ typedef struct {
     size_t n;
 } cenv_t;
 
-static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
+static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
-    if (var == val)
+    if (!allow && var == val)
         return;
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
     soln->data[soln->n++] = val;
+}
+
+static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
+{
+    extend_(var, val, soln, 0);
 }
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
@@ -1102,7 +1107,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         // bind type vars to themselves if they were not matched explicitly
         // during type intersection.
         if (e >= env0)
-            extend(tv, tv, &eqc);
+            extend_(tv, tv, &eqc, 1);
     }
 
     *penv = jl_alloc_tuple_uninit(eqc.n);
