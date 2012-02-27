@@ -25,9 +25,9 @@ d = BigInt("-246913578024691357802469135780")
 @assert d == -c
 
 
-e=2^63-1
-@assert typeof(BigInt(e)) == BigInt
-@assert BigInt(e)+1 == BigInt("9223372036854775808")
+ee=2^63-1
+@assert typeof(BigInt(ee)) == BigInt
+@assert BigInt(ee)+1 == BigInt("9223372036854775808")
 
 #Multiple calls for sanity check, since we're doing direct memory manipulation
 @assert string(a) == "123456789012345678901234567890"
@@ -38,3 +38,10 @@ e=2^63-1
 
 @assert div(BigInt(3), BigInt(2)) == BigInt(1)
 @assert rem(BigInt(3), BigInt(2)) == BigInt(1)
+
+@assert a+int(1) == b
+@assert a+int8(1) == b
+@assert a+int16(1) == b
+@assert a+int32(1) == b
+@assert a+int64(1) == b
+
