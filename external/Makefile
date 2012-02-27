@@ -548,7 +548,7 @@ distclean-gmp:
 GMP_INC = -I gmp-$(GMP_VER)/
 GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
 
-$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c
+$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
 	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 	touch $@
 install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
