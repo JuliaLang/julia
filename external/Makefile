@@ -169,13 +169,14 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
 
 clean-double-conversion:
 	rm -f double-conversion-$(GRISU_VER)/src/*.o
 	rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	rm -rf double-conversion-$(GRISU_VER)
+	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
 ## fdlibm ##
 
@@ -315,18 +316,19 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
 	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
-	cp libarpack.$(SHLIB_EXT) $(JULIALIB)
+	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
 clean-arpack:
 	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -397,7 +399,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
@@ -409,7 +411,7 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 
 clean-suitesparse:
-	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
+	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 distclean-suitesparse: clean-suitesparse
 	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
@@ -419,12 +421,14 @@ distclean-suitesparse: clean-suitesparse
 ifeq ($(USE_DEBIAN), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
+SUITESPARSEWRAPPER_BUILD_DEP = 
 else
 SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig
 SUITESPARSE_LIB = 
+SUITESPARSEWRAPPER_BUILD_DEP = $(SUITESPARSE_OBJ_TARGET)
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSEWRAPPER_BUILD_DEP)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -457,7 +461,7 @@ clean-clp:
 	$(MAKE) -C clp-$(CLP_VER) clean
 	rm -f $(CLP_OBJ_TARGET)
 distclean-clp:
-	rm -rf clp-$(CLP_VER).tar.bz2 clp-$(CLP_VER)
+	rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
 
 ## UNWIND ##
 
