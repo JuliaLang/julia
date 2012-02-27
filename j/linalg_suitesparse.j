@@ -75,7 +75,7 @@ end
 
 ## Library code
 
-_jl_libsuitesparse = dlopen("libsuitesparse")
+_jl_libumfpack = dlopen("libumfpack")
 _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 
 ## CHOLMOD
@@ -335,7 +335,7 @@ macro _jl_umfpack_symbolic_macro(f_sym_r, f_sym_c, inttype)
         function _jl_umfpack_symbolic{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
             Symbolic = Array(Ptr{Void}, 1)
-            status = ccall(dlsym(_jl_libsuitesparse, $f_sym_r),
+            status = ccall(dlsym(_jl_libumfpack, $f_sym_r),
                            Ti,
                            (Ti, Ti, 
                             Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -348,7 +348,7 @@ macro _jl_umfpack_symbolic_macro(f_sym_r, f_sym_c, inttype)
         function _jl_umfpack_symbolic{Tv<:Complex128,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
             Symbolic = Array(Ptr{Void}, 1)            
-            status = ccall(dlsym(_jl_libsuitesparse, $f_sym_c),
+            status = ccall(dlsym(_jl_libumfpack, $f_sym_c),
                            Ti,
                            (Ti, Ti, 
                             Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, 
@@ -372,7 +372,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
         function _jl_umfpack_numeric{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
             # Pointer to store the numeric factorization returned by UMFPACK
             Numeric = Array(Ptr{Void}, 1)
-            status = ccall(dlsym(_jl_libsuitesparse, $f_num_r),
+            status = ccall(dlsym(_jl_libumfpack, $f_num_r),
                            Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
@@ -386,7 +386,7 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
         function _jl_umfpack_numeric{Tv<:Complex128,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
             # Pointer to store the numeric factorization returned by UMFPACK
             Numeric = Array(Ptr{Void}, 1)
-            status = ccall(dlsym(_jl_libsuitesparse, $f_num_c),
+            status = ccall(dlsym(_jl_libumfpack, $f_num_c),
                            Ti,
                            (Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
                             Ptr{Float64}, Ptr{Float64}),
@@ -409,7 +409,7 @@ macro _jl_umfpack_solve_macro(f_sol_r, f_sol_c, inttype)
         function _jl_umfpack_solve{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
                                                              b::Vector{Tv}, Numeric)
             x = similar(b)
-            status = ccall(dlsym(_jl_libsuitesparse, $f_sol_r),
+            status = ccall(dlsym(_jl_libumfpack, $f_sol_r),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -423,7 +423,7 @@ macro _jl_umfpack_solve_macro(f_sol_r, f_sol_c, inttype)
                                                                 b::Vector{Tv}, Numeric)
             xr = similar(b, Float64)
             xi = similar(b, Float64)
-            status = ccall(dlsym(_jl_libsuitesparse, $f_sol_c),
+            status = ccall(dlsym(_jl_libumfpack, $f_sol_c),
                            Ti,
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
@@ -443,10 +443,10 @@ macro _jl_umfpack_free_macro(f_symfree, f_numfree, eltype, inttype)
     quote
 
         _jl_umfpack_free_symbolic{Tv<:$eltype,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic) =
-        ccall(dlsym(_jl_libsuitesparse, $f_symfree), Void, (Ptr{Void},), Symbolic)
+        ccall(dlsym(_jl_libumfpack, $f_symfree), Void, (Ptr{Void},), Symbolic)
         
         _jl_umfpack_free_numeric{Tv<:$eltype,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Numeric) =
-        ccall(dlsym(_jl_libsuitesparse, $f_numfree), Void, (Ptr{Void},), Numeric)
+        ccall(dlsym(_jl_libumfpack, $f_numfree), Void, (Ptr{Void},), Numeric)
         
     end
 end
