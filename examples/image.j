@@ -134,12 +134,12 @@ function imadjustintensity(img, range)
     out = uint8(255*tmp)
 end
 
-function rgb2gray(img)
+function rgb2gray{T}(img::Array{T,3})
     n, m = size(img)
     red_weight = 0.30
     green_weight = 0.59
     blue_weight = 0.11
-    out = Array(Uint8, n, m)
+    out = Array(T, n, m)
     if ndims(img)==3 && size(img,3)==3
         for i=1:n, j=1:m
             out[i,j] = red_weight*img[i,j,1]+green_weight*img[i,j,2]+blue_weight*img[i,j,3];
@@ -155,73 +155,75 @@ function rgb2gray(img)
     out
 end
 
-function fspecial(filter::String, filter_size, sigma)
-    for i = filter_size
-        if mod(i, 2) != 1
-            error("filter size must be odd")
-        end
-    end
+rgb2gray{T}(img::Array{T,2}) = img
 
-    if length(filter_size) == 2
-        m = filter_size[1]
-        n = filter_size[2]
-    elseif length(filter_size) == 1
-        m = filter_size
-        n = m
-    elseif length(filter_size) == 0
-        m = 3
-        n = 3
-    else
-        error("filter size must consist of one or two values")
-    end
+function sobel()
+    f = [1.0 2.0 1.0; 0.0 0.0 0.0; -1.0 -2.0 -1.0]
+    return f, f'
+end
 
-    if filter == "average"
-        out = ones(Float64, m, n)/(m*n)
-    elseif filter == "sobel"
-        out = [1.0 2.0 1.0; 0 0 0; -1.0 -2.0 -1.0]
-    elseif filter == "prewitt"
-        out = [1.0 1.0 1.0; 0 0 0; -1.0 -1.0 -1.0]
-    elseif filter == "gaussian"
-        out = gaussian2d(sigma, filter_size)
-    else
-        error("unkown filter type")
+function prewitt()
+    f = [1.0 1.0 1.0; 0.0 0.0 0.0; -1.0 -1.0 -1.0]
+    return f, f'
+end
+
+function imaverage(filter_size)
+    if length(filter_size) != 2
+        error("wrong filter size")
+    end
+    m, n = filter_size[1], filter_size[2]
+    if mod(m, 2) != 1 || mod(n, 2) != 1
+        error("filter dimensions must be odd")
+    end
+    f = ones(Float64, m, n)/(m*n)
+end
+
+imaverage() = imaverage([3 3])
+
+function imlaplacian(diagonals::String)
+    if diagonals == "diagonals"
+        return [1.0 1.0 1.0; 1.0 -8.0 1.0; 1.0 1.0 1.0]
+    elseif diagonals == "nodiagonals"
+        return [0.0 1.0 0.0; 1.0 -4.0 1.0; 0.0 1.0 0.0]
     end
 end
 
-fspecial(filter::String, filter_size) = fspecial(filter::String, filter_size, 0.5)
-fspecial(filter::String) = fspecial(filter::String, [], 0.5)
+imlaplacian() = imlaplacian("nodiagonals")
 
 function gaussian2d(sigma, filter_size)
-    for i = filter_size
-        if mod(i, 2) != 1
-            error("filter size must be odd")
-        end
-    end
-
-    if length(sigma) == 0
-        sigma = 0.5
-    end
-
-    if length(filter_size) == 2
-        m = filter_size[1]
-        n = filter_size[2]
-    elseif length(filter_size) == 1
-        m = filter_size
-        n = m
-    elseif length(filter_size) == 0
+    if length(filter_size) == 0
         # choose 'good' size 
         m = 4*ceil(sigma)+1
         n = m
+    elseif length(filter_size) != 2
+        error("wrong filter size")
     else
-        error("filter size must consist of one or two values")
+        m, n = filter_size[1], filter_size[2]
     end
-
+    if mod(m, 2) != 1 || mod(n, 2) != 1
+        error("filter dimensions must be odd")
+    end
     g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
     return g/sum(g)
 end
 
 gaussian2d(sigma) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
+
+function imdog(sigma)
+    m = 4*ceil(sqrt(2)*sigma)+1
+    return gaussian2d(sqrt(2)*sigma, [m m]) - gaussian2d(sigma, [m m])
+end
+
+imdog() = imdog(0.5)
+
+function ssd{T}(A::Array{T}, B::Array{T})
+    return sum((A-B).^2)
+end
+
+function sad{T}(A::Array{T}, B::Array{T})
+    return sum(abs(A-B))
+end
 
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
@@ -263,7 +265,18 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     else
         error("wrong border treatment")
     end
-    C = conv2(A, filter)
+    # check if separable
+    U, S, V = svd(filter)
+    separable = true;
+    for i = 2:length(S)
+        # assumption that <10^-7 \approx 0
+        separable = separable && (abs(S[i]) < 10^-7)
+    end
+    if separable
+        C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+    else
+        C = conv2(A, filter)
+    end
     sc = size(C)
     out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
 end
