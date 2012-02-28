@@ -53,7 +53,7 @@ function _show(x::Float, mode::Int32, n::Int)
     len = _jl_length[1]
     pt  = _jl_point[1]
     if mode == GRISU_PRECISION
-        while _jl_digits[len] == '0'
+        while len > 1 && _jl_digits[len] == '0'
             len -= 1
         end
     end
