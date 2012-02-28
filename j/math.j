@@ -35,3 +35,16 @@ function hypot(x::Real, y::Real)
 end
 
 square(x::Number) = x*x
+
+function polyval(a::Vector, x::Real)
+    y = a[1]
+    for i = 2:length(a)
+        y = a[i] + x.*y
+    end
+    y
+end
+
+function polyint(a::Vector, k::Real)
+    vcat(a, k)./flipud(1:(length(a)+1))
+end
+polyint(a::Vector) = polyint(a, 0)
