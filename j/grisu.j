@@ -43,15 +43,20 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), GRISU_PRECISION, int32(n))
 end
 
-function _show(x::Float, mode::Int32)
+function _show(x::Float, mode::Int32, n::Int)
     s = current_output_stream()
     if isnan(x); return write(s, "NaN"); end
     if isinf(x); return write(s, x < 0 ? "-Inf" : "Inf"); end
-    @grisu_ccall x mode 0
+    @grisu_ccall x mode n
     pdigits = pointer(_jl_digits)
     neg = _jl_neg[1]
     len = _jl_length[1]
     pt  = _jl_point[1]
+    if mode == GRISU_PRECISION
+        while _jl_digits[len] == '0'
+            len -= 1
+        end
+    end
     if neg
         write(s,'-')
     end
@@ -90,9 +95,9 @@ function _show(x::Float, mode::Int32)
     nothing
 end
 
-show(x::Float64) = _show(x, GRISU_SHORTEST)
-show(x::Float32) = _show(x, GRISU_SHORTEST_SINGLE)
-#showcompact(x::Float) = _show(x, GRISU_SHORTEST_SINGLE) # TODO: better short float printing.
+show(x::Float64) = _show(x, GRISU_SHORTEST, 0)
+show(x::Float32) = _show(x, GRISU_SHORTEST_SINGLE, 0)
+showcompact(x::Float) = _show(x, GRISU_PRECISION, 6)
 
 # normal:
 #   0 < pt < len        ####.####           len+1

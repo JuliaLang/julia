@@ -173,6 +173,7 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
 int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
            int equalnans)
 {
+    union { double d; int64_t i64; } u, v;
     if (atag==btag && (!equalnans || atag < T_FLOAT))
         return cmp_same_eq(a, b, atag);
 
@@ -181,7 +182,8 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
 
     if ((int)atag >= T_FLOAT && (int)btag >= T_FLOAT) {
         if (equalnans) {
-            return *(uint64_t*)&da == *(uint64_t*)&db;
+            u.d = da; v.d = db;
+            return u.i64 == v.i64;
         }
         return (da == db);
     }

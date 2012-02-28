@@ -13,6 +13,7 @@ SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
+GMP_VER=5.0.4
 
 ## high-level setup ##
 
@@ -21,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+LIBS = fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -182,13 +183,14 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
 
 clean-double-conversion:
 	rm -f double-conversion-$(GRISU_VER)/src/*.o
 	rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	rm -rf double-conversion-$(GRISU_VER)
+	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
 ## fdlibm ##
 
@@ -328,7 +330,8 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
 	$(FC) -shared $(LDFLAGS) $(FFLAGS) SRC/*.f UTIL/*.f -o libarpack.$(SHLIB_EXT) $(LIBBLAS) $(LIBLAPACK) && \
@@ -339,7 +342,7 @@ clean-arpack:
 	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -410,7 +413,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) && \
 	mkdir -p lib && \
@@ -422,7 +425,7 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 
 clean-suitesparse:
-	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
+	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 distclean-suitesparse: clean-suitesparse
 	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
@@ -432,12 +435,14 @@ distclean-suitesparse: clean-suitesparse
 ifeq ($(USE_DEBIAN), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
+SUITESPARSEWRAPPER_BUILD_DEP = 
 else
 SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig
 SUITESPARSE_LIB = 
+SUITESPARSEWRAPPER_BUILD_DEP = $(SUITESPARSE_OBJ_TARGET)
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSEWRAPPER_BUILD_DEP)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -470,7 +475,7 @@ clean-clp:
 	$(MAKE) -C clp-$(CLP_VER) clean
 	rm -f $(CLP_OBJ_TARGET)
 distclean-clp:
-	rm -rf clp-$(CLP_VER).tar.bz2 clp-$(CLP_VER)
+	rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
 
 ## UNWIND ##
 
@@ -523,6 +528,47 @@ clean-lighttpd:
 	rm -f $(LIGHTTPD_OBJ_TARGET)
 distclean-lighttpd:
 	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+
+## GMP ##
+
+GMP_OBJ_TARGET = $(EXTROOTLIB)/libgmp.$(SHLIB_EXT)
+
+compile-gmp: install-gmp
+install-gmp: $(GMP_OBJ_TARGET)
+
+gmp-$(GMP_VER).tar.bz2:
+	$(WGET) ftp://ftp.gmplib.org/pub/gmp-5.0.4/$@
+gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
+	tar jxf $<
+	touch $@
+gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
+	cd gmp-$(GMP_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT)) 
+$(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
+	$(MAKE) -C gmp-$(GMP_VER) 
+	$(MAKE) -C gmp-$(GMP_VER) check
+	$(MAKE) -C gmp-$(GMP_VER) install
+	touch $@
+
+clean-gmp:
+	$(MAKE) -C gmp-$(GMP_VER) clean
+	rm -f $(GMP_OBJ_TARGET)
+distclean-gmp:
+	rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
+
+##GMP Wrapper
+
+GMP_INC = -I gmp-$(GMP_VER)/
+GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
+
+$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
+	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+	touch $@
+install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+
+clean-gmp-wrapper:
+	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## phony targets ##
 
