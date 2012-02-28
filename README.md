@@ -91,31 +91,6 @@ Other versions of gcc are also available but gfortran45 is the one use by all th
 
 **Use the gmake command on FreeBSD instead of make**
 
-On FreeBSD two of the unit tests of flisp fail at the moment.  Until this is fixed you can comment them out:
-
-    diff --git a/src/flisp/unittest.lsp b/src/flisp/unittest.lsp
-    index 9ebd491..3b0df0e 100644
-    --- a/src/flisp/unittest.lsp
-    +++ b/src/flisp/unittest.lsp
-    @@ -77,7 +77,7 @@
-     (assert (equal? (string 'sym #byte(65) #wchar(945) "blah") "symA\u03B1blah"))
-
-     ; NaNs
-    -(assert (equal? +nan.0 +nan.0))
-    +;;;(assert (equal? +nan.0 +nan.0))
-     (assert (not (= +nan.0 +nan.0)))
-     (assert (not (= +nan.0 -nan.0)))
-     (assert (equal? (< +nan.0 3) (> 3 +nan.0)))
-    @@ -92,7 +92,7 @@
-
-     ; -0.0 etc.
-     (assert (not (equal? 0.0 0)))
-    -(assert (equal? 0.0 0.0))
-    +;;;(assert (equal? 0.0 0.0))
-     (assert (not (equal? -0.0 0.0)))
-     (assert (not (equal? -0.0 0)))
-     (assert (not (eqv? 0.0 0)))
-
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
