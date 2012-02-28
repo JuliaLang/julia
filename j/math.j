@@ -57,13 +57,13 @@ function polyint(a::AbstractVector, k::Number)
 end
 polyint(a::AbstractVector) = polyint(a, 0)
 
-function poly(A::Matrix)
-    n = size(A)[1]
-    z, ignored = eig(A)
+function poly(r::AbstractVector)
+    n = length(r)
     c = zeros(n+1,1)
     c[1] = 1
     for j = 1:n
-        c[2:j+1] = c[2:j+1]-z[j]*c[1:j]
+        c[2:j+1] = c[2:j+1]-r[j]*c[1:j]
     end
     return c
 end
+poly(A::Matrix) = poly(eig(A)[1])
