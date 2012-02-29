@@ -237,5 +237,5 @@ end
 
 include("stream.j")
 
-readall(`ls`)
+show(readall(`ls`))
 end #module

@@ -253,9 +253,6 @@ int true_main(int argc, char *argv[])
     //uv_pipe_t pipe;
     //uv_pipe_init(jl_event_loop,&pipe,1);
     jl_status("This is a test\n");
-    jl_spawn("ls",0,NULL,NULL,NULL);
-    jl_spawn("ls",0,NULL,NULL,NULL);
-    jl_callback(0);
     //jl_event_loop->data=&pipe;
     //uv_run(jl_event_loop);
     //uv_run_once(jl_io_loop);

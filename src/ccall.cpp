@@ -193,7 +193,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if(fptr==NULL) {
             fptr = jl_dlsym_e(jl_kernel32_handle, ((jl_sym_t*)ptr)->name);
             if(fptr==NULL) {
-                fptr = jl_dlsym(jl_ntdll_handle, ((jl_sym_t*)ptr)->name);
+                fptr = jl_dlsym_e(jl_ntdll_handle, ((jl_sym_t*)ptr)->name);
+                if(fptr==NULL) {
+                    fptr = jl_dlsym(jl_crtdll_handle, ((jl_sym_t*)ptr)->name);
+                }
             }
         }
 #else

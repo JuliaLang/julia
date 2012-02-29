@@ -37,18 +37,22 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
   return buf;
 }
 
+
 void closeHandle(uv_handle_t* handle)
 {
     switch(handle->type) {
     case UV_NAMED_PIPE:
         if(handle->data) {
             jl_pipe_opts_t *opts=handle->data;
-            ios_close(opts->stream);
             free(opts->readcb);
         } break;
     case UV_PROCESS:
         if(handle->data) {
             jl_proc_opts_t *opts=handle->data;
+            if(opts) {
+                if(opts->exitcb)
+                    jl_callback_call(opts->exitcb,handle,0,0);
+            }
             free(opts->exitcb);
             //pipes have to be closed where they are created to support reusing them
         }
@@ -70,13 +74,7 @@ DLLEXPORT void jl_process_events()
 
 
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
-    jl_proc_opts_t *opts;
     int c = uv_loop_refcount(jl_event_loop);
-    if(p->data) {
-        opts = p->data;
-        if(opts->exitcb)
-            jl_callback_call(opts->exitcb,p,exit_status,term_signal);
-    }
     uv_close(p,&closeHandle);
 }
 
@@ -103,16 +101,21 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
     jl_pipe_opts_t *opts;
     if(handle->data) {
         opts = handle->data;
+        opts->stream->size+=nread;
+        opts->stream->bpos+=nread;
         if(opts->readcb) {
             jl_callback_call(opts->readcb,nread,((jl_pipe_opts_t*)handle->data)->stream->buf,(buf.base),buf.len);
         }
     }
 }
 
-DLLEXPORT uv_pipe_t *jl_make_pipe()
+DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
 {
+    jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
-    return uv_pipe_init(jl_event_loop,pipe,1);
+    uv_pipe_init(jl_event_loop,pipe,0);
+    pipe->data = 0;//will be initilized on io
+    return pipe;
 }
 
 DLLEXPORT void jl_close_uv(uv_handle_t **handle)
@@ -120,14 +123,15 @@ DLLEXPORT void jl_close_uv(uv_handle_t **handle)
     if(handle) uv_close(*handle,&closeHandle);
 }
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohande,void **callback)
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback)
 {
-    if(handle->data)
+    if(!handle||(*handle)->data)
         return -2;
     jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
-    if(callback)
-        opts->readcb=(jl_callback_t*)*callback;
-    uv_read_start(handle,&jl_alloc_buf,jl_readcb);
+    opts->readcb=callback?(jl_callback_t*)*callback:0;
+    opts->stream = iohandle;
+    (*handle)->data = opts;
+    return uv_read_start(*handle,&jl_alloc_buf,&jl_readcb);
 }
 
 DLLEXPORT void jl_callback(void **callback)

@@ -412,7 +412,7 @@ size_t ios_readprep(ios_t *s, size_t n)
 size_t ios_fillprep(ios_t *s, size_t n)
 {
     size_t space = s->size - s->bpos;
-    if (space >= n || s->bm == bm_mem || s->fd == -1)
+    if (space >= n)
         return space;
     if (s->maxsize < s->bpos+n) {
         if (_buf_realloc(s, s->bpos + n)==NULL)
@@ -420,6 +420,9 @@ size_t ios_fillprep(ios_t *s, size_t n)
     }
     return n;
 }
+
+
+
 
 static void _write_update_pos(ios_t *s)
 {

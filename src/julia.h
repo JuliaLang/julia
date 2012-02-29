@@ -344,6 +344,7 @@ extern uv_lib_t jl_dl_handle;
 #if defined(__WIN32__) || defined (_WIN32)
 extern uv_lib_t jl_ntdll_handle;
 extern uv_lib_t jl_kernel32_handle;
+extern uv_lib_t jl_crtdll_handle;
 #endif
 extern uv_loop_t *jl_event_loop;
 extern uv_loop_t *jl_io_loop;
@@ -679,7 +680,7 @@ DLLEXPORT void jl_process_events();
 DLLEXPORT uv_pipe_t *jl_make_pipe();
 DLLEXPORT void jl_close_uv(uv_handle_t **handle);
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohande,void **callback);
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback);
 
 DLLEXPORT void jl_callback(void **callback);
 

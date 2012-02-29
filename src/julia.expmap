@@ -193,6 +193,7 @@
     jl_close_uv;
     jl_start_reading;
     jl_callback;
+	iswprint;
   local:
     *;
 };

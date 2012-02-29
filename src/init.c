@@ -107,6 +107,7 @@ uv_lib_t jl_dl_handle;
 #ifdef __WIN32__
 uv_lib_t jl_ntdll_handle;
 uv_lib_t jl_kernel32_handle;
+uv_lib_t jl_crtdll_handle;
 #endif
 uv_loop_t *jl_event_loop;
 uv_loop_t *jl_io_loop;
@@ -139,6 +140,7 @@ void julia_init(char *imageFile)
 #ifdef __WIN32__
     uv_dlopen("ntdll.dll",&jl_ntdll_handle); //bypass julia's pathchecking for system dlls
     uv_dlopen("Kernel32.dll",&jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll",&jl_crtdll_handle);
 #endif
     jl_io_loop = uv_default_loop(); //this loop will handle io/sockets - if not handled otherwise
     jl_event_loop = uv_loop_new(); //this loop will internal events (spawining process etc.)

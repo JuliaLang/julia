@@ -6,6 +6,7 @@ abstract AsyncStream
 type NamedPipe <: AsyncStream
     handle::Int32
     buf::IOStream
+    NamedPipe(handle::Int32,buf::IOStream) = new(handle,buf)
 end
 
 function make_pipe()
@@ -13,7 +14,7 @@ function make_pipe()
 end
 
 function close_pipe(pipe::NamedPipe)
-    ccall(:jl_close_uv,Void,(Int32,),pipe.handle)
+    ccall(:jl_close_uv,Void,(Ptr{Int32},),pipe.handle)
 end
 
 function run_event_loop()
@@ -54,7 +55,7 @@ function spawn(cmd::Cmd, cb::Int32)
 end
 
 function finish_read(pipe::NamedPipe)
-    close_pipe(pipe)
+    close_pipe(pipe) #handles to UV and ios will be invalid after this point
 end
 
 function finish_read(state::(NamedPipe,ByteString))
@@ -64,9 +65,8 @@ end
 function readall(cmd::Cmd)
     ptrs = _jl_pre_exec(cmd.exec)
     out=make_pipe()
-    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),out.handle,out.buf.ios,C_NULL)
-    string=ByteString[]
     Process(int32(ccall(:jl_spawn, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}), ptrs[1], ptrs, C_NULL, out.handle, make_callback(finish_read,(),out))),0,out,0); #close pipe on return (closes event loop)
+    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),out.handle,out.buf.ios,C_NULL)
     run_event_loop()
-    string
+    return takebuf_string(out.buf)
 end
