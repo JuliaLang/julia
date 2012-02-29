@@ -22,6 +22,7 @@
 #include <libgen.h>
 #include <getopt.h>
 #include "julia.h"
+#include <stdio.h>
 
 int jl_boot_file_loaded = 0;
 
@@ -103,6 +104,12 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 void jl_get_builtin_hooks(void);
 
 uv_lib_t jl_dl_handle;
+#ifdef __WIN32__
+uv_lib_t jl_ntdll_handle;
+uv_lib_t jl_kernel32_handle;
+#endif
+uv_loop_t *jl_event_loop;
+uv_loop_t *jl_io_loop;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jmp_buf *where);
@@ -129,6 +136,22 @@ void julia_init(char *imageFile)
     jl_page_size = getPageSize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
+#ifdef __WIN32__
+    uv_dlopen("ntdll.dll",&jl_ntdll_handle); //bypass julia's pathchecking for system dlls
+    uv_dlopen("Kernel32.dll",&jl_kernel32_handle);
+#endif
+    jl_io_loop = uv_default_loop(); //this loop will handle io/sockets - if not handled otherwise
+    jl_event_loop = uv_loop_new(); //this loop will internal events (spawining process etc.)
+    //init io
+    jl_stdin_tty = malloc(sizeof(uv_tty_t));
+    jl_stdout_tty = malloc(sizeof(uv_tty_t));
+    jl_stderr_tty = malloc(sizeof(uv_tty_t));
+    uv_tty_reset_mode();
+    uv_tty_set_mode(jl_stdin_tty,1); //raw input
+    uv_tty_init(jl_io_loop,jl_stdin_tty,0,1);//stdin
+    uv_tty_init(jl_io_loop,jl_stdout_tty,1,0);//stdout
+    uv_tty_init(jl_io_loop,jl_stderr_tty,2,0);//stderr
+    uv_tty_set_mode(jl_stdin_tty,1); //raw input
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

@@ -1045,9 +1045,9 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 #ifdef JL_TRACE
 static int trace_en = 0;
 static void enable_trace(int x) { trace_en=x; }
+extern char *type_summary(jl_value_t *t);
 #endif
 
-extern char *type_summary(jl_value_t *t);
 
 JL_CALLABLE(jl_apply_generic)
 {
@@ -1056,7 +1056,8 @@ JL_CALLABLE(jl_apply_generic)
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
 #endif
-
+#ifdef JL_TRACE
+    if (trace_en) {
         ios_printf(ios_stdout, "%s(", ((jl_sym_t*)jl_t1(env))->name);
         size_t i;
         for(i=0; i < nargs; i++) {
@@ -1064,7 +1065,8 @@ JL_CALLABLE(jl_apply_generic)
             ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
         }
         ios_printf(ios_stdout, ")\n");
-
+    }
+#endif
     /*
       search order:
       look at concrete signatures
@@ -1378,4 +1380,57 @@ DLLEXPORT
 jl_sym_t *jl_genericfunc_name(jl_value_t *v)
 {
     return jl_gf_name(v);
+}
+
+
+//todo implement in Julia
+JL_CALLABLE(jl_f_make_callback)
+{
+    JL_TYPECHK("make_callback",function,args[0]);
+    JL_TYPECHK("make_callback",tuple,args[1])
+    jl_function_t *Ffunc=args[0];
+    jl_tuple_t *tt=args[1];
+    jl_function_t *mfunc;
+    jl_value_t *env = ((jl_function_t*)Ffunc)->env;
+    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
+    jl_callback_t *cb = allocobj(sizeof(jl_callback_t));
+    jl_tuple_t *ttmp = jl_new_struct_uninit(jl_tuple_type);
+    size_t j=0;
+    jl_tupleset(ttmp, 0, jl_typeof(args[2]));
+    for(j=0; j < tt->length; j++) {
+        jl_tupleset(ttmp, j+1, jl_tupleref(tt,j));
+    }
+    int i;
+
+    for(i=0; i < tt->length; i++) {
+        if (jl_is_tuple(jl_tupleref(tt,i))||jl_is_struct_type(jl_tupleref(tt,1)))
+            jl_error("make_callback: only primitive types are supported");
+    }
+
+    mfunc = jl_method_table_assoc_exact_by_type(mt,ttmp); //is this necessary?
+    if (mfunc != NULL) {
+        if (mfunc->linfo != NULL &&
+                (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
+            // if inference is running on this function, return a copy
+            // of the function to be compiled without inference and run.
+            jl_lambda_info_t *li = mfunc->linfo;
+            if (li->unspecialized == NULL) {
+                li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
+            }
+            mfunc = li->unspecialized;
+        }
+    }
+    else {
+        mfunc = jl_mt_assoc_by_type(mt, ttmp, 1);
+    }
+
+    if (mfunc == NULL) {
+        return jl_no_method_error((jl_function_t*)F, args, nargs);
+    }
+    cb->function=mfunc;
+    cb->types=tt;
+    cb->state=args[2];
+    jl_value_t *t = jl_box_int32((void *)cb);
+    free(ttmp);
+    return t;
 }

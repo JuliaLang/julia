@@ -35,19 +35,9 @@
 //#define MEMDEBUG
 //#define MEMPROFILE
 
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
-
 /** vasprintf windows implelemntation by Michael Clark <michael@metaparadigm.com> as part of http://oss.metaparadigm.com/json-c/ lincensed under the MIT LICENSE */
 
-#ifdef defined(__WIN32__) and !defined(WIN32)
+#if defined(__WIN32__) && !defined(WIN32)
 #define WIN32
 #endif
 
@@ -417,6 +407,18 @@ size_t ios_readprep(ios_t *s, size_t n)
         return space;
     s->size += got;
     return s->size - s->bpos;
+}
+
+size_t ios_fillprep(ios_t *s, size_t n)
+{
+    size_t space = s->size - s->bpos;
+    if (space >= n || s->bm == bm_mem || s->fd == -1)
+        return space;
+    if (s->maxsize < s->bpos+n) {
+        if (_buf_realloc(s, s->bpos + n)==NULL)
+            return space;
+    }
+    return n;
 }
 
 static void _write_update_pos(ios_t *s)

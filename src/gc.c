@@ -72,16 +72,6 @@ typedef struct _bigval_t {
     char _data[1];
 } bigval_t;
 
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
-
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
 #define gc_setmark(o) (gc_val(o)->marked=1)

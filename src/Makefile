@@ -3,7 +3,7 @@ include $(JULIAHOME)/Make.inc
 
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
-	alloc dlload sys init task array dump
+        alloc dlload sys init task array dump event wrapper
 FLAGS = \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \

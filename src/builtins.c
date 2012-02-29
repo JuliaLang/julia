@@ -37,7 +37,13 @@ void jl_errorf(const char *fmt, ...)
     va_end(args);
     jl_value_t *msg = jl_pchar_to_string(buf, nc);
     JL_GC_PUSH(&msg);
-    jl_raise(jl_new_struct(jl_errorexception_type, msg));
+    if(jl_errorexception_type!=NULL) {
+        jl_raise(jl_new_struct(jl_errorexception_type, msg));
+    } else {
+        ios_printf(ios_stderr,"%s",&buf);
+        exit(1);
+    }
+
 }
 
 void jl_too_few_args(const char *fname, int min)
@@ -1244,6 +1250,9 @@ void jl_init_primitives(void)
     add_builtin_func("new_tag_type_super", jl_f_new_tag_type_super);
     add_builtin_func("new_bits_type", jl_f_new_bits_type);
     add_builtin_func("def_macro", jl_f_def_macro);
+
+    // add builtin func
+    add_builtin_func("make_callback",jl_f_make_callback);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

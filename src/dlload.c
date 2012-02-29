@@ -24,7 +24,7 @@ static char *extensions[] = { ".dylib", ".bundle" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { "dll" };
+static char *extensions[] = { ".dll" };
 #define N_EXTENSIONS 1
 #endif
 
@@ -70,7 +70,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
                 strncat(path, "/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
-                error = uv_dlopen(path, handle);
+                error = uv_dlopen(path, &handle);
                 if (!error.code) return handle;
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
@@ -85,21 +85,32 @@ uv_lib_t jl_load_dynamic_library(char *fname)
                 strncat(path, "/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
-                error = uv_dlopen(path, handle);
+                error = uv_dlopen(path, &handle);
                 if (!error.code) return handle;
             }
         }
         /* try loading from standard library path */
         strncpy(path, modname, PATHBUF-1);
         strncat(path, ext, PATHBUF-1-strlen(path));
-        error = uv_dlopen(path, handle);
+        error = uv_dlopen(path, &handle);
         if (!error.code) return handle;
     }
     assert(handle == NULL);
-    ios_printf(ios_stderr, "Error: %d\n", error.code);
+    ios_printf(ios_stderr, "could not load module %s (%d:%d)", fname, error.code,error.sys_errno_);
     jl_errorf("could not load module %s", fname);
 
     return NULL;
+}
+
+void jl_print() {
+ios_printf(ios_stderr, "could not load module");
+}
+
+void *jl_dlsym_e(uv_lib_t handle, char *symbol) {
+    void *ptr;
+    uv_err_t error=uv_dlsym(handle, symbol, &ptr);
+    if(error.code) ptr=NULL;
+    return ptr;
 }
 
 void *jl_dlsym(uv_lib_t handle, char *symbol)
@@ -107,12 +118,8 @@ void *jl_dlsym(uv_lib_t handle, char *symbol)
     void *ptr;
     uv_err_t error = uv_dlsym(handle, symbol, &ptr);
     if (error.code != 0) {
-        if(jl_errorexception_type==NULL) {
-            ios_printf(ios_stderr, "Error: %d\n", error.code);
+            ios_printf(ios_stderr, "Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
             exit(1);
-        }
-        else
-            jl_errorf("dlsym: %d", error.code);
     }
     return ptr;
 }

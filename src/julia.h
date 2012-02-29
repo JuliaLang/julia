@@ -201,6 +201,13 @@ typedef struct {
     int exportp:1;
 } jl_binding_t;
 
+typedef struct _jl_callback_t {
+    JL_STRUCT_TYPE
+    jl_function_t *function;
+    jl_tuple_t *types;
+    jl_value_t *state;
+} jl_callback_t;
+
 typedef struct _jl_module_t {
     JL_STRUCT_TYPE
     jl_sym_t *name;
@@ -243,6 +250,7 @@ typedef struct {
     jl_array_t *args;
     jl_value_t *etype;
 } jl_expr_t;
+
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
@@ -333,6 +341,12 @@ extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 
 extern uv_lib_t jl_dl_handle;
+#if defined(__WIN32__) || defined (_WIN32)
+extern uv_lib_t jl_ntdll_handle;
+extern uv_lib_t jl_kernel32_handle;
+#endif
+extern uv_loop_t *jl_event_loop;
+extern uv_loop_t *jl_io_loop;
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -355,6 +369,11 @@ extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
+
+//IO objects
+extern uv_tty_t *jl_stdin_tty;
+extern uv_tty_t *jl_stdout_tty;
+extern uv_tty_t *jl_stderr_tty;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -637,6 +656,7 @@ DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
+DLLEXPORT char *jl_getenv(char *name);
 
 // child process status
 DLLEXPORT int jl_process_exited(int status);
@@ -648,9 +668,20 @@ DLLEXPORT int jl_process_term_signal(int status);
 DLLEXPORT int jl_process_stop_signal(int status);
 
 // access to std filehandles
-DLLEXPORT int jl_stdin(void);
-DLLEXPORT int jl_stdout(void);
-DLLEXPORT int jl_stderr(void);
+DLLEXPORT uv_tty_t *jl_stdin(void);
+DLLEXPORT uv_tty_t *jl_stdout(void);
+DLLEXPORT uv_tty_t *jl_stderr(void);
+
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void **callback);
+DLLEXPORT void jl_run_event_loop();
+DLLEXPORT void jl_process_events();
+
+DLLEXPORT uv_pipe_t *jl_make_pipe();
+DLLEXPORT void jl_close_uv(uv_handle_t *handle);
+
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohande,void **callback);
+
+DLLEXPORT void jl_callback(void **callback);
 
 // exceptions
 void jl_error(const char *str);
@@ -715,6 +746,12 @@ void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 // external libraries
 DLLEXPORT uv_lib_t jl_load_dynamic_library(char *fname);
 DLLEXPORT void *jl_dlsym(uv_lib_t handle, char *symbol);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t handle, char *symbol); //supress errors
+DLLEXPORT void jl_print();
+
+//event loop
+DLLEXPORT void jl_runEventLoop();
+DLLEXPORT void jl_processEvents();
 
 // compiler
 void jl_compile(jl_function_t *f);

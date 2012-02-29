@@ -77,6 +77,7 @@
     ios_getc;
     ios_getutf8;
     jl_getutf8;
+    jl_getenv;
     u8_isvalid;
     ios_close;
     ios_flush;
@@ -185,6 +186,13 @@
     jl_signal_pending;
     jl_defer_signal;
     jl_register_toplevel_eh;
+    jl_spawn;
+    jl_run_event_loop;
+    jl_process_events;
+    jl_make_pipe;
+    jl_close_uv;
+    jl_start_reading;
+    jl_callback;
   local:
     *;
 };

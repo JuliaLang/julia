@@ -152,8 +152,11 @@ static Function *to_function(jl_lambda_info_t *li)
     FPM->run(*f);
     //n_compile++;
     //print out the function's LLVM code
-    //f->dump();
-    verifyFunction(*f);
+    if(verifyFunction(*f,ReturnStatusAction)) {
+       // f->dump();
+        jl_error("Function failed to verify");
+        emit_function(li,f);
+    }
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -168,6 +171,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
     Function *llvmf = (Function*)li->functionObject;
+    verifyFunction(*llvmf,AbortProcessAction);
     if (li->fptr == NULL) {
         JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);

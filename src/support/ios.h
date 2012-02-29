@@ -14,6 +14,16 @@ typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 #define IOS_INLSIZE 54
 #define IOS_BUFSIZE 131072
 
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
+# ifdef __LP64__
+#  define BVOFFS 3
+# else
+#  define BVOFFS 4
+# endif
+#else
+#define BVOFFS 2
+#endif
+
 typedef struct {
     bufmode_t bm;
 
@@ -89,6 +99,8 @@ DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
 DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
+// like ios_readprep, but can never call os_read
+DLLEXPORT size_t ios_fillprep(ios_t *from, size_t n);
 //void ios_lock(ios_t *s);
 //int ios_trylock(ios_t *s);
 //int ios_unlock(ios_t *s);

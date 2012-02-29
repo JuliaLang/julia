@@ -229,9 +229,14 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-int jl_stdin(void)  { return STDIN_FILENO; }
-int jl_stdout(void) { return STDOUT_FILENO; }
-int jl_stderr(void) { return STDERR_FILENO; }
+uv_tty_t *jl_stdin_tty=0;
+uv_tty_t *jl_stdout_tty=0;
+uv_tty_t *jl_stderr_tty=0;
+
+uv_tty_t *jl_stdin(void)  { return jl_stdin_tty; }
+uv_tty_t *jl_stdout(void) { return jl_stdout_tty; }
+uv_tty_t *jl_stderr(void) { return jl_stderr_tty; }
+
 
 // -- I/O thread --
 
