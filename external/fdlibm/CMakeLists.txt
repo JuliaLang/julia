@@ -156,4 +156,4 @@ w_sinh.c
 w_sqrt.c
 )
 
-add_library(fdmlib STATIC ${SOURCES})
+add_library(fdlibm SHARED ${SOURCES})

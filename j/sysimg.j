@@ -35,7 +35,7 @@ include("inference.j")
 
 # I/O, strings & printing
 include("io.j")
-#set_current_output_stream(make_stdout_stream()) # for error reporting
+set_current_output_stream(make_stdout_stream()) # for error reporting
 include("string.j")
 include("ascii.j")
 include("utf8.j")
@@ -52,48 +52,48 @@ include("errno_h.j")
 # concurrency and parallelism
 include("iterator.j")
 include("task.j")
-include("process.j")
-include("serialize.j")
-include("multi.j")
+#include("process.j")
+#include("serialize.j")
+#include("multi.j")
 
 # front end
-include("client.j")
+#include("client.j")
 
 # core math functions
-include("intfuncs.j")
-include("floatfuncs.j")
-include("math.j")
-include("math_libm.j")
-include("sort.j")
-include("combinatorics.j")
-include("statistics.j")
+#include("intfuncs.j")
+#include("floatfuncs.j")
+#include("math.j")
+#include("math_libm.j")
+#include("sort.j")
+#include("combinatorics.j")
+#include("statistics.j")
 
 # random number generation
-include("random.j")
+##include("random.j")
 
 # sparse matrices
-include("sparse.j")
+#include("sparse.j")
 
 # distributed arrays
-include("darray.j")
+#include("darray.j")
 
 # utilities - version, timing, help, edit
-include("version.j")
-include("util.j")
-include("datafmt.j")
+#include("version.j")
+#include("util.j")
+#include("datafmt.j")
 
 ## Load optional external libraries
 
 # linear algebra
-include("linalg.j")
-include("linalg_blas.j")
-include("linalg_lapack.j")
-include("linalg_arpack.j")
-include("linalg_suitesparse.j")
+#include("linalg.j")
+#include("linalg_blas.j")
+#include("linalg_lapack.j")
+#include("linalg_arpack.j")
+#include("linalg_suitesparse.j")
 
 # signal processing
-include("signal.j")
-include("signal_fftw.j")
+#include("signal.j")
+#include("signal_fftw.j")
 
 
 # prime method cache with some things we know we'll need right after startup

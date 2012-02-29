@@ -501,6 +501,11 @@ void init_repl_environment(void)
     rl_startup_hook = (Function*)init_rl;
 }
 
+void install_event_handler(char *prompt, rl_vcpfunc_t *func)
+{
+    rl_callback_handler_install(prompt, func);
+}
+
 void repl_callback_enable()
 {
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
@@ -509,4 +514,20 @@ void repl_callback_enable()
 void jl_stdin_callback(void)
 {
     rl_callback_read_char();
+}
+
+#include "../src/uv.h"
+
+extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
+{
+    char *start = buf.base;
+    while(start != 0 && nread-- > 0) {
+        rl_stuff_char(*start);
+    }
+    rl_callback_read_char();
+}
+
+void restart(void)
+{
+    rl_on_new_line();
 }

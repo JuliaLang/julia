@@ -36,13 +36,9 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
 
-First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
+First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
-
-or, if you don't have git installed, by using wget and tar to fetch and unpack the source:
-
-    mkdir julia && wget -O - https://github.com/JuliaLang/julia/tarball/master | tar -zxf- -C julia --strip-components 1
 
 Next, enter the `julia/` directory and run `make` to build the `julia` executable.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
@@ -91,31 +87,6 @@ Other versions of gcc are also available but gfortran45 is the one use by all th
 
 **Use the gmake command on FreeBSD instead of make**
 
-On FreeBSD two of the unit tests of flisp fail at the moment.  Until this is fixed you can comment them out:
-
-    diff --git a/src/flisp/unittest.lsp b/src/flisp/unittest.lsp
-    index 9ebd491..3b0df0e 100644
-    --- a/src/flisp/unittest.lsp
-    +++ b/src/flisp/unittest.lsp
-    @@ -77,7 +77,7 @@
-     (assert (equal? (string 'sym #byte(65) #wchar(945) "blah") "symA\u03B1blah"))
-
-     ; NaNs
-    -(assert (equal? +nan.0 +nan.0))
-    +;;;(assert (equal? +nan.0 +nan.0))
-     (assert (not (= +nan.0 +nan.0)))
-     (assert (not (= +nan.0 -nan.0)))
-     (assert (equal? (< +nan.0 3) (> 3 +nan.0)))
-    @@ -92,7 +92,7 @@
-
-     ; -0.0 etc.
-     (assert (not (equal? 0.0 0)))
-    -(assert (equal? 0.0 0.0))
-    +;;;(assert (equal? 0.0 0.0))
-     (assert (not (equal? -0.0 0.0)))
-     (assert (not (equal? -0.0 0)))
-     (assert (not (eqv? 0.0 0)))
-
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
@@ -123,8 +94,9 @@ Buliding Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]** or **[curl]**          — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
+- **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
 
 With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded and compiled from source (or in a few cases, included in the Julia source repository) the first time you run `make`:
@@ -141,12 +113,14 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
+- **[GMP]**                 - the GNU multiple precision arithmetic library, needed for bigint support
 - **[D3]**                  — JavaScript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
 [wget]:         http://www.gnu.org/software/wget/
 [curl]:         http://curl.haxx.se/
+[git]:		http://git-scm.com/
 [perl]:         http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
@@ -160,6 +134,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [LLVM]:         http://www.llvm.org/
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+[GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 
 <a name="Directories"/>

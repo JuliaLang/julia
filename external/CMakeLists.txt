@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 ## library versions ##
 
+set(EXTERNAL_TOP_SRCDIR ${CMAKE_CURRENT_SOURCE_DIR})
+
 set(llvm_VER 3.0)
 set(readline_VER 6.2)
 set(pcre_VER 8.21)
@@ -59,7 +61,7 @@ endif(NOT DEFINED BACKUP_DOWNLOADER)
 	
 ## Download Packages ##
 
-set(PACKAGES llvm pcre dsfmt openblas lapack arpack fftw suitesparse)
+set(PACKAGES llvm pcre dsfmt openblas lapack arpack fftw suitesparse grisu)
 
 ## Linux Specific Packages ##
 
@@ -154,6 +156,7 @@ add_subdirectory(llvm-${llvm_VER})
 set(PCRE_SUPPORT_UNICODE_PROPERTIES ON)
 set(PCRE_SUPPORT_UTF8 ON)
 set(PCRE_SUPPORT_JIT ON)
+set(BUILD_SHARED_LIBS ON)
 add_subdirectory(pcre-${pcre_VER})
 
 
@@ -181,11 +184,15 @@ elseif( USE_OPTIMIZED_BLAS )
   find_package( BLAS )
 endif (BLAS_LIBRARIES)
 
-set(OpenBlasLIB ${CMAKE_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas.${CMAKE_STATIC_LIBRARY_SUFFIX})
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+	set(CMAKE_STATIC_LIBRARY_SUFFIX .lib)
+endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+
+set(OpenBlasLIB ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
 # Neither user specified or optimized BLAS libraries can be used
 if(NOT BLAS_FOUND)
   message(STATUS "Using OpenBlas")
-  set( BLAS_LIBRARIES ${OpenBlasLIB})
+  set(BLAS_LIBRARIES ${OpenBlasLIB})
   set( BUILD_OPENBLAS ON)
 else()
   set( CMAKE_EXE_LINKER_FLAGS 
@@ -205,27 +212,27 @@ add_subdirectory(lapack-${lapack_VER})
 
 add_subdirectory(amos)
 add_subdirectory(fdlibm)
+set(LapackLIB lapack-static)
+
 add_subdirectory(cmake)
 
-set(LapackLIB ${CMAKE_CURRENT_BINARY_DIR}/lib/liblapack.${CMAKE_STATIC_LIBRARY_SUFFIX})
+message(STATUS ${OpenBlasLIB})
 
 add_custom_command(OUTPUT ${OpenBlasLIB}
-COMMAND perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}.system
-COMMAND $(MAKE) openblas-${openblas_VER} DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH}
-COMMAND $(MAKE) PREFIX=${CMAKE_INSTALL_PREFIX}
+COMMAND perl -i -ple "'s/^\\s*(EXTRALIB\\s*\\+=\\s*-lSystemStubs)\\s*$$/# $$1/g'" ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}/Makefile.system
+COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH}
+COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH} PREFIX=${CMAKE_INSTALL_PREFIX} install
 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER})
 add_custom_target(openblas DEPENDS ${OpenBlasLIB})
 add_dependencies(lapack openblas)
+add_dependencies(lapack-static openblas)
 
-  ExternalProject_Add(suitesparse 
-	DEPENDS lapack openblas
-    SOURCE_DIR suitesparse-${suitesparse_VER}           # Source dir to be used for build
-    BUILD_COMMAND 
-	$(MAKE) && \
-	mkdir -p lib && \
-	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
-	cd lib && \
-	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o ${LapackLIB} ${OpenBlasLIB} -lstdc++ -o libsuitesparse.${CMAKE_SHARED_LIBRARY_SUFFIX}
-	BUILD_IN_SOURCE 1
-    INSTALL_DIR ${CMAKE_INSTALL_PREFIX})
+include(ExternalProject)
+#  ExternalProject_Add(suitesparse 
+#    URL ${CMAKE_CURRENT_SOURCE_DIR}/suitesparse-${suitesparse_VER}           # Source dir to be used for build
+#    BUILD_COMMAND 
+#	$(MAKE);mkdir -p lib;cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib;cd lib;for i in *.a; do ar x $$i; done;
+#	gfortran -shared $(FFLAGS) *.o ${LapackLIB} ${OpenBlasLIB} -lstdc++ -o libsuitesparse${CMAKE_SHARED_LIBRARY_SUFFIX}
+#	BUILD_IN_SOURCE 1)
+	
+#add_dependencies(suitesparse lapack openblas)
