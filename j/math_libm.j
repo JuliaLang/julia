@@ -1,5 +1,5 @@
 _jl_libfdm = dlopen("libfdm")
-_jl_libm = dlopen("libm")
+#_jl_libm = dlopen("libm")
 _jl_libamos = dlopen("libamos")
 
 macro _jl_libmfunc_1arg_float(T,f)

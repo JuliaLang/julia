@@ -74,7 +74,7 @@ other(p::PipeOut) = p.pipe.in
 
 function make_pipe()
     fds = Array(Int32, 2)
-    ret = ccall(:pipe, Int32, (Ptr{Int32},), fds)
+    ret = ccall(:CreatePipe, Int32, (Ptr{Int32},), fds)
     system_error(:make_pipe, ret != 0)
     Pipe(FileDes(fds[2]), FileDes(fds[1]))
 end
