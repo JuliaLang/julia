@@ -39,22 +39,29 @@ function ppmwrite(img, file::String)
     write(s, "# ppm file written by julia\n")
     n, m = size(img)
     write(s, "$m $n 255\n")
-    if ndims(img)==3 && size(img,3)==3
-        for i=1:n, j=1:m
-            write(s, uint8(img[i,j,1]))
-            write(s, uint8(img[i,j,2]))
-            write(s, uint8(img[i,j,3]))
+    if eltype(img) <: Integer
+        if ndims(img) == 3 && size(img,3) == 3
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(img[i,j,k]))
+            end
+        elseif ndims(img) == 2
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(img[i,j]))
+            end
+        else
+            error("unsupported array dimensions")
         end
-    elseif ndims(img)==2 && (is(eltype(img),Int8) || is(eltype(img), Uint8))
-        for i=1:n, j=1:m, k = 1:3
-            write(s, uint8(img[i,j]))
-        end
-    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
-        for i=1:n, j=1:m
-            p = img[i,j]
-            write(s, uint8(redval(p)))
-            write(s, uint8(greenval(p)))
-            write(s, uint8(blueval(p)))
+    elseif eltype(img) <: Float
+        if ndims(img) == 3 && size(img,3) == 3
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(255*img[i,j,k]))
+            end
+        elseif ndims(img) == 2
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(255*img[i,j]))
+            end
+        else
+            error("unsupported array dimensions")
         end
     else
         error("unsupported array type")
@@ -75,11 +82,9 @@ function imread(file::String)
     spc = strchr(szline, ' ')
     w = parse_int(szline[1:spc-1])
     h = parse_int(szline[spc+1:end-1])
-    img = Array(Uint8, h, w, 3)
-    for i=1:h, j=1:w
-        img[i,j,1] = read(stream, Uint8)
-        img[i,j,2] = read(stream, Uint8)
-        img[i,j,3] = read(stream, Uint8)
+    img = Array(Float64, h, w, 3)
+    for i=1:h, j=1:w, k = 1:3
+        img[i,j,k] = float64(read(stream, Uint8))/255.0
     end
     img
 end
@@ -110,7 +115,7 @@ function imwrite(I, file::String)
 end
 
 function imshow(img, range)
-    if ndims(img) == 2 && (is(eltype(img), Int8) || is(eltype(img), Uint8))
+    if ndims(img) == 2 
         # only makes sense for gray scale images
         img = imadjustintensity(img, range)
     end
@@ -126,28 +131,26 @@ function imadjustintensity(img, range)
     if length(range) == 0
         range = [min(img) max(img)]
     elseif length(range) == 1
-        error("wrong range")
+        error("incorrect range")
     end
-    tmp = (float(img)-range[1])/(range[2] - range[1])
+    tmp = (img - range[1])/(range[2] - range[1])
     tmp[tmp > 1] = 1
     tmp[tmp < 0] = 0
-    out = uint8(255*tmp)
+    out = tmp
 end
 
 function rgb2gray{T}(img::Array{T,3})
     n, m = size(img)
-    red_weight = 0.30
-    green_weight = 0.59
-    blue_weight = 0.11
+    weights = [0.30 0.59 0.11] # RGB
     out = Array(T, n, m)
     if ndims(img)==3 && size(img,3)==3
         for i=1:n, j=1:m
-            out[i,j] = red_weight*img[i,j,1]+green_weight*img[i,j,2]+blue_weight*img[i,j,3];
+            out[i,j] = sum(weights.*squeeze(img[i,j,:])')
         end
     elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
         for i=1:n, j=1:m
             p = img[i,j]
-            out[i,j] = red_weight*redval(p)+green_weight*greenval(p)+blue_weight*blueval(p);
+            out[i,j] = sum(weights.*[redval(p) greenval(p) blueval(p)])
         end
     else
         error("unsupported array type")
@@ -167,6 +170,7 @@ function prewitt()
     return f, f'
 end
 
+# average filter
 function imaverage(filter_size)
     if length(filter_size) != 2
         error("wrong filter size")
@@ -180,6 +184,7 @@ end
 
 imaverage() = imaverage([3 3])
 
+# laplacian filter kernel
 function imlaplacian(diagonals::String)
     if diagonals == "diagonals"
         return [1.0 1.0 1.0; 1.0 -8.0 1.0; 1.0 1.0 1.0]
@@ -190,6 +195,7 @@ end
 
 imlaplacian() = imlaplacian("nodiagonals")
 
+# 2D gaussian filter kernel
 function gaussian2d(sigma, filter_size)
     if length(filter_size) == 0
         # choose 'good' size 
@@ -210,6 +216,7 @@ end
 gaussian2d(sigma) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
 
+# difference of gaussian
 function imdog(sigma)
     m = 4*ceil(sqrt(2)*sigma)+1
     return gaussian2d(sqrt(2)*sigma, [m m]) - gaussian2d(sigma, [m m])
@@ -217,13 +224,21 @@ end
 
 imdog() = imdog(0.5)
 
+# Sum of squared differences
 function ssd{T}(A::Array{T}, B::Array{T})
     return sum((A-B).^2)
 end
 
+# normalized by Array size
+ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/prod(size(A))
+
+# sum of absolute differences
 function sad{T}(A::Array{T}, B::Array{T})
     return sum(abs(A-B))
 end
+
+# normalized by Array size
+sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/prod(size(A))
 
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
@@ -281,6 +296,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
 end
 
+# imfilter for multi channel images
 function imfilter{T}(img::Array{T,3}, filter::Matrix{T}, border::String, value)
     x, y, c = size(img)
     out = zeros(T, x, y, c)
