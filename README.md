@@ -55,7 +55,7 @@ Now you should be able to run julia like this:
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
+You can read about [getting started](http://julialang.org/manaual/getting-started) in the manual.
 
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
@@ -83,7 +83,7 @@ On FreeBSD the prerequisites can be installed from ports like this:
     make install
     ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
 
-Other versions of gcc are also available but gfortran45 is the one use by all the ports that depend on fortran currently.
+Other versions of gcc are also exist but currently gfortran45 is the one used by all the ports that depend on Fortran.
 
 **Use the gmake command on FreeBSD instead of make**
 
@@ -99,7 +99,7 @@ Buliding Julia requires that the following software be installed:
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
 
 With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
-Julia uses the following external libraries, which are automatically downloaded and compiled from source (or in a few cases, included in the Julia source repository) the first time you run `make`:
+Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
 - **[FemtoLisp]**           — Packaged with julia source, and used to implement the compiler front-end.
@@ -113,14 +113,14 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
-- **[GMP]**                 - the GNU multiple precision arithmetic library, needed for bigint support
+- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support
 - **[D3]**                  — JavaScript visualization library.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
 [wget]:         http://www.gnu.org/software/wget/
 [curl]:         http://curl.haxx.se/
-[git]:		http://git-scm.com/
+[git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
@@ -169,7 +169,7 @@ Now you should be able to run julia like this:
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](https://github.com/JuliaLang/julia/wiki/Getting-Started) in the manual.
+You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
