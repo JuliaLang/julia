@@ -1186,6 +1186,30 @@ prod(A::StridedArray{Bool}, region::Region) =
 
 ## map over arrays ##
 
+## along an axis
+function amap(f::Function, A::StridedArray, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(slice(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(slice(A, idx))
+    end
+
+    return R
+end
+
+
 ## 1 argument
 function map_to(dest::StridedArray, f, A::StridedArray)
     for i=1:numel(A)
