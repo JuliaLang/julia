@@ -36,7 +36,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
 
-First, acquire the source code either by cloning the git repository (requires **[git](http://git-scm.com/)** to be installed):
+First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
@@ -120,6 +120,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [gcc]:          http://gcc.gnu.org/
 [wget]:         http://www.gnu.org/software/wget/
 [curl]:         http://curl.haxx.se/
+[git]:		http://git-scm.com/
 [perl]:         http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
