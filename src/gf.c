@@ -1394,13 +1394,15 @@ JL_CALLABLE(jl_f_make_callback)
     jl_value_t *env = ((jl_function_t*)Ffunc)->env;
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
     jl_callback_t *cb = allocobj(sizeof(jl_callback_t));
-    jl_tuple_t *ttmp = jl_new_struct_uninit(jl_tuple_type);
+    jl_tuple_t *ttmp = jl_alloc_tuple_uninit(tt->length+1);
     size_t j=0;
     jl_tupleset(ttmp, 0, jl_typeof(args[2]));
     for(j=0; j < tt->length; j++) {
         jl_tupleset(ttmp, j+1, jl_tupleref(tt,j));
     }
     int i;
+
+    jl_show(ttmp);
 
     for(i=0; i < tt->length; i++) {
         if (jl_is_tuple(jl_tupleref(tt,i))||jl_is_struct_type(jl_tupleref(tt,1)))
@@ -1425,7 +1427,7 @@ JL_CALLABLE(jl_f_make_callback)
     }
 
     if (mfunc == NULL) {
-        return jl_no_method_error((jl_function_t*)F, args, nargs);
+        jl_error("make_callback: method could not be found");
     }
     cb->function=mfunc;
     cb->types=tt;

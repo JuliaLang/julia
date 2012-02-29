@@ -672,7 +672,7 @@ DLLEXPORT uv_tty_t *jl_stdin(void);
 DLLEXPORT uv_tty_t *jl_stdout(void);
 DLLEXPORT uv_tty_t *jl_stderr(void);
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void **callback);
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **callback);
 DLLEXPORT void jl_run_event_loop();
 DLLEXPORT void jl_process_events();
 

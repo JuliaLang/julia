@@ -138,7 +138,7 @@ DLLEXPORT void jl_callback(void **callback)
     }
 }
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void **callback)
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **callback)
 {
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
@@ -148,13 +148,15 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe,
     opts.env = NULL;
     opts.cwd = NULL;
     opts.args = argv;
-    opts.stdin_stream = jlopts->in = stdin_pipe;
-    opts.stdout_stream = jlopts->out = stdout_pipe;
+    opts.stdin_stream = jlopts->in = *stdin_pipe;
+    opts.stdout_stream = jlopts->out = *stdout_pipe;
     opts.stderr_stream = NULL;
     opts.detached = 0;
     opts.exit_cb = &jl_return_spawn;
     jlopts->exitcb=callback;
     error = uv_spawn(jl_event_loop,proc,opts);
+    if(error)
+        jl_errorf("Failed to create process %s: %d",name,error);
     proc->data = jlopts;
     return proc;
 }
