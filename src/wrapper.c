@@ -115,9 +115,9 @@ DLLEXPORT uv_pipe_t *jl_make_pipe()
     return uv_pipe_init(jl_event_loop,pipe,1);
 }
 
-DLLEXPORT void jl_close_uv(uv_handle_t *handle)
+DLLEXPORT void jl_close_uv(uv_handle_t **handle)
 {
-    uv_close(handle,&closeHandle);
+    if(handle) uv_close(*handle,&closeHandle);
 }
 
 DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohande,void **callback)
@@ -153,7 +153,7 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe
     opts.stderr_stream = NULL;
     opts.detached = 0;
     opts.exit_cb = &jl_return_spawn;
-    jlopts->exitcb=callback;
+    jlopts->exitcb=*callback;
     error = uv_spawn(jl_event_loop,proc,opts);
     if(error)
         jl_errorf("Failed to create process %s: %d",name,error);

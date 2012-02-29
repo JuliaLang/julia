@@ -13,7 +13,7 @@ function make_pipe()
 end
 
 function close_pipe(pipe::NamedPipe)
-    ccall(:jl_close,Void,(Int32,),pipe)
+    ccall(:jl_close_uv,Void,(Int32,),pipe.handle)
 end
 
 function run_event_loop()

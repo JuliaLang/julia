@@ -1395,6 +1395,7 @@ JL_CALLABLE(jl_f_make_callback)
     jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
     jl_callback_t *cb = allocobj(sizeof(jl_callback_t));
     jl_tuple_t *ttmp = jl_alloc_tuple_uninit(tt->length+1);
+    JL_GC_PUSH(&ttmp);
     size_t j=0;
     jl_tupleset(ttmp, 0, jl_typeof(args[2]));
     for(j=0; j < tt->length; j++) {
@@ -1433,6 +1434,6 @@ JL_CALLABLE(jl_f_make_callback)
     cb->types=tt;
     cb->state=args[2];
     jl_value_t *t = jl_box_int32((void *)cb);
-    free(ttmp);
+    JL_GC_POP();
     return t;
 }
