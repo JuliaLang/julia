@@ -308,3 +308,12 @@ end
 
 imfilter(img, filter) = imfilter(img, filter, "replicate", 0)
 imfilter(img, filter, border) = imfilter(img, filter, border, 0)
+
+function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
+    u = img
+    f = imlaplacian()
+    for i = dt:dt:dt*iterations
+        u = u + dt*imfilter(u, f, "replicate")
+    end
+    u
+end
