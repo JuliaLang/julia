@@ -137,7 +137,6 @@ static int jl_word_char(uint32_t wc)
            ('0' <= wc && wc <= '9') || (0xA1 <= wc) || (wc == '_');
 }
 
-
 static int newline_callback(int count, int key) {
     if (!rl_point) return 0;
     spaces_suppressed = 0;
