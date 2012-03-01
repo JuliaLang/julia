@@ -233,15 +233,9 @@ function alignment(x::Rational)
     m == nothing ? (strlen(showcompact_to_string(x)), 0) :
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
-function alignment(v::AbstractVector)
-    l = r = 0
-    for x in v
-        a = alignment(x)
-        l = max(l, a[1])
-        r = max(r, a[2])
-    end
-    (l, r)
-end
+
+const _jl_undef_ref_str = "undef"
+const _jl_undef_ref_alignment = (2,3)
 
 function alignment(
     X::AbstractMatrix,
@@ -250,8 +244,16 @@ function alignment(
 )
     a = {}
     for j in cols
-        push(a, alignment(X[rows,j][:]))
-        # TODO: remove [:] once X[rows,j] returns a vector
+        l = r = 0
+        for i in rows
+            aij = _jl_undef_ref_alignment
+            try
+                aij = alignment(X[i,j])
+            end
+            l = max(l, aij[1])
+            r = max(r, aij[2])
+        end
+        push(a, (l, r))
         if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
             pop(a)
             break
@@ -271,11 +273,16 @@ function print_matrix_row(
 )
     for k = 1:length(A)
         j = cols[k]
-        x = X[i,j]
-        a = alignment(x)
+        a = _jl_undef_ref_alignment
+        sx = _jl_undef_ref_str
+        try
+            x = X[i,j]
+            a = alignment(x)
+            sx = showcompact_to_string(x)
+        end
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
-        print(l, showcompact_to_string(x), r)
+        print(l, sx, r)
         if k < length(A); print(sep); end
     end
 end
