@@ -193,7 +193,8 @@
     jl_close_uv;
     jl_start_reading;
     jl_callback;
-	iswprint;
+    iswprint;
+    localtime_r;
   local:
     *;
 };

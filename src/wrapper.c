@@ -11,11 +11,6 @@ extern "C" {
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
-DLLEXPORT char* jl_getenv(char *name)
-{
-    return getenv(name);
-}
-
 typedef struct {
     jl_callback_t *readcb;
     ios_t *stream;
@@ -23,6 +18,7 @@ typedef struct {
 
 typedef struct {
     jl_callback_t *exitcb;
+    jl_callback_t *closecb;
     uv_pipe_t* in;
     uv_pipe_t* out;
 } jl_proc_opts_t;
@@ -49,9 +45,9 @@ void closeHandle(uv_handle_t* handle)
     case UV_PROCESS:
         if(handle->data) {
             jl_proc_opts_t *opts=handle->data;
-            if(opts) {
-                if(opts->exitcb)
-                    jl_callback_call(opts->exitcb,handle,0,0);
+            if(opts->closecb) {
+                jl_callback_call(opts->closecb,handle);
+                free(opts->closecb);
             }
             free(opts->exitcb);
             //pipes have to be closed where they are created to support reusing them
@@ -74,7 +70,11 @@ DLLEXPORT void jl_process_events()
 
 
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
-    int c = uv_loop_refcount(jl_event_loop);
+    jl_proc_opts_t *opts = p->data;
+    if(opts) {
+        if(opts->exitcb)
+            jl_callback_call(opts->exitcb,p,exit_status,term_signal);
+    }
     uv_close(p,&closeHandle);
 }
 
@@ -142,7 +142,7 @@ DLLEXPORT void jl_callback(void **callback)
     }
 }
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **callback)
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **exitcb, void **closecb)
 {
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
@@ -157,13 +157,24 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe
     opts.stderr_stream = NULL;
     opts.detached = 0;
     opts.exit_cb = &jl_return_spawn;
-    jlopts->exitcb=*callback;
+    jlopts->exitcb=exitcb?*exitcb:0;
+    jlopts->closecb=closecb?*closecb:0;
     error = uv_spawn(jl_event_loop,proc,opts);
     if(error)
         jl_errorf("Failed to create process %s: %d",name,error);
     proc->data = jlopts;
     return proc;
 }
+
+#ifdef __WIN32__
+DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm)
+{
+        auto struct tm *tmp = localtime(t); //localtime is reentrant on windows
+        if (tmp)
+                *tm = *tmp;
+        return tmp;
+}
+#endif
 
 
 #ifdef __cplusplus

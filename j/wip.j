@@ -80,6 +80,12 @@ include("errno_h.j")
 # concurrency and parallelism
 include("iterator.j")
 include("task.j")
+include("stream.j")
+include("serialize.j")
+include("multi.j")
+
+# front end
+include("client.j")
 
 # core math functions
 include("intfuncs.j")
@@ -90,152 +96,29 @@ include("sort.j")
 include("combinatorics.j")
 include("statistics.j")
 
-include("utf8.j")
-include("string.j")
+# random number generation
+include("random.j")
+# sparse matrices
+include("sparse.j")
 
-typealias Executable Vector{ByteString}
+# distributed arrays
+include("darray.j")
 
-type Cmd
-    exec::Executable
-end
+# utilities - version, timing, help, edit
+include("version.j")
+include("util.j")
+include("datafmt.j")
+## Load optional external libraries
 
-function _jl_pre_exec(args::Vector{ByteString})
-    if length(args) < 1
-        error("exec: too few words to exec")
-    end
-    ptrs = Array(Ptr{Uint8}, length(args)+1)
-    for i = 1:length(args)
-        ptrs[i] = args[i].data
-    end
-    ptrs[length(args)+1] = C_NULL
-    return ptrs
-end
+# linear algebra
+include("linalg.j")
+include("linalg_blas.j")
+include("linalg_lapack.j")
+include("linalg_arpack.j")
+include("linalg_suitesparse.j")
 
-## process status ##
+# signal processing
+include("signal.j")
+include("signal_fftw.j")
 
-abstract ProcessStatus
-type ProcessNotRun   <: ProcessStatus; end
-type ProcessRunning  <: ProcessStatus; end
-type ProcessExited   <: ProcessStatus; status::Int32; end
-type ProcessSignaled <: ProcessStatus; signal::Int32; end
-type ProcessStopped  <: ProcessStatus; signal::Int32; end
-
-process_exited  (s::Int32) = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
-process_signaled(s::Int32) = ccall(:jl_process_signaled, Int32, (Int32,), s) != 0
-process_stopped (s::Int32) = ccall(:jl_process_stopped,  Int32, (Int32,), s) != 0
-
-process_exit_status(s::Int32) = ccall(:jl_process_exit_status, Int32, (Int32,), s)
-process_term_signal(s::Int32) = ccall(:jl_process_term_signal, Int32, (Int32,), s)
-process_stop_signal(s::Int32) = ccall(:jl_process_stop_signal, Int32, (Int32,), s)
-
-function process_status(s::Int32)
-    process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
-    process_signaled(s) ? ProcessSignaled(process_term_signal(s)) :
-    process_stopped (s) ? ProcessStopped (process_stop_signal(s)) :
-    error("process status error")
-end
-
-## file descriptors and pipes ##
-
-type FileDes; fd::Int32; end
-
-global const STDIN = FileDes(ccall(:jl_stdin,  Int32, ()))
-global const STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
-global const STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
-
-isequal(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
-
-hash(fd::FileDes) = hash(fd.fd)
-
-show(fd::FileDes) =
-    fd == STDIN  ? print("STDIN")  :
-    fd == STDOUT ? print("STDOUT") :
-    fd == STDERR ? print("STDERR") :
-    invoke(show, (Any,), fd)
-
-type Pipe
-    in::FileDes
-    out::FileDes
-
-    function Pipe(in::FileDes, out::FileDes)
-        if in == out
-            error("identical in and out file descriptors")
-        end
-        new(in,out)
-    end
-end
-
-isequal(p1::Pipe, p2::Pipe) = (p1.in == p2.in && p1.out == p2.out)
-
-abstract PipeEnd
-type PipeIn  <: PipeEnd; pipe::Pipe; end
-type PipeOut <: PipeEnd; pipe::Pipe; end
-
-isequal(p1::PipeEnd, p2::PipeEnd) = false
-isequal(p1::PipeIn , p2::PipeIn ) = (p1.pipe == p2.pipe)
-isequal(p1::PipeOut, p2::PipeOut) = (p1.pipe == p2.pipe)
-
-in (p::Pipe) = PipeIn(p)
-out(p::Pipe) = PipeOut(p)
-in (p::PipeEnd) = in(p.pipe)
-out(p::PipeEnd) = out(p.pipe)
-
-fd(p::PipeIn)  = p.pipe.in
-fd(p::PipeOut) = p.pipe.out
-other(p::PipeIn)  = p.pipe.out
-other(p::PipeOut) = p.pipe.in
-
-function _jl_pre_exec(args::Vector{ByteString})
-    if length(args) < 1
-        error("exec: too few words to exec")
-    end
-    ptrs = Array(Ptr{Uint8}, length(args)+1)
-    for i = 1:length(args)
-        ptrs[i] = args[i].data
-    end
-    ptrs[length(args)+1] = C_NULL
-    return ptrs
-end
-
-## implementation of `cmd` syntax ##
-
-arg_gen(x::String) = ByteString[x]
-
-function arg_gen(head)
-    if applicable(start,head)
-        vals = ByteString[]
-        for x in head
-            push(vals,cstring(x))
-        end
-        return vals
-    else
-        return ByteString[cstring(head)]
-    end
-end
-
-function arg_gen(head, tail...)
-    head = arg_gen(head)
-    tail = arg_gen(tail...)
-    vals = ByteString[]
-    for h = head, t = tail
-        push(vals, cstring(strcat(h,t)))
-    end
-    vals
-end
-
-function cmd_gen(parsed)
-    args = ByteString[]
-    for arg in parsed
-        append!(args, arg_gen(arg...))
-    end
-    Cmd(args)
-end
-
-macro cmd(str)
-    :(cmd_gen($_jl_shell_parse(str)))
-end
-
-include("stream.j")
-
-show(readall(`ls`))
 end #module

@@ -29,7 +29,7 @@ end
 
 ## process-related functions ##
 
-getpid() = ccall(:getpid, Uint32, ())
+getpid() = ccall(:_getpid, Uint32, ())
 system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cstring(cmd))
 
 ## network functions ##
@@ -52,7 +52,7 @@ end
 
 function getcwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint),
+    p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint),
               b, uint(length(b)))
     if p == C_NULL
         error("path too long")

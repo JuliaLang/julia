@@ -1,11 +1,10 @@
 ## core libc calls ##
-const jl_getenv = :jl_getenv
 
 hasenv(var::String) =
-    ccall(:jl_getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var)) != C_NULL
+    ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var)) != C_NULL
 
 function getenv(var::String)
-    val = ccall(:jl_getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
     if val == C_NULL
         error("getenv: undefined variable: ", var)
     end
@@ -32,7 +31,7 @@ type EnvHash <: Associative; end
 const ENV = EnvHash()
 
 function ref(::EnvHash, k::String)
-    val = ccall(:jl_getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
     if val == C_NULL
         throw(KeyError(k))
     end
@@ -40,7 +39,7 @@ function ref(::EnvHash, k::String)
 end
 
 function get(::EnvHash, k::String, deflt)
-    val = ccall(:jl_getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
+    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), cstring(k))
     if val == C_NULL
         return deflt
     end

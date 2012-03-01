@@ -253,6 +253,8 @@ int true_main(int argc, char *argv[])
     //uv_pipe_t pipe;
     //uv_pipe_init(jl_event_loop,&pipe,1);
     jl_status("This is a test\n");
+    &jl_load;
+
     //jl_event_loop->data=&pipe;
     //uv_run(jl_event_loop);
     //uv_run_once(jl_io_loop);
@@ -262,9 +264,6 @@ int true_main(int argc, char *argv[])
     //install_read_event_handler(&echoBack);
     uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
     int iserr = 0;
-
-    /** to be removed */
-    jl_getenv("PATH");
 
  again:
     ;
@@ -284,7 +283,7 @@ int true_main(int argc, char *argv[])
         restart();
         goto again;
     }
-
+    jl_make_pipe();
     return iserr;
 }
 

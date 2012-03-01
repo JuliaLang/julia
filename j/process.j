@@ -383,7 +383,7 @@ function spawn(cmd::Cmd)
             n = length(close_fds)
             while i <= n
                 # close manually inlined for performance
-                r = ccall(:close, Int32, (Int32,), close_fds[i])
+                r = ccall(:_close, Int32, (Int32,), close_fds[i])
                 if r != 0
                     println("close: ", strerror())
                     exit(0xff)

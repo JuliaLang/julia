@@ -345,6 +345,7 @@ extern uv_lib_t jl_dl_handle;
 extern uv_lib_t jl_ntdll_handle;
 extern uv_lib_t jl_kernel32_handle;
 extern uv_lib_t jl_crtdll_handle;
+extern uv_lib_t jl_winsock_handle;
 #endif
 extern uv_loop_t *jl_event_loop;
 extern uv_loop_t *jl_io_loop;
@@ -657,7 +658,6 @@ DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
-DLLEXPORT char *jl_getenv(char *name);
 
 // child process status
 DLLEXPORT int jl_process_exited(int status);
@@ -673,7 +673,7 @@ DLLEXPORT uv_tty_t *jl_stdin(void);
 DLLEXPORT uv_tty_t *jl_stdout(void);
 DLLEXPORT uv_tty_t *jl_stderr(void);
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **callback);
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **exitcb, void **closecb);
 DLLEXPORT void jl_run_event_loop();
 DLLEXPORT void jl_process_events();
 
@@ -683,6 +683,10 @@ DLLEXPORT void jl_close_uv(uv_handle_t **handle);
 DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback);
 
 DLLEXPORT void jl_callback(void **callback);
+
+#ifdef __WIN32__
+DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
+#endif
 
 // exceptions
 void jl_error(const char *str);

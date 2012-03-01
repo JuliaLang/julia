@@ -1,3 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
 add_subdirectory(arpack)
 add_subdirectory(fftw-3.3)
+set(FFTW_SINGLE ON)
+add_subdirectory(fftw-3.3 ${CMAKE_CURRENT_BINARY_DIR}/fftw-3.3f)
