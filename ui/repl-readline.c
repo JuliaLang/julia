@@ -137,6 +137,7 @@ static int jl_word_char(uint32_t wc)
            ('0' <= wc && wc <= '9') || (0xA1 <= wc) || (wc == '_');
 }
 
+
 static int newline_callback(int count, int key) {
     if (!rl_point) return 0;
     spaces_suppressed = 0;
@@ -148,10 +149,17 @@ static int newline_callback(int count, int key) {
 }
 
 static int return_callback(int count, int key) {
+    static int consecutive_returns = 0;
+    if (rl_point > prompt_length && rl_point == rl_end &&
+        rl_line_buffer[rl_point-prompt_length-1] == '\n')
+        consecutive_returns++;
+    else
+        consecutive_returns = 0;
     add_history_temporary(rl_line_buffer);
     rl_ast = jl_parse_input_line(rl_line_buffer);
     rl_done = !rl_ast || !jl_is_expr(rl_ast) ||
-        (((jl_expr_t*)rl_ast)->head != jl_continue_sym);
+        (((jl_expr_t*)rl_ast)->head != jl_continue_sym) ||
+        consecutive_returns > 1;
     if (!rl_done) {
         newline_callback(count, key);
     } else {
