@@ -41,7 +41,7 @@ void jl_errorf(const char *fmt, ...)
         jl_raise(jl_new_struct(jl_errorexception_type, msg));
     } else {
         jl_printf(jl_stderr_tty,"%s",&buf);
-        exit(1);
+        jl_exit(1);
     }
 
 }
@@ -473,7 +473,7 @@ char *jl_find_file_in_path(const char *fname)
         if (fpath != fname) free(fpath);
         if (jl_errorexception_type == NULL) {
             jl_printf(jl_stderr_tty, "could not open file %s\n", fname);
-            exit(1);
+            jl_exit(1);
         }
         else {
             jl_errorf("could not open file %s", fname);

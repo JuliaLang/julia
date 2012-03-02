@@ -4,7 +4,7 @@
 */
 
 #include "repl.h"
-#include "../src/uv.h"
+#include "uv.h"
 #define WHOLE_ARCHIVE
 #include "../src/julia.h"
 
@@ -198,6 +198,7 @@ uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
 }
 
 extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
+extern parseAndExecute(char *str);
 
 int true_main(int argc, char *argv[])
 {
@@ -234,6 +235,8 @@ int true_main(int argc, char *argv[])
     //uv_pipe_init(jl_event_loop,&pipe,1);
     //jl_status("\033[34mThis is a test\n");
     &jl_load;
+
+    install_event_handler("julia> ",&parseAndExecute);
 
     //jl_event_loop->data=&pipe;
     //uv_run(jl_event_loop);

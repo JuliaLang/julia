@@ -227,12 +227,14 @@ void jl_async_callback(uv_handle_t *handle, int status)
     }
 }
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb)
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t **cb)
 {
+    if(!loop)
+        return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
     opts->callcb = cb?*cb:0,
-            uv_async_init(*loop,async,&jl_async_callback);
+            uv_async_init(loop,async,&jl_async_callback);
     return async;
 }
 
@@ -240,12 +242,12 @@ DLLEXPORT void jl_async_send(uv_async_t **handle) {
     if(handle) uv_async_send(*handle);
 }
 
-DLLEXPORT int jl_idle_init(uv_loop_t **loop)
+DLLEXPORT int jl_idle_init(uv_loop_t *loop)
 {
     if(!loop)
         return -2;
     uv_idle_t *idle = malloc(sizeof(uv_idle_t));
-    uv_idle_init(*loop,idle);
+    uv_idle_init(loop,idle);
     idle->data = 0;
     return idle;
 }
@@ -367,6 +369,14 @@ int jl_printf(uv_stream_t *s, const char *format, ...)
 DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
     return sizeof(uv_stream_t*);
+}
+
+DLLEXPORT void jl_exit(int exitcode)
+{
+    if(jl_io_loop) {
+        jl_process_events(&jl_io_loop);
+    }
+    exit(exitcode);
 }
 
 #ifdef __cplusplus

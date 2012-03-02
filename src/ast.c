@@ -96,7 +96,7 @@ void jl_init_frontend(void)
     
     if (fl_load_system_image(img)) {
         jl_printf(jl_stderr_tty, "fatal error loading system image\n");
-        exit(1);
+        jl_exit(1);
     }
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));

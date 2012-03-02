@@ -1044,6 +1044,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 
 #ifdef JL_TRACE
 static int trace_en = 0;
+static int error_en = 1;
 static void enable_trace(int x) { trace_en=x; }
 extern char *type_summary(jl_value_t *t);
 #endif
@@ -1097,6 +1098,17 @@ JL_CALLABLE(jl_apply_generic)
     }
 
     if (mfunc == NULL) {
+#ifdef JL_TRACE
+        if (error_en) {
+            jl_printf(jl_stdout_tty, "%s(", ((jl_sym_t*)jl_t1(env))->name);
+            size_t i;
+            for(i=0; i < nargs; i++) {
+                if (i > 0) jl_printf(jl_stdout_tty, ", ");
+                jl_printf(jl_stdout_tty, "%s", type_summary(jl_typeof(args[i])));
+            }
+            jl_printf(jl_stdout_tty, ")\n");
+        }
+#endif
         return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);

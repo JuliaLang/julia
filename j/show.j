@@ -1,6 +1,6 @@
 # formerly built-in methods. can be replaced any time.
-print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
-print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
+#print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
+#print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
 show(x) = ccall(:jl_show_any, Void, (Any,), x)
 
 print(x) = show(x)
