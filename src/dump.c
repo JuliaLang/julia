@@ -850,7 +850,7 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = jl_find_file_in_path(fname);
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        ios_printf(ios_stderr, "system image file not found\n");
+        jl_printf(jl_stderr_tty, "system image file not found\n");
         exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
@@ -928,7 +928,7 @@ jl_value_t *jl_compress_ast(jl_value_t *ast)
     tree_literal_values = jl_alloc_cell_1d(0);
     jl_serialize_value(&dest, ast);
 
-    //ios_printf(ios_stderr, "%d bytes, %d values\n", dest.size, vals->length);
+    //jl_printf(jl_stderr_tty, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (tree_literal_values->length == 0)

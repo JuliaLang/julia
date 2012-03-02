@@ -82,21 +82,6 @@ DLLEXPORT int32_t jl_nb_available(ios_t *s)
     return (int32_t)(s->size - s->bpos);
 }
 
-// --- io constructors ---
-
-DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
-
-// hack to expose ios_stdout to julia. we could create a new iostream pointing
-// to stdout, but then there would be two buffers for one descriptor, and
-// ios_stdout is used before julia IOStream is available, creating a potential
-// mess.
-DLLEXPORT jl_value_t *jl_stdout_stream(void)
-{
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
-    a->data = (void*)ios_stdout;
-    return (jl_value_t*)a;
-}
-
 // --- current output stream ---
 
 jl_value_t *jl_current_output_stream_obj(void)
@@ -104,7 +89,7 @@ jl_value_t *jl_current_output_stream_obj(void)
     return jl_current_task->state.ostream_obj;
 }
 
-DLLEXPORT ios_t *jl_current_output_stream(void)
+DLLEXPORT uv_stream_t *jl_current_output_stream(void)
 {
     return jl_current_task->state.current_output_stream;
 }
@@ -112,7 +97,7 @@ DLLEXPORT ios_t *jl_current_output_stream(void)
 void jl_set_current_output_stream_obj(jl_value_t *v)
 {
     jl_current_task->state.ostream_obj = v;
-    ios_t *s = (ios_t*)jl_array_data(jl_fieldref(v,0));
+    uv_stream_t *s = (uv_stream_t*)jl_array_data(jl_fieldref(v,0));
     jl_current_task->state.current_output_stream = s;
     // if current stream has never been set before, propagate to all
     // outer contexts.
@@ -386,4 +371,9 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
+}
+
+DLLEXPORT size_t jl_sizeof_ios_t(void)
+{
+    return sizeof(ios_t);
 }

@@ -132,7 +132,6 @@ long getPageSize (void) {
 #endif
 }
 
-
 void julia_init(char *imageFile)
 {
     jl_page_size = getPageSize();
@@ -155,7 +154,11 @@ void julia_init(char *imageFile)
     uv_tty_init(jl_io_loop,jl_stdin_tty,0,1);//stdin
     uv_tty_init(jl_io_loop,jl_stdout_tty,1,0);//stdout
     uv_tty_init(jl_io_loop,jl_stderr_tty,2,0);//stderr
+    jl_stdin_tty->data=0;
+    jl_stdout_tty->data=0;
+    jl_stderr_tty->data=0;
     uv_tty_set_mode(jl_stdin_tty,1); //raw input
+    //uv_tty_set_mode(jl_stdout_tty,1); //raw output
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();
@@ -184,9 +187,9 @@ void julia_init(char *imageFile)
             jl_restore_system_image(imageFile);
         }
         JL_CATCH {
-            ios_printf(ios_stderr, "error during init:\n");
+            jl_printf(jl_stderr_tty, "error during init:\n");
             jl_show(jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
+            jl_printf(jl_stdout_tty, "\n");
             exit(1);
         }
     }
@@ -199,7 +202,7 @@ void julia_init(char *imageFile)
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
+        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
 
@@ -208,7 +211,7 @@ void julia_init(char *imageFile)
     ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
+        jl_printf(jl_stderr_tty, "sigaltstack: %s\n", strerror(errno));
         exit(1);
     }
 	
@@ -218,7 +221,7 @@ void julia_init(char *imageFile)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
+        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
 
@@ -227,7 +230,7 @@ void julia_init(char *imageFile)
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
+        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
         exit(1);
     }
 	

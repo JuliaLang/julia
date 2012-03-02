@@ -528,13 +528,13 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh) {
+    if (jl_current_task == eh&&eh->state.eh_ctx!=0) {
         longjmp(*eh->state.eh_ctx, 1);
     }
     else {
         if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
-            ios_printf(ios_stderr, "warning: exception handler exited\n");
+            jl_printf(jl_stderr_tty, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
         // for now, exit the task
@@ -681,7 +681,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    jl_current_task->state.current_output_stream = ios_stdout;
+    jl_current_task->state.current_output_stream = jl_stdout_tty;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;

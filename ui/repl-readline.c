@@ -502,6 +502,7 @@ static void init_rl(void)
 
 void init_repl_environment(void)
 {
+    rl_outstream=jl_stdout_tty;
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
@@ -513,9 +514,21 @@ void install_event_handler(char *prompt, rl_vcpfunc_t *func)
     rl_callback_handler_install(prompt, func);
 }
 
+void parseAndExecute(char *str)
+{
+    if (!str || ios_eof(ios_stdin)) {
+        ios_printf(ios_stdout, "\n");
+        return;
+    }
+    jl_value_t *ast = jl_parse_input_line(str);
+    jl_value_t *value = jl_toplevel_eval(ast);
+    jl_show_any(value);
+    ios_printf(ios_stdout, "\n\n");
+}
+
 void repl_callback_enable()
 {
-    rl_callback_handler_install(prompt_string, jl_input_line_callback);
+    rl_callback_handler_install(prompt_string, &parseAndExecute);
 }
 
 void jl_stdin_callback(void)

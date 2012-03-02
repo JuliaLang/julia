@@ -75,7 +75,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
-                    ios_printf(ios_stderr, "%d\n", error.code);
+                    jl_printf(jl_stderr_tty, "%d\n", error.code);
                     jl_errorf("could not load module %s", fname);
                 }
             }
@@ -96,14 +96,14 @@ uv_lib_t jl_load_dynamic_library(char *fname)
         if (!error.code) return handle;
     }
     assert(handle == NULL);
-    ios_printf(ios_stderr, "could not load module %s (%d:%d)", fname, error.code,error.sys_errno_);
+    jl_printf(jl_stderr_tty, "could not load module %s (%d:%d)", fname, error.code,error.sys_errno_);
     jl_errorf("could not load module %s", fname);
 
     return NULL;
 }
 
 void jl_print() {
-ios_printf(ios_stderr, "could not load module");
+jl_printf(jl_stderr_tty, "could not load module");
 }
 
 void *jl_dlsym_e(uv_lib_t handle, char *symbol) {
@@ -118,7 +118,7 @@ void *jl_dlsym(uv_lib_t handle, char *symbol)
     void *ptr;
     uv_err_t error = uv_dlsym(handle, symbol, &ptr);
     if (error.code != 0) {
-            ios_printf(ios_stderr, "Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
+            jl_printf(jl_stderr_tty, "Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
             exit(1);
     }
     return ptr;

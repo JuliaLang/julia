@@ -497,7 +497,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      ios_printf(ios_stdout, "call %s%s\n",
+                      jl_printf(jl_stdout_tty, "call %s%s\n",
                       jl_print_to_string(args[0]),
                       jl_print_to_string((jl_value_t*)aty));
                   }
@@ -1388,7 +1388,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
     //jl_print((jl_value_t*)ast);
-    //ios_printf(ios_stdout, "\n");
+    //jl_printf(jl_stdout_tty, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, Value*> localVars;
@@ -2071,9 +2071,7 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-#ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
-#endif
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 

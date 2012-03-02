@@ -130,7 +130,7 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
+const VERSION = VersionNumber(0)#convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 const VERSION_COMMIT = chomp(readall(`git rev-parse HEAD`))
 const VERSION_CLEAN = success(`git diff --quiet`)
 const VERSION_TIME = strftime("%F %T",int(readall(`git log -1 --pretty=format:%ct`)))

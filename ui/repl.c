@@ -173,15 +173,6 @@ void jl_freeBuffer(uv_write_t *uvw,int status) {
     free(uvw);
 }
 
-void jl_write(char *str)
-{
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t *buf =  malloc(sizeof(uv_buf_t));
-    buf->base=str;
-    buf->len=strlen(str)-1;
-    uv_write(uvw,jl_stdout_tty,buf,1,&jl_freeBuffer);
-}
-
 void jl_status(char *str)
 {
     uv_write_t *uvw = malloc(sizeof(uv_write_t));
@@ -191,22 +182,10 @@ void jl_status(char *str)
     uv_write(uvw,jl_stdout_tty,buf,1,&jl_noWriteAction);
 }
 
-void parseAndExecute(char *str)
-{
-    if (!str || ios_eof(ios_stdin)) {
-        ios_printf(ios_stdout, "\n");
-        return;
-    }
-    jl_value_t *ast = jl_parse_input_line(str);
-    jl_value_t *value = jl_toplevel_eval(ast);
-    jl_show(value);
-    ios_printf(ios_stdout, "\n\n");
-}
-
 void echoBack(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     jl_status("Test!\n");
-    jl_write(buf.base);
+    jl_write(stream,buf.base,buf.len);
 }
 
 uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
@@ -226,7 +205,6 @@ int true_main(int argc, char *argv[])
         jl_lisp_prompt();
         return 0;
     }
-
     jl_array_t *args = jl_alloc_cell_1d(argc);
     jl_set_global(jl_current_module, jl_symbol("ARGS"), (jl_value_t*)args);
     int i;
@@ -246,13 +224,15 @@ int true_main(int argc, char *argv[])
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("_start"));
 
+    uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
+
     if (start_client) {
         jl_apply(start_client, NULL, 0);
         return 0;
     }
     //uv_pipe_t pipe;
     //uv_pipe_init(jl_event_loop,&pipe,1);
-    jl_status("This is a test\n");
+    //jl_status("\033[34mThis is a test\n");
     &jl_load;
 
     //jl_event_loop->data=&pipe;
@@ -260,9 +240,7 @@ int true_main(int argc, char *argv[])
     //uv_run_once(jl_io_loop);
 
     // client event loop not available; use fallback blocking version
-    install_event_handler("julia> ",&parseAndExecute);
     //install_read_event_handler(&echoBack);
-    uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
     int iserr = 0;
 
  again:
@@ -277,9 +255,9 @@ int true_main(int argc, char *argv[])
     }
     JL_CATCH {
         iserr = 1;
-        ios_printf(ios_stderr, "error during run:\n");
+        jl_puts("error during run:\n",jl_stderr_tty);
         jl_show(jl_exception_in_transit);
-        ios_printf(ios_stdout, "\n");
+        jl_puts( "\n",jl_stdout_tty);
         restart();
         goto again;
     }
