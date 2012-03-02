@@ -1302,6 +1302,14 @@ function map(f, As::StridedArray...)
     return map_to2(first, dest, f, As...)
 end
 
+## Filter ##
+
+# given a function returning a boolean and an array, return matching elements
+function filter(f, As::StridedArray)
+    boolmap::Array{Bool} = map(f, As)
+    As[boolmap]
+end
+
 ## Transpose ##
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
