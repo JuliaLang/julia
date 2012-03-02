@@ -513,6 +513,8 @@ DLLEXPORT void jl_register_toplevel_eh(void)
     jl_current_task->state.eh_task->state.bt = 1;
 }
 
+
+
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {

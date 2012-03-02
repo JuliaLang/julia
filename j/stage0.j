@@ -4,8 +4,8 @@ if true
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
-    print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
-    print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
+    #print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
+    #print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
     print(s::ASCIIString) = print(s.data)
     print(x) = show(x)
     println(x) = (print(x);print("\n"))

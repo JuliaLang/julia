@@ -970,7 +970,7 @@ function start_worker(wrfd)
     end
 
     ccall(:_close, Int32, (Int32,), sockfd)
-    ccall(:exit , Void , (Int32,), int32(0))
+    #ccall(:exit , Void , (Int32,), int32(0))
 end
 
 # establish an SSH tunnel to a remote worker
@@ -1596,7 +1596,7 @@ function event_loop(isclient)
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
-            run_event_loop(global_event_loop);
+            run_event_loop(global_event_loop());
         catch e
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process

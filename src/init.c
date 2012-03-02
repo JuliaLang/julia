@@ -190,7 +190,7 @@ void julia_init(char *imageFile)
             jl_printf(jl_stderr_tty, "error during init:\n");
             jl_show(jl_exception_in_transit);
             jl_printf(jl_stdout_tty, "\n");
-            exit(1);
+            jl_exit(1);
         }
     }
 
@@ -203,7 +203,7 @@ void julia_init(char *imageFile)
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
         jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        jl_exit(1);
     }
 
     stack_t ss;
@@ -212,7 +212,7 @@ void julia_init(char *imageFile)
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
         jl_printf(jl_stderr_tty, "sigaltstack: %s\n", strerror(errno));
-        exit(1);
+        jl_exit(1);
     }
 	
     struct sigaction act;
@@ -222,7 +222,7 @@ void julia_init(char *imageFile)
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
         jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        jl_exit(1);
     }
 
     memset(&act, 0, sizeof(struct sigaction));
@@ -231,7 +231,7 @@ void julia_init(char *imageFile)
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
         jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        jl_exit(1);
     }
 	
 	#endif

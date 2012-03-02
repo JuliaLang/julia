@@ -502,7 +502,9 @@ static void init_rl(void)
 
 void init_repl_environment(void)
 {
+#ifdef __WIN32__
     rl_outstream=jl_stdout_tty;
+#endif
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
@@ -531,12 +533,7 @@ void repl_callback_enable()
     rl_callback_handler_install(prompt_string, &parseAndExecute);
 }
 
-void jl_stdin_callback(void)
-{
-    rl_callback_read_char();
-}
-
-#include "../src/uv.h"
+#include "uv.h"
 
 extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {

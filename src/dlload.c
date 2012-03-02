@@ -21,6 +21,8 @@ typedef void * module_handle_t;
 static char *extensions[] = { ".dylib", ".bundle" };
 #define N_EXTENSIONS 2
 #elif defined(__WIN32__)
+#include <windef.h>
+#include <windows.h>
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
@@ -30,9 +32,6 @@ static char *extensions[] = { ".dll" };
 
 #include "julia.h"
 #include "uv.h"
-
-#include <windef.h>
-#include <windows.h>
 
 #define PATHBUF 512
 
@@ -53,7 +52,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
 		this_process=GetModuleHandle(NULL);
                 handle=this_process;
 #else
-        uv_dlopen(NULL, handle);
+        handle = dlopen(NULL,RTLD_NOW);
 #endif
         return handle;
     }
@@ -119,7 +118,7 @@ void *jl_dlsym(uv_lib_t handle, char *symbol)
     uv_err_t error = uv_dlsym(handle, symbol, &ptr);
     if (error.code != 0) {
             jl_printf(jl_stderr_tty, "Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
-            exit(1);
+            jl_exit(1);
     }
     return ptr;
 }

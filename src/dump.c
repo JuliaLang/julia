@@ -851,7 +851,7 @@ void jl_restore_system_image(char *fname)
     char *fpath = jl_find_file_in_path(fname);
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
         jl_printf(jl_stderr_tty, "system image file not found\n");
-        exit(1);
+        jl_exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
