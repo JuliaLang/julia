@@ -65,12 +65,13 @@ include("iterator.j")
 include("task.j")
 include("serialize.j")
 include("multi.j")
+#include("multi-wip.j")
 
 # front end
 include("client.j")
 
 # random number generation
-include("random.j")
+#include("random.j")
 
 # sparse matrices
 include("sparse.j")

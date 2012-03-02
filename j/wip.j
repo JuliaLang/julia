@@ -63,7 +63,6 @@ include("inference.j")
 
 # I/O, strings & printing
 include("io.j")
-set_current_output_stream(make_stdout_stream()) # for error reporting
 include("string.j")
 include("ascii.j")
 include("utf8.j")
@@ -91,5 +90,5 @@ include("iterator.j")
 include("task.j")
 include("stream.j")
 
-
+set_current_output_stream(make_stdout_stream()) # for error reporting
 end #module

@@ -767,7 +767,7 @@ macro printf(f, exps...)
     blk
 end
 
-fprintf(s::IOStream, f::Function, args...) = f(s, args...)
-fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
+fprintf(s::AsyncStream, f::Function, args...) = f(s, args...)
+fprintf(s::AsyncStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
 printf(f::Union(Function,String), args...) = fprintf(current_output_stream(), f, args...)
 sprintf(f::Union(Function,String), args...) = print_to_string(printf, f, args...)

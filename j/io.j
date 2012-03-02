@@ -15,13 +15,11 @@ type IOStream <: Stream
         end
         return x
     end
-    IOStream() = IOStream(true)
-
-
 end
 
-fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
+IOStream() = IOStream(true)
 
+fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 # "own" means the descriptor will be closed with the IOStream

@@ -268,9 +268,9 @@ int true_main(int argc, char *argv[])
     }
     JL_CATCH {
         iserr = 1;
-        ios_printf(ios_stderr, "error during run:\n");
+        jl_puts("error during run:\n",jl_stderr_tty);
         jl_show(jl_exception_in_transit);
-        ios_printf(ios_stdout, "\n");
+        jl_puts( "\n",jl_stdout_tty);
         restart();
         goto again;
     }
