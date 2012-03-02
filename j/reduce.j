@@ -1,6 +1,6 @@
 ## reductions ##
 
-function reduce(op, itr)
+function reduce(op, itr) # this is a left fold
     if is(op,max)
         return max(itr)
     elseif is(op,min)
