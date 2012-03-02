@@ -1,7 +1,7 @@
 const UVHandle = Int32
 const IOStreamHandle = Ptr{Void}
-
-#types
+localEventLoop() = ccall(:jl_local_event_loop,Int32,())
+globalEventLoop() = ccall(:jl_global_event_loop,Int32,())
 
 typealias Executable Union(Vector{ByteString},Function)
 
@@ -14,7 +14,7 @@ type Cmds
     pipeline::Cmds
 end
 
-abstract AsyncStream
+abstract AsyncStream <: Stream
 
 type NamedPipe <: AsyncStream
     handle::Int32
@@ -22,7 +22,21 @@ type NamedPipe <: AsyncStream
     NamedPipe(handle::Int32,buf::IOStream) = new(handle,buf)
 end
 
+type tty <: AsyncStream
+    handle::Int32
+    buf::IOStream
+end
 typealias StreamHandle Union(Int32,AsyncStream)
+
+make_stdout_stream() = tty(ccall(:jl_stdout, Int32, ()),memio())
+
+function _uv_tty2tty(handle::Int32)
+    tty(handle,memio())
+end
+
+STDIN  = _uv_tty2tty(ccall(:jl_stdin ,Int32,()))
+STDOUT = _uv_tty2tty(ccall(:jl_stdout,Int32,()))
+STDERR = _uv_tty2tty(ccall(:jl_stderr,Int32,()))
 
 type Process
     handle::Int32
@@ -34,6 +48,35 @@ type Process
     Process(handle::Int32,in::StreamHandle,out::StreamHandle,err::StreamHandle)=new(handle,in,out,err,-1,-1)
 end
 
+abstract AsyncWork
+
+type SingleAsyncWork <: AsyncWork
+    handle::Int32
+end
+
+type RepeatedAsyncWork <: AsyncWork
+    handle::Int32
+end
+
+function createSingleAsyncWork(loop::Int32,cb::Int32)
+    SingleAsyncWork(ccall(:jl_make_async,Int32,(Ptr{Int32},Ptr{Int32}),loop,cb))
+end
+
+function initRepeatedAsyncWork(loop::Int32)
+    RepeatedAsyncWork(ccall(:jl_idle_init,Int32,(Ptr{Int32},),loop))
+end
+
+assignRepeatedAsyncWork(work::RepeatedAsyncWork,cb::Int32) = ccall(:jl_idle_start,Int32,(Ptr{Int32},Ptr{Int32}),work.handle,cb)
+
+function add_idle_cb(loop::Int32,cb::Int32)
+    work = initRepeatedAsyncWork(loop)
+    assignRepeatedAsyncWork(work,cb)
+    work
+end
+
+function queueAsync(work::SingleAsyncWork)
+    ccall(:jl_async_send,Void,(Ptr{Int32},),work.handle)
+end
 
 # process status #
 abstract ProcessStatus
@@ -61,9 +104,10 @@ end
 ## types
 
 ##event loop
-function run_event_loop()
-    ccall(:jl_run_event_loop,Void,())
+function run_event_loop(loop::Int32)
+    ccall(:jl_run_event_loop,Void,(Ptr{Int32},),loop)
 end
+run_event_loop() = run_event_loop(localEventLoop())
 
 
 ##pipe functions
@@ -202,3 +246,52 @@ macro cmd(str)
     :(cmd_gen($_jl_shell_parse(str)))
 end
 
+## Async IO
+current_output_stream() = ccall(:jl_current_output_stream_obj, AsyncStream, ())
+
+set_current_output_stream(s::AsyncStream) =
+    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
+
+function with_output_stream(s::AsyncStream, f::Function, args...)
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        throw(e)
+    end
+end
+
+# custom version for print_to_*
+function _jl_with_output_stream(s::AsyncStream, f::Function, args...)
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        # only add finalizer if takebuf doesn't happen
+        finalizer(s, close)
+        throw(e)
+    end
+end
+
+## low-level calls
+write(s::AsyncStream, b::Uint8) =
+    ccall(:jl_putc, Int32, (Int32, Ptr{Void}), int32(b), s.handle)
+
+write(s::AsyncStream, c::Char) =
+    ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.handle, c)
+
+function write{T}(s::AsyncStream, a::Array{T})
+    if isa(T,BitsKind)
+        ccall(:jl_write, Uint,
+              (Ptr{Void}, Ptr{Void}, Uint),
+              s.ios, a, uint(numel(a)*sizeof(T)))
+    else
+        invoke(write, (Any, Array), s, a)
+    end
+end
+
+function write(s::AsyncStream, p::Ptr, nb::Integer)
+    ccall(:jl_write, Uint,
+          (Ptr{Void}, Ptr{Void}, Uint),
+          s.ios, p, uint(nb))
+end

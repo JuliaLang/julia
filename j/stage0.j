@@ -29,6 +29,7 @@ end
 
 include("sysimg.j")
 
+show("sys0.ji")
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       cstring("sys0.ji"), cstring("j/start_image.j"))
 

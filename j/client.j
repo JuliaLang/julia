@@ -16,13 +16,13 @@ function _jl_answer_color()
 end
 
 _jl_color_available() =
-    success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+    true || success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
 
 _jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    del_fd_handler(STDIN.fd)
+    del_io_handler(STDIN)
     put(_jl_repl_channel, (ast, show_value))
 end
 
@@ -81,16 +81,19 @@ function run_repl()
         ccall(:jl_enable_color, Void, ())
     end
 
-    while true
-        ccall(:repl_callback_enable, Void, ())
-        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-        (ast, show_value) = take(_jl_repl_channel)
-        if show_value == -1
-            # exit flag
-            break
-        end
-        _jl_eval_user_input(ast, show_value!=0)
-    end
+    ccall(:repl_callback_enable, Void, ())
+    add_io_handler(STDIN,()->ccall(:jl_stdin_callback,Void,()))
+
+    run_event_loop(globalEventLoop());
+#TODO: make into callback
+    #while true
+    #    (ast, show_value) = take(_jl_repl_channel)
+    #    if show_value == -1
+    #        # exit flag
+    #        break
+    #    end
+    #    _jl_eval_user_input(ast, show_value!=0)
+    #end
 
     if _jl_have_color
         print(_jl_color_normal)

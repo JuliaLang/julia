@@ -1,7 +1,9 @@
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
-type IOStream
+abstract Stream
+
+type IOStream <: Stream
     ios::Array{Uint8,1}
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
@@ -15,8 +17,7 @@ type IOStream
     end
     IOStream() = IOStream(true)
 
-    global make_stdout_stream
-    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
+
 end
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
@@ -67,32 +68,6 @@ memio() = memio(0, true)
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
-current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
-
-set_current_output_stream(s::IOStream) =
-    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
-
-function with_output_stream(s::IOStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        throw(e)
-    end
-end
-
-# custom version for print_to_*
-function _jl_with_output_stream(s::IOStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        # only add finalizer if takebuf doesn't happen
-        finalizer(s, close)
-        throw(e)
-    end
-end
-
 takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
@@ -101,13 +76,13 @@ takebuf_string(s::IOStream) =
 
 function print_to_array(size::Integer, f::Function, args...)
     s = memio(size, false)
-    _jl_with_output_stream(s, f, args...)
+    #_jl_with_output_stream(s, f, args...)
     takebuf_array(s)
 end
 
 function print_to_string(size::Integer, f::Function, args...)
     s = memio(size, false)
-    _jl_with_output_stream(s, f, args...)
+    #_jl_with_output_stream(s, f, args...)
     takebuf_string(s)
 end
 
@@ -187,7 +162,7 @@ function write(s::IOStream, p::Ptr, nb::Integer)
           s.ios, p, uint(nb))
 end
 
-function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
+function write{T,N}(s::Stream, a::SubArray{T,N,Array})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end

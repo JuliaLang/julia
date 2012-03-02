@@ -77,16 +77,6 @@ include("libc.j")
 include("env.j")
 include("errno_h.j")
 
-# concurrency and parallelism
-include("iterator.j")
-include("task.j")
-include("stream.j")
-include("serialize.j")
-include("multi.j")
-
-# front end
-include("client.j")
-
 # core math functions
 include("intfuncs.j")
 include("floatfuncs.j")
@@ -96,29 +86,10 @@ include("sort.j")
 include("combinatorics.j")
 include("statistics.j")
 
-# random number generation
-include("random.j")
-# sparse matrices
-include("sparse.j")
+# concurrency and parallelism
+include("iterator.j")
+include("task.j")
+include("stream.j")
 
-# distributed arrays
-include("darray.j")
-
-# utilities - version, timing, help, edit
-include("version.j")
-include("util.j")
-include("datafmt.j")
-## Load optional external libraries
-
-# linear algebra
-include("linalg.j")
-include("linalg_blas.j")
-include("linalg_lapack.j")
-include("linalg_arpack.j")
-include("linalg_suitesparse.j")
-
-# signal processing
-include("signal.j")
-include("signal_fftw.j")
 
 end #module

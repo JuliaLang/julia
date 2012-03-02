@@ -10,7 +10,7 @@ const stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
 # Essential libraries
 _jl_libpcre = dlopen("libpcre")
 _jl_libgrisu = dlopen("libgrisu")
-_jl_libm = dlopen("libm")
+#_jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
 _jl_libamos = dlopen("libamos")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();

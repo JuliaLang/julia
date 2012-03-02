@@ -35,7 +35,9 @@ include("inference.j")
 
 # I/O, strings & printing
 include("io.j")
-set_current_output_stream(make_stdout_stream()) # for error reporting
+include("stream.j")
+stream=make_stdout_stream()
+set_current_output_stream(stream) # for error reporting
 include("string.j")
 include("ascii.j")
 include("utf8.j")
@@ -49,16 +51,6 @@ include("libc.j")
 include("env.j")
 include("errno_h.j")
 
-# concurrency and parallelism
-include("iterator.j")
-include("task.j")
-include("stream.j")
-include("serialize.j")
-include("multi.j")
-
-# front end
-include("client.j")
-
 # core math functions
 include("intfuncs.j")
 include("floatfuncs.j")
@@ -67,6 +59,15 @@ include("math_libm.j")
 include("sort.j")
 include("combinatorics.j")
 include("statistics.j")
+
+# concurrency and parallelism
+include("iterator.j")
+include("task.j")
+include("serialize.j")
+include("multi.j")
+
+# front end
+include("client.j")
 
 # random number generation
 include("random.j")
@@ -155,7 +156,7 @@ compile_hint(ht_keyindex, (HashTable{Any,Any}, Int32))
 compile_hint(perform_work, (WorkItem,))
 compile_hint(notify_done, (WorkItem,))
 compile_hint(work_result, (WorkItem,))
-compile_hint(del_fd_handler, (Int32,))
+compile_hint(del_io_handler, (Int32,))
 compile_hint(enqueue, (Array{WorkItem,1}, WorkItem))
 compile_hint(enq_work, (WorkItem,))
 compile_hint(pop, (Array{WorkItem,1},))
@@ -171,7 +172,7 @@ compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int))
 compile_hint(istaskdone, (Task,))
 compile_hint(make_stdout_stream, ())
-compile_hint(set_current_output_stream, (IOStream,))
+compile_hint(set_current_output_stream, (AsyncStream,))
 compile_hint(int, (Uint64,))
 compile_hint(copy, (Bool,))
 compile_hint(bool, (Bool,))

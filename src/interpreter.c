@@ -83,7 +83,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         if (v == NULL) {
         if (jl_errorexception_type == NULL) {
-            ios_printf(ios_stderr, "%s not defined", ((jl_sym_t*)e)->name);
+            jl_printf(jl_stderr_tty, "%s not defined", ((jl_sym_t*)e)->name);
             exit(1);
         } else {
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);

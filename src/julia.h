@@ -1,5 +1,6 @@
 #ifndef JULIA_H
 #define JULIA_H
+#define JL_TRACE
 
 #include "libsupport.h"
 #include <stdint.h>
@@ -659,23 +660,17 @@ DLLEXPORT jl_value_t *jl_strerror(int errnum);
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
 
-// child process status
-DLLEXPORT int jl_process_exited(int status);
-DLLEXPORT int jl_process_signaled(int status);
-DLLEXPORT int jl_process_stopped(int status);
-
-DLLEXPORT int jl_process_exit_status(int status);
-DLLEXPORT int jl_process_term_signal(int status);
-DLLEXPORT int jl_process_stop_signal(int status);
-
-// access to std filehandles
+//async stuff
 DLLEXPORT uv_tty_t *jl_stdin(void);
 DLLEXPORT uv_tty_t *jl_stdout(void);
 DLLEXPORT uv_tty_t *jl_stderr(void);
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **exitcb, void **closecb);
-DLLEXPORT void jl_run_event_loop();
-DLLEXPORT void jl_process_events();
+DLLEXPORT void jl_run_event_loop(uv_loop_t **loop);
+DLLEXPORT void jl_process_events(uv_loop_t **loop);
+
+DLLEXPORT uv_loop_t *jl_global_event_loop();
+DLLEXPORT uv_loop_t *jl_local_event_loop();
 
 DLLEXPORT uv_pipe_t *jl_make_pipe();
 DLLEXPORT void jl_close_uv(uv_handle_t **handle);
@@ -683,6 +678,22 @@ DLLEXPORT void jl_close_uv(uv_handle_t **handle);
 DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback);
 
 DLLEXPORT void jl_callback(void **callback);
+
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb);
+DLLEXPORT void jl_async_send(uv_async_t **handle);
+DLLEXPORT int jl_idle_init(uv_loop_t **loop);
+DLLEXPORT int jl_idle_start(uv_idle_t **idle, jl_callback_t **cb);
+DLLEXPORT int jl_idle_stop(uv_idle_t **idle);
+
+DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
+DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
+int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+int jl_printf(uv_stream_t *s, const char *format, ...);
+DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
+DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream);
+
+
+DLLEXPORT int jl_sizeof_uv_stream_t();
 
 #ifdef __WIN32__
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
@@ -925,7 +936,7 @@ typedef struct _jl_savestate_t {
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
     jl_value_t *ostream_obj;
-    ios_t *current_output_stream;
+    uv_stream_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
@@ -962,12 +973,16 @@ DLLEXPORT void jl_raise(jl_value_t *e);
 DLLEXPORT void jl_register_toplevel_eh(void);
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj(void);
-DLLEXPORT ios_t *jl_current_output_stream(void);
+DLLEXPORT uv_stream_t *jl_current_output_stream(void);
 DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT jl_array_t *jl_readuntil(ios_t *s, uint8_t delim);
+
+DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
+DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
+DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

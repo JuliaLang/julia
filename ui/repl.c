@@ -173,15 +173,6 @@ void jl_freeBuffer(uv_write_t *uvw,int status) {
     free(uvw);
 }
 
-void jl_write(char *str)
-{
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t *buf =  malloc(sizeof(uv_buf_t));
-    buf->base=str;
-    buf->len=strlen(str)-1;
-    uv_write(uvw,jl_stdout_tty,buf,1,&jl_freeBuffer);
-}
-
 void jl_status(char *str)
 {
     uv_write_t *uvw = malloc(sizeof(uv_write_t));
@@ -206,7 +197,7 @@ void parseAndExecute(char *str)
 void echoBack(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     jl_status("Test!\n");
-    jl_write(buf.base);
+    jl_write(stream,buf.base,buf.len);
 }
 
 uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
@@ -252,7 +243,7 @@ int true_main(int argc, char *argv[])
     }
     //uv_pipe_t pipe;
     //uv_pipe_init(jl_event_loop,&pipe,1);
-    jl_status("This is a test\n");
+    //jl_status("\033[34mThis is a test\n");
     &jl_load;
 
     //jl_event_loop->data=&pipe;

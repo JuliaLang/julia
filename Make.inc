@@ -99,7 +99,7 @@ OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 #CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
 
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap 
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap 
 
 # Libraries to link
 LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
