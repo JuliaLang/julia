@@ -68,11 +68,11 @@ srand(seed::Int32) = srand(uint32(seed))
 srand(seed::Int64) = srand(uint64(seed))
 
 function srand(filename::String, n::Integer)
-    fd = open(filename)
-    a = Array(Uint32, int(n))
-    read(fd, a)
-    srand(a)
-    close(fd)
+    #fd = open(filename)
+    #a = Array(Uint32, int(n))
+    #read(fd, a)
+    #srand(a)
+    #close(fd)
 end
 
 srand(filename::String) = srand(filename, 4)
@@ -227,11 +227,14 @@ function randg(a::Real)
         if log(U) < 0.5*x2 + d*(1.0 - v + log(v)); return d*v; end
     end
 end
-@_jl_rand_matrix_builder_1arg Float64 randg
+
+#@TODO
+#this macro lead to julia trying to define a function named '\0' - Error!
+#@_jl_rand_matrix_builder_1arg Float64 randg
 
 # randchi2()
 
-randchi2(v) = 2*randg(v/2)
-@_jl_rand_matrix_builder_1arg Float64 randchi2
+#randchi2(v) = 2*randg(v/2)
+#@_jl_rand_matrix_builder_1arg Float64 randchi2
 
-const chi2rnd = randchi2 # alias chi2rnd
+#const chi2rnd = randchi2 # alias chi2rnd

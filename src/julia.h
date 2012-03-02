@@ -693,7 +693,7 @@ DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream);
 
 
-DLLEXPORT int jl_sizeof_uv_stream_t();
+DLLEXPORT size_t jl_sizeof_uv_stream_t();
 
 #ifdef __WIN32__
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);

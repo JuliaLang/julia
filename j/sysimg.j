@@ -71,7 +71,7 @@ include("multi.j")
 include("client.j")
 
 # random number generation
-#include("random.j")
+include("random.j")
 
 # sparse matrices
 include("sparse.j")

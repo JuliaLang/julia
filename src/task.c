@@ -528,7 +528,7 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh) {
+    if (jl_current_task == eh&&eh->state.eh_ctx!=0) {
         longjmp(*eh->state.eh_ctx, 1);
     }
     else {

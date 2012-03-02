@@ -328,6 +328,8 @@ DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
+    if(!stream->type==UV_UNKNOWN_HANDLE)
+        return -2;
     uv_write_t *uvw = malloc(sizeof(uv_write_t));
     uv_buf_t buf[]  = {{.base = str,.len=n}};
     return uv_write(uvw,stream,buf,1,&jl_free_buffer);
@@ -362,7 +364,7 @@ int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-DLLEXPORT int jl_sizeof_uv_stream_t()
+DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
     return sizeof(uv_stream_t*);
 }

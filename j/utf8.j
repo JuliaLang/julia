@@ -74,8 +74,8 @@ lcfirst(s::UTF8String) = print_to_string(length(s), print, lowercase(s[1]), s[2:
 
 ## outputing UTF-8 strings ##
 
-print(s::UTF8String) = print(s.data)
-write(io, s::UTF8String) = write(io, s.data)
+#print(s::UTF8String) = print(s.data)
+#write(io, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
 

@@ -201,7 +201,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
         sockets[w[i].fd] = w[i].socket
-        add_fd_handler(w[i].fd, handler)
+        #add_fd_handler(w[i].fd, handler)
     end
     PGRP.locs = newlocs
     PGRP.np += n
@@ -218,7 +218,7 @@ function _jl_join_pgroup(myid, locs, sockets)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
         sockets[w[i].fd] = w[i].socket
-        add_fd_handler(w[i].fd, handler)
+        #add_fd_handler(w[i].fd, handler)
         send_msg_now(w[i], :identify_socket, myid)
     end
     for i = (myid+1):np
@@ -1556,44 +1556,47 @@ end
 yield() = yieldto(Scheduler)
 
 const _jl_fd_handlers = HashTable()
+const _jl_read_handlers = HashTable()
 
-add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
-del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
+function io_callback(io::AsyncStream)
+    _jl_fd_handlers[io](io)
+end
+
+
+function add_io_handler(io::AsyncStream, H)
+    (_jl_fd_handlers[fd]=H)
+    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback(io_callback,(),io))
+end
+
+function del_io_handler(io::AsyncStream)
+    ccall(:jl_stop_reading,Bool,(Ptr{Int32},),io.handle)
+    del(_jl_fd_handlers, fd)
+end
+
+#add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
+#del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
+
+const fgcm = createSingleAsyncWork(globalEventLoop(),make_callback(flush_gc_msgs,()));
+
+function _jl_idle_cb()
+    if !isempty(Workqueue)
+        perform_work()
+    else
+        queue_async(fgcm)
+    end
+end
 
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
-
-    while true
+    add_idle_cb(globalEventLoop(),make_callback(_jl_idle_cb,()))
+    while false
         try
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
-            while true
-                del_all(fdset)
-                for (fd,_) = _jl_fd_handlers
-                    add(fdset, fd)
-                end
-
-                bored = isempty(Workqueue)
-                if bored
-                    flush_gc_msgs()
-                end
-                nselect = select_read(fdset, bored ? 10.0 : 0.0)
-                if nselect == 0
-                    if !isempty(Workqueue)
-                        perform_work()
-                    end
-                else
-                    for fd=int32(0):int32(fdset.nfds-1)
-                        if has(fdset,fd)
-                            h = _jl_fd_handlers[fd]
-                            h(fd)
-                        end
-                    end
-                end
-            end
+            run_event_loop(global_event_loop);
         catch e
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process

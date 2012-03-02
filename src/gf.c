@@ -1403,8 +1403,6 @@ JL_CALLABLE(jl_f_make_callback)
     }
     int i;
 
-    jl_show(ttmp);
-
     for(i=0; i < tt->length; i++) {
         if (jl_is_tuple(jl_tupleref(tt,i))||jl_is_struct_type(jl_tupleref(tt,1)))
             jl_error("make_callback: only primitive types are supported");

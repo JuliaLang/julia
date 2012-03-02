@@ -35,7 +35,6 @@ function _uv_tty2tty(handle::Int32)
 end
 
 STDIN  = _uv_tty2tty(ccall(:jl_stdin ,Int32,()))
-STDOUT = _uv_tty2tty(ccall(:jl_stdout,Int32,()))
 STDERR = _uv_tty2tty(ccall(:jl_stderr,Int32,()))
 
 type Process
@@ -169,7 +168,6 @@ function readall(cmd::Cmd)
     pp.out=out;
     ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),out.handle,out.buf.ios,C_NULL)
     run_event_loop()
-    show(pp.exit_code)
     return takebuf_string(out.buf)
 end
 
@@ -274,11 +272,16 @@ function _jl_with_output_stream(s::AsyncStream, f::Function, args...)
 end
 
 ## low-level calls
+print(b::ASCIIString) = write(current_output_stream(),b)
+
+write(s::AsyncStream, b::ASCIIString) =
+    ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,s.handle)
+
 write(s::AsyncStream, b::Uint8) =
     ccall(:jl_putc, Int32, (Int32, Ptr{Void}), int32(b), s.handle)
 
 write(s::AsyncStream, c::Char) =
-    ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.handle, c)
+    ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), c, s.handle)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)

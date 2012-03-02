@@ -373,7 +373,7 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
 }
 
-DLLEXPORT void jl_sizeof_ios_t(void)
+DLLEXPORT size_t jl_sizeof_ios_t(void)
 {
     return sizeof(ios_t);
 }
