@@ -63,10 +63,10 @@ USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 endif
 
-ifeq ($(OS), Darwin)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-endif
+#ifeq ($(OS), Darwin)
+#USE_SYSTEM_BLAS=1
+#USE_SYSTEM_LAPACK=1
+#endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
