@@ -121,7 +121,7 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+LDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 endif
 
