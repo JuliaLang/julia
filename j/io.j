@@ -3,31 +3,51 @@ const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 type IOStream
     ios::Array{Uint8,1}
+    name::String
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
-    function IOStream(finalize::Bool)
-        x = new(zeros(Uint8,sizeof_ios_t))
+    function IOStream(finalize::Bool, name::String)
+        x = new(zeros(Uint8,sizeof_ios_t), name)
         if finalize
             finalizer(x, close)
         end
         return x
     end
+    IOStream(finalize::Bool) = IOStream(finalize, "")
     IOStream() = IOStream(true)
 
     global make_stdout_stream
-    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()))
+    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
 end
+
+function make_stdin_stream()
+    s = fdio(ccall(:jl_stdin, Int32, ()))
+    s.name = "<stdin>"
+    s
+end
+
+function make_stderr_stream()
+    s = fdio(ccall(:jl_stderr, Int32, ()))
+    s.name = "<stderr>"
+    s
+end
+
+show(s::IOStream) = print("IOStream(",s.name,")")
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 
-close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
+function close(s::IOStream)
+    s.name = "<closed>"
+    ccall(:ios_close, Void, (Ptr{Void},), s.ios)
+end
 
 # "own" means the descriptor will be closed with the IOStream
 function fdio(fd::Integer, own::Bool)
     s = IOStream()
     ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
           s.ios, int(fd), int32(0), int32(own));
+    s.name = strcat("<fd ",fd,">")
     return s
 end
 fdio(fd::Integer) = fdio(fd, false)
@@ -40,6 +60,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
              int32(rd), int32(wr), int32(cr), int32(tr)) == C_NULL
         error("could not open file ", fname)
     end
+    s.name = strcat("<file ",fname,">")
     if ff && ccall(:ios_seek_end, Uint, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
@@ -60,6 +81,7 @@ end
 function memio(x::Integer, finalize::Bool)
     s = IOStream(finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, uint(x))
+    s.name = "<memio>" # can't use strcat here, because strcat calls memio
     s
 end
 memio(x::Integer) = memio(x, true)
