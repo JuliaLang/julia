@@ -112,6 +112,7 @@ function parse_input_line(s::String)
 end
 
 function process_options(args::Array{Any,1})
+    global ARGS
     quiet = false
     repl = true
     if has(ENV, "JL_POST_BOOT")
@@ -128,12 +129,16 @@ function process_options(args::Array{Any,1})
             # TODO: support long options
             repl = false
             i+=1
+            ARGS = args[i+1:end]
             eval(parse_input_line(args[i]))
+            break
         elseif args[i]=="-E"
             repl = false
             i+=1
+            ARGS = args[i+1:end]
             show(eval(parse_input_line(args[i])))
             println()
+            break
         elseif args[i]=="-P"
             i+=1
             eval(parse_input_line(args[i]))
@@ -157,7 +162,6 @@ function process_options(args::Array{Any,1})
         elseif args[i][1]!='-'
             # program
             repl = false
-            global ARGS
             # remove julia's arguments
             ARGS = ARGS[i:end]
             include(args[i])
