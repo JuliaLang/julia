@@ -85,7 +85,7 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     return a
 end
 function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
-    if convert(T,x) == 0
+    if isa(T,BitsKind) && convert(T,x) == 0
         ccall(:bzero, Void, (Ptr{T}, Int), a, int(length(a)*sizeof(T)))
     else
         for i = 1:numel(a)
@@ -1186,6 +1186,30 @@ prod(A::StridedArray{Bool}, region::Region) =
 
 ## map over arrays ##
 
+## along an axis
+function amap(f::Function, A::StridedArray, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+
+    if axis_size == 0
+        return f(A)
+    end
+
+    idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
+    r = f(slice(A, idx))
+    R = Array(typeof(r), axis_size)
+    R[1] = r
+
+    for i = 2:axis_size
+        idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
+        R[i] = f(slice(A, idx))
+    end
+
+    return R
+end
+
+
 ## 1 argument
 function map_to(dest::StridedArray, f, A::StridedArray)
     for i=1:numel(A)
@@ -1300,6 +1324,14 @@ function map(f, As::StridedArray...)
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first))
     return map_to2(first, dest, f, As...)
+end
+
+## Filter ##
+
+# given a function returning a boolean and an array, return matching elements
+function filter(f, As::StridedArray)
+    boolmap::Array{Bool} = map(f, As)
+    As[boolmap]
 end
 
 ## Transpose ##

@@ -8,8 +8,8 @@ all extra unicode::
 
 default all extra \
 core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode amos::
-	$(QUIET_JULIA) ../julia $@.j
+sparse lapack fft arpack random unicode amos bigint::
+	$(QUIET_JULIA) ../julia ./runtests.j $@
 
 perf:
 ifneq ($(MAKECMDGOALS),perf)

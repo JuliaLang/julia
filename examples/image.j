@@ -39,10 +39,32 @@ function ppmwrite(img, file::String)
     write(s, "# ppm file written by julia\n")
     n, m = size(img)
     write(s, "$m $n 255\n")
-    for i=1:n, j=1:m
-        write(s, uint8(img[i,j,1]))
-        write(s, uint8(img[i,j,2]))
-        write(s, uint8(img[i,j,3]))
+    if eltype(img) <: Integer
+        if ndims(img) == 3 && size(img,3) == 3
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(img[i,j,k]))
+            end
+        elseif ndims(img) == 2
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(img[i,j]))
+            end
+        else
+            error("unsupported array dimensions")
+        end
+    elseif eltype(img) <: Float
+        if ndims(img) == 3 && size(img,3) == 3
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(255*img[i,j,k]))
+            end
+        elseif ndims(img) == 2
+            for i=1:n, j=1:m, k=1:3
+                write(s, uint8(255*img[i,j]))
+            end
+        else
+            error("unsupported array dimensions")
+        end
+    else
+        error("unsupported array type")
     end
 
     close(s)
@@ -60,11 +82,9 @@ function imread(file::String)
     spc = strchr(szline, ' ')
     w = parse_int(szline[1:spc-1])
     h = parse_int(szline[spc+1:end-1])
-    img = Array(Uint8, h, w, 3)
-    for i=1:h, j=1:w
-        img[i,j,1] = read(stream, Uint8)
-        img[i,j,2] = read(stream, Uint8)
-        img[i,j,3] = read(stream, Uint8)
+    img = Array(Float64, h, w, 3)
+    for i=1:h, j=1:w, k = 1:3
+        img[i,j,k] = float64(read(stream, Uint8))/255.0
     end
     img
 end
@@ -94,9 +114,206 @@ function imwrite(I, file::String)
     wait(cmd)
 end
 
-function imshow(img)
+function imshow(img, range)
+    if ndims(img) == 2 
+        # only makes sense for gray scale images
+        img = imadjustintensity(img, range)
+    end
     tmp::String = "./tmp.ppm"
     ppmwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
+end
+
+imshow(img) = imshow(img, [])
+
+function imadjustintensity(img, range)
+    if length(range) == 0
+        range = [min(img) max(img)]
+    elseif length(range) == 1
+        error("incorrect range")
+    end
+    tmp = (img - range[1])/(range[2] - range[1])
+    tmp[tmp > 1] = 1
+    tmp[tmp < 0] = 0
+    out = tmp
+end
+
+function rgb2gray{T}(img::Array{T,3})
+    n, m = size(img)
+    weights = [0.30 0.59 0.11] # RGB
+    out = Array(T, n, m)
+    if ndims(img)==3 && size(img,3)==3
+        for i=1:n, j=1:m
+            out[i,j] = sum(weights.*squeeze(img[i,j,:])')
+        end
+    elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
+        for i=1:n, j=1:m
+            p = img[i,j]
+            out[i,j] = sum(weights.*[redval(p) greenval(p) blueval(p)])
+        end
+    else
+        error("unsupported array type")
+    end
+    out
+end
+
+rgb2gray{T}(img::Array{T,2}) = img
+
+function sobel()
+    f = [1.0 2.0 1.0; 0.0 0.0 0.0; -1.0 -2.0 -1.0]
+    return f, f'
+end
+
+function prewitt()
+    f = [1.0 1.0 1.0; 0.0 0.0 0.0; -1.0 -1.0 -1.0]
+    return f, f'
+end
+
+# average filter
+function imaverage(filter_size)
+    if length(filter_size) != 2
+        error("wrong filter size")
+    end
+    m, n = filter_size[1], filter_size[2]
+    if mod(m, 2) != 1 || mod(n, 2) != 1
+        error("filter dimensions must be odd")
+    end
+    f = ones(Float64, m, n)/(m*n)
+end
+
+imaverage() = imaverage([3 3])
+
+# laplacian filter kernel
+function imlaplacian(diagonals::String)
+    if diagonals == "diagonals"
+        return [1.0 1.0 1.0; 1.0 -8.0 1.0; 1.0 1.0 1.0]
+    elseif diagonals == "nodiagonals"
+        return [0.0 1.0 0.0; 1.0 -4.0 1.0; 0.0 1.0 0.0]
+    end
+end
+
+imlaplacian() = imlaplacian("nodiagonals")
+
+# 2D gaussian filter kernel
+function gaussian2d(sigma, filter_size)
+    if length(filter_size) == 0
+        # choose 'good' size 
+        m = 4*ceil(sigma)+1
+        n = m
+    elseif length(filter_size) != 2
+        error("wrong filter size")
+    else
+        m, n = filter_size[1], filter_size[2]
+    end
+    if mod(m, 2) != 1 || mod(n, 2) != 1
+        error("filter dimensions must be odd")
+    end
+    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
+    return g/sum(g)
+end
+
+gaussian2d(sigma) = gaussian2d(sigma, [])
+gaussian2d() = gaussian2d(0.5, [])
+
+# difference of gaussian
+function imdog(sigma)
+    m = 4*ceil(sqrt(2)*sigma)+1
+    return gaussian2d(sqrt(2)*sigma, [m m]) - gaussian2d(sigma, [m m])
+end
+
+imdog() = imdog(0.5)
+
+# Sum of squared differences
+function ssd{T}(A::Array{T}, B::Array{T})
+    return sum((A-B).^2)
+end
+
+# normalized by Array size
+ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/prod(size(A))
+
+# sum of absolute differences
+function sad{T}(A::Array{T}, B::Array{T})
+    return sum(abs(A-B))
+end
+
+# normalized by Array size
+sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/prod(size(A))
+
+function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
+    si, sf = size(img), size(filter)
+    A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
+    s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
+    if border == "replicate"
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = repmat(img[:,1], 1, s2)
+        A[s1+1:end-s1, end-s2+1:end] = repmat(img[:,end], 1, s2)
+        A[1:s1, s2+1:end-s2] = repmat(img[1,:], s1, 1)
+        A[end-s1+1:end, s2+1:end-s2] = repmat(img[end,:], s1, 1)
+        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
+        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
+        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
+        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+    elseif border == "circular"
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = img[:, end-s2:end]
+        A[s1+1:end-s1, end-s2+1:end] = img[:, 1:s2]
+        A[1:s1, s2+1:end-s2] = img[end-s1+1:end, :]
+        A[end-s1+1:end, s2+1:end-s2] = img[1:s1, :]
+        A[1:s1, 1:s2] = img[end-s1+1:end, end-s2+1:end]
+        A[end-s1+1:end, 1:s2] = img[1:s1, end-s2+1:end]
+        A[1:s1, end-s2+1:end] = img[end-s1+1:end, 1:s2]
+        A[end-s1+1:end, end-s2+1:end] = img[1:s1, 1:s2]
+    elseif border == "mirror"
+        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[s1+1:end-s1, 1:s2] = fliplr(img[:, 1:s2])
+        A[s1+1:end-s1, end-s2+1:end] = fliplr(img[:, end-s2:end])
+        A[1:s1, s2+1:end-s2] = flipud(img[1:s1, :])
+        A[end-s1+1:end, s2+1:end-s2] = flipud(img[end-s1+1:end, :])
+        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
+        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
+        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
+        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+    elseif border == "value"
+        A += value
+        A[s1+1:end-s1, s2+1:end-s2] = img
+    else
+        error("wrong border treatment")
+    end
+    # check if separable
+    U, S, V = svd(filter)
+    separable = true;
+    for i = 2:length(S)
+        # assumption that <10^-7 \approx 0
+        separable = separable && (abs(S[i]) < 10^-7)
+    end
+    if separable
+        C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+    else
+        C = conv2(A, filter)
+    end
+    sc = size(C)
+    out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
+end
+
+# imfilter for multi channel images
+function imfilter{T}(img::Array{T,3}, filter::Matrix{T}, border::String, value)
+    x, y, c = size(img)
+    out = zeros(T, x, y, c)
+    for i = 1:c
+        out[:,:,i] = imfilter(squeeze(img[:,:,i]), filter, border, value)
+    end
+    out
+end
+
+imfilter(img, filter) = imfilter(img, filter, "replicate", 0)
+imfilter(img, filter, border) = imfilter(img, filter, border, 0)
+
+function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
+    u = img
+    f = imlaplacian()
+    for i = dt:dt:dt*iterations
+        u = u + dt*imfilter(u, f, "replicate")
+    end
+    u
 end

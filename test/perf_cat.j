@@ -1,13 +1,3 @@
-macro timeit(ex,name)
-    quote
-        t = Inf
-        for i=1:5
-            t = min(t, @elapsed $ex)
-        end
-        println(rpad(strcat($name,":"), 20), t)
-    end
-end
-
 function cat2d_perf(n, iter)
     a = rand(n,n)
     b = rand(n,n)

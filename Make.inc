@@ -26,7 +26,7 @@ USECLANG = 0
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-CFLAGS = -pipe -std=gnu99 -fPIC
+CFLAGS = -pipe -std=gnu99 -fPIC -fno-strict-aliasing
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
