@@ -13,6 +13,7 @@ show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 show(b::Bool) = print(b ? "true" : "false")
 show(n::Integer)  = print(dec(int64(n)))
+show(s::ASCIIString) = print(s)
 
 function show_trailing_hex(n::Uint64, ndig::Integer)
     for s = ndig-1:-1:0

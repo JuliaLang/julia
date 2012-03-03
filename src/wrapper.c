@@ -116,8 +116,10 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
     jl_pipe_opts_t *opts;
     if(handle->data) {
         opts = handle->data;
-        opts->stream->size+=nread;
-        opts->stream->bpos+=nread;
+        if(nread>0) { //no error/EOF
+            opts->stream->size+=nread;
+            opts->stream->bpos+=nread;
+        }
         if(opts->readcb) {
             jl_callback_call(opts->readcb,nread,((jl_pipe_opts_t*)handle->data)->stream->buf,(buf.base),buf.len);
         }
