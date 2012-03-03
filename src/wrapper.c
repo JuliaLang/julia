@@ -233,8 +233,9 @@ DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t **cb)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb?*cb:0,
-            uv_async_init(loop,async,&jl_async_callback);
+    opts->callcb = cb?*cb:0;
+    uv_async_init(loop,async,&jl_async_callback);
+    async->data=opts;
     return async;
 }
 
@@ -278,12 +279,12 @@ void jl_free_buffer(uv_write_t *uvw, int status) {
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
-    return jl_write(stream,str,strlen(str));
+    return stream ? jl_write(stream,str,strlen(str)):-1;
 }
 
 DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream)
 {
-    return jl_puts(str,stream);
+    return stream ? jl_puts(str,stream):-1;
 }
 
 static unsigned char chars[] = {
@@ -330,7 +331,7 @@ DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
-    if(!stream->type==UV_UNKNOWN_HANDLE)
+    if(stream->type==UV_UNKNOWN_HANDLE)
         return -2;
     uv_write_t *uvw = malloc(sizeof(uv_write_t));
     uv_buf_t buf[]  = {{.base = str,.len=n}};

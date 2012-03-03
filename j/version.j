@@ -135,10 +135,8 @@ const VERSION_COMMIT = chomp(readall(`git rev-parse HEAD`))
 const VERSION_CLEAN = success(`git diff --quiet`)
 const VERSION_TIME = strftime("%F %T",int(readall(`git log -1 --pretty=format:%ct`)))
 
-begin
-
 const _jl_version_string = "Version $VERSION"
-local _jl_version_clean = VERSION_CLEAN ? "" : "*"
+global _jl_version_clean = VERSION_CLEAN ? "" : "*"
 const _jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$_jl_version_clean"
 
 const _jl_banner_plain =
@@ -153,12 +151,12 @@ I"               _
 
 "
 
-local tx = "\033[0m\033[1m" # text
-local jl = "\033[0m\033[1m" # julia
-local d1 = "\033[34m" # first dot
-local d2 = "\033[31m" # second dot
-local d3 = "\033[32m" # third dot
-local d4 = "\033[35m" # fourth dot
+global tx = "\033[0m\033[1m" # text
+global jl = "\033[0m\033[1m" # julia
+global d1 = "\033[34m" # first dot
+global d2 = "\033[31m" # second dot
+global d3 = "\033[32m" # third dot
+global d4 = "\033[35m" # fourth dot
 const _jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
@@ -170,5 +168,3 @@ const _jl_banner_color =
 $(jl)|__/$(tx)                   |
 
 \033[0m"
-
-end # begin

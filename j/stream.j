@@ -1,4 +1,4 @@
-typealias PtrSize Int64
+typealias PtrSize Int32
 const UVHandle = PtrSize
 const IOStreamHandle = Ptr{Void}
 localEventLoop() = ccall(:jl_local_event_loop,PtrSize,())
@@ -52,6 +52,7 @@ abstract AsyncWork
 
 type SingleAsyncWork <: AsyncWork
     handle::PtrSize
+    SingleAsyncWork(handle::PtrSize)=new(handle)
 end
 
 type RepeatedAsyncWork <: AsyncWork
@@ -59,7 +60,7 @@ type RepeatedAsyncWork <: AsyncWork
 end
 
 function createSingleAsyncWork(loop::PtrSize,cb::PtrSize)
-    SingleAsyncWork(ccall(:jl_make_async,PtrSize,(Ptr{PtrSize},Ptr{PtrSize}),loop,cb))
+    return SingleAsyncWork(ccall(:jl_make_async,PtrSize,(Ptr{PtrSize},Ptr{PtrSize}),loop,cb))
 end
 
 function initRepeatedAsyncWork(loop::PtrSize)
@@ -276,13 +277,13 @@ end
 print(b::ASCIIString) = write(current_output_stream(),b)
 
 write(s::AsyncStream, b::ASCIIString) =
-    ccall(:jl_puts, PtrSize, (Ptr{Uint8},Ptr{PtrSize}),b.data,s.handle)
+    ccall(:jl_puts, PtrSize, (Ptr{Uint8},PtrSize),b.data,int32(s.handle))
 
 write(s::AsyncStream, b::Uint8) =
-    ccall(:jl_putc, PtrSize, (Uint8, Ptr{PtrSize}), unit8(b), s.handle)
+    ccall(:jl_putc, PtrSize, (Uint8, PtrSize), unit8(b),int32(s.handle))
 
 write(s::AsyncStream, c::Char) =
-    ccall(:jl_pututf8, PtrSize, (Ptr{Uint8},Ptr{PtrSize}), c, s.handle)
+    ccall(:jl_pututf8, PtrSize, (Ptr{Uint8},PtrSize), c,int32(s.handle))
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)

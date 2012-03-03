@@ -1576,13 +1576,13 @@ end
 #add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
 #del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
 
-const fgcm = createSingleAsyncWork(globalEventLoop(),make_callback(flush_gc_msgs,()));
+#global fgcm = createSingleAsyncWork(globalEventLoop(),make_callback(flush_gc_msgs,()));
 
 function _jl_idle_cb()
     if !isempty(Workqueue)
         perform_work()
     else
-        queue_async(fgcm)
+        #queue_async(fgcm)
     end
 end
 
