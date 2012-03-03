@@ -344,7 +344,7 @@ $(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(O
 	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(LDFLAGS) $(FFLAGS) SRC/*.f UTIL/*.f -o libarpack.$(SHLIB_EXT) $(LIBBLAS) $(LIBLAPACK) && \
+	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
 	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
@@ -430,7 +430,7 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o $(LIBBLAS) $(LIBLAPACK) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 
