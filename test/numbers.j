@@ -511,6 +511,10 @@ for A = real_types, B = real_types
     @assert typeof(ComplexPair(convert(A,2),convert(B,3))) <: ComplexPair{T}
 end
 
+# comparison should fail on complex
+@assert_fails complex(1,2) > 0
+@assert_fails complex(1,2) > complex(0,0)
+
 # div, fld, rem, mod
 for yr = {
     1:6,

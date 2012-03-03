@@ -30,6 +30,9 @@ let T = typevar(:T)
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
                                  (Type{Ptr{T}},Ptr{T})))
     @assert !subtype(Type{T},TypeVar)
+
+    @assert isequal(tintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
+                    (Range{Int64},(Int64,Int64)))
 end
 let N = typevar(:N)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),

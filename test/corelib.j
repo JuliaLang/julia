@@ -17,6 +17,13 @@ L64 = linspace(int64(1), int64(4))
 @assert L32[3] == 3 && L64[3] == 3
 @assert L32[4] == 4 && L64[4] == 4
 
+r = [5:-1:1]
+@assert r[1]==5
+@assert r[2]==4
+@assert r[3]==3
+@assert r[4]==2
+@assert r[5]==1
+
 # comprehensions
 X = [ i+2j | i=1:5, j=1:5 ]
 @assert X[2,3] == 8
@@ -67,4 +74,15 @@ for i=2:2:10000
 end
 for i=10000:20000
     @assert h[i]==i+1
+end
+
+let
+    z = HashTable()
+    get_KeyError = false
+    try
+        z["a"]
+    catch _e123_
+        get_KeyError = isa(_e123_,KeyError)
+    end
+    @assert get_KeyError
 end
