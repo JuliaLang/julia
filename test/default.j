@@ -1,4 +1,3 @@
-load("lib.j")
 runtests("core")
 runtests("numbers")
 runtests("strings")

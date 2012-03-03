@@ -1,14 +1,3 @@
-macro assert_approx_eq(a, b)
-    va, vb, diff, sdiff = gensym(4)
-    quote
-        local $va = $a
-        local $vb = $b
-        local $diff = abs($va - $vb)
-        local $sdiff = strcat("|", $string(a), " - ", $string(b), "| < 1e-6")
-        ($diff < 1e-6) ? nothing : error("assertion failed: ", $sdiff, "\n  ", $string(a), " = ", $va, "\n  ", $string(b), " = ", $vb)
-    end
-end
-
 # airy
 @assert_approx_eq airy(1.8) 0.0470362
 @assert_approx_eq airy(1, 1.8) -0.0685248
