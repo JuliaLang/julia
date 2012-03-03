@@ -2,8 +2,8 @@
 
 const stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
-const stdin_stream = fdio(ccall(:jl_stdin, Int32, ()))
-const stderr_stream = fdio(ccall(:jl_stderr, Int32, ()))
+const stdin_stream = make_stdin_stream()
+const stderr_stream = make_stderr_stream()
 
 # restore shared library handles
 
