@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -54,7 +54,7 @@ endif
 
 # Hard-coded setup for libraries on Debian
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper
+LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 endif
 
 WGET = wget
@@ -266,7 +266,11 @@ distclean-dsfmt: clean-dsfmt
 
 ## OpenBLAS ##
 
+ifeq ($(USE_SYSTEM_BLAS), 0)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+else
+OPENBLAS_OBJ_SOURCE =
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: compile-openblas
@@ -289,8 +293,13 @@ distclean-openblas:
 
 ## LAPACK ##
 
+ifeq ($(USE_SYSTEM_LAPACK), 0)
 LAPACK_OBJ_TARGET = $(EXTROOTLIB)/liblapack.$(SHLIB_EXT)
 LAPACK_OBJ_SOURCE = lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
+else
+LAPACK_OBJ_TARGET =
+LAPACK_OBJ_SOURCE =
+endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
