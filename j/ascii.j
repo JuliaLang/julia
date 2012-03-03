@@ -62,8 +62,8 @@ end
 
 ## outputing ASCII strings ##
 
-#print(s::ASCIIString) = print(s.data)
-#write(io, s::ASCIIString) = write(io, s.data)
+print(s::ASCIIString) = print(s.data)
+write(io, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
 

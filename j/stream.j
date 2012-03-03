@@ -246,33 +246,6 @@ macro cmd(str)
     :(cmd_gen($_jl_shell_parse(str)))
 end
 
-## Async IO
-current_output_stream() = ccall(:jl_current_output_stream_obj, AsyncStream, ())
-
-set_current_output_stream(s::AsyncStream) =
-    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
-
-function with_output_stream(s::AsyncStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        throw(e)
-    end
-end
-
-# custom version for print_to_*
-function _jl_with_output_stream(s::AsyncStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        # only add finalizer if takebuf doesn't happen
-        finalizer(s, close)
-        throw(e)
-    end
-end
-
 ## low-level calls
 print(b::ASCIIString) = write(current_output_stream(),b)
 
@@ -284,6 +257,8 @@ write(s::AsyncStream, b::Uint8) =
 
 write(s::AsyncStream, c::Char) =
     ccall(:jl_pututf8, PtrSize, (Ptr{Uint8},PtrSize), c,int32(s.handle))
+
+print(c::Char) = write(current_output_stream(),c)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)

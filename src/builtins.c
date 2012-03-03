@@ -703,6 +703,7 @@ DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
     return s->name;
 }
 
+//WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;

@@ -279,12 +279,16 @@ void jl_free_buffer(uv_write_t *uvw, int status) {
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
-    return stream ? jl_write(stream,str,strlen(str)):-1;
+    jl_write(stream,str,strlen(str));
 }
 
-DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream)
+DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
 {
-    return stream ? jl_puts(str,stream):-1;
+    char buf[8];
+    if (wchar < 0x80)
+        return jl_putc((int)wchar, s);
+    size_t n = u8_toutf8(buf, 8, &wchar, 1);
+    return jl_write(s, buf, n);
 }
 
 static unsigned char chars[] = {
@@ -324,18 +328,27 @@ static unsigned char chars[] = {
 
 DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 {
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t buf[]  = {{.base = &chars+c,.len=1}};
-    return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    if(stream->type<UV_FS_EVENT) { //is uv handle
+        uv_write_t *uvw = malloc(sizeof(uv_write_t));
+        uv_buf_t buf[]  = {{.base = &chars+c,.len=1}};
+        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    } else {
+        ios_t *handle = stream;
+        ios_putc(c,handle);
+    }
 }
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
-    if(stream->type==UV_UNKNOWN_HANDLE)
-        return -2;
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t buf[]  = {{.base = str,.len=n}};
-    return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    if(stream->type<UV_FS_EVENT) { //is uv handle
+        uv_write_t *uvw = malloc(sizeof(uv_write_t));
+        uv_buf_t buf[]  = {{.base = str,.len=n}};
+        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    } else
+    {
+        ios_t *handle = stream;
+        ios_write(handle,str,n);
+    }
 }
 
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args)

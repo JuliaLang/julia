@@ -17,3 +17,7 @@
 /sys.ji
 /sys0.ji
 /h2j
+
+*.dll
+*.do
+*.o
