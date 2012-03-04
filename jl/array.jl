@@ -145,7 +145,7 @@ function linspace(start::Real, stop::Real, n::Integer)
     a
 end
 
-linspace(start::Real, stop::Real) = [ i | i=start:stop ]
+linspace(start::Real, stop::Real) = linspace(start, stop, 100)
 
 logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
 logspace(start::Real, stop::Real) = logspace(start, stop, 50)
