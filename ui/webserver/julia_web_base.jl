@@ -91,7 +91,7 @@ end
 ###########################################
 
 # load the special functions available to the web repl
-load("./ui/webserver/julia_web.j")
+load("./ui/webserver/julia_web.jl")
 
 ###########################################
 # input event handler

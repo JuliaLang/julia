@@ -1,4 +1,4 @@
-include("pcre.j")
+include("pcre.jl")
 
 ## object-oriented Regex interface ##
 

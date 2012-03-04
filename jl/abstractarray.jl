@@ -1,4 +1,4 @@
-## abstractarray.j : Generic array interfaces.
+## abstractarray.jl : Generic array interfaces.
 
 ## Type aliases for convenience ##
 

@@ -1,4 +1,4 @@
-## multi.j - multiprocessing
+## multi.jl - multiprocessing
 ##
 ## julia starts with one process, and processors can be added using:
 ##   addprocs_local(n)                     using exec
@@ -1092,7 +1092,7 @@ end
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
 SGE(n) = addprocs_sge(n)
 
-#include("vcloud.j")
+#include("vcloud.jl")
 
 ## global objects and collective operations ##
 

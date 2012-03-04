@@ -1,99 +1,99 @@
 ## Load essential files and libraries
 
-include("base.j")
+include("base.jl")
 
 # core operations & types
-include("range.j")
-include("tuple.j")
-include("cell.j")
-include("expr.j")
-include("error.j")
+include("range.jl")
+include("tuple.jl")
+include("cell.jl")
+include("expr.jl")
+include("error.jl")
 
 # core numeric operations & types
-include("bool.j")
-include("number.j")
-include("int.j")
-include("promotion.j")
-include("operators.j")
-include("float.j")
-include("pointer.j")
-include("char.j")
-include("reduce.j")
-include("complex.j")
-include("rational.j")
+include("bool.jl")
+include("number.jl")
+include("int.jl")
+include("promotion.jl")
+include("operators.jl")
+include("float.jl")
+include("pointer.jl")
+include("char.jl")
+include("reduce.jl")
+include("complex.jl")
+include("rational.jl")
 
 # core data structures (used by type inference)
-include("abstractarray.j")
-include("subarray.j")
-include("array.j")
-include("intset.j")
-include("table.j")
-include("set.j")
+include("abstractarray.jl")
+include("subarray.jl")
+include("array.jl")
+include("intset.jl")
+include("table.jl")
+include("set.jl")
 
 # compiler
-include("inference.j")
+include("inference.jl")
 
 # I/O, strings & printing
-include("io.j")
+include("io.jl")
 #set_current_output_stream(make_stdout_stream()) # for error reporting
-include("string.j")
-include("ascii.j")
-include("utf8.j")
-include("regex.j")
-include("show.j")
-include("grisu.j")
-include("printf.j")
+include("string.jl")
+include("ascii.jl")
+include("utf8.jl")
+include("regex.jl")
+include("show.jl")
+include("grisu.jl")
+include("printf.jl")
 
 # system & environment
-include("libc.j")
-include("env.j")
-include("errno_h.j")
+include("libc.jl")
+include("env.jl")
+include("errno_h.jl")
 
 # concurrency and parallelism
-include("iterator.j")
-include("task.j")
-include("process.j")
-include("serialize.j")
-include("multi.j")
+include("iterator.jl")
+include("task.jl")
+include("process.jl")
+include("serialize.jl")
+include("multi.jl")
 
 # front end
-include("client.j")
+include("client.jl")
 
 # core math functions
-include("intfuncs.j")
-include("floatfuncs.j")
-include("math.j")
-include("math_libm.j")
-include("sort.j")
-include("combinatorics.j")
-include("statistics.j")
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+include("math_libm.jl")
+include("sort.jl")
+include("combinatorics.jl")
+include("statistics.jl")
 
 # random number generation
-include("random.j")
+include("random.jl")
 
 # sparse matrices
-include("sparse.j")
+include("sparse.jl")
 
 # distributed arrays
-include("darray.j")
+include("darray.jl")
 
 # utilities - version, timing, help, edit
-include("version.j")
-include("util.j")
-include("datafmt.j")
+include("version.jl")
+include("util.jl")
+include("datafmt.jl")
 
 ## Load optional external libraries
 
 # linear algebra
-include("linalg.j")
-include("linalg_blas.j")
-include("linalg_lapack.j")
-include("linalg_arpack.j")
-include("linalg_suitesparse.j")
+include("linalg.jl")
+include("linalg_blas.jl")
+include("linalg_lapack.jl")
+include("linalg_arpack.jl")
+include("linalg_suitesparse.jl")
 
 # signal processing
-include("signal.j")
-include("signal_fftw.j")
+include("signal.jl")
+include("signal_fftw.jl")
 
 
 # prime method cache with some things we know we'll need right after startup

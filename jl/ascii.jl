@@ -1,4 +1,4 @@
-## from src/boot.j
+## from src/boot.jl
 # type ASCIIString <: DirectIndexString; data::Array{Uint8,1}; end
 
 ## required core functionality ##

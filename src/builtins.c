@@ -453,13 +453,13 @@ char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
-    // try adding julia home, then julia_home/j/
+    // try adding julia home, then julia_home/jl/
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
         if (fid == -1) {
             free(fpath);
-            asprintf(&fpath, "%s/j/%s", julia_home, fname);
+            asprintf(&fpath, "%s/jl/%s", julia_home, fname);
             fid = open (fpath, O_RDONLY);
         }
     }

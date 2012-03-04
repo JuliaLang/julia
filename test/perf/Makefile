@@ -13,7 +13,7 @@ benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3
 	for t in 1 2 3 4 5; do bin/perf2; done >>$@
 	for t in 1 2 3 4 5; do bin/perf3; done >>$@
 
-benchmarks/julia.csv: perf.j
+benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py

@@ -82,7 +82,7 @@ function_loc(f::Function) = function_loc(f, (Any...))
 edit(file::String) = edit(file, 1)
 function edit(file::String, line::Int)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
-    issrc = file[end-1:end] == ".j"
+    issrc = file[end-2:end] == ".jl"
     if issrc
         if editor == "emacs"
             jmode = "$JULIA_HOME/contrib/julia-mode.el"

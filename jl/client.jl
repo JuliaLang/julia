@@ -1,5 +1,5 @@
-## client.j - frontend handling command line options, environment setup,
-##            and REPL
+## client.jl - frontend handling command line options, environment setup,
+##             and REPL
 
 const _jl_color_normal = "\033[0m"
 
@@ -196,10 +196,10 @@ function _start()
         end
 
         global const VARIABLES = {}
-        global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/j/"]
+        global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/jl/"]
 
         # Load customized startup
-        try include(strcat(getcwd(),"/startup.j")) end
+        try include(strcat(getcwd(),"/startup.jl")) end
         try include(strcat(ENV["HOME"],"/.juliarc")) end
 
         (quiet,repl) = process_options(ARGS)

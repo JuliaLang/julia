@@ -1,6 +1,6 @@
 module NewSystem
 
-include("sysimg.j")
+include("sysimg.jl")
 
 # invoke type inference, running the existing inference code on the new
 # inference code to cache an optimized version of it.
@@ -11,6 +11,6 @@ begin
 end
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      cstring("sys.ji"), cstring("j/start_image.j"))
+      cstring("sys.ji"), cstring("jl/start_image.jl"))
 
 end # module

@@ -1,4 +1,4 @@
-## array.j: Dense arrays
+## array.jl: Dense arrays
 
 typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}

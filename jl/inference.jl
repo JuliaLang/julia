@@ -674,7 +674,7 @@ function _jl_abstract_interpret(e::Expr, vtypes, sv::StaticVarInfo)
         if isa(lhs,SymbolNode)
             lhs = lhs.name
         end
-        assert(isa(lhs,Symbol), "inference.j:579")
+        assert(isa(lhs,Symbol), "inference.jl:579")
         return StateUpdate(lhs, t, vtypes)
     elseif is(e.head,:call) || is(e.head,:call1)
         abstract_eval(e, vtypes, sv)
@@ -884,7 +884,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     args = f_argnames(ast)
     la = length(args)
-    assert(is(ast.head,:lambda), "inference.j:745")
+    assert(is(ast.head,:lambda), "inference.jl:745")
     locals = (ast.args[2][1])::Array{Any,1}
     vars = append(args, locals)
     body = (ast.args[3].args)::Array{Any,1}
@@ -1326,8 +1326,8 @@ function inlineable(f, e::Expr, vars)
     if length(body) != 1
         return NF
     end
-    assert(isa(body[1],Expr), "inference.j:1050")
-    assert(is(body[1].head,:return), "inference.j:1051")
+    assert(isa(body[1],Expr), "inference.jl:1050")
+    assert(is(body[1].head,:return), "inference.jl:1051")
     # check for vararg function
     args = f_argnames(ast)
     na = length(args)
