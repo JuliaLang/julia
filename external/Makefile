@@ -315,7 +315,7 @@ lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS)" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LDFLAGS) $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
