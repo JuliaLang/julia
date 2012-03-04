@@ -17,3 +17,6 @@
 /sys.ji
 /sys0.ji
 /h2j
+
+/jl/errno_h.jl
+/jl/pcre_h.jl
