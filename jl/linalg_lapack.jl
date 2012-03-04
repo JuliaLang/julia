@@ -102,7 +102,7 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
     info = _jl_lapack_getrf(m, n, A, stride(A,2), ipiv)
 
     if info > 0; error("matrix is singular"); end
-    P = linspace(1, m)
+    P = [i | i = 1:m]
     for i=1:min(m,n)
         t = P[i]
         P[i] = P[ipiv[i]]
