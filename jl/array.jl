@@ -147,6 +147,9 @@ end
 
 linspace(start::Real, stop::Real) = [ i | i=start:stop ]
 
+logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
+logspace(start::Real, stop::Real) = logspace(start, stop, 50)
+
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
