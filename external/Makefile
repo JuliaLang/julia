@@ -284,7 +284,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
-	cp -f libopenblas.dylib $(EXTROOTLIB)
+	cp -f openblas-$(OPENBLAS_VER)/libopenblas.dylib $(EXTROOTLIB)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
