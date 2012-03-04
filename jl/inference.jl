@@ -1368,18 +1368,6 @@ function inlineable(f, e::Expr, vars)
                        append(argexprs,spvals))
 end
 
-function remove_call1(e)
-    if isa(e,Expr)
-        for i=1:length(e.args)
-            e.args[i] = remove_call1(e.args[i])
-        end
-        if is(e.head,:call1)
-            e.head = :call
-        end
-    end
-    e
-end
-
 _jl_tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
 
@@ -1402,9 +1390,6 @@ function inlining_pass(e::Expr, vars)
     if is(e.head,:call) && (is(arg1, :ccall) ||
                             (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
                             (isa(arg1,TopNode) && is(arg1.name, :ccall)))
-        if length(e.args)>1
-            e.args[2] = remove_call1(e.args[2])
-        end
         i0 = 3
     else
         i0 = 1
