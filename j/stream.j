@@ -11,8 +11,10 @@ type Cmd
 end
 
 type Cmds
-    siblings::Union(Cmd,Set{Cmd})
+    siblings::Set{Cmd}
     pipeline::Cmds
+    Cmds() = new()
+    Cmds(c::Cmd) = new(c)
 end
 
 abstract AsyncStream <: Stream
@@ -28,6 +30,7 @@ type tty <: AsyncStream
     buf::IOStream
 end
 typealias StreamHandle Union(PtrSize,AsyncStream)
+typealias PipeOrNot(Bool,AsyncStream)
 
 make_stdout_stream() = tty(ccall(:jl_stdout, PtrSize, ()),memio())
 
@@ -138,14 +141,6 @@ run_event_loop()
 takebuf_string(stream.buf)
 end
 
-##process functions
-
-_spawn(fname::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, in::Ptr{PtrSize}, out::Ptr{PtrSize}, exitcb::Ptr{PtrSize},closecb::Ptr{PtrSize}) = ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),fname,argv,in,out,exitcb,closecb)
-function spawn(cmd::Cmd, cb::PtrSize)
-    ptrs = _jl_pre_exec(cmd.exec)
-    Process(_spawn(ptrs[1], ptrs, C_NULL, C_NULL, C_NULL)) #no pipes, no callback
-end
-
 #show(p::Process) = print("Process")
 
 
@@ -162,23 +157,28 @@ function process_exited(p::Process,h::PtrSize,e::PtrSize, t::PtrSize)
     p.term_signal=t
 end
 
+function spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::PtrSize,closecb::PtrSize,pp::Process)
+    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs,isa(in,NamedPipe) ? in.handle : C_NULL, isa(out,NamedPipe) ? out.handle : C_NULL,exitcb,closecb)
+    pp.in=in
+    pp.out=out
+    pp
+end
+spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::PtrSize,closecb::PtrSize) = spawn(cmd,in,out,exitcb,closecb,Process(0,0,0,0))
+
 function readall(cmd::Cmd)
-    ptrs = _jl_pre_exec(cmd.exec)
     out=make_pipe()
-    pp=Process(0,0,0,0)
-    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs, C_NULL, out.handle,make_callback(process_exited,(PtrSize,PtrSize,PtrSize),pp), make_callback(finish_read,(),out))
-    pp.out=out;
+    spawn(cmd,false,out,make_callback(process_exited,(PtrSize,PtrSize,PtrSize),pp), make_callback(finish_read,(),out))
     ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Ptr{PtrSize}),out.handle,out.buf.ios,C_NULL)
     run_event_loop()
     return takebuf_string(out.buf)
 end
 
 function success(cmd::Cmd)
-ptrs = _jl_pre_exec(cmd.exec)
-pp=Process(0,0,0,0)
-pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs, C_NULL, C_NULL,make_callback(process_exited,(PtrSize,PtrSize,PtrSize),pp), C_NULL)
-run_event_loop()
-return (pp.exit_code==0)
+    ptrs = _jl_pre_exec(cmd.exec)
+    pp=Process(0,0,0,0)
+    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs, C_NULL, C_NULL,make_callback(process_exited,(PtrSize,PtrSize,PtrSize),pp), C_NULL)
+    run_event_loop()
+    return (pp.exit_code==0)
 end
 run(cmd::Cmd)=success(cmd::Cmd)
 
@@ -191,8 +191,6 @@ function exec(thunk::Function)
     end
     exit(0)
 end
-
-typealias Executable Vector{ByteString}
 
 ## process status ##
 
@@ -274,4 +272,29 @@ function write(s::AsyncStream, p::Ptr, nb::Integer)
     ccall(:jl_write, Uint,
           (Ptr{Void}, Ptr{Void}, Uint),
           s.ios, p, uint(nb))
+end
+
+(&)(left::Cmds,right::Cmd)  = add(src.siblings,dest)
+(&)(left::Cmd,right::Cmds)  = right&left
+(&)(left::Cmds,right::Cmds) = union(left,right)
+(&)(left::Cmd,right::Cmd)   = Cmds(left)&right
+
+(|)(src::Cmds,dest::Cmds)   = src.pipeline=dest
+(|)(src::Cmd,dest::Cmds)    = (s=Cmds(src);s.pipeline=dest;s)
+(|)(src::Cmds,dest::Cmd)    = (src.pipeline=Cmds(dest);src)
+
+function show(cmd::Cmd)
+    if isa(cmd.exec,Vector{ByteString})
+        esc = shell_escape(cmd.exec...)
+        print('`')
+        for c in esc
+            if c == '`'
+                print('\\')
+            end
+            print(c)
+        end
+        print('`')
+    else
+        invoke(show, (Any,), cmd.exec)
+    end
 end

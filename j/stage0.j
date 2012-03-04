@@ -15,6 +15,7 @@ if true
     show(b::Bool) = print(b ? "true" : "false")
     show(n::Int64) = ccall(:jl_print_int64, Void, (Int64,), n)
     show(n::Integer)  = show(int64(n))
+
     print(a...) = for x=a; print(x); end
     function show(e::Expr)
         print(e.head)

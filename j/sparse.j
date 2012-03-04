@@ -201,14 +201,14 @@ spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
 spzeros(Tv::Type, m::Int, n::Int) =
     SparseMatrixCSC(m, n, ones(Int32, n+1), Array(Int32, 0), Array(Tv, 0))
 
-speye(n::Int) = speye(Float64, n, n)
-speye(m::Int, n::Int) = speye(Float64, m, n)
-
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
     L = linspace(int32(1), int32(x))
     _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
+
+speye(n::Int) = speye(Float64, n, n)
+speye(m::Int, n::Int) = speye(Float64, m, n)
 
 ## Structure query functions
 

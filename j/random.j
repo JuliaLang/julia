@@ -10,7 +10,7 @@ function _jl_librandom_init()
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
-            seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16))
+            seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`)[1:40], 16))
         catch
             # ignore
         end
@@ -79,6 +79,8 @@ srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
+rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
+
 const _jl_dsfmt_get_min_array_size =
     ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
 
@@ -98,7 +100,6 @@ function rand!(A::Array{Float64})
     return A
 end
 
-rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Int...) = rand(dims)
 
