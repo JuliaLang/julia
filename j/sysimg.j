@@ -2,20 +2,6 @@
 
 include("base.j")
 
-show(e::LoadError) = (print("Load Error:"); show(e.error); show(e.file); show(e.line); print("\n"))
-function show(e::TypeError)
-    print("Type Error")
-    if e.expected == Bool
-        print("in bool")
-    else
-        if isa(e.got,Type)
-            show(e.type)
-        else
-            show(typeof(e.got))
-        end
-    end
-end
-
 # core operations & types
 include("range.j")
 include("tuple.j")
@@ -85,7 +71,7 @@ include("multi.j")
 include("client.j")
 
 # random number generation
-#include("random.j")
+include("random.j")
 
 # sparse matrices
 include("sparse.j")

@@ -132,6 +132,7 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop,pipe,0);
     pipe->data = 0;//will be initilized on io
+    pipe->handle=0;
     return pipe;
 }
 
@@ -294,7 +295,7 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
 }
 
 static unsigned char chars[] = {
-      0,  1,  2, 3,   4,  5,  6,  7,
+      0,  1,  2,  3,   4,  5,  6,  7,
       8,  9, 10, 11, 12, 13, 13, 15,
      16, 17, 18, 19, 20, 21, 22, 23,
      24, 25, 26, 27, 28, 29, 30, 31,
@@ -332,7 +333,7 @@ DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 {
     if(stream->type<UV_FS_EVENT) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
-        uv_buf_t buf[]  = {{.base = &chars+c,.len=1}};
+        uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
     } else {
         ios_t *handle = stream;

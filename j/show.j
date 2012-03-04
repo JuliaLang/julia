@@ -473,3 +473,12 @@ function show(v::AbstractVector)
     X = reshape(v,(1,length(v)))
     print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
 end
+
+show(cmd::Cmd) = print(" `$(cmd.exec)` ")
+function show(cmds::Cmds)
+    show_delim_array(cmds.siblings,' ','&',' ',false)
+    if(isa(cmds.pipeline,Cmds))
+        print("|")
+        show(cmds.pipeline)
+    end
+end
