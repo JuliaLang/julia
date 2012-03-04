@@ -230,7 +230,7 @@ function ssd{T}(A::Array{T}, B::Array{T})
 end
 
 # normalized by Array size
-ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/prod(size(A))
+ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/numel(A)
 
 # sum of absolute differences
 function sad{T}(A::Array{T}, B::Array{T})
@@ -238,7 +238,7 @@ function sad{T}(A::Array{T}, B::Array{T})
 end
 
 # normalized by Array size
-sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/prod(size(A))
+sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
 
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)

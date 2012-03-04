@@ -199,8 +199,8 @@ fft(X) = fft(X, (), 1)
 ifft(X) = ifft(X, (), 1)
 
 # TODO: This is inefficient. Advanced interfaces of _jl_FFTW should be used
-macro jl_fft_ifft_macro(fname, fname_compute)
-    quote 
+for (fname, fname_compute) in ((:fft,:fftn), (:ifft,:ifftn))
+    @eval begin
         function ($fname){T<:Union(Float64,Float32,Complex128,Complex64),n}(
             X::Array{T,n}, npoints, dim::Integer
         )
@@ -225,45 +225,38 @@ macro jl_fft_ifft_macro(fname, fname_compute)
     end
 end
 
-@jl_fft_ifft_macro fft fftn
-@jl_fft_ifft_macro ifft ifftn
-
 # Transpose
 # NOTE: Using _jl_FFTW_MEASURE and _jl_FFTW_PATIENT zeros out the input the 
 # first time it is used for a particular size. Use _jl_FFTW_ESTIMATE
 
-macro jl_transpose_real_macro(libname, fname, eltype)
-    quote
-        function _jl_fftw_transpose(X::Matrix{$eltype})
+for (libname, fname, elty) in ((:_jl_libfftw ,"fftw_plan_guru_r2r",:Float64),
+                               (:_jl_libfftwf,"fftwf_plan_guru_r2r",:Float32))
+    @eval begin
+        function _jl_fftw_transpose(X::Matrix{$elty})
             (n1, n2) = size(X)
             P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
-                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Uint32),
+                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
                          int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, [_jl_FFTW_HC2R], _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
-            _jl_fftw_execute($eltype, plan)
-            _jl_fftw_destroy_plan($eltype, plan)
+            _jl_fftw_execute($elty, plan)
+            _jl_fftw_destroy_plan($elty, plan)
             return P
         end
     end
 end
 
-@jl_transpose_real_macro _jl_libfftw  :fftw_plan_guru_r2r  Float64
-@jl_transpose_real_macro _jl_libfftwf :fftwf_plan_guru_r2r Float32
-
-macro jl_transpose_complex_macro(libname, fname, celtype)
-    quote
-        function _jl_fftw_transpose(X::Matrix{$celtype})
+for (libname, fname, celty) in ((:_jl_libfftw ,"fftw_plan_guru_dft",:Complex128),
+                                (:_jl_libfftwf,"fftwf_plan_guru_dft",:Complex64))
+    @eval begin
+        function _jl_fftw_transpose(X::Matrix{$celty})
             (n1, n2) = size(X)
             P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
-                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celtype}, Ptr{$celtype}, Int32, Uint32),
+                         (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
                          int32(0), C_NULL, int32(2),int32([n1,n2,1,n2,1,n1]), X, P, _jl_FFTW_FORWARD, _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
-            _jl_fftw_execute($celtype, plan)
-            _jl_fftw_destroy_plan($celtype, plan)
+            _jl_fftw_execute($celty, plan)
+            _jl_fftw_destroy_plan($celty, plan)
             return P
         end
     end
 end
-
-@jl_transpose_complex_macro _jl_libfftw  :fftw_plan_guru_dft  Complex128
-@jl_transpose_complex_macro _jl_libfftwf :fftwf_plan_guru_dft Complex64
