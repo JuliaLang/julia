@@ -816,8 +816,10 @@ ast_rettype(ast) = ast.args[3].typ
 # saved type inference data there.
 function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #dbg = 
-    #dotrace = true#is(linfo,sizestr)
-    local ast::Expr
+    #dotrace = true
+    local ast::Expr, tfunc_idx
+    curtype = None
+    redo = false
     # check cached t-functions
     tf = def.tfunc
     if !is(tf,())
@@ -826,11 +828,14 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         for i = 1:length(codearr)
             if typeseq(typearr[i],atypes)
                 code = codearr[i]
-                if isa(code, Tuple)
-                    # compressed tree format
-                    return (code, code[3])
+                assert(isa(code, Tuple))
+                if code[5]
+                    curtype = code[3]
+                    redo = true
+                    tfunc_idx = i
+                    break
                 end
-                return (code, ast_rettype(code))
+                return (code, code[3])
             end
         end
     end
@@ -888,12 +893,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # our stack frame
     frame = CallStack(ast0, linfo.module, atypes, inference_stack)
     inference_stack = frame
-    curtype = None
     frame.result = curtype
-
-    local s, sv
-
-    while true
 
     rec = false
 
@@ -1048,29 +1048,35 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
     #print("\n",ast,"\n")
     #print("==> ", frame.result,"\n")
-    if !rec || typeseq(curtype, frame.result)
-        break
+    if redo && typeseq(curtype, frame.result)
+        rec = false
     end
-    curtype = frame.result
-    end # while
     
     fulltree = type_annotate(ast, s, sv, frame.result, vars)
     
-    fulltree.args[3] = inlining_pass(fulltree.args[3], vars)
-    tuple_elim_pass(fulltree)
-    linfo.inferred = true
-    
-    compressed = ccall(:jl_compress_ast, Any, (Any,), fulltree)
-    fulltree = compressed
-    #compressed = fulltree
-    if is(def.tfunc,())
-        def.tfunc = ({},{})
+    if !rec
+        fulltree.args[3] = inlining_pass(fulltree.args[3], vars)
+        tuple_elim_pass(fulltree)
+        linfo.inferred = true
     end
-    push(def.tfunc[1]::Array{Any,1}, atypes)
-    push(def.tfunc[2]::Array{Any,1}, compressed)
+    
+    compr = ccall(:jl_compress_ast, Any, (Any,), fulltree)
+    
+    if !redo
+        if is(def.tfunc,())
+            def.tfunc = ({},{})
+        end
+        compr = (compr[1],compr[2],compr[3],compr[4],rec)
+        push(def.tfunc[1]::Array{Any,1}, atypes)
+        push(def.tfunc[2]::Array{Any,1}, compr)
+    elseif !rec
+        codearr = def.tfunc[2]
+        compr = codearr[tfunc_idx]
+        codearr[tfunc_idx] = (compr[1],compr[2],compr[3],compr[4],false)
+    end
     
     inference_stack = (inference_stack::CallStack).prev
-    return (fulltree, frame.result)
+    return (compr, frame.result)
 end
 
 function record_var_type(e::Symbol, t, decls)

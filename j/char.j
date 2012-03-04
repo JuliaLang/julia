@@ -42,7 +42,6 @@ promote_rule(::Type{Char}, ::Type{Uint64}) = Uint64
 +(x::Char, y::Char) = int(x) + int(y)
 -(x::Char, y::Char) = int(x) - int(y)
 *(x::Char, y::Char) = int(x) * int(y)
-/(x::Char, y::Char) = int(x) * int(y)
 
 div(x::Char, y::Char) = div(int(x), int(y))
 fld(x::Char, y::Char) = div(int(x), int(y))

@@ -211,6 +211,7 @@ promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
 *(x::Uint64, y::Uint64) = boxui64(mul_int(unbox64(x), unbox64(y)))
 
 /(x::Integer, y::Integer) = float64(x)/float64(y)
+inv(x::Integer) = 1.0/float64(x)
 
 div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
 rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))

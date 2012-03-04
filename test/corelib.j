@@ -37,6 +37,9 @@ let a36 = boo32_64()
     @assert a36[1]==1 && a36[2]==2
 end
 
+@assert (10.^[-1])[1] == 0.1
+@assert (10.^[-1.])[1] == 0.1
+
 # hash table
 h = HashTable()
 for i=1:10000

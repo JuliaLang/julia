@@ -53,9 +53,6 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
     end
 end
 
-# fallback division:
-/{T<:Real}(x::T, y::T) = float64(x)/float64(y)
-
 \(x,y) = y/x
 
 # .<op> defaults to <op>
