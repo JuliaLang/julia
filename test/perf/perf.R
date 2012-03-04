@@ -102,7 +102,7 @@ mandelperf = function() {
     return(M)
 }
 
-assert(sum(mandelperf()) == 14660)
+assert(sum(mandelperf()) == 14791)
 timeit("mandel", mandelperf)
 
 ## pi_sum ##
@@ -137,8 +137,8 @@ randmatstat = function(t) {
         v[i] = sum(diag((t(P)%*%P)^4))
         w[i] = sum(diag((t(Q)%*%Q)^4))
     }
-    s1 = sd(v)/mean(v)
-    s2 = sd(w)/mean(w)
+    s1 = apply(v,2,sd)/mean(v)
+    s2 = apply(w,2,sd)/mean(w)
     return(c(s1,s2))
 }
 

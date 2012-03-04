@@ -26,7 +26,7 @@ our %systems = (
   "python"     => ["NumPy"       , "1.5.1"      ],
   "matlab"     => ["Matlab"      , "R2011a"     ],
   "octave"     => ["Octave"      , "3.4"        ],
-  "r"          => ["R"           , "2.9.0"      ],
+  "r"          => ["R"           , "2.14.2"     ],
   "javascript" => ["JavaScript"  , "V8 3.6.6.11"],
 );
 
