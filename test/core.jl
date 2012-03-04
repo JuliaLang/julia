@@ -33,6 +33,15 @@ let T = typevar(:T)
 
     @assert isequal(tintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
                     (Range{Int64},(Int64,Int64)))
+
+    @assert isequal(tintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
+                    (Int, Array{Int,1}))
+
+    @assert isequal(tintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
+                    None)
+
+    @assert isequal(tintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
+                    (Number, Array{Number,1}))
 end
 let N = typevar(:N)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),

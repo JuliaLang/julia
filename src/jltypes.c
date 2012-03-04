@@ -887,7 +887,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     return (jl_value_t*)jl_bottom_type;
 }
 
-static jl_value_t *meet(jl_value_t *X, jl_value_t *Y)
+static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 {
     if (jl_is_typevar(X)) {
         jl_value_t *tv;
@@ -909,20 +909,17 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y)
     }
     if (!jl_has_typevars_(X,1)) {
         if (!jl_has_typevars_(Y,1)) {
-            if (!jl_types_equal(X,Y))
-                return NULL;
-            return X;
+            if (var==invariant) {
+                return (jl_types_equal(X,Y) ? X : NULL);
+            }
         }
-        if (jl_subtype(X,Y,0))
-            return X;
-        return NULL;
+        return (jl_subtype(X,Y,0) ? X : NULL);
     }
     if (!jl_has_typevars_(Y,1)) {
-        if (jl_subtype(Y,X,0))
-            return Y;
-        return NULL;
+        return (jl_subtype(Y,X,0) ? Y : NULL);
     }
-    return jl_type_intersection(X, Y);
+    jl_value_t *v = jl_type_intersection(X, Y);
+    return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
 }
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
@@ -950,13 +947,13 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 if (pS != &S) {
                     // S=R is in the results
                     jl_value_t **pR = pS;
-                    *pR = meet(*pR, *pU);
+                    *pR = meet(*pR, *pU, invariant);
                     if (*pR == NULL) {
                         return 0;
                     }
                 }
                 else {
-                    v = meet(S, *pU);
+                    v = meet(*pU, S, covariant);
                     if (v == NULL) {
                         return 0;
                     }
@@ -966,7 +963,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     *pU = S;
             }
             else {
-                v = meet(*pU, S);
+                v = meet(*pU, S, covariant);
                 if (v == NULL) {
                     return 0;
                 }
@@ -990,7 +987,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 }
                 else {
                     assert(jl_is_typevar(T));
-                    v = meet(S, T);
+                    v = meet(S, T, covariant);
                     if (!jl_is_typevar(v)) {
                         v = (jl_value_t*)
                             jl_new_typevar(underscore_sym,
