@@ -693,6 +693,4 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
 end
 
-(\){T1<:Integer, T2<:Integer}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
-(\){T1<:Float, T2<:Integer}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, float64(B))
-(\){T1<:Integer, T2<:Float}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), B)
+(\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
