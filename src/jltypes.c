@@ -79,26 +79,6 @@ int jl_is_type(jl_value_t *v)
     return jl_is_nontuple_type(v);
 }
 
-int jl_has_typevars_(jl_value_t *v, int incl_wildcard);
-
-DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
-{
-    if (jl_is_tuple(v)) {
-        jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i;
-        for(i=0; i < t->length; i++) {
-            if (!jl_is_leaf_type(jl_tupleref(t, i)))
-                return 0;
-        }
-        return 1;
-    }
-    if (jl_is_type_type(v) && !jl_has_typevars_(jl_tparam0(v),1))
-        return 1;
-    if (!jl_is_struct_type(v) && !jl_is_func_type(v) && !jl_is_bits_type(v))
-        return 0;
-    return !jl_has_typevars_(v,1);
-}
-
 int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     size_t i;
@@ -139,6 +119,34 @@ int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 int jl_has_typevars(jl_value_t *v)
 {
     return jl_has_typevars_(v, 0);
+}
+
+DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
+{
+    if (jl_is_struct_type(v) || jl_is_bits_type(v)) {
+        jl_tuple_t *t = ((jl_tag_type_t*)v)->parameters;
+        for(int i=0; i < t->length; i++) {
+            if (jl_is_typevar(jl_tupleref(t,i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_tuple(v)) {
+        jl_tuple_t *t = (jl_tuple_t*)v;
+        for(int i=0; i < t->length; i++) {
+            if (!jl_is_leaf_type(jl_tupleref(t, i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_type_type(v)) {
+        return !jl_is_typevar(jl_tparam0(v));
+    }
+    if (jl_is_func_type(v)) {
+        return !jl_is_typevar(((jl_func_type_t*)v)->from) &&
+            !jl_is_typevar(((jl_func_type_t*)v)->to);
+    }
+    return 0;
 }
 
 // construct the full type of a value, possibly making a tuple type
@@ -1314,9 +1322,18 @@ int jl_assign_type_uid(void)
 static void cache_type_(jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevars_((jl_value_t*)type,1) ||
-        ((jl_tag_type_t*)type)->parameters->length == 0)
-        return;
+    jl_tuple_t *t = ((jl_tag_type_t*)type)->parameters;
+    if (t->length == 0) return;
+    if (jl_is_tag_type(type)) {
+        if (jl_has_typevars_((jl_value_t*)type,1))
+            return;
+    }
+    else {
+        for(int i=0; i < t->length; i++) {
+            if (jl_is_typevar(jl_tupleref(t,i)))
+                return;
+        }
+    }
     // assign uid
     if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
         ((jl_struct_type_t*)type)->uid = jl_assign_type_uid();
