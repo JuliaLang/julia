@@ -1,6 +1,6 @@
 load("lib.j")
 runtests("core")
-runtests("numbers")
+#runtests("numbers")
 runtests("strings")
 runtests("corelib")
 runtests("hashing")

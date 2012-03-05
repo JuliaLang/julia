@@ -1,9 +1,9 @@
 JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
-LIBS = -lpthread
+#LIBS = -lpthread -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi $(JULIAHOME)/external/libuv/uv.a
 
-WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp jsoncpp.cpp
+WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 
 %.o: %.c
 	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
