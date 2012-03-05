@@ -2,6 +2,7 @@
 #include <map>
 #include <ctime>
 #include <stdlib.h>
+#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>

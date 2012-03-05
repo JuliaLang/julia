@@ -132,7 +132,9 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop,pipe,0);
     pipe->data = 0;//will be initilized on io
+#ifdef __WIN32__
     pipe->handle=0;
+#endif
     return pipe;
 }
 

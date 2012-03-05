@@ -115,7 +115,7 @@ endif
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
-OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
