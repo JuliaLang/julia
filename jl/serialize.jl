@@ -23,7 +23,7 @@ let i = 2
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              :add_int, :sub_int, :mul_int, :add_float, :sub_float,
-             :mul_float, :unbox32, :unbox64, :box, :boxf32, :boxf64,
+             :mul_float, :unbox, :unbox32, :unbox64, :box, :boxf32, :boxf64,
              :boxsi32, :boxsi64, :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,

@@ -1286,7 +1286,7 @@ function inlineable(f, e::Expr, vars)
         return e.typ.parameters[1]
     end
     if length(atypes)==1 && isa(atypes[1],BitsKind) &&
-        (is(f,unbox8) || is(f,unbox16) || is(f,unbox32) || is(f,unbox64))
+        (is(f,unbox8) || is(f,unbox16) || is(f,unbox32) || is(f,unbox64) || is(f,unbox))
         return e.args[2]
     end
 

@@ -1002,7 +1002,7 @@ void jl_init_serializer(void)
                      jl_symbol("add_int"), jl_symbol("sub_int"),
                      jl_symbol("mul_int"), 
                      jl_symbol("add_float"), jl_symbol("sub_float"),
-                     jl_symbol("mul_float"),
+                     jl_symbol("mul_float"), jl_symbol("unbox"),
                      jl_symbol("unbox8"), jl_symbol("unbox16"),
                      jl_symbol("unbox32"), jl_symbol("unbox64"),
                      jl_symbol("box"), jl_symbol("boxf32"), jl_symbol("boxf64"),
