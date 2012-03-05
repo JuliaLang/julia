@@ -918,21 +918,25 @@ void jl_restore_system_image(char *fname)
 }
 
 DLLEXPORT
-jl_value_t *jl_compress_ast(jl_value_t *ast)
+jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     ios_t dest;
     jl_ios_mem(&dest, 0);
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 
-    tree_literal_values = jl_alloc_cell_1d(0);
+    if (li->roots == NULL)
+        li->roots = jl_alloc_cell_1d(0);
+    tree_literal_values = li->roots;
     jl_serialize_value(&dest, ast);
 
     //jl_printf(jl_stderr_tty, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
-    if (tree_literal_values->length == 0)
+    if (tree_literal_values->length == 0) {
         tree_literal_values = (jl_array_t*)jl_an_empty_cell;
+        li->roots = NULL;
+    }
     v = (jl_value_t*)jl_tuple(4, v, tree_literal_values,
                               jl_lam_body((jl_expr_t*)ast)->etype,
                               jl_lam_capt((jl_expr_t*)ast));
@@ -1002,10 +1006,9 @@ void jl_init_serializer(void)
                      jl_symbol("add_int"), jl_symbol("sub_int"),
                      jl_symbol("mul_int"), 
                      jl_symbol("add_float"), jl_symbol("sub_float"),
-                     jl_symbol("mul_float"),
-                     jl_symbol("unbox"), jl_symbol("unbox8"),
-                     jl_symbol("unbox16"), jl_symbol("unbox32"),
-                     jl_symbol("unbox64"),
+                     jl_symbol("mul_float"), jl_symbol("unbox"),
+                     jl_symbol("unbox8"), jl_symbol("unbox16"),
+                     jl_symbol("unbox32"), jl_symbol("unbox64"),
                      jl_symbol("box"), jl_symbol("boxf32"), jl_symbol("boxf64"),
                      jl_symbol("boxsi32"), jl_symbol("boxsi64"),
                      jl_symbol("eq_int"), jl_symbol("slt_int"),

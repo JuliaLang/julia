@@ -690,7 +690,7 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
-DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream);
+DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
@@ -805,7 +805,7 @@ DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
-jl_value_t *jl_compress_ast(jl_value_t *ast);
+jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)

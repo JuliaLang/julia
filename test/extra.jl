@@ -1,0 +1,2 @@
+runtests("unicode")
+runtests("perf")

@@ -208,6 +208,8 @@ jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp)
     nli->name = l->name;
     nli->fptr = l->fptr;
     nli->module = l->module;
+    nli->file = l->file;
+    nli->line = l->line;
     JL_GC_POP();
     return nli;
 }

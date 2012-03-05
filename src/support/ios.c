@@ -671,6 +671,8 @@ int ios_flush(ios_t *s)
     return 0;
 }
 
+
+
 void ios_close(ios_t *s)
 {
     ios_flush(s);

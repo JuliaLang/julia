@@ -116,8 +116,10 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
     jl_pipe_opts_t *opts;
     if(handle->data) {
         opts = handle->data;
-        opts->stream->size+=nread;
-        opts->stream->bpos+=nread;
+        if(nread>0) { //no error/EOF
+            opts->stream->size+=nread;
+            opts->stream->bpos+=nread;
+        }
         if(opts->readcb) {
             jl_callback_call(opts->readcb,nread,((jl_pipe_opts_t*)handle->data)->stream->buf,(buf.base),buf.len);
         }
@@ -130,6 +132,7 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop,pipe,0);
     pipe->data = 0;//will be initilized on io
+    pipe->handle=0;
     return pipe;
 }
 
@@ -233,8 +236,9 @@ DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t **cb)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb?*cb:0,
-            uv_async_init(loop,async,&jl_async_callback);
+    opts->callcb = cb?*cb:0;
+    uv_async_init(loop,async,&jl_async_callback);
+    async->data=opts;
     return async;
 }
 
@@ -278,16 +282,20 @@ void jl_free_buffer(uv_write_t *uvw, int status) {
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
-    return jl_write(stream,str,strlen(str));
+    jl_write(stream,str,strlen(str));
 }
 
-DLLEXPORT int jl_pututf8(char *str, uv_stream_t *stream)
+DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
 {
-    return jl_puts(str,stream);
+    char buf[8];
+    if (wchar < 0x80)
+        return jl_putc((int)wchar, s);
+    size_t n = u8_toutf8(buf, 8, &wchar, 1);
+    return jl_write(s, buf, n);
 }
 
 static unsigned char chars[] = {
-      0,  1,  2, 3,   4,  5,  6,  7,
+      0,  1,  2,  3,   4,  5,  6,  7,
       8,  9, 10, 11, 12, 13, 13, 15,
      16, 17, 18, 19, 20, 21, 22, 23,
      24, 25, 26, 27, 28, 29, 30, 31,
@@ -323,18 +331,27 @@ static unsigned char chars[] = {
 
 DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
 {
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t buf[]  = {{.base = &chars+c,.len=1}};
-    return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    if(stream->type<UV_FS_EVENT) { //is uv handle
+        uv_write_t *uvw = malloc(sizeof(uv_write_t));
+        uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
+        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    } else {
+        ios_t *handle = stream;
+        ios_putc(c,handle);
+    }
 }
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
-    if(!stream->type==UV_UNKNOWN_HANDLE)
-        return -2;
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t buf[]  = {{.base = str,.len=n}};
-    return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    if(stream->type<UV_FS_EVENT) { //is uv handle
+        uv_write_t *uvw = malloc(sizeof(uv_write_t));
+        uv_buf_t buf[]  = {{.base = str,.len=n}};
+        return uv_write(uvw,stream,buf,1,&jl_free_buffer);
+    } else
+    {
+        ios_t *handle = stream;
+        ios_write(handle,str,n);
+    }
 }
 
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args)

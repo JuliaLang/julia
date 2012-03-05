@@ -250,7 +250,7 @@ int true_main(int argc, char *argv[])
     ;
     JL_TRY {
         if (iserr) {
-            jl_show(jl_exception_in_transit);
+            //jl_show(jl_exception_in_transit);# What if the error was in show?
             ios_printf(ios_stdout, "\n\n");
             iserr = 0;
         }
