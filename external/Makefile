@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper uv
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -556,6 +556,13 @@ install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 clean-gmp-wrapper:
 	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
+
+## libuv
+
+compile-uv:
+	$(MAKE) -C libuv
+install-uv:
+	cp libuv/uv.a root/lib
 
 ## phony targets ##
 

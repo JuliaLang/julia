@@ -2072,6 +2072,7 @@ static void init_julia_llvm_env(Module *m)
 extern "C" void jl_init_codegen(void)
 {
     llvm::JITEmitDebugInfo = true;
+    //llvm::JITEmitDebugInfoToDisk = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 

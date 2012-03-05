@@ -6,7 +6,7 @@ JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 JULIALIB = $(JULIAHOME)/lib
 EXTROOT = $(JULIAHOME)/external/root
 EXTROOTLIB = $(EXTROOT)/lib
-LLVMROOT = $(EXTROOT)
+LLVMROOT = $(EXTROOT)/../root2
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
@@ -85,7 +85,7 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+OSLIBS += -lrt -ldl -pthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -99,10 +99,12 @@ OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 #CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
 
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap 
+ifeq ($(OS), "MINGW32_NT-6.1")
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
+endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

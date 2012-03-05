@@ -195,6 +195,19 @@
     jl_callback;
     iswprint;
     localtime_r;
+    jl_new_event_loop;
+    jl_global_event_loop;
+    jl_local_event_loop;
+    jl_make_async;
+    jl_async_send;
+    jl_idle_init;
+    jl_idle_start;
+    jl_idle_stop;
+    jl_pututf8;
+    jl_puts;
+    jl_putc;
+    jl_write;
+    jl_sizeof_uv_stream_t;
   local:
     *;
 };

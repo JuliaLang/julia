@@ -59,14 +59,14 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 libjulia-debug.a: $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-libjulia-debug: libjulia-debug.a ../libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: libjulia-debug.a 
 
 ../libjulia-release.$(SHLIB_EXT): $(OBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o ../libjulia-release.$(SHLIB_EXT) $(LIBS)
 libjulia-release.a: $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-libjulia-release: libjulia-release.a ../libjulia-release.$(SHLIB_EXT)
+libjulia-release: libjulia-release.a 
 
 clean:
 	rm -f libjulia*.$(SHLIB_EXT)
