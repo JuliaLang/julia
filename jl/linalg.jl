@@ -426,30 +426,7 @@ end
 
 function rref{T}(A::Matrix{T})
     nr, nc = size(A)
-#     try
-#         (L,U) = lu(A)
-#         e = eps(norm(U,Inf))
-#         for i = 1:nr
-#             d = U[i,i]
-#             if abs(d) > e
-#                 for k = i:nc
-#                     U[i,k] /= d
-#                 end
-#             end
-#         end
-#         for i = 1:(nr-1)
-#             for j = (i+1):min(nr,nc)
-#                 c = U[i,j]
-#                 for k = j:nc
-#                     U[i,k] -= c*U[j,k]
-#                 end
-#             end
-#         end
-#         return U
-#    end
-    # fall back here if LU fails because A is singular
-
-    U = copy(A)
+    U = copy_to(similar(A,Float64), A)
     e = eps(norm(U,Inf))
     i = j = 1
     while i <= nr && j <= nc
