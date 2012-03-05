@@ -15,6 +15,8 @@ DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
+PARALLEL_BUILD_JOBS = 1
+
 # Compiler specific stuff
 
 FC = gfortran
