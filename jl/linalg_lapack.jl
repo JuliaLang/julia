@@ -78,7 +78,7 @@ function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     (LU, P) = lu!(copy(A))
     m, n = size(A)
 
-    L = tril(LU, -1) + eye(m,n)
+    L = m >= n ? tril(LU, -1) + eye(m,n) : tril(LU, -1)[:, 1:m] + eye(m,m)
     U = m <= n ? triu(LU) : triu(LU)[1:n, :]
     return (L, U, P)
 end
