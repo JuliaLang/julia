@@ -1,4 +1,5 @@
 from numpy import *
+from numpy.linalg import *
 import sys
 import time
 import random
@@ -70,8 +71,8 @@ def randmatstat(t):
         d = numpy.random.randn(n, n)
         P = matrix(hstack((a, b, c, d)))
         Q = matrix(vstack((hstack((a, b)), hstack((c, d)))))
-        v[i] = trace(pow(transpose(P)*P, 4))
-        w[i] = trace(pow(transpose(Q)*Q, 4))
+        v[i] = trace(matrix_power(transpose(P)*P, 4))
+        w[i] = trace(matrix_power(transpose(Q)*Q, 4))
     return (std(v)/mean(v), std(w)/mean(w))
 
 ## randmatmul ##

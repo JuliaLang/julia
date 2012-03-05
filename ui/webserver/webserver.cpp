@@ -578,7 +578,7 @@ const char *create_session(bool idle)
     opts.stdin_stream = session_data.julia_in;
     opts.stdout_stream = session_data.julia_out;
     opts.file="julia";
-    char argv[2][64] = {"./julia","./ui/webserver/julia_web_base.j"};
+    char argv[2][64] = {"./julia","./ui/webserver/julia_web_base.jl"};
     uv_spawn(session_data.event_loop,session_data.proc,opts);
 
     // set the start time

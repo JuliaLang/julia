@@ -405,6 +405,10 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
         jl_cellset(li->roots, 0, val);
     }
     else {
+        for(size_t i=0; i < li->roots->length; i++) {
+            if (jl_arrayref(li->roots,i) == val)
+                return;
+        }
         jl_cell_1d_push(li->roots, val);
     }
 }

@@ -459,13 +459,13 @@ char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
-    // try adding julia home, then julia_home/j/
+    // try adding julia home, then julia_home/jl/
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
         if (fid == -1) {
             free(fpath);
-            asprintf(&fpath, "%s/j/%s", julia_home, fname);
+            asprintf(&fpath, "%s/jl/%s", julia_home, fname);
             fid = open (fpath, O_RDONLY);
         }
     }
@@ -1034,7 +1034,7 @@ JL_CALLABLE(jl_f_def_macro)
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     jl_set_expander(jl_current_module, nm, f);
     return (jl_value_t*)jl_nothing;
@@ -1121,7 +1121,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     JL_GC_POP();
     return gf;

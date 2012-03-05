@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -40,8 +40,21 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
 endif
 
+ifeq ($(USE_SYSTEM_PCRE), 0)
+LIBS += pcre
+endif
+
+ifeq ($(USE_SYSTEM_BLAS), 0)
+LIBS += openblas
+endif
+
+ifeq ($(USE_SYSTEM_LAPACK), 0)
+LIBS += lapack
+endif
+
+# Hard-coded setup for libraries on Debian
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper
+LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 endif
 
 WGET = wget
@@ -253,7 +266,11 @@ distclean-dsfmt: clean-dsfmt
 
 ## OpenBLAS ##
 
+ifeq ($(USE_SYSTEM_BLAS), 0)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+else
+OPENBLAS_OBJ_SOURCE =
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: compile-openblas
@@ -267,6 +284,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -275,8 +293,13 @@ distclean-openblas:
 
 ## LAPACK ##
 
+ifeq ($(USE_SYSTEM_LAPACK), 0)
 LAPACK_OBJ_TARGET = $(EXTROOTLIB)/liblapack.$(SHLIB_EXT)
 LAPACK_OBJ_SOURCE = lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
+else
+LAPACK_OBJ_TARGET =
+LAPACK_OBJ_SOURCE =
+endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
@@ -292,7 +315,7 @@ lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS)" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -321,7 +344,7 @@ $(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(O
 	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
+	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
 	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
@@ -407,7 +430,7 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 
