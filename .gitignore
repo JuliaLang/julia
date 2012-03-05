@@ -22,3 +22,7 @@
 *.dll
 *.do
 *.o
+
+julia.files
+julia.config
+julia.includes

@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 #include "julia.h"
 #include "support/ios.h"
@@ -38,6 +39,23 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
     return buf;
 }
 
+void jl_callback_call(jl_callback_t *cb,...)
+{
+    va_list argp;
+    va_start(argp,cb);
+    jl_value_t **argv = malloc(sizeof(jl_value_t*)*cb->types->length);
+    jl_value_t *v;
+    argv[0]=cb->state;
+    for(int i = 0; i<cb->types->length; ++i) {
+        v = alloc_2w(); //only primitives
+        v->type = (jl_type_t*)jl_tupleref(cb->types,i);
+        *jl_bits_data(v)=va_arg(argp,void*);
+        argv[i+1]=v;
+    }
+    JL_GC_PUSH(argv);
+    jl_apply(cb->function,(jl_value_t**)argv,cb->types->length+1);
+    JL_GC_POP();
+}
 
 void closeHandle(uv_handle_t* handle)
 {
@@ -90,26 +108,10 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
         if(opts->exitcb)
             jl_callback_call(opts->exitcb,p,exit_status,term_signal);
     }
-    uv_close(p,&closeHandle);
+    uv_close((uv_handle_t*)p,&closeHandle);
 }
 
-void jl_callback_call(jl_callback_t *cb,...)
-{
-    va_list argp;
-    va_start(argp,cb);
-    jl_value_t **argv = malloc(sizeof(jl_value_t*)*cb->types->length);
-    jl_value_t *v;
-    argv[0]=cb->state;
-    for(int i = 0; i<cb->types->length; ++i) {
-        v = alloc_2w(); //only primitives
-        v->type = jl_tupleref(cb->types,i);
-        *jl_bits_data(v)=va_arg(argp,void*);
-        argv[i+1]=v;
-    }
-    JL_GC_PUSH(argv);
-    jl_apply(cb->function,(jl_value_t**)argv,cb->types->length+1);
-    JL_GC_POP();
-}
+
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
@@ -128,7 +130,6 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 
 DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
 {
-    jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop,pipe,0);
     pipe->data = 0;//will be initilized on io
