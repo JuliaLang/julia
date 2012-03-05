@@ -90,7 +90,7 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
 
     info = _jl_lapack_getrf(m, n, A, stride(A,2), ipiv)
 
-    if info > 0; error("matrix is singular"); end
+    #if info > 0; error("matrix is singular"); end
     P = [i | i = 1:m]
     for i=1:min(m,n)
         t = P[i]
@@ -98,9 +98,7 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
         P[ipiv[i]] = t
     end
 
-    if info == 0
-        return (A, P)
-    end
+    if info >= 0; return (A, P); end
     error("error in LU")
 end
 
@@ -214,7 +212,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
         info = _jl_lapack_geqp3(m, n, QR, stride(QR,2), jpvt, tau, work, lwork)
     end
 
-    if info > 0; error("matrix is singular"); end
+    #if info > 0; error("matrix is singular"); end
 
     R = triu(QR)
 
@@ -236,7 +234,7 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
         info = _jl_lapack_orgqr(m, k, k, QR, stride(QR,2), tau, work, lwork2)
     end
 
-    if info == 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
+    if info >= 0; return (QR[:, 1:k], R[1:k, :], jpvt); end
     error("error in LAPACK orgqr/ungqr");
 end
 
