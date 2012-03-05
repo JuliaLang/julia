@@ -91,7 +91,7 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
     info = _jl_lapack_getrf(m, n, A, stride(A,2), ipiv)
 
     #if info > 0; error("matrix is singular"); end
-    P = [i | i = 1:m]
+    P = [1:m]
     for i=1:min(m,n)
         t = P[i]
         P[i] = P[ipiv[i]]
@@ -103,8 +103,10 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
 end
 
 
-macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty)
-    quote
+for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
+    (("dgeqp3_","zgeqp3_","dorgqr_","zungqr_",:Float64,:Complex128),
+     ("sgeqp3_","cgeqp3_","sorgqr_","cungqr_",:Float32,:Complex64))
+    @eval begin
 
         # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -176,9 +178,6 @@ macro _jl_lapack_qr_macro(real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty)
     end
 end
 
-@_jl_lapack_qr_macro :dgeqp3_ :zgeqp3_ :dorgqr_ :zungqr_ Float64 Complex128
-@_jl_lapack_qr_macro :sgeqp3_ :cgeqp3_ :sorgqr_ :cungqr_ Float32 Complex64
-
 #possible TODO: economy mode?
 
 qr{T<:Integer}(x::StridedMatrix{T}) = qr(float64(x))
@@ -238,8 +237,10 @@ function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
     error("error in LAPACK orgqr/ungqr");
 end
 
-macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, elty, celty)
-    quote
+for (syev, heev, real_geev, complex_geev, elty, celty) in
+    (("dsyev_","zheev_","dgeev_","zgeev_",:Float64,:Complex128),
+     ("ssyev_","cheev_","sgeev_","cgeev_",:Float32,:Complex64))
+    @eval begin
 
         #       SUBROUTINE DSYEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -319,9 +320,6 @@ macro _jl_lapack_eig_macro(syev, heev, real_geev, complex_geev, elty, celty)
 
     end
 end
-
-@_jl_lapack_eig_macro :dsyev_ :zheev_ :dgeev_ :zgeev_ Float64 Complex128
-@_jl_lapack_eig_macro :ssyev_ :cheev_ :sgeev_ :cgeev_ Float32 Complex64
 
 eig{T<:Integer}(x::StridedMatrix{T}) = eig(float64(x))
 
@@ -435,8 +433,10 @@ function trideig(d::Vector{Float64}, e::Vector{Float64})
 end
 
 
-macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, elty, celty)
-    quote
+for (real_gesvd, complex_gesvd, elty, celty) in
+    (("dgesvd_","zgesvd_",:Float64,:Complex128),
+     ("sgesvd_","cgesvd_",:Float32,:Complex64))
+    @eval begin
 
         # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -482,9 +482,6 @@ macro _jl_lapack_gesvd_macro(real_gesvd, complex_gesvd, elty, celty)
 
     end
 end
-
-@_jl_lapack_gesvd_macro :dgesvd_ :zgesvd_ Float64 Complex128
-@_jl_lapack_gesvd_macro :sgesvd_ :cgesvd_ Float32 Complex64
 
 svd{T<:Integer}(x::StridedMatrix{T}) = svd(float64(x))
 

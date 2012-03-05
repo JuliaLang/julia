@@ -1,7 +1,9 @@
 _jl_libarpack = dlopen("libarpack")
 
-macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
-    quote
+for (T, Tc, saupd, real_naupd, complex_naupd) in
+    ((:Float64,:Complex128,"dsaupd_","dnaupd_","znaupd_"),
+     (:Float32,:Complex64, "ssaupd_","snaupd_","cnaupd_"))
+    @eval begin
 
         # call dsaupd
         #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
@@ -51,11 +53,10 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
     end
 end
 
-@_jl_arpack_aupd_macro Float64 Complex128 "dsaupd_" "dnaupd_" "znaupd_"
-@_jl_arpack_aupd_macro Float32 Complex64  "ssaupd_" "snaupd_" "cnaupd_"
-
-macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
-    quote
+for (T, Tc, seupd, real_neupd, complex_neupd) in
+    ((:Float64,:Complex128,"dseupd_","dneupd_","zneupd_"),
+     (:Float32,:Complex64 ,"sseupd_","sneupd_","cneupd_"))
+    @eval begin
 
         #  call dseupd  
         #     ( RVEC, HOWMNY, SELECT, D, Z, LDZ, SIGMA, BMAT, N, WHICH, NEV, TOL,
@@ -113,9 +114,6 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
 
     end
 end
-
-@_jl_arpack_eupd_macro Float64 Complex128 "dseupd_" "dneupd_" "zneupd_"
-@_jl_arpack_eupd_macro Float32 Complex64  "sseupd_" "sneupd_" "cneupd_"
 
 eigs(A) = eigs(A, 6)
 eigs(A, k) = eigs(A, k, "LM")

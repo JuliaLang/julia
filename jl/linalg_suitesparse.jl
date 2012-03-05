@@ -329,8 +329,10 @@ end
 
 ## Wrappers around UMFPACK routines
 
-macro _jl_umfpack_symbolic_macro(f_sym_r, f_sym_c, inttype)
-    quote
+for (f_sym_r, f_sym_c, inttype) in
+    (("umfpack_di_symbolic","umfpack_zi_symbolic",:Int32),
+     ("umfpack_dl_symbolic","umfpack_zl_symbolic",:Int64))
+    @eval begin
 
         function _jl_umfpack_symbolic{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti})
             # Pointer to store the symbolic factorization returned by UMFPACK
@@ -363,11 +365,10 @@ macro _jl_umfpack_symbolic_macro(f_sym_r, f_sym_c, inttype)
     end
 end
 
-@_jl_umfpack_symbolic_macro :umfpack_di_symbolic :umfpack_zi_symbolic Int32
-@_jl_umfpack_symbolic_macro :umfpack_dl_symbolic :umfpack_zl_symbolic Int64
-
-macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
-    quote
+for (f_num_r, f_num_c, inttype) in
+    (("umfpack_di_numeric","umfpack_zi_numeric",:Int32),
+     ("umfpack_dl_numeric","umfpack_zl_numeric",:Int64))
+    @eval begin
 
         function _jl_umfpack_numeric{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic)
             # Pointer to store the numeric factorization returned by UMFPACK
@@ -400,11 +401,10 @@ macro _jl_umfpack_numeric_macro(f_num_r, f_num_c, inttype)
     end
 end
 
-@_jl_umfpack_numeric_macro :umfpack_di_numeric :umfpack_zi_numeric Int32
-@_jl_umfpack_numeric_macro :umfpack_dl_numeric :umfpack_zl_numeric Int64
-
-macro _jl_umfpack_solve_macro(f_sol_r, f_sol_c, inttype)
-    quote
+for (f_sol_r, f_sol_c, inttype) in
+    (("umfpack_di_solve","umfpack_zi_solve",:Int32),
+     ("umfpack_dl_solve","umfpack_zl_solve",:Int64))
+    @eval begin
 
         function _jl_umfpack_solve{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
                                                              b::Vector{Tv}, Numeric)
@@ -436,23 +436,18 @@ macro _jl_umfpack_solve_macro(f_sol_r, f_sol_c, inttype)
     end
 end
 
-@_jl_umfpack_solve_macro :umfpack_di_solve :umfpack_zi_solve Int32
-@_jl_umfpack_solve_macro :umfpack_dl_solve :umfpack_zl_solve Int64
+for (f_symfree, f_numfree, elty, inttype) in
+    (("umfpack_di_free_symbolic","umfpack_di_free_numeric",:Float64,:Int32),
+     ("umfpack_zi_free_symbolic","umfpack_zi_free_numeric",:Complex128,:Int32),
+     ("umfpack_dl_free_symbolic","umfpack_dl_free_numeric",:Float64,:Int64),
+     ("umfpack_zl_free_symbolic","umfpack_zl_free_numeric",:Complex128,:Int64))
+    @eval begin
 
-macro _jl_umfpack_free_macro(f_symfree, f_numfree, eltype, inttype)
-    quote
-
-        _jl_umfpack_free_symbolic{Tv<:$eltype,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic) =
+        _jl_umfpack_free_symbolic{Tv<:$elty,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Symbolic) =
         ccall(dlsym(_jl_libsuitesparse, $f_symfree), Void, (Ptr{Void},), Symbolic)
         
-        _jl_umfpack_free_numeric{Tv<:$eltype,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Numeric) =
+        _jl_umfpack_free_numeric{Tv<:$elty,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, Numeric) =
         ccall(dlsym(_jl_libsuitesparse, $f_numfree), Void, (Ptr{Void},), Numeric)
         
     end
 end
-
-@_jl_umfpack_free_macro :umfpack_di_free_symbolic :umfpack_di_free_numeric Float64    Int32
-@_jl_umfpack_free_macro :umfpack_zi_free_symbolic :umfpack_zi_free_numeric Complex128 Int32
-@_jl_umfpack_free_macro :umfpack_dl_free_symbolic :umfpack_dl_free_numeric Float64    Int64
-@_jl_umfpack_free_macro :umfpack_zl_free_symbolic :umfpack_zl_free_numeric Complex128 Int64
-
