@@ -8,7 +8,7 @@ FLAGS = \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
-	-I$(EXTROOT)/include
+	-I$(EXTROOT)/external/libuv  -I$(EXTROOT)/include
 
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)

@@ -6,7 +6,7 @@ JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 JULIALIB = $(JULIAHOME)/lib
 EXTROOT = $(JULIAHOME)/external/root
 EXTROOTLIB = $(EXTROOT)/lib
-LLVMROOT = $(EXTROOT)/../root2
+LLVMROOT = $(EXTROOT)
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
