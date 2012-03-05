@@ -555,8 +555,8 @@ function conj!{T<:Number}(A::StridedArray{T})
     return A
 end
 
-macro unary_op(f)
-    quote
+for f in (:-, :~, :conj, :sign)
+    @eval begin
         function ($f)(A::StridedArray)
             F = similar(A)
             for i=1:numel(A)
@@ -567,13 +567,8 @@ macro unary_op(f)
     end
 end
 
-@unary_op (-)
-@unary_op (~)
-@unary_op (conj)
-@unary_op (sign)
-
-macro unary_c2r_op(f)
-    quote
+for f in (:real, :imag)
+    @eval begin
         function ($f){T}(A::StridedArray{T})
             S = typeof(($f)(zero(T)))
             F = similar(A, S)
@@ -584,9 +579,6 @@ macro unary_c2r_op(f)
         end
     end
 end
-
-@unary_c2r_op (real)
-@unary_c2r_op (imag)
 
 function !(A::StridedArray{Bool})
     F = similar(A)
@@ -637,8 +629,8 @@ function .^{T<:Integer}(A::Array{T}, B::Integer)
     _jl_power_array_int_body(F, A, B)
 end
 
-macro binary_arithmetic_op(f)
-    quote
+for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
+    @eval begin
         function ($f){S,T}(A::Array{S}, B::Array{T})
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, promote_type(S,T))
@@ -663,15 +655,6 @@ macro binary_arithmetic_op(f)
         end
     end
 end
-
-@binary_arithmetic_op (+)
-@binary_arithmetic_op (-)
-@binary_arithmetic_op (.*)
-@binary_arithmetic_op div
-@binary_arithmetic_op mod
-@binary_arithmetic_op (&)
-@binary_arithmetic_op (|)
-@binary_arithmetic_op ($)
 
 ## promotion to complex ##
 
@@ -710,8 +693,8 @@ end
 
 ## Binary comparison operators ##
 
-macro binary_comparison_op(f)
-    quote
+for f in (:(==), :!=, :<, :<=)
+    @eval begin
         function ($f)(A::Array, B::Array)
             if size(A) != size(B); error("argument dimensions must match"); end
             F = similar(A, Bool)
@@ -736,11 +719,6 @@ macro binary_comparison_op(f)
         end
     end
 end
-
-@binary_comparison_op (==)
-@binary_comparison_op (!=)
-@binary_comparison_op (<)
-@binary_comparison_op (<=)
 
 ## data movement ##
 

@@ -803,8 +803,8 @@ function .^{T<:Integer}(A::SubOrDArray{T}, B::Integer)
            S, size(A), distdim(A), procs(A))
 end
 
-macro binary_darray_op(f)
-    quote
+for f in (:+, :-, :.*, :./, :.^, :&, :|, :$)
+    @eval begin
         function ($f){T}(A::Number, B::SubOrDArray{T})
             S = typeof(($f)(one(A),one(T)))
             darray((T,lsz,da)->($f)(A, localize(B, da)),
@@ -823,34 +823,22 @@ macro binary_darray_op(f)
             darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
                    R, size(A), distdim(A), procs(A))
         end
-    end # quote
-end # macro
-
-@binary_darray_op (+)
-@binary_darray_op (-)
-@binary_darray_op (.*)
-@binary_darray_op (./)
-@binary_darray_op (.^)
-@binary_darray_op (&)
-@binary_darray_op (|)
-@binary_darray_op ($)
+    end # eval
+end # for
 
 -(A::SubOrDArray) = darray(-, A)
 ~(A::SubOrDArray) = darray(~, A)
 conj(A::SubOrDArray) = darray(conj, A)
 
-macro unary_darray_c2r_op(f)
-    quote
+for f in (:real, :imag)
+    @eval begin
         function ($f){T}(A::SubOrDArray{T})
             S = typeof(($f)(zero(T)))
             darray((T,lsz,da)->($f)(localize(A, da)),
                    S, size(A), distdim(A), procs(A))
         end
-    end # quote
-end # macro
-
-@unary_darray_c2r_op (real)
-@unary_darray_c2r_op (imag)
+    end # eval
+end # for
 
 function map(f, A::SubOrDArray)
     T = typeof(f(A[1]))
@@ -876,8 +864,8 @@ for f = (:ceil,   :floor,  :trunc,  :round,
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
 
-macro binary_darray_comparison_op(f)
-    quote
+for f in (:(==), :!=, :<, :<=)
+    @eval begin
         function ($f)(A::Number, B::SubOrDArray)
             darray((T,lsz,da)->($f)(A, localize(B, da)),
                    Bool, size(B), distdim(B), procs(B))
@@ -893,13 +881,8 @@ macro binary_darray_comparison_op(f)
             darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
                    Bool, size(A), distdim(A), procs(A))
         end
-    end # quote
-end # macro
-
-@binary_darray_comparison_op (==)
-@binary_darray_comparison_op (!=)
-@binary_darray_comparison_op (<)
-@binary_darray_comparison_op (<=)
+    end # eval
+end # for
 
 function reduce(f, v::DArray)
     mapreduce(f, fetch,

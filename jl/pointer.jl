@@ -1,17 +1,17 @@
 ## converting pointers to an appropriate unsigned ##
 
-const C_NULL = box(Ptr{Void}, unbox(Int,0))
+const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert(::Type{Uint}, x::Ptr) = box(Uint,unbox(Uint,x))
+convert(::Type{Uint}, x::Ptr) = box(Uint, x)
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,uint(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T}, unbox(Uint,uint(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T},unbox(Uint,p))
+convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, p)
 
 # object to pointer
 convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)

@@ -1027,7 +1027,7 @@ JL_CALLABLE(jl_f_def_macro)
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     jl_set_expander(jl_current_module, nm, f);
     return (jl_value_t*)jl_nothing;
@@ -1114,7 +1114,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     JL_GC_POP();
     return gf;

@@ -206,7 +206,7 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
-    L = linspace(int32(1), int32(x))
+    L = linspace(int32(1), int32(x), int32(x))
     _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
 

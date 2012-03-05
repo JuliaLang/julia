@@ -400,25 +400,60 @@ function ^(A::AbstractMatrix, p::Number)
     diagmm(X, v.^p)*Xinv
 end
 
+function findmax(a)
+    m = typemin(eltype(a))
+    mi = 0
+    for i=1:length(a)
+        if a[i] > m
+            m = a[i]
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+function findmin(a)
+    m = typemax(eltype(a))
+    mi = 0
+    for i=1:length(a)
+        if a[i] < m
+            m = a[i]
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
 function rref{T}(A::Matrix{T})
-    (L,U) = lu(A)
+    nr, nc = size(A)
+    U = copy_to(similar(A,Float64), A)
     e = eps(norm(U,Inf))
-    nr, nc = size(U)
-    for i = 1:nr
-        d = U[i,i]
-        if abs(d) > e
-            for k = i:nc
+    i = j = 1
+    while i <= nr && j <= nc
+        (m, mi) = findmax(abs(U[i:nr,j]))
+        mi = mi+i - 1
+        if m <= e
+            U[i:nr,j] = 0
+            j += 1
+        else
+            for k=j:nc
+                U[i, k], U[mi, k] = U[mi, k], U[i, k]
+            end
+            d = U[i,j]
+            for k = j:nc
                 U[i,k] /= d
             end
-        end
-    end
-    for i = 1:(nr-1)
-        for j = (i+1):min(nr,nc)
-            c = U[i,j]
-            for k = j:nc
-                U[i,k] -= c*U[j,k]
+            for k = 1:nr
+                if k != i
+                    d = U[k,j]
+                    for l = j:nc
+                        U[k,l] -= d*U[i,l]
+                    end
+                end
             end
+            i += 1
+            j += 1
         end
     end
-    U
+    return U
 end

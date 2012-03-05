@@ -1,25 +1,18 @@
 _jl_libblas = dlopen("liblapack")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
-macro _jl_blas_copy_macro(fname, eltype)
-    quote
-        function _jl_blas_copy(n::Integer, DX::Union(Ptr{$eltype},Array{$eltype}), incx::Integer, DY::Union(Ptr{$eltype},Array{$eltype}), incy::Integer)
-            ccall(dlsym(_jl_libblas, $fname),
+for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
+                      (:zcopy_,:Complex128), (:ccopy_,:Complex64))
+    @eval begin
+        function _jl_blas_copy(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+            ccall(dlsym(_jl_libblas, $string(fname)),
                   Void,
-                  (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   int32(n), DX, int32(incx), DY, int32(incy))
             return DY
         end
     end
 end
-
-@_jl_blas_copy_macro :dcopy_ Float64
-@_jl_blas_copy_macro :scopy_ Float32
-@_jl_blas_copy_macro :zcopy_ Complex128
-@_jl_blas_copy_macro :ccopy_ Complex64
-
-#bcopy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
-#    _jl_blas_copy(n, src, 1, dest, 1)
 
 function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
@@ -41,20 +34,17 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T},
 end
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
-macro _jl_blas_dot_macro(fname, eltype)
-    quote
-        function _jl_blas_dot(n::Integer, DX::Array{$eltype}, incx::Integer,
-                             DY::Array{$eltype}, incy::Integer)
-            ccall(dlsym(_jl_libblas, $fname),
-                  $eltype,
-                  (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
+    @eval begin
+        function _jl_blas_dot(n::Integer, DX::Array{$elty}, incx::Integer,
+                              DY::Array{$elty}, incy::Integer)
+            ccall(dlsym(_jl_libblas, $string(fname)),
+                  $elty,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   int32(n), DX, int32(incx), DY, int32(incy))
         end
     end
 end
-
-@_jl_blas_dot_macro :ddot_ Float64
-@_jl_blas_dot_macro :sdot_ Float32
 
 function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
@@ -66,21 +56,19 @@ end
 #@blas_dot :cdotc_ Complex64
 
 # DOUBLE PRECISION FUNCTION DNRM2(N,X,INCX)
-macro _jl_blas_nrm2_macro(fname, eltype, ret_type)
-    quote
-        function _jl_blas_nrm2(n::Integer, X::Array{$eltype}, incx::Integer)
-            ccall(dlsym(_jl_libblas, $fname),
+for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
+                                (:snrm2_,:Float32,:Float32),
+                                (:dznrm2_,:Complex128,:Float64),
+                                (:scnrm2_,:Complex64,:Float32))
+    @eval begin
+        function _jl_blas_nrm2(n::Integer, X::Array{$elty}, incx::Integer)
+            ccall(dlsym(_jl_libblas, $string(fname)),
                   $ret_type,
-                  (Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   int32(n), X, int32(incx))
         end
     end
 end
-
-@_jl_blas_nrm2_macro :dnrm2_ Float64 Float64
-@_jl_blas_nrm2_macro :snrm2_ Float32 Float32
-@_jl_blas_nrm2_macro :dznrm2_ Complex128 Float64
-@_jl_blas_nrm2_macro :scnrm2_ Complex64 Float32
 
 norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
     _jl_blas_nrm2(length(x), x, 1)
@@ -92,22 +80,18 @@ norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
 #      INTEGER INCX,INCY,N
 #*     .. Array Arguments ..
 #      DOUBLE PRECISION DX(*),DY(*)
-macro _jl_blas_axpy_macro(fname, eltype)
-    quote
-        function _jl_blas_axpy(n::Integer, x::($eltype), 
-                              DA::Array{$eltype}, incx::Integer, DY::Array{$eltype}, incy::Integer)
-            ccall(dlsym(_jl_libblas, $fname),
+for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
+                      (:zaxpy_,:Complex128), (:caxpy_,:Complex64))
+    @eval begin
+        function _jl_blas_axpy(n::Integer, x::($elty), 
+                               DA::Array{$elty}, incx::Integer, DY::Array{$elty}, incy::Integer)
+            ccall(dlsym(_jl_libblas, $string(fname)),
                   Void,
-                  (Ptr{Int32}, Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}, Ptr{$eltype}, Ptr{Int32}),
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   int32(n), x, DA, int32(incx), DY, int32(incy))            
         end
     end
 end
-
-@_jl_blas_axpy_macro :daxpy_ Float64
-@_jl_blas_axpy_macro :saxpy_ Float32
-@_jl_blas_axpy_macro :zaxpy_ Complex128
-@_jl_blas_axpy_macro :caxpy_ Complex64
 
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
@@ -117,22 +101,22 @@ end
 #       CHARACTER TRANSA,TRANSB
 # *     .. Array Arguments ..
 #       DOUBLE PRECISION A(LDA,*),B(LDB,*),C(LDC,*)
-macro _jl_blas_gemm_macro(fname, eltype)
-   quote
-
+for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
+                      (:zgemm_,:Complex128), (:cgemm_,:Complex64))
+   @eval begin
        function _jl_blas_gemm(transA, transB, m::Integer, n::Integer, k::Integer,
-                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
-                             B::StridedMatrix{$eltype}, ldb::Integer,
-                             beta::($eltype), C::StridedMatrix{$eltype}, ldc::Integer)
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             B::StridedMatrix{$elty}, ldb::Integer,
+                             beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
            a = pointer(A)
            b = pointer(B)
            c = pointer(C)
-           ccall(dlsym(_jl_libblas, $fname),
+           ccall(dlsym(_jl_libblas, $string(fname)),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  uint8(transA), uint8(transB), int32(m), int32(n), int32(k),
                  alpha, a, int32(lda),
                  b, int32(ldb),
@@ -141,11 +125,6 @@ macro _jl_blas_gemm_macro(fname, eltype)
 
    end
 end
-
-@_jl_blas_gemm_macro :dgemm_ Float64
-@_jl_blas_gemm_macro :sgemm_ Float32
-@_jl_blas_gemm_macro :zgemm_ Complex128
-@_jl_blas_gemm_macro :cgemm_ Complex64
 
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
@@ -233,22 +212,22 @@ end
 #*     .. Array Arguments ..
 #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
 
-macro _jl_blas_gemv_macro(fname, eltype)
-   quote
-
+for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
+                      (:zgemv_,:Complex128), (:cgemv_,:Complex64))
+   @eval begin
        function _jl_blas_gemv(trans, m::Integer, n::Integer, 
-                             alpha::($eltype), A::StridedMatrix{$eltype}, lda::Integer,
-                             X::StridedVector{$eltype}, incx::Integer,
-                             beta::($eltype), Y::StridedVector{$eltype}, incy::Integer)
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             X::StridedVector{$elty}, incx::Integer,
+                             beta::($elty), Y::StridedVector{$elty}, incy::Integer)
            a = pointer(A)
            x = pointer(X)
            y = pointer(Y)
-           ccall(dlsym(_jl_libblas, $fname),
+           ccall(dlsym(_jl_libblas, $string(fname)),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{Int32},
-                  Ptr{$eltype}, Ptr{$eltype}, Ptr{Int32}),
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                  trans, int32(m), int32(n),
                  alpha, a, int32(lda),
                  x, int32(incx),
@@ -257,11 +236,6 @@ macro _jl_blas_gemv_macro(fname, eltype)
 
    end
 end
-
-@_jl_blas_gemv_macro :dgemv_ Float64
-@_jl_blas_gemv_macro :sgemv_ Float32
-@_jl_blas_gemv_macro :zgemv_ Complex128
-@_jl_blas_gemv_macro :cgemv_ Complex64
 
 # TODO: support transposed arguments
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},

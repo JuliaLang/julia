@@ -486,7 +486,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                 end
             end
         end
-        if !is(f,apply) && isa(e,Expr) && isa(f,Function)
+        if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
             e.head = :call1
         end
         rt = builtin_tfunction(f, fargs, argtypes)
@@ -1060,7 +1060,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         linfo.inferred = true
     end
     
-    compr = ccall(:jl_compress_ast, Any, (Any,), fulltree)
+    compr = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
     
     if !redo
         if is(def.tfunc,())
@@ -1285,6 +1285,10 @@ function inlineable(f, e::Expr, vars)
         isType(e.typ) && isleaftype(e.typ.parameters[1])
         return e.typ.parameters[1]
     end
+    if length(atypes)==1 && isa(atypes[1],BitsKind) &&
+        (is(f,unbox8) || is(f,unbox16) || is(f,unbox32) || is(f,unbox64) || is(f,unbox))
+        return e.args[2]
+    end
 
     meth = getmethods(f, atypes)
     if length(meth) != 1
@@ -1387,9 +1391,9 @@ function inlining_pass(e::Expr, vars)
         return e
     end
     arg1 = e.args[1]
-    if is(e.head,:call) && (is(arg1, :ccall) ||
-                            (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
-                            (isa(arg1,TopNode) && is(arg1.name, :ccall)))
+    if is(e.head,:call1) && (is(arg1, :ccall) ||
+                             (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
+                             (isa(arg1,TopNode) && is(arg1.name, :ccall)))
         i0 = 3
     else
         i0 = 1
