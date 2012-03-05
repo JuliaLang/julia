@@ -52,19 +52,19 @@ include("env.jl")
 include("errno_h.jl")
 
 # core math functions
-include("intfuncs.j")
-include("floatfuncs.j")
-include("math.j")
-include("math_libm.j")
-include("sort.j")
-include("combinatorics.j")
-include("statistics.j")
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+include("math_libm.jl")
+include("sort.jl")
+include("combinatorics.jl")
+include("statistics.jl")
 
 # concurrency and parallelism
-include("iterator.j")
-include("task.j")
-include("serialize.j")
-include("multi.j")
+include("iterator.jl")
+include("task.jl")
+include("serialize.jl")
+include("multi.jl")
 
 # front end
 include("client.jl")
