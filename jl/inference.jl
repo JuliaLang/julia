@@ -1060,7 +1060,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         linfo.inferred = true
     end
     
-    compr = ccall(:jl_compress_ast, Any, (Any,), fulltree)
+    compr = ccall(:jl_compress_ast, Any, (Any, Any,), def, fulltree)
     
     if !redo
         if is(def.tfunc,())
