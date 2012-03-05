@@ -188,7 +188,7 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe
     opts.stdin_stream = jlopts->in = stdin_pipe ? *stdin_pipe : 0;
     opts.stdout_stream = jlopts->out = stdout_pipe ? *stdout_pipe :0;
     opts.stderr_stream = NULL;
-    opts.detached = 0;
+    //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
     jlopts->exitcb=exitcb?*exitcb:0;
     jlopts->closecb=closecb?*closecb:0;
