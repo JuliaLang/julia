@@ -35,7 +35,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
-include("stream.j")
+include("stream.jl")
 stream=make_stdout_stream()
 set_current_output_stream(stream) # for error reporting
 include("string.jl")

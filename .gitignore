@@ -18,6 +18,7 @@
 /sys0.ji
 /h2j
 
+*.exe
 *.dll
 *.do
 *.o
