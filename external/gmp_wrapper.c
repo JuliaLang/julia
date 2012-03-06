@@ -53,18 +53,92 @@ extern int _jl_mpz_cmp(mpz_t* op1, mpz_t* op2) {
   return mpz_cmp(*op1, *op2);
 }
 
+extern void _jl_mpz_pow_ui(mpz_t* rop, mpz_t* base, unsigned long int exp) {
+  mpz_pow_ui(*rop, *base, exp);
+}
+
+extern void _jl_mpz_pow_sqrt(mpz_t* rop, mpz_t* op) {
+    mpz_sqrt(*rop, *op);
+}
+
 extern char*  _jl_mpz_printf(mpz_t* rop) {
   char** pp;
   gmp_asprintf(pp, "%Zd", *rop);
   return *pp;
 }
 
+//// MPF
+
+
+
+extern void* _jl_mpf_init()
+{
+    mpf_t* flt = malloc(sizeof(mpf_t));
+    mpf_init(*integ);
+    return flot;
+}
+
+extern void _jl_mpf_clear(mpf_t* rop) {
+    mpf_clear(*rop);
+}
+
+extern void _jl_mpf_set_string(mpf_t* rop, char* s) {
+    mpf_set_str(*rop, s, 0);
+}
+
+extern void _jl_mpf_set_ui(mpf_t* rop, unsigned long int op) {
+    mpf_set_ui(*rop, op);
+} 
+
+extern void _jl_mpf_add(mpf_t* rop, mpf_t* op1, mpf_t* op2) {
+    mpf_add(*rop, *op1, *op2);
+}
+
+extern void _jl_mpf_sub(mpf_t* rop, mpf_t* op1, mpf_t* op2) {
+    mpf_sub(*rop, *op1, *op2);
+}
+
+extern void _jl_mpf_mul(mpf_t* rop, mpf_t* op1, mpf_t* op2) {
+    mpf_mul(*rop, *op1, *op2);
+}
+
+extern void _jl_mpf_div(mpf_t* rop, mpf_t* op1, mpf_t* op2) {
+    mpf_div(*rop, *op1, *op2);
+}
+
+extern void _jl_mpf_neg(mpf_t* rop, mpf_t* op1) {
+    mpf_neg(*rop, *op1);
+}
+
+extern void _jl_mpf_abs(mpf_t* rop, mpf_t* op1) {
+    mpf_abs(*rop, *op1);
+}
+
+extern int _jl_mpf_cmp(mpf_t* op1, mpf_t* op2) {
+    return mpf_cmp(*op1, *op2);
+}
+
+extern void _jl_mpf_pow_ui(mpf_t* rop, mpf_t* base, unsigned long int exp) {
+    mpf_pow_ui(*rop, *base, exp);
+}
+
+extern void _jl_mpf_sqrt(mpf_t* rop, mpf_t* op) {
+    mpf_sqrt(*rop, *op);
+}
+
+extern char*  _jl_mpf_printf(mpf_t* rop) {
+    char** pp;
+    gmp_asprintf(pp, "%Zd", *rop);
+    return *pp;
+}
+
+
 //Quick and dirty test of the gmp wrapper code
 int main( int argc, const char* argv[] )
 {
   void* rop = _jl_mpz_init();
-
   void* op1 = _jl_mpz_init();
+    
   _jl_mpz_set_string(op1, "123456789123456789123456789123456789");
 
   void* op2 = _jl_mpz_init();
