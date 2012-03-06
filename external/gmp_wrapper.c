@@ -62,20 +62,18 @@ extern void _jl_mpz_pow_sqrt(mpz_t* rop, mpz_t* op) {
 }
 
 extern char*  _jl_mpz_printf(mpz_t* rop) {
-  char** pp;
-  gmp_asprintf(pp, "%Zd", *rop);
-  return *pp;
+  char* pp;
+  int s = gmp_asprintf(&pp, "%Zd", *rop);
+  return pp;
 }
 
 //// MPF
 
-
-
 extern void* _jl_mpf_init()
 {
     mpf_t* flt = malloc(sizeof(mpf_t));
-    mpf_init(*integ);
-    return flot;
+    mpf_init(*flt);
+    return flt;
 }
 
 extern void _jl_mpf_clear(mpf_t* rop) {
@@ -127,9 +125,9 @@ extern void _jl_mpf_sqrt(mpf_t* rop, mpf_t* op) {
 }
 
 extern char*  _jl_mpf_printf(mpf_t* rop) {
-    char** pp;
-    gmp_asprintf(pp, "%Zd", *rop);
-    return *pp;
+    char* pp;
+    gmp_asprintf(&pp, "%Zd", *rop);
+    return pp;
 }
 
 
