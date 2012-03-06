@@ -92,6 +92,12 @@ function sqrt(x::BigInt)
 	BigInt(z)
 end
 
+function pow(x::BigInt, y::Uint) 
+	z = _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
+        BigInt(z)
+end
+
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0 
 >=(x::BigInt, y::BigInt) = cmp(x,y) >= 0 
