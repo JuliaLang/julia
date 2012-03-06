@@ -218,7 +218,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesh_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(k), int32(1),
+              &real(z), &imag(z), &nu, &int32(1), &int32(k), &int32(1),
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -228,7 +228,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesi_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &int32(1), &int32(1),
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -238,7 +238,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesj_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &int32(1), &int32(1),
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -248,7 +248,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesk_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &int32(1), &int32(1),
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -259,7 +259,7 @@ let
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &int32(1), &int32(1),
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(wrk,1),
               pointer(wrk,2), pointer(ae,2))
