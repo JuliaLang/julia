@@ -750,7 +750,7 @@ DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
-jl_value_t *jl_compress_ast(jl_value_t *ast);
+jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)

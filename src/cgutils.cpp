@@ -251,6 +251,19 @@ static Value *emit_tuplelen(Value *t)
 #endif
 }
 
+// emit length of vararg tuple
+static Value *emit_n_varargs(jl_codectx_t *ctx)
+{
+    int nreq = ctx->nReqArgs;
+    Value *valen = builder.CreateSub((Value*)ctx->argCount,
+                                     ConstantInt::get(T_int32, nreq));
+#ifdef __LP64__
+    return builder.CreateSExt(valen, T_int64);
+#else
+    return valen;
+#endif
+}
+
 static Value *emit_arraysize(Value *t, Value *dim)
 {
     int o;

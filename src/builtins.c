@@ -89,6 +89,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     JL_SIGATOMIC_BEGIN();
     ss->eh_task = jl_current_task->state.eh_task;
     ss->eh_ctx = jl_current_task->state.eh_ctx;
+    ss->bt = jl_current_task->state.bt;
     ss->ostream_obj = jl_current_task->state.ostream_obj;
     ss->current_output_stream = jl_current_task->state.current_output_stream;
     ss->prev = jl_current_task->state.prev;
@@ -99,6 +100,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     jl_current_task->state.prev = ss;
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = handlr;
+    jl_current_task->state.bt = 0;
     // TODO: this should really go after setjmp(). see comment in
     // ctx_switch in task.c.
     JL_SIGATOMIC_END();
@@ -451,13 +453,13 @@ char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
-    // try adding julia home, then julia_home/j/
+    // try adding julia home, then julia_home/jl/
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
         if (fid == -1) {
             free(fpath);
-            asprintf(&fpath, "%s/j/%s", julia_home, fname);
+            asprintf(&fpath, "%s/jl/%s", julia_home, fname);
             fid = open (fpath, O_RDONLY);
         }
     }
@@ -1025,7 +1027,7 @@ JL_CALLABLE(jl_f_def_macro)
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     jl_set_expander(jl_current_module, nm, f);
     return (jl_value_t*)jl_nothing;
@@ -1112,7 +1114,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
-        li->ast = jl_compress_ast(li->ast);
+        li->ast = jl_compress_ast(li, li->ast);
     }
     JL_GC_POP();
     return gf;

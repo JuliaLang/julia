@@ -79,26 +79,6 @@ int jl_is_type(jl_value_t *v)
     return jl_is_nontuple_type(v);
 }
 
-int jl_has_typevars_(jl_value_t *v, int incl_wildcard);
-
-DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
-{
-    if (jl_is_tuple(v)) {
-        jl_tuple_t *t = (jl_tuple_t*)v;
-        size_t i;
-        for(i=0; i < t->length; i++) {
-            if (!jl_is_leaf_type(jl_tupleref(t, i)))
-                return 0;
-        }
-        return 1;
-    }
-    if (jl_is_type_type(v) && !jl_has_typevars_(jl_tparam0(v),1))
-        return 1;
-    if (!jl_is_struct_type(v) && !jl_is_func_type(v) && !jl_is_bits_type(v))
-        return 0;
-    return !jl_has_typevars_(v,1);
-}
-
 int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 {
     size_t i;
@@ -139,6 +119,34 @@ int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
 int jl_has_typevars(jl_value_t *v)
 {
     return jl_has_typevars_(v, 0);
+}
+
+DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
+{
+    if (jl_is_struct_type(v) || jl_is_bits_type(v)) {
+        jl_tuple_t *t = ((jl_tag_type_t*)v)->parameters;
+        for(int i=0; i < t->length; i++) {
+            if (jl_is_typevar(jl_tupleref(t,i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_tuple(v)) {
+        jl_tuple_t *t = (jl_tuple_t*)v;
+        for(int i=0; i < t->length; i++) {
+            if (!jl_is_leaf_type(jl_tupleref(t, i)))
+                return 0;
+        }
+        return 1;
+    }
+    if (jl_is_type_type(v)) {
+        return !jl_is_typevar(jl_tparam0(v));
+    }
+    if (jl_is_func_type(v)) {
+        return !jl_is_typevar(((jl_func_type_t*)v)->from) &&
+            !jl_is_typevar(((jl_func_type_t*)v)->to);
+    }
+    return 0;
 }
 
 // construct the full type of a value, possibly making a tuple type
@@ -257,14 +265,19 @@ typedef struct {
     size_t n;
 } cenv_t;
 
-static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
+static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
-    if (var == val)
+    if (!allow && var == val)
         return;
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
     soln->data[soln->n++] = val;
+}
+
+static void extend(jl_value_t *var, jl_value_t *val, cenv_t *soln)
+{
+    extend_(var, val, soln, 0);
 }
 
 static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
@@ -882,7 +895,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     return (jl_value_t*)jl_bottom_type;
 }
 
-static jl_value_t *meet(jl_value_t *X, jl_value_t *Y)
+static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 {
     if (jl_is_typevar(X)) {
         jl_value_t *tv;
@@ -904,20 +917,17 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y)
     }
     if (!jl_has_typevars_(X,1)) {
         if (!jl_has_typevars_(Y,1)) {
-            if (!jl_types_equal(X,Y))
-                return NULL;
-            return X;
+            if (var==invariant) {
+                return (jl_types_equal(X,Y) ? X : NULL);
+            }
         }
-        if (jl_subtype(X,Y,0))
-            return X;
-        return NULL;
+        return (jl_subtype(X,Y,0) ? X : NULL);
     }
     if (!jl_has_typevars_(Y,1)) {
-        if (jl_subtype(Y,X,0))
-            return Y;
-        return NULL;
+        return (jl_subtype(Y,X,0) ? Y : NULL);
     }
-    return jl_type_intersection(X, Y);
+    jl_value_t *v = jl_type_intersection(X, Y);
+    return (v == (jl_value_t*)jl_bottom_type ?  NULL : v);
 }
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
@@ -945,13 +955,13 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 if (pS != &S) {
                     // S=R is in the results
                     jl_value_t **pR = pS;
-                    *pR = meet(*pR, *pU);
+                    *pR = meet(*pR, *pU, invariant);
                     if (*pR == NULL) {
                         return 0;
                     }
                 }
                 else {
-                    v = meet(S, *pU);
+                    v = meet(*pU, S, covariant);
                     if (v == NULL) {
                         return 0;
                     }
@@ -961,7 +971,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     *pU = S;
             }
             else {
-                v = meet(*pU, S);
+                v = meet(*pU, S, covariant);
                 if (v == NULL) {
                     return 0;
                 }
@@ -985,7 +995,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 }
                 else {
                     assert(jl_is_typevar(T));
-                    v = meet(S, T);
+                    v = meet(S, T, covariant);
                     if (!jl_is_typevar(v)) {
                         v = (jl_value_t*)
                             jl_new_typevar(underscore_sym,
@@ -1104,7 +1114,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         // bind type vars to themselves if they were not matched explicitly
         // during type intersection.
         if (e >= env0)
-            extend(tv, tv, &eqc);
+            extend_(tv, tv, &eqc, 1);
     }
 
     *penv = jl_alloc_tuple_uninit(eqc.n);
@@ -1312,9 +1322,18 @@ int jl_assign_type_uid(void)
 static void cache_type_(jl_type_t *type)
 {
     // only cache concrete types
-    if (jl_has_typevars_((jl_value_t*)type,1) ||
-        ((jl_tag_type_t*)type)->parameters->length == 0)
-        return;
+    jl_tuple_t *t = ((jl_tag_type_t*)type)->parameters;
+    if (t->length == 0) return;
+    if (jl_is_tag_type(type)) {
+        if (jl_has_typevars_((jl_value_t*)type,1))
+            return;
+    }
+    else {
+        for(int i=0; i < t->length; i++) {
+            if (jl_is_typevar(jl_tupleref(t,i)))
+                return;
+        }
+    }
     // assign uid
     if (jl_is_struct_type(type) && ((jl_struct_type_t*)type)->uid==0)
         ((jl_struct_type_t*)type)->uid = jl_assign_type_uid();

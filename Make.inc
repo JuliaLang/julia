@@ -15,6 +15,8 @@ DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
+PARALLEL_BUILD_JOBS = 1
+
 # Compiler specific stuff
 
 FC = gfortran
@@ -26,7 +28,7 @@ USECLANG = 0
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-CFLAGS = -pipe -std=gnu99 -fPIC
+CFLAGS = -pipe -std=gnu99 -fPIC -fno-strict-aliasing
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
@@ -51,13 +53,22 @@ USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_LLVM=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
+USE_SYSTEM_BLAS=0
+USE_SYSTEM_LAPACK=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LIBUNWIND=1
 USE_SYSTEM_LLVM=1
 USE_SYSTEM_READLINE=1
 USE_SYSTEM_PCRE=1
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
 endif
+
+#ifeq ($(OS), Darwin)
+#USE_SYSTEM_BLAS=1
+#USE_SYSTEM_LAPACK=1
+#endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
@@ -83,20 +94,42 @@ else
 PCRE_CONFIG = $(EXTROOT)/bin/pcre-config
 endif
 
+ifeq ($(USE_SYSTEM_BLAS), 1)
+ifeq ($(OS), Darwin)
+LIBBLAS = -framework vecLib -lBLAS
+else
+LIBBLAS = -lblas
+endif
+else
+LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+endif
+
+ifeq ($(USE_SYSTEM_LAPACK), 1)
+ifeq ($(OS), Darwin)
+LIBLAPACK = -framework vecLib -lLAPACK
+else
+LIBLAPACK = -llapack
+endif
+else
+LIBLAPACK = $(JULIAHOME)/external/lapack-$(LAPACK_VER)/liblapack.a
+endif
+
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
+LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
+LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
+LDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
-#CFLAGS += -fno-optimize-sibling-calls -fno-inline-functions
 endif
 
 # Libraries to link

@@ -13,6 +13,7 @@ SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
+GMP_VER=5.0.4
 
 ## high-level setup ##
 
@@ -21,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = pcre fdlibm dsfmt openblas lapack arpack fftw suitesparse suitesparse-wrapper double-conversion amos
+LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -39,8 +40,21 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
 endif
 
+ifeq ($(USE_SYSTEM_PCRE), 0)
+LIBS += pcre
+endif
+
+ifeq ($(USE_SYSTEM_BLAS), 0)
+LIBS += openblas
+endif
+
+ifeq ($(USE_SYSTEM_LAPACK), 0)
+LIBS += lapack
+endif
+
+# Hard-coded setup for libraries on Debian
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper
+LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 endif
 
 WGET = wget
@@ -79,13 +93,13 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=gcc CXX=g++ && \
-	$(MAKE)
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
-	$(MAKE) -C llvm-$(LLVM_VER) install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C llvm-$(LLVM_VER) install
 	touch $@
 
 clean-llvm:
-	$(MAKE) -C llvm-$(LLVM_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C llvm-$(LLVM_VER) clean
 	rm -f $(LLVM_OBJ_TARGET)
 distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
@@ -106,14 +120,14 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
-	$(MAKE)
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
-	$(MAKE) -C readline-$(READLINE_VER) install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C readline-$(READLINE_VER) install
 	touch $@
 
 clean-readline:
-	$(MAKE) -C readline-$(READLINE_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C readline-$(READLINE_VER) clean
 	rm -f $(READLINE_OBJ_TARGET)
 distclean-readline:
 	rm -rf readline-$(READLINE_VER).tar.gz readline-$(READLINE_VER)
@@ -134,11 +148,11 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre-$(PCRE_VER) install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C pcre-$(PCRE_VER) install
 	touch $@
 
 clean-pcre:
-	$(MAKE) -C pcre-$(PCRE_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C pcre-$(PCRE_VER) clean
 	rm -f $(PCRE_OBJ_TARGET)
 distclean-pcre:
 	rm -rf pcre-$(PCRE_VER).tar.bz2 pcre-$(PCRE_VER)
@@ -169,13 +183,14 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
+	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
 
 clean-double-conversion:
 	rm -f double-conversion-$(GRISU_VER)/src/*.o
 	rm -f double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 distclean-double-conversion:
-	rm -rf double-conversion-$(GRISU_VER)
+	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
 ## fdlibm ##
 
@@ -187,14 +202,14 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	$(MAKE) CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) CC=$(CC) CFLAGS="-D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-fdlibm:
-	cd fdlibm && $(MAKE) clean
+	cd fdlibm && $(MAKE) -j$(PARALLEL_BUILD_JOBS) clean
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
@@ -208,14 +223,14 @@ install-amos: $(AMOS_OBJ_TARGET)
 
 $(AMOS_OBJ_SOURCE): amos/*.f
 	cd amos && \
-	$(MAKE) && \
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) && \
 	$(FC) -shared *.o -o libamos.$(SHLIB_EXT)
 $(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-amos:
-	cd amos && $(MAKE) clean
+	cd amos && $(MAKE) -j$(PARALLEL_BUILD_JOBS) clean
 	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
 distclean-amos: clean-amos
 
@@ -251,7 +266,11 @@ distclean-dsfmt: clean-dsfmt
 
 ## OpenBLAS ##
 
+ifeq ($(USE_SYSTEM_BLAS), 0)
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+else
+OPENBLAS_OBJ_SOURCE =
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: compile-openblas
@@ -264,17 +283,23 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 
 clean-openblas:
-	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
 	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 ## LAPACK ##
 
+ifeq ($(USE_SYSTEM_LAPACK), 0)
 LAPACK_OBJ_TARGET = $(EXTROOTLIB)/liblapack.$(SHLIB_EXT)
 LAPACK_OBJ_SOURCE = lapack-$(LAPACK_VER)/liblapack.$(SHLIB_EXT)
+else
+LAPACK_OBJ_TARGET =
+LAPACK_OBJ_SOURCE =
+endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
 install-lapack: $(LAPACK_OBJ_TARGET)
@@ -287,16 +312,16 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS)" FORTRAN=$(FC)
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS)" FORTRAN=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
-	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o ../$(OPENBLAS_OBJ_SOURCE) -o liblapack.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-lapack:
-	$(MAKE) -C lapack-$(LAPACK_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C lapack-$(LAPACK_VER) clean
 	rm -f $(LAPACK_OBJ_SOURCE) $(LAPACK_OBJ_TARGET)
 distclean-lapack:
 	rm -rf lapack-$(LAPACK_VER).tgz lapack-$(LAPACK_VER)
@@ -315,18 +340,19 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f ../lapack-$(LAPACK_VER)/liblapack.a ../$(OPENBLAS_OBJ_SOURCE) -o libarpack.$(SHLIB_EXT) && \
-	cp libarpack.$(SHLIB_EXT) $(JULIALIB)
+	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
+	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
 	touch $@
 
 clean-arpack:
-	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C arpack-ng-$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -353,10 +379,10 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
 	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-sse --enable-float && \
-	$(MAKE) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-single install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-single install
 	touch $@
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
@@ -366,18 +392,18 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
 	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) && \
-	$(MAKE) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-double install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-double install
 	touch $@
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	$(MAKE) -C fftw-$(FFTW_VER)-single clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	$(MAKE) -C fftw-$(FFTW_VER)-double clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
@@ -397,19 +423,19 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) && \
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) && \
 	mkdir -p lib && \
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o ../../lapack-$(LAPACK_VER)/liblapack.a ../../$(OPENBLAS_OBJ_SOURCE) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f $< $@
 
 clean-suitesparse:
-	$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
+	-$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
 distclean-suitesparse: clean-suitesparse
 	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
@@ -419,12 +445,14 @@ distclean-suitesparse: clean-suitesparse
 ifeq ($(USE_DEBIAN), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
+SUITESPARSEWRAPPER_BUILD_DEP = 
 else
 SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig
 SUITESPARSE_LIB = 
+SUITESPARSEWRAPPER_BUILD_DEP = $(SUITESPARSE_OBJ_TARGET)
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSEWRAPPER_BUILD_DEP)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -450,14 +478,14 @@ clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT))
 $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
-	$(MAKE) -C clp-$(CLP_VER) install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C clp-$(CLP_VER) install
 	touch $@
 
 clean-clp:
-	$(MAKE) -C clp-$(CLP_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C clp-$(CLP_VER) clean
 	rm -f $(CLP_OBJ_TARGET)
 distclean-clp:
-	rm -rf clp-$(CLP_VER).tar.bz2 clp-$(CLP_VER)
+	rm -rf clp-$(CLP_VER).tar.gz clp-$(CLP_VER)
 
 ## UNWIND ##
 
@@ -474,13 +502,13 @@ libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=$(abspath $(EXTROOT))
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
-	cd libunwind-$(UNWIND_VER) && $(MAKE)
+	cd libunwind-$(UNWIND_VER) && $(MAKE) -j$(PARALLEL_BUILD_JOBS)
 
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	cd libunwind-$(UNWIND_VER) && $(MAKE) install
+	cd libunwind-$(UNWIND_VER) && $(MAKE) -j$(PARALLEL_BUILD_JOBS) install
 
 clean-unwind:
-	$(MAKE) -C libunwind-$(UNWIND_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C libunwind-$(UNWIND_VER) clean
 	rm -f $(LIBUNWIND_TARGET_OBJ) $(LIBUNWIND_TARGET_SOURCE)
 
 distclean-unwind:
@@ -502,14 +530,55 @@ lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT)) --without-pcre --without-zlib --without-bzip2
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
-	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C lighttpd-$(LIGHTTPD_VER) install
 	touch $@
 
 clean-lighttpd:
-	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) clean
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C lighttpd-$(LIGHTTPD_VER) clean
 	rm -f $(LIGHTTPD_OBJ_TARGET)
 distclean-lighttpd:
 	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+
+## GMP ##
+
+GMP_OBJ_TARGET = $(EXTROOTLIB)/libgmp.$(SHLIB_EXT)
+
+compile-gmp: install-gmp
+install-gmp: $(GMP_OBJ_TARGET)
+
+gmp-$(GMP_VER).tar.bz2:
+	$(WGET) ftp://ftp.gmplib.org/pub/gmp-5.0.4/$@
+gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
+	tar jxf $<
+	touch $@
+gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
+	cd gmp-$(GMP_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT)) 
+$(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C gmp-$(GMP_VER) 
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C gmp-$(GMP_VER) check
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C gmp-$(GMP_VER) install
+	touch $@
+
+clean-gmp:
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C gmp-$(GMP_VER) clean
+	rm -f $(GMP_OBJ_TARGET)
+distclean-gmp:
+	rm -rf gmp-$(GMP_VER).tar.bz2 gmp-$(GMP_VER)
+
+##GMP Wrapper
+
+GMP_INC = -I gmp-$(GMP_VER)/
+GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
+
+$(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
+	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+	touch $@
+install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+
+clean-gmp-wrapper:
+	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
+distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## phony targets ##
 
