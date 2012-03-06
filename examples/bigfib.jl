@@ -1,5 +1,5 @@
 
-load ("j/bigint.j") #Assume running from julia base dir
+load ("jl/bigint.jl") #Assume running from julia base dir
 
 #Large Fibonacci to exercise BigInt 
 #from Bill Hart, https://groups.google.com/group/julia-dev/browse_frm/thread/798e2d1322daf633?hl=en
