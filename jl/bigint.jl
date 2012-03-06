@@ -86,6 +86,24 @@ function cmp(x::BigInt, y::BigInt)
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
+macro define_pow ()
+	if WORD_SIZE == 64
+		:(function pow(x::BigInt, y::Uint64) 
+			z = _jl_bigint_init()
+			ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, UInt64), z, x.mpz, y)
+        		BigInt(z)
+		end)
+	else
+		:(function pow(x::BigInt, y::Uint32) 
+			z = _jl_bigint_init()
+			ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, UInt32), z, x.mpz, y)
+        		BigInt(z)
+		end)
+	end
+end
+
+@define_pow
+
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0 
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0 
 >=(x::BigInt, y::BigInt) = cmp(x,y) >= 0 
