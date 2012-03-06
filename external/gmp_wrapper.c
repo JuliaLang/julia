@@ -88,6 +88,18 @@ extern void _jl_mpf_set_ui(mpf_t* rop, unsigned long int op) {
     mpf_set_ui(*rop, op);
 } 
 
+extern void _jl_mpf_set_si(mpf_t* rop, signed long int op) {
+    mpf_set_si(*rop, op);
+} 
+
+extern void _jl_mpf_set_d(mpf_t* rop, double op) {
+    mpf_set_d(*rop, op);
+}
+
+extern void _jl_mpf_set_z(mpf_t* rop, mpz_t* op) {
+    mpf_set_z(*rop, *op);
+}
+
 extern void _jl_mpf_add(mpf_t* rop, mpf_t* op1, mpf_t* op2) {
     mpf_add(*rop, *op1, *op2);
 }
@@ -126,7 +138,7 @@ extern void _jl_mpf_sqrt(mpf_t* rop, mpf_t* op) {
 
 extern char*  _jl_mpf_printf(mpf_t* rop) {
     char* pp;
-    gmp_asprintf(&pp, "%Zd", *rop);
+    gmp_asprintf(&pp, "%.Ff", *rop);
     return pp;
 }
 
@@ -134,19 +146,19 @@ extern char*  _jl_mpf_printf(mpf_t* rop) {
 //Quick and dirty test of the gmp wrapper code
 int main( int argc, const char* argv[] )
 {
-  void* rop = _jl_mpz_init();
-  void* op1 = _jl_mpz_init();
+  void* rop = _jl_mpf_init();
+  void* op1 = _jl_mpf_init();
     
-  _jl_mpz_set_string(op1, "123456789123456789123456789123456789");
+  _jl_mpf_set_string(op1, "123456789123456789123456789123456789");
 
-  void* op2 = _jl_mpz_init();
-  _jl_mpz_set_string(op2, "12345");
+  void* op2 = _jl_mpf_init();
+  _jl_mpf_set_string(op2, "12345");
 
-  _jl_mpz_add(rop, op1, op2);
+  _jl_mpf_add(rop, op1, op2);
 
-  printf("The sum is %s\n", _jl_mpz_printf(rop));
+  printf("The sum is %s\n", _jl_mpf_printf(rop));
 
-  _jl_mpz_clear(rop);
+  _jl_mpf_clear(rop);
 }
 
 

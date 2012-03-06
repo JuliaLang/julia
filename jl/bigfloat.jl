@@ -1,5 +1,7 @@
 _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
+load("bigint.jl")
+
 type BigFloat <: Float
 	mpf::Ptr{Void}
 
@@ -13,7 +15,15 @@ type BigFloat <: Float
 
 	function BigFloat(x::Float) 
 		z = _jl_BigFloat_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_ui), Void, (Ptr{Void}, Float), z, x)
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float), z, x)
+		b = new(z)
+		finalizer(b, _jl_BigFloat_clear)
+		b
+	end
+	
+	function BigFloat(x::Uint) 
+		z = _jl_BigFloat_init()
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_ui), Void, (Ptr{Void}, Uint), z, x)
 		b = new(z)
 		finalizer(b, _jl_BigFloat_clear)
 		b
@@ -21,7 +31,15 @@ type BigFloat <: Float
 	
 	function BigFloat(x::Int) 
 		z = _jl_BigFloat_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_ui), Void, (Ptr{Void}, Float), z, float(x))
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_si), Void, (Ptr{Void}, Int), z, x)
+		b = new(z)
+		finalizer(b, _jl_BigFloat_clear)
+		b
+	end
+	
+	function BigFloat(x::BigInt) 
+		z = _jl_BigFloat_init()
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_z), Void, (Ptr{Void}, Ptr{Void}), z, x.mpz)
 		b = new(z)
 		finalizer(b, _jl_BigFloat_clear)
 		b
@@ -34,20 +52,29 @@ type BigFloat <: Float
 	end
 end
 
+convert(::Type{BigFloat}, x::Int8)   = BigFloat(x)
+convert(::Type{BigFloat}, x::Int16)  = BigFloat(x)
+convert(::Type{BigFloat}, x::Int32)  = BigFloat(x)
+convert(::Type{BigFloat}, x::Int64)  = BigFloat(x)
+convert(::Type{BigFloat}, x::Uint8)  = BigFloat(x)
+convert(::Type{BigFloat}, x::Uint16) = BigFloat(x)
+convert(::Type{BigFloat}, x::Uint32) = BigFloat(x)
+convert(::Type{BigFloat}, x::Uint64) = BigFloat(x)
+
 convert(::Type{BigFloat}, x::Float) = BigFloat(x)
-
-macro define_bigfloat_convert ()
-	if WORD_SIZE == 64
-		:(convert(::Type{BigFloat}, x::Float32) = BigFloat(float(x)))
-	else
-		:(convert(::Type{BigFloat}, x::Float64) = BigFloat(string(x)))
-	end
-end
-
-@define_bigfloat_convert
+convert(::Type{BigFloat}, x::Float32) = BigFloat(x)
+convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
 
 promote_rule(::Type{BigFloat}, ::Type{Float32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Float64}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Int8}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Int16}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Int32}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Int64}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Uint8}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Uint16}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Uint32}) = BigFloat
+promote_rule(::Type{BigFloat}, ::Type{Uint64}) = BigFloat
 
 function +(x::BigFloat, y::BigFloat) 
 	z= _jl_BigFloat_init()
