@@ -18,8 +18,8 @@ static char *extensions[] = { ".so" };
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { ".dylib", ".bundle" };
-#define N_EXTENSIONS 2
+static char *extensions[] = { "", ".dylib", ".bundle" };
+#define N_EXTENSIONS 3
 #endif
 
 #include "julia.h"

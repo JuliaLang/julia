@@ -1,7 +1,7 @@
 JULIAHOME = ../..
 include $(JULIAHOME)/Make.inc
 
-benchmark: benchmarks.txt benchmarks.html
+default: benchmarks.html
 
 bin/perf%: perf.cpp
 	$(CXX) -O$* $(JULIAHOME)/external/openblas-v0.1alpha2.4/libopenblas.a $< -o $@
@@ -13,7 +13,7 @@ benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3
 	for t in 1 2 3 4 5; do bin/perf2; done >>$@
 	for t in 1 2 3 4 5; do bin/perf3; done >>$@
 
-benchmarks/julia.csv: perf.j
+benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../julia $<; done >$@
 
 benchmarks/python.csv: perf.py
@@ -43,11 +43,8 @@ BENCHMARKS = \
 benchmarks.csv: bin/collect.pl $(BENCHMARKS)
 	$(QUIET_PERL) $^ >$@
 
-benchmarks.txt: bin/table.pl benchmarks.csv
-	$(QUIET_PERL) $^ txt >$@
-
 benchmarks.html: bin/table.pl benchmarks.csv
-	$(QUIET_PERL) $^ html >$@
+	$(QUIET_PERL) $^ >$@
 
 clean:
 	@rm -rf bin/perf* benchmarks/*.csv benchmarks.csv
