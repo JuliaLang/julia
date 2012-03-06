@@ -86,6 +86,12 @@ function cmp(x::BigInt, y::BigInt)
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
+function sqrt(x::BigInt)
+	z = _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_sqrt), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
+	BigInt(z)
+end
+
 function pow(x::BigInt, y::Uint) 
 	z = _jl_bigint_init()
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
