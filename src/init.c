@@ -126,7 +126,7 @@ void julia_init(char *imageFile)
         jl_current_module = jl_base_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
-        jl_load("src/boot.j");
+        jl_load("src/boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
@@ -220,7 +220,7 @@ static jl_value_t *sysmod(char *name)
 
 jl_function_t *jl_method_missing_func=NULL;
 
-// fetch references to things defined in boot.j
+// fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
     jl_nothing      = base("nothing");
