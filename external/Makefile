@@ -582,11 +582,19 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## libuv
 
+## libuv
+
 compile-uv:
-	$(MAKE) -C libuv
-install-uv:
-	cp libuv/uv.a $(EXTROOTLIB)
-	cp libuv/include/uv.h $(EXTROOT)/include
+    $(MAKE) -C libuv
+install-uv: compile-uv
+    cp libuv/uv.a $(EXTROOTLIB)
+    cp libuv/include/uv.h $(EXTROOT)/include
+
+clean-uv:
+    $(MAKE) -C libuv clean
+    rm -f $(EXTROOTLIB)/uv.a $(EXTROOT)/include/uv.h
+distclean-uv: clean-uv
+
 ## phony targets ##
 
 .PHONY: \
