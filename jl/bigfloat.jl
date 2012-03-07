@@ -13,7 +13,7 @@ type BigFloat <: Float
 		b
 	end
 
-	function BigFloat(x::Float) 
+	function BigFloat(x::Float64)
 		z = _jl_BigFloat_init()
 		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float), z, x)
 		b = new(z)
@@ -52,29 +52,29 @@ type BigFloat <: Float
 	end
 end
 
-convert(::Type{BigFloat}, x::Int8)   = BigFloat(x)
-convert(::Type{BigFloat}, x::Int16)  = BigFloat(x)
-convert(::Type{BigFloat}, x::Int32)  = BigFloat(x)
-convert(::Type{BigFloat}, x::Int64)  = BigFloat(x)
-convert(::Type{BigFloat}, x::Uint8)  = BigFloat(x)
-convert(::Type{BigFloat}, x::Uint16) = BigFloat(x)
-convert(::Type{BigFloat}, x::Uint32) = BigFloat(x)
-convert(::Type{BigFloat}, x::Uint64) = BigFloat(x)
+convert(::Type{BigFloat}, x::Int8) = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Int16) = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Int) = BigFloat(x)
 
-convert(::Type{BigFloat}, x::Float) = BigFloat(x)
-convert(::Type{BigFloat}, x::Float32) = BigFloat(x)
+macro define_bigfloat_convert ()
+	if WORD_SIZE == 64
+		:(convert(::Type{BigFloat}, x::Int32) = BigFloat(int(x)))
+		:(convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x)))
+	else
+		:(convert(::Type{BigFloat}, x::Int64) = BigFloat(string(x)))
+		:(convert(::Type{BigFloat}, x::Uint64) = BigFloat(string(x)))
+	end
+end
+
+@define_bigfloat_convert
+
+convert(::Type{BigFloat}, x::Uint8) = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Float32) = BigFloat(float64(x))
 convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
 
 promote_rule(::Type{BigFloat}, ::Type{Float32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Float64}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int8}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int16}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int32}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Int64}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint8}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint16}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint32}) = BigFloat
-promote_rule(::Type{BigFloat}, ::Type{Uint64}) = BigFloat
 
 function +(x::BigFloat, y::BigFloat) 
 	z= _jl_BigFloat_init()
