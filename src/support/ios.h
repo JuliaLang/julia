@@ -31,12 +31,13 @@ typedef struct {
     // the state only indicates where the underlying file position is relative
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
-    bufstate_t state;
+    char *buf;        // start of buffer
     bufmode_t bm;
 
     int errcode;
 
-    char *buf;        // start of buffer
+    bufstate_t state;
+
     size_t maxsize;   // space allocated to buffer
     size_t size;      // length of valid data in buf, >=ndirty
     size_t bpos;      // current position in buffer

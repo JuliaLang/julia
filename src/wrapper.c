@@ -7,6 +7,7 @@
 #include "uv.h"
 
 #ifdef __cplusplus
+#include <cstring>
 extern "C" {
 #endif
 
@@ -37,24 +38,6 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
     buf.len = ios_fillprep(opts->stream,suggested_size);
     buf.base = opts->stream->buf + opts->stream->bpos;
     return buf;
-}
-
-void jl_callback_call(jl_callback_t *cb,...)
-{
-    va_list argp;
-    va_start(argp,cb);
-    jl_value_t **argv = malloc(sizeof(jl_value_t*)*cb->types->length);
-    jl_value_t *v;
-    argv[0]=cb->state;
-    for(int i = 0; i<cb->types->length; ++i) {
-        v = alloc_2w(); //only primitives
-        v->type = (jl_type_t*)jl_tupleref(cb->types,i);
-        *jl_bits_data(v)=va_arg(argp,void*);
-        argv[i+1]=v;
-    }
-    JL_GC_PUSH(argv);
-    jl_apply(cb->function,(jl_value_t**)argv,cb->types->length+1);
-    JL_GC_POP();
 }
 
 void closeHandle(uv_handle_t* handle)
@@ -233,14 +216,14 @@ void jl_async_callback(uv_handle_t *handle, int status)
     }
 }
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t **cb)
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb)
 {
     if(!loop)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
     opts->callcb = cb?*cb:0;
-    uv_async_init(loop,async,&jl_async_callback);
+    uv_async_init(loop,async,(uv_async_cb)&jl_async_callback);
     async->data=opts;
     return async;
 }
@@ -249,12 +232,12 @@ DLLEXPORT void jl_async_send(uv_async_t **handle) {
     if(handle) uv_async_send(*handle);
 }
 
-DLLEXPORT int jl_idle_init(uv_loop_t *loop)
+DLLEXPORT uv_idle_t *jl_idle_init(uv_loop_t **loop)
 {
     if(!loop)
         return -2;
     uv_idle_t *idle = malloc(sizeof(uv_idle_t));
-    uv_idle_init(loop,idle);
+    uv_idle_init(*loop,idle);
     idle->data = 0;
     return idle;
 }
@@ -266,7 +249,7 @@ DLLEXPORT int jl_idle_start(uv_idle_t **idle, jl_callback_t **cb)
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
     opts->callcb = cb?*cb:0;
     (*idle)->data=opts;
-    return uv_idle_start(*idle,&jl_async_callback);
+    return uv_idle_start(*idle,(uv_idle_cb)&jl_async_callback);
 }
 
 DLLEXPORT int jl_idle_stop(uv_idle_t **idle) {
@@ -393,9 +376,10 @@ DLLEXPORT size_t jl_sizeof_uv_stream_t()
 
 DLLEXPORT void jl_exit(int exitcode)
 {
-    if(jl_io_loop) {
+    /*if(jl_io_loop) {
         jl_process_events(&jl_io_loop);
-    }
+    }*/
+    uv_tty_reset_mode();
     exit(exitcode);
 }
 

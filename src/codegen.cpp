@@ -171,7 +171,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
     Function *llvmf = (Function*)li->functionObject;
-    verifyFunction(*llvmf,AbortProcessAction);
+    //verifyFunction(*llvmf,AbortProcessAction);
     if (li->fptr == NULL) {
         JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);

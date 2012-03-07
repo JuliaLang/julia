@@ -12,6 +12,25 @@
 #include "arraylist.h"
 #include <setjmp.h>
 
+// Check windows
+#if _WIN32 || _WIN64
+#if _WIN64
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#endif
+
+// Check GCC
+#if __GNUC__
+#if __x86_64__ || __ppc64__
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#endif
+
+
 #define JL_STRUCT_TYPE \
     struct _jl_type_t *type;
 
@@ -206,7 +225,6 @@ typedef struct _jl_callback_t {
     JL_STRUCT_TYPE
     jl_function_t *function;
     jl_tuple_t *types;
-    jl_value_t *state;
 } jl_callback_t;
 
 typedef struct _jl_module_t {
@@ -374,9 +392,9 @@ extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 
 //IO objects
-extern uv_tty_t *jl_stdin_tty;
-extern uv_tty_t *jl_stdout_tty;
-extern uv_tty_t *jl_stderr_tty;
+extern uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern uv_stream_t *jl_stdout_tty;
+extern uv_stream_t *jl_stderr_tty;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -679,9 +697,9 @@ DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void *
 
 DLLEXPORT void jl_callback(void **callback);
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t **cb);
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb);
 DLLEXPORT void jl_async_send(uv_async_t **handle);
-DLLEXPORT int jl_idle_init(uv_loop_t *loop);
+DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t **loop);
 DLLEXPORT int jl_idle_start(uv_idle_t **idle, jl_callback_t **cb);
 DLLEXPORT int jl_idle_stop(uv_idle_t **idle);
 
@@ -962,6 +980,11 @@ typedef struct _jl_task_t {
     // exception state and per-task dynamic parameters
     jl_savestate_t state;
 } jl_task_t;
+
+union jl_stream {
+    ios_t ios;
+    uv_stream_t stream;
+};
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;

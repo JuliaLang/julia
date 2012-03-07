@@ -217,7 +217,9 @@ int true_main(int argc, char *argv[])
 
     // run program if specified, otherwise enter REPL
     if (program) {
-        return exec_program();
+        int ret = exec_program();
+        uv_tty_reset_mode();
+        return ret;
     }
 
     init_repl_environment();
@@ -229,6 +231,8 @@ int true_main(int argc, char *argv[])
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
+        uv_tty_reset_mode();
+        rl_cleanup_after_signal();
         return 0;
     }
     //uv_pipe_t pipe;
@@ -264,7 +268,8 @@ int true_main(int argc, char *argv[])
         restart();
         goto again;
     }
-    jl_make_pipe();
+    uv_tty_reset_mode();
+    rl_cleanup_after_signal();
     return iserr;
 }
 

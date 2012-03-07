@@ -143,17 +143,17 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",&jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",&jl_winsock_handle);
 #endif
-    jl_io_loop = uv_default_loop(); //this loop will handle io/sockets - if not handled otherwise
-    jl_event_loop = uv_loop_new(); //this loop will internal events (spawining process etc.)
+    jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
+    jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
     //init io
     jl_stdin_tty = malloc(sizeof(uv_tty_t));
     jl_stdout_tty = malloc(sizeof(uv_tty_t));
     jl_stderr_tty = malloc(sizeof(uv_tty_t));
     uv_tty_reset_mode();
-    uv_tty_set_mode(jl_stdin_tty,1); //raw input
-    uv_tty_init(jl_io_loop,jl_stdin_tty,0,1);//stdin
-    uv_tty_init(jl_io_loop,jl_stdout_tty,1,0);//stdout
-    uv_tty_init(jl_io_loop,jl_stderr_tty,2,0);//stderr
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1); //raw input
+    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdin_tty,0,1);//stdin
+    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdout_tty,1,0);//stdout
+    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stderr_tty,2,0);//stderr
     jl_stdin_tty->data=0;
     jl_stdout_tty->data=0;
     jl_stderr_tty->data=0;

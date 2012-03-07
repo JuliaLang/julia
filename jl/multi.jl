@@ -956,7 +956,7 @@ function start_worker(wrfd)
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
-    ccall(:_close, Int32, (Int32,), int32(0))
+    ccall(:close, Int32, (Int32,), int32(0))
 
     global const Scheduler = current_task()
 
@@ -969,7 +969,7 @@ function start_worker(wrfd)
         print("unhandled exception on $(myid()): $e\nexiting.\n")
     end
 
-    ccall(:_close, Int32, (Int32,), sockfd)
+    ccall(:close, Int32, (Int32,), sockfd)
     #ccall(:exit , Void , (Int32,), int32(0))
 end
 
@@ -1565,7 +1565,7 @@ end
 
 function add_io_handler(io::AsyncStream, H)
     (_jl_fd_handlers[fd]=H)
-    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback(io_callback,(),io))
+    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback(()->io_callback(io),()))
 end
 
 function del_io_handler(io::AsyncStream)
