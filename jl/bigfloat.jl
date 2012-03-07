@@ -13,7 +13,11 @@ type BigFloat <: Float
 		b
 	end
 
+<<<<<<< HEAD
 	function BigFloat(x::Float64)
+=======
+	function BigFloat(x::Float64) 
+>>>>>>> a3ed8da3ff56d920d870beb25f68e6bfe33a3a85
 		z = _jl_BigFloat_init()
 		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float), z, x)
 		b = new(z)
@@ -52,6 +56,7 @@ type BigFloat <: Float
 	end
 end
 
+<<<<<<< HEAD
 convert(::Type{BigFloat}, x::Int8) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int16) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int) = BigFloat(x)
@@ -71,7 +76,26 @@ end
 convert(::Type{BigFloat}, x::Uint8) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Float32) = BigFloat(float64(x))
+=======
+convert(::Type{BigFloat}, x::Int8)   = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Int16)  = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Int)  = BigFloat(x)
+macro define_bigfloat_convert ()
+	if WORD_SIZE == 64
+		:(convert(::Type{BigFloat}, x::Int32) = BigInt(int(x)))
+		:(convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x)))
+
+	else
+		:(convert(::Type{BigFloat}, x::Int64) = BigInt(string(x)))
+		:(convert(::Type{BigFloat}, x::Uint64) = BigFloat(int(x)))
+	end
+end
+@define_bigfloat_convert
+convert(::Type{BigFloat}, x::Uint8)  = BigFloat(int(x))
+convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
+>>>>>>> a3ed8da3ff56d920d870beb25f68e6bfe33a3a85
 convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
+convert(::Type{BigFloat}, x::Float32) = BigFloat(float64(x))
 
 promote_rule(::Type{BigFloat}, ::Type{Float32}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{Float64}) = BigFloat
@@ -107,7 +131,7 @@ function div (x::BigFloat, y::BigFloat)
 end
 
 function cmp(x::BigFloat, y::BigFloat) 
-	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_cmp), Int, (Ptr{Void}, Ptr{Void}), x.mpf, y.mpf)
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_cmp), Int32, (Ptr{Void}, Ptr{Void}), x.mpf, y.mpf)
 end
 
 function pow(x::BigFloat, y::Uint) 
