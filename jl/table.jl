@@ -135,16 +135,18 @@ end
 # hash table
 
 type HashTable{K,V} <: Associative
-    keys::Array{K,1}
-    vals::Array{V,1}
-    used::IntSet
-    deleted::IntSet
+    keys::Array{Any,1}
+    vals::Array{Any,1}
+    ndel::Int
     deleter::Function
 
     HashTable() = HashTable{K,V}(0)
-    HashTable(n) = (n = _tablesz(n);
-                    new(Array(K,n), Array(V,n), IntSet(n+1), IntSet(n+1),
-                        identity))
+    function HashTable(n)
+        n = _tablesz(n)
+        new(fill!(cell(n), _jl_secret_table_token),
+            fill!(cell(n), _jl_secret_table_token),
+            0, identity)
+    end
     function HashTable(ks::Tuple, vs::Tuple)
         n = length(ks)
         h = HashTable{K,V}(n)
@@ -188,20 +190,18 @@ hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 function rehash{K,V}(h::HashTable{K,V}, newsz)
     oldk = h.keys
     oldv = h.vals
-    oldu = h.used
-    oldd = h.deleted
     newht = HashTable{K,V}(newsz)
 
-    for i in oldu
-        if !has(oldd,i)
-            newht[oldk[i]] = oldv[i]
+    for i = 1:length(oldv)
+        v = oldv[i]
+        if !is(v,_jl_secret_table_token)
+            newht[oldk[i]] = v
         end
     end
 
     h.keys = newht.keys
     h.vals = newht.vals
-    h.used = newht.used
-    h.deleted = newht.deleted
+    h.ndel = 0
     return h
 end
 
@@ -210,8 +210,7 @@ function del_all{K,V}(h::HashTable{K,V})
     newht = HashTable{K,V}(sz)
     h.keys = newht.keys
     h.vals = newht.vals
-    h.used = newht.used
-    h.deleted = newht.deleted
+    h.ndel = 0
     return h
 end
 
@@ -221,7 +220,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if length(h.deleted) >= ((3*sz)>>2)
+    if h.ndel >= ((3*sz)>>2)
         rehash(h, sz)
     end
 
@@ -229,24 +228,30 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
     maxprobe = sz>>3
     index = hashindex(key, sz)
     orig = index
+    avail = -1  # an available slot
 
     while true
-        if !has(h.used,index)
-            h.keys[index] = key
-            h.vals[index] = v
-            add(h.used, index)
-            return h
-        end
-        if has(h.deleted,index)
-            h.keys[index] = key
-            h.vals[index] = v
-            del(h.deleted, index)
+        hk = h.keys[index]
+        if is(hk,_jl_secret_table_token)
+            if avail<0
+                h.keys[index] = key
+                h.vals[index] = v
+            else
+                h.keys[avail] = key
+                h.vals[avail] = v
+            end
             return h
         end
 
-        if isequal(key, h.keys[index])
+        if isequal(key, hk::K)
             h.vals[index] = v
             return h
+        end
+
+        if is(h.vals[index],_jl_secret_table_token) && avail<0
+            # found an available slot, but need to keep scanning
+            # in case "key" already exists in a later collided slot.
+            avail = index
         end
 
         index = (index & (sz-1)) + 1
@@ -254,6 +259,12 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
         if iter > maxprobe || index==orig
             break
         end
+    end
+
+    if avail>0
+        h.keys[avail] = key
+        h.vals[avail] = v
+        return h
     end
 
     rehash(h, sz*2)
@@ -272,10 +283,11 @@ function ht_keyindex{K,V}(h::HashTable{K,V}, key)
     orig = index
 
     while true
-        if !has(h.used,index)
+        hk = h.keys[index]
+        if is(hk,_jl_secret_table_token)
             break
         end
-        if !has(h.deleted,index) && isequal(key, h.keys[index])
+        if !is(h.vals[index],_jl_secret_table_token) && isequal(key,hk::K)
             return index
         end
 
@@ -302,30 +314,32 @@ end
 function del(h::HashTable, key)
     index = ht_keyindex(h, key)
     if index > 0
-        add(h.deleted, index)
+        h.vals[index] = _jl_secret_table_token
+        h.ndel += 1
     end
     return h
 end
 
-function skip_deleted(used, deleted, i)
-    while !done(used, i)
-        (i, ip1) = next(used, i)
-        if !has(deleted,i)
-            break
-        end
-        i = ip1
+function skip_deleted(vals, i)
+    L = length(vals)
+    while i<=L && is(vals[i],_jl_secret_table_token)
+        i += 1
     end
     return i
 end
 
-start(t::HashTable) = skip_deleted(t.used, t.deleted, 0)
-done(t::HashTable, i) = done(t.used, i)
-next(t::HashTable, i) = ((n, nxt) = next(t.used, i);
-                         ((t.keys[n],t.vals[n]),
-                          skip_deleted(t.used,t.deleted,nxt)))
+start(t::HashTable) = skip_deleted(t.vals, 1)
+done(t::HashTable, i) = done(t.vals, i)
+next(t::HashTable, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.vals,i+1))
 
 isempty(t::HashTable) = done(t, start(t))
-length(t::HashTable) = length(t.used)-length(t.deleted)
+function length(t::HashTable)
+    n = 0
+    for v in t.vals
+        n += int(!is(v,_jl_secret_table_token))
+    end
+    return n
+end
 
 function add_weak_key(t::HashTable, k, v)
     if is(t.deleter, identity)
