@@ -83,7 +83,7 @@ function rem (x::BigInt, y::BigInt)
 end
 
 function cmp(x::BigInt, y::BigInt) 
-	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int32, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
 end
 
 function sqrt(x::BigInt)
