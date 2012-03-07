@@ -430,9 +430,11 @@
 ;; need to be rooted before conversion.
 (define (lower-ccall name RT atypes args)
   (define (ccall-conversion T x)
-    (if (or (eq? T 'Any) (and (pair? x) (eq? (car x) '&)))
-	x
-	`(call (top convert) ,T ,x)))
+    (cond ((eq? T 'Any)  x)
+	  ((and (pair? x) (eq? (car x) '&))
+	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
+	  (else
+	   `(call (top convert) ,T ,x))))
   (let loop ((F atypes)  ;; formals
 	     (A args)    ;; actuals
 	     (stmts '()) ;; initializers

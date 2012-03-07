@@ -6,7 +6,7 @@ sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)
     tmstruct = Array(Int32, 14)
-    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Int32}), &int(t), tmstruct)
+    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Int32}), &t, tmstruct)
     timestr = Array(Uint8, 128)
     n = ccall(:strftime, Int, (Ptr{Uint8}, Int, Ptr{Uint8}, Ptr{Int32}),
               timestr, length(timestr), fmt, tmstruct)

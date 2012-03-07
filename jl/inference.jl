@@ -545,6 +545,9 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         else
             t = Any
         end
+    elseif is(e.head,:&)
+        abstract_eval(e.args[1], vtypes, sv)
+        t = Any
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef

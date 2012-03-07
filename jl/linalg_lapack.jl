@@ -14,7 +14,7 @@ for (potrf, elty) in ((:dpotrf_,:Float64), (:spotrf_,:Float32),
             ccall(dlsym(_jl_liblapack, $string(potrf)),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, &int32(n), A, &int32(lda), info)
+                  uplo, &n, A, &lda, info)
             return info[1]
         end
 
@@ -64,7 +64,7 @@ for (getrf, elty) in ((:dgetrf_,:Float64), (:sgetrf_,:Float32),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), A, &int32(lda), ipiv, info)
+                  &m, &n, A, &lda, ipiv, info)
             return info[1]
         end
     end
@@ -118,7 +118,7 @@ for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), A, &int32(lda), jpvt, tau, work, &int32(lwork), info)
+                  &m, &n, A, &lda, jpvt, tau, work, &lwork, info)
             return info[1]
         end
 
@@ -135,7 +135,7 @@ for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  &int32(m), &int32(n), A, &int32(lda), jpvt, tau, work, &int32(lwork), rwork, info)
+                  &m, &n, A, &lda, jpvt, tau, work, &lwork, rwork, info)
             return info[1]
         end
 
@@ -150,7 +150,7 @@ for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), &int32(k), A, &int32(lda), tau, work, &int32(lwork), info)
+                  &m, &n, &k, A, &lda, tau, work, &lwork, info)
             return info[1]
         end
 
@@ -165,7 +165,7 @@ for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$celty},
                    Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(m), &int32(n), &int32(k), A, &int32(lda), tau, work, &int32(lwork), info)
+                  &m, &n, &k, A, &lda, tau, work, &lwork, info)
             return info[1]
         end
 
@@ -248,7 +248,7 @@ for (syev, heev, real_geev, complex_geev, elty, celty) in
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  jobz, uplo, &int32(n), A, &int32(lda), W, work, &int32(lwork), info)
+                  jobz, uplo, &n, A, &lda, W, work, &lwork, info)
             return info[1]
         end
 
@@ -265,7 +265,7 @@ for (syev, heev, real_geev, complex_geev, elty, celty) in
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$celty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  jobz, uplo, &int32(n), A, &int32(lda), W, work, &int32(lwork), rwork, info)
+                  jobz, uplo, &n, A, &lda, W, work, &lwork, rwork, info)
             return info[1]
         end
 
@@ -285,8 +285,8 @@ for (syev, heev, real_geev, complex_geev, elty, celty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, 
                    Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  jobvl, jobvr, &int32(n), A, &int32(lda), WR, WI, VL, &int32(ldvl),
-                  VR, &int32(ldvr), work, &int32(lwork), info)
+                  jobvl, jobvr, &n, A, &lda, WR, WI, VL, &ldvl,
+                  VR, &ldvr, work, &lwork, info)
             return info[1]
         end
 
@@ -307,8 +307,8 @@ for (syev, heev, real_geev, complex_geev, elty, celty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32},
                    Ptr{$celty}, Ptr{$celty}, Ptr{Int32}, 
                    Ptr{$celty}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  jobvl, jobvr, &int32(n), A, &int32(lda), W, VL, &int32(ldvl), 
-                  VR, &int32(ldvr), work, &int32(lwork), rwork, info)
+                  jobvl, jobvr, &n, A, &lda, W, VL, &ldvl, 
+                  VR, &ldvr, work, &lwork, rwork, info)
             return info[1]
         end
 
@@ -421,8 +421,8 @@ function trideig(d::Vector{Float64}, e::Vector{Float64})
           (Ptr{Uint8},Ptr{Int32},Ptr{Float64},
            Ptr{Float64},Ptr{Float64},Ptr{Int32},
            Ptr{Float64},Ptr{Int32}),
-          "N", &int32(numel(d)), dcopy, ecopy,
-          &0.0, &int32(numel(d)), &0.0, &int32(0))
+          "N", &numel(d), dcopy, ecopy,
+          &0.0, &numel(d), &0.0, &0)
     return dcopy
 end
 
@@ -447,8 +447,8 @@ for (real_gesvd, complex_gesvd, elty, celty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  jobu, jobvt, &int32(m), &int32(n), A, &int32(lda), S, U, &int32(ldu), 
-                  VT, &int32(ldvt), work, &int32(lwork), info)
+                  jobu, jobvt, &m, &n, A, &lda, S, U, &ldu, 
+                  VT, &ldvt, work, &lwork, info)
             return info[1]
         end
 
@@ -469,8 +469,8 @@ for (real_gesvd, complex_gesvd, elty, celty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$celty}, Ptr{Int32}, Ptr{$celty}, Ptr{Int32},
                    Ptr{$celty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  jobu, jobvt, &int32(m), &int32(n), A, &int32(lda), S, U, &int32(ldu), 
-                  VT, &int32(ldvt), work, &int32(lwork), rwork, info)
+                  jobu, jobvt, &m, &n, A, &lda, S, U, &ldu, 
+                  VT, &ldvt, work, &lwork, rwork, info)
             return info[1]
         end
 
@@ -533,7 +533,7 @@ for (gesv, posv, gels, trtrs, elty) in (("dgesv_","dposv_","dgels_","dtrtrs_",:F
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &int32(n), &int32(nrhs), A, &int32(lda), ipiv, B, &int32(ldb), info)
+                  &n, &nrhs, A, &lda, ipiv, B, &ldb, info)
             return info[1]
         end
 
@@ -549,7 +549,7 @@ for (gesv, posv, gels, trtrs, elty) in (("dgesv_","dposv_","dgels_","dtrtrs_",:F
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, &int32(n), &int32(nrhs), A, &int32(lda), B, &int32(ldb), info)
+                  uplo, &n, &nrhs, A, &lda, B, &ldb, info)
             return info[1]
         end
 
@@ -563,8 +563,8 @@ for (gesv, posv, gels, trtrs, elty) in (("dgesv_","dposv_","dgels_","dtrtrs_",:F
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  trans, &int32(m), &int32(n), &int32(nrhs), A, &int32(lda), 
-                  B, &int32(ldb), work, &int32(lwork), info)
+                  trans, &m, &n, &nrhs, A, &lda, 
+                  B, &ldb, work, &lwork, info)
             return info[1]
         end
 
@@ -580,7 +580,7 @@ for (gesv, posv, gels, trtrs, elty) in (("dgesv_","dposv_","dgels_","dtrtrs_",:F
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, trans, diag, &int32(n), &int32(nrhs), A, &int32(lda), B, &int32(ldb), info)
+                  uplo, trans, diag, &n, &nrhs, A, &lda, B, &ldb, info)
             return info[1]
         end
 
