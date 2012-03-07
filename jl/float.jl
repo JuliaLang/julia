@@ -51,6 +51,9 @@ end
 iround(x::Float64) = boxsi64(fpsiround64(unbox64(x)))
 itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
 
+# this is needed very early because it is used by Range and colon
+floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
+
 iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
