@@ -3,7 +3,6 @@ load ("../jl/bigint.jl")
 a=BigInt("123456789012345678901234567890")
 b=BigInt("123456789012345678901234567891")
 
-
 @assert typeof(a+1) == BigInt
 @assert a+1 == b
 @assert b == a+1

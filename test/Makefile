@@ -8,7 +8,7 @@ all extra unicode::
 
 default all extra \
 core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode amos bigint::
+sparse lapack fft arpack random unicode amos bigint bigfloat::
 	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
 perf:
