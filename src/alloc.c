@@ -60,7 +60,7 @@ jl_value_t *jl_memory_exception;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;   jl_sym_t *module_sym;
-jl_sym_t *quote_sym;
+jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
 jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_continue_sym;
 // head symbols for each expression type

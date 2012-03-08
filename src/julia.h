@@ -341,7 +341,7 @@ extern jl_sym_t *top_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *multivalue_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
-extern jl_sym_t *error_sym;
+extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;

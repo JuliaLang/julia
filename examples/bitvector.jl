@@ -125,5 +125,5 @@ end
 length(s::IntSet) = numel(s)
 numel(s::IntSet) =
     int32(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64),
-                s.bits, uint64(0), uint64(s.limit)))
+                s.bits, 0, s.limit))
 

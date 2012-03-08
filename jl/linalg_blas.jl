@@ -8,7 +8,7 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
             ccall(dlsym(_jl_libblas, $string(fname)),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  int32(n), DX, int32(incx), DY, int32(incy))
+                  &n, DX, &incx, DY, &incy)
             return DY
         end
     end
@@ -18,7 +18,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, s
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
     return dest
 end
@@ -28,7 +28,7 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T},
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, uint(n*sizeof(T)))
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
     return dest
 end
@@ -41,7 +41,7 @@ for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
             ccall(dlsym(_jl_libblas, $string(fname)),
                   $elty,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  int32(n), DX, int32(incx), DY, int32(incy))
+                  &n, DX, &incx, DY, &incy)
         end
     end
 end
@@ -65,7 +65,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
             ccall(dlsym(_jl_libblas, $string(fname)),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  int32(n), X, int32(incx))
+                  &n, X, &incx)
         end
     end
 end
@@ -88,7 +88,7 @@ for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
             ccall(dlsym(_jl_libblas, $string(fname)),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  int32(n), x, DA, int32(incx), DY, int32(incy))            
+                  &n, x, DA, &incx, DY, &incy)            
         end
     end
 end
@@ -108,19 +108,16 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              B::StridedMatrix{$elty}, ldb::Integer,
                              beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
-           a = pointer(A)
-           b = pointer(B)
-           c = pointer(C)
            ccall(dlsym(_jl_libblas, $string(fname)),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
-                 uint8(transA), uint8(transB), int32(m), int32(n), int32(k),
-                 alpha, a, int32(lda),
-                 b, int32(ldb),
-                 beta, c, int32(ldc))
+                 &transA, &transB, &m, &n, &k,
+                 &alpha, A, &lda,
+                 B, &ldb,
+                 &beta, C, &ldc)
        end
 
    end
@@ -219,19 +216,16 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              X::StridedVector{$elty}, incx::Integer,
                              beta::($elty), Y::StridedVector{$elty}, incy::Integer)
-           a = pointer(A)
-           x = pointer(X)
-           y = pointer(Y)
            ccall(dlsym(_jl_libblas, $string(fname)),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
-                 trans, int32(m), int32(n),
-                 alpha, a, int32(lda),
-                 x, int32(incx),
-                 beta, y, int32(incy))
+                 trans, &m, &n,
+                 &alpha, A, &lda,
+                 X, &incx,
+                 &beta, Y, &incy)
        end
 
    end
