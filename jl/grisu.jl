@@ -11,7 +11,7 @@ macro grisu_ccall(value, mode, ndigits)
         ccall(dlsym(_jl_libgrisu, :grisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
-              float64($value), int32($mode), int32($ndigits),
+              $value, $mode, $ndigits,
               _jl_digits, _jl_buflen, _jl_neg, _jl_length, _jl_point)
     end
 end

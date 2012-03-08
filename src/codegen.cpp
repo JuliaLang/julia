@@ -152,6 +152,8 @@ static Function *to_function(jl_lambda_info_t *li)
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
+    //ios_printf(ios_stderr, "%s:%d\n",
+    //           ((jl_sym_t*)li->file)->name, jl_unbox_long(li->line));
     //f->dump();
     //verifyFunction(*f);
     if (old != NULL) {
@@ -319,10 +321,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             // first 3 arguments are static
                             for(i=4; i < (size_t)alen; i++) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
-                                (*sp)++;
-                                if (*sp > *max) *max = *sp;
                             }
-                            (*sp) = lastsp;
                             return;
                         }
                     }

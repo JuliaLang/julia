@@ -329,7 +329,7 @@ function sort(a::AbstractArray, dim::Int)
 end
 
 sortperm{T}(a::AbstractVector{T}) =
-    _jl_mergesort(copy(a), linspace(1,length(a)), 1, length(a),
+    _jl_mergesort(copy(a), [1:length(a)], 1, length(a),
                   Array(T, length(a)), Array(Int, length(a)))
 
 function issorted(v::AbstractVector)

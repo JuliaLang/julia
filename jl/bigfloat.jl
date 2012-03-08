@@ -15,7 +15,7 @@ type BigFloat <: Float
 
 	function BigFloat(x::Float64) 
 		z = _jl_BigFloat_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float), z, x)
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float64), z, x)
 		b = new(z)
 		finalizer(b, _jl_BigFloat_clear)
 		b
@@ -57,12 +57,12 @@ convert(::Type{BigFloat}, x::Int16)  = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int)  = BigFloat(x)
 macro define_bigfloat_convert ()
 	if WORD_SIZE == 64
-		:(convert(::Type{BigFloat}, x::Int32) = BigInt(int(x)))
+		:(convert(::Type{BigFloat}, x::Int32) = BigFloat(int(x)))
 		:(convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x)))
 
 	else
-		:(convert(::Type{BigFloat}, x::Int64) = BigInt(string(x)))
-		:(convert(::Type{BigFloat}, x::Uint64) = BigFloat(int(x)))
+		:(convert(::Type{BigFloat}, x::Int64) = BigFloat(string(x)))
+		:(convert(::Type{BigFloat}, x::Uint64) = BigFloat(string(x)))
 	end
 end
 @define_bigfloat_convert
@@ -106,7 +106,7 @@ function *(x::BigFloat, y::BigFloat)
 	BigFloat(z)
 end
 
-function div (x::BigFloat, y::BigFloat)
+function /(x::BigFloat, y::BigFloat)
 	z= _jl_BigFloat_init()
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpf, y.mpf)
 	BigFloat(z)
@@ -131,7 +131,7 @@ end
 function string(x::BigFloat) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
 	ret = cstring(s) #This copies s. 
-	_jl_free(convert(Ptr{Void},s))
+	_c_free(s)
 	ret
 end
 
