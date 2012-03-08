@@ -856,37 +856,6 @@
 
    ;; for loops
 
-   ; for loop over ranges
-   (pattern-lambda
-    (for (= var (: a b c)) body)
-    (begin
-      (if (not (symbol? var))
-	  (error "invalid for loop syntax: expected symbol"))
-      (let ((cnt (gensy))
-	    (lim (gensy))
-	    (aa  (gensy))
-	    (bb  (gensy)))
-	`(scope-block
-	  (block
-	   (= (tuple ,aa ,bb) (call (top promote) ,a ,b))
-	   (= ,cnt 0)
-	   (= ,lim
-	      (call
-	       (top int)
-	       (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb)))))
-	   (break-block loop-exit
-			(_while (call < ,cnt ,lim)
-				(block
-				 (= ,var (call + ,aa (call *
-							   (call
-							    (top oftype)
-							    ,aa
-							    ,cnt)
-							   ,bb)))
-				 (break-block loop-cont
-					      ,body)
-				 (= ,cnt (call + 1 ,cnt))))))))))
-
    (pattern-lambda
     (for (= var (: a b)) body)
     (begin

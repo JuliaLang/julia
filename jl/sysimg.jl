@@ -9,6 +9,8 @@ include("cell.jl")
 include("expr.jl")
 include("error.jl")
 
+_jl_libfdm = dlopen("libfdm")
+
 # core numeric operations & types
 include("bool.jl")
 include("number.jl")
@@ -64,6 +66,7 @@ include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
 include("math_libm.jl")
+include("specfun.jl")
 include("sort.jl")
 include("combinatorics.jl")
 include("statistics.jl")
