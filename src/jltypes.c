@@ -2249,9 +2249,23 @@ void jl_init_types(void)
     jl_func_kind->env = NULL;
 
     // now they can be used to create the remaining base kinds and types
+    jl_method_type =
+        jl_new_struct_type(jl_symbol("Method"), jl_any_type, jl_null,
+                           jl_tuple(6, jl_symbol("sig"), jl_symbol("va"),
+                                    jl_symbol("tvars"), jl_symbol("func"),
+                                    jl_symbol("invokes"), jl_symbol("next")),
+                           jl_tuple(6, jl_tuple_type, jl_bool_type,
+                                    jl_tuple_type, jl_function_type,
+                                    jl_any_type, jl_any_type));
+    jl_method_type->fptr = jl_f_no_function;
+
     jl_methtable_type =
-        jl_new_struct_type(jl_symbol("MethodTable"),
-                           jl_any_type, jl_null, jl_null, jl_null);
+        jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
+                           jl_tuple(4, jl_symbol("defs"), jl_symbol("cache"),
+                                    jl_symbol("cache_1arg"),
+                                    jl_symbol("max_args")),
+                           jl_tuple(4, jl_any_type, jl_any_type, jl_any_type,
+                                    jl_long_type));
     jl_methtable_type->fptr = jl_f_no_function;
 
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),

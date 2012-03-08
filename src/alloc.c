@@ -44,6 +44,7 @@ jl_struct_type_t *jl_quotenode_type;
 jl_struct_type_t *jl_topnode_type;
 jl_bits_type_t *jl_intrinsic_type;
 jl_struct_type_t *jl_methtable_type;
+jl_struct_type_t *jl_method_type;
 jl_struct_type_t *jl_lambda_info_type;
 jl_struct_type_t *jl_module_type;
 jl_struct_type_t *jl_errorexception_type=NULL;
