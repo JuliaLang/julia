@@ -140,7 +140,7 @@ try
     push(VERSION.build, strcat(commit[1:4], clean ? "" : "x"))
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
     clean = clean ? "" : "*"
-    global const _jl_commit_string = "Commit $(commit) ($isotime)$clean"
+    global const _jl_commit_string = "Commit $commit ($isotime)$clean"
 catch
     global const _jl_commit_string = ""
 end
