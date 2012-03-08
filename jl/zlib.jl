@@ -1,51 +1,75 @@
 _jl_zlib_wrapper = dlopen("zlib_wrapper")
 
 type CompressedString <: String
-	s::Ptr{Uint8}
-	sz::Uint
+	zp::Ptr{Void}
 	
-	function CompressedString(s::Ptr{Uint8}, sz::Uint)
-		cs = new(s, sz)
-		finalizer(cs, _jl_zlib_free)
+	function CompressedString(zp::Ptr{Void})
+		cs = new(zp)
+		finalizer(cs, _jl_zlib_free_pack)
 		cs
 	end
 end
 
 type UncompressedString <: String
-	s::Ptr{Uint8}
+	zp::Ptr{Uint8}
 	
-	function UncompressedString(s::Ptr{Uint8})
-		us = new(s)
-		finalizer(us, _jl_zlib_free)
+	function UncompressedString(zp::Ptr{Void})
+		us = new(zp)
+		finalizer(us, _jl_zlib_free_pack)
 		us
 	end
 end
 
 function deflate(s::String)
-	so = Array(Ptr{Uint8},1)
-	sz = 0
-	ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_deflate), Uint8, (Ptr{Uint8}, Ptr{Uint}, Ptr{Ptr{Uint8}}), cstring(s)[1], &sz, so)
-	CompressedString(so[1], sz)
+	sz = convert(Uint, 0)
+	zp = ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_deflate), Ptr{Void}, (Ptr{Uint8},), s)
+	CompressedString(zp)
 end
 
 function inflate(cs::CompressedString)
-	so = Array(Ptr{Uint8},1)
-	ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_inflate), Int, (Ptr{Uint8}, Uint, Ptr{Ptr{Uint8},1}), cs.s, cs.sz, so)
-	so
+	so = ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_inflate), Ptr{Void}, (Ptr{Void},), cs.zp)
+	UncompressedString(so)
 end
 
-function show(cs::CompressedString) 
-	print(cs.s)
+function string(cs::CompressedString)
+	c = ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_print_pack), Ptr{Uint8}, (Ptr{Void},), cs.zp)
+	s = cstring(c)
+	_c_free(c)
+	s
 end
 
-function show(us::UncompressedString)
-	print(us.s)
+function string(us::UncompressedString)
+	c = ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_print_pack), Ptr{Uint8}, (Ptr{Void},), us.zp)
+	s = cstring(c)
+	_c_free(c)
+	s
 end
 
-function _jl_zlib_free(cs::CompressedString)
-	return ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_free), Void, (Ptr{Uint8},), cs.s)
+convert(::Type{String}, x::CompressedString) = string(x)
+convert(::Type{String}, x::UncompressedString) = string(x)
+
+promote_rule(::Type{String}, ::Type{CompressedString}) = String
+promote_rule(::Type{String}, ::Type{UncompressedString}) = String
+
+function cmp(x::CompressedString, y::CompressedString)
+	cmp(string(x), string(y))
 end
 
-function _jl_zlib_free(cs::UncompressedString)
-	return ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_free), Void, (Ptr{Uint8},), cs.s)
+function cmp(x::UncompressedString, y::UncompressedString)
+	cmp(string(x), string(y))
+end
+
+function cmp(x::CompressedString, y::UncompressedString)
+	cmp(string(x), string(y))
+end
+
+function cmp(x::CompressedString, y::String)
+	cmp(string(x), y)
+end
+function cmp(x::UncompressedString, y::String)
+	cmp(string(x), y)
+end
+
+function _jl_zlib_free_pack(cs::CompressedString)
+	return ccall(dlsym(_jl_zlib_wrapper, :_jl_zlib_free_pack), Void, (Ptr{Void},), cs.s)
 end

@@ -2,29 +2,44 @@
 #include <stdlib.h>
 #include <zlib.h>
 
-extern int _jl_zlib_deflate(char *source, unsigned long *output_bytes, char **dest)
+typedef struct {
+	char *s;
+	unsigned long sz;
+} zlib_pack;
+
+extern zlib_pack *_jl_zlib_deflate(char *source)
 {
     unsigned long compress_bound = compressBound(strlen(source));
     char *compress_buffer = (char *)malloc(compress_bound);
+	char *final_buffer = NULL;
+	zlib_pack *pack = NULL;
     memset(compress_buffer, '\0', compress_bound);
-    *output_bytes = compress_bound; 
-    
+
     int ret = compress2(compress_buffer, &compress_bound, source, strlen(source),  6);
-    if(ret == Z_OK) {
-        *output_bytes = compress_bound;
-        *dest = (char *)malloc(*output_bytes);
-        memcpy(*dest, compress_buffer, *output_bytes);
-        *dest[*output_bytes] = '\0';
+    
+	if(ret == Z_OK) {
+        final_buffer = (char *)malloc(compress_bound);
+        memcpy(final_buffer, compress_buffer, compress_bound);
+        final_buffer[compress_bound] = '\0';
+
+		pack = (zlib_pack *)malloc(sizeof(zlib_pack));
+		pack->s = final_buffer;
+		pack->sz = compress_bound;
     }
 
     free(compress_buffer);    
-    return ret;
+    return pack;
 }
 
-extern int _jl_zlib_inflate(char *source, unsigned long source_bytes, char **dest)
+extern zlib_pack *_jl_zlib_inflate(zlib_pack *pack)
 {
+	char *source = pack->s;
+	unsigned long source_bytes = pack->sz;
+	zlib_pack *opack = NULL;
+	
 	size_t dest_bytes = source_bytes*2;
     char *temp_buffer = (char *)malloc(dest_bytes); // guess how much we need
+	char *final_buffer = NULL;
     memset(temp_buffer, '\0', dest_bytes);
 	
     int ret = uncompress(temp_buffer, &dest_bytes, source, source_bytes); 
@@ -34,48 +49,29 @@ extern int _jl_zlib_inflate(char *source, unsigned long source_bytes, char **des
         temp_buffer = (char *)realloc(temp_buffer, dest_bytes);
         uncompress(temp_buffer, &dest_bytes, source, source_bytes);
 	}
+	
 	if(ret == Z_OK) {
-       	printf("Dest Bytes: %lu", dest_bytes);
-	    *dest = (char *)malloc(dest_bytes);
-		memcpy(*dest, temp_buffer, dest_bytes);
-	    *dest[dest_bytes] = '\0';
+	    final_buffer = (char *)malloc(dest_bytes);
+		memcpy(final_buffer, temp_buffer, dest_bytes);
+	    final_buffer[dest_bytes] = '\0';
+	
+		opack = (zlib_pack *)malloc(sizeof(zlib_pack));
+		opack->s = final_buffer;
+		opack->sz = dest_bytes;
 	}
 	
 	free(temp_buffer);
-    return ret;
+	
+	return opack;
 }
 
-extern void _jl_zlib_free(char *str) {
-  free(str);
+extern char *_jl_zlib_print_pack(zlib_pack *pack) {
+	char *pp;
+	asprintf(&pp, "%s", pack->s);
+	return pp;
 }
 
-/* report a zlib or i/o error */
-extern char *zerr(int ret)
-{
-    switch (ret) {
-    case Z_OK:
-      return("");
-      break;
-    case Z_ERRNO:
-        if (ferror(stdin))
-            return("error reading stdin");
-        if (ferror(stdout))
-            return("error writing stdout");
-        break;
-    case Z_STREAM_ERROR:
-        return("invalid compression level");
-        break;
-    case Z_DATA_ERROR:
-        return("invalid or incomplete deflate data");
-        break;
-    case Z_MEM_ERROR:
-        return("out of memory");
-        break;
-    case Z_VERSION_ERROR:
-        return("zlib version mismatch!");
-    }
-}
-
-int main(int argc, char *argv[]) {
-  return 0;
+extern void _jl_zlib_free_pack(zlib_pack *pack) {
+  free(pack->s);
+  free(pack);
 }
