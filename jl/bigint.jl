@@ -33,6 +33,7 @@ convert(::Type{BigInt}, x::Int) = BigInt(x)
 if WORD_SIZE == 64
     convert(::Type{BigInt}, x::Int32) = BigInt(int(x))
 else
+    BigInt(l::Int64) = BigInt(string(l))
     convert(::Type{BigInt}, x::Int64) = BigInt(string(x))
 end
 

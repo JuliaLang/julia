@@ -24,7 +24,7 @@ d = BigInt("-246913578024691357802469135780")
 @assert d == -c
 
 
-ee=2^63-1
+ee = typemax(Int64)
 @assert typeof(BigInt(ee)) == BigInt
 @assert BigInt(ee)+1 == BigInt("9223372036854775808")
 
