@@ -132,11 +132,15 @@ end
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
-    time = strftime("%y%m%d%H%M%S", int(readall(`git log -1 --pretty=format:%ct`)))
-    push(VERSION.build, time)
+    ctime = int(readall(`git log -1 --pretty=format:%ct`))
+    push(VERSION.build, strftime("%y%m%d%H%M%S", ctime))
     commit = chomp(readall(`git rev-parse HEAD`))[1:10]
     clean = success(`git diff --quiet`) ? "" : "*"
     push(VERSION.build, strcat(commit,clean))
+    isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
+    global const _jl_commit_string = "Commit $(commit) ($isotime)$clean"
+catch
+    global const _jl_commit_string = ""
 end
 
 begin
@@ -150,7 +154,7 @@ I"               _
    _ _   _| |_  __ _   |  A fresh approach to technical computing
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $_jl_version_string
- _/ |\__'_|_|_|\__'_|  |
+ _/ |\__'_|_|_|\__'_|  |  $_jl_commit_string
 |__/                   |
 
 "
@@ -168,7 +172,7 @@ const _jl_banner_color =
    $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_version_string
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
+ $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
 $(jl)|__/$(tx)                   |
 
 \033[0m"
