@@ -105,7 +105,7 @@ end
 function string(x::BigInt) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
 	ret = cstring(s) #This copies s. 
-	_jl_free(convert(Ptr{Void},s))
+	_c_free(s)
 	ret
 end
 

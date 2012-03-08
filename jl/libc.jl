@@ -66,4 +66,4 @@ end
 
 ## Memory related ##
 
-_c_free(p::Ptr{Void}) = ccall(:free, Void, (Ptr{Void},), p)
+_c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
