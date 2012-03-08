@@ -3,6 +3,8 @@
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
+ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
+
 type ErrorException <: Exception
     msg::String
 end
@@ -91,8 +93,7 @@ dlsym(hnd, s::String) =
     ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, cstring(s))
 
 dlsym(hnd, s::Symbol) =
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}),
-          hnd, convert(Ptr{Uint8}, s))
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 
 dlopen(fname::String) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), cstring(fname))
@@ -152,10 +153,10 @@ Array(T, d::Int...) = Array(T, d)
 
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
-          int(m))
+          m)
 Array{T}(::Type{T}, m::Integer,n::Integer) =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
-          int(m), int(n))
+          m, n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3},
-          int(m), int(n), int(o))
+          m, n, o)

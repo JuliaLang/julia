@@ -58,6 +58,10 @@
 (define (decl-type v)
   (if (decl? v) (caddr v) 'Any))
 
+(define (sym-dot? e)
+  (and (length= e 3) (eq? (car e) '|.|)
+       (symbol? (cadr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -67,11 +71,15 @@
     (if (not (pair? e))
 	(cons e '())
 	(cons (map (lambda (x)
-		     (if (and (pair? x) (not (quoted? x)))
+		     (if (and (pair? x) (not (quoted? x))
+			      (not (sym-dot? x)))
 			 (let ((g (gensy)))
-			   (if (eq? (car x) '...)
-			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
-				      `(... ,g))
+			   (if (or (eq? (car x) '...) (eq? (car x) '&))
+			       (if (and (pair? (cadr x))
+					(not (quoted? (cadr x))))
+				   (begin (set! a (cons `(= ,g ,(cadr x)) a))
+					  `(,(car x) ,g))
+				   x)
 			       (begin (set! a (cons `(= ,g ,x) a))
 				      g)))
 			 x))
@@ -417,6 +425,57 @@
 				   (-/ |<:|) super)
 		       (values name params super)) ex)
       (error "invalid type signature")))
+
+;; insert calls to convert() in ccall, and pull out expressions that might
+;; need to be rooted before conversion.
+(define (lower-ccall name RT atypes args)
+  (define (ccall-conversion T x)
+    (cond ((eq? T 'Any)  x)
+	  ((and (pair? x) (eq? (car x) '&))
+	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
+	  (else
+	   `(call (top convert) ,T ,x))))
+  (define (argument-root a)
+    ;; something to keep rooted for this argument
+    (cond ((and (pair? a) (eq? (car a) '&))
+	   (argument-root (cadr a)))
+	  ((and (pair? a) (sym-dot? a))
+	   (cadr a))
+	  ((symbol? a)  a)
+	  (else         0)))
+  (let loop ((F atypes)  ;; formals
+	     (A args)    ;; actuals
+	     (stmts '()) ;; initializers
+	     (C '()))    ;; converted
+    (if (or (null? F) (null? A))
+	`(block
+	  ,.(reverse! stmts)
+	  (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
+		,@A))
+	(let* ((a     (car A))
+	       (isseq (and (pair? (car F)) (eq? (caar F) '...)))
+	       (ty    (if isseq (cadar F) (car F)))
+	       (rt (if (eq? ty 'Any)
+		       0
+		       (argument-root a)))
+	       (ca (cond ((eq? ty 'Any)
+			  a)
+			 ((and (pair? a) (eq? (car a) '&))
+			  (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
+			      (let ((g (gensy)))
+				(begin
+				  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
+				  `(& ,g)))
+			      a))
+			 ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
+			  (let ((g (gensy)))
+			    (begin
+			      (set! stmts (cons `(= ,g ,a) stmts))
+			      g)))
+			 (else
+			  a))))
+	  (loop (if isseq F (cdr F)) (cdr A) stmts
+		(list* rt (ccall-conversion ty ca) C))))))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
@@ -895,9 +954,7 @@
 		   `(call aTbT ,a ,b))
 
    (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   `(call (top ccall) ,name ,RT ,(cadddr __)
-			  ,@args)
-		   )
+		   (lower-ccall name RT argtypes args))
 
    )) ; patterns
 

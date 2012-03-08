@@ -31,7 +31,7 @@ tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
 getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
 getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
-                            f, t, int32(lim))
+                            f, t, lim)
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
@@ -545,6 +545,9 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         else
             t = Any
         end
+    elseif is(e.head,:&)
+        abstract_eval(e.args[1], vtypes, sv)
+        t = Any
     elseif is(e.head,:static_typeof)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
@@ -1307,7 +1310,7 @@ function inlineable(f, e::Expr, vars)
     sp = meth[2]::Tuple
     spvals = sp[2:2:]
     for i=1:length(spvals)
-        if !isleaftype(spvals[i]) && !isa(spvals[i],Integer)
+        if isa(spvals[i],TypeVar)
             return NF
         end
     end

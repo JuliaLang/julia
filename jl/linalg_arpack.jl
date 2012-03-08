@@ -16,8 +16,8 @@ for (T, Tc, saupd, real_naupd, complex_naupd) in
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call dnaupd
@@ -31,8 +31,8 @@ for (T, Tc, saupd, real_naupd, complex_naupd) in
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call znaupd
@@ -46,8 +46,8 @@ for (T, Tc, saupd, real_naupd, complex_naupd) in
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32},
                    Ptr{Int32}, Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, rwork, info)
         end
 
     end
@@ -70,9 +70,9 @@ for (T, Tc, seupd, real_neupd, complex_neupd) in
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, 
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, d, v, &ldv, sigma, 
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call dneupd  
@@ -89,9 +89,9 @@ for (T, Tc, seupd, real_neupd, complex_neupd) in
                    Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, dr, di, v, int32(ldv), sigmar, sigmai, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, dr, di, v, &ldv, sigmar, sigmai, workev,
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call zneupd 
@@ -107,9 +107,9 @@ for (T, Tc, seupd, real_neupd, complex_neupd) in
                    Ptr{$Tc}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  &rvec, all, select, d, v, &ldv, sigma, workev,
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, rwork, info)
         end
 
     end

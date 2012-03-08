@@ -2488,4 +2488,5 @@ void jl_init_types(void)
     thunk_sym = jl_symbol("thunk");
     anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");
+    amp_sym = jl_symbol("&");
 }

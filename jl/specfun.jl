@@ -1,5 +1,3 @@
-_jl_libamos = dlopen("libamos")
-
 besselj0(x::Float64) = ccall(dlsym(_jl_libfdm, :j0),  Float64, (Float64,), x)
 besselj0(x::Float32) = ccall(dlsym(_jl_libfdm, :j0f), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
@@ -24,8 +22,8 @@ function airy(k::Int, z::Complex128)
         ccall(dlsym(_jl_libamos, :zairy_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z),
-              id, int32(1),
+              &real(z), &imag(z),
+              &id, &1,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
@@ -33,8 +31,8 @@ function airy(k::Int, z::Complex128)
         ccall(dlsym(_jl_libamos, :zbiry_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z),
-              id, int32(1),
+              &real(z), &imag(z),
+              &id, &1,
               pointer(ai,1), pointer(ai,2),
               pointer(ae,1), pointer(ae,2))
         return complex(ai[1],ai[2])
@@ -59,7 +57,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesh_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(k), int32(1),
+              &real(z), &imag(z), &nu, &1, &k, &1,
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -69,7 +67,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesi_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &1, &1,
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -79,7 +77,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesj_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &1, &1,
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -89,7 +87,7 @@ let
         ccall(dlsym(_jl_libamos, :zbesk_), Void,
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &1, &1,
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(ae,2))
         return complex(cy[1],cy[2])
@@ -100,7 +98,7 @@ let
               (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Int32},
                Ptr{Float64}, Ptr{Float64}, Ptr{Int32}),
-              real(z), imag(z), nu, int32(1), int32(1),
+              &real(z), &imag(z), &nu, &1, &1,
               pointer(cy,1), pointer(cy,2),
               pointer(ae,1), pointer(wrk,1),
               pointer(wrk,2), pointer(ae,2))
