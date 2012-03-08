@@ -14,6 +14,7 @@ CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 GMP_VER=5.0.4
+ZLIB_VER=1.2.6
 
 ## high-level setup ##
 
@@ -22,7 +23,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper zlib zlib-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -54,7 +55,7 @@ endif
 
 # Hard-coded setup for libraries on Debian
 ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
+LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper zlib-wrapper
 endif
 
 WGET = wget
@@ -579,6 +580,48 @@ install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 clean-gmp-wrapper:
 	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
+
+## ZLIB ##
+
+ZLIB_OBJ_TARGET = $(EXTROOTLIB)/libz.$(SHLIB_EXT)
+
+compile-zlib: install-zlib
+install-zlib: $(ZLIB_OBJ_TARGET)
+
+zlib-$(ZLIB_VER).tar.gz:
+	$(WGET) http://zlib.net/$@
+zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
+	tar -zxvf $<
+	touch $@
+zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+	cd zlib-$(ZLIB_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT)) 
+$(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) 
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) check
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) install
+	touch $@
+
+clean-zlib:
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
+	rm -f $(ZLIB_OBJ_TARGET)
+distclean-zlib:
+	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
+
+##ZLIB Wrapper
+
+ZLIB_INC = -I zlib-$(ZLIB_VER)/
+ZLIB_LIB = -L$(EXTROOTLIB)/ -lz
+
+$(EXTROOTLIB)/zlib_wrapper.$(SHLIB_EXT): zlib_wrapper.c $(ZLIB_OBJ_TARGET)
+	$(CC) -O2 -shared -fPIC $(ZLIB_INC) $(ZLIB_LIB) zlib_wrapper.c -o $(EXTROOTLIB)/zlib_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
+	touch $@
+install-zlib-wrapper: $(EXTROOTLIB)/zlib_wrapper.$(SHLIB_EXT)
+
+clean-zlib-wrapper:
+	rm -f $(ZLIB_OBJ_TARGET) $(EXTROOTLIB)/zlib_wrapper.$(SHLIB_EXT)
+distclean-zlib-wrapper: clean-zlib-wrapper
+
 
 ## phony targets ##
 
