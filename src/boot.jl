@@ -189,4 +189,4 @@ end
 
 typealias ByteString Union(ASCIIString,UTF8String)
 
-include(fname::ByteString) = ccall(:jl_load, Void, (Ptr{Uint8},), &fname.data)
+include(fname::ByteString) = ccall(:jl_load_, Void, (Any,), fname)

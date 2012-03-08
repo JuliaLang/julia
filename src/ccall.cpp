@@ -216,8 +216,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!isVa)
             fargt_sig.push_back(t);
     }
-    if ((!isVa && tt->length  != nargs-3) ||
-        ( isVa && tt->length-1 > nargs-3))
+    if ((!isVa && tt->length  != (nargs-3)/2) ||
+        ( isVa && tt->length-1 > (nargs-3)/2))
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
@@ -229,7 +229,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // see if there are & arguments
-    for(i=4; i < nargs+1; i++) {
+    for(i=4; i < nargs+1; i+=2) {
         jl_value_t *argi = args[i];
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             haspointers = true;
@@ -256,10 +256,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     // emit arguments
-    Value *argvals[nargs+1-4];
+    Value *argvals[(nargs-3)/2];
     int last_depth = ctx->argDepth;
     int nargty = tt->length;
-    for(i=4; i < nargs+1; i++) {
+    for(i=4; i < nargs+1; i+=2) {
+        int ai = (i-4)/2;
         jl_value_t *argi = args[i];
         bool addressOf = false;
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
@@ -269,13 +270,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Value *arg = emit_expr(argi, ctx, true);
         Type *largty;
         jl_value_t *jargty;
-        if (isVa && (int)(i-4) >= nargty-1) {
+        if (isVa && ai >= nargty-1) {
             largty = fargt[nargty-1];
             jargty = jl_tparam0(jl_tupleref(tt,nargty-1));
         }
         else {
-            largty = fargt[i-4];
-            jargty = jl_tupleref(tt,i-4);
+            largty = fargt[ai];
+            jargty = jl_tupleref(tt,ai);
         }
         /*
 #ifdef JL_GC_MARKSWEEP
@@ -287,12 +288,12 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 #endif
         */
-        argvals[i-4] = julia_to_native(largty, jargty, arg, argi, addressOf,
-                                       i-3, ctx);
+        argvals[ai] = julia_to_native(largty, jargty, arg, argi, addressOf,
+                                      ai+1, ctx);
     }
     // the actual call
     Value *result = builder.CreateCall(llvmf,
-                                       ArrayRef<Value*>(&argvals[0],nargs-3));
+                                       ArrayRef<Value*>(&argvals[0],(nargs-3)/2));
 
     // restore temp argument area stack pointer
     if (haspointers) {

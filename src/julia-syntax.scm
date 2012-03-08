@@ -435,6 +435,14 @@
 	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
 	  (else
 	   `(call (top convert) ,T ,x))))
+  (define (argument-root a)
+    ;; something to keep rooted for this argument
+    (cond ((and (pair? a) (eq? (car a) '&))
+	   (argument-root (cadr a)))
+	  ((and (pair? a) (sym-dot? a))
+	   (cadr a))
+	  ((symbol? a)  a)
+	  (else         0)))
   (let loop ((F atypes)  ;; formals
 	     (A args)    ;; actuals
 	     (stmts '()) ;; initializers
@@ -447,6 +455,9 @@
 	(let* ((a     (car A))
 	       (isseq (and (pair? (car F)) (eq? (caar F) '...)))
 	       (ty    (if isseq (cadar F) (car F)))
+	       (rt (if (eq? ty 'Any)
+		       0
+		       (argument-root a)))
 	       (ca (cond ((eq? ty 'Any)
 			  a)
 			 ((and (pair? a) (eq? (car a) '&))
@@ -464,7 +475,7 @@
 			 (else
 			  a))))
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
-		(cons (ccall-conversion ty ca) C))))))
+		(list* rt (ccall-conversion ty ca) C))))))
 
 ; patterns that introduce lambdas
 (define binding-form-patterns
