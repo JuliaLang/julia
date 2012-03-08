@@ -152,11 +152,8 @@ Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
 Array(T, d::Int...) = Array(T, d)
 
 Array{T}(::Type{T}, m::Integer) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1},
-          m)
+    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
 Array{T}(::Type{T}, m::Integer,n::Integer) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2},
-          m, n)
+    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3},
-          m, n, o)
+    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)

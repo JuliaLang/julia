@@ -30,8 +30,7 @@ tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
 getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
-getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
-                            f, t, lim)
+getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 

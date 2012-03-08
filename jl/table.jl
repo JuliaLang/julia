@@ -46,8 +46,7 @@ type IdTable <: Associative
 end
 
 function assign(t::IdTable, v::ANY, k::ANY)
-    t.ht = ccall(:jl_eqtable_put,
-                 Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
+    t.ht = ccall(:jl_eqtable_put, Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
     return t
 end
 
@@ -77,11 +76,11 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
                                      shl_int(unbox64(b), 32))))
 
 if WORD_SIZE == 64
-_jl_hash64(x::Union(Int64,Uint64,Float64)) =
-    ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
+    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
+        ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
 else
-_jl_hash64(x::Union(Int64,Uint64,Float64)) =
-    ccall(:int64to32hash, Uint32, (Uint64,), boxui64(unbox64(x)))
+    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
+        ccall(:int64to32hash, Uint32, (Uint64,), boxui64(unbox64(x)))
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
@@ -124,11 +123,17 @@ end
 hash(x::Any) = uid(x)
 
 if WORD_SIZE == 64
-hash(s::ByteString) = ccall(:memhash, Uint64, (Ptr{Void}, Int), s.data, length(s.data))
-hash(s::ByteString, seed::Union(Int,Uint)) = ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32), s.data, length(s.data), uint32(seed))
+    hash(s::ByteString) =
+        ccall(:memhash, Uint64, (Ptr{Void}, Int), s.data, length(s.data))
+    hash(s::ByteString, seed::Union(Int,Uint)) =
+        ccall(:memhash_seed, Uint64, (Ptr{Void}, Int, Uint32),
+              s.data, length(s.data), uint32(seed))
 else
-hash(s::ByteString) = ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
-hash(s::ByteString, seed::Union(Int,Uint)) = ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32), s.data, length(s.data), uint32(seed))
+    hash(s::ByteString) =
+        ccall(:memhash32, Uint32, (Ptr{Void}, Int), s.data, length(s.data))
+    hash(s::ByteString, seed::Union(Int,Uint)) =
+        ccall(:memhash32_seed, Uint32, (Ptr{Void}, Int, Uint32),
+              s.data, length(s.data), uint32(seed))
 end
 
 
