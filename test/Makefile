@@ -8,7 +8,7 @@ all extra unicode::
 
 default all extra \
 core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode specfun bigint bigfloat::
+sparse lapack fft arpack random unicode special bigint bigfloat::
 	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
 perf:
@@ -28,6 +28,6 @@ clean:
 .PHONY: \
 	default all extra \
 	core numbers strings corelib hashing arrayops \
-	sparse lapack fft arpack random specfun \
+	sparse lapack fft arpack random special \
 	unicode perf \
 	benchmark clean
