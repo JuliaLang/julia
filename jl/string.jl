@@ -980,6 +980,9 @@ begin
 end
 
 float(x::String) = float64(x)
+parse_float(x::String) = float64(x)
+parse_float(::Type{Float64}, x::String) = float64(x)
+parse_float(::Type{Float32}, x::String) = float32(x)
 
 # copying a byte string (generally not needed due to "immutability")
 
