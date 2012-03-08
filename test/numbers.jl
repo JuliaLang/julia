@@ -216,6 +216,13 @@
 @assert !isless(+NaN,-NaN)
 @assert !isless(+NaN,+NaN)
 
+@assert  isequal(   0, 0.0)
+@assert  isequal( 0.0,   0)
+@assert !isequal(   0,-0.0)
+@assert !isequal(-0.0,   0)
+@assert  isless(-0.0,   0)
+@assert !isless(   0,-0.0)
+
 for x=-5:5, y=-5:5
     @assert (x==y)==(float64(x)==int64(y))
     @assert (x!=y)==(float64(x)!=int64(y))
