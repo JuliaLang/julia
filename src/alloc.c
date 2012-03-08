@@ -450,7 +450,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
-    if (jl_has_typevars((jl_value_t*)parameters))
+    if (!jl_is_leaf_type((jl_value_t*)t))
         t->uid = 0;
     else
         t->uid = jl_assign_type_uid();
@@ -494,7 +494,7 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
     else
         t->bnbits = (jl_value_t*)jl_null;
     t->nbits = nbits;
-    if (jl_has_typevars((jl_value_t*)parameters))
+    if (!jl_is_leaf_type((jl_value_t*)t))
         t->uid = 0;
     else if (makenew)
         t->uid = jl_assign_type_uid();

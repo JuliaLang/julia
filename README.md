@@ -97,6 +97,7 @@ Buliding Julia requires that the following software be installed:
 - **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
+- **[m4]**                      — needed to build GMP.
 
 With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
@@ -122,6 +123,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
+[m4]:           https://www.gnu.org/software/m4/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme

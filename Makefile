@@ -7,29 +7,31 @@ debug release: %: julia-% sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC external
-	@$(MAKE) -sC src lib$@
-	@$(MAKE) -sC ui $@
-	@$(MAKE) -sC j
+	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC src lib$@
+	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC ui $@
+	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC jl
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.j src/dump.c j/stage0.j
-	$(QUIET_JULIA) ./julia -b stage0.j
+sys0.ji: src/boot.jl src/dump.c jl/stage0.jl
+	$(QUIET_JULIA) ./julia -b stage0.jl
 	@rm -f sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-sys.ji: VERSION sys0.ji j/stage1.j j/sysimg.j j/start_image.j j/*.j
-	$(QUIET_JULIA) ./julia `test -f sys.ji && echo stage1.j || echo -J sys0.ji stage1.j`
+sys.ji: VERSION sys0.ji jl/stage1.jl jl/sysimg.jl jl/start_image.jl jl/*.jl
+	$(QUIET_JULIA) ./julia `test -f sys.ji && echo stage1.jl || echo -J sys0.ji stage1.jl`
 
 install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/lib
-	install -d $(DESTDIR)$(PREFIX)/share/julia/j
+	install -d $(DESTDIR)$(PREFIX)/share/julia/jl
 	install -d $(DESTDIR)$(PREFIX)/share/julia/contrib
 	install -d $(DESTDIR)$(PREFIX)/share/julia/examples
-	install -v julia* $(DESTDIR)$(PREFIX)/share/julia
+	install -v julia $(DESTDIR)$(PREFIX)/share/julia
+	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
+	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
-	install -v j/* $(DESTDIR)$(PREFIX)/share/julia/j
-	install -v examples/*.j $(DESTDIR)$(PREFIX)/share/julia/examples
-	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT)* lib/libfftw3f.$(SHLIB_EXT)* lib/libpcre.$(SHLIB_EXT)* lib/libpcrecpp.$(SHLIB_EXT)* lib/libpcreposix.$(SHLIB_EXT)* lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
+	install -v jl/* $(DESTDIR)$(PREFIX)/share/julia/jl
+	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
+	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT) lib/libpcrecpp.$(SHLIB_EXT) lib/libpcreposix.$(SHLIB_EXT) lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
@@ -50,7 +52,7 @@ clean:
 	@rm -f *~ *#
 	@rm -f sys0.ji
 	@rm -f sys.ji
-	@$(MAKE) -sC j clean
+	@$(MAKE) -sC jl clean
 	@$(MAKE) -sC src clean
 	@$(MAKE) -sC ui clean
 	@$(MAKE) -sC ui/webserver clean

@@ -750,7 +750,7 @@ DLLEXPORT int jl_is_rest_arg(jl_value_t *ex);
 
 jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams);
 
-jl_value_t *jl_compress_ast(jl_value_t *ast);
+jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast);
 jl_value_t *jl_uncompress_ast(jl_tuple_t *data);
 
 static inline int jl_vinfo_capt(jl_array_t *vi)
@@ -930,6 +930,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     JL_SIGATOMIC_BEGIN();
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
+    jl_current_task->state.bt = ss->bt;
     jl_current_task->state.ostream_obj = ss->ostream_obj;
     jl_current_task->state.current_output_stream = ss->current_output_stream;
     jl_current_task->state.prev = ss->prev;

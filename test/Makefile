@@ -8,14 +8,14 @@ all extra unicode::
 
 default all extra \
 core numbers strings corelib hashing arrayops \
-sparse lapack fft arpack random unicode amos bigint::
-	$(QUIET_JULIA) ../julia ./runtests.j $@
+sparse lapack fft arpack random unicode amos bigint bigfloat::
+	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
 perf:
 ifneq ($(MAKECMDGOALS),perf)
-	$(QUIET_JULIA) ../julia perf/$@.j
+	$(QUIET_JULIA) ../julia perf/$@.jl
 else
-	@../julia perf/$@.j | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
+	@../julia perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
 endif
 
 benchmark:
