@@ -26,9 +26,4 @@ d = BigFloat("-24.69135780242")
 @assert string(c) == "24.69135780242"
 @assert string(d) == "-24.69135780242"
 
-<<<<<<< HEAD
 @assert abs(div(BigFloat(3), BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
-=======
-@assert abs((BigFloat(3)/BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
-
->>>>>>> 386f42e063f0134a2411fcfc0ab93ca137f7d7f2
