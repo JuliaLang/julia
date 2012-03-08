@@ -157,7 +157,6 @@ function process_options(args::Array{Any,1})
             addprocs_ssh(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version $VERSION")
-            println(_jl_commit_string)
             exit(0)
         elseif args[i][1]!='-'
             # program

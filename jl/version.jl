@@ -131,23 +131,25 @@ end
 ## julia version info
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
-const VERSION_COMMIT = chomp(readall(`git rev-parse HEAD`))
-const VERSION_CLEAN = success(`git diff --quiet`)
-const VERSION_TIME = strftime("%F %T",int(readall(`git log -1 --pretty=format:%ct`)))
+try
+    time = strftime("%y%m%d%H%M%S", int(readall(`git log -1 --pretty=format:%ct`)))
+    push(VERSION.build, time)
+    commit = chomp(readall(`git rev-parse HEAD`))[1:10]
+    clean = success(`git diff --quiet`) ? "" : "*"
+    push(VERSION.build, strcat(commit,clean))
+end
 
 begin
 
 const _jl_version_string = "Version $VERSION"
-local _jl_version_clean = VERSION_CLEAN ? "" : "*"
-const _jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$_jl_version_clean"
 
 const _jl_banner_plain =
 I"               _
    _       _ _(_)_     |
-  (_)     | (_) (_)    |  A fresh approach to technical computing
-   _ _   _| |_  __ _   |
-  | | | | | | |/ _` |  |  $_jl_version_string
-  | | |_| | | | (_| |  |  $_jl_commit_string
+  (_)     | (_) (_)    |
+   _ _   _| |_  __ _   |  A fresh approach to technical computing
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  $_jl_version_string
  _/ |\__'_|_|_|\__'_|  |
 |__/                   |
 
@@ -162,10 +164,10 @@ local d4 = "\033[35m" # fourth dot
 const _jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
-  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing
-   $(jl)_ _   _| |_  __ _$(tx)   |
-  $(jl)| | | | | | |/ _` |$(tx)  |  $_jl_version_string
-  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_commit_string
+  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+   $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
+  $(jl)| | | | | | |/ _` |$(tx)  |
+  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_version_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
 $(jl)|__/$(tx)                   |
 
