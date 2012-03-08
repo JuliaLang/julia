@@ -32,7 +32,7 @@ let T = typevar(:T)
     @assert !subtype(Type{T},TypeVar)
 
     @assert isequal(tintersect((Range{Int},(Int,Int)),(AbstractArray{T},Dims)),
-                    (Range{Int64},(Int64,Int64)))
+                    (Range{Int},(Int,Int)))
 
     @assert isequal(tintersect((T, AbstractArray{T}),(Number, Array{Int,1})),
                     (Int, Array{Int,1}))
