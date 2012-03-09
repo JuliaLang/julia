@@ -1389,21 +1389,31 @@ function inlining_pass(e::Expr, vars)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall.
-    if length(e.args)<1
+    eargs = e.args
+    if length(eargs)<1
         return e
     end
-    arg1 = e.args[1]
+    arg1 = eargs[1]
     if is(e.head,:call1) && (is(arg1, :ccall) ||
                              (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
                              (isa(arg1,TopNode) && is(arg1.name, :ccall)))
         i0 = 3
+        isccall = true
     else
         i0 = 1
+        isccall = false
     end
-    for i=i0:length(e.args)
-        ei = e.args[i]
+    for i=i0:length(eargs)
+        ei = eargs[i]
         if isa(ei,Expr)
-            e.args[i] = inlining_pass(ei, vars)
+            eargs[i] = inlining_pass(ei, vars)
+        end
+    end
+    if isccall
+        for i=5:2:length(eargs)
+            if isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode)
+                eargs[i+1] = 0
+            end
         end
     end
     if is(e.head,:call1)
