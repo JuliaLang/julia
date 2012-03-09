@@ -252,6 +252,8 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
     A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
     s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
+    # correlation instead of convolution
+    filter = fliplr(fliplr(filter).')
     if border == "replicate"
         A[s1+1:end-s1, s2+1:end-s2] = img
         A[s1+1:end-s1, 1:s2] = repmat(img[:,1], 1, s2)
@@ -296,9 +298,32 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         separable = separable && (abs(S[i]) < 10^-7)
     end
     if separable
-        C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+        # conv2 isn't suitable for this (kernel center should be the actual center of the kernel)
+        #C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+        x = squeeze(U[:,1]*sqrt(S[1]))
+        y = squeeze(V[1,:]*sqrt(S[1]))
+        sa = size(A)
+        m = length(y)+sa[1]
+        n = length(x)+sa[2]
+        B = zeros(T, m, n)
+        B[int((length(x))/2)+1:sa[1]+int((length(x))/2),int((length(y))/2)+1:sa[2]+int((length(y))/2)] = A
+        y = fft([zeros(T,int((m-length(y)-1)/2)); y; zeros(T,int((m-length(y)-1)/2))])./m
+        x = fft([zeros(T,int((m-length(x)-1)/2)); x; zeros(T,int((n-length(x)-1)/2))])./n
+        C = fftshift(ifft2(fft2(B) .* (y * x.')))
+        if T <: Real
+            C = real(C)
+        end
     else
-        C = conv2(A, filter)
+        #C = conv2(A, filter)
+        sa, sb = size(A), size(filter)
+        At = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
+        Bt = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
+        At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
+        Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = filter
+        C = fftshift(ifft2(fft2(At).*fft2(Bt))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1)))
+        if T <: Real
+            C = real(C)
+        end
     end
     sc = size(C)
     out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
