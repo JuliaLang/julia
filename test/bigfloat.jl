@@ -1,4 +1,3 @@
-
 load ("../jl/bigfloat.jl")
 a=BigFloat("12.34567890121")
 b=BigFloat("12.34567890122")
@@ -28,4 +27,3 @@ d = BigFloat("-24.69135780242")
 @assert string(d) == "-24.69135780242"
 
 @assert abs((BigFloat(3)/BigFloat(2)) - BigFloat(1.5)) < 0.00000000001
-
