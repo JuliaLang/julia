@@ -31,11 +31,10 @@ extern zlib_pack *_jl_zlib_deflate(char *source)
     return pack;
 }
 
-extern zlib_pack *_jl_zlib_inflate(zlib_pack *pack)
+extern char *_jl_zlib_inflate(zlib_pack *pack)
 {
 	char *source = pack->s;
 	unsigned long source_bytes = pack->sz;
-	zlib_pack *opack = NULL;
 	
 	size_t dest_bytes = source_bytes*2;
     char *temp_buffer = (char *)malloc(dest_bytes); // guess how much we need
@@ -54,15 +53,11 @@ extern zlib_pack *_jl_zlib_inflate(zlib_pack *pack)
 	    final_buffer = (char *)malloc(dest_bytes);
 		memcpy(final_buffer, temp_buffer, dest_bytes);
 	    final_buffer[dest_bytes] = '\0';
-	
-		opack = (zlib_pack *)malloc(sizeof(zlib_pack));
-		opack->s = final_buffer;
-		opack->sz = dest_bytes;
 	}
 	
 	free(temp_buffer);
 	
-	return opack;
+	return final_buffer;
 }
 
 extern char *_jl_zlib_print_pack(zlib_pack *pack) {
