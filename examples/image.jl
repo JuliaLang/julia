@@ -374,3 +374,7 @@ end
 
 imgaussiannoise{T}(img::Array{T}, variance::Number) = imgaussiannoise(img, variance, 0)
 imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
+
+# 'illustrates' fourier transform
+ftshow{T}(A::Array{T,2}) = imshow(log(1+abs(fftshift(A))),[])
+
