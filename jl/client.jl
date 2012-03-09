@@ -199,7 +199,7 @@ function _start()
 
         # Load customized startup
         try include(strcat(getcwd(),"/startup.jl")) end
-        try include(strcat(ENV["HOME"],"/.juliarc")) end
+        try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
 
         (quiet,repl) = process_options(ARGS)
         if repl

@@ -39,8 +39,7 @@ copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
-          b, a, length(b)*sizeof(T))
+    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint), b, a, length(b)*sizeof(T))
     return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
@@ -49,8 +48,7 @@ function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != numel(a)
         error("reshape: invalid dimensions")
     end
-    ccall(:jl_reshape_array, Any, (Any, Any, Any),
-          Array{T,N}, a, dims)::Array{T,N}
+    ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
 end
 
 ## Constructors ##

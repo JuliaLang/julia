@@ -145,20 +145,6 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
     }
 }
 
-static void jl_serialize_methlist(ios_t *s, jl_methlist_t *ml)
-{
-    while (ml != NULL) {
-        jl_serialize_value(s, ml->sig);
-        assert(jl_is_tuple(ml->sig));
-        write_int8(s, ml->va);
-        jl_serialize_value(s, ml->tvars);
-        jl_serialize_value(s, ml->func);
-        jl_serialize_value(s, ml->invokes);
-        ml = ml->next;
-    }
-    jl_serialize_value(s, NULL);
-}
-
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
     writetag(s, jl_module_type);
@@ -345,14 +331,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
     }
-    else if (jl_typeis(v, jl_methtable_type)) {
-        writetag(s, jl_methtable_type);
-        jl_methtable_t *mt = (jl_methtable_t*)v;
-        jl_serialize_methlist(s, mt->defs);
-        jl_serialize_methlist(s, mt->cache);
-        jl_serialize_value(s, mt->cache_1arg);
-        write_int32(s, mt->max_args);
-    }
     else if (jl_typeis(v, jl_task_type)) {
         jl_error("Task cannot be serialized");
     }
@@ -495,28 +473,6 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
     }
     assert(0);
     return NULL;
-}
-
-static jl_methlist_t *jl_deserialize_methlist(ios_t *s)
-{
-    jl_methlist_t *ml = NULL;
-    jl_methlist_t **pnext = &ml;
-    while (1) {
-        jl_value_t *sig = jl_deserialize_value(s);
-        if (sig == NULL)
-            break;
-        jl_methlist_t *node = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
-        node->sig = (jl_tuple_t*)sig;
-        assert(jl_is_tuple(sig));
-        node->va = read_int8(s);
-        node->tvars = (jl_tuple_t*)jl_deserialize_value(s);
-        node->func = (jl_function_t*)jl_deserialize_value(s);
-        node->invokes = (jl_methtable_t*)jl_deserialize_value(s);
-        node->next = NULL;
-        *pnext = node;
-        pnext = &node->next;
-    }
-    return ml;
 }
 
 static jl_value_t *jl_deserialize_value(ios_t *s)
@@ -685,17 +641,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                             (jl_function_t*)jl_deserialize_value(s));
         }
         return (jl_value_t*)m;
-    }
-    else if (vtag == (jl_value_t*)jl_methtable_type) {
-        jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-        if (usetable)
-            ptrhash_put(&backref_table, (void*)(ptrint_t)pos, mt);
-        mt->type = (jl_type_t*)jl_methtable_type;
-        mt->defs = jl_deserialize_methlist(s);
-        mt->cache = jl_deserialize_methlist(s);
-        mt->cache_1arg = (jl_array_t*)jl_deserialize_value(s);
-        mt->max_args = read_int32(s);
-        return (jl_value_t*)mt;
     }
     else if (vtag == (jl_value_t*)SmallInt64_tag) {
         jl_value_t *v = jl_box_int64(read_int32(s));
@@ -981,10 +926,10 @@ void jl_init_serializer(void)
                      jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
                      (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
-                     (void*)SmallInt64_tag, jl_methtable_type, jl_module_type,
-                     jl_lambda_info_type, jl_tvar_type,
+                     (void*)SmallInt64_tag, jl_module_type, jl_tvar_type,
+                     jl_lambda_info_type,
 
-                     jl_null, jl_any_type, jl_symbol("Any"),
+                     jl_null, jl_false, jl_true, jl_any_type, jl_symbol("Any"),
                      jl_symbol("Array"), jl_symbol("TypeVar"),
                      jl_symbol("FuncKind"), jl_symbol("Box"),
                      lambda_sym, body_sym, return_sym, call_sym, colons_sym,
@@ -1006,8 +951,7 @@ void jl_init_serializer(void)
                      jl_symbol("add_int"), jl_symbol("sub_int"),
                      jl_symbol("mul_int"), 
                      jl_symbol("add_float"), jl_symbol("sub_float"),
-                     jl_symbol("mul_float"), jl_symbol("unbox"),
-                     jl_symbol("unbox8"), jl_symbol("unbox16"),
+                     jl_symbol("mul_float"), jl_symbol("unbox8"),
                      jl_symbol("unbox32"), jl_symbol("unbox64"),
                      jl_symbol("box"), jl_symbol("boxf32"), jl_symbol("boxf64"),
                      jl_symbol("boxsi32"), jl_symbol("boxsi64"),
@@ -1018,7 +962,6 @@ void jl_init_serializer(void)
                      jl_symbol("getfield"), jl_symbol("_setfield"),
                      jl_symbol("tupleref"), jl_symbol("tuplelen"),
                      jl_symbol("apply_type"), jl_symbol("tuple"),
-                     jl_false, jl_true,
 
                      jl_box_int32(0), jl_box_int32(1), jl_box_int32(2),
                      jl_box_int32(3), jl_box_int32(4), jl_box_int32(5),
@@ -1076,13 +1019,14 @@ void jl_init_serializer(void)
                      jl_any_func, jl_typename_type,
                      jl_task_type, jl_union_kind, jl_function_type,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
-                     jl_array_any_type, jl_intrinsic_type,
+                     jl_array_any_type, jl_intrinsic_type, jl_method_type,
+                     jl_methtable_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
                      jl_func_kind->name, jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
-                     jl_tvar_type->name,
+                     jl_method_type->name, jl_tvar_type->name,
                      jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_lambda_info_type->name, jl_module_type->name,
                      jl_box_type->name,

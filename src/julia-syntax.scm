@@ -710,11 +710,17 @@
 						idxs)))
 			  (arr   (if reuse (gensy) a))
 			  (stmts (if reuse `((= ,arr ,a)) '())))
-		     (receive
-		      (new-idxs stuff) (process-indexes arr idxs)
-		      `(block
-			,@(append stmts stuff)
-			(call (top assign) ,arr ,rhs ,@new-idxs)))))
+		     (let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
+			    (r    (if rrhs (gensy) rhs))
+			    (rini (if rrhs `((= ,r ,rhs)) '())))
+		       (receive
+			(new-idxs stuff) (process-indexes arr idxs)
+			`(block
+			  ,@stmts
+			  ,@stuff
+			  ,@rini
+			  (call (top assign) ,arr ,r ,@new-idxs)
+			  ,r)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -1050,7 +1056,6 @@
 	       (call (top next) ,range (call (top start) ,range)) 1))
 
       ;; evaluate one expression to figure out type and size
-      ;; compute just one value by inserting a break inside loops
       (define (evaluate-one ranges)
 	`(block
 	  ,@(map (lambda (r)

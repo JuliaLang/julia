@@ -11,4 +11,4 @@ function std(v::AbstractVector)
     return sqrt(s/(n-1))
 end
 
-median(v::AbstractVector) = select(v, div(numel(v),2))
+median(v::AbstractVector) = select(v, div(numel(v)+1,2))
