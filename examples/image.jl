@@ -361,8 +361,9 @@ function imthresh{T}(img::Array{T,2}, threshold::Float)
     end
     img_max, img_min = max(img), min(img)
     tmp = zeros(T, size(img))
-    tmp[img >= threshold*(img_max-img_min)+img_min] = 1
-    tmp[img <  threshold*(img_max-img_min)+img_min] = 0
+    # matter of taste?
+    #tmp[img >= threshold*(img_max-img_min)+img_min] = 1
+    tmp[img >= threshold] = 1
     return tmp
 end
 
