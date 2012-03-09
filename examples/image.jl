@@ -52,13 +52,17 @@ function ppmwrite(img, file::String)
             error("unsupported array dimensions")
         end
     elseif eltype(img) <: Float
-        if ndims(img) == 3 && size(img,3) == 3
+        # prevent overflow
+        a = copy(img)
+        a[img > 1] = 1
+        a[img < 0] = 0
+        if ndims(a) == 3 && size(a,3) == 3
             for i=1:n, j=1:m, k=1:3
-                write(s, uint8(255*img[i,j,k]))
+                write(s, uint8(255*a[i,j,k]))
             end
-        elseif ndims(img) == 2
+        elseif ndims(a) == 2
             for i=1:n, j=1:m, k=1:3
-                write(s, uint8(255*img[i,j]))
+                write(s, uint8(255*a[i,j]))
             end
         else
             error("unsupported array dimensions")
@@ -240,10 +244,20 @@ end
 # normalized by Array size
 sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
 
+# normalized cross correlation
+function ncc{T}(A::Array{T}, B::Array{T})
+    Am = A[:]-mean(A[:])
+    Bm = B[:]-mean(B[:])
+    res = ((Am/norm(Am))'*(Bm/norm(Bm)))
+    return res
+end
+
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
     A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
     s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
+    # correlation instead of convolution
+    filter = fliplr(fliplr(filter).')
     if border == "replicate"
         A[s1+1:end-s1, s2+1:end-s2] = img
         A[s1+1:end-s1, 1:s2] = repmat(img[:,1], 1, s2)
@@ -288,9 +302,32 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         separable = separable && (abs(S[i]) < 10^-7)
     end
     if separable
-        C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+        # conv2 isn't suitable for this (kernel center should be the actual center of the kernel)
+        #C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
+        x = squeeze(U[:,1]*sqrt(S[1]))
+        y = squeeze(V[1,:]*sqrt(S[1]))
+        sa = size(A)
+        m = length(y)+sa[1]
+        n = length(x)+sa[2]
+        B = zeros(T, m, n)
+        B[int((length(x))/2)+1:sa[1]+int((length(x))/2),int((length(y))/2)+1:sa[2]+int((length(y))/2)] = A
+        y = fft([zeros(T,int((m-length(y)-1)/2)); y; zeros(T,int((m-length(y)-1)/2))])./m
+        x = fft([zeros(T,int((m-length(x)-1)/2)); x; zeros(T,int((n-length(x)-1)/2))])./n
+        C = fftshift(ifft2(fft2(B) .* (y * x.')))
+        if T <: Real
+            C = real(C)
+        end
     else
-        C = conv2(A, filter)
+        #C = conv2(A, filter)
+        sa, sb = size(A), size(filter)
+        At = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
+        Bt = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
+        At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
+        Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = filter
+        C = fftshift(ifft2(fft2(At).*fft2(Bt))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1)))
+        if T <: Real
+            C = real(C)
+        end
     end
     sc = size(C)
     out = C[int(sc[1]/2-si[1]/2):int(sc[1]/2+si[1]/2)-1, int(sc[2]/2-si[2]/2):int(sc[2]/2+si[2]/2)-1]
@@ -317,3 +354,27 @@ function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
     end
     u
 end
+
+function imthresh{T}(img::Array{T,2}, threshold::Float)
+    if !(0.0 <= threshold <= 1.0)
+        error("threshold must be between 0 and 1")
+    end
+    img_max, img_min = max(img), min(img)
+    tmp = zeros(T, size(img))
+    # matter of taste?
+    #tmp[img >= threshold*(img_max-img_min)+img_min] = 1
+    tmp[img >= threshold] = 1
+    return tmp
+end
+
+function imgaussiannoise{T}(img::Array{T}, variance::Number, mean::Number)
+    tmp = img + sqrt(variance)*randn(size(img)) + mean
+    return tmp
+end
+
+imgaussiannoise{T}(img::Array{T}, variance::Number) = imgaussiannoise(img, variance, 0)
+imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
+
+# 'illustrates' fourier transform
+ftshow{T}(A::Array{T,2}) = imshow(log(1+abs(fftshift(A))),[])
+
