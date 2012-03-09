@@ -52,13 +52,17 @@ function ppmwrite(img, file::String)
             error("unsupported array dimensions")
         end
     elseif eltype(img) <: Float
-        if ndims(img) == 3 && size(img,3) == 3
+        # prevent overflow
+        a = copy(img)
+        a[img > 1] = 1
+        a[img < 0] = 0
+        if ndims(a) == 3 && size(a,3) == 3
             for i=1:n, j=1:m, k=1:3
-                write(s, uint8(255*img[i,j,k]))
+                write(s, uint8(255*a[i,j,k]))
             end
-        elseif ndims(img) == 2
+        elseif ndims(a) == 2
             for i=1:n, j=1:m, k=1:3
-                write(s, uint8(255*img[i,j]))
+                write(s, uint8(255*a[i,j]))
             end
         else
             error("unsupported array dimensions")
@@ -356,8 +360,17 @@ function imthresh{T}(img::Array{T,2}, threshold::Float)
         error("threshold must be between 0 and 1")
     end
     img_max, img_min = max(img), min(img)
-    tmp = zeros(size(img))
+    tmp = zeros(T, size(img))
     tmp[img >= threshold*(img_max-img_min)+img_min] = 1
     tmp[img <  threshold*(img_max-img_min)+img_min] = 0
     return tmp
 end
+
+function imgaussiannoise{T}(img::Array{T}, variance::Number, mean::Number)
+    tmp = zeros(T, size(img))
+    tmp = img + sqrt(variance)*randn(size(img)) + mean
+    return tmp
+end
+
+imgaussiannoise{T}(img::Array{T}, variance::Number) = imgaussiannoise(img, variance, 0)
+imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
