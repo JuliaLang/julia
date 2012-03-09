@@ -350,3 +350,14 @@ function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
     end
     u
 end
+
+function imthresh{T}(img::Array{T,2}, threshold::Float)
+    if !(0.0 <= threshold <= 1.0)
+        error("threshold must be between 0 and 1")
+    end
+    img_max, img_min = max(img), min(img)
+    tmp = zeros(size(img))
+    tmp[img >= threshold*(img_max-img_min)+img_min] = 1
+    tmp[img <  threshold*(img_max-img_min)+img_min] = 0
+    return tmp
+end
