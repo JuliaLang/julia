@@ -368,7 +368,6 @@ function imthresh{T}(img::Array{T,2}, threshold::Float)
 end
 
 function imgaussiannoise{T}(img::Array{T}, variance::Number, mean::Number)
-    tmp = zeros(T, size(img))
     tmp = img + sqrt(variance)*randn(size(img)) + mean
     return tmp
 end
