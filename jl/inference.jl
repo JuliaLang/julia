@@ -1532,7 +1532,8 @@ function tuple_elim_pass(ast::Expr)
                                         end
                                         stmt.args[2] = r
                                         k += 1
-                                    elseif is_top_call(rhs,:convert) &&
+                                    elseif length(rhs.args)>2 &&
+                                        isa(rhs.args[3],Expr) &&
                                         is_top_call(rhs.args[3],:tupleref) &&
                                         isequal(rhs.args[3].args[2],tupname)
                                         # assignment with conversion
