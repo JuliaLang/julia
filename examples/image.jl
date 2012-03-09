@@ -240,6 +240,14 @@ end
 # normalized by Array size
 sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
 
+# normalized cross correlation
+function ncc{T}(A::Array{T}, B::Array{T})
+    Am = A[:]-mean(A[:])
+    Bm = B[:]-mean(B[:])
+    res = ((Am/norm(Am))'*(Bm/norm(Bm)))
+    return res
+end
+
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     si, sf = size(img), size(filter)
     A = zeros(T, si[1]+sf[1]-1, si[2]+sf[2]-1)
