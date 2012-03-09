@@ -133,11 +133,11 @@ end
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
     ctime = int(readall(`git log -1 --pretty=format:%ct`))
-    push(VERSION.build, strftime("%Y%m%d", ctime))
-    push(VERSION.build, strftime("%H%M%S", ctime))
+    push(VERSION.build, ctime)
     commit = chomp(readall(`git rev-parse HEAD`))[1:10]
+    push(VERSION.build, strcat("r", commit[1:4]))
     clean = success(`git diff --quiet`)
-    push(VERSION.build, strcat(commit[1:4], clean ? "" : "x"))
+    if !clean; push(VERSION.build, "dirty"); end
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
     clean = clean ? "" : "*"
     global const _jl_commit_string = "Commit $commit ($isotime)$clean"
