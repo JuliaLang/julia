@@ -5,16 +5,6 @@
  * May 2011
  */
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "Ws2_32.lib")
-#else
-#include <sys/socket.h>
-#include <netdb.h>
-#include <unistd.h>
-#endif
-
 #include "network.h"
 
 using namespace std;
