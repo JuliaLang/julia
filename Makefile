@@ -4,8 +4,8 @@ include $(JULIAHOME)/Make.inc
 default: release
 
 debug release:
-	$(MAKE) julia-$@
-	$(MAKE) sys.ji
+	@$(MAKE) -s julia-$@
+	@$(MAKE) -s sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC external
@@ -64,9 +64,6 @@ cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 
 distclean: cleanall
-
-#distclean: cleanall
-#	$(MAKE) -C external cleanall
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall
