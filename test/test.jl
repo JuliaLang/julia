@@ -29,13 +29,12 @@ test_group("exception tests")
 
 test_group("printing tests")
 @test print_to_string(show, :(1+2)) == "+(1,2)"
-# could we do something like:
-# @test prints(show, ([1,2]), "[1, 2]")
-# where prints() applies the 2nd-arg tuple to the first arg in print_to_string?
+@test prints(print_joined, ([1,2,3], " : "), "1 : 2 : 3") # prints is a helper
+@test prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3") # fail
 
 test_group("performance tests")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @test fib(20) == 6765
-# @test takes_less_than(fib(20), .1)
+@test takes_less_than(fib(20), 1e-6)
 
 # shutdown goes here

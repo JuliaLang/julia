@@ -8,6 +8,7 @@ function runtests(onestr::String)
     else
     # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
     # that list
+    # TODO
     
     # otherwise, throw an error
         error("not a file or directory: $onestr")
@@ -33,7 +34,7 @@ function test_printer_simple(hdl::Task)
             print(".")
         else
             println("")
-            show(t)
+            show(t) # TODO spiff up
             println("")
         end
     end
@@ -66,7 +67,7 @@ end
 TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
 
 # had some issues with struct access inside the macro, so don't build the TestResult until the end,
-# which is ugly and should be fixed
+# which is ugly and should be fixed (TODO)
 macro test(ex)
     res, elapsed, exc, op, arg1, arg2, arg3 = gensym(7)
     quote
@@ -78,7 +79,7 @@ macro test(ex)
         local $arg2 = Nothing
         
         try
-            $elapsed = @elapsed $res = assert_test($ex)
+            $elapsed = @elapsed $res = eval($ex)
         catch except
             $exc = except
         end
@@ -95,9 +96,20 @@ macro test(ex)
                     $op = "approx_eq"
                     $arg1 = eval($ex.args[2])
                     $arg2 = eval($ex.args[3])
+                elseif ($string(ex.args[1]) == "prints")
+                    $op = "prints"
+                    $arg1 = print_to_string(eval($ex.args[2]), eval($ex.args[3])...)
+                    #$arg2 = eval($ex.args[4]) # TODO fails?!
                 end
             end
+        end
         
+        # if we're running takes_less_than, see how we did
+        if ($string(ex.args[1]) == "takes_less_than")
+            $res = $elapsed < eval($ex.args[3])
+            $op = "takes_less_than"
+            $arg1 = $elapsed
+            $arg2 = eval($ex.args[3])
         end
         
         produce(TestResult(tls(:context), tls(:group), $string(ex), $res, $elapsed,
@@ -106,9 +118,20 @@ macro test(ex)
 end
 
 # helpful utility tests, supported by the macro
+# 
+
 function approx_eq(a, b, tol)
     abs(a - b) < tol
 end
 approx_eq(a, b) = approx_eq(a, b, 1e-6)
 
+function prints(fn::Function, args, expected::String) 
+    print_to_string(fn, args...) == expected
+end
+
+#@test takes_less_than(fib(20), .1)
+function takes_less_than(anything, expected)
+    # the magic happens in @test
+    true
+end
 
