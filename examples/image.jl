@@ -393,3 +393,23 @@ function ntsc2rgb{T}(img::Array{T})
     end
     return out
 end
+
+function rgb2ycbcr{T}(img::Array{T})
+    trans = [65.481 128.533 24.966; -37.797 -74.203 112; 112 -93.786 -18.214]
+    offset = [16.0; 128.0; 128.0]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = offset + trans * squeeze(img[i,j,:])
+    end
+    return out
+end
+
+function ycbcr2rgb{T}(img::Array{T})
+    trans = inv([65.481 128.533 24.966; -37.797 -74.203 112; 112 -93.786 -18.214])
+    offset = [16.0; 128.0; 128.0]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * (squeeze(img[i,j,:]) - offset)
+    end
+    return out
+end
