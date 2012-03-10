@@ -417,3 +417,43 @@ end
 function imcomplement{T}(img::Array{T})
     return 1 - img
 end
+
+function rgb2hsi{T}(img::Array{T})
+    R = img[:,:,1]
+    G = img[:,:,2]
+    B = img[:,:,3]
+    H = acos((1/2*(2*R - G - B)) ./ (((R - G).^2 + (R - B).*(G - B)).^(1/2)+eps(T))) 
+    H[B > G] = 2*pi - H[B > G]
+    H /= 2*pi
+    rgb_sum = R + G + B
+    rgb_sum[rgb_sum == 0] = eps(T)
+    S = 1 - 3./(rgb_sum).*min(R, G, B)
+    H[S == 0] = 0
+    I = 1/3*(R + G + B)
+    return cat(3, H, S, I)
+end
+
+function hsi2rgb{T}(img::Array{T})
+    H = img[:,:,1]*2*pi
+    S = img[:,:,2]
+    I = img[:,:,3]
+    R = zeros(T, size(img,1), size(img,2))
+    G = zeros(T, size(img,1), size(img,2))
+    B = zeros(T, size(img,1), size(img,2))
+    RG = 0 <= H < 2*pi/3
+    GB = 2*pi/3 <= H < 4*pi/3
+    BR = 4*pi/3 <= H < 2*pi
+    # RG sector
+    B[RG] = I[RG].*(1 - S[RG])
+    R[RG] = I[RG].*(1 + (S[RG].*cos(H[RG]))./cos(pi/3 - H[RG]))
+    G[RG] = 3*I[RG] - R[RG] - B[RG]
+    # GB sector
+    R[GB] = I[GB].*(1 - S[GB])
+    G[GB] = I[GB].*(1 + (S[GB].*cos(H[GB] - pi/3))./cos(H[GB]))
+    B[GB] = 3*I[GB] - R[GB] - G[GB]
+    # BR sector
+    G[BR] = I[BR].*(1 - S[BR])
+    B[BR] = I[BR].*(1 + (S[BR].*cos(H[BR] - 2*pi/3))./cos(-pi/3 - H[BR]))
+    R[BR] = 3*I[BR] - G[BR] - B[BR]
+    return cat(3, R, G, B)
+end
