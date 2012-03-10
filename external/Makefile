@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = fdlibm dsfmt arpack suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -50,6 +50,10 @@ endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 0)
 LIBS += lapack
+endif
+
+ifeq ($(USE_SYSTEM_FFTW), 0)
+LIBS += fftw
 endif
 
 # Hard-coded setup for libraries on Debian
