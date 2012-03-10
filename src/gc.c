@@ -436,20 +436,6 @@ static void gc_mark_stack(jl_gcframe_t *s)
 }
 #endif
 
-static void gc_mark_methlist(jl_methlist_t *ml)
-{
-    while (ml != NULL) {
-        gc_setmark(ml);
-        GC_Markval(ml->sig);
-        GC_Markval(ml->tvars);
-        if (ml->func != NULL)
-            GC_Markval(ml->func);
-        if (ml->invokes)
-            GC_Markval(ml->invokes);
-        ml = ml->next;
-    }
-}
-
 static void gc_mark_module(jl_module_t *m)
 {
     size_t i;
@@ -539,12 +525,6 @@ static void gc_markval_(jl_value_t *v)
             }
         }
     }
-    else if (vt == (jl_value_t*)jl_methtable_type) {
-        jl_methtable_t *mt = (jl_methtable_t*)v;
-        gc_mark_methlist(mt->defs);
-        gc_mark_methlist(mt->cache);
-        if (mt->cache_1arg) GC_Markval(mt->cache_1arg);
-    }
     else if (vt == (jl_value_t*)jl_module_type) {
         gc_mark_module((jl_module_t*)v);
     }
@@ -626,6 +606,7 @@ static void gc_mark(void)
 
     // invisible builtin values
     GC_Markval(jl_methtable_type);
+    GC_Markval(jl_method_type);
     GC_Markval(jl_any_func);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);

@@ -58,6 +58,10 @@
 (define (decl-type v)
   (if (decl? v) (caddr v) 'Any))
 
+(define (sym-dot? e)
+  (and (length= e 3) (eq? (car e) '|.|)
+       (symbol? (cadr e))))
+
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
 ; retuns a pair (expr . assignments)
@@ -67,11 +71,15 @@
     (if (not (pair? e))
 	(cons e '())
 	(cons (map (lambda (x)
-		     (if (and (pair? x) (not (quoted? x)))
+		     (if (and (pair? x) (not (quoted? x))
+			      (not (sym-dot? x)))
 			 (let ((g (gensy)))
-			   (if (eq? (car x) '...)
-			       (begin (set! a (cons `(= ,g ,(cadr x)) a))
-				      `(... ,g))
+			   (if (or (eq? (car x) '...) (eq? (car x) '&))
+			       (if (and (pair? (cadr x))
+					(not (quoted? (cadr x))))
+				   (begin (set! a (cons `(= ,g ,(cadr x)) a))
+					  `(,(car x) ,g))
+				   x)
 			       (begin (set! a (cons `(= ,g ,x) a))
 				      g)))
 			 x))
@@ -83,16 +91,16 @@
     `(block ,@(cdr e)
 	    (= ,(car e) (call ,op ,(car e) ,rhs)))))
 
-; (a > b > c) => (&& (call > a b) (call > b c))
+; (a > b > c) => (call & (call > a b) (call > b c))
 (define (expand-compare-chain e)
   (if (length> e 3)
       (let ((arg2 (caddr e)))
 	(if (pair? arg2)
 	    (let ((g (gensy)))
-	      `(&& (call ,(cadr e) ,(car e) (= ,g ,arg2))
-		   ,(expand-compare-chain (cons g (cdddr e)))))
-	    `(&& (call ,(cadr e) ,(car e) ,arg2)
-		 ,(expand-compare-chain (cddr e)))))
+	      `(call & (call ,(cadr e) ,(car e) (= ,g ,arg2))
+		     ,(expand-compare-chain (cons g (cdddr e)))))
+	    `(call & (call ,(cadr e) ,(car e) ,arg2)
+		   ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
 (define (end-val a n tuples s)
@@ -418,6 +426,57 @@
 		       (values name params super)) ex)
       (error "invalid type signature")))
 
+;; insert calls to convert() in ccall, and pull out expressions that might
+;; need to be rooted before conversion.
+(define (lower-ccall name RT atypes args)
+  (define (ccall-conversion T x)
+    (cond ((eq? T 'Any)  x)
+	  ((and (pair? x) (eq? (car x) '&))
+	   `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
+	  (else
+	   `(call (top convert) ,T ,x))))
+  (define (argument-root a)
+    ;; something to keep rooted for this argument
+    (cond ((and (pair? a) (eq? (car a) '&))
+	   (argument-root (cadr a)))
+	  ((and (pair? a) (sym-dot? a))
+	   (cadr a))
+	  ((symbol? a)  a)
+	  (else         0)))
+  (let loop ((F atypes)  ;; formals
+	     (A args)    ;; actuals
+	     (stmts '()) ;; initializers
+	     (C '()))    ;; converted
+    (if (or (null? F) (null? A))
+	`(block
+	  ,.(reverse! stmts)
+	  (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
+		,@A))
+	(let* ((a     (car A))
+	       (isseq (and (pair? (car F)) (eq? (caar F) '...)))
+	       (ty    (if isseq (cadar F) (car F)))
+	       (rt (if (eq? ty 'Any)
+		       0
+		       (argument-root a)))
+	       (ca (cond ((eq? ty 'Any)
+			  a)
+			 ((and (pair? a) (eq? (car a) '&))
+			  (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
+			      (let ((g (gensy)))
+				(begin
+				  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
+				  `(& ,g)))
+			      a))
+			 ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
+			  (let ((g (gensy)))
+			    (begin
+			      (set! stmts (cons `(= ,g ,a) stmts))
+			      g)))
+			 (else
+			  a))))
+	  (loop (if isseq F (cdr F)) (cdr A) stmts
+		(list* rt (ccall-conversion ty ca) C))))))
+
 ; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
@@ -651,11 +710,17 @@
 						idxs)))
 			  (arr   (if reuse (gensy) a))
 			  (stmts (if reuse `((= ,arr ,a)) '())))
-		     (receive
-		      (new-idxs stuff) (process-indexes arr idxs)
-		      `(block
-			,@(append stmts stuff)
-			(call (top assign) ,arr ,rhs ,@new-idxs)))))
+		     (let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
+			    (r    (if rrhs (gensy) rhs))
+			    (rini (if rrhs `((= ,r ,rhs)) '())))
+		       (receive
+			(new-idxs stuff) (process-indexes arr idxs)
+			`(block
+			  ,@stmts
+			  ,@stuff
+			  ,@rini
+			  (call (top assign) ,arr ,r ,@new-idxs)
+			  ,r)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -797,37 +862,6 @@
 
    ;; for loops
 
-   ; for loop over ranges
-   (pattern-lambda
-    (for (= var (: a b c)) body)
-    (begin
-      (if (not (symbol? var))
-	  (error "invalid for loop syntax: expected symbol"))
-      (let ((cnt (gensy))
-	    (lim (gensy))
-	    (aa  (gensy))
-	    (bb  (gensy)))
-	`(scope-block
-	  (block
-	   (= (tuple ,aa ,bb) (call (top promote) ,a ,b))
-	   (= ,cnt 0)
-	   (= ,lim
-	      (call
-	       (top int)
-	       (call (top itrunc) (call + 1 (call / (call - ,c ,aa) ,bb)))))
-	   (break-block loop-exit
-			(_while (call < ,cnt ,lim)
-				(block
-				 (= ,var (call + ,aa (call *
-							   (call
-							    (top oftype)
-							    ,aa
-							    ,cnt)
-							   ,bb)))
-				 (break-block loop-cont
-					      ,body)
-				 (= ,cnt (call + 1 ,cnt))))))))))
-
    (pattern-lambda
     (for (= var (: a b)) body)
     (begin
@@ -926,9 +960,7 @@
 		   `(call aTbT ,a ,b))
 
    (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   `(call (top ccall) ,name ,RT ,(cadddr __)
-			  ,@args)
-		   )
+		   (lower-ccall name RT argtypes args))
 
    )) ; patterns
 
@@ -1024,7 +1056,6 @@
 	       (call (top next) ,range (call (top start) ,range)) 1))
 
       ;; evaluate one expression to figure out type and size
-      ;; compute just one value by inserting a break inside loops
       (define (evaluate-one ranges)
 	`(block
 	  ,@(map (lambda (r)
@@ -1053,6 +1084,7 @@
 	`(scope-block
 	  (block
 	   (local ,oneresult)
+	   ,@(map (lambda (r) `(local ,(cadr r))) ranges)
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   ;; the evaluate-one code is used by type inference but does not run
 	   (if (call (top !) true) ,(evaluate-one loopranges))

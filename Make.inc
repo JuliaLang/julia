@@ -15,7 +15,9 @@ DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
 
-PARALLEL_BUILD_JOBS = 1
+ifdef PARALLEL_BUILD_JOBS
+  jPARALLEL_BUILD_JOBS = -j$(PARALLEL_BUILD_JOBS)
+endif
 
 # Compiler specific stuff
 
@@ -43,11 +45,11 @@ DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
 
-# OS specific stuff
-
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
 TARGET_OPENBLAS_ARCH=
+
+# Use libraries available on the system instead of building them
 
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_LLVM=0
@@ -55,6 +57,8 @@ USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
 USE_SYSTEM_BLAS=0
 USE_SYSTEM_LAPACK=0
+USE_SYSTEM_FFTW=0
+USE_SYSTEM_GMP=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LIBUNWIND=1
@@ -63,6 +67,8 @@ USE_SYSTEM_READLINE=1
 USE_SYSTEM_PCRE=1
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
+USE_SYSTEM_FFTW=1
+USE_SYSTEM_GMP=1
 endif
 
 #ifeq ($(OS), Darwin)
@@ -113,6 +119,8 @@ endif
 else
 LIBLAPACK = $(JULIAHOME)/external/lapack-$(LAPACK_VER)/liblapack.a
 endif
+
+# OS specific stuff
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so

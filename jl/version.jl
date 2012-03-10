@@ -131,24 +131,37 @@ end
 ## julia version info
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
-const VERSION_COMMIT = chomp(readall(`git rev-parse HEAD`))
-const VERSION_CLEAN = success(`git diff --quiet`)
-const VERSION_TIME = strftime("%F %T",int(readall(`git log -1 --pretty=format:%ct`)))
+try
+    ver = print_to_string(print,VERSION)
+    commit = chomp(readall(`git rev-parse HEAD`))
+    tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
+             catch; "doesn't reference a commit"; end
+    ctime = int(readall(`git log -1 --pretty=format:%ct`))
+    if commit != tagged
+        push(VERSION.build, ctime)
+        push(VERSION.build, "r$(commit[1:4])")
+    end
+    clean = success(`git diff --quiet`)
+    if !clean; push(VERSION.build, "dirty"); end
+    clean = clean ? "" : "*"
+    isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
+    global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
+catch
+    global const _jl_commit_string = ""
+end
 
 begin
 
 const _jl_version_string = "Version $VERSION"
-local _jl_version_clean = VERSION_CLEAN ? "" : "*"
-const _jl_commit_string = "Commit $(VERSION_COMMIT[1:10]) ($VERSION_TIME)$_jl_version_clean"
 
 const _jl_banner_plain =
 I"               _
    _       _ _(_)_     |
-  (_)     | (_) (_)    |  A fresh approach to technical computing
-   _ _   _| |_  __ _   |
-  | | | | | | |/ _` |  |  $_jl_version_string
-  | | |_| | | | (_| |  |  $_jl_commit_string
- _/ |\__'_|_|_|\__'_|  |
+  (_)     | (_) (_)    |
+   _ _   _| |_  __ _   |  A fresh approach to technical computing
+  | | | | | | |/ _` |  |
+  | | |_| | | | (_| |  |  $_jl_version_string
+ _/ |\__'_|_|_|\__'_|  |  $_jl_commit_string
 |__/                   |
 
 "
@@ -162,11 +175,11 @@ local d4 = "\033[35m" # fourth dot
 const _jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
-  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  A fresh approach to technical computing
-   $(jl)_ _   _| |_  __ _$(tx)   |
-  $(jl)| | | | | | |/ _` |$(tx)  |  $_jl_version_string
-  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_commit_string
- $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |
+  $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
+   $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
+  $(jl)| | | | | | |/ _` |$(tx)  |
+  $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_version_string
+ $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
 $(jl)|__/$(tx)                   |
 
 \033[0m"

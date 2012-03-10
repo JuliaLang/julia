@@ -713,8 +713,8 @@ shell_escape(cmd::String, args::String...) =
 function parse(s::String, pos, greedy)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{Uint8},Int32,Int32),
-                    cstring(s), int32(pos-1), int32(greedy ? 1:0))
+                    (Ptr{Uint8}, Int32, Int32),
+                    cstring(s), pos-1, greedy ? 1:0)
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
@@ -980,6 +980,9 @@ begin
 end
 
 float(x::String) = float64(x)
+parse_float(x::String) = float64(x)
+parse_float(::Type{Float64}, x::String) = float64(x)
+parse_float(::Type{Float32}, x::String) = float32(x)
 
 # copying a byte string (generally not needed due to "immutability")
 
@@ -988,19 +991,16 @@ strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    c = ccall(:memcmp, Int32,
-              (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              a, b, uint(min(length(a),length(b))))
+    c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
+              a, b, min(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-# find the index of a byte in a byte array
+# find the index of the first occurrence of a byte value in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8},
-              (Ptr{Uint8}, Int32, Uint),
-              p, int32(b), uint(length(a)))
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p, b, length(a))
     q == C_NULL ? 0 : q - p + 1
 end
 
@@ -1018,9 +1018,8 @@ function memcat(arrays::Array{Uint8,1}...)
     ptr = pointer(arr)
     offset = 0
     for a in arrays
-        ccall(:memcpy, Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(a), uint(length(a)))
+        ccall(:memcpy, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}, Uint),
+              ptr+offset, a, length(a))
         offset += length(a)
     end
     return arr
@@ -1029,20 +1028,4 @@ end
 # concatenate the data fields of byte strings
 
 memcat(s::ByteString) = memcat(s.data)
-
-function memcat(strs::ByteString...)
-    n = 0
-    for s in strs
-        n += length(s)
-    end
-    data = Array(Uint8, n)
-    ptr = pointer(data)
-    offset = 0
-    for s in strs
-        ccall(:memcpy, Ptr{Uint8},
-              (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr + offset, pointer(s.data), uint(length(s)))
-        offset += length(s)
-    end
-    data
-end
+memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)

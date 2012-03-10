@@ -1,4 +1,4 @@
-julia (0.1-1) unstable; urgency=low
+julia (0be57b740a) unstable; urgency=low
 
   * Initial release (Closes: #nnnn)  <nnnn is the bug number of your ITP>
 

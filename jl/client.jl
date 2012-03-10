@@ -81,6 +81,9 @@ function run_repl()
         ccall(:jl_enable_color, Void, ())
     end
 
+    # ctrl-C interrupt for interactive use
+    ccall(:jl_install_sigint_handler, Void, ())
+
     while true
         ccall(:repl_callback_enable, Void, ())
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
@@ -157,7 +160,6 @@ function process_options(args::Array{Any,1})
             addprocs_ssh(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version $VERSION")
-            println(jl_commit_string)
             exit(0)
         elseif args[i][1]!='-'
             # program
@@ -200,7 +202,7 @@ function _start()
 
         # Load customized startup
         try include(strcat(getcwd(),"/startup.jl")) end
-        try include(strcat(ENV["HOME"],"/.juliarc")) end
+        try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
 
         (quiet,repl) = process_options(ARGS)
         if repl

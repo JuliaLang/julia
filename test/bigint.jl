@@ -3,7 +3,6 @@ load ("../jl/bigint.jl")
 a=BigInt("123456789012345678901234567890")
 b=BigInt("123456789012345678901234567891")
 
-
 @assert typeof(a+1) == BigInt
 @assert a+1 == b
 @assert b == a+1
@@ -25,7 +24,7 @@ d = BigInt("-246913578024691357802469135780")
 @assert d == -c
 
 
-ee=2^63-1
+ee = typemax(Int64)
 @assert typeof(BigInt(ee)) == BigInt
 @assert BigInt(ee)+1 == BigInt("9223372036854775808")
 

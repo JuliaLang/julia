@@ -30,6 +30,6 @@ end
 include("sysimg.jl")
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      cstring("sys0.ji"), cstring("jl/start_image.jl"))
+      "sys0.ji", "jl/start_image.jl")
 
 end # module
