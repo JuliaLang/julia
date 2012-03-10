@@ -376,3 +376,20 @@ imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
 # 'illustrates' fourier transform
 ftshow{T}(A::Array{T,2}) = imshow(log(1+abs(fftshift(A))),[])
 
+function rgb2ntsc{T}(img::Array{T})
+    trans = [0.299 0.587 0.114; 0.596 -0.274 -0.322; 0.211 -0.523 0.312]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * squeeze(img[i,j,:])
+    end
+    return out
+end
+
+function ntsc2rgb{T}(img::Array{T})
+    trans = [1 0.956 0.621; 1 -0.272 -0.647; 1 -1.106 1.703]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * squeeze(img[i,j,:])
+    end
+    return out
+end
