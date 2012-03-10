@@ -469,3 +469,21 @@ end
 function imstretch{T}(img::Array{T,2}, m::Number, slope::Number)
     return 1./(1 + (m./(img + eps(T))).^slope)
 end
+
+function imedge{T}(img::Array{T}, method::String, border::String)
+    # needs more methods
+    if method == "sobel"
+        s1, s2 = sobel()
+        img1 = imfilter(img, s1, border)
+        img2 = imfilter(img, s2, border)
+        return img1, img2, sqrt(img1.^2 + img2.^2), atan2(img2, img1)
+    elseif method == "prewitt"
+        s1, s2 = prewitt()
+        img1 = imfilter(img, s1, border)
+        img2 = imfilter(img, s2, border)
+        return img1, img2, sqrt(img1.^2 + img2.^2), atan2(img2, img1)
+    end
+end
+
+imedge{T}(img::Array{T}, method::String) = imedge(img, method, "replicate")
+imedge{T}(img::Array{T}) = imedge(img, "sobel", "replicate")
