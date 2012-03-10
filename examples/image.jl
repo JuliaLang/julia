@@ -131,7 +131,7 @@ end
 
 imshow(img) = imshow(img, [])
 
-function imadjustintensity(img, range)
+function imadjustintensity{T}(img::Array{T,2}, range)
     if length(range) == 0
         range = [min(img) max(img)]
     elseif length(range) == 1
@@ -208,7 +208,7 @@ function imlaplacian(alpha::Number)
 end
 
 # 2D gaussian filter kernel
-function gaussian2d(sigma, filter_size)
+function gaussian2d(sigma::Number, filter_size)
     if length(filter_size) == 0
         # choose 'good' size 
         m = 4*ceil(sigma)+1
@@ -225,16 +225,24 @@ function gaussian2d(sigma, filter_size)
     return g/sum(g)
 end
 
-gaussian2d(sigma) = gaussian2d(sigma, [])
+gaussian2d(sigma::Number) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
 
 # difference of gaussian
-function imdog(sigma)
+function imdog(sigma::Number)
     m = 4*ceil(sqrt(2)*sigma)+1
     return gaussian2d(sqrt(2)*sigma, [m m]) - gaussian2d(sigma, [m m])
 end
 
 imdog() = imdog(0.5)
+
+# laplacian of gaussian
+function imlog(sigma::Number)
+    m = 4*ceil(sigma)+1
+    return [((x^2+y^2-sigma^2)/sigma^4)*exp(-(x^2+y^2)/(2*sigma^2)) | x=-floor(m/2):floor(m/2), y=-floor(m/2):floor(m/2)]
+end
+
+imlog() = imlog(0.5)
 
 # Sum of squared differences
 function ssd{T}(A::Array{T}, B::Array{T})
