@@ -199,6 +199,14 @@ end
 
 imlaplacian() = imlaplacian("nodiagonals")
 
+# more general version
+function imlaplacian(alpha::Number)
+    lc = alpha/(1 + alpha)
+    lb = (1 - alpha)/(1 + alpha)
+    lm = -4/(1 + alpha)
+    return [lc lb lc; lb lm lb; lc lb lc]
+end
+
 # 2D gaussian filter kernel
 function gaussian2d(sigma, filter_size)
     if length(filter_size) == 0
