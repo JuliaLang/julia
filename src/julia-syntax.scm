@@ -91,16 +91,16 @@
     `(block ,@(cdr e)
 	    (= ,(car e) (call ,op ,(car e) ,rhs)))))
 
-; (a > b > c) => (&& (call > a b) (call > b c))
+; (a > b > c) => (call & (call > a b) (call > b c))
 (define (expand-compare-chain e)
   (if (length> e 3)
       (let ((arg2 (caddr e)))
 	(if (pair? arg2)
 	    (let ((g (gensy)))
-	      `(&& (call ,(cadr e) ,(car e) (= ,g ,arg2))
-		   ,(expand-compare-chain (cons g (cdddr e)))))
-	    `(&& (call ,(cadr e) ,(car e) ,arg2)
-		 ,(expand-compare-chain (cddr e)))))
+	      `(call & (call ,(cadr e) ,(car e) (= ,g ,arg2))
+		     ,(expand-compare-chain (cons g (cdddr e)))))
+	    `(call & (call ,(cadr e) ,(car e) ,arg2)
+		   ,(expand-compare-chain (cddr e)))))
       `(call ,(cadr e) ,(car e) ,(caddr e))))
 
 (define (end-val a n tuples s)
@@ -710,11 +710,17 @@
 						idxs)))
 			  (arr   (if reuse (gensy) a))
 			  (stmts (if reuse `((= ,arr ,a)) '())))
-		     (receive
-		      (new-idxs stuff) (process-indexes arr idxs)
-		      `(block
-			,@(append stmts stuff)
-			(call (top assign) ,arr ,rhs ,@new-idxs)))))
+		     (let* ((rrhs (and (pair? rhs) (not (quoted? rhs))))
+			    (r    (if rrhs (gensy) rhs))
+			    (rini (if rrhs `((= ,r ,rhs)) '())))
+		       (receive
+			(new-idxs stuff) (process-indexes arr idxs)
+			`(block
+			  ,@stmts
+			  ,@stuff
+			  ,@rini
+			  (call (top assign) ,arr ,r ,@new-idxs)
+			  ,r)))))
 
    (pattern-lambda (ref a . idxs)
 		   (let* ((reuse (and (pair? a)
@@ -1050,7 +1056,6 @@
 	       (call (top next) ,range (call (top start) ,range)) 1))
 
       ;; evaluate one expression to figure out type and size
-      ;; compute just one value by inserting a break inside loops
       (define (evaluate-one ranges)
 	`(block
 	  ,@(map (lambda (r)
@@ -1079,6 +1084,7 @@
 	`(scope-block
 	  (block
 	   (local ,oneresult)
+	   ,@(map (lambda (r) `(local ,(cadr r))) ranges)
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   ;; the evaluate-one code is used by type inference but does not run
 	   (if (call (top !) true) ,(evaluate-one loopranges))

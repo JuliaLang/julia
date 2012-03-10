@@ -24,13 +24,13 @@ end
 function make_stdin_stream()
     s = fdio(ccall(:jl_stdin, Int32, ()))
     s.name = "<stdin>"
-    s
+    return s
 end
 
 function make_stderr_stream()
     s = fdio(ccall(:jl_stderr, Int32, ()))
     s.name = "<stderr>"
-    s
+    return s
 end
 
 show(s::IOStream) = print("IOStream(",s.name,")")
@@ -81,7 +81,7 @@ function memio(x::Integer, finalize::Bool)
     s = IOStream(finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
     s.name = "<memio>" # can't use strcat here, because strcat calls memio
-    s
+    return s
 end
 memio(x::Integer) = memio(x, true)
 memio() = memio(0, true)
@@ -186,16 +186,12 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) =
-    ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
-
-write(s::IOStream, c::Char) =
-    ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
+write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Uint,
-              (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
@@ -203,8 +199,7 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:ios_write, Uint,
-          (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
+    ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
 function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
@@ -231,9 +226,7 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read(s::IOStream, ::Type{Char})
-    ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
-end
+read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
@@ -256,8 +249,7 @@ end
 
 function readall(s::IOStream)
     dest = memio()
-    ccall(:ios_copyall, Uint,
-          (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
+    ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
 
@@ -314,8 +306,7 @@ end
 
 function has(s::FDSet, i::Integer)
     if 0 <= i < sizeof_fd_set*8
-        return ccall(:jl_fd_isset, Int32,
-                     (Ptr{Void}, Int32), s.data, i)!=0
+        return ccall(:jl_fd_isset, Int32, (Ptr{Void}, Int32), s.data, i)!=0
     end
     return false
 end
@@ -346,8 +337,7 @@ begin
         if timeout == Inf
             tout = C_NULL
         else
-            ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64),
-                  tv, timeout)
+            ccall(:jl_set_timeval, Void, (Ptr{Void}, Float64), tv, timeout)
             tout = convert(Ptr{Void}, tv)
         end
         ccall(:select, Int32,

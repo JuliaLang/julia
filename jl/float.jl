@@ -124,6 +124,11 @@ isequal(x::Float64, y::Float64) = fpiseq64(unbox64(x),unbox64(y))
 isless (x::Float32, y::Float32) = fpislt32(unbox32(x),unbox32(y))
 isless (x::Float64, y::Float64) = fpislt64(unbox64(x),unbox64(y))
 
+isequal(a::Integer, b::Float) = (a==b) & isequal(float(a),b)
+isequal(a::Float, b::Integer) = isequal(b, a)
+isless (a::Integer, b::Float) = (a<b) | isless(float(a),b)
+isless (a::Float, b::Integer) = (a<b) | isless(a,float(b))
+
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox64(x),unbox64(y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox64(x),unbox64(y))
 ==(x::Int64  , y::Float64) = eqfsi64(unbox64(y),unbox64(x))

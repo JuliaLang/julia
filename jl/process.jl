@@ -26,7 +26,7 @@ end
 
 type FileDes; fd::Int32; end
 
-global const STDIN = FileDes(ccall(:jl_stdin,  Int32, ()))
+global const STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
 global const STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
 global const STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
 
@@ -121,9 +121,7 @@ end
 function wait(pid::Int32)
     status = Array(Int32,1)
     while true
-        ret = ccall(:waitpid, Int32,
-                    (Int32, Ptr{Int32}, Int32),
-                    pid, status, 0)
+        ret = ccall(:waitpid, Int32, (Int32, Ptr{Int32}, Int32), pid, status, 0)
         if ret != -1
             break
         end
@@ -132,7 +130,7 @@ function wait(pid::Int32)
     status[1]
 end
 
-exit(n) = ccall(:exit, Void, (Int32,), int32(n))
+exit(n) = ccall(:exit, Void, (Int32,), n)
 exit() = exit(0)
 
 function dup2(fd1::FileDes, fd2::FileDes)

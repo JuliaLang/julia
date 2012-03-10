@@ -171,6 +171,7 @@
     jl_apply_generic;
     julia_init;
     julia_trampoline;
+    jl_install_sigint_handler;
     jl_alloc_cell_1d;
     julia_home;
     jl_arrayref;
