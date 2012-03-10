@@ -1084,6 +1084,7 @@
 	`(scope-block
 	  (block
 	   (local ,oneresult)
+	   ,@(map (lambda (r) `(local ,(cadr r))) ranges)
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   ;; the evaluate-one code is used by type inference but does not run
 	   (if (call (top !) true) ,(evaluate-one loopranges))
