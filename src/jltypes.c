@@ -293,12 +293,12 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     for(i=0; i < t->length; i++) {
         jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                            penv, eqc, var);
-        if (ti == jl_bottom_type) {
+        if (ti == (jl_value_t*)jl_bottom_type) {
             int eq1 = eqc->n, co1 = penv->n;
             eqc->n = eq0; penv->n = co0;
             ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                    penv, eqc, var);
-            if (ti != jl_bottom_type) {
+            if (ti != (jl_value_t*)jl_bottom_type) {
                 // tvar conflict among union elements; keep the conflicting
                 // constraints rolled back
                 eqc->n = eq0; penv->n = co0;

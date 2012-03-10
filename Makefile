@@ -3,13 +3,15 @@ include $(JULIAHOME)/Make.inc
 
 default: release
 
-debug release: %: julia-% sys.ji
+debug release:
+	$(MAKE) julia-$@
+	$(MAKE) sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC external
-	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC src lib$@
-	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC ui $@
-	@$(MAKE) -j$(PARALLEL_BUILD_JOBS) -sC jl
+	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC src lib$@
+	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC ui $@
+	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC jl
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys0.ji: src/boot.jl src/dump.c jl/stage0.jl

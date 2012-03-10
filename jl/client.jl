@@ -81,6 +81,9 @@ function run_repl()
         ccall(:jl_enable_color, Void, ())
     end
 
+    # ctrl-C interrupt for interactive use
+    ccall(:jl_install_sigint_handler, Void, ())
+
     while true
         ccall(:repl_callback_enable, Void, ())
         add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))

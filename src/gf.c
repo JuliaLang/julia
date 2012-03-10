@@ -1272,9 +1272,20 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
 }
 
+DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
+                                      jl_tuple_t *tvars)
+{
+    jl_tuple_t *env = jl_null;
+    jl_value_t *ti=NULL;
+    JL_GC_PUSH(&env, &ti);
+    ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
+    jl_tuple_t *result = jl_tuple2(ti, env);
+    JL_GC_POP();
+    return result;
+}
+
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
-                                jl_tuple_t *sig, jl_tuple_t *tvars,
-                                jl_sym_t *name)
+                                jl_tuple_t *sig, jl_tuple_t *tvars)
 {
     jl_tuple_t *env = jl_null;
     jl_value_t *temp=NULL;
@@ -1284,20 +1295,15 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
     jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
-        if (func->linfo == NULL) {
-            // builtin
-            result = jl_tuple(4, ti, env, name, jl_null);
+        assert(func->linfo);  // no builtin methods
+        jl_value_t *cenv;
+        if (func->env != NULL) {
+            cenv = func->env;
         }
         else {
-            jl_value_t *cenv;
-            if (func->env != NULL) {
-                cenv = func->env;
-            }
-            else {
-                cenv = (jl_value_t*)jl_null;
-            }
-            result = jl_tuple(4, ti, env, func->linfo, cenv);
+            cenv = (jl_value_t*)jl_null;
         }
+        result = jl_tuple(4, ti, env, func->linfo, cenv);
     }
     JL_GC_POP();
     return result;
@@ -1318,7 +1324,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
           more generally, we can stop when the type is a subtype of the
           union of all the signatures examined so far.
         */
-        matc = match_method(type, ml->func, ml->sig, ml->tvars, name);
+        matc = match_method(type, ml->func, ml->sig, ml->tvars);
         if (matc != NULL) {
             len++;
             if (lim >= 0 && len > lim) {
