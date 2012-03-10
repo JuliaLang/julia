@@ -446,13 +446,9 @@ function abstract_call_gf(f, fargs, argtypes, e)
             e.head = :call
         end
     end
-    for (m::Tuple) = x
+    for (m::Tuple) in x
         #print(m,"\n")
-        if isa(m[3],Symbol)
-            # when there is a builtin method in this GF, we get
-            # a symbol with the name instead of a LambdaStaticData
-            rt = builtin_tfunction(m[3], fargs, m[1])
-        elseif isa(m[3],Type)
+        if isa(m[3],Type)
             # constructor
             rt = m[3]
         else
@@ -466,6 +462,27 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # if rettype is None we've found a method not found error
     #print("=> ", rettype, "\n")
     return rettype
+end
+
+function _jl_invoke_tfunc(f, types, argtypes)
+    argtypes = tintersect(types,limit_tuple_type(argtypes))
+    if is(argtypes,None)
+        return None
+    end
+    applicable = getmethods(f, types)
+    if isempty(applicable)
+        return Any
+    end
+    for (m::Tuple) in applicable
+        if typeseq(m[1],types)
+            tvars = m[2][1:2:end]
+            (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
+                              argtypes, m[1], tvars)::(Any,Any)
+            (_tree,rt) = typeinf(m[3], ti, env, m[3])
+            return rt
+        end
+    end
+    return Any
 end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
@@ -482,6 +499,16 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     at = length(aargtypes) > 0 ?
                          limit_tuple_type(append(aargtypes...)) : ()
                     return abstract_call(_ieval(af), (), at, vtypes, sv, ())
+                end
+            end
+        end
+        if is(f,invoke) && length(fargs)>1
+            af = isconstantfunc(fargs[1], vtypes, sv)
+            if !is(af,false) && _iisbound(af) && isgeneric(af=_ieval(af))
+                sig = argtypes[2]
+                if isa(sig,Tuple) && allp(isType, sig)
+                    sig = map(t->t.parameters[1], sig)
+                    return _jl_invoke_tfunc(af, sig, argtypes[3:])
                 end
             end
         end

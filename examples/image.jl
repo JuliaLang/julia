@@ -246,10 +246,9 @@ sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
 
 # normalized cross correlation
 function ncc{T}(A::Array{T}, B::Array{T})
-    Am = A[:]-mean(A[:])
-    Bm = B[:]-mean(B[:])
-    res = ((Am/norm(Am))'*(Bm/norm(Bm)))
-    return res
+    Am = (A-mean(A))[:]
+    Bm = (B-mean(B))[:]
+    return dot(Am,Bm)/(norm(Am)*norm(Bm))
 end
 
 function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
@@ -368,8 +367,7 @@ function imthresh{T}(img::Array{T,2}, threshold::Float)
 end
 
 function imgaussiannoise{T}(img::Array{T}, variance::Number, mean::Number)
-    tmp = img + sqrt(variance)*randn(size(img)) + mean
-    return tmp
+    return img + sqrt(variance)*randn(size(img)) + mean
 end
 
 imgaussiannoise{T}(img::Array{T}, variance::Number) = imgaussiannoise(img, variance, 0)

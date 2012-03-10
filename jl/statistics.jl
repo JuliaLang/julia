@@ -1,4 +1,4 @@
-mean(v::AbstractVector) = sum(v) / length(v)
+mean(v::AbstractArray) = sum(v) / numel(v)
 mean(v::AbstractArray, dim::Int) = sum(v,dim) / size(v,dim)
 
 function std(v::AbstractVector)

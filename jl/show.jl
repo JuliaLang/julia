@@ -93,17 +93,19 @@ function show(e::Expr)
     elseif is(hd,:string)
         show(e.args[1])
     elseif is(hd,symbol("::"))
-        print("$(e.args[1])::$(e.args[2])")
+        show(e.args[1]); print("::"); show(e.args[2])
+    elseif is(hd,:quote)
+        show_quoted_expr(e.args[1])
     elseif is(hd,:body) || is(hd,:block)
-        print("\nbegin\n")
-        for a=e.args
-            println("  $a")
+        println("\nbegin")
+        for a in e.args
+            print("  "); show(a); println()
         end
         println("end")
     elseif is(hd,:comparison)
-        print(e.args...)
+        for a in e.args; show(a); end
     elseif is(hd,:(.))
-        print(e.args[1],'.',e.args[2])
+        show(e.args[1]); print('.'); show(e.args[2])
     else
         print(hd)
         show_comma_array(e.args,'(',')')
@@ -116,17 +118,17 @@ show(e::LineNumberNode) = print("line($(e.line))")
 show(e::LabelNode) = print("$(e.label): ")
 show(e::GotoNode) = print("goto $(e.label)")
 show(e::TopNode) = print("top($(e.name))")
+show(e::QuoteNode) = show_quoted_expr(e.value)
 
-function show(e::QuoteNode)
-    a1 = e.value
+function show_quoted_expr(a1)
     if isa(a1,Expr) && (is(a1.head,:body) || is(a1.head,:block))
         println("\nquote")
-        for a=a1.args
-            println("  $a")
+        for a in a1.args
+            print("  "); show(a); println()
         end
         println("end")
     else
-        if isa(a1,Symbol) && !is(a1,:(:))
+        if isa(a1,Symbol) && !is(a1,:(:)) && !is(a1,:(==))
             print(":$a1")
         else
             print(":($a1)")

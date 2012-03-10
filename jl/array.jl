@@ -599,8 +599,7 @@ end
 .^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); error("argument dimensions must match"); end
-    F = similar(A, Float64)
+    F = Array(Float64, promote_shape(size(A), size(B)))
     for i=1:numel(A)
         F[i] = A[i]^B[i]
     end
@@ -630,8 +629,7 @@ end
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::Array{S}, B::Array{T})
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, promote_type(S,T))
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
@@ -694,8 +692,7 @@ end
 for f in (:(==), :!=, :<, :<=)
     @eval begin
         function ($f)(A::Array, B::Array)
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, Bool)
+            F = Array(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
@@ -1228,10 +1225,10 @@ function map_to2(first, dest::StridedArray, f,
 end
 
 function map(f, A::StridedArray, B::StridedArray)
-    if size(A) != size(B); error("argument dimensions must match"); end
+    shp = promote_shape(size(A),size(B))
     if isempty(A); return A; end
     first = f(A[1], B[1])
-    dest = similar(A, typeof(first))
+    dest = similar(A, typeof(first), shp)
     return map_to2(first, dest, f, A, B)
 end
 
