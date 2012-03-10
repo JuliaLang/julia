@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt arpack fftw suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
+LIBS = fdlibm dsfmt arpack suitesparse suitesparse-wrapper double-conversion amos gmp gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -50,6 +50,10 @@ endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 0)
 LIBS += lapack
+endif
+
+ifeq ($(USE_SYSTEM_FFTW), 0)
+LIBS += fftw
 endif
 
 # Hard-coded setup for libraries on Debian
@@ -572,7 +576,7 @@ GMP_INC = -I gmp-$(GMP_VER)/
 GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
 
 $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
-	$(CC) -O2 -shared -fPIC $(GMP_INC) $(GMP_LIB) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
+	$(CC) -O2 -shared -fPIC $(GMP_INC) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB) $(GMP_LIB)
 	touch $@
 install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 

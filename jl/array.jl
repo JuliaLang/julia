@@ -39,8 +39,7 @@ copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint),
-          b, a, length(b)*sizeof(T))
+    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint), b, a, length(b)*sizeof(T))
     return b
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
@@ -49,8 +48,7 @@ function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != numel(a)
         error("reshape: invalid dimensions")
     end
-    ccall(:jl_reshape_array, Any, (Any, Any, Any),
-          Array{T,N}, a, dims)::Array{T,N}
+    ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
 end
 
 ## Constructors ##
@@ -601,8 +599,7 @@ end
 .^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
 
 function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); error("argument dimensions must match"); end
-    F = similar(A, Float64)
+    F = Array(Float64, promote_shape(size(A), size(B)))
     for i=1:numel(A)
         F[i] = A[i]^B[i]
     end
@@ -632,8 +629,7 @@ end
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
         function ($f){S,T}(A::Array{S}, B::Array{T})
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, promote_type(S,T))
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
@@ -696,8 +692,7 @@ end
 for f in (:(==), :!=, :<, :<=)
     @eval begin
         function ($f)(A::Array, B::Array)
-            if size(A) != size(B); error("argument dimensions must match"); end
-            F = similar(A, Bool)
+            F = Array(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
@@ -1230,10 +1225,10 @@ function map_to2(first, dest::StridedArray, f,
 end
 
 function map(f, A::StridedArray, B::StridedArray)
-    if size(A) != size(B); error("argument dimensions must match"); end
+    shp = promote_shape(size(A),size(B))
     if isempty(A); return A; end
     first = f(A[1], B[1])
-    dest = similar(A, typeof(first))
+    dest = similar(A, typeof(first), shp)
     return map_to2(first, dest, f, A, B)
 end
 

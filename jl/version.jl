@@ -132,15 +132,20 @@ end
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
+    ver = print_to_string(print,VERSION)
+    commit = chomp(readall(`git rev-parse HEAD`))
+    tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
+             catch; "doesn't reference a commit"; end
     ctime = int(readall(`git log -1 --pretty=format:%ct`))
-    push(VERSION.build, strftime("%Y%m%d", ctime))
-    push(VERSION.build, strftime("%H%M%S", ctime))
-    commit = chomp(readall(`git rev-parse HEAD`))[1:10]
+    if commit != tagged
+        push(VERSION.build, ctime)
+        push(VERSION.build, "r$(commit[1:4])")
+    end
     clean = success(`git diff --quiet`)
-    push(VERSION.build, strcat(commit[1:4], clean ? "" : "x"))
-    isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
+    if !clean; push(VERSION.build, "dirty"); end
     clean = clean ? "" : "*"
-    global const _jl_commit_string = "Commit $commit ($isotime)$clean"
+    isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
+    global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
 catch
     global const _jl_commit_string = ""
 end

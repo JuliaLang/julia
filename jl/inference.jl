@@ -30,8 +30,7 @@ tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
 getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
-getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32),
-                            f, t, lim)
+getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
@@ -447,13 +446,9 @@ function abstract_call_gf(f, fargs, argtypes, e)
             e.head = :call
         end
     end
-    for (m::Tuple) = x
+    for (m::Tuple) in x
         #print(m,"\n")
-        if isa(m[3],Symbol)
-            # when there is a builtin method in this GF, we get
-            # a symbol with the name instead of a LambdaStaticData
-            rt = builtin_tfunction(m[3], fargs, m[1])
-        elseif isa(m[3],Type)
+        if isa(m[3],Type)
             # constructor
             rt = m[3]
         else
@@ -467,6 +462,27 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # if rettype is None we've found a method not found error
     #print("=> ", rettype, "\n")
     return rettype
+end
+
+function _jl_invoke_tfunc(f, types, argtypes)
+    argtypes = tintersect(types,limit_tuple_type(argtypes))
+    if is(argtypes,None)
+        return None
+    end
+    applicable = getmethods(f, types)
+    if isempty(applicable)
+        return Any
+    end
+    for (m::Tuple) in applicable
+        if typeseq(m[1],types)
+            tvars = m[2][1:2:end]
+            (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
+                              argtypes, m[1], tvars)::(Any,Any)
+            (_tree,rt) = typeinf(m[3], ti, env, m[3])
+            return rt
+        end
+    end
+    return Any
 end
 
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
@@ -483,6 +499,16 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     at = length(aargtypes) > 0 ?
                          limit_tuple_type(append(aargtypes...)) : ()
                     return abstract_call(_ieval(af), (), at, vtypes, sv, ())
+                end
+            end
+        end
+        if is(f,invoke) && length(fargs)>1
+            af = isconstantfunc(fargs[1], vtypes, sv)
+            if !is(af,false) && _iisbound(af) && isgeneric(af=_ieval(af))
+                sig = argtypes[2]
+                if isa(sig,Tuple) && allp(isType, sig)
+                    sig = map(t->t.parameters[1], sig)
+                    return _jl_invoke_tfunc(af, sig, argtypes[3:])
                 end
             end
         end
@@ -1390,21 +1416,31 @@ function inlining_pass(e::Expr, vars)
     # don't inline first argument of ccall, as this needs to be evaluated
     # by the interpreter and inlining might put in something it can't handle,
     # like another ccall.
-    if length(e.args)<1
+    eargs = e.args
+    if length(eargs)<1
         return e
     end
-    arg1 = e.args[1]
+    arg1 = eargs[1]
     if is(e.head,:call1) && (is(arg1, :ccall) ||
                              (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
                              (isa(arg1,TopNode) && is(arg1.name, :ccall)))
         i0 = 3
+        isccall = true
     else
         i0 = 1
+        isccall = false
     end
-    for i=i0:length(e.args)
-        ei = e.args[i]
+    for i=i0:length(eargs)
+        ei = eargs[i]
         if isa(ei,Expr)
-            e.args[i] = inlining_pass(ei, vars)
+            eargs[i] = inlining_pass(ei, vars)
+        end
+    end
+    if isccall
+        for i=5:2:length(eargs)
+            if isa(eargs[i],Symbol) || isa(eargs[i],SymbolNode)
+                eargs[i+1] = 0
+            end
         end
     end
     if is(e.head,:call1)
@@ -1533,7 +1569,8 @@ function tuple_elim_pass(ast::Expr)
                                         end
                                         stmt.args[2] = r
                                         k += 1
-                                    elseif is_top_call(rhs,:convert) &&
+                                    elseif length(rhs.args)>2 &&
+                                        isa(rhs.args[3],Expr) &&
                                         is_top_call(rhs.args[3],:tupleref) &&
                                         isequal(rhs.args[3].args[2],tupname)
                                         # assignment with conversion
