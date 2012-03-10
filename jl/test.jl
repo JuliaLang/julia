@@ -65,7 +65,8 @@ type TestResult
 end
 TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
 
-# the macro captures the expression, then calls a function that does the actual work
+# had some issues with struct access inside the macro, so don't build the TestResult until the end,
+# which is ugly and should be fixed
 macro test(ex)
     res, elapsed, exc, op, arg1, arg2, arg3 = gensym(7)
     quote
@@ -89,12 +90,25 @@ macro test(ex)
                 $op = $string(ex.head)
                 $arg1 = eval($ex.args[1])
                 $arg2 = eval($ex.args[3])
+            elseif ($string(ex.head) == "call")
+                if ($string(ex.args[1]) == "approx_eq")
+                    $op = "approx_eq"
+                    $arg1 = eval($ex.args[2])
+                    $arg2 = eval($ex.args[3])
+                end
             end
         
         end
         
         produce(TestResult(tls(:context), tls(:group), $string(ex), $res, $elapsed,
             $exc, $op, $arg1, $arg2, Nothing))
-        #produce(_dotest(:(ex), $string(ex)))
     end
 end
+
+# helpful utility tests, supported by the macro
+function approx_eq(a, b, tol)
+    abs(a - b) < tol
+end
+approx_eq(a, b) = approx_eq(a, b, 1e-6)
+
+
