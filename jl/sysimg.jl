@@ -85,6 +85,7 @@ include("darray.jl")
 include("version.jl")
 include("util.jl")
 include("datafmt.jl")
+include("test.jl")
 
 ## Load optional external libraries
 

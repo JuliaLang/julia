@@ -1,25 +1,33 @@
 # test suite functions and macros
 
 # runtests
-function runtests(onestr::String) 
-    # if onestr is an existing readable file, pass it to the primary testing function 
-    if (is_file_readable(onestr))
-        runtests([onestr], test_printer_simple)
-    else
-    # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
-    # that list
-    # TODO
-    
-    # otherwise, throw an error
-        error("not a file or directory: $onestr")
+function runtests(onestr::String, outputter::Function) 
+    # if onestr is an existing file, pass it to the primary testing function 
+    stat = strip(readall(`stat -f "%HT" $onestr`))
+    if (stat == "Regular File")
+        runtests([onestr], outputter)
+    elseif (stat == "Directory")
+        # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
+        # that list
+        files_str = strip(readall(`find $onestr -name test_*.jl -print`))
+        if (length(files_str) > 0)
+            runtests(split(files_str, "\n"), outputter)
+        else
+            # otherwise, throw an error
+            error("no test_*.jl files in directory: $onestr")
+        end
     end
 end
+runtests(onestr::String) = runtests(onestr, test_printer_simple)
+runtests(fn::Function) = runtests(".", fn)
+runtests() = runtests(".")
 
 function runtests(filenames, outputter::Function)
     # run these files as a task
     hdl = Task(() -> _runtests_task(filenames))
     outputter(hdl)
 end
+runtests(filenames) = runtests(filenames, test_printer_simple)
 
 function _runtests_task(filenames)
     for fn = filenames
@@ -129,7 +137,6 @@ function prints(fn::Function, args, expected::String)
     print_to_string(fn, args...) == expected
 end
 
-#@test takes_less_than(fib(20), .1)
 function takes_less_than(anything, expected)
     # the magic happens in @test
     true
