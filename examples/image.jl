@@ -413,3 +413,7 @@ function ycbcr2rgb{T}(img::Array{T})
     end
     return out
 end
+
+function imcomplement{T}(img::Array{T})
+    return 1 - img
+end
