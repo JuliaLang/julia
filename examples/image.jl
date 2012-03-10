@@ -457,3 +457,7 @@ function hsi2rgb{T}(img::Array{T})
     R[BR] = 3*I[BR] - G[BR] - B[BR]
     return cat(3, R, G, B)
 end
+
+function imstretch{T}(img::Array{T,2}, m::Number, slope::Number)
+    return 1./(1 + (m./(img + eps(T))).^slope)
+end
