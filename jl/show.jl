@@ -93,17 +93,17 @@ function show(e::Expr)
     elseif is(hd,:string)
         show(e.args[1])
     elseif is(hd,symbol("::"))
-        print("$(e.args[1])::$(e.args[2])")
+        show(e.args[1]); print("::"); show(e.args[2])
     elseif is(hd,:body) || is(hd,:block)
-        print("\nbegin\n")
+        println("\nbegin")
         for a=e.args
-            println("  $a")
+            print("  "); show(a); println()
         end
         println("end")
     elseif is(hd,:comparison)
-        print(e.args...)
+        for a in e.args; show(a); end
     elseif is(hd,:(.))
-        print(e.args[1],'.',e.args[2])
+        show(e.args[1]); print('.'); show(e.args[2])
     else
         print(hd)
         show_comma_array(e.args,'(',')')
