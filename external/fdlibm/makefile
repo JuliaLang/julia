@@ -100,7 +100,6 @@ all: libfdm.a
 
 libfdm.a : $(obj) 
 	ar cru libfdm.a $(obj)
-	ranlib libfdm.a
 
 source: $(src) readme
 
