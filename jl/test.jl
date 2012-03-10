@@ -29,7 +29,13 @@ end
 # the default printer
 function test_printer_simple(hdl::Task)
     for t = hdl
-        show(t)
+        if (t.result)
+            print(".")
+        else
+            println("")
+            show(t)
+            println("")
+        end
     end
 end
 
@@ -66,14 +72,29 @@ macro test(ex)
         local $elapsed = NaN
         local $res = false
         local $exc = NoException()
+        local $op = Nothing
+        local $arg1 = Nothing
+        local $arg2 = Nothing
         
         try
             $elapsed = @elapsed $res = assert_test($ex)
         catch except
             $exc = except
         end
+        
+        # if we failed without an exception, pull apart the expression and see if we can't evaluate its
+        # parts
+        if ($res == false && $exc == NoException())
+            if ($string(ex.head) == "comparison")
+                $op = $string(ex.head)
+                $arg1 = eval($ex.args[1])
+                $arg2 = eval($ex.args[3])
+            end
+        
+        end
+        
         produce(TestResult(tls(:context), tls(:group), $string(ex), $res, $elapsed,
-            $exc, Nothing, Nothing, Nothing, Nothing))
+            $exc, $op, $arg1, $arg2, Nothing))
         #produce(_dotest(:(ex), $string(ex)))
     end
 end
