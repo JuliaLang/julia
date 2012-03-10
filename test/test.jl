@@ -5,9 +5,7 @@ test_context("Testing test tests")
 # setup goes here
 
 test_group("string tests")
-println("f")
 @test strip("\t  hi   \n") == "hi"
-println("g")
 
 
 test_group("array tests")

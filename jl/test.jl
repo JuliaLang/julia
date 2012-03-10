@@ -16,19 +16,13 @@ end
 
 function runtests(filenames, outputter::Function)
     # run these files as a task
-    println("a")
     hdl = Task(() -> _runtests_task(filenames))
-    println("b")
     outputter(hdl)
-    println("c")
 end
 
 function _runtests_task(filenames)
-    println("C")
     for fn = filenames
-        println("d")
         load(fn)
-        println("e")
     end
 end
 
@@ -67,30 +61,19 @@ TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothin
 
 # the macro captures the expression, then calls a function that does the actual work
 macro test(ex)
+    res, elapsed, exc, op, arg1, arg2, arg3 = gensym(7)
     quote
-        produce(_dotest(:(ex), $string(ex)))
+        local $elapsed = NaN
+        local $res = false
+        local $exc = NoException()
+        
+        try
+            $elapsed = @elapsed $res = assert_test($ex)
+        catch except
+            $exc = except
+        end
+        produce(TestResult(tls(:context), tls(:group), $string(ex), $res, $elapsed,
+            $exc, Nothing, Nothing, Nothing, Nothing))
+        #produce(_dotest(:(ex), $string(ex)))
     end
-end
-
-function _dotest(ex::Expr, ex_str::String)
-    tr = TestResult()
-    
-    # store things we already know
-    tr.expr_str = ex_str
-    tr.context = tls(:context)
-    tr.group = tls(:group)
-    
-    # evaluate the expression while timing it and catching exceptions
-    #try
-        #$(tr).elapsed = @elapsed (
-            tr.result = assert_test(eval(ex))
-    # catch except
-    #      $tr.result = False
-    #      $tr.exception_thrown = except
-    #  end
-         
-    
-    # figure out the parts of the expression and evaluate separately
-    
-    tr
 end
