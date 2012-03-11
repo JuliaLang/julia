@@ -39,6 +39,10 @@ void *jl_load_dynamic_library(char *fname)
     if (modname == NULL) {
         return (void*)dlopen(NULL, RTLD_NOW);
     }
+    else if (modname[0] == '/') {
+        handle = dlopen(modname, RTLD_NOW);
+        if (handle != NULL) return handle;
+    }
     char *cwd;
 
     for(i=0; i < N_EXTENSIONS; i++) {
