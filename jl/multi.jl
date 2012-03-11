@@ -1564,7 +1564,7 @@ end
 
 function add_io_handler(io::AsyncStream, H)
     (_jl_fd_handlers[fd]=H)
-    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback(()->io_callback(io),()))
+    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback((args...)->io_callback(io)))
 end
 
 function del_io_handler(io::AsyncStream)
@@ -1584,11 +1584,12 @@ function _jl_idle_cb()
         #queue_async(fgcm)
     end
 end
+_jl_idle_cb(args...) = _jl_idle_cb()
 
 function event_loop(isclient)
     fdset = FDSet()
     iserr, lasterr = false, ()
-    add_idle_cb(globalEventLoop(),make_callback(_jl_idle_cb,()))
+    add_idle_cb(globalEventLoop(),make_callback(_jl_idle_cb))
     while false
         try
             if iserr

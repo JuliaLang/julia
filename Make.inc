@@ -91,7 +91,7 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
-READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a
+READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a -lncurses -lcurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)

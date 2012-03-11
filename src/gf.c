@@ -1410,48 +1410,42 @@ jl_sym_t *jl_genericfunc_name(jl_value_t *v)
 JL_CALLABLE(jl_f_make_callback)
 {
     JL_TYPECHK("make_callback",function,args[0]);
-    JL_TYPECHK("make_callback",tuple,args[1]);
-    jl_callback_t *cb = malloc(sizeof(jl_callback_t));
-    cb->function=(jl_function_t*)args[0];
-    cb->types=(jl_tuple_t*)args[1];
-    cb->state=nargs>2?args[2]:0;
 #ifdef ENVIRONMENT64
-    jl_value_t *t = jl_box_int64((void *)cb);
+    jl_value_t *t = jl_box_int64((void *)args[0]);
 #else
-    jl_value_t *t = jl_box_int32((void *)cb);
+    jl_value_t *t = jl_box_int32((void *)args[0]);
 #endif
     JL_GC_POP();
     return t;
 }
 
-void jl_callback_call(jl_callback_t *cb,...)
+void jl_callback_call(jl_function_t *f,int count,...)
 {
-    jl_value_t **argv = calloc(l,sizeof(jl_value_t*));
-    JL_GC_PUSHARGS(argv,cb->types->length);
+    jl_value_t **argv = calloc(count,sizeof(jl_value_t*));
+    JL_GC_PUSHARGS(argv,count);
     va_list argp;
-    va_start(argp,cb);
+    va_start(argp,count);
     jl_value_t *v;
     int i=0;
-    for(i; i<l; ++i) {
-        jl_type_t *t = (jl_type_t*)jl_tupleref(cb->types,i);
-        if(t==
-#ifdef ENVIRONMENT64
-       jl_pointer_type||t==
-#endif
-        jl_int64_type) {
-            v = jl_box_int64(va_arg(argp,int64_t));
-        } else if(t==
+    for(i; i<count; ++i) {
+        switch(va_arg(argp,int)) {
 #ifdef ENVIRONMENT32
-        jl_pointer_type||t==
+        case CB_PTR:
 #endif
-        jl_int32_type) {
+        case CB_INT32:
             v = jl_box_int32(va_arg(argp,int32_t));
-        } else {
-            jl_error("callback: only Ints and Pointers are supported at this time");
+            break;
+#ifdef ENVIRONMENT64
+        case CB_PTR:
+#endif
+        case CB_INT64:
+            v = jl_box_int64(va_arg(argp,int64_t));
+            break;
+        default: jl_error("callback: only Ints and Pointers are supported at this time");
+            break;
         }
-        v->type=t;
         argv[i]=v;
     }
-    jl_apply(cb->function,(jl_value_t**)argv,cb->types->length);
+    jl_apply(f,(jl_value_t**)argv,count);
     JL_GC_POP();
 }

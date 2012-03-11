@@ -46,17 +46,14 @@ void closeHandle(uv_handle_t* handle)
     case UV_NAMED_PIPE:
         if(handle->data) {
             jl_pipe_opts_t *opts=handle->data;
-            free(opts->readcb);
             free(opts);
         } break;
     case UV_PROCESS:
         if(handle->data) {
             jl_proc_opts_t *opts=handle->data;
             if(opts->closecb) {
-                jl_callback_call(opts->closecb,handle);
-                free(opts->closecb);
+                jl_callback_call(opts->closecb,1,CB_PTR,handle);
             }
-            free(opts->exitcb);
             free(opts);
             //pipes have to be closed where they are created to support reusing them
         } break;
@@ -64,8 +61,6 @@ void closeHandle(uv_handle_t* handle)
     case UV_ASYNC:
         if(handle->data) {
             jl_async_opts_t *opts=handle->data;
-            if(opts->callcb)
-                free(opts->callcb);
             free(opts);
         }
     default:
@@ -74,14 +69,14 @@ void closeHandle(uv_handle_t* handle)
     free(handle);
 }
 
-DLLEXPORT void jl_run_event_loop(uv_loop_t **loop)
+DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
-    if(loop) uv_run(*loop);
+    if(loop) uv_run(loop);
 }
 
-DLLEXPORT void jl_process_events(uv_loop_t **loop)
+DLLEXPORT void jl_process_events(uv_loop_t *loop)
 {
-    if(loop) uv_run_once(*loop);
+    if(loop) uv_run_once(loop);
 }
 
 
@@ -89,7 +84,7 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
     jl_proc_opts_t *opts = p->data;
     if(opts) {
         if(opts->exitcb)
-            jl_callback_call(opts->exitcb,p,exit_status,term_signal);
+            jl_callback_call(opts->exitcb,3,CB_PTR,p,CB_INT32,exit_status,CB_INT32,term_signal);
     }
     uv_close((uv_handle_t*)p,&closeHandle);
 }
@@ -106,12 +101,12 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
             opts->stream->bpos+=nread;
         }
         if(opts->readcb) {
-            jl_callback_call(opts->readcb,nread,((jl_pipe_opts_t*)handle->data)->stream->buf,(buf.base),buf.len);
+            jl_callback_call(opts->readcb,4,CB_INT,nread,CB_PTR,((jl_pipe_opts_t*)handle->data)->stream->buf,CB_PTR,(buf.base),CB_INT32,buf.len);
         }
     }
 }
 
-DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
+DLLEXPORT uv_pipe_t *jl_make_pipe(void)
 {
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop,pipe,0);
@@ -122,43 +117,35 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(ios_t *stream)
     return pipe;
 }
 
-DLLEXPORT void jl_close_uv(uv_handle_t **handle)
+DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
-    if(handle) uv_close(*handle,&closeHandle);
+    if(handle) uv_close(handle,&closeHandle);
 }
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback)
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *callback)
 {
-    if(!handle||(*handle)->data)
+    if(!handle||handle->data)
         return -2;
     jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
-    opts->readcb=callback?(jl_callback_t*)*callback:0;
+    opts->readcb=(jl_callback_t*)callback;
     opts->stream = iohandle;
-    (*handle)->data = opts;
-    return uv_read_start(*handle,&jl_alloc_buf,&jl_readcb);
+    handle->data = opts;
+    return uv_read_start(handle,&jl_alloc_buf,&jl_readcb);
 }
 
-DLLEXPORT uint16_t jl_stop_reading(uv_stream_t **handle)
+DLLEXPORT uint16_t jl_stop_reading(uv_stream_t *handle)
 {
     if(!handle)
         return -1;
-    int err = uv_read_stop(*handle);
-    if(!(*handle)->data)
+    int err = uv_read_stop(handle);
+    if(!(handle)->data)
         return -2;
-    ((jl_pipe_opts_t*)(*handle)->data)->readcb=0;
+    ((jl_pipe_opts_t*)(handle)->data)->readcb=0;
     return err;
 
 }
 
-DLLEXPORT void jl_callback(void **callback)
-{
-    if(callback) {
-        jl_callback_t *cb=(jl_callback_t *)*(callback);
-        jl_callback_call(cb,"test_callback.j");
-    }
-}
-
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **exitcb, void **closecb)
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb)
 {
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
@@ -168,13 +155,13 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe
     opts.env = NULL;
     opts.cwd = NULL;
     opts.args = argv;
-    opts.stdin_stream = jlopts->in = stdin_pipe ? *stdin_pipe : 0;
-    opts.stdout_stream = jlopts->out = stdout_pipe ? *stdout_pipe :0;
+    opts.stdin_stream = jlopts->in = stdin_pipe;
+    opts.stdout_stream = jlopts->out = stdout_pipe;
     opts.stderr_stream = NULL;
     //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
     opts.exit_cb = &jl_return_spawn;
-    jlopts->exitcb=exitcb?*exitcb:0;
-    jlopts->closecb=closecb?*closecb:0;
+    jlopts->exitcb=exitcb;
+    jlopts->closecb=closecb;
     error = uv_spawn(jl_event_loop,proc,opts);
     if(error)
         jl_errorf("Failed to create process %s: %d",name,error);
@@ -212,54 +199,53 @@ void jl_async_callback(uv_handle_t *handle, int status)
     if(handle->data) {
         jl_async_opts_t* opts = handle->data;
         if(opts->callcb)
-            jl_callback_call(opts->callcb,handle,status);
+            jl_callback_call(opts->callcb,2,CB_PTR,handle,CB_INT32,status);
     }
 }
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb)
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t *cb)
 {
     if(!loop)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb?*cb:0;
+    opts->callcb = cb;
     uv_async_init(loop,async,(uv_async_cb)&jl_async_callback);
     async->data=opts;
     return async;
 }
 
-DLLEXPORT void jl_async_send(uv_async_t **handle) {
-    if(handle) uv_async_send(*handle);
+DLLEXPORT void jl_async_send(uv_async_t *handle) {
+    if(handle) uv_async_send(handle);
 }
 
-DLLEXPORT uv_idle_t *jl_idle_init(uv_loop_t **loop)
+DLLEXPORT uv_idle_t *jl_idle_init(uv_loop_t *loop)
 {
     if(!loop)
         return -2;
     uv_idle_t *idle = malloc(sizeof(uv_idle_t));
-    uv_idle_init(*loop,idle);
+    uv_idle_init(loop,idle);
     idle->data = 0;
     return idle;
 }
 
-DLLEXPORT int jl_idle_start(uv_idle_t **idle, jl_callback_t **cb)
+DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb)
 {
-    if(!idle||(*idle)->data)
+    if(!idle||(idle)->data)
         return -2;
     jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb?*cb:0;
-    (*idle)->data=opts;
-    return uv_idle_start(*idle,(uv_idle_cb)&jl_async_callback);
+    opts->callcb = cb;
+    (idle)->data=opts;
+    return uv_idle_start(idle,(uv_idle_cb)&jl_async_callback);
 }
 
-DLLEXPORT int jl_idle_stop(uv_idle_t **idle) {
+DLLEXPORT int jl_idle_stop(uv_idle_t *idle) {
     if(!idle)
         return -2;
-    if((*idle)->data) {
-        free(((jl_async_opts_t *)(*idle)->data)->callcb);
-        free((*idle)->data);
+    if(idle->data) {
+        free(idle->data);
     }
-    return uv_idle_stop(*idle);
+    return uv_idle_stop(idle);
 }
 
 void jl_free_buffer(uv_write_t *uvw, int status) {

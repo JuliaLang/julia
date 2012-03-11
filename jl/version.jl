@@ -130,7 +130,7 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
+const VERSION = 0#convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
     ver = print_to_string(print,VERSION)
     commit = chomp(readall(`git rev-parse HEAD`))
@@ -166,6 +166,7 @@ I"               _
 
 "
 
+local reset = "\033[0m"
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot
@@ -173,7 +174,7 @@ local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot
 local d4 = "\033[35m" # fourth dot
 const _jl_banner_color =
-"\033[1m               $(d3)_
+"$(jl)               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
    $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
@@ -182,6 +183,6 @@ const _jl_banner_color =
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
 $(jl)|__/$(tx)                   |
 
-\033[0m"
+$(reset)"
 
 end # begin

@@ -270,6 +270,12 @@ typedef struct {
     jl_value_t *etype;
 } jl_expr_t;
 
+enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_INT64 };
+#ifdef ENVIRONMENT64
+#define CB_INT CB_INT64
+#else
+#define CB_INT CB_INT32
+#endif
 
 extern jl_tag_type_t *jl_any_type;
 extern jl_tag_type_t *jl_type_type;
@@ -684,25 +690,25 @@ DLLEXPORT uv_tty_t *jl_stdin(void);
 DLLEXPORT uv_tty_t *jl_stdout(void);
 DLLEXPORT uv_tty_t *jl_stderr(void);
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t **stdin_pipe, uv_pipe_t **stdout_pipe, void **exitcb, void **closecb);
-DLLEXPORT void jl_run_event_loop(uv_loop_t **loop);
-DLLEXPORT void jl_process_events(uv_loop_t **loop);
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb);
+DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
+DLLEXPORT void jl_process_events(uv_loop_t *loop);
 
 DLLEXPORT uv_loop_t *jl_global_event_loop();
 DLLEXPORT uv_loop_t *jl_local_event_loop();
 
 DLLEXPORT uv_pipe_t *jl_make_pipe();
-DLLEXPORT void jl_close_uv(uv_handle_t **handle);
+DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t **handle, ios_t *iohandle,void **callback);
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *callback);
 
-DLLEXPORT void jl_callback(void **callback);
+DLLEXPORT void jl_callback(void *callback);
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t **loop,jl_callback_t **cb);
-DLLEXPORT void jl_async_send(uv_async_t **handle);
-DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t **loop);
-DLLEXPORT int jl_idle_start(uv_idle_t **idle, jl_callback_t **cb);
-DLLEXPORT int jl_idle_stop(uv_idle_t **idle);
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t *cb);
+DLLEXPORT void jl_async_send(uv_async_t *handle);
+DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
+DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
+DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
 DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);

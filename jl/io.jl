@@ -126,7 +126,7 @@ takebuf_string(s::IOStream) =
 
 function print_to_array(size::Integer, f::Function, args...)
     s = memio(size, false)
-    #_jl_with_output_stream(s, f, args...)
+    _jl_with_output_stream(s, f, args...)
     takebuf_array(s)
 end
 
@@ -190,8 +190,7 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
-    ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, convert(Ptr{Void}, s.ios))
+write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, convert(Ptr{Void}, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)

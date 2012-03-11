@@ -23,6 +23,11 @@
 *.do
 *.o
 
-julia.files
-julia.config
-julia.includes
+*.out
+
+*.files
+*.config
+*.includes
+*.creator
+*.user
+*.orig

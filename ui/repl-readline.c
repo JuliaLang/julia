@@ -487,7 +487,7 @@ static void init_rl(void)
         rl_bind_key_in_map('\r',       return_callback,     keymaps[i]);
         rl_bind_key_in_map('\n',       newline_callback,    keymaps[i]);
         rl_bind_key_in_map('\v',       line_kill_callback,  keymaps[i]);
-        rl_bind_key_in_map('\b',       backspace_callback,  keymaps[i]);
+        rl_bind_key_in_map(127,       backspace_callback,  keymaps[i]);
         rl_bind_key_in_map('\001',     line_start_callback, keymaps[i]);
         rl_bind_key_in_map('\005',     line_end_callback,   keymaps[i]);
         rl_bind_key_in_map('\002',     left_callback,       keymaps[i]);
@@ -500,6 +500,8 @@ static void init_rl(void)
     };
 }
 
+extern int _rl_echoing_p;
+
 void init_repl_environment(void)
 {
 #ifdef __WIN32__
@@ -507,6 +509,8 @@ void init_repl_environment(void)
 #endif
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
+    rl_prep_terminal(1);
+    _rl_echoing_p=1;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }
@@ -538,10 +542,13 @@ void repl_callback_enable()
 extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     char *start = buf.base;
-    while(start != 0 && nread-- > 0) {
+    while(*start != 0 && nread > 0) {
         rl_stuff_char(*start);
+        start++;
+        nread--;
     }
     rl_callback_read_char();
+    rl_redisplay();
 }
 
 void restart(void)

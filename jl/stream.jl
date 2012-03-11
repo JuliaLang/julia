@@ -1,4 +1,4 @@
-typealias PtrSize Int64
+typealias PtrSize Int
 const UVHandle = PtrSize
 const IOStreamHandle = Ptr{Void}
 localEventLoop() = ccall(:jl_local_event_loop,PtrSize,())
@@ -174,7 +174,7 @@ function finish_read(state::(NamedPipe,ByteString))
     finish_read(state...)
 end
 
-function process_exited(p::Process,h::PtrSize,e::PtrSize, t::PtrSize)
+function end_process(p::Process,h::PtrSize,e::Int32, t::Int32)
     p.exit_code=e
     p.term_signal=t
 end
@@ -192,7 +192,7 @@ spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot)=spawn(cmd,in,out,0)
 spawn(cmd::Cmd,in::PipeOrNot)=spawn(cmd,in,false)
 spawn(cmd::Cmd)=spawn(cmd,false,false,0)
 
-function process_exited_chain(procs::Processes,h::PtrSize,e::PtrSize,t::PtrSize)
+function process_exited_chain(procs::Processes,h::PtrSize,e::Int32,t::Int32)
     for p in procs.siblings
         if(p.handle==h)
             p.exit_code=e
@@ -223,7 +223,7 @@ function spawn(cmds::Cmds,in::PipeOrNot,out::PipeOrNot)
     end
     procs = Processes()
     for c in cmds.siblings
-        add(procs.siblings,spawn(c,in,n,make_callback(process_exited_chain,(PtrSize,PtrSize,PtrSize),procs),make_callback(()->process_closed_chain(procs),()))
+        add(procs.siblings,spawn(c,in,n,make_callback((args...)->process_exited_chain(procs,args...)),make_callback((args...)->process_closed_chain(procs))))
     end
     #if(isa(n,AsyncStream))
         #start_reading(n)
@@ -245,7 +245,7 @@ end
 function readall(cmd::Cmd)
     out=make_pipe()
     pp=Process(0,0,0,0)
-    spawn(cmd,false,out,make_callback(()->process_exited(pp),(PtrSize,PtrSize,PtrSize)), make_callback(()->finish_read(out),()))
+    spawn(cmd,false,out,make_callback((args...)->end_process(pp,args...)), make_callback((args...)->finish_read(out)))
     ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Ptr{PtrSize}),out.handle,out.buf.ios,C_NULL)
     run_event_loop()
     return takebuf_string(out.buf)
@@ -254,7 +254,7 @@ end
 function success(cmd::Cmd)
     ptrs = _jl_pre_exec(cmd.exec)
     pp=Process(0,0,0,0)
-    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs, C_NULL, C_NULL,make_callback(()->process_exited(pp),(PtrSize,PtrSize,PtrSize)), C_NULL)
+    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs, C_NULL, C_NULL,make_callback((args...)->end_process(pp)), C_NULL)
     run_event_loop()
     return (pp.exit_code==0)
 end
