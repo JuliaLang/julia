@@ -816,8 +816,8 @@ print_joined(strings) = print_joined(strings, "")
 join(args...) = print_to_string(print_joined, args...)
 
 chop(s::String) = s[1:thisind(s,length(s))-1]
-chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
-chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
+chomp(s::String) = (i=thisind(s,length(s)); i>0 && s[i]=='\n' ? s[1:i-1] : s)
+chomp(s::ByteString) = (isempty(s) || s.data[end]!=0x0a) ? s : s[1:end-1]
 
 function lstrip(s::String)
     i = start(s)
