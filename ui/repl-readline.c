@@ -502,6 +502,18 @@ static void init_rl(void)
 
 extern int _rl_echoing_p;
 
+void jl_prep_terminal (int meta_flag)
+{
+//terminal is prepped by libuv
+    _rl_echoing_p=1;
+}
+
+/* Restore the terminal's normal settings and modes. */
+void jl_deprep_terminal ()
+{
+//no need to deprep the terminal
+}
+
 void init_repl_environment(void)
 {
 #ifdef __WIN32__
@@ -510,7 +522,8 @@ void init_repl_environment(void)
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     rl_prep_terminal(1);
-    _rl_echoing_p=1;
+    rl_prep_term_function=&jl_prep_terminal;
+    rl_deprep_term_function=&jl_deprep_terminal;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }
