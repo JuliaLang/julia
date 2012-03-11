@@ -2416,7 +2416,7 @@ function interior( self::PlotContainer, device::Renderer, exterior_bbox::Boundin
             pt_add(upperright(interior_bbox), dur) )
     end
 
-    throw("interior error")
+    return interior_bbox
 end
 
 function exterior( self::PlotContainer, device::Renderer, interior::BoundingBox )
