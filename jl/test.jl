@@ -1,33 +1,37 @@
 # test suite functions and macros
 
 # tests
-function tests(onestr::String, outputter::Function) 
-    # if onestr is an existing file, pass it to the primary testing function 
-    stat = strip(readall(`stat -f "%HT" $onestr`))
-    if (stat == "Regular File")
-        tests([onestr], outputter)
-    elseif (stat == "Directory")
-        # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
-        # that list
-        files_str = strip(readall(`find $onestr -name test_*.jl -print`))
-        if (length(files_str) > 0)
-            tests(split(files_str, "\n"), outputter)
-        else
-            # otherwise, throw an error
-            error("no test_*.jl files in directory: $onestr")
-        end
-    end
-end
-tests(onestr::String) = tests(onestr, test_printer_simple)
-tests(fn::Function) = tests(".", fn)
-tests() = tests(".")
+# TODO: re-enable when filesystem tests become available!
+# function tests(onestr::String, outputter::Function) 
+#     # if onestr is an existing file, pass it to the primary testing function 
+#     stat = strip(readall(`stat -f "%HT" $onestr`))
+#     if (stat == "Regular File")
+#         tests([onestr], outputter)
+#     elseif (stat == "Directory")
+#         # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
+#         # that list
+#         files_str = strip(readall(`find $onestr -name test_*.jl -print`))
+#         if (length(files_str) > 0)
+#             tests(split(files_str, "\n"), outputter)
+#         else
+#             # otherwise, throw an error
+#             error("no test_*.jl files in directory: $onestr")
+#         end
+#     end
+# end
+# tests(onestr::String) = tests(onestr, test_printer_raw)
+# tests(fn::Function) = tests(".", fn)
+# tests() = tests(".")
 
+tests(onestr::String, outputter::Function) = tests([onestr], outputter)
+tests(onestr::String) = tests([onestr], test_printer_raw)
+    
 function tests(filenames, outputter::Function)
     # run these files as a task
     hdl = Task(() -> _tests_task(filenames))
     outputter(hdl)
 end
-tests(filenames) = tests(filenames, test_printer_simple)
+tests(filenames) = tests(filenames, test_printer_raw)
 
 function _tests_task(filenames)
     for fn = filenames
@@ -36,7 +40,7 @@ function _tests_task(filenames)
 end
 
 # the default printer
-function test_printer_simple(hdl::Task)
+function test_printer_raw(hdl::Task)
     for t = hdl
         if (t.result)
             print(".")
