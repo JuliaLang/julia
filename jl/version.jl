@@ -146,8 +146,10 @@ try
     clean = clean ? "" : "*"
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
     global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
+    global const VERSION_COMMIT = commit[1:10]
 catch
     global const _jl_commit_string = ""
+    global const VERSION_COMMIT = ""
 end
 
 begin
