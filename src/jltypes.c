@@ -286,12 +286,30 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
 static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
                                    cenv_t *penv, cenv_t *eqc, variance_t var)
 {
+    int eq0 = eqc->n, co0 = penv->n;
     jl_tuple_t *t = jl_alloc_tuple(a->types->length);
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < t->length; i++) {
-        jl_tupleset(t, i, jl_type_intersect(jl_tupleref(a->types,i), b,
-                                            penv, eqc, var));
+        jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
+                                           penv, eqc, var);
+        if (ti == (jl_value_t*)jl_bottom_type) {
+            int eq1 = eqc->n, co1 = penv->n;
+            eqc->n = eq0; penv->n = co0;
+            ti = jl_type_intersect(jl_tupleref(a->types,i), b,
+                                   penv, eqc, var);
+            if (ti != (jl_value_t*)jl_bottom_type) {
+                // tvar conflict among union elements; keep the conflicting
+                // constraints rolled back
+                eqc->n = eq0; penv->n = co0;
+            }
+            else {
+                // union element doesn't overlap no matter what.
+                // so keep constraints.
+                eqc->n = eq1; penv->n = co1;
+            }
+        }
+        jl_tupleset(t, i, ti);
     }
     // problem: an intermediate union type we make here might be too
     // complex, even though the final type after typevars are replaced
@@ -2247,9 +2265,23 @@ void jl_init_types(void)
     jl_func_kind->env = NULL;
 
     // now they can be used to create the remaining base kinds and types
+    jl_method_type =
+        jl_new_struct_type(jl_symbol("Method"), jl_any_type, jl_null,
+                           jl_tuple(6, jl_symbol("sig"), jl_symbol("va"),
+                                    jl_symbol("tvars"), jl_symbol("func"),
+                                    jl_symbol("invokes"), jl_symbol("next")),
+                           jl_tuple(6, jl_tuple_type, jl_bool_type,
+                                    jl_tuple_type, jl_function_type,
+                                    jl_any_type, jl_any_type));
+    jl_method_type->fptr = jl_f_no_function;
+
     jl_methtable_type =
-        jl_new_struct_type(jl_symbol("MethodTable"),
-                           jl_any_type, jl_null, jl_null, jl_null);
+        jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
+                           jl_tuple(4, jl_symbol("defs"), jl_symbol("cache"),
+                                    jl_symbol("cache_1arg"),
+                                    jl_symbol("max_args")),
+                           jl_tuple(4, jl_any_type, jl_any_type, jl_any_type,
+                                    jl_long_type));
     jl_methtable_type->fptr = jl_f_no_function;
 
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
@@ -2486,4 +2518,5 @@ void jl_init_types(void)
     thunk_sym = jl_symbol("thunk");
     anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");
+    amp_sym = jl_symbol("&");
 }

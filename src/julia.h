@@ -236,9 +236,9 @@ typedef struct _jl_module_t {
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
-    // not first-class
+    JL_STRUCT_TYPE
     jl_tuple_t *sig;
-    int va;
+    jl_value_t *va;
     jl_tuple_t *tvars;
     jl_function_t *func;
     // cache of specializations of this method for invoke(), i.e.
@@ -257,7 +257,7 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *defs;
     jl_methlist_t *cache;
     jl_array_t *cache_1arg;
-    int max_args;  // max # of non-vararg arguments in a signature
+    jl_value_t *max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -347,6 +347,7 @@ extern jl_struct_type_t *jl_quotenode_type;
 extern jl_struct_type_t *jl_topnode_type;
 extern jl_bits_type_t *jl_intrinsic_type;
 extern jl_struct_type_t *jl_methtable_type;
+extern jl_struct_type_t *jl_method_type;
 extern jl_struct_type_t *jl_task_type;
 
 extern jl_tuple_t *jl_null;
@@ -378,7 +379,7 @@ extern jl_sym_t *top_sym;
 extern jl_sym_t *line_sym;
 extern jl_sym_t *multivalue_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
-extern jl_sym_t *error_sym;
+extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
@@ -1012,6 +1013,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     JL_SIGATOMIC_BEGIN();
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
+    jl_current_task->state.bt = ss->bt;
     jl_current_task->state.ostream_obj = ss->ostream_obj;
     jl_current_task->state.current_output_stream = ss->current_output_stream;
     jl_current_task->state.prev = ss->prev;

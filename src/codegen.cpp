@@ -151,12 +151,6 @@ static Function *to_function(jl_lambda_info_t *li)
     nested_compile = last_n_c;
     FPM->run(*f);
     //n_compile++;
-    //print out the function's LLVM code
-    if(verifyFunction(*f,ReturnStatusAction)) {
-       // f->dump();
-        jl_error("Function failed to verify");
-        emit_function(li,f);
-    }
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -323,10 +317,7 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
                             // first 3 arguments are static
                             for(i=4; i < (size_t)alen; i++) {
                                 max_arg_depth(jl_exprarg(e,i), max, sp, esc, ctx);
-                                (*sp)++;
-                                if (*sp > *max) *max = *sp;
                             }
-                            (*sp) = lastsp;
                             return;
                         }
                     }

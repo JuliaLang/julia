@@ -97,6 +97,7 @@ Buliding Julia requires that the following software be installed:
 - **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
+- **[m4]**                      — needed to build GMP.
 
 With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
@@ -122,6 +123,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
+[m4]:           https://www.gnu.org/software/m4/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
@@ -153,7 +155,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 <a name="Binary-Installation"/>
 ## Binary Installation
 
-Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with containing pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
+Because of the rapid pace of development at this point, we recommend installing the latest Julia from source, but platform-specific tarballs with pre-compiled binaries are also [available for download](https://github.com/JuliaLang/julia/downloads).
 To install from source, download the appropriate tarball and untar it somewhere.
 For example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
@@ -170,6 +172,8 @@ Now you should be able to run julia like this:
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
+
+An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also available.
 
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup

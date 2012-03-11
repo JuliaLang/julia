@@ -51,6 +51,9 @@ end
 iround(x::Float64) = boxsi64(fpsiround64(unbox64(x)))
 itrunc(x::Float64) = boxsi64(fptosi64(unbox64(x)))
 
+# this is needed very early because it is used by Range and colon
+floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
+
 iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
@@ -120,6 +123,11 @@ isequal(x::Float32, y::Float32) = fpiseq32(unbox32(x),unbox32(y))
 isequal(x::Float64, y::Float64) = fpiseq64(unbox64(x),unbox64(y))
 isless (x::Float32, y::Float32) = fpislt32(unbox32(x),unbox32(y))
 isless (x::Float64, y::Float64) = fpislt64(unbox64(x),unbox64(y))
+
+isequal(a::Integer, b::Float) = (a==b) & isequal(float(a),b)
+isequal(a::Float, b::Integer) = isequal(b, a)
+isless (a::Integer, b::Float) = (a<b) | isless(float(a),b)
+isless (a::Float, b::Integer) = (a<b) | isless(a,float(b))
 
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox64(x),unbox64(y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox64(x),unbox64(y))

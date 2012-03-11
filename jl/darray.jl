@@ -46,7 +46,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 
     function DArray(initializer::Function, dims)
-        procs = linspace(1, min(nprocs(),dims[distdim]))
+        procs = [1:min(nprocs(),dims[distdim])]
         dist = defaultdist(distdim, dims, length(procs))
         DArray{T,N,distdim}(initializer, dims, procs, dist)
     end
@@ -291,7 +291,7 @@ function darray{T}(init, ::Type{T}, dims::Dims, distdim, procs)
 end
 
 function darray{T}(init, ::Type{T}, dims::Dims, distdim)
-    procs = linspace(1, min(nprocs(),dims[distdim]))
+    procs = [1:min(nprocs(),dims[distdim])]
     darray(init, T, dims, distdim, procs,
            defaultdist(distdim, dims, length(procs)))
 end
@@ -304,7 +304,7 @@ darray(init::Function, dims::Int...) = darray(init, dims)
 
 darray(T::Type, args...)     = darray((T,lsz,da)->Array(T,lsz), T, args...)
 darray(dims::Dims, args...)  = darray((T,lsz,da)->Array(T,lsz), dims, args...)
-darray(dims::Int...)        = darray((T,lsz,da)->Array(T,lsz), dims)
+darray(dims::Int...)         = darray((T,lsz,da)->Array(T,lsz), dims)
 
 # construct a DArray as a function of each block of another
 function darray(f::Function, A::SubOrDArray)

@@ -25,7 +25,7 @@ static jl_methtable_t *new_method_table(void)
     mt->defs = NULL;
     mt->cache = NULL;
     mt->cache_1arg = NULL;
-    mt->max_args = 0;
+    mt->max_args = jl_box_long(0);
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
@@ -159,7 +159,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     jl_methlist_t *ml = mt->cache;
     while (ml != NULL) {
         if (cache_match_by_type(&jl_tupleref(types,0), types->length,
-                                (jl_tuple_t*)ml->sig, ml->va)) {
+                                (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
             return ml->func;
         }
         ml = ml->next;
@@ -187,8 +187,8 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
     }
     jl_methlist_t *ml = mt->cache;
     while (ml != NULL) {
-        if (((jl_tuple_t*)ml->sig)->length == n || ml->va) {
-            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va)) {
+        if (((jl_tuple_t*)ml->sig)->length == n || ml->va==jl_true) {
+            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
                 return ml->func;
             }
         }
@@ -526,9 +526,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (type->length > mt->max_args &&
+    if (type->length > jl_unbox_long(mt->max_args) &&
         jl_is_seq_type(jl_tupleref(decl,decl->length-1))) {
-        size_t nspec = mt->max_args+2;
+        size_t nspec = jl_unbox_long(mt->max_args)+2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
@@ -856,7 +856,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->sig = type;
             l->tvars = tvars;
             l->va = (type->length > 0 &&
-                     jl_is_seq_type(jl_tupleref(type,type->length-1)));
+                     jl_is_seq_type(jl_tupleref(type,type->length-1))) ?
+                jl_true : jl_false;
             l->invokes = NULL;
             l->func = method;
             JL_SIGATOMIC_END();
@@ -877,11 +878,13 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         pl = &l->next;
         l = l->next;
     }
-    jl_methlist_t *newrec = (jl_methlist_t*)allocb(sizeof(jl_methlist_t));
+    jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
+    newrec->type = (jl_type_t*)jl_method_type;
     newrec->sig = type;
     newrec->tvars = tvars;
     newrec->va = (type->length > 0 &&
-                  jl_is_seq_type(jl_tupleref(type,type->length-1)));
+                  jl_is_seq_type(jl_tupleref(type,type->length-1))) ?
+        jl_true : jl_false;
     newrec->func = method;
     newrec->invokes = NULL;
     newrec->next = l;
@@ -946,8 +949,8 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     size_t na = t->length;
     if (t->length>0 && jl_is_seq_type(jl_tupleref(t,t->length-1)))
         na--;
-    if (na > mt->max_args) {
-        mt->max_args = na;
+    if (na > jl_unbox_long(mt->max_args)) {
+        mt->max_args = jl_box_long(na);
     }
     JL_SIGATOMIC_END();
     return ml;
@@ -1283,9 +1286,20 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars);
 }
 
+DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
+                                      jl_tuple_t *tvars)
+{
+    jl_tuple_t *env = jl_null;
+    jl_value_t *ti=NULL;
+    JL_GC_PUSH(&env, &ti);
+    ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
+    jl_tuple_t *result = jl_tuple2(ti, env);
+    JL_GC_POP();
+    return result;
+}
+
 static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
-                                jl_tuple_t *sig, jl_tuple_t *tvars,
-                                jl_sym_t *name)
+                                jl_tuple_t *sig, jl_tuple_t *tvars)
 {
     jl_tuple_t *env = jl_null;
     jl_value_t *temp=NULL;
@@ -1295,20 +1309,15 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
     jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
-        if (func->linfo == NULL) {
-            // builtin
-            result = jl_tuple(4, ti, env, name, jl_null);
+        assert(func->linfo);  // no builtin methods
+        jl_value_t *cenv;
+        if (func->env != NULL) {
+            cenv = func->env;
         }
         else {
-            jl_value_t *cenv;
-            if (func->env != NULL) {
-                cenv = func->env;
-            }
-            else {
-                cenv = (jl_value_t*)jl_null;
-            }
-            result = jl_tuple(4, ti, env, func->linfo, cenv);
+            cenv = (jl_value_t*)jl_null;
         }
+        result = jl_tuple(4, ti, env, func->linfo, cenv);
     }
     JL_GC_POP();
     return result;
@@ -1329,7 +1338,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
           more generally, we can stop when the type is a subtype of the
           union of all the signatures examined so far.
         */
-        matc = match_method(type, ml->func, ml->sig, ml->tvars, name);
+        matc = match_method(type, ml->func, ml->sig, ml->tvars);
         if (matc != NULL) {
             len++;
             if (lim >= 0 && len > lim) {

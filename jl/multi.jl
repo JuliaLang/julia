@@ -97,9 +97,8 @@ type Worker
     add_msgs::Array{Any,1}
     gcflag::Bool
     
-    function Worker(host, port)
-        fd = ccall(:connect_to_host, Int32,
-                   (Ptr{Uint8}, Int16), host, port)
+    function Worker(host::ByteString, port)
+        fd = ccall(:connect_to_host, Int32, (Ptr{Uint8}, Int16), host, port)
         if fd == -1
             error("could not connect to $host:$port, errno=$(errno())\n")
         end
@@ -956,7 +955,7 @@ function start_worker(wrfd)
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
-    ccall(:close, Int32, (Int32,), int32(0))
+    ccall(:close, Int32, (Int32,), 0)
 
     global const Scheduler = current_task()
 
@@ -970,7 +969,7 @@ function start_worker(wrfd)
     end
 
     ccall(:close, Int32, (Int32,), sockfd)
-    #ccall(:exit , Void , (Int32,), int32(0))
+    #ccall(:exit , Void , (Int32,), 0)
 end
 
 # establish an SSH tunnel to a remote worker

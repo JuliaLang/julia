@@ -13,7 +13,7 @@ type BigInt <: Integer
 
 	function BigInt(x::Int) 
 		z = _jl_bigint_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_set_ui), Void, (Ptr{Void}, Uint),z,uint(x))
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_set_si), Void, (Ptr{Void}, Int),z,x)
 		b = new(z)
 		finalizer(b, _jl_bigint_clear)
 		b
@@ -30,16 +30,15 @@ convert(::Type{BigInt}, x::Int8) = BigInt(int(x))
 convert(::Type{BigInt}, x::Int16) = BigInt(int(x))
 convert(::Type{BigInt}, x::Int) = BigInt(x)
 
-macro define_bigint_convert ()
-	if WORD_SIZE == 64
-		:(convert(::Type{BigInt}, x::Int32) = BigInt(int(x)))
-
-	else
-		:(convert(::Type{BigInt}, x::Int64) = BigInt(string(x)))
-	end
+if WORD_SIZE == 64
+    convert(::Type{BigInt}, x::Int32) = BigInt(int(x))
+else
+    BigInt(l::Int64) = BigInt(string(l))
+    convert(::Type{BigInt}, x::Int64) = BigInt(string(x))
 end
 
-@define_bigint_convert
+convert(::Type{Int}, n::BigInt) =
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_get_si), Int, (Ptr{Void},), n.mpz)
 
 promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 promote_rule(::Type{BigInt}, ::Type{Int16}) = BigInt
@@ -83,7 +82,19 @@ function rem (x::BigInt, y::BigInt)
 end
 
 function cmp(x::BigInt, y::BigInt) 
-	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_cmp), Int32, (Ptr{Void}, Ptr{Void}),x.mpz, y.mpz)
+end
+
+function sqrt(x::BigInt)
+	z = _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_sqrt), Void, (Ptr{Void}, Ptr{Void}),z,x.mpz)
+	BigInt(z)
+end
+
+function pow(x::BigInt, y::Uint) 
+	z = _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
+    BigInt(z)
 end
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0 
@@ -95,7 +106,7 @@ end
 function string(x::BigInt) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
 	ret = cstring(s) #This copies s. 
-	_jl_free(convert(Ptr{Void},s))
+	_c_free(s)
 	ret
 end
 

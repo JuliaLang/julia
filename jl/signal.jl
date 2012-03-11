@@ -79,10 +79,8 @@ function conv2{T}(y::Vector{T}, x::Vector{T}, A::Matrix{T})
     B = zeros(T, m, n)
     B[1:size(A,1),1:size(A,2)] = A
     y = fft([y;zeros(T,m-length(y))])./m
-    Y = repmat(reshape(y,m,1), 1, n)
     x = fft([x;zeros(T,n-length(x))])./n
-    X = repmat(reshape(x,1,n), m, 1)
-    C = ifft2(fft(fft(B,(),2).*X,(),1).*Y)
+    C = ifft2(fft2(B) .* (y * x.'))
     if T <: Real
         return real(C)
     end
@@ -91,13 +89,13 @@ end
 
 function conv2{T}(A::Matrix{T}, B::Matrix{T})
     sa, sb = size(A), size(B)
-    At = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
-    Bt = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
-    #At[1:sa[1], 1:sa[2]] = A
-    #Bt[1:sb[1], 1:sb[2]] = B
-    At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
-    Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = B
-    C = fftshift(ifft2(fft2(At).*fft2(Bt)))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1))
+    At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+    At[1:sa[1], 1:sa[2]] = A
+    Bt[1:sb[1], 1:sb[2]] = B
+    #At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
+    #Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = B
+    C = ifft2(fft2(At).*fft2(Bt))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1))
     if T <: Real
         return real(C)
     end

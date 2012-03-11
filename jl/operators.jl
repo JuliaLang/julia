@@ -110,6 +110,39 @@ one(::Type{Function}) = identity
 
 # vectorization
 
+function promote_shape(a::(Int,), b::(Int,))
+    if a[1] != b[1]
+        error("argument dimensions must match")
+    end
+    return a
+end
+
+function promote_shape(a::(Int,Int), b::(Int,))
+    if a[1] != b[1] || a[2] != 1
+        error("argument dimensions must match")
+    end
+    return a
+end
+
+promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
+
+function promote_shape(a::Dims, b::Dims)
+    if length(a) < length(b)
+        return promote_shape(b, a)
+    end
+    for i=1:length(b)
+        if a[i] != b[i]
+            error("argument dimensions must match")
+        end
+    end
+    for i=length(b)+1:length(a)
+        if a[i] != 1
+            error("argument dimensions must match")
+        end
+    end
+    return a
+end
+
 macro vectorize_1arg(S,f)
     quote
         function ($f){T<:$S}(x::AbstractArray{T,1})
@@ -146,8 +179,8 @@ macro vectorize_2arg(S,f)
         end
 
         function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
-            if size(x) != size(y); error("argument dimensions must match"); end
-            reshape([ ($f)(x[i], y[i]) | i=1:numel(x) ], size(x))
+            shp = promote_shape(size(x),size(y))
+            reshape([ ($f)(x[i], y[i]) | i=1:numel(x) ], shp)
         end
     end
 end

@@ -1,7 +1,9 @@
 _jl_libarpack = dlopen("libarpack")
 
-macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
-    quote
+for (T, Tc, saupd, real_naupd, complex_naupd) in
+    ((:Float64,:Complex128,"dsaupd_","dnaupd_","znaupd_"),
+     (:Float32,:Complex64, "ssaupd_","snaupd_","cnaupd_"))
+    @eval begin
 
         # call dsaupd
         #  ( IDO, BMAT, N, WHICH, NEV, TOL, RESID, NCV, V, LDV, IPARAM,
@@ -14,8 +16,8 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call dnaupd
@@ -29,8 +31,8 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, 
                    Ptr{Int32}, Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call znaupd
@@ -44,18 +46,17 @@ macro _jl_arpack_aupd_macro(T, Tc, saupd, real_naupd, complex_naupd)
                   (Ptr{Int32}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32},
                    Ptr{Int32}, Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  ido, bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv), 
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  ido, bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv, 
+                  iparam, ipntr, workd, workl, &lworkl, rwork, info)
         end
 
     end
 end
 
-@_jl_arpack_aupd_macro Float64 Complex128 "dsaupd_" "dnaupd_" "znaupd_"
-@_jl_arpack_aupd_macro Float32 Complex64  "ssaupd_" "snaupd_" "cnaupd_"
-
-macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
-    quote
+for (T, Tc, seupd, real_neupd, complex_neupd) in
+    ((:Float64,:Complex128,"dseupd_","dneupd_","zneupd_"),
+     (:Float32,:Complex64 ,"sseupd_","sneupd_","cneupd_"))
+    @eval begin
 
         #  call dseupd  
         #     ( RVEC, HOWMNY, SELECT, D, Z, LDZ, SIGMA, BMAT, N, WHICH, NEV, TOL,
@@ -69,9 +70,9 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, 
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, d, v, &ldv, sigma, 
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call dneupd  
@@ -88,9 +89,9 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$T}, Ptr{$T}, Ptr{Int32}, Ptr{Int32}),
-                  rvec, all, select, dr, di, v, int32(ldv), sigmar, sigmai, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), info)
+                  &rvec, all, select, dr, di, v, &ldv, sigmar, sigmai, workev,
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, info)
         end
 
         #  call zneupd 
@@ -106,16 +107,13 @@ macro _jl_arpack_eupd_macro(T, Tc, seupd, real_neupd, complex_neupd)
                    Ptr{$Tc}, Ptr{Uint8}, Ptr{Int32}, Ptr{Uint8}, Ptr{Int32},
                    Ptr{$T}, Ptr{$Tc}, Ptr{Int32}, Ptr{$Tc}, Ptr{Int32}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Ptr{$T}, Ptr{Int32}),
-                  rvec, all, select, d, v, int32(ldv), sigma, workev,
-                  bmat, int32(n), which, int32(nev), tol, resid, int32(ncv), v, int32(ldv),
-                  iparam, ipntr, workd, workl, int32(lworkl), rwork, info)
+                  &rvec, all, select, d, v, &ldv, sigma, workev,
+                  bmat, &n, which, &nev, tol, resid, &ncv, v, &ldv,
+                  iparam, ipntr, workd, workl, &lworkl, rwork, info)
         end
 
     end
 end
-
-@_jl_arpack_eupd_macro Float64 Complex128 "dseupd_" "dneupd_" "zneupd_"
-@_jl_arpack_eupd_macro Float32 Complex64  "sseupd_" "sneupd_" "cneupd_"
 
 eigs(A) = eigs(A, 6)
 eigs(A, k) = eigs(A, k, "LM")

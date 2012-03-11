@@ -225,6 +225,14 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 
+#ifdef JL_GC_MARKSWEEP
+    jl_gc_enable();
+#endif
+}
+
+DLLEXPORT void jl_install_sigint_handler()
+{
+    struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = sigint_handler;
@@ -235,10 +243,6 @@ void julia_init(char *imageFile)
     }
 	
 	#endif
-
-#ifdef JL_GC_MARKSWEEP
-    jl_gc_enable();
-#endif
 }
 
 DLLEXPORT

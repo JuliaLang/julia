@@ -498,6 +498,11 @@ void jl_load(const char *fname)
     if (fpath != fname) free(fpath);
 }
 
+DLLEXPORT void jl_load_(jl_value_t *str)
+{
+    jl_load(jl_string_data(str));
+}
+
 JL_CALLABLE(jl_f_top_eval)
 {
     if (nargs == 1) {
