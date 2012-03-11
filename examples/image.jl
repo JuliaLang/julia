@@ -495,3 +495,40 @@ end
 
 imedge{T}(img::Array{T}, method::String) = imedge(img, method, "replicate")
 imedge{T}(img::Array{T}) = imedge(img, "sobel", "replicate")
+
+# forward and backward differences 
+# can be very helpful for discretized continuous models 
+forwarddiffy{T}(u::Array{T,2}) = [u[2:end,:]; u[end,:]] - u
+forwarddiffx{T}(u::Array{T,2}) = [u[:,2:end] u[:,end]] - u
+backdiffy{T}(u::Array{T,2}) = u - [u[1,:]; u[1:end-1,:]]
+backdiffx{T}(u::Array{T,2}) = u - [u[:,1] u[:,1:end-1]]
+
+function imROF{T}(img::Array{T,2}, lambda::Number, iterations::Integer)
+    # Total Variation regularized image denoising using the primal dual algorithm
+    # Also called Rudin Osher Fatemi (ROF) model
+    # lambda: regularization parameter
+    s1, s2 = size(img)
+    p = zeros(T, s1, s2, 2)
+    u = zeros(T, s1, s2)
+    grad_u = zeros(T, s1, s2, 2)
+    div_p = zeros(T, s1, s2)
+    dt = lambda/4
+    for i = 1:iterations
+        div_p = backdiffx(squeeze(p[:,:,1])) + backdiffy(squeeze(p[:,:,2]))
+        u = img + div_p/lambda
+        grad_u = cat(3, forwarddiffx(u), forwarddiffy(u))
+        grad_u_mag = sqrt(grad_u[:,:,1].^2 + grad_u[:,:,2].^2)
+        tmp = 1 + grad_u_mag*dt
+        p = (dt*grad_u + p)./cat(3, tmp, tmp)
+    end
+    return u
+end
+
+# ROF Model for color images
+function imROF{T}(img::Array{T,3}, lambda::Number, iterations::Integer)
+    out = zeros(T, size(img))
+    for i = 1:size(img, 3)
+        out[:,:,i] = imROF(squeeze(img[:,:,i]), lambda, iterations)
+    end
+    return out
+end
