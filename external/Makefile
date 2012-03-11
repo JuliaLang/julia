@@ -22,7 +22,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt arpack suitesparse suitesparse-wrapper double-conversion amos gmp-wrapper
+LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -32,12 +32,12 @@ ifeq ($(OS), FreeBSD)
 LIBS += unwind
 endif
 
-ifeq ($(USE_SYSTEM_READLINE), 0)
-LIBS += readline
-endif
-
 ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
+endif
+
+ifeq ($(USE_SYSTEM_READLINE), 0)
+LIBS += readline
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
@@ -60,9 +60,12 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 LIBS += gmp
 endif
 
-# Hard-coded setup for libraries on Debian
-ifeq ($(USE_DEBIAN), 1)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
+ifeq ($(USE_SYSTEM_ARPACK), 0)
+LIBS += arpack
+endif
+
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+LIBS += suitesparse
 endif
 
 WGET = wget
@@ -419,8 +422,13 @@ distclean-fftw:
 
 ## SUITESPARSE ##
 
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
+else
+SUITESPARSE_OBJ_TARGET =
+SUITESPARSE_OBJ_SOURCE =
+endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -450,17 +458,15 @@ distclean-suitesparse: clean-suitesparse
 
 # SUITESPARSE WRAPPER
 
-ifeq ($(USE_DEBIAN), 1)
+ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
-SUITESPARSEWRAPPER_BUILD_DEP = 
 else
 SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig
 SUITESPARSE_LIB = 
-SUITESPARSEWRAPPER_BUILD_DEP = $(SUITESPARSE_OBJ_TARGET)
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSEWRAPPER_BUILD_DEP)
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -497,8 +503,13 @@ distclean-clp:
 
 ## UNWIND ##
 
+ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
 LIBUNWIND_TARGET_OBJ = $(EXTROOTLIB)/libunwind.a
 LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
+else
+LIBUNWIND_TARGET_OBJ = 
+LIBUNWIND_TARGET_SOURCE = 
+endif
 
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
@@ -549,7 +560,11 @@ distclean-lighttpd:
 
 ## GMP ##
 
+ifeq ($(USE_SYSTEM_GMP), 0)
 GMP_OBJ_TARGET = $(EXTROOTLIB)/libgmp.$(SHLIB_EXT)
+else
+GMP_OBJ_TARGET = 
+endif
 
 compile-gmp: install-gmp
 install-gmp: $(GMP_OBJ_TARGET)
