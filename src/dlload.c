@@ -56,6 +56,10 @@ uv_lib_t jl_load_dynamic_library(char *fname)
 #endif
         return handle;
     }
+    else if (modname[0] == '/') {
+        handle = dlopen(modname, RTLD_NOW);
+        if (handle != NULL) return handle;
+    }
     char *cwd;
 
     for(i=0; i < N_EXTENSIONS; i++) {
