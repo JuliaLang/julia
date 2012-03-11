@@ -145,16 +145,16 @@ end
 
 function rgb2gray{T}(img::Array{T,3})
     n, m = size(img)
-    weights = [0.30 0.59 0.11] # RGB
+    wr, wg, wb = 0.30, 0.59, 0.11
     out = Array(T, n, m)
     if ndims(img)==3 && size(img,3)==3
         for i=1:n, j=1:m
-            out[i,j] = sum(weights.*squeeze(img[i,j,:])')
+            out[i,j] = wr*img[i,j,1] + wg*img[i,j,2] + wb*img[i,j,3]
         end
     elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
         for i=1:n, j=1:m
             p = img[i,j]
-            out[i,j] = sum(weights.*[redval(p) greenval(p) blueval(p)])
+            out[i,j] = wr*redval(p) + wg*greenval(p) + wb*blueval(p)
         end
     else
         error("unsupported array type")
@@ -450,7 +450,7 @@ function rgb2hsi{T}(img::Array{T})
 end
 
 function hsi2rgb{T}(img::Array{T})
-    H = img[:,:,1]*2*pi
+    H = img[:,:,1]*(2pi)
     S = img[:,:,2]
     I = img[:,:,3]
     R = zeros(T, size(img,1), size(img,2))
