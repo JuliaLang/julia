@@ -1563,8 +1563,8 @@ end
 
 
 function add_io_handler(io::AsyncStream, H)
-    (_jl_fd_handlers[fd]=H)
-    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Ptr{Int32}),io.handle,io.buf.ios,make_callback((args...)->io_callback(io)))
+    (_jl_fd_handlers[io]=H)
+    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Function),io.handle,io.buf.ios,make_callback(H))
 end
 
 function del_io_handler(io::AsyncStream)

@@ -62,9 +62,6 @@ function _uv_tty2tty(handle::PtrSize)
     tty(handle,memio())
 end
 
-STDIN  = _uv_tty2tty(ccall(:jl_stdin ,PtrSize,()))
-STDERR = _uv_tty2tty(ccall(:jl_stderr,PtrSize,()))
-
 abstract AsyncWork
 
 type SingleAsyncWork <: AsyncWork
@@ -76,17 +73,17 @@ type RepeatedAsyncWork <: AsyncWork
     handle::PtrSize
 end
 
-function createSingleAsyncWork(loop::PtrSize,cb::PtrSize)
-    return SingleAsyncWork(ccall(:jl_make_async,PtrSize,(Ptr{PtrSize},Ptr{PtrSize}),loop,cb))
+function createSingleAsyncWork(loop::PtrSize,cb::Function)
+    return SingleAsyncWork(ccall(:jl_make_async,PtrSize,(Ptr{PtrSize},Function),loop,cb))
 end
 
 function initRepeatedAsyncWork(loop::PtrSize)
     RepeatedAsyncWork(ccall(:jl_idle_init,PtrSize,(Ptr{PtrSize},),int(loop)))
 end
 
-assignRepeatedAsyncWork(work::RepeatedAsyncWork,cb::PtrSize) = ccall(:jl_idle_start,PtrSize,(Ptr{PtrSize},Ptr{PtrSize}),work.handle,cb)
+assignRepeatedAsyncWork(work::RepeatedAsyncWork,cb::Function) = ccall(:jl_idle_start,PtrSize,(Ptr{PtrSize},Function),work.handle,cb)
 
-function add_idle_cb(loop::PtrSize,cb::PtrSize)
+function add_idle_cb(loop::PtrSize,cb::Function)
     work = initRepeatedAsyncWork(loop)
     assignRepeatedAsyncWork(work,cb)
     work
@@ -147,8 +144,8 @@ end
 
 ##stream functions
 
-function start_reading(stream::AsyncStream,cb::PtrSize)
-    ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Ptr{PtrSize}),stream.handle,stream.buf.ios,cb!=0?cb:C_NULL)
+function start_reading(stream::AsyncStream,cb::Function)
+    ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Function),stream.handle,stream.buf.ios,cb!=0?cb:C_NULL)
 end
 start_reading(stream::AsyncStream) = start_reading(stream,0)
 
@@ -179,15 +176,15 @@ function end_process(p::Process,h::PtrSize,e::Int32, t::Int32)
     p.term_signal=t
 end
 
-function spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::PtrSize,closecb::PtrSize,pp::Process)
+function spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::Function,closecb::Function,pp::Process)
     ptrs = _jl_pre_exec(cmd.exec);
-    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Ptr{PtrSize},Ptr{PtrSize}),ptrs[1], ptrs,isa(in,NamedPipe) ? in.handle : C_NULL, isa(out,NamedPipe) ? out.handle : C_NULL,exitcb,closecb)
+    pp.handle=ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{PtrSize}, Ptr{PtrSize}, Function,Function),ptrs[1], ptrs,isa(in,NamedPipe) ? in.handle : C_NULL, isa(out,NamedPipe) ? out.handle : C_NULL,exitcb,closecb)
     pp.in=isa(in,NamedPipe)?in:0
     pp.out=isa(out,NamedPipe)?out:0
     pp
 end
-spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::PtrSize,closecb::PtrSize) = spawn(cmd,in,out,exitcb,closecb,Process(0,0,0,0))
-spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::PtrSize) = spawn(cmd,in,out,exitcb,0,Process(0,0,0,0))
+spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::Function,closecb::Function) = spawn(cmd,in,out,exitcb,closecb,Process(0,0,0,0))
+spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot,exitcb::Function) = spawn(cmd,in,out,exitcb,0,Process(0,0,0,0))
 spawn(cmd::Cmd,in::PipeOrNot,out::PipeOrNot)=spawn(cmd,in,out,0)
 spawn(cmd::Cmd,in::PipeOrNot)=spawn(cmd,in,false)
 spawn(cmd::Cmd)=spawn(cmd,false,false,0)

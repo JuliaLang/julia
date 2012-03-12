@@ -547,14 +547,14 @@ void parseAndExecute(char *str)
 
 void repl_callback_enable()
 {
-    rl_callback_handler_install(prompt_string, &parseAndExecute);
+    rl_callback_handler_install(prompt_string, &jl_input_line_callback);
 }
 
 #include "uv.h"
 
-extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
+void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen)
 {
-    char *start = buf.base;
+    char *start = base;
     while(*start != 0 && nread > 0) {
         rl_stuff_char(*start);
         start++;

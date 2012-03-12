@@ -23,7 +23,12 @@ _jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     del_io_handler(STDIN)
-    put(_jl_repl_channel, (ast, show_value))
+    if show_value == -1
+        # exit
+    end
+    _jl_eval_user_input(ast, show_value!=0)
+    ccall(:repl_callback_enable, Void, ())
+    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 end
 
 # called to show a REPL result
@@ -74,6 +79,10 @@ function _jl_eval_user_input(ast::ANY, show_value)
     println()
 end
 
+function readBuffer(handle::PtrSize,nread::PtrSize,base::PtrSize,len::Int32)
+    ccall(:jl_readBuffer,Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
+end
+
 function run_repl()
     global const _jl_repl_channel = RemoteRef()
 
@@ -85,7 +94,7 @@ function run_repl()
     ccall(:jl_install_sigint_handler, Void, ())
 
     ccall(:repl_callback_enable, Void, ())
-    #add_io_handler(STDIN,()->ccall(:jl_stdin_callback,Void,()))
+    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 
     run_event_loop(globalEventLoop());
 #TODO: make into callback

@@ -1415,8 +1415,9 @@ JL_CALLABLE(jl_f_make_callback)
 #else
     jl_value_t *t = jl_box_int32((void *)args[0]);
 #endif
+    jl_gc_preserve(args[0]);
     JL_GC_POP();
-    return t;
+    return args[0];
 }
 
 void jl_callback_call(jl_function_t *f,int count,...)

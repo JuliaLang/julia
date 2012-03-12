@@ -227,12 +227,12 @@ int true_main(int argc, char *argv[])
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("_start"));
 
-    uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
+    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
         uv_tty_reset_mode();
-        rl_cleanup_after_signal();
+        //rl_cleanup_after_signal();
         return 0;
     }
     //uv_pipe_t pipe;
@@ -240,7 +240,7 @@ int true_main(int argc, char *argv[])
     //jl_status("\033[34mThis is a test\n");
     &jl_load;
 
-    install_event_handler("julia> ",&parseAndExecute);
+    //install_event_handler("julia> ",&parseAndExecute);
 
     //jl_event_loop->data=&pipe;
     //uv_run(jl_event_loop);

@@ -195,6 +195,7 @@
     jl_make_pipe;
     jl_close_uv;
     jl_start_reading;
+    jl_stop_reading;
     jl_callback;
     iswprint;
     localtime_r;
@@ -211,6 +212,8 @@
     jl_putc;
     jl_write;
     jl_sizeof_uv_stream_t;
+    jl_stdin_callback;
+    jl_readBuffer;
   local:
     *;
 };

@@ -101,7 +101,7 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
             opts->stream->bpos+=nread;
         }
         if(opts->readcb) {
-            jl_callback_call(opts->readcb,4,CB_INT,nread,CB_PTR,((jl_pipe_opts_t*)handle->data)->stream->buf,CB_PTR,(buf.base),CB_INT32,buf.len);
+            jl_callback_call(opts->readcb,4,CB_PTR,handle,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
         }
     }
 }
@@ -127,7 +127,7 @@ DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *c
     if(!handle||handle->data)
         return -2;
     jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
-    opts->readcb=(jl_callback_t*)callback;
+    opts->readcb=(jl_function_t*)callback;
     opts->stream = iohandle;
     handle->data = opts;
     return uv_read_start(handle,&jl_alloc_buf,&jl_readcb);
@@ -140,7 +140,8 @@ DLLEXPORT uint16_t jl_stop_reading(uv_stream_t *handle)
     int err = uv_read_stop(handle);
     if(!(handle)->data)
         return -2;
-    ((jl_pipe_opts_t*)(handle)->data)->readcb=0;
+    free(handle->data);
+    handle->data=0;
     return err;
 
 }
