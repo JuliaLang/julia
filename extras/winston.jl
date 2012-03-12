@@ -1129,6 +1129,7 @@ end
 
 _format_ticklabel(x) = _format_ticklabel(x, 0.)
 function _format_ticklabel( x, range )
+    #println(x, " ",range)
     if x == 0
         return "0"
     end
@@ -1146,7 +1147,7 @@ function _format_ticklabel( x, range )
         a, b = _magform( range )
         return "%.*f" % (abs(b),x)
     end
-    return string(x)
+    return showcompact_to_string(x)
 end
 
 _ticklist_linear( lo, hi, sep ) = _ticklist_linear( lo, hi, sep, 0. )
@@ -1522,13 +1523,11 @@ end
 
 function _ticklabels( self::HalfAxis, context, ticks )
     ticklabels = getattr(self, "ticklabels")
-    if ticklabels == nothing
-        #r = [ max(ticks) - min(ticks) ] * length(ticks)
-        r = (max(ticks) - min(ticks)) * ones(length(ticks))
-        return map( _format_ticklabel, ticks, r )
-    else
+    if ticklabels != nothing
         return ticklabels
     end
+    r = max(ticks) - min(ticks)
+    [ _format_ticklabel(x,r) | x=ticks ]
 end
 
 function _make_ticklabels( self::HalfAxis, context, pos, labels )
@@ -2416,7 +2415,8 @@ function interior( self::PlotContainer, device::Renderer, exterior_bbox::Boundin
             pt_add(upperright(interior_bbox), dur) )
     end
 
-    throw("interior error")
+    println("warning: sub-optimal solution for plot")
+    return interior_bbox
 end
 
 function exterior( self::PlotContainer, device::Renderer, interior::BoundingBox )
