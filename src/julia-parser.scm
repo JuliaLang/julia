@@ -520,13 +520,17 @@
 		    op)  ; return operator by itself, as in (+)
 		   ((syntactic-unary-op? op)
 		    (list op (parse-unary s)))
-		   ((or (eqv? next #\() (eqv? next #\{))
+		   ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
 		    (ts:put-back! s op)
 		    (parse-factor s))
 		   (else
-		    (list 'call op (parse-unary s))))))
+		    (let ((arg (parse-unary s)))
+		      (if (and (pair? arg)
+			       (eq? (car arg) 'tuple))
+			  (list* 'call op (cdr arg))
+			  (list  'call op arg)))))))
 	  ((eq? t '|::|)
-	   ; allow ::T, omitting argument name
+	   ;; allow ::T, omitting argument name
 	   (take-token s)
 	   `(|::| ,(gensym) ,(parse-call s)))
 	  (else
