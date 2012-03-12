@@ -1,4 +1,6 @@
 
+load("color.jl")
+
 _jl_libcairo = dlopen("libcairo")
 
 type CairoSurface
@@ -256,30 +258,13 @@ function restore( self::RendererState )
     del(self.saved, 1)
 end
 
-function color_to_rgb( hextriplet::Integer )
-    s = 1. / 0xff
-    r = s * ((hextriplet >> 16) & 0xff) 
-    g = s * ((hextriplet >>  8) & 0xff)
-    b = s * ((hextriplet >>  0) & 0xff)
-    return (r, g, b)
-end
-
-function color_to_rgb(color::String)
-    # XXX:TODO
-    if color == "red"
-        return (1.,0.,0.)
-    elseif color == "blue"
-        return (0.,0.,1.)
-    end
-end
+color_to_rgb(i::Integer) = hex2rgb(i)
+color_to_rgb(s::String) = name2rgb(s)
 
 function _set_color( ctx::CairoContext, color )
     (r,g,b) = color_to_rgb( color )
     set_source_rgb( ctx, r, g, b )
 end
-
-const _set_fill_color = _set_color
-const _set_pen_color = _set_color
 
 function _set_line_type(ctx::CairoContext, nick::String)
     const nick2name = {
@@ -367,8 +352,8 @@ end
 
 __pl_style_func = {
     "color"     => _set_color,
-    "linecolor" => _set_pen_color,
-    "fillcolor" => _set_fill_color,
+    "linecolor" => _set_color,
+    "fillcolor" => _set_color,
     "linetype"  => _set_line_type,
     "linewidth" => set_line_width,
     "filltype"  => set_fill_type,
