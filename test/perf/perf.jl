@@ -67,20 +67,20 @@ function qsort_kernel(a, lo, hi)
     j = hi
     while i < hi
         pivot = a[ifloor((lo+hi)/2)]
-    	while i <= j
+        while i <= j
             while a[i] < pivot; i = i + 1; end
             while a[j] > pivot; j = j - 1; end
             if i <= j
-	      	t = a[i]
-	    	a[i] = a[j]
-	    	a[j] = t
-            	i = i + 1
-            	j = j - 1
+                t = a[i]
+                a[i] = a[j]
+                a[j] = t
+                i = i + 1
+                j = j - 1
             end
-    	end
+        end
         if lo < j; qsort_kernel(a, lo, j); end
         lo = i
-	j = hi
+        j = hi
     end
     return a
 end
