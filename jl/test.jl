@@ -78,55 +78,62 @@ type TestResult
 end
 TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
 
-# had some issues with struct access inside the macro, so don't build the TestResult until the end,
-# which is ugly and should be fixed (TODO)
+# the macro just wraps the expression in a couple layers of quotes, then passes it to a function
+# that does the real work
 macro test(ex)
-    res, elapsed, exc, op, arg1, arg2, arg3 = gensym(7)
     quote
-        local $elapsed = NaN
-        local $res = false
-        local $exc = NoException()
-        local $op = Nothing
-        local $arg1 = Nothing
-        local $arg2 = Nothing
-        
-        try
-            $elapsed = @elapsed $res = eval($ex)
-        catch except
-            $exc = except
-        end
-        
-        # if we failed without an exception, pull apart the expression and see if we can't evaluate its
-        # parts
-        if ($res == false && $exc == NoException())
-            if ($string(ex.head) == "comparison")
-                $op = $string(ex.head)
-                $arg1 = eval($ex.args[1])
-                $arg2 = eval($ex.args[3])
-            elseif ($string(ex.head) == "call")
-                if ($string(ex.args[1]) == "approx_eq")
-                    $op = "approx_eq"
-                    $arg1 = eval($ex.args[2])
-                    $arg2 = eval($ex.args[3])
-                elseif ($string(ex.args[1]) == "prints")
-                    $op = "prints"
-                    $arg1 = print_to_string(eval($ex.args[2]), eval($ex.args[3])...)
-                    #$arg2 = eval($ex.args[4]) # TODO fails?!
-                end
+        $_test(expr(:quote, ex))
+    end
+end
+
+function _test(ex::Expr)
+    local tr = TestResult()
+    tr.context = tls(:context)
+    tr.group = tls(:group)
+    
+    # unwrap once
+    ex = eval(ex)
+    
+    # save the string
+    tr.expr_str = string(ex)
+    
+    # eval the whole thing, capturing exceptions and times
+    try
+        tr.elapsed = @elapsed tr.result = eval(ex)
+    catch except
+        tr.exception_thrown = except
+    end
+    
+    # if we failed without an exception, pull apart the expression and see about evaluating
+    # the parts
+    if (tr.result == false && tr.exception_thrown == NoException())
+        if (ex.head == :comparison)
+            tr.operation = ex.head
+            tr.arg1 = eval(ex.args[1])
+            tr.arg2 = eval(ex.args[3])
+        elseif (ex.head == :call) # is it a helper we know about?
+            if (ex.args[1] == :approx_eq)
+                tr.operation = ex.args[1]
+                tr.arg1 = eval(ex.args[2])
+                tr.arg2 = eval(ex.args[3])
+            elseif (ex.args[1] == :prints)
+                tr.operation = ex.args[1]
+                tr.arg1 = print_to_string(eval(ex.args[2]), eval(ex.args[3])...)
+                tr.arg2 = eval(ex.args[4]) 
             end
         end
-        
-        # if we're running takes_less_than, see how we did
-        if ($string(ex.args[1]) == "takes_less_than")
-            $res = $elapsed < eval($ex.args[3])
-            $op = "takes_less_than"
-            $arg1 = $elapsed
-            $arg2 = eval($ex.args[3])
-        end
-        
-        produce(TestResult(tls(:context), tls(:group), $string(ex), $res, $elapsed,
-            $exc, $op, $arg1, $arg2, Nothing))
     end
+    
+    # if we're running takes_less_than, see how we did
+    if (ex.args[1] == :takes_less_than)
+        tr.result = tr.elapsed < eval(ex.args[3])
+        tr.operation = ex.args[1]
+        tr.arg1 = tr.elapsed
+        tr.arg2 = eval(ex.args[3])
+    end
+    
+    
+    produce(tr)
 end
 
 # helpful utility tests, supported by the macro
@@ -142,7 +149,7 @@ function prints(fn::Function, args, expected::String)
 end
 
 function takes_less_than(anything, expected)
-    # the magic happens in @test
+    # the magic happens in _test
     true
 end
 
