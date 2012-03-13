@@ -1,6 +1,6 @@
 
 # e.g., 0xff0000 -> (1.,0.,0.)
-function hex2rgb( hextriplet::Int )
+function hex2rgb( hextriplet::Integer )
     s = 1. / 0xff
     r = s * ((hextriplet >> 16) & 0xff) 
     g = s * ((hextriplet >>  8) & 0xff)
