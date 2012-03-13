@@ -153,9 +153,7 @@ catch
 end
 
 begin
-
 const _jl_version_string = "Version $VERSION"
-
 const _jl_banner_plain =
 I"               _
    _       _ _(_)_     |
@@ -167,7 +165,6 @@ I"               _
 |__/                   |
 
 "
-
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot
@@ -185,5 +182,4 @@ const _jl_banner_color =
 $(jl)|__/$(tx)                   |
 
 \033[0m"
-
 end # begin
