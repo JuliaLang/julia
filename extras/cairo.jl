@@ -198,7 +198,7 @@ end
 function label(ctx::CairoContext, halign::String, valign::String, s::String, angle::Real)
     extents = text_extents(ctx, s)
 
-    _xxx = {
+    const _xxx = {
         "center"    => 0.5,
         "left"      => 0.,
         "right"     => 1.,
@@ -326,7 +326,7 @@ function _str_size_to_pts( str )
     num_xx = float64(m.captures[1])
     units = m.captures[2]
     # convert to postscipt pt = in/72
-    xx2pt = { "in"=>72., "pt"=>1., "mm"=>2.835, "cm"=>28.35 }
+    const xx2pt = { "in"=>72., "pt"=>1., "mm"=>2.835, "cm"=>28.35 }
     num_pt = num_xx*xx2pt[units]
     return num_pt
 end
@@ -353,7 +353,7 @@ end
 
 ## state commands
 
-__pl_style_func = {
+const __pl_style_func = {
     "color"     => _set_color,
     "linecolor" => _set_color,
     "fillcolor" => _set_color,
@@ -438,7 +438,7 @@ function symbols( self::CairoRenderer, x, y )
     name = pop(splitname)
     filled = contains(splitname, "solid") || contains(splitname, "filled")
 
-    symbol_funcs = {
+    const symbol_funcs = {
         "asterisk" => (c, x, y, r) -> (
             move_to(c, x, y+r);
             line_to(c, x, y-r);
