@@ -190,7 +190,7 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::ASCIIString) = ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,s.ios)
+write(s::IOStream, b::ASCIIString) = ccall(:jl_puts, PtrSize, (Ptr{Uint8},Ptr{Void}),b.data,s.ios)
 write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, convert(Ptr{Void}, s.ios))
 write(s::IOStream,c::Char) = ccall(:jl_pututf8, PtrSize, (Ptr{Void},Char), s.ios,c)
 
@@ -206,8 +206,7 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:jl_write, Uint,
-          convert(Ptr{Void}, s.ios), p, nb)
+    ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),convert(Ptr{Void}, s.ios), p, nb)
 end
 
 function write{T,N}(s::Stream, a::SubArray{T,N,Array})

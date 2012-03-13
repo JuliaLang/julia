@@ -1,8 +1,8 @@
 
 macro _jl_libmfunc_1arg_float(T,f)
     quote
-        ($f)(x::Float64) = ccall(:($f), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(symbol($strcat(string(f),"f")), Float32, (Float32,), x)
+        ($f)(x::Float64) = ccall($expr(:quote,f), Float64, (Float64,), x)
+        ($f)(x::Float32) = ccall($expr(:quote,symbol(strcat(string(f),"f"))), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
         @vectorize_1arg $T $f
     end
@@ -24,8 +24,8 @@ macro _jl_libmfunc_1arg_int(T,f,name...)
         fname = f
     end
     quote
-        ($fname)(x::Float64) = ccall(:($f), Int32, (Float64,), x)
-        ($fname)(x::Float32) = ccall(symbol($strcat(string(f),"f")), Int32, (Float32,), x)
+        ($fname)(x::Float64) = ccall($expr(:quote,f), Int32, (Float64,), x)
+        ($fname)(x::Float32) = ccall($expr(:quote,symbol(strcat(string(f),"f"))), Int32, (Float32,), x)
         @vectorize_1arg $T $fname
     end
 end

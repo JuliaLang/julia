@@ -335,18 +335,14 @@ write(c::Char) = write(current_output_stream(),c)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:jl_write, Uint,
-              (Ptr{Void}, Ptr{Void}, Uint),
-              s.ios, a, uint(numel(a)*sizeof(T)))
+        ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),s.ios, a, uint(numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
     end
 end
 
 function write(s::AsyncStream, p::Ptr, nb::Integer)
-    ccall(:jl_write, Uint,
-          (Ptr{Void}, Ptr{Void}, Uint),
-          s.ios, p, uint(nb))
+    ccall(:jl_write, Uint,(PtrSize, Ptr{Void}, Uint),s.handle, p, uint(nb))
 end
 
 (&)(left::Cmds,right::Cmd)  = (add(left.siblings,right);left)
