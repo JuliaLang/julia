@@ -475,7 +475,7 @@ function print_unescaped(s::String)
                 n = c-'0'
                 while (k+=1) <= 3 && !done(s,i)
                     c, j = next(s,i)
-                    n = '0' <= c <= '7' ? n<<3 + c-'0' : break
+                    n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j
                 end
                 if n > 255

@@ -323,15 +323,15 @@ end
 print(b::ASCIIString) = write(current_output_stream(),b)
 
 write(s::AsyncStream, b::ASCIIString) =
-    ccall(:jl_puts, PtrSize, (Ptr{Uint8},PtrSize),b.data,int(s.handle))
+    ccall(:jl_puts, Int32, (Ptr{Uint8},PtrSize),b.data,int(s.handle))
 
 write(s::AsyncStream, b::Uint8) =
-    ccall(:jl_putc, PtrSize, (Uint8, PtrSize), unit8(b),int(s.handle))
+    ccall(:jl_putc, Int32, (Uint8, PtrSize), b,s.handle)
 
 write(s::AsyncStream, c::Char) =
-    ccall(:jl_pututf8, PtrSize, (PtrSize,Char), int(s.handle),c)
+    ccall(:jl_pututf8, Int32, (PtrSize,Char), s.handle,c)
 
-print(c::Char) = write(current_output_stream(),c)
+write(c::Char) = write(current_output_stream(),c)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)
