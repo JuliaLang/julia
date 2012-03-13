@@ -5,6 +5,8 @@ import time
 import random
 import numpy
 
+if sys.version_info < (3,):
+    range = xrange
 
 ## fibonacci ##
 
@@ -64,7 +66,7 @@ def randmatstat(t):
     n = 5
     v = zeros(t)
     w = zeros(t)
-    for i in xrange(1,t):
+    for i in range(1,t):
         a = numpy.random.randn(n, n)
         b = numpy.random.randn(n, n)
         c = numpy.random.randn(n, n)
@@ -87,7 +89,7 @@ def randmatmul(n):
 def mandel(z):
     n = 0
     c = z
-    for n in xrange(0,79):
+    for n in range(0,79):
         if abs(z) > 2:
             n -= 1
             break
@@ -107,21 +109,21 @@ def mandelperf():
 
 def pisum():
     sum = 0.0
-    for j in xrange(1, 500):
+    for j in range(1, 500):
         sum = 0.0
-        for k in xrange(1, 10000):
+        for k in range(1, 10000):
             sum += 1.0/(k*k)
     return sum
 
 def print_perf(name, time):
-    print "python," + name + "," + str(time*1000)
+    print("python," + name + "," + str(time*1000))
 
 ## run tests ##
 
 if __name__=="__main__":
     assert fib(20) == 6765
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
         f = fib(20)
         t = time.time()-t
@@ -129,9 +131,9 @@ if __name__=="__main__":
     print_perf("fib", tmin)
 
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
-        for i in xrange(1,1000):
+        for i in range(1,1000):
             n = random.randint(0,2**32-1)
             s = hex(n)
             m = int(s,16)
@@ -142,7 +144,7 @@ if __name__=="__main__":
 
     assert sum(mandelperf()) == 14304
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
         mandelperf()
         t = time.time()-t
@@ -150,8 +152,8 @@ if __name__=="__main__":
     print_perf ("mandel", tmin)
 
     tmin = float('inf')
-    for i in xrange(5):
-        lst = [ random.random() for i in xrange(1,5000) ]
+    for i in range(5):
+        lst = [ random.random() for i in range(1,5000) ]
         t = time.time()
         quicksort(lst, 0, len(lst)-1)
         t = time.time()-t
@@ -161,7 +163,7 @@ if __name__=="__main__":
     pi = pisum()
     assert abs(pisum()-1.644834071848065) < 1e-6
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
         pisum()
         t = time.time()-t
@@ -171,7 +173,7 @@ if __name__=="__main__":
     (s1, s2) = randmatstat(1000)
     assert s1 > 0.5 and s1 < 1.0
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
         randmatstat(1000)
         t = time.time()-t
@@ -179,7 +181,7 @@ if __name__=="__main__":
     print_perf ("rand_mat_stat", tmin)
 
     tmin = float('inf')
-    for i in xrange(5):
+    for i in range(5):
         t = time.time()
         C = randmatmul(1000)
         assert C[0,0] >= 0

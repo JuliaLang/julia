@@ -130,14 +130,6 @@ function args2hashtable(args...)
     opts
 end
 
-function _fopen( filename::String, mode::String )
-    ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), cstring(filename), cstring(mode))
-end
-
-function _fclose( fptr::Ptr{Void} )
-    ccall(:fclose, Void, (Ptr{Void},), fptr)
-end
-
 function _draw_text(device, p, str, args...)
     save_state(device)
     for (key,val) in args2hashtable(args...)
@@ -2469,13 +2461,14 @@ function page_compose( self::PlotContainer, device::Renderer )
 end
 
 function x11( self::PlotContainer, args...)
+    println("sorry, not implemented yet")
+    return
     opts = args2hashtable(args...)
     width = has(opts,"width") ? opts["width"] : config_value("window","width")
     height = has(opts,"height") ? opts["height"] : config_value("window","height")
     reuse_window = in_repl() && config_value("window","reuse")
     device = ScreenRenderer( reuse_window, width, height )
     page_compose( self, device )
-    delete(device)
 end
 
 function write_pdf( self::PlotContainer, filename::String, args... )

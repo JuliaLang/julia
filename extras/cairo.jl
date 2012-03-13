@@ -1,4 +1,6 @@
 
+load("color.jl")
+
 _jl_libcairo = dlopen("libcairo")
 
 type CairoSurface
@@ -91,6 +93,7 @@ end
 @_CTX_FUNC_V fill cairo_fill
 @_CTX_FUNC_V fill_preserve cairo_fill_preserve
 @_CTX_FUNC_V new_path cairo_new_path
+@_CTX_FUNC_V new_sub_path cairo_new_sub_path
 @_CTX_FUNC_V close_path cairo_close_path
 @_CTX_FUNC_V paint cairo_paint
 @_CTX_FUNC_V stroke cairo_stroke
@@ -156,7 +159,10 @@ macro _CTX_FUNC_DDDD(NAME, FUNCTION)
 end
 
 @_CTX_FUNC_DDDD set_source_rgba cairo_set_source_rgba
-@_CTX_FUNC_DDDD rectangle cairo_rectangle
+@_CTX_FUNC_DDDD _rectangle cairo_rectangle
+
+rectangle(ctx::CairoContext, x::Real, y::Real, w::Real, h::Real) =
+    _rectangle(ctx, x, ctx.surface.height-y-h, w, h)
 
 macro _CTX_FUNC_DDDDD(NAME, FUNCTION)
     quote
@@ -211,7 +217,7 @@ end
 
 function set_clip_rect(ctx::CairoContext, cr)
     x = cr[1]
-    y = ctx.surface.height - cr[4]
+    y = cr[3]
     width = cr[2] - cr[1]
     height = cr[4] - cr[3]
     rectangle(ctx, x, y, width, height)
@@ -220,7 +226,6 @@ function set_clip_rect(ctx::CairoContext, cr)
 end
 
 # -----------------------------------------------------------------------------
-
 
 type RendererState
     current::HashTable
@@ -256,30 +261,13 @@ function restore( self::RendererState )
     del(self.saved, 1)
 end
 
-function color_to_rgb( hextriplet::Integer )
-    s = 1. / 0xff
-    r = s * ((hextriplet >> 16) & 0xff) 
-    g = s * ((hextriplet >>  8) & 0xff)
-    b = s * ((hextriplet >>  0) & 0xff)
-    return (r, g, b)
-end
-
-function color_to_rgb(color::String)
-    # XXX:TODO
-    if color == "red"
-        return (1.,0.,0.)
-    elseif color == "blue"
-        return (0.,0.,1.)
-    end
-end
+color_to_rgb(i::Integer) = hex2rgb(i)
+color_to_rgb(s::String) = name2rgb(s)
 
 function _set_color( ctx::CairoContext, color )
     (r,g,b) = color_to_rgb( color )
     set_source_rgb( ctx, r, g, b )
 end
-
-const _set_fill_color = _set_color
-const _set_pen_color = _set_color
 
 function _set_line_type(ctx::CairoContext, nick::String)
     const nick2name = {
@@ -367,8 +355,8 @@ end
 
 __pl_style_func = {
     "color"     => _set_color,
-    "linecolor" => _set_pen_color,
-    "fillcolor" => _set_fill_color,
+    "linecolor" => _set_color,
+    "fillcolor" => _set_color,
     "linetype"  => _set_line_type,
     "linewidth" => set_line_width,
     "filltype"  => set_fill_type,
@@ -423,7 +411,7 @@ function line( self::CairoRenderer, p, q )
 end
 
 function rect( self::CairoRenderer, p, q )
-    rect( self.ctx, p[1], p[2], q[1], q[2] )
+    rectangle( self.ctx, p[1], p[2], q[1]-p[1], q[2]-p[2] )
 end
 
 function circle( self::CairoRenderer, p, r )
@@ -438,57 +426,93 @@ function arc( self::CairoRenderer, c, p, q )
     arc( self.ctx, c[1], c[2], p[1], p[2], q[1], q[2] )
 end
 
-__pl_symbol_type = {
-    "none"              => 0,
-    "dot"               => 1,
-    "plus"              => 2,
-    "asterisk"          => 3,
-    "circle"            => 4,
-    "cross"             => 5,
-    "square"            => 6,
-    "triangle"          => 7,
-    "diamond"           => 8,
-    "star"              => 9,
-    "inverted triangle"     => 10,
-    "starburst"         => 11,
-    "fancy plus"            => 12,
-    "fancy cross"           => 13,
-    "fancy square"          => 14,
-    "fancy diamond"         => 15,
-    "filled circle"         => 16,
-    "filled square"         => 17,
-    "filled triangle"       => 18,
-    "filled diamond"        => 19,
-    "filled inverted triangle"  => 20,
-    "filled fancy square"       => 21,
-    "filled fancy diamond"      => 22,
-    "half filled circle"        => 23,
-    "half filled square"        => 24,
-    "half filled triangle"      => 25,
-    "half filled diamond"       => 26,
-    "half filled inverted triangle" => 27,
-    "half filled fancy square"  => 28,
-    "half filled fancy diamond" => 29,
-    "octagon"           => 30,
-    "filled octagon"        => 31,
-}
-
 function symbol( self::CairoRenderer, p )
     symbols( self, [p[1]], [p[2]] )
 end
 
 function symbols( self::CairoRenderer, x, y )
-    DEFAULT_SYMBOL_TYPE = "square"
-    DEFAULT_SYMBOL_SIZE = 0.01
-    type_str = get(self.state, "symboltype", DEFAULT_SYMBOL_TYPE )
-    size = get(self.state, "symbolsize", DEFAULT_SYMBOL_SIZE )
+    fullname = get(self.state, "symboltype", "square")
+    size = get(self.state, "symbolsize", 0.01)
+
+    splitname = split(fullname)
+    name = pop(splitname)
+    filled = contains(splitname, "solid") || contains(splitname, "filled")
+
+    symbol_funcs = {
+        "asterisk" => (c, x, y, r) -> (
+            move_to(c, x, y+r);
+            line_to(c, x, y-r);
+            move_to(c, x+0.866r, y-0.5r);
+            line_to(c, x-0.866r, y+0.5r);
+            move_to(c, x+0.866r, y+0.5r);
+            line_to(c, x-0.866r, y-0.5r)
+        ),
+        "cross" => (c, x, y, r) -> (
+            move_to(c, x+r, y+r);
+            line_to(c, x-r, y-r);
+            move_to(c, x+r, y-r);
+            line_to(c, x-r, y+r)
+        ),
+        "diamond" => (c, x, y, r) -> (
+            move_to(c, x, y+r);
+            line_to(c, x+r, y);
+            line_to(c, x, y-r);
+            line_to(c, x-r, y);
+            close_path(c)
+        ),
+        "dot" => (c, x, y, r) -> (
+            new_sub_path(c);
+            rectangle(c, x, y, 1., 1.)
+        ),
+        "plus" => (c, x, y, r) -> (
+            move_to(c, x+r, y);
+            line_to(c, x-r, y);
+            move_to(c, x, y+r);
+            line_to(c, x, y-r)
+        ),
+        "square" => (c, x, y, r) -> (
+            new_sub_path(c);
+            rectangle(c, x-0.866r, y-0.866r, 1.732r, 1.732r)
+        ),
+        "triangle" => (c, x, y, r) -> (
+            move_to(c, x, y+r);
+            line_to(c, x+0.866r, y-0.5r);
+            line_to(c, x-0.866r, y-0.5r);
+            close_path(c)
+        ),
+        "down-triangle" => (c, x, y, r) -> (
+            move_to(c, x, y-r);
+            line_to(c, x+0.866r, y+0.5r);
+            line_to(c, x-0.866r, y+0.5r);
+            close_path(c)
+        ),
+        "right-triangle" => (c, x, y, r) -> (
+            move_to(c, x+r, y);
+            line_to(c, x-0.5r, y+0.866r);
+            line_to(c, x-0.5r, y-0.866r);
+            close_path(c)
+        ),
+        "left-triangle" => (c, x, y, r) -> (
+            move_to(c, x-r, y);
+            line_to(c, x+0.5r, y+0.866r);
+            line_to(c, x+0.5r, y-0.866r);
+            close_path(c)
+        ),
+    }
+    default_symbol_func = (ctx,x,y,r) -> (
+        new_sub_path(ctx);
+        circle(ctx,x,y,r)
+    )
+    symbol_func = get(symbol_funcs, name, default_symbol_func)
 
     new_path(self.ctx)
     for i = 1:min(length(x),length(y))
-        # XXX:TODO
-        circle(self.ctx, x[i], y[i], 0.4*size)
-        stroke(self.ctx)
+        symbol_func(self.ctx, x[i], y[i], 0.5*size)
     end
+    if filled
+        fill_preserve(self.ctx)
+    end
+    stroke(self.ctx)
 end
 
 function curve( self::CairoRenderer, x::Vector, y::Vector )
