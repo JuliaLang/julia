@@ -10,6 +10,12 @@ FLAGS = \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
 	-I$(JULIAHOME)/external/libuv  -I$(EXTROOT)/include
 
+ifneq ($(MAKECMDGOALS),debug)
+TARGET = "debug"
+else
+TARGET = ""
+endif
+
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
 DEBUGFLAGS += $(FLAGS)
@@ -49,7 +55,7 @@ codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
 
 support/libsupport.a: support/*.h support/*.c
-	$(MAKE) -C support
+	$(MAKE) -C support $(TARGET)
 
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp

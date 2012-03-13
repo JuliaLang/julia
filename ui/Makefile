@@ -4,8 +4,8 @@ include $(JULIAHOME)/Make.inc
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	    -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS)
 
-DEBUGFLAGS = $(FLAGS)
-SHIPFLAGS = $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
+SHIPFLAGS += $(FLAGS)
 
 julia-release julia-debug: %: %-readline
 	@$(MAKE) -C webserver $@
