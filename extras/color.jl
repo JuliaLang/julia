@@ -1,6 +1,6 @@
 
 # e.g., 0xff0000 -> (1.,0.,0.)
-function hex2rgb( hextriplet::Int )
+function hex2rgb( hextriplet::Integer )
     s = 1. / 0xff
     r = s * ((hextriplet >> 16) & 0xff) 
     g = s * ((hextriplet >>  8) & 0xff)
@@ -15,7 +15,7 @@ function name2rgb( name::String )
 end
 
 # http://www.w3.org/TR/SVG/types.html#ColorKeywords
-_svg_color_names = {
+const _svg_color_names = {
     "aliceblue" => (240, 248, 255),
     "antiquewhite" => (250, 235, 215),
     "aqua" => ( 0, 255, 255),
