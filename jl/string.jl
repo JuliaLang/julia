@@ -23,10 +23,10 @@ print(x...) = for i=x; print(i); end
 println(args...) = print(args..., '\n')
 
 show(s::String) = print_quoted(s)
-showln(x) = (show(x); println())
 
 (*)(s::String...) = strcat(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
+
 
 size(s::String) = (length(s),)
 size(s::String, d::Integer) = d==1 ? length(s) :
