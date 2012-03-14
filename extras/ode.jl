@@ -393,6 +393,80 @@ function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T})
     return (tspan, x)
 end
 
+#ODEROSENBROCK Solve stiff differential equations, Rosenbrock method
+#    with provided coefficients.
+function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
+    h = diff(tspan)
+    x = Array(T, length(tspan), length(x0))
+    x[1,:] = x0'
+
+    solstep = 1
+    while tspan[solstep] < max(tspan)
+        ts = tspan[solstep]
+        hs = h[solstep]
+        xs = reshape(x[solstep,:], size(x0))
+        dFdx = jacobian(F, ts, xs)
+        jac = eye(size(dFdx)[1])./gamma./hs-dFdx
+
+        g = zeros(size(a)[1], length(x0))
+        g[1,:] = jac \ F(ts + b[1].*hs, xs)
+        for i = 2:size(a)[1]
+            g[i,:] = jac \ (F(ts + b[i].*hs, xs + (a[i,1:i-1]*g[1:i-1,:]).') + (c[i,1:i-1]*g[1:i-1,:]).'./hs)
+        end
+
+        x[solstep+1,:] = x[solstep,:] + b*g
+        solstep += 1
+    end
+    return(tspan, x)
+end
+
+#JACOBIAN Numerically determine Jacobian by forward finite differences
+function jacobian(F::Function, t::Number, x::AbstractVector)
+    ftx = F(t, x)
+    dFdx = zeros(length(x), length(x))
+    for j = 1:length(x)
+        dx = zeros(size(x))
+        # The 100 below is heuristic
+        dx[j] = (x[j]+(x[j]==0))./100
+        dFdx[:,j] = (F(t,x+dx)-ftx)./dx[j]
+    end
+    return dFdx
+end
+
+# Kaps-Rentrop coefficients
+ode4s_kr(F, tspan, x0) = oderosenbrock(F,
+                                       tspan,
+                                       x0,
+                                       0.231,
+                                       [0         0        0 0
+                                        2         0        0 0
+                                        4.4524708 4.163528 0 0
+                                        4.4524708 4.163528 0 0],
+                                       [3.957037 4.624892 0.617477 1.282613],
+                                       [ 0         0         0        0
+                                        -5.071675  0         0        0
+                                         6.020153  0.159750  0        0
+                                        -1.856344 -8.505381 -2.084075 0],
+                                       )
+# Shampine coefficients
+ode4s_s(F, tspan, x0) = oderosenbrock(F,
+                                      tspan,
+                                      x0,
+                                      0.5,
+                                      [ 0    0    0 0
+                                        2    0    0 0
+                                       48/25 6/25 0 0
+                                       48/25 6/25 0 0],
+                                      [19/9 1/2 25/108 125/108],
+                                      [   0       0      0   0
+                                         -8       0      0   0
+                                        372/25   12/5    0   0
+                                       -112/125 -54/125 -2/5 0],
+                                     )
+
+# Use Shampine coefficients by default (matching Numerical Recipes)
+const ode4s = ode4s_s
+
 # ODE_MS Fixed-step, fixed-order multi-step numerical method with Adams-Bashforth-Moulton coefficients
 function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer)
     h = diff(tspan)
