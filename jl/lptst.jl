@@ -33,6 +33,8 @@ Aeq = [ 1. 1. 1. 0. 0. 0. 0. 0. 0. ;
         0. 1. 0. 0. 1. 0. 0. 1. 0. ;
         0. 0. 1. 0. 0. 1. 0. 0. 1. ];
 println(Aeq);
+Aeq = sparse(Aeq);
+println(Aeq)
 #Aeq = sparse(Aeq);
 #println(Aeq);
 #(I, J, V) = find(Aeq);
@@ -44,7 +46,15 @@ beq = [ 1.; 1.; 1.; 1.; 1.; 1. ];
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
 #(z, x) = linprog(f, [], [], Aeq, beq, lb, ub);
-(z, x) = linprog2(f, [], [], Aeq, beq, lb, ub);
+
+lpoptions = GLPSimplexParam()
+lpoptions["msg_lev"] = GLP_MSG_ERR
+lpoptions["presolve"] = GLP_ON
+#lpoptions["it_lim"] = 2
+
+(z, x) = linprog2(f, [], [], Aeq, beq, lb, ub, lpoptions);
+
+cstruct_delete(lpoptions)
 
 #(z, x) = mixintprog_bin(f, [], [], Aeq, beq);
 

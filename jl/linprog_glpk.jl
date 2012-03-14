@@ -1,4 +1,5 @@
 load("linprog_glpk_h.jl")
+load("cstruct_test.jl")
 
 _jl_glpk = dlopen("libglpk")
 
@@ -208,6 +209,7 @@ for func = glpk_func_list_other
     ex.args[2] = t3
     eval(ex)
 end
+
 #}}}
 
 ## Wrap GLPK API
@@ -228,66 +230,49 @@ type GLPProb
     end
 end
 
-#TODO implement this somehow
-type GLPSimplexParam
-    p::Ptr{Void}
-    #msg_lev::Int32
-    #meth::Int32
-    #pricing::Int32
-    #r_test::Int32
-    #tol_bnd::Float64
-    #tol_dj::Float64
-    #tol_piv::Float64
-    #obj_ll::Float64
-    #obj_ul::Float64
-    #it_lim::Int32
-    #tm_lim::Int32
-    #out_frq::Int32
-    #out_dly::Int32
-    #presolve::Int32
+_jl_glpk__simplex_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_smcp",
+        [("msg_lev", Int32), ("meth", Int32), ("pricing", Int32),
+         ("r_test", Int32), ("tol_bnd", Float64), ("tol_dj", Float64),
+         ("tol_piv", Float64), ("obj_ll", Float64), ("obj_ul", Float64),
+         ("it_lim", Int32), ("tm_lim", Int32), ("out_frq", Int32),
+         ("out_dly", Int32), ("presolve", Int32)])
 
+type GLPSimplexParam <: CStructWrapper
+    struct::CStruct
     function GLPSimplexParam()
-        new(C_NULL)
+        struct = CStruct(_jl_glpk__simplex_param_struct_desc)
+        ccall(_jl_glpk_init_smcp, Int32, (Ptr{Void},), pointer(struct))
+        new(struct)
     end
 end
 
-#TODO implement this somehow
-type GLPInteriorParam
-    p::Ptr{Void}
-    #msg_lev::Int32
-    #ord_alg::Int32
+_jl_glpk__interior_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iptcp",
+        [("msg_lev", Int32), ("ord_alg", Int32)])
 
+type GLPInteriorParam <: CStructWrapper
+    struct::CStruct
     function GLPInteriorParam()
-        new(C_NULL)
+        struct = CStruct(_jl_glpk__interior_param_struct_desc)
+        ccall(_jl_glpk_init_iptcp, Int32, (Ptr{Void},), pointer(struct))
+        new(struct)
     end
 end
 
-#TODO implement this somehow
-type GLPIntoptParam
-    p::Ptr{Void}
-    #msg_lev::Int32
-    #br_tech::Int32
-    #bt_tech::Int32
-    #pp_tech::Int32
-    #fp_heur::Int32
-    #gmi_cuts::Int32
-    #mir_cuts::Int32
-    #cov_cuts::Int32
-    #clq_cuts::Int32
-    #tol_int::Float64
-    #tol_obj::Float64
-    #mip_gap::Float64
-    #tm_lim::Int32
-    #out_frq::Int32
-    #out_dly::Int32
-    #glp_tree::Function
-    #cb_info::Ptr
-    #cb_size::Int32
-    #presolve::Int32
-    #binarize::Int32
+_jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
+    [("msg_lev", Int32), ("br_tech", Int32), ("bt_tech", Int32),
+     ("pp_tech", Int32), ("fp_heur", Int32), ("gmi_cuts", Int32),
+     ("mir_cuts", Int32), ("cov_cuts", Int32), ("clq_cuts", Int32),
+     ("tol_int", Float64), ("tol_obj", Float64), ("mip_gap", Float64),
+     ("tm_lim", Int32), ("out_frq", Int32), ("out_dly", Int32),
+     ("cb_func", Ptr{Function}), ("cb_info", Ptr), ("cb_size", Int32),
+     ("presolve", Int32), ("binarize", Int32)])
 
+type GLPIntoptParam <: CStructWrapper
+    struct::CStruct
     function GLPIntoptParam()
-        new(C_NULL)
+        struct = CStruct(_jl_glpk__intopt_param_struct_desc)
+        ccall(_jl_glpk_init_iocp, Int32, (Ptr{Void},), pointer(struct))
+        new(struct)
     end
 end
 
@@ -512,16 +497,14 @@ function _jl_glpk__check_adv_basis_flags(flags::Int)
 end
 
 function _jl_glpk__check_simplex_param(glp_param::GLPSimplexParam)
-    #XXX
-    if (glp_param.p == C_NULL)
+    if (pointer(glp_param) == C_NULL)
         throw(GLPError("glp_param = NULL"))
     end
     return true
 end
 
 function _jl_glpk__check_interior_param(glp_param::GLPInteriorParam)
-    #XXX
-    if (glp_param.p == C_NULL)
+    if (pointer(glp_param) == C_NULL)
         throw(GLPError("glp_param = NULL"))
     end
     return true
@@ -537,8 +520,7 @@ function _jl_glpk__check_kind_is_valid(kind::Int)
 end
 
 function _jl_glpk__check_intopt_param(glp_param::GLPIntoptParam)
-    #XXX
-    if (glp_param.p == C_NULL)
+    if (pointer(glp_param) == C_NULL)
         throw(GLPError("glp_param = NULL"))
     end
     return true
@@ -602,7 +584,7 @@ end
 
 function glp_set_col_name(glp_prob::GLPProb, col::Int, name::String)
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_col_is_valid(glp_prob, row)
+    _jl_glpk__check_col_is_valid(glp_prob, col)
     ccall(_jl_glpk_set_col_name, Void, (Ptr, Int32, Ptr{Uint8}), glp_prob.p, col, cstring(name))
 end
 
@@ -741,7 +723,7 @@ function glp_get_prob_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return string(name_cstr)
     end
 end
 
@@ -751,7 +733,7 @@ function glp_get_obj_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return string(name_cstr)
     end
 end
 
@@ -780,7 +762,7 @@ function glp_get_row_name(glp_prob::GLPProb, row::Int)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return string(name_cstr)
     end
 end
 
@@ -791,7 +773,7 @@ function glp_get_col_name(glp_prob::GLPProb, col::Int)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return string(name_cstr)
     end
 end
 
@@ -950,27 +932,33 @@ function glp_simplex{Tp<:Union(GLPSimplexParam, Nothing)}(glp_prob::GLPProb, glp
         param_ptr = C_NULL
     else
         #println("nonnull ptr")
-        param_ptr = glp_param.p
+        param_ptr = pointer(glp_param)
     end
     ret = ccall(_jl_glpk_simplex, Int32, (Ptr, Ptr{Void}), glp_prob.p, param_ptr)
     #ret = ccall(_jl_glpk_simplex, Int32, (Ptr, Ptr{Void}), glp_prob.p, C_NULL)
     return ret
 end
 
+glp_simplex(glp_prob::GLPProb) =
+    glp_simplex(glp_prob, nothing)
+
 function glp_exact{Tp<:Union(GLPSimplexParam, Nothing)}(glp_prob::GLPProb, glp_param::Tp)
     _jl_glpk__check_glp_prob(glp_prob)
     if glp_param == nothing
         param_ptr = C_NULL
     else
-        param_ptr = glp_param.p
+        param_ptr = pointer(glp_param)
     end
     ret = ccall(_jl_glpk_exact, Int32, (Ptr, Ptr), glp_prob.p, param_ptr)
     return ret
 end
 
+glp_exact(glp_prob::GLPProb) =
+    glp_exact(glp_prob, nothing)
+
 function glp_init_smcp(glp_param::GLPSimplexParam)
     _jl_glpk__check_simplex_param(glp_param)
-    ccall(_jl_glpk_init_smcp, Int32, (Ptr, Ptr), glp_param.p)
+    ccall(_jl_glpk_init_smcp, Int32, (Ptr, Ptr), pointer(glp_param))
 end
 
 function glp_get_status(glp_prob::GLPProb)
@@ -1046,7 +1034,7 @@ function glp_get_unbnd_ray(glp_prob::GLPProb)
     return ret
 end
 
-function glp_interior{Tp<:Union(GLPInteriorParam), Nothing}(glp_prob::GLPProb, glp_param::Tp)
+function glp_interior{Tp<:Union(GLPInteriorParam, Nothing)}(glp_prob::GLPProb, glp_param::Tp)
     _jl_glpk__check_glp_prob(glp_prob)
     if glp_param == nothing
         param_ptr::Ptr = C_NULL
@@ -1057,12 +1045,14 @@ function glp_interior{Tp<:Union(GLPInteriorParam), Nothing}(glp_prob::GLPProb, g
     return ret
 end
 
+glp_interior(glp_prob::GLPProb) = glp_interior(glp_prob, nothing)
+
 function glp_init_iptcp(glp_param::GLPInteriorParam)
     _jl_glpk__check_interior_param(glp_param)
     ccall(_jl_glpk_init_iptcp, Int32, (Ptr, Ptr), glp_param.p)
 end
 
-function glp_iptstatus(glp_prob::GLPProb)
+function glp_ipt_status(glp_prob::GLPProb)
     _jl_glpk__check_glp_prob(glp_prob)
     ret = ccall(_jl_glpk_ipt_status, Int32, (Ptr,), glp_prob.p)
     return ret
@@ -1138,6 +1128,8 @@ function glp_intopt{Tp<:Union(GLPIntoptParam, Nothing)}(glp_prob::GLPProb, glp_p
     ret = ccall(_jl_glpk_intopt, Int32, (Ptr, Ptr), glp_prob.p, param_ptr)
     return ret
 end
+
+glp_intopt(glp_prob::GLPProb) = glp_intopt(glp_prob, nothing)
 
 function glp_init_iocp(glp_param::GLPIntoptParam)
     _jl_glpk__check_intopt_param(glp_param)
@@ -1663,9 +1655,10 @@ function mixintprog_bin{T}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNot
     end
 end
 
-function linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+function linprog2{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T})
+        lb::VecOrNothing{T}, ub::VecOrNothing{T},
+        params::P)
     lp = GLPProb()
     glp_set_obj_dir(lp, GLP_MIN)
 
@@ -1767,45 +1760,50 @@ function linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNot
         end
     end
 
-    l = (m + meq) * n
-    #println("l = $l")
+    if (m > 0 && ispsarse(A)) && (meq > 0 && issparse(Aeq))
+        (ia, ja, ar) = find([A; Aeq])
+    elseif (m > 0 && issparse(A)) && (meq == 0)
+        (ia, ja, ar) = find(A)
+    elseif (m == 0) && (meq > 0 && issparse(Aeq))
+        (ia, ja, ar) = find(Aeq)
+    else
+        l = (m + meq) * n
 
-    ia = zeros(Int32, l)
-    ja = zeros(Int32, l)
-    ar = zeros(Float64, l)
+        ia = zeros(Int32, l)
+        ja = zeros(Int32, l)
+        ar = zeros(Float64, l)
 
-    k = 0
-    for r = 1 : m
-        for c = 1 : n
-            k += 1
-            ia[k] = r
-            ja[k] = c
-            ar[k] = A[r, c]
+        k = 0
+        for r = 1 : m
+            for c = 1 : n
+                k += 1
+                ia[k] = r
+                ja[k] = c
+                ar[k] = A[r, c]
+            end
+        end
+        #println(size(Aeq))
+        for r = 1 : meq
+            for c = 1 : n
+                r0 = r + m
+                k += 1
+                #println("k=$k r=$r c=$c r0=$r0")
+                ia[k] = r0
+                ja[k] = c
+                ar[k] = Aeq[r, c]
+            end
         end
     end
-    #println(size(Aeq))
-    for r = 1 : meq
-        for c = 1 : n
-            r0 = r + m
-            k += 1
-            #println("k=$k r=$r c=$c r0=$r0")
-            ia[k] = r0
-            ja[k] = c
-            ar[k] = Aeq[r, c]
-        end
-    end
-    #println("ia=$ia")
-    #println("ja=$ja")
-    #println("ar=$ar")
+    println("ia=$ia")
+    println("ja=$ja")
+    println("ar=$ar")
 
 
     #glp_load_matrix(lp, l, ia, ja, ar)
     glp_load_matrix(lp, ia, ja, ar)
 
     # TODO more mtehods, options, etc.
-    params = GLPSimplexParam()
     ret = glp_simplex(lp, params)
-    #ret = glp_simplex(lp, nothing)
     #println("ret=$ret")
 
     if ret == 0
@@ -1822,3 +1820,15 @@ function linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNot
         return (nothing, nothing)
     end
 end
+
+linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
+        linprog2(f, A, b, nothing, nothing, nothing, nothing, nothing)
+
+linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) = 
+        linprog2(f, A, b, Aeq, beq, nothing, nothing, nothing)
+
+linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
+        ub::VecOrNothing{T}) = 
+        linprog2(f, A, b, Aeq, beq, lb, ub, nothing)
