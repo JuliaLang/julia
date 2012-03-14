@@ -20,6 +20,7 @@ string(s::String) = s
 
 print(s::String) = for c=s; print(c); end
 print(x...) = for i=x; print(i); end
+print() = nothing
 println(args...) = print(args..., '\n')
 
 show(s::String) = print_quoted(s)
