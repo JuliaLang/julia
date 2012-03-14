@@ -208,7 +208,7 @@ function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector)
         
     # k_ needs to be initialized as an Nx7 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),7)
+    k_ = zeros(eltype(x), (length(x),7))
     
     # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
     # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
@@ -310,7 +310,7 @@ function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector)
         
     # k_ needs to be initialized as an Nx6 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),6)
+    k_ = zeros(eltype(x), (length(x),6))
     
     while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
