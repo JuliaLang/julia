@@ -226,7 +226,9 @@ type GLPProb
     p::Ptr
     function GLPProb()
         p = ccall(_jl_glpk_create_prob, Ptr, ())
-        new(p)
+        prob = new(p)
+        finalizer(prob, glp_delete_prob)
+        return prob
     end
 end
 
@@ -242,7 +244,9 @@ type GLPSimplexParam <: CStructWrapper
     function GLPSimplexParam()
         struct = CStruct(_jl_glpk__simplex_param_struct_desc)
         ccall(_jl_glpk_init_smcp, Int32, (Ptr{Void},), pointer(struct))
-        new(struct)
+        param = new(struct)
+        finalizer(param, cstruct_delete)
+        return param
     end
 end
 
@@ -254,7 +258,9 @@ type GLPInteriorParam <: CStructWrapper
     function GLPInteriorParam()
         struct = CStruct(_jl_glpk__interior_param_struct_desc)
         ccall(_jl_glpk_init_iptcp, Int32, (Ptr{Void},), pointer(struct))
-        new(struct)
+        param = new(struct)
+        finalizer(param, cstruct_delete)
+        return param
     end
 end
 
@@ -264,7 +270,7 @@ _jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
      ("mir_cuts", Int32), ("cov_cuts", Int32), ("clq_cuts", Int32),
      ("tol_int", Float64), ("tol_obj", Float64), ("mip_gap", Float64),
      ("tm_lim", Int32), ("out_frq", Int32), ("out_dly", Int32),
-     ("cb_func", Ptr{Function}), ("cb_info", Ptr), ("cb_size", Int32),
+     ("cb_func", Ptr{Void}), ("cb_info", Ptr), ("cb_size", Int32),
      ("presolve", Int32), ("binarize", Int32)])
 
 type GLPIntoptParam <: CStructWrapper
@@ -272,26 +278,26 @@ type GLPIntoptParam <: CStructWrapper
     function GLPIntoptParam()
         struct = CStruct(_jl_glpk__intopt_param_struct_desc)
         ccall(_jl_glpk_init_iocp, Int32, (Ptr{Void},), pointer(struct))
-        new(struct)
+        param = new(struct)
+        finalizer(param, cstruct_delete)
+        return param
     end
 end
 
-#TODO implement this somehow
-type GLPBasisFactParam
-    p::Ptr{Void}
-    #type::Int32
-    #lu_size::Int32
-    #piv_tol::Float64
-    #piv_lim::Int32
-    #suhl::Int32
-    #eps_tol::Float64
-    #max_gro::Float64
-    #nfs_max::Int32
-    #upd_tol::Float64
-    #nrs_max::Int32
-    #rs_size::Int32
+_jl_glpk__basisfact_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_bfcp",
+    [("type", Int32), ("lu_size", Int32), ("piv_tol", Float64),
+     ("piv_lim", Int32), ("suhl", Int32), ("eps_tol", Float64),
+     ("max_gro", Float64), ("nfs_max", Int32), ("upd_tol", Float64),
+     ("nrs_max", Int32), ("rs_size", Int32)])
+
+type GLPBasisFactParam <: CStructWrapper
+    struct::CStruct
     function GLPBasisFactParam()
-        new(C_NULL)
+        struct = CStruct(_jl_glpk__basisfact_param_struct_desc)
+        ccall(_jl_glpk_init_bfcp, Int32, (Ptr{Void},), pointer(struct))
+        param = new(struct)
+        finalizer(param, cstruct_delete)
+        return param
     end
 end
 
@@ -1360,302 +1366,7 @@ end
 # ...... and many more ......
 #
 
-function linprog{T}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T})
-    lp = ccall(_jl_glpk_create_prob, Ptr, ())
-    ccall(_jl_glpk_set_obj_dir, Void, (Ptr, Int32), lp, GLP_MIN)
-
-    n = size(f, 1)
-    m = 0
-    meq = 0
-
-    if length(A) > 0
-        if ndims(A) != 2
-            error("A must be a bidimensional array (ndims=$(ndims(A)))")
-        end
-        if size(A, 2) != n
-            error("invlid A size: $(size(A))")
-        end
-        m = size(A, 1)
-        if size(b, 1) != m
-            #printf(f"m=%i\n", m)
-            error("invalid b size: $(size(b))")
-        end
-    else
-        if length(b) > 0
-            error("syntax error: b is defined but A isn't")
-        end
-    end
-
-    if length(Aeq) > 0
-        if ndims(Aeq) != 2
-            error("Aeq must be Aeq bidimensional array (ndims=$(ndims(Aeq)))")
-        end
-        if size(Aeq, 2) != n
-            error("invlid Aeq size: $(size(Aeq))")
-        end
-        meq = size(Aeq, 1)
-        if size(beq, 1) != meq
-            #printf(f"m=%i\n", meq)
-            error("invalid beq size: $(size(beq))")
-        end
-    else
-        if length(beq) > 0
-            error("syntax error: beq is defined but Aeq isn't")
-        end
-    end
-
-    has_lb = false
-    has_ub = false
-    if length(lb) > 0
-        if size(lb, 1) != n
-            error("invlid lb size: $(size(lb))")
-        end
-        has_lb = true
-    end
-    if length(ub) > 0
-        if size(ub, 1) != n
-            error("invalid ub size: $(size(ub))")
-        end
-        has_ub = true
-    end
-
-    println("n=$n m=$m meq=$meq has_lb=$has_lb ub=$has_ub")
-
-    if m > 0
-        ccall(_jl_glpk_add_rows, Int32, (Ptr, Int32), lp, m)
-        for r = 1 : m
-            #println("  r=$r b=$(b[r])")
-            ccall(_jl_glpk_set_row_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, r, GLP_UP, 0.0, b[r])
-        end
-    end
-    if meq > 0
-        ccall(_jl_glpk_add_rows, Int32, (Ptr, Int32), lp, meq)
-        for r = 1 : meq
-            r0 = r + m
-            #println("  r=$r r0=$r0 beq=$(beq[r])")
-            ccall(_jl_glpk_set_row_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, r0, GLP_FX, beq[r], beq[r])
-        end
-    end
-
-    ccall(_jl_glpk_add_cols, Int32, (Ptr, Int32), lp, n);    
-
-    for c = 1 : n
-        ccall(_jl_glpk_set_obj_coef, Void, (Ptr, Int32, Float64), lp, c, f[c])
-        #println("  c=$c f=$(f[c])")
-    end
-
-    if has_lb && has_ub
-        for c = 1 : n
-            #println("  c=$c lb=$(lb[c]) ub=$(ub[c])")
-            if lb[c] != ub[c]
-                ccall(_jl_glpk_set_col_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, c, GLP_DB, lb[c], ub[c])
-            else
-                ccall(_jl_glpk_set_col_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, c, GLP_FX, lb[c], ub[c])
-            end
-        end
-    elseif has_lb
-        for c = 1 : n
-            #println("  c=$c lb=$(lb[c])")
-            ccall(_jl_glpk_set_col_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, c, GLP_LO, lb[c], 0.0)
-        end
-    elseif has_ub
-        for c = 1 : n
-            #println("  c=$c ub=$(ub[c])")
-            ccall(_jl_glpk_set_col_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, c, GLP_UP, 0.0, ub[c])
-        end
-    end
-
-    l = (m + meq) * n
-    #println("l = $l")
-
-    ia = zeros(Int32, l + 1)
-    ja = zeros(Int32, l + 1)
-    ar = zeros(Float64, l + 1)
-
-    k = 1
-    for r = 1 : m
-        for c = 1 : n
-            k += 1
-            ia[k] = r
-            ja[k] = c
-            ar[k] = A[r, c]
-        end
-    end
-    #println(size(Aeq))
-    for r = 1 : meq
-        for c = 1 : n
-            r0 = r + m
-            k += 1
-            #println("k=$k r=$r c=$c r0=$r0")
-            ia[k] = r0
-            ja[k] = c
-            ar[k] = Aeq[r, c]
-        end
-    end
-    #println("ia=$ia")
-    #println("ja=$ja")
-    #println("ar=$ar")
-
-
-    ccall(_jl_glpk_load_matrix, Void, (Ptr, Int32, Ptr{Int32}, Ptr{Int32}, Ptr{Float64}), lp, l, ia, ja, ar)
-
-    # TODO more mtehods, options, etc.
-    ret = ccall(_jl_glpk_simplex, Int32, (Ptr, Ptr{Void}), lp, C_NULL)
-    #println("ret=$ret")
-
-    if ret == 0
-        z = ccall(_jl_glpk_get_obj_val, Float64, (Ptr,), lp)
-        x = zeros(Float64, n)
-        for c = 1 : n
-            x[c] = ccall(_jl_glpk_get_col_prim, Float64, (Ptr, Int32), lp, c)
-        end
-        ccall(_jl_glpk_delete_prob, Void, (Ptr,), lp)
-        return (z, x)
-    else
-        ccall(_jl_glpk_delete_prob, Void, (Ptr,), lp)
-        # throw exception here
-        return (nothing, nothing)
-    end
-end
-
-function mixintprog_bin{T}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T})
-    lp = ccall(_jl_glpk_create_prob, Ptr, ())
-    ccall(_jl_glpk_set_obj_dir, Void, (Ptr, Int32), lp, GLP_MIN)
-
-    n = size(f, 1)
-    m = 0
-    meq = 0
-
-    if length(A) > 0
-        if ndims(A) != 2
-            error("A must be a bidimensional array (ndims=$(ndims(A)))")
-        end
-        if size(A, 2) != n
-            error("invlid A size: $(size(A))")
-        end
-        m = size(A, 1)
-        if size(b, 1) != m
-            #printf(f"m=%i\n", m)
-            error("invalid b size: $(size(b))")
-        end
-    else
-        if length(b) > 0
-            error("syntax error: b is defined but A isn't")
-        end
-    end
-
-    if length(Aeq) > 0
-        if ndims(Aeq) != 2
-            error("Aeq must be Aeq bidimensional array (ndims=$(ndims(Aeq)))")
-        end
-        if size(Aeq, 2) != n
-            error("invlid Aeq size: $(size(Aeq))")
-        end
-        meq = size(Aeq, 1)
-        if size(beq, 1) != meq
-            #printf(f"m=%i\n", meq)
-            error("invalid beq size: $(size(beq))")
-        end
-    else
-        if length(beq) > 0
-            error("syntax error: beq is defined but Aeq isn't")
-        end
-    end
-
-    #println("n=$n m=$m meq=$meq")
-
-    if m > 0
-        ccall(_jl_glpk_add_rows, Int32, (Ptr, Int32), lp, m)
-        for r = 1 : m
-            #println("  r=$r b=$(b[r])")
-            ccall(_jl_glpk_set_row_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, r, GLP_UP, 0.0, b[r])
-        end
-    end
-    if meq > 0
-        ccall(_jl_glpk_add_rows, Int32, (Ptr, Int32), lp, meq)
-        for r = 1 : meq
-            r0 = r + m
-            #println("  r=$r r0=$r0 beq=$(beq[r])")
-            ccall(_jl_glpk_set_row_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, r0, GLP_FX, beq[r], beq[r])
-        end
-    end
-
-    ccall(_jl_glpk_add_cols, Int32, (Ptr, Int32), lp, n);    
-
-    for c = 1 : n
-        ccall(_jl_glpk_set_obj_coef, Void, (Ptr, Int32, Float64), lp, c, f[c])
-        #println("  c=$c f=$(f[c])")
-    end
-
-    for c = 1 : n
-        ccall(_jl_glpk_set_col_bnds, Void, (Ptr, Int32, Int32, Float64, Float64), lp, c, GLP_DB, 0., 1.)
-        ccall(_jl_glpk_set_col_kind, Void, (Ptr, Int32, Int32), lp, c, GLP_BV)
-    end
-
-    l = (m + meq) * n
-    #println("l = $l")
-
-    ia = zeros(Int32, l + 1)
-    ja = zeros(Int32, l + 1)
-    ar = zeros(Float64, l + 1)
-
-    k = 1
-    for r = 1 : m
-        for c = 1 : n
-            k += 1
-            ia[k] = r
-            ja[k] = c
-            ar[k] = A[r, c]
-        end
-    end
-    #println(size(Aeq))
-    for r = 1 : meq
-        for c = 1 : n
-            r0 = r + m
-            k += 1
-            #println("k=$k r=$r c=$c r0=$r0")
-            ia[k] = r0
-            ja[k] = c
-            ar[k] = Aeq[r, c]
-        end
-    end
-    #println("ia=$ia")
-    #println("ja=$ja")
-    #println("ar=$ar")
-
-
-    ccall(_jl_glpk_load_matrix, Void, (Ptr, Int32, Ptr{Int32}, Ptr{Int32}, Ptr{Float64}), lp, l, ia, ja, ar)
-
-    # TODO more mtehods, options, etc.
-    ret = ccall(_jl_glpk_simplex, Int32, (Ptr, Ptr{Void}), lp, C_NULL)
-    #println("ret=$ret")
-
-    if ret == 0
-        ret = ccall(_jl_glpk_intopt, Int32, (Ptr, Ptr{Void}), lp, C_NULL)
-        #println("ret=$ret")
-        if ret == 0
-            z = ccall(_jl_glpk_get_obj_val, Float64, (Ptr,), lp)
-            x = zeros(Float64, n)
-            for c = 1 : n
-                x[c] = ccall(_jl_glpk_get_col_prim, Float64, (Ptr, Int32), lp, c)
-            end
-            ccall(_jl_glpk_delete_prob, Void, (Ptr,), lp)
-            return (z, x)
-        else
-            ccall(_jl_glpk_delete_prob, Void, (Ptr,), lp)
-            return(nothing, nothing)
-        end
-    else
-        ccall(_jl_glpk_delete_prob, Void, (Ptr,), lp)
-        # throw exception here
-        return (nothing, nothing)
-    end
-end
-
-function linprog2{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+function linprog{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
         lb::VecOrNothing{T}, ub::VecOrNothing{T},
         params::P)
@@ -1663,59 +1374,11 @@ function linprog2{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector
     glp_set_obj_dir(lp, GLP_MIN)
 
     n = size(f, 1)
-    m = 0
-    meq = 0
 
-    if !_jl_glpk__is_empty(A)
-        if size(A, 2) != n
-            error("invlid A size: $(size(A))")
-        end
-        m = size(A, 1)
-        if _jl_glpk__is_empty(b)
-            error("b is empty but a is not")
-        end
-        if size(b, 1) != m
-            #printf(f"m=%i\n", m)
-            error("invalid b size: $(size(b))")
-        end
-    else
-        if !_jl_glpk__is_empty(b)
-            error("A is empty but b is not")
-        end
-    end
+    m = _jl_linprog__check_A_b(A, b, n)
+    meq = _jl_linprog__check_A_b(Aeq, beq, n)
 
-    if !_jl_glpk__is_empty(Aeq)
-        if size(Aeq, 2) != n
-            error("invlid Aeq size: $(size(Aeq))")
-        end
-        meq = size(Aeq, 1)
-        if _jl_glpk__is_empty(beq)
-            error("beq is empty but a is not")
-        end
-        if size(beq, 1) != meq
-            #printf(f"meq=%i\n", meq)
-            error("invalid beq size: $(size(beq))")
-        end
-    else
-        if !_jl_glpk__is_empty(beq)
-            error("Aeq is empty but beq is not")
-        end
-    end
-
-    has_lb = false
-    has_ub = false
-    if ! _jl_glpk__is_empty(lb)
-        if size(lb, 1) != n
-            error("invlid lb size: $(size(lb))")
-        end
-        has_lb = true
-    end
-    if ! _jl_glpk__is_empty(ub)
-        if size(ub, 1) != n
-            error("invalid ub size: $(size(ub))")
-        end
-        has_ub = true
-    end
+    has_lb, has_ub = _jl_linprog__check_lb_ub(lb, ub, n)
 
     #println("n=$n m=$m meq=$meq has_lb=$has_lb ub=$has_ub")
 
@@ -1767,42 +1430,15 @@ function linprog2{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector
     elseif (m == 0) && (meq > 0 && issparse(Aeq))
         (ia, ja, ar) = find(Aeq)
     else
-        l = (m + meq) * n
-
-        ia = zeros(Int32, l)
-        ja = zeros(Int32, l)
-        ar = zeros(Float64, l)
-
-        k = 0
-        for r = 1 : m
-            for c = 1 : n
-                k += 1
-                ia[k] = r
-                ja[k] = c
-                ar[k] = A[r, c]
-            end
-        end
-        #println(size(Aeq))
-        for r = 1 : meq
-            for c = 1 : n
-                r0 = r + m
-                k += 1
-                #println("k=$k r=$r c=$c r0=$r0")
-                ia[k] = r0
-                ja[k] = c
-                ar[k] = Aeq[r, c]
-            end
-        end
+        (ia, ja, ar) = _jl_linprog__dense_matrices_to_glp_format(m, n, A, Aeq)
     end
     println("ia=$ia")
     println("ja=$ja")
     println("ar=$ar")
 
-
-    #glp_load_matrix(lp, l, ia, ja, ar)
     glp_load_matrix(lp, ia, ja, ar)
 
-    # TODO more mtehods, options, etc.
+    # TODO more methods
     ret = glp_simplex(lp, params)
     #println("ret=$ret")
 
@@ -1812,23 +1448,91 @@ function linprog2{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector
         for c = 1 : n
             x[c] = glp_get_col_prim(lp, c)
         end
-        glp_delete_prob(lp)
-        return (z, x)
+        #glp_delete_prob(lp)
+        return (z, x, ret)
     else
-        glp_delete_prob(lp)
+        #glp_delete_prob(lp)
         # throw exception here ?
-        return (nothing, nothing)
+        return (nothing, nothing, ret)
     end
 end
 
-linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
-        linprog2(f, A, b, nothing, nothing, nothing, nothing, nothing)
+linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
+        linprog(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
-linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) = 
-        linprog2(f, A, b, Aeq, beq, nothing, nothing, nothing)
+        linprog(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
-linprog2{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
         ub::VecOrNothing{T}) = 
-        linprog2(f, A, b, Aeq, beq, lb, ub, nothing)
+        linprog(f, A, b, Aeq, beq, lb, ub, nothing)
+
+function _jl_linprog__check_A_b{T}(A::MatOrNothing{T}, b::VecOrNothing{T}, n::Int)
+    m = 0
+    if !_jl_glpk__is_empty(A)
+        if size(A, 2) != n
+            error("invlid A size: $(size(A))")
+        end
+        m = size(A, 1)
+        if _jl_glpk__is_empty(b)
+            error("b is empty but a is not")
+        end
+        if size(b, 1) != m
+            #printf(f"m=%i\n", m)
+            error("invalid b size: $(size(b))")
+        end
+    else
+        if !_jl_glpk__is_empty(b)
+            error("A is empty but b is not")
+        end
+    end
+    return m
+end
+
+function _jl_linprog__check_lb_ub{T}(lb::VecOrNothing{T}, ub::VecOrNothing{T}, n::Int)
+    has_lb = false
+    has_ub = false
+    if ! _jl_glpk__is_empty(lb)
+        if size(lb, 1) != n
+            error("invlid lb size: $(size(lb))")
+        end
+        has_lb = true
+    end
+    if ! _jl_glpk__is_empty(ub)
+        if size(ub, 1) != n
+            error("invalid ub size: $(size(ub))")
+        end
+        has_ub = true
+    end
+    return (has_lb, has_ub)
+end
+
+function _jl_linprog__dense_matrices_to_glp_format(m, n, A, Aeq)
+    l = (m + meq) * n
+
+    ia = zeros(Int32, l)
+    ja = zeros(Int32, l)
+    ar = zeros(Float64, l)
+
+    k = 0
+    for r = 1 : m
+        for c = 1 : n
+            k += 1
+            ia[k] = r
+            ja[k] = c
+            ar[k] = A[r, c]
+        end
+    end
+    for r = 1 : meq
+        for c = 1 : n
+            r0 = r + m
+            k += 1
+            ia[k] = r0
+            ja[k] = c
+            ar[k] = Aeq[r, c]
+        end
+    end
+    return (ia, ja, ar)
+end

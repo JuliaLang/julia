@@ -52,9 +52,9 @@ lpoptions["msg_lev"] = GLP_MSG_ERR
 lpoptions["presolve"] = GLP_ON
 #lpoptions["it_lim"] = 2
 
-(z, x) = linprog2(f, [], [], Aeq, beq, lb, ub, lpoptions);
+(z, x) = linprog(f, [], [], Aeq, beq, lb, ub, lpoptions);
 
-cstruct_delete(lpoptions)
+#cstruct_delete(lpoptions)
 
 #(z, x) = mixintprog_bin(f, [], [], Aeq, beq);
 
