@@ -800,7 +800,7 @@ function hcat(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function hvcat{Tv, Ti}(rows::(Int...), X::SparseMatrixCSC...)
+function hvcat(rows::(Int...), X::SparseMatrixCSC...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array(SparseMatrixCSC, nbr)
@@ -857,7 +857,7 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
         else
             offs += 1
         end
-        flags[i] = false
+        flags[pos] = false
     end
 
     colptr[col+1] = start + nvals
