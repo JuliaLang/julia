@@ -773,30 +773,20 @@ function hcat{TvX, TiX, TvY, TiY}(X::SparseMatrixCSC{TvX, TiX}, Y::SparseMatrixC
 
     colptr = Array(Ti, nX + nY + 1)
     colptr[1] = 1
-    nnz_res = nnz(X) + nnz(Y)
+    nnzX = nnz(X)
+    nnzY = nnz(Y)
+    nnz_res = nnzX + nnzY
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
-    for c = 1 : nX
-        rX1 = X.colptr[c]
-        rX2 = X.colptr[c + 1] - 1
-        rsizeX = rX2 - rX1 + 1
-        r_res1 = colptr[c]
-        r_res2 = r_res1 + rsizeX
-        colptr[c + 1] = r_res2
-        rowval[r_res1 : r_res2 - 1] = X.rowval[rX1 : rX2]
-        nzval[r_res1 : r_res2 - 1] = X.nzval[rX1 : rX2]
-    end
-    for c = 1 : nY
-        c_res = c + nX
-        rY1 = Y.colptr[c]
-        rY2 = Y.colptr[c + 1] - 1
-        rsizeY = rY2 - rY1 + 1
-        r_res1 = colptr[c_res]
-        r_res2 = r_res1 + rsizeY
-        colptr[c_res + 1] = r_res2
-        rowval[r_res1 : r_res2 - 1] = Y.rowval[rY1 : rY2]
-        nzval[r_res1 : r_res2 - 1] = Y.nzval[rY1 : rY2]
-    end
+
+    colptr[1 : nX + 1] = X.colptr
+    rowval[1 : nnzX] = X.rowval
+    nzval[1 : nnzX] = X.nzval
+
+    colptr[(1 : nY + 1) + nX] = Y.colptr + nnzX
+    rowval[(1 : nnzY) + nnzX] = Y.rowval
+    nzval[(1 : nnzY) + nnzX] = Y.nzval
+
     SparseMatrixCSC(mX, nX + nY, colptr, rowval, nzval)
 end
 
