@@ -730,7 +730,7 @@ end
 
 # Sparse concatenation
 
-function vcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
+function vcat(X::SparseMatrixCSC...)
     num = length(X)
     mX = [ size(x, 1) | x = X ] 
     nX = [ size(x, 2) | x = X ]
@@ -739,6 +739,9 @@ function vcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
         if nX[i] != n; error("error in vcat: mismatched dimensions"); end
     end
     m = sum(mX)
+
+    Tv = promote_type(map(x->eltype(x.nzval), X)...)
+    Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
     nnzX = [ nnz(x) | x = X ]
@@ -765,7 +768,7 @@ function vcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function hcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
+function hcat(X::SparseMatrixCSC...)
     num = length(X)
     mX = [ size(x, 1) | x = X ]
     nX = [ size(x, 2) | x = X ]
@@ -774,6 +777,9 @@ function hcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
         if mX[i] != m; error("error in hcat: mismatched dimensions"); end
     end
     n = sum(nX)
+
+    Tv = promote_type(map(x->eltype(x.nzval), X)...)
+    Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
     nnzX = [ nnz(x) | x = X ]
@@ -794,10 +800,10 @@ function hcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function hvcat{Tv, Ti}(rows::(Int...), X::SparseMatrixCSC{Tv, Ti}...)
+function hvcat{Tv, Ti}(rows::(Int...), X::SparseMatrixCSC...)
     nbr = length(rows)  # number of block rows
 
-    tmp_rows = Array(SparseMatrixCSC{Tv,Ti}, nbr)
+    tmp_rows = Array(SparseMatrixCSC, nbr)
     k = 0
     for i = 1 : nbr
         tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
