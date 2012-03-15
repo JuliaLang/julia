@@ -53,6 +53,9 @@
 
 (define assignment-ops (prec-ops 0))
 
+(define (assignment? e)
+  (and (pair? e) (eq? (car e) '=)))
+
 (define unary-ops '(+ - ! ~ $ & |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -802,18 +805,20 @@
 	  (if (equal? t #\;)
 	      (begin (take-token s)
 		     (if (equal? (peek-token s) closer)
-			 ; allow f(a, b; )
+			 ;; allow f(a, b; )
 			 (begin (take-token s)
 				(reverse lst))
 			 (reverse (cons (cons 'parameters (loop '()))
 					lst))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
+		(if (assignment? nxt)
+		    (error "invalid syntax in argument list"))
 		(cond ((eqv? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((eqv? c #\;)          (loop (cons nxt lst)))
 		      ((equal? c closer)     (loop (cons nxt lst)))
-		      ; newline character isn't detectable here
+		      ;; newline character isn't detectable here
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
 		      ((memv c '(#\] #\}))
@@ -921,6 +926,8 @@
 (define (parse-tuple s first)
   (let loop ((lst '())
 	     (nxt first))
+    (if (assignment? nxt)
+	(error "invalid syntax in tuple"))
     (let ((t (require-token s)))
       (case t
 	((#\))

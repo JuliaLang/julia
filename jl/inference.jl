@@ -504,7 +504,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         end
         if is(f,invoke) && length(fargs)>1
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && _iisbound(af) && isgeneric(af=_ieval(af))
+            if !is(af,false) && _iisbound(af) && (af=_ieval(af);isgeneric(af))
                 sig = argtypes[2]
                 if isa(sig,Tuple) && allp(isType, sig)
                     sig = map(t->t.parameters[1], sig)
