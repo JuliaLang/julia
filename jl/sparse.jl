@@ -746,28 +746,21 @@ function vcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
 
-    rX1 = zeros(Ti, num)
-    rX2 = zeros(Ti, num)
-    rsizeX = zeros(Ti, num)
-    r_res = zeros(Ti, num + 1)
-
     colptr[1] = 1
     for c = 1 : n
         mX_sofar = 0
         rr1 = colptr[c]
-        rr2 = 0
         for i = 1 : num
             rX1 = X[i].colptr[c]
             rX2 = X[i].colptr[c + 1] - 1
-            rsizeX[i] = rX2 - rX1 + 1
-            rr2 = rr1 + rsizeX[i]
+            rr2 = rr1 + (rX2 - rX1)
 
-            rowval[rr1 : rr2 - 1] = X[i].rowval[rX1 : rX2] + mX_sofar
-            nzval[rr1 : rr2 - 1] = X[i].nzval[rX1 : rX2]
+            rowval[rr1 : rr2] = X[i].rowval[rX1 : rX2] + mX_sofar
+            nzval[rr1 : rr2] = X[i].nzval[rX1 : rX2]
             mX_sofar += mX[i]
-            rr1 = rr2
+            rr1 = rr2 + 1
         end
-        colptr[c + 1] = rr2
+        colptr[c + 1] = rr1
     end
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
