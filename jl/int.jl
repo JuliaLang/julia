@@ -427,7 +427,7 @@ typemax(::Type{Uint32}) = uint32(4294967295)
 @eval typemin(::Type{Int64 }) = $(-9223372036854775807-int64(1))
 typemax(::Type{Int64 }) = 9223372036854775807
 typemin(::Type{Uint64}) = uint64(0)
-typemax(::Type{Uint64}) = 18446744073709551615
+typemax(::Type{Uint64}) = 0xffffffffffffffff
 
 sizeof(::Type{Int8})   = 1
 sizeof(::Type{Uint8})  = 1
