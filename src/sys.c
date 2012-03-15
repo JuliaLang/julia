@@ -247,7 +247,7 @@ static void *run_io_thr(void *arg)
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
     while (1) {
-        if (ioq == NULL) {
+        while (ioq == NULL) {
             pthread_mutex_lock(&wake_mut);
             pthread_cond_wait(&wake_cond, &wake_mut);
             pthread_mutex_unlock(&wake_mut);
