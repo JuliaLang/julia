@@ -728,70 +728,90 @@ function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{Tv
     SparseMatrixCSC(mX, nY, colptr, rowval, nzval)
 end
 
-#sparse concatenation
+# Sparse concatenation
 
-function vcat{TvX, TiX, TvY, TiY}(X::SparseMatrixCSC{TvX, TiX}, Y::SparseMatrixCSC{TvY, TiY})
-    mX, nX = size(X)
-    mY, nY = size(Y)
-    if nX != nY; error("error in vcat: mismatched dimensions"); end
-    Tv = promote_type(TvX, TvY)
-    Ti = promote_type(TiX, TiY)
-
-    colptr = Array(Ti, nX + 1)
-    colptr[1] = 1
-    nnz_res = nnz(X) + nnz(Y)
-    rowval = Array(Ti, nnz_res)
-    nzval = Array(Tv, nnz_res)
-    for c = 1 : nX
-        rX1 = X.colptr[c]
-        rX2 = X.colptr[c + 1] - 1
-        rY1 = Y.colptr[c]
-        rY2 = Y.colptr[c + 1] - 1
-        rsizeX = rX2 - rX1 + 1
-        rsizeY = rY2 - rY1 + 1
-        r_res1 = colptr[c]
-        r_resM = r_res1 + rsizeX
-        r_res2 = r_resM + rsizeY
-        colptr[c + 1] = r_res2
-        rowval[r_res1 : r_resM - 1] = X.rowval[rX1 : rX2]
-        rowval[r_resM : r_res2 - 1] = Y.rowval[rY1 : rY2] + mX
-        nzval[r_res1 : r_resM - 1] = X.nzval[rX1 : rX2]
-        nzval[r_resM : r_res2 - 1] = Y.nzval[rY1 : rY2]
+function vcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
+    num = length(X)
+    mX = [ size(x, 1) | x = X ] 
+    nX = [ size(x, 2) | x = X ]
+    n = nX[1]
+    for i = 2 : num
+        if nX[i] != n; error("error in vcat: mismatched dimensions"); end
     end
-    SparseMatrixCSC(mX + mY, nX, colptr, rowval, nzval)
-end
+    m = sum(mX)
 
-vcat{TvX, TiX, TvY}(X::SparseMatrixCSC{TvX, TiX}, Y::AbstractMatrix{TvY}) = vcat(full(X), Y)
-vcat{TvX, TvY, TiY}(X::AbstractMatrix{TvX}, Y::SparseMatrixCSC{TvY, TiY}) = vcat(X, full(Y))
-
-function hcat{TvX, TiX, TvY, TiY}(X::SparseMatrixCSC{TvX, TiX}, Y::SparseMatrixCSC{TvY, TiY})
-    mX, nX = size(X)
-    mY, nY = size(Y)
-    if mX != mY; error("error in hcat: mismatched dimensions"); end
-    Tv = promote_type(TvX, TvY)
-    Ti = promote_type(TiX, TiY)
-
-    colptr = Array(Ti, nX + nY + 1)
-    colptr[1] = 1
-    nnzX = nnz(X)
-    nnzY = nnz(Y)
-    nnz_res = nnzX + nnzY
+    colptr = Array(Ti, n + 1)
+    nnzX = [ nnz(x) | x = X ]
+    nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
 
-    colptr[1 : nX + 1] = X.colptr
-    rowval[1 : nnzX] = X.rowval
-    nzval[1 : nnzX] = X.nzval
+    rX1 = zeros(Ti, num)
+    rX2 = zeros(Ti, num)
+    rsizeX = zeros(Ti, num)
+    r_res = zeros(Ti, num + 1)
 
-    colptr[(1 : nY + 1) + nX] = Y.colptr + nnzX
-    rowval[(1 : nnzY) + nnzX] = Y.rowval
-    nzval[(1 : nnzY) + nnzX] = Y.nzval
+    colptr[1] = 1
+    for c = 1 : n
+        mX_sofar = 0
+        rr1 = colptr[c]
+        rr2 = 0
+        for i = 1 : num
+            rX1 = X[i].colptr[c]
+            rX2 = X[i].colptr[c + 1] - 1
+            rsizeX[i] = rX2 - rX1 + 1
+            rr2 = rr1 + rsizeX[i]
 
-    SparseMatrixCSC(mX, nX + nY, colptr, rowval, nzval)
+            rowval[rr1 : rr2 - 1] = X[i].rowval[rX1 : rX2] + mX_sofar
+            nzval[rr1 : rr2 - 1] = X[i].nzval[rX1 : rX2]
+            mX_sofar += mX[i]
+            rr1 = rr2
+        end
+        colptr[c + 1] = rr2
+    end
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-hcat{TvX, TiX, TvY}(X::SparseMatrixCSC{TvX, TiX}, Y::AbstractMatrix{TvY}) = hcat(full(X), Y)
-hcat{TvX, TvY, TiY}(X::AbstractMatrix{TvX}, Y::SparseMatrixCSC{TvY, TiY}) = hcat(X, full(Y))
+function hcat{Tv, Ti}(X::SparseMatrixCSC{Tv, Ti}...)
+    num = length(X)
+    mX = [ size(x, 1) | x = X ]
+    nX = [ size(x, 2) | x = X ]
+    m = mX[1]
+    for i = 2 : num
+        if mX[i] != m; error("error in hcat: mismatched dimensions"); end
+    end
+    n = sum(nX)
+
+    colptr = Array(Ti, n + 1)
+    nnzX = [ nnz(x) | x = X ]
+    nnz_res = sum(nnzX)
+    rowval = Array(Ti, nnz_res)
+    nzval = Array(Tv, nnz_res)
+
+    nnz_sofar = 0
+    nX_sofar = 0
+    for i = 1 : num
+        colptr[(1 : nX[i] + 1) + nX_sofar] = X[i].colptr + nnz_sofar
+        rowval[(1 : nnzX[i]) + nnz_sofar] = X[i].rowval
+        nzval[(1 : nnzX[i]) + nnz_sofar] = X[i].nzval
+        nnz_sofar += nnzX[i]
+        nX_sofar += nX[i]
+    end
+
+    SparseMatrixCSC(m, n, colptr, rowval, nzval)
+end
+
+function hvcat{Tv, Ti}(rows::(Int...), X::SparseMatrixCSC{Tv, Ti}...)
+    nbr = length(rows)  # number of block rows
+
+    tmp_rows = Array(SparseMatrixCSC{Tv,Ti}, nbr)
+    k = 0
+    for i = 1 : nbr
+        tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
+        k += rows[i]
+    end
+    vcat(ntuple(nbr, x->tmp_rows[x])...)
+end
 
 
 ## SparseAccumulator and related functions
