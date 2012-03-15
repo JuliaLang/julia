@@ -754,7 +754,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
         // delete cached slow ASCIIString constructor
         jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
         mt->cache = NULL;
-        mt->cache_1arg = NULL;
+        mt->cache_arg1 = NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
         mt->defs->func->linfo->specializations = NULL;
     }

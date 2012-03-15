@@ -228,7 +228,8 @@ typedef struct _jl_methtable_t {
     JL_STRUCT_TYPE
     jl_methlist_t *defs;
     jl_methlist_t *cache;
-    jl_array_t *cache_1arg;
+    jl_array_t *cache_arg1;
+    jl_array_t *cache_targ;
     jl_value_t *max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
     int ncalls;
