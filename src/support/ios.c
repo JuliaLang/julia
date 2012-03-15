@@ -41,9 +41,11 @@
 #define WIN32
 #endif
 
+#if defined(__APPLE__)
+#define HAVE_VASPRINTF 1
+#endif
 
-
-#if !HAVE_VASPRINTF
+#ifndef HAVE_VASPRINTF
 /* CAW: compliant version of vasprintf */
 static int vasprintf(char **buf, const char *fmt, va_list ap)
 {
