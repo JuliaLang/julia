@@ -188,7 +188,7 @@
       (if n
 	  (if (eq? pred char-hex?)
 	      (sized-uint-literal n s)
-	      (if (and (integer? n) (> n (uint64 9223372036854775807)))
+	      (if (and (integer? n) (> n 9223372036854775807))
 	          (error (string "invalid numeric constant " s))
 	          n))
 	  (error (string "invalid numeric constant " s))))))
