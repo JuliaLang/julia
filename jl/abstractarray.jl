@@ -117,6 +117,8 @@ float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
 
+full(x::AbstractArray) = x
+
 ## Unary operators ##
 
 conj{T<:Real}(x::AbstractArray{T}) = x
@@ -350,7 +352,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         ncols += (nd==2 ? size(Aj,2) : 1)
         if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
     end
-    B = similar(A[1], nrows, ncols)
+    B = similar(full(A[1]), nrows, ncols)
     pos = 1
     if dense
         for k=1:nargs
@@ -377,7 +379,7 @@ function vcat{T}(A::AbstractMatrix{T}...)
     for j = 2:nargs
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
-    B = similar(A[1], nrows, ncols)
+    B = similar(full(A[1]), nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -532,7 +534,7 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
         a += rows[i]
     end
 
-    out = similar(as[1], T, nr, nc)
+    out = similar(full(as[1]), T, nr, nc)
 
     a = 1
     r = 1
