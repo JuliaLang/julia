@@ -25,25 +25,27 @@
 # This is a "percolate down" function, used by several other
 # functions. "percolate up" is implemented in heap_push.
 function _heapify!{T}(cmp::Function,x::Vector{T},i::Int,len::Int)
-    # Among node i and its two children, find the extreme value
-    #(e.g., the smallest when using < for comparison)
-    il = 2*i;  # index of left child
-    if il > len
-        return
-    end
-    iextreme = cmp(x[il],x[i]) ? il : i  # index of extreme value
-    if il < len
-        iextreme = cmp(x[il+1],x[iextreme]) ? il+1 : iextreme
-    end
-    if iextreme != i
+    il = 2*i      # index of left child
+    while il <= len
+        # Among node i and its two children, find the extreme value
+        #(e.g., the smallest when using < for comparison)
+        iextreme = cmp(x[il],x[i]) ? il : i  # index of extreme value
+        if il < len
+            iextreme = cmp(x[il+1],x[iextreme]) ? il+1 : iextreme
+        end
+        if iextreme == i
+            return   # The heap below this node is fine
+        end
         # Put the extreme value at i via a swap
         tmp = x[iextreme]
         x[iextreme] = x[i]
         x[i] = tmp
-        # Recursively re-heapify, starting at the swapped child node
-        _heapify!(cmp,x,iextreme,len)
+        # Descend to the modified child
+        i = iextreme
+        il = 2*i
     end
 end
+
 
 # Convert an arbitrary vector into heap storage format
 function vector2heap!{T}(cmp::Function, x::Vector{T})
