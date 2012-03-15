@@ -130,9 +130,10 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
         return 0;
 
     if (atag == T_UINT64) {
-        // this is safe because if a had been bigger than S64_MAX,
-        // we would already have concluded that it's bigger than b.
         if (btag == T_INT64) {
+            if (*(int64_t*)b >= 0) {
+                return (*(uint64_t*)a < (uint64_t)*(int64_t*)b);
+            }
             return ((int64_t)*(uint64_t*)a < *(int64_t*)b);
         }
         else if (btag == T_DOUBLE) {
@@ -142,6 +143,9 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
     }
     else if (atag == T_INT64) {
         if (btag == T_UINT64) {
+            if (*(int64_t*)a >= 0) {
+                return ((uint64_t)*(int64_t*)a < *(uint64_t*)b);
+            }
             return (*(int64_t*)a < (int64_t)*(uint64_t*)b);
         }
         else if (btag == T_DOUBLE) {
@@ -149,20 +153,14 @@ int cmp_lt(void *a, numerictype_t atag, void *b, numerictype_t btag)
             return (*(int64_t*)a < (int64_t)*(double*)b);
         }
     }
-    else if (btag == T_UINT64) {
-        if (atag == T_INT64) {
-            return ((int64_t)*(uint64_t*)b > *(int64_t*)a);
-        }
-        else if (atag == T_DOUBLE) {
+    if (btag == T_UINT64) {
+        if (atag == T_DOUBLE) {
             if (da != da) return 0;
             return (*(uint64_t*)b > (uint64_t)*(double*)a);
         }
     }
     else if (btag == T_INT64) {
-        if (atag == T_UINT64) {
-            return (*(int64_t*)b > (int64_t)*(uint64_t*)a);
-        }
-        else if (atag == T_DOUBLE) {
+        if (atag == T_DOUBLE) {
             if (da != da) return 0;
             return (*(int64_t*)b > (int64_t)*(double*)a);
         }
@@ -227,62 +225,3 @@ int cmp_eq(void *a, numerictype_t atag, void *b, numerictype_t btag,
     }
     return 1;
 }
-
-#ifdef ENABLE_LLT_TEST
-void test_operators(void)
-{
-    int8_t i8, i8b;
-    uint8_t ui8, ui8b;
-    int16_t i16, i16b;
-    uint16_t ui16, ui16b;
-    int32_t i32, i32b;
-    uint32_t ui32, ui32b;
-    int64_t i64, i64b;
-    uint64_t ui64, ui64b;
-    float f, fb;
-    double d, db;
-
-    ui64 = U64_MAX;
-    ui64b = U64_MAX-1;
-    i64 = S64_MIN;
-    i64b = i64+1;
-    d = (double)ui64;
-    db = (double)i64b;
-
-    assert(cmp_lt(&i64, T_INT64, &ui64, T_UINT64));
-    assert(!cmp_lt(&ui64, T_UINT64, &i64, T_INT64));
-    assert(cmp_lt(&i64, T_INT64, &ui64b, T_UINT64));
-    assert(!cmp_lt(&ui64b, T_UINT64, &i64, T_INT64));
-    assert(cmp_lt(&i64, T_INT64, &i64b, T_INT64));
-    assert(!cmp_lt(&i64b, T_INT64, &i64, T_INT64));
-
-    // try to compare a double too big to fit in an int64 with an
-    // int64 requiring too much precision to fit in a double...
-    // this case fails but it's very difficult/expensive to support
-    //assert(cmp_lt(&ui64b, T_UINT64, &d, T_DOUBLE));
-
-    i64 = S64_MAX;
-    ui64 = S64_MAX-1;
-    assert(cmp_lt(&ui64, T_UINT64, &i64, T_INT64));
-    assert(!cmp_lt(&i64, T_INT64, &ui64, T_UINT64));
-    i64 = S64_MAX-1;
-    ui64 = S64_MAX;
-    assert(cmp_lt(&i64, T_INT64, &ui64, T_UINT64));
-    assert(!cmp_lt(&ui64, T_UINT64, &i64, T_INT64));
-
-    d = DBL_MAXINT;
-    i64 = DBL_MAXINT+100;
-    assert(cmp_lt(&d, T_DOUBLE, &i64, T_INT64));
-    assert(!cmp_lt(&i64, T_INT64, &d, T_DOUBLE));
-    i64 = DBL_MAXINT+10;
-    assert(cmp_lt(&d, T_DOUBLE, &i64, T_INT64));
-    assert(!cmp_lt(&i64, T_INT64, &d, T_DOUBLE));
-    i64 = DBL_MAXINT+1;
-    assert(cmp_lt(&d, T_DOUBLE, &i64, T_INT64));
-    assert(!cmp_lt(&i64, T_INT64, &d, T_DOUBLE));
-
-    assert(!cmp_eq(&d, T_DOUBLE, &i64, T_INT64, 0));
-    i64 = DBL_MAXINT;
-    assert(cmp_eq(&d, T_DOUBLE, &i64, T_INT64, 0));
-}
-#endif
