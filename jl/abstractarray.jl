@@ -328,7 +328,7 @@ function vcat{T}(V::AbstractVector{T}...)
     for Vk in V
         n += length(Vk)
     end
-    a = similar(V[1], n)
+    a = similar(full(V[1]), n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -438,7 +438,7 @@ function cat(catdim::Integer, X...)
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
-    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
+    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
 
     range = 1
     for k=1:nargs
@@ -501,7 +501,7 @@ function cat(catdim::Integer, A::AbstractArray...)
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(eltype, A)...)
-    C = similar(A[1], typeC, dimsC)
+    C = similar(full(A[1]), typeC, dimsC)
 
     range = 1
     for k=1:nargs
