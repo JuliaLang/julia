@@ -1,4 +1,47 @@
-# Interior point method (default)
+##
+## Linear Programming and Mixed Integer Programming interfaces
+## for optimization and constraint satisfaction problems
+##
+
+# General notes: the interface is provided as a collection of
+# high-level functions which use the glpk library.
+# Most functions have almost same interface
+# as matlab's linprog, e.g.:
+#
+# (z, x, flag) = linprog(f, A, b, Aeq, beq, params)
+#
+# There's a function for each solving method:
+#   linprog_interior
+#   linprog_simplex
+#   linprog_exact
+#   mixintprog
+#
+# The function linprog is an alias to linprog_interior
+#
+# These functions all seek to solve the problem
+#
+#   z = min_{x} (f' * x)
+#
+# where the vector x is subject to these constraints:
+#
+#   A * x <= b
+#   Aeq * x == b
+#   lb <= x <= ub
+#
+# The return flag is 0 in case of success, and follows
+# the glpk library convention otherwise.
+# In case of failure, z and x are set to nothing, otherwise
+# they will hold the solution found
+#
+# The parameters Aeq, beq, lb, ub and params are optional.
+# This mean they can be either passed as the constant 'nothing'
+# or as an empty vector [] or not provided at all.
+#
+# Some methods have slightly different function calls, see
+# individual notes for additional information
+
+# Linear Programming, Interior point method (default)
+#{{{
 
 function linprog_interior{T<:Real, P<:Union(GLPInteriorParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
@@ -23,28 +66,28 @@ function linprog_interior{T<:Real, P<:Union(GLPInteriorParam, Nothing)}(f::Abstr
     end
 end
 
-linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
+linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
         linprog_interior(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
 linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) = 
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
         linprog_interior(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
 linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) = 
+        ub::VecOrNothing{T}) =
         linprog_interior(f, A, b, Aeq, beq, lb, ub, nothing)
 
 linprog = linprog_interior
+#}}}
 
-
-# Simplex Method
-
+# Linear Programming, Simplex Method
+#{{{
 function linprog_simplex{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
         lb::VecOrNothing{T}, ub::VecOrNothing{T},
         params::P)
-    
+
     lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
     ret = glp_simplex(lp, params)
@@ -63,20 +106,157 @@ function linprog_simplex{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::Abstrac
     end
 end
 
-linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
+linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
         linprog_simplex(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
 linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) = 
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
         linprog_simplex(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
 linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) = 
+        ub::VecOrNothing{T}) =
         linprog_simplex(f, A, b, Aeq, beq, lb, ub, nothing)
+#}}}
 
+# Linear Programming, Simplex-exact Method
+#{{{
 
+# Notes:
+#  * uses glp_simplex as a preliminary step
+#  * the exact step only accepts the "it_lim" and "tm_lim" options,
+#    which means no message suppression is possible
 
+function linprog_exact{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
+        lb::VecOrNothing{T}, ub::VecOrNothing{T},
+        params::P)
+
+    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+
+    ret = glp_simplex(lp, params)
+    if ret != 0
+        # throw exception here ?
+        return (nothing, nothing, ret)
+    end
+
+    ret = glp_exact(lp, params)
+    if ret == 0
+        z = glp_get_obj_val(lp)
+        x = zeros(Float64, n)
+        for c = 1 : n
+            x[c] = glp_get_col_prim(lp, c)
+        end
+        return (z, x, ret)
+    else
+        # throw exception here ?
+        return (nothing, nothing, ret)
+    end
+end
+
+linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+        linprog_exact(f, A, b, nothing, nothing, nothing, nothing, nothing)
+
+linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+        linprog_exact(f, A, b, Aeq, beq, nothing, nothing, nothing)
+
+linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
+        ub::VecOrNothing{T}) =
+        linprog_exact(f, A, b, Aeq, beq, lb, ub, nothing)
+#}}}
+
+# Mixed Integer Programming
+#{{{
+
+# Notes:
+#  * same syntax as linprog algorithms, with an additional col_kind vector and
+#    an additional set of parameters for the presolve step; and an additional
+#    return flag for the presolve step:
+#
+#    (z, x, flag, ps_flag) = mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, param, ps_param)
+#
+#  * if the col_kind vector is not provided, all variables default to integer
+#  * if the "presolve" options is set to GLP_OFF, then it uses linear programming
+#    for presolving:
+#    + if the presolve_params is not given, uses the simplex point method with
+#      default options
+#    + it the presolve_params is given, its type is used to determine which
+#      method to use (GLPSimplexParam -> simplex, GLPInteriorParam -> interior
+#      point)
+
+function mixintprog{T<:Real, Ti<:Integer, P<:Union(GLPIntoptParam, Nothing), Px<:Union(GLPParam, Nothing)}(
+        f::AbstractVector{T},
+        A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
+        lb::VecOrNothing{T}, ub::VecOrNothing{T},
+        col_kind::VecOrNothing{Ti},
+        params::P, params_presolve::Px)
+
+    lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
+    _jl_mixintprog_set_col_kind(lp, n, col_kind)
+
+    if params == nothing || pointer(params) == C_NULL || params["presolve"] != GLP_ON
+        if params_presolve == nothing || isa(params_presolve, GLPSimplexParam)
+            ret_ps = glp_simplex(lp, params_presolve)
+        elseif  isa(params_presolve, GLPInteriorParam)
+            # TODO check whether this is possible at all
+            # or simplex is always strictly necessary
+            println("warning: this probably won't work")
+            ret_ps = glp_interior(lp, params_presolve)
+        else
+            error("wrong type for params_presolve")
+        end
+        if ret_ps != 0
+            # throw exception here ?
+            # XXX GLP_ESTOP ??
+            return (nothing, nothing, GLP_ESTOP, ret_ps)
+        end
+    else
+        ret_ps = 0
+    end
+
+    ret = glp_intopt(lp, params)
+    if ret == 0
+        z = glp_mip_obj_val(lp)
+        x = zeros(Float64, n)
+        for c = 1 : n
+            x[c] = glp_mip_col_val(lp, c)
+        end
+        return (z, x, ret, ret_ps)
+    else
+        # throw exception here ?
+        return (nothing, nothing, ret, ret_ps)
+    end
+end
+
+mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+        mixintprog(f, A, b, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
+
+mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+        mixintprog(f, A, b, Aeq, beq, nothing, nothing, nothing, nothing, nothing)
+
+mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
+        ub::VecOrNothing{T}) =
+        mixintprog(f, A, b, Aeq, beq, lb, ub, nothing, nothing, nothing)
+
+mixintprog{T<:Real, Ti<:Integer}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
+        ub::VecOrNothing{T}, col_kind::VecOrNothing{Ti}) =
+        mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, nothing, nothing)
+
+mixintprog{T<:Real, Ti<:Integer, P<:Union(GLPIntoptParam, Nothing), }(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
+        ub::VecOrNothing{T}, col_kind::VecOrNothing{Ti},
+        params::P) =
+        mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, params, nothing)
+#}}}
+
+## Common auxiliary functions
+#{{{
 function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
         lb::VecOrNothing{T}, ub::VecOrNothing{T},
@@ -152,9 +332,6 @@ function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::Abstra
     return (lp, n)
 end
 
-
-
-
 function _jl_linprog__check_A_b{T}(A::MatOrNothing{T}, b::VecOrNothing{T}, n::Int)
     m = 0
     if !_jl_glpk__is_empty(A)
@@ -222,3 +399,20 @@ function _jl_linprog__dense_matrices_to_glp_format(m, meq, n, A, Aeq)
     end
     return (ia, ja, ar)
 end
+
+function _jl_mixintprog_set_col_kind{Ti<:Integer}(lp::GLPProb, n::Int, col_kind::VecOrNothing{Ti})
+    if _jl_glpk__is_empty(col_kind)
+        for i = 1 : n
+            glp_set_col_kind(lp, i, GLP_IV)
+        end
+        return
+    end
+    if length(col_kind) != n
+        error("wrong col_kind vector size")
+    end
+    for i = 1 : n
+        glp_set_col_kind(lp, i, col_kind[i])
+    end
+end
+
+#}}}

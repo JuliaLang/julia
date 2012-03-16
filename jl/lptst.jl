@@ -60,10 +60,17 @@ ub = ones(Float64, 9);
                1.; 0.; 0. ]
 
 
-lps_opts = GLPInteriorParam()
-lps_opts["msg_lev"] = GLP_MSG_ALL
-lps_opts["ord_alg"] = GLP_ORD_QMD
+lpi_opts = GLPInteriorParam()
+lpi_opts["msg_lev"] = GLP_MSG_ALL
+lpi_opts["ord_alg"] = GLP_ORD_QMD
 
-(z, x, ret) = linprog_interior(f, [], [], Aeq, beq, lb, ub, lps_opts);
+(z, x, ret) = linprog(f, [], [], Aeq, beq, lb, ub, lpi_opts);
 println("z=$z");
 println("x=$x");
+
+mip_opts = GLPIntoptParam()
+mip_opts["msg_lev"] = GLP_MSG_ERR
+mip_opts["presolve"] = GLP_ON
+colkind = int32([ GLP_BV | i = 1 : 9 ])
+#(z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, lb, ub)
+(z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);

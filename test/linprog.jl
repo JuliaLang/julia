@@ -47,3 +47,28 @@ ub = ones(Float64, 9);
 @assert x == [ 0.; 0.; 1. ;
                0.; 1.; 0. ;
                1.; 0.; 0. ]
+
+
+# Same problem, interior point method
+
+lpi_opts = GLPInteriorParam()
+lpi_opts["msg_lev"] = GLP_MSG_ERR
+
+(z, x, ret) = linprog(f, [], [], Aeq, beq, lb, ub, lpi_opts);
+
+tol = 1e-4
+
+@assert flag == 0
+@assert abs(z - 5.) < tol
+@assert max(abs(x - [ 0.; 0.; 1. ;
+                      0.; 1.; 0. ;
+                      1.; 0.; 0. ])) < tol
+
+
+# Same problem, mixed integer programming
+# with binary variables
+mip_opts = GLPIntoptParam()
+mip_opts["msg_lev"] = GLP_MSG_ERR
+mip_opts["presolve"] = GLP_ON
+colkind = int32([ GLP_BV | i = 1 : 9 ])
+(z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
