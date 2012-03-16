@@ -13,7 +13,7 @@ lps_opts["it_lim"] = 1000
 #   b = [ 100.; 600.; 300. ];
 #   lb = [ 0.; 0.; 0. ];
 #
-#   (z, x) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
+#   (z, x, ret) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 #   println("z=$z")
 #   println("x=$x")
 
@@ -25,7 +25,7 @@ A = [ 2. 1. ;
 b = [ 100.; 80 ];
 lb = [ 0.; 0;];
 
-(z, x) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
+(z, x, ret) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 #println("z=$z")
 #println("x=$x")
 @assert z == -180.0
@@ -51,7 +51,7 @@ Aeq = sparse(Aeq);
 beq = ones(Float64, 6);
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
-(z, x) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
+(z, x, ret) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
 #println("z=$z");
 #println("x=$x");
 @assert z == 5.
@@ -64,6 +64,6 @@ lps_opts = GLPInteriorParam()
 lps_opts["msg_lev"] = GLP_MSG_ALL
 lps_opts["ord_alg"] = GLP_ORD_QMD
 
-(z, x) = linprog_interior(f, [], [], Aeq, beq, lb, ub, lps_opts);
+(z, x, ret) = linprog_interior(f, [], [], Aeq, beq, lb, ub, lps_opts);
 println("z=$z");
 println("x=$x");

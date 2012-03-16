@@ -1,5 +1,9 @@
-## GLPK API Wrapper
+###
+### GLPK API Wrapper
+###
 
+## Shared library interface setup
+#{{{
 include("glpk_h.jl")
 
 _jl_glpk = dlopen("libglpk")
@@ -42,16 +46,65 @@ if glp_version() != (GLP_MAJOR_VERSION, GLP_MINOR_VERSION)
     hv = (GLP_MAJOR_VERSION, GLP_MINOR_VERSION)
     error("GLPK error: mismatched versions: header=$(hv[1]).$(hv[2]) binary=$(bv[1]).$(bv[2])")
 end
+#}}}
 
+
+## Preliminary definitions
+#{{{
+# We define some types which allow to pass optional agruments
+# to the function.
+# In this framework, optional arguments can be passed either
+# as an empty vector [] or as the 'nothing' constant
 
 typealias VecOrNothing{T} Union(AbstractVector{T}, AbstractVector{None}, Nothing)
 typealias MatOrNothing{T} Union(AbstractMatrix{T}, AbstractVector{None}, Nothing)
 _jl_glpk__is_empty{T}(x::Union(VecOrNothing{T}, MatOrNothing{T})) =
         isa(x, Union(AbstractVector{None}, Nothing))
 
+# General exception: all GLP functions
+# throw this in case of errors
 type GLPError <: Exception
     msg::String
 end
+#}}}
+
+
+## Main types definitions
+#{{{
+# All structs in original glpk are wrapped up in
+# composite types, which initialize and destry themselves
+# as needed, and expose pointers when asked to by
+# ccall's.
+#
+# Therefore, the original C glp API
+#  
+#  int glp_simplex(glp_prob * lp, glp_smpc * param)
+#
+# becomes
+#
+#  glp_simplex(lp::GLPProb, param::GLPSimplexParam)
+#
+# 
+# The map between names is as follows:
+#
+# +-------------+---------------------+
+# |  C          |  Julia              |
+# +-------------+---------------------+
+# |  glp_prob   |  GLPProb            |
+# |  glp_smcp   |  GLPSimplexParam    |
+# |  glp_iptcp  |  GLPInteriorParam   |
+# |  glp_iocp   |  GLPIntoptParam     |
+# |  glp_bfcp   |  GLPBasisFactParam  |
+# +-------------+---------------------+
+#
+# In order to get/set the value of a cstruct field, you can
+# use vector-like referncing with the field name as an argument,
+# e.g.:
+#
+#   lps_opts = GLPSimplexParam()
+#   lps_opts["msg_lev"] = GLP_MSG_ERR
+#   lps_opts["presolve"] = GLP_ON
+#
 
 type GLPProb
     p::Ptr{Void}
@@ -63,6 +116,15 @@ type GLPProb
     end
 end
 
+function glp_delete_prob(glp_prob::GLPProb)
+    if glp_prob.p == C_NULL
+        return
+    end
+    @glpk_ccall delete_prob Void (Ptr{Void},) glp_prob.p
+    glp_prob.p = C_NULL
+    return
+end
+
 _jl_glpk__simplex_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_smcp",
         [("msg_lev", Int32), ("meth", Int32), ("pricing", Int32),
          ("r_test", Int32), ("tol_bnd", Float64), ("tol_dj", Float64),
@@ -70,7 +132,9 @@ _jl_glpk__simplex_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_smcp",
          ("it_lim", Int32), ("tm_lim", Int32), ("out_frq", Int32),
          ("out_dly", Int32), ("presolve", Int32)])
 
-type GLPSimplexParam <: CStructWrapper
+abstract GLPParam <: CStructWrapper
+
+type GLPSimplexParam <: GLPParam
     struct::CStruct
     function GLPSimplexParam()
         struct = CStruct(_jl_glpk__simplex_param_struct_desc)
@@ -84,7 +148,7 @@ end
 _jl_glpk__interior_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iptcp",
         [("msg_lev", Int32), ("ord_alg", Int32)])
 
-type GLPInteriorParam <: CStructWrapper
+type GLPInteriorParam <: GLPParam
     struct::CStruct
     function GLPInteriorParam()
         struct = CStruct(_jl_glpk__interior_param_struct_desc)
@@ -104,7 +168,7 @@ _jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
      ("cb_func", Ptr{Void}), ("cb_info", Ptr{Void}), ("cb_size", Int32),
      ("presolve", Int32), ("binarize", Int32)])
 
-type GLPIntoptParam <: CStructWrapper
+type GLPIntoptParam <: GLPParam
     struct::CStruct
     function GLPIntoptParam()
         struct = CStruct(_jl_glpk__intopt_param_struct_desc)
@@ -121,7 +185,7 @@ _jl_glpk__basisfact_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_bfcp"
      ("max_gro", Float64), ("nfs_max", Int32), ("upd_tol", Float64),
      ("nrs_max", Int32), ("rs_size", Int32)])
 
-type GLPBasisFactParam <: CStructWrapper
+type GLPBasisFactParam <: GLPParam
     struct::CStruct
     function GLPBasisFactParam()
         struct = CStruct(_jl_glpk__basisfact_param_struct_desc)
@@ -131,15 +195,17 @@ type GLPBasisFactParam <: CStructWrapper
         return param
     end
 end
+#}}}
 
-function glp_delete_prob(glp_prob::GLPProb)
-    if glp_prob.p == C_NULL
-        return
-    end
-    @glpk_ccall delete_prob Void (Ptr{Void},) glp_prob.p
-    glp_prob.p = C_NULL
-    return
-end
+
+## Check functions for internal use
+#{{{
+# Functions which perform all sorts of
+# sanity checks on input parameters and
+# throw exceptions in case of errors.
+# Ideally, it should never be possible
+# to pass an invalid parameter to the
+# underlying glp API.
 
 function _jl_glpk__check_glp_prob(glp_prob::GLPProb)
     if glp_prob.p == C_NULL
@@ -432,7 +498,30 @@ function _jl_glpk__check_bfcp(glp_param::GLPBasisFactParam)
     end
     return true
 end
+#}}}
 
+
+## GLP functions
+#{{{
+# The API interface is as close as possible to the original
+# one.
+# The general translation rules are:
+#  
+#  * whenever the C library accepts NULL as argument,
+#    the Julia one will accept the nothing constant.
+#  * vectors do not need to have an extra element at the
+#    beginning to accomodate to the 1-based GLP indexing.
+#  * most functions will accept any kind of vectors as inputs,
+#    provided they can be converted to be C-compatible
+#    (i.e. to either Int32 (int) or Float64 (double) elements).
+#  * the exceptions to the above are those functions which write
+#    their output in a vector, in which case the vector type must
+#    be strictly C-compatible.
+#  * all char[] strings become Strings, both in inputs and in output.
+#
+#  A single exception to the strict compatibility is glp_version(),
+#  which returns a tuple of integers in the form (major, minor)
+#  rather than a string.
 
 function glp_set_prob_name(glp_prob::GLPProb, name::String)
     _jl_glpk__check_glp_prob(glp_prob)
@@ -1325,4 +1414,4 @@ end
 #
 # ...... and many more ......
 #
-
+#}}}
