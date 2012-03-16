@@ -28,7 +28,7 @@
 # Adapted from Cleve Moler's textbook
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
-function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector, p...)
+function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
 
     rtol = 1.e-5
     atol = 1.e-8
@@ -48,7 +48,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector, p...)
 
     # Compute initial step size.
 
-    s1 = F(t, y, p...)
+    s1 = F(t, y)
     r = norm(s1./float(max(abs(y), threshold)), Inf) + realmin() # TODO: fix type bug in max()
     h = tdir*0.8*rtol^(1/3)/r
 
@@ -68,11 +68,11 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector, p...)
         
         # Attempt a step.
 
-        s2 = F(t+h/2, y+h/2*s1, p...)
-        s3 = F(t+3*h/4, y+3*h/4*s2, p...)
+        s2 = F(t+h/2, y+h/2*s1)
+        s3 = F(t+3*h/4, y+3*h/4*s2)
         tnew = t + h
         ynew = y + h*(2*s1 + 3*s2 + 4*s3)/9
-        s4 = F(tnew, ynew, p...)
+        s4 = F(tnew, ynew)
         
         # Estimate the error.
 
@@ -169,7 +169,7 @@ end # ode23
 # modified: 17 January 2001
 
 # Dormand Prince
-function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
+function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector)
     tol = 1.0e-5
     
     # see p.91 in the Ascher & Petzold reference for more infomation.
@@ -216,7 +216,7 @@ function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
     # 6 function evaluations because the first stage is simply assigned from the last step's last stage.
     # note: you can see this by the last element in c_ is 1.0, thus t+c_[7]*h = t+h, ergo, the next step.
     
-    k_[:,1] = F(t,x,p...) # first stage
+    k_[:,1] = F(t,x) # first stage
     
     # The main loop using Dormand-Prince 4(5) pair
     while (t < tfinal) & (h >= hmin)
@@ -227,7 +227,7 @@ function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
         #        s is the number of intermediate RK stages on [t (t+h)] (Dormand-Prince has s=7 stages)
 
         for j = 1:6
-            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)), p...)
+            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
         end
                 
 	# compute the 4th order estimate
@@ -272,7 +272,7 @@ function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
 end # ode45_dp
 
 # Fehlberg
-function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
+function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector)
     tol = 1.0e-5
 
     # see p.91 in the Ascher & Petzold reference for more infomation.
@@ -319,10 +319,10 @@ function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector, p...)
         # notes: k_ needs to end up as an Nx6, a_ is 6x5, which is s by (s-1),  (RK-Fehlberg has s=6 stages)
         #        s is the number of intermediate RK stages on [t (t+h)]
         
-        k_[:,1]=F(t,x, p...) # first stage
+        k_[:,1]=F(t,x) # first stage
         
         for j = 1:5
-            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)), p...)
+            k_[:,j+1] = F(t+c_[j+1]*h, x + reshape(h*k_[:,1:j]*a_[j+1,1:j]', length(x)))
         end
         
         # compute the 4th order estimate
@@ -372,7 +372,7 @@ const ode45 = ode45_dp
 #   ODEFUN(T,X) must return a column vector corresponding to f(t,x). Each
 #   row in the solution array X corresponds to a time returned in the
 #   column vector T.
-function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, p...)
+function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T})
     h = diff(tspan)
     x = Array(T, (length(tspan), length(x0)))
     x[1,:] = x0'
@@ -380,10 +380,10 @@ function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, p...
     midxdot = Array(T, (4, length(x0)))
     for i = 1:(length(tspan)-1)
         # Compute midstep derivatives
-        midxdot[1,:] = F(tspan[i],         x[i,:]', p...)
-        midxdot[2,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[1,:]'.*h[i]./2, p...)
-        midxdot[3,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[2,:]'.*h[i]./2, p...)
-        midxdot[4,:] = F(tspan[i]+h[i],    x[i,:]' + midxdot[3,:]'.*h[i], p...)
+        midxdot[1,:] = F(tspan[i],         x[i,:]')
+        midxdot[2,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[1,:]'.*h[i]./2)
+        midxdot[3,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[2,:]'.*h[i]./2)
+        midxdot[4,:] = F(tspan[i]+h[i],    x[i,:]' + midxdot[3,:]'.*h[i])
 
         # Integrate
         x[i+1,:] = x[i,:] + 1./6.*h[i].*[1 2 2 1]*midxdot
@@ -392,9 +392,9 @@ function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, p...
 end
 
 # ODE_MS Fixed-step, fixed-order multi-step numerical method with Adams-Bashforth-Moulton coefficients
-function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer, p...)
+function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer)
     h = diff(tspan)
-    x = zeros(T, (length(tspan), length(x0)))
+    x = zeros(T,(length(tspan), length(x0)))
     x[1,:] = x0
 
     if 1 <= order <= 4
@@ -418,10 +418,10 @@ function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, or
     for i = 1:length(tspan)-1
         # Need to run the first several steps at reduced order
         steporder = min(i, order)
-        xdot[i,:] = F(tspan[i], x[i,:]', p...)
+        xdot[i,:] = F(tspan[i], x[i,:]')
         x[i+1,:] = x[i,:] + b[steporder,1:steporder]*xdot[i-(steporder-1):i,:].*h[i]
     end
     return (tspan, x)
 end
 
-ode4ms(F, tspan, x0, p...) = ode_ms(F, tspan, x0, 4, p...)
+ode4ms(F, tspan, x0) = ode_ms(F, tspan, x0, 4)
