@@ -47,7 +47,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
 
     modname = fname;
     if (modname == NULL) {
-#ifdef __WIN32__
+#if defined(__WIN32__)
 		HMODULE this_process;
 		this_process=GetModuleHandle(NULL);
                 handle=this_process;
@@ -57,7 +57,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
         return handle;
     }
     else if (modname[0] == '/') {
-        handle = dlopen(modname, RTLD_NOW);
+        uv_dlopen(modname,&handle);
         if (handle != NULL) return handle;
     }
     char *cwd;

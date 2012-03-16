@@ -2,6 +2,10 @@
 #define JULIA_H
 #define JL_TRACE
 
+#if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
+    #define __WIN32__
+#endif
+
 #include "libsupport.h"
 #include <stdint.h>
 #include "uv.h"
