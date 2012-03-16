@@ -627,8 +627,9 @@ end
 function isless(A::AbstractArray, B::AbstractArray)
     nA, nB = numel(A), numel(B)
     for i = 1:min(nA, nB)
-        if !isequal(A[i], B[i])
-            return isless(A[i], B[i])
+        a, b = A[i], B[i]
+        if !isequal(a, b)
+            return isless(a, b)
         end
     end
     return nA < nB
