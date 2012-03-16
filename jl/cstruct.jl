@@ -81,22 +81,8 @@ type CStructDescriptor
             pf = open(program_file, "w")
             with_output_stream(pf, println, program)
             close(pf)
-        catch err
-            tmpfile_delete_all(tmpf_list)
-            throw(err)
-        end
-
-
-        try
-            #print(`gcc -Wall -o $binary_file $program_file`)
             run(`gcc -Wall -o $binary_file $program_file`)
-        catch err
-            tmpfile_delete_all(tmpf_list)
-            throw(err)
-        end
-
-        final_result = zeros(Int32, num_struct_fields + 1)
-        try
+            final_result = zeros(Int32, num_struct_fields + 1)
             final_result = map(int32, split(readall(`$binary_file`)))
         catch err
             tmpfile_delete_all(tmpf_list)
@@ -180,12 +166,3 @@ ref(wrap::CStructWrapper, field_name::String) = ref(wrap.struct, field_name)
 pointer(wrap::CStructWrapper) = pointer(wrap.struct)
 
 cstruct_delete(wrap::CStructWrapper) = cstruct_delete(wrap.struct)
-
-
-#iptcp_param = CStruct(["glpk.h"], "glp_iptcp", ["msg_lev", "ord_alg"], [Int32, Int32])
-
-#required_headers = ["glpk.h"]
-#struct_name = "glp_smcp"
-#struct_fields = [ "msg_lev", "meth", "pricing" ]
-#fields_types = [ Int32, Int32, Int32 ]
-
