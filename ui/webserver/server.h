@@ -109,6 +109,7 @@ namespace scgi
         char *cstr;
         std::string body;
         callback cb;
+        const char *bufBase;
     };
 
 	// run the server - this blocks forever
@@ -116,7 +117,7 @@ namespace scgi
 }
 
 struct clientData {
-    char *session_token;
+    std::string session_token;
     std::string buf;
 };
 

@@ -422,7 +422,7 @@ static char *strtok_saveptr;
 
 #if defined(_WIN32) && !defined(__MINGW_H)
 #define strtok_r(s,d,p) strtok_s(s,d,p)
-#else
+#elif defined(__MINGW_H)
 char *strtok_r(char *str, const char *delim, char **save)
 {
     char *res, *last;

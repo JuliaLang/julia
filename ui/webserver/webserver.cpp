@@ -116,7 +116,7 @@ struct session
 };
 
 // a list of sessions
-map<const char*, session> session_map;
+map<string, session> session_map;
 
 // a mutex for accessing session_map
 pthread_mutex_t session_mutex;
@@ -132,7 +132,7 @@ const int INBOX_INTERVAL = 10000; // in nanoseconds
 void closeInput(uv_stream_t *handle,int status)
 {
     clientData *data = (clientData *)handle->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
 
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
@@ -160,7 +160,7 @@ void free_write_buffer(uv_write_t* req, int status)
 void read_client(uv_async_t* handle, int status)
 {
     clientData *data = (clientData *)handle->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
@@ -277,7 +277,7 @@ void socketClosed(uv_handle_t *stream)
 void close_session(uv_handle_t *stream)
 {
     clientData *data = (clientData *)stream->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
@@ -294,7 +294,7 @@ void close_session(uv_handle_t *stream)
 void connected(uv_connect_t* req, int status)
 {
     clientData *data = (clientData* )req->handle->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
     // switch to normal operation
     session_map[session_token].status = SESSION_NORMAL;
 
@@ -308,7 +308,7 @@ void connected(uv_connect_t* req, int status)
 void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     clientData *data = (clientData *)stream->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
 
@@ -366,13 +366,14 @@ void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
         uv_tcp_connect(c, session_map[session_token].sock,address,&connected);
     }
 
+    delete[] buf.base;
 }
 
 //read from julia on metadata socket (4444)
 void readSocketData(uv_stream_t *sock,size_t nread, uv_buf_t buf)
 {
     clientData *data = (clientData* )sock->data;
-    char *session_token=data->session_token;
+    string session_token=data->session_token;
     if(session_map[session_token].status != SESSION_NORMAL)
         return;
 
@@ -437,7 +438,7 @@ void readSocketData(uv_stream_t *sock,size_t nread, uv_buf_t buf)
 const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
 
 // this is defined below but we need it here too
-const char *create_session(bool idle);
+std::string create_session(bool idle);
 
 
 void pipes_done(uv_handle_t *pipe)
@@ -454,7 +455,7 @@ void watchdog(uv_timer_t* handle, int status)
     time_t t = time(0);
 
     // start terminating old sessions
-    for (map<const char*, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+    for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
     {
         if ((iter->second).status == SESSION_NORMAL && !(iter->second).is_idle)
         {
@@ -464,15 +465,15 @@ void watchdog(uv_timer_t* handle, int status)
     }
 
     // get a list of zombie sessions
-    vector<const char*> zombie_list;
-    for (map<const char *, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+    vector<string> zombie_list;
+    for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
     {
         if (!(iter->second).inbox_thread_alive && !(iter->second).outbox_thread_alive)
             zombie_list.push_back(iter->first);
     }
 
     // kill the zombies
-    for (vector<const char*>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
+    for (vector<string>::iterator iter = zombie_list.begin(); iter != zombie_list.end(); iter++)
     {
         // thread will terminate automatically
         uv_loop_delete(session_map[*iter].event_loop);
@@ -517,16 +518,13 @@ const int JULIA_TIMEOUT = 500; // in milliseconds
 const int JULIA_TIMEOUT_INTERVAL = 10000; // in nanoseconds
 
 // generate a session token
-char* make_session_token()
+string make_session_token()
 {
     // add a random integer to a prefix
-    string token = "SESSION_"+to_string(rand());
-    char *cstr = new char [token.size()+1];
-    strcpy (cstr, token.c_str());
-    return cstr;
+    return "SESSION_"+to_string(rand());
 }
 
-string respond(const char *session_token, string body)
+string respond(string session_token, string body)
 {
     string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nSet-Cookie: SESSION_TOKEN=";
     header += session_token;
@@ -538,15 +536,29 @@ string respond(const char *session_token, string body)
 void *run_event_loop(void *token)
 {
     uv_loop_t *loop = session_map[(char *)token].event_loop;
-    delete (char*)token;
+    delete[] (char*)token;
     uv_run(loop);
     return 0;
+}
+
+
+static uv_buf_t alloc_buf(uv_handle_t* handle, size_t suggested_size) {
+    uv_buf_t buf;
+    buf.len = suggested_size;
+    buf.base = new char[suggested_size];
+    return buf;
+}
+
+
+void process_exited(uv_process_t*p, int exit_status, int term_signal)
+{
+    session_map[((clientData*)p->data)->session_token].status = SESSION_TERMINATING;
 }
 
 // create a session and return a session token
 // a new session can be "idle", which means it isn't yet matched with a browser session
 // idle sessions don't expire
-const char *create_session(bool idle)
+string create_session(bool idle)
 {
     // check if we've reached max capacity
     if (session_map.size() >= MAX_CONCURRENT_SESSIONS)
@@ -556,7 +568,7 @@ const char *create_session(bool idle)
     session session_data;
 
     // generate a session token
-    const char *session_token = make_session_token();
+    string session_token = make_session_token();
 
     // set the idleness of the session
     session_data.is_idle = idle;
@@ -578,9 +590,13 @@ const char *create_session(bool idle)
     uv_process_options_t opts;
     opts.stdin_stream = session_data.julia_in;
     opts.stdout_stream = session_data.julia_out;
-    opts.file="julia";
-    char argv[2][64] = {"./julia","./ui/webserver/julia_web_base.jl"};
-    uv_spawn(session_data.event_loop,session_data.proc,opts);
+    opts.stderr_stream = 0; //parent stderr
+    opts.exit_cb=&process_exited;
+    opts.cwd=NULL; //cwd
+    char *argv[3]={"julia-debug-readline","./ui/webserver/julia_web_base.jl",NULL};
+    opts.args=argv;
+    opts.file=*argv;
+    uv_spawn(uv_default_loop(),session_data.proc,opts);
 
     // set the start time
     session_data.update_time = time(0);
@@ -589,13 +605,19 @@ const char *create_session(bool idle)
     session_map[session_token] = session_data;
 
     // start the event thread
-    char* session_token_inbox = new char[256];
-    strcpy(session_token_inbox, session_token);
-    if (pthread_create(&session_data.thread, 0, &run_event_loop, (void*)session_token))
+    char* session_token_inbox = new char[session_token.length()+1];
+    strcpy(session_token_inbox, session_token.c_str());
+
+    clientData *data = new clientData;
+    data->session_token=session_token;
+    session_data.proc->data = session_data.julia_in->data = session_data.julia_out->data = data;
+    if (pthread_create(&session_data.thread, 0, &run_event_loop, (void*)session_token_inbox))
     {
-        delete [] session_token;
         //session_data.thread = 0;
     }
+
+    //start reading
+    uv_read_start((uv_stream_t*)opts.stdout_stream,&alloc_buf,&julia_incoming);
 
     // print the number of open sessions
     if (session_map.size() == 1)
@@ -605,16 +627,16 @@ const char *create_session(bool idle)
         else
             cout<<"1 open session.\n";
     }
-    else
+    else {
         cout<<session_map.size()<<" open sessions.\n";
-    
+    }
+
     // return the session token
     return session_token;
 }
 
 void requestDone(uv_handle_t *handle)
 {
-    delete[] ((reading_in_progress*) handle->data)->cstr;
     delete (reading_in_progress*)handle->data;
     delete (uv_tcp_t*)(handle);
 }
@@ -627,7 +649,7 @@ void get_response(request* req,uv_stream_t *client)
     pthread_mutex_lock(&session_mutex);
 
     // the session token
-    const char *session_token;
+    string session_token="";
 
     // check for the session cookie
     if (req->get_cookie_exists("SESSION_TOKEN")) {
@@ -635,7 +657,7 @@ void get_response(request* req,uv_stream_t *client)
     }
 
     // check if the session is real
-    if (strlen(session_token)>0)
+    if (session_token.length()>0)
     {
         if (session_map.find(session_token) == session_map.end())
             session_token = "";
@@ -682,7 +704,7 @@ void get_response(request* req,uv_stream_t *client)
 
                         // look for an idle session to harvest
                         bool found_idle_session = false;
-                        for (map<const char*, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+                        for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
                         {
                             // check if the session is idle
                             if ((iter->second).is_idle)
@@ -851,11 +873,12 @@ void get_response(request* req,uv_stream_t *client)
     p->cstr = new char [response.size()+1];
     strcpy (p->cstr, response.c_str());
     // write the response
-    uv_buf_t buf[1];
-    buf[0].base=p->cstr;
-    buf[0].len=response.size()+1;
+    uv_buf_t buf;
+    buf.base=p->cstr;
+    buf.len=response.size()+1;
     uv_write_t *wr = new uv_write_t;
-    uv_write(wr,(uv_stream_t*)client,buf,1,&free_write_buffer);
+    uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
+    wr->data=(void*)buf.base;
 
     // close the connection to the client
     uv_close((uv_handle_t*)client,&requestDone);
@@ -869,7 +892,7 @@ void sigproc(int)
     pthread_mutex_lock(&session_mutex);
 
     // clean up
-    for (map<const char*, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
+    for (map<string, session>::iterator iter = session_map.begin(); iter != session_map.end(); iter++)
     {
         // close the pipes
         uv_close((uv_handle_t*)(iter->second).julia_in,&pipes_done);

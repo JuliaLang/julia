@@ -100,6 +100,18 @@ load("./ui/webserver/julia_web.jl")
 # store the result of the previous input
 ans = nothing
 
+function __socket_cb(handle::PtrSize,nread::PtrSize,base::PtrSize,len::Int32)
+    msg_type = read(__io, Uint8)
+    args = {}
+    num_args = read(__io, Uint8)
+    for i=1:num_args
+        arg_length = read(__io, Uint32)
+        arg = ASCIIString(read(__io, Uint8, arg_length))
+        push(args, arg)
+    end
+    return __Message(msg_type, args)
+end
+
 # callback for that event handler
 function __socket_callback(fd)
     # read the message
@@ -161,7 +173,7 @@ function __socket_callback(fd)
 end
 
 # event handler for socket input
-add_fd_handler(__connectfd, __socket_callback)
+add_io_handler(__connectfd, __socket_callback)
 
 function __eval_exprs(__parsed_exprs)
     global ans

@@ -222,6 +222,9 @@ namespace scgi
 void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     reading_in_progress *p = (reading_in_progress*)(stream->data);
+    if(p->isComma)
+        buf.base=buf.base+2;
+    if(p->bufBase==0) p->bufBase=buf.base;
     if(p->body_length>p->pos+buf.len) {
         p->body+=buf.base;
         p->pos+=buf.len;
@@ -480,7 +483,8 @@ void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
         // get the response
         p->cb(&(p->request_obj),stream);
     }
-    delete[] buf.base;
+    delete[] p->bufBase;
+    p->bufBase=0;
 }
 
 
@@ -488,7 +492,9 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
+    if(p->bufBase==0)p->bufBase=buf.base;
     int i;
+    if(p->isComma) (++(p->pos),++pos);
     for(i=0; i<buf.len&&p->pos<p->header_length; ++i, ++pos, ++p->pos)
     {
         if(p->inName) {
@@ -498,7 +504,7 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
                 p->current_header.name+=*pos;
         } else {
             if(*pos!=0)
-                p->current_header.value+=pos;
+                p->current_header.value+=*pos;
             else {
                 //header complete
 
@@ -515,18 +521,16 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
         }
     }
     if(p->pos>=p->header_length) {
-        //we're done
-        p->header_length = from_string<int>(p->header_length_str);
         //process cookies
-        for (size_t i = 0; i < p->header_list.size(); i++)
+        for (size_t j = 0; j < p->header_list.size(); j++)
         {
-            if (to_upper(p->header_list[i].name) == "HTTP_COOKIE")
+            if (to_upper(p->header_list[j].name) == "HTTP_COOKIE")
             {
-                vector<string> crumb_list = split(p->header_list[i].value, ';');
-                for (size_t i = 0; i < crumb_list.size(); i++)
+                vector<string> crumb_list = split(p->header_list[j].value, ';');
+                for (size_t k = 0; k < crumb_list.size(); k++)
                 {
                     // get the crumb
-                    vector<string> crumb = split(crumb_list[i], '=');
+                    vector<string> crumb = split(crumb_list[k], '=');
                     if (crumb.size() == 2)
                     {
                         // create the cookie
@@ -541,9 +545,12 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
             }
         }
         p->pos=0;
+        p->isComma=true;
         PASS_ON(read_body)
+    } else {
+        delete[] p->bufBase;
+        p->bufBase=0;
     }
-    delete[] buf.base;
 }
 
 //read the length of the header;
@@ -551,6 +558,7 @@ void read_header_length(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
+    if(p->bufBase==0) p->bufBase=buf.base;
     int i;
     for(i = 0; i<buf.len; ++i, ++pos)
     {
@@ -563,8 +571,10 @@ void read_header_length(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
         //we're done
         p->header_length = from_string<int>(p->header_length_str);
         PASS_ON(read_header)
+    } else {
+        delete[] p->bufBase;
+        p->bufBase=0;
     }
-    delete[] buf.base;
 }
 
 uv_buf_t allocBuffer(uv_handle_t* handle, size_t suggested_size)
@@ -580,6 +590,7 @@ void handle_request_and_release_socket(uv_stream_t* server, int status)
 {
     uv_tcp_t *client = new uv_tcp_t;
     uv_tcp_init(uv_default_loop(),client);
+    uv_accept((uv_stream_t*)server,(uv_stream_t*)client);
 
     // create the request object
 
@@ -591,6 +602,7 @@ void handle_request_and_release_socket(uv_stream_t* server, int status)
     p->isComma=true;
     p->cstr=0;
     p->cb=(callback)server->data;
+    p->bufBase=0;
     client->data=p;
 
     uv_read_start((uv_stream_t*)client,&allocBuffer,&read_header_length);
@@ -602,7 +614,7 @@ void run_server(int port, callback cb)
     uv_tcp_t server;
     int err;
 
-    server.data=&cb;
+    server.data=(void*)cb;
 
     err = uv_tcp_init(uv_default_loop(), &server);
     //assert(err == 0);
