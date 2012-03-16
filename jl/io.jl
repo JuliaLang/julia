@@ -353,7 +353,13 @@ type LineIterator
 end
 
 start(itr::LineIterator) = readline(itr.stream)
-done(itr::LineIterator, line) = isempty(line)
+function done(itr::LineIterator, line)
+    if !isempty(line)
+        return false
+    end
+    close(itr.stream)
+    true
+end
 
 function next(itr::LineIterator, this_line)
     next_line = readline(itr.stream)
