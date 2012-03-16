@@ -77,12 +77,12 @@ type CStructDescriptor
         program_file = tmpfile(tmpf_list, ".c")
         binary_file = tmpfile(tmpf_list)
 
+        final_result = zeros(Int32, num_struct_fields + 1)
         try
             pf = open(program_file, "w")
             with_output_stream(pf, println, program)
             close(pf)
             run(`gcc -Wall -o $binary_file $program_file`)
-            final_result = zeros(Int32, num_struct_fields + 1)
             final_result = map(int32, split(readall(`$binary_file`)))
         catch err
             tmpfile_delete_all(tmpf_list)
@@ -110,7 +110,9 @@ type CStruct
         if ptr == C_NULL
             error("memory allocation failed for struct of type $(desc.struct_name)")
         end
-        new(ptr, desc)
+        cstruct = new(ptr, desc)
+        finalizer(cstruct, cstruct_delete)
+        return cstruct
     end
 end
 

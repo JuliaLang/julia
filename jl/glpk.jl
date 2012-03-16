@@ -15,7 +15,7 @@ macro glpk_ccall(func, args...)
     end
 end
 
-# We need to define the version as first thing
+# We need to define glp_version as first thing
 # in order to perform a sanity check
 # (since we import structs from the header,
 # we must ensure that the binary is the correct
@@ -139,9 +139,7 @@ type GLPSimplexParam <: GLPParam
     function GLPSimplexParam()
         struct = CStruct(_jl_glpk__simplex_param_struct_desc)
         @glpk_ccall init_smcp Int32 (Ptr{Void},) pointer(struct)
-        param = new(struct)
-        finalizer(param, cstruct_delete)
-        return param
+        new(struct)
     end
 end
 
@@ -153,9 +151,7 @@ type GLPInteriorParam <: GLPParam
     function GLPInteriorParam()
         struct = CStruct(_jl_glpk__interior_param_struct_desc)
         @glpk_ccall init_iptcp Int32 (Ptr{Void},) pointer(struct)
-        param = new(struct)
-        finalizer(param, cstruct_delete)
-        return param
+        new(struct)
     end
 end
 
@@ -173,9 +169,7 @@ type GLPIntoptParam <: GLPParam
     function GLPIntoptParam()
         struct = CStruct(_jl_glpk__intopt_param_struct_desc)
         @glpk_ccall init_iocp Int32 (Ptr{Void},) pointer(struct)
-        param = new(struct)
-        finalizer(param, cstruct_delete)
-        return param
+        new(struct)
     end
 end
 
@@ -189,10 +183,7 @@ type GLPBasisFactParam <: GLPParam
     struct::CStruct
     function GLPBasisFactParam()
         struct = CStruct(_jl_glpk__basisfact_param_struct_desc)
-        #@glpk_ccall init_bfcp Int32 (Ptr{Void},) pointer(struct)
-        param = new(struct)
-        finalizer(param, cstruct_delete)
-        return param
+        new(struct)
     end
 end
 #}}}
@@ -238,14 +229,14 @@ function _jl_glpk__check_col_is_valid_w0(glp_prob::GLPProb, col::Integer)
     return true
 end
 
-function _jl_glpk__check_obj_dir_is_valid(dir::Int32)
+function _jl_glpk__check_obj_dir_is_valid(dir::Integer)
     if ~(dir == GLP_MIN || dir == GLP_MAX)
         throw(GLPError("Invalid obj_dir $dir (use GLP_MIN or GLP_MAX)"))
     end
     return true
 end
 
-function _jl_glpk__check_bounds_type_is_valid(bounds_type::Int32)
+function _jl_glpk__check_bounds_type_is_valid(bounds_type::Integer)
     if ~(bounds_type == GLP_FR ||
          bounds_type == GLP_LO ||
          bounds_type == GLP_UP ||
@@ -256,7 +247,7 @@ function _jl_glpk__check_bounds_type_is_valid(bounds_type::Int32)
     return true
 end
 
-function _jl_glpk__check_bounds_are_valid(bounds_type::Int32, lb::Real, ub::Real)
+function _jl_glpk__check_bounds_are_valid(bounds_type::Integer, lb::Real, ub::Real)
     if bounds_type == GLP_DB && lb > ub
         throw(GLPError("Invalid bounds for double-bounded variable: $lb > $ub"))
     elseif bounds_type == GLP_FX && lb != ub
@@ -402,7 +393,7 @@ function _jl_glpk__check_stat_is_valid(stat::Integer)
         stat != GLP_NU &&
         stat != GLP_NF &&
         stat != GLP_NS)
-        throw(GLPError("invalid status $stat (use GLP_BS ir GLP_NL or GLP_NU or GLP_NF or GLP_NS)"))
+        throw(GLPError("invalid status $stat (use GLP_BS or GLP_NL or GLP_NU or GLP_NF or GLP_NS)"))
     end
 end
 
@@ -545,7 +536,7 @@ function glp_set_col_name(glp_prob::GLPProb, col::Integer, name::String)
     @glpk_ccall set_col_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p col cstring(name)
 end
 
-function glp_set_obj_dir(glp_prob::GLPProb, dir::Int32)
+function glp_set_obj_dir(glp_prob::GLPProb, dir::Integer)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_obj_dir_is_valid(dir)
     @glpk_ccall set_obj_dir Void (Ptr{Void}, Int32) glp_prob.p dir
@@ -563,7 +554,7 @@ function glp_add_cols(glp_prob::GLPProb, cols::Integer)
     return first_new_col
 end
 
-function glp_set_row_bnds(glp_prob::GLPProb, row::Integer, bounds_type::Int32, lb::Real, ub::Real)
+function glp_set_row_bnds(glp_prob::GLPProb, row::Integer, bounds_type::Integer, lb::Real, ub::Real)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_row_is_valid(glp_prob, row)
     _jl_glpk__check_bounds_type_is_valid(bounds_type)
@@ -571,7 +562,7 @@ function glp_set_row_bnds(glp_prob::GLPProb, row::Integer, bounds_type::Int32, l
     @glpk_ccall set_row_bnds Void (Ptr{Void}, Int32, Int32, Float64, Float64) glp_prob.p row bounds_type lb ub
 end
 
-function glp_set_col_bnds(glp_prob::GLPProb, col::Integer, bounds_type::Int32, lb::Real, ub::Real)
+function glp_set_col_bnds(glp_prob::GLPProb, col::Integer, bounds_type::Integer, lb::Real, ub::Real)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_col_is_valid(glp_prob, col)
     _jl_glpk__check_bounds_type_is_valid(bounds_type)
@@ -889,7 +880,7 @@ function glp_get_sjj(glp_prob::GLPProb, col::Integer)
     return sjj
 end
 
-function glp_scale_prob(glp_prob::GLPProb, flags::Int32)
+function glp_scale_prob(glp_prob::GLPProb, flags::Integer)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_scale_flags(flags)
     @glpk_ccall scale_prob Void (Ptr{Void}, Int32) glp_prob.p flags
@@ -940,7 +931,6 @@ function glp_simplex{Tp<:Union(GLPSimplexParam, Nothing)}(glp_prob::GLPProb, glp
         param_ptr = pointer(glp_param)
     end
     ret = @glpk_ccall simplex Int32 (Ptr{Void}, Ptr{Void}) glp_prob.p param_ptr
-    #ret = @glpk_ccall simplex Int32 (Ptr{Void}, Ptr{Void}) glp_prob.p C_NULL
     return ret
 end
 
