@@ -11,6 +11,39 @@ macro glpk_ccall(func, args...)
     end
 end
 
+# We need to define the version as first thing
+# in order to perform a sanity check
+# (since we import structs from the header,
+# we must ensure that the binary is the correct
+# one)
+function glp_version()
+    csp = @glpk_ccall version Ptr{Uint8} ()
+    str = Array(Uint8, 100)
+    strp = pointer(str)
+    k = 0
+    for i = 1 : 100
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Int), strp, csp, sizeof(Uint8))
+        if str[i] == '\0'
+            k = i
+            break
+        end
+        strp += sizeof(Uint8)
+        csp += sizeof(Uint8)
+    end
+    if k == 0
+        throw(GLPError("error reading version"))
+    end
+    vstr = ASCIIString(str[1:k - 1])
+    return tuple(map(x->int32(parse_int(x)), split(vstr, '.'))...)
+end
+
+if glp_version() != (GLP_MAJOR_VERSION, GLP_MINOR_VERSION)
+    bv = glp_version()
+    hv = (GLP_MAJOR_VERSION, GLP_MINOR_VERSION)
+    error("GLPK error: mismatched versions: header=$(hv[1]).$(hv[2]) binary=$(bv[1]).$(bv[2])")
+end
+
+
 typealias VecOrNothing{T} Union(AbstractVector{T}, AbstractVector{None}, Nothing)
 typealias MatOrNothing{T} Union(AbstractMatrix{T}, AbstractVector{None}, Nothing)
 _jl_glpk__is_empty{T}(x::Union(VecOrNothing{T}, MatOrNothing{T})) =
@@ -1275,26 +1308,6 @@ function glp_warm_up(glp_prob::GLPProb)
     _jl_glpk__check_glp_prob(glp_prob)
     ret = @glpk_ccall warm_up Int32 (Ptr{Void},) glp_prob.p
     return ret
-end
-
-function glp_version()
-    csp = @glpk_ccall version Ptr{Uint8} ()
-    str = Array(Uint8, 100)
-    strp = pointer(str)
-    k = 0
-    for i = 1 : 100
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Int), strp, csp, sizeof(Uint8))
-        if str[i] == '\0'
-            k = i
-            break
-        end
-        strp += sizeof(Uint8)
-        csp += sizeof(Uint8)
-    end
-    if k == 0
-        throw(GLPError("error reading version"))
-    end
-    return ASCIIString(str[1:k - 1])
 end
 
 
