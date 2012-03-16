@@ -88,6 +88,9 @@ include("datafmt.jl")
 
 ## Load optional external libraries
 
+# cstruct parser
+include("cstruct.jl")
+
 # linear algebra
 include("linalg.jl")
 include("linalg_blas.jl")
@@ -98,6 +101,9 @@ include("linalg_suitesparse.jl")
 # signal processing
 include("signal.jl")
 include("signal_fftw.jl")
+
+# optimization
+include("linprog_glpk.jl")
 
 
 # prime method cache with some things we know we'll need right after startup

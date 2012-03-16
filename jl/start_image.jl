@@ -15,6 +15,9 @@ _jl_libfdm = dlopen("libfdm")
 _jl_libamos = dlopen("libamos")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 
+# Notsureabout libraries
+_jl_glpk = dlopen("libglpk")
+
 # Optional libraries
 _jl_libblas = dlopen("liblapack")
 _jl_liblapack = _jl_libblas
