@@ -401,6 +401,15 @@ DLLEXPORT int jl_cwd(char *buffer, size_t size)
     return (uv_cwd(buffer,size)).code;
 }
 
+DLLEXPORT int jl_getpid()
+{
+#ifdef __WIN32__
+    return GetCurrentProcessId();
+#else
+    return getpid();
+#endif
+}
+
 #ifdef __cplusplus
 }
 #endif

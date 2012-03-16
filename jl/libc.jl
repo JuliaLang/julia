@@ -29,7 +29,7 @@ end
 
 ## process-related functions ##
 
-getpid() = ccall(:getpid, Uint32, ())
+getpid() = ccall(:jl_getpid, Uint32, ())
 system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cstring(cmd))
 
 ## network functions ##
