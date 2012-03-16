@@ -22,3 +22,8 @@ function done(ci::ShivaIterator, state)
     end
     false
 end
+
+zip(xs::AbstractArray, ys::AbstractArray) = [(xs[i], ys[i]) | i in 1:min(length(xs), length(ys))]
+zip(xss::AbstractArray...) = [map((v)->ref(v, i), xss) | i in 1:min(map(length, xss))]
+
+enumerate(j::AbstractArray) = zip(1:length(j), j)
