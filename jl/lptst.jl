@@ -58,3 +58,12 @@ ub = ones(Float64, 9);
 @assert x == [ 0.; 0.; 1. ;
                0.; 1.; 0. ;
                1.; 0.; 0. ]
+
+
+lps_opts = GLPInteriorParam()
+lps_opts["msg_lev"] = GLP_MSG_ALL
+lps_opts["ord_alg"] = GLP_ORD_QMD
+
+(z, x) = linprog_interior(f, [], [], Aeq, beq, lb, ub, lps_opts);
+println("z=$z");
+println("x=$x");

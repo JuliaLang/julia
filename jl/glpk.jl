@@ -922,7 +922,7 @@ function glp_interior{Tp<:Union(GLPInteriorParam, Nothing)}(glp_prob::GLPProb, g
     if glp_param == nothing
         param_ptr::Ptr{Void} = C_NULL
     else
-        param_ptr = glp_param.p
+        param_ptr = pointer(glp_param)
     end
     ret = @glpk_ccall interior Int32 (Ptr{Void}, Ptr{Void}) glp_prob.p param_ptr
     return ret
@@ -932,7 +932,7 @@ glp_interior(glp_prob::GLPProb) = glp_interior(glp_prob, nothing)
 
 function glp_init_iptcp(glp_param::GLPInteriorParam)
     _jl_glpk__check_interior_param(glp_param)
-    @glpk_ccall init_iptcp Int32 (Ptr{Void}, Ptr{Void}) glp_param.p
+    @glpk_ccall init_iptcp Int32 (Ptr{Void}, Ptr{Void}) pointer(glp_param)
 end
 
 function glp_ipt_status(glp_prob::GLPProb)
@@ -1006,7 +1006,7 @@ function glp_intopt{Tp<:Union(GLPIntoptParam, Nothing)}(glp_prob::GLPProb, glp_p
     if glp_param == nothing
         param_ptr::Ptr{Void} = C_NULL
     else
-        param_ptr = glp_param.p
+        param_ptr = pointer(glp_param)
     end
     ret = @glpk_ccall intopt Int32 (Ptr{Void}, Ptr{Void}) glp_prob.p param_ptr
     return ret
@@ -1016,7 +1016,7 @@ glp_intopt(glp_prob::GLPProb) = glp_intopt(glp_prob, nothing)
 
 function glp_init_iocp(glp_param::GLPIntoptParam)
     _jl_glpk__check_intopt_param(glp_param)
-    @glpk_ccall init_iocp Int32 (Ptr{Void}, Ptr{Void}) glp_param.p
+    @glpk_ccall init_iocp Int32 (Ptr{Void}, Ptr{Void}) pointer(glp_param)
 end
 
 function glp_mip_status(glp_prob::GLPProb)
@@ -1277,6 +1277,27 @@ function glp_warm_up(glp_prob::GLPProb)
     return ret
 end
 
+function glp_version()
+    csp = @glpk_ccall version Ptr{Uint8} ()
+    str = Array(Uint8, 100)
+    strp = pointer(str)
+    k = 0
+    for i = 1 : 100
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Int), strp, csp, sizeof(Uint8))
+        if str[i] == '\0'
+            k = i
+            break
+        end
+        strp += sizeof(Uint8)
+        csp += sizeof(Uint8)
+    end
+    if k == 0
+        throw(GLPError("error reading version"))
+    end
+    return ASCIIString(str[1:k - 1])
+end
+
+
 #TODO
 #function glp_eval_tab_row(glp_prob::GLPProb, k::Int, ind::AbstractVector{Int}, val::AbstractVector{Float})
 #function glp_eval_tab_col(glp_prob::GLPProb, k::Int, ind::AbstractVector{Int}, val::AbstractVector{Float})
@@ -1286,6 +1307,7 @@ end
 #function glp_dual_rest(glp_prob::GLPProb, len::Int, ind::AbstractVector{Int}, val::AbstractVector{Float}, dir::Int, eps::Float)
 #function glp_analyze_bound(glp_prob::GLPProb, k::Int, limit1::Ptr{Float64}, var1::Ptr{Int32}, limit2::Ptr{Float64}, var2::Ptr{Int32})
 #function glp_analyze_coef(glp_prob::GLPProb, k::Int, coef1::Ptr{Float64}, var1::Ptr{Int32}, limit1::Ptr{Float64}, coef2::Ptr{Float64}, var2::Ptr{Int32}, limit2::Ptr{Float64})
+#
 #
 #
 # ...... and many more ......
