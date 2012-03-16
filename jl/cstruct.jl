@@ -175,7 +175,7 @@ pointer(struct::CStruct) = struct.ptr
 abstract CStructWrapper
 
 assign{T}(wrap::CStructWrapper, val::T, field_name::String) = assign(wrap.struct, val, field_name)
-ref(wrap::CStructWrapper, field_name::String) = ref(wrap.strucct, val, field_name)
+ref(wrap::CStructWrapper, field_name::String) = ref(wrap.struct, field_name)
 
 pointer(wrap::CStructWrapper) = pointer(wrap.struct)
 
