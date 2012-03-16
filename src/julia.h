@@ -721,6 +721,8 @@ DLLEXPORT int jl_timer_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 
+DLLEXPORT void jl_exit(int status);
+
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
 
 #ifdef __WIN32__

@@ -29,7 +29,8 @@ function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     del_io_handler(STDIN)
     if show_value == -1
-        # exit
+        print('\n');
+        exit(0)
     end
     _jl_eval_user_input(ast, show_value!=0)
     ccall(:repl_callback_enable, Void, ())
