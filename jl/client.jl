@@ -20,6 +20,11 @@ _jl_color_available() =
 
 _jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
 
+
+exit(n) = ccall(:exit, Void, (Int32,), n)
+exit() = exit(0)
+quit() = exit()
+
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     del_io_handler(STDIN)

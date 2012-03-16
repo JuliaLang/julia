@@ -69,23 +69,41 @@ type SingleAsyncWork <: AsyncWork
     SingleAsyncWork(handle::PtrSize)=new(handle)
 end
 
-type RepeatedAsyncWork <: AsyncWork
+type IdleAsyncWork <: AsyncWork
     handle::PtrSize
 end
+
+type TimeoutAsyncWork <: AsyncWork
+    handle::PtrSize
+end
+
+const dummySingleAsync = SingleAsyncWork(0)
 
 function createSingleAsyncWork(loop::PtrSize,cb::Function)
     return SingleAsyncWork(ccall(:jl_make_async,PtrSize,(Ptr{PtrSize},Function),loop,cb))
 end
 
-function initRepeatedAsyncWork(loop::PtrSize)
-    RepeatedAsyncWork(ccall(:jl_idle_init,PtrSize,(Ptr{PtrSize},),int(loop)))
+function initIdleAsync(loop::PtrSize)
+    IdleAsyncWork(ccall(:jl_idle_init,PtrSize,(PtrSize,),int(loop)))
 end
 
-assignRepeatedAsyncWork(work::RepeatedAsyncWork,cb::Function) = ccall(:jl_idle_start,PtrSize,(Ptr{PtrSize},Function),work.handle,cb)
+function initTimeoutAsync(loop::PtrSize)
+    TimeoutAsyncWork(ccall(:jl_timer_init,PtrSize,(PtrSize,),loop))
+end
+
+function startTimer(timer::TimeoutAsyncWork,cb::Function,timeout::Int64,repeat::Int64)
+    ccall(:jl_timer_start,Int32,(PtrSize,Function,Int64,Int64),timer.handle,cb,timeout,repeat)
+end
+
+function stopTimer(timer::TimeoutAsyncWork)
+    ccall(:jl_tier_stop,Int32,(PtrSize,),timer.handle)
+end
+
+assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,PtrSize,(Ptr{PtrSize},Function),work.handle,cb)
 
 function add_idle_cb(loop::PtrSize,cb::Function)
-    work = initRepeatedAsyncWork(loop)
-    assignRepeatedAsyncWork(work,cb)
+    work = initIdleAsyncWork(loop)
+    assignIdleAsyncWork(work,cb)
     work
 end
 

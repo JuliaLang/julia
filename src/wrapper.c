@@ -14,19 +14,19 @@ extern "C" {
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
 typedef struct {
-    jl_callback_t *readcb;
+    jl_function_t *readcb;
     ios_t *stream;
 } jl_pipe_opts_t;
 
 typedef struct {
-    jl_callback_t *exitcb;
-    jl_callback_t *closecb;
+    jl_function_t *exitcb;
+    jl_function_t *closecb;
     uv_pipe_t* in;
     uv_pipe_t* out;
 } jl_proc_opts_t;
 
 typedef struct {
-    jl_callback_t *callcb;
+    jl_function_t *callcb;
 } jl_async_opts_t;
 
 
@@ -204,7 +204,7 @@ void jl_async_callback(uv_handle_t *handle, int status)
     }
 }
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t *cb)
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_function_t *cb)
 {
     if(!loop)
         return 0;
@@ -223,7 +223,7 @@ DLLEXPORT void jl_async_send(uv_async_t *handle) {
 DLLEXPORT uv_idle_t *jl_idle_init(uv_loop_t *loop)
 {
     if(!loop)
-        return -2;
+        return 0;
     uv_idle_t *idle = malloc(sizeof(uv_idle_t));
     uv_idle_init(loop,idle);
     idle->data = 0;
@@ -247,6 +247,32 @@ DLLEXPORT int jl_idle_stop(uv_idle_t *idle) {
         free(idle->data);
     }
     return uv_idle_stop(idle);
+}
+
+DLLEXPORT int jl_timer_init(uv_loop_t *loop)
+{
+    if(!loop)
+        return -2;
+    uv_timer_t *timer = malloc(sizeof(uv_idle_t));
+    uv_timer_init(loop,timer);
+    timer->data=0;
+    return timer;
+}
+
+//units are in ms
+DLLEXPORT int jl_timer_start(uv_timer_t* timer, jl_function_t *cb, int64_t timeout, int64_t repeat)
+{
+    jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
+    opts->callcb = cb;
+    (timer)->data=opts;
+    return uv_timer_start(timer,(uv_timer_cb)&jl_async_callback,timeout,repeat);
+}
+
+DLLEXPORT int jl_timer_stop(uv_timer_t* timer)
+{
+    free(timer->data);
+    timer->data=0;
+    return uv_timer_stop(timer);
 }
 
 void jl_free_buffer(uv_write_t *uvw, int status) {
@@ -323,7 +349,7 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
     } else
     {
         ios_t *handle = stream;
-        ios_write(handle,str,n);
+        return ios_write(handle,str,n);
     }
 }
 

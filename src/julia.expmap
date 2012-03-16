@@ -214,6 +214,10 @@
     jl_sizeof_uv_stream_t;
     jl_stdin_callback;
     jl_readBuffer;
+    jl_exit;
+    jl_timer_start;
+    jl_timer_stop;
+    jl_timer_init;
   local:
     *;
 };

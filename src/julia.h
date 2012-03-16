@@ -704,7 +704,7 @@ DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *c
 
 DLLEXPORT void jl_callback(void *callback);
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_callback_t *cb);
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_function_t *cb);
 DLLEXPORT void jl_async_send(uv_async_t *handle);
 DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
@@ -717,6 +717,9 @@ int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
+DLLEXPORT int jl_timer_init(uv_loop_t *loop);
+DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
+DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
 

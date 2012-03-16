@@ -64,6 +64,8 @@
 # * add readline to event loop
 # * GOs/darrays on a subset of nodes
 
+_jl_work_cb_handle = dummySingleAsync
+
 ## workers and message i/o ##
 
 function send_msg_unknown(s::IOStream, kind, args)
@@ -711,8 +713,9 @@ type WaitFor
 end
 
 function enq_work(wi::WorkItem)
-    global Workqueue
+    global Workqueue, _jl_work_cb_handle
     enqueue(Workqueue, wi)
+    #queueAsync(_jl_work_cb_handle)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))
@@ -969,7 +972,7 @@ function start_worker(wrfd)
     end
 
     ccall(:close, Int32, (Int32,), sockfd)
-    #ccall(:exit , Void , (Int32,), 0)
+    ccall(:jl_exit , Void , (Int32,), 0)
 end
 
 # establish an SSH tunnel to a remote worker
@@ -1356,6 +1359,7 @@ end
 function spawnlocal(thunk)
     global Workqueue
     global PGRP
+    global _jl_work_cb_handle
     rr = RemoteRef(myid())
     sync_add(rr)
     rid = rr2id(rr)
@@ -1363,6 +1367,7 @@ function spawnlocal(thunk)
     (PGRP::ProcessGroup).refs[rid] = wi
     add(wi.clientset, rid[1])
     push(Workqueue, wi)   # add to the *front* of the queue, work first
+    queueAsync(_jl_work_cb_handle)
     yield()
     rr
 end
@@ -1575,21 +1580,24 @@ end
 #add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
 #del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
 
-#global fgcm = createSingleAsyncWork(globalEventLoop(),make_callback(flush_gc_msgs,()));
 
-function _jl_idle_cb()
+function _jl_work_cb()
     if !isempty(Workqueue)
         perform_work()
     else
-        #queue_async(fgcm)
+        queueAsync(fgcm)
     end
 end
-_jl_idle_cb(args...) = _jl_idle_cb()
+_jl_work_cb(args...) = _jl_work_cb()
 
 function event_loop(isclient)
+    global _jl_work_cb_handle, fgcm
     fdset = FDSet()
     iserr, lasterr = false, ()
-    add_idle_cb(globalEventLoop(),make_callback(_jl_idle_cb))
+    _jl_work_cb_handle = createSingleAsyncWork(globalEventLoop(),make_callback(_jl_work_cb))
+    fgcm = createSingleAsyncWork(globalEventLoop(),make_callback((args...)->flush_gc_msgs()));
+    timer = initTimeoutAsync(globalEventLoop())
+    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),10000,10000) #do work every 10s
     while false
         try
             if iserr
