@@ -50,11 +50,11 @@ end
 
 function getcwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    if p == C_NULL
+    err = ccall(:jl_cwd, Int32, (Ptr{Uint8}, Uint), b, length(b))
+    if err != 0
         error("path too long")
     end
-    cstring(p)
+    cstring(b)
 end
 
 function setcwd(p::String)

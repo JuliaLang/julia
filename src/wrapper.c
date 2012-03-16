@@ -396,6 +396,11 @@ DLLEXPORT void jl_exit(int exitcode)
     exit(exitcode);
 }
 
+DLLEXPORT int jl_cwd(char *buffer, size_t size)
+{
+    return (uv_cwd(buffer,size)).code;
+}
+
 #ifdef __cplusplus
 }
 #endif
