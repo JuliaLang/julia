@@ -13,9 +13,10 @@ A = [ 2. 1. ;
 b = [ 100.; 80 ];
 lb = [ 0.; 0;];
 
-(z, x) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
+(z, x, flag) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 #println("z=$z")
 #println("x=$x")
+@assert flag == 0
 @assert z == -180.0
 @assert x == [20.; 60.]
 
@@ -38,9 +39,10 @@ Aeq = sparse(Aeq);
 beq = ones(Float64, 6);
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
-(z, x) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
+(z, x, flag) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
 #println("z=$z");
 #println("x=$x");
+@assert flag == 0
 @assert z == 5.
 @assert x == [ 0.; 0.; 1. ;
                0.; 1.; 0. ;
