@@ -500,6 +500,7 @@ static void init_rl(void)
     };
 }
 
+#ifndef __WIN32__ //Requires RL 5.0 on windows and RL 6.2 otherwise
 extern int _rl_echoing_p;
 
 void jl_prep_terminal (int meta_flag)
@@ -516,16 +517,18 @@ void jl_deprep_terminal ()
 //no need to deprep the terminal
     uv_tty_reset_mode();
 }
+#endif
 
 void init_repl_environment(void)
 {
 #ifdef __WIN32__
     rl_outstream=jl_stdout_tty;
+#else
+    rl_prep_terminal(1);
+    rl_prep_term_function=&jl_prep_terminal;
 #endif
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
-    rl_prep_terminal(1);
-    rl_prep_term_function=&jl_prep_terminal;
     //rl_deprep_term_function=&jl_deprep_terminal;
     init_history();
     rl_startup_hook = (Function*)init_rl;
