@@ -95,7 +95,7 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline
 else
-READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a -lncurses -lcurses
+READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -130,6 +130,7 @@ ifeq ($(OS), Linux)
 SHLIB_EXT = so
 LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+READLINE += -lncurses -lcurses
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -145,6 +146,7 @@ OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 endif
 
 ifeq ($(OS), "MINGW32_NT-6.1")
+SHLIB_EXT = dll
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
 endif
 
