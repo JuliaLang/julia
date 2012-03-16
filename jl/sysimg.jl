@@ -103,7 +103,8 @@ include("signal.jl")
 include("signal_fftw.jl")
 
 # optimization
-include("linprog_glpk.jl")
+include("glpk.jl")
+include("linprog.jl")
 
 
 # prime method cache with some things we know we'll need right after startup
