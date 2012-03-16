@@ -1,14 +1,12 @@
-load("linprog_glpk.jl");
-
 f = [ 10.; 6.; 4 ];
 A = [ 1.  1. 1. ;
       10. 4. 5. ;
       2.  2. 6  ];
 b = [ 100.; 600.; 300. ];
 lb = [ 0.; 0.; 0. ];
-(z, x) = linprog(-f, A, b, [], [], lb, []);
-println("z=$z")
-println("x=$x")
+#(z, x) = linprog(-f, A, b, [], [], lb, []);
+#println("z=$z")
+#println("x=$x")
 
 f = [ 3.; 2. ];
 A = [ 2. 1. ;
@@ -32,17 +30,13 @@ Aeq = [ 1. 1. 1. 0. 0. 0. 0. 0. 0. ;
         1. 0. 0. 1. 0. 0. 1. 0. 0. ;
         0. 1. 0. 0. 1. 0. 0. 1. 0. ;
         0. 0. 1. 0. 0. 1. 0. 0. 1. ];
-println(Aeq);
 Aeq = sparse(Aeq);
-println(Aeq)
-#Aeq = sparse(Aeq);
-#println(Aeq);
 #(I, J, V) = find(Aeq);
 #println("I=$I");
 #println("J=$J");
 #println("V=$V");
+beq = ones(Float64, 6);
 
-beq = [ 1.; 1.; 1.; 1.; 1.; 1. ];
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
 #(z, x) = linprog(f, [], [], Aeq, beq, lb, ub);
