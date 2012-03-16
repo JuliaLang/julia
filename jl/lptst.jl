@@ -1,24 +1,41 @@
-f = [ 10.; 6.; 4 ];
-A = [ 1.  1. 1. ;
-      10. 4. 5. ;
-      2.  2. 6  ];
-b = [ 100.; 600.; 300. ];
-lb = [ 0.; 0.; 0. ];
-#(z, x) = linprog(-f, A, b, [], [], lb, []);
-#println("z=$z")
-#println("x=$x")
+# Disable output except on error
+
+lps_opts = GLPSimplexParam()
+lps_opts["msg_lev"] = GLP_MSG_ERR
+lps_opts["presolve"] = GLP_ON
+lps_opts["it_lim"] = 1000
+
+
+#   f = [ 10.; 6.; 4 ];
+#   A = [ 1.  1. 1. ;
+#         10. 4. 5. ;
+#         2.  2. 6  ];
+#   b = [ 100.; 600.; 300. ];
+#   lb = [ 0.; 0.; 0. ];
+#
+#   (z, x) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
+#   println("z=$z")
+#   println("x=$x")
+
+# A small dense constraint satisfaction problem
 
 f = [ 3.; 2. ];
 A = [ 2. 1. ;
       1. 1. ]; 
 b = [ 100.; 80 ];
 lb = [ 0.; 0;];
-ub = [ 40.; 1e15];
 
-(z, x) = linprog(-f, A, b, [], [], lb, []);
-println("z=$z")
-println("x=$x")
+(z, x) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
+#println("z=$z")
+#println("x=$x")
+@assert z == -180.0
+@assert x == [20.; 60.]
 
+
+
+# Test a matching problem
+# passing a sparse representation
+# to linprog_simplex
 
 f = [ 3. 2. 2. ;
       1. 0. 1. ;
@@ -31,26 +48,13 @@ Aeq = [ 1. 1. 1. 0. 0. 0. 0. 0. 0. ;
         0. 1. 0. 0. 1. 0. 0. 1. 0. ;
         0. 0. 1. 0. 0. 1. 0. 0. 1. ];
 Aeq = sparse(Aeq);
-#(I, J, V) = find(Aeq);
-#println("I=$I");
-#println("J=$J");
-#println("V=$V");
 beq = ones(Float64, 6);
-
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
-#(z, x) = linprog(f, [], [], Aeq, beq, lb, ub);
-
-lpoptions = GLPSimplexParam()
-lpoptions["msg_lev"] = GLP_MSG_ERR
-lpoptions["presolve"] = GLP_ON
-#lpoptions["it_lim"] = 2
-
-(z, x) = linprog(f, [], [], Aeq, beq, lb, ub, lpoptions);
-
-#cstruct_delete(lpoptions)
-
-#(z, x) = mixintprog_bin(f, [], [], Aeq, beq);
-
-println("z=$z");
-println("x=$x");
+(z, x) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
+#println("z=$z");
+#println("x=$x");
+@assert z == 5.
+@assert x == [ 0.; 0.; 1. ;
+               0.; 1.; 0. ;
+               1.; 0.; 0. ]

@@ -1291,7 +1291,7 @@ end
 # ...... and many more ......
 #
 
-function linprog{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+function linprog_simplex{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
         lb::VecOrNothing{T}, ub::VecOrNothing{T},
         params::P)
@@ -1382,17 +1382,17 @@ function linprog{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{
     end
 end
 
-linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
-        linprog(f, A, b, nothing, nothing, nothing, nothing, nothing)
+linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) = 
+        linprog_simplex(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
-linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) = 
-        linprog(f, A, b, Aeq, beq, nothing, nothing, nothing)
+        linprog_simplex(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
-linprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
+linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
         Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
         ub::VecOrNothing{T}) = 
-        linprog(f, A, b, Aeq, beq, lb, ub, nothing)
+        linprog_simplex(f, A, b, Aeq, beq, lb, ub, nothing)
 
 function _jl_linprog__check_A_b{T}(A::MatOrNothing{T}, b::VecOrNothing{T}, n::Int)
     m = 0
