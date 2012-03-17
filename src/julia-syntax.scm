@@ -284,17 +284,19 @@
 					  args
 					  field-names)))
 			      body)))
-  (pattern-replace
-   (pattern-set
-    (pattern-lambda (function (call name . sig) body)
-		    `(function ,(cadr __) ,(ctor-body body)))
-    (pattern-lambda (= (call name . sig) body)
-		    `(= ,(cadr __) ,(ctor-body body)))
-    (pattern-lambda (function (call (curly name . p) . sig) body)
-		    `(function ,(cadr __) ,(ctor-body body)))
-    (pattern-lambda (= (call (curly name . p) . sig) body)
-		    `(= ,(cadr __) ,(ctor-body body))))
-   ctor))
+  (let ((ctor2
+	 (pattern-replace
+	  (pattern-set
+	   (pattern-lambda (function (call name . sig) body)
+			   `(function ,(cadr __) ,(ctor-body body)))
+	   (pattern-lambda (= (call name . sig) body)
+			   `(= ,(cadr __) ,(ctor-body body)))
+	   (pattern-lambda (function (call (curly name . p) . sig) body)
+			   `(function ,(cadr __) ,(ctor-body body)))
+	   (pattern-lambda (= (call (curly name . p) . sig) body)
+			   `(= ,(cadr __) ,(ctor-body body))))
+	  ctor)))
+    ctor2))
 
 ;; remove line numbers and nested blocks
 (define (flatten-blocks e)

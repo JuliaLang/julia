@@ -4,8 +4,8 @@ include $(JULIAHOME)/Make.inc
 default: release
 
 debug release:
-	$(MAKE) julia-$@
-	$(MAKE) sys.ji
+	@$(MAKE) -s julia-$@
+	@$(MAKE) -s sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC external
@@ -33,7 +33,7 @@ install: release
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
 	install -v jl/* $(DESTDIR)$(PREFIX)/share/julia/jl
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
-	install -v lib/libarpack.$(SHLIB_EXT) lib/libfdm.$(SHLIB_EXT) lib/libfftw3.$(SHLIB_EXT) lib/libfftw3f.$(SHLIB_EXT) lib/libpcre.$(SHLIB_EXT) lib/libpcrecpp.$(SHLIB_EXT) lib/libpcreposix.$(SHLIB_EXT) lib/librandom.$(SHLIB_EXT) lib/liblapack.$(SHLIB_EXT) lib/libsuitesparse*$(SHLIB_EXT) lib/libgrisu.$(SHLIB_EXT) lib/libamos.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
+	-install -v lib/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
@@ -64,9 +64,6 @@ cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 
 distclean: cleanall
-
-#distclean: cleanall
-#	$(MAKE) -C external cleanall
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall

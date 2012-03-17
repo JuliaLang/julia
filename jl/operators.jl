@@ -1,7 +1,6 @@
 ## types ##
 
-<:(T,S) = subtype(T,S)
->:(T,S) = subtype(S,T)
+const (<:) = subtype
 
 super(T::Union(CompositeKind,BitsKind,AbstractKind)) = T.super
 
@@ -21,7 +20,7 @@ isequal(x,y) = is(x,y)
 isequal(x::Number, y::Number) = x==y
 isless(x::Real, y::Real) = x<y
 
-max(x,y) = x > y ? x : y
+max(x,y) = y < x ? x : y
 min(x,y) = x < y ? x : y
 
 ## definitions providing basic traits of arithmetic operators ##
@@ -159,18 +158,6 @@ end
 
 macro vectorize_2arg(S,f)
     quote
-        # function ($f){T<:$S}(x::T, y::AbstractArray{T,1})
-        #     [ ($f)(x,y[i]) | i=1:length(y) ]
-        # end
-        # function ($f){T<:$S}(x::AbstractArray{T,1}, y::T)
-        #     [ ($f)(x[i],y) | i=1:length(x) ]
-        # end
-        # function ($f){T<:$S}(x::T, y::AbstractArray{T,2})
-        #     [ ($f)(x,y[i,j]) | i=1:size(y,1), j=1:size(y,2) ]
-        # end
-        # function ($f){T<:$S}(x::AbstractArray{T,2}, y::T)
-        #     [ ($f)(x[i,j],y) | i=1:size(x,1), j=1:size(x,2) ]
-        # end
         function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
             reshape([ ($f)(x, y[i]) | i=1:numel(y) ], size(y))
         end

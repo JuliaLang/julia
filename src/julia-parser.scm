@@ -53,6 +53,9 @@
 
 (define assignment-ops (prec-ops 0))
 
+(define (assignment? e)
+  (and (pair? e) (eq? (car e) '=)))
+
 (define unary-ops '(+ - ! ~ $ & |<:| |>:|))
 
 ; operators that are both unary and binary
@@ -147,10 +150,13 @@
       (let ((c (peek-char port)))
 	(and (eqv? c ch)
 	     (begin (write-char (read-char port) str) #t))))
-    (define (disallow ch)
-      (if (eqv? (peek-char port) ch)
-	  (error (string "invalid numeric constant "
-			 (get-output-string str) ch))))
+    (define (disallow-dot)
+      (if (eqv? (peek-char port) #\.)
+	  (begin (read-char port)
+		 (if (dot-opchar? (peek-char port))
+		     (io.ungetc port #\.)
+		     (error (string "invalid numeric constant "
+				    (get-output-string str) #\.))))))
     (define (read-digs)
       (let ((d (accum-tok-eager (peek-char port) pred port)))
 	(and (not (equal? d ""))
@@ -171,7 +177,7 @@
 		   (io.ungetc port #\.)
 		   (begin (write-char #\. str)
 			  (read-digs)
-			  (disallow #\.)))))
+			  (disallow-dot)))))
     (let ((c (peek-char port)))
       (if (or (eqv? c #\e) (eqv? c #\E))
 	  (begin (read-char port)
@@ -181,14 +187,16 @@
 		       (begin (write-char c str)
 			      (write-char (read-char port) str)
 			      (read-digs)
-			      (disallow #\.))
+			      (disallow-dot))
 		       (io.ungetc port c))))))
     (let* ((s (get-output-string str))
 	   (n (string->number s (if (eq? pred char-hex?) 16 10))))
       (if n
 	  (if (eq? pred char-hex?)
 	      (sized-uint-literal n s)
-	      n)
+	      (if (and (integer? n) (> n 9223372036854775807))
+	          (error (string "invalid numeric constant " s))
+	          n))
 	  (error (string "invalid numeric constant " s))))))
 
 (define (sized-uint-literal n s)
@@ -520,13 +528,17 @@
 		    op)  ; return operator by itself, as in (+)
 		   ((syntactic-unary-op? op)
 		    (list op (parse-unary s)))
-		   ((or (eqv? next #\() (eqv? next #\{))
+		   ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
 		    (ts:put-back! s op)
 		    (parse-factor s))
 		   (else
-		    (list 'call op (parse-unary s))))))
+		    (let ((arg (parse-unary s)))
+		      (if (and (pair? arg)
+			       (eq? (car arg) 'tuple))
+			  (list* 'call op (cdr arg))
+			  (list  'call op arg)))))))
 	  ((eq? t '|::|)
-	   ; allow ::T, omitting argument name
+	   ;; allow ::T, omitting argument name
 	   (take-token s)
 	   `(|::| ,(gensym) ,(parse-call s)))
 	  (else
@@ -796,18 +808,20 @@
 	  (if (equal? t #\;)
 	      (begin (take-token s)
 		     (if (equal? (peek-token s) closer)
-			 ; allow f(a, b; )
+			 ;; allow f(a, b; )
 			 (begin (take-token s)
 				(reverse lst))
 			 (reverse (cons (cons 'parameters (loop '()))
 					lst))))
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
+		(if (assignment? nxt)
+		    (error "assignment in function calls not allowed"))
 		(cond ((eqv? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((eqv? c #\;)          (loop (cons nxt lst)))
 		      ((equal? c closer)     (loop (cons nxt lst)))
-		      ; newline character isn't detectable here
+		      ;; newline character isn't detectable here
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
 		      ((memv c '(#\] #\}))
@@ -915,6 +929,8 @@
 (define (parse-tuple s first)
   (let loop ((lst '())
 	     (nxt first))
+    (if (assignment? nxt)
+	(error "invalid syntax in tuple"))
     (let ((t (require-token s)))
       (case t
 	((#\))

@@ -3,17 +3,11 @@
   I/O and operating system utility functions
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
-#include <setjmp.h>
 #include <assert.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <limits.h>
 #include <errno.h>
-#include <math.h>
 #include <signal.h>
 #include <libgen.h>
 #include <fcntl.h>
@@ -37,7 +31,7 @@ DLLEXPORT int jl_sizeof_timeval(void) { return sizeof(struct timeval); }
 DLLEXPORT void jl_set_timeval(struct timeval *tv, double tout)
 {
     tv->tv_sec = (int)tout;
-    tv->tv_usec = (int)((tout-trunc(tout))*1.0e6);
+    tv->tv_usec = (int)((tout-(int)tout)*1.0e6);
 }
 
 DLLEXPORT void jl_fd_clr(fd_set *set, int fd)
@@ -247,7 +241,7 @@ static void *run_io_thr(void *arg)
     pthread_sigmask(SIG_BLOCK, &set, NULL);
 
     while (1) {
-        if (ioq == NULL) {
+        while (ioq == NULL) {
             pthread_mutex_lock(&wake_mut);
             pthread_cond_wait(&wake_cond, &wake_mut);
             pthread_mutex_unlock(&wake_mut);

@@ -23,9 +23,11 @@ print(x...) = for i=x; print(i); end
 println(args...) = print(args..., '\n')
 
 show(s::String) = print_quoted(s)
+showln(x) = (show(x); println())
 
 (*)(s::String...) = strcat(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
+
 
 size(s::String) = (length(s),)
 size(s::String, d::Integer) = d==1 ? length(s) :
@@ -816,8 +818,8 @@ print_joined(strings) = print_joined(strings, "")
 join(args...) = print_to_string(print_joined, args...)
 
 chop(s::String) = s[1:thisind(s,length(s))-1]
-chomp(s::String) = (i=thisind(s,length(s)); s[i]=='\n' ? s[1:i-1] : s)
-chomp(s::ByteString) = s.data[end]==0x0a ? s[1:end-1] : s
+chomp(s::String) = (i=thisind(s,length(s)); i>0 && s[i]=='\n' ? s[1:i-1] : s)
+chomp(s::ByteString) = (isempty(s) || s.data[end]!=0x0a) ? s : s[1:end-1]
 
 function lstrip(s::String)
     i = start(s)
@@ -879,7 +881,11 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         end
         c,i = next(s,i)
     end
-    return flipsign(n,sgn)
+    if T <: Signed
+        return flipsign(n,sgn)
+    else
+        return n
+    end
 end
 
 parse_int(s::String, base::Integer) = parse_int(Int,s,base)

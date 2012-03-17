@@ -32,21 +32,25 @@ redval(p)   = (p>>>16)&0xff
 greenval(p) = (p>>>8)&0xff
 blueval(p)  = p&0xff
 
-function ppmwrite(img, file::String)
-    s = open(file, "w")
-
-    write(s, "P6\n")
-    write(s, "# ppm file written by julia\n")
+function write_bitmap_data(s, img)
     n, m = size(img)
-    write(s, "$m $n 255\n")
     if eltype(img) <: Integer
         if ndims(img) == 3 && size(img,3) == 3
             for i=1:n, j=1:m, k=1:3
                 write(s, uint8(img[i,j,k]))
             end
         elseif ndims(img) == 2
-            for i=1:n, j=1:m, k=1:3
-                write(s, uint8(img[i,j]))
+            if is(eltype(img),Int32) || is(eltype(img),Uint32)
+                for i=1:n, j=1:m
+                    p = img[i,j]
+                    write(s, uint8(redval(p)))
+                    write(s, uint8(greenval(p)))
+                    write(s, uint8(blueval(p)))
+                end
+            else
+                for i=1:n, j=1:m, k=1:3
+                    write(s, uint8(img[i,j]))
+                end
             end
         else
             error("unsupported array dimensions")
@@ -70,7 +74,15 @@ function ppmwrite(img, file::String)
     else
         error("unsupported array type")
     end
+end
 
+function ppmwrite(img, file::String)
+    s = open(file, "w")
+    write(s, "P6\n")
+    write(s, "# ppm file written by julia\n")
+    n, m = size(img)
+    write(s, "$m $n 255\n")
+    write_bitmap_data(s, img)
     close(s)
 end
 
@@ -94,26 +106,15 @@ function imread(file::String)
 end
 
 function imwrite(I, file::String)
+    if length(file) > 3 && file[end-3:end]==".ppm"
+        # fall back to built-in ppmwrite in case convert not available
+        return ppmwrite(I, file)
+    end
     h, w = size(I)
-    cmd = `convert -size $(w)x$(h) -depth 8 rgb:- $file`
+    cmd = `convert -size $(w)x$(h) -depth 8 rgb: $file`
     stream = fdio(write_to(cmd).fd, true)
     spawn(cmd)
-    if ndims(I)==3 && size(I,3)==3
-        for i=1:h, j=1:w
-            write(stream, uint8(I[i,j,1]))
-            write(stream, uint8(I[i,j,2]))
-            write(stream, uint8(I[i,j,3]))
-        end
-    elseif is(eltype(I),Int32) || is(eltype(I),Uint32)
-        for i=1:h, j=1:w
-            p = I[i,j]
-            write(stream, uint8(redval(p)))
-            write(stream, uint8(greenval(p)))
-            write(stream, uint8(blueval(p)))
-        end
-    else
-        error("unsupported image data format")
-    end
+    write_bitmap_data(stream, I)
     close(stream)
     wait(cmd)
 end
@@ -124,14 +125,14 @@ function imshow(img, range)
         img = imadjustintensity(img, range)
     end
     tmp::String = "./tmp.ppm"
-    ppmwrite(img, tmp)
+    imwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
 end
 
 imshow(img) = imshow(img, [])
 
-function imadjustintensity(img, range)
+function imadjustintensity{T}(img::Array{T,2}, range)
     if length(range) == 0
         range = [min(img) max(img)]
     elseif length(range) == 1
@@ -145,16 +146,16 @@ end
 
 function rgb2gray{T}(img::Array{T,3})
     n, m = size(img)
-    weights = [0.30 0.59 0.11] # RGB
+    wr, wg, wb = 0.30, 0.59, 0.11
     out = Array(T, n, m)
     if ndims(img)==3 && size(img,3)==3
         for i=1:n, j=1:m
-            out[i,j] = sum(weights.*squeeze(img[i,j,:])')
+            out[i,j] = wr*img[i,j,1] + wg*img[i,j,2] + wb*img[i,j,3]
         end
     elseif is(eltype(img),Int32) || is(eltype(img),Uint32)
         for i=1:n, j=1:m
             p = img[i,j]
-            out[i,j] = sum(weights.*[redval(p) greenval(p) blueval(p)])
+            out[i,j] = wr*redval(p) + wg*greenval(p) + wb*blueval(p)
         end
     else
         error("unsupported array type")
@@ -199,8 +200,16 @@ end
 
 imlaplacian() = imlaplacian("nodiagonals")
 
+# more general version
+function imlaplacian(alpha::Number)
+    lc = alpha/(1 + alpha)
+    lb = (1 - alpha)/(1 + alpha)
+    lm = -4/(1 + alpha)
+    return [lc lb lc; lb lm lb; lc lb lc]
+end
+
 # 2D gaussian filter kernel
-function gaussian2d(sigma, filter_size)
+function gaussian2d(sigma::Number, filter_size)
     if length(filter_size) == 0
         # choose 'good' size 
         m = 4*ceil(sigma)+1
@@ -217,16 +226,24 @@ function gaussian2d(sigma, filter_size)
     return g/sum(g)
 end
 
-gaussian2d(sigma) = gaussian2d(sigma, [])
+gaussian2d(sigma::Number) = gaussian2d(sigma, [])
 gaussian2d() = gaussian2d(0.5, [])
 
 # difference of gaussian
-function imdog(sigma)
+function imdog(sigma::Number)
     m = 4*ceil(sqrt(2)*sigma)+1
     return gaussian2d(sqrt(2)*sigma, [m m]) - gaussian2d(sigma, [m m])
 end
 
 imdog() = imdog(0.5)
+
+# laplacian of gaussian
+function imlog(sigma::Number)
+    m = 4*ceil(sigma)+1
+    return [((x^2+y^2-sigma^2)/sigma^4)*exp(-(x^2+y^2)/(2*sigma^2)) | x=-floor(m/2):floor(m/2), y=-floor(m/2):floor(m/2)]
+end
+
+imlog() = imlog(0.5)
 
 # Sum of squared differences
 function ssd{T}(A::Array{T}, B::Array{T})
@@ -376,3 +393,143 @@ imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
 # 'illustrates' fourier transform
 ftshow{T}(A::Array{T,2}) = imshow(log(1+abs(fftshift(A))),[])
 
+function rgb2ntsc{T}(img::Array{T})
+    trans = [0.299 0.587 0.114; 0.596 -0.274 -0.322; 0.211 -0.523 0.312]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * squeeze(img[i,j,:])
+    end
+    return out
+end
+
+function ntsc2rgb{T}(img::Array{T})
+    trans = [1 0.956 0.621; 1 -0.272 -0.647; 1 -1.106 1.703]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * squeeze(img[i,j,:])
+    end
+    return out
+end
+
+function rgb2ycbcr{T}(img::Array{T})
+    trans = [65.481 128.533 24.966; -37.797 -74.203 112; 112 -93.786 -18.214]
+    offset = [16.0; 128.0; 128.0]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = offset + trans * squeeze(img[i,j,:])
+    end
+    return out
+end
+
+function ycbcr2rgb{T}(img::Array{T})
+    trans = inv([65.481 128.533 24.966; -37.797 -74.203 112; 112 -93.786 -18.214])
+    offset = [16.0; 128.0; 128.0]
+    out = zeros(T, size(img))
+    for i = 1:size(img,1), j = 1:size(img,2)
+        out[i,j,:] = trans * (squeeze(img[i,j,:]) - offset)
+    end
+    return out
+end
+
+function imcomplement{T}(img::Array{T})
+    return 1 - img
+end
+
+function rgb2hsi{T}(img::Array{T})
+    R = img[:,:,1]
+    G = img[:,:,2]
+    B = img[:,:,3]
+    H = acos((1/2*(2*R - G - B)) ./ (((R - G).^2 + (R - B).*(G - B)).^(1/2)+eps(T))) 
+    H[B > G] = 2*pi - H[B > G]
+    H /= 2*pi
+    rgb_sum = R + G + B
+    rgb_sum[rgb_sum == 0] = eps(T)
+    S = 1 - 3./(rgb_sum).*min(R, G, B)
+    H[S == 0] = 0
+    I = 1/3*(R + G + B)
+    return cat(3, H, S, I)
+end
+
+function hsi2rgb{T}(img::Array{T})
+    H = img[:,:,1]*(2pi)
+    S = img[:,:,2]
+    I = img[:,:,3]
+    R = zeros(T, size(img,1), size(img,2))
+    G = zeros(T, size(img,1), size(img,2))
+    B = zeros(T, size(img,1), size(img,2))
+    RG = 0 <= H < 2*pi/3
+    GB = 2*pi/3 <= H < 4*pi/3
+    BR = 4*pi/3 <= H < 2*pi
+    # RG sector
+    B[RG] = I[RG].*(1 - S[RG])
+    R[RG] = I[RG].*(1 + (S[RG].*cos(H[RG]))./cos(pi/3 - H[RG]))
+    G[RG] = 3*I[RG] - R[RG] - B[RG]
+    # GB sector
+    R[GB] = I[GB].*(1 - S[GB])
+    G[GB] = I[GB].*(1 + (S[GB].*cos(H[GB] - pi/3))./cos(H[GB]))
+    B[GB] = 3*I[GB] - R[GB] - G[GB]
+    # BR sector
+    G[BR] = I[BR].*(1 - S[BR])
+    B[BR] = I[BR].*(1 + (S[BR].*cos(H[BR] - 2*pi/3))./cos(-pi/3 - H[BR]))
+    R[BR] = 3*I[BR] - G[BR] - B[BR]
+    return cat(3, R, G, B)
+end
+
+function imstretch{T}(img::Array{T,2}, m::Number, slope::Number)
+    return 1./(1 + (m./(img + eps(T))).^slope)
+end
+
+function imedge{T}(img::Array{T}, method::String, border::String)
+    # needs more methods
+    if method == "sobel"
+        s1, s2 = sobel()
+        img1 = imfilter(img, s1, border)
+        img2 = imfilter(img, s2, border)
+        return img1, img2, sqrt(img1.^2 + img2.^2), atan2(img2, img1)
+    elseif method == "prewitt"
+        s1, s2 = prewitt()
+        img1 = imfilter(img, s1, border)
+        img2 = imfilter(img, s2, border)
+        return img1, img2, sqrt(img1.^2 + img2.^2), atan2(img2, img1)
+    end
+end
+
+imedge{T}(img::Array{T}, method::String) = imedge(img, method, "replicate")
+imedge{T}(img::Array{T}) = imedge(img, "sobel", "replicate")
+
+# forward and backward differences 
+# can be very helpful for discretized continuous models 
+forwarddiffy{T}(u::Array{T,2}) = [u[2:end,:]; u[end,:]] - u
+forwarddiffx{T}(u::Array{T,2}) = [u[:,2:end] u[:,end]] - u
+backdiffy{T}(u::Array{T,2}) = u - [u[1,:]; u[1:end-1,:]]
+backdiffx{T}(u::Array{T,2}) = u - [u[:,1] u[:,1:end-1]]
+
+function imROF{T}(img::Array{T,2}, lambda::Number, iterations::Integer)
+    # Total Variation regularized image denoising using the primal dual algorithm
+    # Also called Rudin Osher Fatemi (ROF) model
+    # lambda: regularization parameter
+    s1, s2 = size(img)
+    p = zeros(T, s1, s2, 2)
+    u = zeros(T, s1, s2)
+    grad_u = zeros(T, s1, s2, 2)
+    div_p = zeros(T, s1, s2)
+    dt = lambda/4
+    for i = 1:iterations
+        div_p = backdiffx(squeeze(p[:,:,1])) + backdiffy(squeeze(p[:,:,2]))
+        u = img + div_p/lambda
+        grad_u = cat(3, forwarddiffx(u), forwarddiffy(u))
+        grad_u_mag = sqrt(grad_u[:,:,1].^2 + grad_u[:,:,2].^2)
+        tmp = 1 + grad_u_mag*dt
+        p = (dt*grad_u + p)./cat(3, tmp, tmp)
+    end
+    return u
+end
+
+# ROF Model for color images
+function imROF{T}(img::Array{T,3}, lambda::Number, iterations::Integer)
+    out = zeros(T, size(img))
+    for i = 1:size(img, 3)
+        out[:,:,i] = imROF(squeeze(img[:,:,i]), lambda, iterations)
+    end
+    return out
+end

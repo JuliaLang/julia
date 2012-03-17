@@ -2,14 +2,9 @@
   object constructors
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 #include "newobj_internal.h"
 #include "builtin_proto.h"
@@ -195,13 +190,14 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
     return tup;
 }
 
-jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env)
+jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
+                              jl_lambda_info_t *linfo)
 {
     jl_function_t *f = (jl_function_t*)alloc_4w();
     f->type = (jl_type_t*)jl_any_func;
-    f->fptr = proc;
+    f->fptr = (fptr!=NULL ? fptr : linfo->fptr);
     f->env = env;
-    f->linfo = NULL;
+    f->linfo = linfo;
     return f;
 }
 
@@ -224,7 +220,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->module = jl_current_module;
     li->sparams = sparams;
     li->tfunc = (jl_value_t*)jl_null;
-    li->fptr = NULL;
+    li->fptr = &jl_trampoline;
     li->roots = NULL;
     li->functionObject = NULL;
     li->specTypes = NULL;

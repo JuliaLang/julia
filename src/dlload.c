@@ -9,8 +9,8 @@
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { ".so" };
-#define N_EXTENSIONS 1
+static char *extensions[] = { ".so", "" };
+#define N_EXTENSIONS 2
 
 #elif defined(__APPLE__)
 #include <unistd.h>
@@ -38,6 +38,10 @@ void *jl_load_dynamic_library(char *fname)
     modname = fname;
     if (modname == NULL) {
         return (void*)dlopen(NULL, RTLD_NOW);
+    }
+    else if (modname[0] == '/') {
+        handle = dlopen(modname, RTLD_NOW);
+        if (handle != NULL) return handle;
     }
     char *cwd;
 

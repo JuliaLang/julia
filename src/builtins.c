@@ -8,10 +8,7 @@
 #include <setjmp.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <limits.h>
 #include <errno.h>
-#include <math.h>
-#include <ctype.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "julia.h"
@@ -327,8 +324,6 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
     return 0;
 }
 
-jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
-
 extern int jl_in_inference;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
@@ -391,7 +386,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
     }
 
     if (ewc) {
-        thunk = jl_new_closure_internal(thk, (jl_value_t*)jl_null);
+        thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, thk);
         if (fast && !jl_in_inference) {
             jl_type_infer(thk, jl_tuple_type, thk);
         }
@@ -420,6 +415,17 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     if (((jl_expr_t*)ast)->head == jl_continue_sym) {
         jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
     }
+    char oldcwd[512];
+    char newcwd[512];
+    get_cwd(oldcwd, sizeof(oldcwd));
+    char *sep = strrchr(fname, PATHSEP);
+    if (sep) {
+        size_t n = (sep - fname)+1;
+        if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
+        strncpy(newcwd, fname, n);
+        newcwd[n] = '\0';
+        set_cwd(newcwd);
+    }
     JL_TRY {
         jl_register_toplevel_eh();
         // handle syntax error
@@ -438,6 +444,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         }
     }
     JL_CATCH {
+        if (sep) set_cwd(oldcwd);
         jl_value_t *fn=NULL, *ln=NULL;
         JL_GC_PUSH(&fn, &ln);
         fn = jl_pchar_to_string(fname, strlen(fname));
@@ -445,6 +452,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
+    if (sep) set_cwd(oldcwd);
 }
 
 // locate a file in the search path
@@ -722,8 +730,7 @@ DLLEXPORT void jl_print_symbol(jl_sym_t *sym)
 // for bootstrap
 DLLEXPORT void jl_print_int64(int64_t i)
 {
-    ios_t *s = jl_current_output_stream();
-    ios_printf(s, "%lld", i);
+    ios_printf(jl_current_output_stream(), "%lld", i);
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
@@ -731,9 +738,7 @@ DLLEXPORT int jl_strtod(char *str, double *out)
     char *p;
     errno = 0;
     *out = strtod(str, &p);
-    if (p == str || errno != 0)
-        return 1;
-    return 0;
+    return (p == str || errno != 0);
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)
@@ -741,9 +746,7 @@ DLLEXPORT int jl_strtof(char *str, float *out)
     char *p;
     errno = 0;
     *out = strtof(str, &p);
-    if (p == str || errno != 0)
-        return 1;
-    return 0;
+    return (p == str || errno != 0);
 }
 
 // showing --------------------------------------------------------------------
@@ -879,22 +882,7 @@ JL_CALLABLE(jl_trampoline)
     jl_compile((jl_function_t*)F);
     assert(((jl_function_t*)F)->fptr == &jl_trampoline);
     jl_generate_fptr((jl_function_t*)F);
-    assert(((jl_function_t*)F)->fptr != NULL);
     return jl_apply((jl_function_t*)F, args, nargs);
-}
-
-DLLEXPORT
-jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env)
-{
-    assert(jl_is_lambda_info(li));
-    assert(jl_is_tuple(env));
-    jl_function_t *f=NULL;
-    // note: env is pushed here to make codegen a little easier
-    JL_GC_PUSH(&f, &env);
-    f = jl_new_closure(li->fptr ? li->fptr : jl_trampoline, env);
-    f->linfo = li;
-    JL_GC_POP();
-    return (jl_value_t*)f;
 }
 
 JL_CALLABLE(jl_f_instantiate_type)
@@ -1205,7 +1193,7 @@ static void add_builtin(const char *name, jl_value_t *v)
 
 static void add_builtin_func(const char *name, jl_fptr_t f)
 {
-    add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL));
+    add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL, NULL));
 }
 
 void jl_init_primitives(void)

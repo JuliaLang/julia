@@ -117,6 +117,8 @@ float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
 
+full(x::AbstractArray) = x
+
 ## Unary operators ##
 
 conj{T<:Real}(x::AbstractArray{T}) = x
@@ -326,7 +328,7 @@ function vcat{T}(V::AbstractVector{T}...)
     for Vk in V
         n += length(Vk)
     end
-    a = similar(V[1], n)
+    a = similar(full(V[1]), n)
     pos = 1
     for k=1:length(V)
         Vk = V[k]
@@ -350,7 +352,7 @@ function hcat{T}(A::Union(AbstractMatrix{T},AbstractVector{T})...)
         ncols += (nd==2 ? size(Aj,2) : 1)
         if size(Aj, 1) != nrows; error("hcat: mismatched dimensions"); end
     end
-    B = similar(A[1], nrows, ncols)
+    B = similar(full(A[1]), nrows, ncols)
     pos = 1
     if dense
         for k=1:nargs
@@ -377,7 +379,7 @@ function vcat{T}(A::AbstractMatrix{T}...)
     for j = 2:nargs
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
-    B = similar(A[1], nrows, ncols)
+    B = similar(full(A[1]), nrows, ncols)
     pos = 1
     for k=1:nargs
         Ak = A[k]
@@ -436,7 +438,7 @@ function cat(catdim::Integer, X...)
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
-    C = similar(isa(X[1],AbstractArray) ? X[1] : [X[1]], typeC, dimsC)
+    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
 
     range = 1
     for k=1:nargs
@@ -499,7 +501,7 @@ function cat(catdim::Integer, A::AbstractArray...)
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
     typeC = promote_type(map(eltype, A)...)
-    C = similar(A[1], typeC, dimsC)
+    C = similar(full(A[1]), typeC, dimsC)
 
     range = 1
     for k=1:nargs
@@ -532,7 +534,7 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
         a += rows[i]
     end
 
-    out = similar(as[1], T, nr, nc)
+    out = similar(full(as[1]), T, nr, nc)
 
     a = 1
     r = 1
@@ -625,8 +627,9 @@ end
 function isless(A::AbstractArray, B::AbstractArray)
     nA, nB = numel(A), numel(B)
     for i = 1:min(nA, nB)
-        if !isequal(A[i], B[i])
-            return isless(A[i], B[i])
+        a, b = A[i], B[i]
+        if !isequal(a, b)
+            return isless(a, b)
         end
     end
     return nA < nB

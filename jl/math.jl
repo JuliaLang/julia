@@ -18,6 +18,23 @@ acoth(y) = atanh(1 ./y)
 sinc(x::Number) = x==0 ? one(x)  : (pix=pi*x; oftype(x,sin(pix)/pix))
 cosc(x::Number) = x==0 ? zero(x) : (pix=pi*x; oftype(x,cos(pix)/x-sin(pix)/(pix*x)))
 
+radians2degrees(z::Real) = oftype(z, (180/pi) * z)
+degrees2radians(z::Real) = oftype(z, (pi/180) * z)
+
+cosd(z) = cos(degrees2radians(z))
+cotd(z) = cot(degrees2radians(z))
+cscd(z) = csc(degrees2radians(z))
+secd(z) = sec(degrees2radians(z))
+sind(z) = sin(degrees2radians(z))
+tand(z) = tan(degrees2radians(z))
+
+acosd(y) = radians2degrees(acos(y))
+acotd(y) = radians2degrees(acot(y))
+acscd(y) = radians2degrees(acsc(y))
+asecd(y) = radians2degrees(asec(y))
+asind(y) = radians2degrees(asin(y))
+atand(y) = radians2degrees(atan(y))
+
 log(b,x) = log(x)/log(b)
 
 function hypot(x::Real, y::Real)

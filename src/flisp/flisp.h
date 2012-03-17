@@ -1,6 +1,7 @@
 #ifndef FLISP_H
 #define FLISP_H
 
+#include <setjmp.h>
 #include "libsupport.h"
 
 typedef uptrint_t value_t;

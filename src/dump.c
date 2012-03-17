@@ -2,14 +2,8 @@
   saving and restoring system images
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 #include "newobj_internal.h"
@@ -303,7 +297,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         if (f->linfo && f->linfo->ast &&
             (jl_is_expr(f->linfo->ast) || jl_is_tuple(f->linfo->ast)) &&
             f->fptr != &jl_trampoline) {
-            write_int32(s, 0);
+            jl_serialize_fptr(s, &jl_trampoline);
         }
         else {
             jl_serialize_fptr(s, f->fptr);
@@ -588,9 +582,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         f->env = jl_deserialize_value(s);
         f->fptr = jl_deserialize_fptr(s);
-        if (f->fptr == NULL) {
-            f->fptr = &jl_trampoline;
-        }
         return (jl_value_t*)f;
     }
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
@@ -610,7 +601,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->line = jl_deserialize_value(s);
         li->module = (jl_module_t*)jl_deserialize_value(s);
 
-        li->fptr = NULL;
+        li->fptr = &jl_trampoline;
         li->roots = NULL;
         li->functionObject = NULL;
         li->inInference = 0;
@@ -754,7 +745,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
         // delete cached slow ASCIIString constructor
         jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
         mt->cache = NULL;
-        mt->cache_1arg = NULL;
+        mt->cache_arg1 = NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
         mt->defs->func->linfo->specializations = NULL;
     }

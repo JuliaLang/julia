@@ -327,13 +327,14 @@ end
 
 (|)(src::Cmds, dst::Ports) = stdout(src) | dst
 (|)(src::Ports, dst::Cmds) = (src | stdin(dst); dst)
-(|)(src::Cmds,  dst::Cmds) = (stdout(src)| stdin(dst); src & dst)
+(|)(src::Cmds,  dst::Cmds) = (stdout(src) | stdin(dst); src & dst)
 
 # spawn(cmd) starts all processes connected to cmd
 
 function spawn(cmd::Cmd)
     fds = Set{FileDes}()
-    for c = cmd.pipeline
+    fds_ = Set{FileDes}()
+    for c in cmd.pipeline
         if !isa(cmd.status,ProcessNotRun)
             if isa(cmd.status,ProcessRunning)
                 error("already running: ", c)
@@ -341,8 +342,10 @@ function spawn(cmd::Cmd)
                 error("already run: ", c)
             end
         end
-        for (f,p) = c.pipes
+        for (f,p) in c.pipes
             add(fds, fd(p))
+            add(fds, other(p))
+            add(fds_, fd(p))
         end
     end
     gc_disable()
@@ -353,7 +356,7 @@ function spawn(cmd::Cmd)
         dup2_fds = Array(Int32, 2*numel(c.pipes))
         close_fds_ = copy(fds)
         i = 0
-        for (f,p) = c.pipes
+        for (f,p) in c.pipes
             dup2_fds[i+=1] = fd(p).fd
             dup2_fds[i+=1] = f.fd
             del(close_fds_, fd(p))
@@ -369,7 +372,7 @@ function spawn(cmd::Cmd)
             i = 1
             n = length(dup2_fds)
             while i <= n
-                # dup2 manually inlined for performance
+                # dup2 manually inlined to avoid potential heap stomping
                 r = ccall(:dup2, Int32, (Int32, Int32), dup2_fds[i], dup2_fds[i+1])
                 if r == -1
                     println("dup2: ", strerror())
@@ -380,7 +383,7 @@ function spawn(cmd::Cmd)
             i = 1
             n = length(close_fds)
             while i <= n
-                # close manually inlined for performance
+                # close manually inlined to avoid potential heap stomping
                 r = ccall(:close, Int32, (Int32,), close_fds[i])
                 if r != 0
                     println("close: ", strerror())
@@ -406,7 +409,7 @@ function spawn(cmd::Cmd)
         end
         c.pid = pid
     end
-    for f in fds
+    for f in fds_
         close(f)
     end
     gc_enable()
@@ -483,15 +486,10 @@ readall(ports::Ports) = _readall(ports, cmds(ports))
 readall(cmds::Cmds)   = _readall(stdout(cmds), cmds)
 
 function _each_line(ports::Ports, cmds::Cmds)
-    local fh
-    create = @thunk begin
-        r = read_from(ports)
-        spawn(cmds)
-        fh = fdio(r.fd, true)
-        LineIterator(fh)
-    end
-    destroy = @thunk close(fh)
-    ShivaIterator(create, destroy)
+    r = read_from(ports)
+    spawn(cmds)
+    fh = fdio(r.fd, true)
+    LineIterator(fh)
 end
 
 each_line(ports::Ports) = _each_line(ports, cmds(ports))

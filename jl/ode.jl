@@ -28,13 +28,13 @@
 # Adapted from Cleve Moler's textbook
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
-function ode23(F::Function, tspan::Vector, y_0)
+function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
 
     rtol = 1.e-5
     atol = 1.e-8
 
     t0 = tspan[1]
-    tfinal = tspan[2]
+    tfinal = tspan[end]
     tdir = sign(tfinal - t0)
     threshold = atol / rtol
     hmax = abs(0.1*(tfinal-t0))
@@ -49,7 +49,7 @@ function ode23(F::Function, tspan::Vector, y_0)
     # Compute initial step size.
 
     s1 = F(t, y)
-    r = norm(s1./max(abs(y), threshold), Inf) + realmin()
+    r = norm(s1./float(max(abs(y), threshold)), Inf) + realmin() # TODO: fix type bug in max()
     h = tdir*0.8*rtol^(1/3)/r
 
     # The main loop.
@@ -77,7 +77,7 @@ function ode23(F::Function, tspan::Vector, y_0)
         # Estimate the error.
 
         e = h*(-5*s1 + 6*s2 + 8*s3 - 9*s4)/72
-        err = norm(e./max(max(abs(y), abs(ynew)), threshold), Inf) + realmin()
+        err = norm(e./max(float(max(abs(y), abs(ynew))), threshold), Inf) + realmin()
 
         # Accept the solution if the estimated error is less than the tolerance.
 
@@ -169,7 +169,7 @@ end # ode23
 # modified: 17 January 2001
 
 # Dormand Prince
-function ode45_dp(F, tspan, x0)
+function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector)
     tol = 1.0e-5
     
     # see p.91 in the Ascher & Petzold reference for more infomation.
@@ -197,7 +197,7 @@ function ode45_dp(F, tspan, x0)
 
     # Initialization
     t0 = tspan[1]
-    tfinal = tspan[2]
+    tfinal = tspan[end]
     t = t0
     hmax = (tfinal - t)/2.5
     hmin = (tfinal - t)/1e9
@@ -208,7 +208,7 @@ function ode45_dp(F, tspan, x0)
         
     # k_ needs to be initialized as an Nx7 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),7)
+    k_ = zeros(eltype(x), (length(x),7))
     
     # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
     # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
@@ -272,7 +272,7 @@ function ode45_dp(F, tspan, x0)
 end # ode45_dp
 
 # Fehlberg
-function ode45_fb(F, tspan, x0)
+function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector)
     tol = 1.0e-5
 
     # see p.91 in the Ascher & Petzold reference for more infomation.
@@ -299,7 +299,7 @@ function ode45_fb(F, tspan, x0)
 
     # Initialization
     t0 = tspan[1]
-    tfinal = tspan[2]
+    tfinal = tspan[end]
     t = t0
     hmax = (tfinal - t)/2.5
     hmin = (tfinal - t)/1e9
@@ -310,7 +310,7 @@ function ode45_fb(F, tspan, x0)
         
     # k_ needs to be initialized as an Nx6 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),6)
+    k_ = zeros(eltype(x), (length(x),6))
     
     while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
@@ -362,3 +362,66 @@ end # ode45_fb
 
 # Use Dormand Prince version of ode45 by default
 const ode45 = ode45_dp
+
+#ODE4    Solve non-stiff differential equations, fourth order
+#   fixed-step Runge-Kutta method.
+#
+#   [T,X] = ODE4(ODEFUN, TSPAN, X0) with TSPAN = [T0:H:TFINAL]
+#   integrates the system of differential equations x' = f(t,x) from time
+#   T0 to TFINAL in steps of H with initial conditions X0. Function
+#   ODEFUN(T,X) must return a column vector corresponding to f(t,x). Each
+#   row in the solution array X corresponds to a time returned in the
+#   column vector T.
+function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T})
+    h = diff(tspan)
+    x = Array(T, (length(tspan), length(x0)))
+    x[1,:] = x0'
+
+    midxdot = Array(T, (4, length(x0)))
+    for i = 1:(length(tspan)-1)
+        # Compute midstep derivatives
+        midxdot[1,:] = F(tspan[i],         x[i,:]')
+        midxdot[2,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[1,:]'.*h[i]./2)
+        midxdot[3,:] = F(tspan[i]+h[i]./2, x[i,:]' + midxdot[2,:]'.*h[i]./2)
+        midxdot[4,:] = F(tspan[i]+h[i],    x[i,:]' + midxdot[3,:]'.*h[i])
+
+        # Integrate
+        x[i+1,:] = x[i,:] + 1./6.*h[i].*[1 2 2 1]*midxdot
+    end
+    return (tspan, x)
+end
+
+# ODE_MS Fixed-step, fixed-order multi-step numerical method with Adams-Bashforth-Moulton coefficients
+function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer)
+    h = diff(tspan)
+    x = zeros(T,(length(tspan), length(x0)))
+    x[1,:] = x0
+
+    if 1 <= order <= 4
+        b = [ 1      0      0     0
+             -1/2    3/2    0     0
+             5/12  -16/12  23/12 0
+             -9/24   37/24 -59/24 55/24];
+    else
+        for steporder = size(b,1):order
+            s = steporder - 1;
+            for j = 0:s
+                # Assign in correct order for multiplication below
+                #                    (a factor depending on j and s)      .* (an integral of a polynomial with -(0:s), except -j, as roots)
+                b[steporder,s-j+1] = (-1).^j./factorial(j)./factorial(s-j).*diff(polyval(polyint(poly(diagm(-[0:j-1; j+1:s]))),0:1));
+            end
+        end
+    end
+
+    # TODO: use a better data structure here (should be an order-element circ buffer)
+    xdot = similar(x)
+    for i = 1:length(tspan)-1
+        # Need to run the first several steps at reduced order
+        steporder = min(i, order)
+        xdot[i,:] = F(tspan[i], x[i,:]')
+        x[i+1,:] = x[i,:] + b[steporder,1:steporder]*xdot[i-(steporder-1):i,:].*h[i]
+    end
+    return (tspan, x)
+end
+
+ode4ms(F, tspan, x0) = ode_ms(F, tspan, x0, 4)
