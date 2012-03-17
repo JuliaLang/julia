@@ -219,6 +219,7 @@
     jl_timer_stop;
     jl_timer_init;
     jl_cwd;
+    jl_getpid;
   local:
     *;
 };
