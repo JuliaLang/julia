@@ -1,6 +1,99 @@
 ## Based on "Multi-Threading and One-Sided Communication in Parallel LU Factorization"
 ## http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.138.4361&rank=7
 
+function hpl_seq(A::Matrix, b::Vector)
+
+    blocksize = 5
+
+    n = size(A,1)
+    A = [A b]
+    
+    B_rows = linspace(0, n, div(n,blocksize)+1)
+    B_rows[end] = n 
+    B_cols = [B_rows, [n+1]]
+    nB = length(B_rows)
+    depend = zeros(Bool, nB, nB) # In parallel, depend needs to be able to hold futures
+    
+    ## Small matrix case
+    if nB <= 1
+        x = A[1:n, 1:n] \ A[:,n+1]
+        return x
+    end
+
+    ## Add a ghost row of dependencies to boostrap the computation
+    for j=1:nB; depend[1,j] = true; end
+    
+    for i=1:(nB-1)
+        ## Threads for panel factorizations
+        I = (B_rows[i]+1):B_rows[i+1]
+        #(depend[i+1,i], panel_p) = spawn(panel_factor_seq, I, depend[i,i])
+        (depend[i+1,i], panel_p) = panel_factor_seq(A, I, depend[i,i])
+        
+        ## Threads for trailing updates
+        for j=(i+1):nB
+            J = (B_cols[j]+1):B_cols[j+1]    
+            #depend[i+1,j] = spawn(trailing_update_seq, I, J, panel_p, depend[i+1,i],depend[i,j])
+            depend[i+1,j] = trailing_update_seq(A, I, J, panel_p, depend[i+1,i],depend[i,j])
+        end
+    end
+    
+    ## Completion of the last diagonal block signals termination
+    #wait(depend[nB, nB])
+    
+    ## Solve the triangular system
+    x = triu(A[1:n,1:n]) \ A[:,n+1]
+    
+    return x
+
+end ## hpl()
+
+
+### Panel factorization ###
+
+function panel_factor_seq(A, I, col_dep)
+    n = size (A, 1)
+
+    ## Enforce dependencies
+    #wait(col_dep)
+    
+    ## Factorize a panel
+    K = I[1]:n
+    (A[K,I], panel_p) = lu!(A[K,I]) # Economy mode
+    
+    ## Panel permutation 
+    panel_p = K[panel_p]
+    
+    return (true, panel_p)
+    
+end ## panel_factor_seq()
+
+
+### Trailing update ###
+
+function trailing_update_seq(A, I, J, panel_p, row_dep, col_dep)
+
+    n = size (A, 1)
+    
+    ## Enforce dependencies
+    #wait(row_dep, col_dep)
+    
+    ## Apply permutation from pivoting 
+    K = (I[end]+1):n       
+    A[I[1]:n, J] = A[panel_p, J]
+    
+    ## Compute blocks of U 
+    L = tril(A[I,I],-1) + eye(length(I))
+    A[I, J] = L \ A[I, J]
+    
+    ## Trailing submatrix update
+    if !isempty(K)
+        A[K,J] = A[K,J] - A[K,I]*A[I,J]  
+    end
+    
+    return true
+    
+end ## trailing_update_seq()
+
 # This version is written for a shared memory implementation.
 # The matrix A is local to the first Worker, which allocates work to other Workers
 # All updates to A are carried out by the first Worker. Thus A is not distributed
@@ -39,7 +132,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
         K = I[1]:n
-        (A_KI, panel_p) = panel_factor(A[K,I], depend[i,i])
+        (A_KI, panel_p) = panel_factor_par(A[K,I], depend[i,i])
 
         ## Write the factorized panel back to A
         A[K,I] = A_KI
@@ -65,9 +158,9 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
                 A_IJ = A[I,J]
                 #A_KI = A[K,I]
                 A_KJ = A[K,J]
-                depend[i+1,j] = @spawn trailing_update(L_II, A_IJ, A_KI, A_KJ, depend[i+1,i], depend[i,j])
+                depend[i+1,j] = @spawn trailing_update_par(L_II, A_IJ, A_KI, A_KJ, depend[i+1,i], depend[i,j])
             else
-                depend[i+1,j] = trailing_update(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
+                depend[i+1,j] = trailing_update_par(L_II, A[I,J], A[K,I], A[K,J], depend[i+1,i], depend[i,j])
             end
         end
 
@@ -99,7 +192,7 @@ end ## hpl()
 
 ### Panel factorization ###
 
-function panel_factor(A_KI, col_dep)
+function panel_factor_par(A_KI, col_dep)
 
     @assert col_dep
     
@@ -108,12 +201,12 @@ function panel_factor(A_KI, col_dep)
     
     return (A_KI, panel_p)
     
-end ## panel_factor()
+end ## panel_factor_par()
 
 
 ### Trailing update ###
 
-function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
+function trailing_update_par(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     
     @assert row_dep
     @assert col_dep
@@ -131,7 +224,7 @@ function trailing_update(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
     
     return (A_IJ, A_KJ)
     
-end ## trailing_update()
+end ## trailing_update_par()
 
 
 ### using DArrays ###
@@ -156,7 +249,7 @@ function hpl_par2(A::Matrix, b::Vector)
     for i = 1:nB
         #println("C=$(convert(Array, C))") #####
         ##panel factorization
-        panel_p = remote_call_fetch(C.pmap[i], panel_factor2, C, i, n)
+        panel_p = remote_call_fetch(C.pmap[i], panel_factor_par2, C, i, n)
 
         ## Apply permutation from pivoting
         for j = (i+1):nB
@@ -181,13 +274,13 @@ function hpl_par2(A::Matrix, b::Vector)
 
         for j=(i+1):nB
             dep = depend[i,j]
-            depend[j,i] = remote_call(C.pmap[j], trailing_update2, C, L_II, C_KI, i, j, n, false, dep)
+            depend[j,i] = remote_call(C.pmap[j], trailing_update_par2, C, L_II, C_KI, i, j, n, false, dep)
         end
 
         ## Special case for last column
         if i == nB
             dep = depend[nB,nB]
-            remote_call_fetch(C.pmap[nB], trailing_update2, C, L_II, C_KI, i, nB+1, n, true, dep)
+            remote_call_fetch(C.pmap[nB], trailing_update_par2, C, L_II, C_KI, i, nB+1, n, true, dep)
         else
             #enforce dependencies for nonspecial case
             for j=(i+1):nB
@@ -200,7 +293,7 @@ function hpl_par2(A::Matrix, b::Vector)
     x = triu(A[1:n,1:n]) \ A[:,n+1]
 end ## hpl_par2()
 
-function panel_factor2(C, i, n)
+function panel_factor_par2(C, i, n)
     (C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
                            (I = (C.dist[i]):(C.dist[i+1]-1))
     K = I[1]:n
@@ -210,7 +303,7 @@ function panel_factor2(C, i, n)
     C[K,I] = C_KI
 
     return panel_p
-end ##panel_factor2()
+end ##panel_factor_par2()
 
 function permute(C, i, j, panel_p, n, flag)
     if flag
@@ -230,7 +323,7 @@ function permute(C, i, j, panel_p, n, flag)
     end
 end ##permute()
 
-function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
+function trailing_update_par2(C, L_II, C_KI, i, j, n, flag, dep)
     if isa(dep, RemoteRef); wait(dep); end
     if flag
         #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
@@ -273,7 +366,7 @@ function trailing_update2(C, L_II, C_KI, i, j, n, flag, dep)
             C[K,J] = C_KJ
         end   
     end 
-end ## trailing_update2()
+end ## trailing_update_par2()
 
 ## Test n*n matrix on np processors
 ## Prints 5 numbers that should be close to zero
