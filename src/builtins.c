@@ -420,6 +420,16 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     if (((jl_expr_t*)ast)->head == jl_continue_sym) {
         jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
     }
+    char oldcwd[512];
+    char newcwd[512];
+    get_cwd(oldcwd, sizeof(oldcwd));
+    char *sep = strrchr(fname, PATHSEP);
+    if (sep) {
+        size_t n = (sep - fname)+1;
+        if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
+        strncpy(newcwd, fname, n);
+        set_cwd(newcwd);
+    }
     JL_TRY {
         jl_register_toplevel_eh();
         // handle syntax error
@@ -438,6 +448,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         }
     }
     JL_CATCH {
+        if (sep) set_cwd(oldcwd);
         jl_value_t *fn=NULL, *ln=NULL;
         JL_GC_PUSH(&fn, &ln);
         fn = jl_pchar_to_string(fname, strlen(fname));
@@ -445,6 +456,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
+    if (sep) set_cwd(oldcwd);
 }
 
 // locate a file in the search path
