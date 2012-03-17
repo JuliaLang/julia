@@ -486,15 +486,10 @@ readall(ports::Ports) = _readall(ports, cmds(ports))
 readall(cmds::Cmds)   = _readall(stdout(cmds), cmds)
 
 function _each_line(ports::Ports, cmds::Cmds)
-    local fh
-    create = @thunk begin
-        r = read_from(ports)
-        spawn(cmds)
-        fh = fdio(r.fd, true)
-        LineIterator(fh)
-    end
-    destroy = @thunk close(fh)
-    ShivaIterator(create, destroy)
+    r = read_from(ports)
+    spawn(cmds)
+    fh = fdio(r.fd, true)
+    LineIterator(fh)
 end
 
 each_line(ports::Ports) = _each_line(ports, cmds(ports))

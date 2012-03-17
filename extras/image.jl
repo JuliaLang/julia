@@ -32,21 +32,25 @@ redval(p)   = (p>>>16)&0xff
 greenval(p) = (p>>>8)&0xff
 blueval(p)  = p&0xff
 
-function ppmwrite(img, file::String)
-    s = open(file, "w")
-
-    write(s, "P6\n")
-    write(s, "# ppm file written by julia\n")
+function write_bitmap_data(s, img)
     n, m = size(img)
-    write(s, "$m $n 255\n")
     if eltype(img) <: Integer
         if ndims(img) == 3 && size(img,3) == 3
             for i=1:n, j=1:m, k=1:3
                 write(s, uint8(img[i,j,k]))
             end
         elseif ndims(img) == 2
-            for i=1:n, j=1:m, k=1:3
-                write(s, uint8(img[i,j]))
+            if is(eltype(img),Int32) || is(eltype(img),Uint32)
+                for i=1:n, j=1:m
+                    p = img[i,j]
+                    write(s, uint8(redval(p)))
+                    write(s, uint8(greenval(p)))
+                    write(s, uint8(blueval(p)))
+                end
+            else
+                for i=1:n, j=1:m, k=1:3
+                    write(s, uint8(img[i,j]))
+                end
             end
         else
             error("unsupported array dimensions")
@@ -70,7 +74,15 @@ function ppmwrite(img, file::String)
     else
         error("unsupported array type")
     end
+end
 
+function ppmwrite(img, file::String)
+    s = open(file, "w")
+    write(s, "P6\n")
+    write(s, "# ppm file written by julia\n")
+    n, m = size(img)
+    write(s, "$m $n 255\n")
+    write_bitmap_data(s, img)
     close(s)
 end
 
@@ -94,26 +106,15 @@ function imread(file::String)
 end
 
 function imwrite(I, file::String)
+    if length(file) > 3 && file[end-3:end]==".ppm"
+        # fall back to built-in ppmwrite in case convert not available
+        return ppmwrite(I, file)
+    end
     h, w = size(I)
-    cmd = `convert -size $(w)x$(h) -depth 8 rgb:- $file`
+    cmd = `convert -size $(w)x$(h) -depth 8 rgb: $file`
     stream = fdio(write_to(cmd).fd, true)
     spawn(cmd)
-    if ndims(I)==3 && size(I,3)==3
-        for i=1:h, j=1:w
-            write(stream, uint8(I[i,j,1]))
-            write(stream, uint8(I[i,j,2]))
-            write(stream, uint8(I[i,j,3]))
-        end
-    elseif is(eltype(I),Int32) || is(eltype(I),Uint32)
-        for i=1:h, j=1:w
-            p = I[i,j]
-            write(stream, uint8(redval(p)))
-            write(stream, uint8(greenval(p)))
-            write(stream, uint8(blueval(p)))
-        end
-    else
-        error("unsupported image data format")
-    end
+    write_bitmap_data(stream, I)
     close(stream)
     wait(cmd)
 end
@@ -124,7 +125,7 @@ function imshow(img, range)
         img = imadjustintensity(img, range)
     end
     tmp::String = "./tmp.ppm"
-    ppmwrite(img, tmp)
+    imwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
 end
