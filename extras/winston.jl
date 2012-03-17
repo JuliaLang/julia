@@ -26,9 +26,7 @@ type WinstonConfig
         # read global config
         winston_ini = "winston.ini"
         fn = find_in_path(winston_ini)
-        if fn != winston_ini
-            read(inifile, fn)
-        end
+        read(inifile, fn)
 
         new(inifile)
     end
