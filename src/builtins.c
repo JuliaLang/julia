@@ -423,6 +423,7 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
         size_t n = (sep - fname)+1;
         if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
         strncpy(newcwd, fname, n);
+        newcwd[n] = '\0';
         set_cwd(newcwd);
     }
     JL_TRY {
