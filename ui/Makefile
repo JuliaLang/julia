@@ -7,7 +7,7 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
-julia-release julia-debug: %: %-readline
+julia-release julia-debug: %: %-basic %-readline
 	@$(MAKE) -C webserver $@
 
 release debug:
