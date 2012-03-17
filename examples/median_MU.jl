@@ -1,4 +1,4 @@
-function median(S)
+function median_MU(S)
   n = length(S)
 
   if n < 1500
