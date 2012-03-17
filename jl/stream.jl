@@ -308,11 +308,24 @@ function readall(cmds::Cmds)
     takebuf_string(out.buf)
 end
 
-function readall(cmd::Cmd)
+#returns a pipe to read from the last command in the pipelines
+read_from(cmd::Cmd) = read_from(Cmds(cmd))
+function read_from(cmds::Cmds)
     out=make_pipe()
-    pp=Process(0,0,0,0)
-    spawn(cmd,false,out,make_callback((args...)->end_process(pp,args...)), make_callback((args...)->finish_read(out)))
+    spawn(cmds,false,out);
     ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Ptr{PtrSize}),out.handle,out.buf.ios,C_NULL)
+    out
+end
+
+write_to(cmd::Cmd) = write_to(Cmds(cmd))
+function write_to(cmds::Cmds)
+    in=make_pipe();
+    spawn(cmds,in)
+    in
+end
+
+function readall(cmd::Cmd)
+    out=read_from(cmd)
     run_event_loop()
     return takebuf_string(out.buf)
 end
