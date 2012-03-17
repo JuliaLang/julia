@@ -2,9 +2,9 @@
 load("color.jl")
 
 load("openlib.jl")
-_jl_libcairo = openlib("cairo")
-_jl_libpangocairo = openlib("pangocairo-1.0")
-_jl_libgobject = openlib("gobject-2.0")
+_jl_libcairo = openlib("libcairo")
+_jl_libpangocairo = openlib("libpangocairo-1.0")
+_jl_libgobject = openlib("libgobject-2.0")
 
 type CairoSurface
     ptr::Ptr{Void}
