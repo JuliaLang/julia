@@ -3,9 +3,7 @@
   system initialization and global state
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <setjmp.h>
 #include <assert.h>
 #if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__)
@@ -15,9 +13,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #endif
-#include <limits.h>
 #include <errno.h>
-#include <math.h>
 #include <signal.h>
 #include <libgen.h>
 #include <getopt.h>

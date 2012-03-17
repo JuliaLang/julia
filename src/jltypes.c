@@ -5,15 +5,8 @@
   . builtin type definitions
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
-#include "libsupport.h"
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"
