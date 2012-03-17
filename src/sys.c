@@ -23,13 +23,6 @@
 
 // --- io and select ---
 
-void jl__not__used__(void)
-{
-    // force inclusion of lib/socket.o in executable
-    short p=0;
-    open_any_tcp_port(&p);
-}
-
 DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
 
 DLLEXPORT int jl_sizeof_timeval(void) { return sizeof(struct timeval); }

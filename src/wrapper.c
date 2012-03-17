@@ -14,9 +14,10 @@ extern "C" {
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
 typedef struct {
+    jl_function_t *connectcb;
     jl_function_t *readcb;
     ios_t *stream;
-} jl_pipe_opts_t;
+} jl_stream_opts_t;
 
 typedef struct {
     jl_function_t *exitcb;
@@ -34,7 +35,7 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
     uv_buf_t buf;
     if(!handle->data)
         jl_error("jl_alloc_buf: Missing data");
-    jl_pipe_opts_t *opts = (jl_pipe_opts_t*)handle->data;
+    jl_stream_opts_t *opts = (jl_stream_opts_t*)handle->data;
     buf.len = ios_fillprep(opts->stream,suggested_size);
     buf.base = opts->stream->buf + opts->stream->bpos;
     return buf;
@@ -45,7 +46,7 @@ void closeHandle(uv_handle_t* handle)
     switch(handle->type) {
     case UV_NAMED_PIPE:
         if(handle->data) {
-            jl_pipe_opts_t *opts=handle->data;
+            jl_stream_opts_t *opts=handle->data;
             free(opts);
         } break;
     case UV_PROCESS:
@@ -59,6 +60,7 @@ void closeHandle(uv_handle_t* handle)
         } break;
     case UV_IDLE: //fall through to async
     case UV_ASYNC:
+    case UV_TIMER:
         if(handle->data) {
             jl_async_opts_t *opts=handle->data;
             free(opts);
@@ -93,8 +95,8 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
-    jl_pipe_opts_t *opts;
-    if(handle->data) {
+    jl_stream_opts_t *opts;
+    if(handle&&handle->data) {
         opts = handle->data;
         if(nread>0) { //no error/EOF
             opts->stream->size+=nread;
@@ -122,11 +124,15 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if(handle) uv_close(handle,&closeHandle);
 }
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *callback)
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback)
 {
-    if(!handle||handle->data)
+    if(!handle)
         return -2;
-    jl_pipe_opts_t *opts = malloc(sizeof(jl_pipe_opts_t));
+    jl_stream_opts_t *opts = (jl_stream_opts_t *)handle->data;
+    if(!opts) {
+        opts = malloc(sizeof(jl_stream_opts_t));
+        opts->connectcb=0; //this stream is not a server
+    }
     opts->readcb=(jl_function_t*)callback;
     opts->stream = iohandle;
     handle->data = opts;
@@ -138,12 +144,29 @@ DLLEXPORT uint16_t jl_stop_reading(uv_stream_t *handle)
     if(!handle)
         return -1;
     int err = uv_read_stop(handle);
-    if(!(handle)->data)
-        return -2;
-    free(handle->data);
-    handle->data=0;
     return err;
 
+}
+
+DLLEXPORT void jl_connectcb(uv_stream_t *stream, int status)
+{
+    if(stream&&stream->data) {
+        jl_stream_opts_t *opts = (jl_stream_opts_t *)stream->data;
+        if(opts->connectcb)
+            jl_callback_call(opts->connectcb,2,CB_PTR,stream,CB_INT32,status);
+    }
+}
+
+DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
+{
+    jl_stream_opts_t *opts = (jl_stream_opts_t *)stream->data;
+    if(!opts) {
+        opts = malloc(sizeof(jl_stream_opts_t));
+        opts->stream=0;
+        opts->readcb=0;
+    }
+    opts->connectcb=cb;
+    return uv_listen(stream,backlog,&jl_connectcb);
 }
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb)

@@ -50,16 +50,67 @@ type NamedPipe <: AsyncStream
     NamedPipe(handle::PtrSize,buf::IOStream) = new(handle,buf,false)
 end
 
-type tty <: AsyncStream
+type TTY <: AsyncStream
     handle::PtrSize
     buf::IOStream
 end
 typealias PipeOrNot Union(Bool,AsyncStream)
 
-make_stdout_stream() = tty(ccall(:jl_stdout, PtrSize, ()),memio())
+make_stdout_stream() = TTY(ccall(:jl_stdout, PtrSize, ()),memio())
 
 function _uv_tty2tty(handle::PtrSize)
-    tty(handle,memio())
+    TTY(handle,memio())
+end
+
+## SOCKETS ##
+
+abstract Socket <: AsyncStream
+
+type TcpSocket <: Socket
+    handle::PtrSize
+end
+
+type UdpSocket <: Socket
+    handle::PtrSize
+end
+
+_jl_tcp_init(loop::PtrSize) = ccall(:jl_tcp_init,PtrSize,(PtrSize,),loop)
+_jl_udp_init(loop::PtrSize) = ccall(:jl_udp_init,PtrSize,(PtrSize,),loop)
+
+abstract IpAddr
+
+type Ip4Addr <: IpAddr
+    port::Uint16
+    host::Uint32
+end
+
+type Ip6Addr <: IpAddr
+    port::Uint16
+    host::Array{Uint8,1} #this should be fixed at 16 bytes is fixed size arrays are implemented
+    flow_info::Uint32
+    scope::Uint32
+end
+
+_jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(PtrSize,Int32,Function),sock,backlog,make_callback(cb))
+
+_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(PtrSize,Uint32,Uint16),sock,addr.host,addr.port)
+_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(PtrSize,Uint32,Uint16,Function),sock,addr.host,addr.port)
+
+function open_any_tcp_port(preferred_port::Uint16,cb::Function)
+    socket = TcpSocket(_jl_tcp_init(globalEventLoop()));
+    if(socket.handle==0)
+        error("open_any_tcp_port: could not create socket")
+    end
+    addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
+    while _jl_tcp_bind(socket,addr)!=0
+        addr.port++;
+    end
+    err = _jl_listen(socket,4)
+    if(err)
+        print(err)
+        error("open_any_tcp_port: could not listen on socket")
+    end
+    return (addr.port,socket)
 end
 
 abstract AsyncWork

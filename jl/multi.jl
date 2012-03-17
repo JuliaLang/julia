@@ -944,26 +944,21 @@ end
 
 # the entry point for julia worker processes. does not return.
 # argument is descriptor to write listening port # to.
-start_worker() = start_worker(1)
-function start_worker(wrfd)
-    port = [int16(9009)]
-    sockfd = ccall(:open_any_tcp_port, Int32, (Ptr{Int16},), port)
-    if sockfd == -1
-        error("could not bind socket")
-    end
-    io = fdio(wrfd)
-    write(io, "julia_worker:")  # print header
-    fprintf(io, "%d#", port[1]) # print port
-    write(io, getipaddr())      # print hostname
-    write(io, '\n')
-    flush(io)
+start_worker() = start_worker(STDOUT)
+function start_worker(out::Stream)
+    default_port = int16(9009)
+    worker_sockets = HashTable()
+    (actual_port,sock) = open_any_tcp_port(port,make_callback((fd,staus)->accept_handler(fd,worker_sockets)))
+
+    write(out, "julia_worker:")  # print header
+    fprintf(out, "%d#", actual_port) # print port
+    write(out, getipaddr())      # print hostname
+    write(out, '\n')
+
     # close stdin; workers will not use it
     close(STDIN)
 
     global const Scheduler = current_task()
-
-    worker_sockets = HashTable()
-    add_fd_handler(sockfd, fd->accept_handler(fd, worker_sockets))
 
     try
         event_loop(false)
@@ -971,8 +966,8 @@ function start_worker(wrfd)
         print("unhandled exception on $(myid()): $e\nexiting.\n")
     end
 
-    #ccall(:jl_close, Int32, (Int32,), sockfd)
-    ccall(:jl_exit , Void , (Int32,), 0)
+    close(sock)
+    exit(0)
 end
 
 # establish an SSH tunnel to a remote worker

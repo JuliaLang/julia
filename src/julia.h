@@ -704,7 +704,7 @@ DLLEXPORT uv_loop_t *jl_local_event_loop();
 DLLEXPORT uv_pipe_t *jl_make_pipe();
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,void *callback);
+DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
 
 DLLEXPORT void jl_callback(void *callback);
 
