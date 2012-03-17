@@ -3,6 +3,14 @@ type Polynomial{T<:Number}
     a::Vector{T}
 end
 
+function zero{T}(p::Polynomial{T})
+    Polynomial([zero(T)])
+end
+
+function one{T}(p::Polynomial{T})
+    Polynomial([one(T)])
+end
+
 function show(p::Polynomial)
     n = length(p.a)
     print("Polynomial(")
@@ -65,10 +73,6 @@ function *{T,S}(p1::Polynomial{T}, p2::Polynomial{S})
     Polynomial(a)
 end
 
-function ^{T}(p1::Polynomial{T})
-
-end
-
 polyval(p::Polynomial, x::Number) = polyval(p.a, x)
 
 function polyval(a::AbstractVector, x::Number)
@@ -125,4 +129,5 @@ function poly(r::AbstractVector)
     return Polynomial(c)
 end
 poly(A::Matrix) = poly(eig(A)[1])
+
 
