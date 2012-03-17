@@ -1,3 +1,58 @@
+abstract ImageCoordinate
+abstract Space <: ImageCoordinate
+abstract Time <: ImageCoordinate
+abstract Channel <: ImageCoordinate
+
+abstract Image
+# Defines an image type with all data held in memory
+type ImageArray{T<:Number} <: Image
+    data::Array{T}
+    coordinate_types::Vector{ImageCoordinate}
+    coordinate_units::Vector{Any}  # vector of strings, "microns" or I"\mu m"
+    coordinate_names::Vector{Any}  # vector of strings, "X" or "Y"
+    coordinate_ranges::Vector{Range1}
+    space_directions::Matrix{Float64}
+    valid::Array{Any,1}     # can be used to store bad frame/pixel data
+    metadata::CompositeKind  # arbitrary metadata, like acquisition time, etc.
+
+    ImageArray{T}() = new()
+end
+function ImageArray{T<:Number}(dat::Array{T})
+    ret = ImageArray{T}()
+    ret.data = dat
+    n_dims = ndims(dat)
+    ret.coordinate_types = cell(n_dims)
+    ret.coordinate_types[1:n_dims] = Space
+    ret.coordinate_units = cell(n_dims)
+    ret.coordinate_units[1:n_dims] = ""
+    ret.coordinate_names = cell(n_dims)
+    ret.coordinate_names[1:n_dims] = ""
+    ret.space_directions = eye(n_dims)
+    ret.valid = cell(n_dims)
+    onec = cell(n_dims)
+    onec[1:n_dims] = 1
+    for idim = 1:n_dims
+        sz = copy(onec)
+        sz[idim] = size(dat,idim)
+        ret.valid[idim] = trues(tuple(sz...))
+    end
+    return ret
+end
+function ndims(img::ImageArray)
+    return length(img.coordinate_types)
+end
+function set_orthogonal_spacing(img::Image,s::Vector)
+    n_dims = ndims(img)
+    if n_dims != length(s)
+        error("Dimensions do not match")
+    end
+    for idim = 1:n_dims
+        img.space_directions[idim,idim] = s[idim]
+    end
+    return img
+end
+
+
 function lut(pal::Vector, a)
     out = similar(a, eltype(pal))
     n = numel(pal)
