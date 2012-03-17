@@ -28,6 +28,7 @@ showln(x) = (show(x); println())
 (*)(s::String...) = strcat(s...)
 (^)(s::String, r::Integer) = repeat(s,r)
 
+
 size(s::String) = (length(s),)
 size(s::String, d::Integer) = d==1 ? length(s) :
     error("in size: dimension ",d," out of range")
@@ -880,7 +881,11 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         end
         c,i = next(s,i)
     end
-    return flipsign(n,sgn)
+    if T <: Signed
+        return flipsign(n,sgn)
+    else
+        return n
+    end
 end
 
 parse_int(s::String, base::Integer) = parse_int(Int,s,base)

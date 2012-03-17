@@ -5,15 +5,8 @@
   . builtin type definitions
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
-#include "libsupport.h"
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"
@@ -2277,11 +2270,12 @@ void jl_init_types(void)
 
     jl_methtable_type =
         jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
-                           jl_tuple(4, jl_symbol("defs"), jl_symbol("cache"),
-                                    jl_symbol("cache_1arg"),
+                           jl_tuple(5, jl_symbol("defs"), jl_symbol("cache"),
+                                    jl_symbol("cache_arg1"),
+                                    jl_symbol("cache_targ"),
                                     jl_symbol("max_args")),
-                           jl_tuple(4, jl_any_type, jl_any_type, jl_any_type,
-                                    jl_long_type));
+                           jl_tuple(5, jl_any_type, jl_any_type, jl_any_type,
+                                    jl_any_type, jl_long_type));
     jl_methtable_type->fptr = jl_f_no_function;
 
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),

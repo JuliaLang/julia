@@ -4,14 +4,8 @@
   . pool-allocates small objects, keeps big objects on a simple list
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and

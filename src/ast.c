@@ -5,15 +5,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
-#include <setjmp.h>
 #include "julia.h"
-
 #include "flisp.h"
 
 static char flisp_system_image[] = {

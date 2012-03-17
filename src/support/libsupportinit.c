@@ -1,7 +1,3 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <math.h>
 #include <locale.h>
 #include "libsupport.h"
 

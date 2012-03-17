@@ -48,6 +48,4 @@ JL_CALLABLE(jl_f_yieldto);
 JL_CALLABLE(jl_f_ctor_trampoline);
 JL_CALLABLE(jl_f_make_callback);
 
-jl_value_t *jl_new_closure_internal(jl_lambda_info_t *li, jl_value_t *env);
-
 #endif

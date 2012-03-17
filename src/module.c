@@ -1,15 +1,7 @@
 /*
   modules and top-level bindings
 */
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 
 jl_module_t *jl_base_module=NULL;

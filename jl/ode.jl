@@ -208,7 +208,7 @@ function ode45_dp(F::Function, tspan::AbstractVector, x0::AbstractVector)
         
     # k_ needs to be initialized as an Nx7 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),7)
+    k_ = zeros(eltype(x), (length(x),7))
     
     # Compute the first stage prior to the main loop.  This is part of the Dormand-Prince pair caveat
     # Normally, during the main loop the last stage for x[k] is the first stage for computing x[k+1].
@@ -310,7 +310,7 @@ function ode45_fb(F::Function, tspan::AbstractVector, x0::AbstractVector)
         
     # k_ needs to be initialized as an Nx6 matrix where N=number of rows in x
     # (just for speed so octave doesn't need to allocate more memory at each stage value)
-    k_ = zeros(length(x),6)
+    k_ = zeros(eltype(x), (length(x),6))
     
     while (t < tfinal) & (h >= hmin)
         if t + h > tfinal; h = tfinal - t; end
@@ -372,12 +372,12 @@ const ode45 = ode45_dp
 #   ODEFUN(T,X) must return a column vector corresponding to f(t,x). Each
 #   row in the solution array X corresponds to a time returned in the
 #   column vector T.
-function ode4(F::Function, tspan::AbstractVector, x0::AbstractVector)
+function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T})
     h = diff(tspan)
-    x = Array(Float64, (length(tspan), length(x0)))
+    x = Array(T, (length(tspan), length(x0)))
     x[1,:] = x0'
 
-    midxdot = Array(Float64, (4, length(x0)))
+    midxdot = Array(T, (4, length(x0)))
     for i = 1:(length(tspan)-1)
         # Compute midstep derivatives
         midxdot[1,:] = F(tspan[i],         x[i,:]')
@@ -392,9 +392,9 @@ function ode4(F::Function, tspan::AbstractVector, x0::AbstractVector)
 end
 
 # ODE_MS Fixed-step, fixed-order multi-step numerical method with Adams-Bashforth-Moulton coefficients
-function ode_ms(F::Function, tspan::AbstractVector, x0::AbstractVector, order::Integer)
+function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer)
     h = diff(tspan)
-    x = zeros(length(tspan), length(x0))
+    x = zeros(T,(length(tspan), length(x0)))
     x[1,:] = x0
 
     if 1 <= order <= 4

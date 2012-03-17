@@ -1,13 +1,6 @@
 #include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
 #include <setjmp.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -106,8 +99,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     if (!jl_is_expr(e)) {
         if (jl_is_lambda_info(e)) {
-            return jl_new_closure_internal((jl_lambda_info_t*)e,
-                                           (jl_value_t*)jl_null);
+            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
+                                               (jl_lambda_info_t*)e);
         }
         return e;
     }

@@ -58,6 +58,17 @@ function isequal(t1::Tuple, t2::Tuple)
     return true
 end
 
+function isless(t1::Tuple, t2::Tuple)
+    n1, n2 = length(t1), length(t2)
+    for i = 1:min(n1, n2)
+        a, b = t1[i], t2[i]
+        if !isequal(a, b)
+            return isless(a, b)
+        end
+    end
+    return n1 < n2
+end
+
 ## functions ##
 
 copy(x::Tuple) = map(copy, x)

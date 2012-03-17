@@ -9,8 +9,8 @@
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
-static char *extensions[] = { ".so" };
-#define N_EXTENSIONS 1
+static char *extensions[] = { ".so", "" };
+#define N_EXTENSIONS 2
 
 #elif defined(__APPLE__)
 #include <unistd.h>

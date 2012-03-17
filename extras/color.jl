@@ -1,6 +1,6 @@
 
 # e.g., 0xff0000 -> (1.,0.,0.)
-function hex2rgb( hextriplet::Int )
+function hex2rgb( hextriplet::Integer )
     s = 1. / 0xff
     r = s * ((hextriplet >> 16) & 0xff) 
     g = s * ((hextriplet >>  8) & 0xff)
@@ -10,12 +10,21 @@ end
 
 # e.g., "red" -> (1.,0.,0.)
 function name2rgb( name::String )
-    ir,ig,ib = _svg_color_names[name]
+    ir,ig,ib = _jl_color_names[name]
     (ir/255., ig/255., ib/255.)
 end
 
-# http://www.w3.org/TR/SVG/types.html#ColorKeywords
-_svg_color_names = {
+const _jl_color_names = {
+    "y" => (255, 255, 0),
+    "m" => (255, 0, 255),
+    "c" => (0, 255, 255),
+    "r" => (255, 0, 0),
+    "g" => (0, 255, 0),
+    "b" => (0, 0, 255),
+    "w" => (255, 255, 255),
+    "k" => (0, 0, 0),
+
+    # http://www.w3.org/TR/SVG/types.html#ColorKeywords
     "aliceblue" => (240, 248, 255),
     "antiquewhite" => (250, 235, 215),
     "aqua" => ( 0, 255, 255),

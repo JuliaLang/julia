@@ -2,14 +2,8 @@
   array constructors and primitives
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 
 // array constructors ---------------------------------------------------------

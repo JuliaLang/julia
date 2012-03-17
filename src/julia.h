@@ -260,7 +260,8 @@ typedef struct _jl_methtable_t {
     JL_STRUCT_TYPE
     jl_methlist_t *defs;
     jl_methlist_t *cache;
-    jl_array_t *cache_1arg;
+    jl_array_t *cache_arg1;
+    jl_array_t *cache_targ;
     jl_value_t *max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
     int ncalls;
@@ -597,7 +598,8 @@ jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type);
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t);
-jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env);
+jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
+                              jl_lambda_info_t *li);
 jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 jl_tuple_t *jl_tuple(size_t n, ...);
 jl_tuple_t *jl_tuple1(void *a);

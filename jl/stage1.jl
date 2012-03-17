@@ -11,6 +11,6 @@ begin
 end
 
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
-      "sys.ji", "jl/start_image.jl")
+      "$JULIA_HOME/sys.ji", "start_image.jl")
 
 end # module

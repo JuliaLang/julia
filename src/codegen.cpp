@@ -19,7 +19,6 @@
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include <setjmp.h>
-#include <cstdio>
 #include <string>
 #include <sstream>
 #include <map>
@@ -169,15 +168,13 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
     Function *llvmf = (Function*)li->functionObject;
-    //verifyFunction(*llvmf,AbortProcessAction);
-    if (li->fptr == NULL) {
+    if (li->fptr == &jl_trampoline) {
         JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         JL_SIGATOMIC_END();
+        llvmf->deleteBody();
     }
-    assert(li->fptr != NULL);
     f->fptr = li->fptr;
-    llvmf->deleteBody();
 }
 
 extern "C" void jl_compile(jl_function_t *f)
@@ -365,6 +362,9 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
             }
         }
     }
+    else if (jl_is_lambda_info(expr)) {
+        if (1 > *max) *max = 1;
+    }
     else if (jl_is_symbolnode(expr)) {
         expr = (jl_value_t*)jl_symbolnode_sym(expr);
     }
@@ -416,8 +416,9 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     jl_array_t *capt = jl_lam_capt((jl_expr_t*)ast);
     if (capt->length == 0) {
         // no captured vars; lift
-        jl_value_t *fun = jl_new_closure_internal((jl_lambda_info_t*)expr,
-                                                  (jl_value_t*)jl_null);
+        jl_value_t *fun =
+            (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
+                                        (jl_lambda_info_t*)expr);
         jl_add_linfo_root(ctx->linfo, fun);
         return literal_pointer_val(fun);
     }
@@ -446,8 +447,12 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
     env_tuple = builder.CreateCall(jlntuple_func,
                                    ArrayRef<Value*>(&captured[0],
                                                     1+capt->length));
-    return builder.CreateCall2(jlclosure_func,
-                               literal_pointer_val(expr), env_tuple);
+    make_gcroot(env_tuple, ctx);
+    Value *result = builder.CreateCall3(jlclosure_func,
+                                        Constant::getNullValue(T_pint8),
+                                        env_tuple, literal_pointer_val(expr));
+    ctx->argDepth--;
+    return result;
 }
 
 // --- generating function calls ---
@@ -1967,14 +1972,15 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlbox_func, (void*)&jl_new_box);
 
     std::vector<Type*> args4(0);
+    args4.push_back(T_pint8);
     args4.push_back(jl_pvalue_llvmt);
     args4.push_back(jl_pvalue_llvmt);
     jlclosure_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, args4, false),
                          Function::ExternalLinkage,
-                         "jl_new_closure_internal", jl_Module);
+                         "jl_new_closure", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlclosure_func,
-                                         (void*)&jl_new_closure_internal);
+                                         (void*)&jl_new_closure);
 
     std::vector<Type*> args5(0);
     args5.push_back(T_size);

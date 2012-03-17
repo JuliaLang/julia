@@ -239,3 +239,22 @@ end
 #@_jl_rand_matrix_builder_1arg Float64 randchi2
 
 #const chi2rnd = randchi2 # alias chi2rnd
+
+# From John D. Cook
+# http://www.johndcook.com/julia_rng.html
+function randbeta(a, b)
+    if a <= 0 || b <= 0
+        error("Beta parameters must be positive")
+    end
+    
+    ## There are more efficient methods for generating beta samples.
+    ## However such methods are a little more efficient and much more complicated.
+    ## For an explanation of why the following method works, see
+    ## http://www.johndcook.com/distribution_chart.html#gamma_beta
+
+    u = randg(a)
+    v = randg(b)
+    return u / (u + v)
+end
+
+const betarnd = randbeta
