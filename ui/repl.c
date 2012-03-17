@@ -264,11 +264,9 @@ int true_main(int argc, char *argv[])
         jl_puts("error during run:\n",jl_stderr_tty);
         jl_show(jl_exception_in_transit);
         jl_puts( "\n",jl_stdout_tty);
-        restart();
         goto again;
     }
     uv_tty_reset_mode();
-    rl_cleanup_after_signal();
     return iserr;
 }
 
