@@ -53,34 +53,3 @@ end
 
 square(x::Number) = x*x
 
-function polyval(a::AbstractVector, x::Number)
-    y = a[1]
-    for i = 2:length(a)
-        y = a[i] + x.*y
-    end
-    return y
-end
-
-function polyval(a::AbstractVector, x::AbstractVector)
-    y = zeros(size(x))
-    for i = 1:length(x)
-        y[i] = polyval(a, x[i])
-    end
-    return y
-end
-
-function polyint(a::AbstractVector, k::Number)
-    vcat(a, k)./flipud(1:(length(a)+1))
-end
-polyint(a::AbstractVector) = polyint(a, 0)
-
-function poly(r::AbstractVector)
-    n = length(r)
-    c = zeros(n+1,1)
-    c[1] = 1
-    for j = 1:n
-        c[2:j+1] = c[2:j+1]-r[j]*c[1:j]
-    end
-    return c
-end
-poly(A::Matrix) = poly(eig(A)[1])
