@@ -1,3 +1,5 @@
+_jl_libamos = dlopen("libamos")
+
 besselj0(x::Float64) = ccall(dlsym(_jl_libfdm, :j0),  Float64, (Float64,), x)
 besselj0(x::Float32) = ccall(dlsym(_jl_libfdm, :j0f), Float32, (Float32,), x)
 @vectorize_1arg Real besselj0
