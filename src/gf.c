@@ -7,14 +7,8 @@
   . method specialization, invoking type inference
 */
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
 #include <assert.h>
-#include <sys/types.h>
-#include <limits.h>
-#include <errno.h>
-#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -263,7 +257,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
     if (f->linfo == NULL)
         return f;
-    jl_function_t *nf = jl_new_closure(f->fptr, f->env);
+    jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL);
     JL_GC_PUSH(&nf);
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     JL_GC_POP();
@@ -273,16 +267,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 // make a new method that calls the generated code from the given linfo
 jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
 {
-    jl_function_t *nf = jl_new_closure(NULL, NULL);
-    nf->linfo = li;
-    JL_GC_PUSH(&nf);
-    nf->env = f->env;
-    if (li->fptr != NULL)
-        nf->fptr = li->fptr;
-    else
-        nf->fptr = &jl_trampoline;
-    JL_GC_POP();
-    return nf;
+    return jl_new_closure(NULL, f->env, li);
 }
 
 static
@@ -1327,7 +1312,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
-    jl_function_t *f = jl_new_closure(NULL, NULL);
+    jl_function_t *f = jl_new_closure(jl_apply_generic, NULL, NULL);
     JL_GC_PUSH(&f);
     jl_initialize_generic_function(f, name);
     JL_GC_POP();

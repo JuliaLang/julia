@@ -8,7 +8,6 @@ type Cons{T} <: List{T}
     tail::List{T}
 end
 
-cons{T}(h::List{T}, t::List{List{T}}) = Cons{List{T}}(h, t)
 cons{T}(h, t::List{T}) = Cons{T}(h, t)
 
 nil(T) = Nil{T}()
@@ -42,7 +41,6 @@ function show{T}(l::List{T})
 end
 
 list() = nil()
-list{T}(first::T) = cons(first, nil(T))
 function list(elts...)
     l = nil()
     for i=length(elts):-1:1
@@ -52,6 +50,13 @@ function list(elts...)
 end
 function list{T}(elts::T...)
     l = nil(T)
+    for i=length(elts):-1:1
+        l = cons(elts[i],l)
+    end
+    return l
+end
+function list{T}(elts::List{T}...)
+    l = nil(List{T})
     for i=length(elts):-1:1
         l = cons(elts[i],l)
     end
