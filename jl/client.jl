@@ -97,21 +97,12 @@ function run_repl()
     end
 
     # ctrl-C interrupt for interactive use
-    ccall(:jl_install_sigint_handler, Void, ())
+    #ccall(:jl_install_sigint_handler, Void, ())
 
     ccall(:repl_callback_enable, Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 
     run_event_loop(globalEventLoop());
-#TODO: make into callback
-    #while true
-    #    (ast, show_value) = take(_jl_repl_channel)
-    #    if show_value == -1
-    #        # exit flag
-    #        break
-    #    end
-    #    _jl_eval_user_input(ast, show_value!=0)
-    #end
 
     if _jl_have_color
         print(_jl_color_normal)

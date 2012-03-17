@@ -121,8 +121,7 @@ void *jl_dlsym(uv_lib_t handle, char *symbol)
     void *ptr;
     uv_err_t error = uv_dlsym(handle, symbol, &ptr);
     if (error.code != 0) {
-            jl_printf(jl_stderr_tty, "Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
-            jl_exit(1);
+        jl_errorf("Error: Symbol Could not be found %s (%d:%d)\n", symbol ,error.code, error.sys_errno_);
     }
     return ptr;
 }

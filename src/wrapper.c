@@ -410,6 +410,19 @@ DLLEXPORT int jl_getpid()
 #endif
 }
 
+//WIN32 math functions that are not part of the CRT
+#ifdef __WIN32__
+DLLEXPORT float truncf(float x)
+{
+     return (x > 0) ? floor(x) : ceil(x);
+}
+
+DLLEXPORT double trunc(double x)
+{
+     return (x > 0) ? floor(x) : ceil(x);
+}
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -958,7 +958,7 @@ function start_worker(wrfd)
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
-    ccall(:close, Int32, (Int32,), 0)
+    close(STDIN)
 
     global const Scheduler = current_task()
 
@@ -971,7 +971,7 @@ function start_worker(wrfd)
         print("unhandled exception on $(myid()): $e\nexiting.\n")
     end
 
-    ccall(:close, Int32, (Int32,), sockfd)
+    #ccall(:jl_close, Int32, (Int32,), sockfd)
     ccall(:jl_exit , Void , (Int32,), 0)
 end
 
@@ -1597,7 +1597,7 @@ function event_loop(isclient)
     _jl_work_cb_handle = createSingleAsyncWork(globalEventLoop(),make_callback(_jl_work_cb))
     fgcm = createSingleAsyncWork(globalEventLoop(),make_callback((args...)->flush_gc_msgs()));
     timer = initTimeoutAsync(globalEventLoop())
-    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),10000,10000) #do work every 10s
+    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),int64(10000),int64(10000)) #do work every 10s
     while false
         try
             if iserr

@@ -11,6 +11,10 @@ LLVMROOT = $(EXTROOT)
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
+ifeq ($(OS), MINGW32_NT-6.1)
+OS=WINNT
+endif
+
 DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
@@ -111,7 +115,11 @@ else
 LIBBLAS = -lblas
 endif
 else
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+	ifeq ($(OS), WINNT)
+		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
+	else
+		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+	endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -145,9 +153,9 @@ LDFLAGS =
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 endif
 
-ifeq ($(OS), "MINGW32_NT-6.1")
+ifeq ($(OS), WINNT)
 SHLIB_EXT = dll
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"D:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
 endif
 
 # Libraries to link
