@@ -235,7 +235,6 @@ int true_main(int argc, char *argv[])
     //uv_pipe_t pipe;
     //uv_pipe_init(jl_event_loop,&pipe,1);
     //jl_status("\033[34mThis is a test\n");
-    &jl_load;
 
     //install_event_handler("julia> ",&parseAndExecute);
 
@@ -270,7 +269,7 @@ int true_main(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    libsupport_init();
+    //libsupport_init();
     parse_opts(&argc, &argv);
     julia_init(lisp_prompt ? NULL : image_file);
     return julia_trampoline(argc, argv, true_main);

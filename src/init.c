@@ -149,8 +149,6 @@ void julia_init(char *imageFile)
     jl_stdout_tty = malloc(sizeof(uv_tty_t));
     jl_stderr_tty = malloc(sizeof(uv_tty_t));
     uv_tty_reset_mode();
-    //uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1); //raw input
-    uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,1); //raw output
     uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdin_tty,0,1);//stdin
     uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdout_tty,1,0);//stdout
     uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stderr_tty,2,0);//stderr

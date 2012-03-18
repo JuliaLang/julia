@@ -392,7 +392,7 @@ DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
         uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
     } else {
-        ios_t *handle = stream;
+        ios_t *handle = (ios_t*)stream;
         return ios_putc(c,handle);
     }
 }
@@ -404,7 +404,7 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
         uv_buf_t buf[]  = {{.base = str,.len=n}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
     } else {
-        ios_t *handle = stream;
+        ios_t *handle = (ios_t*)stream;
         return ios_write(handle,str,n);
     }
 }
@@ -474,7 +474,7 @@ DLLEXPORT int jl_getpid()
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t* loop)
 {
     if(!loop)
-        return -2;
+        return NULL;
     uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
     uv_tcp_init(loop,tcp);
     tcp->data=0;
