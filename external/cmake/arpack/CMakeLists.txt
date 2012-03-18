@@ -87,7 +87,6 @@ set(arpacksrc_STAT_SRCS
 prefixlist(arpacksrc_STAT_SRCS "${arpacksrc_DIR}")
 
 set(arpackutil_STAT_SRCS
-	arscnd.f # TO BE REMOVED
     icnteq.f
     icopy.f
     iset.f

@@ -222,6 +222,8 @@ include(CMakeDetermineASMCompiler)
 set(CMAKE_ASM_CREATE_SHARED_LIBRARY ${CMAKE_C_CREATE_SHARED_LIBRARY})
 
 add_subdirectory(fdlibm)
+set(LapackLIB lapack)
+
 add_subdirectory(cmake)
 
 set(FFTW_CONFIG --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma)

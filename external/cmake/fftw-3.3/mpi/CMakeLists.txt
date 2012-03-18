@@ -74,13 +74,12 @@ target_link_libraries(mpi-bench ${LIBFFTWTHREADS} fftw3${PREC_SUFFIX}_mpi fftw3$
 set_target_properties(fftw3${PREC_SUFFIX}_mpi PROPERTIES VERSION 1.0.0 SOVERSION 1)
 install(TARGETS fftw3${PREC_SUFFIX}_mpi ${INSTALL_TARGETS_DEFAULT_ARGS} DESTINATION lib)
 
-install(FILES fftw3-mpi.h DESTINATION include)
 endif(MPI)
 
 ########### install files ###############
 configure_file(${TOP_SRCDIR}/mpi/fftw3-mpi.f03.in ${CMAKE_CURRENT_BINARY_DIR}/fftw3-mpi.f03)
 
-install(FILES  fftw3-mpi.h DESTINATION include)
+install(FILES  ${TOP_SRCDIR}/mpi/fftw3-mpi.h DESTINATION include)
 install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/fftw3-mpi.f03 DESTINATION lib/pkgconfig)
 
 ############ CHECKS ######################

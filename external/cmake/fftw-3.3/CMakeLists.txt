@@ -101,13 +101,17 @@ addConfigHDefine("PACKAGE_VERSION" "\"${VER}\"" CODE)
 addConfigHDefine("VERSION" "\"${VER}\"" CODE)
 addConfigHDefine("FFTW_CC" "\"${CMAKE_C_FLAGS}\"" CODE)
 
-check_include_file(sys/types.h HAVE_SYS_TYPES_H)
-check_include_file(stdint.h HAVE_STDINT_H)
-check_include_file(stddef.h HAVE_STDDEF_H)
+set(HeadersToCheck malloc.h sys/types.h stdlib.h strings.h string.h stdint.h 
+stddef.h sys/time.h unistd.h sys/stat.h sys/sysctl.h sys/time.h sys/types.h alloca.h c_asm.h
+dlfcn.h inttypes.h intrinsics.h libintl.h limits.h mach/mach_time.h memory.h)
 
-addConfigHVarB(HAVE_SYS_TYPES_H CODE)
-addConfigHVarB(HAVE_STDINT_H CODE)
-addConfigHVarB(HAVE_STDDEF_H CODE)
+foreach(f ${HeadersToCheck})
+string(TOUPPER ${f} name)
+string(REPLACE "/" "_" name ${name})
+string(REPLACE "." "_" name ${name})
+check_include_file(${f} HAVE_${name})
+addConfigHVarB(HAVE_${name} CODE)
+endforeach()
 
 ########### DETECT FMA  ###############
 set(DEFAULT_FMA "powerpc" "ia64" "hppa" "mips64")
@@ -342,11 +346,16 @@ conditionalSet(COMBINED_THREADS HAVE_COMBINED_THREADS)
 #################
 
 set(FunctionsToCheck alloca abort BSDgettimeofday gettimeofday gethrtime read_real_time time_base_to_time drand48 sqrt memset posix_memalign memalign _mm_malloc _mm_free clock_gettime mach_absolute_time sysctl abort sinl cosl snprintf)
-foreach(f ${FunctionToCheck})
+foreach(f ${FunctionsToCheck})
 string(TOUPPER ${f} name)
-CheckFunctionExists(${f} HAVE_${name})
+CHECK_FUNCTION_EXISTS(${f} HAVE_${name})
 addConfigHVarB(HAVE_${name} CODE)
 endforeach()
+
+include(../Tests.cmake)
+message(STATUS "Running test")
+COMPILE_TEST(TIME_WITH_SYS_TIME)
+addConfigHVarB(TIME_WITH_SYS_TIME CODE)
 
 ## MSVC inline fix ##
 if(MSVC)
@@ -412,7 +421,7 @@ findObjects(FFTW${PREC_PREFIX}_SOURCES reodft kernel dft_scalar_codelets dft_sca
 include_directories("${TOP_SRCDIR}/api" "${TOP_SRCDIR}/kernel" "${TOP_SRCDIR}/dft" "${TOP_SRCDIR}/dft/scalar" "${TOP_SRCDIR}/dft/simd" "${TOP_SRCDIR}/rdft" "${TOP_SRCDIR}/rdft/scalar" "${TOP_SRCDIR}/rdft/simd" "${TOP_SRCDIR}/reodft" "${TOP_SRCDIR}/simd-support")
 add_library(fftw3${PREC_SUFFIX} SHARED ${FFTW${PREC_PREFIX}_SOURCES})
 
-set_target_properties(fftw3${PREC_SUFFIX} PROPERTIES VERSION 3.3.0 SOVERSION 6:0:3)
+set_target_properties(fftw3${PREC_SUFFIX} PROPERTIES VERSION 3.3.0)
 install(TARGETS fftw3${PREC_SUFFIX} DESTINATION lib)
 
 #add_subdirectory(tools)
@@ -421,7 +430,7 @@ install(TARGETS fftw3${PREC_SUFFIX} DESTINATION lib)
 ########### install files ###############
 
 configure_file(${TOP_SRCDIR}/fftw.pc.in ${CMAKE_CURRENT_BINARY_DIR}/fftw3${PREC_SUFFIX}.pc)
-install(FILES fftw3${PREC_SUFFIX}.pc DESTINATION lib/pkgconfig)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/fftw3${PREC_SUFFIX}.pc DESTINATION lib/pkgconfig)
 
 ## Type Sizes ##
 include(CheckTypeSize)

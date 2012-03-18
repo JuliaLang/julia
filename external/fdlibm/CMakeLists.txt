@@ -2,12 +2,20 @@ cmake_minimum_required(VERSION 2.8)
 project(fdlibm)
 
 enable_language(C)
-# default to release build
 
 IF (NOT DEFINED FDLIBM_MODE)
-	set(FDLIBM_MODE "_IEEE_LIBM")
+	set(FDLIBM_MODE _IEEE_LIBM)
 ENDIF()
-add_definitions("-D\"${FDLIBM_MODE}\"")
+add_definitions("-D${FDLIBM_MODE}")
+
+include(TestBigEndian)
+
+TEST_BIG_ENDIAN(IS_BIG_ENDIAN)
+if(${IS_BIG_ENDIAN})
+add_definitions("-D__BIG_ENDIAN")
+else()
+add_definitions("-D__LITTLE_ENDIAN")
+endif()
 
 set(SOURCES 
 b_exp.c
@@ -156,4 +164,4 @@ w_sinh.c
 w_sqrt.c
 )
 
-add_library(fdmlib STATIC ${SOURCES})
+add_library(fdlibm STATIC ${SOURCES})
