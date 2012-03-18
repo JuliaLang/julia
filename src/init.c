@@ -114,19 +114,22 @@ void jl_switch_stack(jl_task_t *t, jmp_buf *where);
 extern jmp_buf * volatile jl_jmp_target;
 #endif
 
+#ifdef __WIN32__
 static long chachedPagesize = 0;
 long getPageSize (void) {
-#ifdef __WIN32__
-    if (!chachedPagesize) {
+	if (!chachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
         chachedPagesize = systemInfo.dwPageSize;
     }
     return chachedPagesize;
-#else
-	return sysconf(_SC_PAGESIZE);
-#endif
 }
+#else
+long getPageSize (void) {
+	return sysconf(_SC_PAGESIZE);
+}
+#endif
+
 
 void julia_init(char *imageFile)
 {
@@ -154,8 +157,8 @@ void julia_init(char *imageFile)
     jl_stdin_tty->data=0;
     jl_stdout_tty->data=0;
     jl_stderr_tty->data=0;
-    uv_tty_set_mode(jl_stdin_tty,1); //raw input
-    uv_tty_set_mode(jl_stdout_tty,0); //raw output
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1); //raw input
+    uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,0); //raw output
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

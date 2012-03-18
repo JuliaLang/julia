@@ -153,6 +153,7 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 LDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
+READLINE += -lncurses -lcurses
 endif
 
 ifeq ($(OS), WINNT)

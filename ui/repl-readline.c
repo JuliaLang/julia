@@ -508,7 +508,7 @@ void jl_prep_terminal (int meta_flag)
     rl_prep_terminal(1);
 //terminal is prepped by libuv
     _rl_echoing_p=1;
-    uv_tty_set_mode(jl_stdout_tty,1);
+    uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,1);
 }
 
 /* Restore the terminal's normal settings and modes. */

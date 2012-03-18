@@ -359,10 +359,10 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     }
     else {
         char *val = tostring(args[1], "os.setenv");
-#ifdef __linux
-        result = setenv(name, val, 1);
-#elif defined (__WIN32__)
+#if defined (__WIN32__)
         result = SetEnvironmentVariable(name,val);
+#else
+		result = setenv(name, val, 1);
 #endif
     }
     if (result != 0)

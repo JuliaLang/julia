@@ -709,6 +709,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
 
 DLLEXPORT void jl_callback(void *callback);
+void jl_callback_call(jl_function_t *f,int count,...);
 
 DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_function_t *cb);
 DLLEXPORT void jl_async_send(uv_async_t *handle);

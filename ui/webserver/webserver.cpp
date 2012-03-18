@@ -593,9 +593,11 @@ string create_session(bool idle)
     opts.stderr_stream = 0; //parent stderr
     opts.exit_cb=&process_exited;
     opts.cwd=NULL; //cwd
-    char *argv[3]={"julia-debug-readline","./ui/webserver/julia_web_base.jl",NULL};
+	char arg0[] = "julia-debug-readline";
+	char arg1[] = "./ui/webserver/julia_web_base.jl";
+	char *argv[3] = {arg0, arg1, NULL};
     opts.args=argv;
-    opts.file=*argv;
+    opts.file=arg0;
     uv_spawn(uv_default_loop(),session_data.proc,opts);
 
     // set the start time

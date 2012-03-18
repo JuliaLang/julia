@@ -1,6 +1,9 @@
+#include <stdio.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "julia.h"
 #include "support/ios.h"
@@ -335,7 +338,7 @@ void jl_free_buffer(uv_write_t *uvw, int status) {
 
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream)
 {
-    jl_write(stream,str,strlen(str));
+    return jl_write(stream,str,strlen(str));
 }
 
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
@@ -347,7 +350,7 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
     return jl_write(s, buf, n);
 }
 
-static unsigned char chars[] = {
+static char chars[] = {
       0,  1,  2,  3,   4,  5,  6,  7,
       8,  9, 10, 11, 12, 13, 13, 15,
      16, 17, 18, 19, 20, 21, 22, 23,
@@ -378,7 +381,7 @@ static unsigned char chars[] = {
     216,217,218,219,220,221,222,223,
     224,225,226,227,228,229,230,231,
     232,233,234,235,236,237,238,239,
-    240,241,424,243,244,245,246,247,
+    240,241,242,243,244,245,246,247,
     248,249,250,251,252,253,254,255
 };
 
@@ -390,7 +393,7 @@ DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
     } else {
         ios_t *handle = stream;
-        ios_putc(c,handle);
+        return ios_putc(c,handle);
     }
 }
 
@@ -400,8 +403,7 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = str,.len=n}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
-    } else
-    {
+    } else {
         ios_t *handle = stream;
         return ios_write(handle,str,n);
     }
