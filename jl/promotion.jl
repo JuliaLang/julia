@@ -59,6 +59,9 @@ mod(x::Real, y::Real) = mod(promote(x,y)...)
 mod1(x::Real, y::Real) = mod1(promote(x,y)...)
 cmp(x::Real, y::Real) = cmp(promote(x,y)...)
 
+max(x::Real, y::Real) = max(promote(x,y)...)
+min(x::Real, y::Real) = min(promote(x,y)...)
+
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
@@ -74,3 +77,6 @@ no_op_err(name, T) = error(name," not defined for ",T)
 
 =={T<:Number}(x::T, y::T) = no_op_err("==", T)
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
+
+max{T<:Real}(x::T, y::T) = y < x ? x : y
+min{T<:Real}(x::T, y::T) = x < y ? x : y

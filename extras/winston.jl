@@ -899,14 +899,13 @@ end
 
 type Legend <: PlotComponent
     attr::PlotAttributes
-    device_objects::List
     x
     y
     components::Array{PlotComponent,1}
 
     function Legend( x, y, components, args... )
         #_PlotComponent.__init__( self )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr( self )
         kw_init(self, args...)
         self.x = x
@@ -942,13 +941,16 @@ function make( self::Legend, context::PlotContext )
     shift( bbox, key_pos )
     dp = 0., -(key_vsep + key_height)
 
+    objs = {}
     for comp in self.components
         s = getattr( comp, "label", "" )
         t = TextObject( text_pos, s, getattr(self,"style") )
-        add( self, t, make_key(comp,bbox) )
+        push(objs, t)
+        push(objs, make_key(comp,bbox))
         text_pos = pt_add( text_pos, dp )
         shift( bbox, dp )
     end
+    objs
 end
 
 # ErrorBars --------------------------------------------------------------------
@@ -963,13 +965,12 @@ _kw_rename(::ErrorBar) = {
 
 type ErrorBarsX <: ErrorBar
     attr::PlotAttributes
-    device_objects::List
     y
     lo
     hi
 
     function ErrorBarsX( y, lo, hi, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.y = y
@@ -987,25 +988,28 @@ end
 
 function make( self::ErrorBarsX, context )
     l = _size_relative( getattr(self, "barsize"), context.dev_bbox ) 
+    objs = {}
     for i = 1:numel(self.y)
         p = context.geom( self.lo[i], self.y[i] )
         q = context.geom( self.hi[i], self.y[i] )
         l0 = LineObject( p, q )
         l1 = LineObject( (p[1],p[2]-l), (p[1],p[2]+l) )
         l2 = LineObject( (q[1],q[2]-l), (q[1],q[2]+l) )
-        add( self, l0, l1, l2 )
+        push(objs, l0)
+        push(objs, l1)
+        push(objs, l2)
     end
+    objs
 end
 
 type ErrorBarsY <: ErrorBar
     attr::PlotAttributes
-    device_objects::List
     x
     lo
     hi
 
     function ErrorBarsY( x, lo, hi, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -1022,6 +1026,7 @@ function limits( self::ErrorBarsY )
 end
 
 function make( self::ErrorBarsY, context )
+    objs = {}
     l = _size_relative( getattr(self, "barsize"), context.dev_bbox )
     for i = 1:numel(self.x)
         p = __call__( context.geom, self.x[i], self.lo[i] )
@@ -1029,8 +1034,11 @@ function make( self::ErrorBarsY, context )
         l0 = LineObject( p, q )
         l1 = LineObject( (p[1]-l,p[2]), (p[1]+l,p[2]) )
         l2 = LineObject( (q[1]-l,q[2]), (q[1]+l,q[2]) )
-        add( self, l0, l1, l2 )
+        push(objs, l0)
+        push(objs, l1)
+        push(objs, l2)
     end
+    objs
 end
 
 function SymmetricErrorBarsX( x, y, err, args... )
@@ -1128,11 +1136,11 @@ function _format_ticklabel( x, range )
     a, b = _magform( x )
     if abs(b) > 4
         if a == 1.
-            return "$$10^{$b}$$"
+            return "10^{$b}"
         elseif a == -1.
-            return "-$$10^{$b}$$"
+            return "-10^{$b}"
         else
-            return I"$a\times 10^{$b}$$"
+            return I"$a\times 10^{$b}"
         end
     end
     if range < 1e-6
@@ -1274,19 +1282,10 @@ function boundingbox( self::_Group, context )
     return bb
 end
 
-#function boundingbox( objs::List, context::PlotContext )
-#    bb = BoundingBox()
-#    for obj in objs
-#        union( bb, boundingbox(obj, context) )
-#    end
-#    return bb
-#end
-
 abstract HalfAxis <: PlotComponent
 
 type HalfAxisX <: HalfAxis
     attr::HashTable
-    device_objects::List
     func_ticks_default
     func_ticks_num
     func_subticks_default
@@ -1294,7 +1293,7 @@ type HalfAxisX <: HalfAxis
 
     function HalfAxisX(args...)
         self = new(
-            HashTable(), {},
+            HashTable(),
             (_ticks_default_linear, _ticks_default_log),
             (_ticks_num_linear, _ticks_num_log),
             (_subticks_linear, _subticks_log),
@@ -1376,14 +1375,15 @@ function _make_grid( self::HalfAxisX, context, ticks )
     if ticks == nothing
         return
     end
+    objs = {}
     for tick in ticks
-        add( self, LineX(tick,getattr(self, "grid_style")) )
+        push(objs, LineX(tick,getattr(self, "grid_style")))
     end
+    objs
 end
 
 type HalfAxisY <: HalfAxis
     attr::HashTable
-    device_objects::List
     func_ticks_default
     func_ticks_num
     func_subticks_default
@@ -1391,7 +1391,7 @@ type HalfAxisY <: HalfAxis
 
     function HalfAxisY(args...)
         self = new(
-            HashTable(), {},
+            HashTable(),
             (_ticks_default_linear, _ticks_default_log),
             (_ticks_num_linear, _ticks_num_log),
             (_subticks_linear, _subticks_log),
@@ -1473,9 +1473,11 @@ function _make_grid( self::HalfAxisY, context, ticks )
     if ticks == nothing
         return
     end
+    objs = {}
     for tick in ticks
-        add( self, LineY(tick,getattr(self,"grid_style")) )
+        push(objs, LineY(tick,getattr(self,"grid_style")))
     end
+    objs
 end
 
 # defaults
@@ -1550,15 +1552,14 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         style[k] = v
     end
 
-    l = LabelsObject( labelpos, labels, style )
-    add( self, l )
+    LabelsObject( labelpos, labels, style )
 end
 
 function _make_spine( self::HalfAxis, context )
     a, b = _range( self, context )
     p = _pos( self, context, a )
     q = _pos( self, context, b )
-    add( self, LineObject( p, q, getattr(self, "spine_style")) )
+    LineObject( p, q, getattr(self, "spine_style"))
 end
 
 function _make_ticks( self::HalfAxis, context, ticks, size, style )
@@ -1574,7 +1575,7 @@ function _make_ticks( self::HalfAxis, context, ticks, size, style )
         push( tickpos, _pos(self, context, tick) )
     end
 
-    add( self, CombObject(tickpos, ticklen, style) )
+    CombObject(tickpos, ticklen, style)
 end
 
 function make( self::HalfAxis, context )
@@ -1594,43 +1595,45 @@ function make( self::HalfAxis, context )
     implicit_draw_ticklabels = (draw_ticklabels == nothing) && 
         (getattr(self, "range") != nothing || getattr(self, "ticklabels") != nothing)
 
+    objs = {}
     if getattr(self, "draw_grid")
-        _make_grid( self, context, ticks )
+        objs = _make_grid( self, context, ticks)
     end
 
     if getattr(self, "draw_axis")
         if (draw_subticks != nothing && draw_subticks) || implicit_draw_subticks
-            _make_ticks( self, context, subticks, 
+            push(objs, _make_ticks( self, context, subticks, 
                 getattr(self, "subticks_size"), 
-                getattr(self, "subticks_style") )
+                getattr(self, "subticks_style")))
         end
 
         if draw_ticks
-            _make_ticks( self, context, ticks, 
+            push(objs, _make_ticks( self, context, ticks, 
                 getattr(self, "ticks_size"),
-                getattr(self, "ticks_style") )
+                getattr(self, "ticks_style")))
         end
 
         if getattr(self, "draw_spine")
-            _make_spine( self, context )
+            push(objs, _make_spine( self, context ))
         end
     end
 
     if (draw_ticklabels != nothing && draw_ticklabels) || implicit_draw_ticklabels
-        _make_ticklabels( self, context, ticks, ticklabels )
+        push(objs, _make_ticklabels( self, context, ticks, ticklabels ))
     end
 
     # has to be made last
     if hasattr(self, "label")
         if getattr(self, "label") != nothing # XXX:remove
-            add( self, BoxLabel(
-                _Group(self.device_objects),
+            push(objs, BoxLabel(
+                _Group(objs),
                 getattr(self, "label"),
                 _side(self),
                 getattr(self, "label_offset"),
                 getattr(self, "label_style")) )
         end
     end
+    objs
 end
 
 # PlotComposite ---------------------------------------------------------------
@@ -2534,13 +2537,12 @@ end
 
 type Curve <: LineComponent
     attr::HashTable
-    device_objects::List
     x
     y
 
     function Curve(x, y, args...)
         attr = HashTable() 
-        self = new(attr, {}, x, y)
+        self = new(attr, x, y)
         iniattr(self)
         kw_init(self, args2hashtable(args...)...)
         self
@@ -2555,21 +2557,22 @@ end
 
 function make( self::Curve, context )
     segs = geodesic( context.geom, self.x, self.y )
+    objs = {}
     for seg in segs
         x, y = call_vec( context.geom, seg[1], seg[2] )
-        add( self, PathObject(x, y) )
+        push(objs, PathObject(x, y))
     end
+    objs
 end
 
 type Slope <: LineComponent
     attr::HashTable
-    device_objects::List
     slope::Real
     intercept
 
     function Slope( slope, intercept, args... )
         #LineComponent.__init__( self )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.slope = slope
@@ -2608,22 +2611,23 @@ function make( self::Slope, context::PlotContext )
         end
     end
     #sort!(m)
+    objs = {}
     if length(m) > 1
         a = __call__( context.geom, m[1]... )
         b = __call__( context.geom, m[end]... )
-        add( self, LineObject(a, b) )
+        push(objs, LineObject(a, b))
     end
+    objs
 end
 
 type Histogram <: LineComponent
     attr::PlotAttributes
-    device_objects::List
     values
     x0
     binsize
 
     function Histogram( values, binsize, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.values = values
@@ -2668,16 +2672,15 @@ function make( self::Histogram, context::PlotContext )
         push(y, 0 )
     end
     u, v = call_vec(context.geom, x, y )
-    add( self, PathObject(u, v) )
+    [ PathObject(u, v) ]
 end
 
 type LineX <: LineComponent
     attr::PlotAttributes
-    device_objects::List
     x
 
     function LineX( x, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2693,16 +2696,15 @@ function make( self::LineX, context::PlotContext )
     yr = yrange(context.data_bbox)
     a = __call__( context.geom, self.x, yr[1] )
     b = __call__( context.geom, self.x, yr[2] )
-    add( self, LineObject(a, b) )
+    [ LineObject(a, b) ]
 end
 
 type LineY <: LineComponent
     attr::PlotAttributes
-    device_objects::List
     y
 
     function LineY( y, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.y = y
@@ -2718,12 +2720,11 @@ function make( self::LineY, context::PlotContext )
     xr = xrange(context.data_bbox)
     a = __call__( context.geom, xr[1], self.y )
     b = __call__( context.geom, xr[2], self.y )
-    add( self, LineObject(a, b) )
+    [ LineObject(a, b) ]
 end
 
 type BoxLabel <: PlotComponent
     attr::PlotAttributes
-    device_objects::List
     obj
     str::String
     side
@@ -2731,7 +2732,7 @@ type BoxLabel <: PlotComponent
 
     function BoxLabel( obj, str::String, side, offset, args... )
         @assert str != nothing
-        self = new(HashTable(), {}, obj, str, side, offset)
+        self = new(HashTable(), obj, str, side, offset)
         kw_init(self, args...)
         self
     end
@@ -2761,7 +2762,7 @@ function make( self::BoxLabel, context )
     end
 
     lt = LineTextObject( p, q, self.str, offset, getattr(self, "style") )
-    add( self, lt )
+    [ lt ]
 end
 
 # LabelComponent --------------------------------------------------------------
@@ -2782,12 +2783,11 @@ _kw_rename(::LabelComponent) = {
 
 type DataLabel <: LabelComponent
     attr::PlotAttributes
-    device_objects::List
     pos
     str
 
     function DataLabel( x, y, str, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.pos = x, y
@@ -2799,17 +2799,16 @@ end
 function make( self::DataLabel, context )
     pos = __call__( context.geom, self.pos )
     t = TextObject(pos, self.str, getattr(self, "style") )
-    add( self, t )
+    [ t ]
 end
 
 type PlotLabel <: LabelComponent
     attr::PlotAttributes
-    device_objects::List
     pos
     str
 
     function PlotLabel( x, y, str, args... )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.pos = x, y
@@ -2821,7 +2820,7 @@ end
 function make( self::PlotLabel, context )
     pos = __call__(context.plot_geom, self.pos... )
     t = TextObject(pos, self.str, getattr(self, "style"))
-    add( self, t )
+    [ t ]
 end
 
 # LabelsComponent ------------------------------------------------------------
@@ -2876,13 +2875,11 @@ kw_defaults(::FillComponent) = {
 
 type FillAbove <: FillComponent
     attr::PlotAttributes
-    device_objects::List
     x
     y
 
     function __init__( self, x, y, args...)
-        self = new(HashTable(), {})
-        #FillComponent.__init__( self )
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2902,18 +2899,16 @@ function make( self::FillAbove, context )
     max_y = context.data_bbox.yrange()[1]
     coords.append( context.geom(self.x[-1], max_y) )
     coords.append( context.geom(self.x[0], max_y) )
-    add( self, PolygonObject(coords) )
+    [ PolygonObject(coords) ]
 end
 
 type FillBelow <: FillComponent
     attr::PlotAttributes
-    device_objects::List
     x
     y
 
     function FillBelow( x, y, args...)
-        self = new(HashTable(), {})
-        #FillComponent.__init__( self )
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2933,20 +2928,18 @@ function make( self::FillBelow, context )
     min_y = yrange(context.data_bbox)[0]
     push( coords, __call__(context.geom, self.x[-1], min_y) )
     push( coords, __call__(context.geom, self.x[0], min_y) )
-    add( self, PolygonObject(coords) )
+    [ PolygonObject(coords) ]
 end
 
 type FillBetween <: FillComponent
     attr::PlotAttributes
-    device_objects::List
     x1
     y1
     x2
     y2
 
     function FillBetween(x1, y1, x2, y2, args...)
-        #FillComponent.__init__( self )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x1 = x1
@@ -2966,13 +2959,10 @@ function limits( self::FillBetween )
 end
 
 function make( self::FillBetween, context )
-    #x = list(self.x1) + reverse(self.x2)
-    #y = list(self.y1) + reverse(self.y2)
-    #coords = map( context.geom, x, y )
     x = [self.x1, reverse(self.x2)]
     y = [self.y1, reverse(self.y2)]
     coords = map( (a,b) -> __call__(context.geom,a,b), x, y )
-    add( self, PolygonObject(coords) )
+    [ PolygonObject(coords) ]
 end
 
 # SymbolDataComponent --------------------------------------------------------
@@ -2991,13 +2981,11 @@ end
 
 type Points <: SymbolDataComponent
     attr::PlotAttributes
-    device_objects::List
     x
     y
 
     function Points( x, y, args... )
-        #SymbolDataComponent.__init__( self )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -3019,7 +3007,7 @@ end
 
 function make( self::SymbolDataComponent, context::PlotContext )
     x, y = call_vec( context.geom, self.x, self.y )
-    add( self, SymbolsObject(x, y) )
+    [ SymbolsObject(x, y) ]
 end
 
 function Point( x::Real, y::Real, args... )
@@ -3028,14 +3016,12 @@ end
 
 type ColoredPoints <: SymbolDataComponent
     attr::PlotAttributes
-    device_objects::List
     x
     y
     c
 
     function ColoredPoints( x, y, c, args... )
-        #SymbolDataComponent.__init__( self )
-        self = new(HashTable(), {})
+        self = new(HashTable())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -3058,7 +3044,7 @@ end
 
 function make( self::ColoredPoints, context::PlotContext )
     x, y = call_vec( context.geom, self.x, self.y )
-    add( self, ColoredSymbolsObject(x, y, self.c) )
+    [ ColoredSymbolsObject(x, y, self.c) ]
 end
 
 function ColoredPoint( x::Real, y::Real, args... )
@@ -3071,29 +3057,17 @@ function show(self::PlotComponent)
     print(typeof(self),"()")
 end
 
-function add( self::PlotComponent, args... )
-    for arg in args
-        @assert arg != nothing
-        push(self.device_objects, arg)
-    end
-end
-
 function limits( self::PlotComponent )
     return BoundingBox()
-end
-
-function clear( self::PlotComponent )
-    self.device_objects = {}
 end
 
 function make_key( self::PlotComponent, bbox::BoundingBox )
 end
 
 function boundingbox( self::PlotComponent, context::PlotContext )
-    clear(self)
-    make(self, context)
+    objs = make(self, context)
     bb = BoundingBox()
-    for obj in self.device_objects
+    for obj in objs
         x = boundingbox(obj, context)
         union( bb, x )
     end
@@ -3101,10 +3075,9 @@ function boundingbox( self::PlotComponent, context::PlotContext )
 end
 
 function render( self::PlotComponent, context )
-    clear(self)
-    make(self, context)
+    objs = make(self, context)
     push_style(context, getattr(self,"style"))
-    for obj in self.device_objects
+    for obj in objs
         render(obj, context)
     end
     pop_style(context)
