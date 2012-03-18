@@ -28,19 +28,19 @@ USEGCC = 1
 USECLANG = 0
 
 ifeq ($(USEGCC),1)
-CC = gcc
+CC = gcc -std=gnu99
 CXX = g++
-CFLAGS = -pipe -std=gnu99 -fPIC -fno-strict-aliasing
+CFLAGS = -pipe -fPIC -fno-strict-aliasing
 CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
 endif
 
 ifeq ($(USECLANG),1)
-CC = clang
+CC = clang -std=gnu99
 CXX = clang++
-CFLAGS = -fPIC -fexceptions -pipe
-CXXFLAGS = -fPIC -fno-rtti -fexceptions -pipe
+CFLAGS = -pipe -fPIC -fno-strict-aliasing
+CXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
