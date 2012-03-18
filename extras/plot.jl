@@ -31,6 +31,7 @@ end
 const chartokens = {
     '-' => {"linestyle" => "solid"},
     ':' => {"linestyle" => "dotted"},
+    ';' => {"linestyle" => "dotdashed"},
     '+' => {"symboltype" => "plus"},
     'o' => {"symboltype" => "circle"},
     '*' => {"symboltype" => "asterisk"},
@@ -55,7 +56,13 @@ const chartokens = {
 function _parse_style(spec::String)
     style = HashTable()
 
-    # TODO { "--" => "dashed", "-." => "dotdashed" }
+    for (k,v) in { "--" => "dashed", "-." => "dotdashed" }
+        splitspec = split(spec, k)
+        if length(splitspec) > 1
+            style["linestyle"] = v
+            spec = join(splitspec)
+        end
+    end
 
     for char in spec
         if has(chartokens, char)
@@ -96,7 +103,6 @@ function _plot(p::FramedPlot, args...)
             if length(args) > 0 && typeof(args[1]) <: String
                 style = _parse_style(shift(args))
             end
-            println(style)
             if has(style, "linestyle")
                 add(p, Curve(x, y, style))
             end
