@@ -86,8 +86,9 @@ addObjects(api ${api_STAT_SRCS})
 
 ########### install files ###############
 
-install(FILES  fftw3.h fftw3.f DESTINATION include)
-install(FILES  fftw3.f03 DESTINATION lib/pkgconfig)
+install(FILES  ${TOP_SRCDIR}/api/fftw3.h ${TOP_SRCDIR}/api/fftw3.f DESTINATION include)
+configure_file(${TOP_SRCDIR}/api/fftw3.f03.in ${CMAKE_CURRENT_BINARY_DIR}/fftw3.f03)
+install(FILES  ${CMAKE_CURRENT_BINARY_DIR}/fftw3.f03 DESTINATION lib/pkgconfig)
 
 include_directories("${TOP_SRCDIR}/kernel" "${TOP_SRCDIR}/dft" "${TOP_SRCDIR}/rdft" "${TOP_SRCDIR}/reodft")
 

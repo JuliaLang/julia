@@ -135,7 +135,9 @@ endforeach(package)
 
 ## General Setup ##
 
-set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/"root")
+if(NOT DEFINED(CMAKE_INSTALL_PREFIX))
+	set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/root")
+endif()
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed.
@@ -212,7 +214,7 @@ add_subdirectory(lapack-${lapack_VER})
 
 add_subdirectory(amos)
 add_subdirectory(fdlibm)
-set(LapackLIB lapack-static)
+set(LapackLIB lapack)
 
 add_subdirectory(cmake)
 
@@ -225,7 +227,7 @@ COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAG
 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER})
 add_custom_target(openblas DEPENDS ${OpenBlasLIB})
 add_dependencies(lapack openblas)
-add_dependencies(lapack-static openblas)
+#add_dependencies(lapack-static openblas)
 
 include(ExternalProject)
 #  ExternalProject_Add(suitesparse 
