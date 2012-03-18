@@ -1,3 +1,5 @@
+## Tentative C-struct semi-automatic parser
+
 function tmpfile(tmpf_list::Vector{String})
     filename = chomp(readall(`tempfile`))
     push(tmpf_list, filename)
@@ -139,7 +141,7 @@ function ref(struct::CStruct, field_name::String)
         end
     end
     error("field '$field_name' not found in struct '$(struct.desc.struct_name)'")
-end 
+end
 
 function assign{T}(struct::CStruct, val::T, field_name::String)
     if struct.ptr == C_NULL
@@ -156,7 +158,7 @@ function assign{T}(struct::CStruct, val::T, field_name::String)
         end
     end
     error("field '$field_name' not found in struct '$(struct.desc.struct_name)'")
-end 
+end
 
 pointer(struct::CStruct) = struct.ptr
 

@@ -1,5 +1,8 @@
 ### Linear programming
 
+setcwd("../extras")
+include("linprog.jl")
+
 ## Simplex method
 
 # Set options (disable all output

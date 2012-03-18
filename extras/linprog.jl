@@ -40,6 +40,8 @@
 # Some methods have slightly different function calls, see
 # individual notes for additional information
 
+include("glpk.jl")
+
 # Linear Programming, Interior point method (default)
 #{{{
 

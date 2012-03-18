@@ -6,12 +6,20 @@
 #{{{
 include("glpk_h.jl")
 
-_jl_glpk = dlopen("libglpk")
+_jl_libglpk = dlopen("libglpk")
+_jl_libglpk_wrapper = dlopen("libglpk_wrapper.so")
 
 macro glpk_ccall(func, args...)
     f = "glp_$(func)"
     quote
-        ccall(dlsym(_jl_glpk, $f), $args...)
+        ccall(dlsym(_jl_libglpk, $f), $args...)
+    end
+end
+
+macro glpkw_ccall(func, args...)
+    f = "_jl_glpkw__$(func)"
+    quote
+        ccall(dlsym(_jl_libglpk_wrapper, $f), $args...)
     end
 end
 
@@ -51,6 +59,71 @@ end
 
 ## Preliminary definitions
 #{{{
+
+# General structure for the parameters types
+
+abstract GLPParam
+
+pointer(param::GLPParam) = param.struct
+
+typealias GLPParamFieldDescriptor (ASCIIString, Type)
+
+type GLPParamDescriptor
+    struct_name::String
+    field_names::Vector{ASCIIString}
+    field_types::Vector{BitsKind}
+    function GLPParamDescriptor{S<:String}(cstr::S, struct_desc::Vector{GLPParamFieldDescriptor})
+        struct_name = cstr
+        field_names = convert(Vector{ASCIIString}, [ x[1] | x = struct_desc ])
+        field_types = convert(Vector{Type}, [ x[2] | x = struct_desc ])
+        new(struct_name, field_names, field_types)
+    end
+end
+
+function GLPParamDescriptor{S<:String, K}(struct_name::S, struct_desc::Vector{K})
+    GLPParamDescriptor(struct_name, convert(Vector{(ASCIIString, Type)}, struct_desc))
+end
+
+function assign{T}(param::GLPParam, val::T, field_name::String)
+    if pointer(param) == C_NULL
+        error("param is not allocated")
+    end
+    for i = 1 : length(param.desc.field_names)
+        if field_name == param.desc.field_names[i]
+            if pointer(param) == C_NULL
+                throw(GLPError("invalid struct"))
+            end
+            t = param.desc.field_types[i]
+            csf = strcat("_jl_glpkw__", param.desc.struct_name, "_set_", field_name)
+            ccs = :(ccall(dlsym(_jl_libglpk_wrapper, $csf), Void, (Ptr{Void}, $t), pointer($param), $val))
+            eval(ccs)
+            return
+        end
+    end
+    error("field '$field_name' not found in struct '$(param.desc.struct_name)'")
+end
+
+function ref(param::GLPParam, field_name::String)
+    if pointer(param) == C_NULL
+        error("param is not allocated")
+    end
+    for i = 1 : length(param.desc.field_names)
+        if field_name == param.desc.field_names[i]
+            if pointer(param) == C_NULL
+                throw(GLPError("invalid struct"))
+            end
+            t = param.desc.field_types[i]
+            cgf = strcat("_jl_glpkw__", param.desc.struct_name, "_get_", field_name)
+            ccg = :(ccall(dlsym(_jl_libglpk_wrapper, $cgf), $t, (Ptr{Void},), pointer($param)))
+            return eval(ccg)
+        end
+    end
+    error("field '$field_name' not found in struct '$(param.desc.struct_name)'")
+end
+
+
+
+
 # We define some types which allow to pass optional agruments
 # to the function.
 # In this framework, optional arguments can be passed either
@@ -77,14 +150,14 @@ end
 # ccall's.
 #
 # Therefore, the original C glp API
-#  
+#
 #  int glp_simplex(glp_prob * lp, glp_smpc * param)
 #
 # becomes
 #
 #  glp_simplex(lp::GLPProb, param::GLPSimplexParam)
 #
-# 
+#
 # The map between names is as follows:
 #
 # +-------------+---------------------+
@@ -125,37 +198,52 @@ function glp_delete_prob(glp_prob::GLPProb)
     return
 end
 
-_jl_glpk__simplex_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_smcp",
+
+_jl_glpk__simplex_param_struct_desc = GLPParamDescriptor("smcp",
         [("msg_lev", Int32), ("meth", Int32), ("pricing", Int32),
          ("r_test", Int32), ("tol_bnd", Float64), ("tol_dj", Float64),
          ("tol_piv", Float64), ("obj_ll", Float64), ("obj_ul", Float64),
          ("it_lim", Int32), ("tm_lim", Int32), ("out_frq", Int32),
          ("out_dly", Int32), ("presolve", Int32)])
 
-abstract GLPParam <: CStructWrapper
-
 type GLPSimplexParam <: GLPParam
-    struct::CStruct
+    struct::Ptr{Void}
+    desc::GLPParamDescriptor
     function GLPSimplexParam()
-        struct = CStruct(_jl_glpk__simplex_param_struct_desc)
-        @glpk_ccall init_smcp Int32 (Ptr{Void},) pointer(struct)
-        new(struct)
+        struct = @glpkw_ccall smcp_init Ptr{Void} ()
+        param = new(struct, _jl_glpk__simplex_param_struct_desc)
+        finalizer(param, _jl_glpkw__smcp_delete)
+        return param
     end
 end
 
-_jl_glpk__interior_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iptcp",
+function _jl_glpkw__smcp_delete(param::GLPSimplexParam)
+    @glpkw_ccall smcp_delete(pointer(param))
+    param.struct = C_NULL
+end
+
+
+_jl_glpk__interior_param_struct_desc = GLPParamDescriptor("iptcp",
         [("msg_lev", Int32), ("ord_alg", Int32)])
 
 type GLPInteriorParam <: GLPParam
-    struct::CStruct
+    struct::Ptr{Void}
+    desc::GLPParamDescriptor
     function GLPInteriorParam()
-        struct = CStruct(_jl_glpk__interior_param_struct_desc)
-        @glpk_ccall init_iptcp Int32 (Ptr{Void},) pointer(struct)
-        new(struct)
+        struct = @glpkw_ccall iptcp_init Ptr{Void} ()
+        param = new(struct, _jl_glpk__interior_param_struct_desc)
+        finalizer(param, _jl_glpkw__iptcp_delete)
+        return param
     end
 end
 
-_jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
+function _jl_glpkw__iptcp_delete(param::GLPInteriorParam)
+    @glpkw_ccall iptcp_delete(pointer(param))
+    param.struct = C_NULL
+end
+
+
+_jl_glpk__intopt_param_struct_desc = GLPParamDescriptor("iocp",
     [("msg_lev", Int32), ("br_tech", Int32), ("bt_tech", Int32),
      ("pp_tech", Int32), ("fp_heur", Int32), ("gmi_cuts", Int32),
      ("mir_cuts", Int32), ("cov_cuts", Int32), ("clq_cuts", Int32),
@@ -165,27 +253,109 @@ _jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
      ("presolve", Int32), ("binarize", Int32)])
 
 type GLPIntoptParam <: GLPParam
-    struct::CStruct
+    struct::Ptr{Void}
+    desc::GLPParamDescriptor
     function GLPIntoptParam()
-        struct = CStruct(_jl_glpk__intopt_param_struct_desc)
-        @glpk_ccall init_iocp Int32 (Ptr{Void},) pointer(struct)
-        new(struct)
+        struct = @glpkw_ccall iocp_init Ptr{Void} ()
+        param = new(struct, _jl_glpk__intopt_param_struct_desc)
+        finalizer(param, _jl_glpkw__iocp_delete)
+        return param
     end
 end
 
-_jl_glpk__basisfact_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_bfcp",
+function _jl_glpkw__iocp_delete(param::GLPIntoptParam)
+    @glpkw_ccall iocp_delete(pointer(param))
+    param.struct = C_NULL
+end
+
+
+_jl_glpk__basisfact_param_struct_desc = GLPParamDescriptor("bfcp",
     [("type", Int32), ("lu_size", Int32), ("piv_tol", Float64),
      ("piv_lim", Int32), ("suhl", Int32), ("eps_tol", Float64),
      ("max_gro", Float64), ("nfs_max", Int32), ("upd_tol", Float64),
      ("nrs_max", Int32), ("rs_size", Int32)])
 
 type GLPBasisFactParam <: GLPParam
-    struct::CStruct
+    struct::Ptr{Void}
+    desc::GLPParamDescriptor
     function GLPBasisFactParam()
-        struct = CStruct(_jl_glpk__basisfact_param_struct_desc)
-        new(struct)
+        struct = @glpkw_ccall bfcp_init Ptr{Void} ()
+        param = new(struct, _jl_glpk__basisfact_param_struct_desc)
+        finalizer(param, _jl_glpkw__bfcp_delete)
+        return param
     end
 end
+
+function _jl_glpkw__bfcp_delete(param::GLPBasisFactParam)
+    @glpkw_ccall bfcp_delete(pointer(param))
+    param.struct = C_NULL
+end
+
+# old cstruct-based version
+#{{{
+#_jl_glpk__simplex_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_smcp",
+#        [("msg_lev", Int32), ("meth", Int32), ("pricing", Int32),
+#         ("r_test", Int32), ("tol_bnd", Float64), ("tol_dj", Float64),
+#         ("tol_piv", Float64), ("obj_ll", Float64), ("obj_ul", Float64),
+#         ("it_lim", Int32), ("tm_lim", Int32), ("out_frq", Int32),
+#         ("out_dly", Int32), ("presolve", Int32)])
+#
+#abstract GLPParam <: CStructWrapper
+#
+#type GLPSimplexParam <: GLPParam
+#    struct::CStruct
+#    function GLPSimplexParam()
+#        struct = CStruct(_jl_glpk__simplex_param_struct_desc)
+#        @glpk_ccall init_smcp Int32 (Ptr{Void},) pointer(struct)
+#        new(struct)
+#    end
+#end
+
+#_jl_glpk__interior_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iptcp",
+#        [("msg_lev", Int32), ("ord_alg", Int32)])
+#
+#type GLPInteriorParam <: GLPParam
+#    struct::CStruct
+#    function GLPInteriorParam()
+#        struct = CStruct(_jl_glpk__interior_param_struct_desc)
+#        @glpk_ccall init_iptcp Int32 (Ptr{Void},) pointer(struct)
+#        new(struct)
+#    end
+#end
+
+#_jl_glpk__intopt_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_iocp",
+#    [("msg_lev", Int32), ("br_tech", Int32), ("bt_tech", Int32),
+#     ("pp_tech", Int32), ("fp_heur", Int32), ("gmi_cuts", Int32),
+#     ("mir_cuts", Int32), ("cov_cuts", Int32), ("clq_cuts", Int32),
+#     ("tol_int", Float64), ("tol_obj", Float64), ("mip_gap", Float64),
+#     ("tm_lim", Int32), ("out_frq", Int32), ("out_dly", Int32),
+#     ("cb_func", Ptr{Void}), ("cb_info", Ptr{Void}), ("cb_size", Int32),
+#     ("presolve", Int32), ("binarize", Int32)])
+#
+#type GLPIntoptParam <: GLPParam
+#    struct::CStruct
+#    function GLPIntoptParam()
+#        struct = CStruct(_jl_glpk__intopt_param_struct_desc)
+#        @glpk_ccall init_iocp Int32 (Ptr{Void},) pointer(struct)
+#        new(struct)
+#    end
+#end
+
+#_jl_glpk__basisfact_param_struct_desc = CStructDescriptor(["glpk.h"], "glp_bfcp",
+#    [("type", Int32), ("lu_size", Int32), ("piv_tol", Float64),
+#     ("piv_lim", Int32), ("suhl", Int32), ("eps_tol", Float64),
+#     ("max_gro", Float64), ("nfs_max", Int32), ("upd_tol", Float64),
+#     ("nrs_max", Int32), ("rs_size", Int32)])
+#
+#type GLPBasisFactParam <: GLPParam
+#    struct::CStruct
+#    function GLPBasisFactParam()
+#        struct = CStruct(_jl_glpk__basisfact_param_struct_desc)
+#        new(struct)
+#    end
+#end
+#}}}
+
 #}}}
 
 
@@ -497,7 +667,7 @@ end
 # The API interface is as close as possible to the original
 # one.
 # The general translation rules are:
-#  
+#
 #  * whenever the C library accepts NULL as argument,
 #    the Julia one will accept the nothing constant.
 #  * vectors do not need to have an extra element at the
@@ -660,7 +830,7 @@ function glp_del_rows{Ti<:Integer}(glp_prob::GLPProb, num_rows::Integer, rows_id
     _jl_glpk__check_glp_prob(glp_prob)
     rows_ids32 = int32(rows_ids)
     _jl_glpk__check_rows_ids(glp_prob, 1, num_rows, rows_ids32)
-    
+
     off32 = sizeof(Int32)
     rows_ids32p = pointer(rows_ids32) - off32
     @glpk_ccall del_rows Void (Ptr{Void}, Int32, Ptr{Int32}) glp_prob.p num_rows rows_ids32p
@@ -670,7 +840,7 @@ function glp_del_cols{Ti<:Integer}(glp_prob::GLPProb, num_cols::Integer, cols_id
     _jl_glpk__check_glp_prob(glp_prob)
     cols_ids32 = int32(cols_ids)
     _jl_glpk__check_cols_ids(glp_prob, 1, num_cols, cols_ids32)
-    
+
     off32 = sizeof(Int32)
     cols_ids32p = pointer(cols_ids32) - off32
     @glpk_ccall del_cols Void (Ptr{Void}, Int32, Ptr{Int32}) glp_prob.p num_cols cols_ids32p
@@ -1192,7 +1362,7 @@ function glp_read_lp(glp_prob::GLPProb, param, filename::String)
     return ret
 end
 
-glp_read_lp(glp_prob::GLPProb, filename::String) = 
+glp_read_lp(glp_prob::GLPProb, filename::String) =
     glp_read_lp(glp_prob, C_NULL, filename)
 
 function glp_write_lp(glp_prob::GLPProb, param, filename::String)
@@ -1203,7 +1373,7 @@ function glp_write_lp(glp_prob::GLPProb, param, filename::String)
     return ret
 end
 
-glp_write_lp(glp_prob::GLPProb, filename::String) = 
+glp_write_lp(glp_prob::GLPProb, filename::String) =
     glp_write_lp(glp_prob, C_NULL, filename)
 
 function glp_read_prob(glp_prob::GLPProb, flags::Integer, filename::String)

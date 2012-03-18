@@ -1,3 +1,6 @@
+setcwd("../extras")
+include("glpk.jl")
+
 # Same example as in the GLPK manual
 
 lp = GLPProb()
