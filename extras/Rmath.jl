@@ -261,7 +261,6 @@ end
 @_jl_libRmathfunc_pq_1par_0d qchisq
 @_jl_libRmathfunc_r_1par_0d  rchisq
 
-
 ## Poisson distribution
 @_jl_libRmathfunc_d_1par_0d  dpois
 @_jl_libRmathfunc_pq_1par_0d ppois
@@ -278,7 +277,7 @@ end
 @_jl_libRmathfunc_d_1par_0d  dt
 @_jl_libRmathfunc_pq_1par_0d pt
 @_jl_libRmathfunc_pq_1par_0d qt
-@_jl_libRmathfunc_r_1par_0d  rf
+@_jl_libRmathfunc_r_1par_0d  rt
 
 ## Geometric distribution
 @_jl_libRmathfunc_d_1par_0d  dgeom
