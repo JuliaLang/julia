@@ -467,6 +467,7 @@ SUITESPARSE_LIB =
 endif
 
 $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
+	mkdir -p $(EXTROOTLIB)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
