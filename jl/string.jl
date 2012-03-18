@@ -1007,7 +1007,7 @@ end
 function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p, b, length(a))
-    q == C_NULL ? 0 : q - p + 1
+    q == C_NULL ? 0 : int(q - p + 1)
 end
 
 # concatenate byte arrays into a single array

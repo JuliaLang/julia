@@ -64,6 +64,7 @@ cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 
 distclean: cleanall
+	rm -fr dist
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall

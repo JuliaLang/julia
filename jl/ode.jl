@@ -28,6 +28,8 @@
 # Adapted from Cleve Moler's textbook
 # http://www.mathworks.com/moler/ncm/ode23tx.m
 
+load("poly.jl")
+
 function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
 
     rtol = 1.e-5
