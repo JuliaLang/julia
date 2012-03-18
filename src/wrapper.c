@@ -97,27 +97,6 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
     uv_close((uv_handle_t*)p,&closeHandle);
 }
 
-size_t jl_splitbuf(ios_t *to, ios_t *from, char delim)
-{
-    size_t total = 0, avail=from->size - from->bpos;
-    size_t written;
-    char *pd = (char*)memchr(from->buf+from->bpos, delim, avail);
-    if (pd == NULL) {
-        written = ios_write(to, from->buf+from->bpos, avail);
-        from->bpos += avail;
-        total += written;
-        avail = 0;
-    }
-    else {
-        size_t ntowrite = pd - (from->buf+from->bpos) + 1;
-        written = ios_write(to, from->buf+from->bpos, ntowrite);
-        from->bpos += ntowrite;
-        total += written;
-        return total;
-    }
-    return total;
-}
-
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
     jl_stream_opts_t *opts;
