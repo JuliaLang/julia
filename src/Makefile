@@ -5,6 +5,7 @@ SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
 	alloc dlload sys init task array dump wrapper
 FLAGS = \
+	-D_GNU_SOURCE \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \

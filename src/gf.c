@@ -1131,7 +1131,7 @@ JL_CALLABLE(jl_apply_generic)
         size_t i;
         for(i=0; i < nargs; i++) {
             if (i > 0) jl_printf(jl_stdout_tty, ", ");
-            jl_printf(jl_stdout_tty, "%s", type_summary(jl_typeof(args[i])));
+            jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
         }
         jl_printf(jl_stdout_tty, ")\n");
     }
@@ -1172,7 +1172,7 @@ JL_CALLABLE(jl_apply_generic)
             size_t i;
             for(i=0; i < nargs; i++) {
                 if (i > 0) jl_printf(jl_stdout_tty, ", ");
-                jl_printf(jl_stdout_tty, "%s", type_summary(jl_typeof(args[i])));
+                jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
             }
             jl_printf(jl_stdout_tty, ")\n");
         }
@@ -1471,9 +1471,9 @@ JL_CALLABLE(jl_f_make_callback)
 {
     JL_TYPECHK("make_callback",function,args[0]);
 #ifdef ENVIRONMENT64
-    jl_value_t *t = jl_box_int64((void *)args[0]);
+    jl_value_t *t = jl_box_int64((size_t)args[0]);
 #else
-    jl_value_t *t = jl_box_int32((void *)args[0]);
+    jl_value_t *t = jl_box_int32((size_t)args[0]);
 #endif
     jl_gc_preserve(args[0]);
     JL_GC_POP();
@@ -1487,8 +1487,8 @@ void jl_callback_call(jl_function_t *f,int count,...)
     va_list argp;
     va_start(argp,count);
     jl_value_t *v;
-    int i=0;
-    for(i; i<count; ++i) {
+    int i;
+    for(i=0; i<count; ++i) {
         switch(va_arg(argp,int)) {
 #ifdef ENVIRONMENT32
         case CB_PTR:

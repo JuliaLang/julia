@@ -196,8 +196,6 @@ uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
     return ret;
 }
 
-extern readBuffer(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
-extern parseAndExecute(char *str);
 
 int true_main(int argc, char *argv[])
 {
