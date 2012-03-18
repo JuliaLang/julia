@@ -303,10 +303,10 @@ DLLEXPORT int jl_idle_stop(uv_idle_t *idle) {
     return uv_idle_stop(idle);
 }
 
-DLLEXPORT int jl_timer_init(uv_loop_t *loop)
+DLLEXPORT uv_timer_t *jl_timer_init(uv_loop_t *loop)
 {
     if(!loop)
-        return -2;
+        return 0;
     uv_timer_t *timer = malloc(sizeof(uv_timer_t));
     uv_timer_init(loop,timer);
     timer->data=0;
@@ -469,7 +469,7 @@ DLLEXPORT int jl_getpid()
 #endif
 }
 
-DLLEXPORT int jl_tcp_init(uv_loop_t* loop)
+DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t* loop)
 {
     if(!loop)
         return -2;

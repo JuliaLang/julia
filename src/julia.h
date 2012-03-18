@@ -723,11 +723,11 @@ int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
-DLLEXPORT int jl_timer_init(uv_loop_t *loop);
+DLLEXPORT uv_timer_t *jl_timer_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 
-DLLEXPORT int jl_tcp_init(uv_loop_t *loop);
+DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 
 DLLEXPORT void jl_exit(int status);
