@@ -59,6 +59,17 @@ function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
     surface
 end
 
+function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_ps_surface_create), Ptr{Void},
+        (Ptr{Uint8},Float64,Float64), cstring(filename), w_pts, h_pts)
+    ccall(dlsym(_jl_libcairo,:cairo_ps_surface_set_eps), Void,
+        (Ptr{Void},Int32), ptr, 1)
+    surface = CairoSurface(ptr, :eps)
+    surface.width = w_pts
+    surface.height = h_pts
+    surface
+end
+
 function write_to_png(surface::CairoSurface, filename::String)
     ccall(dlsym(_jl_libcairo,:cairo_surface_write_to_png), Void,
         (Ptr{Uint8},Ptr{Uint8}), surface.ptr, cstring(filename))
@@ -345,6 +356,17 @@ PDFRenderer(filename::String, w_str::String, h_str::String) =
 
 function PDFRenderer(filename::String, w_pts::Float64, h_pts::Float64)
     surface = CairoPDFSurface(filename, w_pts, h_pts)
+    r = CairoRenderer(surface)
+    r.upperright = (w_pts,h_pts)
+    r.on_close = () -> show_page(r.ctx)
+    r
+end
+
+EPSRenderer(filename::String, w_str::String, h_str::String) =
+    EPSRenderer(filename, _str_size_to_pts(w_str), _str_size_to_pts(h_str))
+
+function EPSRenderer(filename::String, w_pts::Float64, h_pts::Float64)
+    surface = CairoEPSSurface(filename, w_pts, h_pts)
     r = CairoRenderer(surface)
     r.upperright = (w_pts,h_pts)
     r.on_close = () -> show_page(r.ctx)
