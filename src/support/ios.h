@@ -107,6 +107,7 @@ DLLEXPORT size_t ios_fillprep(ios_t *from, size_t n);
 //void ios_lock(ios_t *s);
 //int ios_trylock(ios_t *s);
 //int ios_unlock(ios_t *s);
+DLLEXPORT void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos);
 
 /* stream creation */
 DLLEXPORT

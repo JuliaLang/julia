@@ -265,6 +265,14 @@ static char *_buf_realloc(ios_t *s, size_t sz)
     return s->buf;
 }
 
+void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos)
+{
+    size_t offset = splitpos-from->buf;
+    ios_write(to,from->buf,offset);
+    memmove(from->buf,splitpos,from->size-offset);
+    from->size=from->size-offset;
+}
+
 // write a block of data into the buffer at the current position, resizing
 // if necessary. returns # written.
 static size_t _write_grow(ios_t *s, char *data, size_t n)
@@ -845,6 +853,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     from->_eof = 1;
     return total;
 }
+
 
 static void _ios_init(ios_t *s)
 {

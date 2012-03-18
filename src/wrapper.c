@@ -58,6 +58,9 @@ void closeHandle(uv_handle_t* handle)
             free(opts);
             //pipes have to be closed where they are created to support reusing them
         } break;
+    case UV_TTY:
+            uv_tty_reset_mode();
+            break;
     case UV_IDLE: //fall through to async
     case UV_ASYNC:
     case UV_TIMER:
@@ -91,7 +94,26 @@ void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
     uv_close((uv_handle_t*)p,&closeHandle);
 }
 
-
+size_t jl_splitbuf(ios_t *to, ios_t *from, char delim)
+{
+    size_t total = 0, avail=from->size - from->bpos;
+    size_t written;
+    char *pd = (char*)memchr(from->buf+from->bpos, delim, avail);
+    if (pd == NULL) {
+        written = ios_write(to, from->buf+from->bpos, avail);
+        from->bpos += avail;
+        total += written;
+        avail = 0;
+    }
+    else {
+        size_t ntowrite = pd - (from->buf+from->bpos) + 1;
+        written = ios_write(to, from->buf+from->bpos, ntowrite);
+        from->bpos += ntowrite;
+        total += written;
+        return total;
+    }
+    return total;
+}
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
@@ -124,7 +146,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
     if(handle) uv_close(handle,&closeHandle);
 }
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback)
+DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback)
 {
     if(!handle)
         return -2;
@@ -139,10 +161,19 @@ DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_func
     return uv_read_start(handle,&jl_alloc_buf,&jl_readcb);
 }
 
-DLLEXPORT uint16_t jl_stop_reading(uv_stream_t *handle)
+DLLEXPORT int16_t jl_change_readcb(uv_stream_t *handle,jl_function_t *callback)
+{
+    if(!handle||!handle->data)
+        return -2;
+    jl_stream_opts_t *opts = (jl_stream_opts_t *)handle->data;
+    opts->readcb=callback;
+    return 0;
+}
+
+DLLEXPORT int16_t jl_stop_reading(uv_stream_t *handle)
 {
     if(!handle)
-        return -1;
+        return -2;
     int err = uv_read_stop(handle);
     return err;
 
@@ -276,7 +307,7 @@ DLLEXPORT int jl_timer_init(uv_loop_t *loop)
 {
     if(!loop)
         return -2;
-    uv_timer_t *timer = malloc(sizeof(uv_idle_t));
+    uv_timer_t *timer = malloc(sizeof(uv_timer_t));
     uv_timer_init(loop,timer);
     timer->data=0;
     return timer;
@@ -405,6 +436,11 @@ int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
+char *jl_bufptr(ios_t *s)
+{
+    return s->buf;
+}
+
 DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
     return sizeof(uv_stream_t*);
@@ -433,6 +469,26 @@ DLLEXPORT int jl_getpid()
 #endif
 }
 
+DLLEXPORT int jl_tcp_init(uv_loop_t* loop)
+{
+    if(!loop)
+        return -2;
+    uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
+    uv_tcp_init(loop,tcp);
+    tcp->data=0;
+    return tcp;
+}
+
+DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
+{
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_port = port;
+    addr.sin_addr.s_addr = host;
+    addr.sin_family = AF_INET;
+    return uv_tcp_bind(handle,addr);
+}
+
 //WIN32 math functions that are not part of the CRT
 #ifdef __WIN32__
 DLLEXPORT float truncf(float x)
@@ -443,6 +499,42 @@ DLLEXPORT float truncf(float x)
 DLLEXPORT double trunc(double x)
 {
      return (x > 0) ? floor(x) : ceil(x);
+}
+#endif
+
+#ifndef __WIN32__
+#include <sys/types.h>
+#include <ifaddrs.h>
+DLLEXPORT
+void getlocalip(char *buf, size_t len)
+{
+    struct ifaddrs * ifAddrStruct=NULL;
+    struct ifaddrs * ifa=NULL;
+    void * tmpAddrPtr=NULL;
+    buf[0] = '\0';
+
+    getifaddrs(&ifAddrStruct);
+
+    for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) { // check it is IP4
+            // is a valid IP4 Address
+            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            inet_ntop(AF_INET, tmpAddrPtr, buf, len);
+            if (strcmp(buf,"127.0.0.1"))
+                break;
+            //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
+        }
+        /*
+        else if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET6) { // check it is IP6
+            // is a valid IP6 Address
+            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            char addressBuffer[INET6_ADDRSTRLEN];
+            inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
+            printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);
+        }
+        */
+    }
+    if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
 }
 #endif
 

@@ -42,24 +42,27 @@ end
 
 
 typealias CmdsOrNot Union(Bool,Cmds)
+typealias BufOrNot Union(Bool,IOStream)
 
 type NamedPipe <: AsyncStream
     handle::PtrSize
-    buf::IOStream
+    buf::BufOrNot
     closed::Bool
     NamedPipe(handle::PtrSize,buf::IOStream) = new(handle,buf,false)
+    NamedPipe(handle::PtrSize) = new(handle,false,false)
 end
 
 type TTY <: AsyncStream
     handle::PtrSize
-    buf::IOStream
+    buf::BufOrNot
+    closed::Bool
 end
 typealias PipeOrNot Union(Bool,AsyncStream)
 
-make_stdout_stream() = TTY(ccall(:jl_stdout, PtrSize, ()),memio())
+make_stdout_stream() = TTY(ccall(:jl_stdout, PtrSize, ()),memio(),false)
 
 function _uv_tty2tty(handle::PtrSize)
-    TTY(handle,memio())
+    TTY(handle,memio(),false)
 end
 
 ## SOCKETS ##
@@ -68,10 +71,22 @@ abstract Socket <: AsyncStream
 
 type TcpSocket <: Socket
     handle::PtrSize
+    buf::BufOrNot
+    closed::Bool
+    TcpSocket(handle::PtrSize)=new(handle,false,false)
 end
 
 type UdpSocket <: Socket
     handle::PtrSize
+    buf::BufOrNot
+    closed::Bool
+    UdpSocket(handle::PtrSize)=new(handle,false,false)
+end
+
+function _init_buf(stream::AsyncStream)
+    if(!isa(stream.buf,IOStream))
+        stream.buf=memio()
+    end
 end
 
 _jl_tcp_init(loop::PtrSize) = ccall(:jl_tcp_init,PtrSize,(PtrSize,),loop)
@@ -91,10 +106,14 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-_jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(PtrSize,Int32,Function),sock,backlog,make_callback(cb))
+_jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(PtrSize,Int32,Function),sock.handle,backlog,make_callback(cb))
 
-_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(PtrSize,Uint32,Uint16),sock,addr.host,addr.port)
-_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(PtrSize,Uint32,Uint16,Function),sock,addr.host,addr.port)
+_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(PtrSize,Uint32,Uint16),sock.handle,addr.host,addr.port)
+_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(PtrSize,Uint32,Uint16,Function),sock.handle,addr.host,addr.port)
+
+function connection_cb(handle::PtrSize, status::Int32)
+
+end
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     socket = TcpSocket(_jl_tcp_init(globalEventLoop()));
@@ -103,10 +122,10 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     end
     addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
     while _jl_tcp_bind(socket,addr)!=0
-        addr.port++;
+        addr.port+=1;
     end
-    err = _jl_listen(socket,4)
-    if(err)
+    err = _jl_listen(socket,int32(4),connection_cb)
+    if(err!=0)
         print(err)
         error("open_any_tcp_port: could not listen on socket")
     end
@@ -193,6 +212,10 @@ function run_event_loop(loop::PtrSize)
 end
 run_event_loop() = run_event_loop(localEventLoop())
 
+function break_one_loop(loop::PtrSize)
+    ccall(:uv_break_one,Void,(Ptr{Void},),loop)
+end
+
 function process_events(loop::PtrSize)
     ccall(:jl_process_events,Void,(Ptr{PtrSize},),loop)
 end
@@ -201,13 +224,13 @@ process_events() = process_events(localEventLoop())
 ##pipe functions
 
 function make_pipe()
-    NamedPipe(ccall(:jl_make_pipe,PtrSize,()),memio())
+    NamedPipe(ccall(:jl_make_pipe,PtrSize,())) #make the pipe and unbuffered stream for now
 end
 
-function close_pipe(pipe::NamedPipe)
-    if(!pipe.closed)
-        ccall(:jl_close_uv,Void,(Ptr{PtrSize},),pipe.handle)
-        pipe.closed=true
+function close(stream::AsyncStream)
+    if(!stream.closed)
+        ccall(:jl_close_uv,Void,(Ptr{PtrSize},),stream.handle)
+        stream.closed=true
     end
 end
 
@@ -233,7 +256,7 @@ end
 
 
 function finish_read(pipe::NamedPipe)
-    close_pipe(pipe) #handles to UV and ios will be invalid after this point
+    close(pipe) #handles to UV and ios will be invalid after this point
 end
 
 function finish_read(state::(NamedPipe,ByteString))
@@ -275,7 +298,7 @@ function process_closed_chain(procs::Processes)
         end
     end
     if(done && procs.out!=0)
-            close_pipe(procs.out)
+            close(procs.out)
     end
 end
 
@@ -283,7 +306,6 @@ function spawn(cmds::Cmds,in::PipeOrNot,out::PipeOrNot)
     if(isa(cmds.pipeline,Cmds))
         n=make_pipe()
         spawn(cmds.pipeline,n,out)
-        print("New Out pipe")
     else
         n=out
     end
@@ -301,20 +323,19 @@ end
 spawn(cmds::Cmds)=spawn(cmds,false,false)
 spawn(cmds::Cmds,in::PipeOrNot)=spawn(cmds,in,false)
 
-function readall(cmds::Cmds)
-    out=make_pipe()
-    spawn(cmds,false,out)
-    run_event_loop()
-    takebuf_string(out.buf)
-end
 
 #returns a pipe to read from the last command in the pipelines
 read_from(cmd::Cmd) = read_from(Cmds(cmd))
 function read_from(cmds::Cmds)
     out=make_pipe()
+    _init_buf(out) #create buffer for reading
     spawn(cmds,false,out);
     ccall(:jl_start_reading,Bool,(Ptr{PtrSize},Ptr{Void},Ptr{PtrSize}),out.handle,out.buf.ios,C_NULL)
     out
+end
+
+function change_readcb(stream::AsyncStream,readcb::Function)
+    ccall(:jl_change_readcb,Int16,(PtrSize,Function),stream.handle,readcb)
 end
 
 write_to(cmd::Cmd) = write_to(Cmds(cmd))
@@ -324,10 +345,33 @@ function write_to(cmds::Cmds)
     in
 end
 
-function readall(cmd::Cmd)
-    out=read_from(cmd)
+readall(cmd::Cmd) = readall(Cmds(cmd))
+function readall(cmds::Cmds)
+    out=read_from(cmds)
     run_event_loop()
     return takebuf_string(out.buf)
+end
+
+function _contains_newline(bufptr::PtrSize,len::Int32)
+    return (ccall(:memchr,Ptr{Uint8},(PtrSize,Int32,Uint),bufptr,'\n',len)!=C_NULL)
+end
+
+
+function linebuffer_cb(cb::Function,stream::AsyncStream,handle::PtrSize,nread::PtrSize,base::PtrSize,buflen::Int32)
+    if(!isa(stream.buf,IOStream))
+        error("Linebuffering only supported on membuffered ASyncStreams")
+    end
+    if(nread>0)
+        #search for newline
+        base=convert(Ptr{Uint8},base);
+        pd::Ptr{Uint8} = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,PtrSize),base,'\n',nread)
+        if(pd!=C_NULL)
+            #newline found - split buffer
+            to=memio()
+            ccall(:ios_splitbuf,Void,(Ptr{Void},Ptr{Void},Ptr{Uint8}),to,stream.buf.ios,pd)
+            cb(stream,takebuf_array(string))
+        end
+    end
 end
 
 function success(cmd::Cmd)
@@ -425,6 +469,10 @@ end
 
 function write(s::AsyncStream, p::Ptr, nb::Integer)
     ccall(:jl_write, Uint,(PtrSize, Ptr{Void}, Uint),s.handle, p, uint(nb))
+end
+
+function _write(s::AsyncStream, p::PtrSize, nb::Integer)
+    ccall(:jl_write, Uint,(PtrSize, PtrSize, Uint),s.handle,p,uint(nb))
 end
 
 (&)(left::Cmds,right::Cmd)  = (add(left.siblings,right);left)

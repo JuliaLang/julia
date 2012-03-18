@@ -220,6 +220,10 @@
     jl_timer_init;
     jl_cwd;
     jl_getpid;
+    ios_splitbuf;
+    jl_tcp_init;
+    jl_tcp_bind;
+    jl_listen;
   local:
     *;
 };

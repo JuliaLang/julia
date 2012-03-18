@@ -1470,11 +1470,7 @@ jl_sym_t *jl_genericfunc_name(jl_value_t *v)
 JL_CALLABLE(jl_f_make_callback)
 {
     JL_TYPECHK("make_callback",function,args[0]);
-#ifdef ENVIRONMENT64
-    jl_value_t *t = jl_box_int64((void *)args[0]);
-#else
-    jl_value_t *t = jl_box_int32((void *)args[0]);
-#endif
+    JL_GC_PUSH(&args[0]);
     jl_gc_preserve(args[0]);
     JL_GC_POP();
     return args[0];

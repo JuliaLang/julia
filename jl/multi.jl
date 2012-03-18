@@ -946,9 +946,9 @@ end
 # argument is descriptor to write listening port # to.
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
-    default_port = int16(9009)
+    default_port = uint16(9009)
     worker_sockets = HashTable()
-    (actual_port,sock) = open_any_tcp_port(port,make_callback((fd,staus)->accept_handler(fd,worker_sockets)))
+    (actual_port,sock) = open_any_tcp_port(default_port,make_callback((fd,staus)->accept_handler(fd,worker_sockets)))
 
     write(out, "julia_worker:")  # print header
     fprintf(out, "%d#", actual_port) # print port
@@ -980,35 +980,43 @@ end
 #     localp
 # end
 
+function writeback(handle,nread,base,buflen)
+    if(nread>0)
+        _write(STDOUT,base,nread)
+    end
+end
+
+function _parse_conninfo(w,i::Int,todo,stream::AsyncStream,conninfo::String)
+    print("conninfo")
+    m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
+    if m != nothing
+        port = parse_int(Int16, m.captures[1])
+        hostname = m.captures[2]
+        w[i] = Worker(hostname, port)
+        change_io_handler(stream,make_callback(writeback))
+        print(i)
+        print(todo[0])
+        todo[0]--
+        if(todo[0]<=0)
+            break_one_loop()
+        end
+    end
+end
+
 function start_remote_workers(machines, cmds)
     n = length(cmds)
     outs = cell(n)
-    for i=1:n
-        let fd = read_from(cmds[i]).fd
-            let stream = fdio(fd, true)
-                outs[i] = stream
-                # redirect console output from workers to the client's stdout
-                add_fd_handler(fd, fd->write(stdout_stream, readline(stream)))
-            end
-        end
-    end
-    for c in cmds
-        spawn(c)
-    end
     w = cell(n)
+    todo = [int32(n)]
     for i=1:n
-        local hostname::String, port::Int16
-        while true
-            conninfo = readline(outs[i])
-            m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
-            if m != nothing
-                port = parse_int(Int16, m.captures[1])
-                hostname = m.captures[2]
-                break
-            end
+        let stream = read_from(cmds[i])
+            outs[i] = stream
+            # redirect console output from workers to the client's stdout
+            add_io_handler(stream,make_callback((args...)->
+                linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
         end
-        w[i] = Worker(hostname, port)
     end
+    run_event_loop(globalEventLoop())
     w
 end
 
@@ -1562,9 +1570,14 @@ function io_callback(io::AsyncStream)
 end
 
 
-function add_io_handler(io::AsyncStream, H)
+function add_io_handler(io::AsyncStream, H::Function)
     (_jl_fd_handlers[io]=H)
     ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Function),io.handle,io.buf.ios,make_callback(H))
+end
+
+function change_io_handler(io::AsyncStream, H::Function)
+    (_jl_fd_handlers[io]=H)
+    change_readcb(io,H)
 end
 
 function del_io_handler(io::AsyncStream)
@@ -1593,13 +1606,13 @@ function event_loop(isclient)
     fgcm = createSingleAsyncWork(globalEventLoop(),make_callback((args...)->flush_gc_msgs()));
     timer = initTimeoutAsync(globalEventLoop())
     startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),int64(10000),int64(10000)) #do work every 10s
-    while false
+    while true
         try
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
-            run_event_loop(global_event_loop());
+            run_event_loop(globalEventLoop());
         catch e
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
@@ -1607,7 +1620,7 @@ function event_loop(isclient)
                     return
                 end
             elseif isclient && isa(e,InterruptException) &&
-                !has(_jl_fd_handlers, STDIN.fd)
+                !has(_jl_fd_handlers, STDIN)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(_jl_roottask_wi, e)

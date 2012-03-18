@@ -13,7 +13,7 @@ FLAGS = \
 ifneq ($(MAKECMDGOALS),debug)
 TARGET = "debug"
 else
-TARGET = ""
+TARGET = 
 endif
 
 OBJS = $(SRCS:%=%.o)

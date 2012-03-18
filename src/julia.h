@@ -706,7 +706,7 @@ DLLEXPORT uv_loop_t *jl_local_event_loop();
 DLLEXPORT uv_pipe_t *jl_make_pipe();
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT uint16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
+DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
 
 DLLEXPORT void jl_callback(void *callback);
 
@@ -726,6 +726,9 @@ DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 DLLEXPORT int jl_timer_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
+
+DLLEXPORT int jl_tcp_init(uv_loop_t *loop);
+DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 
 DLLEXPORT void jl_exit(int status);
 
