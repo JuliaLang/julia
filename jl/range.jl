@@ -67,6 +67,12 @@ last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
+copy(r::Range) = Range(copy(r.start),
+                       copy(r.step),
+                       copy(r.len))
+copy(r::Range1) = Range1(copy(r.start),
+                         copy(r.len))
+
 function ref{T}(r::Range{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     r.start + oftype(T,i-1)*step(r)
