@@ -11,35 +11,35 @@ abstract Image
 # The dimensions of the data array fall into 3 general categories:
 #   space dimensions (e.g., x and y), time (if the data array
 #   represents a sequence of images over time), and channel dimension
-#   (e.g., color index). It's important to know the storage order of
+#   (e.g., color channel index). It's important to know the storage order of
 #   the data array. This is signaled by a storage order string, which
 #   introduces a one-character name for each array dimension.  For
 #   example, one could create an image out of a data array A[y,x,c] as
-#      im = ImageArray(A,"yxc")
+#      img = ImageArray(A,"yxc")
 #   Images can be manipulated in terms of these coordinate names,
 #   e.g.,
-#      imsnip = ref(im,'x',4)
+#      imsnip = ref(img,'x',4)
 #   would yield an image called imsnip that is a slice of im along the
-#   x-coordinate. This would work no matter how im is stored, but for
-#   this example is equivalent to
-#      imsnip.data = im.data[:,4,:].
+#   x-coordinate. This would work no matter how img is stored; for
+#   this example, it is equivalent to
+#      imsnip.data = img.data[:,4,:].
 #   ref is used instead of slicedim because the following also works:
-#      imsnip = ref(im,'x',3:23,'y',100:200)
+#      imsnip = ref(img,'x',3:23,'y',100:200)
 #
 #   There are two reserved choices for the array dimension names: 't'
 #   (for time) and 'c' (for channel). All other choices are assumed to
 #   be spatial. The comparison is case-sensitive, so 'T' and 'C' can
 #   be used for spatial axes. Thus, "yxc" might be used for an RGB
 #   image with color data in the third array dimension, and "xyzt" for
-#   a 3d grayscale image over time.
+#   3d grayscale over time.
 #
 #   Other than the usage of 't' and 'c', the choices of dimension
 #   names is arbitrary.  One suggestion is to choose a name that
 #   indicates the direction of increasing array index. For example,
-#   choosing "ur" (for "upper-right") instead of "yx" might more
+#   choosing "br" (for "bottom-right") instead of "yx" might more
 #   clearly signal that the lower-left corner (as displayed on the
-#   screen) should be A[1,1], and the upper-right corner is
-#   A[sz1,sz2]. In MRI, "RAS" might indicate a standard right-handed
+#   screen) should be A[sz1,1], and the upper-right corner is
+#   A[1,sz2]. In MRI, "RAS" might indicate a standard right-handed
 #   coordinate system ('R' = rightward-increasing, 'A' =
 #   anterior-increasing, 'S' = superior-increasing). Note that "ASR"
 #   would imply the same coordinate system but that the data are
@@ -106,13 +106,13 @@ function assert_chars_unique(s::ASCIIString)
         end
     end
 end
-    
+
 # An image type with all data held in memory
 type ImageArray{DataType<:Number} <: Image
     data::Array{DataType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
     data_size::Vector{Int}        # full size of the original array
-    arrayi_range::Vector          # vector of ranges (when snipping out a block)
+    arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
     physc_unit::Vector            # vector of strings, e.g., "microns"
     physc_name::Vector            # vector of strings, like "X" or "horizontal"
@@ -122,11 +122,12 @@ type ImageArray{DataType<:Number} <: Image
     valid                         # which pixels can be trusted?
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
-# Empty constructor
-ImageArray{DataType<:Number}() = ImageArray{DataType}([],"",[],[],[],[],[],[],"","",false,[])
+# Empty constructor (doesn't work right now for some reason)
+ImageArray{DataType<:Number}() = ImageArray{DataType}(Array(DataType,0),"",Array(Int,0),Array(Range1,0),zeros(0,0),Array(ASCIIString,0),Array(ASCIIString,0),zeros(0),"","",false,[])
 # Construct from a data array
 function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
     sz = size(data)
+    szv = vcat(sz...)
     n_dims = length(sz)
     if strlen(arrayi_order) != n_dims
         error("storage order string must have a length equal to the number of dimensions in the array")
@@ -137,24 +138,35 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     matcht = match(r"t",arrayi_order)
     matchc = match(r"c",arrayi_order)
     n_spatial_dims = n_dims - !is(matcht,nothing) - !is(matchc,nothing)
-    println("n_spatial_dims = $n_spatial_dims")
     # Set up defaults for other fields
-    arrayi_range = cell(n_dims)
+    arrayi_range = Array(Range1{Int},n_dims)
     for idim = 1:n_dims
         arrayi_range[idim] = 1:sz[idim]
     end
-    physc_unit = cell(n_spatial_dims)
-    physc_name = cell(n_spatial_dims)
+    physc_unit = Array(ASCIIString,n_spatial_dims)
+    physc_name = Array(ASCIIString,n_spatial_dims)
     physc_unit[1:n_spatial_dims] = ""
     physc_name[1:n_spatial_dims] = ""
     T = [eye(n_spatial_dims) zeros(n_spatial_dims)]
     if !is(matcht,nothing)
         tindex = matcht.offset
-        arrayti2physt = linspace(1,sz[tindex],sz[tindex])
+        arrayti2physt = linspace(1.0,sz[tindex],sz[tindex])
+        t_unit = ""
     else
-        arrayti2physt = []
+        arrayti2physt = zeros(0)
+        t_unit = ""
     end
-    ImageArray{DataType}(data,arrayi_order,sz,arrayi_range,T,physc_unit,physc_name,arrayti2physt,"","",true,[])
+    color_space = ""
+    if !is(matchc,nothing)
+        if size(data,matchc.offset) == 1
+            color_space = "gray"
+        elseif size(data,matchc.offset) == 3
+            color_space = "sRGB"
+        elseif szv[matchc.offset] == 4
+            color_space = "CMYK"
+        end
+    end
+    ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,[])
 end
 
 function set_pixel_spacing(img::Image,dx::Vector)
@@ -165,11 +177,47 @@ function set_pixel_spacing(img::Image,dx::Vector)
     for idim = 1:n_spatial_dims
         img.arrayi2physc[idim,idim] = dx[idim]
     end
-    return img
 end
 
+function get_pixel_spacing(img::Image)
+    n_spatial_dims = size(img.arrayi2physc,1)
+    dx = zeros(n_spatial_dims)
+    for idim = 1:n_spatial_dims
+        dx[idim] = img.arrayi2physc[idim,idim]
+    end
+    return dx
+end
 
+function ref{DataType}(img::ImageArray{DataType},cv...)
+    if length(cv) % 2 != 0
+        error("Coordinate/value must come in pairs")
+    end
+    imgret = copy(img)
+    # Prepare the coordinates for snipping
+    cc = cell(ndims(img.data))
+    for idim = 1:ndims(img.data)
+        cc[idim] = 1:size(img.data,idim)
+    end
+    for icv = 1:2:length(cv)
+        idim = strchr(img.arrayi_order,cv[icv])
+        cc[idim] = cv[icv+1]
+    end
+    # Do the snip
+    imgret.data = img.data[cc...]
+    imgret.arrayi_range = cc
+    return imgret
+end
 
+function copydata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+    image_out.data = image_in.data[image_out.arrayi_range...]
+end
+
+function permute{DataType}(img::ImageArray{DataType},perm)
+    img.data = permute(img.data,perm)
+    img.arrayi_order = img.arrayi_order[perm]
+end
+
+#############################################################
 
 function lut(pal::Vector, a)
     out = similar(a, eltype(pal))
