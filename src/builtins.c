@@ -280,6 +280,8 @@ static int is_intrinsic(jl_sym_t *s)
 
 static int has_intrinsics(jl_expr_t *e)
 {
+    if (e->args->length == 0)
+        return 0;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
         ((jl_is_symbol(e0) && is_intrinsic((jl_sym_t*)e0)) ||
@@ -298,6 +300,7 @@ static int has_intrinsics(jl_expr_t *e)
 // the compiler or the interpreter.
 static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 {
+    assert(jl_is_expr(expr));
     if (expr->head==body_sym) {
         jl_array_t *body = expr->args;
         size_t i;

@@ -585,8 +585,9 @@ BOX_FUNC(float64, double, jl_box, 3)
 static jl_value_t *boxed_##typ##_cache[NBOX_C];         \
 jl_value_t *jl_box_##typ(c_type x)                      \
 {                                                       \
-    if ((u##c_type)(x+NBOX_C/2) < NBOX_C)               \
-        return boxed_##typ##_cache[(x+NBOX_C/2)];       \
+    c_type idx = x+NBOX_C/2;                            \
+    if ((u##c_type)idx < (u##c_type)NBOX_C)             \
+        return boxed_##typ##_cache[idx];                \
     jl_value_t *v = alloc_##nw##w();                    \
     v->type = (jl_type_t*)jl_##typ##_type;              \
     *(c_type*)jl_bits_data(v) = x;                      \
