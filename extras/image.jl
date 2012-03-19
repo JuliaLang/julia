@@ -1,56 +1,174 @@
-abstract ImageCoordinate
-abstract Space <: ImageCoordinate
-abstract Time <: ImageCoordinate
-abstract Channel <: ImageCoordinate
-
+# The super-type of all images
 abstract Image
-# Defines an image type with all data held in memory
-type ImageArray{T<:Number} <: Image
-    data::Array{T}
-    coordinate_types::Vector{ImageCoordinate}
-    coordinate_units::Vector{Any}  # vector of strings, "microns" or I"\mu m"
-    coordinate_names::Vector{Any}  # vector of strings, "X" or "Y"
-    coordinate_ranges::Vector{Range1}
-    space_directions::Matrix{Float64}
-    valid::Array{Any,1}     # can be used to store bad frame/pixel data
-    metadata::CompositeKind  # arbitrary metadata, like acquisition time, etc.
 
-    ImageArray{T}() = new()
-end
-function ImageArray{T<:Number}(dat::Array{T})
-    ret = ImageArray{T}()
-    ret.data = dat
-    n_dims = ndims(dat)
-    ret.coordinate_types = cell(n_dims)
-    ret.coordinate_types[1:n_dims] = Space
-    ret.coordinate_units = cell(n_dims)
-    ret.coordinate_units[1:n_dims] = ""
-    ret.coordinate_names = cell(n_dims)
-    ret.coordinate_names[1:n_dims] = ""
-    ret.space_directions = eye(n_dims)
-    ret.valid = cell(n_dims)
-    onec = cell(n_dims)
-    onec[1:n_dims] = 1
-    for idim = 1:n_dims
-        sz = copy(onec)
-        sz[idim] = size(dat,idim)
-        ret.valid[idim] = trues(tuple(sz...))
+# General principles:
+
+# Image types implement fields needed to specify an image data array
+#   A, and all fields critical to the interpretation of this array. In
+#   addition, a "metadata" field is present so that users can store
+#   other information as desired.
+
+# The dimensions of the data array fall into 3 general categories:
+#   space dimensions (e.g., x and y), time (if the data array
+#   represents a sequence of images over time), and channel dimension
+#   (e.g., color index). It's important to know the storage order of
+#   the data array. This is signaled by a storage order string, which
+#   introduces a one-character name for each array dimension.  For
+#   example, one could create an image out of a data array A[y,x,c] as
+#      im = ImageArray(A,"yxc")
+#   Images can be manipulated in terms of these coordinate names,
+#   e.g.,
+#      imsnip = ref(im,'x',4)
+#   would yield an image called imsnip that is a slice of im along the
+#   x-coordinate. This would work no matter how im is stored, but for
+#   this example is equivalent to
+#      imsnip.data = im.data[:,4,:].
+#   ref is used instead of slicedim because the following also works:
+#      imsnip = ref(im,'x',3:23,'y',100:200)
+#
+#   There are two reserved choices for the array dimension names: 't'
+#   (for time) and 'c' (for channel). All other choices are assumed to
+#   be spatial. The comparison is case-sensitive, so 'T' and 'C' can
+#   be used for spatial axes. Thus, "yxc" might be used for an RGB
+#   image with color data in the third array dimension, and "xyzt" for
+#   a 3d grayscale image over time.
+#
+#   Other than the usage of 't' and 'c', the choices of dimension
+#   names is arbitrary.  One suggestion is to choose a name that
+#   indicates the direction of increasing array index. For example,
+#   choosing "ur" (for "upper-right") instead of "yx" might more
+#   clearly signal that the lower-left corner (as displayed on the
+#   screen) should be A[1,1], and the upper-right corner is
+#   A[sz1,sz2]. In MRI, "RAS" might indicate a standard right-handed
+#   coordinate system ('R' = rightward-increasing, 'A' =
+#   anterior-increasing, 'S' = superior-increasing). Note that "ASR"
+#   would imply the same coordinate system but that the data are
+#   stored in [anterior/posterior, superior/inferior, right/left]
+#   order.
+#
+# The remaining "principal" fields are those that are minimally needed
+#   to interpret the data array:
+#     The spatial geometry is specified by fields that document how
+#       indices for the array's spatial dimensions correspond to
+#       physical space (any linear relationship is supported, via a
+#       transform matrix);
+#     The timing information is supplied by a lookup vector specifying
+#       the time of each temporal slice;
+#     The channel data is specified in terms of a colorspace string
+#       ("sRGB"), or a list of strings specifying the meaning of each
+#       channel index (e.g., ["GFP","tdTomato"] for a 2-color
+#       fluorescence image)
+
+# More detail on spatial specifications:
+# arrayi stands for "array index", i.e., the (integer) indices into
+#   the data array
+# physc means "physical coordinate", i.e., units in actual space (e.g.,
+#   position in millimeters)
+# arrayi2physc is a n-by-(n+1) transform matrix T; p = T*[a,1] would
+#   take a column vector a containing the index coordinates of a
+#   single element and convert it into a column vector of physical
+#   coordinates. In other words, the separation between adjacent
+#   "pixels" along the jth array dimension corresponds to a
+#   physical-space displacement of T*[ej,0], where ej is the unit
+#   vector along the jth dimension. The right-hand column of T can be
+#   used to encode translations, so that the (ficticious) array item
+#   A[0,...,0] corresponds to a physical-space origin of coordinates
+#   at position T[:,end]. There are utility functions that make
+#   it easy to specify T in common cases, e.g.,
+#     set_pixel_spacing(im,[0.15 0.15 3])
+#   would create a transform matrix for a confocal microscopy stack
+#   with 0.15 microns between pixels in the x- and y- dimensions, and
+#   3 microns between slices along the z-dimension, with the result
+#     T = [0.15 0    0  0;
+#          0    0.15 0  0;
+#          0    0    3  0]
+#       
+
+# A final important task is representing valid pixels, since real-world
+#   imaging devices/situations can result in a subset of the data
+#   being untrustworthy. In cases where the underlying data type The valid field can be set to true (all
+#   pixels are trustworthy), a boolean matrix of the size of the data
+#   array (marking trustworthy pixels individually), or as a container
+#   of arrays whose product would be equal to the full-size valid
+#   pixels array. For example,
+#      valid = [good_pixels_per_frame,good_frames]
+#   where good_pixels_per_frame is a boolean of size [sizex sizey] and
+#   good_frames is a boolean of size [1 1 n_frames].
+
+
+# A few utility functions:
+# Make sure the storage order string doesn't duplicate any names
+function assert_chars_unique(s::ASCIIString)
+    ss = sort(b"$s")
+    for i = 2:length(ss)
+        if ss[i] == ss[i-1]
+            error("Array dimension names cannot repeat")
+        end
     end
-    return ret
 end
-function ndims(img::ImageArray)
-    return length(img.coordinate_types)
+    
+# An image type with all data held in memory
+type ImageArray{DataType<:Number} <: Image
+    data::Array{DataType}         # the raw data
+    arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
+    data_size::Vector{Int}        # full size of the original array
+    arrayi_range::Vector          # vector of ranges (when snipping out a block)
+    arrayi2physc::Matrix{Float64} # transform matrix
+    physc_unit::Vector            # vector of strings, e.g., "microns"
+    physc_name::Vector            # vector of strings, like "X" or "horizontal"
+    arrayti2physt::Vector{Float64}# time coordinate lookup table 
+    t_unit::String                # time coordinate unit string
+    color_space                   # string or vector of strings, e.g. "sRGB"
+    valid                         # which pixels can be trusted?
+    metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
-function set_orthogonal_spacing(img::Image,s::Vector)
-    n_dims = ndims(img)
-    if n_dims != length(s)
+# Empty constructor
+ImageArray{DataType<:Number}() = ImageArray{DataType}([],"",[],[],[],[],[],[],"","",false,[])
+# Construct from a data array
+function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
+    sz = size(data)
+    n_dims = length(sz)
+    if strlen(arrayi_order) != n_dims
+        error("storage order string must have a length equal to the number of dimensions in the array")
+    end
+    # Enforce uniqueness of each array coordinate name
+    assert_chars_unique(arrayi_order)
+    # Count # of spatial dimensions
+    matcht = match(r"t",arrayi_order)
+    matchc = match(r"c",arrayi_order)
+    n_spatial_dims = n_dims - !is(matcht,nothing) - !is(matchc,nothing)
+    println("n_spatial_dims = $n_spatial_dims")
+    # Set up defaults for other fields
+    arrayi_range = cell(n_dims)
+    for idim = 1:n_dims
+        arrayi_range[idim] = 1:sz[idim]
+    end
+    physc_unit = cell(n_spatial_dims)
+    physc_name = cell(n_spatial_dims)
+    physc_unit[1:n_spatial_dims] = ""
+    physc_name[1:n_spatial_dims] = ""
+    T = [eye(n_spatial_dims) zeros(n_spatial_dims)]
+    if !is(matcht,nothing)
+        tindex = matcht.offset
+        arrayti2physt = linspace(1,sz[tindex],sz[tindex])
+    else
+        arrayti2physt = []
+    end
+    ImageArray{DataType}(data,arrayi_order,sz,arrayi_range,T,physc_unit,physc_name,arrayti2physt,"","",true,[])
+end
+
+function set_pixel_spacing(img::Image,dx::Vector)
+    n_spatial_dims = size(img.arrayi2physc,1)
+    if n_spatial_dims != length(dx)
         error("Dimensions do not match")
     end
-    for idim = 1:n_dims
-        img.space_directions[idim,idim] = s[idim]
+    for idim = 1:n_spatial_dims
+        img.arrayi2physc[idim,idim] = dx[idim]
     end
     return img
 end
+
+
 
 
 function lut(pal::Vector, a)
