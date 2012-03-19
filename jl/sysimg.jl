@@ -91,7 +91,6 @@ include("datafmt.jl")
 include("linalg.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
-include("linalg_arpack.jl")
 include("linalg_suitesparse.jl")
 
 # signal processing
