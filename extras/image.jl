@@ -84,19 +84,25 @@ abstract Image
 #          0    0    3  0]
 #       
 
-# A final important task is representing valid pixels, since real-world
-#   imaging devices/situations can result in a subset of the data
-#   being untrustworthy. In cases where the underlying data type The valid field can be set to true (all
-#   pixels are trustworthy), a boolean matrix of the size of the data
-#   array (marking trustworthy pixels individually), or as a container
-#   of arrays whose product would be equal to the full-size valid
-#   pixels array. For example,
+# A final important task is representing valid pixels, since
+#   real-world imaging devices/situations can result in a subset of
+#   the data being untrustworthy. In cases where the underlying data
+#   type has NaN, you can easily mark the invalid pixels in the data
+#   array itself. However, when the data type does not have NaN, the
+#   valid field is necessary. Note that when both are possible, the
+#   validity of a pixel should be evaluated as !isnan(data) & valid,
+#   meaning that marking a pixel as invalid by either NaN or setting
+#   valid false suffices.
+# The valid field can be set to true (all pixels are trustworthy), a
+#   boolean matrix of the size of the data array (marking trustworthy
+#   pixels individually), or as a container of arrays whose product
+#   would be equal to the full-size valid pixels array. For example,
 #      valid = [good_pixels_per_frame,good_frames]
 #   where good_pixels_per_frame is a boolean of size [sizex sizey] and
 #   good_frames is a boolean of size [1 1 n_frames].
 
 
-# A few utility functions:
+# Utility functions:
 # Make sure the storage order string doesn't duplicate any names
 function assert_chars_unique(s::ASCIIString)
     ss = sort(b"$s")
@@ -105,6 +111,21 @@ function assert_chars_unique(s::ASCIIString)
             error("Array dimension names cannot repeat")
         end
     end
+end
+
+function isspatial(s::ASCIIString)
+# this returns a vector of bools, is it OK to have the name start
+# with "is"?
+    indx = trues(length(s))
+    matcht = match(r"t",s)
+    if !is(matcht,nothing)
+        indx[matcht.offset] = false;
+    end
+    matchc = match(r"c",s)
+    if !is(matchc,nothing)
+        indx[matchc.offset] = false;
+    end
+    return indx
 end
 
 # An image type with all data held in memory
@@ -122,8 +143,20 @@ type ImageArray{DataType<:Number} <: Image
     valid                         # which pixels can be trusted?
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
-# Empty constructor (doesn't work right now for some reason)
-#ImageArray{DataType<:Number}() = ImageArray{DataType}(Array(DataType,0),"",Array(Int,0),Array(Range1,0),zeros(0,0),Array(ASCIIString,0),Array(ASCIIString,0),zeros(0),"","",false,[])
+# Empty constructor (doesn't seem to work now, for unknown reason)
+ImageArray{DataType<:Number}() = 
+    ImageArray{DataType}(Array(DataType,0),
+                         "",
+                         Array(Int,0),
+                         Array(Range1,0),
+                         zeros(0,0),
+                         Array(ASCIIString,0),
+                         Array(ASCIIString,0),
+                         zeros(0),
+                         "",
+                         "",
+                         false,
+                         "")
 # Construct from a data array, providing defaults for everything
 # except the storage order
 function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
@@ -167,7 +200,7 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
             color_space = "CMYK"
         end
     end
-    ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,[])
+    ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
 function copy(img::ImageArray)
@@ -178,7 +211,7 @@ function copy(img::ImageArray)
                copy(img.arrayi2physc),
                copy(img.physc_unit),
                copy(img.physc_name),
-               copy(img.arrayti2phys),
+               copy(img.arrayti2physt),
                copy(img.t_unit),
                copy(img.color_space),
                copy(img.valid),
@@ -228,8 +261,16 @@ function copydata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray
     image_out.data = image_in.data[image_out.arrayi_range...]
 end
 
-function permute{DataType}(img::ImageArray{DataType},perm)
+function permute!{DataType}(img::ImageArray{DataType},perm)
     img.data = permute(img.data,perm)
+    img.data_size = img.data_size[perm]
+    img.arrayi_range = img.arrayi_range[perm]
+    # Permute arrayi2physc: first compute the spatial permutation
+    flag = isspatial(img.arrayi_order)
+    cflag = cumsum(int(flag))
+    perm_spatial = cflag[perm[flag[perm]]]
+    img.arrayi2physc = [img.arrayi2physc[:,perm_spatial], img.arrayi2physc[:,end]]
+    # Finally, permute the storage order string
     img.arrayi_order = img.arrayi_order[perm]
 end
 
