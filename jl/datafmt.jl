@@ -80,6 +80,9 @@ function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
 end
 
 function _jl_dlmread_setup(fname::String, dlm::(Char...))
+    if length(dlm) == 0
+        error("dlmread: no separator characters specified")
+    end
     nr = integer(split(readall(`wc -l $fname`),' ',false)[1])
     f = open(fname)
     row = _jl_dlm_readrow(f, dlm)
