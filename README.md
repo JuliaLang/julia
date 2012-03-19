@@ -178,8 +178,7 @@ An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Julia support is currently available for [Emacs](https://github.com/JuliaLang/julia/tree/master/contrib#Emacs), [Vim](https://github.com/JuliaLang/julia/tree/master/contrib#Vim), and [TextMate](https://github.com/JuliaLang/julia/tree/master/contrib#TextMate).
-Support files and instructions for configuring these editors can be found in [`contrib/`](https://github.com/JuliaLang/julia/tree/master/contrib).
+Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, and Textmate.
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.

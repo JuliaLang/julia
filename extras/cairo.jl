@@ -297,6 +297,7 @@ function _set_line_type(ctx::CairoContext, nick::String)
     }
     # XXX:should be scaled by linewidth
     const name2dashes = {
+        "solid"           => Float64[],
         "dotted"          => [1.,3.],
         "dotdashed"       => [1.,3.,4.,4.],
         "longdashed"      => [6.,6.],
@@ -388,6 +389,7 @@ const __pl_style_func = {
     "color"     => _set_color,
     "linecolor" => _set_color,
     "fillcolor" => _set_color,
+    "linestyle" => _set_line_type,
     "linetype"  => _set_line_type,
     "linewidth" => set_line_width,
     "filltype"  => set_fill_type,
