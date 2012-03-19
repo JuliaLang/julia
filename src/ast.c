@@ -435,8 +435,8 @@ void jl_load_file_string(const char *text)
 jl_value_t *jl_expand(jl_value_t *expr)
 {
     int np = jl_gc_n_preserved_values();
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")),
-                          julia_to_scm(expr));
+    value_t arg = julia_to_scm(expr);
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-expand-to-thunk")), arg);
     jl_value_t *result;
     if (e == FL_T || e == FL_F || e == FL_EOF) {
         result = NULL;
