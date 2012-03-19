@@ -229,8 +229,8 @@ for (libname, fname, elty) in ((:_jl_libfftw ,"fftw_plan_guru_r2r",:Float64),
                                (:_jl_libfftwf,"fftwf_plan_guru_r2r",:Float32))
     @eval begin
         function _jl_fftw_transpose(X::Matrix{$elty})
+            P = similar(X)
             (n1, n2) = size(X)
-            P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Uint32),
                          0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, [_jl_FFTW_HC2R], _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
@@ -245,8 +245,8 @@ for (libname, fname, celty) in ((:_jl_libfftw ,"fftw_plan_guru_dft",:Complex128)
                                 (:_jl_libfftwf,"fftwf_plan_guru_dft",:Complex64))
     @eval begin
         function _jl_fftw_transpose(X::Matrix{$celty})
+            P = similar(X)
             (n1, n2) = size(X)
-            P = similar(X, n2, n1)
             plan = ccall(dlsym($libname, $fname), Ptr{Void},
                          (Int32, Ptr{Int32}, Int32, Ptr{Int32}, Ptr{$celty}, Ptr{$celty}, Int32, Uint32),
                          0, C_NULL, 2, int32([n1,n2,1,n2,1,n1]), X, P, _jl_FFTW_FORWARD, _jl_FFTW_ESTIMATE | _jl_FFTW_PRESERVE_INPUT)
