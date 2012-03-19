@@ -23,7 +23,8 @@ abstract Image
 #   x-coordinate. This would work no matter how img is stored; for
 #   this example, it is equivalent to
 #      imsnip.data = img.data[:,4,:].
-#   ref is used instead of slicedim because the following also works:
+#   The syntax is ref rather than slicedim because the following also
+#   works:
 #      imsnip = ref(img,'x',3:23,'y',100:200)
 #
 #   There are two reserved choices for the array dimension names: 't'
@@ -132,7 +133,7 @@ end
 type ImageArray{DataType<:Number} <: Image
     data::Array{DataType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
-    data_size::Vector{Int}        # full size of the original array
+    data_size::Vector{Int}        # size of the _original_ array (pre-snip)
     arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
     physc_unit::Vector            # vector of strings, e.g., "microns"
@@ -269,7 +270,7 @@ function permute!{DataType}(img::ImageArray{DataType},perm)
     flag = isspatial(img.arrayi_order)
     cflag = cumsum(int(flag))
     perm_spatial = cflag[perm[flag[perm]]]
-    img.arrayi2physc = [img.arrayi2physc[:,perm_spatial], img.arrayi2physc[:,end]]
+    img.arrayi2physc = [img.arrayi2physc[:,perm_spatial] img.arrayi2physc[:,end]]
     # Finally, permute the storage order string
     img.arrayi_order = img.arrayi_order[perm]
 end
