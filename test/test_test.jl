@@ -1,5 +1,5 @@
 # test file to test testing
-
+load("test.jl")
 
 test_context("Testing test tests")
 # setup goes here
@@ -7,7 +7,6 @@ test_context("Testing test tests")
 test_group("string tests")
 @test strip("\t  hi   \n") == "hi"
 @test strip("\t  this should fail   \n") == "hi" #fail
-
 
 test_group("numeric tests")
 @test approx_eq(airy(1.8), 0.0470362)
