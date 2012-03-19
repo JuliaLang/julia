@@ -16,16 +16,11 @@ abstract Image
 #   introduces a one-character name for each array dimension.  For
 #   example, one could create an image out of a data array A[y,x,c] as
 #      img = ImageArray(A,"yxc")
-#   Images can be manipulated in terms of these coordinate names,
-#   e.g.,
-#      imsnip = ref(img,'x',4)
-#   would yield an image called imsnip that is a slice of im along the
-#   x-coordinate. This would work no matter how img is stored; for
-#   this example, it is equivalent to
-#      imsnip.data = img.data[:,4,:].
-#   The syntax is ref rather than slicedim because the following also
-#   works:
-#      imsnip = ref(img,'x',3:23,'y',100:200)
+#   Images can then be manipulated in "ordinary" ways,
+#      imgsnip = img[50:200,100:175,1:3]
+#   but also in terms of these coordinate names, e.g.,
+#      imsnip = img['x',100:175,'y',50:200]
+#   which would yield the same result.
 #
 #   There are two reserved choices for the array dimension names: 't'
 #   (for time) and 'c' (for channel). All other choices are assumed to
@@ -38,9 +33,9 @@ abstract Image
 #   names is arbitrary.  One suggestion is to choose a name that
 #   indicates the direction of increasing array index. For example,
 #   choosing "br" (for "bottom-right") instead of "yx" might more
-#   clearly signal that the lower-left corner (as displayed on the
-#   screen) should be A[sz1,1], and the upper-right corner is
-#   A[1,sz2]. In MRI, "RAS" might indicate a standard right-handed
+#   clearly signal that the upper-left corner (as displayed on the
+#   screen) should be A[1,1], and the bottom-right corner is
+#   A[sz1,sz2]. In MRI, "RAS" might indicate a standard right-handed
 #   coordinate system ('R' = rightward-increasing, 'A' =
 #   anterior-increasing, 'S' = superior-increasing). Note that "ASR"
 #   would imply the same coordinate system but that the data are
@@ -174,10 +169,7 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     matchc = match(r"c",arrayi_order)
     n_spatial_dims = n_dims - !is(matcht,nothing) - !is(matchc,nothing)
     # Set up defaults for other fields
-    arrayi_range = Array(Range1{Int},n_dims)
-    for idim = 1:n_dims
-        arrayi_range[idim] = 1:sz[idim]
-    end
+    arrayi_range = map(x->1:x,szv)
     physc_unit = Array(ASCIIString,n_spatial_dims)
     physc_name = Array(ASCIIString,n_spatial_dims)
     physc_unit[1:n_spatial_dims] = ""
@@ -204,11 +196,13 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
+### Copy and ref functions ###
+# Deep copy
 function copy(img::ImageArray)
     ImageArray(copy(img.data),
                copy(img.arrayi_order),
                copy(img.data_size),
-               copy(img.arrayi_range),
+               img.arrayi_range, # ranges are immutable
                copy(img.arrayi2physc),
                copy(img.physc_unit),
                copy(img.physc_name),
@@ -217,6 +211,63 @@ function copy(img::ImageArray)
                copy(img.color_space),
                copy(img.valid),
                copy(img.metadata))
+end
+
+# Copy everything but the data and the metadata
+function copy_pfields(img::ImageArray)
+    ImageArray(img.data,
+               copy(img.arrayi_order),
+               copy(img.data_size),
+               img.arrayi_range,
+               copy(img.arrayi2physc),
+               copy(img.physc_unit),
+               copy(img.physc_name),
+               copy(img.arrayti2physt),
+               copy(img.t_unit),
+               copy(img.color_space),
+               copy(img.valid),
+               img.metadata)
+end
+
+# Copy just the data
+function copydata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+    image_out.data = image_in.data[image_out.arrayi_range...]
+end
+
+# This supports two ref syntaxes
+function ref(img::ImageArray,ind...)
+    if isa(ind[1],Char)
+        ## Named ref syntax: ref(img,'a',20:50,'b',40:200,...)
+        if length(ind) % 2 != 0
+            error("Coordinate/value must come in pairs")
+        end
+        imgret = copy_pfields(img)
+        # Prepare the coordinates for snipping
+        sniprange = map(x->1:x,vcat(size(img.data)...))
+        for iarg = 1:2:length(ind)
+            idim = strchr(img.arrayi_order,ind[iarg])
+            if idim == 0
+                error(strcat("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
+            end
+            sniprange[idim] = ind[iarg+1]
+        end
+        # Do the snip
+        imgret.data = img.data[sniprange...]
+        imgret.arrayi_range = sniprange
+        return imgret
+    else
+        # Normal ref syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        imgret.data = ref(img.data,ind...)
+        imgret.arrayi_range = convert(Array{Range1{Int},1},{ind...})
+        return imgret
+    end
+end
+
+
+### Utility functions ###
+function size(img::ImageArray)
+    return size(img.data)
 end
 
 function set_pixel_spacing(img::Image,dx::Vector)
@@ -238,30 +289,8 @@ function get_pixel_spacing(img::Image)
     return dx
 end
 
-function ref(img::ImageArray,cv...)
-    if length(cv) % 2 != 0
-        error("Coordinate/value must come in pairs")
-    end
-    imgret = copy(img)
-    # Prepare the coordinates for snipping
-    cc = Array(Range1{Int},ndims(img.data))
-    for idim = 1:ndims(img.data)
-        cc[idim] = 1:size(img.data,idim)
-    end
-    for icv = 1:2:length(cv)
-        idim = strchr(img.arrayi_order,cv[icv])
-        cc[idim] = cv[icv+1]
-    end
-    # Do the snip
-    imgret.data = img.data[cc...]
-    imgret.arrayi_range = cc
-    return imgret
-end
 
-function copydata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
-    image_out.data = image_in.data[image_out.arrayi_range...]
-end
-
+### Manipulations
 function permute!{DataType}(img::ImageArray{DataType},perm)
     img.data = permute(img.data,perm)
     img.data_size = img.data_size[perm]
