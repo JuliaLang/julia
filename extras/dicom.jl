@@ -77,15 +77,23 @@ end
 
 function undefined_length(st, vr)
     data = memio()
-    w1 = 0
-    w2 = 0
-    while w1 != 0xFFFE || w2 != 0xE0DD
+    w1 = w2 = 0
+    while true
+        # read until 0xFFFE 0xE0DD
         w1 = w2
         w2 = read(st, Uint16)
-        write(data, uint16(w2))
+        if w1 == 0xFFFE
+            if w2 == 0xE0DD
+                break
+            end
+            write(data, w1)
+        end
+        if w2 != 0xFFFE
+            write(data, w2)
+        end
     end
-    read(st, Uint32)
-    takebuf_array(data) # minus last 4 bytes?
+    skip(st, 4)
+    takebuf_array(data)
 end
 
 function sequence_item(st, evr, sz)
