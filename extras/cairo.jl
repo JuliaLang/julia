@@ -542,6 +542,8 @@ function symbols( self::CairoRenderer, x, y )
     )
     symbol_func = get(symbol_funcs, name, default_symbol_func)
 
+    save(self.ctx)
+    set_dash(self.ctx, Float64[])
     new_path(self.ctx)
     for i = 1:min(length(x),length(y))
         symbol_func(self.ctx, x[i], y[i], 0.5*size)
@@ -550,6 +552,7 @@ function symbols( self::CairoRenderer, x, y )
         fill_preserve(self.ctx)
     end
     stroke(self.ctx)
+    restore(self.ctx)
 end
 
 function curve( self::CairoRenderer, x::Vector, y::Vector )
