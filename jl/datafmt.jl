@@ -79,7 +79,7 @@ function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
     a
 end
 
-function _jl_dlmread_setup(fname::String, dlm::Char)
+function _jl_dlmread_setup(fname::String, dlm::(Char...))
     nr = integer(split(readall(`wc -l $fname`),' ',false)[1])
     f = open(fname)
     row = _jl_dlm_readrow(f, dlm)
@@ -87,7 +87,18 @@ function _jl_dlmread_setup(fname::String, dlm::Char)
     return (f, nr, nc, row)
 end
 
-function dlmread(fname::String, dlm::Char, T::Type)
+const _jl_dlmread_default_delimiters = (' ', ',', ';', '\t', '\v')
+
+dlmread(fname::String, T::Type) = dlmread(fname, _jl_dlmread_default_delimiters, T)
+
+dlmread(fname::String) = dlmread(fname, _jl_dlmread_default_delimiters)
+
+dlmread(fname::String, dlm::Char, T::Type) = dlmread(fname, (dlm,), T)
+
+dlmread(fname::String, dlm::Union(Vector{Char}, ASCIIString), T::Type) =
+    dlmread(fname, ntuple(length(dlm), i->dlm[i]), T)
+
+function dlmread(fname::String, dlm::(Char...), T::Type)
     (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
     a = Array(T, nr, nc)
     _jl_dlmread(a, f, dlm, nr, nc, row)
@@ -95,7 +106,12 @@ function dlmread(fname::String, dlm::Char, T::Type)
     return a
 end
 
-function dlmread(fname::String, dlm::Char)
+dlmread(fname::String, dlm::Char) = dlmread(fname, (dlm,))
+
+dlmread(fname::String, dlm::Union(Vector{Char}, ASCIIString)) =
+    dlmread(fname, ntuple(length(dlm), i->dlm[i]))
+
+function dlmread(fname::String, dlm::(Char...))
     (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
     a = Array(Float64, nr, nc)
     a = _jl_dlmread_auto(a, f, dlm, nr, nc, row)
