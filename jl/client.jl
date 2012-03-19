@@ -199,7 +199,7 @@ function _start()
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
-            global const Scheduler = Task(()->event_loop(true), 1024*1024)
+            global const Scheduler = Task(make_callback(()->event_loop(true)), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
             # make scheduler aware of current (root) task
             enq_work(_jl_roottask_wi)

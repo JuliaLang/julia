@@ -116,7 +116,7 @@ static void _probe_arch(void)
 #endif
 
     intptr_t prior_diff = p.probe_local - p.prior_local;
-    _frame_offset = labs(prior_diff);
+    _frame_offset = labs(prior_diff)+64;
 }
 
 /* end probing code */

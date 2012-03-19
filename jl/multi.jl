@@ -1012,8 +1012,7 @@ function start_remote_workers(machines, cmds)
         let stream = read_from(cmds[i])
             outs[i] = stream
             # redirect console output from workers to the client's stdout
-            add_io_handler(stream,make_callback((args...)->
-                linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
+            add_io_handler(stream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
         end
     end
     run_event_loop(globalEventLoop())

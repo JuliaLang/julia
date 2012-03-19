@@ -1478,7 +1478,7 @@ JL_CALLABLE(jl_f_make_callback)
 
 void jl_callback_call(jl_function_t *f,int count,...)
 {
-    jl_value_t **argv = calloc(count,sizeof(jl_value_t*));
+    jl_value_t **argv = alloca(count*sizeof(jl_value_t*));
     va_list argp;
     va_start(argp,count);
     jl_value_t *v;    int i;
@@ -1500,11 +1500,8 @@ void jl_callback_call(jl_function_t *f,int count,...)
             break;
         }
         argv[i]=v;
-        JL_GC_PUSH(&v);
     }
     JL_GC_PUSHARGS(argv,count);
     jl_apply(f,(jl_value_t**)argv,count);
-    for(i=0; i<count; ++i)
-        JL_GC_POP();
     JL_GC_POP();
 }

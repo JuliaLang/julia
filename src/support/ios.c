@@ -31,9 +31,19 @@
 #include "utf8.h"
 #include "ios.h"
 #include "timefuncs.h"
+/*
+#define MEMBEBUG
+#define MEMPROFILE*/
 
-//#define MEMDEBUG
-//#define MEMPROFILE
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
+# ifdef __LP64__
+#  define BVOFFS 3
+# else
+#  define BVOFFS 4
+# endif
+#else
+#define BVOFFS 2
+#endif
 
 /** vasprintf windows implelemntation by Michael Clark <michael@metaparadigm.com> as part of http://oss.metaparadigm.com/json-c/ lincensed under the MIT LICENSE */
 
