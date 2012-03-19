@@ -1021,7 +1021,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
-    jl_value_t **a = alloca(na+1);
+    jl_value_t **a = alloca(sizeof(jl_value_t*)*(na+1));
     a[0] = (jl_value_t*)f;
     int i;
     for(i=0; i < na; i++)
