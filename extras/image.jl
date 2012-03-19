@@ -123,8 +123,9 @@ type ImageArray{DataType<:Number} <: Image
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
 # Empty constructor (doesn't work right now for some reason)
-ImageArray{DataType<:Number}() = ImageArray{DataType}(Array(DataType,0),"",Array(Int,0),Array(Range1,0),zeros(0,0),Array(ASCIIString,0),Array(ASCIIString,0),zeros(0),"","",false,[])
-# Construct from a data array
+#ImageArray{DataType<:Number}() = ImageArray{DataType}(Array(DataType,0),"",Array(Int,0),Array(Range1,0),zeros(0,0),Array(ASCIIString,0),Array(ASCIIString,0),zeros(0),"","",false,[])
+# Construct from a data array, providing defaults for everything
+# except the storage order
 function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
     sz = size(data)
     szv = vcat(sz...)
@@ -169,6 +170,21 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,[])
 end
 
+function copy(img::ImageArray)
+    ImageArray(copy(img.data),
+               copy(img.arrayi_order),
+               copy(img.data_size),
+               copy(img.arrayi_range),
+               copy(img.arrayi2physc),
+               copy(img.physc_unit),
+               copy(img.physc_name),
+               copy(img.arrayti2phys),
+               copy(img.t_unit),
+               copy(img.color_space),
+               copy(img.valid),
+               copy(img.metadata))
+end
+
 function set_pixel_spacing(img::Image,dx::Vector)
     n_spatial_dims = size(img.arrayi2physc,1)
     if n_spatial_dims != length(dx)
@@ -188,13 +204,13 @@ function get_pixel_spacing(img::Image)
     return dx
 end
 
-function ref{DataType}(img::ImageArray{DataType},cv...)
+function ref(img::ImageArray,cv...)
     if length(cv) % 2 != 0
         error("Coordinate/value must come in pairs")
     end
     imgret = copy(img)
     # Prepare the coordinates for snipping
-    cc = cell(ndims(img.data))
+    cc = Array(Range1{Int},ndims(img.data))
     for idim = 1:ndims(img.data)
         cc[idim] = 1:size(img.data,idim)
     end
