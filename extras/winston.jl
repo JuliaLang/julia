@@ -26,9 +26,7 @@ type WinstonConfig
         # read global config
         winston_ini = "winston.ini"
         fn = find_in_path(winston_ini)
-        if fn != winston_ini
-            read(inifile, fn)
-        end
+        read(inifile, fn)
 
         new(inifile)
     end
@@ -2474,15 +2472,13 @@ function x11( self::PlotContainer, args...)
     page_compose( self, device )
 end
 
-function write_pdf( self::PlotContainer, filename::String, args... )
-    opt = HashTable()
-    for (k,v) in config_options("postscript")
-        opt[k] = v
-    end
-    for (k,v) in args2hashtable(args...)
-        opt[k] = v
-    end
-    device = PDFRenderer( filename, opt["width"], opt["height"] )
+function write_eps( self::PlotContainer, filename::String, width, height )
+    device = EPSRenderer( filename, width, height )
+    page_compose( self, device )
+end
+
+function write_pdf( self::PlotContainer, filename::String, width, height )
+    device = PDFRenderer( filename, width, height )
     page_compose( self, device )
 end
 
@@ -2493,10 +2489,16 @@ end
 
 function file( self::PlotContainer, filename::String, args... )
     extn = filename[end-2:end]
-    if extn == "pdf"
-        write_pdf(self, filename, args...)
+    opts = args2hashtable(args...)
+    if extn == "eps"
+        width = has(opts,"width") ? opts["width"] : config_value("eps","width")
+        height = has(opts,"height") ? opts["height"] : config_value("eps","height")
+        write_eps(self, filename, width, height)
+    elseif extn == "pdf"
+        width = has(opts,"width") ? opts["width"] : config_value("pdf","width")
+        height = has(opts,"height") ? opts["height"] : config_value("pdf","height")
+        write_pdf(self, filename, width, height)
     elseif extn == "png"
-        opts = args2hashtable(args...)
         width = has(opts,"width") ? opts["width"] : config_value("window","width")
         height = has(opts,"height") ? opts["height"] : config_value("window","height")
         write_png(self, filename, width, height)

@@ -27,11 +27,13 @@ install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/jl
 	install -d $(DESTDIR)$(PREFIX)/share/julia/contrib
 	install -d $(DESTDIR)$(PREFIX)/share/julia/examples
+	install -d $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v julia $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
 	install -v jl/* $(DESTDIR)$(PREFIX)/share/julia/jl
+	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
 	-install -v lib/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
 
@@ -64,6 +66,7 @@ cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 
 distclean: cleanall
+	rm -fr dist
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* sloccount clean cleanall

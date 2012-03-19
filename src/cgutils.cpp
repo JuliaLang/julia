@@ -366,19 +366,6 @@ static jl_value_t *julia_type_of(Value *v)
     return jl_typeid_to_type(id);
 }
 
-// see if a julia type maps directly to an llvm type
-static bool is_julia_type_representable(jl_value_t *jt)
-{
-    return
-        (jt == (jl_value_t*)jl_bool_type || jt == (jl_value_t*)jl_int8_type ||
-         jt == (jl_value_t*)jl_int16_type || jt == (jl_value_t*)jl_int32_type ||
-         jt == (jl_value_t*)jl_int64_type ||
-         jt == (jl_value_t*)jl_float32_type ||
-         jt == (jl_value_t*)jl_float64_type ||
-         (jl_is_cpointer_type(jt) &&
-          is_julia_type_representable(jl_tparam0(jt))));
-}
-
 static Value *NoOpCast(Value *v)
 {
     v = CastInst::Create(Instruction::BitCast, v, v->getType());
