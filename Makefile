@@ -10,17 +10,17 @@ debug release:
 julia-debug julia-release:
 	@$(MAKE) -sC external
 	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC src lib$@
+	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC base
 	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC ui $@
-	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC jl
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.jl src/dump.c jl/stage0.jl
-	$(QUIET_JULIA) ./julia -b jl/stage0.jl
+sys0.ji: src/boot.jl src/dump.c base/stage0.jl
+	$(QUIET_JULIA) ./julia -b base/stage0.jl
 	@rm -f sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-sys.ji: VERSION sys0.ji jl/*.jl
-	$(QUIET_JULIA) ./julia `test -f sys.ji && echo jl/stage1.jl || echo -J sys0.ji jl/stage1.jl`
+sys.ji: VERSION sys0.ji base/*.jl
+	$(QUIET_JULIA) ./julia `test -f sys.ji && echo base/stage1.jl || echo -J sys0.ji base/stage1.jl`
 
 install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/lib
@@ -32,7 +32,7 @@ install: release
 	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
-	install -v jl/* $(DESTDIR)$(PREFIX)/share/julia/jl
+	install -v base/* $(DESTDIR)$(PREFIX)/share/julia/jl
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
 	-install -v lib/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
