@@ -131,7 +131,7 @@ t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
-        return (subtype(from, to) ? from : to)
+        return tintersect(from,to)
     end
     if is(to,Tuple)
         return from
