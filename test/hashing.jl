@@ -32,3 +32,5 @@ end
 f = prevfloat(float64(typemax(Uint64)))
 @assert hash(f) == hash(0xfffffffffffff800)
 @assert hash(f) == hash(-2048)
+
+@assert hash(RopeString("1","2")) == hash("12")

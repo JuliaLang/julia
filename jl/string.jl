@@ -157,6 +157,8 @@ end
 isequal(a::String, b::String) = cmp(a,b) == 0
 isless(a::String, b::String)  = cmp(a,b) <  0
 
+hash(s::String) = hash(cstring(s))
+
 # faster comparisons for byte strings
 
 cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
