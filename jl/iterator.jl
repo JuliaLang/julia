@@ -40,3 +40,40 @@ function done(z::Zip, state)
     end
     return false
 end
+
+# filter
+
+type Filter
+    flt::Function
+    itr
+end
+filter(flt::Function, itr) = Filter(flt, itr)
+
+function _jl_advance_filter(f::Filter, s)
+    while !done(f.itr,s)
+        v,t = next(f.itr,s)
+        if f.flt(v)
+            return (v,s)
+        end
+        s=t
+    end
+    return (nothing,s)
+end
+
+start(f::Filter) = _jl_advance_filter(f,start(f.itr))
+next(f::Filter, state) = (state[1],_jl_advance_filter(f,next(f.itr,state[2])[2]))
+done(f::Filter, state) = done(f.itr,state[2])
+
+# reverse
+
+type Reverse
+    itr
+end
+reverse(itr) = Reverse(itr)
+
+start(r::Reverse) = length(r.itr)
+next(r::Reverse, i) = (r.itr[i], i-1)
+done(r::Reverse, i) = i < 1
+
+# TODO: a more general "reversible" interface; this only
+# works for objects that are indexable from 1 to length(itr)

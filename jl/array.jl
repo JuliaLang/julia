@@ -1244,7 +1244,7 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-function filter(f, As::StridedArray)
+function filter(f::Function, As::StridedArray)
     boolmap::Array{Bool} = map(f, As)
     As[boolmap]
 end
