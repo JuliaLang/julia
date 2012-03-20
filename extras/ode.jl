@@ -51,7 +51,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
     # Compute initial step size.
 
     s1 = F(t, y)
-    r = norm(s1./float(max(abs(y), threshold)), Inf) + realmin() # TODO: fix type bug in max()
+    r = norm(s1./max(abs(y), threshold), Inf) + realmin() # TODO: fix type bug in max()
     h = tdir*0.8*rtol^(1/3)/r
 
     # The main loop.
@@ -79,7 +79,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
         # Estimate the error.
 
         e = h*(-5*s1 + 6*s2 + 8*s3 - 9*s4)/72
-        err = norm(e./max(float(max(abs(y), abs(ynew))), threshold), Inf) + realmin()
+        err = norm(e./max(max(abs(y), abs(ynew)), threshold), Inf) + realmin()
 
         # Accept the solution if the estimated error is less than the tolerance.
 
