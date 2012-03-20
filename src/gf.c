@@ -864,7 +864,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             l = l->next;
         }
         char *n = fname->name;
-        jl_value_t *errstream = jl_get_global(jl_system_module,
+        jl_value_t *errstream = jl_get_global(jl_base_module,
                                               jl_symbol("stderr_stream"));
         JL_TRY {
             if (errstream)

@@ -595,7 +595,7 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    GC_Markval(jl_base_module);
+    GC_Markval(jl_core_module);
     GC_Markval(jl_current_module);
 
     // invisible builtin values
@@ -656,7 +656,7 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_get_global(jl_system_module,
+    jl_value_t *errstream = jl_get_global(jl_base_module,
                                           jl_symbol("stderr_stream"));
     JL_TRY {
         if (errstream)

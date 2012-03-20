@@ -133,7 +133,7 @@ void handle_input(jl_value_t *ast, int end, int show_value)
         show_value = -1;
         ast = jl_nothing;
     }
-    jl_value_t *f = jl_get_global(jl_system_module,jl_symbol("repl_callback"));
+    jl_value_t *f = jl_get_global(jl_base_module,jl_symbol("repl_callback"));
     assert(f);
     jl_value_t *fargs[] = { ast, jl_box_long(show_value) };
     jl_apply((jl_function_t*)f, fargs, 2);
@@ -145,8 +145,8 @@ void jl_lisp_prompt();
 static void print_profile(void)
 {
     size_t i;
-    void **table = jl_system_module->bindings.table;
-    for(i=1; i < jl_system_module->bindings.size; i+=2) {
+    void **table = jl_base_module->bindings.table;
+    for(i=1; i < jl_base_module->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->value != NULL && jl_is_function(b->value) &&
@@ -184,7 +184,7 @@ int true_main(int argc, char *argv[])
     init_repl_environment();
 
     jl_function_t *start_client =
-        (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("_start"));
+        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
