@@ -190,8 +190,8 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
     return tup;
 }
 
-jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
-                              jl_lambda_info_t *linfo)
+DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
+                                        jl_lambda_info_t *linfo)
 {
     jl_function_t *f = (jl_function_t*)alloc_4w();
     f->type = (jl_type_t*)jl_any_func;

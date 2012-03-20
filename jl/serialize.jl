@@ -253,8 +253,8 @@ function deserialize_function(s)
     if has(_jl_known_lambda_data, lnumber)
         linfo = _jl_known_lambda_data[lnumber]
         function ()
-            ccall(:jl_new_closure_internal, Any, (Any, Any),
-                  linfo, force(env))::Function
+            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
+                  C_NULL, force(env), linfo)::Function
         end
     else
         function ()
@@ -262,8 +262,8 @@ function deserialize_function(s)
                           force(ast), force(sparams))
             linfo.inferred = infr
             _jl_known_lambda_data[lnumber] = linfo
-            ccall(:jl_new_closure_internal, Any, (Any, Any),
-                  linfo, force(env))::Function
+            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
+                  C_NULL, force(env), linfo)::Function
         end
     end
 end
