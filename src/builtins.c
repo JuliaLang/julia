@@ -762,7 +762,7 @@ void jl_show(jl_value_t *v)
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
-static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
+void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     ios_t *s = jl_current_output_stream();
     ios_putc(opn, s);
@@ -811,7 +811,7 @@ static void show_type(jl_value_t *t)
         }
         else {
             ios_write(s, "Union", 5);
-            show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+            jl_show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
         }
     }
     else if (jl_is_seq_type(t)) {
@@ -827,7 +827,7 @@ static void show_type(jl_value_t *t)
         ios_puts(tt->name->name->name, s);
         jl_tuple_t *p = tt->parameters;
         if (p->length > 0)
-            show_tuple(p, '{', '}', 0);
+            jl_show_tuple(p, '{', '}', 0);
     }
 }
 
@@ -836,7 +836,7 @@ DLLEXPORT void jl_show_any(jl_value_t *v)
     // fallback for printing some other builtin types
     ios_t *s = jl_current_output_stream();
     if (jl_is_tuple(v)) {
-        show_tuple((jl_tuple_t*)v, '(', ')', 1);
+        jl_show_tuple((jl_tuple_t*)v, '(', ')', 1);
     }
     else if (jl_is_type(v)) {
         show_type(v);
