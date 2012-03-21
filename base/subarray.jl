@@ -304,7 +304,7 @@ strides(s::SubArray) = tuple(s.strides...)
 
 stride(s::SubArray, i::Integer) = s.strides[i]
 
-convert{T}(::Type{Ptr}, x::SubArray{T}) =
+convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)
 
 pointer(s::SubArray, i::Int) = pointer(s, ind2sub(size(s), i))

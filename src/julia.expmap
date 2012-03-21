@@ -19,7 +19,7 @@
     jl_new_struct;
     jl_new_structt;
     jl_new_lambda_info;
-    jl_new_closure_internal;
+    jl_new_closure;
     jl_new_array;
     jl_reshape_array;
     jl_alloc_array_1d;
@@ -161,7 +161,7 @@
     jl_print_int64;
     jl_pgcstack;
     jl_symbol;
-    jl_system_module;
+    jl_base_module;
     jl_get_global;
     jl_set_global;
     jl_set_const;
