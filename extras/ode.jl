@@ -395,7 +395,7 @@ end
 
 #ODEROSENBROCK Solve stiff differential equations, Rosenbrock method
 #    with provided coefficients.
-function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
+function oderosenbrock{T}(F::Function, G::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
     h = diff(tspan)
     x = Array(T, length(tspan), length(x0))
     x[1,:] = x0'
@@ -405,7 +405,7 @@ function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector
         ts = tspan[solstep]
         hs = h[solstep]
         xs = reshape(x[solstep,:], size(x0))
-        dFdx = jacobian(F, ts, xs)
+        dFdx = G(ts, xs)
         jac = eye(size(dFdx)[1])./gamma./hs-dFdx
 
         g = zeros(size(a)[1], length(x0))
@@ -420,17 +420,20 @@ function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector
     return(tspan, x)
 end
 
-#JACOBIAN Numerically determine Jacobian by forward finite differences
-function jacobian(F::Function, t::Number, x::AbstractVector)
-    ftx = F(t, x)
-    dFdx = zeros(length(x), length(x))
-    for j = 1:length(x)
-        dx = zeros(size(x))
-        # The 100 below is heuristic
-        dx[j] = (x[j]+(x[j]==0))./100
-        dFdx[:,j] = (F(t,x+dx)-ftx)./dx[j]
+function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
+    # Crude forward finite differences estimator as fallback
+    function jacobian(F::Function, t::Number, x::AbstractVector)
+        ftx = F(t, x)
+        dFdx = zeros(length(x), length(x))
+        for j = 1:length(x)
+            dx = zeros(size(x))
+            # The 100 below is heuristic
+            dx[j] = (x[j]+(x[j]==0))./100
+            dFdx[:,j] = (F(t,x+dx)-ftx)./dx[j]
+        end
+        return dFdx
     end
-    return dFdx
+    oderosenbrock(F, (t, x)->jacobian(F, t, x), tspan, x0, gamma, a, b, c)
 end
 
 # Kaps-Rentrop coefficients
