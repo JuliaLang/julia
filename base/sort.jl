@@ -395,13 +395,4 @@ function searchsorted(a, x)
     return isless(a[lo],x) ? hi : lo
 end
 
-function order(a::AbstractVector)
-    n = length(a)
-    p = sort_by(i -> a[i], 1:n)
-    o = Array(Integer, n)
-    for i = 1:n
-        o[p[i]] = i
-    end
-    return o
-end
-
+order(a::AbstractVector) = sortperm(a)[2]

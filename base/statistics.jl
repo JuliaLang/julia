@@ -105,8 +105,8 @@ end
 # order (aka, rank), resolving ties using the mean rank
 function tiedrank(v::AbstractArray)
     n     = length(v)
-    place = sort_by(i -> v[i], 1:n)
-    ord   = Array(Float, n)
+    place = invperm(order(v))
+    ord   = Array(Float64, n)
 
     i = 1
     while i <= n
