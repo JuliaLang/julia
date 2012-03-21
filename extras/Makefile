@@ -1,8 +1,6 @@
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-USE_SYSTEM_GLPK=0
-
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 LIBS = glpk-wrapper
@@ -39,7 +37,7 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPK_INC = -I /usr/include/
 GLPK_LIB = 
 else
-GLPK_INC = -I glpk-$(GLPK_VER)/
+GLPK_INC = -I glpk-$(GLPK_VER)/include/
 GLPK_LIB = 
 endif
 
