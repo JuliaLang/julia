@@ -282,6 +282,7 @@ static int has_intrinsics(jl_expr_t *e)
 {
     if (e->args->length == 0)
         return 0;
+    if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
         ((jl_is_symbol(e0) && is_intrinsic((jl_sym_t*)e0)) ||
@@ -301,17 +302,37 @@ static int has_intrinsics(jl_expr_t *e)
 static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 {
     assert(jl_is_expr(expr));
-    if (expr->head==body_sym) {
+    if (expr->head==body_sym && compileloops) {
         jl_array_t *body = expr->args;
-        size_t i;
+        size_t i, maxlabl=0;
+        // compile if there are backwards branches
         for(i=0; i < body->length; i++) {
             jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_expr(stmt)) {
-                // TODO: only backward branches
-                if (compileloops &&
-                    (((jl_expr_t*)stmt)->head == goto_sym ||
-                     ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+            if (jl_is_labelnode(stmt)) {
+                int l = jl_labelnode_label(stmt);
+                if (l > maxlabl) maxlabl = l;
+            }
+        }
+        size_t sz = (maxlabl+1+7)/8;
+        char *labls = alloca(sz); memset(labls,0,sz);
+        for(i=0; i < body->length; i++) {
+            jl_value_t *stmt = jl_cellref(body,i);
+            if (jl_is_labelnode(stmt)) {
+                int l = jl_labelnode_label(stmt);
+                labls[l/8] |= (1<<(l&7));
+            }
+            else if (compileloops && jl_is_gotonode(stmt)) {
+                int l = jl_gotonode_label(stmt);
+                if (labls[l/8]&(1<<(l&7))) {
                     return 1;
+                }
+            }
+            else if (jl_is_expr(stmt)) {
+                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
+                    int l = jl_unbox_long(jl_exprarg(stmt,1));
+                    if (labls[l/8]&(1<<(l&7))) {
+                        return 1;
+                    }
                 }
                 // to compile code that uses exceptions
                 /*
@@ -322,8 +343,7 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
     }
-    if (has_intrinsics(expr))
-        return 1;
+    if (has_intrinsics(expr)) return 1;
     return 0;
 }
 
@@ -353,10 +373,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
     int ewc = 0;
     JL_GC_PUSH(&thunk, &thk, &ex);
 
-    if (ex->head == body_sym || ex->head == thunk_sym) {
-        // already expanded
-    }
-    else {
+    if (ex->head != body_sym && ex->head != thunk_sym) {
+        // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }
 
@@ -390,10 +408,11 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
 
     if (ewc) {
         thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, thk);
-        if (fast && !jl_in_inference) {
+        if (!jl_in_inference) {
             jl_type_infer(thk, jl_tuple_type, thk);
         }
         result = jl_apply((jl_function_t*)thunk, NULL, 0);
+        jl_delete_function(thk);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);
