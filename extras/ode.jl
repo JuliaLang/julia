@@ -437,35 +437,32 @@ function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector
 end
 
 # Kaps-Rentrop coefficients
-ode4s_kr(F, tspan, x0) = oderosenbrock(F,
-                                       tspan,
-                                       x0,
-                                       0.231,
-                                       [0         0        0 0
-                                        2         0        0 0
-                                        4.4524708 4.163528 0 0
-                                        4.4524708 4.163528 0 0],
-                                       [3.957037 4.624892 0.617477 1.282613],
-                                       [ 0         0         0        0
-                                        -5.071675  0         0        0
-                                         6.020153  0.159750  0        0
-                                        -1.856344 -8.505381 -2.084075 0],
-                                       )
+kr4_coefficients = (0.231,
+                   [0         0        0 0
+                    2         0        0 0
+                    4.4524708 4.163528 0 0
+                    4.4524708 4.163528 0 0],
+                   [3.957037 4.624892 0.617477 1.282613],
+                   [ 0         0         0        0
+                    -5.071675  0         0        0
+                     6.020153  0.159750  0        0
+                    -1.856344 -8.505381 -2.084075 0],)
+ode4s_kr(F, tspan, x0) = oderosenbrock(F, tspan, x0, kr4_coefficients...)
+ode4s_kr(F, G, tspan, x0) = oderosenbrock(F, G, tspan, x0, kr4_coefficients...)
 # Shampine coefficients
-ode4s_s(F, tspan, x0) = oderosenbrock(F,
-                                      tspan,
-                                      x0,
-                                      0.5,
-                                      [ 0    0    0 0
-                                        2    0    0 0
-                                       48/25 6/25 0 0
-                                       48/25 6/25 0 0],
-                                      [19/9 1/2 25/108 125/108],
-                                      [   0       0      0   0
-                                         -8       0      0   0
-                                        372/25   12/5    0   0
-                                       -112/125 -54/125 -2/5 0],
-                                     )
+s4_coefficients = (0.5,
+                   [ 0    0    0 0
+                     2    0    0 0
+                    48/25 6/25 0 0
+                    48/25 6/25 0 0],
+                   [19/9 1/2 25/108 125/108],
+                   [   0       0      0   0
+                      -8       0      0   0
+                     372/25   12/5    0   0
+                    -112/125 -54/125 -2/5 0],
+                   )
+ode4s_s(F, tspan, x0) = oderosenbrock(F, tspan, x0, s4_coefficients...)
+ode4s_s(F, G, tspan, x0) = oderosenbrock(F, G, tspan, x0, s4_coefficients...)
 
 # Use Shampine coefficients by default (matching Numerical Recipes)
 const ode4s = ode4s_s
