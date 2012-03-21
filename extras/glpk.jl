@@ -66,22 +66,19 @@ abstract GLPParam
 
 pointer(param::GLPParam) = param.struct
 
-typealias GLPParamFieldDescriptor (ASCIIString, Type)
+typealias GLPParamFieldDescriptor (ASCIIString, BitsKind)
 
 type GLPParamDescriptor
     struct_name::String
     field_names::Vector{ASCIIString}
     field_types::Vector{BitsKind}
-    function GLPParamDescriptor{S<:String}(cstr::S, struct_desc::Vector{GLPParamFieldDescriptor})
+    function GLPParamDescriptor(cstr::String, struct_desc)
         struct_name = cstr
-        field_names = convert(Vector{ASCIIString}, [ x[1] | x = struct_desc ])
-        field_types = convert(Vector{Type}, [ x[2] | x = struct_desc ])
+        c_struct_desc = convert(Vector{GLPParamFieldDescriptor}, struct_desc)
+        field_names = [ x[1]::ASCIIString | x = c_struct_desc ]
+        field_types = [ x[2]::BitsKind | x = c_struct_desc ]
         new(struct_name, field_names, field_types)
     end
-end
-
-function GLPParamDescriptor{S<:String, K}(struct_name::S, struct_desc::Vector{K})
-    GLPParamDescriptor(struct_name, convert(Vector{(ASCIIString, Type)}, struct_desc))
 end
 
 function assign{T}(param::GLPParam, val::T, field_name::String)

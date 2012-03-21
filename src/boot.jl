@@ -164,7 +164,7 @@ abstract DirectIndexString <: String
 
 abstract Associative
 
-# simple convert for use by constructors of types in Base
+# simple convert for use by constructors of types in Core
 convert(T, x) = convert_default(T, x, convert)
 
 type SymbolNode

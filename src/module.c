@@ -4,8 +4,8 @@
 #include <assert.h>
 #include "julia.h"
 
+jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
-jl_module_t *jl_system_module=NULL;
 jl_module_t *jl_current_module=NULL;
 
 static jl_binding_t *varlist_binding=NULL;
@@ -40,9 +40,9 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 
         // keep track of all variables added after the VARIABLES array
         // is defined
-        if (jl_system_module) {
+        if (jl_base_module) {
             if (varlist_binding == NULL) {
-                varlist_binding = jl_get_binding(jl_system_module, jl_symbol("VARIABLES"));
+                varlist_binding = jl_get_binding(jl_base_module, jl_symbol("VARIABLES"));
             }
             if (varlist_binding && varlist_binding->value != NULL &&
                 jl_typeis(varlist_binding->value, jl_array_any_type)) {
@@ -60,8 +60,8 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     if (m == NULL) return NULL;
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
-        if (jl_base_module && m != jl_base_module) {
-            return jl_get_binding(jl_base_module, var);
+        if (jl_core_module && m != jl_core_module) {
+            return jl_get_binding(jl_core_module, var);
         }
         return NULL;
     }

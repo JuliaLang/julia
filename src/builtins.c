@@ -180,7 +180,7 @@ JL_CALLABLE(jl_f_apply)
         else {
             if (jl_append_any_func == NULL) {
                 jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_system_module,
+                    (jl_function_t*)jl_get_global(jl_base_module,
                                                   jl_symbol("append_any"));
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
@@ -239,10 +239,10 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
     }
     jl_module_t *newm = jl_new_module(name);
     b->value = (jl_value_t*)newm;
-    if (jl_current_module == jl_base_module && name == jl_symbol("System")) {
-        // pick up system module during bootstrap, and stay within it
+    if (jl_current_module == jl_core_module && name == jl_symbol("Base")) {
+        // pick up Base module during bootstrap, and stay within it
         // after loading.
-        jl_system_module = last_module = newm;
+        jl_base_module = last_module = newm;
     }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
@@ -753,16 +753,16 @@ static jl_function_t *jl_show_gf=NULL;
 
 void jl_show(jl_value_t *v)
 {
-    if (jl_system_module) {
+    if (jl_base_module) {
         if (jl_show_gf == NULL) {
-            jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("show"));
+            jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
         jl_apply(jl_show_gf, &v, 1);
     }
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
-static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
+void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     ios_t *s = jl_current_output_stream();
     ios_putc(opn, s);
@@ -811,7 +811,7 @@ static void show_type(jl_value_t *t)
         }
         else {
             ios_write(s, "Union", 5);
-            show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+            jl_show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
         }
     }
     else if (jl_is_seq_type(t)) {
@@ -827,7 +827,7 @@ static void show_type(jl_value_t *t)
         ios_puts(tt->name->name->name, s);
         jl_tuple_t *p = tt->parameters;
         if (p->length > 0)
-            show_tuple(p, '{', '}', 0);
+            jl_show_tuple(p, '{', '}', 0);
     }
 }
 
@@ -836,7 +836,7 @@ DLLEXPORT void jl_show_any(jl_value_t *v)
     // fallback for printing some other builtin types
     ios_t *s = jl_current_output_stream();
     if (jl_is_tuple(v)) {
-        show_tuple((jl_tuple_t*)v, '(', ')', 1);
+        jl_show_tuple((jl_tuple_t*)v, '(', ')', 1);
     }
     else if (jl_is_type(v)) {
         show_type(v);
@@ -1186,7 +1186,7 @@ DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
 
 static void add_builtin(const char *name, jl_value_t *v)
 {
-    jl_set_const(jl_base_module, jl_symbol(name), v);
+    jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t f)

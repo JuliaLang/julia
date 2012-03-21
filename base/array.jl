@@ -4,9 +4,9 @@ typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
-typealias StridedArray{T,N}  Union(Array{T,N}, SubArray{T,N,Array{T}})
-typealias StridedVector{T} Union(Vector{T}, SubArray{T,1,Array{T}})
-typealias StridedMatrix{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias StridedArray{T,N,A<:Array}  Union(Array{T,N}, SubArray{T,N,A})
+typealias StridedVector{T,A<:Array}   Union(Vector{T} , SubArray{T,1,A})
+typealias StridedMatrix{T,A<:Array}   Union(Matrix{T} , SubArray{T,2,A})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 ## Basic functions ##

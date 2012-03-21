@@ -165,7 +165,7 @@ function process_options(args::Array{Any,1})
             # program
             repl = false
             # remove julia's arguments
-            ARGS = ARGS[i:end]
+            ARGS = args[i+1:end]
             include(args[i])
             break
         else
