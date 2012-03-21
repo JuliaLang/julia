@@ -1,3 +1,5 @@
+load("color.jl")
+
 # The super-type of all images
 abstract Image
 
@@ -124,25 +126,36 @@ function isspatial(s::ASCIIString)
     return indx
 end
 
+getminmax(::Type{Uint8}) = [typemin(Uint8),typemax(Uint8)]
+getminmax(::Type{Uint16}) = [typemin(Uint16),typemax(Uint16)]
+getminmax(::Type{Uint32}) = [typemin(Uint32),typemax(Uint32)]
+getminmax(::Type{Int8}) = [typemin(Int8),typemax(Int8)]
+getminmax(::Type{Int16}) = [typemin(Int16),typemax(Int16)]
+getminmax(::Type{Int32}) = [typemin(Int32),typemax(Int32)]
+getminmax(::Type{Float32}) = [typemin(Float32),typemax(Float32)]
+getminmax(::Type{Float64}) = [typemin(Float64),typemax(Float64)]
+
 # An image type with all data held in memory
 type ImageArray{DataType<:Number} <: Image
     data::Array{DataType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
-    data_size::Vector{Int}        # size of the _original_ array (pre-snip)
+    minmax::Vector{DataType}      # min and max possible values
+    size_ancestor::Vector{Int}    # size of the _original_ array (pre-snip)
     arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
     physc_unit::Vector            # vector of strings, e.g., "microns"
     physc_name::Vector            # vector of strings, like "X" or "horizontal"
     arrayti2physt::Vector{Float64}# time coordinate lookup table 
     t_unit::String                # time coordinate unit string
-    color_space                   # string or vector of strings, e.g. "sRGB"
+    color_space                   # object of type ColorSpace
     valid                         # which pixels can be trusted?
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
 # Empty constructor (doesn't seem to work now, for unknown reason)
-ImageArray{DataType<:Number}() = 
+ImageArray{DataType<:Number}() =
     ImageArray{DataType}(Array(DataType,0),
                          "",
+                         getminmax(DataType),
                          Array(Int,0),
                          Array(Range1,0),
                          zeros(0,0),
@@ -183,26 +196,27 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
         arrayti2physt = zeros(0)
         t_unit = ""
     end
-    color_space = ""
+    color_space = CSnil
     if !is(matchc,nothing)
         if size(data,matchc.offset) == 1
-            color_space = "gray"
+            color_space = CSgray
         elseif size(data,matchc.offset) == 3
-            color_space = "sRGB"
+            color_space = CSsRGB
         elseif szv[matchc.offset] == 4
-            color_space = "CMYK"
+            color_space = CSCMYK
         end
     end
-    ImageArray{DataType}(data,arrayi_order,szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+    ImageArray{DataType}(data,arrayi_order,getminmax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
 ### Copy and ref functions ###
-# Deep copy
+# Deep copy---copies everything that is immutable
 function copy(img::ImageArray)
     ImageArray(copy(img.data),
                copy(img.arrayi_order),
-               copy(img.data_size),
-               img.arrayi_range, # ranges are immutable
+               copy(img.minmax),
+               copy(img.size_ancestor),
+               img.arrayi_range, # ranges are immutable, or will be
                copy(img.arrayi2physc),
                copy(img.physc_unit),
                copy(img.physc_name),
@@ -217,7 +231,8 @@ end
 function copy_pfields(img::ImageArray)
     ImageArray(img.data,
                copy(img.arrayi_order),
-               copy(img.data_size),
+               copy(img.minmax),
+               copy(img.size_ancestor),
                img.arrayi_range,
                copy(img.arrayi2physc),
                copy(img.physc_unit),
@@ -230,27 +245,39 @@ function copy_pfields(img::ImageArray)
 end
 
 # Copy just the data
-function copydata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+function copy_data{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
     image_out.data = image_in.data[image_out.arrayi_range...]
+end
+
+# Copy just the metadata
+function copy_metadata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+    image_out.metadata = copy(image_in.metadata)
+end
+
+# Private function for converting name/value lists into indices
+function _image_named_coords_sub(img::Image,ind...)
+    if length(ind) % 2 != 0
+        println(ind...)
+        error("Coordinate/value must come in pairs")
+    end
+    # Prepare the coordinates
+    sniprange = map(x->1:x,vcat(size(img.data)...))
+    for iarg = 1:2:length(ind)
+        idim = strchr(img.arrayi_order,ind[iarg])
+        if idim == 0
+            error(strcat("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
+        end
+        sniprange[idim] = ind[iarg+1]
+    end
+    return sniprange
 end
 
 # This supports two ref syntaxes
 function ref(img::ImageArray,ind...)
     if isa(ind[1],Char)
         ## Named ref syntax: ref(img,'a',20:50,'b',40:200,...)
-        if length(ind) % 2 != 0
-            error("Coordinate/value must come in pairs")
-        end
         imgret = copy_pfields(img)
-        # Prepare the coordinates for snipping
-        sniprange = map(x->1:x,vcat(size(img.data)...))
-        for iarg = 1:2:length(ind)
-            idim = strchr(img.arrayi_order,ind[iarg])
-            if idim == 0
-                error(strcat("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
-            end
-            sniprange[idim] = ind[iarg+1]
-        end
+        sniprange = _image_named_coords_sub(img,ind...)
         # Do the snip
         imgret.data = img.data[sniprange...]
         imgret.arrayi_range = sniprange
@@ -259,8 +286,41 @@ function ref(img::ImageArray,ind...)
         # Normal ref syntax: img[20:50,40:200,...]
         imgret = copy_pfields(img)
         imgret.data = ref(img.data,ind...)
-        imgret.arrayi_range = convert(Array{Range1{Int},1},{ind...})
+        for i = 1:length(ind)
+            imgret.arrayi_range[i] = ind[i]
+        end
         return imgret
+    end
+end
+function sub(img::ImageArray,ind...)
+    if isa(ind[1],Char)
+        ## Named sub syntax: sub(img,'a',20:50,'b',40:200,...)
+        imgret = copy_pfields(img)
+        sniprange = _image_named_coords_sub(img,ind)
+        # Do the snip
+        imgret.data = sub(img.data,sniprange...)
+        imgret.arrayi_range = sniprange
+        return imgret
+    else
+        # Normal sub syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        imgret.data = sub(img.data,ind...)
+        for i = 1:length(ind)
+            imgret.arrayi_range[i] = ind[i]
+        end
+        return imgret
+    end
+end
+function assign(img::ImageArray,val,ind...)
+    if isa(ind[1],Char)
+        ## Named assign syntax: assign(img,'a',20:50,'b',40:200,...)
+        sniprange = _image_named_coords_sub(img,ind)
+        # Do the snip
+        img.data[sniprange...] = val
+    else
+        # Normal assign syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        img.data[ind...] = val
     end
 end
 
@@ -293,7 +353,7 @@ end
 ### Manipulations
 function permute!{DataType}(img::ImageArray{DataType},perm)
     img.data = permute(img.data,perm)
-    img.data_size = img.data_size[perm]
+    img.size_ancestor = img.size_ancestor[perm]
     img.arrayi_range = img.arrayi_range[perm]
     # Permute arrayi2physc: first compute the spatial permutation
     flag = isspatial(img.arrayi_order)
