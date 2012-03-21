@@ -1,3 +1,371 @@
+load("color.jl")
+
+# The super-type of all images
+abstract Image
+
+# General principles:
+
+# Image types implement fields needed to specify an image data array
+#   A, and all fields critical to the interpretation of this array. In
+#   addition, a "metadata" field is present so that users can store
+#   other information as desired.
+
+# The dimensions of the data array fall into 3 general categories:
+#   space dimensions (e.g., x and y), time (if the data array
+#   represents a sequence of images over time), and channel dimension
+#   (e.g., color channel index). It's important to know the storage order of
+#   the data array. This is signaled by a storage order string, which
+#   introduces a one-character name for each array dimension.  For
+#   example, one could create an image out of a data array A[y,x,c] as
+#      img = ImageArray(A,"yxc")
+#   Images can then be manipulated in "ordinary" ways,
+#      imgsnip = img[50:200,100:175,1:3]
+#   but also in terms of these coordinate names, e.g.,
+#      imsnip = img['x',100:175,'y',50:200]
+#   which would yield the same result.
+#
+#   There are two reserved choices for the array dimension names: 't'
+#   (for time) and 'c' (for channel). All other choices are assumed to
+#   be spatial. The comparison is case-sensitive, so 'T' and 'C' can
+#   be used for spatial axes. Thus, "yxc" might be used for an RGB
+#   image with color data in the third array dimension, and "xyzt" for
+#   3d grayscale over time.
+#
+#   Other than the usage of 't' and 'c', the choices of dimension
+#   names is arbitrary.  One suggestion is to choose a name that
+#   indicates the direction of increasing array index. For example,
+#   choosing "br" (for "bottom-right") instead of "yx" might more
+#   clearly signal that the upper-left corner (as displayed on the
+#   screen) should be A[1,1], and the bottom-right corner is
+#   A[sz1,sz2]. In MRI, "RAS" might indicate a standard right-handed
+#   coordinate system ('R' = rightward-increasing, 'A' =
+#   anterior-increasing, 'S' = superior-increasing). Note that "ASR"
+#   would imply the same coordinate system but that the data are
+#   stored in [anterior/posterior, superior/inferior, right/left]
+#   order.
+#
+# The remaining "principal" fields are those that are minimally needed
+#   to interpret the data array:
+#     The spatial geometry is specified by fields that document how
+#       indices for the array's spatial dimensions correspond to
+#       physical space (any linear relationship is supported, via a
+#       transform matrix);
+#     The timing information is supplied by a lookup vector specifying
+#       the time of each temporal slice;
+#     The channel data is specified in terms of a colorspace string
+#       ("sRGB"), or a list of strings specifying the meaning of each
+#       channel index (e.g., ["GFP","tdTomato"] for a 2-color
+#       fluorescence image)
+
+# More detail on spatial specifications:
+# arrayi stands for "array index", i.e., the (integer) indices into
+#   the data array
+# physc means "physical coordinate", i.e., units in actual space (e.g.,
+#   position in millimeters)
+# arrayi2physc is a n-by-(n+1) transform matrix T; p = T*[a,1] would
+#   take a column vector a containing the index coordinates of a
+#   single element and convert it into a column vector of physical
+#   coordinates. In other words, the separation between adjacent
+#   "pixels" along the jth array dimension corresponds to a
+#   physical-space displacement of T*[ej,0], where ej is the unit
+#   vector along the jth dimension. The right-hand column of T can be
+#   used to encode translations, so that the (ficticious) array item
+#   A[0,...,0] corresponds to a physical-space origin of coordinates
+#   at position T[:,end]. There are utility functions that make
+#   it easy to specify T in common cases, e.g.,
+#     set_pixel_spacing(im,[0.15 0.15 3])
+#   would create a transform matrix for a confocal microscopy stack
+#   with 0.15 microns between pixels in the x- and y- dimensions, and
+#   3 microns between slices along the z-dimension, with the result
+#     T = [0.15 0    0  0;
+#          0    0.15 0  0;
+#          0    0    3  0]
+#       
+
+# A final important task is representing valid pixels, since
+#   real-world imaging devices/situations can result in a subset of
+#   the data being untrustworthy. In cases where the underlying data
+#   type has NaN, you can easily mark the invalid pixels in the data
+#   array itself. However, when the data type does not have NaN, the
+#   valid field is necessary. Note that when both are possible, the
+#   validity of a pixel should be evaluated as !isnan(data) & valid,
+#   meaning that marking a pixel as invalid by either NaN or setting
+#   valid false suffices.
+# The valid field can be set to true (all pixels are trustworthy), a
+#   boolean matrix of the size of the data array (marking trustworthy
+#   pixels individually), or as a container of arrays whose product
+#   would be equal to the full-size valid pixels array. For example,
+#      valid = [good_pixels_per_frame,good_frames]
+#   where good_pixels_per_frame is a boolean of size [sizex sizey] and
+#   good_frames is a boolean of size [1 1 n_frames].
+
+
+# Utility functions:
+# Make sure the storage order string doesn't duplicate any names
+function assert_chars_unique(s::ASCIIString)
+    ss = sort(b"$s")
+    for i = 2:length(ss)
+        if ss[i] == ss[i-1]
+            error("Array dimension names cannot repeat")
+        end
+    end
+end
+
+function isspatial(s::ASCIIString)
+# this returns a vector of bools, is it OK to have the name start
+# with "is"?
+    indx = trues(length(s))
+    matcht = match(r"t",s)
+    if !is(matcht,nothing)
+        indx[matcht.offset] = false;
+    end
+    matchc = match(r"c",s)
+    if !is(matchc,nothing)
+        indx[matchc.offset] = false;
+    end
+    return indx
+end
+
+getminmax(::Type{Uint8}) = [typemin(Uint8),typemax(Uint8)]
+getminmax(::Type{Uint16}) = [typemin(Uint16),typemax(Uint16)]
+getminmax(::Type{Uint32}) = [typemin(Uint32),typemax(Uint32)]
+getminmax(::Type{Int8}) = [typemin(Int8),typemax(Int8)]
+getminmax(::Type{Int16}) = [typemin(Int16),typemax(Int16)]
+getminmax(::Type{Int32}) = [typemin(Int32),typemax(Int32)]
+getminmax(::Type{Float32}) = [typemin(Float32),typemax(Float32)]
+getminmax(::Type{Float64}) = [typemin(Float64),typemax(Float64)]
+
+# An image type with all data held in memory
+type ImageArray{DataType<:Number} <: Image
+    data::Array{DataType}         # the raw data
+    arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
+    minmax::Vector{DataType}      # min and max possible values
+    size_ancestor::Vector{Int}    # size of the _original_ array (pre-snip)
+    arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
+    arrayi2physc::Matrix{Float64} # transform matrix
+    physc_unit::Vector            # vector of strings, e.g., "microns"
+    physc_name::Vector            # vector of strings, like "X" or "horizontal"
+    arrayti2physt::Vector{Float64}# time coordinate lookup table 
+    t_unit::String                # time coordinate unit string
+    color_space                   # object of type ColorSpace
+    valid                         # which pixels can be trusted?
+    metadata       # arbitrary metadata, like acquisition date&time, etc.
+end
+# Empty constructor (doesn't seem to work now, for unknown reason)
+ImageArray{DataType<:Number}() =
+    ImageArray{DataType}(Array(DataType,0),
+                         "",
+                         getminmax(DataType),
+                         Array(Int,0),
+                         Array(Range1,0),
+                         zeros(0,0),
+                         Array(ASCIIString,0),
+                         Array(ASCIIString,0),
+                         zeros(0),
+                         "",
+                         "",
+                         false,
+                         "")
+# Construct from a data array, providing defaults for everything
+# except the storage order
+function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIString)
+    sz = size(data)
+    szv = vcat(sz...)
+    n_dims = length(sz)
+    if strlen(arrayi_order) != n_dims
+        error("storage order string must have a length equal to the number of dimensions in the array")
+    end
+    # Enforce uniqueness of each array coordinate name
+    assert_chars_unique(arrayi_order)
+    # Count # of spatial dimensions
+    matcht = match(r"t",arrayi_order)
+    matchc = match(r"c",arrayi_order)
+    n_spatial_dims = n_dims - !is(matcht,nothing) - !is(matchc,nothing)
+    # Set up defaults for other fields
+    arrayi_range = map(x->1:x,szv)
+    physc_unit = Array(ASCIIString,n_spatial_dims)
+    physc_name = Array(ASCIIString,n_spatial_dims)
+    physc_unit[1:n_spatial_dims] = ""
+    physc_name[1:n_spatial_dims] = ""
+    T = [eye(n_spatial_dims) zeros(n_spatial_dims)]
+    if !is(matcht,nothing)
+        tindex = matcht.offset
+        arrayti2physt = linspace(1.0,sz[tindex],sz[tindex])
+        t_unit = ""
+    else
+        arrayti2physt = zeros(0)
+        t_unit = ""
+    end
+    color_space = CSnil
+    if !is(matchc,nothing)
+        if size(data,matchc.offset) == 1
+            color_space = CSgray
+        elseif size(data,matchc.offset) == 3
+            color_space = CSsRGB
+        elseif szv[matchc.offset] == 4
+            color_space = CSCMYK
+        end
+    end
+    ImageArray{DataType}(data,arrayi_order,getminmax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+end
+
+### Copy and ref functions ###
+# Deep copy---copies everything that is immutable
+function copy(img::ImageArray)
+    ImageArray(copy(img.data),
+               copy(img.arrayi_order),
+               copy(img.minmax),
+               copy(img.size_ancestor),
+               img.arrayi_range, # ranges are immutable, or will be
+               copy(img.arrayi2physc),
+               copy(img.physc_unit),
+               copy(img.physc_name),
+               copy(img.arrayti2physt),
+               copy(img.t_unit),
+               copy(img.color_space),
+               copy(img.valid),
+               copy(img.metadata))
+end
+
+# Copy everything but the data and the metadata
+function copy_pfields(img::ImageArray)
+    ImageArray(img.data,
+               copy(img.arrayi_order),
+               copy(img.minmax),
+               copy(img.size_ancestor),
+               img.arrayi_range,
+               copy(img.arrayi2physc),
+               copy(img.physc_unit),
+               copy(img.physc_name),
+               copy(img.arrayti2physt),
+               copy(img.t_unit),
+               copy(img.color_space),
+               copy(img.valid),
+               img.metadata)
+end
+
+# Copy just the data
+function copy_data{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+    image_out.data = image_in.data[image_out.arrayi_range...]
+end
+
+# Copy just the metadata
+function copy_metadata{DataType}(image_out::ImageArray{DataType},image_in::ImageArray{DataType})
+    image_out.metadata = copy(image_in.metadata)
+end
+
+# Private function for converting name/value lists into indices
+function _image_named_coords_sub(img::Image,ind...)
+    if length(ind) % 2 != 0
+        println(ind...)
+        error("Coordinate/value must come in pairs")
+    end
+    # Prepare the coordinates
+    sniprange = map(x->1:x,vcat(size(img.data)...))
+    for iarg = 1:2:length(ind)
+        idim = strchr(img.arrayi_order,ind[iarg])
+        if idim == 0
+            error(strcat("Array index name '",ind[iarg],"' does not match any of the names in \"",img.arrayi_order,"\""))
+        end
+        sniprange[idim] = ind[iarg+1]
+    end
+    return sniprange
+end
+
+# This supports two ref syntaxes
+function ref(img::ImageArray,ind...)
+    if isa(ind[1],Char)
+        ## Named ref syntax: ref(img,'a',20:50,'b',40:200,...)
+        imgret = copy_pfields(img)
+        sniprange = _image_named_coords_sub(img,ind...)
+        # Do the snip
+        imgret.data = img.data[sniprange...]
+        imgret.arrayi_range = sniprange
+        return imgret
+    else
+        # Normal ref syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        imgret.data = ref(img.data,ind...)
+        for i = 1:length(ind)
+            imgret.arrayi_range[i] = ind[i]
+        end
+        return imgret
+    end
+end
+function sub(img::ImageArray,ind...)
+    if isa(ind[1],Char)
+        ## Named sub syntax: sub(img,'a',20:50,'b',40:200,...)
+        imgret = copy_pfields(img)
+        sniprange = _image_named_coords_sub(img,ind)
+        # Do the snip
+        imgret.data = sub(img.data,sniprange...)
+        imgret.arrayi_range = sniprange
+        return imgret
+    else
+        # Normal sub syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        imgret.data = sub(img.data,ind...)
+        for i = 1:length(ind)
+            imgret.arrayi_range[i] = ind[i]
+        end
+        return imgret
+    end
+end
+function assign(img::ImageArray,val,ind...)
+    if isa(ind[1],Char)
+        ## Named assign syntax: assign(img,'a',20:50,'b',40:200,...)
+        sniprange = _image_named_coords_sub(img,ind)
+        # Do the snip
+        img.data[sniprange...] = val
+    else
+        # Normal assign syntax: img[20:50,40:200,...]
+        imgret = copy_pfields(img)
+        img.data[ind...] = val
+    end
+end
+
+
+### Utility functions ###
+function size(img::ImageArray)
+    return size(img.data)
+end
+
+function set_pixel_spacing(img::Image,dx::Vector)
+    n_spatial_dims = size(img.arrayi2physc,1)
+    if n_spatial_dims != length(dx)
+        error("Dimensions do not match")
+    end
+    for idim = 1:n_spatial_dims
+        img.arrayi2physc[idim,idim] = dx[idim]
+    end
+end
+
+function get_pixel_spacing(img::Image)
+    n_spatial_dims = size(img.arrayi2physc,1)
+    dx = zeros(n_spatial_dims)
+    for idim = 1:n_spatial_dims
+        dx[idim] = img.arrayi2physc[idim,idim]
+    end
+    return dx
+end
+
+
+### Manipulations
+function permute!{DataType}(img::ImageArray{DataType},perm)
+    img.data = permute(img.data,perm)
+    img.size_ancestor = img.size_ancestor[perm]
+    img.arrayi_range = img.arrayi_range[perm]
+    # Permute arrayi2physc: first compute the spatial permutation
+    flag = isspatial(img.arrayi_order)
+    cflag = cumsum(int(flag))
+    perm_spatial = cflag[perm[flag[perm]]]
+    img.arrayi2physc = [img.arrayi2physc[:,perm_spatial] img.arrayi2physc[:,end]]
+    # Finally, permute the storage order string
+    img.arrayi_order = img.arrayi_order[perm]
+end
+
+#############################################################
+
 function lut(pal::Vector, a)
     out = similar(a, eltype(pal))
     n = numel(pal)
