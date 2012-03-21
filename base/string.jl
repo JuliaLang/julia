@@ -14,6 +14,8 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+ref(s::String, v::Vector) =
+    print_to_string(length(v), @thunk for i in v; print(s[i]); end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s

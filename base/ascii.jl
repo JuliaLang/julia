@@ -8,6 +8,7 @@ ref(s::ASCIIString, i::Int) = char(s.data[i])
 
 ## overload methods for efficiency ##
 
+ref(s::ASCIIString, r::Vector) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, r::Range1{Int}) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, indx::Array{Int,1}) = ASCIIString(s.data[indx])
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
