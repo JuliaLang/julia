@@ -1484,15 +1484,12 @@ void jl_callback_call(jl_function_t *f,int count,...)
     jl_value_t *v;    int i;
     for(i=0; i<count; ++i) {
         switch(va_arg(argp,int)) {
-#ifdef ENVIRONMENT32
         case CB_PTR:
-#endif
+            v = jl_box_pointer(va_arg(argp,void*));
+            break;
         case CB_INT32:
             v = jl_box_int32(va_arg(argp,int32_t));
             break;
-#ifdef ENVIRONMENT64
-        case CB_PTR:
-#endif
         case CB_INT64:
             v = jl_box_int64(va_arg(argp,int64_t));
             break;

@@ -224,6 +224,7 @@
     jl_tcp_init;
     jl_tcp_bind;
     jl_listen;
+    uv_break_one;
   local:
     *;
 };

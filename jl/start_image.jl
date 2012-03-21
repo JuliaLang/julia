@@ -2,9 +2,9 @@
 
 const stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
-const STDIN  = _uv_tty2tty(ccall(:jl_stdin ,Int,()))
-const STDOUT = stdout_stream
-const STDERR = _uv_tty2tty(ccall(:jl_stderr,Int,()))
+const STDIN  = _uv_tty2tty(ccall(:jl_stdin ,Ptr{Void},()))
+const STDOUT = _uv_tty2tty(ccall(:jl_stdout,Ptr{Void},()))
+const STDERR = _uv_tty2tty(ccall(:jl_stderr,Ptr{Void},()))
 
 # restore shared library handles
 

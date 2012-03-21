@@ -1,4 +1,4 @@
-#if defined(__WIN32__) && !defined(_MSC_VER)
+#ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
 #endif
@@ -2076,7 +2076,9 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
+#ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
+#endif
     //llvm::JITEmitDebugInfoToDisk = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;

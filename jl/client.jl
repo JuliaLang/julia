@@ -85,7 +85,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(handle::PtrSize,nread::PtrSize,base::PtrSize,len::Int32)
+function readBuffer(handle::Ptr,nread::PtrSize,base::Ptr,len::Int32)
     ccall(:jl_readBuffer,Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
 end
 

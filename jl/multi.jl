@@ -1015,7 +1015,7 @@ function start_remote_workers(machines, cmds)
             add_io_handler(stream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
         end
     end
-    run_event_loop(globalEventLoop())
+    run_event_loop(localEventLoop())
     w
 end
 
