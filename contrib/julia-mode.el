@@ -95,16 +95,11 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
-; TODO: skip keywords inside strings
+; TODO: skip keywords and # characters inside strings
 
-; fixme? is the line-beginning-position necessary?
-; Currently you are fine with this kind of comment:
-;    # Here's a comment with the word "for" in it
-; but not with this:
-;      x = 5   # Here's another comment with the word "for" in it
 (defun in-comment ()
-  (equal (char-after (+ (line-beginning-position) (current-indentation)))
-	 ?#))
+  (member ?# (string-to-list (buffer-substring (line-beginning-position)
+					       (point)))))
 
 (defun strcount (str chr)
   (let ((i 0)
