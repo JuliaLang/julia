@@ -341,7 +341,7 @@ function issorted(v::AbstractVector)
   return true
 end
 
-function _jl_quickselect(a::AbstractVector, k::Int, lo::Int, hi::Int)
+function _jl_quickselect(a::AbstractArray, k::Int, lo::Int, hi::Int)
     if k < lo || k > hi; error("k is out of bounds"); end
 
     while true
@@ -375,8 +375,8 @@ function _jl_quickselect(a::AbstractVector, k::Int, lo::Int, hi::Int)
 
 end
 
-select(a::AbstractVector, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
-select!(a::AbstractVector, k::Int) = _jl_quickselect(a, k, 1, length(a))
+select(a::AbstractArray, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
+select!(a::AbstractArray, k::Int) = _jl_quickselect(a, k, 1, length(a))
 
 function searchsorted(a, x)
     hi = length(a)

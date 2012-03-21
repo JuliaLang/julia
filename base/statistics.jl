@@ -4,7 +4,7 @@ mean(v::AbstractArray, dim::Int) = sum(v,dim) / size(v,dim)
 weighted_mean(v::AbstractArray, w::AbstractArray) =
     sum(v .* w) / sum(w)
 
-function median(v::AbstractVector)
+function median(v::AbstractArray)
     n = numel(v)
     if isodd(n)
         return select(v, div(n, 2))
@@ -12,10 +12,6 @@ function median(v::AbstractVector)
         vs = sort(v)
         return (vs[div(n, 2)] + vs[div(n, 2) + 1]) / 2
     end
-end
-
-function median(v::AbstractArray)
-    median(reshape(v, 1, numel(v)))
 end
 
 # variance with known mean
@@ -36,14 +32,14 @@ function std(v::AbstractArray, m::Number)
     sqrt(var(v, m))
 end
 
+# standard deviation
+std(v::AbstractArray) = std(v, mean(v))
+
 # median absolute deviation with known center
 mad(v::AbstractArray, center::Number) = median(abs(v - center))
 
 #median absolute deviation
 mad(v::AbstractArray) = mad(v, median(v))
-
-# standard deviation
-std(v::AbstractVector) = std(v, mean(v))
 
 ## hist ##
 
