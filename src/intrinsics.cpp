@@ -864,7 +864,7 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
 static void add_intrinsic(const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
-    jl_set_const(jl_base_module, jl_symbol((char*)name.c_str()), i);
+    jl_set_const(jl_core_module, jl_symbol((char*)name.c_str()), i);
 }
 
 #define ADD_I(name) add_intrinsic(#name, name)
