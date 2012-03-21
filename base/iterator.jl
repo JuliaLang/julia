@@ -43,26 +43,39 @@ end
 
 # filter
 
-type Filter
+type Filter{I}
     flt::Function
-    itr
+    itr::I
 end
 filter(flt::Function, itr) = Filter(flt, itr)
 
-function _jl_advance_filter(f::Filter, s)
-    while !done(f.itr,s)
-        v,t = next(f.itr,s)
-        if f.flt(v)
-            return (v,s)
+start(f::Filter) = _jl_start_filter(f.flt, f.itr)
+function _jl_start_filter(pred, itr)
+    s = start(itr)
+    while !done(itr,s)
+        v,t = next(itr,s)
+        if pred(v)
+            break
         end
         s=t
     end
-    return (nothing,s)
+    s
 end
 
-start(f::Filter) = _jl_advance_filter(f,start(f.itr))
-next(f::Filter, state) = (state[1],_jl_advance_filter(f,next(f.itr,state[2])[2]))
-done(f::Filter, state) = done(f.itr,state[2])
+next(f::Filter, s) = _jl_advance_filter(f.flt, f.itr, s)
+function _jl_advance_filter(pred, itr, s)
+    v,s = next(itr,s)
+    while !done(itr,s)
+        w,t = next(itr,s)
+        if pred(w)
+            break
+        end
+        s=t
+    end
+    v,s
+end
+
+done(f::Filter, s) = done(f.itr,s)
 
 # reverse
 
