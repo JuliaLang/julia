@@ -1112,13 +1112,13 @@ function amap(f::Function, A::StridedArray, axis::Integer)
     end
 
     idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
-    r = f(slice(A, idx))
+    r = f(sub(A, idx))
     R = Array(typeof(r), axis_size)
     R[1] = r
 
     for i = 2:axis_size
         idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
-        R[i] = f(slice(A, idx))
+        R[i] = f(sub(A, idx))
     end
 
     return R
