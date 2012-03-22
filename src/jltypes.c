@@ -262,6 +262,10 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
     if (!allow && var == val)
         return;
+    for(int i=0; i < soln->n; i+=2) {
+        if (soln->data[i]==var && soln->data[i+1]==val)
+            return;
+    }
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
