@@ -1,3 +1,5 @@
+load("../extras/arpack.jl")
+
 # arpack
 n = 10
 a = rand(n,n)

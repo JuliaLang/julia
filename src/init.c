@@ -118,8 +118,8 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
-        jl_base_module = jl_new_module(jl_symbol("Base"));
-        jl_current_module = jl_base_module;
+        jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
         jl_load("src/boot.jl");
@@ -204,18 +204,18 @@ jl_function_t *jl_typeinf_func=NULL;
 DLLEXPORT void jl_enable_inference(void)
 {
     if (jl_typeinf_func != NULL) return;
-    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_system_module,
+    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));
 }
 
-static jl_value_t *base(char *name)
+static jl_value_t *core(char *name)
 {
-    return jl_get_global(jl_base_module, jl_symbol(name));
+    return jl_get_global(jl_core_module, jl_symbol(name));
 }
 
-static jl_value_t *sysmod(char *name)
+static jl_value_t *basemod(char *name)
 {
-    return jl_get_global(jl_system_module, jl_symbol(name));
+    return jl_get_global(jl_base_module, jl_symbol(name));
 }
 
 jl_function_t *jl_method_missing_func=NULL;
@@ -223,35 +223,35 @@ jl_function_t *jl_method_missing_func=NULL;
 // fetch references to things defined in boot.jl
 void jl_get_builtin_hooks(void)
 {
-    jl_nothing      = base("nothing");
+    jl_nothing      = core("nothing");
     jl_root_task->tls = jl_nothing;
 
-    jl_char_type    = (jl_bits_type_t*)base("Char");
-    jl_int8_type    = (jl_bits_type_t*)base("Int8");
-    jl_uint8_type   = (jl_bits_type_t*)base("Uint8");
-    jl_int16_type   = (jl_bits_type_t*)base("Int16");
-    jl_uint16_type  = (jl_bits_type_t*)base("Uint16");
-    jl_uint32_type  = (jl_bits_type_t*)base("Uint32");
-    jl_uint64_type  = (jl_bits_type_t*)base("Uint64");
+    jl_char_type    = (jl_bits_type_t*)core("Char");
+    jl_int8_type    = (jl_bits_type_t*)core("Int8");
+    jl_uint8_type   = (jl_bits_type_t*)core("Uint8");
+    jl_int16_type   = (jl_bits_type_t*)core("Int16");
+    jl_uint16_type  = (jl_bits_type_t*)core("Uint16");
+    jl_uint32_type  = (jl_bits_type_t*)core("Uint32");
+    jl_uint64_type  = (jl_bits_type_t*)core("Uint64");
 
-    jl_float32_type = (jl_bits_type_t*)base("Float32");
-    jl_float64_type = (jl_bits_type_t*)base("Float64");
+    jl_float32_type = (jl_bits_type_t*)core("Float32");
+    jl_float64_type = (jl_bits_type_t*)core("Float64");
 
     jl_stackovf_exception =
-        jl_apply((jl_function_t*)base("StackOverflowError"), NULL, 0);
+        jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
     jl_divbyzero_exception =
-        jl_apply((jl_function_t*)base("DivideByZeroError"), NULL, 0);
+        jl_apply((jl_function_t*)core("DivideByZeroError"), NULL, 0);
     jl_undefref_exception =
-        jl_apply((jl_function_t*)base("UndefRefError"),NULL,0);
+        jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
     jl_interrupt_exception =
-        jl_apply((jl_function_t*)base("InterruptException"),NULL,0);
+        jl_apply((jl_function_t*)core("InterruptException"),NULL,0);
     jl_memory_exception =
-        jl_apply((jl_function_t*)base("MemoryError"),NULL,0);
+        jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
-    jl_weakref_type = (jl_struct_type_t*)base("WeakRef");
-    jl_ascii_string_type = (jl_struct_type_t*)base("ASCIIString");
-    jl_utf8_string_type = (jl_struct_type_t*)base("UTF8String");
-    jl_symbolnode_type = (jl_struct_type_t*)base("SymbolNode");
+    jl_weakref_type = (jl_struct_type_t*)core("WeakRef");
+    jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
+    jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
+    jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
@@ -263,10 +263,10 @@ DLLEXPORT void jl_get_system_hooks(void)
 {
     if (jl_method_missing_func) return; // only do this once
 
-    jl_errorexception_type = (jl_struct_type_t*)sysmod("ErrorException");
-    jl_typeerror_type = (jl_struct_type_t*)sysmod("TypeError");
-    jl_loaderror_type = (jl_struct_type_t*)sysmod("LoadError");
-    jl_backtrace_type = (jl_struct_type_t*)sysmod("BackTrace");
+    jl_errorexception_type = (jl_struct_type_t*)basemod("ErrorException");
+    jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
+    jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
+    jl_backtrace_type = (jl_struct_type_t*)basemod("BackTrace");
 
-    jl_method_missing_func = (jl_function_t*)sysmod("method_missing");
+    jl_method_missing_func = (jl_function_t*)basemod("method_missing");
 }

@@ -4,9 +4,9 @@ typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
-typealias StridedArray{T,N}  Union(Array{T,N}, SubArray{T,N,Array{T}})
-typealias StridedVector{T} Union(Vector{T}, SubArray{T,1,Array{T}})
-typealias StridedMatrix{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias StridedArray{T,N,A<:Array}  Union(Array{T,N}, SubArray{T,N,A})
+typealias StridedVector{T,A<:Array}   Union(Vector{T} , SubArray{T,1,A})
+typealias StridedMatrix{T,A<:Array}   Union(Matrix{T} , SubArray{T,2,A})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 ## Basic functions ##
@@ -957,67 +957,6 @@ function nonzeros{T}(A::StridedArray{T})
     return V
 end
 
-## hist ##
-
-function hist(v::StridedVector, nbins::Integer)
-    h = zeros(Int, nbins)
-    if nbins == 0
-        return h
-    end
-    lo, hi = min(v), max(v)
-    if lo == hi
-        lo = lo - div(nbins,2)
-        hi = hi + div(nbins,2)
-    end
-    binsz = (hi-lo)/nbins
-    for x in v
-        if isfinite(x)
-            i = iround((x-lo+binsz/2)/binsz)
-            h[i > nbins ? nbins : i] += 1
-        end
-    end
-    h
-end
-
-hist(x) = hist(x, 10)
-
-function hist(A::StridedMatrix, nbins::Integer)
-    m, n = size(A)
-    h = Array(Int, nbins, n)
-    for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = hist(sub(A, i:(i+m-1)), nbins)
-    end
-    h
-end
-
-function histc(v::StridedVector, edg)
-    n = length(edg)
-    h = zeros(Int, n)
-    first = edg[1]
-    last = edg[n]
-    for x in v
-        if !isless(last, x) && !isless(x, first)
-            i = searchsorted(edg, x)
-            while isless(x, edg[i])
-                i -= 1
-            end
-            h[i] += 1
-        end
-    end
-    h
-end
-
-function histc(A::StridedMatrix, edg)
-    m, n = size(A)
-    h = Array(Int, length(edg), n)
-    for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = histc(sub(A, i:(i+m-1)), edg)
-    end
-    h
-end
-
 ## Reductions ##
 
 contains(s::Number, n::Number) = (s == n)
@@ -1173,13 +1112,13 @@ function amap(f::Function, A::StridedArray, axis::Integer)
     end
 
     idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
-    r = f(slice(A, idx))
+    r = f(sub(A, idx))
     R = Array(typeof(r), axis_size)
     R[1] = r
 
     for i = 2:axis_size
         idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
-        R[i] = f(slice(A, idx))
+        R[i] = f(sub(A, idx))
     end
 
     return R
@@ -1305,7 +1244,7 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-function filter(f, As::StridedArray)
+function filter(f::Function, As::StridedArray)
     boolmap::Array{Bool} = map(f, As)
     As[boolmap]
 end
@@ -1314,7 +1253,7 @@ end
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     if numel(A) > 50000
-        return _jl_fftw_transpose(A)
+        return _jl_fftw_transpose(reshape(A, size(A, 2), size(A, 1)))
     else
         return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
     end

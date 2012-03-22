@@ -52,7 +52,7 @@ end
 copy(S::SparseMatrixCSC) =
     SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), copy(S.nzval))
 
-function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
+function convert{T}(::Type{Matrix{T}}, S::SparseMatrixCSC{T})
     A = zeros(T, int(S.m), int(S.n))
     for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         A[S.rowval[k], col] = S.nzval[k]
@@ -60,7 +60,7 @@ function convert{T}(::Type{Array{T}}, S::SparseMatrixCSC{T})
     return A
 end
 
-full{T}(S::SparseMatrixCSC{T}) = convert(Array{T}, S)
+full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 
 function sparse(A::Matrix)
     m, n = size(A)

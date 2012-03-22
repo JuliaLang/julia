@@ -95,11 +95,11 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
-; TODO: skip keywords inside strings
+; TODO: skip keywords and # characters inside strings
 
 (defun in-comment ()
-  (equal (char-after (+ (line-beginning-position) (current-indentation)))
-	 ?#))
+  (member ?# (string-to-list (buffer-substring (line-beginning-position)
+					       (point)))))
 
 (defun strcount (str chr)
   (let ((i 0)

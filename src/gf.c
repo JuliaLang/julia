@@ -104,7 +104,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         if (jl_is_tuple(decl)) {
             // tuples don't have to match exactly, to avoid caching
             // signatures for tuples of every length
-            if (!jl_subtype(a, decl, 1))
+            if (!jl_is_tuple(a) || !jl_subtype(a, decl, 1))
                 return 0;
         }
         else if (jl_is_type_type(decl) &&
@@ -493,7 +493,10 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (might_need_dummy) {
                 jl_methlist_t *curr = mt->defs;
                 // can't generalize type if there's an overlapping definition
-                // with typevars
+                // with typevars.
+                // TODO: it seems premature to take these intersections
+                // before the whole signature has been generalized.
+                // example ((T...,),S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,...)
                 while (curr != NULL && curr->func!=method) {
                     if (curr->tvars!=jl_null &&
                         jl_type_intersection((jl_value_t*)curr->sig,
@@ -723,7 +726,17 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     while (m != NULL) {
         if (m->tvars!=jl_null) {
             env = jl_type_match((jl_value_t*)tt, (jl_value_t*)m->sig);
-            if (env != (jl_value_t*)jl_false) break;
+            if (env != jl_false) {
+                // parametric methods only match if all typevars are matched by
+                // non-typevars.
+                for(i=1; i < ((jl_tuple_t*)env)->length; i+=2) {
+                    if (jl_is_typevar(jl_tupleref(env,i)))
+                        break;
+                }
+                if (i >= ((jl_tuple_t*)env)->length)
+                    break;
+                env = jl_false;
+            }
         }
         else if (jl_tuple_subtype(&jl_tupleref(tt,0), nargs,
                                   &jl_tupleref(m->sig,0),
@@ -854,7 +867,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             l = l->next;
         }
         char *n = fname->name;
-        jl_value_t *errstream = jl_get_global(jl_system_module,
+        jl_value_t *errstream = jl_get_global(jl_base_module,
                                               jl_symbol("stderr_stream"));
         JL_TRY {
             if (errstream)
@@ -898,7 +911,8 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     assert(jl_is_tuple(type));
     l = *pml;
     while (l != NULL) {
-        if (sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
+        if (((l->tvars==jl_null) == (tvars==jl_null)) &&
+            sigs_eq((jl_value_t*)type, (jl_value_t*)l->sig)) {
             // method overwritten
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
@@ -1021,7 +1035,7 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
 
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
-    jl_value_t **a = alloca(na+1);
+    jl_value_t **a = alloca(sizeof(jl_value_t*)*(na+1));
     a[0] = (jl_value_t*)f;
     int i;
     for(i=0; i < na; i++)
@@ -1272,6 +1286,15 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     ios_t *s = jl_current_output_stream();
     while (ml != NULL) {
         ios_printf(s, "%s", name);
+        if (ml->tvars != jl_null) {
+            if (jl_is_typevar(ml->tvars)) {
+                ios_putc('{', s); jl_show((jl_value_t*)ml->tvars);
+                ios_putc('}', s);
+            }
+            else {
+                jl_show_tuple(ml->tvars, '{', '}', 0);
+            }
+        }
         jl_show((jl_value_t*)ml->sig);
         if (ml->func == NULL)  {
             // mark dummy cache entries

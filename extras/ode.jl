@@ -51,7 +51,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
     # Compute initial step size.
 
     s1 = F(t, y)
-    r = norm(s1./float(max(abs(y), threshold)), Inf) + realmin() # TODO: fix type bug in max()
+    r = norm(s1./max(abs(y), threshold), Inf) + realmin() # TODO: fix type bug in max()
     h = tdir*0.8*rtol^(1/3)/r
 
     # The main loop.
@@ -79,7 +79,7 @@ function ode23(F::Function, tspan::AbstractVector, y_0::AbstractVector)
         # Estimate the error.
 
         e = h*(-5*s1 + 6*s2 + 8*s3 - 9*s4)/72
-        err = norm(e./max(float(max(abs(y), abs(ynew))), threshold), Inf) + realmin()
+        err = norm(e./max(max(abs(y), abs(ynew)), threshold), Inf) + realmin()
 
         # Accept the solution if the estimated error is less than the tolerance.
 
@@ -392,6 +392,80 @@ function ode4{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T})
     end
     return (tspan, x)
 end
+
+#ODEROSENBROCK Solve stiff differential equations, Rosenbrock method
+#    with provided coefficients.
+function oderosenbrock{T}(F::Function, G::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
+    h = diff(tspan)
+    x = Array(T, length(tspan), length(x0))
+    x[1,:] = x0'
+
+    solstep = 1
+    while tspan[solstep] < max(tspan)
+        ts = tspan[solstep]
+        hs = h[solstep]
+        xs = reshape(x[solstep,:], size(x0))
+        dFdx = G(ts, xs)
+        jac = eye(size(dFdx)[1])./gamma./hs-dFdx
+
+        g = zeros(size(a)[1], length(x0))
+        g[1,:] = jac \ F(ts + b[1].*hs, xs)
+        for i = 2:size(a)[1]
+            g[i,:] = jac \ (F(ts + b[i].*hs, xs + (a[i,1:i-1]*g[1:i-1,:]).') + (c[i,1:i-1]*g[1:i-1,:]).'./hs)
+        end
+
+        x[solstep+1,:] = x[solstep,:] + b*g
+        solstep += 1
+    end
+    return(tspan, x)
+end
+
+function oderosenbrock{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, gamma, a, b, c)
+    # Crude forward finite differences estimator as fallback
+    function jacobian(F::Function, t::Number, x::AbstractVector)
+        ftx = F(t, x)
+        dFdx = zeros(length(x), length(x))
+        for j = 1:length(x)
+            dx = zeros(size(x))
+            # The 100 below is heuristic
+            dx[j] = (x[j]+(x[j]==0))./100
+            dFdx[:,j] = (F(t,x+dx)-ftx)./dx[j]
+        end
+        return dFdx
+    end
+    oderosenbrock(F, (t, x)->jacobian(F, t, x), tspan, x0, gamma, a, b, c)
+end
+
+# Kaps-Rentrop coefficients
+kr4_coefficients = (0.231,
+                   [0         0        0 0
+                    2         0        0 0
+                    4.4524708 4.163528 0 0
+                    4.4524708 4.163528 0 0],
+                   [3.957037 4.624892 0.617477 1.282613],
+                   [ 0         0         0        0
+                    -5.071675  0         0        0
+                     6.020153  0.159750  0        0
+                    -1.856344 -8.505381 -2.084075 0],)
+ode4s_kr(F, tspan, x0) = oderosenbrock(F, tspan, x0, kr4_coefficients...)
+ode4s_kr(F, G, tspan, x0) = oderosenbrock(F, G, tspan, x0, kr4_coefficients...)
+# Shampine coefficients
+s4_coefficients = (0.5,
+                   [ 0    0    0 0
+                     2    0    0 0
+                    48/25 6/25 0 0
+                    48/25 6/25 0 0],
+                   [19/9 1/2 25/108 125/108],
+                   [   0       0      0   0
+                      -8       0      0   0
+                     372/25   12/5    0   0
+                    -112/125 -54/125 -2/5 0],
+                   )
+ode4s_s(F, tspan, x0) = oderosenbrock(F, tspan, x0, s4_coefficients...)
+ode4s_s(F, G, tspan, x0) = oderosenbrock(F, G, tspan, x0, s4_coefficients...)
+
+# Use Shampine coefficients by default (matching Numerical Recipes)
+const ode4s = ode4s_s
 
 # ODE_MS Fixed-step, fixed-order multi-step numerical method with Adams-Bashforth-Moulton coefficients
 function ode_ms{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, order::Integer)

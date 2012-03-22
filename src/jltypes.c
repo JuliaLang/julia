@@ -262,6 +262,10 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
     if (!allow && var == val)
         return;
+    for(int i=0; i < soln->n; i+=2) {
+        if (soln->data[i]==var && soln->data[i+1]==val)
+            return;
+    }
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
@@ -1740,6 +1744,51 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         b==(jl_value_t*)jl_undef_type)
         return 0;
     if (!invariant && (jl_tag_type_t*)b == jl_any_type) return 1;
+
+    if (jl_is_some_tag_type(a) && jl_is_some_tag_type(b)) {
+        if ((jl_tag_type_t*)a == jl_any_type) return 0;
+        jl_tag_type_t *tta = (jl_tag_type_t*)a;
+        jl_tag_type_t *ttb = (jl_tag_type_t*)b;
+        int super=0;
+        while (tta != (jl_tag_type_t*)jl_any_type) {
+            if (tta->name == ttb->name) {
+                if (super && morespecific) {
+                    if (tta->name != jl_type_type->name)
+                        return 1;
+                }
+                if (tta->name == jl_ntuple_typename) {
+                    // NTuple must be covariant
+                    return jl_subtype_le(jl_tupleref(tta->parameters,1),
+                                         jl_tupleref(ttb->parameters,1),
+                                         0, morespecific, invariant);
+                }
+                assert(tta->parameters->length == ttb->parameters->length);
+                for(i=0; i < tta->parameters->length; i++) {
+                    jl_value_t *apara = jl_tupleref(tta->parameters,i);
+                    jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
+                    if (invariant && jl_is_typevar(bpara) &&
+                        !((jl_tvar_t*)bpara)->bound) {
+                        return apara==bpara;
+                    }
+                    if (!jl_subtype_le(apara, bpara, 0, morespecific, 1))
+                        return 0;
+                }
+                return 1;
+            }
+            else if (invariant) {
+                return 0;
+            }
+            tta = tta->super; super = 1;
+        }
+        assert(!invariant);
+        if (((jl_tag_type_t*)a)->name == jl_type_type->name) {
+            // Type{T} also matches >:typeof(T)
+            if (!jl_is_typevar(jl_tparam0(a)))
+                return jl_subtype_le(jl_tparam0(a), b, 1, morespecific, 0);
+        }
+        return 0;
+    }
+
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return
@@ -1799,44 +1848,6 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     }
     else if (jl_is_func_type(b)) {
         return 0;
-    }
-
-    assert(jl_is_some_tag_type(a));
-    assert(jl_is_some_tag_type(b));
-    jl_tag_type_t *tta = (jl_tag_type_t*)a;
-    jl_tag_type_t *ttb = (jl_tag_type_t*)b;
-    int super=0;
-    while (tta != (jl_tag_type_t*)jl_any_type) {
-        if (tta->name == ttb->name) {
-            if (super && morespecific) {
-                if (tta->name != jl_type_type->name)
-                    return 1;
-            }
-            if (tta->name == jl_ntuple_typename) {
-                // NTuple must be covariant
-                return jl_subtype_le(jl_tupleref(tta->parameters,1),
-                                     jl_tupleref(ttb->parameters,1),
-                                     0, morespecific, invariant);
-            }
-            assert(tta->parameters->length == ttb->parameters->length);
-            for(i=0; i < tta->parameters->length; i++) {
-                jl_value_t *apara = jl_tupleref(tta->parameters,i);
-                jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
-                if (!jl_subtype_le(apara, bpara, 0, morespecific, 1))
-                    return 0;
-            }
-            return 1;
-        }
-        else if (invariant) {
-            return 0;
-        }
-        tta = tta->super; super = 1;
-    }
-    assert(!invariant);
-    if (((jl_tag_type_t*)a)->name == jl_type_type->name) {
-        // Type{T} also matches >:typeof(T)
-        if (!jl_is_typevar(jl_tparam0(a)))
-            return jl_subtype_le(jl_tparam0(a), b, 1, morespecific, 0);
     }
     return 0;
 }

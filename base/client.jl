@@ -165,7 +165,7 @@ function process_options(args::Array{Any,1})
             # program
             repl = false
             # remove julia's arguments
-            ARGS = ARGS[i:end]
+            ARGS = args[i+1:end]
             include(args[i])
             break
         else
@@ -198,7 +198,7 @@ function _start()
         end
 
         global const VARIABLES = {}
-        global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/jl/", "$JULIA_HOME/extras/"]
+        global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/extras/"]
 
         # Load customized startup
         try include(strcat(getcwd(),"/startup.jl")) end

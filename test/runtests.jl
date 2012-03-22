@@ -45,6 +45,6 @@ macro assert_fails(expr)
     end
 end
 
-for t in ARGS[2:]
+for t in ARGS
     runtests(t)
 end

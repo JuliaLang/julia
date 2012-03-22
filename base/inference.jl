@@ -98,7 +98,7 @@ t_func[fpiseq32] = (2, 2, cmp_tfunc)
 t_func[fpiseq64] = (2, 2, cmp_tfunc)
 t_func[fpislt32] = (2, 2, cmp_tfunc)
 t_func[fpislt64] = (2, 2, cmp_tfunc)
-t_func[eval(Base,:ccall)] =
+t_func[eval(Core,:ccall)] =
     (3, Inf, (fptr, rt, at, a...)->(is(rt,Type{Void}) ? Nothing :
                                     isType(rt) ? rt.parameters[1] : Any))
 t_func[is] = (2, 2, cmp_tfunc)
@@ -131,7 +131,7 @@ t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
-        return (subtype(from, to) ? from : to)
+        return tintersect(from,to)
     end
     if is(to,Tuple)
         return from

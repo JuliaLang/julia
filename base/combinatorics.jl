@@ -116,6 +116,15 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
+# inverse permutation
+function invperm(a::AbstractVector)
+    b = similar(a)
+    for i=1:length(a)
+        b[a[i]] = i
+    end
+    return b
+end
+
 # Algorithm T from TAoCP 7.2.1.3
 function combinations(a::AbstractVector, t::Integer)
   # T1

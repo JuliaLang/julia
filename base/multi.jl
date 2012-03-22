@@ -540,8 +540,8 @@ function local_remote_call_thunk(f, args)
     #     serialize(buf, env)
     #     seek(buf, 0)
     #     env = force(deserialize(buf))
-    #     f = ccall(:jl_new_closure_internal, Any, (Any, Any),
-    #               linfo, env)::Function
+    #     f = ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
+    #               C_NULL, env, linfo)::Function
     # end
     # f(map(localize_ref,args)...)
 end

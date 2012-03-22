@@ -189,6 +189,17 @@ extern "C" void jl_compile(jl_function_t *f)
     }
 }
 
+extern "C" void jl_delete_function(jl_lambda_info_t *li)
+{
+    // NOTE: this is not safe; there might be closures using this code.
+    Function *llvmf = (Function*)li->functionObject;
+    if (llvmf) {
+        delete llvmf;
+        li->functionObject = NULL;
+        li->fptr = &jl_trampoline;
+    }
+}
+
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 typedef struct {

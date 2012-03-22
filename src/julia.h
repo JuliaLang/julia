@@ -690,10 +690,11 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *v);
+void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one);
 
 // modules
-extern jl_module_t *jl_base_module;
-extern DLLEXPORT jl_module_t *jl_system_module;
+extern jl_module_t *jl_core_module;
+extern DLLEXPORT jl_module_t *jl_base_module;
 extern jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
@@ -720,6 +721,7 @@ DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
 // compiler
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
+void jl_delete_function(jl_lambda_info_t *li);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 char *jl_find_file_in_path(const char *fname);

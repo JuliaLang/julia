@@ -59,6 +59,17 @@ function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
     surface
 end
 
+function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_ps_surface_create), Ptr{Void},
+        (Ptr{Uint8},Float64,Float64), cstring(filename), w_pts, h_pts)
+    ccall(dlsym(_jl_libcairo,:cairo_ps_surface_set_eps), Void,
+        (Ptr{Void},Int32), ptr, 1)
+    surface = CairoSurface(ptr, :eps)
+    surface.width = w_pts
+    surface.height = h_pts
+    surface
+end
+
 function write_to_png(surface::CairoSurface, filename::String)
     ccall(dlsym(_jl_libcairo,:cairo_surface_write_to_png), Void,
         (Ptr{Uint8},Ptr{Uint8}), surface.ptr, cstring(filename))
@@ -286,6 +297,7 @@ function _set_line_type(ctx::CairoContext, nick::String)
     }
     # XXX:should be scaled by linewidth
     const name2dashes = {
+        "solid"           => Float64[],
         "dotted"          => [1.,3.],
         "dotdashed"       => [1.,3.,4.,4.],
         "longdashed"      => [6.,6.],
@@ -351,6 +363,17 @@ function PDFRenderer(filename::String, w_pts::Float64, h_pts::Float64)
     r
 end
 
+EPSRenderer(filename::String, w_str::String, h_str::String) =
+    EPSRenderer(filename, _str_size_to_pts(w_str), _str_size_to_pts(h_str))
+
+function EPSRenderer(filename::String, w_pts::Float64, h_pts::Float64)
+    surface = CairoEPSSurface(filename, w_pts, h_pts)
+    r = CairoRenderer(surface)
+    r.upperright = (w_pts,h_pts)
+    r.on_close = () -> show_page(r.ctx)
+    r
+end
+
 function open( self::CairoRenderer )
     self.state = RendererState()
 end
@@ -366,6 +389,7 @@ const __pl_style_func = {
     "color"     => _set_color,
     "linecolor" => _set_color,
     "fillcolor" => _set_color,
+    "linestyle" => _set_line_type,
     "linetype"  => _set_line_type,
     "linewidth" => set_line_width,
     "filltype"  => set_fill_type,
@@ -518,6 +542,8 @@ function symbols( self::CairoRenderer, x, y )
     )
     symbol_func = get(symbol_funcs, name, default_symbol_func)
 
+    save(self.ctx)
+    set_dash(self.ctx, Float64[])
     new_path(self.ctx)
     for i = 1:min(length(x),length(y))
         symbol_func(self.ctx, x[i], y[i], 0.5*size)
@@ -526,6 +552,7 @@ function symbols( self::CairoRenderer, x, y )
         fill_preserve(self.ctx)
     end
     stroke(self.ctx)
+    restore(self.ctx)
 end
 
 function curve( self::CairoRenderer, x::Vector, y::Vector )

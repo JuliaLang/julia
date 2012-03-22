@@ -14,6 +14,8 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+ref(s::String, v::Vector) =
+    print_to_string(length(v), @thunk for i in v; print(s[i]); end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -156,6 +158,8 @@ end
 
 isequal(a::String, b::String) = cmp(a,b) == 0
 isless(a::String, b::String)  = cmp(a,b) <  0
+
+hash(s::String) = hash(cstring(s))
 
 # faster comparisons for byte strings
 
@@ -1007,7 +1011,7 @@ end
 function memchr(a::Array{Uint8,1}, b::Integer)
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p, b, length(a))
-    q == C_NULL ? 0 : q - p + 1
+    q == C_NULL ? 0 : int(q - p + 1)
 end
 
 # concatenate byte arrays into a single array
