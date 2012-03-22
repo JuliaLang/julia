@@ -243,11 +243,6 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, is
     return (tout, xout)   
 end
 
-random_stuff =     [    0           0          0         0         0        0    0
-                        1/5         0          0         0         0        0    0
-                        3/40        9/40       0         0         0        0    0
-                       44/45      -56/15      32/9       0         0        0    0]
-
 # Both the Dormand-Prince and Fehlberg 4(5) coefficients are from a tableau in
 # U.M. Ascher, L.R. Petzold, Computer Methods for  Ordinary Differential Equations
 # and Differential-Agebraic Equations, Society for Industrial and Applied Mathematics
