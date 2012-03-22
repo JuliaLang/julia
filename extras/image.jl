@@ -142,6 +142,8 @@ type ImageArray{DataType<:Number} <: Image
     metadata       # arbitrary metadata, like acquisition date&time, etc.
 end
 # Empty constructor (doesn't seem to work now, for unknown reason)
+# [Stefan] Comment: I guess it's because DataType has to be specified 
+# in the parameters passed to the constructor.
 ImageArray{DataType<:Number}() =
     ImageArray{DataType}(Array(DataType,0),
                          "",
@@ -319,8 +321,40 @@ end
 
 
 ### Utility functions ###
-function size(img::ImageArray)
+function size{T}(img::ImageArray{T})
     return size(img.data)
+end
+
+function numel{T}(img::ImageArray{T})
+    return numel(img.data)
+end
+
+function ndims{T}(img::ImageArray{T})
+    return numel(size(img))
+end
+
+# return _real_ maximum value
+function max{T}(img::ImageArray{T})
+    return max(img.data)
+end
+
+# return _real_ minimum value
+function min{T}(img::ImageArray{T})
+    return min(img.data)
+end
+
+function sum{T}(img::ImageArray{T}, dim::Integer)
+    return sum(img.data, dim)
+end
+
+sum{T}(img::ImageArray{T}) = sum(img.data)
+
+function abs{T}(img::ImageArray{T})
+    return abs(img.data)
+end
+
+function mean{T}(img::ImageArray{T})
+    return mean(img.data)
 end
 
 function set_pixel_spacing(img::Image,dx::Vector)
@@ -411,6 +445,83 @@ function permute!{DataType}(img::ImageArray{DataType},perm::ASCIIString)
     permute!(img,iperm)
 end
 
+# Mathematical operations
+function (+){T}(A::ImageArray{T}, B::ImageArray{T})
+    if size(A) != size(B)
+        error("dimension mismatch")
+    end
+    C = copy(A)
+    C.data += B.data
+    return C
+end
+
+function (+){T}(A::ImageArray{T}, b::T)
+    C = copy(A)
+    C.data += b
+    return C
+end
+
+function (+){T}(A::ImageArray{T}, B::Array{T})
+    if size(A) != size(B)
+        error("dimension mismatch")
+    end
+    C = copy(A)
+    C.data += B
+    return C
+end
+
+(+){T}(B::Array{T}, A::ImageArray{T}) = (+)(A, B)
+(+){T}(b::T, A::ImageArray{T}) = (+)(A, b)
+
+
+function (-){T}(A::ImageArray{T}, B::ImageArray{T})
+    if size(A) != size(B)
+        error("dimension mismatch")
+    end
+    C = copy(A)
+    C.data -= B.data
+    return C
+end
+
+function (-){T}(A::ImageArray{T}, b::T)
+    C = copy(A)
+    C.data -= b
+    return C
+end
+
+function (-){T}(b::T, A::ImageArray{T})
+    C = copy(A)
+    C.data -= b-C.data
+    return C
+end
+
+function (.*){T}(A::ImageArray{T}, B::ImageArray{T})
+    if size(A) != size(B)
+        error("dimension mismatch")
+    end
+    C = copy(A)
+    C.data .*= B.data
+    return C
+end
+
+function (*){T}(A::ImageArray{T}, b::T)
+    C = copy(A)
+    C.data *= b
+    return C
+end
+
+(*){T}(b::T, A::ImageArray{T}) = (*)(A, b)
+(*){T}(A::ImageArray{T}, B::ImageArray{T}) = (.*)(A, B)
+(.*){T}(A::ImageArray{T}, b::T) = (*)(A, b)
+(.*){T}(b::T, A::ImageArray{T}) = (*)(b, A)
+
+# Logic
+
+# doesn't work ?
+function (<=){T}(A::ImageArray{T}, B::ImageArray{T})
+    return A.data <= b.data
+end
+
 #############################################################
 
 function lut(pal::Vector, a)
@@ -491,15 +602,25 @@ function write_bitmap_data(s, img)
     end
 end
 
-function ppmwrite(img, file::String)
+function ppmwrite(img::ImageArray, file::String)
     s = open(file, "w")
     write(s, "P6\n")
     write(s, "# ppm file written by julia\n")
     n, m = size(img)
     write(s, "$m $n 255\n")
-    write_bitmap_data(s, img)
+    write_bitmap_data(s, img.data)
     close(s)
 end
+
+#function ppmwrite(img, file::String)
+    #s = open(file, "w")
+    #write(s, "P6\n")
+    #write(s, "# ppm file written by julia\n")
+    #n, m = size(img)
+    #write(s, "$m $n 255\n")
+    #write_bitmap_data(s, img)
+    #close(s)
+#end
 
 # demo:
 # m = [ mandel(complex(r,i)) | i=-1:.01:1, r=-2:.01:0.5 ];
@@ -517,35 +638,38 @@ function imread(file::String)
     for i=1:h, j=1:w, k = 1:3
         img[i,j,k] = float64(read(stream, Uint8))/255.0
     end
-    img
+    ImageArray(img, "xyc")
 end
 
-function imwrite(I, file::String)
+function imwrite{T}(img::ImageArray{T}, file::String)
     if length(file) > 3 && file[end-3:end]==".ppm"
         # fall back to built-in ppmwrite in case convert not available
-        return ppmwrite(I, file)
+        return ppmwrite(img, file)
     end
-    h, w = size(I)
+    h, w = size(img)
     cmd = `convert -size $(w)x$(h) -depth 8 rgb: $file`
     stream = fdio(write_to(cmd).fd, true)
     spawn(cmd)
-    write_bitmap_data(stream, I)
+    write_bitmap_data(stream, img.data)
     close(stream)
     wait(cmd)
 end
 
-function imshow(img, range)
+
+function imshow{T}(img::ImageArray{T}, range)
     if ndims(img) == 2 
         # only makes sense for gray scale images
         img = imadjustintensity(img, range)
     end
-    tmp::String = "./tmp.ppm"
+    # point to discuss: .ppm is probably better because it doesn't
+    # perform any compression. 
+    tmp::String = "./tmp.png"
     imwrite(img, tmp)
     cmd = `feh $tmp`
     spawn(cmd)
 end
 
-imshow(img) = imshow(img, [])
+imshow{T}(img::ImageArray{T}) = imshow(img, [])
 
 function imadjustintensity{T}(img::Array{T,2}, range)
     if length(range) == 0
@@ -661,25 +785,25 @@ end
 imlog() = imlog(0.5)
 
 # Sum of squared differences
-function ssd{T}(A::Array{T}, B::Array{T})
+function ssd{T}(A::ImageArray{T}, B::ImageArray{T})
     return sum((A-B).^2)
 end
 
 # normalized by Array size
-ssdn{T}(A::Array{T}, B::Array{T}) = ssd(A, B)/numel(A)
+ssdn{T}(A::ImageArray{T}, B::ImageArray{T}) = ssd(A, B)/numel(A)
 
 # sum of absolute differences
-function sad{T}(A::Array{T}, B::Array{T})
+function sad{T}(A::ImageArray{T}, B::ImageArray{T})
     return sum(abs(A-B))
 end
 
 # normalized by Array size
-sadn{T}(A::Array{T}, B::Array{T}) = sad(A, B)/numel(A)
+sadn{T}(A::ImageArray{T}, B::ImageArray{T}) = sad(A, B)/numel(A)
 
 # normalized cross correlation
-function ncc{T}(A::Array{T}, B::Array{T})
-    Am = (A-mean(A))[:]
-    Bm = (B-mean(B))[:]
+function ncc{T}(A::ImageArray{T}, B::ImageArray{T})
+    Am = (A-mean(A)).data[:]
+    Bm = (B-mean(B)).data[:]
     return dot(Am,Bm)/(norm(Am)*norm(Bm))
 end
 
@@ -786,24 +910,25 @@ function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
     u
 end
 
-function imthresh{T}(img::Array{T,2}, threshold::Float)
+function imthresh{T}(img::ImageArray{T}, threshold::Float)
     if !(0.0 <= threshold <= 1.0)
         error("threshold must be between 0 and 1")
     end
     img_max, img_min = max(img), min(img)
-    tmp = zeros(T, size(img))
+    #tmp = zeros(T, size(img))
+    tmp = copy(img)
     # matter of taste?
     #tmp[img >= threshold*(img_max-img_min)+img_min] = 1
-    tmp[img >= threshold] = 1
+    tmp.data[img.data >= threshold] = 1
     return tmp
 end
 
-function imgaussiannoise{T}(img::Array{T}, variance::Number, mean::Number)
+function imgaussiannoise{T}(img::ImageArray{T}, variance::Number, mean::Number)
     return img + sqrt(variance)*randn(size(img)) + mean
 end
 
-imgaussiannoise{T}(img::Array{T}, variance::Number) = imgaussiannoise(img, variance, 0)
-imgaussiannoise{T}(img::Array{T}) = imgaussiannoise(img, 0.01, 0)
+imgaussiannoise{T}(img::ImageArray{T}, variance::Number) = imgaussiannoise(img, variance, 0.0)
+imgaussiannoise{T}(img::ImageArray{T}) = imgaussiannoise(img, 0.01, 0.0)
 
 # 'illustrates' fourier transform
 ftshow{T}(A::Array{T,2}) = imshow(log(1+abs(fftshift(A))),[])
@@ -846,8 +971,8 @@ function ycbcr2rgb{T}(img::Array{T})
     return out
 end
 
-function imcomplement{T}(img::Array{T})
-    return 1 - img
+function imcomplement{T}(img::ImageArray{T})
+    return 1.0 - img
 end
 
 function rgb2hsi{T}(img::Array{T})
@@ -918,6 +1043,8 @@ forwarddiffy{T}(u::Array{T,2}) = [u[2:end,:]; u[end,:]] - u
 forwarddiffx{T}(u::Array{T,2}) = [u[:,2:end] u[:,end]] - u
 backdiffy{T}(u::Array{T,2}) = u - [u[1,:]; u[1:end-1,:]]
 backdiffx{T}(u::Array{T,2}) = u - [u[:,1] u[:,1:end-1]]
+
+# TODO: Define forward and backward differences for ImageArray additionally
 
 function imROF{T}(img::Array{T,2}, lambda::Number, iterations::Integer)
     # Total Variation regularized image denoising using the primal dual algorithm
