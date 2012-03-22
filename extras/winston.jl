@@ -670,6 +670,7 @@ function draw( self::CombObject, context::PlotContext )
         move( context.draw, p )
         linetorel( context.draw, self.dp )
     end
+    stroke(context.draw)
 end
 
 type SymbolObject <: RenderObject
@@ -1557,12 +1558,8 @@ function _make_ticks( self::HalfAxis, context, ticks, size, style )
     end
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
-    ticklen = _dpos( self, dir *
-        _size_relative(size, context.dev_bbox) )
-    tickpos = {}
-    for tick in ticks
-        push( tickpos, _pos(self, context, tick) )
-    end
+    ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
+    tickpos = [ _pos(self, context, tick) | tick in ticks ]
 
     CombObject(tickpos, ticklen, style)
 end
