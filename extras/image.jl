@@ -5,18 +5,24 @@ abstract Image
 
 # General principles:
 
-# Image types implement fields needed to specify an image data array
-#   A, and all fields critical to the interpretation of this array. In
-#   addition, a "metadata" field is present so that users can store
-#   other information as desired.
+# Image types represent a data array A, with additional fields
+#   critical to the interpretation of this array. In addition, a
+#   "metadata" field is present so that users can store other
+#   information as desired. In the ImageArray type, the data array is
+#   stored directly in memory, whereas the ImageFileArray and
+#   ImageFileBricks types rely on disk caching. Thanks to multiple
+#   dispatch, algorithms can be specialized to be efficient for each
+#   type. However, where possible the "interface" for using these will
+#   be the same.
 
-# The dimensions of the data array fall into 3 general categories:
-#   space dimensions (e.g., x and y), time (if the data array
-#   represents a sequence of images over time), and channel dimension
-#   (e.g., color channel index). It's important to know the storage order of
-#   the data array. This is signaled by a storage order string, which
-#   introduces a one-character name for each array dimension.  For
-#   example, one could create an image out of a data array A[y,x,c] as
+# The dimensions (coordinate axes) of the data array fall into 3
+#   general categories: space dimensions (e.g., x and y), time (if the
+#   data array represents a sequence of images over time), and channel
+#   dimension (e.g., color channel index). It's important to know the
+#   storage order of the data array. This is signaled by a storage
+#   order string, which introduces a one-character name for each array
+#   dimension.  For example, one could create an image out of a data
+#   array A[y,x,c] as
 #      img = ImageArray(A,"yxc")
 #   Images can then be manipulated in "ordinary" ways,
 #      imgsnip = img[50:200,100:175,1:3]
@@ -52,10 +58,10 @@ abstract Image
 #       transform matrix);
 #     The timing information is supplied by a lookup vector specifying
 #       the time of each temporal slice;
-#     The channel data is specified in terms of a colorspace string
-#       ("sRGB"), or a list of strings specifying the meaning of each
-#       channel index (e.g., ["GFP","tdTomato"] for a 2-color
-#       fluorescence image)
+#     The channel data is specified in terms of a colorspace type
+#       (e.g., CSsrgb), which can also be a type that names each color
+#       channel (e.g., ["GFP","tdTomato"] for a 2-color fluorescence
+#       image)
 
 # More detail on spatial specifications:
 # arrayi stands for "array index", i.e., the (integer) indices into
@@ -82,15 +88,19 @@ abstract Image
 #          0    0    3  0]
 #       
 
-# A final important task is representing valid pixels, since
+# A final important task is representing invalid pixels, since
 #   real-world imaging devices/situations can result in a subset of
-#   the data being untrustworthy. In cases where the underlying data
-#   type has NaN, you can easily mark the invalid pixels in the data
-#   array itself. However, when the data type does not have NaN, the
-#   valid field is necessary. Note that when both are possible, the
-#   validity of a pixel should be evaluated as !isnan(data) & valid,
-#   meaning that marking a pixel as invalid by either NaN or setting
-#   valid false suffices.
+#   the data being untrustworthy. WARNING: the design of this facility
+#   is in flux.  In cases where the underlying data type has NaN, you
+#   can easily mark the invalid pixels in the data array
+#   itself. However, when the data type does not have NaN, the valid
+#   field is necessary. Note that when both are possible, the validity
+#   of a pixel should be evaluated as !isnan(data) & valid, meaning
+#   that marking a pixel as invalid by either NaN or setting valid
+#   false suffices. ?? Or should we disallow use of valid for float
+#   types? It might reduce confusion, because then there's just one
+#   thing to check. ??
+
 # The valid field can be set to true (all pixels are trustworthy), a
 #   boolean matrix of the size of the data array (marking trustworthy
 #   pixels individually), or as a container of arrays whose product
@@ -98,48 +108,28 @@ abstract Image
 #      valid = [good_pixels_per_frame,good_frames]
 #   where good_pixels_per_frame is a boolean of size [sizex sizey] and
 #   good_frames is a boolean of size [1 1 n_frames].
+# OR: should the field be called "invalid" so we can use a sparse
+#   array to represent it?
 
 
-# Utility functions:
+# Utility functions needed in the constructors:
 # Make sure the storage order string doesn't duplicate any names
-function assert_chars_unique(s::ASCIIString)
-    ss = sort(b"$s")
-    for i = 2:length(ss)
-        if ss[i] == ss[i-1]
-            error("Array dimension names cannot repeat")
+function assert_items_unique(v::Vector,errmsg::String)
+    vs = sort(v)
+    for i = 2:length(vs)
+        if vs[i] == vs[i-1]
+            error(strcat(errmsg," are not unique"))
         end
     end
 end
 
-function isspatial(s::ASCIIString)
-# this returns a vector of bools, is it OK to have the name start
-# with "is"?
-    indx = trues(length(s))
-    matcht = match(r"t",s)
-    if !is(matcht,nothing)
-        indx[matcht.offset] = false;
-    end
-    matchc = match(r"c",s)
-    if !is(matchc,nothing)
-        indx[matchc.offset] = false;
-    end
-    return indx
-end
-
-getminmax(::Type{Uint8}) = [typemin(Uint8),typemax(Uint8)]
-getminmax(::Type{Uint16}) = [typemin(Uint16),typemax(Uint16)]
-getminmax(::Type{Uint32}) = [typemin(Uint32),typemax(Uint32)]
-getminmax(::Type{Int8}) = [typemin(Int8),typemax(Int8)]
-getminmax(::Type{Int16}) = [typemin(Int16),typemax(Int16)]
-getminmax(::Type{Int32}) = [typemin(Int32),typemax(Int32)]
-getminmax(::Type{Float32}) = [typemin(Float32),typemax(Float32)]
-getminmax(::Type{Float64}) = [typemin(Float64),typemax(Float64)]
 
 # An image type with all data held in memory
 type ImageArray{DataType<:Number} <: Image
     data::Array{DataType}         # the raw data
     arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
-    minmax::Vector{DataType}      # min and max possible values
+    min::DataType                 # min value produced by imaging device
+    max::DataType
     size_ancestor::Vector{Int}    # size of the _original_ array (pre-snip)
     arrayi_range::Vector{Range1{Int}} # vector of ranges (snipping out blocks)
     arrayi2physc::Matrix{Float64} # transform matrix
@@ -155,7 +145,8 @@ end
 ImageArray{DataType<:Number}() =
     ImageArray{DataType}(Array(DataType,0),
                          "",
-                         getminmax(DataType),
+                         typemin(DataType),
+                         typemax(DataType),
                          Array(Int,0),
                          Array(Range1,0),
                          zeros(0,0),
@@ -176,7 +167,7 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
         error("storage order string must have a length equal to the number of dimensions in the array")
     end
     # Enforce uniqueness of each array coordinate name
-    assert_chars_unique(arrayi_order)
+    assert_items_unique(b"$arrayi_order","Array dimension names")
     # Count # of spatial dimensions
     matcht = match(r"t",arrayi_order)
     matchc = match(r"c",arrayi_order)
@@ -201,12 +192,12 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
         if size(data,matchc.offset) == 1
             color_space = CSgray
         elseif size(data,matchc.offset) == 3
-            color_space = CSsRGB
+            color_space = CSsrgb
         elseif szv[matchc.offset] == 4
-            color_space = CSCMYK
+            color_space = CSrgba
         end
     end
-    ImageArray{DataType}(data,arrayi_order,getminmax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+    ImageArray{DataType}(data,arrayi_order,typemin(DataType),typemax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
 
 ### Copy and ref functions ###
@@ -214,7 +205,8 @@ end
 function copy(img::ImageArray)
     ImageArray(copy(img.data),
                copy(img.arrayi_order),
-               copy(img.minmax),
+               copy(img.min),
+               copy(img.max),
                copy(img.size_ancestor),
                img.arrayi_range, # ranges are immutable, or will be
                copy(img.arrayi2physc),
@@ -231,7 +223,8 @@ end
 function copy_pfields(img::ImageArray)
     ImageArray(img.data,
                copy(img.arrayi_order),
-               copy(img.minmax),
+               copy(img.min),
+               copy(img.min),
                copy(img.size_ancestor),
                img.arrayi_range,
                copy(img.arrayi2physc),
@@ -349,19 +342,73 @@ function get_pixel_spacing(img::Image)
     return dx
 end
 
+function set_origin(img::Image,origin::Vector)
+    n_spatial_dims = size(img.arrayi2physc,1)
+    if n_spatial_dims != length(origin)
+        error("Dimensions do not match")
+    end
+    img.arrayi2physc[:,end] = origin
+end
 
-### Manipulations
-function permute!{DataType}(img::ImageArray{DataType},perm)
+function get_origin(img::Image)
+    origin = squeeze(img.arrayi2physc[:,end])
+    return origin
+end
+    
+function isspatial_dimension(s::ASCIIString)
+# this returns a vector of bools, is it OK to have the name start
+# with "is"?
+    indx = trues(length(s))
+    matcht = match(r"t",s)
+    if !is(matcht,nothing)
+        indx[matcht.offset] = false;
+    end
+    matchc = match(r"c",s)
+    if !is(matchc,nothing)
+        indx[matchc.offset] = false;
+    end
+    return indx
+end
+
+function isspatial_dimension(img::Image)
+    return isspatial_dimension(img.arrayi_order)
+end
+
+### Manipulations ###
+function permute!{DataType}(img::ImageArray{DataType},perm::Vector{Int})
+    if length(perm) != ndims(img.data)
+        error("The permutation index must have the same number of items as the number of dimensions in the array")
+    end
+    assert_items_unique(perm,"Permutation indices")
     img.data = permute(img.data,perm)
     img.size_ancestor = img.size_ancestor[perm]
     img.arrayi_range = img.arrayi_range[perm]
     # Permute arrayi2physc: first compute the spatial permutation
-    flag = isspatial(img.arrayi_order)
+    flag = isspatial_dimension(img.arrayi_order)
     cflag = cumsum(int(flag))
     perm_spatial = cflag[perm[flag[perm]]]
     img.arrayi2physc = [img.arrayi2physc[:,perm_spatial] img.arrayi2physc[:,end]]
     # Finally, permute the storage order string
     img.arrayi_order = img.arrayi_order[perm]
+end
+function permute!{DataType}(img::ImageArray{DataType},perm::ASCIIString)
+    # Calculate an integer permutation from the permutation string
+    iperm = Array(Int,length(perm))
+    for i = 1:length(perm)
+        match_found::Bool = false
+        c = perm[i]
+        for j = 1:length(img.arrayi_order)
+            if c == img.arrayi_order[j]
+                iperm[i] = j
+                match_found = true
+                break
+            end
+        end
+        if !match_found
+            error("Dimension '$c' not found in the image dimension string")
+        end
+    end
+    permute!(img,iperm)
 end
 
 #############################################################

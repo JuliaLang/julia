@@ -180,21 +180,23 @@ type CSnil <: ColorSpace
 end
 type CSgray <: ColorSpace
 end
-type CSsRGB <: ColorSpace
+type CSsrgb <: ColorSpace
 end
-type CSCMYK <: ColorSpace
+type CScmyk <: ColorSpace
+end
+type CSrgba <: ColorSpace
 end
 # Color space where each channel is given a name, e.g.,
-#   cs = CSNamed("GFP","tdTomato")
+#   cs = CSnamed("GFP","tdTomato")
 # or
-#   cs = CSNamed(["GFP","tdTomato"])
-type CSNamed <: ColorSpace
+#   cs = CSnamed(["GFP","tdTomato"])
+type CSnamed <: ColorSpace
     str::Vector{ASCIIString}
 end
-CSNamed(t...) = CSNamed([t...])  # allow tuple
-function ref(n::CSNamed,ind::Int)
+CSnamed(t...) = CSnamed([t...])  # allow tuple
+function ref(n::CSnamed,ind::Int)
     return n.str[ind]
 end
-function assign(n::CSNamed,value,key)
+function assign(n::CSnamed,value,key)
     n.str[key] = value
 end
