@@ -166,7 +166,7 @@ end # ode23
 # created : 06 October 1999
 # modified: 17 January 2001
 
-function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, isDormandPrince::Bool, a, b4, b5)
+function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, a, b4, b5)
     tol = 1.0e-5
     
     # see p.91 in the Ascher & Petzold reference for more infomation.
@@ -194,21 +194,21 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, is
         # Compute the slopes by computing the k[:,j+1]'th column based on the previous k[:,1:j] columns
         # notes: k needs to end up as an Nxs, a is 7x6, which is s by (s-1),
         #        s is the number of intermediate RK stages on [t (t+h)] (Dormand-Prince has s=7 stages)
-        if !isDormandPrince || t == tspan[1]
-            k[1,:] = F(t,x) # first stage
-        else
+        if -eps() < c[end]-1 < eps() && t != tspan[1]
             # Assign the last stage for x(k) as the first stage for computing x[k+1].
             # This is part of the Dormand-Prince pair caveat.
-	    # k[:,7] has already been computed, so use it instead of recomputing it
-	    # again as k[:,1] during the next step.
+            # k[:,7] has already been computed, so use it instead of recomputing it
+            # again as k[:,1] during the next step.
             k[1,:] = k[end,:]
+        else
+            k[1,:] = F(t,x) # first stage
         end
 
         for j = 2:length(c)
             k[j,:] = F(t + h.*c[j], x + h.*(a[j,1:j-1]*k[1:j-1,:]).')
         end
                 
-	# compute the 4th order estimate
+        # compute the 4th order estimate
         x4 = x + h.*(b4*k).'
                     
         # compute the 5th order estimate
@@ -220,8 +220,8 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, is
         # Estimate the error and the acceptable error
         delta = norm(gamma1, Inf)       # actual error
         tau = tol*max(norm(x,Inf), 1.0) # allowable error
-                    
-	# Update the solution only if the error is acceptable
+        
+        # Update the solution only if the error is acceptable
         if (delta <= tau)
             t = t + h
             x = x5    # <-- using the higher order estimate is called 'local extrapolation'
@@ -229,7 +229,7 @@ function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, is
             xout = [xout; x.']
         end
 
-	# Update the step size
+        # Update the step size
         if delta == 0.0
             delta = 1e-16
         end
@@ -249,8 +249,7 @@ end
 # (SIAM), Philadelphia, 1998
 #
 # Dormand-Prince coefficients
-dp_coefficients = (true,
-                   [    0           0          0         0         0        0
+dp_coefficients = ([    0           0          0         0         0        0
                         1/5         0          0         0         0        0
                         3/40        9/40       0         0         0        0
                        44/45      -56/15      32/9       0         0        0
@@ -265,8 +264,7 @@ dp_coefficients = (true,
 ode45_dp(F, tspan, x0) = oderkf(F, tspan, x0, dp_coefficients...)
 
 # Fehlberg coefficients
-fb_coefficients = (false,
-                   [    0         0          0         0        0
+fb_coefficients = ([    0         0          0         0        0
                        1/4        0          0         0        0
                        3/32       9/32       0         0        0
                     1932/2197 -7200/2197  7296/2197    0        0
@@ -281,8 +279,7 @@ ode45_fb(F, tspan, x0) = oderkf(F, tspan, x0, fb_coefficients...)
 
 # Cash-Karp coefficients
 # Numerical Recipes in Fortran 77
-ck_coefficients = (false,
-                   [   0         0       0           0          0
+ck_coefficients = ([   0         0       0           0          0
                        1/5       0       0           0          0
                        3/40      9/40    0           0          0
                        3/10     -9/10    6/5         0          0
