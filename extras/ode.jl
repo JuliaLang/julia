@@ -160,12 +160,12 @@ end # ode23
 # tout  - Returned integration time points (column-vector).
 # xout  - Returned solution, one solution column-vector per tout-value.
 #
+# Original Octave implementation:
 # Marc Compere
 # CompereM@asme.org
 # created : 06 October 1999
 # modified: 17 January 2001
 
-# Dormand Prince
 function oderkf{T}(F::Function, tspan::AbstractVector, x0::AbstractVector{T}, isDormandPrince::Bool, a, b4, b5)
     tol = 1.0e-5
     
