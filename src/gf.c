@@ -493,7 +493,10 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (might_need_dummy) {
                 jl_methlist_t *curr = mt->defs;
                 // can't generalize type if there's an overlapping definition
-                // with typevars
+                // with typevars.
+                // TODO: it seems premature to take these intersections
+                // before the whole signature has been generalized.
+                // example ((T...,),S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,S,...)
                 while (curr != NULL && curr->func!=method) {
                     if (curr->tvars!=jl_null &&
                         jl_type_intersection((jl_value_t*)curr->sig,
