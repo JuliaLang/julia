@@ -93,24 +93,17 @@ function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     return a
 end
 
-zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
-zeros(T::Type, dims::Int...) = zeros(T, dims)
-zeros(dims::Dims) = zeros(Float64, dims)
-zeros(dims::Int...) = zeros(dims)
+fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
+fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-ones{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), one(T))
-ones(T::Type, dims::Int...) = ones(T, dims)
-ones(dims::Dims) = ones(Float64, dims)
-ones(dims::Int...) = ones(dims)
+zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
+zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 
-trues(dims::Dims) = fill!(Array(Bool, dims), true)
-trues(dims::Int...) = trues(dims)
+ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
+ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
-falses(dims::Dims) = fill!(Array(Bool, dims), false)
-falses(dims::Int...) = falses(dims)
-
-fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
-fill(v, dims::Int...) = fill(v, dims)
+trues(args...)  = fill(true, args...)
+falses(args...) = fill(false, args...)
 
 eye(n::Int) = eye(n, n)
 function eye(m::Int, n::Int)

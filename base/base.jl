@@ -147,6 +147,7 @@ Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
 
 Array(T, d::Int...) = Array(T, d)
+Array(T, d::Integer...) = Array(T, convert((Int...), d))
 
 Array{T}(::Type{T}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
