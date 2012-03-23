@@ -412,7 +412,6 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
             jl_type_infer(thk, jl_tuple_type, thk);
         }
         result = jl_apply((jl_function_t*)thunk, NULL, 0);
-        jl_delete_function(thk);
     }
     else {
         result = jl_interpret_toplevel_thunk(thk);

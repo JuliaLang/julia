@@ -477,7 +477,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return NULL;
     if (tag == 0) {
         tag = read_uint8(s);
-        return (jl_value_t*)ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        jl_value_t *v = ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        assert(v != HT_NOTFOUND);
+        return v;
     }
     if (tag == BackRef_tag) {
         assert(tree_literal_values == NULL);
