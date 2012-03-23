@@ -187,11 +187,9 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
         arrayti2physt = zeros(0)
         t_unit = ""
     end
-    color_space = CSnil
+    color_space = CSgray
     if !is(matchc,nothing)
-        if size(data,matchc.offset) == 1
-            color_space = CSgray
-        elseif size(data,matchc.offset) == 3
+        if size(data,matchc.offset) == 3
             color_space = CSsrgb
         elseif szv[matchc.offset] == 4
             color_space = CSrgba
@@ -199,6 +197,72 @@ function ImageArray{DataType<:Number}(data::Array{DataType},arrayi_order::ASCIIS
     end
     ImageArray{DataType}(data,arrayi_order,typemin(DataType),typemax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
 end
+
+# Plans:
+#  1. Write some of the code that will use this class first, and see what I think about the interface
+#  2. Resolve issues about "valid"
+
+# An image type with all data stored as an array in a file
+type ImageFileArray{DataType<:Number} <: Image
+    fid::IOStream                 # file identifier for the data
+    data_begin::Int               # in case data starts later in file
+    arrayi_order::ASCIIString     # storage order of data array, e.g. "yxc"
+    min::DataType                 # min value produced by imaging device
+    max::DataType
+    size::Vector{Int}             # size of the array
+    arrayi2physc::Matrix{Float64} # transform matrix
+    physc_unit::Vector            # vector of strings, e.g., "microns"
+    physc_name::Vector            # vector of strings, like "X" or "horizontal"
+    arrayti2physt::Vector{Float64}# time coordinate lookup table 
+    t_unit::String                # time coordinate unit string
+    color_space                   # object of type ColorSpace
+    valid                         # which pixels can be trusted?
+    metadata       # arbitrary metadata, like acquisition date&time, etc.
+end
+# Construct from an already-open file
+# This is the most flexible, because it should handle almost any
+# format that stores its data in array form, no matter what type of
+# header may precede it
+function ImageFileArray{DataType<:Number}(::DataType,f::IOStream,sz::Vector{Int},arrayi_order::ASCIIString)
+    n_dims = length(sz)
+    if strlen(arrayi_order) != n_dims
+        error("storage order string must have a length equal to the number of dimensions in the array")
+    end
+    # Enforce uniqueness of each array coordinate name
+    assert_items_unique(b"$arrayi_order","Array dimension names")
+    # Count # of spatial dimensions
+    matcht = match(r"t",arrayi_order)
+    matchc = match(r"c",arrayi_order)
+    n_spatial_dims = n_dims - !is(matcht,nothing) - !is(matchc,nothing)
+    # Set up defaults for other fields
+    arrayi_range = map(x->1:x,sz)
+    physc_unit = Array(ASCIIString,n_spatial_dims)
+    physc_name = Array(ASCIIString,n_spatial_dims)
+    physc_unit[1:n_spatial_dims] = ""
+    physc_name[1:n_spatial_dims] = ""
+    T = [eye(n_spatial_dims) zeros(n_spatial_dims)]
+    if !is(matcht,nothing)
+        tindex = matcht.offset
+        arrayti2physt = linspace(1.0,sz[tindex],sz[tindex])
+        t_unit = ""
+    else
+        arrayti2physt = zeros(0)
+        t_unit = ""
+    end
+    color_space = CSnil
+    if !is(matchc,nothing)
+        if size(data,matchc.offset) == 1
+            color_space = CSgray
+        elseif size(data,matchc.offset) == 3
+            color_space = CSsrgb
+        elseif sz[matchc.offset] == 4
+            color_space = CSrgba
+        end
+    end
+    ImageArray{DataType}(data,arrayi_order,typemin(DataType),typemax(DataType),szv,arrayi_range,T,physc_unit,physc_name,arrayti2physt,t_unit,color_space,true,"")
+end
+
+
 
 ### Copy and ref functions ###
 # Deep copy---copies everything that is immutable
@@ -316,6 +380,9 @@ function assign(img::ImageArray,val,ind...)
         img.data[ind...] = val
     end
 end
+
+
+    
 
 
 ### Utility functions ###
