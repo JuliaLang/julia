@@ -29,7 +29,7 @@ function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
         copy_to(pointer(dest, do), pointer(src, so), N)
     else
         for i=0:N-1
-            dest[i+do] = copy(src[i+so])
+            dest[i+do] = src[i+so]
         end
     end
     return dest

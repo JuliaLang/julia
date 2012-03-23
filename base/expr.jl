@@ -30,7 +30,7 @@ end
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
 expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
-copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : copy(e.args), e.typ)
+copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : map(copy,e.args), e.typ)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))

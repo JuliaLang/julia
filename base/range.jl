@@ -67,6 +67,9 @@ last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
+# Ranges are intended to be immutable
+copy(r::Ranges) = r
+
 function ref{T}(r::Range{T}, i::Integer)
     if !(1 <= i <= r.len); error(BoundsError); end
     r.start + oftype(T,i-1)*step(r)

@@ -82,7 +82,7 @@ end
 
 function copy_to(dest::AbstractArray, src::AbstractArray)
     for i=1:numel(src)
-        dest[i] = copy(src[i])
+        dest[i] = src[i]
     end
     return dest
 end
