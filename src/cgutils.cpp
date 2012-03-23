@@ -266,20 +266,15 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
 
 static Value *emit_arraysize(Value *t, Value *dim)
 {
-    int o;
 #ifdef __LP64__
-    o = 3;
+    int o = 3;
 #else
-    o = 4;
+    int o = 4;
 #endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
                                          ConstantInt::get(dim->getType(), o)));
-#ifdef __LP64__
-    return builder.CreatePtrToInt(dbits, T_int64);
-#else
-    return builder.CreatePtrToInt(dbits, T_int32);
-#endif
+    return builder.CreatePtrToInt(dbits, T_size);
 }
 
 static Value *emit_arraysize(Value *t, int dim)
@@ -290,11 +285,7 @@ static Value *emit_arraysize(Value *t, int dim)
 static Value *emit_arraylen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 2);
-#ifdef __LP64__
-    return builder.CreatePtrToInt(lenbits, T_int64);
-#else
-    return builder.CreatePtrToInt(lenbits, T_int32);
-#endif
+    return builder.CreatePtrToInt(lenbits, T_size);
 }
 
 static Value *emit_arrayptr(Value *t)

@@ -125,12 +125,9 @@ macro thunk(ex); :(()->$ex); end
 macro L_str(s); s; end
 
 function compile_hint(f, args::Tuple)
-    if !isgeneric(f)
-        return
+    if isgeneric(f)
+        ccall(:jl_compile_hint, Void, (Any, Any), f, args)
     end
-    args = map(t->isa(t,TypeConstructor) ? t.body : t, args)
-    ccall(:jl_get_specialization, Any, (Any, Any), f, args)
-    nothing
 end
 
 # we share Array with Core so we can add definitions to it

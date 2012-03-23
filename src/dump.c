@@ -247,8 +247,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         writetag(s, (jl_value_t*)jl_array_type);
-        jl_serialize_value(s, ar->type);
-        jl_value_t *elty = jl_tparam0(ar->type);
+        jl_serialize_value(s, jl_typeof(ar));
+        jl_value_t *elty = jl_tparam0(jl_typeof(ar));
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
@@ -290,7 +290,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_function(v)) {
         writetag(s, jl_func_kind);
-        jl_serialize_value(s, v->type);
+        jl_serialize_value(s, jl_typeof(v));
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);

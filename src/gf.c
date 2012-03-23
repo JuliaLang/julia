@@ -1140,7 +1140,6 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
 }
 
 // compile-time method lookup
-DLLEXPORT
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
@@ -1161,6 +1160,11 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
         jl_compile(sf);
     }
     return sf;
+}
+
+DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
+{
+    (void)jl_get_specialization(f, types);
 }
 
 #ifdef JL_TRACE

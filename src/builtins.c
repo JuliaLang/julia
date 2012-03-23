@@ -476,7 +476,6 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     if (sep) set_cwd(oldcwd);
 }
 
-// locate a file in the search path
 // fpath needs to be freed if != fname
 char *jl_find_file_in_path(const char *fname)
 {
@@ -938,10 +937,18 @@ JL_CALLABLE(jl_f_new_struct_type)
 }
 
 void jl_add_constructors(jl_struct_type_t *t);
-
 void jl_reinstantiate_inner_types(jl_tag_type_t *t);
 
-static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
+static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
+{
+    size_t i;
+    for(i=0; i < t->length; i++) {
+        jl_value_t *elt = jl_tupleref(t,i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
+        }
+    }
+}
 
 JL_CALLABLE(jl_f_new_struct_fields)
 {
@@ -1052,15 +1059,13 @@ JL_CALLABLE(jl_f_typevar)
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     if (nargs > 1) {
         JL_TYPECHK(typevar, type, args[1]);
-        lb = args[1];
         if (nargs > 2) {
             JL_TYPECHK(typevar, type, args[2]);
+            lb = args[1];
             ub = args[2];
         }
         else {
-            // typevar(name, UB)
-            ub = lb;
-            lb = (jl_value_t*)jl_bottom_type;
+            ub = args[1];
         }
     }
     return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub);
@@ -1087,17 +1092,6 @@ JL_CALLABLE(jl_f_union)
 }
 
 // method definition ----------------------------------------------------------
-
-static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
-{
-    size_t i;
-    for(i=0; i < t->length; i++) {
-        jl_value_t *elt = jl_tupleref(t,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
-        }
-    }
-}
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
@@ -1275,6 +1269,8 @@ void jl_init_primitives(void)
     add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
+    add_builtin("Method", (jl_value_t*)jl_method_type);
+    add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
