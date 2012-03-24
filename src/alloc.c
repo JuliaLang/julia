@@ -548,8 +548,8 @@ BOXN_FUNC(64, 3)
 #define UNBOX_FUNC(j_type,c_type)                                       \
 c_type jl_unbox_##j_type(jl_value_t *v)                                 \
 {                                                                       \
-    assert(jl_is_bits_type(v->type));                                   \
-    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
+    assert(jl_is_bits_type(jl_typeof(v)));                              \
+    assert(jl_bitstype_nbits(jl_typeof(v))/8 == sizeof(c_type));        \
     return *(c_type*)jl_bits_data(v);                                   \
 }
 UNBOX_FUNC(int8,   int8_t)

@@ -118,6 +118,8 @@
 
 (define (read-operator port c)
   (read-char port)
+  (if (and (eqv? c #\*) (eqv? (peek-char port) #\*))
+      (error "use ^ instead of **"))
   (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
       (let loop ((str (string c))

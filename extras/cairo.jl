@@ -429,6 +429,8 @@ end
 
 ## drawing commands
 
+stroke(cr::CairoRenderer) = stroke(cr.ctx)
+
 function move(self::CairoRenderer, p)
     move_to( self.ctx, p[1], p[2] )
 end

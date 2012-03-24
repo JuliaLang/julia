@@ -716,26 +716,68 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     return newmeth;
 }
 
+static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
+                                jl_tuple_t *tvars, int bind_all)
+{
+    jl_value_t *ti = jl_type_intersection_matching(a, b, penv, tvars);
+    if (ti == (jl_value_t*)jl_bottom_type)
+        return ti;
+    jl_value_t **ee = alloca(sizeof(void*)*(*penv)->length);
+    int n=0;
+    // only keep vars in tvars list
+    jl_value_t **tvs;
+    int tvarslen;
+    if (jl_is_typevar(tvars)) {
+        tvs = (jl_value_t**)&tvars;
+        tvarslen = 1;
+    }
+    else {
+        tvs = &jl_t0(tvars);
+        tvarslen = tvars->length;
+    }
+    for(int i=0; i < (*penv)->length; i+=2) {
+        jl_value_t *v = jl_tupleref(*penv,i);
+        jl_value_t *val = jl_tupleref(*penv,i+1);
+        if (bind_all || v != val) {
+            for(int j=0; j < tvarslen; j++) {
+                if (v == tvs[j]) {
+                    ee[n++] = v;
+                    ee[n++] = val;
+                }
+            }
+        }
+    }
+    if (n != (*penv)->length) {
+        jl_tuple_t *en = jl_alloc_tuple_uninit(n);
+        memcpy(en->data, ee, n*sizeof(void*));
+        *penv = en;
+    }
+    return ti;
+}
+
 static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, int cache)
 {
     jl_methlist_t *m = mt->defs;
     size_t nargs = tt->length;
     size_t i;
-    jl_value_t *env = jl_false;
+    jl_value_t *ti=(jl_value_t*)jl_bottom_type;
+    jl_tuple_t *newsig=NULL, *env = jl_null;
+    JL_GC_PUSH(&env, &newsig);
 
     while (m != NULL) {
         if (m->tvars!=jl_null) {
-            env = jl_type_match((jl_value_t*)tt, (jl_value_t*)m->sig);
-            if (env != jl_false) {
+            ti = lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig,
+                              &env, m->tvars, 0);
+            if (ti != (jl_value_t*)jl_bottom_type) {
                 // parametric methods only match if all typevars are matched by
                 // non-typevars.
-                for(i=1; i < ((jl_tuple_t*)env)->length; i+=2) {
+                for(i=1; i < env->length; i+=2) {
                     if (jl_is_typevar(jl_tupleref(env,i)))
                         break;
                 }
-                if (i >= ((jl_tuple_t*)env)->length)
+                if (i >= env->length)
                     break;
-                env = jl_false;
+                ti = (jl_value_t*)jl_bottom_type;
             }
         }
         else if (jl_tuple_subtype(&jl_tupleref(tt,0), nargs,
@@ -746,21 +788,17 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         m = m->next;
     }
 
-    if (env == (jl_value_t*)jl_false) {
+    if (ti == (jl_value_t*)jl_bottom_type) {
+        JL_GC_POP();
         if (m != NULL) {
-            if (!cache) {
+            if (!cache)
                 return m->func;
-            }
             return cache_method(mt, tt, m->func, (jl_tuple_t*)m->sig, jl_null);
         }
         return NULL;
     }
 
-    jl_tuple_t *newsig=NULL;
-    JL_GC_PUSH(&env, &newsig);
-
     assert(jl_is_tuple(env));
-    jl_tuple_t *tpenv = (jl_tuple_t*)env;
     // don't bother computing this if no arguments are tuples
     for(i=0; i < tt->length; i++) {
         if (jl_is_tuple(jl_tupleref(tt,i)))
@@ -768,8 +806,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     }
     if (i < tt->length) {
         newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_type_t*)m->sig,
-                                                       &jl_tupleref(tpenv,0),
-                                                       tpenv->length/2);
+                                                       &jl_tupleref(env,0),
+                                                       env->length/2);
     }
     else {
         newsig = (jl_tuple_t*)m->sig;
@@ -779,7 +817,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     if (!cache)
         nf = m->func;
     else
-        nf = cache_method(mt, tt, m->func, newsig, tpenv);
+        nf = cache_method(mt, tt, m->func, newsig, env);
     JL_GC_POP();
     return nf;
 }
@@ -799,15 +837,16 @@ int jl_args_morespecific(jl_value_t *a, jl_value_t *b)
     int msp = jl_type_morespecific(a,b,0);
     if (jl_has_typevars(b)) {
         if (jl_type_match_morespecific(a,b) == (jl_value_t*)jl_false) {
-            if (jl_has_typevars(a)) {
+            if (jl_has_typevars(a))
                 return 0;
-            }
             return msp;
         }
         if (jl_has_typevars(a)) {
-            if (jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false) {
+            //if (jl_type_match_morespecific(b,a) == (jl_value_t*)jl_false)
+            //    return 1;
+            // this rule seems to work better:
+            if (jl_type_match(b,a) == (jl_value_t*)jl_false)
                 return 1;
-            }
         }
         int nmsp = jl_type_morespecific(b,a,0);
         if (nmsp == msp)
@@ -1101,7 +1140,6 @@ jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t na
 }
 
 // compile-time method lookup
-DLLEXPORT
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
 {
     assert(jl_is_gf(f));
@@ -1122,6 +1160,11 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
         jl_compile(sf);
     }
     return sf;
+}
+
+DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
+{
+    (void)jl_get_specialization(f, types);
 }
 
 #ifdef JL_TRACE
@@ -1361,7 +1404,7 @@ DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,
     jl_tuple_t *env = jl_null;
     jl_value_t *ti=NULL;
     JL_GC_PUSH(&env, &ti);
-    ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
+    ti = lookup_match(type, (jl_value_t*)sig, &env, tvars, 1);
     jl_tuple_t *result = jl_tuple2(ti, env);
     JL_GC_POP();
     return result;
@@ -1375,7 +1418,7 @@ static jl_tuple_t *match_method(jl_value_t *type, jl_function_t *func,
     jl_value_t *ti=NULL;
     JL_GC_PUSH(&env, &ti, &temp);
 
-    ti = jl_type_intersection_matching(type, (jl_value_t*)sig, &env, tvars);
+    ti = lookup_match(type, (jl_value_t*)sig, &env, tvars, 1);
     jl_tuple_t *result = NULL;
     if (ti != (jl_value_t*)jl_bottom_type) {
         assert(func->linfo);  // no builtin methods

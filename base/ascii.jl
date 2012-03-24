@@ -20,7 +20,7 @@ strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a
 
 function ucfirst(s::ASCIIString)
     if 'a' <= s[1] <= 'z'
-        t = strcpy(s)
+        t = ASCIIString(copy(s.data))
         t.data[1] -= 32
         return t
     end
@@ -28,7 +28,7 @@ function ucfirst(s::ASCIIString)
 end
 function lcfirst(s::ASCIIString)
     if 'A' <= s[1] <= 'Z'
-        t = strcpy(s)
+        t = ASCIIString(copy(s.data))
         t.data[1] += 32
         return t
     end
@@ -38,7 +38,7 @@ end
 function uppercase(s::ASCIIString)
     for i = 1:length(s)
         if 'a' <= s[i] <= 'z'
-            t = strcpy(s)
+            t = ASCIIString(copy(s.data))
             while i <= length(t)
                 if 'a' <= t[i] <= 'z'
                     t.data[i] -= 32
@@ -53,7 +53,7 @@ end
 function lowercase(s::ASCIIString)
     for i = 1:length(s)
         if 'A' <= s[i] <= 'Z'
-            t = strcpy(s)
+            t = ASCIIString(copy(s.data))
             while i <= length(t)
                 if 'A' <= t[i] <= 'Z'
                     t.data[i] += 32
