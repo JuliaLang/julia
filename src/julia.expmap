@@ -32,7 +32,7 @@
     jl_symbol_n;
     jl_matching_methods;
     jl_match_method;
-    jl_get_specialization;
+    jl_compile_hint;
     jl_is_builtin;
     jl_is_genericfunc;
     jl_genericfunc_name;

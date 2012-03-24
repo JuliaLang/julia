@@ -670,6 +670,7 @@ function draw( self::CombObject, context::PlotContext )
         move( context.draw, p )
         linetorel( context.draw, self.dp )
     end
+    stroke(context.draw)
 end
 
 type SymbolObject <: RenderObject
@@ -1118,7 +1119,6 @@ end
 
 _format_ticklabel(x) = _format_ticklabel(x, 0.)
 function _format_ticklabel( x, range )
-    #println(x, " ",range)
     if x == 0
         return "0"
     end
@@ -1526,11 +1526,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         offset = offset + _size_relative(
             getattr(self, "ticks_size"), context.dev_bbox )
     end
-    labelpos = Any[]
-    for i in 1:length(labels)
-        push(labelpos,
-            _pos(self, context, pos[i], dir*offset) )
-    end
+    labelpos = [ _pos(self, context, pos[i], dir*offset) | i=1:length(labels) ]
 
     halign, valign = _align(self)
 
@@ -1557,12 +1553,8 @@ function _make_ticks( self::HalfAxis, context, ticks, size, style )
     end
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
-    ticklen = _dpos( self, dir *
-        _size_relative(size, context.dev_bbox) )
-    tickpos = {}
-    for tick in ticks
-        push( tickpos, _pos(self, context, tick) )
-    end
+    ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
+    tickpos = [ _pos(self, context, tick) | tick in ticks ]
 
     CombObject(tickpos, ticklen, style)
 end
@@ -2077,8 +2069,6 @@ end
 # Quick and dirty, dirty hack...
 #
 
-_frame_draw( obj, device, region, limits) =
-    _frame_draw( obj, device, region, limits, (0,1,1,0) )
 function _frame_draw( obj, device, region, limits, labelticks )
     frame = Frame( labelticks )
     context = PlotContext( device, region, limits, getattr(obj,"xlog"), getattr(obj,"ylog") )
@@ -2228,15 +2218,14 @@ function _frames_draw( self::FramedArray, device, interior )
     g = _grid( self, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
-        key = (i,j)
         obj = self.content[i,j]
         subregion = cell( g, i, j )
         limits = _limits(self, i, j)
         axislabels = [0,0,0,0]
-        if key[1] == self.nrows
+        if i == self.nrows
             axislabels[2] = 1
         end
-        if key[2] == 1
+        if j == 1
             axislabels[3] = 1
         end
         _frame_draw( obj, device, subregion, limits, axislabels )
@@ -2247,7 +2236,6 @@ function _data_draw( self::FramedArray, device, interior )
     g = _grid( self, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
-        key = (i,j)
         obj = self.content[i,j]
         subregion = cell(g, i, j)
         lmts = _limits( self, i, j)

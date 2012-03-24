@@ -477,17 +477,25 @@ for (real_gesvd, complex_gesvd, elty, celty) in
     end
 end
 
-svd{T<:Integer}(x::StridedMatrix{T}) = svd(float64(x))
+svd(A) = svd(A,true)
+svdvals(A) = svd(A,false)[2]
 
-function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T})
-    jobu = "A"
-    jobvt = "A"
+svd{T<:Integer}(x::StridedMatrix{T},vecs) = svd(float64(x),vecs)
+
+function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},vecs::Bool)
     m, n = size(A)
     k = min(m,n)
     X = copy(A)
     S = Array(typeof(real(A[1])), k)
-    U = Array(T, m, m)
-    VT = Array(T, n, n)
+    if vecs
+        jobu = jobvt = "A"
+        U = Array(T, m, m)
+        VT = Array(T, n, n)
+    else
+        jobu = jobvt = "N"
+        U = Array(T, 0, 0)
+        VT = Array(T, 0, 0)
+    end
     if iscomplex(A)
         rwork = Array(typeof(real(A[1])), 5*min(m,n))
     end
@@ -511,8 +519,8 @@ function svd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         info = _jl_lapack_gesvd(jobu, jobvt, m, n, X, stride(X,2), S, U, m, VT, n, work, lwork)
     end
 
-    if info == 0; return (U, S, VT); end
-    error("error in LAPACK gesvd");
+    if info != 0; error("error in LAPACK gesvd"); end
+    return (U, S, VT)
 end
 
 for (gesv, posv, gels, trtrs, elty) in (("dgesv_","dposv_","dgels_","dtrtrs_",:Float64),

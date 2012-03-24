@@ -254,7 +254,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
 typedef enum {invariant, covariant} variance_t;
 
 typedef struct {
-    jl_value_t *data[64];
+    jl_value_t *data[128];
     size_t n;
 } cenv_t;
 
@@ -263,7 +263,9 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
     if (!allow && var == val)
         return;
     for(int i=0; i < soln->n; i+=2) {
-        if (soln->data[i]==var && soln->data[i+1]==val)
+        if (soln->data[i]==var &&
+            (soln->data[i+1]==val || (!jl_is_typevar(val) &&
+                                      type_eqv_(soln->data[i+1],val))))
             return;
     }
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
@@ -1151,7 +1153,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 
 static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
 {
-    return (jl_subtype(a, b, 0) && jl_subtype(b, a, 0));
+    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
 static int type_eqv_(jl_value_t *a, jl_value_t *b)
@@ -1175,7 +1177,20 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
     }
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
-            return extensionally_same_type(a, b);
+            jl_tuple_t *ta = (jl_tuple_t*)a; jl_tuple_t *tb = (jl_tuple_t*)b;
+            int sqa = (ta->length>0 &&
+                       jl_is_seq_type(jl_tupleref(ta,ta->length-1)));
+            int sqb = (tb->length>0 &&
+                       jl_is_seq_type(jl_tupleref(tb,tb->length-1)));
+            if (sqa && sqb)
+                return extensionally_same_type(a, b);
+            if (sqa != sqb || ta->length != tb->length)
+                return 0;
+            for(int i=0; i < ta->length; i++) {
+                if (!type_eqv_(jl_tupleref(ta,i),jl_tupleref(tb,i)))
+                    return 0;
+            }
+            return 1;
         }
         return 0;
     }

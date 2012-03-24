@@ -205,7 +205,6 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isa(t,Tuple) && allp(isType,t) ?
                            tintersect(v,map(t->t.parameters[1],t)) :
-                       _iisconst(A[2]) ? tintersect(v,_ieval(A[2])) :
                        Any))
 
 tupleref_tfunc = function (A, t, i)
