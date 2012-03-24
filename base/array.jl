@@ -76,6 +76,9 @@ function ref{T}(::Type{T}, vals...)
     return a
 end
 ref{T}(::Type{T}) = Array(T,0)
+
+ref{T <: Real, S <: Ranges}(::Type{T}, r::S) = [ convert(T, x)::T | x = r ]
+
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
