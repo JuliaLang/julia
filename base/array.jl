@@ -76,10 +76,18 @@ function ref{T}(::Type{T}, vals...)
     return a
 end
 ref{T}(::Type{T}) = Array(T,0)
-
-ref{T <: Real, S <: Ranges}(::Type{T}, r::S) = [ convert(T, x)::T | x = r ]
-
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
+
+# T[a:b] and T[a:s:b] also contruct typed ranges
+function ref{T}(::Type{T}, r::Ranges)
+    a = Array(T,length(r))
+    i = 1
+    for x in r
+        a[i] = x
+        i += 1
+    end
+    return a
+end
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
