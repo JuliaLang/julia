@@ -176,6 +176,9 @@ promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
 ## generic functions of complex numbers ##
 
+convert(::Type{Complex}, z::Complex) = z
+convert(::Type{Complex}, x::Real) = complex(x)
+
 ==(z::Complex, w::Complex) = real(z) == real(w) && imag(z) == imag(w)
 ==(z::Complex, x::Real) = real_valued(z) && real(z) == x
 ==(x::Real, z::Complex) = real_valued(z) && real(z) == x
