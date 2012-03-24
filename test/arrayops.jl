@@ -152,3 +152,9 @@ for i = 1 : 5
 
     @assert isequal(a', permute(a, (2, 1)))
 end
+
+## basic darray ##
+
+d = drand(10,10)
+@assert all(d'' == d)
+@assert all(convert(Array,d)==d)

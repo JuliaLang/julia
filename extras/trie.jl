@@ -4,7 +4,7 @@ type Trie{T}
     children::HashTable{Char,Trie{T}}
     is_key::Bool
 
-    function Trie{T}()
+    function Trie()
         self = new()
         self.children = HashTable{Char,Trie{T}}()
         self.is_key = false
