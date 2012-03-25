@@ -247,8 +247,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         writetag(s, (jl_value_t*)jl_array_type);
-        jl_serialize_value(s, ar->type);
-        jl_value_t *elty = jl_tparam0(ar->type);
+        jl_serialize_value(s, jl_typeof(ar));
+        jl_value_t *elty = jl_tparam0(jl_typeof(ar));
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
@@ -290,7 +290,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
     else if (jl_is_function(v)) {
         writetag(s, jl_func_kind);
-        jl_serialize_value(s, v->type);
+        jl_serialize_value(s, jl_typeof(v));
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);
@@ -308,9 +308,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_lambda_info_t *li = (jl_lambda_info_t*)v;
         jl_serialize_value(s, li->ast);
         jl_serialize_value(s, (jl_value_t*)li->sparams);
-        // don't save cached type info for code in the Base module, because
-        // it might reference types in the old System module.
-        if (li->module == jl_base_module)
+        // don't save cached type info for code in the Core module, because
+        // it might reference types in the old Base module.
+        if (li->module == jl_core_module)
             jl_serialize_value(s, (jl_value_t*)jl_null);
         else
             jl_serialize_value(s, (jl_value_t*)li->tfunc);
@@ -477,7 +477,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return NULL;
     if (tag == 0) {
         tag = read_uint8(s);
-        return (jl_value_t*)ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        jl_value_t *v = ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        assert(v != HT_NOTFOUND);
+        return v;
     }
     if (tag == BackRef_tag) {
         assert(tree_literal_values == NULL);
@@ -714,20 +716,20 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
-    if (jl_current_module != jl_system_module) {
-        // set up for stage 1 bootstrap, where the System module is already
+    if (jl_current_module != jl_base_module) {
+        // set up for stage 1 bootstrap, where the Base module is already
         // loaded and we are loading an updated copy in a separate module.
 
-        // step 1: set Base.System = current_module
-        jl_binding_t *b = jl_get_binding_wr(jl_base_module, jl_symbol("System"));
+        // step 1: set Core.Base = current_module
+        jl_binding_t *b = jl_get_binding_wr(jl_core_module, jl_symbol("Base"));
         b->value = (jl_value_t*)jl_current_module;
         assert(b->constp);
 
-        // step 2: set current_module.Base = Base
-        jl_set_const(jl_current_module, jl_symbol("Base"), (jl_value_t*)jl_base_module);
+        // step 2: set current_module.Core = Core
+        jl_set_const(jl_current_module, jl_symbol("Core"), (jl_value_t*)jl_core_module);
 
-        // step 3: current_module.System = current_module
-        b = jl_get_binding_wr(jl_current_module, jl_symbol("System"));
+        // step 3: current_module.Base = current_module
+        b = jl_get_binding_wr(jl_current_module, jl_symbol("Base"));
         b->value = (jl_value_t*)jl_current_module;
         assert(b->constp);
 
@@ -735,11 +737,11 @@ void jl_save_system_image(char *fname, char *startscriptname)
         b = jl_get_binding_wr(jl_current_module, jl_current_module->name);
         b->value = NULL; b->constp = 0;
 
-        // step 5: rename current_module to System
-        jl_current_module->name = jl_symbol("System");
+        // step 5: rename current_module to Base
+        jl_current_module->name = jl_symbol("Base");
 
-        // step 6: orphan old system module
-        jl_system_module = jl_current_module;
+        // step 6: orphan old Base module
+        jl_base_module = jl_current_module;
     }
     else {
         // delete cached slow ASCIIString constructor
@@ -750,12 +752,12 @@ void jl_save_system_image(char *fname, char *startscriptname)
         mt->defs->func->linfo->specializations = NULL;
     }
 
-    jl_idtable_type = jl_get_global(jl_system_module, jl_symbol("IdTable"));
+    jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("IdTable"));
     idtable_list = jl_alloc_cell_1d(0);
 
     jl_serialize_value(&f, jl_array_type->env);
 
-    jl_serialize_value(&f, jl_base_module);
+    jl_serialize_value(&f, jl_core_module);
     jl_serialize_value(&f, jl_current_module);
 
     jl_serialize_value(&f, idtable_list);
@@ -798,10 +800,10 @@ void jl_restore_system_image(char *fname)
 
     jl_array_type->env = jl_deserialize_value(&f);
     
-    jl_base_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_core_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_current_module = (jl_module_t*)jl_deserialize_value(&f);
-    jl_system_module = (jl_module_t*)jl_get_global(jl_base_module,
-                                                   jl_symbol("System"));
+    jl_base_module = (jl_module_t*)jl_get_global(jl_core_module,
+                                                 jl_symbol("Base"));
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash IdTables
@@ -829,7 +831,7 @@ void jl_restore_system_image(char *fname)
     jl_get_builtin_hooks();
     jl_get_system_hooks();
     jl_boot_file_loaded = 1;
-    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_system_module,
+    jl_typeinf_func = (jl_function_t*)jl_get_global(jl_base_module,
                                                     jl_symbol("typeinf_ext"));
     jl_init_box_caches();
 

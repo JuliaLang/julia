@@ -14,6 +14,8 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+ref(s::String, v::Vector) =
+    print_to_string(length(v), @thunk for i in v; print(s[i]); end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
@@ -156,6 +158,8 @@ end
 
 isequal(a::String, b::String) = cmp(a,b) == 0
 isless(a::String, b::String)  = cmp(a,b) <  0
+
+hash(s::String) = hash(cstring(s))
 
 # faster comparisons for byte strings
 
@@ -989,10 +993,6 @@ float(x::String) = float64(x)
 parse_float(x::String) = float64(x)
 parse_float(::Type{Float64}, x::String) = float64(x)
 parse_float(::Type{Float32}, x::String) = float32(x)
-
-# copying a byte string (generally not needed due to "immutability")
-
-strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 

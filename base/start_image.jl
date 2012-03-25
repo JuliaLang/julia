@@ -18,7 +18,6 @@ _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 # Optional libraries
 _jl_libblas = dlopen("liblapack")
 _jl_liblapack = _jl_libblas
-_jl_libarpack = dlopen("libarpack")
 _jl_libfftw = dlopen("libfftw3")
 _jl_libfftwf = dlopen("libfftw3f")
 _jl_libsuitesparse = dlopen("libsuitesparse");

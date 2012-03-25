@@ -144,3 +144,17 @@ v[2,1,1,1] = 32.0
 v[2,2,1,1] = 40.0
 
 @assert isequal(v,sum(z,(3,4)))
+
+## large matrices transpose ##
+
+for i = 1 : 5
+    a = rand(200, 300)
+
+    @assert isequal(a', permute(a, (2, 1)))
+end
+
+## basic darray ##
+
+d = drand(10,10)
+@assert all(d'' == d)
+@assert all(convert(Array,d)==d)

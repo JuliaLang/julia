@@ -4,9 +4,9 @@ typealias Vector{T} Array{T,1}
 typealias Matrix{T} Array{T,2}
 typealias VecOrMat{T} Union(Vector{T}, Matrix{T})
 
-typealias StridedArray{T,N}  Union(Array{T,N}, SubArray{T,N,Array{T}})
-typealias StridedVector{T} Union(Vector{T}, SubArray{T,1,Array{T}})
-typealias StridedMatrix{T} Union(Matrix{T}, SubArray{T,2,Array{T}})
+typealias StridedArray{T,N,A<:Array}  Union(Array{T,N}, SubArray{T,N,A})
+typealias StridedVector{T,A<:Array}   Union(Vector{T} , SubArray{T,1,A})
+typealias StridedMatrix{T,A<:Array}   Union(Matrix{T} , SubArray{T,2,A})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 ## Basic functions ##
@@ -29,7 +29,7 @@ function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
         copy_to(pointer(dest, do), pointer(src, so), N)
     else
         for i=0:N-1
-            dest[i+do] = copy(src[i+so])
+            dest[i+do] = src[i+so]
         end
     end
     return dest
@@ -78,6 +78,17 @@ end
 ref{T}(::Type{T}) = Array(T,0)
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
+# T[a:b] and T[a:s:b] also contruct typed ranges
+function ref{T<:Number}(::Type{T}, r::Ranges)
+    a = Array(T,length(r))
+    i = 1
+    for x in r
+        a[i] = x
+        i += 1
+    end
+    return a
+end
+
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
     return a
@@ -93,24 +104,17 @@ function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     return a
 end
 
-zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
-zeros(T::Type, dims::Int...) = zeros(T, dims)
-zeros(dims::Dims) = zeros(Float64, dims)
-zeros(dims::Int...) = zeros(dims)
+fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
+fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-ones{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), one(T))
-ones(T::Type, dims::Int...) = ones(T, dims)
-ones(dims::Dims) = ones(Float64, dims)
-ones(dims::Int...) = ones(dims)
+zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
+zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 
-trues(dims::Dims) = fill!(Array(Bool, dims), true)
-trues(dims::Int...) = trues(dims)
+ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
+ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
-falses(dims::Dims) = fill!(Array(Bool, dims), false)
-falses(dims::Int...) = falses(dims)
-
-fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
-fill(v, dims::Int...) = fill(v, dims)
+trues(args...)  = fill(true, args...)
+falses(args...) = fill(false, args...)
 
 eye(n::Int) = eye(n, n)
 function eye(m::Int, n::Int)
@@ -1112,13 +1116,13 @@ function amap(f::Function, A::StridedArray, axis::Integer)
     end
 
     idx = ntuple(ndimsA, j -> j == axis ? 1 : 1:dimsA[j])
-    r = f(slice(A, idx))
+    r = f(sub(A, idx))
     R = Array(typeof(r), axis_size)
     R[1] = r
 
     for i = 2:axis_size
         idx = ntuple(ndimsA, j -> j == axis ? i : 1:dimsA[j])
-        R[i] = f(slice(A, idx))
+        R[i] = f(sub(A, idx))
     end
 
     return R
@@ -1244,7 +1248,7 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-function filter(f, As::StridedArray)
+function filter(f::Function, As::StridedArray)
     boolmap::Array{Bool} = map(f, As)
     As[boolmap]
 end
@@ -1253,7 +1257,7 @@ end
 
 function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     if numel(A) > 50000
-        return _jl_fftw_transpose(A)
+        return _jl_fftw_transpose(reshape(A, size(A, 2), size(A, 1)))
     else
         return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
     end

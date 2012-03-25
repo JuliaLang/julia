@@ -254,7 +254,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
 typedef enum {invariant, covariant} variance_t;
 
 typedef struct {
-    jl_value_t *data[64];
+    jl_value_t *data[128];
     size_t n;
 } cenv_t;
 
@@ -262,6 +262,12 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
     if (!allow && var == val)
         return;
+    for(int i=0; i < soln->n; i+=2) {
+        if (soln->data[i]==var &&
+            (soln->data[i+1]==val || (!jl_is_typevar(val) &&
+                                      type_eqv_(soln->data[i+1],val))))
+            return;
+    }
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
         jl_error("type too large");
     soln->data[soln->n++] = var;
@@ -1145,7 +1151,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 
 static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
 {
-    return (jl_subtype(a, b, 0) && jl_subtype(b, a, 0));
+    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
 static int type_eqv_(jl_value_t *a, jl_value_t *b)
@@ -1169,7 +1175,20 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
     }
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
-            return extensionally_same_type(a, b);
+            jl_tuple_t *ta = (jl_tuple_t*)a; jl_tuple_t *tb = (jl_tuple_t*)b;
+            int sqa = (ta->length>0 &&
+                       jl_is_seq_type(jl_tupleref(ta,ta->length-1)));
+            int sqb = (tb->length>0 &&
+                       jl_is_seq_type(jl_tupleref(tb,tb->length-1)));
+            if (sqa && sqb)
+                return extensionally_same_type(a, b);
+            if (sqa != sqb || ta->length != tb->length)
+                return 0;
+            for(int i=0; i < ta->length; i++) {
+                if (!type_eqv_(jl_tupleref(ta,i),jl_tupleref(tb,i)))
+                    return 0;
+            }
+            return 1;
         }
         return 0;
     }
@@ -1738,6 +1757,51 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         b==(jl_value_t*)jl_undef_type)
         return 0;
     if (!invariant && (jl_tag_type_t*)b == jl_any_type) return 1;
+
+    if (jl_is_some_tag_type(a) && jl_is_some_tag_type(b)) {
+        if ((jl_tag_type_t*)a == jl_any_type) return 0;
+        jl_tag_type_t *tta = (jl_tag_type_t*)a;
+        jl_tag_type_t *ttb = (jl_tag_type_t*)b;
+        int super=0;
+        while (tta != (jl_tag_type_t*)jl_any_type) {
+            if (tta->name == ttb->name) {
+                if (super && morespecific) {
+                    if (tta->name != jl_type_type->name)
+                        return 1;
+                }
+                if (tta->name == jl_ntuple_typename) {
+                    // NTuple must be covariant
+                    return jl_subtype_le(jl_tupleref(tta->parameters,1),
+                                         jl_tupleref(ttb->parameters,1),
+                                         0, morespecific, invariant);
+                }
+                assert(tta->parameters->length == ttb->parameters->length);
+                for(i=0; i < tta->parameters->length; i++) {
+                    jl_value_t *apara = jl_tupleref(tta->parameters,i);
+                    jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
+                    if (invariant && jl_is_typevar(bpara) &&
+                        !((jl_tvar_t*)bpara)->bound) {
+                        return apara==bpara;
+                    }
+                    if (!jl_subtype_le(apara, bpara, 0, morespecific, 1))
+                        return 0;
+                }
+                return 1;
+            }
+            else if (invariant) {
+                return 0;
+            }
+            tta = tta->super; super = 1;
+        }
+        assert(!invariant);
+        if (((jl_tag_type_t*)a)->name == jl_type_type->name) {
+            // Type{T} also matches >:typeof(T)
+            if (!jl_is_typevar(jl_tparam0(a)))
+                return jl_subtype_le(jl_tparam0(a), b, 1, morespecific, 0);
+        }
+        return 0;
+    }
+
     if (jl_is_typevar(a)) {
         if (jl_is_typevar(b)) {
             return
@@ -1797,44 +1861,6 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     }
     else if (jl_is_func_type(b)) {
         return 0;
-    }
-
-    assert(jl_is_some_tag_type(a));
-    assert(jl_is_some_tag_type(b));
-    jl_tag_type_t *tta = (jl_tag_type_t*)a;
-    jl_tag_type_t *ttb = (jl_tag_type_t*)b;
-    int super=0;
-    while (tta != (jl_tag_type_t*)jl_any_type) {
-        if (tta->name == ttb->name) {
-            if (super && morespecific) {
-                if (tta->name != jl_type_type->name)
-                    return 1;
-            }
-            if (tta->name == jl_ntuple_typename) {
-                // NTuple must be covariant
-                return jl_subtype_le(jl_tupleref(tta->parameters,1),
-                                     jl_tupleref(ttb->parameters,1),
-                                     0, morespecific, invariant);
-            }
-            assert(tta->parameters->length == ttb->parameters->length);
-            for(i=0; i < tta->parameters->length; i++) {
-                jl_value_t *apara = jl_tupleref(tta->parameters,i);
-                jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
-                if (!jl_subtype_le(apara, bpara, 0, morespecific, 1))
-                    return 0;
-            }
-            return 1;
-        }
-        else if (invariant) {
-            return 0;
-        }
-        tta = tta->super; super = 1;
-    }
-    assert(!invariant);
-    if (((jl_tag_type_t*)a)->name == jl_type_type->name) {
-        // Type{T} also matches >:typeof(T)
-        if (!jl_is_typevar(jl_tparam0(a)))
-            return jl_subtype_le(jl_tparam0(a), b, 1, morespecific, 0);
     }
     return 0;
 }

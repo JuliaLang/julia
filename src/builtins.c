@@ -186,7 +186,7 @@ JL_CALLABLE(jl_f_apply)
         else {
             if (jl_append_any_func == NULL) {
                 jl_append_any_func =
-                    (jl_function_t*)jl_get_global(jl_system_module,
+                    (jl_function_t*)jl_get_global(jl_base_module,
                                                   jl_symbol("append_any"));
                 if (jl_append_any_func == NULL) {
                     // error if append_any not available
@@ -245,10 +245,10 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
     }
     jl_module_t *newm = jl_new_module(name);
     b->value = (jl_value_t*)newm;
-    if (jl_current_module == jl_base_module && name == jl_symbol("System")) {
-        // pick up system module during bootstrap, and stay within it
+    if (jl_current_module == jl_core_module && name == jl_symbol("Base")) {
+        // pick up Base module during bootstrap, and stay within it
         // after loading.
-        jl_system_module = last_module = newm;
+        jl_base_module = last_module = newm;
     }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
@@ -288,6 +288,7 @@ static int has_intrinsics(jl_expr_t *e)
 {
     if (e->args->length == 0)
         return 0;
+    if (e->head == static_typeof_sym) return 1;
     jl_value_t *e0 = jl_exprarg(e,0);
     if (e->head == call_sym &&
         ((jl_is_symbol(e0) && is_intrinsic((jl_sym_t*)e0)) ||
@@ -307,17 +308,37 @@ static int has_intrinsics(jl_expr_t *e)
 static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 {
     assert(jl_is_expr(expr));
-    if (expr->head==body_sym) {
+    if (expr->head==body_sym && compileloops) {
         jl_array_t *body = expr->args;
-        size_t i;
+        size_t i, maxlabl=0;
+        // compile if there are backwards branches
         for(i=0; i < body->length; i++) {
             jl_value_t *stmt = jl_cellref(body,i);
-            if (jl_is_expr(stmt)) {
-                // TODO: only backward branches
-                if (compileloops &&
-                    (((jl_expr_t*)stmt)->head == goto_sym ||
-                     ((jl_expr_t*)stmt)->head == goto_ifnot_sym)) {
+            if (jl_is_labelnode(stmt)) {
+                int l = jl_labelnode_label(stmt);
+                if (l > maxlabl) maxlabl = l;
+            }
+        }
+        size_t sz = (maxlabl+1+7)/8;
+        char *labls = alloca(sz); memset(labls,0,sz);
+        for(i=0; i < body->length; i++) {
+            jl_value_t *stmt = jl_cellref(body,i);
+            if (jl_is_labelnode(stmt)) {
+                int l = jl_labelnode_label(stmt);
+                labls[l/8] |= (1<<(l&7));
+            }
+            else if (compileloops && jl_is_gotonode(stmt)) {
+                int l = jl_gotonode_label(stmt);
+                if (labls[l/8]&(1<<(l&7))) {
                     return 1;
+                }
+            }
+            else if (jl_is_expr(stmt)) {
+                if (compileloops && ((jl_expr_t*)stmt)->head==goto_ifnot_sym) {
+                    int l = jl_unbox_long(jl_exprarg(stmt,1));
+                    if (labls[l/8]&(1<<(l&7))) {
+                        return 1;
+                    }
                 }
                 // to compile code that uses exceptions
                 /*
@@ -328,8 +349,7 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
             }
         }
     }
-    if (has_intrinsics(expr))
-        return 1;
+    if (has_intrinsics(expr)) return 1;
     return 0;
 }
 
@@ -359,10 +379,8 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
     int ewc = 0;
     JL_GC_PUSH(&thunk, &thk, &ex);
 
-    if (ex->head == body_sym || ex->head == thunk_sym) {
-        // already expanded
-    }
-    else {
+    if (ex->head != body_sym && ex->head != thunk_sym) {
+        // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
     }
 
@@ -396,7 +414,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
 
     if (ewc) {
         thunk = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, thk);
-        if (fast && !jl_in_inference) {
+        if (!jl_in_inference) {
             jl_type_infer(thk, jl_tuple_type, thk);
         }
         result = jl_apply((jl_function_t*)thunk, NULL, 0);
@@ -464,21 +482,15 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     if (sep) set_cwd(oldcwd);
 }
 
-// locate a file in the search path
 // fpath needs to be freed if != fname
 char *jl_find_file_in_path(const char *fname)
 {
     char *fpath = (char*)fname;
     int fid = open (fpath, O_RDONLY);
-    // try adding julia home, then julia_home/jl/
+    // try adding julia home
     if (fid == -1 && julia_home && fname[0] != '/') {
         asprintf(&fpath, "%s/%s", julia_home, fname);
         fid = open (fpath, O_RDONLY);
-        if (fid == -1) {
-            free(fpath);
-            asprintf(&fpath, "%s/jl/%s", julia_home, fname);
-            fid = open (fpath, O_RDONLY);
-        }
     }
     if (fid == -1) {
         if (fpath != fname) free(fpath);
@@ -766,16 +778,16 @@ static jl_function_t *jl_show_gf=NULL;
 
 void jl_show(jl_value_t *v)
 {
-    if (jl_system_module) {
+    if (jl_base_module) {
         if (jl_show_gf == NULL) {
-            jl_show_gf = (jl_function_t*)jl_get_global(jl_system_module, jl_symbol("show"));
+            jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
         jl_apply(jl_show_gf, &v, 1);
     }
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
-static void show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
+void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     uv_stream_t *s = jl_current_output_stream();
     jl_putc(opn, s);
@@ -824,7 +836,7 @@ static void show_type(jl_value_t *t)
         }
         else {
             jl_write(s, "Union", 5);
-            show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
+            jl_show_tuple(((jl_uniontype_t*)t)->types, '(', ')', 0);
         }
     }
     else if (jl_is_seq_type(t)) {
@@ -840,7 +852,7 @@ static void show_type(jl_value_t *t)
         jl_puts(tt->name->name->name, s);
         jl_tuple_t *p = tt->parameters;
         if (p->length > 0)
-            show_tuple(p, '{', '}', 0);
+            jl_show_tuple(p, '{', '}', 0);
     }
 }
 
@@ -849,7 +861,7 @@ DLLEXPORT void jl_show_any(jl_value_t *v)
     // fallback for printing some other builtin types
     uv_stream_t *s = jl_current_output_stream();
     if (jl_is_tuple(v)) {
-        show_tuple((jl_tuple_t*)v, '(', ')', 1);
+        jl_show_tuple((jl_tuple_t*)v, '(', ')', 1);
     }
     else if (jl_is_type(v)) {
         show_type(v);
@@ -933,10 +945,18 @@ JL_CALLABLE(jl_f_new_struct_type)
 }
 
 void jl_add_constructors(jl_struct_type_t *t);
-
 void jl_reinstantiate_inner_types(jl_tag_type_t *t);
 
-static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
+static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
+{
+    size_t i;
+    for(i=0; i < t->length; i++) {
+        jl_value_t *elt = jl_tupleref(t,i);
+        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
+        }
+    }
+}
 
 JL_CALLABLE(jl_f_new_struct_fields)
 {
@@ -1047,15 +1067,13 @@ JL_CALLABLE(jl_f_typevar)
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     if (nargs > 1) {
         JL_TYPECHK(typevar, type, args[1]);
-        lb = args[1];
         if (nargs > 2) {
             JL_TYPECHK(typevar, type, args[2]);
+            lb = args[1];
             ub = args[2];
         }
         else {
-            // typevar(name, UB)
-            ub = lb;
-            lb = (jl_value_t*)jl_bottom_type;
+            ub = args[1];
         }
     }
     return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub);
@@ -1082,17 +1100,6 @@ JL_CALLABLE(jl_f_union)
 }
 
 // method definition ----------------------------------------------------------
-
-static void check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
-{
-    size_t i;
-    for(i=0; i < t->length; i++) {
-        jl_value_t *elt = jl_tupleref(t,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
-            jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
-        }
-    }
-}
 
 jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
                           jl_tuple_t *argtypes, jl_function_t *f, jl_tuple_t *t)
@@ -1199,7 +1206,7 @@ DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
 
 static void add_builtin(const char *name, jl_value_t *v)
 {
-    jl_set_const(jl_base_module, jl_symbol(name), v);
+    jl_set_const(jl_core_module, jl_symbol(name), v);
 }
 
 static void add_builtin_func(const char *name, jl_fptr_t f)
@@ -1273,6 +1280,8 @@ void jl_init_primitives(void)
     add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
+    add_builtin("Method", (jl_value_t*)jl_method_type);
+    add_builtin("MethodTable", (jl_value_t*)jl_methtable_type);
     add_builtin("Symbol", (jl_value_t*)jl_sym_type);
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);

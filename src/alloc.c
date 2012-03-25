@@ -190,8 +190,8 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
     return tup;
 }
 
-jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
-                              jl_lambda_info_t *linfo)
+DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
+                                        jl_lambda_info_t *linfo)
 {
     jl_function_t *f = (jl_function_t*)alloc_4w();
     f->type = (jl_type_t*)jl_any_func;
@@ -548,8 +548,8 @@ BOXN_FUNC(64, 3)
 #define UNBOX_FUNC(j_type,c_type)                                       \
 c_type jl_unbox_##j_type(jl_value_t *v)                                 \
 {                                                                       \
-    assert(jl_is_bits_type(v->type));                                   \
-    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
+    assert(jl_is_bits_type(jl_typeof(v)));                              \
+    assert(jl_bitstype_nbits(jl_typeof(v))/8 == sizeof(c_type));        \
     return *(c_type*)jl_bits_data(v);                                   \
 }
 UNBOX_FUNC(int8,   int8_t)

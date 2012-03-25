@@ -1,8 +1,6 @@
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-USE_SYSTEM_GLPK=0
-
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 LIBS = glpk-wrapper
@@ -25,7 +23,6 @@ endif
 
 GLPK_VER = 4.43
 GLPK_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
-GLPK_PREFIX = /usr/
 
 default: install
 compile: $(addprefix compile-, $(LIBS)) glpk_h.jl
@@ -36,11 +33,9 @@ distclean: $(addprefix distclean-, $(LIBS))
 ## GLPK ##
 
 ifeq ($(USE_SYSTEM_GLPK), 1)
-GLPK_INC = -I /usr/include/
-GLPK_LIB = 
+GLPK_PREFIX = /usr/
 else
-GLPK_INC = -I glpk-$(GLPK_VER)/
-GLPK_LIB = 
+GLPK_PREFIX = glpk-$(GLPK_VER)/
 endif
 
 GLPK_OBJ_TARGET = $(EXTROOTLIB)/libglpk.$(SHLIB_EXT)
@@ -74,8 +69,14 @@ distclean-glpk: clean-glpk
 
 ## GLPK Wrapper
 
-GLPKW_INC = -I glpk-$(GLPK_VER)/
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPKW_INC = -I /usr/include/
+GLPKW_LIB = -lglpk
+else
+GLPKW_INC = -I glpk-$(GLPK_VER)/include/
 GLPKW_LIB = -L$(EXTROOTLIB)/ -lglpk
+endif
+
 
 $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
 	$(CC) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)

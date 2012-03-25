@@ -19,7 +19,7 @@
     jl_new_struct;
     jl_new_structt;
     jl_new_lambda_info;
-    jl_new_closure_internal;
+    jl_new_closure;
     jl_new_array;
     jl_reshape_array;
     jl_alloc_array_1d;
@@ -32,7 +32,7 @@
     jl_symbol_n;
     jl_matching_methods;
     jl_match_method;
-    jl_get_specialization;
+    jl_compile_hint;
     jl_is_builtin;
     jl_is_genericfunc;
     jl_genericfunc_name;
@@ -160,7 +160,7 @@
     jl_print_int64;
     jl_pgcstack;
     jl_symbol;
-    jl_system_module;
+    jl_base_module;
     jl_get_global;
     jl_set_global;
     jl_set_const;

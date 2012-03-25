@@ -1,5 +1,9 @@
-## from src/boot.jl
-# type ASCIIString <: DirectIndexString; data::Array{Uint8,1}; end
+## from src/boot.jl:
+#
+# type ASCIIString <: DirectIndexString
+#     data::Array{Uint8,1}
+# end
+#
 
 ## required core functionality ##
 
@@ -8,13 +12,15 @@ ref(s::ASCIIString, i::Int) = char(s.data[i])
 
 ## overload methods for efficiency ##
 
+ref(s::ASCIIString, r::Vector) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, r::Range1{Int}) = ASCIIString(ref(s.data,r))
+ref(s::ASCIIString, indx::Array{Int,1}) = ASCIIString(s.data[indx])
 strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
 strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
 
 function ucfirst(s::ASCIIString)
     if 'a' <= s[1] <= 'z'
-        t = strcpy(s)
+        t = ASCIIString(copy(s.data))
         t.data[1] -= 32
         return t
     end
@@ -22,7 +28,7 @@ function ucfirst(s::ASCIIString)
 end
 function lcfirst(s::ASCIIString)
     if 'A' <= s[1] <= 'Z'
-        t = strcpy(s)
+        t = ASCIIString(copy(s.data))
         t.data[1] += 32
         return t
     end
@@ -32,7 +38,7 @@ end
 function uppercase(s::ASCIIString)
     for i = 1:length(s)
         if 'a' <= s[i] <= 'z'
-            t = strcpy(s)
+            t = ASCIIString(copy(s.data))
             while i <= length(t)
                 if 'a' <= t[i] <= 'z'
                     t.data[i] -= 32
@@ -47,7 +53,7 @@ end
 function lowercase(s::ASCIIString)
     for i = 1:length(s)
         if 'A' <= s[i] <= 'Z'
-            t = strcpy(s)
+            t = ASCIIString(copy(s.data))
             while i <= length(t)
                 if 'A' <= t[i] <= 'Z'
                     t.data[i] += 32

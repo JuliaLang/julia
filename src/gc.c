@@ -388,7 +388,6 @@ void jl_gc_markval(jl_value_t *v)
     gc_markval_(v);
 }
 
-#ifdef COPY_STACKS
 static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
 {
     while (s != NULL) {
@@ -411,27 +410,6 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
         s = s->prev;
     }
 }
-#else
-static void gc_mark_stack(jl_gcframe_t *s)
-{
-    while (s != NULL) {
-        size_t i;
-        if (s->indirect) {
-            for(i=0; i < s->nroots; i++) {
-                if (*s->roots[i] != NULL)
-                    GC_Markval(*s->roots[i]);
-            }
-        }
-        else {
-            for(i=0; i < s->nroots; i++) {
-                if (s->roots[i] != NULL)
-                    GC_Markval(s->roots[i]);
-            }
-        }
-        s = s->prev;
-    }
-}
-#endif
 
 static void gc_mark_module(jl_module_t *m)
 {
@@ -554,7 +532,7 @@ static void gc_markval_(jl_value_t *v)
                 ss = (jl_savestate_t*)((char*)ss + offset);
         }
 #else
-        gc_mark_stack(ta->state.gcstack);
+        gc_mark_stack(ta->state.gcstack, 0);
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
             GC_Markval(ss->ostream_obj);
@@ -598,12 +576,10 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    GC_Markval(jl_base_module);
+    GC_Markval(jl_core_module);
     GC_Markval(jl_current_module);
 
     // invisible builtin values
-    GC_Markval(jl_methtable_type);
-    GC_Markval(jl_method_type);
     GC_Markval(jl_any_func);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
@@ -659,7 +635,7 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_get_global(jl_system_module,
+    jl_value_t *errstream = jl_get_global(jl_base_module,
                                           jl_symbol("stderr_stream"));
     JL_TRY {
         if (errstream)

@@ -415,15 +415,18 @@ type RectilinearMap
     end
 end
 
-function __call__( self::RectilinearMap, x::Real, y::Real )
+function project( self::RectilinearMap, x::Real, y::Real )
     self.m*[x,y] + self.t
 end
 
-function call_vec( self::RectilinearMap, x::Vector, y::Vector )
+function project( self::RectilinearMap, x::Vector, y::Vector )
     p = self.t[1] + self.m[1,1] * x + self.m[1,2] * y
     q = self.t[2] + self.m[2,1] * x + self.m[2,2] * y
     return p, q
 end
+
+project{T1<:Real,T2<:Real}( self::RectilinearMap, x::AbstractArray{T1,1}, y::AbstractArray{T2,1} ) =
+    project(self, [x], [y])
 
 function compose( self::RectilinearMap, other::RectilinearMap )
     self.t = call( other.t[1], other.t[2] )
@@ -458,7 +461,7 @@ type PlotGeometry
     PlotGeometry(src, dest) = PlotGeometry(src, dest, false, false)
 end
 
-function __call__( self::PlotGeometry, x, y )
+function project( self::PlotGeometry, x, y )
     u, v = x, y
     if self.xlog
         u = log10(x)
@@ -466,19 +469,7 @@ function __call__( self::PlotGeometry, x, y )
     if self.ylog
         v = log10(y)
     end
-    return __call__( self.aff, u, v )
-end
-
-function call_vec( self::PlotGeometry, x, y )
-    u = x
-    v = y
-    if self.xlog
-        u = log10(u)
-    end
-    if self.ylog
-        v = log10(v)
-    end
-    return call_vec( self.aff, u, v )
+    return project( self.aff, u, v )
 end
 
 function geodesic( self::PlotGeometry, x, y )
@@ -679,6 +670,7 @@ function draw( self::CombObject, context::PlotContext )
         move( context.draw, p )
         linetorel( context.draw, self.dp )
     end
+    stroke(context.draw)
 end
 
 type SymbolObject <: RenderObject
@@ -922,7 +914,7 @@ _kw_rename(::Legend) = {
 }
 
 function make( self::Legend, context::PlotContext )
-    key_pos = __call__(context.plot_geom, self.x, self.y )
+    key_pos = project(context.plot_geom, self.x, self.y )
     key_width = _size_relative( getattr(self, "key_width"), context.dev_bbox )
     key_height = _size_relative( getattr(self, "key_height"), context.dev_bbox )
     key_hsep = _size_relative( getattr(self, "key_hsep"), context.dev_bbox )
@@ -1027,8 +1019,8 @@ function make( self::ErrorBarsY, context )
     objs = {}
     l = _size_relative( getattr(self, "barsize"), context.dev_bbox )
     for i = 1:numel(self.x)
-        p = __call__( context.geom, self.x[i], self.lo[i] )
-        q = __call__( context.geom, self.x[i], self.hi[i] )
+        p = project( context.geom, self.x[i], self.lo[i] )
+        q = project( context.geom, self.x[i], self.hi[i] )
         l0 = LineObject( p, q )
         l1 = LineObject( (p[1]-l,p[2]), (p[1]+l,p[2]) )
         l2 = LineObject( (q[1]-l,q[2]), (q[1]+l,q[2]) )
@@ -1077,8 +1069,8 @@ type DataInset <: _Inset
 end
 
 function boundingbox( self::DataInset, context::PlotContext )
-    p = __call__( context.geom, lowerleft(self.plot_limits) )
-    q = __call__( context.geom, upperright(self.plot_limits) )
+    p = project( context.geom, lowerleft(self.plot_limits) )
+    q = project( context.geom, upperright(self.plot_limits) )
     return BoundingBox( p, q )
 end
 
@@ -1098,8 +1090,8 @@ type PlotInset <: _Inset
 end
 
 function boundingbox( self::PlotInset, context::PlotContext )
-    p = __call__( context.plot_geom, lowerleft(self.plot_limits)... )
-    q = __call__( context.plot_geom, upperright(self.plot_limits)... )
+    p = project( context.plot_geom, lowerleft(self.plot_limits)... )
+    q = project( context.plot_geom, upperright(self.plot_limits)... )
     return BoundingBox( p, q )
 end
 
@@ -1127,7 +1119,6 @@ end
 
 _format_ticklabel(x) = _format_ticklabel(x, 0.)
 function _format_ticklabel( x, range )
-    #println(x, " ",range)
     if x == 0
         return "0"
     end
@@ -1306,7 +1297,7 @@ end
 _pos( self::HalfAxisX, context::PlotContext, a) = _pos(self, context, a, 0.)
 function _pos( self::HalfAxisX, context::PlotContext, a, db )
     intcpt = _intercept(self, context)
-    p = __call__( context.geom, a, intcpt )
+    p = project( context.geom, a, intcpt )
     return p[1], p[2] + db
 end
 
@@ -1403,7 +1394,7 @@ end
 
 _pos( self::HalfAxisY, context, a ) = _pos(self, context, a, 0.)
 function _pos( self::HalfAxisY, context, a, db )
-    p = __call__( context.geom, _intercept(self, context), a )
+    p = project( context.geom, _intercept(self, context), a )
     return p[1] + db, p[2]
 end
 
@@ -1535,11 +1526,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         offset = offset + _size_relative(
             getattr(self, "ticks_size"), context.dev_bbox )
     end
-    labelpos = Any[]
-    for i in 1:length(labels)
-        push(labelpos,
-            _pos(self, context, pos[i], dir*offset) )
-    end
+    labelpos = [ _pos(self, context, pos[i], dir*offset) | i=1:length(labels) ]
 
     halign, valign = _align(self)
 
@@ -1566,12 +1553,8 @@ function _make_ticks( self::HalfAxis, context, ticks, size, style )
     end
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
-    ticklen = _dpos( self, dir *
-        _size_relative(size, context.dev_bbox) )
-    tickpos = {}
-    for tick in ticks
-        push( tickpos, _pos(self, context, tick) )
-    end
+    ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
+    tickpos = [ _pos(self, context, tick) | tick in ticks ]
 
     CombObject(tickpos, ticklen, style)
 end
@@ -1753,7 +1736,7 @@ type _Alias
     _Alias(args...) = new(args)
 end
 
-#function __call__( self, args... ) #,  args... )
+#function project( self, args... ) #,  args... )
 #    for obj in self.objs
 #        apply( obj, args, args... )
 #    end
@@ -2086,8 +2069,6 @@ end
 # Quick and dirty, dirty hack...
 #
 
-_frame_draw( obj, device, region, limits) =
-    _frame_draw( obj, device, region, limits, (0,1,1,0) )
 function _frame_draw( obj, device, region, limits, labelticks )
     frame = Frame( labelticks )
     context = PlotContext( device, region, limits, getattr(obj,"xlog"), getattr(obj,"ylog") )
@@ -2237,15 +2218,14 @@ function _frames_draw( self::FramedArray, device, interior )
     g = _grid( self, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
-        key = (i,j)
         obj = self.content[i,j]
         subregion = cell( g, i, j )
         limits = _limits(self, i, j)
         axislabels = [0,0,0,0]
-        if key[1] == self.nrows
+        if i == self.nrows
             axislabels[2] = 1
         end
-        if key[2] == 1
+        if j == 1
             axislabels[3] = 1
         end
         _frame_draw( obj, device, subregion, limits, axislabels )
@@ -2256,7 +2236,6 @@ function _data_draw( self::FramedArray, device, interior )
     g = _grid( self, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
-        key = (i,j)
         obj = self.content[i,j]
         subregion = cell(g, i, j)
         lmts = _limits( self, i, j)
@@ -2561,7 +2540,7 @@ function make( self::Curve, context )
     segs = geodesic( context.geom, self.x, self.y )
     objs = {}
     for seg in segs
-        x, y = call_vec( context.geom, seg[1], seg[2] )
+        x, y = project( context.geom, seg[1], seg[2] )
         push(objs, PathObject(x, y))
     end
     objs
@@ -2615,8 +2594,8 @@ function make( self::Slope, context::PlotContext )
     #sort!(m)
     objs = {}
     if length(m) > 1
-        a = __call__( context.geom, m[1]... )
-        b = __call__( context.geom, m[end]... )
+        a = project( context.geom, m[1]... )
+        b = project( context.geom, m[end]... )
         push(objs, LineObject(a, b))
     end
     objs
@@ -2673,7 +2652,7 @@ function make( self::Histogram, context::PlotContext )
         push(x, self.x0 + nval*self.binsize )
         push(y, 0 )
     end
-    u, v = call_vec(context.geom, x, y )
+    u, v = project(context.geom, x, y )
     [ PathObject(u, v) ]
 end
 
@@ -2696,8 +2675,8 @@ end
 
 function make( self::LineX, context::PlotContext )
     yr = yrange(context.data_bbox)
-    a = __call__( context.geom, self.x, yr[1] )
-    b = __call__( context.geom, self.x, yr[2] )
+    a = project( context.geom, self.x, yr[1] )
+    b = project( context.geom, self.x, yr[2] )
     [ LineObject(a, b) ]
 end
 
@@ -2720,8 +2699,8 @@ end
 
 function make( self::LineY, context::PlotContext )
     xr = xrange(context.data_bbox)
-    a = __call__( context.geom, xr[1], self.y )
-    b = __call__( context.geom, xr[2], self.y )
+    a = project( context.geom, xr[1], self.y )
+    b = project( context.geom, xr[2], self.y )
     [ LineObject(a, b) ]
 end
 
@@ -2799,7 +2778,7 @@ type DataLabel <: LabelComponent
 end
 
 function make( self::DataLabel, context )
-    pos = __call__( context.geom, self.pos )
+    pos = project( context.geom, self.pos )
     t = TextObject(pos, self.str, getattr(self, "style") )
     [ t ]
 end
@@ -2820,7 +2799,7 @@ type PlotLabel <: LabelComponent
 end
 
 function make( self::PlotLabel, context )
-    pos = __call__(context.plot_geom, self.pos... )
+    pos = project(context.plot_geom, self.pos... )
     t = TextObject(pos, self.str, getattr(self, "style"))
     [ t ]
 end
@@ -2855,7 +2834,7 @@ end
 #end
 #
 #function make( self::Labels, context::PlotContext )
-#    x, y = call_vec(context.geom, self.x, self.y )
+#    x, y = project(context.geom, self.x, self.y )
 #    l = LabelsObject(zip(x,y), self.labels, self.kw_style )
 #    add( self, l )
 #end
@@ -2928,8 +2907,8 @@ end
 function make( self::FillBelow, context )
     coords = map( context.geom, self.x, self.y )
     min_y = yrange(context.data_bbox)[0]
-    push( coords, __call__(context.geom, self.x[-1], min_y) )
-    push( coords, __call__(context.geom, self.x[0], min_y) )
+    push( coords, project(context.geom, self.x[-1], min_y) )
+    push( coords, project(context.geom, self.x[0], min_y) )
     [ PolygonObject(coords) ]
 end
 
@@ -2963,7 +2942,7 @@ end
 function make( self::FillBetween, context )
     x = [self.x1, reverse(self.x2)]
     y = [self.y1, reverse(self.y2)]
-    coords = map( (a,b) -> __call__(context.geom,a,b), x, y )
+    coords = map( (a,b) -> project(context.geom,a,b), x, y )
     [ PolygonObject(coords) ]
 end
 
@@ -3008,7 +2987,7 @@ function limits( self::SymbolDataComponent )
 end
 
 function make( self::SymbolDataComponent, context::PlotContext )
-    x, y = call_vec( context.geom, self.x, self.y )
+    x, y = project( context.geom, self.x, self.y )
     [ SymbolsObject(x, y) ]
 end
 
@@ -3045,7 +3024,7 @@ function limits( self::ColoredPoints )
 end
 
 function make( self::ColoredPoints, context::PlotContext )
-    x, y = call_vec( context.geom, self.x, self.y )
+    x, y = project( context.geom, self.x, self.y )
     [ ColoredSymbolsObject(x, y, self.c) ]
 end
 

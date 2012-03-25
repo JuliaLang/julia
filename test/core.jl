@@ -24,7 +24,8 @@
 @assert !isa(Array,Type{Any})
 @assert subtype(Type{ComplexPair},CompositeKind)
 @assert isa(ComplexPair,Type{ComplexPair})
-@assert subtype(Type{Ptr{None}},Type{Ptr})
+@assert !subtype(Type{Ptr{None}},Type{Ptr})
+@assert !subtype(Type{Rational{Int}}, Type{Rational})
 let T = typevar(:T)
     @assert !is(None, tintersect(Array{None},AbstractArray{T}))
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
@@ -208,7 +209,7 @@ glotest()
 
 # dispatch
 begin
-    local foo, bar
+    local foo, bar, baz
     foo(x::(Any...))=0
     foo(x::(Integer...))=1
     @assert foo((:a,))==0
@@ -219,6 +220,11 @@ begin
     @assert bar((1,1,1,1)) == 1
     @assert bar((1,1,1,"a")) == 2
     @assert bar((:a,:a,:a,:a)) == 1
+
+    baz(::Type{Rational}) = 1
+    baz{T}(::Type{Rational{T}}) = 2
+    @assert baz(Rational) == 1
+    @assert baz(Rational{Int}) == 2
 end
 
 # syntax
