@@ -607,6 +607,7 @@ GMP_INC = -I gmp-$(GMP_VER)/
 GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
 
 $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
+	mkdir -p $(EXTROOTLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GMP_INC) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB) $(GMP_LIB)
 	touch $@
 install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
