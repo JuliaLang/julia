@@ -451,9 +451,10 @@ $(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPAC
 $(SUITESPARSE_SYSTEM_OBJ_SOURCE):
 	mkdir -p SuiteSparse-SYSTEM/lib && \
 	cd SuiteSparse-SYSTEM/lib && \
-	cp `find /lib /usr/lib /usr/local/lib $(subst :, ,$(LD_LIBRARY_PATH)) -name libamd.a -o -name libbtf.a \
-		-o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a -o -name libcolamd.a -o -name libspqr.a \
-	   	-o -name libufconfig.a -o -name libcerbla.a -o -name libumfpack.a` . && \
+	cp `find /lib /usr/lib /usr/local/lib $(subst :, ,$(LD_LIBRARY_PATH)) $(subst :, ,$(DYLD_LIBRARY_PATH)) \
+		-name libamd.a -o -name libbtf.a -o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a \
+	   	-o -name libcolamd.a -o -name libspqr.a -o -name libufconfig.a -o -name libcerbla.a \
+		-o -name libumfpack.a` . && \
 	for i in *.a; do ar x $$i; done && \
 	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
