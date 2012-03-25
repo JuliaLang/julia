@@ -79,7 +79,7 @@ ref{T}(::Type{T}) = Array(T,0)
 ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
-function ref{T}(::Type{T}, r::Ranges)
+function ref{T<:Number}(::Type{T}, r::Ranges)
     a = Array(T,length(r))
     i = 1
     for x in r
