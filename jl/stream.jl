@@ -74,14 +74,14 @@ abstract Socket <: AsyncStream
 type TcpSocket <: Socket
     handle::Ptr{Void}
     buf::BufOrNot
-    closed::Bool
+    open::Bool
     TcpSocket(handle::Ptr{Void})=new(handle,false,false)
 end
 
 type UdpSocket <: Socket
     handle::Ptr{Void}
     buf::BufOrNot
-    closed::Bool
+    open::Bool
     UdpSocket(handle::Ptr{Void})=new(handle,false,false)
 end
 
@@ -108,14 +108,14 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
+htons(port::Uint16)=ccall(:htons,Uint16,(Uint16,),port)
+
 _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(Ptr{Void},Int32,Function),sock.handle,backlog,make_callback(cb))
 
-_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,addr.port)
-_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,addr.port)
-
-function connection_cb(handle::Ptr{Void}, status::Int32)
-
-end
+_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,htons(addr.port),addr.host)
+_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,htons(addr.port))
+_jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
+_jl_tcp_accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     socket = TcpSocket(_jl_tcp_init(globalEventLoop()));
@@ -126,7 +126,7 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     while _jl_tcp_bind(socket,addr)!=0
         addr.port+=1;
     end
-    err = _jl_listen(socket,int32(4),connection_cb)
+    err = _jl_listen(socket,int32(4),cb)
     if(err!=0)
         print(err)
         error("open_any_tcp_port: could not listen on socket")
@@ -379,7 +379,7 @@ function _contains_newline(bufptr::Ptr{Void},len::Int32)
 end
 
 
-function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr{Void},nread::PtrSize,base::Ptr{Uint8},buflen::Int32)
+function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr,nread::PtrSize,base::Ptr,buflen::Int32)
     print("linebuffer")
     if(!isa(stream.buf,IOStream))
         error("Linebuffering only supported on membuffered ASyncStreams")
@@ -392,7 +392,7 @@ function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr{Void},nread:
             #newline found - split buffer
             to=memio()
             ccall(:ios_splitbuf,Void,(Ptr{Void},Ptr{Void},Ptr{Uint8}),to,stream.buf.ios,pd)
-            cb(stream,takebuf_array(string))
+            cb(stream,takebuf_string(to))
         end
     end
 end
@@ -535,4 +535,58 @@ end
 function run(args...)
 spawn(args...)
 run_event_loop()
+end
+
+_jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void},cb::Function) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void},Function),sock.handle,sockaddr,cb)
+_jl_getaddrinfo(loop::Ptr,host::ByteString,service::Ptr,cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
+_jl_sockaddr_from_addrinfo(addrinfo::Ptr) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
+_jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
+_uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
+
+function connect_callback(sock::TcpSocket,status::Int32,breakLoop::Bool)
+    if(status==-1)
+        error("Socket connection failed: ",_uv_lasterror(globalEventLoop()))
+    end
+    sock.open=true;
+    if(breakLoop)
+        print("breaking loop")
+        break_one_loop(globalEventLoop())
+    end
+end
+
+function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port::Uint16,addrinfo_list::Ptr)
+    if(status==-1)
+        error("Name lookup failed")
+    end
+    sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
+    _jl_sockaddr_set_port(sockaddr,htons(port))
+    err = _jl_connect_raw(sock,sockaddr,(req::Ptr,status::Int32)->connect_callback(sock,status,breakLoop))
+    if(err != 0)
+        error("Failed to connect to host")
+    end
+end
+
+function readuntil(s::IOStream, delim::Uint8)
+    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+    # TODO: faster versions that avoid this encoding check
+    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+end
+
+function readall(s::IOStream)
+    dest = memio()
+    ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
+    takebuf_string(dest)
+end
+
+readline(s::IOStream) = readuntil(s, uint8('\n'))
+
+
+function connect_to_host(host::ByteString,port::Uint16)
+    sock = TcpSocket(_jl_tcp_init(globalEventLoop()))
+    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addrinfo::Ptr,status::Int32)->getaddrinfo_callback(true,sock,status,port,addrinfo))
+    if(err!=0)
+        error("Failed to  initilize request to resolve hostname: ",host)
+    end
+    run_event_loop(globalEventLoop())
+    return sock
 end

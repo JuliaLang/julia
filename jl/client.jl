@@ -191,7 +191,7 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 function _start()
     try
         ccall(:jl_register_toplevel_eh, Void, ())
-        ccall(:jl_start_io_thread, Void, ())
+        #ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = HashTable(64)
 

@@ -212,6 +212,7 @@ uv_tty_t *jl_stderr(void) { return (uv_tty_t*) jl_stderr_tty; }
 
 // -- I/O thread --
 
+/*
 static pthread_t io_thread;
 static pthread_mutex_t q_mut;
 static pthread_mutex_t wake_mut;
@@ -232,12 +233,12 @@ int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
 static void *run_io_thr(void *arg)
 {
 //@TODO
-    /*sigset_t set;
+    sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGFPE);
     sigaddset(&set, SIGINT);
     sigaddset(&set, SIGSEGV);
-    pthread_sigmask(SIG_BLOCK, &set, NULL);*/
+    pthread_sigmask(SIG_BLOCK, &set, NULL);
 
     while (1) {
         while (ioq == NULL) {
@@ -283,7 +284,7 @@ static void *run_io_thr(void *arg)
         pthread_mutex_unlock(&q_mut);
     }
     return NULL;
-}
+}*/
 
 DLLEXPORT void jl_buf_mutex_lock(ios_t *s)
 {
@@ -298,7 +299,7 @@ DLLEXPORT void jl_buf_mutex_unlock(ios_t *s)
 {
     pthread_mutex_unlock(&s->mutex);
 }
-
+/*
 DLLEXPORT void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
 {
     pthread_mutex_lock(&q_mut);
@@ -359,6 +360,7 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
 }
+*/
 
 DLLEXPORT size_t jl_sizeof_ios_t(void)
 {

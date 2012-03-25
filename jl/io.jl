@@ -47,21 +47,6 @@ type IOStream <: Stream
 
     IOStream(finalize::Bool) = IOStream(finalize, "")
     IOStream() = IOStream(true)
-
-    global make_stdout_stream
-    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
-end
-
-function make_stdin_stream()
-    s = fdio(ccall(:jl_stdin, Int32, ()))
-    s.name = "<stdin>"
-    return s
-end
-
-function make_stderr_stream()
-    s = fdio(ccall(:jl_stderr, Int32, ()))
-    s.name = "<stderr>"
-    return s
 end
 
 show(s::IOStream) = print("IOStream(",s.name,")")

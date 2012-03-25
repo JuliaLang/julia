@@ -4,6 +4,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/socket.h>
+
+#ifndef __WIN32__
+#include "errno.h"
+#endif
 
 #include "julia.h"
 #include "support/ios.h"
@@ -13,6 +18,8 @@
 #include <cstring>
 extern "C" {
 #endif
+
+
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
@@ -30,8 +37,8 @@ typedef struct {
 } jl_proc_opts_t;
 
 typedef struct {
-    jl_function_t *callcb;
-} jl_async_opts_t;
+    jl_function_t *cb;
+} jl_handle_opts_t;
 
 
 static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
@@ -39,14 +46,20 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
     if(!handle->data)
         jl_error("jl_alloc_buf: Missing data");
     jl_stream_opts_t *opts = (jl_stream_opts_t*)handle->data;
-    buf.len = ios_fillprep(opts->stream,suggested_size);
-    buf.base = opts->stream->buf + opts->stream->bpos;
+    if(opts->stream) { // Stream is membuffered
+        buf.len = ios_fillprep(opts->stream,suggested_size);
+        buf.base = opts->stream->buf + opts->stream->bpos;
+    } else {
+        buf.len = suggested_size;
+        buf.base = malloc(suggested_size);
+    }
     return buf;
 }
 
 void closeHandle(uv_handle_t* handle)
 {
     switch(handle->type) {
+    case UV_TCP:
     case UV_NAMED_PIPE:
         if(handle->data) {
             jl_stream_opts_t *opts=handle->data;
@@ -68,7 +81,7 @@ void closeHandle(uv_handle_t* handle)
     case UV_ASYNC:
     case UV_TIMER:
         if(handle->data) {
-            jl_async_opts_t *opts=handle->data;
+            jl_handle_opts_t *opts=handle->data;
             free(opts);
         }
     default:
@@ -102,12 +115,15 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
     jl_stream_opts_t *opts;
     if(handle&&handle->data) {
         opts = handle->data;
-        if(nread>0) { //no error/EOF
+        if(nread>0&&opts->stream) { //no error/EOF
             opts->stream->size+=nread;
             opts->stream->bpos+=nread;
         }
         if(opts->readcb) {
             jl_callback_call(opts->readcb,4,CB_PTR,handle,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
+        }
+        if(!opts->stream) {
+            free(buf.base); //non-membuffered streams are invalidated after the callback. Otherwise ios_t does the memory management
         }
     }
 }
@@ -162,7 +178,7 @@ DLLEXPORT int16_t jl_stop_reading(uv_stream_t *handle)
 
 }
 
-DLLEXPORT void jl_connectcb(uv_stream_t *stream, int status)
+DLLEXPORT void jl_connectioncb(uv_stream_t *stream, int status)
 {
     if(stream&&stream->data) {
         jl_stream_opts_t *opts = (jl_stream_opts_t *)stream->data;
@@ -180,7 +196,7 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
         opts->readcb=0;
     }
     opts->connectcb=cb;
-    return uv_listen(stream,backlog,&jl_connectcb);
+    return uv_listen(stream,backlog,&jl_connectioncb);
 }
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb)
@@ -235,9 +251,9 @@ DLLEXPORT uv_loop_t *jl_local_event_loop()
 void jl_async_callback(uv_handle_t *handle, int status)
 {
     if(handle->data) {
-        jl_async_opts_t* opts = handle->data;
-        if(opts->callcb)
-            jl_callback_call(opts->callcb,2,CB_PTR,handle,CB_INT32,status);
+        jl_handle_opts_t* opts = handle->data;
+        if(opts->cb)
+            jl_callback_call(opts->cb,2,CB_PTR,handle,CB_INT32,status);
     }
 }
 
@@ -246,8 +262,8 @@ DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_function_t *cb)
     if(!loop)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
-    jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb;
+    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
+    opts->cb = cb;
     uv_async_init(loop,async,(uv_async_cb)&jl_async_callback);
     async->data=opts;
     return async;
@@ -271,8 +287,8 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb)
 {
     if(!idle||(idle)->data)
         return -2;
-    jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb;
+    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
+    opts->cb = cb;
     (idle)->data=opts;
     return uv_idle_start(idle,(uv_idle_cb)&jl_async_callback);
 }
@@ -299,8 +315,8 @@ DLLEXPORT uv_timer_t *jl_timer_init(uv_loop_t *loop)
 //units are in ms
 DLLEXPORT int jl_timer_start(uv_timer_t* timer, jl_function_t *cb, int64_t timeout, int64_t repeat)
 {
-    jl_async_opts_t *opts = malloc(sizeof(jl_async_opts_t));
-    opts->callcb = cb;
+    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
+    opts->cb = cb;
     (timer)->data=opts;
     return uv_timer_start(timer,(uv_timer_cb)&jl_async_callback,timeout,repeat);
 }
@@ -461,6 +477,7 @@ DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t* loop)
     return tcp;
 }
 
+//NOTE: This function expects port/host to be in network byte-order (Big Endian)
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 {
     struct sockaddr_in addr;
@@ -468,7 +485,14 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
     addr.sin_port = port;
     addr.sin_addr.s_addr = host;
     addr.sin_family = AF_INET;
-    return uv_tcp_bind(handle,addr);
+    int err = uv_tcp_bind(handle,addr);
+#ifndef __WIN32__
+    if(handle->delayed_error==EADDRINUSE) { //bypass uv delayed error routines to get direct reporting of EADDRINUSE
+        handle->delayed_error=0;
+        err=UV_EADDRINUSE;
+    }
+#endif
+    return err;
 }
 
 //WIN32 math functions that are not part of the CRT
@@ -519,6 +543,89 @@ void getlocalip(char *buf, size_t len)
     if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
 }
 #endif
+
+void jl_addinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res)
+{
+    if(handle->data)
+    {
+        jl_callback_call(((jl_handle_opts_t*)handle->data)->cb,2,CB_PTR,res,CB_INT32,status);
+        free(handle->data);
+
+    }
+    free(handle);
+    uv_freeaddrinfo(res);
+}
+
+DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
+{
+    uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
+    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
+    struct addrinfo hints;
+
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = AF_INET; //ipv4 for now
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags |= AI_CANONNAME;
+
+    opts->cb = cb;
+
+    req->data = opts;
+
+    return uv_getaddrinfo(loop,req,jl_addinfo_cb,host,service,&hints);
+}
+
+DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
+{
+    struct sockaddr*addr=malloc(sizeof(struct sockaddr));
+    memcpy(addr,addrinfo->ai_addr,sizeof(struct sockaddr));
+    return addr;
+}
+
+DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
+{
+    if(addr->sa_family==AF_INET)
+    {
+        ((struct sockaddr_in*)addr)->sin_port=port;
+    } else {
+        ((struct sockaddr_in6*)addr)->sin6_port=port;
+    }
+}
+
+
+void jl_connectcb(uv_connect_t *req, int status)
+{
+    if(req&&req->data) {
+        jl_handle_opts_t *opts = (jl_handle_opts_t *)req->data;
+        if(opts->cb)
+            jl_callback_call(opts->cb,2,CB_PTR,req,CB_INT32,status);
+    }
+}
+
+
+DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr,jl_function_t *connectcb)
+{
+    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
+    opts->cb=connectcb;
+    uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    req->data=opts;
+    if(addr->sa_family==AF_INET)
+    {
+        return uv_tcp_connect(req,handle,*((struct sockaddr_in*)addr),&jl_connectcb);
+    } else {
+        return uv_tcp_connect6(req,handle,*((struct sockaddr_in6*)addr),&jl_connectcb);
+    }
+    return -2; //error! Only IPv4 and IPv6 are implemented atm
+}
+
+DLLEXPORT int jl_last_errno(uv_loop_t *loop)
+{
+    return (uv_last_error(loop)).code;
+}
+
+DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
+{
+    return ios->buf;
+}
 
 #ifdef __cplusplus
 }

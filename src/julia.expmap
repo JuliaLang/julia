@@ -102,8 +102,6 @@
     ios_readline;
     ios_purge;
     ios_takebuf;
-    connect_to_host;
-    open_any_tcp_port;
     getlocalip;
     jl_sizeof_fd_set;
     jl_sizeof_timeval;
@@ -225,6 +223,14 @@
     jl_tcp_bind;
     jl_listen;
     uv_break_one;
+    jl_getaddrinfo;
+    jl_sockaddr_from_addrinfo;
+    jl_sockaddr_set_port;
+    jl_connect_raw;
+    jl_change_readcb;
+    jl_last_errno;
+    uv_accept;
+    jl_ios_buf_base;
   local:
     *;
 };
