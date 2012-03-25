@@ -464,8 +464,9 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 clean-suitesparse:
 	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
+	rm -fr SuiteSparse-SYSTEM/lib
 distclean-suitesparse: clean-suitesparse
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) SuiteSparse-SYSTEM
 
 # SUITESPARSE WRAPPER
 
