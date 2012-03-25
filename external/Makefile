@@ -447,7 +447,7 @@ $(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPAC
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_SYSTEM_OBJ_SOURCE):
 	mkdir -p SuiteSparse-SYSTEM/lib && \
 	cd SuiteSparse-SYSTEM/lib && \
@@ -456,7 +456,7 @@ $(SUITESPARSE_SYSTEM_OBJ_SOURCE):
 	   	-o -name libcolamd.a -o -name libspqr.a -o -name libufconfig.a -o -name libcerbla.a \
 		-o -name libumfpack.a` . && \
 	for i in *.a; do ar x $$i; done && \
-	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	$(FC) -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
