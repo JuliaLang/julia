@@ -23,7 +23,7 @@ our $julia_ver = `julia -e 'print(VERSION_COMMIT[1:8])'`;
 
 our %systems = (
   "julia"      => ["Julia"       , $julia_ver   ],
-  "python"     => ["NumPy"       , "1.5.1"      ],
+  "python"     => ["Python"      , "2.7.1"      ],
   "matlab"     => ["Matlab"      , "R2011a"     ],
   "octave"     => ["Octave"      , "3.4"        ],
   "r"          => ["R"           , "2.14.2"     ],
