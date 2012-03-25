@@ -422,12 +422,13 @@ distclean-fftw:
 
 ## SUITESPARSE ##
 
-ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+SUITESPARSE_LOCAL_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
+SUITESPARSE_SYSTEM_OBJ_SOURCE = SuiteSparse-SYSTEM/lib/libsuitesparse.$(SHLIB_EXT)
 SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
-SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_LOCAL_OBJ_SOURCE)
 else
-SUITESPARSE_OBJ_TARGET =
-SUITESPARSE_OBJ_SOURCE =
+SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_SYSTEM_OBJ_SOURCE)
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -439,7 +440,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) && \
 	mkdir -p lib && \
@@ -447,7 +448,16 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_
 	cd lib && \
 	for i in *.a; do ar x $$i; done && \
 	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+$(SUITESPARSE_SYSTEM_OBJ_SOURCE):
+	mkdir -p SuiteSparse-SYSTEM/lib && \
+	cd SuiteSparse-SYSTEM/lib && \
+	cp `find /lib /usr/lib /usr/local/lib $(subst :, ,$(LD_LIBRARY_PATH)) -name libamd.a -o -name libbtf.a \
+		-o -name libcamd.a -o -name libccolamd.a -o -name libcholmod.a -o -name libcolamd.a -o -name libspqr.a \
+	   	-o -name libufconfig.a -o -name libcerbla.a -o -name libumfpack.a` . && \
+	for i in *.a; do ar x $$i; done && \
+	gfortran -shared $(FFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
 
 clean-suitesparse:

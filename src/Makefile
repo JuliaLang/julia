@@ -20,7 +20,7 @@ SRCS += gc
 endif
 
 ifeq ($(USE_COPY_STACKS),1)
-CFLAGS += -DCOPY_STACKS
+override CFLAGS += -DCOPY_STACKS
 endif
 
 default: release

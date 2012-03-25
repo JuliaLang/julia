@@ -1,6 +1,7 @@
 JULIAHOME = $(abspath .)
 include $(JULIAHOME)/Make.inc
 
+all: default
 default: release
 
 debug release:
