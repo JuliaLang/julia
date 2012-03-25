@@ -107,11 +107,39 @@ function rand(n) {
     return v;
 }
 
-function sortperf(n) {
-    var v = rand(n);
-    v.sort(function(a,b) { return a-b; });
-    return v;
+function qsort_kernel(a, lo, hi) {
+     var i = lo;
+     var j = hi;
+     while (i < hi) {
+        pivot = a[Math.floor((lo+hi)/2)];
+        while (i <= j) {
+            while (a[i] < pivot) {
+                i = i + 1;
+            }
+            while (a[j] > pivot) {
+                j = j - 1;
+            }
+            if (i <= j) {
+                var t = a[i];
+                a[i] = a[j];
+                a[j] = t;
+                i = i + 1;
+                j = j - 1;
+            }
+        }
+        if (lo < j) {
+            qsort_kernel(a, lo, j);
+        }
+        lo = i;
+        j = hi;
+     }
 }
+
+function sortperf(n) {
+     var v = rand(n);
+     qsort_kernel(v, 0, n);
+     return v;
+} 
 
 tmin = Number.POSITIVE_INFINITY;
 for (var i=0; i < 5; i++) {
