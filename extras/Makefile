@@ -34,11 +34,12 @@ distclean: $(addprefix distclean-, $(LIBS))
 
 ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPK_PREFIX = /usr/
+GLPK_OBJ_TARGET =
 else
 GLPK_PREFIX = glpk-$(GLPK_VER)/
+GLPK_OBJ_TARGET = $(EXTROOTLIB)/libglpk.$(SHLIB_EXT)
 endif
 
-GLPK_OBJ_TARGET = $(EXTROOTLIB)/libglpk.$(SHLIB_EXT)
 
 compile-glpk: install-glpk
 install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_h.jl
@@ -60,8 +61,8 @@ glpk_h.jl:
 	$(QUIET_PERL) cpp -dM $(GLPK_PREFIX)/include/glpk.h | perl -nle '/^\s*#define\s+(GLP\w*)\s*\(?($(GLPK_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@
 
 clean-glpk:
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
 	rm -f glpk_h.jl
 distclean-glpk: clean-glpk
 	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
@@ -79,7 +80,8 @@ endif
 
 
 $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
-	$(CC) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
+	mkdir -p $(EXTROOTLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
 	touch $@
 install-glpk-wrapper: $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 

@@ -1,6 +1,9 @@
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	    -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS)
 
