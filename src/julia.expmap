@@ -65,6 +65,8 @@
     jl_array_grow_beg;
     jl_array_del_beg;
     jl_array_ptr;
+    jl_mlock;
+    jl_munlock;
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;

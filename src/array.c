@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/mman.h>
 #include "julia.h"
 
 // array constructors ---------------------------------------------------------
@@ -445,4 +446,14 @@ void jl_cell_1d_push(jl_array_t *a, jl_value_t *item)
     assert(jl_typeis(a, jl_array_any_type));
     jl_array_grow_end(a, 1);
     jl_cellset(a, a->length-1, item);
+}
+
+int jl_mlock(jl_array_t *a)
+{
+    return mlock(a->data, a->length*a->elsize);
+}
+
+int jl_munlock(jl_array_t *a)
+{
+    return munlock(a->data, a->length*a->elsize);
 }
