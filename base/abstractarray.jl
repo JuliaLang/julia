@@ -80,9 +80,11 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy_to(dest::AbstractArray, src::AbstractArray)
-    for i=1:numel(src)
-        dest[i] = src[i]
+function copy_to(dest::AbstractArray, src)
+    i = 1
+    for x in src
+        dest[i] = x
+        i += 1
     end
     return dest
 end
