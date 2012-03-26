@@ -51,6 +51,27 @@ function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
 end
 
+## Memory locking ##
+function allow_swapping{T}(src::Array{T})
+    status = ccall(:jl_munlock,Int,(Any),src)
+    println("Unlocked with status $status")
+    return status
+end
+
+type ArrayLockHolder{T}
+    var::Array{T}
+end
+allow_swapping{T}(lh::ArrayLockHolder{T}) = allow_swapping(lh.var)
+
+function prevent_swapping{T}(src::Array{T})
+    mlock = ArrayLockHolder(src)
+    finalizer(mlock,allow_swapping)
+    status = ccall(:jl_mlock,Int,(Any),src)
+    return status, mlock
+end
+
+
+
 ## Constructors ##
 
 _jl_comprehension_zeros{T,n}(oneresult::AbstractArray{T,n}, dims...) = Array(T, dims...)
