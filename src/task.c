@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <errno.h>
 #include "julia.h"
 #include "builtin_proto.h"
 #if defined(__APPLE__)
