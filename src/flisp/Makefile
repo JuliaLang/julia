@@ -1,6 +1,9 @@
 JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 NAME = flisp
 EXENAME = $(NAME)
 LIBTARGET = lib$(NAME)
