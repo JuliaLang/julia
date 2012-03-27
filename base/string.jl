@@ -384,6 +384,11 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
 end
 
+function cstring(p::Ptr{Uint8},len::Int)
+    p == C_NULL ? error("cannot convert NULL to string") :
+    ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), p, len)::ByteString
+end
+
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String

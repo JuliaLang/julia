@@ -49,6 +49,7 @@
     jl_takebuf_string;
     jl_readuntil;
     jl_cstr_to_string;
+    jl_pchar_to_string;
     jl_array_to_string;
     jl_parse_string;
     jl_parse_input_line;

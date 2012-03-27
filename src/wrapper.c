@@ -196,6 +196,7 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
         opts->readcb=0;
     }
     opts->connectcb=cb;
+    stream->data=opts;
     return uv_listen(stream,backlog,&jl_connectioncb);
 }
 

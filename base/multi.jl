@@ -98,6 +98,7 @@ type Worker
     add_msgs::Array{Any,1}
     gcflag::Bool
     
+    Worker(host::String,port::Integer)=Worker(cstring(host),uint16(port))
     Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
 
     Worker(host,port,sock,id) = new(host, port, sock, memio(), id,
@@ -849,7 +850,7 @@ function accept_handler(accept_fd::Ptr,status::Int32,sockets)
         error("An error occured during the creation of the server")
     end
     client = TcpSocket(_jl_tcp_init(globalEventLoop()))
-    err = accept(accept_fd,client.handle)
+    err = _jl_tcp_accept(box(Ptr{Void},unbox(Int,accept_fd)),client.handle)
     if err!=0
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
@@ -926,7 +927,8 @@ function message_handler_loop(this::Deserializer)
                 # TODO: remove machine from group
                 throw(DisconnectException())
             else
-                print("deserialization error: ", e, "\n")
+		throw(e) 
+                #print("deserialization error: ", e, "\n")
                 #while nb_available(sock) > 0 #|| select(sock)
                 #    read(sock, Uint8)
                 #end
@@ -938,9 +940,9 @@ end
 # activity on message socket
 function message_handler(ds::Deserializer,handle::Ptr,nread::Int,base::Ptr,len::Int32)
     if(nread>0)
-        ds.buf          =   base
+        ds.buf          =   cstring(base,nread)
         ds.buflen       =   nread
-        ds.pos          =   0
+        ds.pos          =   1
         ds.returntask   =   current_task()
         yieldto(ds.task)
     end

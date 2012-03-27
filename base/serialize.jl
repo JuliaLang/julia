@@ -215,22 +215,22 @@ type Deserializer
     task::Task
     returntask::Task
     stream::AsyncStream
-    buf::Ptr{Uint8}
+    buf::ByteString
     buflen::Int
     pos::Int
     function Deserializer(loop::Function,stream::AsyncStream)
         this=new()
         this.task=Task(()->loop(this))
         this.stream=stream
-        this.buf=0
+        this.buf=""
         this.buflen=0
-        this.pos=0
+        this.pos=1
         this
     end
 end
 
 function read(this::Deserializer,::Type{Uint8})
-    if(this.pos==this.buflen)
+    if(this.pos>this.buflen)
         yieldto(this.returntask)
     end
     b=this.buf[this.pos]
