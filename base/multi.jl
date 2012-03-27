@@ -92,9 +92,9 @@ type Worker
     fd::Int32
     socket::IOStream
     sendbuf::IOStream
-    id::Int
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
+    id::Int
     gcflag::Bool
     
     function Worker(host::ByteString, port)
@@ -105,8 +105,7 @@ type Worker
         Worker(host, port, fd, fdio(fd, true))
     end
 
-    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), id,
-                                       {}, {}, false)
+    Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), {}, {}, id, false)
     Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
@@ -122,13 +121,13 @@ function flush_gc_msgs(w::Worker)
     w.gcflag = false
     msgs = w.add_msgs
     if !isempty(msgs)
-        w.add_msgs = {}
+        del_all(w.add_msgs)
         remote_do(w, add_clients, msgs...)
     end
 
     msgs = w.del_msgs
     if !isempty(msgs)
-        w.del_msgs = {}
+        del_all(w.del_msgs)
         #print("sending delete of $msgs\n")
         remote_do(w, del_clients, msgs...)
     end
