@@ -1302,7 +1302,7 @@ let lastp = 1
     global spawn
     function spawn(thunk::Function)
         p = -1
-        env = ccall(:jl_closure_env, Any, (Any,), thunk)
+        env = thunk.env
         if isa(env,Tuple)
             for v in env
                 if isa(v,Box)

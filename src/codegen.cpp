@@ -954,7 +954,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
             make_gcroot(boxed(theFunc), ctx);
         }
 #endif
-        if (!jl_is_func_type(hdtype) &&
+        if (hdtype!=(jl_value_t*)jl_function_type &&
             hdtype!=(jl_value_t*)jl_struct_kind &&
             !(jl_is_type_type(hdtype) &&
               jl_is_struct_type(jl_tparam0(hdtype)))) {

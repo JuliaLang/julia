@@ -25,8 +25,6 @@
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
-    jl_closure_env;
-    jl_closure_linfo;
     jl_enable_inference;
     jl_set_memio_func;
     jl_symbol_n;

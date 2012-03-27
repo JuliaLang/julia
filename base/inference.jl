@@ -113,7 +113,6 @@ t_func[Union] = (0, Inf,
                              end))
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
-#t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
@@ -617,7 +616,7 @@ const _jl_Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
-        isa(x,FuncKind) || isa(x,UnionKind) || isa(x,TypeConstructor)
+        isa(x,UnionKind) || isa(x,TypeConstructor)
         if is(x,Array)
             return _jl_Type_Array
         end
@@ -737,8 +736,6 @@ function type_too_complex(t, d)
         p = t.types
     elseif isa(t,CompositeKind) || isa(t,AbstractKind) || isa(t,BitsKind)
         p = t.parameters
-    elseif isa(t,FuncKind)
-        return type_too_complex(t.from,d+1) || type_too_complex(t.to,d+1)
     elseif isa(t,Tuple)
         p = t
     elseif isa(t,TypeVar)
