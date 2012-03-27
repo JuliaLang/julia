@@ -111,6 +111,12 @@
 #    name::Symbol
 #end
 
+# type Task
+#     parent::Task
+#     tls::Any
+#     done::Bool
+# end
+
 type Nothing; end
 const nothing = Nothing()
 
