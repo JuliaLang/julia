@@ -2,64 +2,51 @@ const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 type IOStream
+    # NOTE: for some reason the order of these field is significant!?
     ios::Array{Uint8,1}
     name::String
 
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
-    function IOStream(finalize::Bool, name::String)
+    function IOStream(name::String, finalize::Bool)
         x = new(zeros(Uint8,sizeof_ios_t), name)
         if finalize
             finalizer(x, close)
         end
         return x
     end
-    IOStream(finalize::Bool) = IOStream(finalize, "")
-    IOStream() = IOStream(true)
+    IOStream(name::String) = IOStream(name, true)
 
     global make_stdout_stream
     make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
 end
 
-function make_stdin_stream()
-    s = fdio(ccall(:jl_stdin, Int32, ()))
-    s.name = "<stdin>"
+# "own" means the descriptor will be closed with the IOStream
+function fdio(name::String, fd::Integer, own::Bool)
+    s = IOStream(name)
+    ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
+          s.ios, fd, 0, own);
     return s
 end
+fdio(name::String, fd::Integer) = fdio(name, fd, false)
+fdio(fd::Integer, own::Bool) = fdio(strcat("<fd ",fd,">"), fd, own)
+fdio(fd::Integer) = fdio(fd, false)
 
-function make_stderr_stream()
-    s = fdio(ccall(:jl_stderr, Int32, ()))
-    s.name = "<stderr>"
-    return s
-end
+make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
+make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
 
 show(s::IOStream) = print("IOStream(",s.name,")")
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
-
-function close(s::IOStream)
-    s.name = "<closed>"
-    ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-end
-
-# "own" means the descriptor will be closed with the IOStream
-function fdio(fd::Integer, own::Bool)
-    s = IOStream()
-    ccall(:ios_fd, Void, (Ptr{Uint8}, Int, Int32, Int32),
-          s.ios, fd, 0, own);
-    s.name = strcat("<fd ",fd,">")
-    return s
-end
-fdio(fd::Integer) = fdio(fd, false)
+close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
-    s = IOStream()
+    s = IOStream(strcat("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
              s.ios, cstring(fname), rd, wr, cr, tr) == C_NULL
         error("could not open file ", fname)
     end
-    s.name = strcat("<file ",fname,">")
     if ff && ccall(:ios_seek_end, Uint, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
@@ -78,9 +65,8 @@ function open(fname::String, mode::String)
 end
 
 function memio(x::Integer, finalize::Bool)
-    s = IOStream(finalize)
+    s = IOStream("<memio>", finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
-    s.name = "<memio>" # can't use strcat here, because strcat calls memio
     return s
 end
 memio(x::Integer) = memio(x, true)

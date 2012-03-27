@@ -314,7 +314,8 @@ function _jl_print_help_entries(entries)
     end
 end
 
-function help_for(fname::String)
+help_for(s::String) = help_for(s, 0)
+function help_for(fname::String, obj)
     _jl_init_help()
     n = 0
     for (cat, tabl) = _jl_helpdb
@@ -327,7 +328,11 @@ function help_for(fname::String)
         end
     end
     if n == 0
-        println("No help information found.")
+        if isgeneric(obj)
+            repl_show(obj); println()
+        else
+            println("No help information found.")
+        end
     end
 end
 
@@ -364,10 +369,10 @@ function help(f::Function)
     if is(f,help)
         return help()
     end
-    help_for(string(f))
+    help_for(string(f), f)
 end
 
-help(t::CompositeKind) = help_for(string(t.name))
+help(t::CompositeKind) = help_for(string(t.name),t)
 
 function help(x)
     show(x)
