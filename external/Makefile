@@ -323,7 +323,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC) LOADER=$(FC)
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
