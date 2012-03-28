@@ -20,11 +20,9 @@ function grow(s::IntSet, top::Integer)
         lim = ((top+31) & -32)>>>5
         olsz = length(s.bits)
         if olsz < lim
-            newbits = Array(Uint32,lim)
-            newbits[1:olsz] = s.bits
+            grow(s.bits, lim-olsz)
             fill = s.fill1s ? uint32(-1) : uint32(0)
-            for i=(olsz+1):length(newbits); newbits[i] = fill; end
-            s.bits = newbits
+            for i=(olsz+1):lim; s.bits[i] = fill; end
         end
         s.limit = top
     end
@@ -154,7 +152,7 @@ function or!(s::IntSet, s2::IntSet)
             s.bits[n] = uint32(-1)
         end
     end
-    s.fill1s |= s2.fill1s;
+    s.fill1s |= s2.fill1s
     s
 end
 
@@ -181,7 +179,7 @@ function not!(s::IntSet)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
-    s.fill1s = ~s.fill1s;
+    s.fill1s = ~s.fill1s
     s
 end
 
@@ -198,7 +196,7 @@ function xor!(s::IntSet, s2::IntSet)
             s.bits[n] = ~s.bits[n]
         end
     end
-    s.fill1s $= s2.fill1s;
+    s.fill1s $= s2.fill1s
     s
 end
 

@@ -11,13 +11,13 @@ let i = 2
     global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
              Int64, Uint64, Float32, Float64, Char, Ptr,
-             AbstractKind, UnionKind, BitsKind, CompositeKind, FuncKind,
+             AbstractKind, UnionKind, BitsKind, CompositeKind, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
-             :Array, :TypeVar, :FuncKind, :Box,
+             :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
              :(=), :null, :gotoifnot, :A, :B, :C, :M, :N, :T, :S, :X, :Y,
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
@@ -130,27 +130,30 @@ function _jl_lambda_number(l::LambdaStaticData)
 end
 
 function serialize(s, f::Function)
-    writetag(s, FuncKind)
-    env = ccall(:jl_closure_env, Any, (Any,), f)
-    linfo = ccall(:jl_closure_linfo, Any, (Any,), f)
-    if isa(linfo,Symbol)
-        if isbound(linfo) && is(f,eval(linfo))
+    writetag(s, Function)
+    name = false
+    if isgeneric(f)
+        name = f.env.name
+    elseif isa(f.env,Symbol)
+        name = f.env
+    end
+    if isa(name,Symbol)
+        if isbound(name) && is(f,eval(name))
             # toplevel named func
             write(s, uint8(0))
-            serialize(s, linfo)
+            serialize(s, name)
         else
             error(f," is not serializable")
         end
-    elseif is(linfo,())
-        error(f," is not serializable")
     else
-        @assert (isa(linfo,LambdaStaticData))
+        linfo = f.code
+        @assert isa(linfo,LambdaStaticData)
         write(s, uint8(1))
         serialize(s, _jl_lambda_number(linfo))
         serialize(s, linfo.ast)
         serialize(s, linfo.sparams)
         serialize(s, linfo.inferred)
-        serialize(s, env)
+        serialize(s, f.env)
     end
 end
 
@@ -174,7 +177,7 @@ function serialize(s, t::Union(AbstractKind,BitsKind,CompositeKind))
 end
 
 function serialize_type(s, t::Union(CompositeKind,BitsKind))
-    if has(_jl_ser_tag,t) && !is(t,FuncKind)
+    if has(_jl_ser_tag,t)
         writetag(s, t)
     else
         writetag(s, typeof(t))
@@ -225,8 +228,6 @@ function deserialize(s)
     elseif is(tag,LongTuple)
         len = read(s, Int32)
         return deserialize_tuple(s, len)
-    elseif is(tag,FuncKind)
-        return deserialize_function(s)
     end
     return deserialize(s, tag)
 end
@@ -239,7 +240,7 @@ deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 const _jl_known_lambda_data = HashTable()
 
-function deserialize_function(s)
+function deserialize(s, ::Type{Function})
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol

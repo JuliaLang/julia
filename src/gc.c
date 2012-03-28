@@ -464,7 +464,7 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(elt);
         }
     }
-    else if (vtt == (jl_value_t*)jl_func_kind) {
+    else if (vt == (jl_value_t*)jl_function_type) {
         jl_function_t *f = (jl_function_t*)v;
         if (f->env  !=NULL) GC_Markval(f->env);
         if (f->linfo!=NULL) GC_Markval(f->linfo);
@@ -577,7 +577,6 @@ static void gc_mark(void)
     GC_Markval(jl_current_module);
 
     // invisible builtin values
-    GC_Markval(jl_any_func);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
     GC_Markval(jl_task_arg_in_transit);

@@ -643,5 +643,5 @@ void jl_init_tasks(void *stack, size_t ssize)
 
     jl_exception_in_transit = (jl_value_t*)jl_null;
     jl_task_arg_in_transit = (jl_value_t*)jl_null;
-    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, NULL, NULL);
+    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
 }

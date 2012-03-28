@@ -67,7 +67,7 @@ show(t::Tuple) = show_delim_array(t, '(', ',', ')', true)
 
 function show_expr_type(ty)
     if !is(ty, Any)
-        if isa(ty, FuncKind)
+        if is(ty, Function)
             print("::F")
         elseif is(ty, IntrinsicFunction)
             print("::I")

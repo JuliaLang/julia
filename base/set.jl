@@ -26,7 +26,7 @@ del_each(s::Set, xs) = (for x=xs; del(s,x); end; s)
 similar{T}(s::Set{T}) = Set{T}()
 copy(s::Set) = add_each(similar(s), s)
 
-del_all{T}(s::Set{T}) = (s.hash = HashTable{T,Bool}(); s)
+del_all{T}(s::Set{T}) = (del_all(s.hash); s)
 
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)

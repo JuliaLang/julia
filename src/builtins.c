@@ -806,17 +806,7 @@ static void show_function(jl_value_t *v)
 static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
-    if (jl_is_func_type(t)) {
-        if (t == (jl_value_t*)jl_any_func) {
-            ios_puts("Function", s);
-        }
-        else {
-            jl_show((jl_value_t*)((jl_func_type_t*)t)->from);
-            ios_write(s, "-->", 3);
-            jl_show((jl_value_t*)((jl_func_type_t*)t)->to);
-        }
-    }
-    else if (t == (jl_value_t*)jl_function_type) {
+    if (t == (jl_value_t*)jl_function_type) {
         ios_puts("Function", s);
     }
     else if (jl_is_union_type(t)) {
@@ -1164,20 +1154,6 @@ JL_CALLABLE(jl_f_invoke)
                         (jl_tuple_t*)args[1], &args[2], nargs-2);
 }
 
-DLLEXPORT jl_value_t *jl_closure_env(jl_function_t *f)
-{
-    return f->env;
-}
-
-DLLEXPORT jl_value_t *jl_closure_linfo(jl_function_t *f)
-{
-    if (jl_is_gf(f))
-        return (jl_value_t*)jl_gf_name(f);
-    if (f->linfo == NULL)
-        return (jl_value_t*)jl_null;
-    return (jl_value_t*)f->linfo;
-}
-
 // eq hash table --------------------------------------------------------------
 
 #include "table.c"
@@ -1203,7 +1179,8 @@ static void add_builtin(const char *name, jl_value_t *v)
 
 static void add_builtin_func(const char *name, jl_fptr_t f)
 {
-    add_builtin(name, (jl_value_t*)jl_new_closure(f, NULL, NULL));
+    add_builtin(name, (jl_value_t*)
+                jl_new_closure(f, (jl_value_t*)jl_symbol(name), NULL));
 }
 
 void jl_init_primitives(void)
@@ -1262,7 +1239,6 @@ void jl_init_primitives(void)
     add_builtin("...", (jl_value_t*)jl_seq_type);
     add_builtin("BitsKind", (jl_value_t*)jl_bits_kind);
     add_builtin("CompositeKind", (jl_value_t*)jl_struct_kind);
-    add_builtin("FuncKind", (jl_value_t*)jl_func_kind);
     add_builtin("AbstractKind", (jl_value_t*)jl_tag_kind);
     add_builtin("UnionKind", (jl_value_t*)jl_union_kind);
     // todo: this should only be visible to compiler components
