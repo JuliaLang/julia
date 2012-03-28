@@ -481,12 +481,18 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }
-    else if (var==invariant && !jl_is_typevar(b)) {
+    else if (var==invariant && !jl_has_typevars(b)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
         return (jl_value_t*)jl_bottom_type;
     }
     else if (jl_subtype((jl_value_t*)a, b, 0)) {
+        /*
+          TODO: get sharper types when the overlap between a typevar and
+          a type is not simple. Ex:
+          tintersect(Type{Array{T,n}}, Type{typevar(:_,Vector)})
+          should give Type{_<:Vector}
+        */
         if (!a->bound) return (jl_value_t*)a;
     }
     else {

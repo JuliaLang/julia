@@ -287,25 +287,28 @@ apply_type_tfunc = function (A, args...)
         return args[1]
     end
     tparams = ()
+    uncertain = false
     for i=2:length(A)
         if isType(args[i])
             tparams = append(tparams, (args[i].parameters[1],))
         elseif isa(A[i],Int)
             tparams = append(tparams, (A[i],))
-        #elseif
         else
-            #return args[1]
+            uncertain = true
             tparams = append(tparams, (headtype.parameters[i-1],))
         end
     end
+    local appl
     # good, all arguments understood
     try
-        Type{apply_type(headtype, tparams...)}
+        appl = apply_type(headtype, tparams...)
     catch
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        args[1]
+        appl = args[1]
+        uncertain = true
     end
+    uncertain ? Type{typevar(:_,appl)} : Type{appl}
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -1301,7 +1304,8 @@ function inlineable(f, e::Expr, vars)
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
-        if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
+        if isType(atypes[1]) && isleaftype(atypes[1]) &&
+            subtype(atypes[2],atypes[1].parameters[1])
             # todo: if T expression has side effects??!
             return e.args[3]
         end
