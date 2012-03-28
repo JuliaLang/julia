@@ -731,7 +731,7 @@ function perform_work(job::WorkItem)
             # continuing interrupted work item
             arg = job.argument
             job.argument = ()
-            result = yieldto(job.task, arg)
+            result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
             job.task.tls = nothing
@@ -1547,6 +1547,7 @@ end
 ## event processing, I/O and work scheduling ##
 
 function make_scheduled(t::Task)
+    t.parent = Scheduler
     enq_work(WorkItem(t))
     t
 end
