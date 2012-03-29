@@ -464,11 +464,6 @@ static void gc_markval_(jl_value_t *v)
                 GC_Markval(elt);
         }
     }
-    else if (vt == (jl_value_t*)jl_function_type) {
-        jl_function_t *f = (jl_function_t*)v;
-        if (f->env  !=NULL) GC_Markval(f->env);
-        if (f->linfo!=NULL) GC_Markval(f->linfo);
-    }
     else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         int ndims = jl_array_ndims(a);
@@ -544,10 +539,9 @@ static void gc_markval_(jl_value_t *v)
         assert(vtt == (jl_value_t*)jl_struct_kind);
         size_t nf = ((jl_struct_type_t*)vt)->names->length;
         size_t i=0;
-        if (vt == (jl_value_t*)jl_bits_kind || vt == (jl_value_t*)jl_tag_kind ||
-            vt == (jl_value_t*)jl_struct_kind) {
-            i++;
-            nf += 3;
+        if (vt == (jl_value_t*)jl_struct_kind ||
+            vt == (jl_value_t*)jl_function_type) {
+            i++;  // skip fptr field
         }
         for(; i < nf; i++) {
             jl_value_t *fld = ((jl_value_t**)v)[i+1];

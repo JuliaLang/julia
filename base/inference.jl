@@ -35,7 +35,7 @@ getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, li
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
 isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
-isgeneric(f) = ccall(:jl_is_genericfunc, Int32, (Any,), f) != 0
+isgeneric(f) = (isa(f,Function)||isa(f,CompositeKind)) && isa(f.env,MethodTable)
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 isconst(s::Symbol) =

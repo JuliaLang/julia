@@ -2143,9 +2143,11 @@ void jl_init_types(void)
     jl_type_type = jl_new_tagtype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_null);
 
     jl_tag_kind->super = jl_type_type;
-    jl_tag_kind->names = jl_tuple(3, jl_symbol("name"), jl_symbol("super"),
+    jl_tag_kind->names = jl_tuple(6, jl_symbol(""),jl_symbol(""),jl_symbol(""),
+                                  jl_symbol("name"), jl_symbol("super"),
                                   jl_symbol("parameters"));
-    jl_tag_kind->types = jl_tuple(3, jl_typename_type, jl_type_type,
+    jl_tag_kind->types = jl_tuple(6, jl_any_type, jl_any_type, jl_any_type,
+                                  jl_typename_type, jl_type_type,
                                   jl_tuple_type);
     jl_tag_kind->fptr = jl_f_no_function;
 
@@ -2154,11 +2156,14 @@ void jl_init_types(void)
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(7, jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(10, jl_symbol(""),
+                                     jl_symbol("env"), jl_symbol("code"),
+                                     jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
                                      jl_symbol("names"), jl_symbol("types"),
                                      jl_symbol(""), jl_symbol(""));
-    jl_struct_kind->types = jl_tuple(7, jl_typename_type, jl_type_type,
+    jl_struct_kind->types = jl_tuple(10, jl_any_type, jl_any_type, jl_any_type,
+                                     jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
                                      jl_tuple_type, jl_any_type, jl_any_type);
     jl_struct_kind->fptr = jl_f_no_function;
@@ -2228,10 +2233,13 @@ void jl_init_types(void)
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), jl_type_type,
                            jl_null,
-                           jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
+                           jl_tuple(7, jl_symbol(""), jl_symbol(""),
+                                    jl_symbol(""),
+                                    jl_symbol("name"), jl_symbol("super"),
                                     jl_symbol("parameters"),
                                     jl_symbol("nbits")),
-                           jl_tuple(4, jl_typename_type, jl_type_type,
+                           jl_tuple(7, jl_any_type, jl_any_type, jl_any_type,
+                                    jl_typename_type, jl_type_type,
                                     jl_tuple_type, jl_any_type));
     // cannot be created with normal constructor due to hidden fields
     jl_bits_kind->fptr = jl_f_no_function;
