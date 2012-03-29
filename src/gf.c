@@ -1497,15 +1497,3 @@ int jl_is_builtin(jl_value_t *v)
              !jl_is_gf(v)) ||
             jl_typeis(v,jl_intrinsic_type));
 }
-
-DLLEXPORT
-int jl_is_genericfunc(jl_value_t *v)
-{
-    return (jl_is_func(v) && jl_is_gf(v));
-}
-
-DLLEXPORT
-jl_sym_t *jl_genericfunc_name(jl_value_t *v)
-{
-    return jl_gf_name(v);
-}

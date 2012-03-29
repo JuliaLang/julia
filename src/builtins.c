@@ -597,8 +597,6 @@ static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld, int err)
     size_t i;
     for(i=0; i < fn->length; i++) {
         if (jl_tupleref(fn,i) == (jl_value_t*)fld) {
-            if (t == jl_struct_kind || t == jl_bits_kind || t == jl_tag_kind)
-                i += 3;
             return i;
         }
     }

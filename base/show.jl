@@ -164,7 +164,7 @@ show(e::KeyError) = print("key not found: $(e.key)")
 show(e::InterruptException) = nothing
 
 function show(e::MethodError)
-    name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
+    name = e.f.env.name
     if is(e.f,convert)
         print("no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else
