@@ -116,11 +116,7 @@ randi(::Type{Uint32}) = _jl_dsfmt_randui32()
 randi(::Type{Int64})  = int64(_jl_dsfmt_randui64()) & typemax(Int64)
 randi(::Type{Uint64}) = _jl_dsfmt_randui64()
 
-if WORD_SIZE == 64
-    randi() = randi(Uint64)
-else
-    randi() = randi(Uint32)
-end
+randi() = randi(Int)
 
 # random integer from lo to hi inclusive
 function randival{T<:Integer}(lo::T, hi::T)
