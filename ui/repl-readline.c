@@ -321,8 +321,6 @@ static int down_callback(int count, int key) {
     }
 }
 
-static int callback_en=0;
-
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
@@ -338,7 +336,6 @@ void jl_input_line_callback(char *input)
         free(input);
     }
 
-    callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
 }
@@ -449,12 +446,9 @@ static char **julia_completion(const char *text, int start, int end)
     return rl_completion_matches(text, do_completions);
 }
 
-static int suspended = 0;
-
 void sigtstp_handler(int arg)
 {
-    suspended = 1;
-    rl_callback_handler_remove();
+    rl_cleanup_after_signal();
 
     sigset_t mask;
     sigemptyset(&mask);
@@ -468,9 +462,7 @@ void sigtstp_handler(int arg)
 
 void sigcont_handler(int arg)
 {
-    if (callback_en)
-        rl_callback_handler_install(prompt_string, jl_input_line_callback);
-    suspended = 0;
+    rl_reset_after_signal();
 }
 
 static void init_rl(void)
@@ -511,12 +503,10 @@ void init_repl_environment(void)
 
 void repl_callback_enable()
 {
-    callback_en = 1;
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
 void jl_stdin_callback(void)
 {
-    if (callback_en && !suspended)
-        rl_callback_read_char();
+    rl_callback_read_char();
 }
