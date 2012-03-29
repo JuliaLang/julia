@@ -380,7 +380,6 @@ end
 
 
 function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr,nread::PtrSize,base::Ptr,buflen::Int32)
-    print("linebuffer")
     if(!isa(stream.buf,IOStream))
         error("Linebuffering only supported on membuffered ASyncStreams")
     end
@@ -548,7 +547,6 @@ function connect_callback(sock::TcpSocket,status::Int32,breakLoop::Bool)
     end
     sock.open=true;
     if(breakLoop)
-        print("breaking loop")
         break_one_loop(globalEventLoop())
     end
 end

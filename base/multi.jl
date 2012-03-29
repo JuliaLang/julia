@@ -207,7 +207,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     PGRP
 end
 
-function _jl_join_pgroup(myid, locs, sockets)
+function _jl_join_pgroup(myid, locs)
     # joining existing process group
     np = length(locs)
     w = cell(np)
@@ -845,7 +845,6 @@ end
 
 # activity on accept fd
 function accept_handler(accept_fd::Ptr,status::Int32,sockets)
-    global PGRP
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -854,16 +853,7 @@ function accept_handler(accept_fd::Ptr,status::Int32,sockets)
     if err!=0
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
-        first = isempty(sockets)
-        #sock = fdio(connectfd, true)
-        #sockets[connectfd] = sock
-        #if first
-        #    # first connection; get process group info from client
-        #    _myid = force(deserialize(sock))
-        #    locs = force(deserialize(sock))
-        #    PGRP = _jl_join_pgroup(_myid, locs, sockets)
-        #    PGRP.workers[1] = Worker("", 0, connectfd, sock, 1)
-        #end
+        first = true# isempty(sockets)
         d=Deserializer(message_handler_loop,client)
         add_io_handler(client,make_callback((args...)->message_handler(d,args...)))
     end
@@ -875,8 +865,18 @@ function message_handler_loop(this::Deserializer)
     global PGRP
     refs = (PGRP::ProcessGroup).refs
     this.task=current_task()
+    first = true
     while true
-        try
+        if(first)
+            # first connection; get process group info from client
+            _myid = force(deserialize(this))
+            locs = force(deserialize(this))
+            print("\nLocation: ",locs,"\nId:",_myid,"\n")
+            PGRP = _jl_join_pgroup(_myid, locs)
+            PGRP.workers[1] = Worker("", 0, this.stream, 1)
+            first=false
+	else
+	try
             msg = force(deserialize(this))
             #print("$(myid()) got $msg\n")
             # handle message
@@ -934,13 +934,14 @@ function message_handler_loop(this::Deserializer)
                 #end
             end
         end
+	end
     end
 end
 
 # activity on message socket
 function message_handler(ds::Deserializer,handle::Ptr,nread::Int,base::Ptr,len::Int32)
     if(nread>0)
-        ds.buf          =   cstring(base,nread)
+        ds.buf          =   ccall(:jl_pchar_to_array,Any,(Ptr,Int),base,nread)::Array{Uint8}
         ds.buflen       =   nread
         ds.pos          =   1
         ds.returntask   =   current_task()
@@ -995,15 +996,12 @@ function writeback(handle,nread,base,buflen)
 end
 
 function _parse_conninfo(w,i::Int,todo,stream::AsyncStream,conninfo::String)
-    print("conninfo")
     m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
     if m != nothing
         port = parse_int(Uint16, m.captures[1])
         hostname::ByteString = m.captures[2]
         w[i] = Worker(hostname, port)
         change_io_handler(stream,make_callback(writeback))
-        print(i)
-        print(todo[1])
         todo[1]-=1
         if(todo[1]<=0)
             break_one_loop(localEventLoop())

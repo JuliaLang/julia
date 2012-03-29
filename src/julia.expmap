@@ -51,6 +51,7 @@
     jl_cstr_to_string;
     jl_pchar_to_string;
     jl_array_to_string;
+    jl_pchar_to_array;
     jl_parse_string;
     jl_parse_input_line;
     jl_is_rest_arg;
