@@ -151,23 +151,23 @@ function randival!{T<:Integer}(lo, hi, A::Array{T})
     return A
 end
 randival{T<:Integer}(lo::T, hi::T, dims::Dims) = randival!(lo, hi, Array(T, dims))
-randival(lo, hi, dims::Dims) = randival(promote(lo, hi)..., dims)
+randival(lo, hi, dims::Dims)   = randival(promote(lo, hi)..., dims)
 randival(lo, hi, dims::Int...) = randival(lo, hi, dims)
 
-randi!(max::Integer, A::Array)     = randival!(one(max), max, A)
+randi!(max::Integer, A::Array)         = randival!(one(max), max, A)
 randi!(r::(Integer,Integer), A::Array) = randival!(r[1], r[2], A)
 
 randi(max::Integer)                    = randival(one(max), max)
 randi(max::Integer, dims::Dims)        = randival(one(max), max, dims)
-randi(max::Integer, dims::Int...)     = randival(one(max), max, dims)
-randi(r::(Integer,Integer))                = randival(r[1], r[2])
-randi(r::(Integer,Integer), dims::Dims)    = randival(r[1], r[2], dims)
+randi(max::Integer, dims::Int...)      = randival(one(max), max, dims)
+randi(r::(Integer,Integer))               = randival(r[1], r[2])
+randi(r::(Integer,Integer), dims::Dims)   = randival(r[1], r[2], dims)
 randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
 
 ## random Bools
 
-randbit() = _jl_dsfmt_randui32() & uint32(1)
-@_jl_rand_matrix_builder Uint32 randbit
+randbit() = int(_jl_dsfmt_randui32() & 1)
+@_jl_rand_matrix_builder Int randbit
 
 randbool() = randbit() == 1
 @_jl_rand_matrix_builder Bool randbool
