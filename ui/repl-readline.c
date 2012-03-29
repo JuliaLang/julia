@@ -321,6 +321,8 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int callback_en=0;
+
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
@@ -336,6 +338,7 @@ void jl_input_line_callback(char *input)
         free(input);
     }
 
+    callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
 }
@@ -463,6 +466,8 @@ void sigtstp_handler(int arg)
 void sigcont_handler(int arg)
 {
     rl_reset_after_signal();
+    if (callback_en)
+        rl_forced_update_display();
 }
 
 static void init_rl(void)
@@ -503,10 +508,12 @@ void init_repl_environment(void)
 
 void repl_callback_enable()
 {
+    callback_en = 1;
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
 void jl_stdin_callback(void)
 {
-    rl_callback_read_char();
+    if (callback_en)
+        rl_callback_read_char();
 }
