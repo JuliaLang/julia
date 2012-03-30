@@ -216,8 +216,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!isVa)
             fargt_sig.push_back(t);
     }
-    if ((!isVa && tt->length  != (nargs-3)/2) ||
-        ( isVa && tt->length-1 > (nargs-3)/2))
+    if ((!isVa && tt->length  != (nargs-2)/2) ||
+        ( isVa && tt->length-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
