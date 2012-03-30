@@ -62,31 +62,26 @@ mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
 
 ## numeric vector sort ##
 
-function qsort_kernel(a, lo, hi)
-    i = lo
-    j = hi
+function qsort(a,lo,hi)
+    i, j = lo, hi
     while i < hi
-        pivot = a[ifloor((lo+hi)/2)]
+        pivot = a[(lo+hi)>>>1]
         while i <= j
             while a[i] < pivot; i = i + 1; end
             while a[j] > pivot; j = j - 1; end
             if i <= j
-                t = a[i]
-                a[i] = a[j]
-                a[j] = t
-                i = i + 1
-                j = j - 1
+                a[i], a[j] = a[j], a[i]
+                i, j = i+1, j-1
             end
         end
-        if lo < j; qsort_kernel(a, lo, j); end
-        lo = i
-        j = hi
+        if lo < j; qsort(a,lo,j); end
+        lo, j = i, hi
     end
     return a
 end
 
 function sortperf(n)
-    qsort_kernel(rand(n), 1, n)
+    qsort(rand(n), 1, n)
 end
 @assert issorted(sortperf(5000))
 @timeit sortperf(5000) "quicksort"
