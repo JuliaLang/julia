@@ -1601,7 +1601,7 @@ function event_loop(isclient)
     _jl_work_cb_handle = createSingleAsyncWork(globalEventLoop(),make_callback(_jl_work_cb))
     fgcm = createSingleAsyncWork(globalEventLoop(),make_callback((args...)->flush_gc_msgs()));
     timer = initTimeoutAsync(globalEventLoop())
-    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),int64(10000),int64(10000)) #do work every 10s
+    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),int64(1),int64(10000)) #do work every 10s
     while true
         try
             if iserr

@@ -168,7 +168,7 @@ function startTimer(timer::TimeoutAsyncWork,cb::Function,timeout::Int64,repeat::
 end
 
 function stopTimer(timer::TimeoutAsyncWork)
-    ccall(:jl_tier_stop,Int32,(Ptr{Void},),timer.handle)
+    ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
 assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,Ptr{Void},(Ptr{Void},Function),work.handle,cb)
