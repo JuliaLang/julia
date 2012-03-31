@@ -791,3 +791,73 @@ function cartesian_map(body, t::(Int,Int,Int))
         end
     end
 end
+
+function bsxfun(f, a::AbstractArray, b::AbstractArray)
+    nd = max(ndims(a),ndims(b))
+    shp = Array(Int,nd)
+    range = ()
+    xa, xb = false, false
+    for i=1:nd
+        ai, bi = size(a,i), size(b,i)
+        if ai == bi
+            shp[i] = ai
+        elseif ai == 1
+            xa = true
+            shp[i] = bi
+            range = append(range,(bi,))
+        elseif bi == 1
+            xb = true
+            shp[i] = ai
+            range = append(range,(ai,))
+        else
+            error("argument dimensions do not match")
+        end
+    end
+    if isempty(range)
+        return f(a, b)
+    end
+    if numel(a) == 1
+        return f(a[1], b)
+    elseif numel(b) == 1
+        return f(a, b[1])
+    end
+    c = Array(promote_type(eltype(a),eltype(b)), shp...)
+
+    aidxs = { 1:size(a,i) | i=1:nd }
+    bidxs = { 1:size(b,i) | i=1:nd }
+    cidxs = { 1:size(c,i) | i=1:nd }
+
+    sliceop = function (idxs::Int...)
+        j = 1
+        for i = 1:nd
+            ai, bi = size(a,i), size(b,i)
+            if ai == bi
+            elseif ai == 1
+                bidxs[i] = idxs[j]
+                cidxs[i] = idxs[j]
+                j+=1
+            else
+                aidxs[i] = idxs[j]
+                cidxs[i] = idxs[j]
+                j+=1
+            end
+        end
+        if xb
+            aa = a[aidxs...]; if numel(aa)==1; aa=aa[1]; end
+        else
+            aa = a
+        end
+        if xa
+            bb = b[bidxs...]; if numel(bb)==1; bb=bb[1]; end
+        else
+            bb = b
+        end
+        c[cidxs...] = f(aa, bb)
+    end
+    cartesian_map(sliceop, range)
+    c
+end
+
+bsxfun(f, a, b) = f(a, b)
+bsxfun(f, a::AbstractArray, b) = f(a, b)
+bsxfun(f, a, b::AbstractArray) = f(a, b)
