@@ -574,3 +574,10 @@ void restart(void)
 {
     rl_on_new_line();
 }
+
+void rl_clear_input(void) {
+    ios_printf(ios_stdout, "\n");
+	rl_replace_line("\0",0);
+	rl_reset_line_state();
+	rl_forced_update_display();
+}

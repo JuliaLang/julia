@@ -59,6 +59,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
     while true
         try
             ccall(:jl_register_toplevel_eh, Void, ())
+            ccall(:restore_signals, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
             end
@@ -97,15 +98,36 @@ function run_repl()
     end
 
     # ctrl-C interrupt for interactive use
-    #ccall(:jl_install_sigint_handler, Void, ())
+    ccall(:jl_install_sigint_handler, Void, ())
 
     ccall(:repl_callback_enable, Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 
-    run_event_loop(globalEventLoop());
+    cont = true
+    lasterr = ()
+    iserr = false
+    while cont
+        cont = false
+        try
+            run_event_loop(globalEventLoop());
+        catch e
+            if isa(e, InterruptException)
+                println("^C")
+                show(e)
+                ccall(:rl_clear_input, Void, ());
+                cont = true
+            else
+                iserr = true
+                lasterr = e
+            end
+        end
+    end
 
     if _jl_have_color
         print(_jl_color_normal)
+    end
+    if iserr
+        throw(lasterr)
     end
     println()
 end

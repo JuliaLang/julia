@@ -19,6 +19,12 @@
 #include <getopt.h>
 #include "julia.h"
 #include <stdio.h>
+#ifdef __WIN32__
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#else
+#include "../external/libuv/include/uv-private/ev.h"
+#endif
 
 int jl_boot_file_loaded = 0;
 
@@ -79,23 +85,42 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-#ifndef __WIN32__
-void sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGINT);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
+static uv_async_t sigint_cb;
+void sigint_callback(uv_handle_t *handle, int status) {
+	//printf("sigint_callback\n");
+	jl_raise(jl_interrupt_exception);
+	uv_break_one(jl_event_loop);
+}
 
+#ifdef __WIN32__
+void restore_signals() { }
+void sigint_handler(int wsig)
+{	
+	//todo: switch to using windows custom handler instead of signal
+	signal(SIGINT, sigint_handler);
+	int sig;
+	switch sig {
+	//	case ...: usig = ...; break;
+		default: sig = wsig;
+	}
+#else	
+void restore_signals() {
+	sigset_t sset;
+	sigemptyset (&sset);
+	sigprocmask (SIG_SETMASK, &sset, 0);
+}
+void sigint_handler(int sig, siginfo_t *info, void *context)
+{	
+#endif
+	//printf("sigint\n");
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     }
     else {
         jl_signal_pending = 0;
-        jl_raise(jl_interrupt_exception);
+		uv_async_send(&sigint_cb);
     }
 }
-#endif
 
 void jl_get_builtin_hooks(void);
 
@@ -226,11 +251,17 @@ void julia_init(char *imageFile)
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
+#endif
 }
 
 DLLEXPORT void jl_install_sigint_handler()
 {
+#ifdef __WIN32__
+	//todo: switch to using SetConsoleCtrlHandler(sigint_handler, 1);
+	signal(SIGINT, sigint_handler);
+#else
     struct sigaction act;
+	uv_async_init(jl_io_loop, &sigint_cb, (uv_async_cb)&sigint_callback);
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = sigint_handler;
@@ -239,8 +270,9 @@ DLLEXPORT void jl_install_sigint_handler()
         jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-	
-	#endif
+#endif
+	//printf("sigint installed\n");
+
 }
 
 DLLEXPORT

@@ -968,6 +968,8 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
             raise(jl_signal_pending);                           \
     } while(0)
 
+DLLEXPORT void restore_signals(void);
+
 // tasks and exceptions
 
 // context that needs to be restored around a try block
