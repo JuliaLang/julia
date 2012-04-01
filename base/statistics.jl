@@ -310,3 +310,40 @@ end
 
 const cor = cor_pearson
 
+# for now, use the R/S definition of quantile; may want variants later
+# see ?quantile in R -- this is type 7
+function quantile(x, qs)
+    # make sure the quantiles are in [0,1]
+    bqs = _bound_quantiles(qs)
+    
+    lx = length(x)
+    lqs = length(bqs)
+    
+    if lx > 0 && lqs > 0
+        index = 1 + (lx-1) * bqs
+        lo = int(floor(index))
+        hi = int(ceil(index))
+        sortedX = sort(x)
+        i = index > lo
+        ret = sortedX[lo]
+        i = [1:length(i)][i]
+        h = (index - lo)[i]
+        ret[i] = (1-h) .* ret[i] + h .* sortedX[hi[i]]
+    else
+        ret = zeros(lqs) * NaN
+    end
+    
+    ret
+end
+quantile(x, q::Number) = quantile(x, [q])[1]
+quartile(x) = quantile(x, [.25, .5, .75])
+quintile(x) = quantile(x, [.2:.2:.8])
+decile(x) = quantile(x, [.1:.1:.9])
+
+function _bound_quantiles(qs)
+    epsilon = 100 * eps()
+    if (any(qs < -epsilon) || any(qs > 1 + epsilon))
+        error("quantiles out of [0,1] range!")
+    end
+    [min(1, max(0, q)) | q = qs]
+end
