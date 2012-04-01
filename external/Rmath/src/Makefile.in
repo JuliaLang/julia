@@ -1,0 +1,105 @@
+#
+# ${R_HOME}/src/nmath/Makefile
+
+VPATH = @srcdir@
+srcdir = @srcdir@
+top_srcdir = @top_srcdir@
+
+top_builddir = ../..
+subdir = src/nmath
+
+include $(top_builddir)/Makeconf
+
+## <NOTE>
+## Keep these in sync with ./standalone/Makefile.in and *.win!
+SOURCES = \
+	mlutils.c \
+	d1mach.c i1mach.c \
+	fmax2.c fmin2.c fprec.c fround.c ftrunc.c \
+	sign.c fsign.c \
+	imax2.c imin2.c \
+	chebyshev.c log1p.c expm1.c lgammacor.c gammalims.c stirlerr.c bd0.c \
+	gamma.c lgamma.c gamma_cody.c beta.c lbeta.c polygamma.c \
+	bessel_i.c bessel_j.c bessel_k.c bessel_y.c \
+	choose.c \
+	snorm.c sexp.c \
+	dgamma.c pgamma.c qgamma.c rgamma.c \
+	dbeta.c pbeta.c qbeta.c rbeta.c \
+	dunif.c punif.c qunif.c runif.c \
+	dnorm.c pnorm.c qnorm.c rnorm.c \
+	dlnorm.c plnorm.c qlnorm.c rlnorm.c \
+	df.c pf.c qf.c rf.c dnf.c \
+	dt.c pt.c qt.c rt.c dnt.c \
+	dchisq.c pchisq.c qchisq.c rchisq.c rnchisq.c \
+	dbinom.c pbinom.c qbinom.c rbinom.c \
+	rmultinom.c \
+	dcauchy.c pcauchy.c qcauchy.c rcauchy.c \
+	dexp.c pexp.c qexp.c rexp.c \
+	dgeom.c pgeom.c qgeom.c rgeom.c \
+	dhyper.c phyper.c qhyper.c rhyper.c \
+	dnbinom.c pnbinom.c qnbinom.c rnbinom.c \
+	dpois.c ppois.c qpois.c rpois.c \
+	dweibull.c pweibull.c qweibull.c rweibull.c \
+	dlogis.c plogis.c qlogis.c rlogis.c \
+	dnchisq.c pnchisq.c qnchisq.c \
+	dnbeta.c pnbeta.c qnbeta.c \
+	pnf.c pnt.c qnf.c qnt.c \
+	ptukey.c qtukey.c \
+	toms708.c wilcox.c \
+	signrank.c
+## </NOTE>
+DEPENDS = $(SOURCES:.c=.d)
+OBJECTS = $(SOURCES:.c=.o)
+HEADERS = bessel.h dpq.h nmath.h
+
+distdir = $(top_builddir)/$(PACKAGE)-$(VERSION)/$(subdir)
+DISTFILES = Makefile.in Makefile.win $(SOURCES) $(HEADERS)
+
+SUBDIRS_WITH_NO_BUILD = standalone
+
+@WANT_R_SHLIB_TRUE@ALL_CFLAGS = $(ALL_CFLAGS_LO)
+
+all: Makefile Makedeps R
+
+Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status $(SOURCES)
+	@cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+
+Makedeps: Makefile $(DEPENDS)
+	@cat $(DEPENDS) >> Makefile
+	@touch $@
+
+R: Makefile
+	@$(MAKE) Makedeps
+	@$(MAKE) libnmath.a
+
+libnmath.a: $(OBJECTS)
+	rm -rf $@
+	$(AR) cr $@ $(OBJECTS)
+	$(RANLIB) $@
+
+mostlyclean: clean
+clean:
+	@(cd standalone; $(MAKE) clean)
+	@-rm -rf .libs _libs
+	@-rm -f Makedeps *.d *.o *.a *.lo *.la stamp-lo
+distclean: clean
+	@(cd standalone; $(MAKE) distclean)
+	@-rm -f Makefile
+maintainer-clean: distclean
+
+install install-strip uninstall TAGS info dvi check:
+
+distdir: $(DISTFILES)
+	@for f in $(DISTFILES); do \
+	  test -f $(distdir)/$${f} \
+	    || ln $(srcdir)/$${f} $(distdir)/$${f} 2>/dev/null \
+	    || cp -p $(srcdir)/$${f} $(distdir)/$${f}; \
+	done
+	@for d in $(SUBDIRS_WITH_NO_BUILD); do \
+	  ((cd $(srcdir); $(TAR) -c -f - $(DISTDIR_TAR_EXCLUDE) $${d}) \
+	      | (cd $(distdir); $(TAR) -x -f -)) \
+	    || exit 1; \
+        done
+
+## Automagically generated dependencies:
+
