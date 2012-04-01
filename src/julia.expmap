@@ -59,6 +59,7 @@
     jl_array_grow_beg;
     jl_array_del_beg;
     jl_array_ptr;
+    jl_sizeof_off_t;
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;
