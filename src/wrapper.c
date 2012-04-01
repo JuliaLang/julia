@@ -58,6 +58,9 @@ static uv_buf_t jl_alloc_buf(uv_handle_t* handle, size_t suggested_size) {
 
 void closeHandle(uv_handle_t* handle)
 {
+#ifndef __WIN32__
+    ev_invoke_pending(handle->loop->ev);
+#endif
     switch(handle->type) {
     case UV_TCP:
     case UV_NAMED_PIPE:
