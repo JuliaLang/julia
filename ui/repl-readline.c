@@ -477,7 +477,7 @@ static char **julia_completion(const char *text, int start, int end)
 {
     return rl_completion_matches(text, do_completions);
 }
-
+#ifndef __WIN32__
 void sigtstp_handler(int arg)
 {
     rl_cleanup_after_signal();
@@ -498,6 +498,7 @@ void sigcont_handler(int arg)
     if (callback_en)
         rl_forced_update_display();
 }
+#endif
 
 static void init_rl(void)
 {
@@ -523,9 +524,10 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
 
     }
-
+#ifndef __WIN32__
     signal(SIGTSTP, sigtstp_handler);
     signal(SIGCONT, sigcont_handler);
+#endif
 }
 
 #ifndef __WIN32__ //Requires RL 5.0 on windows and RL 6.2 otherwise
@@ -559,10 +561,10 @@ void init_repl_environment(void)
 #else
     rl_prep_terminal(1);
     rl_prep_term_function=&jl_prep_terminal;
+	rl_deprep_term_function=&jl_deprep_terminal;
 #endif
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
-    rl_deprep_term_function=&jl_deprep_terminal;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }

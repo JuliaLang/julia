@@ -17,6 +17,9 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
+#include <setjmp.h>
+#define sigsetjmp(a,b) setjmp(a)
+#define siglongjmp(a,b) longjmp(a,b)
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -387,7 +390,7 @@ static void start_task(jl_task_t *t)
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
-    if (sigsetjmp(t->ctx), 1) {
+    if (sigsetjmp(t->ctx, 1)) {
         start_task(t);
     }
     // this runs when the task is created

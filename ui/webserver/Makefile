@@ -5,8 +5,12 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
 LIBS = -lpthread $(EXTROOTLIB)/uv.a 
-ifneq ($(OS), Darwin)
+ifeq ($(OS), Linux)
 LIBS += -lrt 
+endif
+
+ifeq ($(OS),WINNT)
+LIBS += -lWs2_32 -lIphlpapi -lpsapi
 endif
 
 WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp

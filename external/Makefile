@@ -68,8 +68,8 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
 endif
 
-WGET = wget
-WGET_DASH_O = wget -O
+WGET = wget --no-check-certificate
+WGET_DASH_O = wget --no-check-certificate -O
 ifeq ($(OS), Darwin)
 WGET = curl -kLO
 WGET_DASH_O = curl -kLo
@@ -620,8 +620,14 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## libuv
 
+ifneq ($(OS), WINNT) 
+	UV_CFLAGS=
+else
+	UV_CFLAGS=CFLAGS="-DEV_SIGNAL_ENABLE=0"
+endif
+
 compile-uv:
-	$(MAKE) -C libuv CFLAGS="-DEV_SIGNAL_ENABLE=0"
+	$(MAKE) -C libuv $(UV_CFLAGS)
 install-uv: compile-uv | $(EXTROOTLIB)
 	mkdir -p $(EXTROOT)/include
 	cp libuv/uv.a $(EXTROOTLIB)

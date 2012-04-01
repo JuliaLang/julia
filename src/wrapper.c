@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/socket.h>
 
 #ifndef __WIN32__
 #include "errno.h"
+#include <sys/socket.h>
 #endif
 
 #include "julia.h"

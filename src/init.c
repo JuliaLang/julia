@@ -92,7 +92,7 @@ void sigint_handler(int wsig)
 	//todo: switch to using windows custom handler instead of signal
 	signal(SIGINT, sigint_handler);
 	int sig;
-	switch sig {
+	switch(sig){
 	//	case ...: usig = ...; break;
 		default: sig = wsig;
 	}

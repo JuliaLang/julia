@@ -130,7 +130,7 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
+const VERSION = convert(VersionNumber,0)#chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
     ver = print_to_string(print,VERSION)
     commit = chomp(readall(`git rev-parse HEAD`))

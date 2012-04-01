@@ -99,9 +99,13 @@ LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline -lncurses -lcurses
+READLINE = -lreadline 
 else
-READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+READLINE = $(EXTROOT)/lib/libreadline.a
+endif
+
+ifneq ($(OS),WINNT)
+READLINE += -lncurses -lcurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -145,13 +149,13 @@ endif
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
 JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lutil -lm  $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 JLDFLAGS = 
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices  -lutil -lm 
 READLINE += -lncurses -lcurses
 endif
 
@@ -161,7 +165,7 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 
