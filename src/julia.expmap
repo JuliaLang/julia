@@ -142,6 +142,7 @@
     jl_load_dynamic_library;
     jl_stdin_callback;
     repl_callback_enable;
+    rl_clear_input;
     jl_toplevel_eval;
     jl_enq_send_req;
     jl_buf_mutex_lock;
@@ -233,6 +234,7 @@
     jl_last_errno;
     uv_accept;
     jl_ios_buf_base;
+    restore_signals;
   local:
     *;
 };

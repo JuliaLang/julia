@@ -177,7 +177,7 @@ distclean-pcre:
 GRISU_OPTS = -fPIC -O3 -fvisibility=hidden
 
 compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-install-double-conversion: $(EXTROOTLIB) $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
+install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT) | $(EXTROOTLIB)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
@@ -212,7 +212,7 @@ FDLIBM_OBJ_TARGET = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 FDLIBM_OBJ_SOURCE = fdlibm/libfdm.$(SHLIB_EXT)
 
 compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
-install-fdlibm: $(EXTROOTLIB) $(FDLIBM_OBJ_TARGET)
+install-fdlibm: $(FDLIBM_OBJ_TARGET) | $(EXTROOTLIB)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
@@ -232,7 +232,8 @@ AMOS_OBJ_TARGET = $(EXTROOTLIB)/libamos.$(SHLIB_EXT)
 AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
 
 compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(EXTROOTLIB) $(AMOS_OBJ_TARGET)
+install-amos: $(AMOS_OBJ_TARGET) | $(EXTROOTLIB)
+
 
 $(AMOS_OBJ_SOURCE): amos/*.f
 	cd amos && \
@@ -252,7 +253,7 @@ DSFMT_OBJ_TARGET = $(EXTROOTLIB)/librandom.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
-install-dsfmt: $(EXTROOTLIB) $(DSFMT_OBJ_TARGET)
+install-dsfmt: $(DSFMT_OBJ_TARGET) | $(EXTROOTLIB)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
@@ -313,7 +314,7 @@ LAPACK_OBJ_SOURCE =
 endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
-install-lapack: $(EXTROOTLIB) $(LAPACK_OBJ_TARGET)
+install-lapack: $(LAPACK_OBJ_TARGET) | $(EXTROOTLIB)
 
 lapack-$(LAPACK_VER).tgz:
 	$(WGET) http://www.netlib.org/lapack/$@
@@ -350,7 +351,8 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(ARPACK_OBJ_TARGET): $(EXTROOTLIB) arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE) | $(EXTROOTLIB)
+
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
 	$(FC) -shared $(FFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
@@ -464,8 +466,7 @@ SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSpar
 SUITESPARSE_LIB = 
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	mkdir -p $(EXTROOTLIB)
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET) | $(EXTROOTLIB)
 	$(CC) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -607,8 +608,8 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 ## libuv
 
 compile-uv:
-	$(MAKE) -C libuv
-install-uv: $(EXTROOTLIB) compile-uv
+	$(MAKE) -C libuv CFLAGS="-DEV_SIGNAL_ENABLE=0"
+install-uv: compile-uv | $(EXTROOTLIB)
 	mkdir -p $(EXTROOT)/include
 	cp libuv/uv.a $(EXTROOTLIB)
 	cp libuv/include/uv.h $(EXTROOT)/include/uv.h 

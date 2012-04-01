@@ -95,11 +95,13 @@ void closeHandle(uv_handle_t* handle)
 
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop)
 {
+    restore_signals();
     if(loop) uv_run(loop);
 }
 
 DLLEXPORT void jl_process_events(uv_loop_t *loop)
 {
+    restore_signals();
     if(loop) uv_run_once(loop);
 }
 
