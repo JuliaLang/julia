@@ -30,7 +30,7 @@ type Process
     err::StreamOrNot
     exit_code::Int32
     term_signal::Int32
-    Process(handle::Ptr{Void},in::StreamOrNot,out::StreamOrNot,err::StreamOrNot)=new(handle,in,out,err,-1,-1)
+    Process(handle::Ptr{Void},in::StreamOrNot,out::StreamOrNot,err::StreamOrNot)=new(handle,in,out,err,-2,-2)
     Process(handle::Ptr{Void},in::StreamOrNot,out::StreamOrNot)=Process(handle,in,out,0)
 end
 
@@ -191,7 +191,7 @@ type ProcessExited   <: ProcessStatus; status::PtrSize; end
 type ProcessSignaled <: ProcessStatus; signal::PtrSize; end
 type ProcessStopped  <: ProcessStatus; signal::PtrSize; end
 
-process_exited  (s::Process) = (s.exit_code != -1)
+process_exited  (s::Process) = (s.exit_code != -2)
 process_signaled(s::Process) = (s.term_signal > 0)
 process_stopped (s::Process) = 0 #not supported by libuv. Do we need this?
 
@@ -299,7 +299,7 @@ function process_exited_chain(procs::Processes,h::Ptr,e::Int32,t::Int32)
             p.exit_code=e
             p.term_signal=t
         end
-        if(p.exit_code==-1)
+        if(p.exit_code==-2)
             done=false
         end
     end
