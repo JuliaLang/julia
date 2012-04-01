@@ -74,9 +74,6 @@ include("statistics.jl")
 # random number generation
 include("random.jl")
 
-# sparse matrices
-include("sparse.jl")
-
 # distributed arrays
 include("darray.jl")
 
@@ -91,7 +88,6 @@ include("datafmt.jl")
 include("linalg.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
-include("linalg_suitesparse.jl")
 
 # signal processing
 include("signal.jl")

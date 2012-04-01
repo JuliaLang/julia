@@ -19,8 +19,6 @@ _jl_libblas = dlopen("liblapack")
 _jl_liblapack = _jl_libblas
 _jl_libfftw = dlopen("libfftw3")
 _jl_libfftwf = dlopen("libfftw3f")
-_jl_libsuitesparse = dlopen("libsuitesparse");
-_jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper");
 
 ##_jl_libglpk = dlopen("libglpk")
 ##_jl_libglpk = dlopen("libglpk_wrapper")
