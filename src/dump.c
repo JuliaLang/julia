@@ -247,8 +247,8 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     else if (jl_is_array(v)) {
         jl_array_t *ar = (jl_array_t*)v;
         writetag(s, (jl_value_t*)jl_array_type);
-        jl_serialize_value(s, ar->type);
-        jl_value_t *elty = jl_tparam0(ar->type);
+        jl_serialize_value(s, jl_typeof(ar));
+        jl_value_t *elty = jl_tparam0(jl_typeof(ar));
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
@@ -289,8 +289,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         write_int8(s, ((jl_tvar_t*)v)->bound);
     }
     else if (jl_is_function(v)) {
-        writetag(s, jl_func_kind);
-        jl_serialize_value(s, v->type);
+        writetag(s, jl_function_type);
         jl_function_t *f = (jl_function_t*)v;
         jl_serialize_value(s, (jl_value_t*)f->linfo);
         jl_serialize_value(s, f->env);
@@ -477,7 +476,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return NULL;
     if (tag == 0) {
         tag = read_uint8(s);
-        return (jl_value_t*)ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        jl_value_t *v = ptrhash_get(&deser_tag, (void*)(ptrint_t)tag);
+        assert(v != HT_NOTFOUND);
+        return v;
     }
     if (tag == BackRef_tag) {
         assert(tree_literal_values == NULL);
@@ -574,9 +575,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         tv->bound = read_int8(s);
         return (jl_value_t*)tv;
     }
-    else if (vtag == (jl_value_t*)jl_func_kind) {
-        jl_value_t *ftype = jl_deserialize_value(s);
-        jl_function_t *f = (jl_function_t*)newobj((jl_type_t*)ftype, 3);
+    else if (vtag == (jl_value_t*)jl_function_type) {
+        jl_function_t *f =
+            (jl_function_t*)newobj((jl_type_t*)jl_function_type, 3);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, f);
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
@@ -914,8 +915,8 @@ void jl_init_serializer(void)
     htable_new(&backref_table, 50000);
 
     void *tags[] = { jl_symbol_type, jl_tag_kind, jl_bits_kind, jl_struct_kind,
-                     jl_func_kind, jl_tuple_type, jl_array_type, jl_expr_type,
-                     (void*)LongSymbol_tag, (void*)LongTuple_tag,
+                     jl_function_type, jl_tuple_type, jl_array_type,
+                     jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
                      (void*)SmallInt64_tag, jl_module_type, jl_tvar_type,
                      jl_lambda_info_type,
@@ -1007,20 +1008,19 @@ void jl_init_serializer(void)
                      jl_type_type, jl_bottom_type, jl_pointer_type,
                      jl_seq_type, jl_ntuple_type, jl_abstractarray_type,
                      jl_box_type, jl_typector_type, jl_undef_type, jl_top_type,
-                     jl_any_func, jl_typename_type,
-                     jl_task_type, jl_union_kind, jl_function_type,
+                     jl_typename_type, jl_task_type, jl_union_kind,
                      jl_typetype_type, jl_typetype_tvar, jl_ANY_flag,
                      jl_array_any_type, jl_intrinsic_type, jl_method_type,
                      jl_methtable_type,
 
                      jl_symbol_type->name, jl_pointer_type->name,
                      jl_tag_kind->name, jl_union_kind->name, jl_bits_kind->name, jl_struct_kind->name,
-                     jl_func_kind->name, jl_array_type->name, jl_expr_type->name,
+                     jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_method_type->name, jl_tvar_type->name,
                      jl_seq_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_lambda_info_type->name, jl_module_type->name,
-                     jl_box_type->name,
+                     jl_box_type->name, jl_function_type->name,
                      jl_typector_type->name, jl_intrinsic_type->name, jl_undef_type->name,
                      jl_task_type->name,
                      jl_labelnode_type->name, jl_linenumbernode_type->name,

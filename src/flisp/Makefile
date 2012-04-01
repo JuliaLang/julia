@@ -1,6 +1,9 @@
 JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 NAME = flisp
 EXENAME = $(NAME)
 LIBTARGET = lib$(NAME)
@@ -15,7 +18,7 @@ LLT = $(LLTDIR)/libsupport.a
 FLAGS = -Wall -Wno-strict-aliasing -I$(LLTDIR) $(CFLAGS) \
 	-DUSE_COMPUTED_GOTO $(HFILEDIRS:%=-I%) $(LIBDIRS:%=-L%) -fvisibility=hidden
 LIBFILES = $(LLT)
-LIBS = $(LIBFILES) -lm $(GCLIBS)
+LIBS = $(LIBFILES) -lm
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)

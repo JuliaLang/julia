@@ -196,8 +196,14 @@ next(s::CharString, i::Int) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
 strlen(s::CharString) = length(s)
 
-string(c::Char) = CharString(c)
-string(c::Char, x::Char...) = CharString(c, x...)
+function string(c::Char, x::Char...)
+    s = memio(1+length(x), false)
+    write(s, c)
+    for ch in x
+        write(s, ch)
+    end
+    takebuf_string(s)
+end
 
 ## substrings reference original strings ##
 
@@ -993,10 +999,6 @@ float(x::String) = float64(x)
 parse_float(x::String) = float64(x)
 parse_float(::Type{Float64}, x::String) = float64(x)
 parse_float(::Type{Float32}, x::String) = float32(x)
-
-# copying a byte string (generally not needed due to "immutability")
-
-strcpy{T<:ByteString}(s::T) = T(copy(s.data))
 
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 

@@ -74,9 +74,6 @@ include("statistics.jl")
 # random number generation
 include("random.jl")
 
-# sparse matrices
-include("sparse.jl")
-
 # distributed arrays
 include("darray.jl")
 
@@ -91,7 +88,6 @@ include("datafmt.jl")
 include("linalg.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
-include("linalg_suitesparse.jl")
 
 # signal processing
 include("signal.jl")
@@ -129,7 +125,7 @@ compile_hint(_start, ())
 compile_hint(_jl_color_available, ())
 compile_hint(process_options, (Array{Any,1},))
 compile_hint(run_repl, ())
-compile_hint(anyp, (Any-->Any, Array{Any,1}))
+compile_hint(anyp, (Function, Array{Any,1}))
 compile_hint(HashTable, (Int,))
 compile_hint(HashTable{Any,Any}, (Int,))
 compile_hint(Set, ())
@@ -173,6 +169,8 @@ compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int))
 compile_hint(istaskdone, (Task,))
 compile_hint(make_stdout_stream, ())
+compile_hint(make_stdin_stream, ())
+compile_hint(make_stderr_stream, ())
 compile_hint(set_current_output_stream, (IOStream,))
 compile_hint(int, (Uint64,))
 compile_hint(copy, (Bool,))

@@ -1,6 +1,6 @@
 module Base
 
-if true
+if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)

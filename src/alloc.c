@@ -16,7 +16,7 @@ jl_tag_type_t *jl_undef_type;
 jl_tvar_t     *jl_typetype_tvar;
 jl_tag_type_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
-jl_typector_t *jl_function_type;
+jl_struct_type_t *jl_function_type;
 jl_struct_type_t *jl_box_type;
 jl_type_t *jl_box_any_type;
 jl_typename_t *jl_box_typename;
@@ -194,7 +194,7 @@ DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
                                         jl_lambda_info_t *linfo)
 {
     jl_function_t *f = (jl_function_t*)alloc_4w();
-    f->type = (jl_type_t*)jl_any_func;
+    f->type = (jl_type_t*)jl_function_type;
     f->fptr = (fptr!=NULL ? fptr : linfo->fptr);
     f->env = env;
     f->linfo = linfo;
@@ -357,20 +357,6 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
     t->linfo = NULL;
     if (t->name->primary == NULL)
         t->name->primary = (jl_value_t*)t;
-    JL_GC_POP();
-    return t;
-}
-
-jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b)
-{
-    JL_GC_PUSH(&a);
-    if (a != (jl_type_t*)jl_bottom_type &&
-        !jl_subtype((jl_value_t*)a, (jl_value_t*)jl_tuple_type, 0) &&
-        !jl_subtype((jl_value_t*)jl_tuple_type, (jl_value_t*)a, 0))
-        a = (jl_type_t*)jl_tuple1(a);
-    jl_func_type_t *t = (jl_func_type_t*)newobj((jl_type_t*)jl_func_kind, 2);
-    t->from = a;
-    t->to = b;
     JL_GC_POP();
     return t;
 }
@@ -548,8 +534,8 @@ BOXN_FUNC(64, 3)
 #define UNBOX_FUNC(j_type,c_type)                                       \
 c_type jl_unbox_##j_type(jl_value_t *v)                                 \
 {                                                                       \
-    assert(jl_is_bits_type(v->type));                                   \
-    assert(jl_bitstype_nbits(v->type)/8 == sizeof(c_type));             \
+    assert(jl_is_bits_type(jl_typeof(v)));                              \
+    assert(jl_bitstype_nbits(jl_typeof(v))/8 == sizeof(c_type));        \
     return *(c_type*)jl_bits_data(v);                                   \
 }
 UNBOX_FUNC(int8,   int8_t)

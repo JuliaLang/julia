@@ -18,18 +18,16 @@ length(a::Array) = arraylen(a)
 
 ## copy ##
 
-copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
-
 function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
     if so+N-1 > numel(src) || do+N-1 > numel(dest) || do < 1 || so < 1
         throw(BoundsError())
     end
     if isa(T, BitsKind)
-        copy_to(pointer(dest, do), pointer(src, so), N)
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+              pointer(dest, do), pointer(src, so), N*sizeof(T))
     else
         for i=0:N-1
-            dest[i+do] = copy(src[i+so])
+            dest[i+do] = src[i+so]
         end
     end
     return dest
@@ -75,8 +73,17 @@ function ref{T}(::Type{T}, vals...)
     end
     return a
 end
-ref{T}(::Type{T}) = Array(T,0)
-ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
+
+# T[a:b] and T[a:s:b] also contruct typed ranges
+function ref{T<:Number}(::Type{T}, r::Ranges)
+    a = Array(T,length(r))
+    i = 1
+    for x in r
+        a[i] = x
+        i += 1
+    end
+    return a
+end
 
 function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
@@ -93,24 +100,17 @@ function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     return a
 end
 
-zeros{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), zero(T))
-zeros(T::Type, dims::Int...) = zeros(T, dims)
-zeros(dims::Dims) = zeros(Float64, dims)
-zeros(dims::Int...) = zeros(dims)
+fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
+fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
-ones{T}(::Type{T}, dims::Dims) = fill!(Array(T, dims), one(T))
-ones(T::Type, dims::Int...) = ones(T, dims)
-ones(dims::Dims) = ones(Float64, dims)
-ones(dims::Int...) = ones(dims)
+zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
+zeros(args...)               = fill!(Array(Float64, args...), float64(0))
 
-trues(dims::Dims) = fill!(Array(Bool, dims), true)
-trues(dims::Int...) = trues(dims)
+ones{T}(::Type{T}, args...) = fill!(Array(T, args...), one(T))
+ones(args...)               = fill!(Array(Float64, args...), float64(1))
 
-falses(dims::Dims) = fill!(Array(Bool, dims), false)
-falses(dims::Int...) = falses(dims)
-
-fill(v, dims::Dims) = fill!(Array(typeof(v), dims), v)
-fill(v, dims::Int...) = fill(v, dims)
+trues(args...)  = fill(true, args...)
+falses(args...) = fill(false, args...)
 
 eye(n::Int) = eye(n, n)
 function eye(m::Int, n::Int)
@@ -789,7 +789,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy_to(pointer(B, boffs), pointer(A, offs), M)
+                    copy_to(B, boffs, A, offs, M)
                 end
             end
         else

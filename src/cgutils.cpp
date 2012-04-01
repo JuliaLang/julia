@@ -152,21 +152,20 @@ static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
 
 static void emit_func_check(Value *x, jl_codectx_t *ctx)
 {
-    Value *istype1 =
-        builder.CreateICmpEQ(emit_typeof(emit_typeof(x)),
-                             literal_pointer_val((jl_value_t*)jl_func_kind));
-    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
-    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"b");
-    builder.CreateCondBr(istype1, mergeBB1, elseBB1);
+    Value *xty = emit_typeof(x);
+    Value *isfunc =
+        builder.
+        CreateOr(builder.
+                 CreateICmpEQ(xty,
+                              literal_pointer_val((jl_value_t*)jl_function_type)),
+                 builder.
+                 CreateICmpEQ(xty,
+                              literal_pointer_val((jl_value_t*)jl_struct_kind)));
+    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"notf", ctx->f);
+    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"isf");
+    builder.CreateCondBr(isfunc, mergeBB1, elseBB1);
 
     builder.SetInsertPoint(elseBB1);
-    Value *istype2 =
-        builder.CreateICmpEQ(emit_typeof(x),
-                             literal_pointer_val((jl_value_t*)jl_struct_kind));
-    BasicBlock *elseBB2 = BasicBlock::Create(getGlobalContext(),"a", ctx->f);
-    builder.CreateCondBr(istype2, mergeBB1, elseBB2);
-
-    builder.SetInsertPoint(elseBB2);
     emit_type_error(x, (jl_value_t*)jl_function_type, "apply", ctx);
 
     builder.CreateBr(mergeBB1);
@@ -223,7 +222,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
     if (jl_is_symbol(e))
         return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
-        return (jl_value_t*)jl_any_func;
+        return (jl_value_t*)jl_function_type;
     if (jl_is_topnode(e)) {
         jl_binding_t *b = jl_get_binding(ctx->module,
                                          (jl_sym_t*)jl_fieldref(e,0));
@@ -266,20 +265,15 @@ static Value *emit_n_varargs(jl_codectx_t *ctx)
 
 static Value *emit_arraysize(Value *t, Value *dim)
 {
-    int o;
 #ifdef __LP64__
-    o = 3;
+    int o = 3;
 #else
-    o = 4;
+    int o = 4;
 #endif
     Value *dbits =
         emit_nthptr(t, builder.CreateAdd(dim,
                                          ConstantInt::get(dim->getType(), o)));
-#ifdef __LP64__
-    return builder.CreatePtrToInt(dbits, T_int64);
-#else
-    return builder.CreatePtrToInt(dbits, T_int32);
-#endif
+    return builder.CreatePtrToInt(dbits, T_size);
 }
 
 static Value *emit_arraysize(Value *t, int dim)
@@ -290,11 +284,7 @@ static Value *emit_arraysize(Value *t, int dim)
 static Value *emit_arraylen(Value *t)
 {
     Value *lenbits = emit_nthptr(t, 2);
-#ifdef __LP64__
-    return builder.CreatePtrToInt(lenbits, T_int64);
-#else
-    return builder.CreatePtrToInt(lenbits, T_int32);
-#endif
+    return builder.CreatePtrToInt(lenbits, T_size);
 }
 
 static Value *emit_arrayptr(Value *t)

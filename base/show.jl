@@ -67,7 +67,7 @@ show(t::Tuple) = show_delim_array(t, '(', ',', ')', true)
 
 function show_expr_type(ty)
     if !is(ty, Any)
-        if isa(ty, FuncKind)
+        if is(ty, Function)
             print("::F")
         elseif is(ty, IntrinsicFunction)
             print("::I")
@@ -164,7 +164,7 @@ show(e::KeyError) = print("key not found: $(e.key)")
 show(e::InterruptException) = nothing
 
 function show(e::MethodError)
-    name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
+    name = e.f.env.name
     if is(e.f,convert)
         print("no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else
@@ -438,17 +438,28 @@ function whos()
 end
 
 show{T}(x::AbstractArray{T,0}) = (println(summary(x),":"); show(x[]))
-show(X::AbstractMatrix) = (println(summary(X),":"); print_matrix(X))
-show(X::AbstractArray) = (println(summary(X),":"); show_nd(X))
+function show(X::AbstractArray)
+    print(summary(X))
+    if !isempty(X)
+        println(":")
+        ndims(X)==2 ? print_matrix(X) : show_nd(X)
+    end
+end
 
-showall(X::AbstractMatrix) = (println(summary(X),":");
-                              print_matrix(X, typemax(Int64), typemax(Int64)))
+function showall(X::AbstractMatrix)
+    print(summary(X))
+    if !isempty(X)
+        println(":")
+        print_matrix(X, typemax(Int64), typemax(Int64))
+    end
+end
 
 function showall(a::AbstractArray)
-    println(summary(a),":")
+    print(summary(a))
     if isempty(a)
         return
     end
+    println(":")
     tail = size(a)[3:]
     nd = ndims(a)-2
     function print_slice(idxs...)

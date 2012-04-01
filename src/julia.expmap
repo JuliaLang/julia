@@ -1,6 +1,5 @@
 {
   global:
-    int32hash;
     int64hash;
     int64to32hash;
     memhash;
@@ -25,17 +24,12 @@
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
-    jl_closure_env;
-    jl_closure_linfo;
     jl_enable_inference;
-    jl_set_memio_func;
     jl_symbol_n;
     jl_matching_methods;
     jl_match_method;
-    jl_get_specialization;
+    jl_compile_hint;
     jl_is_builtin;
-    jl_is_genericfunc;
-    jl_genericfunc_name;
     jl_is_const;
     jl_get_current_module;
     jl_set_current_module;
@@ -166,8 +160,6 @@
     jl_get_global;
     jl_set_global;
     jl_set_const;
-    jl_func_kind;
-    jl_struct_kind;
     jl_show_method_table;
     jl_current_output_stream;
     jl_apply_generic;
@@ -180,6 +172,7 @@
     jl_arrayset;
     jl_parse_input_line;
     jl_box_int32;
+    jl_box_int64;
     jl_lisp_prompt;
     libsupport_init;
     get_exename;

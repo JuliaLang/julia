@@ -22,7 +22,6 @@ jl_tag_type_t *jl_ntuple_type;
 jl_typename_t *jl_ntuple_typename;
 jl_struct_type_t *jl_tvar_type;
 
-jl_struct_type_t *jl_func_kind;
 jl_struct_type_t *jl_union_kind;
 jl_struct_type_t *jl_tag_kind;
 jl_struct_type_t *jl_tag_type_type;
@@ -49,8 +48,6 @@ jl_bits_type_t *jl_float64_type;
 
 jl_tuple_t *jl_null;
 jl_value_t *jl_nothing;
-
-jl_func_type_t *jl_any_func;
 
 void jl_add_constructors(jl_struct_type_t *t);
 
@@ -80,12 +77,6 @@ int jl_has_typevars_(jl_value_t *v, int incl_wildcard)
             return incl_wildcard;
         return 1;
     }
-    if (jl_is_func_type(v))
-        return jl_has_typevars_((jl_value_t*)((jl_func_type_t*)v)->from,
-                                incl_wildcard) ||
-            jl_has_typevars_((jl_value_t*)((jl_func_type_t*)v)->to,
-                             incl_wildcard);
-
     jl_tuple_t *t;
     if (jl_is_union_type(v))
         t = ((jl_uniontype_t*)v)->types;
@@ -134,10 +125,6 @@ DLLEXPORT int jl_is_leaf_type(jl_value_t *v)
     }
     if (jl_is_type_type(v)) {
         return !jl_is_typevar(jl_tparam0(v));
-    }
-    if (jl_is_func_type(v)) {
-        return !jl_is_typevar(((jl_func_type_t*)v)->from) &&
-            !jl_is_typevar(((jl_func_type_t*)v)->to);
     }
     return 0;
 }
@@ -254,7 +241,7 @@ jl_value_t *jl_type_union(jl_tuple_t *types)
 typedef enum {invariant, covariant} variance_t;
 
 typedef struct {
-    jl_value_t *data[64];
+    jl_value_t *data[128];
     size_t n;
 } cenv_t;
 
@@ -263,7 +250,9 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
     if (!allow && var == val)
         return;
     for(int i=0; i < soln->n; i+=2) {
-        if (soln->data[i]==var && soln->data[i+1]==val)
+        if (soln->data[i]==var &&
+            (soln->data[i+1]==val || (!jl_is_typevar(val) &&
+                                      type_eqv_(soln->data[i+1],val))))
             return;
     }
     if (soln->n >= sizeof(soln->data)/sizeof(void*))
@@ -492,12 +481,18 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }
-    else if (var==invariant && !jl_is_typevar(b)) {
+    else if (var==invariant && !jl_has_typevars(b)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
         return (jl_value_t*)jl_bottom_type;
     }
     else if (jl_subtype((jl_value_t*)a, b, 0)) {
+        /*
+          TODO: get sharper types when the overlap between a typevar and
+          a type is not simple. Ex:
+          tintersect(Type{Array{T,n}}, Type{typevar(:_,Vector)})
+          should give Type{_<:Vector}
+        */
         if (!a->bound) return (jl_value_t*)a;
     }
     else {
@@ -653,25 +648,6 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_tuple(b)) {
         return jl_type_intersect(b, a, penv,eqc,var);
     }
-    // function
-    if (jl_is_func_type(a)) {
-        if (!jl_is_func_type(b))
-            return (jl_value_t*)jl_bottom_type;
-        jl_value_t *t1=NULL, *t2=NULL;
-        JL_GC_PUSH(&t1, &t2);
-        t1 = (jl_value_t*)jl_tuple2(((jl_func_type_t*)a)->from,
-                                    ((jl_func_type_t*)b)->from);
-        t1 = jl_type_union((jl_tuple_t*)t1);
-        t2 = jl_type_intersect((jl_value_t*)((jl_func_type_t*)a)->to,
-                               (jl_value_t*)((jl_func_type_t*)b)->to, penv,
-                               eqc, var);
-        jl_value_t *result =
-            (jl_value_t*)jl_new_functype((jl_type_t*)t1, (jl_type_t*)t2);
-        JL_GC_POP();
-        return result;
-    }
-    if (jl_is_func_type(b))
-        return (jl_value_t*)jl_bottom_type;
     if (jl_is_long(a) || jl_is_long(b))
         return (jl_value_t*)jl_bottom_type;
     // tag
@@ -1029,7 +1005,6 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
 static char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_func_type(t)) return "Function";
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     return "?";
@@ -1151,7 +1126,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
 
 static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
 {
-    return (jl_subtype(a, b, 0) && jl_subtype(b, a, 0));
+    return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
 static int type_eqv_(jl_value_t *a, jl_value_t *b)
@@ -1175,22 +1150,26 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
     }
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
-            return extensionally_same_type(a, b);
+            jl_tuple_t *ta = (jl_tuple_t*)a; jl_tuple_t *tb = (jl_tuple_t*)b;
+            int sqa = (ta->length>0 &&
+                       jl_is_seq_type(jl_tupleref(ta,ta->length-1)));
+            int sqb = (tb->length>0 &&
+                       jl_is_seq_type(jl_tupleref(tb,tb->length-1)));
+            if (sqa && sqb)
+                return extensionally_same_type(a, b);
+            if (sqa != sqb || ta->length != tb->length)
+                return 0;
+            for(int i=0; i < ta->length; i++) {
+                if (!type_eqv_(jl_tupleref(ta,i),jl_tupleref(tb,i)))
+                    return 0;
+            }
+            return 1;
         }
         return 0;
     }
     if (jl_is_union_type(a)) {
         if (jl_is_union_type(b)) {
             return extensionally_same_type(a, b);
-        }
-        return 0;
-    }
-    if (jl_is_func_type(a)) {
-        if (jl_is_func_type(b)) {
-            return (type_eqv_((jl_value_t*)((jl_func_type_t*)a)->from,
-                              (jl_value_t*)((jl_func_type_t*)b)->from) &&
-                    type_eqv_((jl_value_t*)((jl_func_type_t*)a)->to,
-                              (jl_value_t*)((jl_func_type_t*)b)->to));
         }
         return 0;
     }
@@ -1394,16 +1373,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                                    env, n, stack);
         JL_GC_PUSH(&tw);
         jl_type_t *res = (jl_type_t*)jl_new_uniontype(tw);
-        JL_GC_POP();
-        return res;
-    }
-    if (jl_is_func_type(t)) {
-        jl_func_type_t *ft = (jl_func_type_t*)t;
-        jl_type_t *fr=NULL, *to=NULL;
-        JL_GC_PUSH(&fr, &to);
-        fr = inst_type_w_((jl_value_t*)ft->from, env, n, stack);
-        to = inst_type_w_((jl_value_t*)ft->to  , env, n, stack);
-        jl_type_t *res = (jl_type_t*)jl_new_functype(fr, to);
         JL_GC_POP();
         return res;
     }
@@ -1831,24 +1800,6 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
         return 0;
     }
     if (jl_is_long(b)) return 0;
-
-    if (jl_is_func_type(a)) {
-        if (jl_is_func_type(b)) {
-            jl_func_type_t *fa = (jl_func_type_t*)a;
-            jl_func_type_t *fb = (jl_func_type_t*)b;
-            return ( (jl_is_typevar(fb->from) ||
-                      jl_subtype_le((jl_value_t*)fb->from,
-                                    (jl_value_t*)fa->from, 0, morespecific,
-                                    invariant)) &&
-                     jl_subtype_le((jl_value_t*)fa->to,
-                                   (jl_value_t*)fb->to,   0, morespecific,
-                                   invariant) );
-        }
-        return 0;
-    }
-    else if (jl_is_func_type(b)) {
-        return 0;
-    }
     return 0;
 }
 
@@ -2026,23 +1977,6 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         return jl_false;
     }
 
-    if (jl_is_func_type(parent)) {
-        if (jl_is_func_type(child)) {
-            int n = env->n;
-            if (type_match_((jl_value_t*)((jl_func_type_t*)child)->from,
-                            (jl_value_t*)((jl_func_type_t*)parent)->from, env,
-                            morespecific, invariant) == jl_false)
-                { env->n = n; return jl_false; }
-            return type_match_((jl_value_t*)((jl_func_type_t*)child)->to,
-                               (jl_value_t*)((jl_func_type_t*)parent)->to, env,
-                               morespecific, invariant);
-        }
-        return jl_false;
-    }
-    else if (jl_is_func_type(child)) {
-        return jl_false;
-    }
-
     if (jl_is_tuple(child)) {
         if (jl_is_tag_type(parent) &&
             ((jl_tag_type_t*)parent)->name == jl_ntuple_typename) {
@@ -2209,9 +2143,11 @@ void jl_init_types(void)
     jl_type_type = jl_new_tagtype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_null);
 
     jl_tag_kind->super = jl_type_type;
-    jl_tag_kind->names = jl_tuple(3, jl_symbol("name"), jl_symbol("super"),
+    jl_tag_kind->names = jl_tuple(6, jl_symbol(""),jl_symbol(""),jl_symbol(""),
+                                  jl_symbol("name"), jl_symbol("super"),
                                   jl_symbol("parameters"));
-    jl_tag_kind->types = jl_tuple(3, jl_typename_type, jl_type_type,
+    jl_tag_kind->types = jl_tuple(6, jl_any_type, jl_any_type, jl_any_type,
+                                  jl_typename_type, jl_type_type,
                                   jl_tuple_type);
     jl_tag_kind->fptr = jl_f_no_function;
 
@@ -2220,11 +2156,14 @@ void jl_init_types(void)
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(7, jl_symbol("name"), jl_symbol("super"),
+    jl_struct_kind->names = jl_tuple(10, jl_symbol(""),
+                                     jl_symbol("env"), jl_symbol("code"),
+                                     jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
                                      jl_symbol("names"), jl_symbol("types"),
                                      jl_symbol(""), jl_symbol(""));
-    jl_struct_kind->types = jl_tuple(7, jl_typename_type, jl_type_type,
+    jl_struct_kind->types = jl_tuple(10, jl_any_type, jl_any_type, jl_any_type,
+                                     jl_typename_type, jl_type_type,
                                      jl_tuple_type, jl_tuple_type,
                                      jl_tuple_type, jl_any_type, jl_any_type);
     jl_struct_kind->fptr = jl_f_no_function;
@@ -2262,14 +2201,6 @@ void jl_init_types(void)
     jl_sym_type->instance = NULL;
     jl_sym_type->uid = jl_assign_type_uid();
 
-    jl_func_kind =
-        jl_new_struct_type(jl_symbol("FuncKind"), jl_type_type,
-                           jl_null,
-                           jl_tuple(2, jl_symbol("from"), jl_symbol("to")),
-                           jl_tuple(2, jl_type_type, jl_type_type)); 
-    jl_func_kind->fptr = jl_f_no_function;
-    jl_func_kind->env = NULL;
-
     // now they can be used to create the remaining base kinds and types
     jl_method_type =
         jl_new_struct_type(jl_symbol("Method"), jl_any_type, jl_null,
@@ -2283,12 +2214,12 @@ void jl_init_types(void)
 
     jl_methtable_type =
         jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
-                           jl_tuple(5, jl_symbol("defs"), jl_symbol("cache"),
-                                    jl_symbol("cache_arg1"),
+                           jl_tuple(6, jl_symbol("name"), jl_symbol("defs"),
+                                    jl_symbol("cache"), jl_symbol("cache_arg1"),
                                     jl_symbol("cache_targ"),
                                     jl_symbol("max_args")),
-                           jl_tuple(5, jl_any_type, jl_any_type, jl_any_type,
-                                    jl_any_type, jl_long_type));
+                           jl_tuple(6, jl_sym_type, jl_any_type, jl_any_type,
+                                    jl_any_type, jl_any_type, jl_long_type));
     jl_methtable_type->fptr = jl_f_no_function;
 
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
@@ -2299,20 +2230,16 @@ void jl_init_types(void)
 
     jl_bottom_type = (jl_type_t*)jl_new_struct(jl_union_kind, jl_null);
 
-    // the universal (compatible w/ any signature) function type is Any-->None.
-    // the most general (any function is compatible with it) function type
-    // is None-->Any.
-    // generic functions have the type Any-->Any, as they take any arguments
-    // but don't satisfy any particular return-type requirements.
-    jl_any_func = jl_new_functype((jl_type_t*)jl_any_type, (jl_type_t*)jl_any_type);
-
     jl_bits_kind =
         jl_new_struct_type(jl_symbol("BitsKind"), jl_type_type,
                            jl_null,
-                           jl_tuple(4, jl_symbol("name"), jl_symbol("super"),
+                           jl_tuple(7, jl_symbol(""), jl_symbol(""),
+                                    jl_symbol(""),
+                                    jl_symbol("name"), jl_symbol("super"),
                                     jl_symbol("parameters"),
                                     jl_symbol("nbits")),
-                           jl_tuple(4, jl_typename_type, jl_type_type,
+                           jl_tuple(7, jl_any_type, jl_any_type, jl_any_type,
+                                    jl_typename_type, jl_type_type,
                                     jl_tuple_type, jl_any_type));
     // cannot be created with normal constructor due to hidden fields
     jl_bits_kind->fptr = jl_f_no_function;
@@ -2470,11 +2397,13 @@ void jl_init_types(void)
                                     jl_symbol("body")),
                            jl_tuple(2, jl_tuple_type, jl_any_type));
 
-    tv = jl_tuple2(tvar("A"), tvar("B"));
     jl_function_type =
-        jl_new_type_ctor(tv,
-                         (jl_type_t*)jl_new_functype((jl_type_t*)jl_tupleref(tv,0),
-                                                     (jl_type_t*)jl_tupleref(tv,1)));
+        jl_new_struct_type(jl_symbol("Function"), jl_any_type, jl_null,
+                           jl_tuple(3, jl_symbol(""), jl_symbol("env"),
+                                    jl_symbol("code")),
+                           jl_tuple(3, jl_any_type, jl_any_type,
+                                    jl_lambda_info_type));
+    jl_function_type->fptr = jl_f_no_function;
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);

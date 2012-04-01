@@ -80,9 +80,11 @@ function fill!(A::AbstractArray, x)
     return A
 end
 
-function copy_to(dest::AbstractArray, src::AbstractArray)
-    for i=1:numel(src)
-        dest[i] = copy(src[i])
+function copy_to(dest::AbstractArray, src)
+    i = 1
+    for x in src
+        dest[i] = x
+        i += 1
     end
     return dest
 end
@@ -111,7 +113,6 @@ int64   (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
 uint64  (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
 integer (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-bool   (x::AbstractArray) = copy_to(similar(x,Bool)   , x)
 char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
@@ -790,3 +791,73 @@ function cartesian_map(body, t::(Int,Int,Int))
         end
     end
 end
+
+function bsxfun(f, a::AbstractArray, b::AbstractArray)
+    nd = max(ndims(a),ndims(b))
+    shp = Array(Int,nd)
+    range = ()
+    xa, xb = false, false
+    for i=1:nd
+        ai, bi = size(a,i), size(b,i)
+        if ai == bi
+            shp[i] = ai
+        elseif ai == 1
+            xa = true
+            shp[i] = bi
+            range = append(range,(bi,))
+        elseif bi == 1
+            xb = true
+            shp[i] = ai
+            range = append(range,(ai,))
+        else
+            error("argument dimensions do not match")
+        end
+    end
+    if isempty(range)
+        return f(a, b)
+    end
+    if numel(a) == 1
+        return f(a[1], b)
+    elseif numel(b) == 1
+        return f(a, b[1])
+    end
+    c = Array(promote_type(eltype(a),eltype(b)), shp...)
+
+    aidxs = { 1:size(a,i) | i=1:nd }
+    bidxs = { 1:size(b,i) | i=1:nd }
+    cidxs = { 1:size(c,i) | i=1:nd }
+
+    sliceop = function (idxs::Int...)
+        j = 1
+        for i = 1:nd
+            ai, bi = size(a,i), size(b,i)
+            if ai == bi
+            elseif ai == 1
+                bidxs[i] = idxs[j]
+                cidxs[i] = idxs[j]
+                j+=1
+            else
+                aidxs[i] = idxs[j]
+                cidxs[i] = idxs[j]
+                j+=1
+            end
+        end
+        if xb
+            aa = a[aidxs...]; if numel(aa)==1; aa=aa[1]; end
+        else
+            aa = a
+        end
+        if xa
+            bb = b[bidxs...]; if numel(bb)==1; bb=bb[1]; end
+        else
+            bb = b
+        end
+        c[cidxs...] = f(aa, bb)
+    end
+    cartesian_map(sliceop, range)
+    c
+end
+
+bsxfun(f, a, b) = f(a, b)
+bsxfun(f, a::AbstractArray, b) = f(a, b)
+bsxfun(f, a, b::AbstractArray) = f(a, b)

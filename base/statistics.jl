@@ -1,8 +1,6 @@
-mean(v::AbstractArray) = sum(v) / numel(v)
-mean(v::AbstractArray, dim::Int) = sum(v,dim) / size(v,dim)
-
-weighted_mean(v::AbstractArray, w::AbstractArray) =
-    sum(v .* w) / sum(w)
+mean(v::AbstractArray) = sum(v)/numel(v)
+mean(v::AbstractArray, dim::Int) = sum(v,dim)/size(v,dim)
+weighted_mean(v::AbstractArray, w::AbstractArray) = sum(v.*w)/sum(w)
 
 function median(v::AbstractArray)
     n = numel(v)

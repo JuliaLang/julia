@@ -133,12 +133,6 @@ typedef struct {
 
 typedef struct {
     JL_STRUCT_TYPE
-    jl_type_t *from;
-    jl_type_t *to;
-} jl_func_type_t;
-
-typedef struct {
-    JL_STRUCT_TYPE
     jl_tuple_t *types;
 } jl_uniontype_t;
 
@@ -226,6 +220,7 @@ typedef struct _jl_methlist_t {
 
 typedef struct _jl_methtable_t {
     JL_STRUCT_TYPE
+    jl_sym_t *name;
     jl_methlist_t *defs;
     jl_methlist_t *cache;
     jl_array_t *cache_arg1;
@@ -259,7 +254,6 @@ extern jl_typename_t *jl_ntuple_typename;
 extern jl_struct_type_t *jl_tvar_type;
 extern jl_struct_type_t *jl_task_type;
 
-extern DLLEXPORT jl_struct_type_t *jl_func_kind;
 extern jl_struct_type_t *jl_union_kind;
 extern jl_struct_type_t *jl_tag_kind;
 extern jl_struct_type_t *jl_tag_type_type;
@@ -271,7 +265,7 @@ extern jl_value_t *jl_top_type;
 extern jl_struct_type_t *jl_lambda_info_type;
 extern jl_struct_type_t *jl_module_type;
 extern jl_tag_type_t *jl_seq_type;
-extern jl_typector_t *jl_function_type;
+extern jl_struct_type_t *jl_function_type;
 extern jl_tag_type_t *jl_abstractarray_type;
 extern jl_struct_type_t *jl_array_type;
 extern jl_typename_t *jl_array_typename;
@@ -326,8 +320,6 @@ extern jl_tuple_t *jl_null;
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
-
-extern jl_func_type_t *jl_any_func;
 
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
@@ -401,7 +393,6 @@ void *allocobj(size_t sz);
 #define jl_is_bits_type(v)   jl_typeis(v,jl_bits_kind)
 #define jl_bitstype_nbits(t) (((jl_bits_type_t*)t)->nbits)
 #define jl_is_struct_type(v) jl_typeis(v,jl_struct_kind)
-#define jl_is_func_type(v)   jl_typeis(v,jl_func_kind)
 #define jl_is_union_type(v)  jl_typeis(v,jl_union_kind)
 #define jl_is_typevar(v)     jl_typeis(v,jl_tvar_type)
 #define jl_is_typector(v)    jl_typeis(v,jl_typector_type)
@@ -426,7 +417,7 @@ void *allocobj(size_t sz);
 #define jl_is_module(v)      jl_typeis(v,jl_module_type)
 #define jl_is_mtable(v)      jl_typeis(v,jl_methtable_type)
 #define jl_is_task(v)        jl_typeis(v,jl_task_type)
-#define jl_is_func(v)        (jl_is_func_type(jl_typeof(v)) || jl_is_struct_type(v))
+#define jl_is_func(v)        (jl_typeis(v,jl_function_type) || jl_is_struct_type(v))
 #define jl_is_function(v)    jl_is_func(v)
 #define jl_is_ascii_string(v) jl_typeis(v,jl_ascii_string_type)
 #define jl_is_utf8_string(v) jl_typeis(v,jl_utf8_string_type)
@@ -442,8 +433,8 @@ void *allocobj(size_t sz);
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
-#define jl_gf_mtable(f) ((jl_methtable_t*)jl_t0(((jl_function_t*)(f))->env))
-#define jl_gf_name(f) ((jl_sym_t*)jl_t1(((jl_function_t*)(f))->env))
+#define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
+#define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // get a pointer to the data in a value of bits type
 #define jl_bits_data(v) (&((void**)(v))[1])
@@ -489,7 +480,6 @@ static inline int jl_is_nontuple_type(jl_value_t *v)
 {
     return (jl_typeis(v, jl_union_kind) ||
             jl_typeis(v, jl_struct_kind) ||
-            jl_typeis(v, jl_func_kind) ||
             jl_typeis(v, jl_tag_kind) ||
             jl_typeis(v, jl_bits_kind) ||
             jl_typeis(v, jl_typector_type));
@@ -532,7 +522,6 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params);
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n);
 jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
-jl_func_type_t *jl_new_functype(jl_type_t *a, jl_type_t *b);
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters);
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,

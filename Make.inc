@@ -22,7 +22,7 @@ endif
 # Compiler specific stuff
 
 FC = gfortran
-FFLAGS = -O2 -fPIC
+JFFLAGS = -O2 -fPIC
 
 USEGCC = 1
 USECLANG = 0
@@ -30,8 +30,8 @@ USECLANG = 0
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-CFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
-CXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
+JCXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
 endif
@@ -39,8 +39,8 @@ endif
 ifeq ($(USECLANG),1)
 CC = clang
 CXX = clang++
-CFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
-CXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
+JCXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
@@ -130,19 +130,19 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-LDFLAGS = 
+JLDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 endif
 
@@ -169,4 +169,5 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+
 

@@ -229,3 +229,12 @@ end
 
 # syntax
 @assert (true ? 1 : false ? 2 : 3) == 1
+
+begin
+    local mytype
+    function mytype(vec)
+        convert(Vector{(ASCIIString, BitsKind)}, vec)
+    end
+    some_data = {("a", Int32), ("b", Int32)}
+    @assert isa(mytype(some_data),Vector{(ASCIIString, BitsKind)})
+end

@@ -385,7 +385,6 @@ void jl_gc_markval(jl_value_t *v)
     gc_markval_(v);
 }
 
-#ifdef COPY_STACKS
 static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
 {
     while (s != NULL) {
@@ -408,27 +407,6 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
         s = s->prev;
     }
 }
-#else
-static void gc_mark_stack(jl_gcframe_t *s)
-{
-    while (s != NULL) {
-        size_t i;
-        if (s->indirect) {
-            for(i=0; i < s->nroots; i++) {
-                if (*s->roots[i] != NULL)
-                    GC_Markval(*s->roots[i]);
-            }
-        }
-        else {
-            for(i=0; i < s->nroots; i++) {
-                if (s->roots[i] != NULL)
-                    GC_Markval(s->roots[i]);
-            }
-        }
-        s = s->prev;
-    }
-}
-#endif
 
 static void gc_mark_module(jl_module_t *m)
 {
@@ -485,11 +463,6 @@ static void gc_markval_(jl_value_t *v)
             if (elt != NULL)
                 GC_Markval(elt);
         }
-    }
-    else if (vtt == (jl_value_t*)jl_func_kind) {
-        jl_function_t *f = (jl_function_t*)v;
-        if (f->env  !=NULL) GC_Markval(f->env);
-        if (f->linfo!=NULL) GC_Markval(f->linfo);
     }
     else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
@@ -551,7 +524,7 @@ static void gc_markval_(jl_value_t *v)
                 ss = (jl_savestate_t*)((char*)ss + offset);
         }
 #else
-        gc_mark_stack(ta->state.gcstack);
+        gc_mark_stack(ta->state.gcstack, 0);
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
             GC_Markval(ss->ostream_obj);
@@ -566,10 +539,9 @@ static void gc_markval_(jl_value_t *v)
         assert(vtt == (jl_value_t*)jl_struct_kind);
         size_t nf = ((jl_struct_type_t*)vt)->names->length;
         size_t i=0;
-        if (vt == (jl_value_t*)jl_bits_kind || vt == (jl_value_t*)jl_tag_kind ||
-            vt == (jl_value_t*)jl_struct_kind) {
-            i++;
-            nf += 3;
+        if (vt == (jl_value_t*)jl_struct_kind ||
+            vt == (jl_value_t*)jl_function_type) {
+            i++;  // skip fptr field
         }
         for(; i < nf; i++) {
             jl_value_t *fld = ((jl_value_t**)v)[i+1];
@@ -599,9 +571,6 @@ static void gc_mark(void)
     GC_Markval(jl_current_module);
 
     // invisible builtin values
-    GC_Markval(jl_methtable_type);
-    GC_Markval(jl_method_type);
-    GC_Markval(jl_any_func);
     if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
     GC_Markval(jl_exception_in_transit);
     GC_Markval(jl_task_arg_in_transit);

@@ -35,7 +35,7 @@ getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, li
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
 isbuiltin(f) = ccall(:jl_is_builtin, Int32, (Any,), f) != 0
-isgeneric(f) = ccall(:jl_is_genericfunc, Int32, (Any,), f) != 0
+isgeneric(f) = (isa(f,Function)||isa(f,CompositeKind)) && isa(f.env,MethodTable)
 isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 
 isconst(s::Symbol) =
@@ -113,7 +113,6 @@ t_func[Union] = (0, Inf,
                              end))
 t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
-#t_func[new_generic_function] = (1, 1, s->(Any-->Any))
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
 t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
@@ -205,7 +204,6 @@ t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? tintersect(v,t.parameters[1]) :
                        isa(t,Tuple) && allp(isType,t) ?
                            tintersect(v,map(t->t.parameters[1],t)) :
-                       _iisconst(A[2]) ? tintersect(v,_ieval(A[2])) :
                        Any))
 
 tupleref_tfunc = function (A, t, i)
@@ -289,25 +287,28 @@ apply_type_tfunc = function (A, args...)
         return args[1]
     end
     tparams = ()
+    uncertain = false
     for i=2:length(A)
         if isType(args[i])
             tparams = append(tparams, (args[i].parameters[1],))
         elseif isa(A[i],Int)
             tparams = append(tparams, (A[i],))
-        #elseif
         else
-            #return args[1]
+            uncertain = true
             tparams = append(tparams, (headtype.parameters[i-1],))
         end
     end
+    local appl
     # good, all arguments understood
     try
-        Type{apply_type(headtype, tparams...)}
+        appl = apply_type(headtype, tparams...)
     catch
         # type instantiation might fail if one of the type parameters
         # doesn't match, which could happen if a type estimate is too coarse
-        args[1]
+        appl = args[1]
+        uncertain = true
     end
+    uncertain ? Type{typevar(:_,appl)} : Type{appl}
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -618,7 +619,7 @@ const _jl_Type_Array = Type{Array}
 
 function abstract_eval_constant(x::ANY)
     if isa(x,AbstractKind) || isa(x,BitsKind) || isa(x,CompositeKind) ||
-        isa(x,FuncKind) || isa(x,UnionKind) || isa(x,TypeConstructor)
+        isa(x,UnionKind) || isa(x,TypeConstructor)
         if is(x,Array)
             return _jl_Type_Array
         end
@@ -738,8 +739,6 @@ function type_too_complex(t, d)
         p = t.types
     elseif isa(t,CompositeKind) || isa(t,AbstractKind) || isa(t,BitsKind)
         p = t.parameters
-    elseif isa(t,FuncKind)
-        return type_too_complex(t.from,d+1) || type_too_complex(t.to,d+1)
     elseif isa(t,Tuple)
         p = t
     elseif isa(t,TypeVar)
@@ -1305,7 +1304,8 @@ function inlineable(f, e::Expr, vars)
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
-        if isType(atypes[1]) && subtype(atypes[2],atypes[1].parameters[1])
+        if isType(atypes[1]) && isleaftype(atypes[1]) &&
+            subtype(atypes[2],atypes[1].parameters[1])
             # todo: if T expression has side effects??!
             return e.args[3]
         end

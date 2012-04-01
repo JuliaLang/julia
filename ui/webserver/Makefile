@@ -1,6 +1,9 @@
 JULIAHOME = $(abspath ../..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 LIBS = -lpthread
 
 WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp jsoncpp.cpp

@@ -132,6 +132,7 @@ end
 
 exit(n) = ccall(:exit, Void, (Int32,), n)
 exit() = exit(0)
+quit() = exit()
 
 function dup2(fd1::FileDes, fd2::FileDes)
     ret = ccall(:dup2, Int32, (Int32, Int32), fd1.fd, fd2.fd)
