@@ -124,6 +124,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         jl_signal_pending = 0;
 #ifndef __WIN32__
         ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
+        ev_break(jl_local_event_loop()->ev,EVBREAK_CANCEL);
 #endif
         jl_raise(jl_interrupt_exception);
     }

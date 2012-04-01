@@ -226,6 +226,7 @@
     jl_change_readcb;
     jl_last_errno;
     uv_accept;
+    uv_process_kill;
     jl_ios_buf_base;
     restore_signals;
   local:

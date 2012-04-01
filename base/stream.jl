@@ -363,6 +363,22 @@ function write_to(cmds::Cmds)
     in
 end
 
+_jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
+_jl_kill(p::Process)=_jl_kill(p,int32(9))
+
+function kill(ps::Processes)
+    ps.breakEventLoop=false
+    for p in ps.siblings
+        if(p.exit_code==-2)
+            _jl_kill(p)
+        end
+    end
+    if(isa(ps.pipeline,Processes))
+        kill(ps.pipeline)
+    end
+end
+kill(p::Process) = _jl_kill(p)
+
 readall(cmd::Cmd) = readall(Cmds(cmd))
 function readall(cmds::Cmds)
     (out,ps)=read_from(cmds)
@@ -370,7 +386,13 @@ function readall(cmds::Cmds)
         ps=ps.pipeline
     end
     ps.breakEventLoop=true
-    run_event_loop(localEventLoop())
+    try
+        run_event_loop(localEventLoop())
+    catch e
+        ps.breakEventLoop=false
+        kill(ps)
+        throw(e)
+    end
     return takebuf_string(out.buf)
 end
 
@@ -531,8 +553,13 @@ function show(cmd::Cmd)
 end
 
 function run(args...)
-spawn(args...)
-run_event_loop()
+ps=spawn(args...)
+try
+    run_event_loop(localEventLoop())
+catch e
+    kill(ps)
+    throw(e)
+end
 end
 
 _jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void},cb::Function) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void},Function),sock.handle,sockaddr,cb)
