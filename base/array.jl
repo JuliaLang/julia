@@ -628,21 +628,21 @@ end
 
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f){S,T}(A::Array{S}, B::Array{T})
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
             F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B[i])
             end
             return F
         end
-        function ($f){T}(A::Number, B::Array{T})
+        function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_type(typeof(A),T))
             for i=1:numel(B)
                 F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f){T}(A::Array{T}, B::Number)
+        function ($f){T}(A::AbstractArray{T}, B::Number)
             F = similar(A, promote_type(T,typeof(B)))
             for i=1:numel(A)
                 F[i] = ($f)(A[i], B)
