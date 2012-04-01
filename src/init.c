@@ -85,17 +85,6 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-
-static uv_async_t sigint_cb;
-void sigint_callback(uv_handle_t *handle, int status) {
-	//printf("sigint_callback\n");
-	jl_raise(jl_interrupt_exception);
-	uv_break_one(jl_event_loop);
-}
-void jl_handle_sigint()
-{
-    uv_async_send(&sigint_cb);
-}
 #ifdef __WIN32__
 void restore_signals() { }
 void sigint_handler(int wsig)
@@ -123,7 +112,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     else {
         jl_signal_pending = 0;
 #ifndef __WIN32__
-        ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
+        ev_break(jl_local_event_loop()->ev,EVBREAK_CANCEL);
 #endif
         jl_raise(jl_interrupt_exception);
     }

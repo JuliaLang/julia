@@ -326,11 +326,6 @@ static int down_callback(int count, int key) {
     }
 }
 
-static int sigint_callback(int count, int key) {
-    jl_handle_sigint();
-    return 0;
-}
-
 static int callback_en=0;
 
 void jl_input_line_callback(char *input)
@@ -526,7 +521,6 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
-        rl_bind_keyseq_in_map("\\C-c", sigint_callback,    keymaps[i]);
 
     }
 
@@ -620,6 +614,8 @@ void rl_clear_input(void) {
 	rl_replace_line("\0",0);
 	rl_reset_line_state();
 	rl_forced_update_display();
-	uv_break_one(jl_io_loop);
+#ifndef __WIN32__
+    ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
+#endif
 }
 
