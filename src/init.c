@@ -174,7 +174,7 @@ void julia_init(char *imageFile)
     jl_stdin_tty->data=0;
     jl_stdout_tty->data=0;
     jl_stderr_tty->data=0;
-    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1); //raw input
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,0); //raw input
     uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,0); //raw output
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
