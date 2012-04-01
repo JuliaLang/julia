@@ -326,6 +326,11 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int sigint_callback(int count, int key) {
+    jl_handle_sigint();
+    return 0;
+}
+
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
@@ -497,6 +502,7 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
+        rl_bind_keyseq_in_map("\\C-c", sigint_callback,    keymaps[i]);
     };
 }
 
@@ -505,16 +511,19 @@ extern int _rl_echoing_p;
 
 void jl_prep_terminal (int meta_flag)
 {
-    rl_prep_terminal(1);
-//terminal is prepped by libuv
+    struct termios beforeRl = ((uv_tty_t*)jl_stdin_tty)->orig_termios;
+    //terminal is prepped by libuv
     _rl_echoing_p=1;
+    rl_prep_terminal(1);
     uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,1);
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1);
+    ((uv_tty_t*)jl_stdin_tty)->orig_termios=beforeRl;
 }
 
 /* Restore the terminal's normal settings and modes. */
 void jl_deprep_terminal ()
 {
-//no need to deprep the terminal
+    rl_deprep_terminal();
     uv_tty_reset_mode();
 }
 #endif
@@ -529,7 +538,7 @@ void init_repl_environment(void)
 #endif
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
-    //rl_deprep_term_function=&jl_deprep_terminal;
+    rl_deprep_term_function=&jl_deprep_terminal;
     init_history();
     rl_startup_hook = (Function*)init_rl;
 }

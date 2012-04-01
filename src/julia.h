@@ -959,6 +959,7 @@ static inline void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 
 DLLEXPORT extern volatile sig_atomic_t jl_signal_pending;
 DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
+DLLEXPORT void jl_handle_sigint();
 
 #define JL_SIGATOMIC_BEGIN() (jl_defer_signal++)
 #define JL_SIGATOMIC_END()                                      \
