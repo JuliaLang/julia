@@ -1,5 +1,6 @@
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
+const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
 if sizeof_off_t == 4
     typealias FileOffset Int32
