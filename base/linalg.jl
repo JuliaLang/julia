@@ -354,30 +354,40 @@ function linreg(x, y, w)
 end
 
 # multiply by diagonal matrix as vector
-function diagmm(A::Matrix, b::Vector)
-    T = promote_type(eltype(A),eltype(b))
+function diagmm!(C::Matrix, A::Matrix, b::Vector)
     m, n = size(A)
-    C = Array(T, m, n)
-    for j=1:n
+    if n != length(b)
+        error("argument dimensions do not match")
+    end
+    for j = 1:n
         bj = b[j]
-        for i=1:m
+        for i = 1:m
             C[i,j] = A[i,j]*bj
         end
     end
-    C
+    return C
 end
 
-function diagmm(b::Vector, A::Matrix)
-    T = promote_type(eltype(A),eltype(b))
+function diagmm!(C::Matrix, b::Vector, A::Matrix)
     m, n = size(A)
-    C = Array(T, m, n)
+    if m != length(b)
+        error("argument dimensions do not match")
+    end
     for j=1:n
         for i=1:m
             C[i,j] = A[i,j]*b[i]
         end
     end
-    C
+    return C
 end
+
+diagmm!(A::Matrix, b::Vector) = diagmm!(A,A,b)
+diagmm!(b::Vector, A::Matrix) = diagmm!(A,b,A)
+
+diagmm(A::Matrix, b::Vector) =
+    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
+diagmm(b::Vector, A::Matrix) =
+    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
 
 ^(A::AbstractMatrix, p::Integer) = power_by_squaring(A, p)
 
