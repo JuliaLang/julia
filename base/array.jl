@@ -18,15 +18,13 @@ length(a::Array) = arraylen(a)
 
 ## copy ##
 
-copy_to{T}(dest::Ptr{T}, src::Ptr{T}, n::Integer) =
-    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
-
 function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
     if so+N-1 > numel(src) || do+N-1 > numel(dest) || do < 1 || so < 1
         throw(BoundsError())
     end
     if isa(T, BitsKind)
-        copy_to(pointer(dest, do), pointer(src, so), N)
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+              pointer(dest, do), pointer(src, so), N*sizeof(T))
     else
         for i=0:N-1
             dest[i+do] = src[i+so]
@@ -75,8 +73,6 @@ function ref{T}(::Type{T}, vals...)
     end
     return a
 end
-ref{T}(::Type{T}) = Array(T,0)
-ref{T}(::Type{T}, x) = (a=Array(T,1); a[1]=x; a)
 
 # T[a:b] and T[a:s:b] also contruct typed ranges
 function ref{T<:Number}(::Type{T}, r::Ranges)
@@ -793,7 +789,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
                 for j=0:stride:(N-stride)
                     offs = j + 1 + (i-1)*M
                     boffs = j + 1 + (ri-1)*M
-                    copy_to(pointer(B, boffs), pointer(A, offs), M)
+                    copy_to(B, boffs, A, offs, M)
                 end
             end
         else

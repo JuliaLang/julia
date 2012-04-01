@@ -1,6 +1,9 @@
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
+override CFLAGS += $(JCFLAGS)
+override CXXFLAGS += $(JCXXFLAGS)
+
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
 	alloc dlload sys init task array dump wrapper
@@ -27,7 +30,7 @@ SRCS += gc
 endif
 
 ifeq ($(USE_COPY_STACKS),1)
-CFLAGS += -DCOPY_STACKS
+JCFLAGS += -DCOPY_STACKS
 endif
 
 default: release

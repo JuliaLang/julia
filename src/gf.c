@@ -12,10 +12,11 @@
 #include "julia.h"
 #include "builtin_proto.h"
 
-static jl_methtable_t *new_method_table(void)
+static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
     mt->type = (jl_type_t*)jl_methtable_type;
+    mt->name = name;
     mt->defs = NULL;
     mt->cache = NULL;
     mt->cache_arg1 = NULL;
@@ -1085,7 +1086,6 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 static char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_func_type(t)) return "Function";
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     jl_printf(jl_stderr_tty, "unexpected argument type: ");
@@ -1175,14 +1175,17 @@ extern char *type_summary(jl_value_t *t);
 
 JL_CALLABLE(jl_apply_generic)
 {
-    jl_value_t *env = ((jl_function_t*)F)->env;
-    jl_methtable_t *mt = (jl_methtable_t*)jl_t0(env);
+    jl_methtable_t *mt = jl_gf_mtable(F);
 #ifdef JL_GF_PROFILE
     mt->ncalls++;
 #endif
 #ifdef JL_TRACE
     if (trace_en) {
+<<<<<<< HEAD
         jl_printf(jl_stdout_tty, "%s(", ((jl_sym_t*)jl_t1(env))->name);
+=======
+        ios_printf(ios_stdout, "%s(", jl_gf_name(F)->name);
+>>>>>>> 3cfb3edde9bfa8a170e2d72b352d538631ecc081
         size_t i;
         for(i=0; i < nargs; i++) {
             if (i > 0) jl_printf(jl_stdout_tty, ", ");
@@ -1303,7 +1306,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         JL_GC_PUSH(&env, &newsig, &tt);
 
         if (m->invokes == NULL) {
-            m->invokes = new_method_table();
+            m->invokes = new_method_table(mt->name);
             // this private method table has just this one definition
             jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0);
         }
@@ -1382,10 +1385,7 @@ void jl_show_method_table(jl_function_t *gf)
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 {
     f->fptr = jl_apply_generic;
-    jl_value_t *nmt = (jl_value_t*)new_method_table();
-    JL_GC_PUSH(&nmt);
-    f->env = (jl_value_t*)jl_tuple2(nmt, (jl_value_t*)name);
-    JL_GC_POP();
+    f->env = (jl_value_t*)new_method_table(name);
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
@@ -1403,7 +1403,6 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     assert(jl_is_function(gf));
     assert(jl_is_tuple(types));
     assert(jl_is_func(meth));
-    assert(jl_is_tuple(gf->env));
     assert(jl_is_mtable(jl_gf_mtable(gf)));
     if (meth->linfo != NULL)
         meth->linfo->name = jl_gf_name(gf);

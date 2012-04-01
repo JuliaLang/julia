@@ -93,9 +93,9 @@ type Worker
     port::Uint16
     socket::TcpSocket
     sendbuf::IOStream
-    id::Int
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
+    id::Int
     gcflag::Bool
     
     Worker(host::String,port::Integer)=Worker(cstring(host),uint16(port))
@@ -118,13 +118,13 @@ function flush_gc_msgs(w::Worker)
     w.gcflag = false
     msgs = w.add_msgs
     if !isempty(msgs)
-        w.add_msgs = {}
+        del_all(w.add_msgs)
         remote_do(w, add_clients, msgs...)
     end
 
     msgs = w.del_msgs
     if !isempty(msgs)
-        w.del_msgs = {}
+        del_all(w.del_msgs)
         #print("sending delete of $msgs\n")
         remote_do(w, del_clients, msgs...)
     end
@@ -732,7 +732,7 @@ function perform_work(job::WorkItem)
             # continuing interrupted work item
             arg = job.argument
             job.argument = ()
-            result = yieldto(job.task, arg)
+            result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
             job.task.tls = nothing
@@ -1313,7 +1313,7 @@ let lastp = 1
     global spawn
     function spawn(thunk::Function)
         p = -1
-        env = ccall(:jl_closure_env, Any, (Any,), thunk)
+        env = thunk.env
         if isa(env,Tuple)
             for v in env
                 if isa(v,Box)
@@ -1561,6 +1561,7 @@ end
 ## event processing, I/O and work scheduling ##
 
 function make_scheduled(t::Task)
+    t.parent = Scheduler
     enq_work(WorkItem(t))
     t
 end

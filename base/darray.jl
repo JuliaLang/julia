@@ -1,6 +1,6 @@
 type DArray{T,N,distdim} <: AbstractArray{T,N}
+    go::GlobalObject
     dims::NTuple{N,Int}
-    locl::Array{T,N}
     # the distributed array has N pieces
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Array{Int,1}
@@ -9,7 +9,7 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     # dimension of distribution
     distdim::Int
     localpiece::Int  # my piece #; pmap[localpiece]==myid()
-    go::GlobalObject
+    locl::Array{T,N}
 
     function DArray(go, initializer, dims, pmap, dist)
         mi = myid()
@@ -19,23 +19,11 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
                 lp=i; break
             end
         end
-
         mysz = lp==0 ? 0 : (dist[lp+1]-dist[lp])
         locsz = ntuple(length(dims), i->(i==distdim ? mysz : dims[i]))
-        da = new()
-        da.dims = dims
-        da.pmap = pmap
-        da.dist = dist
-        da.distdim = distdim
-        da.localpiece = lp
-        da.go = go
-        if lp == 0
-            da.locl = Array(T, locsz)
-        else
-            da.locl = initializer(T, locsz, da)
-        end
-        #remote_call(LocalProcess(), initializer, T, locsz, da)
-        da
+        da = new(go, dims, pmap, dist, distdim, lp)
+        da.locl = lp==0 ? Array(T, locsz) : initializer(T, locsz, da)
+        return da
     end
 
     # don't use DArray() directly; use darray() below instead

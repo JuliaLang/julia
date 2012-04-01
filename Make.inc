@@ -26,7 +26,7 @@ endif
 # Compiler specific stuff
 
 FC = gfortran
-FFLAGS = -O2 -fPIC
+JFFLAGS = -O2 -fPIC
 
 USEGCC = 1
 USECLANG = 0
@@ -34,8 +34,8 @@ USECLANG = 0
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-CFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
-CXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
+JCXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
 endif
@@ -43,8 +43,8 @@ endif
 ifeq ($(USECLANG),1)
 CC = clang
 CXX = clang++
-CFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
-CXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
+JCXXFLAGS = -pipe -fPIC -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
@@ -99,9 +99,9 @@ LLVM_CONFIG=$(LLVMROOT)/bin/llvm-config
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 1)
-READLINE = -lreadline
+READLINE = -lreadline -lncurses -lcurses
 else
-READLINE = $(EXTROOT)/lib/libreadline.a $(EXTROOT)/lib/libhistory.a
+READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -138,20 +138,19 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
-OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
-READLINE += -lncurses -lcurses
+JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-LDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-LDFLAGS = 
+JLDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 READLINE += -lncurses -lcurses
 endif
@@ -162,7 +161,7 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/external/libuv/uv.a $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

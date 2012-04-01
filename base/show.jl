@@ -68,7 +68,7 @@ show(t::Tuple) = show_delim_array(t, '(', ',', ')', true)
 
 function show_expr_type(ty)
     if !is(ty, Any)
-        if isa(ty, FuncKind)
+        if is(ty, Function)
             print("::F")
         elseif is(ty, IntrinsicFunction)
             print("::I")
@@ -165,7 +165,7 @@ show(e::KeyError) = print("key not found: $(e.key)")
 show(e::InterruptException) = nothing
 
 function show(e::MethodError)
-    name = ccall(:jl_genericfunc_name, Any, (Any,), e.f)
+    name = e.f.env.name
     if is(e.f,convert)
         print("no method $(name)(Type{$(e.args[1])},$(typeof(e.args[2])))")
     else

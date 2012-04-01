@@ -331,6 +331,8 @@ static int sigint_callback(int count, int key) {
     return 0;
 }
 
+static int callback_en=0;
+
 void jl_input_line_callback(char *input)
 {
     int end=0, doprint=1;
@@ -346,6 +348,7 @@ void jl_input_line_callback(char *input)
         free(input);
     }
 
+    callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
 }
@@ -480,6 +483,27 @@ static char **julia_completion(const char *text, int start, int end)
     return rl_completion_matches(text, do_completions);
 }
 
+void sigtstp_handler(int arg)
+{
+    rl_cleanup_after_signal();
+
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGTSTP);
+    sigprocmask(SIG_UNBLOCK, &mask, NULL);
+    signal(SIGTSTP, SIG_DFL);
+    raise(SIGTSTP);
+
+    signal(SIGTSTP, sigtstp_handler);
+}
+
+void sigcont_handler(int arg)
+{
+    rl_reset_after_signal();
+    if (callback_en)
+        rl_forced_update_display();
+}
+
 static void init_rl(void)
 {
     rl_readline_name = "julia";
@@ -503,7 +527,11 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
         rl_bind_keyseq_in_map("\\C-c", sigint_callback,    keymaps[i]);
-    };
+
+    }
+
+    signal(SIGTSTP, sigtstp_handler);
+    signal(SIGCONT, sigcont_handler);
 }
 
 #ifndef __WIN32__ //Requires RL 5.0 on windows and RL 6.2 otherwise
@@ -562,7 +590,8 @@ void parseAndExecute(char *str)
 
 void repl_callback_enable()
 {
-    rl_callback_handler_install(prompt_string, &jl_input_line_callback);
+    callback_en = 1;
+    rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
 #include "uv.h"

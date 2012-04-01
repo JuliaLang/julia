@@ -193,28 +193,29 @@ hashtable     (ks::Tuple , vs::Tuple)  = HashTable{Any,Any}(ks, vs)
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
 function rehash{K,V}(h::HashTable{K,V}, newsz)
-    oldk = h.keys
-    oldv = h.vals
-    newht = HashTable{K,V}(newsz)
+    oldk = copy(h.keys)
+    oldv = copy(h.vals)
+    sz = length(oldk)
+    newsz = _tablesz(newsz)
+    if newsz > sz
+        grow(h.keys, newsz-sz)
+        grow(h.vals, newsz-sz)
+    end
+    del_all(h)
 
     for i = 1:length(oldv)
         v = oldv[i]
         if !is(v,_jl_secret_table_token)
-            newht[oldk[i]] = v
+            h[oldk[i]] = v
         end
     end
 
-    h.keys = newht.keys
-    h.vals = newht.vals
-    h.ndel = 0
     return h
 end
 
 function del_all{K,V}(h::HashTable{K,V})
-    sz = length(h.keys)
-    newht = HashTable{K,V}(sz)
-    h.keys = newht.keys
-    h.vals = newht.vals
+    fill!(h.keys, _jl_secret_table_token)
+    fill!(h.vals, _jl_secret_table_token)
     h.ndel = 0
     return h
 end
