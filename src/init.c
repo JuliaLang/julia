@@ -85,13 +85,6 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-static uv_async_t sigint_cb;
-void sigint_callback(uv_handle_t *handle, int status) {
-	//printf("sigint_callback\n");
-	jl_raise(jl_interrupt_exception);
-	uv_break_one(jl_event_loop);
-}
-
 #ifdef __WIN32__
 void restore_signals() { }
 void sigint_handler(int wsig)
@@ -118,7 +111,8 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     }
     else {
         jl_signal_pending = 0;
-		uv_async_send(&sigint_cb);
+		uv_break_one(jl_event_loop);
+		jl_raise(jl_interrupt_exception);
     }
 }
 
@@ -261,7 +255,6 @@ DLLEXPORT void jl_install_sigint_handler()
 	signal(SIGINT, sigint_handler);
 #else
     struct sigaction act;
-	uv_async_init(jl_io_loop, &sigint_cb, (uv_async_cb)&sigint_callback);
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = sigint_handler;
