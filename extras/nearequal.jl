@@ -1,5 +1,14 @@
 # numerical near equality
-isclose(x, y, rtol, atol) = abs(x-y) <= atol+rtol.*max(abs(x), abs(y))
+function isclose(x, y, rtol, atol)
+    if isnan(x) || isnan(y)
+        return isnan(x) && isnan(y)
+    end
+    if isinf(x) || isinf(y)
+        return x == y
+    end
+    abs(x-y) <= atol+rtol.*max(abs(x), abs(y))
+end
+
 function isclose{T1<:Float, T2<:Float}(x::T1, y::T2)
     tol = max(eps(T1), eps(T2))
     isclose(x, y, tol^(1/3), sqrt(tol))
