@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread
+LIBS = -lpthread $(EXTROOTLIB)/uv.a  -lrt 
 
 WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 

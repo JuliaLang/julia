@@ -244,7 +244,7 @@ end
 start_reading(stream::AsyncStream) = start_reading(stream,0)
 
 function stop_reading(stream::AsyncStream)
-    ccall(:jl_stop_reading,Bool.(Ptr{Void},),stream.handle)
+    ccall(:jl_stop_reading,Bool,(Ptr{Void},),stream.handle)
 end
 
 function readall(stream::AsyncStream)

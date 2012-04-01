@@ -139,7 +139,7 @@ endif
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
-OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -161,7 +161,7 @@ OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.e
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

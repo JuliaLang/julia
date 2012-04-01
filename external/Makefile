@@ -626,6 +626,7 @@ install-uv: compile-uv | $(EXTROOTLIB)
 	mkdir -p $(EXTROOT)/include
 	cp libuv/uv.a $(EXTROOTLIB)
 	cp libuv/include/uv.h $(EXTROOT)/include/uv.h 
+	cp -r libuv/include/uv-private $(EXTROOT)/include
 
 clean-uv:
 	$(MAKE) -C libuv clean

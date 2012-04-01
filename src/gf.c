@@ -1181,11 +1181,7 @@ JL_CALLABLE(jl_apply_generic)
 #endif
 #ifdef JL_TRACE
     if (trace_en) {
-<<<<<<< HEAD
-        jl_printf(jl_stdout_tty, "%s(", ((jl_sym_t*)jl_t1(env))->name);
-=======
-        ios_printf(ios_stdout, "%s(", jl_gf_name(F)->name);
->>>>>>> 3cfb3edde9bfa8a170e2d72b352d538631ecc081
+        jl_printf(jl_stdout_tty, "%s(",  jl_gf_name(F)->name);
         size_t i;
         for(i=0; i < nargs; i++) {
             if (i > 0) jl_printf(jl_stdout_tty, ", ");
@@ -1226,7 +1222,7 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc == NULL) {
 #ifdef JL_TRACE
         if (error_en) {
-            jl_printf(jl_stdout_tty, "%s(", ((jl_sym_t*)jl_t1(env))->name);
+            jl_printf(jl_stdout_tty, "%s(", jl_gf_name(F)->name);
             size_t i;
             for(i=0; i < nargs; i++) {
                 if (i > 0) jl_printf(jl_stdout_tty, ", ");

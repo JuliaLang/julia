@@ -18,8 +18,7 @@ type IOStream <: Stream
         return x
     end
 
-    IOStream(finalize::Bool) = IOStream(finalize, "")
-    IOStream() = IOStream(true)
+    IOStream(name::String) = IOStream(name,true)
 end
 
 

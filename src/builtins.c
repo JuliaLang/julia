@@ -812,17 +812,7 @@ static void show_function(jl_value_t *v)
 static void show_type(jl_value_t *t)
 {
     uv_stream_t *s = jl_current_output_stream();
-    if (jl_is_func_type(t)) {
-        if (t == (jl_value_t*)jl_any_func) {
-            jl_puts("Function", s);
-        }
-        else {
-            jl_show((jl_value_t*)((jl_func_type_t*)t)->from);
-            jl_write(s, "-->", 3);
-            jl_show((jl_value_t*)((jl_func_type_t*)t)->to);
-        }
-    }
-    else if (t == (jl_value_t*)jl_function_type) {
+    if (t == (jl_value_t*)jl_function_type) {
         jl_puts("Function", s);
     }
     else if (jl_is_union_type(t)) {
