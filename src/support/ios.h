@@ -25,10 +25,10 @@ typedef struct {
     int errcode;
 
     char *buf;        // start of buffer
-    size_t maxsize;   // space allocated to buffer
-    size_t size;      // length of valid data in buf, >=ndirty
-    size_t bpos;      // current position in buffer
-    size_t ndirty;    // # bytes at &buf[0] that need to be written
+    off_t maxsize;    // space allocated to buffer
+    off_t size;       // length of valid data in buf, >=ndirty
+    off_t bpos;       // current position in buffer
+    off_t ndirty;     // # bytes at &buf[0] that need to be written
 
     off_t fpos;       // cached file pos
     size_t lineno;    // current line number
