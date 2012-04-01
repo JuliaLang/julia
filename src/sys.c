@@ -66,6 +66,8 @@ DLLEXPORT size_t jl_ios_size(ios_t *s)
     return s->size;
 }
 
+DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+
 DLLEXPORT long jl_ios_fd(ios_t *s)
 {
     return s->fd;
