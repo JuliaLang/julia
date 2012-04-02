@@ -109,8 +109,8 @@ each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
 
 function split(s::String, regex::Regex, include_empty::Bool, limit::Integer)
     s = cstring(s)
+    strs = String[]
     i = j = start(s)
-    strs = typeof(s)[]
     while !done(s,i) && (limit == 0 || length(strs) < limit)
         m = match(regex,s,j)
         if m == nothing
