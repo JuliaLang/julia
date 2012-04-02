@@ -773,8 +773,8 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 
 function split(s::String, delims, include_empty::Bool)
     i = 1
-    strs = String[]
     len = length(s)
+    strs = String[]
     while true
         tokstart = tokend = i
         while !done(s,i)
@@ -797,7 +797,6 @@ end
 
 split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
 split(s::String, x) = split(s, x, true)
-split(s::String, x::Char, incl::Bool) = split(s, (x,), incl)
 
 function print_joined(strings, delim, last)
     i = start(strings)
