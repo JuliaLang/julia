@@ -40,7 +40,7 @@ First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
-Next, enter the `julia/` directory and run `make` to build the `julia` executable.
+Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make PARALLEL_BUILD_JOBS=` and supply the maximum number of concurrent processes; Julia does not support using the `-j` switch to `make`.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
@@ -55,7 +55,7 @@ Now you should be able to run julia like this:
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](http://julialang.org/manaual/getting-started) in the manual.
+You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
