@@ -109,8 +109,8 @@ each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
 
 function split(s::String, regex::Regex, include_empty::Bool, limit::Integer)
     s = cstring(s)
+    strs = String[]
     i = j = start(s)
-    strs = typeof(s)[]
     while !done(s,i) && (limit == 0 || length(strs) < limit)
         m = match(regex,s,j)
         if m == nothing
@@ -130,12 +130,14 @@ function split(s::String, regex::Regex, include_empty::Bool, limit::Integer)
 end
 
 split(s::String, x::String, incl::Bool, limit::Integer) =
+    strwidth(x) == 1 ? split(s, x[1], incl, limit) :
     split(s, Regex(strcat("\\Q",x)), incl, limit)
 
 split(s::String, regex::Regex, include_empty::Bool) =
     split(s, regex, include_empty, 0)
 
 split(s::String, x::String, incl::Bool) =
+    strwidth(x) == 1 ? split(s, x[1], incl) :
     split(s, Regex(strcat("\\Q",x)), incl)
 
 replace(s::String, regex::Regex, repl::String, limit::Integer) =
@@ -145,7 +147,9 @@ replace(s::String, regex::Regex, repl::String) =
     join(split(s, regex, true, 0), repl)
 
 replace(s::String, x::String, repl::String, limit::Integer) =
+    strwidth(x) == 1 ? replace(s, x[1], repl, limit) :
     replace(s, Regex(strcat("\\Q",x)), repl, limit)
 
 replace(s::String, x::String, repl::String) =
+    strwidth(x) == 1 ? replace(s, x[1], repl) :
     replace(s, Regex(strcat("\\Q",x)), repl)
