@@ -55,7 +55,7 @@ Now you should be able to run julia like this:
     julia
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
-You can read about [getting started](http://julialang.org/manaual/getting-started) in the manual.
+You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.
 
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
