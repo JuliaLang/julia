@@ -1,15 +1,15 @@
 type Link
-    name::String          # name of the link function
-    linkFun::Function     # link function mu -> eta
+    name::String          # name of the link
+    linkFun::Function     # link function  mu -> eta
     linkInv::Function     # inverse link  eta -> mu
-    muEta::Function       # derivative d mu/d eta as a function of eta
+    muEta::Function       # derivative    eta -> d mu/d eta
 end
 
 logitLink =
     Link("logit",
          mu  -> log(mu ./ (1 - mu)),
-         eta -> 1 ./ (1. + exp(-eta)),
-         eta -> (x = abs(eta); e = exp(-x); f = 1. + e; e ./ (f .* f)))
+         eta -> 1. ./ (1. + exp(-eta)),
+         eta -> (e = exp(-abs(eta)); f = 1. + e; e ./ (f .* f)))
 
 logLink =
     Link("log",
@@ -25,14 +25,14 @@ identityLink =
 
 inverseLink =
     Link("inverse",
-         mu  -> 1 ./ mu,
-         eta -> 1 ./ eta,
+         mu  ->  1. ./ mu,
+         eta ->  1. ./ eta,
          eta -> -1. ./ (eta .* eta))
 
 type Dist
     name::String             # the name of the distribution
     canonical::Link          # the canonical link for the distribution
-    variance::Function       # variance function (mu)-> var
+    variance::Function       # variance function mu -> var
     devResid::Function       # vector of squared deviance residuals
     deviance::Function       # the scalar deviance
     mustart::Function        # derive a starting estimate for mu
@@ -43,7 +43,7 @@ end
 ## utilities used in some distributions
 logN0(x::Number) = x == 0 ? x : log(x)
 logN0{T<:Number}(x::AbstractArray{T}) = reshape([ logN0(x[i]) | i=1:numel(x) ], size(x))
-y_log_y(y, mu) = y .* logN0(y ./ mu)
+y_log_y(y, mu) = y .* logN0(y ./ mu)    # provides correct limit at y == 0
 
 BernoulliDist =
     Dist("Bernoulli",
@@ -54,7 +54,6 @@ BernoulliDist =
          (y, wt)-> (wt .* y + 0.5) ./ (wt + 1.),
          mu  -> all((0 < mu) & (mu < 1)),
          eta -> true)
-
 
 GaussianDist =
     Dist("Gaussian",
@@ -78,7 +77,7 @@ PoissonDist =
          eta -> true)
 
          
-type GlmResp
+type GlmResp                            # response in a glm model
     dist::Dist                  
     link::Link
     eta::Vector{Float64}        # linear predictor
@@ -99,7 +98,7 @@ end
 ## another outer constructor using the canonical link for the distribution
 GlmResp(dist::Dist, y::Vector{Float64}) = GlmResp(dist, dist.canonical, y)
 
-updateMu{T<:Number}(r::GlmResp, linPr::AbstractArray{T}) = (r.eta = linPr + r.offset; r.mu = r.link.linkInv(r.eta); nothing)
+updateMu{T<:Number}(r::GlmResp, linPr::AbstractArray{T}) = (r.eta = linPr + r.offset; r.mu = r.link.linkInv(r.eta); drsum(r))
 deviance( r::GlmResp) = r.dist.deviance(r.y, r.mu, r.wts)
 devResid( r::GlmResp) = r.dist.devResid(r.y, r.mu, r.wts)
 drsum(    r::GlmResp) = sum(devResid(r))
@@ -109,13 +108,48 @@ variance( r::GlmResp) = r.dist.variance(r.mu)
 wrkResid( r::GlmResp) = (r.y - r.mu) ./ r.link.muEta(r.eta)
 wrkResp(  r::GlmResp) = (r.eta - r.offset) + wrkResid(r)
 
-function accumulate(rr, X)
-    w   = sqrtWrkWt(rr)
-    wX  = diagmm(w, X)
-    (wX' * (w .* wrkResp(rr))), (wX' * wX)
+type predD                              # predictor with dense X
+    X::Matrix{Float64}                  # model matrix
+    beta0::Vector{Float64}              # base coefficient vector
+    delb::Vector{Float64}               # increment
 end
 
-iterate(rr, X) = ((wXz, wXtwX) = accumulate(rr, X); bb = wXtwX \ wXz; updateMu(rr, X * bb))
+## outer constructor
+predD(X::Matrix{Float64}) = (zz = zeros((size(X, 2),)); predD(X, zz, zz))
+
+function accumulate(r::GlmResp, p::predD)
+    w   = sqrtWrkWt(r)
+    wX  = diagmm(w, p.X)
+    (wX' * (w .* wrkResp(r))), (wX' * wX)
+end
+
+increment(r::GlmResp, p::predD) = ((wXz, wXtwX) = accumulate(r, p); bb = wXtwX \ wXz; p.delb = bb - p.beta0; updateMu(r, p.X * bb))
+
+function glmFit(p::predD, r::GlmResp, maxIter::Uint, minStepFac::Float64, convTol::Float64)
+    if (maxIter < 1) error("maxIter must be positive") end
+    if (minStepFac < 0 || 1 < minStepFac) error("minStepFac must be in (0, 1)") end
+    cvg = false
+
+    devold = typemax(Float64)           # Float64 version of Inf
+    for i=1:maxIter
+        dev = increment(r, p)
+        if (dev < devold)
+            p.beta0 = p.beta0 + p.delb
+        else
+            error("code needed to handle the step-factor case")
+        end
+        if abs((devold - dev)/dev) < convTol
+            cvg = true
+            break
+        end
+        devold = dev
+    end
+    if !cvg
+        error("failure to converge in $maxIter iterations")
+    end
+end
+
+glmFit(p::predD, r::GlmResp) = glmFit(p, r, uint(30), 0.001, 1.e-6)
 
 ## put at the end of the file because it screws up the indentation for what follows
 
@@ -124,7 +158,7 @@ gammaDist =
          inverseLink,
          mu -> mu .* mu,
          (y, mu, wt)-> -2 * wt .* (logN0(y ./ mu) - (y - mu) ./ mu),
-         (y, mu, wt, drsum)-> (n=sum(wt); disp=sum(-2 * wt .* (logN0(y ./ mu) - (y - mu) ./ mu))/n; invdisp(1/disp); sum(wt .* dgamma(y, invdisp, mu * disp, true))),
+         (y, mu, wt)-> (n=sum(wt); disp=sum(-2 * wt .* (logN0(y ./ mu) - (y - mu) ./ mu))/n; invdisp(1/disp); sum(wt .* dgamma(y, invdisp, mu * disp, true))),
          (y, wt)-> all(y > 0) ? y : error("non-positive response values not allowed for gammaDist"),
          mu  -> all(mu > 0.),
          eta -> all(eta > 0.))
