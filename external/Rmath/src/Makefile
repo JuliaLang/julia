@@ -34,9 +34,9 @@ endif
 default: release
 
 %.o: %.c
-	$(QUIET_CC) $(CC) -std=gnu99 -I../include -DMATHLIB_STANDALONE -DNDEBUG -O2  -c $< -o $@
+	$(QUIET_CC) $(CC) -fPIC -std=gnu99 -I../include -DMATHLIB_STANDALONE -DNDEBUG -O2  -c $< -o $@
 %.do: %.c
-	$(QUIET_CC) $(CC) -std=gnu99 -I../include -DMATHLIB_STANDALONE -g  -c $< -o $@
+	$(QUIET_CC) $(CC) -fPIC -std=gnu99 -I../include -DMATHLIB_STANDALONE -g  -c $< -o $@
 
 release debug: libRmath.$(SHLIB_EXT)
 
