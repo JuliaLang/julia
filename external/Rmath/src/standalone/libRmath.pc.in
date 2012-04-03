@@ -1,8 +1,0 @@
-includedir=@includedir
-libdir=@libdir
-
-Name: libRmath
-Description: The Rmath function library
-Version: @VERSION
-Libs: -L${libdir} -lRmath @libm
-Cflags: -I${includedir}
