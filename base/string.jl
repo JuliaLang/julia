@@ -390,6 +390,8 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
 end
 
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
