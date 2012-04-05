@@ -1,3 +1,14 @@
+
+function length(itr)
+    n = 0
+    s = start(itr)
+    while !done(itr,s)
+        n += 1
+        v, s = next(itr,s)
+    end
+    return n
+end
+
 # enumerate
 
 type Enumerate
