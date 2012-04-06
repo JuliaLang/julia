@@ -5,6 +5,7 @@ type Enumerate
 end
 enumerate(itr) = Enumerate(itr)
 
+length(e::Enumerate) = length(e.itr)
 start(e::Enumerate) = (start(e.itr), 1)
 function next(e::Enumerate, state)
     v, s = next(e.itr, state[1])
@@ -20,6 +21,7 @@ type Zip
 end
 zip(itrs...) = Zip(itrs...)
 
+length(z::Zip) = min(length, z.itrs)
 start(z::Zip) = { start(itr) | itr in z.itrs }
 function next(z::Zip, state)
     v = Array(Any, length(z.itrs))
@@ -84,6 +86,7 @@ type Reverse
 end
 reverse(itr) = Reverse(itr)
 
+length(r::Reverse) = length(r.itr)
 start(r::Reverse) = length(r.itr)
 next(r::Reverse, i) = (r.itr[i], i-1)
 done(r::Reverse, i) = i < 1

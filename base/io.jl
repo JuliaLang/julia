@@ -51,7 +51,7 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(strcat("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-             s.ios, cstring(fname), rd, wr, cr, tr) == C_NULL
+             s.ios, fname, rd, wr, cr, tr) == C_NULL
         error("could not open file ", fname)
     end
     if ff && ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0

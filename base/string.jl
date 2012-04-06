@@ -390,6 +390,8 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
 end
 
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+
 ## string promotion rules ##
 
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
@@ -726,7 +728,7 @@ function parse(s::String, pos, greedy)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{Uint8}, Int32, Int32),
-                    cstring(s), pos-1, greedy ? 1:0)
+                    s, pos-1, greedy ? 1:0)
     if isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
     end
@@ -965,15 +967,10 @@ cstring(x::Signed) = dec(int64(x))
 
 ## string to float functions ##
 
-function float64_isvalid(s::String, out::Array{Float64,1})
-    s = cstring(s)
-    return (ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), s, out)==0)
-end
-
-function float32_isvalid(s::String, out::Array{Float32,1})
-    s = cstring(s)
-    return (ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out)==0)
-end
+float64_isvalid(s::String, out::Array{Float64,1}) =
+    ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), s, out) == 0
+float32_isvalid(s::String, out::Array{Float32,1}) =
+    ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
 
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)

@@ -66,7 +66,7 @@ function pcre_compile(pattern::String, options::Integer)
     erroff = Array(Int32,1)
     re_ptr = (()->ccall(dlsym(_jl_libpcre, :pcre_compile), Ptr{Void},
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
-                        cstring(pattern), options, errstr, erroff, C_NULL))()
+                        pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
         error("pcre_compile: $(errstr[1])",
               " at position $(erroff[1]+1)",
