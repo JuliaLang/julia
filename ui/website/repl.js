@@ -402,6 +402,35 @@ message_handlers[MSG_OUTPUT_FATAL_ERROR] = function(msg) {
     outbox_queue = [];
 };
 
+message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
+    // get the input from form
+    var input = $("#terminal-input").val();
+
+    // input history
+    if (input.replace(/^\s+|\s+$/g, '') != "")
+        input_history.push(input);
+    if (input_history.length > input_history_size)
+        input_history = input_history.slice(input_history.length-input_history_size);
+    input_history_current = input_history.slice(0);
+    input_history_current.push("");
+    input_history_id = input_history_current.length-1;
+
+    // add the julia prompt and the input to the log
+    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
+
+    // print the error message
+    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
+
+    // clear the input field
+    $("#terminal-input").val("");
+
+    // re-enable the input field
+    $("#terminal-input").removeAttr("disabled");
+
+    // focus the input field
+    $("#terminal-input").focus();
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -411,36 +440,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_PARSE_ERROR
-        if (type == MSG_OUTPUT_PARSE_ERROR) {
-            // get the input from form
-            var input = $("#terminal-input").val();
-
-            // input history
-            if (input.replace(/^\s+|\s+$/g, '') != "")
-                input_history.push(input);
-            if (input_history.length > input_history_size)
-                input_history = input_history.slice(input_history.length-input_history_size);
-            input_history_current = input_history.slice(0);
-            input_history_current.push("");
-            input_history_id = input_history_current.length-1;
-
-            // add the julia prompt and the input to the log
-            add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
-            // print the error message
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
-
-            // clear the input field
-            $("#terminal-input").val("");
-
-            // re-enable the input field
-            $("#terminal-input").removeAttr("disabled");
-
-            // focus the input field
-            $("#terminal-input").focus();
-        }
 
         // MSG_OUTPUT_PARSE_INCOMPLETE
         if (type == MSG_OUTPUT_PARSE_INCOMPLETE) {
