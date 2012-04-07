@@ -11,6 +11,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 

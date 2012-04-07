@@ -411,6 +411,8 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
     }
 }
 
+extern int vasprintf(char **str, const char *fmt, va_list ap);
+
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
     char *str=NULL;
@@ -503,9 +505,10 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 
 //WIN32 math functions that are not part of the CRT
 #ifdef __WIN32__
+#include "math.h"
 DLLEXPORT float truncf(float x)
 {
-     return (x > 0) ? floor(x) : ceil(x);
+     return (x > 0) ? floorf(x) : ceilf(x);
 }
 
 DLLEXPORT double trunc(double x)

@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"

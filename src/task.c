@@ -470,7 +470,11 @@ static jl_value_t *build_backtrace(void)
 		{
 			num = func( 0, 1023, array, NULL );
 		}
-	}
+    }else
+    {
+        jl_puts("Failed to load kernel32.dll",jl_stderr_tty);
+        jl_exit(1);
+    }
 	FreeLibrary(kernel32);
 	#else
 	num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
@@ -542,6 +546,7 @@ void jl_raise(jl_value_t *e)
         ctx_switch(eh, eh->state.eh_ctx);
         // TODO: continued exception
     }
+    jl_exit(1);
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)

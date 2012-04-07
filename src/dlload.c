@@ -23,6 +23,7 @@ static char *extensions[] = { "", ".dylib", ".bundle" };
 #elif defined(__WIN32__)
 #include <windef.h>
 #include <windows.h>
+#include <direct.h>
 #define GET_FUNCTION_FROM_MODULE dlsym
 #define CLOSE_MODULE dlclose
 typedef void * module_handle_t;
