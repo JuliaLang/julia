@@ -368,13 +368,16 @@ function process_outbox() {
 function process_inbox() {
     // iterate through the messages
     for (var id in inbox_queue) {
+        var msg = inbox_queue[id],
+            type = msg[0], msg = msg.slice(1);
+
         // MSG_OUTPUT_NULL
-        if (inbox_queue[id][0] == MSG_OUTPUT_NULL) {
+        if (type == MSG_OUTPUT_NULL) {
             // do nothing
         }
 
         // MSG_OUTPUT_READY
-        if (inbox_queue[id][0] == MSG_OUTPUT_READY) {
+        if (type == MSG_OUTPUT_READY) {
             // remove the initializing message
             $("#terminal").html("");
 
@@ -389,21 +392,21 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_MESSAGE
-        if (inbox_queue[id][0] == MSG_OUTPUT_MESSAGE) {
+        if (type == MSG_OUTPUT_MESSAGE) {
             // print the message
-            add_to_terminal("<span class=\"color-scheme-message\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
+            add_to_terminal("<span class=\"color-scheme-message\">"+escape_html(msg[0])+"</span><br /><br />");
         }
 
         // MSG_OUTPUT_OTHER
-        if (inbox_queue[id][0] == MSG_OUTPUT_OTHER) {
+        if (type == MSG_OUTPUT_OTHER) {
             // just print the output
-            add_to_terminal(escape_html(inbox_queue[id][1]));
+            add_to_terminal(escape_html(msg[0]));
         }
 
         // MSG_OUTPUT_FATAL_ERROR
-        if (inbox_queue[id][0] == MSG_OUTPUT_FATAL_ERROR) {
+        if (type == MSG_OUTPUT_FATAL_ERROR) {
             // print the error message
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
+            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
 
             // stop processing new messages
             dead = true;
@@ -413,7 +416,7 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_PARSE_ERROR
-        if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_ERROR) {
+        if (type == MSG_OUTPUT_PARSE_ERROR) {
             // get the input from form
             var input = $("#terminal-input").val();
 
@@ -430,7 +433,7 @@ function process_inbox() {
             add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
 
             // print the error message
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
+            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
 
             // clear the input field
             $("#terminal-input").val("");
@@ -443,7 +446,7 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_PARSE_INCOMPLETE
-        if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_INCOMPLETE) {
+        if (type == MSG_OUTPUT_PARSE_INCOMPLETE) {
             // re-enable the input field
             $("#terminal-input").removeAttr("disabled");
 
@@ -455,7 +458,7 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_PARSE_COMPLETE
-        if (inbox_queue[id][0] == MSG_OUTPUT_PARSE_COMPLETE) {
+        if (type == MSG_OUTPUT_PARSE_COMPLETE) {
             // get the input from form
             var input = $("#terminal-input").val();
 
@@ -479,12 +482,12 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_EVAL_RESULT
-        if (inbox_queue[id][0] == MSG_OUTPUT_EVAL_RESULT) {
+        if (type == MSG_OUTPUT_EVAL_RESULT) {
             // print the result
-            if ($.trim(inbox_queue[id][1]) == "")
+            if ($.trim(msg[0]) == "")
                 add_to_terminal("<br />");
             else
-                add_to_terminal(escape_html(inbox_queue[id][1])+"<br /><br />");
+                add_to_terminal(escape_html(msg[0])+"<br /><br />");
 
             // show the prompt
             $("#prompt").show();
@@ -497,9 +500,9 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_EVAL_ERROR
-        if (inbox_queue[id][0] == MSG_OUTPUT_EVAL_ERROR) {
+        if (type == MSG_OUTPUT_EVAL_ERROR) {
             // print the error
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(inbox_queue[id][1])+"</span><br /><br />");
+            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
 
             // show the prompt
             $("#prompt").show();
@@ -512,18 +515,18 @@ function process_inbox() {
         }
 
         // MSG_OUTPUT_PLOT
-        if (inbox_queue[id][0] == MSG_OUTPUT_PLOT) {
+        if (type == MSG_OUTPUT_PLOT) {
             // line plot
-            if (inbox_queue[id][1] == "line") {
+            if (msg[0] == "line") {
                 // get the data
-                var x_data = eval(inbox_queue[id][2]);
-                var y_data = eval(inbox_queue[id][3]);
+                var x_data = eval(msg[1]);
+                var y_data = eval(msg[2]);
 
                 // get the bounds on the data
-                var x_min = eval(inbox_queue[id][4]);
-                var x_max = eval(inbox_queue[id][5]);
-                var y_min = eval(inbox_queue[id][6]);
-                var y_max = eval(inbox_queue[id][7]);
+                var x_min = eval(msg[3]);
+                var x_max = eval(msg[4]);
+                var y_min = eval(msg[5]);
+                var y_max = eval(msg[6]);
 
                 // construct the data for D3
                 var data = d3.range(x_data.length).map(function(i) {
@@ -631,16 +634,16 @@ function process_inbox() {
             }
 
             // bar plot
-            if (inbox_queue[id][1] == "bar") {
+            if (msg[0] == "bar") {
                 // get the data
-                var x_data = eval(inbox_queue[id][2]);
-                var y_data = eval(inbox_queue[id][3]);
+                var x_data = eval(msg[1]);
+                var y_data = eval(msg[2]);
 
                 // get the bounds on the data
-                var x_min = eval(inbox_queue[id][4]);
-                var x_max = eval(inbox_queue[id][5]);
-                var y_min = eval(inbox_queue[id][6]);
-                var y_max = eval(inbox_queue[id][7]);
+                var x_min = eval(msg[3]);
+                var x_max = eval(msg[4]);
+                var y_min = eval(msg[5]);
+                var y_max = eval(msg[6]);
 
                 // construct the data for D3
                 var data = d3.range(x_data.length).map(function(i) {
