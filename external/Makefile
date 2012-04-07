@@ -113,7 +113,6 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	echo $(OS)
 	./configure --prefix=$(abspath $(EXTROOT)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=gcc CXX=g++ && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
@@ -299,13 +298,13 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-	ifeq ($(OS),WINNT)
-		OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
-	else
-		OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.lib
-	endif
+ifeq ($(OS),WINNT)
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.lib
 else
-OPENBLAS_OBJ_SOURCE =
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+endif
+else
+OPENBLAS_OBJ_SOURCE = 
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
@@ -345,7 +344,7 @@ lapack-$(LAPACK_VER).tgz:
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
-lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
+lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC) LOADER=$(FC)
