@@ -366,6 +366,8 @@ function process_outbox() {
 
 var message_handlers = [];
 
+message_handlers[MSG_OUTPUT_NULL] = function(msg) {}; // do nothing
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -375,11 +377,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_NULL
-        if (type == MSG_OUTPUT_NULL) {
-            // do nothing
-        }
 
         // MSG_OUTPUT_READY
         if (type == MSG_OUTPUT_READY) {
