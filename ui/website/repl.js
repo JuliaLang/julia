@@ -431,6 +431,17 @@ message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
     $("#terminal-input").focus();
 };
 
+message_handlers[MSG_OUTPUT_PARSE_INCOMPLETE] = function(msg) {
+    // re-enable the input field
+    $("#terminal-input").removeAttr("disabled");
+
+    // focus the input field
+    $("#terminal-input").focus();
+
+    // add a newline for the user
+    $("#terminal-input").newline_at_caret();
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -440,18 +451,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_PARSE_INCOMPLETE
-        if (type == MSG_OUTPUT_PARSE_INCOMPLETE) {
-            // re-enable the input field
-            $("#terminal-input").removeAttr("disabled");
-
-            // focus the input field
-            $("#terminal-input").focus();
-
-            // add a newline for the user
-            $("#terminal-input").newline_at_caret();
-        }
 
         // MSG_OUTPUT_PARSE_COMPLETE
         if (type == MSG_OUTPUT_PARSE_COMPLETE) {
