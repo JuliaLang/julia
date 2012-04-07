@@ -224,6 +224,26 @@ clean-fdlibm:
 	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
 distclean-fdlibm: clean-fdlibm
 
+## rmath ##
+
+RMATH_OBJ_TARGET = $(EXTROOTLIB)/libRmath.$(SHLIB_EXT)
+RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
+
+compile-rmath: $(RMATH_OBJ_SOURCE)
+install-rmath: $(RMATH_OBJ_TARGET)
+
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile
+	cd Rmath/src && \
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC)
+$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
+	mkdir -p $(EXTROOTLIB)
+	cp $< $@
+
+clean-rmath:
+	cd Rmath/src && $(MAKE) $(jPARALLEL_BUILD_JOBS) clean
+	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
+distclean-rmath: clean-rmath
+
 ## amos ##
 
 AMOS_OBJ_TARGET = $(EXTROOTLIB)/libamos.$(SHLIB_EXT)
