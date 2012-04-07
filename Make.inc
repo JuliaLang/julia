@@ -106,6 +106,8 @@ endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses -lcurses
+else
+READLINE += $(EXTROOT)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -121,11 +123,11 @@ else
 LIBBLAS = -lblas
 endif
 else
-	ifeq ($(OS), WINNT)
-		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
-	else
-		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
-	endif
+ifeq ($(OS), WINNT)
+LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
+else
+LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -156,7 +158,6 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 JLDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices  -lutil -lm 
-READLINE += -lncurses -lcurses
 endif
 
 ifeq ($(OS), WINNT)

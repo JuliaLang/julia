@@ -133,9 +133,11 @@ READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER)
 READLINE_OPTS = --disable-shared --enable-static
 ifeq ($(OS),WINNT)
 	READLINE_URL = https://github.com/loladiro/readline/tarball/master
+	READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 else
 	READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
 	READLINE_OPTS += --with-curses
+	READLINE_CFLAGS = 
 endif
 
 compile-readline: $(READLINE_OBJ_SOURCE)
@@ -150,7 +152,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT)) $(READLINE_OPTS)  && \
-	$(MAKE) $(jPARALLEL_BUILD_JOBS)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C readline-$(READLINE_VER) install
