@@ -29,6 +29,20 @@ copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
 
+## byte-order mark, ntoh & hton ##
+
+const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
+
+if ENDIAN_BOM == 0x01020304
+    ntoh(x) = identity(x)
+    hton(x) = identity(x)
+elseif ENDIAN_BOM == 0x04030201
+    ntoh(x) = bswap(x)
+    hton(x) = bswap(x)
+else
+    error("seriously? what is this machine?")
+end
+
 ## number-theoretic functions ##
 
 function gcd{T<:Integer}(a::T, b::T)

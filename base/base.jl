@@ -89,14 +89,9 @@ cstring(str::ByteString) = str
 # return an integer such that uid(x)==uid(y) iff is(x,y)
 uid(x) = ccall(:jl_uid, Uint, (Any,), x)
 
-dlsym(hnd, s::String) =
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, cstring(s))
-
-dlsym(hnd, s::Symbol) =
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
-
-dlopen(fname::String) =
-    ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), cstring(fname))
+dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
 
 identity(x) = x
 

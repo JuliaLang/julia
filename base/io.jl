@@ -1,10 +1,15 @@
+const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
 
+if sizeof_off_t == 4
+    typealias FileOffset Int32
+else
+    typealias FileOffset Int64
+end
 abstract Stream
 
 type IOStream <: Stream
-
     ios::Array{Uint8,1}
     name::String
 
@@ -46,10 +51,10 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(strcat("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
              (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
-             s.ios, cstring(fname), rd, wr, cr, tr) == C_NULL
+             s.ios, fname, rd, wr, cr, tr) == C_NULL
         error("could not open file ", fname)
     end
-    if ff && ccall(:ios_seek_end, Uint, (Ptr{Void},), s.ios) != 0
+    if ff && ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0
         error("error seeking to end of file ", fname)
     end
     return s
@@ -253,14 +258,14 @@ truncate(s::IOStream, n::Integer) =
     ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, n)
 
 seek(s::IOStream, n::Integer) =
-    (ccall(:ios_seek, Int, (Ptr{Void}, Int), s.ios, n)==0 ||
+    (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
      error("seek failed"))
 
 skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, Int, (Ptr{Void}, Int), s.ios, delta)==0 ||
+    (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
      error("skip failed"))
 
-position(s::IOStream) = ccall(:ios_pos, Int, (Ptr{Void},), s.ios)
+position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
 type IOTally
     nbytes::Int
