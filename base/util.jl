@@ -216,14 +216,14 @@ end
 
 # help
 
-function parse_help(stream)
+function parse_help(manual)
     helpdb = HashTable()
-    for l = each_line(stream)
+    for l = split(manual,'\n')
         if isempty(l)
             continue
         end
         if length(l) >= 3 && l[1:3]=="## "
-            heading = l[4:end-1]
+            heading = l[4:end]
             category = HashTable()
             helpdb[heading] = category
             continue
@@ -263,10 +263,8 @@ function _jl_init_help()
     global _jl_helpdb
     if _jl_helpdb == nothing
         println("Downloading help data...")
-        cmd = `curl -s $_jl_help_url`
-        stream = fdio(read_from(cmd).fd, true)
-        spawn(cmd)
-        _jl_helpdb = parse_help(stream)
+        manual = readall(`curl -s $_jl_help_url`)
+        _jl_helpdb = parse_help(manual)
     end
 end
 
@@ -309,7 +307,7 @@ function _jl_print_help_entries(entries)
         if !first
             println()
         end
-        print(desc[1], "\n ", desc[2])
+        println(desc[1], "\n ", desc[2])
         first = false
     end
 end
