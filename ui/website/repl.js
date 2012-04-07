@@ -442,6 +442,29 @@ message_handlers[MSG_OUTPUT_PARSE_INCOMPLETE] = function(msg) {
     $("#terminal-input").newline_at_caret();
 };
 
+message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
+    // get the input from form
+    var input = $("#terminal-input").val();
+
+    // input history
+    if (input.replace(/^\s+|\s+$/g, '') != "")
+        input_history.push(input);
+    if (input_history.length > input_history_size)
+        input_history = input_history.slice(input_history.length-input_history_size);
+    input_history_current = input_history.slice(0);
+    input_history_current.push("");
+    input_history_id = input_history_current.length-1;
+
+    // add the julia prompt and the input to the log
+    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
+
+    // clear the input field
+    $("#terminal-input").val("");
+
+    // hide the prompt until the result comes in
+    $("#prompt").hide();
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -451,30 +474,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_PARSE_COMPLETE
-        if (type == MSG_OUTPUT_PARSE_COMPLETE) {
-            // get the input from form
-            var input = $("#terminal-input").val();
-
-            // input history
-            if (input.replace(/^\s+|\s+$/g, '') != "")
-                input_history.push(input);
-            if (input_history.length > input_history_size)
-                input_history = input_history.slice(input_history.length-input_history_size);
-            input_history_current = input_history.slice(0);
-            input_history_current.push("");
-            input_history_id = input_history_current.length-1;
-
-            // add the julia prompt and the input to the log
-            add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
-            // clear the input field
-            $("#terminal-input").val("");
-
-            // hide the prompt until the result comes in
-            $("#prompt").hide();
-        }
 
         // MSG_OUTPUT_EVAL_RESULT
         if (type == MSG_OUTPUT_EVAL_RESULT) {
