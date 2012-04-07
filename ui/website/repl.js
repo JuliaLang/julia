@@ -412,7 +412,6 @@ function process_inbox() {
             dead = true;
             inbox_queue = [];
             outbox_queue = [];
-            break;
         }
 
         // MSG_OUTPUT_PARSE_ERROR
@@ -726,6 +725,9 @@ function process_inbox() {
                 $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
             }
         }
+
+        if (dead)
+            break;
     }
 
     // we handled all the messages so clear the inbox
