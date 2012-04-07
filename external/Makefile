@@ -180,6 +180,10 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	./configure --prefix=$(abspath $(EXTROOT)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C pcre-$(PCRE_VER) install
+ifeq ($(OS),WINNT)
+	rm root/lib/libpcre.dll
+	mv root/bin/libpcre-0.dll root/lib/libpcre.dll
+endif
 	touch $@
 
 clean-pcre:
@@ -417,6 +421,10 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-single install
+ifeq ($(OS),WINNT)
+	rm root/lib/libfftw3f.dll
+	mv root/bin/libfftw3f-3.dll root/lib/libfftw3f.dll
+endif
 	touch $@
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
@@ -430,6 +438,10 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C fftw-$(FFTW_VER)-double install
+ifeq ($(OS),WINNT)
+	rm root/lib/libfftw3.dll
+	mv root/bin/libfftw3-3.dll root/lib/libfftw3.dll
+endif
 	touch $@
 
 clean-fftw: clean-fftw-single clean-fftw-double

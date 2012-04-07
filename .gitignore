@@ -31,3 +31,6 @@
 *.creator
 *.user
 *.orig
+
+include
+lib

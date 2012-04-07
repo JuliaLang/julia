@@ -99,6 +99,7 @@ uv_lib_t jl_load_dynamic_library(char *fname)
         if (!error.code) return handle;
     }
     assert(handle == NULL);
+
     jl_printf(jl_stderr_tty, "could not load module %s (%d:%d)", fname, error.code,error.sys_errno_);
     jl_errorf("could not load module %s", fname);
 

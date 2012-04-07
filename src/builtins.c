@@ -446,7 +446,11 @@ void jl_load_file_expr(char *fname, jl_value_t *ast)
     char newcwd[512];
     get_cwd(oldcwd, sizeof(oldcwd));
     char *sep = strrchr(fname, PATHSEP);
-    if (sep) {
+    if (sep
+#ifdef __WIN32__
+            ||(sep=strrchr(fname, '/'))
+#endif
+            ) {
         size_t n = (sep - fname)+1;
         if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
         strncpy(newcwd, fname, n);

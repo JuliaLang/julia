@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-debug release:
+debug release: makelinks
 	@$(MAKE) -s julia-$@
 	@$(MAKE) -s sys.ji
 
@@ -70,7 +70,7 @@ distclean: cleanall
 	rm -fr dist
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* sloccount clean cleanall
+	test testall test-* sloccount clean cleanall makelinks
 
 test: release
 	@$(MAKE) -sC test default
@@ -80,3 +80,21 @@ testall: release
 
 test-%: release
 	@$(MAKE) -sC test $*
+
+lib:
+ifeq ($(OS),WINNT)
+	cmd //C mklink //J lib external\\root\\lib
+else
+	ln -s external/root/lib lib
+endif
+
+include:
+ifeq ($(OS),WINNT)
+	cmd //C mklink //J include external\\root\\include
+else
+	ln -s external/root/include include
+endif
+
+
+makelinks: lib include
+
