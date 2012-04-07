@@ -364,12 +364,17 @@ function process_outbox() {
     }
 }
 
+var message_handlers = [];
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
     for (var id in inbox_queue) {
         var msg = inbox_queue[id],
-            type = msg[0], msg = msg.slice(1);
+            type = msg[0], msg = msg.slice(1),
+            handler = message_handlers[type];
+        if (typeof handler == "function")
+            handler(msg);
 
         // MSG_OUTPUT_NULL
         if (type == MSG_OUTPUT_NULL) {
