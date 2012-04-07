@@ -434,8 +434,16 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 int asprintf(char **strp, const char *fmt, ...);
 
 // load toplevel expressions, from (file ...)
+static int jl_load_progress_max = 0;
+static int jl_load_progress_i = 0;
+DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
 void jl_load_file_expr(char *fname, jl_value_t *ast)
 {
+	if (jl_load_progress_max > 0) {
+		jl_load_progress_i++;
+		ios_printf(ios_stdout, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+		ios_flush(ios_stdout);
+	}
     jl_array_t *b = ((jl_expr_t*)ast)->args;
     size_t i;
     volatile size_t lineno=0;

@@ -230,6 +230,7 @@
     uv_process_kill;
     jl_ios_buf_base;
     restore_signals;
+    jl_load_progress_setmax;
   local:
     *;
 };

@@ -1,5 +1,30 @@
 ## Load essential files and libraries
 
+ccall(:putchar, Void, (Char,), 'B')
+ccall(:putchar, Void, (Char,), 'u')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'l')
+ccall(:putchar, Void, (Char,), 'd')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'n')
+ccall(:putchar, Void, (Char,), 'g')
+ccall(:putchar, Void, (Char,), ' ')
+ccall(:putchar, Void, (Char,), 's')
+ccall(:putchar, Void, (Char,), 'y')
+ccall(:putchar, Void, (Char,), 's')
+ccall(:putchar, Void, (Char,), 't')
+ccall(:putchar, Void, (Char,), 'e')
+ccall(:putchar, Void, (Char,), 'm')
+ccall(:putchar, Void, (Char,), ' ')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'm')
+ccall(:putchar, Void, (Char,), 'a')
+ccall(:putchar, Void, (Char,), 'g')
+ccall(:putchar, Void, (Char,), 'e')
+ccall(:putchar, Void, (Char,), ':')
+ccall(:putchar, Void, (Char,), '\n')
+ccall(:jl_load_progress_setmax, Void, (Int,), 67)
+
 include("base.jl")
 
 # core operations & types
@@ -41,6 +66,7 @@ include("io.jl")
 include("stream.jl")
 stream=make_stdout_stream()
 set_current_output_stream(stream) # for error reporting
+
 include("string.jl")
 include("ascii.jl")
 include("utf8.jl")
@@ -213,3 +239,7 @@ compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
 compile_hint(ref, (Type{String}, ASCIIString, ASCIIString, ASCIIString))
+
+ccall(:jl_load_progress_setmax, Void, (Int,), 0);
+println()
+
