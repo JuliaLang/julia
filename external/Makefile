@@ -20,8 +20,6 @@ GMP_VER=5.0.4
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-OS = $(shell uname)
-ARCH = $(shell uname -m)
 LIBS = uv fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
@@ -68,6 +66,10 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
 endif
 
+ifeq ($(OS),WINNT)
+READLINE_VER = 5.0
+endif
+
 WGET = wget --no-check-certificate
 WGET_DASH_O = wget --no-check-certificate -O
 ifeq ($(OS), Darwin)
@@ -94,7 +96,11 @@ $(EXTROOTLIB):
 ## LLVM ##
 
 LLVM_OBJ_TARGET = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+ifeq ($(OS),WINNT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
+else
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
@@ -107,6 +113,7 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
+	echo $(OS)
 	./configure --prefix=$(abspath $(EXTROOT)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=gcc CXX=g++ && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
@@ -124,17 +131,26 @@ distclean-llvm:
 READLINE_OBJ_TARGET = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER).$(SHLIB_EXT)
 
+READLINE_OPTS = --disable-shared --enable-static
+ifeq ($(OS),WINNT)
+	READLINE_URL = https://github.com/loladiro/readline/tarball/master
+else
+	READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
+	READLINE_OPTS += --with-curses
+endif
+
 compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET) ftp://ftp.gnu.org/gnu/readline/$@
+	$(WGET_DASH_O) $@ $(READLINE_URL)
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
-	tar zxf $<
+	mkdir readline-$(READLINE_VER)
+	tar -C readline-$(READLINE_VER) --strip-components 1 -xf $<
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
+	./configure --prefix=$(abspath $(EXTROOT)) $(READLINE_OPTS)  && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -279,7 +295,11 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+	ifeq ($(OS),WINNT)
+		OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+	else
+		OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.lib
+	endif
 else
 OPENBLAS_OBJ_SOURCE =
 endif
@@ -379,6 +399,9 @@ install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
+ifeq ($(OS),WINNT)
+	FFTW_CONFIG += --with-our-malloc
+endif
 
 fftw-$(FFTW_VER).tar.gz:
 	$(WGET) http://www.fftw.org/$@
