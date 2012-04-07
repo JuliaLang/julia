@@ -482,6 +482,20 @@ message_handlers[MSG_OUTPUT_EVAL_RESULT] = function(msg) {
     $("#terminal-input").focus();
 };
 
+message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
+    // print the error
+    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
+
+    // show the prompt
+    $("#prompt").show();
+
+    // re-enable the input field
+    $("#terminal-input").removeAttr("disabled");
+
+    // focus the input field
+    $("#terminal-input").focus();
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -491,21 +505,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_EVAL_ERROR
-        if (type == MSG_OUTPUT_EVAL_ERROR) {
-            // print the error
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
-
-            // show the prompt
-            $("#prompt").show();
-
-            // re-enable the input field
-            $("#terminal-input").removeAttr("disabled");
-
-            // focus the input field
-            $("#terminal-input").focus();
-        }
 
         // MSG_OUTPUT_PLOT
         if (type == MSG_OUTPUT_PLOT) {
