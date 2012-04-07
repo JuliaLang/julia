@@ -1,3 +1,5 @@
+(function() {
+
 /*
     Color Schemes
 */
@@ -849,3 +851,5 @@ $(document).ready(function() {
     // start polling the server
     init_session();
 });
+
+})();
