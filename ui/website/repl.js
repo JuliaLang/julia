@@ -368,6 +368,20 @@ var message_handlers = [];
 
 message_handlers[MSG_OUTPUT_NULL] = function(msg) {}; // do nothing
 
+message_handlers[MSG_OUTPUT_READY] = function(msg) {
+    // remove the initializing message
+    $("#terminal").html("");
+
+    // enable input
+    $("#prompt").show();
+    $("#terminal-input").removeAttr("disabled");
+    $("#terminal-input").show();
+    $("#terminal-input").focus();
+
+    // reset the size of the input box
+    set_input_width();
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -377,21 +391,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_READY
-        if (type == MSG_OUTPUT_READY) {
-            // remove the initializing message
-            $("#terminal").html("");
-
-            // enable input
-            $("#prompt").show();
-            $("#terminal-input").removeAttr("disabled");
-            $("#terminal-input").show();
-            $("#terminal-input").focus();
-
-            // reset the size of the input box
-            set_input_width();
-        }
 
         // MSG_OUTPUT_MESSAGE
         if (type == MSG_OUTPUT_MESSAGE) {
