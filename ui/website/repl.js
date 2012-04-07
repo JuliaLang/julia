@@ -387,6 +387,11 @@ message_handlers[MSG_OUTPUT_MESSAGE] = function(msg) {
     add_to_terminal("<span class=\"color-scheme-message\">"+escape_html(msg[0])+"</span><br /><br />");
 };
 
+message_handlers[MSG_OUTPUT_OTHER] = function(msg) {
+    // just print the output
+    add_to_terminal(escape_html(msg[0]));
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -396,12 +401,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_OTHER
-        if (type == MSG_OUTPUT_OTHER) {
-            // just print the output
-            add_to_terminal(escape_html(msg[0]));
-        }
 
         // MSG_OUTPUT_FATAL_ERROR
         if (type == MSG_OUTPUT_FATAL_ERROR) {
