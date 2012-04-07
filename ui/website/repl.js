@@ -392,6 +392,16 @@ message_handlers[MSG_OUTPUT_OTHER] = function(msg) {
     add_to_terminal(escape_html(msg[0]));
 };
 
+message_handlers[MSG_OUTPUT_FATAL_ERROR] = function(msg) {
+    // print the error message
+    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
+
+    // stop processing new messages
+    dead = true;
+    inbox_queue = [];
+    outbox_queue = [];
+};
+
 // process the messages in the inbox
 function process_inbox() {
     // iterate through the messages
@@ -401,17 +411,6 @@ function process_inbox() {
             handler = message_handlers[type];
         if (typeof handler == "function")
             handler(msg);
-
-        // MSG_OUTPUT_FATAL_ERROR
-        if (type == MSG_OUTPUT_FATAL_ERROR) {
-            // print the error message
-            add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
-
-            // stop processing new messages
-            dead = true;
-            inbox_queue = [];
-            outbox_queue = [];
-        }
 
         // MSG_OUTPUT_PARSE_ERROR
         if (type == MSG_OUTPUT_PARSE_ERROR) {
