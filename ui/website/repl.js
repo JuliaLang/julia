@@ -630,17 +630,12 @@ plotters["bar"] = function(plotdata) {
         return {x: x_data[i], y: y_data[i]};
     });
 
-    var xmin = d3.min(data, function(d) { return d.x; } );
-    var xmax = d3.max(data, function(d) { return d.x; } );
-    var ymin = d3.min(data, function(d) { return d.y; } );
-    var ymax = d3.max(data, function(d) { return d.y; } );
-
     // local variables
     var w = 450,
         h = 275,
         p = 40,
-        x = d3.scale.linear().domain([xmin, xmax]).range([0, w]),
-        y = d3.scale.linear().domain([0, ymax]).range([0, h]),
+        x = d3.scale.linear().domain(d3.extent(x_data)).range([0, w]),
+        y = d3.scale.linear().domain([0, d3.max(y_data)]).range([0, h]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
