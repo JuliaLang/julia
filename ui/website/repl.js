@@ -513,8 +513,9 @@ plotters["line"] = function(plotdata) {
     var w = 450,
         h = 275,
         p = 40,
+        ypad = (plot.y_max-plot.y_min)*0.1,
         x = d3.scale.linear().domain([x_min, x_max]).range([0, w]),
-        y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]),
+        y = d3.scale.linear().domain([y_min - ypad, y_max + ypad]).range([h, 0]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
