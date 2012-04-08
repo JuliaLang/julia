@@ -496,8 +496,13 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
     $("#terminal-input").focus();
 };
 
+var plotters = {};
+
 message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
-    var plottype = msg[0], plotdata = msg.slice(1);
+    var plottype = msg[0], plotdata = msg.slice(1),
+        plotter = plotters[plottype];
+    if (typeof plotter == "function")
+        plotter(plotdata);
 
     // line plot
     if (plottype == "line") {
