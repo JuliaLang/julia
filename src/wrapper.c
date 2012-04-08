@@ -636,6 +636,21 @@ DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
     return ios->buf;
 }
 
+#include "windef.h"
+
+#ifdef __WIN32__
+//I have no idea why we need this but it won't work otherwise
+DLLEXPORT int jl_RtlGenRandom(unsigned char (*fptr)(void*,uint64_t),void *array, uint64_t size)
+{
+    unsigned char ret;
+    //fptr(array,size);
+    ret = fptr(array,size);
+    return ret;
+}
+#endif
+
+//#include "os_detect.h"
+
 #ifdef __cplusplus
 }
 #endif

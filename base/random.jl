@@ -1,8 +1,10 @@
 _jl_librandom = dlopen("librandom")
+@windows_only _jl_advapi32 = dlopen("Advapi32")
 
 ## initialization
 
 function _jl_librandom_init()
+@unix_only begin
     try
         srand("/dev/urandom")
     catch
@@ -10,13 +12,21 @@ function _jl_librandom_init()
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try
-            seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`)[1:40], 16))
+            seed = bitmix(seed, parse_int(Uint64, readall(`ifconfig`|`sha1sum`)[1:40], 16))
         catch
             # ignore
         end
         srand(seed)
     end
     _jl_randn_zig_init()
+end
+@windows_only begin
+    a=zeros(Uint32,2)
+    ccall(:jl_RtlGenRandom,Uint8,(Ptr{Void},Ptr{Void},Uint64),dlsym(_jl_advapi32,:SystemFunction036),convert(Ptr{Void},a),8)
+    #ccall(dlsym(_jl_advapi32,:SystemFunction036),Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+    print(a)
+    srand(a)
+end
 end
 
 # macros to generate random arrays

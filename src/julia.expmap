@@ -231,6 +231,10 @@
     jl_ios_buf_base;
     restore_signals;
     jl_load_progress_setmax;
+    jl_current_os;
+    jl_is_unix;
+    jl_os_name;
+    jl_test;
   local:
     *;
 };

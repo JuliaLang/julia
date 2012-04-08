@@ -97,6 +97,10 @@ include("multi.jl")
 
 # front end
 include("client.jl")
+include("osutils.jl")
+@windows_only begin
+print("Test")
+end
 
 # core math functions
 include("intfuncs.jl")
