@@ -620,10 +620,7 @@ plotters["bar"] = function(plotdata) {
     var y_min = eval(plotdata[4]);
     var y_max = eval(plotdata[5]);
 
-    // construct the data for D3
-    var data = d3.range(x_data.length).map(function(i) {
-        return {x: x_data[i], y: y_data[i]};
-    });
+    var data = d3.zip(x_data, y_data); // coordinate pairs
 
     // local variables
     var w = 450,
@@ -685,9 +682,9 @@ plotters["bar"] = function(plotdata) {
         .enter().append("rect")
         .attr("class", "rect")
         .attr("x", function(d, i) { return x(i); })
-        .attr("y", function(d) { return h - y(d.y); })
+        .attr("y", function(d) { return h - y(d[1]); })
         .attr("width", (w - p*2) / data.length)
-        .attr("height", function(d) { return y(d.y); });
+        .attr("height", function(d) { return y(d[1]); });
 
     // newline
     add_to_terminal("<br />");
