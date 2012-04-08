@@ -509,11 +509,6 @@ plotters["line"] = function(plotdata) {
     var y_min = eval(plotdata[4]);
     var y_max = eval(plotdata[5]);
 
-    // construct the data for D3
-    var data = d3.range(x_data.length).map(function(i) {
-        return {x: x_data[i], y: y_data[i]};
-    });
-
     // local variables
     var w = 450,
         h = 275,
@@ -526,7 +521,7 @@ plotters["line"] = function(plotdata) {
     // create an SVG canvas and a group to represent the plot area
     var vis = d3.select("#terminal")
       .append("svg")
-        .data([data])
+        .data([d3.zip(x_data, y_data)]) // coordinate pairs
         .attr("width", w+p*2)
         .attr("height", h+p*2)
       .append("g")
@@ -604,8 +599,8 @@ plotters["line"] = function(plotdata) {
     vis.append("path")
         .attr("class", "line")
         .attr("d", d3.svg.line()
-        .x(function(d) { return x(d.x); })
-        .y(function(d) { return y(d.y); }));
+        .x(function(d) { return x(d[0]); })
+        .y(function(d) { return y(d[1]); }));
 
     // newline
     add_to_terminal("<br />");
