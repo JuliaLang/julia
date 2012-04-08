@@ -498,32 +498,22 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
 
 var plotters = {};
 
-plotters["line"] = function(plotdata) {
-    // get the data
-    var x_data = eval(plotdata[0]);
-    var y_data = eval(plotdata[1]);
-
-    // get the bounds on the data
-    var x_min = eval(plotdata[2]);
-    var x_max = eval(plotdata[3]);
-    var y_min = eval(plotdata[4]);
-    var y_max = eval(plotdata[5]);
-
+plotters["line"] = function(plot) {
     // local variables
     var w = 450,
         h = 275,
         p = 40,
         xpad = 0,
         ypad = (plot.y_max-plot.y_min)*0.1,
-        x = d3.scale.linear().domain([x_min - xpad, x_max + xpad]).range([0, w]),
-        y = d3.scale.linear().domain([y_min - ypad, y_max + ypad]).range([h, 0]),
+        x = d3.scale.linear().domain([plot.x_min - xpad, plot.x_max + xpad]).range([0, w]),
+        y = d3.scale.linear().domain([plot.y_min - ypad, plot.y_max + ypad]).range([h, 0]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
     // create an SVG canvas and a group to represent the plot area
     var vis = d3.select("#terminal")
       .append("svg")
-        .data([d3.zip(x_data, y_data)]) // coordinate pairs
+        .data([d3.zip(plot.x_data, plot.y_data)]) // coordinate pairs
         .attr("width", w+p*2)
         .attr("height", h+p*2)
       .append("g")
@@ -611,25 +601,15 @@ plotters["line"] = function(plotdata) {
     $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 };
 
-plotters["bar"] = function(plotdata) {
-    // get the data
-    var x_data = eval(plotdata[0]);
-    var y_data = eval(plotdata[1]);
-
-    // get the bounds on the data
-    var x_min = eval(plotdata[2]);
-    var x_max = eval(plotdata[3]);
-    var y_min = eval(plotdata[4]);
-    var y_max = eval(plotdata[5]);
-
-    var data = d3.zip(x_data, y_data); // coordinate pairs
+plotters["bar"] = function(plot) {
+    var data = d3.zip(plot.x_data, plot.y_data); // coordinate pairs
 
     // local variables
     var w = 450,
         h = 275,
         p = 40,
-        x = d3.scale.linear().domain(d3.extent(x_data)).range([0, w]),
-        y = d3.scale.linear().domain([0, d3.max(y_data)]).range([0, h]),
+        x = d3.scale.linear().domain(d3.extent(plot.x_data)).range([0, w]),
+        y = d3.scale.linear().domain([0, d3.max(plot.y_data)]).range([0, h]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
@@ -696,10 +676,19 @@ plotters["bar"] = function(plotdata) {
 };
 
 message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
-    var plottype = msg[0], plotdata = msg.slice(1),
+    var plottype = msg[0],
+        plot = {
+            "x_data": eval(msg[1]),
+            "y_data": eval(msg[2]),
+            "x_min": eval(msg[3]),
+            "x_max": eval(msg[4]),
+            "y_min": eval(msg[5]),
+            "y_max": eval(msg[6])
+        },
         plotter = plotters[plottype];
+
     if (typeof plotter == "function")
-        plotter(plotdata);
+        plotter(plot);
 };
 
 // process the messages in the inbox
