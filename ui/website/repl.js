@@ -498,128 +498,127 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
 
 var plotters = {};
 
+plotters["line"] = function(plotdata) {
+    // get the data
+    var x_data = eval(plotdata[0]);
+    var y_data = eval(plotdata[1]);
+
+    // get the bounds on the data
+    var x_min = eval(plotdata[2]);
+    var x_max = eval(plotdata[3]);
+    var y_min = eval(plotdata[4]);
+    var y_max = eval(plotdata[5]);
+
+    // construct the data for D3
+    var data = d3.range(x_data.length).map(function(i) {
+        return {x: x_data[i], y: y_data[i]};
+    });
+
+    // local variables
+    var w = 450,
+        h = 275,
+        p = 40,
+        x = d3.scale.linear().domain([x_min, x_max]).range([0, w]),
+        y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]),
+        xticks = x.ticks(8),
+        yticks = y.ticks(8);
+
+    // create an SVG canvas and a group to represent the plot area
+    var vis = d3.select("#terminal")
+      .append("svg")
+        .data([data])
+        .attr("width", w+p*2)
+        .attr("height", h+p*2)
+      .append("g")
+        .attr("transform", "translate("+String(p)+","+String(p)+")");
+
+    // vertical tics
+    var vrules = vis.selectAll("g.vrule")
+        .data(xticks)
+      .enter().append("g")
+        .attr("class", "vrule");
+
+    // horizontal tics
+    var hrules = vis.selectAll("g.hrule")
+        .data(yticks)
+      .enter().append("g")
+        .attr("class", "hrule");
+
+    // vertical lines
+    vrules.filter(function(d) { return (d != 0); }).append("line")
+        .attr("x1", x)
+        .attr("x2", x)
+        .attr("y1", 0)
+        .attr("y2", h - 1);
+
+    // horizontal lines
+    hrules.filter(function(d) { return (d != 0); }).append("line")
+        .attr("y1", y)
+        .attr("y2", y)
+        .attr("x1", 0)
+        .attr("x2", w + 1);
+
+    // x-axis labels
+    vrules.append("text")
+        .attr("x", x)
+        .attr("y", h + 10)
+        .attr("dy", ".71em")
+        .attr("text-anchor", "middle")
+        .text(x.tickFormat(10));
+
+    // y-axis labels
+    hrules.append("text")
+        .attr("y", y)
+        .attr("x", -5)
+        .attr("dy", ".35em")
+        .attr("text-anchor", "end")
+        .text(y.tickFormat(10));
+
+    // y-axis
+    var vrules2 = vis.selectAll("g.vrule2")
+        .data(xticks)
+      .enter().append("g")
+        .attr("class", "vrule2");
+
+    // x-axis
+    var hrules2 = vis.selectAll("g.hrule2")
+        .data(yticks)
+      .enter().append("g")
+        .attr("class", "hrule2");
+
+    // y-axis line
+    vrules2.filter(function(d) { return (d == 0); }).append("line")
+        .attr("x1", x)
+        .attr("x2", x)
+        .attr("y1", 0)
+        .attr("y2", h - 1);
+
+    // x-axis line
+    hrules2.filter(function(d) { return (d == 0); }).append("line")
+        .attr("y1", y)
+        .attr("y2", y)
+        .attr("x1", 0)
+        .attr("x2", w + 1);
+
+    // actual plot curve
+    vis.append("path")
+        .attr("class", "line")
+        .attr("d", d3.svg.line()
+        .x(function(d) { return x(d.x); })
+        .y(function(d) { return y(d.y); }));
+
+    // newline
+    add_to_terminal("<br />");
+
+    // scroll to the new plot
+    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+};
+
 message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
     var plottype = msg[0], plotdata = msg.slice(1),
         plotter = plotters[plottype];
     if (typeof plotter == "function")
         plotter(plotdata);
-
-    // line plot
-    if (plottype == "line") {
-        // get the data
-        var x_data = eval(plotdata[0]);
-        var y_data = eval(plotdata[1]);
-
-        // get the bounds on the data
-        var x_min = eval(plotdata[2]);
-        var x_max = eval(plotdata[3]);
-        var y_min = eval(plotdata[4]);
-        var y_max = eval(plotdata[5]);
-
-        // construct the data for D3
-        var data = d3.range(x_data.length).map(function(i) {
-            return {x: x_data[i], y: y_data[i]};
-        });
-
-        // local variables
-        var w = 450,
-            h = 275,
-            p = 40,
-            x = d3.scale.linear().domain([x_min, x_max]).range([0, w]),
-            y = d3.scale.linear().domain([y_min-(y_max-y_min)*0.1, y_max+(y_max-y_min)*0.1]).range([h, 0]),
-            xticks = x.ticks(8),
-            yticks = y.ticks(8);
-
-        // create an SVG canvas and a group to represent the plot area
-        var vis = d3.select("#terminal")
-          .append("svg")
-            .data([data])
-            .attr("width", w+p*2)
-            .attr("height", h+p*2)
-          .append("g")
-            .attr("transform", "translate("+String(p)+","+String(p)+")");
-
-        // vertical tics
-        var vrules = vis.selectAll("g.vrule")
-            .data(xticks)
-          .enter().append("g")
-            .attr("class", "vrule");
-
-        // horizontal tics
-        var hrules = vis.selectAll("g.hrule")
-            .data(yticks)
-          .enter().append("g")
-            .attr("class", "hrule");
-
-        // vertical lines
-        vrules.filter(function(d) { return (d != 0); }).append("line")
-            .attr("x1", x)
-            .attr("x2", x)
-            .attr("y1", 0)
-            .attr("y2", h - 1);
-
-        // horizontal lines
-        hrules.filter(function(d) { return (d != 0); }).append("line")
-            .attr("y1", y)
-            .attr("y2", y)
-            .attr("x1", 0)
-            .attr("x2", w + 1);
-
-        // x-axis labels
-        vrules.append("text")
-            .attr("x", x)
-            .attr("y", h + 10)
-            .attr("dy", ".71em")
-            .attr("text-anchor", "middle")
-            .text(x.tickFormat(10));
-
-        // y-axis labels
-        hrules.append("text")
-            .attr("y", y)
-            .attr("x", -5)
-            .attr("dy", ".35em")
-            .attr("text-anchor", "end")
-            .text(y.tickFormat(10));
-
-        // y-axis
-        var vrules2 = vis.selectAll("g.vrule2")
-            .data(xticks)
-          .enter().append("g")
-            .attr("class", "vrule2");
-
-        // x-axis
-        var hrules2 = vis.selectAll("g.hrule2")
-            .data(yticks)
-          .enter().append("g")
-            .attr("class", "hrule2");
-
-        // y-axis line
-        vrules2.filter(function(d) { return (d == 0); }).append("line")
-            .attr("x1", x)
-            .attr("x2", x)
-            .attr("y1", 0)
-            .attr("y2", h - 1);
-
-        // x-axis line
-        hrules2.filter(function(d) { return (d == 0); }).append("line")
-            .attr("y1", y)
-            .attr("y2", y)
-            .attr("x1", 0)
-            .attr("x2", w + 1);
-
-        // actual plot curve
-        vis.append("path")
-            .attr("class", "line")
-            .attr("d", d3.svg.line()
-            .x(function(d) { return x(d.x); })
-            .y(function(d) { return y(d.y); }));
-
-        // newline
-        add_to_terminal("<br />");
-
-        // scroll to the new plot
-        $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
-    }
 
     // bar plot
     if (plottype == "bar") {
