@@ -284,7 +284,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) -install_name @rpath/librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -314,7 +314,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 
 clean-openblas:

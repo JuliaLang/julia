@@ -48,7 +48,7 @@ release debug: libRmath.$(SHLIB_EXT)
 
 libRmath.$(SHLIB_EXT): $(XOBJS)
 	rm -rf $@
-	gcc -shared -o $@ $^ -L $(JULIAHOME)/lib -lrandom
+	gcc -shared -o $@ $^ -L $(JULIAHOME)/lib -lrandom -install_name @rpath/$@
 
 clean:
 	rm -f *.o *.do *.a *.$(SHLIB_EXT) core* *~ *#
