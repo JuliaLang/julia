@@ -614,104 +614,103 @@ plotters["line"] = function(plotdata) {
     $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
 };
 
+plotters["bar"] = function(plotdata) {
+    // get the data
+    var x_data = eval(plotdata[0]);
+    var y_data = eval(plotdata[1]);
+
+    // get the bounds on the data
+    var x_min = eval(plotdata[2]);
+    var x_max = eval(plotdata[3]);
+    var y_min = eval(plotdata[4]);
+    var y_max = eval(plotdata[5]);
+
+    // construct the data for D3
+    var data = d3.range(x_data.length).map(function(i) {
+        return {x: x_data[i], y: y_data[i]};
+    });
+
+    var xmin = d3.min(data, function(d) { return d.x; } );
+    var xmax = d3.max(data, function(d) { return d.x; } );
+    var ymin = d3.min(data, function(d) { return d.y; } );
+    var ymax = d3.max(data, function(d) { return d.y; } );
+
+    // local variables
+    var w = 450,
+        h = 275,
+        p = 40,
+        x = d3.scale.linear().domain([xmin, xmax]).range([0, w]),
+        y = d3.scale.linear().domain([0, ymax]).range([0, h]),
+        xticks = x.ticks(8),
+        yticks = y.ticks(8);
+
+    // create an SVG canvas and a group to represent the plot area
+    var vis = d3.select("#terminal")
+      .append("svg")
+        .data([data])
+        .attr("width", w+p*2)
+        .attr("height", h+p*2)
+      .append("g")
+        .attr("transform", "translate("+String(p)+","+String(p)+")");
+
+    // horizontal ticks
+    var hrules = vis.selectAll("g.hrule")
+        .data(yticks)
+      .enter().append("g")
+        .attr("class", "hrule")
+        .attr("transform", function(d) { return "translate(0," + (h-y(d)) + ")"; });
+
+    // horizontal lines
+    hrules.append("line")
+        .attr("x1", 0)
+        .attr("x2", w);
+
+    // y-axis labels
+    hrules.append("text")
+        .attr("x", -5)
+        .attr("dy", ".35em")
+        .attr("text-anchor", "end")
+        .text(y.tickFormat(10));
+
+    // x-axis rules container
+    var vrules = vis.selectAll("g.vrule")
+        .data(xticks)
+        .enter().append("g")
+        .attr("class", "vrule")
+        .attr("transform", function(d) { return "translate(" + (x(d)) + ",0)"; });
+
+    // x-axis labels
+    vrules.append("text")
+        .attr("y", h + 20)
+        .attr("dx", "0")
+        .attr("text-anchor", "middle")
+        .text(x.tickFormat(10));
+
+    // Redfining domain/range to fit the bars within the width
+    x.domain([0, 1]).range([0, w/data.length]);
+
+    // actual plot curve
+    vis.selectAll("rect")
+        .data(data)
+        .enter().append("rect")
+        .attr("class", "rect")
+        .attr("x", function(d, i) { return x(i); })
+        .attr("y", function(d) { return h - y(d.y); })
+        .attr("width", (w - p*2) / data.length)
+        .attr("height", function(d) { return y(d.y); });
+
+    // newline
+    add_to_terminal("<br />");
+
+    // scroll to the new plot
+    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+};
+
 message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
     var plottype = msg[0], plotdata = msg.slice(1),
         plotter = plotters[plottype];
     if (typeof plotter == "function")
         plotter(plotdata);
-
-    // bar plot
-    if (plottype == "bar") {
-        // get the data
-        var x_data = eval(plotdata[0]);
-        var y_data = eval(plotdata[1]);
-
-        // get the bounds on the data
-        var x_min = eval(plotdata[2]);
-        var x_max = eval(plotdata[3]);
-        var y_min = eval(plotdata[4]);
-        var y_max = eval(plotdata[5]);
-
-        // construct the data for D3
-        var data = d3.range(x_data.length).map(function(i) {
-            return {x: x_data[i], y: y_data[i]};
-        });
-
-        var xmin = d3.min(data, function(d) { return d.x; } );
-        var xmax = d3.max(data, function(d) { return d.x; } );
-        var ymin = d3.min(data, function(d) { return d.y; } );
-        var ymax = d3.max(data, function(d) { return d.y; } );
-
-        // local variables
-        var w = 450,
-            h = 275,
-            p = 40,
-            x = d3.scale.linear().domain([xmin, xmax]).range([0, w]),
-            y = d3.scale.linear().domain([0, ymax]).range([0, h]),
-            xticks = x.ticks(8),
-            yticks = y.ticks(8);
-
-        // create an SVG canvas and a group to represent the plot area
-        var vis = d3.select("#terminal")
-          .append("svg")
-            .data([data])
-            .attr("width", w+p*2)
-            .attr("height", h+p*2)
-          .append("g")
-            .attr("transform", "translate("+String(p)+","+String(p)+")");
-
-        // horizontal ticks
-        var hrules = vis.selectAll("g.hrule")
-            .data(yticks)
-          .enter().append("g")
-            .attr("class", "hrule")
-            .attr("transform", function(d) { return "translate(0," + (h-y(d)) + ")"; });
-
-        // horizontal lines
-        hrules.append("line")
-            .attr("x1", 0)
-            .attr("x2", w);
-
-        // y-axis labels
-        hrules.append("text")
-            .attr("x", -5)
-            .attr("dy", ".35em")
-            .attr("text-anchor", "end")
-            .text(y.tickFormat(10));
-
-        // x-axis rules container
-        var vrules = vis.selectAll("g.vrule")
-            .data(xticks)
-            .enter().append("g")
-            .attr("class", "vrule")
-            .attr("transform", function(d) { return "translate(" + (x(d)) + ",0)"; });
-
-        // x-axis labels
-        vrules.append("text")
-            .attr("y", h + 20)
-            .attr("dx", "0")
-            .attr("text-anchor", "middle")
-            .text(x.tickFormat(10));
-
-        // Redfining domain/range to fit the bars within the width
-        x.domain([0, 1]).range([0, w/data.length]);
-
-        // actual plot curve
-        vis.selectAll("rect")
-            .data(data)
-            .enter().append("rect")
-            .attr("class", "rect")
-            .attr("x", function(d, i) { return x(i); })
-            .attr("y", function(d) { return h - y(d.y); })
-            .attr("width", (w - p*2) / data.length)
-            .attr("height", function(d) { return y(d.y); });
-
-        // newline
-        add_to_terminal("<br />");
-
-        // scroll to the new plot
-        $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
-    }
 };
 
 // process the messages in the inbox
