@@ -500,13 +500,10 @@ var plotters = {};
 
 plotters["line"] = function(plot) {
     // local variables
-    var w = 450,
-        h = 275,
-        p = 40,
-        xpad = 0,
+    var xpad = 0,
         ypad = (plot.y_max-plot.y_min)*0.1,
-        x = d3.scale.linear().domain([plot.x_min - xpad, plot.x_max + xpad]).range([0, w]),
-        y = d3.scale.linear().domain([plot.y_min - ypad, plot.y_max + ypad]).range([h, 0]),
+        x = d3.scale.linear().domain([plot.x_min - xpad, plot.x_max + xpad]).range([0, plot.w]),
+        y = d3.scale.linear().domain([plot.y_min - ypad, plot.y_max + ypad]).range([plot.h, 0]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
@@ -514,10 +511,10 @@ plotters["line"] = function(plot) {
     var vis = d3.select("#terminal")
       .append("svg")
         .data([d3.zip(plot.x_data, plot.y_data)]) // coordinate pairs
-        .attr("width", w+p*2)
-        .attr("height", h+p*2)
+        .attr("width", plot.w+plot.p*2)
+        .attr("height", plot.h+plot.p*2)
       .append("g")
-        .attr("transform", "translate("+String(p)+","+String(p)+")");
+        .attr("transform", "translate("+String(plot.p)+","+String(plot.p)+")");
 
     // vertical tics
     var vrules = vis.selectAll("g.vrule")
@@ -536,19 +533,19 @@ plotters["line"] = function(plot) {
         .attr("x1", x)
         .attr("x2", x)
         .attr("y1", 0)
-        .attr("y2", h - 1);
+        .attr("y2", plot.h - 1);
 
     // horizontal lines
     hrules.filter(function(d) { return (d != 0); }).append("line")
         .attr("y1", y)
         .attr("y2", y)
         .attr("x1", 0)
-        .attr("x2", w + 1);
+        .attr("x2", plot.w + 1);
 
     // x-axis labels
     vrules.append("text")
         .attr("x", x)
-        .attr("y", h + 10)
+        .attr("y", plot.h + 10)
         .attr("dy", ".71em")
         .attr("text-anchor", "middle")
         .text(x.tickFormat(10));
@@ -578,14 +575,14 @@ plotters["line"] = function(plot) {
         .attr("x1", x)
         .attr("x2", x)
         .attr("y1", 0)
-        .attr("y2", h - 1);
+        .attr("y2", plot.h - 1);
 
     // x-axis line
     hrules2.filter(function(d) { return (d == 0); }).append("line")
         .attr("y1", y)
         .attr("y2", y)
         .attr("x1", 0)
-        .attr("x2", w + 1);
+        .attr("x2", plot.w + 1);
 
     // actual plot curve
     vis.append("path")
@@ -605,11 +602,8 @@ plotters["bar"] = function(plot) {
     var data = d3.zip(plot.x_data, plot.y_data); // coordinate pairs
 
     // local variables
-    var w = 450,
-        h = 275,
-        p = 40,
-        x = d3.scale.linear().domain(d3.extent(plot.x_data)).range([0, w]),
-        y = d3.scale.linear().domain([0, d3.max(plot.y_data)]).range([0, h]),
+    var x = d3.scale.linear().domain(d3.extent(plot.x_data)).range([0, plot.w]),
+        y = d3.scale.linear().domain([0, d3.max(plot.y_data)]).range([0, plot.h]),
         xticks = x.ticks(8),
         yticks = y.ticks(8);
 
@@ -617,22 +611,22 @@ plotters["bar"] = function(plot) {
     var vis = d3.select("#terminal")
       .append("svg")
         .data([data])
-        .attr("width", w+p*2)
-        .attr("height", h+p*2)
+        .attr("width", plot.w+plot.p*2)
+        .attr("height", plot.h+plot.p*2)
       .append("g")
-        .attr("transform", "translate("+String(p)+","+String(p)+")");
+        .attr("transform", "translate("+String(plot.p)+","+String(plot.p)+")");
 
     // horizontal ticks
     var hrules = vis.selectAll("g.hrule")
         .data(yticks)
       .enter().append("g")
         .attr("class", "hrule")
-        .attr("transform", function(d) { return "translate(0," + (h-y(d)) + ")"; });
+        .attr("transform", function(d) { return "translate(0," + (plot.h-y(d)) + ")"; });
 
     // horizontal lines
     hrules.append("line")
         .attr("x1", 0)
-        .attr("x2", w);
+        .attr("x2", plot.w);
 
     // y-axis labels
     hrules.append("text")
@@ -650,13 +644,13 @@ plotters["bar"] = function(plot) {
 
     // x-axis labels
     vrules.append("text")
-        .attr("y", h + 20)
+        .attr("y", plot.h + 20)
         .attr("dx", "0")
         .attr("text-anchor", "middle")
         .text(x.tickFormat(10));
 
     // Redfining domain/range to fit the bars within the width
-    x.domain([0, 1]).range([0, w/data.length]);
+    x.domain([0, 1]).range([0, plot.w/data.length]);
 
     // actual plot curve
     vis.selectAll("rect")
@@ -664,8 +658,8 @@ plotters["bar"] = function(plot) {
         .enter().append("rect")
         .attr("class", "rect")
         .attr("x", function(d, i) { return x(i); })
-        .attr("y", function(d) { return h - y(d[1]); })
-        .attr("width", (w - p*2) / data.length)
+        .attr("y", function(d) { return plot.h - y(d[1]); })
+        .attr("width", (plot.w - plot.p*2) / data.length)
         .attr("height", function(d) { return y(d[1]); });
 
     // newline
@@ -686,6 +680,14 @@ message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
             "y_max": eval(msg[6])
         },
         plotter = plotters[plottype];
+
+    // TODO:
+    // * calculate dynamically based on window size
+    // * update above calculation with window resize
+    // * allow user to resize
+    plot.w = 450;
+    plot.h = 275;
+    plot.p = 40;
 
     if (typeof plotter == "function")
         plotter(plot);
