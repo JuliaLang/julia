@@ -497,17 +497,19 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
 };
 
 message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
+    var plottype = msg[0], plotdata = msg.slice(1);
+
     // line plot
-    if (msg[0] == "line") {
+    if (plottype == "line") {
         // get the data
-        var x_data = eval(msg[1]);
-        var y_data = eval(msg[2]);
+        var x_data = eval(plotdata[0]);
+        var y_data = eval(plotdata[1]);
 
         // get the bounds on the data
-        var x_min = eval(msg[3]);
-        var x_max = eval(msg[4]);
-        var y_min = eval(msg[5]);
-        var y_max = eval(msg[6]);
+        var x_min = eval(plotdata[2]);
+        var x_max = eval(plotdata[3]);
+        var y_min = eval(plotdata[4]);
+        var y_max = eval(plotdata[5]);
 
         // construct the data for D3
         var data = d3.range(x_data.length).map(function(i) {
@@ -615,16 +617,16 @@ message_handlers[MSG_OUTPUT_PLOT] = function(msg) {
     }
 
     // bar plot
-    if (msg[0] == "bar") {
+    if (plottype == "bar") {
         // get the data
-        var x_data = eval(msg[1]);
-        var y_data = eval(msg[2]);
+        var x_data = eval(plotdata[0]);
+        var y_data = eval(plotdata[1]);
 
         // get the bounds on the data
-        var x_min = eval(msg[3]);
-        var x_max = eval(msg[4]);
-        var y_min = eval(msg[5]);
-        var y_max = eval(msg[6]);
+        var x_min = eval(plotdata[2]);
+        var x_max = eval(plotdata[3]);
+        var y_min = eval(plotdata[4]);
+        var y_max = eval(plotdata[5]);
 
         // construct the data for D3
         var data = d3.range(x_data.length).map(function(i) {
