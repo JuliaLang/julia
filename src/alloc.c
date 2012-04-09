@@ -315,6 +315,19 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
     return jl_symbol(n);
 }
 
+DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
+{
+    static char gs_name[14];
+    char name[sizeof(gs_name)+len+3];
+    char *n;
+    name[0] = '#'; name[1] = '#'; name[2+len] = '#';
+    memcpy(name+2, str, len);
+    n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
+    memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
+    gs_ctr++;
+    return jl_symbol(name);
+}
+
 // allocating types -----------------------------------------------------------
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
