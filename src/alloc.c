@@ -317,8 +317,8 @@ DLLEXPORT jl_sym_t *jl_gensym(void)
 
 DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
 {
-    static char gs_name[16];
-    char name[16+len+1];
+    static char gs_name[14];
+    char name[sizeof(gs_name)+len+3];
     char *n;
     name[0] = '#'; name[1] = '#'; name[2+len] = '#';
     memcpy(name+2, str, len);
