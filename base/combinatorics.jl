@@ -1,12 +1,22 @@
 function factorial(n::Integer)
+    max_n = 5
+    a = zeros(30)
+    a[1:max_n] = [1.,    2.,    6.,   24.,  120.]
     if n < 0
-        return zero(n)
+        error("Negative factorial in factorial")
     end
-    f = one(n)
-    for i = 2:n
-        f *= i
+    if n == 0
+        return 1
     end
-    return f
+    if n > 30
+        return exp(lgamma(n+1))
+    end
+    while max_n < n
+        j = max_n
+        max_n += 1
+        a[max_n] = a[j]*max_n
+    end
+    return a[n]
 end
 
 # computes n!/k!
@@ -23,6 +33,24 @@ function factorial{T<:Integer}(n::T, k::T)
 end
 
 nPr(n, r) = factorial(n, n-r)
+
+# Returns the value of ln[gamma(x)], for x>0
+function lfactorial(n::Integer)
+
+    a = zeros(100)
+
+    if n < 0
+        error("Negative factorial in lfactorial")
+    end
+    if n <= 1
+        return zero(n)
+    end
+    if n <=100
+        return a[n]>0 ? a[n] : (a[n]=lgamma(n+1);a[n])
+    end
+    return lgamma(n+1)
+
+end
 
 function binomial{T<:Integer}(n::T, k::T)
     if k < 0
