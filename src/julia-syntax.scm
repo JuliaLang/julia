@@ -958,8 +958,12 @@
    (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
 		   `(call aTbT ,a ,b))
 
-   (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   (lower-ccall name RT argtypes args))
+   (pattern-lambda (ccall name RT argtypes . args)
+		   (begin
+		     (if (not (and (pair? argtypes)
+				   (eq? (car argtypes) 'tuple)))
+			 (error "ccall argument types must be a tuple; try (T,)"))
+		     (lower-ccall name RT (cdr argtypes) args)))
 
    )) ; patterns
 
