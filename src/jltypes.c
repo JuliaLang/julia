@@ -2167,7 +2167,7 @@ void jl_init_types(void)
                                      jl_tuple_type, jl_tuple_type,
                                      jl_tuple_type, jl_any_type, jl_any_type);
     jl_struct_kind->fptr = jl_f_no_function;
-    jl_struct_kind->env = NULL;
+    jl_struct_kind->env = (jl_value_t*)jl_null;
     jl_struct_kind->linfo = NULL;
     jl_struct_kind->ctor_factory = NULL;
     jl_struct_kind->instance = NULL;
@@ -2183,7 +2183,7 @@ void jl_init_types(void)
                                        jl_tuple_type);
     jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->fptr = jl_f_no_function;
-    jl_typename_type->env = NULL;
+    jl_typename_type->env = (jl_value_t*)jl_null;
     jl_typename_type->linfo = NULL;
     jl_typename_type->ctor_factory = NULL;
     jl_typename_type->instance = NULL;
@@ -2195,7 +2195,7 @@ void jl_init_types(void)
     jl_sym_type->names = jl_null;
     jl_sym_type->types = jl_null;
     jl_sym_type->fptr = jl_f_no_function;
-    jl_sym_type->env = NULL;
+    jl_sym_type->env = (jl_value_t*)jl_null;
     jl_sym_type->linfo = NULL;
     jl_sym_type->ctor_factory = NULL;
     jl_sym_type->instance = NULL;

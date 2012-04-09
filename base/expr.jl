@@ -12,7 +12,7 @@ gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{Uint8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
-gensym(ss::Union(ASCIIString, UTF8String)...) = map(s->gensym(s), ss)
+gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 
 type UniqueNames
     names::Array{Any,1}
