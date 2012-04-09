@@ -29,6 +29,7 @@ is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
 ## required core functionality ##
 
 length(s::UTF8String) = length(s.data)
+strlen(s::UTF8String) = ccall(:u8_strlen, Int, (Ptr{Uint8},), s.data)
 
 function next(s::UTF8String, i::Int)
     if !is_utf8_start(s.data[i])
