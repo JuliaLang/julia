@@ -767,7 +767,14 @@ for f in (:(==), :!=, :<, :<=)
     end
 end
 
-## data movement ##
+for f in (:(==), :!=, :<, :<=)
+    @eval begin
+        ($f)(A::BitArray, B::AbstractArray) = ($f)(int(A), B)
+        ($f)(A::AbstractArray, B::BitArray) = ($f)(A, int(B))
+    end
+end
+
+## Data movement ##
 
 # TODO some of this could be optimized
 
@@ -892,7 +899,7 @@ function reverse!(v::BitVector)
     v
 end
 
-reverse(v::BitVector) = reverse!(similar(v))
+reverse(v::BitVector) = reverse!(copy(v))
 
 ## nnz & find ##
 
@@ -973,10 +980,10 @@ end
 
 function findn_nzs(B::BitMatrix)
     I, J = findn(B)
-    return (I, J, ones(Int, length(I)))
+    return (I, J, bitones(length(I)))
 end
 
-nonzeros(B::BitArray) = ones(Int, nnz(B))
+nonzeros(B::BitArray) = bitones(nnz(B))
 
 ## Reductions ##
 
@@ -1073,14 +1080,14 @@ max(B::BitArray) = (nnz(B) > 0 ? 1 : 0)
 
 # TODO
 
-## Transpose ##
+## Filter ##
 
 function filter(f::Function, Bs::BitArray)
     boolmap::Array{Bool} = map(f, Bs)
     Bs[boolmap]
 end
 
-## Permute ##
+## Transpose ##
 
 transpose(B::BitVector) = reshape(B, 1, length(B))
 function transpose(B::BitMatrix)
@@ -1251,7 +1258,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
             has_bitarray = true
         end
     end
-    # just 0/1 integers -> general case
+    # just 0/1 integers and no BitArrays -> general case
     if !has_bitarray
         return invoke(cat, (Integer, Any...), catdim, X...)
     end
