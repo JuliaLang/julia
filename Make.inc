@@ -18,7 +18,7 @@ endif
 ifeq ($(OS), WINNT)
 fPIC = 
 else
-fPIC = $(fPIC)
+fPIC = -fPIC
 endif
 
 DEFAULT_REPL = readline

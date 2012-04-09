@@ -85,14 +85,14 @@ lib:
 ifeq ($(OS),WINNT)
 	cmd //C mklink //J lib external\\root\\lib
 else
-	test ! -e lib && ln -s external/root/lib lib
+	test ! -h lib && ln -s external/root/lib lib
 endif
 
 include:
 ifeq ($(OS),WINNT)
 	cmd //C mklink //J include external\\root\\include
 else
-	test ! -e include && ln -s external/root/include include
+	test ! -h include && ln -s external/root/include include
 endif
 
 

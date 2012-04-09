@@ -665,15 +665,18 @@ else
 endif
 
 UV_OBJ_TARGET = $(EXTROOTLIB)/uv.a
+UV_OBJ_SOURCE = libuv/uv.a
 
-compile-uv: compile-uv | $(EXTROOTLIB)
+libuv/Makefile:
+	(cd .. && git submodule update --init --recursive)
+$(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) -C libuv $(UV_CFLAGS)
-$(UV_OBJ_TARGET):
+$(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(EXTROOT)/include
-	cp libuv/uv.a $(EXTROOTLIB)
+	cp $(UV_OBJ_SOURCE) $(EXTROOTLIB)
 	cp libuv/include/uv.h $(EXTROOT)/include/uv.h 
 	cp -r libuv/include/uv-private $(EXTROOT)/include
-install-uv: $(UV_OBJ_TARGET) 
+install-uv: $(UV_OBJ_TARGET) | $(EXTROOTLIB)
 
 clean-uv:
 	$(MAKE) -C libuv clean
