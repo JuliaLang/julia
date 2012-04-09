@@ -55,6 +55,9 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 empty(a::AbstractArray) = similar(a, 0)
 
 function reshape(a::AbstractArray, dims::Dims)
+    if prod(dims) != numel(a)
+        error("reshape: invalid dimensions")
+    end
     b = similar(a, dims)
     for i=1:numel(a)
         b[i] = a[i]
