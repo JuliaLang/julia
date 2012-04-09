@@ -32,6 +32,15 @@ function gensym(u::UniqueNames)
 end
 end
 
+macro gensym(names...)
+    blk = expr(:block)
+    for name in names
+        push(blk.args, :($name = gensym($(string(name)))))
+    end
+    push(blk.args, :nothing)
+    return blk
+end
+
 ## expressions ##
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
