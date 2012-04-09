@@ -24,6 +24,24 @@ end
 
 nPr(n, r) = factorial(n, n-r)
 
+# Returns the value of ln[gamma(x)], for x>0
+function lfactorial(n::Integer)
+
+    a = zeros(100)
+
+    if n < 0
+        error("Negative factorial in lfactorial")
+    end
+    if n <= 1
+        return zero(n)
+    end
+    if n <=100
+        return a[n]>0 ? a[n] : (a[n]=lgamma(n+1);a[n])
+    end
+    return lgamma(n+1)
+
+end
+
 function binomial{T<:Integer}(n::T, k::T)
     if k < 0
         return zero(T)
