@@ -1076,7 +1076,7 @@ prod(B::BitArray) = (nnz(B) == length(B) ? 1 : 0)
 min(B::BitArray) = prod(B)
 max(B::BitArray) = (nnz(B) > 0 ? 1 : 0)
 
-## map over arrays ##
+## map over bitarrays ##
 
 # TODO
 
