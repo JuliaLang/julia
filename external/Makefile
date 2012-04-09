@@ -155,7 +155,7 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C readline-$(READLINE_VER) install
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
 	touch $@
 
 clean-readline:

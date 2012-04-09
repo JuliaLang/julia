@@ -1,5 +1,5 @@
-#ifndef WIN_H
-#define WIN_H
+#ifndef READLINE_WIN_H
+#define READLINE_WIN_H
 
 #include <stdio.h>
 #define fprintf jl_printf
