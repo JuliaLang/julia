@@ -94,7 +94,7 @@ type CairoContext
 end
 
 function destroy(ctx::CairoContext)
-    ccall(dlsym(_jl_libgobject,:g_object_unref), Void, Ptr{Void}, ctx.layout)
+    ccall(dlsym(_jl_libgobject,:g_object_unref), Void, (Ptr{Void},), ctx.layout)
     _destroy(ctx)
 end
 

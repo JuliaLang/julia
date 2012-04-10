@@ -1,5 +1,5 @@
 (define ops-by-prec
-  '#((= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>= >>>=)
+  '#((= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= => <<= >>= >>>= ~)
      (?)
      (|\|\||)
      (&&)
@@ -59,7 +59,7 @@
 (define unary-ops '(+ - ! ~ $ & |<:| |>:|))
 
 ; operators that are both unary and binary
-(define unary-and-binary-ops '(+ - $ &))
+(define unary-and-binary-ops '(+ - $ & ~))
 
 ; operators that are special forms, not function names
 (define syntactic-operators
@@ -754,10 +754,7 @@
      (if (not (eqv? (peek-token s) #\())
 	 (error "expected ( after ccall"))
      (take-token s)
-     (let ((al (parse-arglist s #\) )))
-       (if (not (and (pair? (caddr al)) (eq? (caaddr al) 'tuple)))
-	   (error "ccall argument types must be a tuple; try (T,)"))
-       (cons 'ccall al)))
+     (cons 'ccall (parse-arglist s #\))))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."

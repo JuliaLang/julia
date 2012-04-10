@@ -397,9 +397,13 @@ function _jl_da_reshape(T, sz, da, A)
     reshape(A[I...], sz)
 end
 
-reshape(A::DArray, dims::Dims) =
+function reshape(A::DArray, dims::Dims)
+    if prod(dims) != numel(A)
+        error("reshape: invalid dimensions")
+    end
     darray((T,sz,da)->_jl_da_reshape(T,sz,da,A),
            eltype(A), dims, maxdim(dims), A.pmap)
+end
 
 transpose{T} (v::DArray{T,1}) = reshape(v, 1, size(v,1))
 ctranspose{T<:Number}(v::DArray{T,1}) = conj(reshape(v, 1, size(v,1)))
