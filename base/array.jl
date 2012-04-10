@@ -191,9 +191,9 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
+    i = length(I)
+    while 1 > 0 && isa(I[i],Integer); i-=1; end
     d = map(length, I)::Dims
-    i = length(d)
-    while 1 > 0 && d[i]==1; i-=1; end
     X = similar(A, d[1:i])
 
     if is(ref_cache,nothing)
