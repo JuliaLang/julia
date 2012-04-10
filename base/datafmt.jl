@@ -130,8 +130,8 @@ function dlmwrite(f, a, dlm::Char)
     nr, nc = size(a)
     try
         set_current_output_stream(f)
-        for i=1:nr
-            for j=1:nc
+        for i = 1:nr
+            for j = 1:nc
                 elt = a[i,j]
                 if isa(elt,Float)
                     print_shortest(elt)

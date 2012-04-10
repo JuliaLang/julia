@@ -1,5 +1,4 @@
-setcwd("../extras")
-load("bitarray.jl")
+load("../extras/bitarray.jl")
 
 macro check_bit_operation1(func, RetT, b1, args...)
     quote
