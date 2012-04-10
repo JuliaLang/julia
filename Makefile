@@ -82,6 +82,7 @@ test-%: release
 	@$(MAKE) -sC test $*
 
 lib:
+	mkdir -p external/root/lib
 ifeq ($(OS),WINNT)
 	cmd //C mklink //J lib external\\root\\lib
 else
@@ -89,6 +90,7 @@ else
 endif
 
 include:
+	mkdir -p external/root/include
 ifeq ($(OS),WINNT)
 	cmd //C mklink //J include external\\root\\include
 else
