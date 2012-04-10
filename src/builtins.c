@@ -218,15 +218,16 @@ JL_CALLABLE(jl_f_apply)
 
 // eval -----------------------------------------------------------------------
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
-                                  volatile size_t *plineno);
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno);
 
-jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 0);
-    assert(jl_is_symbol(name));
+    if (!jl_is_symbol(name)) {
+        jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
+    }
     if (name == jl_current_module->name) {
         jl_errorf("module name %s conflicts with enclosing module", name->name);
     }
@@ -349,8 +350,7 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 
 extern int jl_in_inference;
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
-                                  volatile size_t *plineno)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
 {
     //jl_show(ex);
     //ios_printf(ios_stdout, "\n");
@@ -427,53 +427,39 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 
 int asprintf(char **strp, const char *fmt, ...);
 
-// load toplevel expressions, from (file ...)
-void jl_load_file_expr(char *fname, jl_value_t *ast)
+// repeatedly call jl_parse_next and eval everything
+void jl_parse_eval_all(char *fname)
 {
-    jl_array_t *b = ((jl_expr_t*)ast)->args;
-    size_t i;
-    volatile size_t lineno=0;
-    if (((jl_expr_t*)ast)->head == jl_continue_sym) {
-        jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
-    }
-    char oldcwd[512];
-    char newcwd[512];
-    get_cwd(oldcwd, sizeof(oldcwd));
-    char *sep = strrchr(fname, PATHSEP);
-    if (sep) {
-        size_t n = (sep - fname)+1;
-        if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
-        strncpy(newcwd, fname, n);
-        newcwd[n] = '\0';
-        set_cwd(newcwd);
-    }
+    int lineno=0;
+    jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
+    JL_GC_PUSH(&fn, &ln, &form);
     JL_TRY {
         jl_register_toplevel_eh();
         // handle syntax error
-        if (((jl_expr_t*)ast)->head == error_sym) {
-            jl_interpret_toplevel_expr(ast);
-        }
-        for(i=0; i < b->length; i++) {
-            // process toplevel form
-            jl_value_t *form = jl_cellref(b, i);
-            if (jl_is_linenode(form)) {
-                lineno = jl_linenode_line(form);
+        while (1) {
+            form = jl_parse_next(&lineno);
+            if (form == NULL)
+                break;
+            if (jl_is_expr(form)) {
+                if (((jl_expr_t*)form)->head == jl_continue_sym) {
+                    jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(form,0)));
+                }
+                if (((jl_expr_t*)form)->head == error_sym) {
+                    jl_interpret_toplevel_expr(form);
+                }
             }
-            else {
-                (void)jl_toplevel_eval_flex(form, 0, &lineno);
-            }
+            (void)jl_toplevel_eval_flex(form, 0, &lineno);
         }
     }
     JL_CATCH {
-        if (sep) set_cwd(oldcwd);
-        jl_value_t *fn=NULL, *ln=NULL;
-        JL_GC_PUSH(&fn, &ln);
+        jl_stop_parsing();
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(lineno);
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
-    if (sep) set_cwd(oldcwd);
+    jl_stop_parsing();
+    JL_GC_POP();
 }
 
 // fpath needs to be freed if != fname
@@ -504,14 +490,8 @@ char *jl_find_file_in_path(const char *fname)
 void jl_load(const char *fname)
 {
     char *fpath = jl_find_file_in_path(fname);
-    jl_value_t *ast = jl_parse_file(fpath);
-    if (ast == (jl_value_t*)jl_null)  {
-        if (fpath != fname) free(fpath);
-	jl_errorf("could not open file %s", fpath);
-    }
-    JL_GC_PUSH(&ast);
-    jl_load_file_expr(fpath, ast);
-    JL_GC_POP();
+    jl_start_parsing_file(fpath);
+    jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
 }
 
