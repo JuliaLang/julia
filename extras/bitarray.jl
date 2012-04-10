@@ -123,6 +123,16 @@ function copy_to(dest::BitArray, src::BitArray)
     return dest
 end
 
+function reshape{N}(B::BitArray, dims::NTuple{N,Int})
+    if prod(dims) != numel(B)
+        error("reshape: invalid dimensions")
+    end
+    Br = BitArray{N}()
+    Br.chunks = B.chunks
+    Br.dims = [i::Int | i=dims]
+    return Br
+end
+
 bitzeros(args...) = fill!(BitArray(args...), 0)
 bitones(args...) = fill!(BitArray(args...), 1)
 
@@ -1109,7 +1119,7 @@ end
 
 ## Transpose ##
 
-transpose(B::BitVector) = reshape(B, 1, length(B))
+transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 function transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
