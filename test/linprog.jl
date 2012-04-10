@@ -1,7 +1,8 @@
 ### Linear programming
 
 setcwd("../extras")
-include("linprog.jl")
+load("sparse.jl")
+load("linprog.jl")
 
 ## Simplex method
 
