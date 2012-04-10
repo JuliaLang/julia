@@ -361,7 +361,7 @@ distclean-lapack:
 ## ARPACK ##
 
 ARPACK_OBJ_TARGET = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = arpack-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
@@ -370,14 +370,16 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
 	touch $@
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
-	tar zxf $<
+	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/configure
+	cd arpack-ng-$(ARPACK_VER) && \
+	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="-L$(JULIALIB) -lopenblas" --with-lapack="-L$(JULIALIB) -lopenblas" --disable-mpi --enable-shared
+	touch $@
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
-	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
-	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
+	make install
 	touch $@
 
 clean-arpack:
