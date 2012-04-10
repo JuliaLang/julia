@@ -18,6 +18,7 @@
 #else
 	#include <sys/socket.h>
 	#include <netdb.h>
+  #include <unistd.h>
 #endif
 
 #ifdef __FreeBSD__

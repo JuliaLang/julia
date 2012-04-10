@@ -7,8 +7,10 @@ all extra unicode::
 	@$(MAKE) -sC unicode
 
 default all extra \
-core numbers strings corelib hashing arrayops glpk linprog\
-sparse lapack fft arpack random unicode special bigint bigfloat::
+core numbers strings corelib hashing arrayops \
+glpk linprog sparse lapack fft arpack random unicode \
+special bigint bigfloat bitarray \
+::
 	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
 perf:
@@ -29,5 +31,5 @@ clean:
 	default all extra \
 	core numbers strings corelib hashing arrayops glpk \
 	linprog sparse lapack fft arpack random special \
-	unicode perf \
+	unicode perf bitarray \
 	benchmark clean

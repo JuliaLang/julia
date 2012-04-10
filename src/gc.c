@@ -392,14 +392,16 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
         size_t i;
         jl_value_t ***rts = (jl_value_t***)((char*)s->roots + offset);
         if (s->indirect) {
-            for(i=0; i < s->nroots; i++) {
+            size_t nr = s->nroots;
+            for(i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
                 if (*ptr != NULL)
                     GC_Markval(*ptr);
             }
         }
         else {
-            for(i=0; i < s->nroots; i++) {
+            size_t nr = s->nroots;
+            for(i=0; i < nr; i++) {
                 if (rts[i] != NULL)
                     GC_Markval(rts[i]);
             }
@@ -439,6 +441,7 @@ DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 
 static void gc_markval_(jl_value_t *v)
 {
+ gc_markval_top:
     assert(v != NULL);
     //assert(v != lookforme);
     if (gc_marked_obj(v)) return;
@@ -450,15 +453,14 @@ static void gc_markval_(jl_value_t *v)
     else
         (*((ptrint_t*)bp))++;
 #endif
-    jl_value_t *vtt = gc_typeof(vt);
     gc_setmark_obj(v);
 
-    if (vtt==(jl_value_t*)jl_bits_kind) return;
+    if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind) return;
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t i;
-        for(i=0; i < ((jl_tuple_t*)v)->length; i++) {
+        size_t l = ((jl_tuple_t*)v)->length;
+        for(size_t i=0; i < l; i++) {
             jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
             if (elt != NULL)
                 GC_Markval(elt);
@@ -483,12 +485,15 @@ static void gc_markval_(jl_value_t *v)
                 gc_setmark(data);
             }
         }
-        jl_value_t *elty = jl_tparam0(vt);
-        if (gc_typeof(elty) != (jl_value_t*)jl_bits_kind) {
-            size_t i;
-            for(i=0; i < a->length; i++) {
-                jl_value_t *elt = ((jl_value_t**)a->data)[i];
-                if (elt != NULL) GC_Markval(elt);
+        if (gc_typeof(jl_tparam0(vt)) != (jl_value_t*)jl_bits_kind) {
+            size_t l = a->length;
+            if (l > 0) {
+                for(size_t i=0; i < l-1; i++) {
+                    jl_value_t *elt = ((jl_value_t**)a->data)[i];
+                    if (elt != NULL) GC_Markval(elt);
+                }
+                v = ((jl_value_t**)a->data)[l-1];
+                if (v != NULL) goto gc_markval_top;
             }
         }
     }
@@ -536,17 +541,21 @@ static void gc_markval_(jl_value_t *v)
         // don't mark contents
     }
     else {
-        assert(vtt == (jl_value_t*)jl_struct_kind);
-        size_t nf = ((jl_struct_type_t*)vt)->names->length;
-        size_t i=0;
-        if (vt == (jl_value_t*)jl_struct_kind ||
-            vt == (jl_value_t*)jl_function_type) {
-            i++;  // skip fptr field
-        }
-        for(; i < nf; i++) {
-            jl_value_t *fld = ((jl_value_t**)v)[i+1];
-            if (fld)
-                GC_Markval(fld);
+        int nf = (int)((jl_struct_type_t*)vt)->names->length;
+        if (nf > 0) {
+            int i = 0;
+            if (vt == (jl_value_t*)jl_struct_kind ||
+                vt == (jl_value_t*)jl_function_type) {
+                i++;  // skip fptr field
+            }
+            for(; i < nf-1; i++) {
+                jl_value_t *fld = ((jl_value_t**)v)[i+1];
+                if (fld)
+                    GC_Markval(fld);
+            }
+            v = ((jl_value_t**)v)[i+1];
+            if (v)
+                goto gc_markval_top;
         }
     }
 }

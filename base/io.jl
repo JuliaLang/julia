@@ -221,7 +221,7 @@ end
 
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
-function read{T}(s::IOStream, a::Array{T})
+function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,

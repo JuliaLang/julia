@@ -8,6 +8,12 @@ symbol(a::Array{Uint8,1}) =
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 gensym(n::Integer) = ntuple(n, i->gensym())
 
+gensym(s::ASCIIString) = gensym(s.data)
+gensym(s::UTF8String) = gensym(s.data)
+gensym(a::Array{Uint8,1}) =
+    ccall(:jl_tagged_gensym, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
+gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
+
 type UniqueNames
     names::Array{Any,1}
     UniqueNames() = new({})
@@ -24,6 +30,15 @@ function gensym(u::UniqueNames)
     push(u.names, s)
     return s
 end
+end
+
+macro gensym(names...)
+    blk = expr(:block)
+    for name in names
+        push(blk.args, :($name = gensym($(string(name)))))
+    end
+    push(blk.args, :nothing)
+    return blk
 end
 
 ## expressions ##
