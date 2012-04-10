@@ -611,7 +611,6 @@ function del(B::BitVector, r::Range1{Int})
 
     u = ~uint64(0)
     msk_bef_f = u >>> (63 - j_f) >>> 1
-    msk_aft_l = ~(u >>> (63 - j_l))
 
     B.chunks[k_f] = (msk_bef_f & B.chunks[k_f]) | ((B.chunks[k_l] >>> j_l >>> 1) << j_f)
     if length(B.chunks) > k_l && (j_l >= j_f)
@@ -630,7 +629,9 @@ function del(B::BitVector, r::Range1{Int})
         B.chunks[end - g_k] = (B.chunks[end] >>> (g_fl - 1) >>> 1)
     end
 
-    ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, delta_k)
+    if delta_k > 0
+        ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, delta_k)
+    end
 
     B.dims[1] -= delta_l
 
