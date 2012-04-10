@@ -1,6 +1,7 @@
 
 type Polynomial{T<:Number}
     a::Vector{T}
+    #todo: chop leading 0's in constructor
 end
 
 # allowing Int based polynomial gives all sorts of bad results below,
@@ -36,6 +37,28 @@ function show(p::Polynomial)
     print(")")
 end
 
+function show{T<:Complex}(p::Polynomial{T})
+    n = length(p)
+    print("Polynomial(")
+    if n > 0
+        for i = 1:n-1
+            if p.a[i] != 0
+                print("[")
+                print(p.a[i])
+                print("]x^")
+                print(n-i)
+                print(" + ")
+            end
+        end
+        print("[")
+        print(p.a[n])
+        print("]")
+    else
+        print("0")
+    end
+    print(")")
+end
+
 ref(p::Polynomial, i) = p.a[i]
 assign(p::Polynomial, v, i) = (p.a[i] = v)
 
@@ -46,6 +69,7 @@ end
 *(c::Number, p::Polynomial) = Polynomial(c * p.a)
 *(p::Polynomial, c::Number) = Polynomial(c * p.a)
 /(p::Polynomial, c::Number) = Polynomial(p.a / c)
+-(p::Polynomial) = Polynomial(-p.a)
 
 function +{T,S}(p1::Polynomial{T}, p2::Polynomial{S})
     R = promote_type(T,S)
@@ -99,6 +123,9 @@ function *{T,S}(p1::Polynomial{T}, p2::Polynomial{S})
     R = promote_type(T,S)
     n = length(p1)
     m = length(p2)
+    if n == 0 || m == 0
+        return Polynomial(R[])
+    end
     a = zeros(R, n+m-1)
     for i = 1:length(p1)
         for j = 1:length(p2)
@@ -108,14 +135,29 @@ function *{T,S}(p1::Polynomial{T}, p2::Polynomial{S})
     Polynomial(a)
 end
 
+#todo: division
+
+function ==(p1::Polynomial, p2::Polynomial)
+    if length(p1) != length(p2)
+        return false
+    else
+        return all(p1.a == p2.a)
+    end
+end
+
 polyval(p::Polynomial, x::Number) = polyval(p.a, x)
 
-function polyval(a::AbstractVector, x::Number)
-    y = a[1]
-    for i = 2:length(a)
-        y = a[i] + x.*y
+function polyval{T}(a::AbstractVector{T}, x::Number)
+    P = promote_type(T, typeof(x))
+    if length(a) == 0
+        return zero(P)
+    else
+        y = convert(P, a[1])
+        for i = 2:length(a)
+            y = a[i] + x.*y
+        end
+        return y
     end
-    return y
 end
 
 function polyval(a::AbstractVector, x::AbstractVector)
