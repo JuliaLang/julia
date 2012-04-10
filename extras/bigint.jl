@@ -84,7 +84,7 @@ end
 function divmod(x::BigInt, y::BigInt)
 	z1= _jl_bigint_init()
 	z2= _jl_bigint_init()
-	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_divmod), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),z1,z2,x.mpz,y.mpz)
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_divmod), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
 	BigInt(z1),BigInt(z2)
 end
 
