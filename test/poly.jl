@@ -4,12 +4,12 @@ load("extras/poly.jl")
 
 pNULL = Polynomial(Float32[])
 p0 = Polynomial([0])
-p1 = Polynomial([1])
-p2 = Polynomial([1,1])
-p3 = Polynomial([1,2,1])
-p4 = Polynomial([1,3,3,1])
-p5 = Polynomial([1,4,6,4,1])
-pN = Polynomial([24,15,87,3,276])
+p1 = Polynomial([0,0,0,0,0,0,0,0,0,0,0,0,0,1])
+p2 = Polynomial([0,0,1,1])
+p3 = Polynomial([0,0,0,0,1,2,1])
+p4 = Polynomial([0,1,3,3,1])
+p5 = Polynomial([0,0,0,0,0,0,0,0,0,0,0,0,0,1,4,6,4,1])
+pN = Polynomial([0,24,15,87,3,276])
 p1000 = Polynomial(randn(1000))
 
 @assert length(pNULL) == 0
