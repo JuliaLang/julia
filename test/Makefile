@@ -7,7 +7,7 @@ default all extra unicode::
 default all extra \
 core numbers strings corelib hashing arrayops \
 glpk linprog sparse lapack fft arpack random unicode \
-special bigint bigfloat bitarray \
+special bigint bigfloat bitarray date\
 ::
 	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
