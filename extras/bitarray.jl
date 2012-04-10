@@ -380,15 +380,15 @@ assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[f
 # note: parameters passed to these functions
 #       are not checked for consistency
 
-function _jl_copy_chunks(dest::Vector{Uint64}, src::Vector{Uint64}, ns::Int, pos::Int)
-    if ns == 0
+function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, numbits::Int)
+    if numbits == 0
         return
     end
-    nd = pos - 1
+    nd = pos_d - 1
     k0 = int(_jl_num_bit_chunks(nd))
-    k1 = int(_jl_num_bit_chunks(nd + ns))
+    k1 = int(_jl_num_bit_chunks(nd + numbits))
     ld = nd & 0x3f
-    ls = (nd + ns) & 0x3f
+    ls = (nd + numbits) & 0x3f
 
     u = ~(uint64(0))
     if ld == 0
@@ -418,12 +418,19 @@ function _jl_copy_chunks(dest::Vector{Uint64}, src::Vector{Uint64}, ns::Int, pos
     return
 end
 
+function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
+    chunk = ((src[k] & msk_s0) >>> ls0)
+    if ks1 > k
+        chunk_n = (src[k + 1] & ~msk_s0)
+        chunk |= (chunk_n << (63 - ls0) << 1)
+    end
+    return chunk
+end
+
 function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Int)
     if numbits == 0
         return
     end
-    nd = pos_d - 1
-    ns = pos_s - 1
 
     kd0, ld0 = _jl_get_chunks_id(pos_d)
     kd1, ld1 = _jl_get_chunks_id(pos_d + numbits - 1)
@@ -433,76 +440,39 @@ function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64},
     delta_kd = kd1 - kd0
     delta_ks = ks1 - ks0
 
-    #println("kd0=$kd0 kd1=$kd1 ld0=$ld0 ld1=$ld1")
-    #println("ks0=$ks0 ks1=$ks1 ls0=$ls0 ls1=$ls1")
-
-    u = 0xffffffffffffffff
+    u = ~(uint64(0))
     if delta_kd ==  0
         msk_d0 = ((u >>> (63 - ld0) >>> 1) | (u << ld1 << 1))
-        #print("msk_d0="); _jl_print_bit_chunk(msk_d0); println();
     else
         msk_d0 = (u >>> (63 - ld0) >>> 1)
         msk_d1 = ~(u >>> (63 - ld1))
-        #print("msk_d0="); _jl_print_bit_chunk(msk_d0); println();
-        #print("msk_d1="); _jl_print_bit_chunk(msk_d1); println();
     end
     if delta_ks == 0
         msk_s0 = ~((u >>> (63 - ls0) >>> 1) | (u << ls1 << 1))
-        #print("msk_s0="); _jl_print_bit_chunk(msk_s0); println();
     else
         msk_s0 = ~(u >>> (63 - ls0) >>> 1)
-        msk_s1 = (u >>> (63 - ls1))
-        #print("msk_s0="); _jl_print_bit_chunk(msk_s0); println();
-        #print("msk_s1="); _jl_print_bit_chunk(msk_s1); println();
     end
 
-    chunk_s0 = ((src[ks0] & msk_s0) >>> ls0)
-    #print("  c_s0="); _jl_print_bit_chunk(chunk_s0); println()
-    if ks1 > ks0
-        chunk_s0n = (src[ks0 + 1] & ~msk_s0)
-        if (ks1 == ks0 + 1)
-            chunk_s0n &= msk_s1
-        end
-        chunk_s0 |= (chunk_s0n << (63 - ls0) << 1)
-        #print(" !c_s0="); _jl_print_bit_chunk(chunk_s0); println()
-    end
+    chunk_s0 = _jl_glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
 
     dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
-    #print("  dkd0="); _jl_print_bit_chunk(dest[kd0]); println()
 
     if delta_kd == 0
         return
     end
 
     for i = 1 : kd1 - kd0 - 1
-        chunk_s1 = ((src[ks0 + i] & msk_s0) >>> ls0)
-        #print("  c_s1="); _jl_print_bit_chunk(chunk_s1); println()
-        if ks1 > ks0 + i
-            chunk_s1n = (src[ks0 + i + 1] & ~msk_s0)
-            if ks1 == ks0 + i + 1
-                chunk_s1n &= msk_s1
-            end
-            chunk_s1 |= (chunk_s1n << (63 - ls0) << 1)
-            #print(" !c_s1="); _jl_print_bit_chunk(chunk_s1); println()
-        end
+        chunk_s1 = _jl_glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
+
         chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
 
         dest[kd0 + i] = chunk_s
-        #print("  dkdi="); _jl_print_bit_chunk(dest[kd0 + i]); println()
+
         chunk_s0 = chunk_s1
     end
 
     if ks1 >= ks0 + delta_kd
-        chunk_s1 = ((src[ks0 + delta_kd] & msk_s0) >>> ls0)
-        #print("  c_s1="); _jl_print_bit_chunk(chunk_s1); println()
-        if ks1 > ks0 + delta_kd
-            chunk_s1n = (src[ks0 + delta_kd + 1] & ~msk_s0)
-            if ks1 == ks0 + delta_kd + 1
-                chunk_s1n &= msk_s1
-            end
-            chunk_s1 |= (chunk_s1n << (63 - ls0) << 1)
-            #print(" !c_s1="); _jl_print_bit_chunk(chunk_s1); println()
-        end
+        chunk_s1 = _jl_glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
     else
         chunk_s1 = uint64(0)
     end
@@ -510,7 +480,6 @@ function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64},
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
 
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
-    #print("  dkd1="); _jl_print_bit_chunk(dest[kd1]); println()
 
     return
 end
@@ -546,7 +515,7 @@ function append!(B::BitVector, items::BitVector)
         B.chunks[end] = uint64(0)
     end
     B.dims[1] += n1
-    _jl_copy_chunks(B.chunks, items.chunks, n1, n0 + 1)
+    _jl_copy_chunks(B.chunks, n0 + 1, items.chunks, n1)
     return B
 end
 
@@ -1285,7 +1254,7 @@ function hcat(B::BitVector...)
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
-        _jl_copy_chunks(M.chunks, B[j].chunks, height, (height * (j - 1)) + 1)
+        _jl_copy_chunks(M.chunks, (height * (j - 1)) + 1, B[j].chunks, height)
     end
     return M
 end
@@ -1298,7 +1267,7 @@ function vcat(V::BitVector...)
     B = BitArray(n)
     j = 1
     for Vk in V
-        _jl_copy_chunks(B.chunks, Vk.chunks, length(Vk), j)
+        _jl_copy_chunks(B.chunks, j, Vk.chunks, length(Vk))
         j += length(Vk)
     end
     return B
@@ -1322,7 +1291,7 @@ function hcat(A::Union(BitMatrix,BitVector)...)
     for k=1:nargs
         Ak = A[k]
         n = numel(Ak)
-        _jl_copy_chunks(B.chunks, Ak.chunks, n, pos)
+        _jl_copy_chunks(B.chunks, pos, Ak.chunks, n)
         pos += n
     end
     return B
