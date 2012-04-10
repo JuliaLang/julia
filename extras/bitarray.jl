@@ -23,8 +23,8 @@ BitArray() = BitArray{1}(0)
 BitArray(dims::Dims) = BitArray{max(length(dims), 1)}(dims...)
 BitArray(dims::Int...) = BitArray{max(length(dims), 1)}(dims...)
 
-typealias BitVector{T} BitArray{1}
-typealias BitMatrix{T} BitArray{2}
+typealias BitVector BitArray{1}
+typealias BitMatrix BitArray{2}
 
 # non-standard compact representation
 
