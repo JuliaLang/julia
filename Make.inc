@@ -113,7 +113,7 @@ else
 LIBBLAS = -lblas
 endif
 else
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+LIBBLAS = "-L$(JULIALIB) -lopenblas"
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -123,7 +123,7 @@ else
 LIBLAPACK = -llapack
 endif
 else
-LIBLAPACK = $(JULIAHOME)/external/lapack-$(LAPACK_VER)/liblapack.a
+LIBLAPACK = "-L$(JULIALIB) -lopenblas"
 endif
 
 # OS specific stuff

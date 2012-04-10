@@ -374,7 +374,7 @@ arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="-L$(JULIALIB) -lopenblas" --with-lapack="-L$(JULIALIB) -lopenblas" --disable-mpi --enable-shared
+	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas=$(LIBBLAS) --with-lapack=$(LIBLAPACK) --disable-mpi --enable-shared
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
