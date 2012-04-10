@@ -377,6 +377,9 @@ assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[f
 
 ## Aux functions ##
 
+# note: parameters passed to these functions
+#       are not checked for consistency
+
 function _jl_copy_chunks(dest::Vector{Uint64}, src::Vector{Uint64}, ns::Int, pos::Int)
     if ns == 0
         return
@@ -412,6 +415,103 @@ function _jl_copy_chunks(dest::Vector{Uint64}, src::Vector{Uint64}, ns::Int, pos
     if length(src) != k1 - k0
         dest[k1] |= (src[k1 - k0 + 1] << ld) & msk_s
     end
+    return
+end
+
+function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Int)
+    if numbits == 0
+        return
+    end
+    nd = pos_d - 1
+    ns = pos_s - 1
+
+    kd0, ld0 = _jl_get_chunks_id(pos_d)
+    kd1, ld1 = _jl_get_chunks_id(pos_d + numbits - 1)
+    ks0, ls0 = _jl_get_chunks_id(pos_s)
+    ks1, ls1 = _jl_get_chunks_id(pos_s + numbits - 1)
+
+    delta_kd = kd1 - kd0
+    delta_ks = ks1 - ks0
+
+    #println("kd0=$kd0 kd1=$kd1 ld0=$ld0 ld1=$ld1")
+    #println("ks0=$ks0 ks1=$ks1 ls0=$ls0 ls1=$ls1")
+
+    u = 0xffffffffffffffff
+    if delta_kd ==  0
+        msk_d0 = ((u >>> (63 - ld0) >>> 1) | (u << ld1 << 1))
+        #print("msk_d0="); _jl_print_bit_chunk(msk_d0); println();
+    else
+        msk_d0 = (u >>> (63 - ld0) >>> 1)
+        msk_d1 = ~(u >>> (63 - ld1))
+        #print("msk_d0="); _jl_print_bit_chunk(msk_d0); println();
+        #print("msk_d1="); _jl_print_bit_chunk(msk_d1); println();
+    end
+    if delta_ks == 0
+        msk_s0 = ~((u >>> (63 - ls0) >>> 1) | (u << ls1 << 1))
+        #print("msk_s0="); _jl_print_bit_chunk(msk_s0); println();
+    else
+        msk_s0 = ~(u >>> (63 - ls0) >>> 1)
+        msk_s1 = (u >>> (63 - ls1))
+        #print("msk_s0="); _jl_print_bit_chunk(msk_s0); println();
+        #print("msk_s1="); _jl_print_bit_chunk(msk_s1); println();
+    end
+
+    chunk_s0 = ((src[ks0] & msk_s0) >>> ls0)
+    #print("  c_s0="); _jl_print_bit_chunk(chunk_s0); println()
+    if ks1 > ks0
+        chunk_s0n = (src[ks0 + 1] & ~msk_s0)
+        if (ks1 == ks0 + 1)
+            chunk_s0n &= msk_s1
+        end
+        chunk_s0 |= (chunk_s0n << (63 - ls0) << 1)
+        #print(" !c_s0="); _jl_print_bit_chunk(chunk_s0); println()
+    end
+
+    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+    #print("  dkd0="); _jl_print_bit_chunk(dest[kd0]); println()
+
+    if delta_kd == 0
+        return
+    end
+
+    for i = 1 : kd1 - kd0 - 1
+        chunk_s1 = ((src[ks0 + i] & msk_s0) >>> ls0)
+        #print("  c_s1="); _jl_print_bit_chunk(chunk_s1); println()
+        if ks1 > ks0 + i
+            chunk_s1n = (src[ks0 + i + 1] & ~msk_s0)
+            if ks1 == ks0 + i + 1
+                chunk_s1n &= msk_s1
+            end
+            chunk_s1 |= (chunk_s1n << (63 - ls0) << 1)
+            #print(" !c_s1="); _jl_print_bit_chunk(chunk_s1); println()
+        end
+        chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+
+        dest[kd0 + i] = chunk_s
+        #print("  dkdi="); _jl_print_bit_chunk(dest[kd0 + i]); println()
+        chunk_s0 = chunk_s1
+    end
+
+    if ks1 >= ks0 + delta_kd
+        chunk_s1 = ((src[ks0 + delta_kd] & msk_s0) >>> ls0)
+        #print("  c_s1="); _jl_print_bit_chunk(chunk_s1); println()
+        if ks1 > ks0 + delta_kd
+            chunk_s1n = (src[ks0 + delta_kd + 1] & ~msk_s0)
+            if ks1 == ks0 + delta_kd + 1
+                chunk_s1n &= msk_s1
+            end
+            chunk_s1 |= (chunk_s1n << (63 - ls0) << 1)
+            #print(" !c_s1="); _jl_print_bit_chunk(chunk_s1); println()
+        end
+    else
+        chunk_s1 = uint64(0)
+    end
+
+    chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+
+    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+    #print("  dkd1="); _jl_print_bit_chunk(dest[kd1]); println()
+
     return
 end
 
@@ -1228,7 +1328,6 @@ function hcat(A::Union(BitMatrix,BitVector)...)
     return B
 end
 
-#TODO: optimize...
 function vcat(A::BitMatrix...)
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
@@ -1237,17 +1336,21 @@ function vcat(A::BitMatrix...)
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
     B = BitArray(nrows, ncols)
-    pos = 1
-    for k=1:nargs
-        Ak = A[k]
-        p1 = pos+size(Ak,1)-1
-        B[pos:p1, :] = Ak
-        pos = p1+1
+    nrowsA = [size(a, 1) | a = A]
+    pos_d = 1
+    pos_s = ones(Int, nargs)
+    for j = 1:ncols
+        for k=1:nargs
+            _jl_copy_chunks2(B.chunks, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
+            pos_s[k] += nrowsA[k]
+            pos_d += nrowsA[k]
+        end
     end
     return B
 end
 
 # general case, specialized for BitArrays and Integers
+# TODO: optimize!
 function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     nargs = length(X)
     # using integers != 0 or 1 results in convertion to Array{Int}
