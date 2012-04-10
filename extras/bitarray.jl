@@ -380,54 +380,16 @@ assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[f
 # note: parameters passed to these functions
 #       are not checked for consistency
 
-function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, numbits::Int)
-    if numbits == 0
-        return
-    end
-    nd = pos_d - 1
-    k0 = int(_jl_num_bit_chunks(nd))
-    k1 = int(_jl_num_bit_chunks(nd + numbits))
-    ld = nd & 0x3f
-    ls = (nd + numbits) & 0x3f
-
-    u = ~(uint64(0))
-    if ld == 0
-        k0 += 1
-    end
-
-    if k0 == k1
-        msk_d = ~((u >>> (63 - ld) >>> 1) $ (u >>> (64 - ls)))
-    else
-        msk_d = (u >>> (63 - ld) >>> 1)
-        msk_s = (u >>> (64 - ls))
-    end
-
-    dest[k0] = (dest[k0] & msk_d) | ((src[1] << ld) & ~msk_d)
-
-    if k0 == k1
-        return
-    end
-
-    for i = 1 : k1 - k0 - 1
-        dest[k0 + i] = (src[i] >>> (63 - ld) >>> 1) | (src[i + 1] << ld)
-    end
-    dest[k1] = (dest[k1] & ~msk_s) | ((src[k1 - k0] >>> (63 - ld) >>> 1) & msk_s)
-    if length(src) != k1 - k0
-        dest[k1] |= (src[k1 - k0 + 1] << ld) & msk_s
-    end
-    return
-end
-
 function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
     chunk = ((src[k] & msk_s0) >>> ls0)
-    if ks1 > k
+    if ks1 > k && ls0 > 0
         chunk_n = (src[k + 1] & ~msk_s0)
-        chunk |= (chunk_n << (63 - ls0) << 1)
+        chunk |= (chunk_n << (64 - ls0))
     end
     return chunk
 end
 
-function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Int)
+function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Int)
     if numbits == 0
         return
     end
@@ -483,6 +445,10 @@ function _jl_copy_chunks2(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64},
 
     return
 end
+
+_jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, numbits::Int) =
+    _jl_copy_chunks(dest, pos_d, src, 1, numbits)
+
 
 ## Dequeue functionality ##
 
@@ -670,39 +636,23 @@ function del(B::BitVector, r::Range1{Int})
         return B
     end
 
-    k_f, j_f = _jl_get_chunks_id(i_f)
-    k_l, j_l = _jl_get_chunks_id(i_l)
-
-    g_fl = (64 + j_l - j_f + 1) & 0x3f
-    if (g_fl == 0)
-        g_fl = 64
-    end
-
-    u = ~uint64(0)
-    msk_bef_f = u >>> (63 - j_f) >>> 1
-
-    B.chunks[k_f] = (msk_bef_f & B.chunks[k_f]) | ((B.chunks[k_l] >>> j_l >>> 1) << j_f)
-    if length(B.chunks) > k_l && (j_l >= j_f)
-        B.chunks[k_f] |= (B.chunks[k_l + 1] << (64 - g_fl))
-    end
-
-    g_k = k_l - k_f - (j_l < j_f ? 1 : 0)
-    for t = k_f + 1 : length(B.chunks) - (g_k + 1)
-        B.chunks[t] = (B.chunks[t + g_k] >>> (g_fl - 1) >>> 1) | (B.chunks[t + g_k + 1] << (64 - g_fl)) 
-    end
+    _jl_copy_chunks(B.chunks, i_f, B.chunks, i_l + 1, n - i_l)
 
     delta_l = i_l - i_f + 1
-    delta_k = length(B.chunks) - _jl_num_bit_chunks(length(B) - delta_l)
-
-    if (length(B.chunks) - delta_k > k_f)
-        B.chunks[end - g_k] = (B.chunks[end] >>> (g_fl - 1) >>> 1)
-    end
+    new_l = length(B) - delta_l
+    delta_k = length(B.chunks) - _jl_num_bit_chunks(new_l)
 
     if delta_k > 0
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, delta_k)
     end
 
-    B.dims[1] -= delta_l
+    if new_l > 0
+        u = ~(uint64(0))
+        l = new_l & 0x3f
+        B.chunks[end] &= (u >>> (64 - l))
+    end
+
+    B.dims[1] = new_l
 
     return B
 end
@@ -1310,7 +1260,7 @@ function vcat(A::BitMatrix...)
     pos_s = ones(Int, nargs)
     for j = 1:ncols
         for k=1:nargs
-            _jl_copy_chunks2(B.chunks, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
+            _jl_copy_chunks(B.chunks, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
             pos_s[k] += nrowsA[k]
             pos_d += nrowsA[k]
         end
