@@ -1,13 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 #include <assert.h>
 #include <errno.h>
 #include <limits.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-
+#include <time.h>
 #include "dtypes.h"
 
 #ifdef WIN32
@@ -86,3 +85,67 @@ void sleep_ms(int ms)
     select(0, NULL, NULL, NULL, &timeout);
 #endif
 }
+
+int read_tm_sec(struct tm *t )
+{
+   return t->tm_sec;
+}
+
+int read_tm_min(struct tm *t)
+{
+   return t->tm_min;
+}
+
+int read_tm_hour(struct tm* t)
+{
+    return t->tm_hour;
+}
+
+int read_tm_mday(struct tm* t )
+{
+   return t->tm_mday;
+}
+
+int read_tm_mon(struct tm* t)
+{
+   return t->tm_mon;
+}
+
+int read_tm_year(struct tm* t)
+{
+    return t->tm_year;
+}
+
+int read_tm_isdst(struct tm* t)
+{
+    return t->tm_isdst;
+}
+
+long int read_tm_gmtoff(struct tm* t)
+{
+    return t->tm_gmtoff;
+}
+
+char *read_tm_zone(struct tm* t)
+{
+    return t->tm_zone;
+}
+
+char *default_tzone(){
+    if (daylight) {
+        return tzname[0];
+    } else {
+        return tzname[1];
+    }
+}
+
+long int default_gmtoff(){
+    return timezone;
+}
+
+int default_isdst(){
+    return daylight;
+}
+
+
+
