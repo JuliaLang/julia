@@ -9,7 +9,7 @@
 load("glpk_h.jl")
 
 _jl_libglpk = dlopen("libglpk")
-_jl_libglpk_wrapper = dlopen("libglpk_wrapper.so")
+_jl_libglpk_wrapper = dlopen("libglpk_wrapper")
 
 macro glpk_ccall(func, args...)
     f = "glp_$(func)"
