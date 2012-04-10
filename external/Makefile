@@ -374,7 +374,7 @@ arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas=$(LIBBLAS) --with-lapack=$(LIBLAPACK) --disable-mpi --enable-shared
+	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -445,13 +445,11 @@ distclean-fftw:
 
 ## SUITESPARSE ##
 
-SUITESPARSE_LOCAL_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
-SUITESPARSE_SYSTEM_OBJ_SOURCE = SuiteSparse-SYSTEM/lib/libsuitesparse.$(SHLIB_EXT)
-SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_LOCAL_OBJ_SOURCE)
+SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
 else
-SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_SYSTEM_OBJ_SOURCE)
+SUITESPARSE_OBJ_SOURCE = 
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -463,33 +461,23 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) && \
-	mkdir -p lib && \
-	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
-	cd lib && \
-	for i in *.a; do ar x $$i; done && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
-$(SUITESPARSE_SYSTEM_OBJ_SOURCE):
-	mkdir -p SuiteSparse-SYSTEM/lib && \
-	cd SuiteSparse-SYSTEM/lib && \
-	cp `find /lib /usr/lib /usr/local/lib $(subst :, ,$(LD_LIBRARY_PATH)) $(subst :, ,$(DYLD_LIBRARY_PATH)) \
-	$(subst :, ,$(LIBRARY_PATH)) -name libamd.a -o -name libbtf.a -o -name libcamd.a -o -name libccolamd.a \
-	-o -name libcholmod.a -o -name libcolamd.a -o -name libspqr.a -o -name libufconfig.a \
-	-o -name libcerbla.a -o -name libumfpack.a` . && \
-	for i in *.a; do ar x $$i; done && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX) 
+	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
-	cp -f $< $@
+	cd SuiteSparse-$(SUITESPARSE_VER) && \
+	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.dylib && \
+	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.dylib && \
+	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.dylib -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.dylib -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS)
 
 clean-suitesparse:
 	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
-	rm -fr SuiteSparse-SYSTEM/lib
 distclean-suitesparse: clean-suitesparse
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) SuiteSparse-SYSTEM
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
 # SUITESPARSE WRAPPER
 

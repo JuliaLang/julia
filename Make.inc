@@ -113,7 +113,7 @@ else
 LIBBLAS = -lblas
 endif
 else
-LIBBLAS = "-L$(JULIALIB) -lopenblas"
+LIBBLAS = -L$(JULIALIB) -lopenblas
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -123,7 +123,7 @@ else
 LIBLAPACK = -llapack
 endif
 else
-LIBLAPACK = "-L$(JULIALIB) -lopenblas"
+LIBLAPACK = -L$(JULIALIB) -lopenblas
 endif
 
 # OS specific stuff
