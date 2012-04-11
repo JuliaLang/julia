@@ -301,8 +301,10 @@ for k = 1 : 4
     @check_bit_operation1 rotl90 Array{Int} b1 k
 end
 
-b1 = bitrand(v1)
-@check_bit_operation1 reverse Array{Int} b1
+for m = 0 : v1
+    b1 = bitrand(m)
+    @check_bit_operation1 reverse Array{Int} b1
+end
 
 @timesofar "datamove"
 

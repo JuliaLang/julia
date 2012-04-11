@@ -399,7 +399,7 @@ function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::U
     return chunk
 end
 
-function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Int)
+function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, pos_s::Int, numbits::Integer)
     if numbits == 0
         return
     end
@@ -919,14 +919,63 @@ function rotl90(A::BitMatrix, k::Integer)
     k == 3 ? rotr90(A) : copy(A)
 end
 
-function reverse!(v::BitVector)
-    n = length(v)
-    r = n
-    for i=1:div(n,2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+function _jl_reverse_bits(x::Uint64)
+    x = ((x >>>  1) & 0x5555555555555555) | ((x <<  1) & 0xaaaaaaaaaaaaaaaa)
+    x = ((x >>>  2) & 0x3333333333333333) | ((x <<  2) & 0xcccccccccccccccc)
+    x = ((x >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((x <<  4) & 0xf0f0f0f0f0f0f0f0)
+    x = ((x >>>  8) & 0x00ff00ff00ff00ff) | ((x <<  8) & 0xff00ff00ff00ff00)
+    x = ((x >>> 16) & 0x0000ffff0000ffff) | ((x << 16) & 0xffff0000ffff0000)
+    x = ((x >>> 32) & 0x00000000ffffffff) | ((x << 32) & 0xffffffff00000000)
+    return x
+end
+
+# alternative implementation: doesn't seem to give
+# any performance gain (and it has a higher WTF coefficient)
+#function _jl_reverse_bits(x::Uint64)
+    #x = (x << 32) | (x >>> 32)
+    #x = (x & 0x0001ffff0001ffff) << 15 | (x & 0xfffe0000fffe0000) >>> 17
+    #t = (x $ (x >>> 10)) & 0x003f801f003f801f
+    #x = (t | (t << 10)) $ x
+    #t = (x $ (x >>> 4)) & 0x0e0384210e038421
+    #x = (t | (t << 4)) $ x
+    #t = (x $ (x >>> 2)) & 0x2248884222488842
+    #x = (t | (t << 2)) $ x
+    #return x
+#end
+
+
+function reverse!(B::BitVector)
+    n = length(B)
+    if n == 0
+        return B
     end
-    v
+    pnc = length(B.chunks) & 1
+    hnc = (length(B.chunks) >>> 1)
+
+    aux_chunks = Array(Uint64, 1)
+
+    for i = 1 : hnc
+        j = ((i - 1) << 6)
+        aux_chunks[1] = _jl_reverse_bits(B.chunks[i])
+        _jl_copy_chunks(B.chunks, j + 1, B.chunks, n - 63 - j, 64)
+        B.chunks[i] = _jl_reverse_bits(B.chunks[i])
+        _jl_copy_chunks(B.chunks, n - 63 - j, aux_chunks, 1, 64)
+    end
+
+    if pnc == 0
+        return B
+    end
+
+    l = ((n + 63) & 63) + 1
+    i = hnc + 1
+    j = hnc << 6
+    u = ~(uint64(0))
+    msk = (u >>> (64 - l))
+
+    aux_chunks[1] = _jl_reverse_bits(B.chunks[i] & msk) >>> (64 - l)
+    _jl_copy_chunks(B.chunks, j + 1, aux_chunks, 1, l)
+
+    return B
 end
 
 reverse(v::BitVector) = reverse!(copy(v))
@@ -950,8 +999,8 @@ function nnz(B::BitArray)
 end
 
 function find(B::BitArray)
-    nnzA = nnz(B)
-    I = Array(Int, nnzA)
+    nnzB = nnz(B)
+    I = Array(Int, nnzB)
     count = 1
     for i = 1:length(B)
         if B[i] != 0
