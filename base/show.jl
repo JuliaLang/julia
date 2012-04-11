@@ -474,13 +474,10 @@ function showall(a::AbstractArray)
     cartesian_map(print_slice, tail)
 end
 
-function show(v::AbstractVector{Any})
+function show_vector(v, opn, cls)
     X = reshape(v,(1,length(v)))
-    print_matrix(X, 1, tty_cols(), "{", ", ", "}", "  ...  ", ":", 5, 5)
+    print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
 end
 
-function show(v::AbstractVector)
-    print(summary(v))
-    println(":")
-    print_matrix(reshape(v,(length(v),1)))
-end
+show(v::AbstractVector{Any}) = show_vector(v, "{", "}")
+show(v::AbstractVector)      = show_vector(v, "[", "]")
