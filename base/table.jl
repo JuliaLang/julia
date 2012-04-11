@@ -146,7 +146,7 @@ type HashTable{K,V} <: Associative
     deleter::Function
 
     HashTable() = HashTable{K,V}(0)
-    function HashTable(n)
+    function HashTable(n::Integer)
         n = _tablesz(n)
         new(fill!(cell(n), _jl_secret_table_token),
             fill!(cell(n), _jl_secret_table_token),

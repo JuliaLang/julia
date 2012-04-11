@@ -52,8 +52,11 @@
     (filter defined-julia-global (find-possible-globals e)))))
 
 ;; return a lambda expression representing a thunk for a top-level expression
+;; note: expansion of stuff inside module is delayed, so the contents obey
+;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr- e)
-  (if (or (boolean? e) (eof-object? e) (and (pair? e) (eq? (car e) 'line)))
+  (if (or (boolean? e) (eof-object? e)
+	  (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
       e
       (let* ((ex (julia-expand0 e))
 	     (gv (toplevel-expr-globals ex))
@@ -87,19 +90,7 @@
 	   (cadadr ex))
 	  (else ex))))
 
-(define (has-macrocalls? e)
-  (or (and (pair? e) (eq? (car e) 'macrocall))
-      (and (not (and (pair? e) (eq? (car e) 'quote)))
-	   (any has-macrocalls? e))))
-
-;; expand expression right after parsing if it's OK to do so
-(define (pre-expand-toplevel-expr e)
-  (if (or (and (pair? e) (eq? (car e) 'module))
-	  (has-macrocalls? e))
-      e
-      (parser-wrap (lambda ()
-		     (expand-toplevel-expr e)))))
-
+;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
   (set! current-filename 'string)
   (let ((inp (open-input-string s)))
@@ -118,22 +109,52 @@
 			(expr (julia-parse inp)))
 		   (if (not (eof-object? (julia-parse inp)))
 		       (error "extra input after end of expression")
-		       (pre-expand-toplevel-expr expr))))))
-
-(define (jl-parse-named-stream name stream)
-  (parser-wrap (lambda ()
-		 (cons 'file (map pre-expand-toplevel-expr
-				  (julia-parse-stream name stream))))))
+		       (expand-toplevel-expr expr))))))
 
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str)
-  (jl-parse-named-stream "string" (open-input-string str)))
+  (jl-parser-set-stream "string" (open-input-string str)))
 
 (define (jl-parse-file s)
-  (let ((infile (open-input-file s)))
-    (begin0
-     (jl-parse-named-stream s infile)
-     (io.close infile))))
+  (jl-parser-set-stream s (open-input-file s)))
+
+(define *filename-stack* '())
+(define *ts-stack* '())
+(define current-token-stream #())
+
+(define (jl-parser-set-stream name stream)
+  (set! *filename-stack* (cons current-filename *filename-stack*))
+  (set! *ts-stack* (cons current-token-stream *ts-stack*))
+  (set! current-filename (symbol name))
+  (set! current-token-stream (make-token-stream stream)))
+
+(define (jl-parser-close-stream)
+  (io.close (ts:port current-token-stream))
+  (set! current-filename (car *filename-stack*))
+  (set! current-token-stream (car *ts-stack*))
+  (set! *filename-stack* (cdr *filename-stack*))
+  (set! *ts-stack* (cdr *ts-stack*)))
+
+(define (jl-parser-next)
+  (parser-wrap
+   (lambda ()
+     (with-exception-catcher
+      (lambda (e)
+	(if (and (pair? e) (eq? (car e) 'error))
+	    (let ((msg (cadr e)))
+	      (raise `(error ,(string msg " at " current-filename ":" 
+				      (input-port-line
+				       (ts:port current-token-stream))))))
+	    (raise e)))
+      (lambda ()
+	(skip-ws-and-comments (ts:port current-token-stream))
+	(let ((ln (input-port-line (ts:port current-token-stream))))
+	  (let ((e (if #f #;(eq? (peek-token current-token-stream) 'end)
+		       (take-token current-token-stream)
+		       (julia-parse current-token-stream))))
+	    (if (eof-object? e)
+		#f
+		(cons ln (expand-toplevel-expr e))))))))))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)
