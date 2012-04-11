@@ -64,6 +64,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
 end
 
 _jl_pivot_middle(a,b,c) = a < b ? (b < c ? b : c) : (a < c ? a : c)
+_jl_pivot_middle_by(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
@@ -74,8 +75,9 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
         i, j = lo, hi
         # pivot = (a[lo]+a[hi])/2                                   # 1.14x
         # pivot = a[(lo+hi)>>>1]                                    # 1.15x
-          pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
+        # pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
         # pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
+         pivot = _jl_pivot_middle_by(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
         # pivot = a[randival(lo,hi)]                                # 1.28x
         while i <= j
             while $lt(:(a[i]), :pivot); i += 1; end
