@@ -280,7 +280,7 @@ function ref(B::BitArray, I::Integer...)
     index = I[1]
     stride = 1
     for k=2:ndims
-        stride = stride * size(B, k - 1)
+        stride *= size(B, k - 1)
         index += (I[k] - 1) * stride
     end
     return B[index]
@@ -396,6 +396,59 @@ function assign{T<:Integer}(B::BitArray, x, I::AbstractVector{T})
     return B
 end
 
+# this is mainly indended for the general cat case
+function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
+    nI = 1 + length(I)
+    if ndims(B) != nI
+        error("wrong number of dimensions in assigment")
+    end
+    lI = length(I0)
+    for r in I
+        lI *= length(r)
+    end
+    if numel(X) != lI
+        error("array assignment dimensions mismatch")
+    end
+    if lI == 0
+        return B
+    end
+    f0 = first(I0)
+    l0 = length(I0)
+    if nI == 1
+        _jl_copy_chunks(B.chunks, f0, X.chunks, 1, l0)
+        return B
+    end
+    #ind_lst = [first(r)::Int | r in I] # this hits a bug, refactoring...
+    ind_lst = Array(Int, length(I))
+    for k = 1 : length(I)
+        ind_lst[k] = first(I[k])
+    end
+    # endofbug
+    indX = 1
+    iterate = true
+    while iterate
+        stride = 1
+        ind = f0
+        for k = 1 : nI - 1
+            stride *= size(B, k)
+            ind += stride * (ind_lst[k] - 1)
+        end
+        _jl_copy_chunks(B.chunks, ind, X.chunks, indX, l0)
+        indX += l0
+        iterate = false
+        for k = 1 : nI - 1
+            if ind_lst[k] < last(I[k])
+                ind_lst[k] += 1
+                iterate = true
+                break;
+            else
+                ind_lst[k] = first(I[k])
+            end
+        end
+    end
+    return B
+end
+
 function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
     for i = 1:length(I)
         B[I[i]] = X[i]
@@ -423,11 +476,11 @@ let assign_cache = nothing
         if is(assign_cache,nothing)
             assign_cache = HashTable()
         end
-        gen_cartesian_map(assign_cache, ivars->:(B[$(ivars...)] = X[refind];
-        refind += 1),
-        tuple(I0, I...),
-        (:B, :X, :refind),
-        B, X, 1)
+        gen_cartesian_map(assign_cache,
+            ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
+            tuple(I0, I...),
+            (:B, :X, :refind),
+            B, X, 1)
         return B
     end
 end
@@ -1339,7 +1392,6 @@ function vcat(A::BitMatrix...)
 end
 
 # general case, specialized for BitArrays and Integers
-# TODO: optimize!
 function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     nargs = length(X)
     # using integers != 0 or 1 results in convertion to Array{Int}
@@ -1404,6 +1456,8 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         nextrange = range+cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      (1:dimsC[i]) : (range:nextrange-1) ))
+        # note: when X is a BitArray, this calls
+        #       the special assign with ranges
         C[cat_one...] = X[k]
         range = nextrange
     end
