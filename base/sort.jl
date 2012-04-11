@@ -63,7 +63,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
-_jl_pivot_middle(a,b,c) = a < b ? (b < c ? b : c) : (a < c ? a : c)
+_jl_pivot_middle(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
