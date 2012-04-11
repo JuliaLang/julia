@@ -479,7 +479,7 @@ function show(v::AbstractVector{Any})
     print_matrix(X, 1, tty_cols(), "{", ", ", "}", "  ...  ", ":", 5, 5)
 end
 
-function show{T}(v::AbstractVector{T})
+function show(v::AbstractVector)
     print(summary(v))
     println(":")
     print_matrix(reshape(v,(length(v),1)))
