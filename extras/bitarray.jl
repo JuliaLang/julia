@@ -289,13 +289,16 @@ end
 let ref_cache = nothing
 global ref
 function ref(B::BitArray, I::Indices...)
-    X = similar(B, map(length, I)::Dims)
+    i = length(I)
+    while 1 > 0 && isa(I[i],Integer); i-=1; end
+    d = map(length, I)::Dims
+    X = similar(B, d[1:i])
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
     gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = B[$(ivars...)];
+            X[storeind] = B[$(ivars...)]
             storeind += 1
         end, I, (:B, :X, :storeind), B, X, 1)
     return X
