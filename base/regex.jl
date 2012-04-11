@@ -33,6 +33,7 @@ macro r_str(pattern, flags...)
                    f=='m' ? PCRE_MULTILINE :
                    f=='s' ? PCRE_DOTALL    :
                    f=='x' ? PCRE_EXTENDED  :
+                   f=='u' ? PCRE_UTF8      :
                    error("unknown regex flag: $f")
     end
     Regex(pattern, options)
