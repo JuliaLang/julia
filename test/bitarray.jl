@@ -390,6 +390,7 @@ b2 = bitrand(s1, s3, s3, s4)
 b3 = bitrand(s1, s2, s3, s1)
 @check_bit_operation_allint cat Array{Int} (2, b1, b2)
 @check_bit_operation_allint cat Array{Int} (4, b1, b3)
+@check_bit_operation_allint cat Array{Int} (6, b1, b1)
 
 b1 = bitrand(n1, 1, 1)
 @check_bit_operation_allint cat Array{Int} (1, b1, 0, 1, b1)
