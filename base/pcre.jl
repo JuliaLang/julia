@@ -24,7 +24,8 @@ const PCRE_COMPILE_MASK      =
       PCRE_NO_AUTO_CAPTURE   |
       PCRE_NO_START_OPTIMIZE |
       PCRE_NO_UTF8_CHECK     |
-      PCRE_UNGREEDY
+      PCRE_UNGREEDY          |
+      PCRE_UTF8
 
 const PCRE_EXECUTE_MASK      =
       PCRE_NEWLINE_ANY       |

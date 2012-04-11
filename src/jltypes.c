@@ -693,6 +693,9 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
+    // super needs to be instantiated so the matching below finds actual types
+    // and doesn't fail due to the presence of extra typevars.
+    super = (jl_tag_type_t*)jl_instantiate_type_with((jl_type_t*)super, eqc->data, eqc->n/2);
 
     size_t n = sub->parameters->length;
 

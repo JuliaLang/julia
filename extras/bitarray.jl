@@ -69,6 +69,85 @@ isreal(B::BitArray) = true
 iscomplex(B::BitArray) = false
 isbool(B::BitArray) = false
 
+## Aux functions ##
+
+function _jl_get_chunks_id(i::Integer)
+    j = uint64(i - 1)
+    return int(j >>> 6) + 1, int(j & 0x3f)
+end
+
+function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
+    chunk = ((src[k] & msk_s0) >>> ls0)
+    if ks1 > k && ls0 > 0
+        chunk_n = (src[k + 1] & ~msk_s0)
+        chunk |= (chunk_n << (64 - ls0))
+    end
+    return chunk
+end
+
+function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint64}, pos_s::Integer, numbits::Integer)
+    if numbits == 0
+        return
+    end
+
+    kd0, ld0 = _jl_get_chunks_id(pos_d)
+    kd1, ld1 = _jl_get_chunks_id(pos_d + numbits - 1)
+    ks0, ls0 = _jl_get_chunks_id(pos_s)
+    ks1, ls1 = _jl_get_chunks_id(pos_s + numbits - 1)
+
+    delta_kd = kd1 - kd0
+    delta_ks = ks1 - ks0
+
+    u = ~(uint64(0))
+    if delta_kd ==  0
+        msk_d0 = ((u >>> (63 - ld0) >>> 1) | (u << ld1 << 1))
+    else
+        msk_d0 = (u >>> (63 - ld0) >>> 1)
+        msk_d1 = ~(u >>> (63 - ld1))
+    end
+    if delta_ks == 0
+        msk_s0 = ~((u >>> (63 - ls0) >>> 1) | (u << ls1 << 1))
+    else
+        msk_s0 = ~(u >>> (63 - ls0) >>> 1)
+    end
+
+    chunk_s0 = _jl_glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
+
+    dest[kd0] = (dest[kd0] & msk_d0) | ((chunk_s0 << ld0) & ~msk_d0)
+
+    if delta_kd == 0
+        return
+    end
+
+    for i = 1 : kd1 - kd0 - 1
+        chunk_s1 = _jl_glue_src_bitchunks(src, ks0 + i, ks1, msk_s0, ls0)
+
+        chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+
+        dest[kd0 + i] = chunk_s
+
+        chunk_s0 = chunk_s1
+    end
+
+    if ks1 >= ks0 + delta_kd
+        chunk_s1 = _jl_glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
+    else
+        chunk_s1 = uint64(0)
+    end
+
+    chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
+
+    dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)
+
+    return
+end
+
+_jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, numbits::Int) =
+    _jl_copy_chunks(dest, pos_d, src, 1, numbits)
+
+
+## similar, fill, copy_to etc ##
+
 similar(B::BitArray) = BitArray(B.dims...)
 similar(B::BitArray, dims::Int...) = BitArray(dims)
 similar(B::BitArray, dims::Dims) = BitArray(dims...)
@@ -123,6 +202,24 @@ function copy_to(dest::BitArray, src::BitArray)
     return dest
 end
 
+function copy_to(dest::BitArray, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer)
+    if pos_s+numbits-1 > numel(src) || pos_d+numbits-1 > numel(dest) || pos_d < 1 || pos_s < 1
+        throw(BoundsError())
+    end
+    _jl_copy_chunks(dest.chunks, pos_d, src.chunks, pos_s, numbits)
+    return dest
+end
+
+function reshape{N}(B::BitArray, dims::NTuple{N,Int})
+    if prod(dims) != numel(B)
+        error("reshape: invalid dimensions")
+    end
+    Br = BitArray{N}()
+    Br.chunks = B.chunks
+    Br.dims = [i::Int | i=dims]
+    return Br
+end
+
 bitzeros(args...) = fill!(BitArray(args...), 0)
 bitones(args...) = fill!(BitArray(args...), 1)
 
@@ -164,11 +261,6 @@ bitrand(dims::Int...) = bitrand(dims)
 
 ## Indexing: ref ##
 
-function _jl_get_chunks_id(i::Integer)
-    j = uint64(i - 1)
-    return int(j >>> 6) + 1, int(j & 0x3f)
-end
-
 function ref(B::BitArray, i::Integer)
     if i < 1 || i > length(B)
         throw(BoundsError())
@@ -188,7 +280,7 @@ function ref(B::BitArray, I::Integer...)
     index = I[1]
     stride = 1
     for k=2:ndims
-        stride = stride * size(B, k - 1)
+        stride *= size(B, k - 1)
         index += (I[k] - 1) * stride
     end
     return B[index]
@@ -197,13 +289,16 @@ end
 let ref_cache = nothing
 global ref
 function ref(B::BitArray, I::Indices...)
-    X = similar(B, map(length, I)::Dims)
+    i = length(I)
+    while 1 > 0 && isa(I[i],Integer); i-=1; end
+    d = map(length, I)::Dims
+    X = similar(B, d[1:i])
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
     gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = B[$(ivars...)];
+            X[storeind] = B[$(ivars...)]
             storeind += 1
         end, I, (:B, :X, :storeind), B, X, 1)
     return X
@@ -301,6 +396,59 @@ function assign{T<:Integer}(B::BitArray, x, I::AbstractVector{T})
     return B
 end
 
+# this is mainly indended for the general cat case
+function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
+    nI = 1 + length(I)
+    if ndims(B) != nI
+        error("wrong number of dimensions in assigment")
+    end
+    lI = length(I0)
+    for r in I
+        lI *= length(r)
+    end
+    if numel(X) != lI
+        error("array assignment dimensions mismatch")
+    end
+    if lI == 0
+        return B
+    end
+    f0 = first(I0)
+    l0 = length(I0)
+    if nI == 1
+        _jl_copy_chunks(B.chunks, f0, X.chunks, 1, l0)
+        return B
+    end
+    #ind_lst = [first(r)::Int | r in I] # this hits a bug, refactoring...
+    ind_lst = Array(Int, length(I))
+    for k = 1 : length(I)
+        ind_lst[k] = first(I[k])
+    end
+    # endofbug
+    indX = 1
+    iterate = true
+    while iterate
+        stride = 1
+        ind = f0
+        for k = 1 : nI - 1
+            stride *= size(B, k)
+            ind += stride * (ind_lst[k] - 1)
+        end
+        _jl_copy_chunks(B.chunks, ind, X.chunks, indX, l0)
+        indX += l0
+        iterate = false
+        for k = 1 : nI - 1
+            if ind_lst[k] < last(I[k])
+                ind_lst[k] += 1
+                iterate = true
+                break;
+            else
+                ind_lst[k] = first(I[k])
+            end
+        end
+    end
+    return B
+end
+
 function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
     for i = 1:length(I)
         B[I[i]] = X[i]
@@ -328,11 +476,11 @@ let assign_cache = nothing
         if is(assign_cache,nothing)
             assign_cache = HashTable()
         end
-        gen_cartesian_map(assign_cache, ivars->:(B[$(ivars...)] = X[refind];
-        refind += 1),
-        tuple(I0, I...),
-        (:B, :X, :refind),
-        B, X, 1)
+        gen_cartesian_map(assign_cache,
+            ivars->:(B[$(ivars...)] = X[refind]; refind += 1),
+            tuple(I0, I...),
+            (:B, :X, :refind),
+            B, X, 1)
         return B
     end
 end
@@ -375,45 +523,6 @@ assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
 assign(A::BitMatrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
 assign(A::BitMatrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
 
-## Aux functions ##
-
-function _jl_copy_chunks(dest::Vector{Uint64}, src::Vector{Uint64}, ns::Int, pos::Int)
-    if ns == 0
-        return
-    end
-    nd = pos - 1
-    k0 = int(_jl_num_bit_chunks(nd))
-    k1 = int(_jl_num_bit_chunks(nd + ns))
-    ld = nd & 0x3f
-    ls = (nd + ns) & 0x3f
-
-    u = ~(uint64(0))
-    if ld == 0
-        k0 += 1
-    end
-
-    if k0 == k1
-        msk_d = ~((u >>> (63 - ld) >>> 1) $ (u >>> (64 - ls)))
-    else
-        msk_d = (u >>> (63 - ld) >>> 1)
-        msk_s = (u >>> (64 - ls))
-    end
-
-    dest[k0] = (dest[k0] & msk_d) | ((src[1] << ld) & ~msk_d)
-
-    if k0 == k1
-        return
-    end
-
-    for i = 1 : k1 - k0 - 1
-        dest[k0 + i] = (src[i] >>> (63 - ld) >>> 1) | (src[i + 1] << ld)
-    end
-    dest[k1] = (dest[k1] & ~msk_s) | ((src[k1 - k0] >>> (63 - ld) >>> 1) & msk_s)
-    if length(src) != k1 - k0
-        dest[k1] |= (src[k1 - k0 + 1] << ld) & msk_s
-    end
-    return
-end
 
 ## Dequeue functionality ##
 
@@ -446,7 +555,7 @@ function append!(B::BitVector, items::BitVector)
         B.chunks[end] = uint64(0)
     end
     B.dims[1] += n1
-    _jl_copy_chunks(B.chunks, items.chunks, n1, n0 + 1)
+    _jl_copy_chunks(B.chunks, n0 + 1, items.chunks, n1)
     return B
 end
 
@@ -601,39 +710,23 @@ function del(B::BitVector, r::Range1{Int})
         return B
     end
 
-    k_f, j_f = _jl_get_chunks_id(i_f)
-    k_l, j_l = _jl_get_chunks_id(i_l)
-
-    g_fl = (64 + j_l - j_f + 1) & 0x3f
-    if (g_fl == 0)
-        g_fl = 64
-    end
-
-    u = ~uint64(0)
-    msk_bef_f = u >>> (63 - j_f) >>> 1
-
-    B.chunks[k_f] = (msk_bef_f & B.chunks[k_f]) | ((B.chunks[k_l] >>> j_l >>> 1) << j_f)
-    if length(B.chunks) > k_l && (j_l >= j_f)
-        B.chunks[k_f] |= (B.chunks[k_l + 1] << (64 - g_fl))
-    end
-
-    g_k = k_l - k_f - (j_l < j_f ? 1 : 0)
-    for t = k_f + 1 : length(B.chunks) - (g_k + 1)
-        B.chunks[t] = (B.chunks[t + g_k] >>> (g_fl - 1) >>> 1) | (B.chunks[t + g_k + 1] << (64 - g_fl)) 
-    end
+    _jl_copy_chunks(B.chunks, i_f, B.chunks, i_l + 1, n - i_l)
 
     delta_l = i_l - i_f + 1
-    delta_k = length(B.chunks) - _jl_num_bit_chunks(length(B) - delta_l)
-
-    if (length(B.chunks) - delta_k > k_f)
-        B.chunks[end - g_k] = (B.chunks[end] >>> (g_fl - 1) >>> 1)
-    end
+    new_l = length(B) - delta_l
+    delta_k = length(B.chunks) - _jl_num_bit_chunks(new_l)
 
     if delta_k > 0
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, delta_k)
     end
 
-    B.dims[1] -= delta_l
+    if new_l > 0
+        u = ~(uint64(0))
+        l = new_l & 0x3f
+        B.chunks[end] &= (u >>> (64 - l))
+    end
+
+    B.dims[1] = new_l
 
     return B
 end
@@ -890,14 +983,63 @@ function rotl90(A::BitMatrix, k::Integer)
     k == 3 ? rotr90(A) : copy(A)
 end
 
-function reverse!(v::BitVector)
-    n = length(v)
-    r = n
-    for i=1:div(n,2)
-        v[i], v[r] = v[r], v[i]
-        r -= 1
+function _jl_reverse_bits(x::Uint64)
+    x = ((x >>>  1) & 0x5555555555555555) | ((x <<  1) & 0xaaaaaaaaaaaaaaaa)
+    x = ((x >>>  2) & 0x3333333333333333) | ((x <<  2) & 0xcccccccccccccccc)
+    x = ((x >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((x <<  4) & 0xf0f0f0f0f0f0f0f0)
+    x = ((x >>>  8) & 0x00ff00ff00ff00ff) | ((x <<  8) & 0xff00ff00ff00ff00)
+    x = ((x >>> 16) & 0x0000ffff0000ffff) | ((x << 16) & 0xffff0000ffff0000)
+    x = ((x >>> 32) & 0x00000000ffffffff) | ((x << 32) & 0xffffffff00000000)
+    return x
+end
+
+# alternative implementation: doesn't seem to give
+# any performance gain (and it has a higher WTF coefficient)
+#function _jl_reverse_bits(x::Uint64)
+    #x = (x << 32) | (x >>> 32)
+    #x = (x & 0x0001ffff0001ffff) << 15 | (x & 0xfffe0000fffe0000) >>> 17
+    #t = (x $ (x >>> 10)) & 0x003f801f003f801f
+    #x = (t | (t << 10)) $ x
+    #t = (x $ (x >>> 4)) & 0x0e0384210e038421
+    #x = (t | (t << 4)) $ x
+    #t = (x $ (x >>> 2)) & 0x2248884222488842
+    #x = (t | (t << 2)) $ x
+    #return x
+#end
+
+
+function reverse!(B::BitVector)
+    n = length(B)
+    if n == 0
+        return B
     end
-    v
+    pnc = length(B.chunks) & 1
+    hnc = (length(B.chunks) >>> 1)
+
+    aux_chunks = Array(Uint64, 1)
+
+    for i = 1 : hnc
+        j = ((i - 1) << 6)
+        aux_chunks[1] = _jl_reverse_bits(B.chunks[i])
+        _jl_copy_chunks(B.chunks, j + 1, B.chunks, n - 63 - j, 64)
+        B.chunks[i] = _jl_reverse_bits(B.chunks[i])
+        _jl_copy_chunks(B.chunks, n - 63 - j, aux_chunks, 1, 64)
+    end
+
+    if pnc == 0
+        return B
+    end
+
+    l = ((n + 63) & 63) + 1
+    i = hnc + 1
+    j = hnc << 6
+    u = ~(uint64(0))
+    msk = (u >>> (64 - l))
+
+    aux_chunks[1] = _jl_reverse_bits(B.chunks[i] & msk) >>> (64 - l)
+    _jl_copy_chunks(B.chunks, j + 1, aux_chunks, 1, l)
+
+    return B
 end
 
 reverse(v::BitVector) = reverse!(copy(v))
@@ -921,8 +1063,8 @@ function nnz(B::BitArray)
 end
 
 function find(B::BitArray)
-    nnzA = nnz(B)
-    I = Array(Int, nnzA)
+    nnzB = nnz(B)
+    I = Array(Int, nnzB)
     count = 1
     for i = 1:length(B)
         if B[i] != 0
@@ -1090,7 +1232,7 @@ end
 
 ## Transpose ##
 
-transpose(B::BitVector) = reshape(B, 1, length(B))
+transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 function transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
@@ -1185,7 +1327,7 @@ function hcat(B::BitVector...)
     end
     M = BitArray(height, length(B))
     for j = 1:length(B)
-        _jl_copy_chunks(M.chunks, B[j].chunks, height, (height * (j - 1)) + 1)
+        _jl_copy_chunks(M.chunks, (height * (j - 1)) + 1, B[j].chunks, height)
     end
     return M
 end
@@ -1198,7 +1340,7 @@ function vcat(V::BitVector...)
     B = BitArray(n)
     j = 1
     for Vk in V
-        _jl_copy_chunks(B.chunks, Vk.chunks, length(Vk), j)
+        _jl_copy_chunks(B.chunks, j, Vk.chunks, length(Vk))
         j += length(Vk)
     end
     return B
@@ -1222,13 +1364,12 @@ function hcat(A::Union(BitMatrix,BitVector)...)
     for k=1:nargs
         Ak = A[k]
         n = numel(Ak)
-        _jl_copy_chunks(B.chunks, Ak.chunks, n, pos)
+        _jl_copy_chunks(B.chunks, pos, Ak.chunks, n)
         pos += n
     end
     return B
 end
 
-#TODO: optimize...
 function vcat(A::BitMatrix...)
     nargs = length(A)
     nrows = sum(a->size(a, 1), A)::Int
@@ -1237,12 +1378,15 @@ function vcat(A::BitMatrix...)
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
     B = BitArray(nrows, ncols)
-    pos = 1
-    for k=1:nargs
-        Ak = A[k]
-        p1 = pos+size(Ak,1)-1
-        B[pos:p1, :] = Ak
-        pos = p1+1
+    nrowsA = [size(a, 1) | a = A]
+    pos_d = 1
+    pos_s = ones(Int, nargs)
+    for j = 1:ncols
+        for k=1:nargs
+            _jl_copy_chunks(B.chunks, pos_d, A[k].chunks, pos_s[k], nrowsA[k])
+            pos_s[k] += nrowsA[k]
+            pos_d += nrowsA[k]
+        end
     end
     return B
 end
@@ -1312,6 +1456,8 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         nextrange = range+cat_ranges[k]
         cat_one = ntuple(ndimsC, i->(i != catdim ?
                                      (1:dimsC[i]) : (range:nextrange-1) ))
+        # note: when X is a BitArray, this calls
+        #       the special assign with ranges
         C[cat_one...] = X[k]
         range = nextrange
     end

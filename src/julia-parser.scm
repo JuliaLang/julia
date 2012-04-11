@@ -746,8 +746,6 @@
 	   `(const ,assgn))))
     ((module)
      (let ((name (parse-atom s)))
-       (if (not (symbol? name))
-	   (error (string "invalid module name " name)))
        (begin0 (list word name (parse-block s))
 	       (expect-end s))))
     ((ccall)
@@ -1165,8 +1163,8 @@
 
 ; --- main entry point ---
 
-; can optionally specify which grammar production to parse.
-; default is parse-stmts.
+;; can optionally specify which grammar production to parse.
+;; default is parse-stmts.
 (define (julia-parse s . production)
   (cond ((string? s)
 	 (apply julia-parse (make-token-stream (open-input-string s))
@@ -1176,8 +1174,8 @@
 	((eof-object? s)
 	 s)
 	(else
-	 ; as a special case, allow early end of input if there is
-	 ; nothing left but whitespace
+	 ;; as a special case, allow early end of input if there is
+	 ;; nothing left but whitespace
 	 (skip-ws-and-comments (ts:port s))
 	 (if (eqv? (peek-token s) #\newline) (take-token s))
 	 (let ((t (peek-token s)))
@@ -1185,35 +1183,3 @@
 	       t
 	       ((if (null? production) parse-stmts (car production))
 		s))))))
-
-(define (check-end-of-input s)
-  (skip-ws-and-comments (ts:port s))
-  (if (eqv? (peek-token s) #\newline) (take-token s))
-  (if (not (eof-object? (peek-token s)))
-      (error (string "extra input after end of expression: "
-		     (peek-token s)))))
-
-(define (julia-parse-stream filename stream)
-  (set! current-filename (symbol filename))
-  (let ((s (make-token-stream stream)))
-    (with-exception-catcher
-     (lambda (e)
-       (if (and (pair? e) (eq? (car e) 'error))
-	   (let ((msg (cadr e)))
-	     (raise `(error ,(string msg " at " filename ":" 
-				     (input-port-line (ts:port s))))))
-	   (raise e)))
-     (lambda ()
-       (skip-ws-and-comments (ts:port s))
-       (let ((linen (input-port-line (ts:port s))))
-	 (let loop ((lines '())
-		    (linen linen)
-		    (curr  (julia-parse s)))
-	   (if (eof-object? curr)
-	       (reverse lines)
-	       (begin
-		 (skip-ws-and-comments (ts:port s))
-		 (let ((nl (input-port-line (ts:port s))))
-		   (loop (list* curr `(line ,linen) lines)
-			 nl
-			 (julia-parse s)))))))))))
