@@ -92,7 +92,6 @@
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
-  (set! current-filename 'string)
   (let ((inp (open-input-string s)))
     (io.seek inp pos0)
     (let ((expr
@@ -103,7 +102,6 @@
       (cons expr (io.pos inp)))))
 
 (define (jl-parse-string s)
-  (set! current-filename 'prompt)
   (parser-wrap (lambda ()
 		 (let* ((inp  (make-token-stream (open-input-string s)))
 			(expr (julia-parse inp)))
