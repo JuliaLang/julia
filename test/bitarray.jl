@@ -83,6 +83,7 @@ i1 = randbit(n1, n2)
 
 ## Indexing ##
 
+b1 = bitrand(n1, n2)
 m1 = randi(n1)
 m2 = randi(n2)
 b2 = bitrand(m1, m2)
@@ -91,7 +92,18 @@ b2 = bitrand(m1, m2)
 b2 = bitrand(m1, m2)
 @check_bit_operation2 assign Array{Int} b1 b2 1:m1 n2-m2+1:n2
 
+for p1 = [randi(v1) 1 63 64 65 127 128 129 191 192 193]
+    for p2 = [randi(v1) 1 63 64 65 127 128 129 191 192 193]
+        for n = 0 : min(v1 - p1 + 1, v1 - p2 + 1)
+            b1 = bitrand(v1)
+            b2 = bitrand(v1)
+            @check_bit_operation_allint copy_to Array{Int} (b1, p1, b2, p2, n)
+        end
+    end
+end
+
 # logical indexing
+b1 = bitrand(n1, n2)
 b2 = bitrand(n1, n2)
 t2 = convert(Array{Bool}, b2)
 @assert isequal(int(b1[t2]), int(b1)[t2])
