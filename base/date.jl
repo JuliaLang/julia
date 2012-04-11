@@ -168,8 +168,8 @@ function leap_year(d::Date)
 	leap_year(d.year)
 end
 
-function julian(jd::Integer)
-	jd < 2299161 # Date of Gregorian Calendar Reform, ITALY 1582-10-15 
+function is_julian(jd::Integer)
+	jd < 2299161 # Date of Gregorian Calendar Reform, ITALY; 1582-10-15 
 end
 
 #The following three functions are used during construction of a Date object, 
@@ -184,14 +184,14 @@ function _date_to_jd (y,m,d)
     a = int(floor(y / 100.0))
     b = 2 - a + int(floor(a / 4.0))
     jd = int(floor(365.25 * (y + 4716))) + int(floor(30.6001 * (m + 1))) + d + b - 1524
-    if julian(jd)
+    if is_julian(jd)
     	jd -= b
     end
     return jd
 end
 
 function _jd_to_date (jd::Integer)
-	if julian(jd)
+	if is_julian(jd)
 		a=jd
 	else
 		x = int(floor((jd - 1867216.25) / 36524.25))
