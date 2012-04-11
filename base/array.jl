@@ -100,8 +100,8 @@ function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     return a
 end
 
-fill(v::Array, dims::Dims)       = fill!(Array(typeof(v), dims), v)
-fill(v::Array, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
+fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
+fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 zeros{T}(::Type{T}, args...) = fill!(Array(T, args...), zero(T))
 zeros(args...)               = fill!(Array(Float64, args...), float64(0))
