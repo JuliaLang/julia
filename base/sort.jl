@@ -73,8 +73,8 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
         end
         i, j = lo, hi
         # pivot = (a[lo]+a[hi])/2                                   # 1.14x
-        # pivot = a[(lo+hi)>>>1]                                    # 1.15x
-          pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
+          pivot = a[(lo+hi)>>>1]                                    # 1.15x
+        # pivot = (a[lo]+a[hi]+a[(lo+hi)>>>1])/3                    # 1.16x
         # pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
         # pivot = a[randival(lo,hi)]                                # 1.28x
         while i <= j
