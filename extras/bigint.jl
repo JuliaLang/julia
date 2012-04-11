@@ -1,4 +1,4 @@
-_jl_libgmp_wrapper = dlopen("/home/yann/julia/external/root/lib/libgmp_wrapper.so")
+_jl_libgmp_wrapper = dlopen("libgmp_wrapper.so")
 
 type BigInt <: Integer
 	mpz::Ptr{Void}

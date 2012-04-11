@@ -1,4 +1,3 @@
-#Assume running from julia base dir
 load("timing.jl")
 load("bigint.jl")
 
