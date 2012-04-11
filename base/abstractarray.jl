@@ -66,6 +66,8 @@ function reshape(a::AbstractArray, dims::Dims)
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
+vec(a::AbstractArray) = reshape(a,max(size(a)))
+
 function squeeze(A::AbstractArray)
     d = ()
     for i = size(A)
