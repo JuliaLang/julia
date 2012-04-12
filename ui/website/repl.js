@@ -858,6 +858,27 @@ $(document).ready(function() {
 
                 // prevent the form from actually submitting
                 return false;
+                
+            case 67:
+                // C key pressed
+                if (evt.ctrlKey) {
+                    // ctrl-c to cancel a command
+                    
+                    add_to_terminal("<span class=\"color-scheme-error\">Process Killed<span><br /><br />");
+                    
+                    // show the prompt
+                    $("#prompt").show();
+
+                    // re-enable the input field
+                    $("#terminal-input").removeAttr("disabled");
+
+                    // focus the input field
+                    $("#terminal-input").focus();
+                    
+                    waiting_for_message = false;
+                }
+                
+            //return false;
         }
     });
 
