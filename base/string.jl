@@ -387,7 +387,7 @@ cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
+    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
 convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))

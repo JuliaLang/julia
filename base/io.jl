@@ -111,7 +111,7 @@ takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
+    ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
 function print_to_array(size::Integer, f::Function, args...)
     s = memio(size, false)
@@ -236,7 +236,7 @@ end
 
 function readuntil(s::IOStream, delim)
     # TODO: faster versions that avoid the encoding check
-    ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
 function readall(s::IOStream)
