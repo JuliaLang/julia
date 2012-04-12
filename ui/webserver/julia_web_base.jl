@@ -104,7 +104,7 @@ ans = nothing
 function __socket_callback(fd)
     # read the message
     __msg = __read_message()
-
+    
     # MSG_INPUT_EVAL
     if __msg.msg_type == __MSG_INPUT_EVAL
         # split the input into lines

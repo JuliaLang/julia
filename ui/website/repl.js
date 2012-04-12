@@ -39,6 +39,13 @@ var color_schemes = [
 // the current color scheme
 var current_color_scheme = 0;
 
+// Fetch items out of local storage if they exist
+if (Modernizr.localstorage) {
+    if (localStorage.getItem("current_color_scheme")) {
+        current_color_scheme = localStorage.getItem("current_color_scheme");
+    }
+}
+
 // apply a particular color scheme -- call this every time the terminal content changes
 function apply_color_scheme() {
     $("form#terminal-form").css("background-color", color_schemes[current_color_scheme][1].background_color);
@@ -53,6 +60,10 @@ function apply_color_scheme() {
     $("svg .line").css("stroke", color_schemes[current_color_scheme][1].plot_line_color);
     $("svg .rect").css("fill", color_schemes[current_color_scheme][1].plot_rect_color);
     $("svg .rect").css("stroke", color_schemes[current_color_scheme][1].plot_rect_stroke_width);
+    
+    if (Modernizr.localstorage) {
+        localStorage.setItem("current_color_scheme", current_color_scheme);
+    }
 }
 
 // when the DOM loads
