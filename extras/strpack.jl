@@ -60,15 +60,16 @@ end
 
 function calcsize(types)
     size = 0
-    eltype(::Type{Nothing}) = 1
     for (elemtype, dims) in types
         typ = elemtype <: Array ? eltype(elemtype) : elemtype
         size += if isa(typ, BitsKind)
             prod(dims)*sizeof(typ)
+        elseif typ == Nothing # isa(Nothing, CompositeKind) == true
+            prod(dims)
         elseif isa(typ, CompositeKind)
             prod(dims)*sizeof(Struct(typ))
         else
-            prod(dims)
+            error("Improper type $typ in struct.")
         end
     end
     size
@@ -134,18 +135,18 @@ function struct_parse(s::String)
                       {([a-zA-Z]\w*)}      # another type in {}
                   )
                   "x, s[i:end])
-        if m == nothing
+        if isa(m, Nothing)
             error("Failed to compile struct; syntax error at ...$(s[i])...")
         end
         name, oneD, nD, typ, custtyp = m.captures
-        dims = if oneD == nothing && nD == nothing
+        dims = if isa(oneD, Nothing) && isa(nD, Nothing)
             1
-        elseif nD == nothing
+        elseif isa(nD, Nothing)
             int(oneD)
         else
             tuple(map(int, split(nD, ','))...)
         end
-        elemtype = if custtyp == nothing
+        elemtype = if isa(custtyp, Nothing)
             tmap[typ[1]]
         else
             testtype = eval(symbol(custtyp)) #is there an easier way to do this?
@@ -165,10 +166,10 @@ end
 function gen_typelist(types::Array)
     xprs = {}
     for (typ, dims, name) in types
-        if typ == nothing
+        if typ == Nothing
             continue
         end
-        fn = (name != nothing) ? symbol(name) : gensym("field$(length(xprs)+1)")
+        fn = !isa(name, Nothing) ? symbol(name) : gensym("field$(length(xprs)+1)")
         xpr = if dims == 1
             :(($fn)::($typ))
         else
