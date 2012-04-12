@@ -126,7 +126,19 @@ var waiting_for_response = false;
 var input_history = [];
 var input_history_current = [""];
 var input_history_id = 0;
-var input_history_size = 100;
+var input_history_size = 1000;
+
+// Fetch items out of local storage if they exist
+if (Modernizr.localstorage) {
+    if (localStorage.getItem("input_history")) {
+        input_history = JSON.parse(localStorage.getItem("input_history"));
+        input_history_id = input_history.length - 1;
+    }
+    
+    if (localStorage.getItem("input_history_current")) {
+        input_history_current = JSON.parse(localStorage.getItem("input_history_current"));
+    }
+}
 
 // a queue of messages to be sent to the server
 var outbox_queue = [];
@@ -414,6 +426,12 @@ message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
     input_history_current = input_history.slice(0);
     input_history_current.push("");
     input_history_id = input_history_current.length-1;
+    
+    // Save the changed values to localstorage
+    if (Modernizr.localstorage) {
+        localStorage.setItem("input_history", JSON.stringify(input_history));
+        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+    }
 
     // add the julia prompt and the input to the log
     add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
@@ -454,6 +472,11 @@ message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
     input_history_current = input_history.slice(0);
     input_history_current.push("");
     input_history_id = input_history_current.length-1;
+    
+    if (Modernizr.localstorage) {
+        localStorage.setItem("input_history", JSON.stringify(input_history));
+        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+    }
 
     // add the julia prompt and the input to the log
     add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
@@ -789,6 +812,12 @@ $(document).ready(function() {
                     input_history_id -= 1;
                     if (input_history_id < 0)
                         input_history_id = 0;
+                        
+                    // Save values to localstorage    
+                    if (Modernizr.localstorage) {
+                        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+                    }
+                    
                     $("#terminal-input").val(input_history_current[input_history_id]);
                     $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
                 }
@@ -802,6 +831,12 @@ $(document).ready(function() {
                     input_history_id += 1;
                     if (input_history_id > input_history_current.length-1)
                         input_history_id = input_history_current.length-1;
+                        
+                    // Save values to localstorage    
+                    if (Modernizr.localstorage) {
+                        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+                    }
+                    
                     $("#terminal-input").val(input_history_current[input_history_id]);
                     $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
                 }
