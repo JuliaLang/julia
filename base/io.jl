@@ -234,10 +234,9 @@ function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Float32
     end
 end
 
-function readuntil(s::IOStream, delim::Uint8)
-    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
-    # TODO: faster versions that avoid this encoding check
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+function readuntil(s::IOStream, delim)
+    # TODO: faster versions that avoid the encoding check
+    ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
 function readall(s::IOStream)
@@ -246,7 +245,7 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-readline(s::IOStream) = readuntil(s, uint8('\n'))
+readline(s::IOStream) = readuntil(s, '\n')
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 

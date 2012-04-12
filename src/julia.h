@@ -920,7 +920,7 @@ DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
-DLLEXPORT jl_array_t *jl_readuntil(ios_t *s, uint8_t delim);
+DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
