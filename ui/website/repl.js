@@ -132,18 +132,11 @@ var input_history_size = 100;
 if (Modernizr.localstorage) {
     if (localStorage.getItem("input_history")) {
         input_history = JSON.parse(localStorage.getItem("input_history"));
+        input_history_id = input_history.length - 1;
     }
     
     if (localStorage.getItem("input_history_current")) {
         input_history_current = JSON.parse(localStorage.getItem("input_history_current"));
-    }
-    
-    if (localStorage.getItem("input_history_id")) {
-        input_history_id = JSON.parse(localStorage.getItem("input_history_id"));
-    }
-    
-    if (localStorage.getItem("input_history_size")) {
-        input_history_size = JSON.parse(localStorage.getItem("input_history_size"));
     }
 }
 
@@ -438,7 +431,6 @@ message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
     if (Modernizr.localstorage) {
         localStorage.setItem("input_history", JSON.stringify(input_history));
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
-        localStorage.setItem("input_history_id", input_history_id);
     }
 
     // add the julia prompt and the input to the log
@@ -484,7 +476,6 @@ message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
     if (Modernizr.localstorage) {
         localStorage.setItem("input_history", JSON.stringify(input_history));
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
-        localStorage.setItem("input_history_id", input_history_id);
     }
 
     // add the julia prompt and the input to the log
@@ -825,7 +816,6 @@ $(document).ready(function() {
                     // Save values to localstorage    
                     if (Modernizr.localstorage) {
                         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
-                        localStorage.setItem("input_history_id", input_history_id);
                     }
                     
                     $("#terminal-input").val(input_history_current[input_history_id]);
@@ -845,7 +835,6 @@ $(document).ready(function() {
                     // Save values to localstorage    
                     if (Modernizr.localstorage) {
                         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
-                        localStorage.setItem("input_history_id", input_history_id);
                     }
                     
                     $("#terminal-input").val(input_history_current[input_history_id]);
