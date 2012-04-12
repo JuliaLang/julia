@@ -90,7 +90,7 @@ Other versions of gcc are also exist but currently gfortran45 is the one used by
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
-Buliding Julia requires that the following software be installed:
+Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
