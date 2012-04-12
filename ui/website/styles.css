@@ -26,14 +26,26 @@ div#left-column
     padding-right: 20px;
 }
 
+div#left-column ul {
+    padding-left: 20px;
+}
+
+div#left-column ul li {
+    list-style-image: url("images/bullet.png");
+    padding: 5px;
+    cursor: pointer;
+}
+
 div#left-column a
 {
-    display: block;
-    padding: 5px;
-    padding-left: 20px;
     text-decoration: none;
     color: #666;
-    font-size: 100%;
+    font-size: 14px;
+}
+
+div#left-column a strong
+{
+    font-weight: bolder;
 }
 
 div#left-column a.current-page
@@ -41,7 +53,7 @@ div#left-column a.current-page
     font-weight: bold;
 }
 
-div#left-column a:hover
+div#left-column a:hover, div#left-column li:hover
 {
     background-color: #f6f6f6;
 }
