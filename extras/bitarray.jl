@@ -176,10 +176,14 @@ function fill!(B::BitArray, x::Integer)
     end
     return B
 end
-fill!(B::BitArray, x) = fill!(B::BitArray, int(x))
+fill!(B::BitArray, x) = fill!(B, int(x))
 
 fill(B::BitArray, x::Integer) = fill!(similar(B), x)
-fill(B::BitArray, x) = fill(B::BitArray, int(x))
+# disambiguation
+# (this is going to throw an error anyway)
+fill(B::BitArray, x::(Int64...,)) = fill(B, int(x))
+# end disambiguation
+fill(B::BitArray, x) = fill(B, int(x))
 
 function copy_to(dest::BitArray, src::BitArray)
     nc_d = length(dest.chunks)
@@ -821,12 +825,26 @@ end
 
 (*)(A::BitArray, B::BitArray) = int(A) * int(B)
 
+#disambiguations
+(*)(A::BitMatrix, B::BitVector) = invoke((*), (BitArray, BitArray), A, B)
+(*)(A::BitVector, B::BitMatrix) = invoke((*), (BitArray, BitArray), A, B)
+(*)(A::BitMatrix, B::BitMatrix) = invoke((*), (BitArray, BitArray), A, B)
+(*){T}(A::BitMatrix, B::AbstractVector{T}) = (*)(int(A), B)
+(*){T}(A::BitVector, B::AbstractMatrix{T}) = (*)(int(A), B)
+(*){T}(A::BitMatrix, B::AbstractMatrix{T}) = (*)(int(A), B)
+(*){T}(A::AbstractVector{T}, B::BitMatrix) = (*)(A, int(B))
+(*){T}(A::AbstractMatrix{T}, B::BitVector) = (*)(A, int(B))
+(*){T}(A::AbstractMatrix{T}, B::BitMatrix) = (*)(A, int(B))
+#end disambiguations
+
 for f in (:+, :-, :div, :mod, :./, :.^, :/, :\, :*, :.*, :&, :|, :$)
     @eval begin
         ($f)(A::BitArray, B::AbstractArray) = ($f)(int(A), B)
         ($f)(A::AbstractArray, B::BitArray) = ($f)(A, int(B))
     end
 end
+
+
 
 
 ## promotion to complex ##
