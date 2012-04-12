@@ -126,7 +126,7 @@ var waiting_for_response = false;
 var input_history = [];
 var input_history_current = [""];
 var input_history_id = 0;
-var input_history_size = 100;
+var input_history_size = 1000;
 
 // Fetch items out of local storage if they exist
 if (Modernizr.localstorage) {
