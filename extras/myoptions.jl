@@ -85,7 +85,6 @@ function docheck(o::Options,checkflag::Vector{Bool})
         unchecked = checkflag & !o.checked[1:length(checkflag)]
         println("unchecked: ",unchecked)
         if any(unchecked)
-            clearcheck(o,checkflag)
             s = ""
             for (k, v) = o.keyindex
                 if unchecked[v]
@@ -97,6 +96,7 @@ function docheck(o::Options,checkflag::Vector{Bool})
             if o.check_behavior == OPTIONS_WARN
                 println("Warning: ",msg,s)
             else
+                clearcheck(o,checkflag)  # in case inside try/catch block
                 error(msg,s)
             end
         end
@@ -105,8 +105,8 @@ function docheck(o::Options,checkflag::Vector{Bool})
 end
 # Reset status on handled options (in case o is reused later)
 function clearcheck(o::Options,checkflag::Vector{Bool})
-    # (note checkflag may be shorter than o.checked and o.check_lock,
-    # so can't just say o.checked[checkflag] = false)
+    # Note checkflag may be shorter than o.checked and o.check_lock,
+    # so can't just say o.checked[checkflag] = false
     for i = 1:length(checkflag)
         if checkflag[i]
             o.check_lock[i] = false
@@ -133,6 +133,11 @@ function assign_replace(o::Options,ex::(Expr...))
     end
     return exout
 end
+# Create a variable using the following syntax:
+#    eval(assign_str("fred",5))
+function assign_str(name::String,val)
+    expr(:(=),Any[symbol(name),val])
+end
 
 #### Convenience macros ####
 # Macro to set the defaults. Usage:
@@ -146,11 +151,7 @@ macro defaults(opts,ex...)
             eval(($extmp)[$indx])
         end
         $varname = strcat("_",$string(opts),"_checkflag")
-        println($varname)
-#        $thisex = expr(:local,Any[expr(:(=),Any[symbol($varname),ischeck($opts)])])
-        $thisex = expr(:(=),Any[symbol($varname),ischeck($opts)])
-        println($thisex)
-        eval($thisex)
+        eval(assign_str($varname,ischeck($opts)))
     end
     # The last line executes local _nameofopts_checkflag = ischeck(nameofopts)
 end
