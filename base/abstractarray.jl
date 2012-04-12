@@ -14,9 +14,11 @@ typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
 eltype{T,n}(::AbstractArray{T,n}) = T
-eltype{T<:AbstractArray}(::Type{T}) = T.parameters[1]
+eltype{T,n}(::Type{AbstractArray{T,n}}) = T
+eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 ndims{T,n}(::AbstractArray{T,n}) = n
-ndims{T<:AbstractArray}(::Type{T}) = T.parameters[2]
+ndims{T,n}(::Type{AbstractArray{T,n}}) = n
+ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
