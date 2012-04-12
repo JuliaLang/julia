@@ -1,7 +1,7 @@
 ## work with Vector{Uint8} via I/O primitives ##
 
 # Stateful string
-type IOString
+type IOString <: IO
     data::Vector{Uint8}
     ptr::Int
     

@@ -1,3 +1,5 @@
+abstract IO
+
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
@@ -8,7 +10,7 @@ else
     typealias FileOffset Int64
 end
 
-type IOStream
+type IOStream <: IO
     # NOTE: for some reason the order of these field is significant!?
     ios::Array{Uint8,1}
     name::String
@@ -262,7 +264,7 @@ skip(s::IOStream, delta::Integer) =
 
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
-type IOTally
+type IOTally <: IO
     nbytes::Int
     IOTally() = new(0)
 end

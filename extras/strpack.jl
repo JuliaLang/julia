@@ -1,5 +1,4 @@
 load("iostring.jl")
-typealias IO Union(IOStream, IOString)
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
