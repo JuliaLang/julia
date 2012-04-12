@@ -1251,13 +1251,88 @@ end
 ## Transpose ##
 
 transpose(B::BitVector) = reshape(copy(B), 1, length(B))
+
+function _jl_transpose8rS64(x::Uint64)
+   t = (x $ (x >>> 7)) & 0x00aa00aa00aa00aa;
+   x = x $ t $ (t << 7);
+   t = (x $ (x >>> 14)) & 0x0000cccc0000cccc
+   x = x $ t $ (t << 14);
+   t = (x $ (x >>> 28)) & 0x00000000f0f0f0f0
+   x = x $ t $ (t << 28);
+   return x
+end
+
+function _jl_form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
+    x = uint64(0)
+
+    k, l = _jl_get_chunks_id(i1 + (i2 - 1) * m)
+    r = 0
+    for j = 1 : 8
+        if k > nc
+            break
+        end
+        x |= ((B.chunks[k] >>> l) & msk8) << r
+        if l + 8 >= 64 && nc > k
+            r0 = 8 - ((l + 8) & 63)
+            x |= (B.chunks[k + 1] & (msk8 >>> r0)) << (r + r0)
+        end
+        k += cgap + (l + cinc >= 64 ? 1 : 0)
+        l = (l + cinc) & 63
+        r += 8
+    end
+    return x
+end
+
+# note: assumes B is filled with 0's
+function _jl_put_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, x::Uint64, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
+    k, l = _jl_get_chunks_id(i1 + (i2 - 1) * m)
+    r = 0
+    for j = 1 : 8
+        if k > nc
+            break
+        end
+        B.chunks[k] |= ((x >>> r) & msk8) << l
+        if l + 8 >= 64 && nc > k
+            r0 = 8 - ((l + 8) & 63)
+            B.chunks[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
+        end
+        k += cgap + (l + cinc >= 64 ? 1 : 0)
+        l = (l + cinc) & 63
+        r += 8
+    end
+    return
+end
+
 function transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
-    Bt = BitArray(l2, l1)
-    for i = 1 : l1
-        for j = 1 : l2
-            Bt[j, i] = B[i, j]
+    Bt = bitzeros(l2, l1)
+
+    cgap1 = l1 >>> 6
+    cinc1 = l1 & 63
+
+    cgap2 = l2 >>> 6
+    cinc2 = l2 & 63
+    nc = length(B.chunks)
+
+
+    for i = 1 : 8 : l1
+
+        msk8_1 = uint64(0xff)
+        if (l1 < i + 7)
+            msk8_1 >>>= i + 7 - l1
+        end
+
+        for j = 1 : 8 : l2
+            x = _jl_form_8x8_chunk(B, i, j, l1, cgap1, cinc1, nc, msk8_1)
+            x = _jl_transpose8rS64(x)
+
+            msk8_2 = uint64(0xff)
+            if (l2 < j + 7)
+                msk8_2 >>>= j + 7 - l2
+            end
+
+            _jl_put_8x8_chunk(Bt, j, i, x, l2, cgap2, cinc2, nc, msk8_2)
         end
     end
     return Bt

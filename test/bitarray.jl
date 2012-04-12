@@ -356,8 +356,12 @@ m2 = randi(s3)
 b1 = bitrand(v1)
 @check_bit_operation1 transpose Array{Int} b1
 
-b1 = bitrand(n1, n2)
-@check_bit_operation1 transpose Array{Int} b1
+for m1 = 0 : n1
+    for m2 = 0 : n2
+        b1 = bitrand(m1, m2)
+        @check_bit_operation1 transpose Array{Int} b1
+    end
+end
 
 @timesofar "transpose"
 
