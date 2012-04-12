@@ -162,7 +162,10 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
     // TODO: check type of array?
     jl_struct_type_t* string_type = u8_isvalid(a->data, a->length) == 1 ? // ASCII
         jl_ascii_string_type : jl_utf8_string_type;
-    return jl_apply((jl_function_t*)string_type, (jl_value_t**)&a, 1);
+    jl_value_t *s = alloc_2w();
+    s->type = (jl_type_t*)string_type;
+    jl_fieldref(s,0) = (jl_value_t*)a;
+    return s;
 }
 
 jl_value_t *jl_pchar_to_string(char *str, size_t len)

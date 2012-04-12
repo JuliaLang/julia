@@ -355,8 +355,7 @@ function done(itr::LineIterator, line)
 end
 
 function next(itr::LineIterator, this_line)
-    next_line = readline(itr.stream)
-    this_line, next_line
+    this_line, readline(itr.stream)
 end
 
 each_line(stream::IOStream) = LineIterator(stream)
