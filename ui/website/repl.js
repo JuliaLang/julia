@@ -6,20 +6,6 @@
 
 // array of color schemes
 var color_schemes = [
-    ["Classic", {
-        background_color: "#f8f8f8",
-        text_color: "#444444",
-        message_color: "#0000aa",
-        error_color: "#ff0000",
-        prompt_color: "#00aa00",
-        plot_grid_color: "#dadada",
-        plot_axis_color: "#aaaaaa",
-        plot_text_color: "#444444",
-        plot_line_color: "#4d87b7",
-        plot_rect_color: "#4d87c7",
-        plot_rect_stroke_width: "0",
-        plot_rect_stroke_color: "#FFFFFF",
-    }],
     ["Dark", {
         background_color: "#000000",
         text_color: "#dddddd",
@@ -30,6 +16,20 @@ var color_schemes = [
         plot_axis_color: "#666666",
         plot_text_color: "#dddddd",
         plot_line_color: "#4d87c7",
+        plot_rect_color: "#4d87c7",
+        plot_rect_stroke_width: "0",
+        plot_rect_stroke_color: "#FFFFFF",
+    }],
+    ["Light", {
+        background_color: "#f8f8f8",
+        text_color: "#444444",
+        message_color: "#0000aa",
+        error_color: "#ff0000",
+        prompt_color: "#00aa00",
+        plot_grid_color: "#dadada",
+        plot_axis_color: "#aaaaaa",
+        plot_text_color: "#444444",
+        plot_line_color: "#4d87b7",
         plot_rect_color: "#4d87c7",
         plot_rect_stroke_width: "0",
         plot_rect_stroke_color: "#FFFFFF",
