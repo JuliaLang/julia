@@ -71,7 +71,7 @@ $(document).ready(function() {
     // add the color scheme options to the picker
     var options_str = "";
     for (var i in color_schemes)
-        options_str += "<option>"+color_schemes[i][0]+"</option>";
+        options_str += "<option " + (current_color_scheme === i ? "selected" : "") + ">"+color_schemes[i][0]+"</option>";
     $("select#color-scheme-picker").html(options_str);
 
     // add a hook to the change event of the color picker
