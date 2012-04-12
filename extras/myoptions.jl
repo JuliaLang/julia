@@ -71,14 +71,21 @@ function assign(o::Options,v,s::Symbol)
 end
 # Functions for "claiming" and checking usage of individual options
 function ischeck(o::Options)
-    ret = !o.check_lock
-    o.check_lock[:] = true
-    ret
+    if o.check_behavior == OPTIONS_NONE
+        return falses(length(o.vals))
+    end
+    ret = !o.check_lock   # items marked true are to be checked by caller
+    o.check_lock[ret] = true
+    return ret
 end
 function docheck(o::Options,checkflag::Vector{Bool})
     if o.check_behavior != OPTIONS_NONE
+        println("Checked: ",o.checked)
+        println("checkflag: ",checkflag)
         unchecked = checkflag & !o.checked[1:length(checkflag)]
+        println("unchecked: ",unchecked)
         if any(unchecked)
+            clearcheck(o,checkflag)
             s = ""
             for (k, v) = o.keyindex
                 if unchecked[v]
@@ -88,14 +95,26 @@ function docheck(o::Options,checkflag::Vector{Bool})
             s = s[2:end]
             msg = "The following options were not used: "
             if o.check_behavior == OPTIONS_WARN
-                print("Warning: ")
-                println(msg,s)
+                println("Warning: ",msg,s)
             else
                 error(msg,s)
             end
         end
     end
+    clearcheck(o,checkflag)
 end
+# Reset status on handled options (in case o is reused later)
+function clearcheck(o::Options,checkflag::Vector{Bool})
+    # (note checkflag may be shorter than o.checked and o.check_lock,
+    # so can't just say o.checked[checkflag] = false)
+    for i = 1:length(checkflag)
+        if checkflag[i]
+            o.check_lock[i] = false
+            o.checked[i] = false
+        end
+    end
+end
+
 
 # Given a tuple of assignment expressions, check to see whether the
 # left-hand-side appears as a symbol in the options table. If so,
@@ -116,49 +135,24 @@ function assign_replace(o::Options,ex::(Expr...))
 end
 
 #### Convenience macros ####
-
 # Macro to set the defaults. Usage:
 #     @defaults opts a=3 b=a+2 c=f(a,b)
 # After executing this macro, you can use a, b, and c as ordinary variables
-#
-# The line about _jl_options_checkflag is to store the list of options
-# that this function is "responsible for" (meaning, may need to check
-# whether they were used). This variable will be used later by the
-# @check_options_used macro.
 macro defaults(opts,ex...)
-    indx, extmp = gensym(2)
+    indx, extmp, thisex, varname = gensym(4)
     quote
         $extmp = assign_replace($opts,$ex)
         for $indx = 1:length($extmp)
             eval(($extmp)[$indx])
         end
-        _jl_options_checkflag = ischeck($opts)
+        $varname = strcat("_",$string(opts),"_checkflag")
+        println($varname)
+#        $thisex = expr(:local,Any[expr(:(=),Any[symbol($varname),ischeck($opts)])])
+        $thisex = expr(:(=),Any[symbol($varname),ischeck($opts)])
+        println($thisex)
+        eval($thisex)
     end
-    # Comment: The eval line fails if one leaves out the parens, i.e.,
-    #     eval($extmp[$indx])
-    # fails with error
-    #      syntax error: prefix $ outside of quote block
-    #      syntax error: error expanding macro defaults
-    # I only discovered this by trying random stuff (and indeed it
-    # cost me several hours). Can something about this be explained in
-    # the manual? I don't understand well enough to write it
-    # myself.
-
-    # Question 1: This works if your variable name is "opts", but not
-    # otherwise. I thought that $opts gives you access to the actual
-    # name?? Indeed, this works fine for @add_options, so I am really
-    # baffled by this.
-
-    # Question 2: Because someone might write a function taking both
-    # "plot_opts" and "calculation_opts", ideally I'd like to find a
-    # fix for Question #1 and be able to store more than one
-    # _jl_options_checkflag.  Perhaps one could store these in a hash
-    # table using the symbol as the key (outside the quote block, opts
-    # is the symbol of the options variable that this was called
-    # with). But, I haven't figured out how to access the symbol from
-    # within the quote block. Is this possible? If not, then perhaps
-    # Stefan's suggestion that we require the variable name to be
-    # "opts" is best.
+    # The last line executes local _nameofopts_checkflag = ischeck(nameofopts)
 end
 
 # Macro to check whether options were used (optional, use only if you
@@ -166,23 +160,24 @@ end
 # Usage:
 #    @check_options_used opts
 macro check_options_used(opts)
+    varname = gensym()
     quote
-        docheck(opts,_jl_options_checkflag)
+        $varname = strcat("_",$string(opts),"_checkflag")
+        eval(expr(:call,Any[:docheck,$opts,symbol($varname)]))
     end
+    # The last line executes docheck(namedopts,_namedopts_checkflag)
 end
 
 # Macro for setting options. Usage:
 #    opts = @options a=5 b=7
 #    opts = @options OPTIONS_WARN a=5 b=7
-# Question 3: the second syntax doesn't work, with error
-#   no method Options(Symbol,Expr)
-# This puzzles me, because
-#     Options(OPTIONS_WARN,:(a=5),:(b=7),...)
-# works, and putting println(typeof($ex[1])) inside the quote block
-# indicates that $ex[1] is an Int.
 macro options(ex...)
     quote
-        Options(($ex)...)
+        if isa(($ex)[1],Expr)
+            Options(($ex)...)
+        else
+            Options($ex[1],(($ex)[2:end])...)
+        end
     end
 end
 
