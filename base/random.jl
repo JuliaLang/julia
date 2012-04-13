@@ -21,10 +21,9 @@ function _jl_librandom_init()
     _jl_randn_zig_init()
 end
 @windows_only begin
-    a=zeros(Uint32,2)
-    ccall(:jl_RtlGenRandom,Uint8,(Ptr{Void},Ptr{Void},Uint64),dlsym(_jl_advapi32,:SystemFunction036),convert(Ptr{Void},a),8)
+    a=zeros(Uint32,2) #TODO FIX
+    #ccall(:jl_RtlGenRandom,Uint8,(Ptr{Void},Ptr{Void},Uint64),dlsym(_jl_advapi32,:SystemFunction036),convert(Ptr{Void},a),8)
     #ccall(dlsym(_jl_advapi32,:SystemFunction036),Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
-    print(a)
     srand(a)
 end
 end

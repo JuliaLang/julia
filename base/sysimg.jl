@@ -76,6 +76,7 @@ include("grisu.jl")
 include("printf.jl")
 
 # system & environment
+include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno_h.jl")
@@ -97,10 +98,6 @@ include("multi.jl")
 
 # front end
 include("client.jl")
-include("osutils.jl")
-@windows_only begin
-print("Test")
-end
 
 # core math functions
 include("intfuncs.jl")
