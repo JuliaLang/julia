@@ -1,3 +1,4 @@
+setcwd("../extras")
 include("sparse.jl")
 include("linalg_suitesparse.jl")
 
