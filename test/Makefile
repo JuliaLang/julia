@@ -1,9 +1,7 @@
 JULIAHOME = ..
 include ../Make.inc
 
-default::
-
-all extra unicode::
+default all extra unicode::
 	@$(MAKE) -sC unicode
 
 default all extra \
