@@ -153,22 +153,40 @@ jl_value_t *jl_takebuf_string(ios_t *s)
     return str;
 }
 
-jl_array_t *jl_readuntil(ios_t *s, uint8_t delim)
+jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, 80);
-    ios_t dest;
-    jl_ios_mem(&dest, 0);
-    ios_setbuf(&dest, a->data, 80, 0);
-    size_t n = ios_copyuntil(&dest, s, delim);
-    if (dest.buf != a->data) {
-        return jl_takebuf_array(&dest);
+    jl_array_t *a;
+    // manually inlined common case
+    char *pd = (char*)memchr(s->buf+s->bpos, delim, s->size - s->bpos);
+    if (pd) {
+        size_t n = pd-(s->buf+s->bpos)+1;
+        a = jl_alloc_array_1d(jl_array_uint8_type, n);
+        memcpy(jl_array_data(a), s->buf+s->bpos, n);
+        s->bpos += n;
     }
     else {
-        a->length = n;
-        a->nrows = n;
-        ((char*)a->data)[n] = '\0';
+        a = jl_alloc_array_1d(jl_array_uint8_type, 80);
+        ios_t dest;
+        jl_ios_mem(&dest, 0);
+        ios_setbuf(&dest, a->data, 80, 0);
+        size_t n = ios_copyuntil(&dest, s, delim);
+        if (dest.buf != a->data) {
+            a = jl_takebuf_array(&dest);
+        }
+        else {
+            a->length = n;
+            a->nrows = n;
+            ((char*)a->data)[n] = '\0';
+        }
     }
-    return a;
+    JL_GC_PUSH(&a);
+    jl_struct_type_t* string_type = u8_isvalid(a->data, a->length) == 1 ? // ASCII
+        jl_ascii_string_type : jl_utf8_string_type;
+    jl_value_t *str = alloc_2w();
+    str->type = (jl_type_t*)string_type;
+    jl_fieldref(str,0) = (jl_value_t*)a;
+    JL_GC_POP();
+    return str;
 }
 
 // -- syscall utilities --

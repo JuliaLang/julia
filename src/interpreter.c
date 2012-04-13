@@ -223,6 +223,10 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                     i = label_idx(jl_exprarg(stmt,1), stmts);
                     continue;
                 }
+                else if (cond != jl_true) {
+                    jl_type_error_rt("toplevel", "if",
+                                     (jl_value_t*)jl_bool_type, cond);
+                }
             }
             else if (head == return_sym) {
                 return eval(jl_exprarg(stmt,0), locals, nl);

@@ -14,7 +14,11 @@ typealias RangeIndex Union(Int, Range{Int}, Range1{Int})
 
 size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
 eltype{T,n}(::AbstractArray{T,n}) = T
+eltype{T,n}(::Type{AbstractArray{T,n}}) = T
+eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 ndims{T,n}(::AbstractArray{T,n}) = n
+ndims{T,n}(::Type{AbstractArray{T,n}}) = n
+ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
@@ -55,6 +59,9 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 empty(a::AbstractArray) = similar(a, 0)
 
 function reshape(a::AbstractArray, dims::Dims)
+    if prod(dims) != numel(a)
+        error("reshape: invalid dimensions")
+    end
     b = similar(a, dims)
     for i=1:numel(a)
         b[i] = a[i]
@@ -62,6 +69,8 @@ function reshape(a::AbstractArray, dims::Dims)
     return b
 end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
+
+vec(a::AbstractArray) = reshape(a,max(size(a)))
 
 function squeeze(A::AbstractArray)
     d = ()

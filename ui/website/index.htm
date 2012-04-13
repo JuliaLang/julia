@@ -7,6 +7,8 @@
         <link href="styles.css" rel="stylesheet" type="text/css" />
         <link href="favicon.ico" rel="shortcut icon" />
         <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
+        <script type="text/javascript" src="localstorage.js"></script>
+        <script type="text/javascript" src="modernizr-2.5.3.js"></script>
         <script type="text/javascript" src="jquery.js"></script>
         <script type="text/javascript" src="jquery.json.js"></script>
         <script type="text/javascript" src="jquery.autoresize.js"></script>
@@ -18,10 +20,14 @@
         <div id="main">
             <div id="left-column">
                 <h1>The Julia Language</h1>
-                <a href="/" class="current-page"><img class="bullet" src="images/bullet.png" alt="" /> Interactive Prompt</a>
-                <a href="http://julialang.org/" target="_blank"><img class="bullet" src="images/bullet.png" alt="" /> Julia Home</a>
-                <a href="http://julialang.org/manual/" target="_blank"><img class="bullet" src="images/bullet.png" alt="" /> Documentation</a>
-                <a href="https://github.com/JuliaLang/julia/issues" target="_blank"><img class="bullet" src="images/bullet.png" alt="" /> Issues</a>  
+                
+                <ul>
+                    <li><a href="/" class="current-page">Interactive Prompt</a></li>
+                    <li><a href="http://julialang.org/" target="_blank">Julia Home</a></li>
+                    <li><a href="http://julialang.org/manual/" target="_blank">Documentation</a></li>
+                    <li><a href="https://github.com/JuliaLang/julia/issues" target="_blank">Issues</a></li>
+                </ul>
+                
                 <h2>Color Scheme</h2>
                 <select id="color-scheme-picker"> </select>
                 <h2>Quick Reference</h2>

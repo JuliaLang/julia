@@ -238,3 +238,13 @@ begin
     some_data = {("a", Int32), ("b", Int32)}
     @assert isa(mytype(some_data),Vector{(ASCIIString, BitsKind)})
 end
+
+type MyArray{N} <: AbstractArray{Int, N}
+end
+begin
+    local x
+    x = MyArray{1}()
+    foob(x::AbstractArray)=0
+    foob{T}(x::AbstractVector{T})=1
+    @assert foob(x) == 1
+end

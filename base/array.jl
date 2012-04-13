@@ -181,23 +181,26 @@ function ref(A::Array, I::Integer...)
 end
 
 # note: this is also useful for Ranges
-ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i = I ]
-ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i = I ]
+ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i=I ]
+ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i=I ]
 
-ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::Integer) = [ A[i,j] | i = I, j = J ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i = I, j = J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] | i=I ]
+ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i=I, j=J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i=I, j=J ]
 
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    X = similar(A, map(length, I)::Dims)
+    i = length(I)
+    while 1 > 0 && isa(I[i],Integer); i-=1; end
+    d = map(length, I)::Dims
+    X = similar(A, d[1:i])
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()
     end
     gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)];
+            X[storeind] = A[$(ivars...)]
             storeind += 1
         end, I, (:A, :X, :storeind), A, X, 1)
     return X

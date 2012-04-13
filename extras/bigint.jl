@@ -57,6 +57,12 @@ function -(x::BigInt)
 	BigInt(z)
 end
 
+function lshift(x::BigInt, c::Uint)
+    z= _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_lshift), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
+    BigInt(z)
+end
+
 function -(x::BigInt, y::BigInt)
 	z= _jl_bigint_init()
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_sub), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
@@ -73,6 +79,13 @@ function div (x::BigInt, y::BigInt)
 	z= _jl_bigint_init()
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
 	BigInt(z)
+end
+
+function divmod(x::BigInt, y::BigInt)
+	z1= _jl_bigint_init()
+	z2= _jl_bigint_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_divmod), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}), z1, z2, x.mpz, y.mpz)
+	BigInt(z1),BigInt(z2)
 end
 
 function rem (x::BigInt, y::BigInt)

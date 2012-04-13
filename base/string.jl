@@ -212,10 +212,10 @@ type SubString <: String
     offset::Int
     length::Int
 
-    SubString(s::String, i::Int, j::Int) = new(s, i-1, j-i+1)
-    SubString(s::SubString, i::Int, j::Int) =
-        new(s.string, i-1+s.offset, j-i+1)
+    SubString(s::String, i::Int, j::Int) =
+        (o=nextind(s,i-1)-1; new(s,o,thisind(s,j)-o))
 end
+SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 
 function next(s::SubString, i::Int)
@@ -387,7 +387,7 @@ cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
+    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
 convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))

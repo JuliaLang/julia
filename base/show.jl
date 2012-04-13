@@ -474,14 +474,10 @@ function showall(a::AbstractArray)
     cartesian_map(print_slice, tail)
 end
 
-function show(v::AbstractVector)
-    if is(eltype(v),Any)
-        opn = "{"
-        cls = "}"
-    else
-        opn = "["
-        cls = "]"
-    end
+function show_vector(v, opn, cls)
     X = reshape(v,(1,length(v)))
     print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
 end
+
+show(v::AbstractVector{Any}) = show_vector(v, "{", "}")
+show(v::AbstractVector)      = show_vector(v, "[", "]")

@@ -50,6 +50,7 @@
     jl_prepare_ast;
     jl_is_leaf_type;
     jl_gensym;
+    jl_tagged_gensym;
     jl_eqtable_put;
     jl_eqtable_get;
     jl_eqtable_del;
@@ -74,6 +75,8 @@
     ios_getutf8;
     jl_getutf8;
     u8_isvalid;
+    u8_strwidth;
+    u8_strlen;
     ios_close;
     ios_flush;
     ios_read;

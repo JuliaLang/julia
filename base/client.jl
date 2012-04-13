@@ -29,7 +29,13 @@ end
 # called to show a REPL result
 function repl_show(v::ANY)
     if !(isa(v,Function) && isgeneric(v))
-        show(v)
+        if isa(v,AbstractVector)
+            print(summary(v))
+            println(":")
+            print_matrix(reshape(v,(length(v),1)))
+        else
+            show(v)
+        end
     end
     if isgeneric(v)
         if isa(v,CompositeKind)
