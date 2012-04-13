@@ -1,6 +1,5 @@
-setcwd("../extras")
-include("sparse.jl")
-include("linalg_suitesparse.jl")
+include("../extras/sparse.jl")
+include("../extras/linalg_suitesparse.jl")
 
 
 # check matrix operations

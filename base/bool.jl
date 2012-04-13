@@ -5,7 +5,6 @@ convert(::Type{Bool}, x::Number) = (x!=0)
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
 
-bool(x) = true
 bool(x::Bool) = x
 bool(x::Number) = convert(Bool, x)
 

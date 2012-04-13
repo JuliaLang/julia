@@ -10,7 +10,7 @@ runtests("hashing")
 runtests("arrayops")
 runtests("lapack")
 runtests("fft")
-# runtests("sparse")
+runtests("sparse")
 runtests("arpack")
 runtests("bitarray")
 
