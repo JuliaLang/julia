@@ -422,12 +422,7 @@ function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
         _jl_copy_chunks(B.chunks, f0, X.chunks, 1, l0)
         return B
     end
-    #ind_lst = [first(r)::Int | r in I] # this hits a bug, refactoring...
-    ind_lst = Array(Int, length(I))
-    for k = 1 : length(I)
-        ind_lst[k] = first(I[k])
-    end
-    # endofbug
+    ind_lst = [first(r)::Int | r in I]
     indX = 1
     iterate = true
     while iterate
