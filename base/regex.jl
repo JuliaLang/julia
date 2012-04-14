@@ -79,8 +79,9 @@ function show(m::RegexMatch)
     print(")")
 end
 
-matches(r::Regex, s::String, o::Integer) = pcre_exec(r.regex, r.extra, cstring(s), 1, o, false)
-matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
+contains(s::String, r::Regex) = contains(r, s, r.options & PCRE_EXECUTE_MASK)
+contains(s::String, r::Regex, opts::Integer) =
+    pcre_exec(r.regex, r.extra, cstring(s), 0, opts, false)
 
 function match(re::Regex, str::ByteString, offset::Integer, opts::Integer)
     m, n = pcre_exec(re.regex, re.extra, str, offset, opts, true)
@@ -92,7 +93,10 @@ function match(re::Regex, str::ByteString, offset::Integer, opts::Integer)
 end
 match(r::Regex, s::String, o::Integer, p::Integer) = match(r, cstring(s), o, p)
 match(r::Regex, s::String, o::Integer) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
-match(r::Regex, s::String) = match(r, s, 1)
+match(r::Regex, s::String) = match(r, s, 0)
+
+search(s::String, r::Regex, off::Integer) = match(r,s,off)
+search(s::String, r::Regex) = match(r,s)
 
 type RegexMatchIterator
     regex::Regex

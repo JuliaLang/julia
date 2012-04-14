@@ -136,10 +136,10 @@ function printfd(n)
     for i = 1:n
         # fprintf(f, f"%d %d\n", i, i)
         # f"%d %d\n"(f,i,i)
-        # @printf "%d %d\n" f i i
+        @printf "%d %d\n" f i i
     end
     close(f)
 end
 
-# printfd(1)
-# @timeit printfd(100000) "printfd"
+printfd(1)
+@timeit printfd(100000) "printfd"

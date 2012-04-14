@@ -69,7 +69,7 @@ function ref(s::UTF8String, r::Range1{Int})
     UTF8String(s.data[i:j])
 end
 
-function strchr(s::UTF8String, c::Char, o::Integer)
+function search(s::UTF8String, c::Char, o::Integer)
     if c < 0x80 return memchr(s.data, c, o) end
     while true
         o = memchr(s.data, first_utf8_byte(c), o)

@@ -119,7 +119,7 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-function strchr(s::String, c::Char, o::Integer)
+function search(s::String, c::Char, o::Integer)
     i = nextind(s,o)
     while !done(s,i)
         d, j = next(s,i)
@@ -130,8 +130,11 @@ function strchr(s::String, c::Char, o::Integer)
     end
     return length(s)+1
 end
-strchr(s::String, c::Char) = strchr(s,c,0)
-contains(s::String, c::Char) = strchr(s,c) <= length(s)
+search(s::String, c::Char) = search(s,c,0)
+
+# TODO: search for a substring
+
+contains(s::String, c::Char) = isvalid(s,search(s,c))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -796,9 +799,14 @@ function split(s::String, delims, include_empty::Bool)
     end
     return strs
 end
-
-split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
 split(s::String, x) = split(s, x, true)
+split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
+
+# fast memchr-based split on a single byte for byte strings
+# function split(s::String, d::Uint8, include_empty::Bool)
+#     strs = String[]
+#     while 
+# end
 
 # split on a string literal
 function split(s::String, delim::String, include_empty::Bool)
