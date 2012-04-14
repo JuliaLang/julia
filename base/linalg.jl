@@ -389,19 +389,22 @@ diagmm(A::Matrix, b::Vector) =
 diagmm(b::Vector, A::Matrix) =
     diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
 
-^(A::AbstractMatrix, p::Integer) =
-    size(A,1) != size(A,2) ? error("matrix must be square") :
-    p < 0 ? A^float(p) : power_by_squaring(A,p)
+^(A::AbstractMatrix, p::Integer) = p < 0 ? inv(A^-p) : power_by_squaring(A,p)
 
 function ^(A::AbstractMatrix, p::Number)
-    if p >= 0 && integer_valued(p)
-        return power_by_squaring(A, integer(real(p)))
+    if integer_valued(p)
+        ip = integer(real(p))
+        if ip < 0
+            return inv(power_by_squaring(A, -ip))
+        else
+            return power_by_squaring(A, ip)
+        end
     end
     if size(A,1) != size(A,2)
         error("matrix must be square")
     end
-    v, X = eig(A)
-    if isreal(v) && any(v < 0)
+    (v, X) = eig(A)
+    if isreal(v) && any(v<0)
         v = complex(v)
     end
     if ishermitian(A)
