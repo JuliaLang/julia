@@ -27,7 +27,7 @@ Regex(p::String)             = Regex(p, 0, false)
 # constructs are correctly handled.
 
 macro r_str(pattern, flags...)
-    options = 0
+    options = PCRE_UTF8
     for fx in flags, f in fx
         options |= f=='i' ? PCRE_CASELESS  :
                    f=='m' ? PCRE_MULTILINE :
@@ -39,7 +39,8 @@ macro r_str(pattern, flags...)
 end
 
 function show(re::Regex)
-    if (re.options & ~(PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED))==0
+    imsx = PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED
+    if (re.options & ~imsx) == PCRE_UTF8
         print('r')
         print_quoted_literal(re.pattern)
         if (re.options & PCRE_CASELESS ) != 0; print('i'); end

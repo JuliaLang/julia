@@ -104,7 +104,7 @@ ans = nothing
 function __socket_callback(fd)
     # read the message
     __msg = __read_message()
-
+    
     # MSG_INPUT_EVAL
     if __msg.msg_type == __MSG_INPUT_EVAL
         # split the input into lines
@@ -126,14 +126,15 @@ function __socket_callback(fd)
                 continue
             end
             __all_nothing = false
+            __expr_multitoken = isa(__expr, Expr)
 
             # stop now if there was a parsing error
-            if __expr.head == :error
+            if __expr_multitoken && __expr.head == :error
                 return __write_message(__Message(__MSG_OUTPUT_PARSE_ERROR, {__expr.args[1]}))
             end
             
             # if the expression was incomplete, just keep going
-            if __expr.head == :continue
+            if __expr_multitoken && __expr.head == :continue
                 continue
             end
 

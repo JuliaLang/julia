@@ -211,3 +211,7 @@ sizeof(::Type{Float64}) = 8
 
 const e  = 2.71828182845904523536
 const pi = 3.14159265358979323846
+
+## byte order swaps for arbitrary-endianness serialization/deserialization ##
+bswap(x::Float32) = boxf32(bswap_int(unbox32(x)))
+bswap(x::Float64) = boxf64(bswap_int(unbox64(x)))

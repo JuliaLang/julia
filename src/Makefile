@@ -57,16 +57,16 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-../libjulia-debug.$(SHLIB_EXT): $(DOBJS) flisp/libflisp.a support/libsupport.a
+../libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o ../libjulia-debug.$(SHLIB_EXT) $(LIBS)
-libjulia-debug.a: $(DOBJS) flisp/libflisp.a support/libsupport.a
+libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
 libjulia-debug: libjulia-debug.a ../libjulia-debug.$(SHLIB_EXT)
 
-../libjulia-release.$(SHLIB_EXT): $(OBJS) flisp/libflisp.a support/libsupport.a
+../libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o ../libjulia-release.$(SHLIB_EXT) $(LIBS)
-libjulia-release.a: $(OBJS) flisp/libflisp.a support/libsupport.a
+libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
 libjulia-release: libjulia-release.a ../libjulia-release.$(SHLIB_EXT)

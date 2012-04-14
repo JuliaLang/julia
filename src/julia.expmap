@@ -112,6 +112,7 @@
     jl_ios_size;
     jl_ios_fd;
     jl_nb_available;
+    jl_ios_eof;
     jl_gc_add_finalizer;
     jl_gc_collect;
     jl_gc_lookfor;

@@ -90,7 +90,7 @@ Other versions of gcc are also exist but currently gfortran45 is the one used by
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
 
-Buliding Julia requires that the following software be installed:
+Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
@@ -143,13 +143,14 @@ Julia uses the following external libraries, which are automatically downloaded 
 ## Directories
 
     attic/         old, now-unused code
+    base/          source code for julia's standard library
     contrib/       emacs and textmate support for julia
     examples/      example julia programs
     external/      external dependencies
-    j/             source code for julia's standard library
+    extras/        useful optional libraries
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
-    test/          unit and function tests for julia itself
+    test/          unit and function test cases
     ui/            source for various front ends
 
 <a name="Binary-Installation"/>
@@ -200,6 +201,9 @@ In external, doing `make install-lighttpd` will download and build lighttpd.
 Use the launch-webserver script to start the webserver and web-repl.
 Point your browser to `http://localhost:2000/`.
 Try `plot(cumsum(randn(1000)))`
+
+### Run it Online
+[julia.forio.com](http://julia.forio.com)
 
 ### Pre-installed lighttpd
 

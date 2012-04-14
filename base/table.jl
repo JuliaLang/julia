@@ -60,7 +60,7 @@ del_all(t::IdTable) = (t.ht = cell(length(t.ht)); t)
 
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
-next(t::IdTable, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, uint32(i))
+next(t::IdTable, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
 
 isempty(t::IdTable) = is(next(t,0),())
 

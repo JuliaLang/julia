@@ -630,18 +630,16 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             Value *arg1 = emit_expr(args[1], ctx, true);
             if (jl_is_long(args[2])) {
+                size_t tlen = ((jl_tuple_t*)tty)->length;
                 int isseqt =
-                    jl_is_seq_type(jl_tupleref(tty,
-                                               ((jl_tuple_t*)tty)->length-1));
-                uint32_t idx = (uint32_t)jl_unbox_long(args[2]);
-                if (idx > 0 &&
-                    (idx < ((jl_tuple_t*)tty)->length ||
-                     (idx == ((jl_tuple_t*)tty)->length && !isseqt))) {
+                    tlen>0 && jl_is_seq_type(jl_tupleref(tty, tlen-1));
+                size_t idx = jl_unbox_long(args[2]);
+                if (idx > 0 && (idx < tlen || (idx == tlen && !isseqt))) {
                     // known to be in bounds
                     JL_GC_POP();
                     return emit_nthptr(arg1, idx+1);
                 }
-                if (idx==0 || (!isseqt && idx > ((jl_tuple_t*)tty)->length)) {
+                if (idx==0 || (!isseqt && idx > tlen)) {
                     emit_error("tupleref: index out of range", ctx);
                     JL_GC_POP();
                     return V_null;

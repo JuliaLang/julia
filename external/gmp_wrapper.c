@@ -45,6 +45,10 @@ extern void _jl_mpz_div(mpz_t* rop, mpz_t* op1, mpz_t* op2) {
   mpz_fdiv_q(*rop, *op1, *op2);
 }
 
+extern void _jl_mpz_divmod(mpz_t* rop1, mpz_t* rop2, mpz_t* op1, mpz_t* op2) {
+  mpz_divmod(*rop1, *rop2, *op1, *op2);
+}
+  
 extern void _jl_mpz_rem(mpz_t* rop, mpz_t* op1, mpz_t* op2) {
   mpz_fdiv_r(*rop, *op1, *op2);
 }
@@ -59,6 +63,10 @@ extern void _jl_mpz_abs(mpz_t* rop, mpz_t* op1) {
 
 extern int _jl_mpz_cmp(mpz_t* op1, mpz_t* op2) {
   return mpz_cmp(*op1, *op2);
+}
+
+extern void _jl_mpz_lshift(mpz_t* rop, mpz_t* base, unsigned long int count) {
+  mpz_mul_2exp(*rop, *base, count);
 }
 
 extern void _jl_mpz_pow_ui(mpz_t* rop, mpz_t* base, unsigned long int exp) {
