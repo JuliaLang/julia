@@ -215,3 +215,7 @@ const pi = 3.14159265358979323846
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = boxf32(bswap_int(unbox32(x)))
 bswap(x::Float64) = boxf64(bswap_int(unbox64(x)))
+
+## approximate comparison based on nextfloat; default tolerance is quite close
+isapprox(a, b, tol) = abs(a-b) <= tol
+isapprox(a, b) = isapprox(a, b, 8*max(eps(float(a)), eps(float(b))))
