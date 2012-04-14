@@ -68,6 +68,8 @@ If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architect
 
 On OS X, you may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
 
+If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
+
 On FreeBSD the prerequisites can be installed from ports like this:
 
     cd /usr/ports/devel/gmake
