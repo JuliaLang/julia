@@ -236,8 +236,8 @@ function alignment(x::Rational)
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 
-const _jl_undef_ref_str = "undef"
-const _jl_undef_ref_alignment = (2,3)
+const _jl_undef_ref_str = "#undef"
+const _jl_undef_ref_alignment = (3,3)
 
 function alignment(
     X::AbstractMatrix,

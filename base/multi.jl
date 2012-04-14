@@ -280,7 +280,7 @@ type RemoteRef
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
         found = key(_jl_client_refs, r, false)
-        if bool(found)
+        if !is(found,false)
             return found
         end
         _jl_client_refs[r] = true

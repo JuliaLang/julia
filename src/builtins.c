@@ -11,6 +11,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <ctype.h>
+#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -731,7 +733,15 @@ DLLEXPORT int jl_strtod(char *str, double *out)
     char *p;
     errno = 0;
     *out = strtod(str, &p);
-    return (p == str || errno != 0);
+    if (p == str ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
+        return 1;
+    while (*p != '\0') {
+        if (!isspace(*p))
+            return 1;
+        p++;
+    }
+    return 0;
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)
@@ -739,7 +749,15 @@ DLLEXPORT int jl_strtof(char *str, float *out)
     char *p;
     errno = 0;
     *out = strtof(str, &p);
-    return (p == str || errno != 0);
+    if (p == str ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
+        return 1;
+    while (*p != '\0') {
+        if (!isspace(*p))
+            return 1;
+        p++;
+    }
+    return 0;
 }
 
 // showing --------------------------------------------------------------------
@@ -784,10 +802,7 @@ static void show_function(jl_value_t *v)
 static void show_type(jl_value_t *t)
 {
     ios_t *s = jl_current_output_stream();
-    if (t == (jl_value_t*)jl_function_type) {
-        ios_puts("Function", s);
-    }
-    else if (jl_is_union_type(t)) {
+    if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             ios_write(s, "None", 4);
         }
