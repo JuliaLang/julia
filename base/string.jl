@@ -14,7 +14,7 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
-ref(s::String, v::Vector) =
+ref(s::String, v::AbstractVector) =
     print_to_string(length(v), @thunk for i in v; print(s[i]); end)
 
 symbol(s::String) = symbol(cstring(s))
@@ -773,32 +773,72 @@ rpad(s, n::Integer, p) = rpad(string(s), n, string(p))
 lpad(s, n::Integer) = lpad(string(s), n, " ")
 rpad(s, n::Integer) = rpad(string(s), n, " ")
 
+# split on a single character in a collection
 function split(s::String, delims, include_empty::Bool)
-    i = 1
+    i = start(s)
     len = length(s)
     strs = String[]
     while true
         tokstart = tokend = i
         while !done(s,i)
-            (c,i) = next(s,i)
+            c,i = next(s,i)
             if contains(delims, c)
                 break
             end
             tokend = i
         end
-        tok = s[tokstart:(tokend-1)]
-        if include_empty || !isempty(tok)
-            push(strs, tok)
+        if include_empty || tokstart < tokend
+            push(strs, s[tokstart:tokend-1])
         end
-        if !((i <= len) || (i==len+1 && tokend!=i))
+        if !(i <= len || i==len+1 && tokend!=i)
             break
         end
     end
-    strs
+    return strs
 end
 
 split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
 split(s::String, x) = split(s, x, true)
+
+# split on a string literal
+function split(s::String, delim::String, include_empty::Bool)
+    i = start(s)
+    len = length(s)
+    strs = String[]
+    jj = start(delim)
+    d1, jj = next(delim,jj)
+    tokstart = tokend = i
+    while !done(s,i)
+        c,i = next(s,i)
+        if c == d1
+            j = jj
+            matched = true
+            while !done(delim,j)
+                if done(s,i)
+                    matched = false
+                    break
+                end
+                c,i = next(s,i)
+                d,j = next(delim,j)
+                if c != d
+                    matched = false
+                    break
+                end
+            end
+            if matched
+                if include_empty || tokstart < tokend
+                    push(strs, s[tokstart:tokend-1])
+                end
+                tokstart = i
+            end
+        end
+        tokend = i
+    end
+    if include_empty || tokstart < tokend
+        push(strs, s[tokstart:tokend-1])
+    end
+    return strs
+end
 
 function print_joined(strings, delim, last)
     i = start(strings)

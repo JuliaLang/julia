@@ -129,17 +129,7 @@ function split(s::String, regex::Regex, include_empty::Bool, limit::Integer)
     end
     return strs
 end
-
-split(s::String, x::String, incl::Bool, limit::Integer) =
-    strwidth(x) == 1 ? split(s, x[1], incl, limit) :
-    split(s, Regex(strcat("\\Q",x)), incl, limit)
-
-split(s::String, regex::Regex, include_empty::Bool) =
-    split(s, regex, include_empty, 0)
-
-split(s::String, x::String, incl::Bool) =
-    strwidth(x) == 1 ? split(s, x[1], incl) :
-    split(s, Regex(strcat("\\Q",x)), incl)
+split(s::String, regex::Regex, include_empty::Bool) = split(s, regex, include_empty, 0)
 
 replace(s::String, regex::Regex, repl::String, limit::Integer) =
     join(split(s, regex, true, limit), repl)
