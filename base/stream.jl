@@ -133,6 +133,7 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     end
     return (addr.port,socket)
 end
+open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16(preferred_port),cb)
 
 abstract AsyncWork
 

@@ -113,6 +113,9 @@ struct session
 
     //event loop
     uv_loop_t *event_loop;
+
+    //notifier
+    uv_async_t *data_notifier;
 };
 
 // a list of sessions
@@ -146,7 +149,8 @@ void closeInput(uv_stream_t *handle,int status)
 
 void free_socket_write_buffer(uv_write_t* req, int status)
 {
-    delete (vector<string>*) req->data;
+    vector<string>* tmp = (vector<string>*) req->data;
+    delete tmp;
     delete req;
 }
 
@@ -156,13 +160,23 @@ void free_write_buffer(uv_write_t* req, int status)
     delete req;
 }
 
+
+static uv_buf_t alloc_buf(uv_handle_t* handle, size_t suggested_size) {
+    uv_buf_t buf;
+    buf.len = suggested_size;
+    buf.base = new char[suggested_size];
+    return buf;
+}
+
+
 //when data arrives from client (currently async, will be websocket)
 void read_client(uv_async_t* handle, int status)
 {
-    clientData *data = (clientData *)handle->data;
-    string session_token=data->session_token;
     // lock the mutex
     pthread_mutex_lock(&session_mutex);
+
+    clientData *data = (clientData *)handle->data;
+    string session_token=data->session_token;
 
     // terminate if necessary
     if (session_map[session_token].status == SESSION_TERMINATING)
@@ -174,7 +188,8 @@ void read_client(uv_async_t* handle, int status)
         uv_close((uv_handle_t*)handle,(uv_close_cb)&closeInput);
 
         return;
-    }
+    } else if(session_map[session_token].status != SESSION_NORMAL)
+        return;
 
     // get the inbox data
     string inbox = session_map[session_token].inbox_std;
@@ -188,19 +203,18 @@ void read_client(uv_async_t* handle, int status)
         return;
     }
 
-    char *cstr = new char [inbox.size()+1];
-    strcpy (cstr, inbox.c_str());
+    if(inbox.size()>0) {
+        char *cstr = new char [inbox.size()];
+        memcpy (cstr, inbox.data(), inbox.size());
 
-    uv_buf_t buffer;
-    buffer.base = cstr;
-    buffer.len = inbox.size()+1;
+        uv_buf_t buffer;
+        buffer.base = cstr;
+        buffer.len = inbox.size();
 
-    uv_write_t *req = new uv_write_t;
-    req->data=(void*)cstr;
-    uv_write(req,(uv_stream_t*)session_map[session_token].julia_in,&buffer,1,&free_write_buffer);
-
-    // lock the mutex
-    pthread_mutex_lock(&session_mutex);
+        uv_write_t *req = new uv_write_s;
+        req->data=(void*)cstr;
+        uv_write(req,(uv_stream_t*)session_map[session_token].julia_in,&buffer,1,&free_write_buffer);
+    }
 
     // write messages to julia
     for (size_t i = 0; i < session_map[session_token].inbox.size(); i++)
@@ -209,23 +223,23 @@ void read_client(uv_async_t* handle, int status)
         message msg = session_map[session_token].inbox[i];
 
         uv_buf_t bufs[2*(1+msg.args.size())];
-        uv_write_t *req = new uv_write_t;
+        uv_write_t *req2 = new uv_write_s;
 
         vector<string> *tmp = new vector<string>(msg.args);
-        req->data=(void*)tmp;
+        req2->data=(void*)tmp;
 
         //write the message type
         string t=" ";
         t[0]=msg.type;
-        bufs[0].base=t.c_str();
+        bufs[0].base=t.data();
         bufs[0].len=1;
 
         tmp->push_back(t);
 
         string t2=" ";
-        t[0]=msg.args.size();
+        t2[0]=msg.args.size();
         // write the number of arguments
-        bufs[1].base=t.c_str();
+        bufs[1].base=t2.data();
         bufs[1].len=1;
 
         tmp->push_back(t2);
@@ -240,15 +254,16 @@ void read_client(uv_async_t* handle, int status)
                 string str_arg_size = "    ";
                 *((uint32_t*)(&(str_arg_size[0]))) = (uint32_t)msg.args[j].size();
                 tmp->push_back(str_arg_size);
-                bufs[2*j].base=str_arg_size.c_str();
-                bufs[2*j].len=str_arg_size.size();
+                bufs[2*(j+1)].base=str_arg_size.data();
+                bufs[2*(j+1)].len=str_arg_size.size();
+                //assert(str_arg_size.size()==4);
 
-                bufs[2*j+1].base=msg.args[j].c_str();
-                bufs[2*j+1].len=msg.args[j].size();
+                bufs[2*(j+1)+1].base=msg.args[j].data();
+                bufs[2*(j+1)+1].len=msg.args[j].size();
             }
         }
 
-        uv_write(req,(uv_stream_t*)session_map[session_token].sock,bufs,2*(1+msg.args.size()),&free_socket_write_buffer);
+        uv_write(req2,(uv_stream_t*)session_map[session_token].sock,bufs,2*(1+msg.args.size()),&free_socket_write_buffer);
     }
     session_map[session_token].inbox.clear();
 
@@ -291,99 +306,22 @@ void close_session(uv_handle_t *stream)
     pthread_mutex_unlock(&session_mutex);
 }
 
-void connected(uv_connect_t* req, int status)
-{
-    clientData *data = (clientData* )req->handle->data;
-    string session_token=data->session_token;
-    // switch to normal operation
-    session_map[session_token].status = SESSION_NORMAL;
-
-    // send a ready message
-    message ready_message;
-    ready_message.type = MSG_OUTPUT_READY;
-    session_map[session_token].outbox.push_back(ready_message);
-}
-
-//read from julia (on stdin)
-void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
-{
-    clientData *data = (clientData *)stream->data;
-    string session_token=data->session_token;
-    // lock the mutex
-    pthread_mutex_lock(&session_mutex);
-
-    // terminate if necessary
-    if (session_map[session_token].status == SESSION_TERMINATING)
-    {
-        // unlock the mutex
-        pthread_mutex_unlock(&session_mutex);
-
-        // terminate
-        uv_close((uv_handle_t*)stream,&close_session);
-    }
-
-    // prepare for reading from julia
-    uv_pipe_t *pipe = session_map[session_token].julia_out;
-
-    // unlock the mutex
-    pthread_mutex_unlock(&session_mutex);
-
-    // lock the mutex
-    pthread_mutex_lock(&session_mutex);
-
-    // send the outbox data to the client
-    if (session_map[session_token].status == SESSION_NORMAL)
-    {
-        // just dump the output into the session
-        session_map[session_token].outbox_std.append(buf.base,buf.len);
-    }
-
-    // get the port number
-    if (session_map[session_token].status == SESSION_WAITING_FOR_PORT_NUM)
-    {
-        data->buf+=buf.base;
-        // wait for a newline
-        size_t newline_pos = data->buf.find("\n");
-        if (newline_pos == string::npos)
-        {
-            // unlock the mutex
-            pthread_mutex_unlock(&session_mutex);
-            data->buf+=buf.base;
-            return;
-        }
-
-        // read the port number
-        string num_string = data->buf.substr(0, newline_pos);
-        data->buf = data->buf.substr(newline_pos+1, data->buf.size()-(newline_pos+1));
-        int port_num = from_string<int>(num_string);
-
-        // start
-        session_map[session_token].sock = new uv_tcp_t;
-        uv_tcp_init(session_map[session_token].event_loop,session_map[session_token].sock);
-        uv_connect_t *c=new uv_connect_t;
-        sockaddr_in address=uv_ip4_addr("127.0.0.1", port_num);
-        session_map[session_token].sock->data=data;
-        uv_tcp_connect(c, session_map[session_token].sock,address,&connected);
-    }
-
-    delete[] buf.base;
-}
-
 //read from julia on metadata socket (4444)
-void readSocketData(uv_stream_t *sock,size_t nread, uv_buf_t buf)
+void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
 {
+    // lock the mutex
+    pthread_mutex_lock(&session_mutex);
+
     clientData *data = (clientData* )sock->data;
     string session_token=data->session_token;
     if(session_map[session_token].status != SESSION_NORMAL)
         return;
 
-    // lock the mutex
-    pthread_mutex_lock(&session_mutex);
-    session_map[session_token].outbox_raw.append(buf.base,buf.len);
+    session_map[session_token].outbox_raw.append(buf.base,nread);
 
     // try to convert the raw outbox data into messages
     string outbox_raw = session_map[session_token].outbox_raw;
-    if (outbox_raw.size() >= 2)
+    while (outbox_raw.size() >= 2)
     {
         // construct the message
         message msg;
@@ -419,12 +357,91 @@ void readSocketData(uv_stream_t *sock,size_t nread, uv_buf_t buf)
         if (msg.args.size() == arg_num)
         {
             // we have a whole message - eat it from outbox_raw
-            session_map[session_token].outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
+            outbox_raw = session_map[session_token].outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
 
             // add the message to the queue
             session_map[session_token].outbox.push_back(msg);
         }
     }
+
+    // unlock the mutex
+    pthread_mutex_unlock(&session_mutex);
+}
+
+
+void connected(uv_connect_t* req, int status)
+{
+    clientData *data = (clientData* )req->handle->data;
+    string session_token=data->session_token;
+    // switch to normal operation
+    session_map[session_token].status = SESSION_NORMAL;
+
+    // send a ready message
+    message ready_message;
+    ready_message.type = MSG_OUTPUT_READY;
+    session_map[session_token].outbox.push_back(ready_message);
+
+    uv_read_start((uv_stream_t*)session_map[session_token].sock,&alloc_buf,readSocketData);
+
+}
+
+//read from julia (on stdin)
+void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
+{
+    clientData *data = (clientData *)stream->data;
+    string session_token=data->session_token;
+    // lock the mutex
+    pthread_mutex_lock(&session_mutex);
+
+    // terminate if necessary
+    if (session_map[session_token].status == SESSION_TERMINATING)
+    {
+        // unlock the mutex
+        pthread_mutex_unlock(&session_mutex);
+
+        // terminate
+        uv_close((uv_handle_t*)stream,&close_session);
+    }
+
+    // prepare for reading from julia
+    uv_pipe_t *pipe = session_map[session_token].julia_out;
+
+
+    // send the outbox data to the client
+    if (session_map[session_token].status == SESSION_NORMAL)
+    {
+        // just dump the output into the session
+        session_map[session_token].outbox_std.append(buf.base,buf.len);
+    }
+
+    // get the port number
+    if (session_map[session_token].status == SESSION_WAITING_FOR_PORT_NUM)
+    {
+        data->buf+=buf.base;
+        // wait for a newline
+        size_t newline_pos = data->buf.find("\n");
+        if (newline_pos == string::npos)
+        {
+            // unlock the mutex
+            pthread_mutex_unlock(&session_mutex);
+            return;
+        }
+
+        // read the port number
+        string num_string = data->buf.substr(0, newline_pos);
+        data->buf = data->buf.substr(newline_pos+1, data->buf.size()-(newline_pos+1));
+        int port_num = from_string<int>(num_string);
+
+        // start
+        session_map[session_token].sock = new uv_tcp_t;
+        uv_tcp_init(session_map[session_token].event_loop,session_map[session_token].sock);
+        uv_connect_t *c=new uv_connect_t;
+        sockaddr_in address=uv_ip4_addr("127.0.0.1", port_num);
+        session_map[session_token].sock->data=data;
+        uv_tcp_connect(c, session_map[session_token].sock,address,&connected);
+    }
+
+    delete[] buf.base;
 
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);
@@ -526,7 +543,7 @@ string make_session_token()
 
 string respond(string session_token, string body)
 {
-    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nSet-Cookie: SESSION_TOKEN=";
+    string header = "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=UTF-8\r\nSet-Cookie: SESSION_TOKEN=";
     header += session_token;
     header += "\r\n\r\n";
     return header+body;
@@ -540,15 +557,6 @@ void *run_event_loop(void *token)
     uv_run(loop);
     return 0;
 }
-
-
-static uv_buf_t alloc_buf(uv_handle_t* handle, size_t suggested_size) {
-    uv_buf_t buf;
-    buf.len = suggested_size;
-    buf.base = new char[suggested_size];
-    return buf;
-}
-
 
 void process_exited(uv_process_t*p, int exit_status, int term_signal)
 {
@@ -590,27 +598,35 @@ string create_session(bool idle)
     uv_process_options_t opts;
     opts.stdin_stream = session_data.julia_in;
     opts.stdout_stream = session_data.julia_out;
+    //opts.stdout_stream=0;
     opts.stderr_stream = 0; //parent stderr
     opts.exit_cb=&process_exited;
     opts.cwd=NULL; //cwd
-	char arg0[] = "julia-debug-readline";
-	char arg1[] = "./ui/webserver/julia_web_base.jl";
+    #ifndef __WIN32__
+    opts.env=environ;
+    #endif
+    char arg0[] = "./julia-debug-readline";
+    char arg1[] = "ui/webserver/julia_web_base.jl";
 	char *argv[3] = {arg0, arg1, NULL};
     opts.args=argv;
     opts.file=arg0;
     uv_spawn(uv_default_loop(),session_data.proc,opts);
 
+    clientData *data = new clientData;
+
     // set the start time
     session_data.update_time = time(0);
 
+    session_data.data_notifier = new uv_async_t;
+    session_data.data_notifier->data = (void*)data;
+    uv_async_init(uv_default_loop(),session_data.data_notifier,read_client);
+
     // store the session
     session_map[session_token] = session_data;
-
     // start the event thread
     char* session_token_inbox = new char[session_token.length()+1];
     strcpy(session_token_inbox, session_token.c_str());
 
-    clientData *data = new clientData;
     data->session_token=session_token;
     session_data.proc->data = session_data.julia_in->data = session_data.julia_out->data = data;
     if (pthread_create(&session_data.thread, 0, &run_event_loop, (void*)session_token_inbox))
@@ -750,8 +766,10 @@ void get_response(request* req,uv_stream_t *client)
                         else
                         {
                             // forward the message to julia
-                            if (request_message.type != MSG_INPUT_POLL)
+                            if (request_message.type != MSG_INPUT_POLL) {
                                 session_map[session_token].inbox.push_back(request_message);
+                                uv_async_send(session_map[session_token].data_notifier);
+                            }
 
                             // check if this was an eval message
                             if (request_message.type == MSG_INPUT_EVAL)
@@ -766,6 +784,8 @@ void get_response(request* req,uv_stream_t *client)
     // if we asked julia for an eval, wait a little and see if julia responds
     if (waiting_for_eval)
     {
+    //to be implemented using websockets
+    /*
         // unlock the mutex
         pthread_mutex_unlock(&session_mutex);
 
@@ -820,7 +840,7 @@ void get_response(request* req,uv_stream_t *client)
         }
 
         // lock the mutex
-        pthread_mutex_lock(&session_mutex);
+        pthread_mutex_lock(&session_mutex);*/
     }
 
     // perform maintenance on the session if there is one
@@ -872,12 +892,12 @@ void get_response(request* req,uv_stream_t *client)
     string response =  respond(session_token, writer.write(response_root));
 
     reading_in_progress *p = (reading_in_progress *)client->data;
-    p->cstr = new char [response.size()+1];
-    strcpy (p->cstr, response.c_str());
+    p->cstr = new char [response.size()];
+    strcpy (p->cstr, response.data());
     // write the response
     uv_buf_t buf;
     buf.base=p->cstr;
-    buf.len=response.size()+1;
+    buf.len=response.size();
     uv_write_t *wr = new uv_write_t;
     uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
     wr->data=(void*)buf.base;
