@@ -864,15 +864,25 @@ strip(s::String) = lstrip(rstrip(s))
 function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     if !(2 <= base <= 36); error("invalid base: ",base); end
     i = start(s)
-    if done(s,i)
-        error("premature end of integer (in ",show_to_string(s),")")
+    while true
+        if done(s,i)
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+        end
+        c,i = next(s,i)
+        if !iswspace(c)
+            break
+        end
     end
-    c,i = next(s,i)
     sgn = one(T)
     if T <: Signed && c == '-'
         sgn = -sgn
         if done(s,i)
-            error("premature end of integer (in ",show_to_string(s),")")
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+        end
+        c,i = next(s,i)
+    elseif c == '+'
+        if done(s,i)
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
         end
         c,i = next(s,i)
     end
@@ -883,10 +893,19 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            error(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")
+            if !iswspace(c)
+                throw(ArgumentError(strcat(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")))
+            end
+            while !done(s,i)
+                c,i = next(s,i)
+                if !iswspace(c)
+                    throw(ArgumentError(strcat("extra characters after whitespace (in ",show_to_string(s),")")))
+                end
+            end
+        else
+            # TODO: overflow detection?
+            n = n*base + d
         end
-        # TODO: overflow detection?
-        n = n*base + d
         if done(s,i)
             break
         end

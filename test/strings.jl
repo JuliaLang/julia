@@ -229,6 +229,17 @@ end
 @assert parse_int(Int64,"DeadBeef",16) == 3735928559
 @assert parse_int(Int64,"-DeadBeef",16) == -3735928559
 
+@assert parse_int("2\n") == 2
+@assert parse_int("   2 \n ") == 2
+@assert parse_int(" 2 ") == 2
+@assert parse_int("2 ") == 2
+@assert parse_int(" 2") == 2
+@assert parse_int("+2\n") == 2
+@assert parse_int("-2") == -2
+@assert_fails parse_int("   2 \n 0")
+@assert_fails parse_int("2x")
+@assert_fails parse_int("-")
+
 # printing numbers
 @assert string(uint32(-1)) == "0xffffffff"
 @assert hex(0xffffffffffff)=="ffffffffffff"
