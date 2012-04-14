@@ -27,14 +27,14 @@ julia-release-readline: $(JULIAHOME)/julia-release-readline
 julia-debug-readline: $(JULIAHOME)/julia-debug-readline
 
 $(JULIAHOME)/julia-release-basic: repl.o repl-basic.o $(JULIAHOME)/src/libjulia-release.a
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(SHIPFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-release.a $(LIBS)
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(SHIPFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-release.a $(LIBS)
 $(JULIAHOME)/julia-debug-basic: repl.do repl-basic.do $(JULIAHOME)/src/libjulia-debug.a
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-debug.a $(LIBS)
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-debug.a $(LIBS)
 
 $(JULIAHOME)/julia-release-readline: repl.o repl-readline.o $(JULIAHOME)/src/libjulia-release.a
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(SHIPFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-release.a $(READLINE) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(SHIPFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-release.a $(READLINE) $(LIBS)
 $(JULIAHOME)/julia-debug-readline: repl.do repl-readline.do $(JULIAHOME)/src/libjulia-debug.a
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-debug.a $(READLINE) $(LIBS)
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(JULIAHOME)/src/libjulia-debug.a $(READLINE) $(LIBS)
 
 clean:
 	$(MAKE) -C webserver $@
