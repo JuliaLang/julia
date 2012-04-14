@@ -119,8 +119,8 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-function strchr(s::String, c::Char, i::Integer)
-    i = nextind(s,i)
+function strchr(s::String, c::Char, o::Integer)
+    i = nextind(s,o)
     while !done(s,i)
         d, j = next(s,i)
         if c == d
@@ -128,10 +128,10 @@ function strchr(s::String, c::Char, i::Integer)
         end
         i = j
     end
-    return 0
+    return length(s)+1
 end
-strchr(s::String, c::Char) = strchr(s, c, start(s))
-contains(s::String, c::Char) = (strchr(s,c)!=0)
+strchr(s::String, c::Char) = strchr(s,c,0)
+contains(s::String, c::Char) = strchr(s,c) <= length(s)
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -803,7 +803,6 @@ split(s::String, x) = split(s, x, true)
 # split on a string literal
 function split(s::String, delim::String, include_empty::Bool)
     i = start(s)
-    len = length(s)
     strs = String[]
     jj = start(delim)
     d1, jj = next(delim,jj)
@@ -1065,11 +1064,14 @@ end
 
 # find the index of the first occurrence of a byte value in a byte array
 
-function memchr(a::Array{Uint8,1}, b::Integer)
+function memchr(a::Array{Uint8,1}, b::Integer, off::Integer)
+    n = length(a)
+    if n < off error("memchr: index out of range") end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p, b, length(a))
-    q == C_NULL ? 0 : int(q - p + 1)
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+off, b, n-off)
+    q != C_NULL ? int(q-p+1) : n+1
 end
+memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,0)
 
 # concatenate byte arrays into a single array
 
