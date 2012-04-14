@@ -797,13 +797,12 @@ function split(s::String, delims, include_empty::Bool)
     return strs
 end
 
-split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
+split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
 split(s::String, x) = split(s, x, true)
 
 # split on a string literal
 function split(s::String, delim::String, include_empty::Bool)
     i = start(s)
-    len = length(s)
     strs = String[]
     jj = start(delim)
     d1, jj = next(delim,jj)

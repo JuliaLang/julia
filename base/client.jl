@@ -29,7 +29,7 @@ end
 # called to show a REPL result
 function repl_show(v::ANY)
     if !(isa(v,Function) && isgeneric(v))
-        if isa(v,AbstractVector)
+        if isa(v,AbstractVector) && !isa(v,Ranges)
             print(summary(v))
             println(":")
             print_matrix(reshape(v,(length(v),1)))
