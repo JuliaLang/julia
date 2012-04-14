@@ -87,10 +87,10 @@ volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
 void restore_signals() { }
-void sigint_handler(int wsig)
+BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {	
 	//todo: switch to using windows custom handler instead of signal
-	signal(SIGINT, sigint_handler);
+    //signal(SIGINT, sigint_handler);
 	int sig;
 	switch(sig){
 	//	case ...: usig = ...; break;
@@ -117,6 +117,9 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 #endif
         jl_raise(jl_interrupt_exception);
     }
+#ifdef __WIN32__
+    return 1;
+#endif
 }
 
 void jl_get_builtin_hooks(void);
@@ -243,18 +246,17 @@ void julia_init(char *imageFile)
         jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-
+#endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
-#endif
+
 }
 
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-	//todo: switch to using SetConsoleCtrlHandler(sigint_handler, 1);
-	signal(SIGINT, sigint_handler);
+    SetConsoleCtrlHandler(sigint_handler,1);
 #else
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
@@ -266,7 +268,7 @@ DLLEXPORT void jl_install_sigint_handler()
         jl_exit(1);
     }
 #endif
-	//printf("sigint installed\n");
+    //printf("sigint installed\n");
 
 }
 

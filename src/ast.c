@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "flisp.h"
 

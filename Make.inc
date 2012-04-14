@@ -15,6 +15,12 @@ ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
 
+ifeq ($(OS), WINNT)
+fPIC = 
+else
+fPIC = -fPIC
+endif
+
 DEFAULT_REPL = readline
 JULIAGC = MARKSWEEP
 USE_COPY_STACKS = 1
@@ -26,7 +32,7 @@ endif
 # Compiler specific stuff
 
 FC = gfortran
-JFFLAGS = -O2 -fPIC
+JFFLAGS = -O2 $(fPIC)
 
 USEGCC = 1
 USECLANG = 0
@@ -34,8 +40,8 @@ USECLANG = 0
 ifeq ($(USEGCC),1)
 CC = gcc
 CXX = g++
-JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
-JCXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
 endif
@@ -43,8 +49,8 @@ endif
 ifeq ($(USECLANG),1)
 CC = clang
 CXX = clang++
-JCFLAGS = -std=gnu99 -pipe -fPIC -fno-strict-aliasing
-JCXXFLAGS = -pipe -fPIC -fno-rtti
+JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
@@ -106,6 +112,8 @@ endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses -lcurses
+else
+READLINE += $(EXTROOT)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -121,11 +129,11 @@ else
 LIBBLAS = -lblas
 endif
 else
-	ifeq ($(OS), WINNT)
-		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
-	else
-		LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
-	endif
+ifeq ($(OS), WINNT)
+LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
+else
+LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LAPACK), 1)
@@ -156,7 +164,6 @@ ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 JLDFLAGS = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices  -lutil -lm 
-READLINE += -lncurses -lcurses
 endif
 
 ifeq ($(OS), WINNT)

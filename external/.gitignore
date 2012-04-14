@@ -1,6 +1,7 @@
 /root
 /llvm-*
 /readline-*
+!readline-win.h
 /pcre-*
 /dsfmt-*
 /openblas-*

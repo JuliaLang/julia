@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -1168,7 +1171,7 @@ DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
 #ifdef JL_TRACE
 static int trace_en = 0;
 static int error_en = 1;
-static void enable_trace(int x) { trace_en=x; }
+static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
 extern char *type_summary(jl_value_t *t);
 #endif
 
@@ -1337,13 +1340,13 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 
 static void print_methlist(char *name, jl_methlist_t *ml)
 {
-    uv_stream_t *s = jl_current_output_stream();
+    uv_stream_t *s = (uv_stream_t*)jl_current_output_stream();
     while (ml != NULL) {
         jl_printf(s, "%s", name);
         if (ml->tvars != jl_null) {
             if (jl_is_typevar(ml->tvars)) {
-                ios_putc('{', s); jl_show((jl_value_t*)ml->tvars);
-                ios_putc('}', s);
+                jl_putc('{', s); jl_show((jl_value_t*)ml->tvars);
+                jl_putc('}', s);
             }
             else {
                 jl_show_tuple(ml->tvars, '{', '}', 0);
@@ -1540,7 +1543,7 @@ void jl_callback_call(jl_function_t *f,int count,...)
     jl_value_t **argv = alloca(count*sizeof(jl_value_t*));
     va_list argp;
     va_start(argp,count);
-    jl_value_t *v;    int i;
+    jl_value_t *v=0;    int i;
     for(i=0; i<count; ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
@@ -1553,6 +1556,7 @@ void jl_callback_call(jl_function_t *f,int count,...)
             v = jl_box_int64(va_arg(argp,int64_t));
             break;
         default: jl_error("callback: only Ints and Pointers are supported at this time");
+            //excecution never reaches here
             break;
         }
         argv[i]=v;

@@ -31,8 +31,8 @@
 #include "utf8.h"
 #include "ios.h"
 #include "timefuncs.h"
-/*
-#define MEMBEBUG
+
+/*#define MEMBEBUG
 #define MEMPROFILE*/
 
 #if defined(MEMDEBUG) || defined(MEMPROFILE)

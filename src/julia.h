@@ -27,11 +27,14 @@
 
 // Check GCC
 #if __GNUC__
+#define NORETURN __attribute__ ((noreturn))
 #if __x86_64__ || __ppc64__
 #define ENVIRONMENT64
 #else
 #define ENVIRONMENT32
 #endif
+#else
+#define NORETURN
 #endif
 
 
@@ -721,7 +724,7 @@ DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
 DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 
-DLLEXPORT void jl_exit(int status);
+DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
 
@@ -730,8 +733,8 @@ DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
 #endif
 
 // exceptions
-void jl_error(const char *str);
-void jl_errorf(const char *fmt, ...);
+void NORETURN jl_error(const char *str);
+void NORETURN jl_errorf(const char *fmt, ...);
 void jl_too_few_args(const char *fname, int min);
 void jl_too_many_args(const char *fname, int max);
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
@@ -766,6 +769,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
 DLLEXPORT void jl_show(jl_value_t *v);
+DLLEXPORT void jl_show_any(jl_value_t *v);
 void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one);
 
 // modules
@@ -1009,7 +1013,7 @@ extern DLLEXPORT jl_value_t *jl_exception_in_transit;
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
-DLLEXPORT void jl_raise(jl_value_t *e);
+DLLEXPORT void NORETURN jl_raise(jl_value_t *e);
 DLLEXPORT void jl_register_toplevel_eh(void);
 
 DLLEXPORT jl_value_t *jl_current_output_stream_obj(void);

@@ -411,6 +411,8 @@ DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
     }
 }
 
+extern int vasprintf(char **str, const char *fmt, va_list ap);
+
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 {
     char *str=NULL;
@@ -503,9 +505,10 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
 
 //WIN32 math functions that are not part of the CRT
 #ifdef __WIN32__
+#include "math.h"
 DLLEXPORT float truncf(float x)
 {
-     return (x > 0) ? floor(x) : ceil(x);
+     return (x > 0) ? floorf(x) : ceilf(x);
 }
 
 DLLEXPORT double trunc(double x)
@@ -632,6 +635,19 @@ DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
 {
     return ios->buf;
 }
+
+#ifdef __WIN32__
+//I have no idea why we need this but it won't work otherwise
+DLLEXPORT int jl_RtlGenRandom(unsigned char (*fptr)(void*,uint64_t),void *array, uint64_t size)
+{
+    unsigned char ret;
+    //fptr(array,size);
+    ret = fptr(array,size);
+    return ret;
+}
+#endif
+
+//#include "os_detect.h"
 
 #ifdef __cplusplus
 }
