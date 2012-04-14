@@ -51,6 +51,13 @@ function next(s::UTF8String, i::Int)
     char(c), i
 end
 
+function first_utf8_byte(c::Char)
+    c < 0x80    ? uint8(c)            :
+    c < 0x800   ? uint8((c>>6 )|0xc0) :
+    c < 0x10000 ? uint8((c>>12)|0xe0) :
+                  uint8((c>>18)|0xf0)
+end
+
 ## overload methods for efficiency ##
 
 isvalid(s::UTF8String, i::Integer) =
@@ -62,8 +69,13 @@ function ref(s::UTF8String, r::Range1{Int})
     UTF8String(s.data[i:j])
 end
 
-strchr(s::UTF8String, c::Char) =
-    c < 0x80 ? memchr(s.data, c) : invoke(strchr, (String,Char), s, c)
+function strchr(s::UTF8String, c::Char, o::Integer)
+    if c < 0x80 return memchr(s.data, c, o) end
+    while true
+        o = memchr(s.data, first_utf8_byte(c), o)
+        if length(s) < o || s[o]==c return o end
+    end
+end
 
 strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
