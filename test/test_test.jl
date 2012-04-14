@@ -1,5 +1,6 @@
 # test file to test testing
 load("test.jl")
+load("nearequal.jl")
 
 test_context("Testing test tests")
 # setup goes here
@@ -9,8 +10,8 @@ test_group("string tests")
 @test strip("\t  this should fail   \n") == "hi" #fail
 
 test_group("numeric tests")
-@test approx_eq(airy(1.8), 0.0470362)
-@test approx_eq(airy(1, 1.8), 1 + -0.0685248) # fail, using helper function
+@test isclose(.1+.1+.1, .3)
+@test isclose(.1+.1+.1, .4)
 
 test_group("array tests")
 a = Array(Float64, 2, 2, 2, 2, 2)
@@ -34,6 +35,6 @@ test_group("printing tests")
 test_group("performance tests")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @test fib(20) == 6765
-@test takes_less_than(fib(20), 1e-6)
+@test takes_less_than(fib(20), 1e-6) # fail
 
 # shutdown goes here
