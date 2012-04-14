@@ -48,9 +48,9 @@ ifeq ($(USE_SYSTEM_BLAS), 0)
 LIBS += openblas
 endif
 
-ifeq ($(USE_SYSTEM_LAPACK), 0)
-LIBS += lapack
-endif
+#ifeq ($(USE_SYSTEM_LAPACK), 0)
+#LIBS += lapack
+#endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
 LIBS += fftw
