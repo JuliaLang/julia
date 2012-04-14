@@ -55,6 +55,7 @@ function test_printer_raw(hdl::Task)
             println("")
         end
     end
+    println("")
 end
 
 # things to set state

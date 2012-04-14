@@ -1,5 +1,5 @@
 # test file to test testing
-#load("test.jl")
+# run this with julia -L extras/test.jl -e "tests(\"test/test_test.jl\")"
 load("nearequal.jl")
 
 test_context("Testing test tests")
