@@ -1,5 +1,5 @@
 # test file to test testing
-load("test.jl")
+#load("test.jl")
 load("nearequal.jl")
 
 test_context("Testing test tests")
@@ -7,34 +7,36 @@ test_context("Testing test tests")
 
 test_group("string tests")
 @test strip("\t  hi   \n") == "hi"
-@test strip("\t  this should fail   \n") == "hi" #fail
+@testfails strip("\t  this should fail   \n") == "hi" 
 
 test_group("numeric tests")
 @test isclose(.1+.1+.1, .3)
-@test isclose(.1+.1+.1, .4)
+@testfails isclose(.1+.1+.1, .4)
 
 test_group("array tests")
 a = Array(Float64, 2, 2, 2, 2, 2)
 a[1,1,1,1,1] = 10
 @test a[1,1,1,1,1] == 10
-@test a[1,1,1,1,1] == 2 # fail
+@testfails a[1,1,1,1,1] == 2
 
 
 test_group("random tests")
 @test rand() != rand() # not very likely to fail
-@test rand() == rand() # fail
+@testfails rand() == rand() # very likely to fail
 
 test_group("exception tests")
-@test complex(1,2) > 0 # fail
+@testfails complex(1,2) > 0 # fail
+@test throws_exception(complex(1,2) > 0, MethodError)
+@testfails throws_exception(complex(1,2) > 0, SystemError) 
 
 test_group("printing tests")
 @test print_to_string(show, :(1+2)) == "+(1,2)"
 @test prints(print_joined, ([1,2,3], " : "), "1 : 2 : 3") # prints is a helper
-@test prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3") # fail
+@testfails prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3")
 
 test_group("performance tests")
 fib(n) = n < 2 ? n : fib(n-1) + fib(n-2)
 @test fib(20) == 6765
-@test takes_less_than(fib(20), 1e-6) # fail
+@testfails takes_less_than(fib(20), 1e-6) 
 
 # shutdown goes here
