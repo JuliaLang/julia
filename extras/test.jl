@@ -112,7 +112,7 @@ function _test(ex::Expr)
             tr.arg1 = eval(ex.args[1])
             tr.arg2 = eval(ex.args[3])
         elseif (ex.head == :call) # is it a helper we know about?
-            if (ex.args[1] == :approx_eq)
+            if (ex.args[1] == :isapprox)
                 tr.operation = ex.args[1]
                 tr.arg1 = eval(ex.args[2])
                 tr.arg2 = eval(ex.args[3])
@@ -138,12 +138,6 @@ end
 
 # helpful utility tests, supported by the macro
 # 
-
-function approx_eq(a, b, tol)
-    abs(a - b) < tol
-end
-approx_eq(a, b) = approx_eq(a, b, 1e-6)
-
 function prints(fn::Function, args, expected::String) 
     print_to_string(fn, args...) == expected
 end
