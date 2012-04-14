@@ -46,7 +46,12 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            show(t) # TODO spiff up
+            println("In $(t.context) / $(t.group)")
+            println("$(t.expr_str) FAILED")
+            println("$(t.operation) with args:")
+            println("1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
+            println("Exception: $(t.exception_thrown)")
+            println(sprintf("%0.3f seconds\n", t.elapsed))
             println("")
         end
     end
