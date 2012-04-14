@@ -264,6 +264,8 @@ skip(s::IOStream, delta::Integer) =
 
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
+eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
+
 type IOTally <: IO
     nbytes::Int
     IOTally() = new(0)

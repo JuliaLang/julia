@@ -79,11 +79,37 @@ function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
     a
 end
 
+countlines(f) = countlines(f, '\n')
+countlines(f::String, eol::Char) = countlines(open(f), eol)
+function countlines(f::IOStream, eol::Char)
+    if !iswascii(eol)
+        error("countlines: only ASCII line terminators supported")
+    end
+    a = Array(Uint8, 8192)
+    nl = 0
+    while !eof(f)
+        fill!(a, uint8(eol)+1)  # fill with byte we're not looking for
+        try
+            read(f, a)
+        end
+        for i=1:length(a)
+            if a[i] == eol
+                nl+=1
+            end
+        end
+    end
+    skip(f,-1)
+    if read(f,Uint8) != eol
+        nl+=1
+    end
+    nl
+end
+
 function _jl_dlmread_setup(fname::String, dlm::(Char...))
     if length(dlm) == 0
         error("dlmread: no separator characters specified")
     end
-    nr = integer(split(readall(`wc -l $fname`),' ',false)[1])
+    nr = countlines(fname,'\n')
     f = open(fname)
     row = _jl_dlm_readrow(f, dlm)
     nc = length(row)

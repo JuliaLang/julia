@@ -78,6 +78,17 @@ DLLEXPORT int32_t jl_nb_available(ios_t *s)
     return (int32_t)(s->size - s->bpos);
 }
 
+DLLEXPORT int jl_ios_eof(ios_t *s)
+{
+    if (ios_eof(s))
+        return 1;
+    if (s->state == bst_rd) {
+        if (ios_readprep(s, 1) < 1)
+            return 1;
+    }
+    return 0;
+}
+
 // --- io constructors ---
 
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
