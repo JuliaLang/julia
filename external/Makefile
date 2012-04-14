@@ -469,9 +469,13 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.dylib && \
+	install_name_tool -id @rpath/libamd.dylib $(JULIALIB)/libamd.dylib && \
 	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.dylib && \
+	install_name_tool -id @rpath/libcolamd.dylib $(JULIALIB)/libcolamd.dylib && \
 	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.dylib -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
-	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.dylib -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS)
+	install_name_tool -id @rpath/libcholmod.dylib $(JULIALIB)/libcholmod.dylib && \
+	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.dylib -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @rpath/libumfpack.dylib $(JULIALIB)/libumfpack.dylib
 
 clean-suitesparse:
 	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C SuiteSparse-$(SUITESPARSE_VER) clean
