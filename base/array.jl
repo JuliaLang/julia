@@ -192,7 +192,7 @@ let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
     i = length(I)
-    while 1 > 0 && isa(I[i],Integer); i-=1; end
+    while i > 0 && isa(I[i],Integer); i-=1; end
     d = map(length, I)::Dims
     X = similar(A, d[1:i])
 

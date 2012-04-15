@@ -176,17 +176,17 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
 end
 
 function ref(s::SubArray, I::Indices...)
-    j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = Array(Indices, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Int) ? t : t[I[j]]
-        j += 1
+        newindexes[i] = isa(t, Int) ? t : t[I[i]]
     end
 
-    reshape(ref(s.parent, newindexes...), map(length, I))
+    L = length(I)
+    while L > 0 && isa(I[L],Integer); L-=1; end
+    reshape(ref(s.parent, newindexes...), map(length, I[1:L]))
 end
 
 assign(s::SubArray, v::AbstractArray, i::Integer) =
