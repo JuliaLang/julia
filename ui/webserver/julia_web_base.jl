@@ -72,6 +72,7 @@ end
 
 # send a message
 function __write_message(client::TcpSocket,msg)
+    @debug_only __print_message(msg)
     write(client, uint8(msg.msg_type))
     write(client, uint8(length(msg.args)))
     for arg=msg.args
@@ -83,14 +84,11 @@ __write_message(msg) = __write_message(__client,msg)
 
 # print a message (useful for debugging)
 function __print_message(msg)
-    print(msg.msg_type)
-    print(": [ ")
+    println("Writing message: ",msg.msg_type)
+    println("Number of arguments: ",length(msg.args))
     for arg=msg.args
-        print("\"")
-        print(arg)
-        print("\" ")
+        println("Argument Length: ",length(arg))
     end
-    println("]")
 end
 
 ###########################################

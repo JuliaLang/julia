@@ -158,7 +158,6 @@ long getPageSize (void) {
 void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
-    int err;
     uv_handle_type type = uv_guess_handle(fd);
     switch(type)
     {
@@ -185,7 +184,6 @@ void *init_stdio_handle(uv_file fd,int readable)
                 jl_error("unknown file stream");
             break;
         default:
-            err = GetLastError();
             handle=0;
             ios_puts("This type of handle for stdio is not yet supported!",ios_stderr);
             break;
