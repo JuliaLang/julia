@@ -12,15 +12,23 @@ function median(v::AbstractArray)
     end
 end
 
-# variance with known mean
-function var(v::AbstractArray, m::Number)
+## variance with known mean
+# generic version: only found to be faster for ranges
+function var(v::Ranges, m::Number)
     n = numel(v)
     d = 0.0
-    for i = 1:n
-        d += (v[i] - m) ^ 2
+    for x in v
+        d += abs2(x - m)
     end
     return d / (n - 1)
 end
+# vectorized version
+function var(v::AbstractVector, m::Number)
+    n = length(v)
+    x = v - m
+    return (x'*x)[1] / (n - 1)
+end
+var(v::AbstractArray, m::Number) = var(reshape(v, numel(v)), m)
 
 # variance
 var(v::AbstractArray) = var(v, mean(v))
@@ -129,13 +137,11 @@ function tiedrank(v::AbstractArray)
 end
 
 # pearson covariance with known means
-function _jl_cov_pearson1(x::AbstractVector, y::AbstractVector, mx::Number, my::Number)
+function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number)
     n = numel(x)
-    r = 0.0
-    for i = 1:n
-        r += (x[i] - mx) * (y[i] - my)
-    end
-    r / (n - 1)
+    x0 = x - mx
+    y0 = y - my
+    return (x0'*y0)[1] / (n - 1)
 end
 
 # pearson covariance
@@ -150,38 +156,20 @@ function cov_pearson(x::AbstractVector, y::AbstractVector)
 end
 
 # pearson covariance over all pairs of columns
-function _jl_cov_pearson{T}(x::AbstractMatrix, mxs::AbstractVector{T})
-    (n,m) = size(x)
-    R = Array(T, (m,m))
-    for i = 1:m
-        R[i,i] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                  sub(x, (1:n, i)),
-                                  mxs[i], mxs[i])
-
-        for j = (i+1):m
-            R[i,j] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                      sub(x, (1:n, j)),
-                                      mxs[i], mxs[j])
-            R[j,i] = R[i,j]
-        end
-    end
-    return R
+function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix)
+    n = size(x, 1)
+    x0 = x - repmat(mxs, n, 1)
+    return (x0'*x0) / (n - 1)
 end
-cov_pearson(x::AbstractMatrix) = _jl_cov_pearson(x, amap(mean, x, 2))
+cov_pearson(x::AbstractMatrix) = cov_pearson(x, mean(x, 1))
 
 # pearson covariance over all pairs of columns with known means
-function _jl_cov_pearson{T}(x::AbstractMatrix, y::AbstractMatrix, 
-                            mxs::AbstractVector{T}, mys::AbstractVector{T})
-    (n,m) = size(x)
-    R = Array(T, (m,m))
-    for i = 1:m
-        for j = 1:m
-            R[i,j] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                      sub(y, (1:n, j)),
-                                      mxs[i], mys[j])
-        end
-    end
-    return R
+function _jl_cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
+                     mxs::AbstractMatrix, mys::AbstractMatrix)
+    n = size(x, 1)
+    x0 = x - repmat(mxs, n, 1)
+    y0 = y - repmat(mys, n, 1)
+    return (x0'*y0) / (n - 1)
 end
 
 # pearson covariance over all pairs of columns
@@ -194,7 +182,10 @@ function cov_pearson(x::AbstractMatrix, y::AbstractMatrix)
         return cov_pearson(x)
     end
 
-    _jl_cov_pearson(x, y, amap(mean, x, 2), amap(mean, y, 2))
+    n = size(x, 1)
+    mx = mean(x, 1)
+    my = mean(y, 1)
+    return _jl_cov_pearson(x, y, mxs, mys)
 end
 
 # spearman covariance
@@ -236,27 +227,22 @@ function cor_pearson(x::AbstractVector, y::AbstractVector)
 end
 
 # pearson correlation over all pairs of columns
-function cor_pearson(x::AbstractMatrix)
+function cor_pearson{T}(x::AbstractMatrix{T})
     (n,m) = size(x)
-    mxs = amap(mean, x, 2)
+    mxs = mean(x, 1)
     sxs = similar(mxs)
     for i = 1:m
-        sxs[i] = std(x[:,i], mxs[i])
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i])
     end
-    R = _jl_cov_pearson(x, mxs)
+    R = _jl_cov_pearson(x, mxs) ./ (sxs' * sxs)
 
-    for i = 1:m
-        R[i,i] = 1.0
-        for j = (i+1):m
-            R[i,j] /= sxs[i] * sxs[j]
-            R[j,i] = R[i,j]
-        end
-    end
+    R[1:m+1:end] = one(T)
+
     return R
 end
 
 # pearson correlation over all pairs of columns
-function cor_pearson(x::AbstractMatrix, y::AbstractMatrix)
+function cor_pearson{T}(x::AbstractMatrix{T}, y::AbstractMatrix{T})
     if size(x) != size(y)
         error("cor_pearson: incompatible dimensions")
     end
@@ -266,22 +252,16 @@ function cor_pearson(x::AbstractMatrix, y::AbstractMatrix)
     end
 
     (n,m) = size(x)
-    mxs = amap(mean, x, 2)
-    mys = amap(mean, y, 2)
-
+    mxs = mean(x, 1)
+    mys = mean(y, 1)
     sxs = similar(mxs)
     sys = similar(mys)
     for i = 1:m
-        sxs[i] = std(x[:,i], mxs[i])
-        sys[i] = std(y[:,i], mys[i])
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i])
+        sys[i] = std(sub(y, (1:n, i)), mys[i])
     end
-    R = _jl_cov_pearson(x, y, mxs, mys)
+    R = _jl_cov_pearson(x, y, mxs, mys) ./ (sxs' * sys)
 
-    for i = 1:m
-        for j = 1:m
-            R[i,j] /= sxs[i] * sys[j]
-        end
-    end
     return R
 end
 
