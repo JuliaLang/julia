@@ -108,12 +108,10 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-htons(port::Uint16)=ccall(:htons,Uint16,(Uint16,),port)
-
 _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(Ptr{Void},Int32,Function),sock.handle,backlog,make_callback(cb))
 
-_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,htons(addr.port),addr.host)
-_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,htons(addr.port))
+_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
+_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,hton(addr.port))
 _jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
 _jl_tcp_accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
 
@@ -584,7 +582,7 @@ function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port
         error("Name lookup failed")
     end
     sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
-    _jl_sockaddr_set_port(sockaddr,htons(port))
+    _jl_sockaddr_set_port(sockaddr,hton(port))
     err = _jl_connect_raw(sock,sockaddr,(req::Ptr,status::Int32)->connect_callback(sock,status,breakLoop))
     if(err != 0)
         error("Failed to connect to host")

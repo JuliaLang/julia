@@ -338,7 +338,7 @@ void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
         {
             // make sure there is enough data left to read
             if (outbox_raw.size() < pos+4)
-                break;
+                goto done;
 
             // get the size of this argument
             uint32_t arg_size = *((uint32_t*)(&outbox_raw[pos]));
@@ -346,7 +346,7 @@ void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
 
             // make sure there is enough data left to read
             if (outbox_raw.size() < pos+arg_size)
-                break;
+                goto done;
 
             // get the argument
             msg.args.push_back(outbox_raw.substr(pos, arg_size));
@@ -363,6 +363,8 @@ void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
             session_map[session_token].outbox.push_back(msg);
         }
     }
+
+    done:
 
     // unlock the mutex
     pthread_mutex_unlock(&session_mutex);

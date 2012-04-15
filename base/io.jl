@@ -181,12 +181,12 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
-write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
+write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, c::Char) = ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
@@ -194,7 +194,7 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
+    ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
 function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
@@ -214,7 +214,7 @@ end
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 function read(s::IOStream, ::Type{Uint8})
-    b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
+    b = ccall(:jl_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
     end

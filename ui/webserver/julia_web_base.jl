@@ -18,8 +18,8 @@
 # import the message types
 load("./ui/webserver/message_types.h")
 
-#macro debug_only(x); x; end
-macro debug_only(x); end
+macro debug_only(x); x; end
+#macro debug_only(x); end
 
 ###########################################
 # set up the socket connection
@@ -149,7 +149,7 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
             append!(p.curArg.data,arr[pos:(pos+p.curArgLength-p.curArgPos)])
             pos+=p.curArgLength-p.curArgPos;
             push(p.current.args,p.curArg)
-            p.curArg=""
+            p.curArg=ASCIIString(Array(Uint8,0))
             @debug_only begin
                 println("message body complete")
                 println(p.num_args)
