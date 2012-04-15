@@ -1,4 +1,4 @@
-e# subarrays ##
+# subarrays ##
 
 type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
