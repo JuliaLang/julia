@@ -1,4 +1,4 @@
-# subarrays ##
+## subarrays ##
 
 type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
@@ -51,8 +51,7 @@ function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     L = length(i)
     while L > 0 && isa(i[L], Int); L-=1; end
     i0 = map(j -> isa(j, Int) ? (j:j) : j, i[1:L])
-    i1 = i[L+1:end]
-    i = ntuple(length(i), k->(k<=L ? i0[k] : i1[k-L]))
+    i = ntuple(length(i), k->(k<=L ? i0[k] : i[k]))
     SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
 sub(A::AbstractArray, i::RangeIndex...) =
