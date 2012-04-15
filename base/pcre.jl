@@ -100,7 +100,7 @@ function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
               (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
               regex, extra, str, length(str),
-              offset-1, options, ovec, length(ovec))
+              offset, options, ovec, length(ovec))
     if n < -1
         error("pcre_exec: error $n")
     end

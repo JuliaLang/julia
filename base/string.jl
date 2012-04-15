@@ -119,7 +119,7 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-function strchr(s::String, c::Char, o::Integer)
+function search(s::String, c::Char, o::Integer)
     i = nextind(s,o)
     while !done(s,i)
         d, j = next(s,i)
@@ -130,8 +130,11 @@ function strchr(s::String, c::Char, o::Integer)
     end
     return length(s)+1
 end
-strchr(s::String, c::Char) = strchr(s,c,0)
-contains(s::String, c::Char) = strchr(s,c) <= length(s)
+search(s::String, c::Char) = search(s,c,0)
+
+# TODO: search for a substring
+
+contains(s::String, c::Char) = isvalid(s,search(s,c))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -796,9 +799,14 @@ function split(s::String, delims, include_empty::Bool)
     end
     return strs
 end
-
-split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
 split(s::String, x) = split(s, x, true)
+split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
+
+# fast memchr-based split on a single byte for byte strings
+# function split(s::String, d::Uint8, include_empty::Bool)
+#     strs = String[]
+#     while 
+# end
 
 # split on a string literal
 function split(s::String, delim::String, include_empty::Bool)
@@ -1053,6 +1061,13 @@ float(x::String) = float64(x)
 parse_float(x::String) = float64(x)
 parse_float(::Type{Float64}, x::String) = float64(x)
 parse_float(::Type{Float32}, x::String) = float32(x)
+
+for conv in (:float, :float32, :float64,
+             :int, :int8, :int16, :int32, :int64,
+             :uint, :uint8, :uint16, :uint32, :uint64,
+             )
+    @eval ($conv){S<:String}(a::AbstractArray{S}) = map($conv, a)
+end
 
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
