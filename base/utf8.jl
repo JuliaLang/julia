@@ -65,7 +65,7 @@ isvalid(s::UTF8String, i::Integer) =
 
 function ref(s::UTF8String, r::Range1{Int})
     i = isvalid(s,first(r)) ? first(r) : nextind(s,first(r))
-    j = nextind(s,last(r)) - 1
+    j = nextind(s,last(r))-1
     UTF8String(s.data[i:j])
 end
 
@@ -73,7 +73,8 @@ function strchr(s::UTF8String, c::Char, i::Integer)
     if c < 0x80 return memchr(s.data, c, i) end
     while true
         i = memchr(s.data, first_utf8_byte(c), i)
-        if i!=0 || s[i]==c return i end
+        if i==0 || s[i]==c return i end
+        i = next(s,i)[2]
     end
 end
 

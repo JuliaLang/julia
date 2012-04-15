@@ -242,9 +242,9 @@ end
 
 # printing numbers
 @assert string(uint32(-1)) == "0xffffffff"
-@assert hex(0xffffffffffff)=="ffffffffffff"
-@assert hex(0xffffffffffff+1)=="1000000000000"
-@assert hex(typemax(Uint64))=="ffffffffffffffff"
+@assert hex(0xffffffffffff) == "ffffffffffff"
+@assert hex(0xffffffffffff+1) == "1000000000000"
+@assert hex(typemax(Uint64)) == "ffffffffffffffff"
 
 @assert int2str(typemin(Int64), 10) == "-9223372036854775808"
 @assert int2str(typemin(Int16), 10) == "-32768"
@@ -252,3 +252,54 @@ end
 
 # string manipulation
 @assert strip("\t  hi   \n") == "hi"
+
+# ascii strchr
+astr = "Hello, world.\n"
+@assert strchr(astr, 'x') == 0
+@assert strchr(astr, 'H') == 1
+@assert strchr(astr, 'l') == 3
+@assert strchr(astr, 'l', 4) == 4
+@assert strchr(astr, 'l', 5) == 11
+@assert strchr(astr, 'l', 12) == 0
+@assert strchr(astr, ',') == 6
+@assert strchr(astr, ',', 7) == 0
+@assert strchr(astr, '\n') == 14
+
+# utf-8 strchr
+u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+@assert strchr(u8str, 'z') == 0
+@assert strchr(u8str, '∀') == 1
+@assert strchr(u8str, '∀', 2) == 0
+@assert strchr(u8str, '∃') == 13
+@assert strchr(u8str, '∃', 14) == 0
+@assert strchr(u8str, 'x') == 26
+@assert strchr(u8str, 'x', 27) == 43
+@assert strchr(u8str, 'x', 44) == 0
+@assert strchr(u8str, 'δ') == 17
+@assert strchr(u8str, 'δ', 18) == 33
+@assert strchr(u8str, 'δ', 34) == 0
+
+# generic strchr
+gastr = GenericString(astr)
+@assert strchr(gastr, 'x') == 0
+@assert strchr(gastr, 'H') == 1
+@assert strchr(gastr, 'l') == 3
+@assert strchr(gastr, 'l', 4) == 4
+@assert strchr(gastr, 'l', 5) == 11
+@assert strchr(gastr, 'l', 12) == 0
+@assert strchr(gastr, ',') == 6
+@assert strchr(gastr, ',', 7) == 0
+@assert strchr(gastr, '\n') == 14
+
+gu8str = GenericString(u8str)
+@assert strchr(gu8str, 'z') == 0
+@assert strchr(gu8str, '∀') == 1
+@assert strchr(gu8str, '∀', 2) == 0
+@assert strchr(gu8str, '∃') == 13
+@assert strchr(gu8str, '∃', 14) == 0
+@assert strchr(gu8str, 'x') == 26
+@assert strchr(gu8str, 'x', 27) == 43
+@assert strchr(gu8str, 'x', 44) == 0
+@assert strchr(gu8str, 'δ') == 17
+@assert strchr(gu8str, 'δ', 18) == 33
+@assert strchr(gu8str, 'δ', 34) == 0

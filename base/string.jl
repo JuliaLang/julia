@@ -15,13 +15,13 @@ ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 ref(s::String, v::AbstractVector) =
-    print_to_string(length(v), @thunk for i in v; print(s[i]); end)
+    print_to_string(length(v), @thunk for i in v print(s[i]) end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
-print(s::String) = for c=s; print(c); end
-print(x...) = for i=x; print(i); end
+print(s::String) = for c in s print(c) end
+print(x...) = for i in x print(i) end
 println(args...) = print(args..., '\n')
 
 show(s::String) = print_quoted(s)
@@ -122,7 +122,8 @@ end
 typealias Chars Union(Char,AbstractVector{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
-    i = nextind(s,i)
+    if i < 1 error("strchr: index out of range") end
+    i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
         if contains(c,d)
@@ -130,7 +131,7 @@ function strchr(s::String, c::Chars, i::Integer)
         end
         i = j
     end
-    return length(s)+1
+    return 0
 end
 strchr(s::String, c::Chars) = strchr(s,c,start(s))
 
@@ -1079,9 +1080,10 @@ function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-# find the index of the first occurrence of a byte value in a byte array
+# find the index of the first occurrence of a value in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
+    if i < 1 error("memchr: index out of range") end
     n = length(a)
     if i > n return 0 end
     p = pointer(a)
