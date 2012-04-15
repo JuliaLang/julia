@@ -237,8 +237,8 @@ function alignment(x::Rational)
                    (strlen(m.captures[1]), strlen(m.captures[2]))
 end
 
-const _jl_undef_ref_str = "undef"
-const _jl_undef_ref_alignment = (2,3)
+const _jl_undef_ref_str = "#undef"
+const _jl_undef_ref_alignment = (3,3)
 
 function alignment(
     X::AbstractMatrix,
@@ -475,14 +475,7 @@ function showall(a::AbstractArray)
     cartesian_map(print_slice, tail)
 end
 
-function show(v::AbstractVector)
-    if is(eltype(v),Any)
-        opn = "{"
-        cls = "}"
-    else
-        opn = "["
-        cls = "]"
-    end
+function show_vector(v, opn, cls)
     X = reshape(v,(1,length(v)))
     print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
 end
@@ -495,3 +488,6 @@ function show(cmds::Cmds)
         show(cmds.pipeline)
     end
 end
+
+show(v::AbstractVector{Any}) = show_vector(v, "{", "}")
+show(v::AbstractVector)      = show_vector(v, "[", "]")

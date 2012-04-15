@@ -14,6 +14,8 @@
 #ifdef __WIN32__
 #include <malloc.h>
 #endif
+#include <ctype.h>
+#include <math.h>
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -227,15 +229,16 @@ JL_CALLABLE(jl_f_apply)
 
 // eval -----------------------------------------------------------------------
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
-                                  volatile size_t *plineno);
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno);
 
-jl_value_t *jl_eval_module_expr(jl_expr_t *ex, volatile size_t *plineno)
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
     jl_sym_t *name = (jl_sym_t*)jl_exprarg(ex, 0);
-    assert(jl_is_symbol(name));
+    if (!jl_is_symbol(name)) {
+        jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
+    }
     if (name == jl_current_module->name) {
         jl_errorf("module name %s conflicts with enclosing module", name->name);
     }
@@ -358,8 +361,7 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 
 extern int jl_in_inference;
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast,
-                                  volatile size_t *plineno)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
 {
     //jl_show(ex);
     //jl_printf(jl_stdout_tty, "\n");
@@ -434,68 +436,57 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
     return jl_toplevel_eval_flex(v, 1, NULL);
 }
 
-int asprintf(char **strp, const char *fmt, ...);
+int asprintf(char **strp, const char *fmt, ...);#
 
 // load toplevel expressions, from (file ...)
 static int jl_load_progress_max = 0;
 static int jl_load_progress_i = 0;
 DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
-void jl_load_file_expr(char *fname, jl_value_t *ast)
+
+// repeatedly call jl_parse_next and eval everything
+static int jl_load_progress_i = 0;
+DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
+// repeatedly call jl_parse_next and eval everything
+void jl_parse_eval_all(char *fname)
 {
 	if (jl_load_progress_max > 0) {
 		jl_load_progress_i++;
 		ios_printf(ios_stdout, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
 		ios_flush(ios_stdout);
-	}
-    jl_array_t *b = ((jl_expr_t*)ast)->args;
-    size_t i;
-    volatile size_t lineno=0;
-    if (((jl_expr_t*)ast)->head == jl_continue_sym) {
-        jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(ast,0)));
     }
-    char oldcwd[512];
-    char newcwd[512];
-    get_cwd(oldcwd, sizeof(oldcwd));
-    char *sep = strrchr(fname, PATHSEP);
-    if (sep
-#ifdef __WIN32__
-            ||(sep=strrchr(fname, '/'))
-#endif
-            ) {
-        size_t n = (sep - fname)+1;
-        if (n > sizeof(newcwd)-1) n = sizeof(newcwd)-1;
-        strncpy(newcwd, fname, n);
-        newcwd[n] = '\0';
-        set_cwd(newcwd);
-    }
+    int lineno=0;
+    jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
+    JL_GC_PUSH(&fn, &ln, &form);
     JL_TRY {
         jl_register_toplevel_eh();
         // handle syntax error
-        if (((jl_expr_t*)ast)->head == error_sym) {
-            jl_interpret_toplevel_expr(ast);
-        }
-        for(i=0; i < b->length; i++) {
-            // process toplevel form
-            jl_value_t *form = jl_cellref(b, i);
-            if (jl_is_linenode(form)) {
-                lineno = jl_linenode_line(form);
+        while (1) {
+            form = jl_parse_next(&lineno);
+            if (form == NULL)
+                break;
+            if (jl_is_expr(form)) {
+                if (((jl_expr_t*)form)->head == jl_continue_sym) {
+                    jl_errorf("syntax error: %s", jl_string_data(jl_exprarg(form,0)));
+                }
+                if (((jl_expr_t*)form)->head == error_sym) {
+                    jl_interpret_toplevel_expr(form);
+                }
             }
-            else {
-                (void)jl_toplevel_eval_flex(form, 0, &lineno);
-            }
+            (void)jl_toplevel_eval_flex(form, 0, &lineno);
         }
     }
     JL_CATCH {
-        if (sep) set_cwd(oldcwd);
-        jl_value_t *fn=NULL, *ln=NULL;
-        JL_GC_PUSH(&fn, &ln);
+        jl_stop_parsing();
         fn = jl_pchar_to_string(fname, strlen(fname));
         ln = jl_box_long(lineno);
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
-    if (sep) set_cwd(oldcwd);
+    jl_stop_parsing();
+    JL_GC_POP();
 }
+
+
 
 // fpath needs to be freed if != fname
 char *jl_find_file_in_path(const char *fname)
@@ -525,14 +516,8 @@ char *jl_find_file_in_path(const char *fname)
 void jl_load(const char *fname)
 {
     char *fpath = jl_find_file_in_path(fname);
-    jl_value_t *ast = jl_parse_file(fpath);
-    if (ast == (jl_value_t*)jl_null)  {
-        if (fpath != fname) free(fpath);
-	jl_errorf("could not open file %s", fpath);
-    }
-    JL_GC_PUSH(&ast);
-    jl_load_file_expr(fpath, ast);
-    JL_GC_POP();
+    jl_start_parsing_file(fpath);
+    jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
 }
 
@@ -774,7 +759,15 @@ DLLEXPORT int jl_strtod(char *str, double *out)
     char *p;
     errno = 0;
     *out = strtod(str, &p);
-    return (p == str || errno != 0);
+    if (p == str ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
+        return 1;
+    while (*p != '\0') {
+        if (!isspace(*p))
+            return 1;
+        p++;
+    }
+    return 0;
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)
@@ -782,7 +775,15 @@ DLLEXPORT int jl_strtof(char *str, float *out)
     char *p;
     errno = 0;
     *out = strtof(str, &p);
-    return (p == str || errno != 0);
+    if (p == str ||
+        (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
+        return 1;
+    while (*p != '\0') {
+        if (!isspace(*p))
+            return 1;
+        p++;
+    }
+    return 0;
 }
 
 // showing --------------------------------------------------------------------
@@ -827,10 +828,7 @@ static void show_function(jl_value_t *v)
 static void show_type(jl_value_t *t)
 {
     uv_stream_t *s = jl_current_output_stream();
-    if (t == (jl_value_t*)jl_function_type) {
-        jl_puts("Function", s);
-    }
-    else if (jl_is_union_type(t)) {
+    if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             jl_write(s, "None", 4);
         }

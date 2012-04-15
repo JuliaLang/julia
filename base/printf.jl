@@ -128,7 +128,7 @@ end
 ### printf formatter generation ###
 
 function _jl_special_handler(flags::ASCIIString, width::Int)
-    x = gensym()
+    @gensym x
     blk = expr(:block)
     pad = contains(flags,'-') ? rpad : lpad
     pos = contains(flags,'+') ? "+" :
@@ -146,7 +146,7 @@ function _jl_printf_pad(m::Int, n, c::Char)
     if m <= 1
         :($n > 0 && write(out,$c))
     else
-        i = gensym()
+        @gensym i
         quote
             $i = $n
             while $i > 0
@@ -423,7 +423,7 @@ function _jl_printf_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (0): pad left with zeros
     #  (-): left justify
     #
-    x = gensym()
+    @gensym x
     blk = expr(:block, :($x = char($x)))
     if width > 1 && !contains(flags,'-')
         p = contains(flags,'0') ? '0' : ' '
@@ -444,7 +444,7 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (0): pad left with zeros
     #  (-): left justify
     #
-    x = gensym()
+    @gensym x
     blk = expr(:block)
     if width > 0
         if !contains(flags,'#')
@@ -475,7 +475,7 @@ function _jl_printf_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
     #
-    x = gensym()
+    @gensym x
     blk = expr(:block)
     ptrwidth = WORD_SIZE>>2
     width -= ptrwidth+2
