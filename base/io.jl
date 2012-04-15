@@ -1,3 +1,5 @@
+abstract IO
+
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
@@ -7,7 +9,8 @@ if sizeof_off_t == 4
 else
     typealias FileOffset Int64
 end
-abstract Stream
+
+abstract Stream <: IO
 
 type IOStream <: Stream
     ios::Array{Uint8,1}
@@ -22,10 +25,10 @@ type IOStream <: Stream
         end
         return x
     end
+    IOStream(name::String) = IOStream(name, true)
 
     IOStream(name::String) = IOStream(name,true)
 end
-
 
 # "own" means the descriptor will be closed with the IOStream
 function fdio(name::String, fd::Integer, own::Bool)
@@ -44,7 +47,6 @@ make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
 show(s::IOStream) = print("IOStream(",s.name,")")
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
-
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
@@ -81,8 +83,7 @@ memio() = memio(0, true)
 
 convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
-## IO
-current_output_stream() = ccall(:jl_current_output_stream_obj, Stream, ())
+current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
 
 set_current_output_stream(s::Stream) =
     ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
@@ -103,7 +104,7 @@ function _jl_with_output_stream(s::Stream, f::Function, args...)
         f(args...)
     catch e
         # only add finalizer if takebuf doesn't happen
-        #finalizer(s, close)
+        finalizer(s, close)
         throw(e)
     end
 end
@@ -180,26 +181,23 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::ASCIIString) = ccall(:jl_puts, PtrSize, (Ptr{Uint8},Ptr{Void}),b.data,s.ios)
-write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, convert(Ptr{Void}, s.ios))
-write(s::IOStream,c::Char) = ccall(:jl_pututf8, PtrSize, (Ptr{Void},Char), s.ios,c)
+write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, c::Char) = ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:jl_write, Uint,
-              (Ptr{Void}, Ptr{Void}, Uint),
-              convert(Ptr{Void}, s.ios), a, numel(a)*sizeof(T))
-
+        ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+              s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
     end
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),convert(Ptr{Void}, s.ios), p, nb)
+    ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
-function write{T,N}(s::Stream, a::SubArray{T,N,Array})
+function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
@@ -216,7 +214,7 @@ end
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 function read(s::IOStream, ::Type{Uint8})
-    b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
+    b = ccall(:jl_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
     end

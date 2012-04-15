@@ -280,7 +280,7 @@ type RemoteRef
     function RemoteRef(w, wh, id)
         r = new(w,wh,id)
         found = key(_jl_client_refs, r, false)
-        if bool(found)
+        if !is(found,false)
             return found
         end
         _jl_client_refs[r] = true
@@ -1290,7 +1290,7 @@ function sync_end()
 end
 
 macro sync(block)
-    v = gensym()
+    @gensym v
     quote
         sync_begin()
         $v = $block
@@ -1484,7 +1484,7 @@ function pfor(f, r::Range1{Int})
 end
 
 function make_preduce_body(reducer, var, body)
-    ac, lo, hi = gensym(3)
+    @gensym ac lo hi
     localize_vars(
     quote
         function (($lo)::Int, ($hi)::Int)
@@ -1500,7 +1500,7 @@ function make_preduce_body(reducer, var, body)
 end
 
 function make_pfor_body(var, body)
-    lo, hi = gensym(2)
+    @gensym lo hi
     localize_vars(
     quote
         function (($lo)::Int, ($hi)::Int)

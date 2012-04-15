@@ -33,25 +33,25 @@ end
 
 # print elapsed time, return expression value
 macro time(ex)
-  t0, val, t1 = gensym(3)
-  quote
-    local $t0 = time()
-    local $val = $ex
-    local $t1 = time()
-    println("elapsed time: ", $t1-$t0, " seconds")
-    $val
-  end
+    @gensym t0 val t1
+    quote
+        local $t0 = time()
+        local $val = $ex
+        local $t1 = time()
+        println("elapsed time: ", $t1-$t0, " seconds")
+        $val
+    end
 end
 
 # print nothing, return elapsed time
 macro elapsed(ex)
-  t0, val, t1 = gensym(3)
-  quote
-    local $t0 = time()
-    local $val = $ex
-    local $t1 = time()
-    $t1-$t0
-  end
+    @gensym t0 val t1
+    quote
+        local $t0 = time()
+        local $val = $ex
+        local $t1 = time()
+        $t1-$t0
+    end
 end
 
 function peakflops()

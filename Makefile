@@ -16,12 +16,12 @@ julia-debug julia-release:
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl
-	$(QUIET_JULIA) ./julia -b base/stage0.jl
+	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
 sys.ji: VERSION sys0.ji base/*.jl
-	$(QUIET_JULIA) ./julia `test -f sys.ji && echo base/stage1.jl || echo -J sys0.ji base/stage1.jl`
+	$(QUIET_JULIA) cd base && ../julia `test -f ../sys.ji && echo stage1.jl || echo -J sys0.ji stage1.jl`
 
 install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/lib
