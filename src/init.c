@@ -155,6 +155,45 @@ long getPageSize (void) {
 }
 #endif
 
+void *init_stdio_handle(uv_file fd,int readable)
+{
+    void *handle;
+    switch(uv_guess_handle(fd))
+    {
+        case UV_TTY:
+            handle = malloc(sizeof(uv_tty_t));
+            uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
+            ((uv_tty_t*)handle)->data=0;
+            uv_tty_set_mode((void*)handle,1); //raw stdio
+            break;
+        case UV_NAMED_PIPE:
+            handle = malloc(sizeof(uv_pipe_t));
+            uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,0);
+            uv_pipe_open((uv_pipe_t*)handle,fd);
+            break;
+        case UV_FILE:
+            if(readable)
+                jl_error("stdin readine from files is not yet supported");
+            if(fd == 1)
+                handle=ios_stdout;
+            else if(fd == 2)
+                handle=ios_stderr;
+            else
+                jl_error("unknown file stream");
+            break;
+        default:
+            jl_error("This type of handle for stdio is not yet supported!");
+            break;
+    }
+    return handle;
+}
+
+void init_stdio()
+{
+    jl_stdin_tty = init_stdio_handle(0,1);
+    jl_stdout_tty = init_stdio_handle(1,0);
+    jl_stderr_tty = init_stdio_handle(2,0);
+}
 
 void julia_init(char *imageFile)
 {
@@ -170,17 +209,7 @@ void julia_init(char *imageFile)
     jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
     jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
     //init io
-    jl_stdin_tty = malloc(sizeof(uv_tty_t));
-    jl_stdout_tty = malloc(sizeof(uv_tty_t));
-    jl_stderr_tty = malloc(sizeof(uv_tty_t));
-    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdin_tty,0,1);//stdin
-    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stdout_tty,1,0);//stdout
-    uv_tty_init(jl_io_loop,(uv_tty_t*)jl_stderr_tty,2,0);//stderr
-    jl_stdin_tty->data=0;
-    jl_stdout_tty->data=0;
-    jl_stderr_tty->data=0;
-    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1); //raw input
-    uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,1); //raw output
+    init_stdio();
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();
