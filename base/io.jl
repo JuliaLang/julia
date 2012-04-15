@@ -10,6 +10,8 @@ else
     typealias FileOffset Int64
 end
 
+abstract Stream <: IO
+
 type IOStream <: Stream
     ios::Array{Uint8,1}
     name::String
@@ -83,10 +85,10 @@ convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
 
 current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
 
-set_current_output_stream(s::IOStream) =
+set_current_output_stream(s::Stream) =
     ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
 
-function with_output_stream(s::IOStream, f::Function, args...)
+function with_output_stream(s::Stream, f::Function, args...)
     try
         set_current_output_stream(s)
         f(args...)
@@ -96,7 +98,7 @@ function with_output_stream(s::IOStream, f::Function, args...)
 end
 
 # custom version for print_to_*
-function _jl_with_output_stream(s::IOStream, f::Function, args...)
+function _jl_with_output_stream(s::Stream, f::Function, args...)
     try
         set_current_output_stream(s)
         f(args...)

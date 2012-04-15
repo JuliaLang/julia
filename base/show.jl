@@ -13,7 +13,6 @@ show(tn::TypeName) = show(tn.name)
 show(::Nothing) = print("nothing")
 show(b::Bool) = print(b ? "true" : "false")
 show(n::Integer)  = print(dec(int64(n)))
-show(s::ASCIIString) = print(s)
 
 function show_trailing_hex(n::Uint64, ndig::Integer)
     for s = ndig-1:-1:0
@@ -478,15 +477,6 @@ end
 function show_vector(v, opn, cls)
     X = reshape(v,(1,length(v)))
     print_matrix(X, 1, tty_cols(), opn, ", ", cls, "  ...  ", ":", 5, 5)
-end
-
-show(cmd::Cmd) = print(" `$(cmd.exec)` ")
-function show(cmds::Cmds)
-    show_delim_array(cmds.siblings,' ','&',' ',false)
-    if(isa(cmds.pipeline,Cmds))
-        print("|")
-        show(cmds.pipeline)
-    end
 end
 
 show(v::AbstractVector{Any}) = show_vector(v, "{", "}")

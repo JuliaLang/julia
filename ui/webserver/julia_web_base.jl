@@ -186,12 +186,14 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
 
                          __all_nothing = false
 
+                         __expr_multitoken = isa(__expr,Expr)
+
                          # stop now if there was a parsing error
-                         if __expr.head == :error
+                         if __expr_multitoken && __expr.head == :error
                             __write_message(client,__Message(__MSG_OUTPUT_PARSE_ERROR, {__expr.args[1]}))
                             breakLoop=true
                             break
-                         elseif __expr.head == :continue
+                         elseif __expr_multitoken && __expr.head == :continue
                             continue
                          end
 

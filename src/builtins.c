@@ -436,16 +436,13 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
     return jl_toplevel_eval_flex(v, 1, NULL);
 }
 
-int asprintf(char **strp, const char *fmt, ...);#
+int asprintf(char **strp, const char *fmt, ...);
 
 // load toplevel expressions, from (file ...)
 static int jl_load_progress_max = 0;
 static int jl_load_progress_i = 0;
 DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
 
-// repeatedly call jl_parse_next and eval everything
-static int jl_load_progress_i = 0;
-DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
