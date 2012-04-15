@@ -83,20 +83,17 @@ contains(s::String, r::Regex) = contains(r, s, r.options & PCRE_EXECUTE_MASK)
 contains(s::String, r::Regex, opts::Integer) =
     pcre_exec(r.regex, r.extra, cstring(s), 0, opts, false)
 
-function match(re::Regex, str::ByteString, offset::Integer, opts::Integer)
-    m, n = pcre_exec(re.regex, re.extra, str, offset, opts, true)
+function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
+    m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]]))
     off = map(i->m[2i+1]+1, [1:n])
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, o::Integer, p::Integer) = match(r, cstring(s), o, p)
-match(r::Regex, s::String, o::Integer) = match(r, s, o, r.options & PCRE_EXECUTE_MASK)
-match(r::Regex, s::String) = match(r, s, 0)
-
-search(s::String, r::Regex, off::Integer) = match(r,s,off)
-search(s::String, r::Regex) = match(r,s)
+match(r::Regex, s::String, i::Integer, o::Integer) = match(r, cstring(s), i, o)
+match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE_EXECUTE_MASK)
+match(r::Regex, s::String) = match(r, s, start(s))
 
 type RegexMatchIterator
     regex::Regex
@@ -107,7 +104,7 @@ end
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string)
 done(itr::RegexMatchIterator, m) = m == nothing
 next(itr::RegexMatchIterator, m) =
-    (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 0 : length(m.match)-1)))
+    (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 1 : length(m.match))))
 
 each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
 each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)

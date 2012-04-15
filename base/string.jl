@@ -119,22 +119,24 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-function search(s::String, c::Char, o::Integer)
-    i = nextind(s,o)
+typealias Chars Union(Char,AbstractVector{Char})
+
+function strchr(s::String, c::Chars, i::Integer)
+    i = nextind(s,i)
     while !done(s,i)
         d, j = next(s,i)
-        if c == d
+        if contains(c,d)
             return i
         end
         i = j
     end
     return length(s)+1
 end
-search(s::String, c::Char) = search(s,c,0)
+strchr(s::String, c::Chars) = strchr(s,c,start(s))
 
 # TODO: search for a substring
 
-contains(s::String, c::Char) = isvalid(s,search(s,c))
+contains(s::String, c::Char) = (strchr(s,c)!=0)
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -1079,14 +1081,14 @@ end
 
 # find the index of the first occurrence of a byte value in a byte array
 
-function memchr(a::Array{Uint8,1}, b::Integer, off::Integer)
+function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
     n = length(a)
-    if n < off error("memchr: index out of range") end
+    if i > n return 0 end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+off, b, n-off)
-    q != C_NULL ? int(q-p+1) : n+1
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
+    q == C_NULL ? 0 : int(q-p+1)
 end
-memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,0)
+memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,1)
 
 # concatenate byte arrays into a single array
 

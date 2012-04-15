@@ -69,11 +69,11 @@ function ref(s::UTF8String, r::Range1{Int})
     UTF8String(s.data[i:j])
 end
 
-function search(s::UTF8String, c::Char, o::Integer)
-    if c < 0x80 return memchr(s.data, c, o) end
+function strchr(s::UTF8String, c::Char, i::Integer)
+    if c < 0x80 return memchr(s.data, c, i) end
     while true
-        o = memchr(s.data, first_utf8_byte(c), o)
-        if length(s) < o || s[o]==c return o end
+        i = memchr(s.data, first_utf8_byte(c), i)
+        if i!=0 || s[i]==c return i end
     end
 end
 
