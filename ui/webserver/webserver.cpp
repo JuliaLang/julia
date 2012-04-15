@@ -563,6 +563,7 @@ void *run_event_loop(void *token)
 void process_exited(uv_process_t*p, int exit_status, int term_signal)
 {
     session_map[((clientData*)p->data)->session_token].status = SESSION_TERMINATING;
+    cout<<"Process Exited";
 }
 
 // create a session and return a session token
@@ -600,18 +601,23 @@ string create_session(bool idle)
     uv_process_options_t opts;
     opts.stdin_stream = session_data.julia_in;
     opts.stdout_stream = session_data.julia_out;
-    //opts.stdout_stream=0;
+#if 0
+    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
+#else
+    char arg0[]="./julia-release-readline";
+    char arg1[]="ui/webserver/julia_web_base.jl";
+    char *argv[3]={arg0,arg1,NULL};
+#endif
     opts.stderr_stream = 0; //parent stderr
     opts.exit_cb=&process_exited;
     opts.cwd=NULL; //cwd
     #ifndef __WIN32__
     opts.env=environ;
+    #else
+    opts.env=NULL;
     #endif
-    char arg0[] = "./julia-debug-readline";
-    char arg1[] = "ui/webserver/julia_web_base.jl";
-	char *argv[3] = {arg0, arg1, NULL};
     opts.args=argv;
-    opts.file=arg0;
+    opts.file=argv[0];
     uv_spawn(uv_default_loop(),session_data.proc,opts);
 
     clientData *data = new clientData;
@@ -895,7 +901,7 @@ void get_response(request* req,uv_stream_t *client)
 
     reading_in_progress *p = (reading_in_progress *)client->data;
     p->cstr = new char [response.size()];
-    strcpy (p->cstr, response.data());
+    memcpy (p->cstr, response.data(),response.size());
     // write the response
     uv_buf_t buf;
     buf.base=p->cstr;

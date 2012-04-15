@@ -158,7 +158,9 @@ long getPageSize (void) {
 void *init_stdio_handle(uv_file fd,int readable)
 {
     void *handle;
-    switch(uv_guess_handle(fd))
+    int err;
+    uv_handle_type type = uv_guess_handle(fd);
+    switch(type)
     {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
@@ -170,6 +172,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             handle = malloc(sizeof(uv_pipe_t));
             uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,0);
             uv_pipe_open((uv_pipe_t*)handle,fd);
+            ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_FILE:
             if(readable)
@@ -182,7 +185,9 @@ void *init_stdio_handle(uv_file fd,int readable)
                 jl_error("unknown file stream");
             break;
         default:
-            jl_error("This type of handle for stdio is not yet supported!");
+            err = GetLastError();
+            handle=0;
+            ios_puts("This type of handle for stdio is not yet supported!",ios_stderr);
             break;
     }
     return handle;

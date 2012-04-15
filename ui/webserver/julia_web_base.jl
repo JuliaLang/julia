@@ -18,8 +18,8 @@
 # import the message types
 load("./ui/webserver/message_types.h")
 
-macro debug_only(x); x; end
-#macro debug_only(x); end
+#macro debug_only(x); x; end
+macro debug_only(x); end
 
 ###########################################
 # set up the socket connection
@@ -44,6 +44,7 @@ end
 
 (port,sock) = open_any_tcp_port(4444,make_callback(connect_cb))
 
+set_current_output_stream(STDOUT)
 # print the socket number so the server knows what it is
 println(int16(port))
 
