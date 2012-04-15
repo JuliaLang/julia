@@ -275,7 +275,7 @@ function help()
     print(
 " Welcome to Julia. The full manual is available at
 
-    https://github.com/JuliaLang/julia/wiki/
+    http://julialang.org/manual/
 
  To get help on a function, try help(function). To search all help text,
  try apropos(\"string\"). To see available functions, try help(category),
