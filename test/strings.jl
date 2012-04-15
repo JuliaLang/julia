@@ -255,51 +255,39 @@ end
 
 # ascii strchr
 astr = "Hello, world.\n"
-@assert strchr(astr, 'x') == 0
-@assert strchr(astr, 'H') == 1
-@assert strchr(astr, 'l') == 3
-@assert strchr(astr, 'l', 4) == 4
-@assert strchr(astr, 'l', 5) == 11
-@assert strchr(astr, 'l', 12) == 0
-@assert strchr(astr, ',') == 6
-@assert strchr(astr, ',', 7) == 0
-@assert strchr(astr, '\n') == 14
+for str in {astr, GenericString(astr)}
+    @assert strchr(str, 'x') == 0
+    @assert strchr(str, '\0') == 0
+    @assert strchr(str, '\u80') == 0
+    @assert strchr(str, '∀') == 0
+    @assert strchr(str, 'H') == 1
+    @assert strchr(str, 'l') == 3
+    @assert strchr(str, 'l', 4) == 4
+    @assert strchr(str, 'l', 5) == 11
+    @assert strchr(str, 'l', 12) == 0
+    @assert strchr(str, ',') == 6
+    @assert strchr(str, ',', 7) == 0
+    @assert strchr(str, '\n') == 14
+end
 
 # utf-8 strchr
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
-@assert strchr(u8str, 'z') == 0
-@assert strchr(u8str, '∀') == 1
-@assert strchr(u8str, '∀', 2) == 0
-@assert strchr(u8str, '∃') == 13
-@assert strchr(u8str, '∃', 14) == 0
-@assert strchr(u8str, 'x') == 26
-@assert strchr(u8str, 'x', 27) == 43
-@assert strchr(u8str, 'x', 44) == 0
-@assert strchr(u8str, 'δ') == 17
-@assert strchr(u8str, 'δ', 18) == 33
-@assert strchr(u8str, 'δ', 34) == 0
-
-# generic strchr
-gastr = GenericString(astr)
-@assert strchr(gastr, 'x') == 0
-@assert strchr(gastr, 'H') == 1
-@assert strchr(gastr, 'l') == 3
-@assert strchr(gastr, 'l', 4) == 4
-@assert strchr(gastr, 'l', 5) == 11
-@assert strchr(gastr, 'l', 12) == 0
-@assert strchr(gastr, ',') == 6
-@assert strchr(gastr, ',', 7) == 0
-@assert strchr(gastr, '\n') == 14
-
-gu8str = GenericString(u8str)
-@assert strchr(gu8str, 'z') == 0
-@assert strchr(gu8str, '∀') == 1
-@assert strchr(gu8str, '∀', 2) == 0
-@assert strchr(gu8str, '∃') == 13
-@assert strchr(gu8str, '∃', 14) == 0
-@assert strchr(gu8str, 'x') == 26
-@assert strchr(gu8str, 'x', 27) == 43
-@assert strchr(gu8str, 'x', 44) == 0
-@assert strchr(gu8str, 'δ') == 17
-@assert strchr(gu8str, 'δ', 18) == 33
-@assert strchr(gu8str, 'δ', 34) == 0
+for str in {u8str, GenericString(u8str)}
+    @assert strchr(str, 'z') == 0
+    @assert strchr(str, '\0') == 0
+    @assert strchr(str, '\u80') == 0
+    @assert strchr(str, '∄') == 0
+    @assert strchr(str, '∀') == 1
+    @assert strchr(str, '∀', 2) == 0
+    @assert strchr(str, '∃') == 13
+    @assert strchr(str, '∃', 14) == 0
+    @assert strchr(str, 'x') == 26
+    @assert strchr(str, 'x', 27) == 43
+    @assert strchr(str, 'x', 44) == 0
+    @assert strchr(str, 'δ') == 17
+    @assert strchr(str, 'δ', 18) == 33
+    @assert strchr(str, 'δ', 34) == 0
+    @assert strchr(str, 'ε') == 5
+    @assert strchr(str, 'ε', 6) == 54
+    @assert strchr(str, 'ε', 55) == 0
+end
