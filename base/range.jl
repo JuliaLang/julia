@@ -16,8 +16,9 @@ type Range{T<:Real} <: Ranges{T}
         new(start, step, len)
     end
     Range(start::T, step::T, len::Integer) = Range(start, step, int(len))
+    Range(start::T, step, len::Integer) = Range(start, convert(T,step), int(len))
 end
-Range{T}(start::T, step::T, len::Integer) = Range{T}(start, step, len)
+Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
 type Range1{T<:Real} <: Ranges{T}
     start::T
