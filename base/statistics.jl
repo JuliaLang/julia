@@ -14,38 +14,38 @@ end
 
 ## variance with known mean
 # generic version: only found to be faster for ranges
-function var(v::Ranges, m::Number, uncorr::Bool)
+function var(v::Ranges, m::Number, corrected::Bool)
     n = numel(v)
     d = 0.0
     for x in v
         d += abs2(x - m)
     end
-    return d / (n - (uncorr ? 0 : 1))
+    return d / (n - (corrected ? 1 : 0))
 end
-var(v::Ranges, m::Number) = var(v, m, false)
+var(v::Ranges, m::Number) = var(v, m, true)
 # vectorized version
-function var(v::AbstractVector, m::Number, uncorr::Bool)
+function var(v::AbstractVector, m::Number, corrected::Bool)
     n = length(v)
     x = v - m
-    return dot(x, x) / (n - (uncorr ? 0 : 1))
+    return dot(x, x) / (n - (corrected ? 1 : 0))
 end
-var(v::AbstractVector, m::Number) = var(v, m, false)
-var(v::AbstractArray, m::Number, uncorr::Bool) = var(reshape(v, numel(v)), m, uncorr)
-var(v::AbstractArray, m::Number) = var(v, m, false)
+var(v::AbstractVector, m::Number) = var(v, m, true)
+var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, numel(v)), m, corrected)
+var(v::AbstractArray, m::Number) = var(v, m, true)
 
 ## variance
-var(v::Ranges, uncorr::Bool) = var(v, mean(v), uncorr)
-var(v::AbstractVector, uncorr::Bool) = var(v, mean(v), uncorr)
-var(v::AbstractArray, uncorr::Bool) = var(reshape(v, numel(v)), uncorr)
-var(v::AbstractArray) = var(v, false)
+var(v::Ranges, corrected::Bool) = var(v, mean(v), corrected)
+var(v::AbstractVector, corrected::Bool) = var(v, mean(v), corrected)
+var(v::AbstractArray, corrected::Bool) = var(reshape(v, numel(v)), corrected)
+var(v::AbstractArray) = var(v, true)
 
 ## standard deviation with known mean
-std(v::AbstractArray, m::Number, uncorr::Bool) = sqrt(var(v, m, uncorr))
-std(v::AbstractArray, m::Number) = std(v, m, false)
+std(v::AbstractArray, m::Number, corrected::Bool) = sqrt(var(v, m, corrected))
+std(v::AbstractArray, m::Number) = std(v, m, true)
 
 ## standard deviation
-std(v::AbstractArray, uncorr::Bool) = std(v, mean(v), uncorr)
-std(v::AbstractArray) = std(v, false)
+std(v::AbstractArray, corrected::Bool) = std(v, mean(v), corrected)
+std(v::AbstractArray) = std(v, true)
 
 ## median absolute deviation with known center
 mad(v::AbstractArray, center::Number) = median(abs(v - center))
@@ -145,129 +145,129 @@ end
 ## pearson covariance functions ##
 
 # pearson covariance between two vectors, with known means
-function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, uncorr::Bool)
+function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
     n = numel(x)
     x0 = x - mx
     y0 = y - my
-    return (x0'*y0)[1] / (n - (uncorr ? 0 : 1))
+    return (x0'*y0)[1] / (n - (corrected ? 1 : 0))
 end
 
 # pearson covariance between two vectors
-function cov_pearson(x::AbstractVector, y::AbstractVector, uncorr::Bool)
+function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     if numel(x) != numel(y) 
         error("cov_pearson: incompatible dimensions")
     end
 
     mx = mean(x)
     my = mean(y)
-    _jl_cov_pearson1(x, y, mx, my, uncorr)
+    _jl_cov_pearson1(x, y, mx, my, corrected)
 end
-cov_pearson(x::AbstractVector, y::AbstractVector) = cov_pearson(x, y, false)
+cov_pearson(x::AbstractVector, y::AbstractVector) = cov_pearson(x, y, true)
 
 # pearson covariance over all pairs of columns of a matrix
-function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, uncorr::Bool)
+function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool)
     n = size(x, 1)
     x0 = x - repmat(mxs, n, 1)
-    return (x0'*x0) / (n - (uncorr ? 0 : 1))
+    return (x0'*x0) / (n - (corrected ? 1 : 0))
 end
-cov_pearson(x::AbstractMatrix, uncorr::Bool) = _jl_cov_pearson(x, mean(x, 1), uncorr)
-cov_pearson(x::AbstractMatrix) = cov_pearson(x, false)
+cov_pearson(x::AbstractMatrix, corrected::Bool) = _jl_cov_pearson(x, mean(x, 1), corrected)
+cov_pearson(x::AbstractMatrix) = cov_pearson(x, true)
 
 # pearson covariance over all pairs of columns of two matrices
 function _jl_cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
                      mxs::AbstractMatrix, mys::AbstractMatrix,
-                     uncorr::Bool)
+                     corrected::Bool)
     n = size(x, 1)
     x0 = x - repmat(mxs, n, 1)
     y0 = y - repmat(mys, n, 1)
-    return (x0'*y0) / (n - (uncorr ? 0 : 1))
+    return (x0'*y0) / (n - (corrected ? 1 : 0))
 end
-function cov_pearson(x::AbstractMatrix, y::AbstractMatrix, uncorr::Bool)
+function cov_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if size(x) != size(y)
         error("cov_pearson: incompatible dimensions")
     end
 
     if is(x, y)
-        return cov_pearson(x, uncorr)
+        return cov_pearson(x, corrected)
     end
 
     n = size(x, 1)
     mxs = mean(x, 1)
     mys = mean(y, 1)
-    return _jl_cov_pearson(x, y, mxs, mys, uncorr)
+    return _jl_cov_pearson(x, y, mxs, mys, corrected)
 end
-cov_pearson(x::AbstractMatrix, y::AbstractMatrix) = cov_pearson(x, y, false)
+cov_pearson(x::AbstractMatrix, y::AbstractMatrix) = cov_pearson(x, y, true)
 
 ## spearman covariance functions ##
 
 # spearman covariance between two vectors
-function cov_spearman(x::AbstractVector, y::AbstractVector, uncorr::Bool)
-    cov_pearson(tiedrank(x), tiedrank(y), uncorr)
+function cov_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool)
+    cov_pearson(tiedrank(x), tiedrank(y), corrected)
 end
-cov_spearman(x::AbstractVector, y::AbstractVector) = cov_spearman(x, y, false)
+cov_spearman(x::AbstractVector, y::AbstractVector) = cov_spearman(x, y, true)
 
 # spearman covariance over all pairs of columns of a matrix
-function cov_spearman(x::AbstractMatrix, uncorr::Bool)
-    cov_pearson(apply(hcat, amap(tiedrank, x, 2)), uncorr)
+function cov_spearman(x::AbstractMatrix, corrected::Bool)
+    cov_pearson(apply(hcat, amap(tiedrank, x, 2)), corrected)
 end
-cov_spearman(x::AbstractMatrix) = cov_spearman(x, false)
+cov_spearman(x::AbstractMatrix) = cov_spearman(x, true)
 
 # spearman covariance over all pairs of columns of two matrices
-function cov_spearman(x::AbstractMatrix, y::AbstractMatrix, uncorr::Bool)
+function cov_spearman(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if is(x, y)
-        return cov_spearman(x, uncorr)
+        return cov_spearman(x, corrected)
     end
 
     cov_pearson(
         apply(hcat, amap(tiedrank, x, 2)),
         apply(hcat, amap(tiedrank, y, 2)),
-        uncorr)
+        corrected)
 end
-cov_spearman(x::AbstractMatrix, y::AbstractMatrix) = cov_spearman(x, y, false)
+cov_spearman(x::AbstractMatrix, y::AbstractMatrix) = cov_spearman(x, y, true)
 
 const cov = cov_pearson
 
 ## pearson correlation functions ##
 
 # pearson correlation between two vectors
-function cor_pearson(x::AbstractVector, y::AbstractVector, uncorr::Bool)
+function cor_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     if numel(x) != numel(y)
         error("cor_pearson: incompatible dimensions")
     end
 
     mx = mean(x)
     my = mean(y)
-    sx = std(x, mx, uncorr)
-    sy = std(y, my, uncorr)
+    sx = std(x, mx, corrected)
+    sy = std(y, my, corrected)
 
-    return _jl_cov_pearson1(x, y, mx, my, uncorr) / (sx * sy)
+    return _jl_cov_pearson1(x, y, mx, my, corrected) / (sx * sy)
 end
-cor_pearson(x::AbstractVector, y::AbstractVector) = cor_pearson(x, y, false)
+cor_pearson(x::AbstractVector, y::AbstractVector) = cor_pearson(x, y, true)
 
 # pearson correlation over all pairs of columns of a matrix
-function cor_pearson{T}(x::AbstractMatrix{T}, uncorr::Bool)
+function cor_pearson{T}(x::AbstractMatrix{T}, corrected::Bool)
     (n,m) = size(x)
     mxs = mean(x, 1)
     sxs = similar(mxs)
     for i = 1:m
-        sxs[i] = std(sub(x, (1:n, i)), mxs[i], uncorr)
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i], corrected)
     end
-    R = _jl_cov_pearson(x, mxs, uncorr) ./ (sxs' * sxs)
+    R = _jl_cov_pearson(x, mxs, corrected) ./ (sxs' * sxs)
 
     R[1:m+1:end] = one(T) # fix diagonal for numerical errors
 
     return R
 end
-cor_pearson(x::AbstractMatrix) = cor_pearson(x, false)
+cor_pearson(x::AbstractMatrix) = cor_pearson(x, true)
 
 # pearson correlation over all pairs of columns of two matrices
-function cor_pearson(x::AbstractMatrix, y::AbstractMatrix, uncorr::Bool)
+function cor_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if size(x) != size(y)
         error("cor_pearson: incompatible dimensions")
     end
 
     if is(x, y)
-        return cor_pearson(x, uncorr)
+        return cor_pearson(x, corrected)
     end
 
     (n,m) = size(x)
@@ -276,40 +276,40 @@ function cor_pearson(x::AbstractMatrix, y::AbstractMatrix, uncorr::Bool)
     sxs = similar(mxs)
     sys = similar(mys)
     for i = 1:m
-        sxs[i] = std(sub(x, (1:n, i)), mxs[i], uncorr)
-        sys[i] = std(sub(y, (1:n, i)), mys[i], uncorr)
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i], corrected)
+        sys[i] = std(sub(y, (1:n, i)), mys[i], corrected)
     end
 
-    return _jl_cov_pearson(x, y, mxs, mys, uncorr) ./ (sxs' * sys)
+    return _jl_cov_pearson(x, y, mxs, mys, corrected) ./ (sxs' * sys)
 end
-cor_pearson(x::AbstractMatrix, y::AbstractMatrix) = cor_pearson(x, y, false)
+cor_pearson(x::AbstractMatrix, y::AbstractMatrix) = cor_pearson(x, y, true)
 
 ## spearman correlation functions ##
 
 # spearman correlation between two vectors
-function cor_spearman(x::AbstractVector, y::AbstractVector, uncorr::Bool)
-    cor_pearson(tiedrank(x), tiedrank(y), uncorr)
+function cor_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool)
+    cor_pearson(tiedrank(x), tiedrank(y), corrected)
 end
-cor_spearman(x::AbstractVector, y::AbstractVector) = cor_spearman(x, y, false)
+cor_spearman(x::AbstractVector, y::AbstractVector) = cor_spearman(x, y, true)
 
 # spearman correlation over all pairs of columns of a matrix
-function cor_spearman(x::AbstractMatrix, uncorr::Bool)
-    cor_pearson(apply(hcat, amap(tiedrank, x, 2)), uncorr)
+function cor_spearman(x::AbstractMatrix, corrected::Bool)
+    cor_pearson(apply(hcat, amap(tiedrank, x, 2)), corrected)
 end
-cor_spearman(x::AbstractMatrix) = cor_spearman(x, false)
+cor_spearman(x::AbstractMatrix) = cor_spearman(x, true)
 
 # spearman correlation over all pairs of columns of two matrices
-function cor_spearman(x::AbstractMatrix, y::AbstractMatrix, uncorr::Bool)
+function cor_spearman(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if is(x, y)
-        return cor_spearman(x, uncorr)
+        return cor_spearman(x, corrected)
     end
 
     cor_pearson(
         apply(hcat, amap(tiedrank, x, 2)),
         apply(hcat, amap(tiedrank, y, 2)),
-        uncorr)
+        corrected)
 end
-cor_spearman(x::AbstractMatrix, y::AbstractMatrix) = cor_spearman(x, y, false)
+cor_spearman(x::AbstractMatrix, y::AbstractMatrix) = cor_spearman(x, y, true)
 
 const cor = cor_pearson
 
