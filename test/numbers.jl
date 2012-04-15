@@ -809,6 +809,14 @@ end
 @assert signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
 @assert signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
 
+# things related to floating-point epsilon
+@assert eps(float(0)) == 5e-324
+@assert .1+.1+.1 != .3
+# TODO: uncomment when isclose() becomes part of base.
+# @assert isclose(.1+.1+.1, .3)
+# @assert !isclose(.1+.1+.1-.3, 0)
+# @assert isclose(.1+.1+.1-.3, 0, eps(.3))
+
 @assert div(1e50,1) == 1e50
 @assert fld(1e50,1) == 1e50
 
