@@ -13,28 +13,41 @@ function median(v::AbstractArray)
 end
 
 ## variance with known mean
-# generic version: only found to be faster for ranges
-function var(v::Ranges, m::Number, corrected::Bool)
-    n = numel(v)
-    d = 0.0
-    for x in v
-        d += abs2(x - m)
-    end
-    return d / (n - (corrected ? 1 : 0))
-end
-var(v::Ranges, m::Number) = var(v, m, true)
-# vectorized version
 function var(v::AbstractVector, m::Number, corrected::Bool)
     n = length(v)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
+    end
     x = v - m
     return dot(x, x) / (n - (corrected ? 1 : 0))
 end
 var(v::AbstractVector, m::Number) = var(v, m, true)
 var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, numel(v)), m, corrected)
 var(v::AbstractArray, m::Number) = var(v, m, true)
+function var(v::Ranges, m::Number, corrected::Bool)
+    f = first(v) - m
+    s = step(v)
+    l = length(v)
+    if l == 0 || (l == 1 && corrected)
+        return NaN
+    end
+    if corrected
+        return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+    else
+        return f^2 + f * s * (l - 1) + s^2 * (l - 1) * (2 * l - 1) / 6
+    end
+end
+var(v::Ranges, m::Number) = var(v, m, true)
 
 ## variance
-var(v::Ranges, corrected::Bool) = var(v, mean(v), corrected)
+function var(v::Ranges, corrected::Bool)
+    s = step(v)
+    l = length(v)
+    if l == 0 || (l == 1 && corrected)
+        return NaN
+    end
+    return abs2(s) * (l + 1) * (corrected ? l : (l - 1)) / 12
+end
 var(v::AbstractVector, corrected::Bool) = var(v, mean(v), corrected)
 var(v::AbstractArray, corrected::Bool) = var(reshape(v, numel(v)), corrected)
 var(v::AbstractArray) = var(v, true)
@@ -46,6 +59,8 @@ std(v::AbstractArray, m::Number) = std(v, m, true)
 ## standard deviation
 std(v::AbstractArray, corrected::Bool) = std(v, mean(v), corrected)
 std(v::AbstractArray) = std(v, true)
+std(v::Ranges, corrected::Bool) = sqrt(var(v, corrected))
+std(v::Ranges) = std(v, true)
 
 ## median absolute deviation with known center
 mad(v::AbstractArray, center::Number) = median(abs(v - center))
@@ -147,6 +162,9 @@ end
 # pearson covariance between two vectors, with known means
 function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
     n = numel(x)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
+    end
     x0 = x - mx
     y0 = y - my
     return (x0'*y0)[1] / (n - (corrected ? 1 : 0))
@@ -167,6 +185,9 @@ cov_pearson(x::AbstractVector, y::AbstractVector) = cov_pearson(x, y, true)
 # pearson covariance over all pairs of columns of a matrix
 function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool)
     n = size(x, 1)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
+    end
     x0 = x - repmat(mxs, n, 1)
     return (x0'*x0) / (n - (corrected ? 1 : 0))
 end
@@ -178,6 +199,9 @@ function _jl_cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
                      mxs::AbstractMatrix, mys::AbstractMatrix,
                      corrected::Bool)
     n = size(x, 1)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
+    end
     x0 = x - repmat(mxs, n, 1)
     y0 = y - repmat(mys, n, 1)
     return (x0'*y0) / (n - (corrected ? 1 : 0))
