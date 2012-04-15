@@ -27,7 +27,7 @@ var(v::Ranges, m::Number) = var(v, m, false)
 function var(v::AbstractVector, m::Number, uncorr::Bool)
     n = length(v)
     x = v - m
-    return (x'*x)[1] / (n - (uncorr ? 0 : 1))
+    return dot(x, x) / (n - (uncorr ? 0 : 1))
 end
 var(v::AbstractVector, m::Number) = var(v, m, false)
 var(v::AbstractArray, m::Number, uncorr::Bool) = var(reshape(v, numel(v)), m, uncorr)
