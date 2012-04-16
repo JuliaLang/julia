@@ -827,12 +827,12 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     end
     return strs
 end
-split(s::String, spl, n::Integer) = split(s, spl, true, n)
-split(s::String, spl, keep::Bool) = split(s, spl, keep, 0)
-split(s::String, spl)             = split(s, spl, true, 0)
+split(s::String, spl, n::Integer) = split(s, spl, n, true)
+split(s::String, spl, keep::Bool) = split(s, spl, 0, keep)
+split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
-split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], false, 0)
+split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 
 function print_joined(strings, delim, last)
     i = start(strings)
