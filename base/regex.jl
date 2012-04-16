@@ -122,29 +122,6 @@ next(itr::RegexMatchIterator, m) =
 each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
 each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
 
-function split(s::String, regex::Regex, include_empty::Bool, limit::Integer)
-    s = cstring(s)
-    strs = String[]
-    i = j = start(s)
-    while !done(s,i) && (limit == 0 || length(strs) < limit)
-        m = match(regex,s,j)
-        if m == nothing
-            break
-        end
-        tok = s[i:m.offset-1]
-        if include_empty || !isempty(tok)
-            push(strs, tok)
-        end
-        i = m.offset+length(m.match)
-        j = m.offset+max(1,length(m.match))
-    end
-    if include_empty || i < length(s)
-        push(strs, s[i:end])
-    end
-    return strs
-end
-split(s::String, regex::Regex, include_empty::Bool) = split(s, regex, include_empty, 0)
-
 replace(s::String, regex::Regex, repl::String, limit::Integer) =
     join(split(s, regex, true, limit), repl)
 

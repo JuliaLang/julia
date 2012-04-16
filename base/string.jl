@@ -809,76 +809,24 @@ rpad(s, n::Integer, p) = rpad(string(s), n, string(p))
 lpad(s, n::Integer) = lpad(string(s), n, " ")
 rpad(s, n::Integer) = rpad(string(s), n, " ")
 
-# split on a single character in a collection
-function split(s::String, delims, include_empty::Bool)
-    i = start(s)
-    len = length(s)
+function split(str::String, splitter, include_empty::Bool)
+    i = start(str)
     strs = String[]
     while true
-        tokstart = tokend = i
-        while !done(s,i)
-            c,i = next(s,i)
-            if contains(delims, c)
-                break
-            end
-            tokend = i
+        j, k = search(str, splitter, i)
+        if j == 0 break end
+        if include_empty || i < j-1
+            push(strs, str[i:j-1])
         end
-        if include_empty || tokstart < tokend
-            push(strs, s[tokstart:tokend-1])
-        end
-        if !(i <= len || i==len+1 && tokend!=i)
-            break
-        end
+        i = k
+    end
+    if include_empty || i < length(str)
+        push(strs, str[i:])
     end
     return strs
 end
-split(s::String, x) = split(s, x, true)
-split(s::String) = split(s, [' ','\t','\n','\v','\f','\r'], false)
-
-# fast memchr-based split on a single byte for byte strings
-# function split(s::String, d::Uint8, include_empty::Bool)
-#     strs = String[]
-#     while 
-# end
-
-# split on a string literal
-function split(s::String, delim::String, include_empty::Bool)
-    i = start(s)
-    strs = String[]
-    jj = start(delim)
-    d1, jj = next(delim,jj)
-    tokstart = tokend = i
-    while !done(s,i)
-        c,i = next(s,i)
-        if c == d1
-            j = jj
-            matched = true
-            while !done(delim,j)
-                if done(s,i)
-                    matched = false
-                    break
-                end
-                c,i = next(s,i)
-                d,j = next(delim,j)
-                if c != d
-                    matched = false
-                    break
-                end
-            end
-            if matched
-                if include_empty || tokstart < tokend
-                    push(strs, s[tokstart:tokend-1])
-                end
-                tokstart = i
-            end
-        end
-        tokend = i
-    end
-    if include_empty || tokstart < tokend
-        push(strs, s[tokstart:tokend-1])
-    end
-    return strs
-end
+split(str::String, splitter) = split(str, splitter, true)
+split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], false)
 
 function print_joined(strings, delim, last)
     i = start(strings)
