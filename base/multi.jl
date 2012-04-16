@@ -72,7 +72,7 @@ function send_msg_unknown(s::IOStream, kind, args)
     error("attempt to send to unknown socket")
 end
 
-function send_msg(s::IOStream, kind, args...)
+function send_msg(s::Stream, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg(worker_from_id(id), kind, args...)
@@ -80,7 +80,7 @@ function send_msg(s::IOStream, kind, args...)
     send_msg_unknown(s, kind, args)
 end
 
-function send_msg_now(s::IOStream, kind, args...)
+function send_msg_now(s::Stream, kind, args...)
     id = worker_id_from_socket(s)
     if id > -1
         return send_msg_now(worker_from_id(id), kind, args...)
@@ -101,8 +101,9 @@ type Worker
     Worker(host::String,port::Integer)=Worker(cstring(host),uint16(port))
     Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
 
-    Worker(host,port,sock,id) = new(host, port, sock, memio(), id,
-                                       {}, {}, false)
+    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, memio(),
+                                       {}, {}, id, false)
+    Worker(host::String,port::Integer,sock::TcpSocket,id)=Worker(host,uint16(port),sock,id)
     Worker(host,port,sock) = Worker(host,port,sock,0)
 end
 
@@ -199,7 +200,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         push(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
-        d=Deserializer(message_handler_loop,w[i].socket)
+        d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
         add_io_handler(w[i].socket,make_callback((args...)->message_handler(d,args...)))
     end
     PGRP.locs = newlocs
@@ -215,7 +216,7 @@ function _jl_join_pgroup(myid, locs)
     for i = 2:(myid-1)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
-        d=Deserializer(message_handler_loop,w[i].socket)
+        d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
         add_io_handler(w[i].socket,make_callback((args...)->message_handler(d,args...)))
         send_msg_now(w[i], :identify_socket, myid)
     end
@@ -774,7 +775,7 @@ function perform_work(job::WorkItem)
     end
 end
 
-function deliver_result(sock::IOStream, msg, oid, value)
+function deliver_result(sock::Stream, msg, oid, value)
     #print("$(myid()) sending result $oid\n")
     if is(msg,:fetch) || is(msg,:call_fetch)
         val = value
@@ -790,6 +791,8 @@ function deliver_result(sock::IOStream, msg, oid, value)
         send_msg_now(sock, :result, msg, oid, e)
     end
 end
+
+deliver_result(sock::Deserializer,msg,oid,value) = deliver_result(sock.stream,msg,oid,value)
 
 const _jl_empty_cell_ = {}
 function deliver_result(sock::(), msg, oid, value_thunk)
@@ -844,7 +847,7 @@ end
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(accept_fd::Ptr,status::Int32,sockets)
+function accept_handler(accept_fd::Ptr,status::Int32,isclient)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -854,18 +857,18 @@ function accept_handler(accept_fd::Ptr,status::Int32,sockets)
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
         first = true# isempty(sockets)
-        d=Deserializer(message_handler_loop,client)
+        d=Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
         add_io_handler(client,make_callback((args...)->message_handler(d,args...)))
     end
 end
 
 type DisconnectException <: Exception end
 
-function message_handler_loop(this::Deserializer)
+function message_handler_loop(isclient,this::Deserializer)
     global PGRP
     refs = (PGRP::ProcessGroup).refs
     this.task=current_task()
-    first = true
+    first = !isclient
     while true
         if(first)
             # first connection; get process group info from client
@@ -912,7 +915,7 @@ function message_handler_loop(this::Deserializer)
                 oid = force(deserialize(this))::(Int,Int)
                 wi = lookup_ref(oid)
                 if wi.done
-                    deliver_result(this, msg, oid, work_result(wi))
+                    deliver_result(this.stream, msg, oid, work_result(wi))
                 else
                     # add to WorkItem's notify list
                     # TODO: should store the worker here, not the socket,
@@ -957,7 +960,7 @@ start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
     worker_sockets = HashTable()
-    (actual_port,sock) = open_any_tcp_port(default_port,make_callback((handle::Ptr,status::Int32)->accept_handler(handle,status,worker_sockets)))
+    (actual_port,sock) = open_any_tcp_port(default_port,make_callback((handle::Ptr,status::Int32)->accept_handler(handle,status,false)))
 
     write(out, "julia_worker:")  # print header
     fprintf(out, "%d#", actual_port) # print port
@@ -1015,7 +1018,7 @@ function start_remote_workers(machines, cmds)
     w = cell(n)
     todo = [int32(n)]
     for i=1:n
-        let r = read_from(cmds[i])
+        let r = read_from(cmds[i],false)
             stream,ps=r
             # redirect console output from workers to the client's stdout
             add_io_handler(stream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
@@ -1616,8 +1619,7 @@ function event_loop(isclient)
                 if !isclient
                     return
                 end
-            elseif isclient && isa(e,InterruptException) &&
-                !has(_jl_fd_handlers, STDIN)
+            elseif isclient && isa(e,InterruptException)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(_jl_roottask_wi, e)

@@ -290,6 +290,12 @@ spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback) = spawn(cmd,lo
 spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot)=spawn(cmd,in,out,false)
 spawn(cmd::Cmd,in::StreamOrNot)=spawn(cmd,in,false)
 spawn(cmd::Cmd)=spawn(cmd,false,false,false)
+function spawn_nostdin(cmd::Cmd,out::StreamOrNot)
+    pipe=make_pipe()
+    proc=spawn(cmd,pipe,out)
+    close(pipe)
+    proc
+end
 
 function process_exited_chain(procs::Processes,h::Ptr,e::Int32,t::Int32)
     done=true
@@ -343,10 +349,18 @@ spawn(cmds::Cmds,in::StreamOrNot)=spawn(cmds,in,false)
 
 #returns a pipe to read from the last command in the pipelines
 read_from(cmd::Cmd) = read_from(Cmds(cmd))
-function read_from(cmds::Cmds)
+read_from(cmd::Cmd,passStdin::Bool)=read_from(Cmds(cmd),passStdin)
+read_from(cmds::Cmds)=read_from(cmds,true)
+function read_from(cmds::Cmds,passStdin::Bool)
     out=make_pipe()
     _init_buf(out) #create buffer for reading
-    processes=spawn(cmds,false,out);
+    if(passStdin)
+        processes=spawn(cmds,false,out)
+    else
+        dummy=make_pipe()
+        processes=spawn(cmds,dummy,out)
+        close(dummy)
+    end
     ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),out.handle,out.buf.ios,C_NULL)
     (out,processes)
 end
