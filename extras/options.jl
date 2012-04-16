@@ -65,7 +65,7 @@ end
 function convert{Tnew<:OptionsChecking,Told<:OptionsChecking}(::Type{Tnew},o::Options{Told})
     Options{Tnew}(o.key2index,o.vals,o.used,o.check_lock)
 end
-function show_common(o::Options)
+function show{T<:OptionsChecking}(o::Options{T})
     # Put them in the same order specified by the user
     key = Array(ASCIIString,length(o.vals))
     for (k, v) = o.key2index
@@ -77,18 +77,7 @@ function show_common(o::Options)
             print(", ")
         end
     end
-end
-function show(o::Options{CheckNone})
-    show_common(o)
-    print(" (CheckNone)")
-end
-function show(o::Options{CheckWarn})
-    show_common(o)
-    print(" (CheckWarn)")
-end
-function show(o::Options{CheckError})
-    show_common(o)
-    print(" (CheckError)")
+    print(" ($T)")
 end
 
 
