@@ -148,6 +148,8 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(void)
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
     if(handle) uv_close(handle,&closeHandle);
+    if(handle->type==UV_TTY)
+        uv_tty_reset_mode();
 }
 
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback)
