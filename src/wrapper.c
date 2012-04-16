@@ -148,6 +148,8 @@ DLLEXPORT uv_pipe_t *jl_make_pipe(void)
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
     if(handle) uv_close(handle,&closeHandle);
+    if(handle->type==UV_TTY)
+        uv_tty_reset_mode();
 }
 
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback)
@@ -387,7 +389,7 @@ static char chars[] = {
     248,249,250,251,252,253,254,255
 };
 
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if(stream->type<UV_FS_EVENT) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));

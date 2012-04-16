@@ -603,6 +603,7 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v);
 DLLEXPORT jl_sym_t *jl_symbol(const char *str);
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len);
 DLLEXPORT jl_sym_t *jl_gensym(void);
+DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len);
 jl_sym_t *jl_get_root_symbol(void);
 jl_expr_t *jl_exprn(jl_sym_t *head, size_t n);
 jl_function_t *jl_new_generic_function(jl_sym_t *name);
@@ -710,7 +711,7 @@ DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 int jl_printf(uv_stream_t *s, const char *format, ...);
@@ -762,7 +763,9 @@ void jl_restore_system_image(char *fname);
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
-jl_value_t *jl_parse_file(const char *fname);
+void jl_start_parsing_file(const char *fname);
+void jl_stop_parsing();
+jl_value_t *jl_parse_next(int *plineno);
 DLLEXPORT void jl_load_file_string(const char *text);
 jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
@@ -812,7 +815,7 @@ DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 char *jl_find_file_in_path(const char *fname);
 DLLEXPORT void jl_load(const char *fname);
-void jl_load_file_expr(char *fname, jl_value_t *ast);
+void jl_parse_eval_all(char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
 jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
@@ -1022,7 +1025,7 @@ DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
-DLLEXPORT jl_array_t *jl_readuntil(ios_t *s, uint8_t delim);
+DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);

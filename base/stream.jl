@@ -108,12 +108,10 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-htons(port::Uint16)=ccall(:htons,Uint16,(Uint16,),port)
-
 _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(Ptr{Void},Int32,Function),sock.handle,backlog,make_callback(cb))
 
-_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,htons(addr.port),addr.host)
-_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,htons(addr.port))
+_jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
+_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,hton(addr.port))
 _jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
 _jl_tcp_accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
 
@@ -133,6 +131,7 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     end
     return (addr.port,socket)
 end
+open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16(preferred_port),cb)
 
 abstract AsyncWork
 
@@ -291,6 +290,12 @@ spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback) = spawn(cmd,lo
 spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot)=spawn(cmd,in,out,false)
 spawn(cmd::Cmd,in::StreamOrNot)=spawn(cmd,in,false)
 spawn(cmd::Cmd)=spawn(cmd,false,false,false)
+function spawn_nostdin(cmd::Cmd,out::StreamOrNot)
+    pipe=make_pipe()
+    proc=spawn(cmd,pipe,out)
+    close(pipe)
+    proc
+end
 
 function process_exited_chain(procs::Processes,h::Ptr,e::Int32,t::Int32)
     done=true
@@ -344,10 +349,18 @@ spawn(cmds::Cmds,in::StreamOrNot)=spawn(cmds,in,false)
 
 #returns a pipe to read from the last command in the pipelines
 read_from(cmd::Cmd) = read_from(Cmds(cmd))
-function read_from(cmds::Cmds)
+read_from(cmd::Cmd,passStdin::Bool)=read_from(Cmds(cmd),passStdin)
+read_from(cmds::Cmds)=read_from(cmds,true)
+function read_from(cmds::Cmds,passStdin::Bool)
     out=make_pipe()
     _init_buf(out) #create buffer for reading
-    processes=spawn(cmds,false,out);
+    if(passStdin)
+        processes=spawn(cmds,false,out)
+    else
+        dummy=make_pipe()
+        processes=spawn(cmds,dummy,out)
+        close(dummy)
+    end
     ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),out.handle,out.buf.ios,C_NULL)
     (out,processes)
 end
@@ -505,7 +518,7 @@ write(c::Char) = write(current_output_stream(),c)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),s.ios, a, uint(numel(a)*sizeof(T)))
+        ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),s.handle, a, uint(numel(a)*sizeof(T)))
     else
         invoke(write, (Any, Array), s, a)
     end
@@ -583,7 +596,7 @@ function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port
         error("Name lookup failed")
     end
     sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
-    _jl_sockaddr_set_port(sockaddr,htons(port))
+    _jl_sockaddr_set_port(sockaddr,hton(port))
     err = _jl_connect_raw(sock,sockaddr,(req::Ptr,status::Int32)->connect_callback(sock,status,breakLoop))
     if(err != 0)
         error("Failed to connect to host")

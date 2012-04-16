@@ -1,5 +1,5 @@
-str1 = CharString(read(open("unicode/UTF-32LE.txt"), Char, 1112065)[2:]);
-str2 = UTF8String(read(open("unicode/UTF-8.txt"), Uint8, 4382595)[4:]);
+str1 = CharString(reinterpret(Char, read(open("unicode/UTF-32LE.txt"), Uint32, 1112065)[2:]))
+str2 = UTF8String(read(open("unicode/UTF-8.txt"), Uint8, 4382595)[4:])
 @assert str1 == str2
 
 str1 = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"

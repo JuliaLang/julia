@@ -1,5 +1,6 @@
 setcwd("../extras")
-include("glpk.jl")
+load("sparse.jl")
+load("glpk.jl")
 
 # Same example as in the GLPK manual
 
