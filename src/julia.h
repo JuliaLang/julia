@@ -711,7 +711,7 @@ DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 int jl_printf(uv_stream_t *s, const char *format, ...);

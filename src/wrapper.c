@@ -387,7 +387,7 @@ static char chars[] = {
     248,249,250,251,252,253,254,255
 };
 
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
     if(stream->type<UV_FS_EVENT) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));

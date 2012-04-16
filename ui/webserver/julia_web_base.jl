@@ -18,8 +18,8 @@
 # import the message types
 load("./ui/webserver/message_types.h")
 
-macro debug_only(x); x; end
-#macro debug_only(x); end
+#macro debug_only(x); x; end
+macro debug_only(x); end
 
 ###########################################
 # set up the socket connection
@@ -44,6 +44,7 @@ end
 
 (port,sock) = open_any_tcp_port(4444,make_callback(connect_cb))
 
+set_current_output_stream(STDOUT)
 # print the socket number so the server knows what it is
 println(int16(port))
 
@@ -71,6 +72,7 @@ end
 
 # send a message
 function __write_message(client::TcpSocket,msg)
+    @debug_only __print_message(msg)
     write(client, uint8(msg.msg_type))
     write(client, uint8(length(msg.args)))
     for arg=msg.args
@@ -82,14 +84,11 @@ __write_message(msg) = __write_message(__client,msg)
 
 # print a message (useful for debugging)
 function __print_message(msg)
-    print(msg.msg_type)
-    print(": [ ")
+    println("Writing message: ",msg.msg_type)
+    println("Number of arguments: ",length(msg.args))
     for arg=msg.args
-        print("\"")
-        print(arg)
-        print("\" ")
+        println("Argument Length: ",length(arg))
     end
-    println("]")
 end
 
 ###########################################
