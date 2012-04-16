@@ -141,14 +141,12 @@ search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
 search(s::String, c::Chars) = search(s,c,start(s))
 
 function search(s::String, t::String, i::Integer)
-    if isempty(t)
-        return i <= length(s) ? (i,nextind(s,i)) : (0,start(s))
-    end
+    if isempty(t) return (i,nextind(s,i)) end
     t1, j2 = next(t,start(t))
     while true
         j = j2
         i = strchr(s,t1,i)
-        if i == 0 return (0,start(s)) end
+        if i == 0 return (0,0) end
         c, k = next(s,i)
         matched = true
         while !done(t,j)

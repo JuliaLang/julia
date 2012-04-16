@@ -56,6 +56,9 @@ function show(re::Regex)
     end
 end
 
+# TODO: map offsets into non-ByteStrings back to original indices.
+# or maybe it's better to just fail since that would be quite slow
+
 type RegexMatch
     match::ByteString
     captures::Tuple
@@ -79,9 +82,12 @@ function show(m::RegexMatch)
     print(")")
 end
 
-contains(s::String, r::Regex) = contains(r, s, r.options & PCRE_EXECUTE_MASK)
-contains(s::String, r::Regex, opts::Integer) =
+matches(r::Regex, s::String, o::Integer) =
     pcre_exec(r.regex, r.extra, cstring(s), 0, opts, false)
+matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
+
+contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
+contains(s::String, r::Regex)                = matches(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
@@ -94,6 +100,13 @@ end
 match(r::Regex, s::String, i::Integer, o::Integer) = match(r, cstring(s), i, o)
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE_EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
+
+function search(str::ByteString, re::Regex, idx::Integer)
+    opts = re.options & PCRE_EXECUTE_MASK
+    m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
+    isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
+end
+search(s::ByteString, r::Regex) = search(s,r,start(s))
 
 type RegexMatchIterator
     regex::Regex
