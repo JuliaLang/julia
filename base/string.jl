@@ -14,6 +14,7 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
+# TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
     print_to_string(length(v), @thunk for i in v print(s[i]) end)
 
@@ -900,7 +901,9 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     i = start(s)
     while true
         if done(s,i)
-            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+            throw(ArgumentError(strcat(
+                "premature end of integer (in ",show_to_string(s),")"
+            )))
         end
         c,i = next(s,i)
         if !iswspace(c)
@@ -911,12 +914,16 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     if T <: Signed && c == '-'
         sgn = -sgn
         if done(s,i)
-            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+            throw(ArgumentError(strcat(
+                "premature end of integer (in ", show_to_string(s), ")"
+            )))
         end
         c,i = next(s,i)
     elseif c == '+'
         if done(s,i)
-            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+            throw(ArgumentError(strcat(
+                "premature end of integer (in ", show_to_string(s), ")"
+            )))
         end
         c,i = next(s,i)
     end
@@ -928,12 +935,16 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
             if !iswspace(c)
-                throw(ArgumentError(strcat(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")))
+                throw(ArgumentError(strcat(
+                    show_to_string(c), " is not a valid digit (in ", show_to_string(s), ")"
+                )))
             end
             while !done(s,i)
                 c,i = next(s,i)
                 if !iswspace(c)
-                    throw(ArgumentError(strcat("extra characters after whitespace (in ",show_to_string(s),")")))
+                    throw(ArgumentError(strcat(
+                        "extra characters after whitespace (in ", show_to_string(s), ")"
+                    )))
                 end
             end
         else
