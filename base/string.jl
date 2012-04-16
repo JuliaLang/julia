@@ -809,24 +809,30 @@ rpad(s, n::Integer, p) = rpad(string(s), n, string(p))
 lpad(s, n::Integer) = lpad(string(s), n, " ")
 rpad(s, n::Integer) = rpad(string(s), n, " ")
 
-function split(str::String, splitter, include_empty::Bool)
+# splitter can be a Char, Vector{Char}, String, Regex, ...
+# any splitter that provides search(s::String, splitter)
+function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     i = start(str)
     strs = String[]
-    while true
+    while length(strs) != limit-1
         j, k = search(str, splitter, i)
         if j == 0 break end
-        if include_empty || i < j-1
+        if keep_empty || i < j-1
             push(strs, str[i:j-1])
         end
         i = k
     end
-    if include_empty || i < length(str)
+    if keep_empty || !done(str,i)
         push(strs, str[i:])
     end
     return strs
 end
-split(str::String, splitter) = split(str, splitter, true)
-split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], false)
+split(s::String, spl, n::Integer) = split(s, spl, true, n)
+split(s::String, spl, keep::Bool) = split(s, spl, keep, 0)
+split(s::String, spl)             = split(s, spl, true, 0)
+
+# a bit oddball, but standard behavior in Perl, Ruby & Python:
+split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], false, 0)
 
 function print_joined(strings, delim, last)
     i = start(strings)
@@ -1045,8 +1051,7 @@ parse_float(::Type{Float32}, x::String) = float32(x)
 
 for conv in (:float, :float32, :float64,
              :int, :int8, :int16, :int32, :int64,
-             :uint, :uint8, :uint16, :uint32, :uint64,
-             )
+             :uint, :uint8, :uint16, :uint32, :uint64)
     @eval ($conv){S<:String}(a::AbstractArray{S}) = map($conv, a)
 end
 
