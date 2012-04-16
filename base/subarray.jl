@@ -7,11 +7,13 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     strides::Array{Int,1}
     first_index::Int
 
-    #linear indexing constructor
-    if N == 1 && length(I) == 1 && A <: Array
+    #linear indexing constructor (scalar)
+    if N == 0 && length(I) == 1 && A <: Array
         function SubArray(p::A, i::(Int,))
-            new(p, i, (length(i[1]),), [1], i[1])
+            new(p, i, (), Int[], i[1])
         end
+    #linear indexing constructor (ranges)
+    elseif N == 1 && length(I) == 1 && A <: Array
         function SubArray(p::A, i::(Range1{Int},))
             new(p, i, (length(i[1]),), [1], first(i[1]))
         end
@@ -42,23 +44,28 @@ end
 
 #linear indexing sub (may want to rename as slice)
 function sub{T,N}(A::Array{T,N}, i::(RangeIndex,))
-    SubArray{T,1,typeof(A),typeof(i)}(A, i)
+    SubArray{T,(isa(i[1], Int) ? 0 : 1),typeof(A),typeof(i)}(A, i)
 end
 
 function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
-    i = map(j -> isa(j, Int) ? (j:j) : j, i)
-    SubArray{T,N,typeof(A),typeof(i)}(A, i)
+    L = length(i)
+    while L > 0 && isa(i[L], Int); L-=1; end
+    i0 = map(j -> isa(j, Int) ? (j:j) : j, i[1:L])
+    i = ntuple(length(i), k->(k<=L ? i0[k] : i[k]))
+    SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
 sub(A::AbstractArray, i::RangeIndex...) =
     sub(A, i)
 function sub(A::SubArray, i::RangeIndex...)
+    L = length(i)
+    while L > 0 && isa(i[L], Int); L-=1; end
     j = 1
     newindexes = Array(RangeIndex,length(A.indexes))
     for k = 1:length(A.indexes)
         if isa(A.indexes[k], Int)
             newindexes[k] = A.indexes[k]
         else
-            newindexes[k] = A.indexes[k][isa(i[j],Int) ? (i[j]:i[j]) : i[j]]
+            newindexes[k] = A.indexes[k][(isa(i[j],Int) && j<=L) ? (i[j]:i[j]) : i[j]]
             j += 1
         end
     end
@@ -176,17 +183,17 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
 end
 
 function ref(s::SubArray, I::Indices...)
-    j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = Array(Indices, n)
     for i = 1:n
         t = s.indexes[i]
         #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Int) ? t : t[I[j]]
-        j += 1
+        newindexes[i] = isa(t, Int) ? t : t[I[i]]
     end
 
-    reshape(ref(s.parent, newindexes...), map(length, I))
+    L = length(I)
+    while L > 0 && isa(I[L],Integer); L-=1; end
+    reshape(ref(s.parent, newindexes...), map(length, I[1:L]))
 end
 
 assign(s::SubArray, v::AbstractArray, i::Integer) =

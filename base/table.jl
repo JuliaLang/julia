@@ -60,7 +60,7 @@ del_all(t::IdTable) = (t.ht = cell(length(t.ht)); t)
 
 start(t::IdTable) = 0
 done(t::IdTable, i) = is(next(t,i),())
-next(t::IdTable, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, uint32(i))
+next(t::IdTable, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
 
 isempty(t::IdTable) = is(next(t,0),())
 
@@ -146,7 +146,7 @@ type HashTable{K,V} <: Associative
     deleter::Function
 
     HashTable() = HashTable{K,V}(0)
-    function HashTable(n)
+    function HashTable(n::Integer)
         n = _tablesz(n)
         new(fill!(cell(n), _jl_secret_table_token),
             fill!(cell(n), _jl_secret_table_token),

@@ -1,3 +1,5 @@
+abstract IO
+
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 const sizeof_fd_set = int(ccall(:jl_sizeof_fd_set, Int32, ()))
@@ -8,7 +10,7 @@ else
     typealias FileOffset Int64
 end
 
-type IOStream
+type IOStream <: IO
     # NOTE: for some reason the order of these field is significant!?
     ios::Array{Uint8,1}
     name::String
@@ -111,7 +113,7 @@ takebuf_array(s::IOStream) =
     ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
-    ccall(:jl_takebuf_string, Any, (Ptr{Void},), s.ios)::ByteString
+    ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
 function print_to_array(size::Integer, f::Function, args...)
     s = memio(size, false)
@@ -221,7 +223,7 @@ end
 
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
-function read{T}(s::IOStream, a::Array{T})
+function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
@@ -234,10 +236,9 @@ function read{T}(s::IOStream, a::Array{T})
     end
 end
 
-function readuntil(s::IOStream, delim::Uint8)
-    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
-    # TODO: faster versions that avoid this encoding check
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
+function readuntil(s::IOStream, delim)
+    # TODO: faster versions that avoid the encoding check
+    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
 function readall(s::IOStream)
@@ -246,7 +247,7 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-readline(s::IOStream) = readuntil(s, uint8('\n'))
+readline(s::IOStream) = readuntil(s, '\n')
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
@@ -263,7 +264,9 @@ skip(s::IOStream, delta::Integer) =
 
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
-type IOTally
+eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
+
+type IOTally <: IO
     nbytes::Int
     IOTally() = new(0)
 end
@@ -355,8 +358,7 @@ function done(itr::LineIterator, line)
 end
 
 function next(itr::LineIterator, this_line)
-    next_line = readline(itr.stream)
-    this_line, next_line
+    this_line, readline(itr.stream)
 end
 
 each_line(stream::IOStream) = LineIterator(stream)

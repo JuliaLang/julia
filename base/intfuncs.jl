@@ -3,11 +3,11 @@
 isodd(n::Integer) = bool(rem(n,2))
 iseven(n::Integer) = !isodd(n)
 
-sign{T<:Integer}(x::T) = convert(T,(x > 0)-(x < 0))
-sign{T<:Unsigned}(x::T) = convert(T,(x > 0))
+sign{T<:Integer}(x::T) = convert(T,(x>0)-(x<0))
+sign{T<:Unsigned}(x::T) = convert(T,(x>0))
 
 signbit(x::Unsigned) = 0
-signbit(x::Int8 ) = int(x>>>7 )
+signbit(x::Int8 ) = int(x>>>7)
 signbit(x::Int16) = int(x>>>15)
 signbit(x::Int32) = int(x>>>31)
 signbit(x::Int64) = int(x>>>63)
@@ -17,14 +17,14 @@ flipsign(x::Int64, y::Int64) = boxsi64(flipsign_int64(unbox64(x),unbox64(y)))
 
 flipsign{T<:Signed}(x::T,y::T)  = flipsign(int(x),int(y))
 flipsign(x::Signed, y::Signed)  = flipsign(promote(x,y)...)
-flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 flipsign(x::Signed, y::Float32) = flipsign(x, reinterpret(Int32,y))
 flipsign(x::Signed, y::Float64) = flipsign(x, reinterpret(Int64,y))
+flipsign(x::Signed, y::Real)    = flipsign(x, -oftype(x,signbit(y)))
 
 copysign(x::Signed, y::Signed)  = flipsign(x, x$y)
-copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
 copysign(x::Signed, y::Float32) = copysign(x, reinterpret(Int32,y))
 copysign(x::Signed, y::Float64) = copysign(x, reinterpret(Int64,y))
+copysign(x::Signed, y::Real)    = copysign(x, -oftype(x,signbit(y)))
 
 abs(x::Unsigned) = x
 abs(x::Signed) = flipsign(x,x)
@@ -36,9 +36,13 @@ const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
 if ENDIAN_BOM == 0x01020304
     ntoh(x) = identity(x)
     hton(x) = identity(x)
+    ltoh(x) = bswap(x)
+    htol(x) = bswap(x)
 elseif ENDIAN_BOM == 0x04030201
     ntoh(x) = bswap(x)
     hton(x) = bswap(x)
+    ltoh(x) = identity(x)
+    htol(x) = identity(x)
 else
     error("seriously? what is this machine?")
 end
@@ -89,7 +93,7 @@ function power_by_squaring(x, p::Integer)
     elseif p == 0
         return one(x)
     elseif p < 0
-        return inv(x^(-p))
+        error("power_by_squaring: exponent must be non-negative")
     elseif p == 2
         return x*x
     end
@@ -116,8 +120,8 @@ function power_by_squaring(x, p::Integer)
     return x
 end
 
-^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
-^(x::Number, p::Integer)  = power_by_squaring(x,p)
+^{T<:Integer}(x::T, p::T) = p < 0 ? x^float(p) : power_by_squaring(x,p)
+^(x::Number, p::Integer)  = p < 0 ? x^float(p) : power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # x^p mod m
@@ -125,7 +129,7 @@ function powermod(x::Integer, p::Integer, m::Integer)
     if p == 0
         return one(x)
     elseif p < 0
-        error("powermod: exponent must be >= 0, got $p")
+        error("powermod: exponent must be non-negative")
     end
     t = 1
     while t <= p

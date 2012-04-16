@@ -229,11 +229,22 @@ end
 @assert parse_int(Int64,"DeadBeef",16) == 3735928559
 @assert parse_int(Int64,"-DeadBeef",16) == -3735928559
 
+@assert parse_int("2\n") == 2
+@assert parse_int("   2 \n ") == 2
+@assert parse_int(" 2 ") == 2
+@assert parse_int("2 ") == 2
+@assert parse_int(" 2") == 2
+@assert parse_int("+2\n") == 2
+@assert parse_int("-2") == -2
+@assert_fails parse_int("   2 \n 0")
+@assert_fails parse_int("2x")
+@assert_fails parse_int("-")
+
 # printing numbers
 @assert string(uint32(-1)) == "0xffffffff"
-@assert hex(0xffffffffffff)=="ffffffffffff"
-@assert hex(0xffffffffffff+1)=="1000000000000"
-@assert hex(typemax(Uint64))=="ffffffffffffffff"
+@assert hex(0xffffffffffff) == "ffffffffffff"
+@assert hex(0xffffffffffff+1) == "1000000000000"
+@assert hex(typemax(Uint64)) == "ffffffffffffffff"
 
 @assert int2str(typemin(Int64), 10) == "-9223372036854775808"
 @assert int2str(typemin(Int16), 10) == "-32768"
@@ -241,3 +252,42 @@ end
 
 # string manipulation
 @assert strip("\t  hi   \n") == "hi"
+
+# ascii strchr
+astr = "Hello, world.\n"
+for str in {astr, GenericString(astr)}
+    @assert strchr(str, 'x') == 0
+    @assert strchr(str, '\0') == 0
+    @assert strchr(str, '\u80') == 0
+    @assert strchr(str, '∀') == 0
+    @assert strchr(str, 'H') == 1
+    @assert strchr(str, 'l') == 3
+    @assert strchr(str, 'l', 4) == 4
+    @assert strchr(str, 'l', 5) == 11
+    @assert strchr(str, 'l', 12) == 0
+    @assert strchr(str, ',') == 6
+    @assert strchr(str, ',', 7) == 0
+    @assert strchr(str, '\n') == 14
+end
+
+# utf-8 strchr
+u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+for str in {u8str, GenericString(u8str)}
+    @assert strchr(str, 'z') == 0
+    @assert strchr(str, '\0') == 0
+    @assert strchr(str, '\u80') == 0
+    @assert strchr(str, '∄') == 0
+    @assert strchr(str, '∀') == 1
+    @assert strchr(str, '∀', 2) == 0
+    @assert strchr(str, '∃') == 13
+    @assert strchr(str, '∃', 14) == 0
+    @assert strchr(str, 'x') == 26
+    @assert strchr(str, 'x', 27) == 43
+    @assert strchr(str, 'x', 44) == 0
+    @assert strchr(str, 'δ') == 17
+    @assert strchr(str, 'δ', 18) == 33
+    @assert strchr(str, 'δ', 34) == 0
+    @assert strchr(str, 'ε') == 5
+    @assert strchr(str, 'ε', 6) == 54
+    @assert strchr(str, 'ε', 55) == 0
+end

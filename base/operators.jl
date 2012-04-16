@@ -62,8 +62,11 @@ end
 
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
+<<(x,y::Int32)    = no_op_err("<<", typeof(x))
 >>(x,y::Integer)  = x >> convert(Int32,y)
+>>(x,y::Int32)    = no_op_err(">>", typeof(x))
 >>>(x,y::Integer) = x >>> convert(Int32,y)
+>>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
 
 # fallback div, fld, rem & mod implementations
 div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))

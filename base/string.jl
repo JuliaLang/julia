@@ -14,14 +14,14 @@ ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
 ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
-ref(s::String, v::Vector) =
-    print_to_string(length(v), @thunk for i in v; print(s[i]); end)
+ref(s::String, v::AbstractVector) =
+    print_to_string(length(v), @thunk for i in v print(s[i]) end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
-print(s::String) = for c=s; print(c); end
-print(x...) = for i=x; print(i); end
+print(s::String) = for c in s print(c) end
+print(x...) = for i in x print(i) end
 println(args...) = print(args..., '\n')
 
 show(s::String) = print_quoted(s)
@@ -119,25 +119,61 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-function strchr(s::String, c::Char, i::Integer)
-    i = nextind(s,i)
+typealias Chars Union(Char,AbstractVector{Char})
+
+function strchr(s::String, c::Chars, i::Integer)
+    if i < 1 error("strchr: index out of range") end
+    i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
-        if c == d
+        if contains(c,d)
             return i
         end
         i = j
     end
     return 0
 end
-strchr(s::String, c::Char) = strchr(s, c, start(s))
+strchr(s::String, c::Chars) = strchr(s,c,start(s))
+
 contains(s::String, c::Char) = (strchr(s,c)!=0)
+
+search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
+search(s::String, c::Chars) = search(s,c,start(s))
+
+function search(s::String, t::String, i::Integer)
+    if isempty(t) return (i,nextind(s,i)) end
+    t1, j2 = next(t,start(t))
+    while true
+        i = strchr(s,t1,i)
+        if i == 0 return (0,0) end
+        c, ii = next(s,i)
+        j = j2; k = ii
+        matched = true
+        while !done(t,j)
+            if done(s,k)
+                matched = false
+                break
+            end
+            c, k = next(s,k)
+            d, j = next(t,j)
+            if c != d
+                matched = false
+                break
+            end
+        end
+        if matched
+            return (i,k)
+        end
+        i = ii
+    end
+end
+search(s::String, t::String) = search(s,t,start(s))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
     for c in s
-        cx[i += 1] = c
+        cx[i+=1] = c
     end
     return cx
 end
@@ -387,7 +423,7 @@ cstring(x...) = print_to_string(print, x...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, Any, (Ptr{Uint8},), p)::ByteString
+    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
 convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
@@ -773,32 +809,24 @@ rpad(s, n::Integer, p) = rpad(string(s), n, string(p))
 lpad(s, n::Integer) = lpad(string(s), n, " ")
 rpad(s, n::Integer) = rpad(string(s), n, " ")
 
-function split(s::String, delims, include_empty::Bool)
-    i = 1
-    len = length(s)
+function split(str::String, splitter, include_empty::Bool)
+    i = start(str)
     strs = String[]
     while true
-        tokstart = tokend = i
-        while !done(s,i)
-            (c,i) = next(s,i)
-            if contains(delims, c)
-                break
-            end
-            tokend = i
+        j, k = search(str, splitter, i)
+        if j == 0 break end
+        if include_empty || i < j-1
+            push(strs, str[i:j-1])
         end
-        tok = s[tokstart:(tokend-1)]
-        if include_empty || !isempty(tok)
-            push(strs, tok)
-        end
-        if !((i <= len) || (i==len+1 && tokend!=i))
-            break
-        end
+        i = k
     end
-    strs
+    if include_empty || i < length(str)
+        push(strs, str[i:])
+    end
+    return strs
 end
-
-split(s::String) = split(s, (' ','\t','\n','\v','\f','\r'), false)
-split(s::String, x) = split(s, x, true)
+split(str::String, splitter) = split(str, splitter, true)
+split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], false)
 
 function print_joined(strings, delim, last)
     i = start(strings)
@@ -864,15 +892,25 @@ strip(s::String) = lstrip(rstrip(s))
 function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     if !(2 <= base <= 36); error("invalid base: ",base); end
     i = start(s)
-    if done(s,i)
-        error("premature end of integer (in ",show_to_string(s),")")
+    while true
+        if done(s,i)
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+        end
+        c,i = next(s,i)
+        if !iswspace(c)
+            break
+        end
     end
-    c,i = next(s,i)
     sgn = one(T)
     if T <: Signed && c == '-'
         sgn = -sgn
         if done(s,i)
-            error("premature end of integer (in ",show_to_string(s),")")
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
+        end
+        c,i = next(s,i)
+    elseif c == '+'
+        if done(s,i)
+            throw(ArgumentError(strcat("premature end of integer (in ",show_to_string(s),")")))
         end
         c,i = next(s,i)
     end
@@ -883,10 +921,19 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
             'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+10 : typemax(Int)
         if d >= base
-            error(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")
+            if !iswspace(c)
+                throw(ArgumentError(strcat(show_to_string(c)," is not a valid digit (in ",show_to_string(s),")")))
+            end
+            while !done(s,i)
+                c,i = next(s,i)
+                if !iswspace(c)
+                    throw(ArgumentError(strcat("extra characters after whitespace (in ",show_to_string(s),")")))
+                end
+            end
+        else
+            # TODO: overflow detection?
+            n = n*base + d
         end
-        # TODO: overflow detection?
-        n = n*base + d
         if done(s,i)
             break
         end
@@ -996,6 +1043,13 @@ parse_float(x::String) = float64(x)
 parse_float(::Type{Float64}, x::String) = float64(x)
 parse_float(::Type{Float32}, x::String) = float32(x)
 
+for conv in (:float, :float32, :float64,
+             :int, :int8, :int16, :int32, :int64,
+             :uint, :uint8, :uint16, :uint32, :uint64,
+             )
+    @eval ($conv){S<:String}(a::AbstractArray{S}) = map($conv, a)
+end
+
 # lexicographically compare byte arrays (used by Latin-1 and UTF-8)
 
 function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
@@ -1004,13 +1058,17 @@ function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
-# find the index of the first occurrence of a byte value in a byte array
+# find the index of the first occurrence of a value in a byte array
 
-function memchr(a::Array{Uint8,1}, b::Integer)
+function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
+    if i < 1 error("memchr: index out of range") end
+    n = length(a)
+    if i > n return 0 end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p, b, length(a))
-    q == C_NULL ? 0 : int(q - p + 1)
+    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
+    q == C_NULL ? 0 : int(q-p+1)
 end
+memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,1)
 
 # concatenate byte arrays into a single array
 

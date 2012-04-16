@@ -42,6 +42,9 @@ void parse_opts(int *argcp, char ***argvp) {
     int c;
     opterr = 0;
     int ind = 1;
+#ifdef JL_SYSTEM_IMAGE_PATH
+    int imagepathspecified=0;
+#endif
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 0:
@@ -63,6 +66,9 @@ void parse_opts(int *argcp, char ***argvp) {
             break;
         case 'J':
             image_file = optarg;
+#ifdef JL_SYSTEM_IMAGE_PATH
+            imagepathspecified = 1;
+#endif
             ind+=2;
             break;
         case 'h':
@@ -92,6 +98,11 @@ void parse_opts(int *argcp, char ***argvp) {
             program = (*argvp)[0];
         }
     }
+#ifdef JL_SYSTEM_IMAGE_PATH
+    if (image_file && !imagepathspecified) {
+        image_file = JL_SYSTEM_IMAGE_PATH;
+    }
+#endif
 }
 
 int ends_with_semicolon(const char *input)

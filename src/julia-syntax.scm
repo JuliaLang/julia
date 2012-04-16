@@ -958,8 +958,12 @@
    (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
 		   `(call aTbT ,a ,b))
 
-   (pattern-lambda (ccall name RT (tuple . argtypes) . args)
-		   (lower-ccall name RT argtypes args))
+   (pattern-lambda (ccall name RT argtypes . args)
+		   (begin
+		     (if (not (and (pair? argtypes)
+				   (eq? (car argtypes) 'tuple)))
+			 (error "ccall argument types must be a tuple; try (T,)"))
+		     (lower-ccall name RT (cdr argtypes) args)))
 
    )) ; patterns
 
@@ -1835,8 +1839,8 @@ So far only the second case can actually occur.
 	   (if (null? p)
 	       (let ((forms (reverse q)))
 		 `(call (top expr) ,(expand-backquote (car e))
-			(call (top append) ,@forms)))
-	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+			(call (top append_any) ,@forms)))
+	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))

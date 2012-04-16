@@ -410,25 +410,37 @@ DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy)
     return result;
 }
 
-jl_value_t *jl_parse_file(const char *fname)
+void jl_start_parsing_file(const char *fname)
 {
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-file")),
-                          cvalue_static_cstring(fname));
-    if (!iscons(e))
-        return (jl_value_t*)jl_null;
-    return scm_to_julia(e);
+    fl_applyn(1, symbol_value(symbol("jl-parse-file")),
+              cvalue_static_cstring(fname));
+}
+
+void jl_stop_parsing()
+{
+    fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
+}
+
+jl_value_t *jl_parse_next(int *plineno)
+{
+    value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
+    if (c == FL_F)
+        return NULL;
+    if (iscons(c)) {
+        value_t a = car_(c);
+        if (isfixnum(a)) {
+            *plineno = numval(a);
+            return scm_to_julia(cdr_(c));
+        }
+    }
+    return scm_to_julia(c);
 }
 
 void jl_load_file_string(const char *text)
 {
-    value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
-                          cvalue_static_cstring(text));
-    if (iscons(e)) {
-        jl_value_t *fexpr = scm_to_julia(e);
-        JL_GC_PUSH(&fexpr);
-        jl_load_file_expr("string", fexpr);
-        JL_GC_POP();
-    }
+    fl_applyn(1, symbol_value(symbol("jl-parse-string-stream")),
+              cvalue_static_cstring(text));
+    jl_parse_eval_all("");
 }
 
 // returns either an expression or a thunk
