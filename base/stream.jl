@@ -394,7 +394,7 @@ spawn(cmds::Cmds,in::StreamOrNot)=spawn(cmds,in,false)
 spawn(cmds::Cmds,in::StreamOrNot,out::StreamOrNot)=spawn(cmds,in,out,false,false)
 
 #returns a pipe to read from the last command in the pipelines
-read_from(cmds::AbstractCmds)=read_from(cmds,true)
+read_from(cmds::AbstractCmd)=read_from(cmds,true)
 function read_from(cmds::AbstractCmd,passStdin::Bool)
     out=make_pipe()
     _init_buf(out) #create buffer for reading
