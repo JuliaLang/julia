@@ -4,194 +4,235 @@
 # Harlan Harris, Timothy E. Holy, and Stefan Karpinski
 
 #### Options type ####
-const OPTIONS_NONE = 0
-const OPTIONS_WARN = 1
-const OPTIONS_ERROR = 2
-type Options
-    keyindex::HashTable{Symbol,Int}
-    vals::Vector
-    checked::Vector{Bool}
-    check_lock::Vector{Bool}
-    check_behavior::Int   # one of OPTIONS_NONE, OPTIONS_WARN, OPTIONS_ERROR
+abstract OptionsChecking
+type CheckNone <: OptionsChecking
 end
-# Constructor: supply check_behavior and parameter/value pairs,
-# where the parameter is expressed as a symbol, e.g.
-#   Options(OPTIONS_WARN,:a,5,:b,rand(3),...)
+type CheckWarn <: OptionsChecking
+end
+type CheckError <: OptionsChecking
+end
+type Options{T<:OptionsChecking}
+    key2index::HashTable{Symbol,Int}
+    vals::Vector
+    used::Vector{Bool}
+    check_lock::Vector{Bool}
+end
+# Constructor: supply type followed by parameter/value pairs,
+#   o = Options(CheckWarn,:a,5,:b,rand(3),...)
 # Note, the macro @options makes construction easier
-function Options(check_behavior::Int,args...)
+function Options{T<:OptionsChecking}(::Type{T},args...)
     if length(args) % 2 != 0
         error("Parameter/value lists must come in pairs")
     end
     n = div(length(args),2)
-    if n > 0
-        keys = args[1:2:end]
-        indx = ntuple(n,i->i)
-        vals = [args[2:2:end]...]
+    keys, index, vals = if n > 0
+        (args[1:2:end], ntuple(n, identity), [args[2:2:end]...])
     else
-        keys = ()
-        indx = ()
-        vals = Array(Any,0)
+        ((), (), Array(Any, 0))
     end
-    ht = HashTable{Symbol,Int}(keys,indx)
-    checked = falses(n)
+    ht = HashTable{Symbol,Int}(keys,index)
+    used = falses(n)
     check_lock = falses(n)
-    Options(ht,vals,checked,check_lock,check_behavior)
+    Options{T}(ht,vals,used,check_lock)
 end
-# Constructor given a list of assignment expressions,
-#   Options(OPTIONS_NONE,:(a=5),:(b=rand(3)),...)
-function Options(check_behavior::Int,ex::Expr...)
-    pv = Array(Any,2*length(ex))
-    for i = 1:length(ex)
+# Constructor: supply type followed by list of assignment expressions, e.g.,
+#   o = Options(CheckNone,:(a=5),:(b=rand(3)),...)
+function Options{T<:OptionsChecking}(::Type{T},ex::Expr...)
+    ht = HashTable{Symbol,Int}()
+    vals = Array(Any,0)
+    n = length(ex)
+    for i = 1:n
         if ex[i].head != :(=)
             error("All expressions must be assignments")
         end
-        pv[2*i-1] = ex[i].args[1]
-        pv[2*i] = ex[i].args[2]
+        ht[ex[i].args[1]] = i
+        push(vals,ex[i].args[2])
     end
-    Options(check_behavior,pv...)
+    used = falses(n)
+    check_lock = falses(n)
+    Options{T}(ht,vals,used,check_lock)
 end
-Options(ex::Expr...) = Options(OPTIONS_ERROR,ex...)
-function copy(o::Options)
-    Options(copy(o.keyindex),
-            copy(o.vals),
-            copy(o.checked),
-            copy(o.check_lock),
-            copy(o.check_behavior))
-end
+# If no type specified, CheckError is the default
+Options(p1::Symbol,v1,args...) = Options(CheckError,p1,v1,args...)
+Options(ex::Expr...) = Options(CheckError,ex...)
 
+function copy{T<:OptionsChecking}(o::Options{T})
+    Options{T}(copy(o.key2index),
+            copy(o.vals),
+            copy(o.used),
+            copy(o.check_lock))
+end
+function convert{Tnew<:OptionsChecking,Told<:OptionsChecking}(::Type{Tnew},o::Options{Told})
+    Options{Tnew}(o.key2index,o.vals,o.used,o.check_lock)
+end
+function show_common(o::Options)
+    # Put them in the same order specified by the user
+    key = Array(ASCIIString,length(o.vals))
+    for (k, v) = o.key2index
+        key[v] = string(k)
+    end
+    for i = 1:length(key)
+        print("$(key[i]) = $(o.vals[i])")
+        if i < length(key)
+            print(", ")
+        end
+    end
+end
+function show(o::Options{CheckNone})
+    show_common(o)
+    print(" (CheckNone)")
+end
+function show(o::Options{CheckWarn})
+    show_common(o)
+    print(" (CheckWarn)")
+end
+function show(o::Options{CheckError})
+    show_common(o)
+    print(" (CheckError)")
+end
 
 
 #### Functions ####
-# Add a new options setting
+# Return an options setting
+function ref(o::Options,s::Symbol)
+    index = ht_keyindex(o.key2index,s)
+    if index > 0
+        index = o.key2index.vals[index]
+        return o.vals[index]
+    else
+        return nothing
+    end
+end
+# Re-set an options setting, or add a new one
 function assign(o::Options,v,s::Symbol)
-    o.keyindex[s] = length(o.vals)+1
-    push(o.vals,v)
-    push(o.checked,false)
-    push(o.check_lock,false)
+    index = ht_keyindex(o.key2index,s)
+    if index > 0
+        index = o.key2index.vals[index]
+        o.vals[index] = v
+        o.used[index] = false
+        o.check_lock[index] = false
+    else
+        o.key2index[s] = length(o.vals)+1
+        push(o.vals,v)
+        push(o.used,false)
+        push(o.check_lock,false)
+    end
 end
 # Functions for "claiming" and checking usage of individual options
 function ischeck(o::Options)
-    if o.check_behavior == OPTIONS_NONE
-        return falses(length(o.vals))
-    end
     ret = !o.check_lock   # items marked true are to be checked by caller
     o.check_lock[ret] = true
     return ret
 end
-function docheck(o::Options,checkflag::Vector{Bool})
-    if o.check_behavior != OPTIONS_NONE
-        println("Checked: ",o.checked)
-        println("checkflag: ",checkflag)
-        unchecked = checkflag & !o.checked[1:length(checkflag)]
-        println("unchecked: ",unchecked)
-        if any(unchecked)
-            s = ""
-            for (k, v) = o.keyindex
-                if unchecked[v]
-                    s = [s,string(k)]
-                end
-            end
-            s = s[2:end]
-            msg = "The following options were not used: "
-            if o.check_behavior == OPTIONS_WARN
-                println("Warning: ",msg,s)
-            else
-                clearcheck(o,checkflag)  # in case inside try/catch block
-                error(msg,s)
+function ischeck(o::Options{CheckNone})
+    return falses(length(o.vals))
+end
+function docheck_common(o::Options,checkflag::Vector{Bool})
+    unused = checkflag & !o.used[1:length(checkflag)]
+    msg = ""
+    if any(unused)
+        s = Array(ASCIIString,0)
+        for (k, v) = o.key2index
+            if unused[v]
+                push(s,string(k))
             end
         end
+        msg = strcat("The following options were not used: ",s)
+    end
+    return unused, msg
+end
+function docheck(o::Options{CheckNone},checkflag::Vector{Bool})
+    clearcheck(o,checkflag)
+end
+function docheck(o::Options{CheckWarn},checkflag::Vector{Bool})
+    unused, msg = docheck_common(o,checkflag)
+    if any(unused)
+        println("Warning: ",msg)
     end
     clearcheck(o,checkflag)
 end
+function docheck(o::Options{CheckError},checkflag::Vector{Bool})
+    unused, msg = docheck_common(o,checkflag)
+    clearcheck(o,checkflag)  # in case it's in a try/catch block...
+    if any(unused)
+        error(msg)
+    end
+end
 # Reset status on handled options (in case o is reused later)
 function clearcheck(o::Options,checkflag::Vector{Bool})
-    # Note checkflag may be shorter than o.checked and o.check_lock,
-    # so can't just say o.checked[checkflag] = false
-    for i = 1:length(checkflag)
-        if checkflag[i]
-            o.check_lock[i] = false
-            o.checked[i] = false
-        end
-    end
+    o.used[checkflag] = false
+    o.check_lock[checkflag] = false
 end
 
 
-# Given a tuple of assignment expressions, check to see whether the
-# left-hand-side appears as a symbol in the options table. If so,
-# replace the rhs in the assignment with the value in options.
-function assign_replace(o::Options,ex::(Expr...))
-    exout = copy(ex)
-    for i = 1:length(ex)
-        if ex[i].head == :(=)
-            try  # try/catch requires only 1 table traversal, "has" needs 2?
-                indx = o.keyindex[ex[i].args[1]]
-                exout[i].args[2] = o.vals[indx]
-                o.checked[indx] = true
-            catch
-            end
-        end
-    end
-    return exout
-end
-# Create a variable using the following syntax:
-#    eval(assign_str("fred",5))
-function assign_str(name::String,val)
-    expr(:(=),Any[symbol(name),val])
-end
 
-#### Convenience macros ####
+#### Macros ####
 # Macro to set the defaults. Usage:
 #     @defaults opts a=3 b=a+2 c=f(a,b)
 # After executing this macro, you can use a, b, and c as ordinary variables
 macro defaults(opts,ex...)
-    indx, extmp, thisex, varname = gensym(4)
-    quote
-        $extmp = assign_replace($opts,$ex)
-        for $indx = 1:length($extmp)
-            eval(($extmp)[$indx])
+    # Create a new variable storing the checkflag
+    varname = strcat("_",string(opts),"_checkflag")
+    exret = :($symbol(varname) = ischeck($opts))
+    htindex = gensym()
+    # Check each argument in the assignment list
+    for i = 1:length(ex)
+        thisex = ex[i]
+        if !isa(thisex,Expr) || thisex.head != :(=)
+            error("@defaults: following the options variable, all statements must be assignments")
         end
-        $varname = strcat("_",$string(opts),"_checkflag")
-        eval(assign_str($varname,ischeck($opts)))
+        thissym = thisex.args[1]
+        exret = quote
+            $exret
+            $htindex = ht_keyindex(($opts).key2index,($ex)[$i].args[1])
+            if $htindex > 0
+                $htindex = ($opts).key2index.vals[$htindex]
+                $(thissym) = ($opts).vals[$htindex]
+                ($opts).used[$htindex] = true
+            else
+                $thisex
+            end
+        end
     end
-    # The last line executes local _nameofopts_checkflag = ischeck(nameofopts)
+    exret
 end
 
 # Macro to check whether options were used (optional, use only if you
 # want to protect the user from typos or other nonsensical settings)
 # Usage:
-#    @check_options_used opts
-macro check_options_used(opts)
+#    @check_used opts
+macro check_used(opts)
     varname = gensym()
-    quote
-        $varname = strcat("_",$string(opts),"_checkflag")
-        eval(expr(:call,Any[:docheck,$opts,symbol($varname)]))
-    end
-    # The last line executes docheck(namedopts,_namedopts_checkflag)
+    varname = strcat("_",string(opts),"_checkflag")
+    :(docheck($opts,$symbol(varname)))
 end
 
 # Macro for setting options. Usage:
 #    opts = @options a=5 b=7
-#    opts = @options OPTIONS_WARN a=5 b=7
+#    opts = @options CheckWarn a=5 b=7
 macro options(ex...)
-    quote
-        if isa(($ex)[1],Expr)
-            Options(($ex)...)
-        else
-            Options($ex[1],(($ex)[2:end])...)
-        end
+    if isa(ex[1],Symbol)
+        :(Options(eval(($ex)[1]),(($ex)[2:end])...))
+    else
+        :(Options(($ex)...))
     end
 end
 
-# Macro to append additional options. Usage:
-#    @add_options opts c=25 d=4
-macro add_options(opts,ex...)
-    indx = gensym()
-    quote
-        for $indx = 1:length($ex)
-            if ($ex)[$indx].head != :(=)
-                error("Arguments to add_options must be a list of assignments, e.g., a=5")
-            end
+# Macro to reset or append additional options. Usage:
+#    @set_options opts c=25 d=4
+macro set_options(opts,ex...)
+    exret = quote
+    end
+    for indx = 1:length(ex)
+        thisex = ex[indx]
+        if !isa(thisex,Expr) || thisex.head != :(=)
+            error("Arguments to add_options must be a list of assignments, e.g.,a=5")
+        end
+        thissym = thisex.args[1]
+        exret = quote
+            $exret
             ($opts)[($ex)[$indx].args[1]] = ($ex)[$indx].args[2]
         end
     end
+    exret
 end

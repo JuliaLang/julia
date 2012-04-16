@@ -1,45 +1,33 @@
 function simplefun(x,funcopts::Options)
-#    @defaults funcopts a=3 b=2 c=2*b
-    @defaults funcopts a=3 b=2
+    @defaults funcopts a=3 b=2 c=2*b
     println(a)
     println(b)
-#    println(c)
-    @check_options_used funcopts
+    println(c)
+    @check_used funcopts
 end
 
 
 function complexfun(x,opts::Options)
-    println("Parent opts (before default):",opts)
     @defaults opts parent=3 both=7
-    println("Parent opts (after default):",opts)
-    println("Parent checkflag: ",_opts_checkflag)
     println(parent)
     println(both)
     subfun1(x,opts)
-    println("Parent checkflag, round 2: ",_opts_checkflag)
     subfun2(x,opts)
-    println("Parent opts (before check):",opts)
-    @check_options_used opts
+    @check_used opts
 end
 
-function subfun1(x,sub1opts::Options)
-    println("sub1 opts (before default):",sub1opts)
-    @defaults sub1opts sub1="sub1 default" both=0
-    println("sub1 opts (after default):",sub1opts)
-    println("sub1 checkflag: ",_sub1opts_checkflag)
+function subfun1(x,opts::Options)
+    @defaults opts sub1="sub1 default" both=0
     println(sub1)
     println(both)
-    @check_options_used sub1opts
+    @check_used opts
 end
 
-function subfun2(x,sub2opts::Options)
-    println("sub2 opts (before default):",sub2opts)
-    @defaults sub2opts sub2="sub2 default" both=22
-    println("sub2 opts (after default):",sub2opts)
-    println("sub2 checkflag: ",_sub2opts_checkflag)
+function subfun2(x,opts::Options)
+    @defaults opts sub2="sub2 default" both=22
     println(sub2)
     println(both)
-    @check_options_used sub2opts
+    @check_used opts
 end
 
 function twinopts(x,plotopts::Options,calcopts::Options)
@@ -47,8 +35,8 @@ function twinopts(x,plotopts::Options,calcopts::Options)
     @defaults calcopts n_iter=100
     println(linewidth)
     println(n_iter)
-    @check_options_used plotopts
-    @check_options_used calcopts
+    @check_used plotopts
+    @check_used calcopts
 end
 
 
@@ -58,14 +46,14 @@ println("Simple cases:\n")
 println("Substitute 5 for a:")
 o = @options a=5
 simplefun(77,o)
-println(o)
+println("Options: ",o)
 
 println("\n\nAdditionally, substitute 7 for b:")
-@add_options o b=7
+@set_options o b=7
 simplefun(77,o)
 
 println("\n\nAdd an unrecognized option d:")
-@add_options o d=99
+@set_options o d=99
 try
     simplefun(77,o)
     println("This should not have succeeded!!")
@@ -77,12 +65,12 @@ end
 println(o)
 
 println("\n\nNow it should just yield a warning:")
-o.check_behavior = OPTIONS_WARN
-simplefun(77,o)
+owarn = convert(CheckWarn,o)
+simplefun(77,owarn)
 
 println("\n\nThis should run silently:")
-o.check_behavior = OPTIONS_NONE
-simplefun(77,o)
+onone = convert(CheckNone,o)
+simplefun(77,onone)
 
 
 
