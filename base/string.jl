@@ -144,10 +144,10 @@ function search(s::String, t::String, i::Integer)
     if isempty(t) return (i,nextind(s,i)) end
     t1, j2 = next(t,start(t))
     while true
-        j = j2
         i = strchr(s,t1,i)
         if i == 0 return (0,0) end
-        c, k = next(s,i)
+        c, ii = next(s,i)
+        j = j2; k = ii
         matched = true
         while !done(t,j)
             if done(s,k)
@@ -164,7 +164,7 @@ function search(s::String, t::String, i::Integer)
         if matched
             return (i,k)
         end
-        i = k
+        i = ii
     end
 end
 search(s::String, t::String) = search(s,t,start(s))
