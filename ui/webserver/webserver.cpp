@@ -14,6 +14,8 @@
 #include <sys/wait.h>
 #endif
 
+extern char **environ; //only unistd.h post- POSIX 2008
+
 using namespace std;
 using namespace scgi;
 
