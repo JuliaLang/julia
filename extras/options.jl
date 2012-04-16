@@ -21,7 +21,7 @@ end
 #   o = Options(CheckWarn,:a,5,:b,rand(3),...)
 # Note, the macro @options makes construction easier
 function Options{T<:OptionsChecking}(::Type{T},args...)
-    if length(args) % 2 != 0
+    if isodd(length(args))
         error("Parameter/value lists must come in pairs")
     end
     n = div(length(args),2)
