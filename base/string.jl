@@ -135,15 +135,47 @@ function strchr(s::String, c::Chars, i::Integer)
 end
 strchr(s::String, c::Chars) = strchr(s,c,start(s))
 
-# TODO: search for a substring
-
 contains(s::String, c::Char) = (strchr(s,c)!=0)
+
+search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
+search(s::String, c::Chars) = search(s,c,start(s))
+
+function search(s::String, t::String, i::Integer)
+    if isempty(t)
+        return i <= length(s) ? (i,nextind(s,i)) : (0,start(s))
+    end
+    t1, j2 = next(t,start(t))
+    while true
+        j = j2
+        i = strchr(s,t1,i)
+        if i == 0 return (0,start(s)) end
+        c, k = next(s,i)
+        matched = true
+        while !done(t,j)
+            if done(s,k)
+                matched = false
+                break
+            end
+            c, k = next(s,k)
+            d, j = next(t,j)
+            if c != d
+                matched = false
+                break
+            end
+        end
+        if matched
+            return (i,k)
+        end
+        i = k
+    end
+end
+search(s::String, t::String) = search(s,t,start(s))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
     i = 0
     for c in s
-        cx[i += 1] = c
+        cx[i+=1] = c
     end
     return cx
 end
