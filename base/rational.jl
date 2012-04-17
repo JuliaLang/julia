@@ -22,7 +22,6 @@ Rational(n::Integer) = Rational(n,one(n))
 //(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 //(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
 //(x::Real, y::Complex) = x*y'//real(y*y')
-//(x::Rational, y::Rational) = Rational(x.num*y.den, x.den*y.num)
 
 function //(x::Complex, y::Complex)
     xy = x*y'
