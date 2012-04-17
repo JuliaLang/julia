@@ -155,7 +155,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?:function|type|macro|quote|abstract|bitstype|typealias|module)\b</string>
+					<string>\b(?:function|type|macro|quote|abstract|bitstype|typealias|module|new)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
@@ -175,7 +175,7 @@
 					<key>match</key>
 					<string>@\w+\b</string>
 					<key>name</key>
-					<string>keyword.macro.julia</string>
+					<string>support.macro.julia</string>
 				</dict>
 			</array>
 		</dict>
