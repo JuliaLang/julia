@@ -933,7 +933,19 @@
 		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call (top vcat) ,@a))
+		   (if (any (lambda (x)
+			      (and (pair? x) (eq? (car x) 'row)))
+			    a)
+		       ;; convert nested hcat inside vcat to hvcat
+		       (let ((rows (map (lambda (x)
+					  (if (and (pair? x) (eq? (car x) 'row))
+					      (cdr x)
+					      (list x)))
+					a)))
+			 `(call (top hvcat)
+				(tuple ,@(map length rows))
+				,@(apply nconc rows)))
+		       `(call (top vcat) ,@a)))
 
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
