@@ -420,7 +420,7 @@ function cat(catdim::Integer, X...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("cat: dimension mismatch on dimension", d)
+                    error("cat: dimension mismatch on dimension ", d)
                     #error("lala $d")
                 end
             end
@@ -696,6 +696,7 @@ function repmat(a::AbstractMatrix, m::Int, n::Int)
     end
     return b
 end
+repmat(a::AbstractVector, m::Int, n::Int) = repmat(reshape(a, length(a), 1), m, n)
 
 sub2ind(dims) = 1
 sub2ind(dims, i::Integer) = int(i)

@@ -10,6 +10,9 @@ bool(x::Number) = convert(Bool, x)
 
 sizeof(::Type{Bool}) = 1
 
+typemin(::Type{Bool}) = false
+typemax(::Type{Bool}) = true
+
 ## boolean operations ##
 
 !(x::Bool) = eq_int(unbox8(x),trunc8(0))
