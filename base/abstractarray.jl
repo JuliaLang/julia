@@ -420,7 +420,7 @@ function cat(catdim::Integer, X...)
             len = d <= ndimsX[1] ? dimsX[1][d] : 1
             for i = 2:nargs
                 if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("cat: dimension mismatch on dimension", d)
+                    error("cat: dimension mismatch on dimension ", d)
                     #error("lala $d")
                 end
             end
