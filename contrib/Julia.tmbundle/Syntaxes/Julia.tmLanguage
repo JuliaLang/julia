@@ -366,6 +366,37 @@
 						</dict>
 					</array>
 				</dict>
+				<dict>
+					<key>begin</key>
+					<string>`</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>0</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.string.begin.julia</string>
+						</dict>
+					</dict>
+					<key>end</key>
+					<string>`</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>0</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.definition.string.end.julia</string>
+						</dict>
+					</dict>
+					<key>name</key>
+					<string>string.quoted.double.julia</string>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>#string_escaped_char</string>
+						</dict>
+					</array>
+				</dict>
 			</array>
 		</dict>
 		<key>string_custom_escaped_char</key>
@@ -402,18 +433,44 @@
 						<key>1</key>
 						<dict>
 							<key>name</key>
-							<string>keyword.other.julia</string>
+							<string>keyword.control.type.julia</string>
 						</dict>
 						<key>2</key>
 						<dict>
 							<key>name</key>
 							<string>entity.name.type.julia</string>
 						</dict>
+						<key>3</key>
+						<dict>
+							<key>name</key>
+							<string>entity.other.inherited-class.julia</string>
+						</dict>
+						<key>4</key>
+						<dict>
+							<key>name</key>
+							<string>punctuation.separator.inheritance.julia</string>
+						</dict>
 					</dict>
 					<key>match</key>
-					<string>(type)\s+([a-zA-Z0-9_]+)</string>
+					<string>(type)\s+([a-zA-Z0-9_]+)(\s*(&lt;:)\s*[.a-zA-Z0-9_:]+)?</string>
 					<key>name</key>
 					<string>meta.type.julia</string>
+				</dict>
+				<dict>
+					<key>captures</key>
+					<dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>support.type.julia</string>
+						</dict>
+					</dict>
+					<key>comments</key>
+					<string>Matches a typed variable, such as 'id::String'</string>
+					<key>match</key>
+					<string>([a-zA-Z0-9_]+)(::[a-zA-Z0-9_]+)</string>
+					<key>name</key>
+					<string>other.typed-variable.julia</string>
 				</dict>
 			</array>
 		</dict>
