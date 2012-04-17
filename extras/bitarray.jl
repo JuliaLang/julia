@@ -328,9 +328,9 @@ let ref_cache = nothing
 global ref
 function ref(B::BitArray, I::Indices...)
     i = length(I)
-    while 1 > 0 && isa(I[i],Integer); i-=1; end
-    d = map(length, I)::Dims
-    X = similar(B, d[1:i])
+    while i > 0 && isa(I[i],Integer); i-=1; end
+    d = map(length, I[1:i])::Dims
+    X = similar(B, d)
 
     if is(ref_cache,nothing)
         ref_cache = HashTable()
@@ -427,51 +427,72 @@ function assign{T<:Integer}(B::BitArray, x, I::AbstractVector{T})
 end
 
 # this is mainly indended for the general cat case
-function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
-    nI = 1 + length(I)
-    if ndims(B) != nI
-        error("wrong number of dimensions in assigment")
-    end
-    lI = length(I0)
-    for r in I
-        lI *= length(r)
-    end
-    if numel(X) != lI
-        error("array assignment dimensions mismatch")
-    end
-    if lI == 0
-        return B
-    end
-    f0 = first(I0)
-    l0 = length(I0)
-    if nI == 1
-        _jl_copy_chunks(B.chunks, f0, X.chunks, 1, l0)
-        return B
-    end
-    ind_lst = [first(r)::Int | r in I]
-    indX = 1
-    iterate = true
-    while iterate
+let assign_cache = nothing
+    global assign
+    function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
+        nI = 1 + length(I)
+        if ndims(B) != nI
+            error("wrong number of dimensions in assigment")
+        end
+        lI = length(I0)
+        for r in I
+            lI *= length(r)
+        end
+        if numel(X) != lI
+            error("array assignment dimensions mismatch")
+        end
+        if lI == 0
+            return B
+        end
+        f0 = first(I0)
+        l0 = length(I0)
+        if nI == 1
+            _jl_copy_chunks(B.chunks, f0, X.chunks, 1, l0)
+            return B
+        end
+        if is(assign_cache,nothing)
+            assign_cache = HashTable()
+        end
+        f_lst = [first(r)::Int | r in I]
+        l_lst = [last(r)::Int | r in I]
+        ind_lst = copy(f_lst)
+        gap_lst = l_lst - f_lst + 1
+        stride_lst = Array(Int, nI - 1)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
             stride *= size(B, k)
+            stride_lst[k] = stride
             ind += stride * (ind_lst[k] - 1)
+            gap_lst[k] *= stride
         end
-        _jl_copy_chunks(B.chunks, ind, X.chunks, indX, l0)
-        indX += l0
-        iterate = false
-        for k = 1 : nI - 1
-            if ind_lst[k] < last(I[k])
-                ind_lst[k] += 1
-                iterate = true
-                break;
-            else
-                ind_lst[k] = first(I[k])
+        reverse!(stride_lst)
+        reverse!(gap_lst)
+
+        genbodies = cell(nI, 2)
+        genbodies[1] = quote
+                _jl_copy_chunks(B.chunks, ind, X.chunks, refind, l0)
+                refind += l0
+                ind += stride_lst[loop_ind]
+            end
+        for k = 2 : nI
+            genbodies[k, 1] = quote
+                loop_ind += 1
+            end
+            genbodies[k, 2] = quote
+                ind -= gap_lst[loop_ind]
+                loop_ind -= 1
+                if (loop_ind > 0)
+                    ind += stride_lst[loop_ind]
+                end
             end
         end
+        gen_cartesian_map(assign_cache,
+            ivars->genbodies,
+            I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
+            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+        return B
     end
-    return B
 end
 
 function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
@@ -488,9 +509,9 @@ let assign_cache = nothing
             assign_cache = HashTable()
         end
         gen_cartesian_map(assign_cache, ivars->:(B[$(ivars...)] = x),
-        tuple(I0, I...),
-        (:B, :x),
-        B, x)
+            tuple(I0, I...),
+            (:B, :x),
+            B, x)
         return B
     end
 end
