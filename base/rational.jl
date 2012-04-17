@@ -16,13 +16,12 @@ Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)
 Rational(n::Integer, d::Integer) = Rational(promote(n,d)...)
 Rational(n::Integer) = Rational(n,one(n))
 
-//(n::Integer, d::Integer) = Rational(n,d)
-//(x::Rational, y::Integer) = x.num // (x.den*y)
-//(x::Integer, y::Rational) = (x*y.den) // y.num
-//(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
-//(x::Complex, y::Real) = complex(real(x)//y, imag(x)//y)
-//(x::Real, y::Complex) = x*y'//real(y*y')
-//(x::Rational, y::Rational) = Rational(x.num*y.den, x.den*y.num)
+//(n::Integer,  d::Integer ) = Rational(n,d)
+//(x::Rational, y::Integer ) = x.num//(x.den*y)
+//(x::Integer,  y::Rational) = (x*y.den)//y.num
+//(x::Rational, y::Rational) = (x.num*y.den)//(x.den*y.num)
+//(x::Complex,  y::Real    ) = complex(real(x)//y,imag(x)//y)
+//(x::Real,     y::Complex ) = x*y'//real(y*y')
 
 function //(x::Complex, y::Complex)
     xy = x*y'
@@ -93,7 +92,7 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 +(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
 -(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)
 *(x::Rational, y::Rational) = (x.num*y.num) // (x.den*y.den)
-/(x::Rational, y::Rational) = x // y
+/(x::Rational, y::Rational) = (x.num*y.den) // (x.den*y.num)
 /(x::Rational, z::ComplexPair) = inv(z/x)
 
 ==(x::Rational, y::Rational) = x.den == y.den && x.num == y.num
