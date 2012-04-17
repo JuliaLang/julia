@@ -1608,27 +1608,39 @@ function isequal(A::BitArray, B::BitArray)
     return true
 end
 
-for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
-    @eval function ($f){T}(v::BitVector{T})
-        n = length(v)
-        c = Array(T, n)
-        if n == 0; return c; end
+function cumsum{T}(v::BitVector{T})
+    n = length(v)
+    c = Array(T, n)
+    if n == 0; return c; end
 
-        c[1] = v[1]
-        for i=2:n
-           c[i] = ($op)(v[i], c[i-1])
-        end
-        return c
+    c[1] = v[1]
+    for i=2:n
+        c[i] = v[i] + c[i-1]
     end
-    @eval function ($f)(v::BitVector{Bool})
-        n = length(v)
-        c = similar(v, n)
-        if n == 0; return c; end
+    return c
+end
+function cumsum(v::BitVector{Bool})
+    n = length(v)
+    c = bitones(Bool, n)
+    for i=1:n
+        if !v[i]
+            c[i] = false
+        else
+            break
+        end
+    end
+    return c
+end
 
-        c[1] = v[1]
-        for i=2:n
-           c[i] = ($op)(v[i], c[i-1])
+function cumprod{T}(v::BitVector{T})
+    n = length(v)
+    c = bitzeros(T, n)
+    for i=1:n
+        if v[i] == one(T)
+            c[i] = one(T)
+        else
+            break
         end
-        return c
     end
+    return c
 end
