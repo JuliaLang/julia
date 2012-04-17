@@ -163,8 +163,8 @@ macro defaults(opts,ex...)
     # Create a new variable storing the checkflag
     varname = strcat("_",string(opts),"_checkflag")
     exret = :($symbol(varname) = ischeck($opts))
-    htindex = gensym()
     # Check each argument in the assignment list
+    htindex = gensym()
     for i = 1:length(ex)
         thisex = ex[i]
         if !isa(thisex,Expr) || thisex.head != :(=)
@@ -173,10 +173,10 @@ macro defaults(opts,ex...)
         thissym = thisex.args[1]
         exret = quote
             $exret
-            $htindex = ht_keyindex(($opts).key2index,($ex)[$i].args[1])
+            $htindex = ht_keyindex(($opts).key2index,$expr(:quote,thissym))
             if $htindex > 0
                 $htindex = ($opts).key2index.vals[$htindex]
-                $(thissym) = ($opts).vals[$htindex]
+                $thissym = ($opts).vals[$htindex]
                 ($opts).used[$htindex] = true
             else
                 $thisex
@@ -218,9 +218,10 @@ macro set_options(opts,ex...)
             error("Arguments to add_options must be a list of assignments, e.g.,a=5")
         end
         thissym = thisex.args[1]
+        thisval = thisex.args[2]
         exret = quote
             $exret
-            ($opts)[($ex)[$indx].args[1]] = ($ex)[$indx].args[2]
+            ($opts)[$expr(:quote,thissym)] = $thisval
         end
     end
     exret
