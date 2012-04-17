@@ -219,12 +219,7 @@ sortperm(r::Range1) = (r, 1:length(r))
 sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (r, 1:1:length(r)) :
                                                (reverse(r), length(r):-1:1)
 
-function sum{T}(r::Ranges{T})
+function sum(r::Ranges)
     l = length(r)
-    return l * (first(r) + step(r) * (l - 1) / 2)
-end
-
-function sum{T<:Integer}(r::Ranges{T})
-    l = length(r)
-    return l * first(r) + div(step(r) * l * (l - 1), 2)
+    return l * first(r) + step(r) * div(l * (l - 1), 2)
 end
