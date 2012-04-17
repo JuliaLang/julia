@@ -387,28 +387,16 @@ function assign{T<:Integer}(B::BitArray{T}, x::Number, i::Integer)
     return B
 end
 
-# disambiguations first
-assign{T}(B::BitArray, x::AbstractArray{T}, i::Integer) = error("invalid argument")
-assign(B::BitArray, x::AbstractArray, i0::Integer, i1::Integer) = error("invalid argument")
-assign(B::BitArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer) = error("invalid argument")
-assign(B::BitArray, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) = error("invalid argument")
-assign(B::BitArray, x::AbstractArray, I0::Integer, I::Integer...) = error("invalid argument")
-
-assign(B::BitArray, x, i::Integer) =
-    B[i] = int(x)
-
-assign(B::BitArray, x, i0::Integer, i1::Integer) =
+assign(B::BitArray, x::Number, i0::Integer, i1::Integer) =
     B[i0 + size(B,1)*(i1-1)] = x
 
-assign(B::BitArray, x, i0::Integer, i1::Integer, i2::Integer) =
+assign(B::BitArray, x::Number, i0::Integer, i1::Integer, i2::Integer) =
     B[i0 + size(B,1)*((i1-1) + size(B,2)*(i2-1))] = x
 
-assign(B::BitArray, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
+assign(B::BitArray, x::Number, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
     B[i0 + size(B,1)*((i1-1) + size(B,2)*((i2-1) + size(B,3)*(i3-1)))] = x
 
-assign(B::BitArray, x, I0::Integer, I::Integer...) = assign_scalarNDbit(B,x,I0,I...)
-
-function assign_scalarNDbit(B::BitArray, x, I0::Integer, I::Integer...)
+function assign(B::BitArray, x::Number, I0::Integer, I::Integer...)
     index = I0
     stride = 1
     for k = 1:length(I)
@@ -419,17 +407,9 @@ function assign_scalarNDbit(B::BitArray, x, I0::Integer, I::Integer...)
     return B
 end
 
-function assign{T<:Integer}(B::BitArray, x, I::AbstractVector{T})
-    for i in I
-        B[i] = x
-    end
-    return B
-end
-
-# this is mainly indended for the general cat case
 let assign_cache = nothing
-    global assign
-    function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
+    global _jl_assign_array2bitarray_ranges
+    function _jl_assign_array2bitarray_ranges(B::BitArray, X::BitArray, I0::Range1{Int}, I::Range1{Int}...)
         nI = 1 + length(I)
         if ndims(B) != nI
             error("wrong number of dimensions in assigment")
@@ -495,7 +475,22 @@ let assign_cache = nothing
     end
 end
 
-function assign{T<:Integer}(B::BitArray, X::AbstractArray, I::AbstractVector{T})
+# note: we can gain some performance if the first dimension is a range;
+#       currently this is mainly indended for the general cat case
+# TODO: extend to I:Indices... (i.e. not necessarily contiguous)
+function assign(B::BitArray, X::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
+    I = map(x->(isa(x,Integer) ? (x:x) : x), I)
+    _jl_assign_array2bitarray_ranges(B, X, I0, I...)
+end
+
+function assign{T<:Integer}(B::BitArray, x::Number, I::AbstractVector{T})
+    for i in I
+        B[i] = x
+    end
+    return B
+end
+
+function assign{T<:Number,S<:Integer}(B::BitArray, X::AbstractArray{T}, I::AbstractVector{S})
     for i = 1:length(I)
         B[I[i]] = X[i]
     end
@@ -504,7 +499,7 @@ end
 
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, x, I0::Indices, I::Indices...)
+    function assign(B::BitArray, x::Number, I0::Indices, I::Indices...)
         if is(assign_cache,nothing)
             assign_cache = HashTable()
         end
@@ -516,9 +511,13 @@ let assign_cache = nothing
     end
 end
 
+# note: use of T<:Integer in the following is to disambiguate
+assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Integer) =
+    (B[I0] = X[1])
+
 let assign_cache = nothing
     global assign
-    function assign(B::BitArray, X::AbstractArray, I0::Indices, I::Indices...)
+    function assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Indices, I::Indices...)
         if is(assign_cache,nothing)
             assign_cache = HashTable()
         end
@@ -533,7 +532,7 @@ end
 
 # logical indexing
 
-function _jl_assign_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
+function _jl_assign_bool_scalar_1d(A::BitArray, x::Number, I::AbstractArray{Bool})
     n = sum(I)
     for i = 1:numel(I)
         if I[i]
@@ -543,7 +542,7 @@ function _jl_assign_bool_scalar_1d(A::BitArray, x, I::AbstractArray{Bool})
     A
 end
 
-function _jl_assign_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+function _jl_assign_bool_vector_1d{T<:Number}(A::BitArray, X::AbstractArray{T}, I::AbstractArray{Bool})
     n = sum(I)
     c = 1
     for i = 1:numel(I)
@@ -555,19 +554,29 @@ function _jl_assign_bool_vector_1d(A::BitArray, X::AbstractArray, I::AbstractArr
     A
 end
 
-assign(A::BitArray, X::AbstractArray, I::AbstractVector{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
-assign(A::BitArray, X::AbstractArray, I::AbstractArray{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
-assign(A::BitArray, x, I::AbstractVector{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
-assign(A::BitArray, x, I::AbstractArray{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
+assign{T<:Number}(A::BitArray, X::AbstractArray{T}, I::AbstractVector{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
+assign{T<:Number}(A::BitArray, X::AbstractArray{T}, I::AbstractArray{Bool}) = _jl_assign_bool_vector_1d(A, X, I)
+assign(A::BitArray, x::Number, I::AbstractVector{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
+assign(A::BitArray, x::Number, I::AbstractArray{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
 
-assign{T<:Integer}(A::BitMatrix{T}, x::AbstractArray, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
-assign{T<:Integer}(A::BitMatrix{T}, x, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+# note: use of T<:Integer in the following is to disambiguate
+assign{T<:Integer,S<:Number}(A::BitMatrix{T}, x::AbstractArray{S}, I::Integer, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
 
-assign{T<:Integer}(A::BitMatrix{T}, x::AbstractArray, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
-assign{T<:Integer}(A::BitMatrix{T}, x, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
+assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::Integer, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
 
-assign{T<:Integer}(A::BitMatrix{T}, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
-assign{T<:Integer}(A::BitMatrix{T}, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
+assign{T<:Integer,S<:Number}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{Bool}, J::Integer) =
+    (A[find(I),J] = x)
+
+assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::Integer) =
+    (A[find(I),J] = x)
+
+assign{T<:Integer,S<:Number}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
+    (A[find(I),find(J)] = x)
+
+assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
+    (A[find(I),find(J)] = x)
 
 
 ## Dequeue functionality ##
