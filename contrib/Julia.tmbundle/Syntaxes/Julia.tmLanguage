@@ -41,10 +41,6 @@
 		</dict>
 		<dict>
 			<key>include</key>
-			<string>#bracket</string>
-		</dict>
-		<dict>
-			<key>include</key>
 			<string>#number</string>
 		</dict>
 		<dict>
