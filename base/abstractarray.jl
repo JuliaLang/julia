@@ -696,6 +696,7 @@ function repmat(a::AbstractMatrix, m::Int, n::Int)
     end
     return b
 end
+repmat(a::AbstractVector, m::Int, n::Int) = repmat(reshape(a, length(a), 1), m, n)
 
 sub2ind(dims) = 1
 sub2ind(dims, i::Integer) = int(i)
