@@ -620,6 +620,7 @@ void rl_clear_input(void) {
 	rl_replace_line("\0",0);
 	rl_reset_line_state();
 	rl_forced_update_display();
+	restart();
 #ifndef __WIN32__
     ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
 #endif

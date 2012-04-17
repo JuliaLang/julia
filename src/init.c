@@ -86,16 +86,45 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
+volatile HANDLE hMainThread;
 void restore_signals() { }
+void win_raise_sigint() {
+	jl_raise(jl_interrupt_exception);
+}
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {	
-	//todo: switch to using windows custom handler instead of signal
-    //signal(SIGINT, sigint_handler);
 	int sig;
 	switch(sig){
 	//	case ...: usig = ...; break;
 		default: sig = wsig;
 	}
+    if (jl_defer_signal) {
+        jl_signal_pending = sig;
+    } else {
+        jl_signal_pending = 0;
+		SuspendThread(hMainThread);
+		CONTEXT ctxThread;
+		memset(&ctxThread,0,sizeof(CONTEXT));
+		ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+		if (!GetThreadContext(hMainThread, &ctxThread)) {
+			//error
+			printf("error: GetThreadContext failed\n");
+			return 0;
+		}
+		ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
+		if (!SetThreadContext(hMainThread,&ctxThread)) {
+			printf("error: SetThreadContext failed\n");
+			//error
+			return 0;
+		}
+		if ((DWORD)-1 == ResumeThread (hMainThread)) {
+			printf("error: ResumeThread failed\n");
+			//error
+			return 0;
+		}
+    }
+	return 1;
+}
 #else	
 void restore_signals() {
 	sigset_t sset;
@@ -104,24 +133,16 @@ void restore_signals() {
 }
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {	
-#endif
-	//printf("sigint\n");
     if (jl_defer_signal) {
         jl_signal_pending = sig;
-    }
-    else {
+    } else {
         jl_signal_pending = 0;
-#ifndef __WIN32__
         ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
         ev_break(jl_local_event_loop()->ev,EVBREAK_CANCEL);
-#endif
         jl_raise(jl_interrupt_exception);
     }
-#ifdef __WIN32__
-    return 1;
-#endif
 }
-
+#endif
 void jl_get_builtin_hooks(void);
 
 uv_lib_t jl_dl_handle;
@@ -288,7 +309,10 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-    SetConsoleCtrlHandler(sigint_handler,1);
+	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+		GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+		TRUE, DUPLICATE_SAME_ACCESS );
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
