@@ -12,13 +12,25 @@
 	<key>firstLineMatch</key>
 	<string>^#!/usr/bin/env\s+julia\s*$</string>
 	<key>foldingStartMarker</key>
-	<string>^\s*(?:if|while|for|begin|function|struct|macro|module)\b(?!.*\bend\b).*$</string>
+	<string>^\s*(?:if|while|for|begin|function|struct|macro|module|type)\b(?!.*\bend\b).*$</string>
 	<key>foldingStopMarker</key>
 	<string>^\s*(?:end)\b.*$</string>
 	<key>name</key>
 	<string>Julia</string>
 	<key>patterns</key>
 	<array>
+		<dict>
+			<key>include</key>
+			<string>#function_decl</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#function_call</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#type_decl</string>
+		</dict>
 		<dict>
 			<key>include</key>
 			<string>#keyword</string>
@@ -78,13 +90,76 @@
 				</dict>
 			</array>
 		</dict>
+		<key>function_call</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>begin</key>
+					<string>([a-zA-Z0-9_]+)\w*\(</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>support.function.julia</string>
+						</dict>
+					</dict>
+					<key>end</key>
+					<string>\)</string>
+					<key>name</key>
+					<string>meta.function.call.julia</string>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
+				</dict>
+			</array>
+		</dict>
+		<key>function_decl</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>begin</key>
+					<string>(function)\w*([a-zA-Z0-9_]+)\w*\(</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.other.julia</string>
+						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>entity.name.function.julia</string>
+						</dict>
+					</dict>
+					<key>end</key>
+					<string>\)</string>
+					<key>name</key>
+					<string>meta.function.julia</string>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
+				</dict>
+			</array>
+		</dict>
 		<key>keyword</key>
 		<dict>
 			<key>patterns</key>
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(?:function|macro|quote|type|abstract|bitstype|typealias|struct|module)\b</string>
+					<string>\b(?:function|type|macro|quote|abstract|bitstype|typealias|struct|module)\b</string>
 					<key>name</key>
 					<string>keyword.other.julia</string>
 				</dict>
@@ -318,6 +393,31 @@
 					<string>\\(\\|[0-3]\d{,2}|[4-7]\d?|x[a-fA-F0-9]{,2}|u[a-fA-F0-9]{,4}|U[a-fA-F0-9]{,8}|.)</string>
 					<key>name</key>
 					<string>constant.character.escape.julia</string>
+				</dict>
+			</array>
+		</dict>
+		<key>type_decl</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>captures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.other.julia</string>
+						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>entity.name.type.julia</string>
+						</dict>
+					</dict>
+					<key>match</key>
+					<string>(type)\s+([a-zA-Z0-9_]+)</string>
+					<key>name</key>
+					<string>meta.type.julia</string>
 				</dict>
 			</array>
 		</dict>
