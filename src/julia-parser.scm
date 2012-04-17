@@ -752,7 +752,12 @@
      (if (not (eqv? (peek-token s) #\())
 	 (error "expected ( after ccall"))
      (take-token s)
-     (cons 'ccall (parse-arglist s #\))))
+     (let ((al (parse-arglist s #\))))
+       (if (and (length> al 1)
+		(memq (cadr al) '(cdecl stdcall fastcall)))
+	   ;; place (callingconv) at end of arglist
+	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
+	   `(ccall ,.al))))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
