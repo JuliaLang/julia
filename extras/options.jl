@@ -1,7 +1,8 @@
 #### options.jl ####
 # A framework for providing optional arguments to functions
 
-# Harlan Harris, Timothy E. Holy, and Stefan Karpinski
+# Harlan Harris & Timothy E. Holy, with contributions from Stefan
+# Karpinski, Patrick O'Leary, and Jeff Bezanson
 
 #### Options type ####
 abstract OptionsChecking
