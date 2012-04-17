@@ -62,10 +62,6 @@ eltype{T}(B::BitArray{T}) = T
 ndims{T,N}(B::BitArray{T,N}) = N
 numel(B::BitArray) = prod(B.dims)
 size(B::BitArray) = tuple(B.dims...)
-isinteger(B::BitArray) = true
-isreal(B::BitArray) = true
-iscomplex(B::BitArray) = false
-isbool(B::BitArray) = false
 
 ## Aux functions ##
 
@@ -1597,3 +1593,42 @@ function cat{T}(catdim::Integer, X::Union(BitArray{T}, Integer)...)
 end
 
 # hvcat -> use fallbacks in abstractarray.jl
+
+## Reductions and scans ##
+
+function isequal(A::BitArray, B::BitArray)
+    if size(A) != size(B)
+        return false
+    end
+    for i = 1:length(A.chunks)
+        if A.chunks[i] != B.chunks[i]
+            return false
+        end
+    end
+    return true
+end
+
+for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
+    @eval function ($f){T}(v::BitVector{T})
+        n = length(v)
+        c = Array(T, n)
+        if n == 0; return c; end
+
+        c[1] = v[1]
+        for i=2:n
+           c[i] = ($op)(v[i], c[i-1])
+        end
+        return c
+    end
+    @eval function ($f)(v::BitVector{Bool})
+        n = length(v)
+        c = similar(v, n)
+        if n == 0; return c; end
+
+        c[1] = v[1]
+        for i=2:n
+           c[i] = ($op)(v[i], c[i-1])
+        end
+        return c
+    end
+end
