@@ -15,6 +15,8 @@ type IOStream <: IO
     ios::Array{Uint8,1}
     name::String
 
+    IOStream(name::String, buf::Array{Uint8,1}) = new(buf, name)
+
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
     function IOStream(name::String, finalize::Bool)
@@ -25,9 +27,6 @@ type IOStream <: IO
         return x
     end
     IOStream(name::String) = IOStream(name, true)
-
-    global make_stdout_stream
-    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
 end
 
 # "own" means the descriptor will be closed with the IOStream
@@ -43,6 +42,7 @@ fdio(fd::Integer) = fdio(fd, false)
 
 make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
 make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
+make_stdout_stream() = IOStream("<stdout>", ccall(:jl_stdout_stream, Any, ()))
 
 show(s::IOStream) = print("IOStream(",s.name,")")
 
