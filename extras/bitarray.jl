@@ -324,23 +324,91 @@ function ref{T<:Integer}(B::BitArray{T}, I::Integer...)
     return B[index]
 end
 
+# note: we can gain some performance if the first dimension is a range;
+# TODO: extend to I:Indices... (i.e. not necessarily contiguous)
 let ref_cache = nothing
-global ref
-function ref(B::BitArray, I::Indices...)
-    i = length(I)
-    while i > 0 && isa(I[i],Integer); i-=1; end
-    d = map(length, I[1:i])::Dims
-    X = similar(B, d)
+    global ref
+    function ref(B::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
+        nI = 1 + length(I)
+        # this will be uncommented when
+        # the indexing behaviour is settled
+        #if ndims(B) != nI
+            #error("wrong number of dimensions in ref")
+        #end
+        while nI > 1 && isa(I[nI-1],Integer); nI-=1; end
+        d = tuple(length(I0), map(length, I[1:nI-1])...)::Dims
+        X = similar(B, d)
 
-    if is(ref_cache,nothing)
-        ref_cache = HashTable()
+        I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
+
+        f0 = first(I0)
+        l0 = length(I0)
+        if nI == 1
+            _jl_copy_chunks(X.chunks, 1, B.chunks, f0, l0)
+            return X
+        end
+        if is(ref_cache,nothing)
+            ref_cache = HashTable()
+        end
+        f_lst = [first(r)::Int | r in I]
+        l_lst = [last(r)::Int | r in I]
+        ind_lst = copy(f_lst)
+        gap_lst = l_lst - f_lst + 1
+        stride_lst = Array(Int, nI - 1)
+        stride = 1
+        ind = f0
+        for k = 1 : nI - 1
+            stride *= size(B, k)
+            stride_lst[k] = stride
+            ind += stride * (ind_lst[k] - 1)
+            gap_lst[k] *= stride
+        end
+        reverse!(stride_lst)
+        reverse!(gap_lst)
+
+        genbodies = cell(nI, 2)
+        genbodies[1] = quote
+                _jl_copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
+                storeind += l0
+                ind += stride_lst[loop_ind]
+            end
+        for k = 2 : nI
+            genbodies[k, 1] = quote
+                loop_ind += 1
+            end
+            genbodies[k, 2] = quote
+                ind -= gap_lst[loop_ind]
+                loop_ind -= 1
+                if loop_ind > 0
+                    ind += stride_lst[loop_ind]
+                end
+            end
+        end
+        gen_cartesian_map(ref_cache,
+            ivars->genbodies,
+            I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
+            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+        return X
     end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = B[$(ivars...)]
-            storeind += 1
-        end, I, (:B, :X, :storeind), B, X, 1)
-    return X
 end
+
+let ref_cache = nothing
+    global ref
+    function ref(B::BitArray, I::Indices...)
+        i = length(I)
+        while i > 0 && isa(I[i],Integer); i-=1; end
+        d = map(length, I[1:i])::Dims
+        X = similar(B, d)
+
+        if is(ref_cache,nothing)
+            ref_cache = HashTable()
+        end
+        gen_cartesian_map(ref_cache, ivars -> quote
+                X[storeind] = B[$(ivars...)]
+                storeind += 1
+            end, I, (:B, :X, :storeind), B, X, 1)
+        return X
+    end
 end
 
 # logical indexing
@@ -462,7 +530,7 @@ let assign_cache = nothing
             genbodies[k, 2] = quote
                 ind -= gap_lst[loop_ind]
                 loop_ind -= 1
-                if (loop_ind > 0)
+                if loop_ind > 0
                     ind += stride_lst[loop_ind]
                 end
             end
