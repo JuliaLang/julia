@@ -350,42 +350,41 @@ let ref_cache = nothing
         if is(ref_cache,nothing)
             ref_cache = HashTable()
         end
-        f_lst = [first(r)::Int | r in I]
-        l_lst = [last(r)::Int | r in I]
-        ind_lst = copy(f_lst)
-        gap_lst = l_lst - f_lst + 1
+        gap_lst = [last(r)-first(r)+1 | r in I]
         stride_lst = Array(Int, nI - 1)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
             stride *= size(B, k)
             stride_lst[k] = stride
-            ind += stride * (ind_lst[k] - 1)
+            ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
         reverse!(stride_lst)
         reverse!(gap_lst)
 
-        genbodies = cell(nI, 2)
-        genbodies[1] = quote
-                _jl_copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
-                storeind += l0
-                ind += stride_lst[loop_ind]
-            end
-        for k = 2 : nI
-            genbodies[k, 1] = quote
-                loop_ind += 1
-            end
-            genbodies[k, 2] = quote
-                ind -= gap_lst[loop_ind]
-                loop_ind -= 1
-                if loop_ind > 0
-                    ind += stride_lst[loop_ind]
-                end
-            end
-        end
         gen_cartesian_map(ref_cache,
-            ivars->genbodies,
+            ivars->begin
+                bodies = cell(nI, 2)
+                bodies[1] = quote
+                        _jl_copy_chunks(X.chunks, storeind, B.chunks, ind, l0)
+                        storeind += l0
+                        ind += stride_lst[loop_ind]
+                    end
+                for k = 2 : nI
+                    bodies[k, 1] = quote
+                        loop_ind += 1
+                    end
+                    bodies[k, 2] = quote
+                        ind -= gap_lst[loop_ind]
+                        loop_ind -= 1
+                        if loop_ind > 0
+                            ind += stride_lst[loop_ind]
+                        end
+                    end
+                end
+                return bodies
+            end,
             I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
             B, X, 1, ind, l0, stride_lst, gap_lst, 0)
         return X
@@ -501,42 +500,41 @@ let assign_cache = nothing
         if is(assign_cache,nothing)
             assign_cache = HashTable()
         end
-        f_lst = [first(r)::Int | r in I]
-        l_lst = [last(r)::Int | r in I]
-        ind_lst = copy(f_lst)
-        gap_lst = l_lst - f_lst + 1
+        gap_lst = [last(r)-first(r)+1 | r in I]
         stride_lst = Array(Int, nI - 1)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
             stride *= size(B, k)
             stride_lst[k] = stride
-            ind += stride * (ind_lst[k] - 1)
+            ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
         reverse!(stride_lst)
         reverse!(gap_lst)
 
-        genbodies = cell(nI, 2)
-        genbodies[1] = quote
-                _jl_copy_chunks(B.chunks, ind, X.chunks, refind, l0)
-                refind += l0
-                ind += stride_lst[loop_ind]
-            end
-        for k = 2 : nI
-            genbodies[k, 1] = quote
-                loop_ind += 1
-            end
-            genbodies[k, 2] = quote
-                ind -= gap_lst[loop_ind]
-                loop_ind -= 1
-                if loop_ind > 0
-                    ind += stride_lst[loop_ind]
-                end
-            end
-        end
         gen_cartesian_map(assign_cache,
-            ivars->genbodies,
+            ivars->begin
+                bodies = cell(nI, 2)
+                bodies[1] = quote
+                        _jl_copy_chunks(B.chunks, ind, X.chunks, refind, l0)
+                        refind += l0
+                        ind += stride_lst[loop_ind]
+                    end
+                for k = 2 : nI
+                    bodies[k, 1] = quote
+                        loop_ind += 1
+                    end
+                    bodies[k, 2] = quote
+                        ind -= gap_lst[loop_ind]
+                        loop_ind -= 1
+                        if loop_ind > 0
+                            ind += stride_lst[loop_ind]
+                        end
+                    end
+                end
+                return bodies
+            end,
             I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
             B, X, 1, ind, l0, stride_lst, gap_lst, 0)
         return B
@@ -1192,18 +1190,10 @@ reverse(v::BitVector) = reverse!(copy(v))
 
 ## nnz & find ##
 
-_jl_bc4(x) = x - ((x >>> 1) & 0x7777777777777777) - ((x >>> 2) & 0x3333333333333333) - ((x >>> 3) & 0x1111111111111111)
-
-_jl_bc8(x) = (_jl_bc4(x) + (_jl_bc4(x) >>> 4)) & 0x0f0f0f0f0f0f0f0f
-
-function _jl_count_bits_in_chunk(c::Uint64)
-    return int(mod(_jl_bc8(c), 0xff))
-end
-
 function nnz(B::BitArray)
     n = 0
     for i = 1:length(B.chunks)
-        n += _jl_count_bits_in_chunk(B.chunks[i])
+        n += count_ones(B.chunks[i])
     end
     return n
 end
