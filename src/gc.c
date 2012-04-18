@@ -584,6 +584,7 @@ static void gc_mark(void)
     GC_Markval(jl_exception_in_transit);
     GC_Markval(jl_task_arg_in_transit);
     GC_Markval(jl_unprotect_stack_func);
+    GC_Markval(jl_bottom_func);
     GC_Markval(jl_typetype_type);
 
     // constants
