@@ -83,7 +83,7 @@ function show(m::RegexMatch)
 end
 
 matches(r::Regex, s::String, o::Integer) =
-    pcre_exec(r.regex, r.extra, cstring(s), 0, opts, false)
+    pcre_exec(r.regex, r.extra, cstring(s), 0, o, false)
 matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
 
 contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
