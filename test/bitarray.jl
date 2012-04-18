@@ -52,11 +52,11 @@ i1 = randi(2, n1, n2) - 1
 @check_bit_operation numel Int (b1,)
 @check_bit_operation size (Int...) (b1,)
 
-@assert bitunpack(bitones(T, n1, n2)) == ones(T, n1, n2)
-@assert bitunpack(bitzeros(T, n1, n2)) == zeros(T, n1, n2)
+@assert isequal(bitunpack(bitones(T, n1, n2)), ones(T, n1, n2))
+@assert isequal(bitunpack(bitzeros(T, n1, n2)), zeros(T, n1, n2))
 
-@assert fill(b1, one(T)) == bitones(T, size(b1))
-@assert fill(b1, zero(T)) == bitzeros(T, size(b1))
+@assert isequal(fill(b1, one(T)), bitones(T, size(b1)))
+@assert isequal(fill(b1, zero(T)), bitzeros(T, size(b1)))
 
 @timesofar "utils"
 

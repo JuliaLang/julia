@@ -60,6 +60,8 @@ jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e)
     return v;
 }
 
+extern int jl_boot_file_loaded;
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
 {
     if (jl_is_symbol(e)) {
@@ -175,6 +177,19 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
         jl_declare_constant(b);
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == macro_sym) {
+        jl_sym_t *nm = (jl_sym_t*)args[0];
+        assert(jl_is_symbol(nm));
+        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
+        assert(jl_is_function(f));
+        if (jl_boot_file_loaded &&
+            f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
+            jl_lambda_info_t *li = f->linfo;
+            li->ast = jl_compress_ast(li, li->ast);
+        }
+        jl_set_expander(jl_current_module, nm, f);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym) {

@@ -1,7 +1,7 @@
 # enumerate
 
-type Enumerate
-    itr
+type Enumerate{I}
+    itr::I
 end
 enumerate(itr) = Enumerate(itr)
 

@@ -15,9 +15,6 @@ function _jl_answer_color()
            "\033[1m\033[34m"
 end
 
-_jl_color_available() =
-    success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
-
 _jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
 
 function repl_callback(ast::ANY, show_value)
@@ -212,7 +209,7 @@ function _start()
 
         (quiet,repl) = process_options(ARGS)
         if repl
-            global _jl_have_color = _jl_color_available()
+            global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
             if !quiet
                 _jl_banner()
             end

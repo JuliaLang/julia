@@ -561,8 +561,8 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(call (top def_macro) (quote ,name)
-			  (-> (tuple ,@argl) ,body)))
+		   `(macro ,name
+		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
    (pattern-lambda (type sig (block . fields))
