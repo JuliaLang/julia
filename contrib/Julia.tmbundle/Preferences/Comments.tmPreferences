@@ -11,7 +11,7 @@
 		<key>decreaseIndentPattern</key>
 		<string>^\s*((end|else|elsif)\b)</string>
 		<key>increaseIndentPattern</key>
-		<string>^\s*(if|while|for|begin|function|struct|macro|module|type|let)\b.*\s*$</string>
+		<string>^\s*(if|while|for|begin|function|macro|module|type|let)\b.*\s*$</string>
 		<key>shellVariables</key>
 		<array>
 			<dict>
