@@ -10,9 +10,9 @@ debug release:
 
 julia-debug julia-release:
 	@$(MAKE) -sC external
-	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC src lib$@
-	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC base
-	@$(MAKE) $(jPARALLEL_BUILD_JOBS) -sC ui $@
+	@$(MAKE) -sC src lib$@
+	@$(MAKE) -sC base
+	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl
