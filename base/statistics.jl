@@ -77,13 +77,13 @@ function hist(v::StridedVector, nbins::Integer)
     end
     lo, hi = min(v), max(v)
     if lo == hi
-        lo = lo - div(nbins,2)
-        hi = hi + div(nbins,2)
+        lo -= div(nbins,2)
+        hi += div(nbins,2) + int(isodd(nbins))
     end
-    binsz = (hi-lo)/nbins
+    binsz = (hi - lo) / nbins
     for x in v
         if isfinite(x)
-            i = iround((x-lo+binsz/2)/binsz)
+            i = iround((x - lo) / binsz + 0.5)
             h[i > nbins ? nbins : i] += 1
         end
     end
@@ -96,8 +96,7 @@ function hist(A::StridedMatrix, nbins::Integer)
     m, n = size(A)
     h = Array(Int, nbins, n)
     for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = hist(sub(A, i:(i+m-1)), nbins)
+        h[:,j] = hist(sub(A, 1:m, j), nbins)
     end
     h
 end
@@ -105,6 +104,9 @@ end
 function histc(v::StridedVector, edg)
     n = length(edg)
     h = zeros(Int, n)
+    if n == 0
+        return h
+    end
     first = edg[1]
     last = edg[n]
     for x in v
@@ -123,8 +125,7 @@ function histc(A::StridedMatrix, edg)
     m, n = size(A)
     h = Array(Int, length(edg), n)
     for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = histc(sub(A, i:(i+m-1)), edg)
+        h[:,j] = histc(sub(A, 1:m, j), edg)
     end
     h
 end
