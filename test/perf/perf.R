@@ -42,31 +42,30 @@ timeit("parse_int", parseintperf, 1000)
 
 ## quicksort ##
 
-qsort_kernel = function(a, lo, hi) {
-    i = lo
-    j = hi
-    while (i < hi) {
-        pivot = a[floor((lo+hi)/2)]
-        while (i <= j) {
-            while (a[i] < pivot) i = i + 1
-            while (a[j] > pivot) j = j - 1
-            if (i <= j) {
-                t = a[i]
-                a[i] = a[j]
-                a[j] = t
-            }
-            i = i + 1;
-            j = j - 1;
-        }
-        if (lo < j) qsort_kernel(a, lo, j)
-        lo = i
-        j = hi
-    }
-    return(a)
-}
-
 qsort = function(a) {
-  return(qsort_kernel(a, 1, length(a)))
+    qsort_kernel = function(lo, hi) {
+        i = lo
+        j = hi
+        while (i < hi) {
+            pivot = a[floor((lo+hi)/2)]
+            while (i <= j) {
+                while (a[i] < pivot) i = i + 1
+                while (a[j] > pivot) j = j - 1
+                if (i <= j) {
+                    t = a[i]
+                    a[i] <<- a[j]
+                    a[j] <<- t
+                    i = i + 1;
+                    j = j - 1;
+                }
+            }
+            if (lo < j) qsort_kernel(lo, j)
+            lo = i
+            j = hi
+        }
+    }
+    qsort_kernel(1, length(a))
+    return(a)
 }
 
 sortperf = function(n) {
@@ -74,6 +73,7 @@ sortperf = function(n) {
     return(qsort(v))
 }
 
+assert(!is.unsorted(sortperf(5000)))
 timeit('quicksort', sortperf, 5000)
 
 ## mandel ##
