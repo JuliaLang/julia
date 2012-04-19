@@ -73,7 +73,7 @@ extern void _jl_mpz_pow_ui(mpz_t* rop, mpz_t* base, unsigned long int exp) {
   mpz_pow_ui(*rop, *base, exp);
 }
 
-extern void _jl_mpz_pow_sqrt(mpz_t* rop, mpz_t* op) {
+extern void _jl_mpz_sqrt(mpz_t* rop, mpz_t* op) {
     mpz_sqrt(*rop, *op);
 }
 
