@@ -16,11 +16,8 @@ function MmapArray{T,N}(::Type{T},dims::Dims,s::IOStream,opts::Options)
     const MAP_SHARED::Int = 1
     const MAP_PRIVATE::Int = 2
     const MAP_ANONYMOUS::Int = 32
-    @defaults opts rwmode="r" sharemode="p" offset=-1
+    @defaults opts rwmode="r" sharemode="p" offset=position(s)
     @check_used opts
-    if offset == -1
-        offset = position(s)
-    end
     if rwmode == "r"
         prot = PROT_READ
     elseif rwmode == "w"
