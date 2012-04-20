@@ -82,6 +82,16 @@ message_handlers[MSG_OUTPUT_WELCOME] = function(msg) {
     window.location = "repl.htm";
 };
 
+message_handlers[MSG_OUTPUT_MESSAGE] = function(msg) {
+    // crappy way to show the user a message for now
+    alert(msg[0]);
+};
+
+message_handlers[MSG_OUTPUT_FATAL_ERROR] = function(msg) {
+    // crappy way to show the user a message for now
+    alert(msg[0]);
+};
+
 // check the server for data
 function poll() {
     // send a poll message

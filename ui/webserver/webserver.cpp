@@ -786,6 +786,18 @@ string get_response(request* req)
                                 msg.args.push_back("the server is currently at maximum capacity");
                                 response_messages.push_back(msg);
                             }
+
+                            // get the new session pointer
+                            julia_session* julia_session_ptr = 0;
+                            for (size_t j = 0; j < julia_session_list.size(); j++)
+                            {
+                                if (julia_session_list[j]->web_session_map.find(session_token) != julia_session_list[j]->web_session_map.end())
+                                {
+                                    // store this session
+                                    julia_session_ptr = julia_session_list[j];
+                                    break;
+                                }
+                            }
                         }
 
                         // don't send this message to julia
@@ -803,7 +815,7 @@ string get_response(request* req)
                             msg.args.push_back("session expired");
                             response_messages.push_back(msg);
                         }
-                        
+
                         // don't send this message to julia
                         continue;
                     }
