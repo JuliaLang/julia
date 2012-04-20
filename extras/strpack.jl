@@ -1,4 +1,5 @@
 load("iostring.jl")
+load("lru.jl")
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
@@ -282,10 +283,9 @@ function struct_utils(struct_type)
 end
 
 # Structure cache:
-# * a given canonical struct string always returns the same struct
+# * a given canonical struct string returns the same struct (until you run out of cache space)
 # * we don't spend time regenerating types and functions when we don't have to
-# TODO: const this once I'm not actively developing
-STRUCTS = HashTable()
+const STRUCTS = BoundedLRU()
 
 function interp_struct_parse(str::String)
     s = canonicalize(str)
