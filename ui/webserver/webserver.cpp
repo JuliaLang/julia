@@ -608,6 +608,9 @@ string get_session(string user_name, string session_name)
             web_session ws;
             ws.update_time = time(0);
             ws.user_name = user_name;
+            message welcome_message;
+            welcome_message.type = MSG_OUTPUT_WELCOME;
+            ws.outbox.push_back(welcome_message);
             julia_session_list[i]->web_session_map[session_token] = ws;
 
             // print a message
@@ -628,6 +631,9 @@ string get_session(string user_name, string session_name)
     web_session ws;
     ws.update_time = time(0);
     ws.user_name = user_name;
+    message welcome_message;
+    welcome_message.type = MSG_OUTPUT_WELCOME;
+    ws.outbox.push_back(welcome_message);
     session_data->web_session_map[session_token] = ws;
 
     // session name
@@ -689,7 +695,7 @@ string get_session(string user_name, string session_name)
     // start the outbox thread
     if (pthread_create(&session_data->outbox_proc, 0, outbox_thread, (void*)session_data))
         session_data->outbox_proc = 0;
-
+    
     // store the session
     julia_session_list.push_back(session_data);
 
@@ -702,7 +708,7 @@ string get_session(string user_name, string session_name)
         cout<<"1 open session.\n";
     else
         cout<<julia_session_list.size()<<" open sessions.\n";
-    
+
     // return the session token
     return session_token;
 }

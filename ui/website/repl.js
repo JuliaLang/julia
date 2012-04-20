@@ -109,16 +109,17 @@ var MSG_INPUT_REPLAY_HISTORY    = 4;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
-var MSG_OUTPUT_READY            = 1;
-var MSG_OUTPUT_MESSAGE          = 2;
-var MSG_OUTPUT_OTHER            = 3;
-var MSG_OUTPUT_FATAL_ERROR      = 4;
-var MSG_OUTPUT_PARSE_ERROR      = 5;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 6;
-var MSG_OUTPUT_PARSE_COMPLETE   = 7;
-var MSG_OUTPUT_EVAL_RESULT      = 8;
-var MSG_OUTPUT_EVAL_ERROR       = 9;
-var MSG_OUTPUT_PLOT             = 10;
+var MSG_OUTPUT_WELCOME          = 1;
+var MSG_OUTPUT_READY            = 2;
+var MSG_OUTPUT_MESSAGE          = 3;
+var MSG_OUTPUT_OTHER            = 4;
+var MSG_OUTPUT_FATAL_ERROR      = 5;
+var MSG_OUTPUT_PARSE_ERROR      = 6;
+var MSG_OUTPUT_PARSE_INCOMPLETE = 7;
+var MSG_OUTPUT_PARSE_COMPLETE   = 8;
+var MSG_OUTPUT_EVAL_RESULT      = 9;
+var MSG_OUTPUT_EVAL_ERROR       = 10;
+var MSG_OUTPUT_PLOT             = 11;
 
 
 /*

@@ -47,16 +47,20 @@ var MSG_INPUT_REPLAY_HISTORY    = 4;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
-var MSG_OUTPUT_READY            = 1;
-var MSG_OUTPUT_MESSAGE          = 2;
-var MSG_OUTPUT_OTHER            = 3;
-var MSG_OUTPUT_FATAL_ERROR      = 4;
-var MSG_OUTPUT_PARSE_ERROR      = 5;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 6;
-var MSG_OUTPUT_PARSE_COMPLETE   = 7;
-var MSG_OUTPUT_EVAL_RESULT      = 8;
-var MSG_OUTPUT_EVAL_ERROR       = 9;
-var MSG_OUTPUT_PLOT             = 10;
+var MSG_OUTPUT_WELCOME          = 1;
+var MSG_OUTPUT_READY            = 2;
+var MSG_OUTPUT_MESSAGE          = 3;
+var MSG_OUTPUT_OTHER            = 4;
+var MSG_OUTPUT_FATAL_ERROR      = 5;
+var MSG_OUTPUT_PARSE_ERROR      = 6;
+var MSG_OUTPUT_PARSE_INCOMPLETE = 7;
+var MSG_OUTPUT_PARSE_COMPLETE   = 8;
+var MSG_OUTPUT_EVAL_RESULT      = 9;
+var MSG_OUTPUT_EVAL_ERROR       = 10;
+var MSG_OUTPUT_PLOT             = 11;
+
+// how long we delay in ms before polling the server again
+var poll_interval = 200;
 
 // keep track of whether we are waiting for a message (and don't send more if we are)
 var waiting_for_response = false;
@@ -70,7 +74,35 @@ var inbox_queue = [];
 // an array of message handlers
 var message_handlers = [];
 
-message_handlers[MSG_OUTPUT_NULL] = function(msg) { alert("started!"); };
+message_handlers[MSG_OUTPUT_WELCOME] = function(msg) {
+    // redirect to the REPL page
+    window.location = "repl.htm";
+};
+
+// check the server for data
+function poll() {
+    // send a poll message
+    outbox_queue.push([MSG_INPUT_POLL]);
+    process_outbox();
+}
+
+// called when the server has responded
+function callback(data, textStatus, jqXHR) {
+    // allow sending new messages
+    waiting_for_response = false;
+
+    // add the messages to the inbox
+    inbox_queue = inbox_queue.concat(data);
+
+    // process the inbox
+    process_inbox();
+
+    // send any new messages
+    process_outbox();
+
+    // poll the server again shortly
+    setTimeout(poll, poll_interval);
+}
 
 // send the messages in the outbox
 function process_outbox() {
@@ -103,21 +135,6 @@ function process_inbox() {
 
     // we handled all the messages so clear the inbox
     inbox_queue = [];
-}
-
-// called when the server has responded
-function callback(data, textStatus, jqXHR) {
-    // allow sending new messages
-    waiting_for_response = false;
-
-    // add the messages to the inbox
-    inbox_queue = inbox_queue.concat(data);
-
-    // process the inbox
-    process_inbox();
-
-    // send any new messages
-    process_outbox();
 }
 
 })();
