@@ -274,21 +274,24 @@ bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
 bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x), 32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
-function factor(n :: Integer)
-  assert(n>0, "Expected a positive integer")
-  if n == 1
-    return typeof(n)[]
-  end
-  if n % 2 == 0
-    return [factor(div(n, 2)), 2]
-  end
-  # TODO: maybe implement a proper Eratosthene's sieve.
-  p = 3
-  while p <= sqrt(n)
-    if n % p == 0
-      return [factor(div(n, p)), p]
+function factor(n::Integer)
+    if n <= 0
+        error("factor: number to be factored must be positive")
     end
-    p += 2
-  end
-  return [n]
+    if n == 1
+        return typeof(n)[]
+    end
+    if iseven(n)
+        return [2, factor(div(n,2))]
+    end
+    # TODO: maybe implement a proper Eratosthenes's sieve.
+    s = ifloor(sqrt(n))
+    p = 3
+    while p <= s
+        if n % p == 0
+          return [p, factor(div(n,p))]
+        end
+        p += 2
+    end
+    return [n]
 end
