@@ -1,4 +1,9 @@
 #ifndef notdefined
+#define This_file_is_used_by_the_SCGI_server_and_the_Julia_back_end
+#define NOTE_These_message_types_must_match_those_in_index_dot_js_and_repl_dot_js
+#endif
+
+#ifndef notdefined
 #define MSG_INPUT_NULL 0
 #else
 __MSG_INPUT_NULL = uint8(0) # {}, null message (should be ignored)
@@ -7,19 +12,25 @@ __MSG_INPUT_NULL = uint8(0) # {}, null message (should be ignored)
 #ifndef notdefined
 #define MSG_INPUT_START 1
 #else
-__MSG_INPUT_START = uint8(1) # {}, create a new session (this message is intercepted in the SCGI server and never reaches here)
+__MSG_INPUT_START = uint8(1) # {user_name, session_name}, create/join a new session (this message is intercepted in the SCGI server)
 #endif
 
 #ifndef notdefined
 #define MSG_INPUT_POLL 2
 #else
-__MSG_INPUT_POLL = uint8(2) # {}, poll the server (this message is intercepted in the SCGI server and never reaches here)
+__MSG_INPUT_POLL = uint8(2) # {}, poll the server (this message is intercepted in the SCGI server)
 #endif
 
 #ifndef notdefined
 #define MSG_INPUT_EVAL 3
 #else
 __MSG_INPUT_EVAL = uint8(3) # {}, evaluate an expression
+#endif
+
+#ifndef notdefined
+#define MSG_INPUT_REPLAY_HISTORY 4
+#else
+__MSG_INPUT_REPLAY_HISTORY = uint8(4) # {}, ask the server to resend all messages (this message is intercepted in the SCGI server)
 #endif
 
 

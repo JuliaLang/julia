@@ -105,6 +105,7 @@ var MSG_INPUT_NULL              = 0;
 var MSG_INPUT_START             = 1;
 var MSG_INPUT_POLL              = 2;
 var MSG_INPUT_EVAL              = 3;
+var MSG_INPUT_REPLAY_HISTORY    = 4;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
@@ -133,6 +134,18 @@ var poll_interval = 200;
 // keep track of whether we are waiting for a message (and don't send more if we are)
 var waiting_for_response = false;
 
+// a queue of messages to be sent to the server
+var outbox_queue = [];
+
+// a queue of messages from the server to be processed
+var inbox_queue = [];
+
+// keep track of whether new terminal data will appear on a new line
+var new_line = true;
+
+// keep track of whether we have received a fatal message
+var dead = false;
+
 // keep track of terminal history
 var input_history = [];
 var input_history_current = [""];
@@ -150,18 +163,6 @@ if (Modernizr.localstorage) {
         input_history_current = JSON.parse(localStorage.getItem("input_history_current"));
     }
 }
-
-// a queue of messages to be sent to the server
-var outbox_queue = [];
-
-// a queue of messages from julia to be processed
-var inbox_queue = [];
-
-// keep track of whether new terminal data will appear on a new line
-var new_line = true;
-
-// keep track of whether we have received a fatal message
-var dead = false;
 
 // reset the width of the terminal input
 function set_input_width() {
@@ -358,7 +359,7 @@ function add_to_terminal(data) {
 // the first request
 function init_session() {
     // send a start message
-    outbox_queue.push([MSG_INPUT_START]);
+    outbox_queue.push([MSG_INPUT_REPLAY_HISTORY]);
     process_outbox();
 }
 
@@ -387,6 +388,7 @@ function process_outbox() {
     }
 }
 
+// an array of message handlers
 var message_handlers = [];
 
 message_handlers[MSG_OUTPUT_NULL] = function(msg) {}; // do nothing
