@@ -119,8 +119,8 @@ done(itr::RegexMatchIterator, m) = m == nothing
 next(itr::RegexMatchIterator, m) =
     (m, match(itr.regex, itr.string, m.offset + (itr.overlap ? 1 : length(m.match))))
 
-each_match(r::Regex, s::String) = RegexMatchIterator(r,s,false)
-each_match_overlap(r::Regex, s::String) = RegexMatchIterator(r,s,true)
+each_match(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
+each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
 
 replace(s::String, regex::Regex, repl::String, limit::Integer) =
     join(split(s, regex, true, limit), repl)
