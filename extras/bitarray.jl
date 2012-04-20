@@ -1135,30 +1135,19 @@ function rotl90(A::BitMatrix, k::Integer)
     k == 3 ? rotr90(A) : copy(A)
 end
 
-function _jl_reverse_bits(x::Uint64)
-    x = ((x >>>  1) & 0x5555555555555555) | ((x <<  1) & 0xaaaaaaaaaaaaaaaa)
-    x = ((x >>>  2) & 0x3333333333333333) | ((x <<  2) & 0xcccccccccccccccc)
-    x = ((x >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((x <<  4) & 0xf0f0f0f0f0f0f0f0)
-    x = ((x >>>  8) & 0x00ff00ff00ff00ff) | ((x <<  8) & 0xff00ff00ff00ff00)
-    x = ((x >>> 16) & 0x0000ffff0000ffff) | ((x << 16) & 0xffff0000ffff0000)
-    x = ((x >>> 32) & 0x00000000ffffffff) | ((x << 32) & 0xffffffff00000000)
-    return x
+# implemented as a macro to improve performance
+macro _jl_reverse_bits(dest, src)
+    z = gensym()
+    quote
+        $z    = $src
+        $z    = (($z >>>  1) & 0x5555555555555555) | (($z <<  1) & 0xaaaaaaaaaaaaaaaa)
+        $z    = (($z >>>  2) & 0x3333333333333333) | (($z <<  2) & 0xcccccccccccccccc)
+        $z    = (($z >>>  4) & 0x0f0f0f0f0f0f0f0f) | (($z <<  4) & 0xf0f0f0f0f0f0f0f0)
+        $z    = (($z >>>  8) & 0x00ff00ff00ff00ff) | (($z <<  8) & 0xff00ff00ff00ff00)
+        $z    = (($z >>> 16) & 0x0000ffff0000ffff) | (($z << 16) & 0xffff0000ffff0000)
+        $dest = (($z >>> 32) & 0x00000000ffffffff) | (($z << 32) & 0xffffffff00000000)
+    end
 end
-
-# alternative implementation: doesn't seem to give
-# any performance gain (and it has a higher WTF coefficient)
-#function _jl_reverse_bits(x::Uint64)
-    #x = (x << 32) | (x >>> 32)
-    #x = (x & 0x0001ffff0001ffff) << 15 | (x & 0xfffe0000fffe0000) >>> 17
-    #t = (x $ (x >>> 10)) & 0x003f801f003f801f
-    #x = (t | (t << 10)) $ x
-    #t = (x $ (x >>> 4)) & 0x0e0384210e038421
-    #x = (t | (t << 4)) $ x
-    #t = (x $ (x >>> 2)) & 0x2248884222488842
-    #x = (t | (t << 2)) $ x
-    #return x
-#end
-
 
 function reverse!(B::BitVector)
     n = length(B)
@@ -1172,9 +1161,9 @@ function reverse!(B::BitVector)
 
     for i = 1 : hnc
         j = ((i - 1) << 6)
-        aux_chunks[1] = _jl_reverse_bits(B.chunks[i])
+        @_jl_reverse_bits aux_chunks[1] B.chunks[i]
         _jl_copy_chunks(B.chunks, j+1, B.chunks, n-63-j, 64)
-        B.chunks[i] = _jl_reverse_bits(B.chunks[i])
+        @_jl_reverse_bits B.chunks[i] B.chunks[i]
         _jl_copy_chunks(B.chunks, n-63-j, aux_chunks, 1, 64)
     end
 
@@ -1188,7 +1177,8 @@ function reverse!(B::BitVector)
     u = ~(uint64(0))
     msk = (u >>> (64 - l))
 
-    aux_chunks[1] = _jl_reverse_bits(B.chunks[i] & msk) >>> (64 - l)
+    @_jl_reverse_bits aux_chunks[1] (B.chunks[i] & msk)
+    aux_chunks[1] >>>= (64 - l)
     _jl_copy_chunks(B.chunks, j+1, aux_chunks, 1, l)
 
     return B
@@ -1424,14 +1414,18 @@ transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 
 # fast 8x8 bit transpose from Henry S. Warrens's "Hacker's Delight"
 # http://www.hackersdelight.org/HDcode/transpose8.c.txt
-function _jl_transpose8rS64(x::Uint64)
-   t = (x $ (x >>> 7)) & 0x00aa00aa00aa00aa;
-   x = x $ t $ (t << 7);
-   t = (x $ (x >>> 14)) & 0x0000cccc0000cccc
-   x = x $ t $ (t << 14);
-   t = (x $ (x >>> 28)) & 0x00000000f0f0f0f0
-   x = x $ t $ (t << 28);
-   return x
+# implemented as a macro to improve performance
+macro _jl_transpose8x8(x)
+    t,y = gensym(2)
+    quote
+        $y = $x
+        $t = ($y $ ($y >>> 7)) & 0x00aa00aa00aa00aa;
+        $y = $y $ $t $ ($t << 7)
+        $t = ($y $ ($y >>> 14)) & 0x0000cccc0000cccc
+        $y = $y $ $t $ ($t << 14)
+        $t = ($y $ ($y >>> 28)) & 0x00000000f0f0f0f0
+        $x = $y $ $t $ ($t << 28)
+    end
 end
 
 function _jl_form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, cinc::Int, nc::Int, msk8::Uint64)
@@ -1497,7 +1491,7 @@ function transpose{T<:Integer}(B::BitMatrix{T})
 
         for j = 1 : 8 : l2
             x = _jl_form_8x8_chunk(B, i, j, l1, cgap1, cinc1, nc, msk8_1)
-            x = _jl_transpose8rS64(x)
+            @_jl_transpose8x8 x
 
             msk8_2 = uint64(0xff)
             if (l2 < j + 7)
