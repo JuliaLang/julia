@@ -24,13 +24,19 @@ __MSG_INPUT_POLL = uint8(2) # {}, poll the server (this message is intercepted i
 #ifndef notdefined
 #define MSG_INPUT_EVAL 3
 #else
-__MSG_INPUT_EVAL = uint8(3) # {}, evaluate an expression
+__MSG_INPUT_EVAL = uint8(3) # {user, input}, evaluate an expression
 #endif
 
 #ifndef notdefined
 #define MSG_INPUT_REPLAY_HISTORY 4
 #else
 __MSG_INPUT_REPLAY_HISTORY = uint8(4) # {}, ask the server to resend all messages (this message is intercepted in the SCGI server)
+#endif
+
+#ifndef notdefined
+#define MSG_INPUT_GET_USER 5
+#else
+__MSG_INPUT_GET_USER = uint8(5) # {}, ask the server to send back the user (this message is intercepted in the SCGI server)
 #endif
 
 
@@ -66,43 +72,55 @@ __MSG_OUTPUT_OTHER = uint8(4) # {text}, standard output pipe
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_FATAL_ERROR 5
+#define MSG_OUTPUT_EVAL_INPUT 5
 #else
-__MSG_OUTPUT_FATAL_ERROR = uint8(5) # {message}, fatal error message (terminates session)
+__MSG_OUTPUT_EVAL_INPUT = uint8(5) # {user, input}, input from a user
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_ERROR 6
+#define MSG_OUTPUT_FATAL_ERROR 6
 #else
-__MSG_OUTPUT_PARSE_ERROR = uint8(6) # {message}, parsing error message
+__MSG_OUTPUT_FATAL_ERROR = uint8(6) # {message}, fatal error message (terminates session, not stored in the replay history)
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_INCOMPLETE 7
+#define MSG_OUTPUT_PARSE_ERROR 7
 #else
-__MSG_OUTPUT_PARSE_INCOMPLETE = uint8(7) # {}, incomplete expression
+__MSG_OUTPUT_PARSE_ERROR = uint8(7) # {message}, parsing error message
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_COMPLETE 8
+#define MSG_OUTPUT_PARSE_INCOMPLETE 8
 #else
-__MSG_OUTPUT_PARSE_COMPLETE = uint8(8) # {}, complete expression
+__MSG_OUTPUT_PARSE_INCOMPLETE = uint8(8) # {}, incomplete expression
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_EVAL_RESULT 9
+#define MSG_OUTPUT_PARSE_COMPLETE 9
 #else
-__MSG_OUTPUT_EVAL_RESULT = uint8(9) # {result}, expression result
+__MSG_OUTPUT_PARSE_COMPLETE = uint8(9) # {}, complete expression
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_EVAL_ERROR 10
+#define MSG_OUTPUT_EVAL_RESULT 10
 #else
-__MSG_OUTPUT_EVAL_ERROR = uint8(10) # {message}, error evaluating expression
+__MSG_OUTPUT_EVAL_RESULT = uint8(10) # {result}, expression result
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PLOT 11
+#define MSG_OUTPUT_EVAL_ERROR 11
 #else
-__MSG_OUTPUT_PLOT = uint8(11) # {type, ...} create a plot, the format of the data depends on the type of plot
+__MSG_OUTPUT_EVAL_ERROR = uint8(11) # {message}, error evaluating expression
+#endif
+
+#ifndef notdefined
+#define MSG_OUTPUT_PLOT 12
+#else
+__MSG_OUTPUT_PLOT = uint8(12) # {type, ...} create a plot, the format of the data depends on the type of plot
+#endif
+
+#ifndef notdefined
+#define MSG_OUTPUT_GET_USER 13
+#else
+__MSG_OUTPUT_GET_USER = uint8(13) # {user} response to MSG_GET_USER
 #endif

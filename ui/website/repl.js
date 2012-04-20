@@ -106,6 +106,7 @@ var MSG_INPUT_START             = 1;
 var MSG_INPUT_POLL              = 2;
 var MSG_INPUT_EVAL              = 3;
 var MSG_INPUT_REPLAY_HISTORY    = 4;
+var MSG_INPUT_GET_USER          = 5;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
@@ -113,18 +114,22 @@ var MSG_OUTPUT_WELCOME          = 1;
 var MSG_OUTPUT_READY            = 2;
 var MSG_OUTPUT_MESSAGE          = 3;
 var MSG_OUTPUT_OTHER            = 4;
-var MSG_OUTPUT_FATAL_ERROR      = 5;
-var MSG_OUTPUT_PARSE_ERROR      = 6;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 7;
-var MSG_OUTPUT_PARSE_COMPLETE   = 8;
-var MSG_OUTPUT_EVAL_RESULT      = 9;
-var MSG_OUTPUT_EVAL_ERROR       = 10;
-var MSG_OUTPUT_PLOT             = 11;
-
+var MSG_OUTPUT_EVAL_INPUT       = 5;
+var MSG_OUTPUT_FATAL_ERROR      = 6;
+var MSG_OUTPUT_PARSE_ERROR      = 7;
+var MSG_OUTPUT_PARSE_INCOMPLETE = 8;
+var MSG_OUTPUT_PARSE_COMPLETE   = 9;
+var MSG_OUTPUT_EVAL_RESULT      = 10;
+var MSG_OUTPUT_EVAL_ERROR       = 11;
+var MSG_OUTPUT_PLOT             = 12;
+var MSG_OUTPUT_GET_USER         = 13;
 
 /*
     REPL implementation.
 */
+
+// the user name
+var user_name = "julia";
 
 // indent string
 var indent_str = "    ";
@@ -360,6 +365,7 @@ function add_to_terminal(data) {
 // the first request
 function init_session() {
     // send a start message
+    outbox_queue.push([MSG_INPUT_GET_USER]);
     outbox_queue.push([MSG_INPUT_REPLAY_HISTORY]);
     process_outbox();
 }
@@ -447,9 +453,6 @@ message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
     }
 
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
     // print the error message
     add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
 
@@ -492,9 +495,6 @@ message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
     }
 
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
     // clear the input field
     $("#terminal-input").val("");
 
@@ -532,6 +532,18 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
     // focus the input field
     $("#terminal-input").focus();
 };
+
+
+message_handlers[MSG_OUTPUT_GET_USER] = function(msg) {
+    // set the user name
+    user_name = indent_and_escape_html(msg[0]);
+    $("#prompt").html("<span class=\"color-scheme-prompt\">"+user_name+"&gt;&nbsp;</span>");
+}
+
+message_handlers[MSG_OUTPUT_EVAL_INPUT] = function(msg) {
+    // add the prompt and the input to the log
+    add_to_terminal("<span class=\"color-scheme-prompt\">"+indent_and_escape_html(msg[0])+"&gt;&nbsp;</span>"+indent_and_escape_html(msg[1])+"<br />");
+}
 
 var plotters = {};
 
@@ -866,7 +878,7 @@ $(document).ready(function() {
                     var input = $("#terminal-input").val();
 
                     // send the input to the server via AJAX
-                    outbox_queue.push([MSG_INPUT_EVAL, input]);
+                    outbox_queue.push([MSG_INPUT_EVAL, user_name, input]);
                     process_outbox();
                 }
 

@@ -44,6 +44,7 @@ var MSG_INPUT_START             = 1;
 var MSG_INPUT_POLL              = 2;
 var MSG_INPUT_EVAL              = 3;
 var MSG_INPUT_REPLAY_HISTORY    = 4;
+var MSG_INPUT_GET_USER          = 5;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
@@ -51,13 +52,15 @@ var MSG_OUTPUT_WELCOME          = 1;
 var MSG_OUTPUT_READY            = 2;
 var MSG_OUTPUT_MESSAGE          = 3;
 var MSG_OUTPUT_OTHER            = 4;
-var MSG_OUTPUT_FATAL_ERROR      = 5;
-var MSG_OUTPUT_PARSE_ERROR      = 6;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 7;
-var MSG_OUTPUT_PARSE_COMPLETE   = 8;
-var MSG_OUTPUT_EVAL_RESULT      = 9;
-var MSG_OUTPUT_EVAL_ERROR       = 10;
-var MSG_OUTPUT_PLOT             = 11;
+var MSG_OUTPUT_EVAL_INPUT       = 5;
+var MSG_OUTPUT_FATAL_ERROR      = 6;
+var MSG_OUTPUT_PARSE_ERROR      = 7;
+var MSG_OUTPUT_PARSE_INCOMPLETE = 8;
+var MSG_OUTPUT_PARSE_COMPLETE   = 9;
+var MSG_OUTPUT_EVAL_RESULT      = 10;
+var MSG_OUTPUT_EVAL_ERROR       = 11;
+var MSG_OUTPUT_PLOT             = 12;
+var MSG_OUTPUT_GET_USER         = 13;
 
 // how long we delay in ms before polling the server again
 var poll_interval = 200;

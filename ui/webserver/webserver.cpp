@@ -695,7 +695,7 @@ string get_session(string user_name, string session_name)
     // start the outbox thread
     if (pthread_create(&session_data->outbox_proc, 0, outbox_thread, (void*)session_data))
         session_data->outbox_proc = 0;
-    
+
     // store the session
     julia_session_list.push_back(session_data);
 
@@ -802,12 +802,31 @@ string get_response(request* req)
                     // MSG_INPUT_REPLAY_HISTORY
                     if (request_message.type == MSG_INPUT_REPLAY_HISTORY)
                     {
-                        // send the entire outbox history to the client
-                        for (size_t i = 0; i < julia_session_ptr->outbox_history.size(); i++)
-                            response_messages.push_back(julia_session_ptr->outbox_history[i]);
+                        if (julia_session_ptr != 0)
+                        {
+                            // send the entire outbox history to the client
+                            for (size_t i = 0; i < julia_session_ptr->outbox_history.size(); i++)
+                                response_messages.push_back(julia_session_ptr->outbox_history[i]);
 
-                        // the outbox history includes messages that were already going to be sent, so delete those
-                        julia_session_ptr->web_session_map[session_token].outbox.clear();
+                            // the outbox history includes messages that were already going to be sent, so delete those
+                            julia_session_ptr->web_session_map[session_token].outbox.clear();
+                        }
+
+                        // don't send this message to julia
+                        continue;
+                    }
+
+                    // MSG_INPUT_GET_USER
+                    if (request_message.type == MSG_INPUT_GET_USER)
+                    {
+                        if (julia_session_ptr != 0)
+                        {
+                            // send back the user name
+                            message msg;
+                            msg.type = MSG_OUTPUT_GET_USER;
+                            msg.args.push_back(julia_session_ptr->web_session_map[session_token].user_name);
+                            response_messages.push_back(msg);
+                        }
 
                         // don't send this message to julia
                         continue;
