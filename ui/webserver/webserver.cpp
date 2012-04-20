@@ -795,6 +795,15 @@ string get_response(request* req)
                     // MSG_INPUT_POLL
                     if (request_message.type == MSG_INPUT_POLL)
                     {
+                        if (julia_session_ptr == 0)
+                        {
+                            // if not, send an error message
+                            message msg;
+                            msg.type = MSG_OUTPUT_FATAL_ERROR;
+                            msg.args.push_back("session expired");
+                            response_messages.push_back(msg);
+                        }
+                        
                         // don't send this message to julia
                         continue;
                     }
@@ -802,7 +811,15 @@ string get_response(request* req)
                     // MSG_INPUT_REPLAY_HISTORY
                     if (request_message.type == MSG_INPUT_REPLAY_HISTORY)
                     {
-                        if (julia_session_ptr != 0)
+                        if (julia_session_ptr == 0)
+                        {
+                            // if not, send an error message
+                            message msg;
+                            msg.type = MSG_OUTPUT_FATAL_ERROR;
+                            msg.args.push_back("session expired");
+                            response_messages.push_back(msg);
+                        }
+                        else
                         {
                             // send the entire outbox history to the client
                             for (size_t i = 0; i < julia_session_ptr->outbox_history.size(); i++)
@@ -819,7 +836,15 @@ string get_response(request* req)
                     // MSG_INPUT_GET_USER
                     if (request_message.type == MSG_INPUT_GET_USER)
                     {
-                        if (julia_session_ptr != 0)
+                        if (julia_session_ptr == 0)
+                        {
+                            // if not, send an error message
+                            message msg;
+                            msg.type = MSG_OUTPUT_FATAL_ERROR;
+                            msg.args.push_back("session expired");
+                            response_messages.push_back(msg);
+                        }
+                        else
                         {
                             // send back the user name
                             message msg;

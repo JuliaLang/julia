@@ -538,6 +538,7 @@ message_handlers[MSG_OUTPUT_GET_USER] = function(msg) {
     // set the user name
     user_name = indent_and_escape_html(msg[0]);
     $("#prompt").html("<span class=\"color-scheme-prompt\">"+user_name+"&gt;&nbsp;</span>");
+    apply_color_scheme();
 }
 
 message_handlers[MSG_OUTPUT_EVAL_INPUT] = function(msg) {
