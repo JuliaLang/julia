@@ -50,14 +50,14 @@ BoundedLRU() = BoundedLRU{Any, Any}()
 isempty(lru::LRU) = isempty(lru.q)
 numel(lru::LRU) = numel(lru.q)
 length(lru::LRU) = length(lru.q)
-has{K}(lru::LRU{K}, key::K) = has(lru.ht, key)
+has(lru::LRU, key) = has(lru.ht, key)
 
 ## associative ##
 
 # Should this check count as an access?
-has{K}(lru::LRU{K}, key::K) = has(lru.ht, key)
+has(lru::LRU, key) = has(lru.ht, key)
 
-get{K}(lru::LRU{K}, key::K, default) = has(lru, key) ? lru[key] : default
+get(lru::LRU, key, default) = has(lru, key) ? lru[key] : default
 
 function del_all(lru::LRU)
     del_all(lru.ht)
@@ -79,7 +79,7 @@ function locate(q, x)
     error("Item not found.")
 end
 
-function ref{K}(lru::LRU{K}, key::K)
+function ref(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     del(lru.q, idx)
@@ -87,7 +87,7 @@ function ref{K}(lru::LRU{K}, key::K)
     item.v
 end
 
-function assign{K,V}(lru::LRU{K,V}, v::V, key::K)
+function assign(lru::LRU, v, key)
     if has(lru, key)
         item = lru.ht[key]
         idx = locate(lru.q, item)
@@ -101,8 +101,8 @@ function assign{K,V}(lru::LRU{K,V}, v::V, key::K)
 end
 
 # Eviction
-function assign{K,V}(lru::BoundedLRU{K,V}, v::V, key::K)
-    invoke(assign, (LRU{K,V}, V, K), lru, v, key)
+function assign{V,K}(lru::BoundedLRU, v::V, key::K)
+    invoke(assign, (LRU, V, K), lru, v, key)
     nrm = length(lru) - lru.maxsize
     for i in 1:nrm
         rm = pop(lru.q)
@@ -112,7 +112,7 @@ end
 
 ## associative ##
 
-function del{K}(lru::LRU{K}, key::K)
+function del(lru::LRU, key)
     item = lru.ht[key]
     idx = locate(lru.q, item)
     del(lru.ht, key)
