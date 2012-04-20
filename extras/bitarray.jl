@@ -94,15 +94,15 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
 
     u = ~(uint64(0))
     if delta_kd ==  0
-        msk_d0 = ((u >>> (63 - ld0) >>> 1) | (u << ld1 << 1))
+        msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
-        msk_d0 = (u >>> (63 - ld0) >>> 1)
-        msk_d1 = ~(u >>> (63 - ld1))
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << ld1 << 1)
     end
     if delta_ks == 0
-        msk_s0 = ~((u >>> (63 - ls0) >>> 1) | (u << ls1 << 1))
+        msk_s0 = (u << ls0) & ~(u << ls1 << 1)
     else
-        msk_s0 = ~(u >>> (63 - ls0) >>> 1)
+        msk_s0 = (u << ls0)
     end
 
     chunk_s0 = _jl_glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
@@ -299,7 +299,7 @@ function ref{T<:Integer}(B::BitArray{T}, i::Integer)
         throw(BoundsError())
     end
     i1, i2 = _jl_get_chunks_id(i)
-    return (B.chunks[i1] >>> i2) & 0x1 == 0x1 ? one(T) : zero(T)
+    return (B.chunks[i1] >>> i2) & one(Uint64) == one(Uint64) ? one(T) : zero(T)
 end
 
 # 0d bitarray
@@ -351,7 +351,7 @@ let ref_cache = nothing
             ref_cache = HashTable()
         end
         gap_lst = [last(r)-first(r)+1 | r in I]
-        stride_lst = Array(Int, nI - 1)
+        stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
@@ -360,8 +360,9 @@ let ref_cache = nothing
             ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
-        reverse!(stride_lst)
-        reverse!(gap_lst)
+        # we only need nI-1 elements, the last one
+        # is dummy (used in bodies[k,2] below)
+        stride_lst[nI] = 0
 
         gen_cartesian_map(ref_cache,
             ivars->begin
@@ -373,20 +374,18 @@ let ref_cache = nothing
                     end
                 for k = 2 : nI
                     bodies[k, 1] = quote
-                        loop_ind += 1
+                        loop_ind -= 1
                     end
                     bodies[k, 2] = quote
                         ind -= gap_lst[loop_ind]
-                        loop_ind -= 1
-                        if loop_ind > 0
-                            ind += stride_lst[loop_ind]
-                        end
+                        loop_ind += 1
+                        ind += stride_lst[loop_ind]
                     end
                 end
                 return bodies
             end,
             I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
         return X
     end
 end
@@ -501,7 +500,7 @@ let assign_cache = nothing
             assign_cache = HashTable()
         end
         gap_lst = [last(r)-first(r)+1 | r in I]
-        stride_lst = Array(Int, nI - 1)
+        stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
@@ -510,8 +509,9 @@ let assign_cache = nothing
             ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
-        reverse!(stride_lst)
-        reverse!(gap_lst)
+        # we only need nI-1 elements, the last one
+        # is dummy (used in bodies[k,2] below)
+        stride_lst[nI] = 0
 
         gen_cartesian_map(assign_cache,
             ivars->begin
@@ -523,20 +523,18 @@ let assign_cache = nothing
                     end
                 for k = 2 : nI
                     bodies[k, 1] = quote
-                        loop_ind += 1
+                        loop_ind -= 1
                     end
                     bodies[k, 2] = quote
                         ind -= gap_lst[loop_ind]
-                        loop_ind -= 1
-                        if loop_ind > 0
-                            ind += stride_lst[loop_ind]
-                        end
+                        loop_ind += 1
+                        ind += stride_lst[loop_ind]
                     end
                 end
                 return bodies
             end,
             I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
         return B
     end
 end
@@ -780,8 +778,8 @@ function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
             B.chunks[t] = (B.chunks[t] << 1) | (B.chunks[t - 1] >>> 63) 
         end
 
-        msk_bef = (~uint64(0)) >>> (63 - j) >>> 1
-        msk_aft = ~msk_bef
+        msk_aft = ((~uint64(0)) << j)
+        msk_bef = ~msk_aft
         B.chunks[k] = (msk_bef & B.chunks[k]) | ((msk_aft & B.chunks[k]) << 1)
     end
     B[i] = item
