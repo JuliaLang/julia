@@ -274,24 +274,28 @@ bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
 bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x), 32)
 bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
-function factor(n::Integer)
+# TODO: maybe implement a proper Eratosthenes's sieve.
+
+function factor{T<:Integer}(n::T, h::HashTable{T,Int})
     if n <= 0
         error("factor: number to be factored must be positive")
     end
-    if n == 1
-        return typeof(n)[]
+    if n == 1 return h end
+    p = oftype(T,3)
+    if n % p == 0
+        h[p] = get(h,p,0)+1
+        return factor(div(n,p), h)
     end
-    if iseven(n)
-        return [2, factor(div(n,2))]
-    end
-    # TODO: maybe implement a proper Eratosthenes's sieve.
     s = ifloor(sqrt(n))
-    p = 3
+    p = oftype(T,3)
     while p <= s
         if n % p == 0
-          return [p, factor(div(n,p))]
+            h[p] = get(h,p,0)+1
+            return factor(div(n,p), h)
         end
         p += 2
     end
-    return [n]
+    h[n] = get(h,n,0)+1
+    return h
 end
+factor{T<:Integer}(n::T) = factor(n, HashTable{T,Int}())
