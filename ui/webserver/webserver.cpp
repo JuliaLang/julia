@@ -961,7 +961,7 @@ int main(int argc, char* argv[])
     pthread_create(&watchdog, 0, watchdog_thread, 0);
 
     // print a welcome message
-    cout<<"server started on port "<<port_num<<".\n";
+    cout<<"SCGI server started on port "<<port_num<<".\n";
 
     // print the number of open sessions
     cout<<"0 open sessions.\n";
