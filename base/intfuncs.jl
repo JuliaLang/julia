@@ -276,16 +276,16 @@ bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
 function factor(n :: Integer)
   assert(n>0, "Expected a positive integer")
-  if n == 1; 
-    return []
+  if n == 1
+    return typeof(n)[]
   end
-  if n % 2 == 0; 
+  if n % 2 == 0
     return [factor(div(n, 2)), 2]
   end
-  # TODO: maybe implement a proper Eratosphene's sieve.
-  p = 3;
+  # TODO: maybe implement a proper Eratosthene's sieve.
+  p = 3
   while p <= sqrt(n)
-    if n % p == 0; 
+    if n % p == 0
       return [factor(div(n, p)), p]
     end
     p += 2
