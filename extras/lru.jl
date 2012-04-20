@@ -32,6 +32,7 @@ type UnboundedLRU{K,V} <: LRU{K,V}
 
     UnboundedLRU() = new(HashTable{K,CacheItem{K,V}}(), empty(Array(CacheItem{K,V},1)))
 end
+UnboundedLRU() = UnboundedLRU{Any, Any}()
 
 type BoundedLRU{K,V} <: LRU{K,V}
     ht::HashTable
@@ -41,6 +42,8 @@ type BoundedLRU{K,V} <: LRU{K,V}
     BoundedLRU(m) = new(HashTable(), empty(Array(CacheItem,1)), m)
     BoundedLRU() = BoundedLRU(__MAXCACHE)
 end
+BoundedLRU(m) = BoundedLRU{Any, Any}(m)
+BoundedLRU() = BoundedLRU{Any, Any}()
 
 ## collections ##
 
