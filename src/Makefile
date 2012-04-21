@@ -19,7 +19,7 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs) -L$(JULIALIB) -Xlinker -all_load $(JULIAHOME)/src/flisp/libflisp.a -Xlinker -all_load $(JULIAHOME)/src/support/libsupport.a -lutil -lm $(OSLIBS) -lpthread 
+LIBS = $(shell $(LLVM_CONFIG) --ldflags) -lLLVM-3.0 -L$(JULIALIB) -Xlinker -all_load $(JULIAHOME)/src/flisp/libflisp.a -Xlinker -all_load $(JULIAHOME)/src/support/libsupport.a -lutil -lm $(OSLIBS) -lpthread 
 
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
