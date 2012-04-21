@@ -822,7 +822,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         if keep_empty || i < j-1
             push(strs, str[i:j-1])
         end
-        if done(str,k) return strs end
+        # if done(str,k) return strs end
         i = k
     end
     if keep_empty || !done(str,i)
