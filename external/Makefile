@@ -319,6 +319,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
+	$(WGET_DASH_O) openblas-$(OPENBLAS_VER)/Makefile.system https://raw.github.com/xianyi/OpenBLAS/fad089ffff6cc8dd3d2f70397f6e4054372fe6f0/Makefile.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
@@ -657,7 +658,7 @@ compile-glpk: install-glpk
 install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_h.jl
 
 glpk-$(GLPK_VER).tar.gz:
-	$(WGET) ftp://ftp.gnu.org/gnu/glpk/$@
+	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
 
 glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
 	tar zxf $<
@@ -669,13 +670,9 @@ $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) install
 	touch $@
 
-glpk_h.jl:
-	$(QUIET_PERL) cpp -dM $(GLPK_PREFIX)/include/glpk.h | perl -nle '/^\s*#define\s+(GLP\w*)\s*\(?($(GLPK_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@
-
 clean-glpk:
 	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
 	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
-	rm -f glpk_h.jl
 distclean-glpk: clean-glpk
 	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
 
