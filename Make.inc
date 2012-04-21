@@ -93,7 +93,7 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline -lncurses -lcurses
 else
-READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
+READLINE = -L$(JULIALIB) -lreadline -lncurses -lcurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)

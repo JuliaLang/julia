@@ -124,13 +124,15 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET) ftp://ftp.gnu.org/gnu/readline/$@
+	$(WGET) http://ftp.gnu.org/gnu/readline/$@
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
+	./configure --prefix=$(abspath $(EXTROOT)) --enable-shared --enable-static --with-curses && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
