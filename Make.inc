@@ -142,9 +142,6 @@ JLDFLAGS =
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
 endif
 
-# Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib -lutil -lm $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
-
 # Colors for make
 
 CCCOLOR="\033[34m"

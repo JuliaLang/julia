@@ -18,6 +18,9 @@ DOBJS = $(SRCS:%=%.do)
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
+# Libraries to link
+LIBS = $(shell $(LLVM_CONFIG) --ldflags) $(shell $(LLVM_CONFIG) --libs) -L$(JULIALIB) -Xlinker -all_load $(JULIAHOME)/src/flisp/libflisp.a -Xlinker -all_load $(JULIAHOME)/src/support/libsupport.a -lutil -lm $(OSLIBS) -lpthread 
+
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
 endif
@@ -57,29 +60,26 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-../libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o ../libjulia-debug.$(SHLIB_EXT) $(LIBS)
+libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ -install_name @rpath/$@ $(LIBS)
+	cp -f $@ $(JULIALIB)/$@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-libjulia-debug: libjulia-debug.a ../libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: libjulia-debug.a libjulia-debug.$(SHLIB_EXT)
 
-../libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o ../libjulia-release.$(SHLIB_EXT) $(LIBS)
+libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $@ -install_name @rpath/$@ $(LIBS)
+	cp -f $@ $(JULIALIB)/$@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-libjulia-release: libjulia-release.a ../libjulia-release.$(SHLIB_EXT)
+libjulia-release: libjulia-release.a libjulia-release.$(SHLIB_EXT)
 
 clean:
-	rm -f libjulia*.$(SHLIB_EXT)
-	rm -f libjulia*.a
-	rm -f ../libjulia*.$(SHLIB_EXT)
-	rm -f julia_flisp.boot
-	rm -f julia_flisp.boot.inc
-	rm -f *.do
-	rm -f *.o
-	rm -f *~ *#
+	rm -f $(JULIALIB)/libjulia*
+	rm -f julia_flisp.boot julia_flisp.boot.inc
+	rm -f *.do *.o *~ *#
 
 clean-flisp:
 	$(MAKE) -C flisp clean
