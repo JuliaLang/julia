@@ -2,18 +2,19 @@
 
 LLVM_VER = 3.0
 READLINE_VER = 6.2
-PCRE_VER = 8.21
+PCRE_VER = 8.30
 GRISU_VER = 1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1.0
 LAPACK_VER = 3.4.0
 ARPACK_VER = 3.0.2
-FFTW_VER = 3.3
+FFTW_VER = 3.3.1
 SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 GMP_VER=5.0.4
+GLPK_VER = 4.43
 
 ## high-level setup ##
 
@@ -66,6 +67,10 @@ endif
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
+endif
+
+ifeq ($(USE_SYSTEM_GLPK), 0)
+LIBS += glpk
 endif
 
 WGET = wget
@@ -316,7 +321,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 	install_name_tool -id @rpath/libopenblas.dylib $(EXTROOTLIB)/libopenblas.dylib
 
@@ -633,6 +638,75 @@ install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 clean-gmp-wrapper:
 	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
+
+
+## GLPK ##
+
+GLPK_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
+
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPK_PREFIX = /usr/
+GLPK_OBJ_TARGET =
+else
+GLPK_PREFIX = glpk-$(GLPK_VER)/
+GLPK_OBJ_TARGET = $(EXTROOTLIB)/libglpk.$(SHLIB_EXT)
+endif
+
+
+compile-glpk: install-glpk
+install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_h.jl
+
+glpk-$(GLPK_VER).tar.gz:
+	$(WGET) ftp://ftp.gnu.org/gnu/glpk/$@
+
+glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
+	tar zxf $<
+	touch $@
+glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
+	cd glpk-$(GLPK_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT))
+$(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) install
+	touch $@
+
+glpk_h.jl:
+	$(QUIET_PERL) cpp -dM $(GLPK_PREFIX)/include/glpk.h | perl -nle '/^\s*#define\s+(GLP\w*)\s*\(?($(GLPK_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@
+
+clean-glpk:
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
+	rm -f glpk_h.jl
+distclean-glpk: clean-glpk
+	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+
+
+## GLPK Wrapper
+
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPKW_INC = -I /usr/include/
+GLPKW_LIB = -lglpk
+else
+GLPKW_INC = -I glpk-$(GLPK_VER)/include/
+GLPKW_LIB = -L$(EXTROOTLIB)/ -lglpk
+endif
+
+
+$(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
+	mkdir -p $(EXTROOTLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
+	touch $@
+install-glpk-wrapper: $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
+
+clean-glpk-wrapper:
+	rm -f $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT)
+distclean-glpk-wrapper: clean-glpk-wrapper
+
+
+## phony targets ##
+
+.PHONY: \
+	default compile install cleanall distclean \
+	compile-* install-* clean-* distclean-*
 
 ## phony targets ##
 
