@@ -192,6 +192,22 @@ bitones(args...) = fill!(BitArray(args...), 1)
 bitfalses(args...) = bitzeros(Bool, args...)
 bittrues(args...) = bitones(Bool, args...)
 
+biteye(n::Integer) = biteye(n, n)
+function biteye(m::Integer, n::Integer)
+    a = bitzeros(m,n)
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
+function one{T}(x::BitMatrix{T})
+    m, n = size(x)
+    a = bitzeros(T,size(x))
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
 
 function copy_to(dest::BitArray, src::BitArray)
     nc_d = length(dest.chunks)
@@ -855,6 +871,12 @@ function del_all(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
     B.dims[1] = 0
     return B
+end
+
+## Misc functions
+
+for f in (:iround, :itrunc, :ifloor, :iceil, :abs)
+    @eval ($f)(B::BitArray) = copy(B)
 end
 
 ## Unary operators ##
