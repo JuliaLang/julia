@@ -216,6 +216,25 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!isVa)
             fargt_sig.push_back(t);
     }
+    // check for calling convention specifier
+    CallingConv::ID cc = CallingConv::C;
+    jl_value_t *last = args[nargs];
+    if (jl_is_expr(last)) {
+        jl_sym_t *lhd = ((jl_expr_t*)last)->head;
+        if (lhd == jl_symbol("stdcall")) {
+            cc = CallingConv::X86_StdCall;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("cdecl")) {
+            cc = CallingConv::C;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("fastcall")) {
+            cc = CallingConv::X86_FastCall;
+            nargs--;
+        }
+    }
+    
     if ((!isVa && tt->length  != (nargs-2)/2) ||
         ( isVa && tt->length-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
@@ -294,6 +313,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // the actual call
     Value *result = builder.CreateCall(llvmf,
                                        ArrayRef<Value*>(&argvals[0],(nargs-3)/2));
+    if (cc != CallingConv::C)
+        ((CallInst*)result)->setCallingConv(cc);
 
     // restore temp argument area stack pointer
     if (haspointers) {

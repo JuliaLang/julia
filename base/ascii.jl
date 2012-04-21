@@ -15,7 +15,7 @@ ref(s::ASCIIString, i::Int) = char(s.data[i])
 ref(s::ASCIIString, r::Vector) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, r::Range1{Int}) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-strchr(s::ASCIIString, c::Char) = c < 0x80 ? memchr(s.data, c) : 0
+strchr(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? memchr(s.data,c,i) : 0
 strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
 
 function ucfirst(s::ASCIIString)

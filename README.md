@@ -40,7 +40,7 @@ First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
 
-Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make PARALLEL_BUILD_JOBS=` and supply the maximum number of concurrent processes; Julia does not support using the `-j` switch to `make`.
+Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
 
@@ -105,19 +105,20 @@ With the exception of `gfortran`, these are standard on most Linux systems and o
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
-- **[FemtoLisp]**           — Packaged with julia source, and used to implement the compiler front-end.
+- **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
 - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[AMOS]**                — Subroutines for computing Bessel functions and Airy functions.
+- **[AMOS]**                — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support
 - **[D3]**                  — JavaScript visualization library.
+- **[double-conversion]**   — efficient number-to-text conversion.
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -140,6 +141,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
+[double-conversion]: http://double-conversion.googlecode.com/
 
 <a name="Directories"/>
 ## Directories

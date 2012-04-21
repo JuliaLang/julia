@@ -745,8 +745,8 @@ void jl_save_system_image(char *fname, char *startscriptname)
     else {
         // delete cached slow ASCIIString constructor
         jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
-        mt->cache = NULL;
-        mt->cache_arg1 = NULL;
+        mt->cache = JL_NULL;
+        mt->cache_arg1 = JL_NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
         mt->defs->func->linfo->specializations = NULL;
     }
@@ -1055,8 +1055,7 @@ void jl_init_serializer(void)
                       jl_trampoline, jl_f_new_struct_type, 
                       jl_f_new_struct_fields, jl_f_new_type_constructor, 
                       jl_f_new_tag_type, jl_f_new_tag_type_super, 
-                      jl_f_new_bits_type, jl_f_def_macro,
-                      jl_f_typevar, jl_f_union, 
+                      jl_f_new_bits_type, jl_f_typevar, jl_f_union, 
                       jl_f_methodexists, jl_f_applicable, 
                       jl_f_invoke, jl_apply_generic, 
                       jl_unprotect_stack, jl_f_task, 

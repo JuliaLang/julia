@@ -317,12 +317,14 @@ extern jl_struct_type_t *jl_method_type;
 extern jl_struct_type_t *jl_task_type;
 
 extern jl_tuple_t *jl_null;
+#define JL_NULL ((void*)jl_null)
 extern jl_value_t *jl_true;
 extern jl_value_t *jl_false;
 DLLEXPORT extern jl_value_t *jl_nothing;
 
 extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
+extern jl_function_t *jl_bottom_func;
 
 extern void *jl_dl_handle;
 

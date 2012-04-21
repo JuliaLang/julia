@@ -33,13 +33,13 @@ end
 
 ## array constructors ##
 
-@assert ones(200,200) == 1
+@assert all(ones(200,200) == 1)
 # @timeit ones(200,200) "ones"
 
 ## matmul and transpose ##
 
 A = ones(200,200)
-@assert A*A' == 200
+@assert all(A*A' == 200)
 # @timeit A*A' "AtA"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##

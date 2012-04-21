@@ -76,20 +76,6 @@
 
 (assert (equal? (string 'sym #byte(65) #wchar(945) "blah") "symA\u03B1blah"))
 
-; NaNs
-(assert (equal? +nan.0 +nan.0))
-(assert (not (= +nan.0 +nan.0)))
-(assert (not (= +nan.0 -nan.0)))
-(assert (equal? (< +nan.0 3) (> 3 +nan.0)))
-(assert (equal? (< +nan.0 (double 3)) (> (double 3) +nan.0)))
-(assert (equal? (< +nan.0 3) (> (double 3) +nan.0)))
-(assert (equal? (< +nan.0 (double 3)) (> 3 +nan.0)))
-(assert (equal? (< +nan.0 3) (< +nan.0 (double 3))))
-(assert (equal? (> +nan.0 3) (> +nan.0 (double 3))))
-(assert (equal? (< 3 +nan.0) (> +nan.0 (double 3))))
-(assert (equal? (> 3 +nan.0) (> (double 3) +nan.0)))
-(assert (not (>= +nan.0 +nan.0)))
-
 ; -0.0 etc.
 (assert (not (equal? 0.0 0)))
 (assert (equal? 0.0 0.0))

@@ -1,7 +1,7 @@
 # tests related to functional programming functions and styles
 
 # map -- array.jl
-@assert map((x)->"$x"[end:end], [9:11]) == ["9", "0", "1"]
+@assert isequal(map((x)->"$x"[end:end], [9:11]), ["9", "0", "1"])
 # TODO: @assert map_to()
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
@@ -23,9 +23,7 @@
 @assert mapreduce((x,y)->"($x+$y)", (x)->x[1:3], ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
 
 # filter -- array.jl
-@assert filter(x->(x>1), [0 1 2 3 2 1 0]) == [2, 3, 2]
-# TODO: @assert_throws_error filter(x->x+1, [0 1 2 3 2 1 0]) == [2, 3, 2]
-@assert filter(x->(x>10), [0 1 2 3 2 1 0]) == []
-@assert filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]) == ["efg", "hij", "opq"]
-
-
+@assert isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
+# TODO: @assert_fails isequal(filter(x->x+1, [0 1 2 3 2 1 0]), [2, 3, 2])
+@assert isequal(filter(x->(x>10), [0 1 2 3 2 1 0]), [])
+@assert isequal(filter((ss)->length(ss)==3, ["abcd", "efg", "hij", "klmn", "opq"]), ["efg", "hij", "opq"])

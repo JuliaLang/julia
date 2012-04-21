@@ -752,7 +752,12 @@
      (if (not (eqv? (peek-token s) #\())
 	 (error "expected ( after ccall"))
      (take-token s)
-     (cons 'ccall (parse-arglist s #\))))
+     (let ((al (parse-arglist s #\))))
+       (if (and (length> al 1)
+		(memq (cadr al) '(cdecl stdcall fastcall)))
+	   ;; place (callingconv) at end of arglist
+	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
+	   `(ccall ,.al))))
     (else (error "unhandled reserved word")))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
@@ -853,28 +858,12 @@
 	    (else
 	     (error "missing separator in array expression")))))))
 
-(define (cat-to-hvcat closer e)
-  (if (and
-       (eqv? closer #\])
-       (eq? (car e) 'vcat)
-       (any (lambda (x) (and (pair? x) (eq? (car x) 'hcat))) (cdr e)))
-      ;; convert nested hcat inside vcat to hvcat
-      (let ((rows (map (lambda (x)
-			 (if (and (pair? x) (eq? (car x) 'hcat))
-			     (cdr x)
-			     (list x)))
-		       (cdr e))))
-	`(call (top hvcat)
-	       (tuple ,@(map length rows))
-	       ,@(apply nconc rows)))
-      e))
-
 (define (parse-matrix s first closer)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
 	  ((null? (cdr v)) (cons (car v) outer))
-	  (else            (cons (fix 'hcat v) outer))))
+	  (else            (cons (fix 'row v) outer))))
   (let loop ((vec   (list first))
 	     (outer '()))
     (let ((t  (if (eqv? (peek-token s) #\newline)
@@ -882,13 +871,11 @@
 		  (require-token s))))
       (if (eqv? t closer)
 	  (begin (take-token s)
-		 (cat-to-hvcat
-		  closer
-		  (if (pair? outer)
-		      (fix 'vcat (update-outer vec outer))
-		      (if (or (null? vec) (null? (cdr vec)))
-			  (fix 'vcat vec)     ; [x]   => (vcat x)
-			  (fix 'hcat vec))))) ; [x y] => (hcat x y)
+		 (if (pair? outer)
+		     (fix 'vcat (update-outer vec outer))
+		     (if (or (null? vec) (null? (cdr vec)))
+			 (fix 'vcat vec)     ; [x]   => (vcat x)
+			 (fix 'hcat vec))))  ; [x y] => (hcat x y)
 	  (case t
 	    ((#\; #\newline)
 	     (take-token s) (loop '() (update-outer vec outer)))
@@ -1108,14 +1095,14 @@
 		       ((eq? (car vex) 'hcat)
 			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)
-			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'hcat))
+			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
 			    (let ((nr (length (cdr vex)))
 				  (nc (length (cdadr vex))))
 			      ;; make sure all rows are the same length
 			      (if (not (every
 					(lambda (x)
 					  (and (pair? x)
-					       (eq? (car x) 'hcat)
+					       (eq? (car x) 'row)
 					       (length= (cdr x) nc)))
 					(cddr vex)))
 				  (error "inconsistent shape in cell expression"))
@@ -1125,7 +1112,7 @@
 						(apply map list
 						       (map cdr (cdr vex))))))
 			    (if (any (lambda (x) (and (pair? x)
-						      (eq? (car x) 'hcat)))
+						      (eq? (car x) 'row)))
 				     (cddr vex))
 				(error "inconsistent shape in cell expression")
 				`(cell1d ,@(cdr vex)))))))))

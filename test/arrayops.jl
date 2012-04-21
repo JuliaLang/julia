@@ -9,15 +9,15 @@ b = a+a
 @assert length((1,)) == 1
 @assert length((1,2)) == 2
 
-@assert 1+[1,2,3] == [2,3,4]
-@assert [1,2,3]+1 == [2,3,4]
-@assert 1-[1,2,3] == [0,-1,-2]
-@assert [1,2,3]-1 == [0,1,2]
+@assert isequal(1+[1,2,3], [2,3,4])
+@assert isequal([1,2,3]+1, [2,3,4])
+@assert isequal(1-[1,2,3], [0,-1,-2])
+@assert isequal([1,2,3]-1, [0,1,2])
 
-@assert 5*[1,2,3] == [5,10,15]
-@assert [1,2,3]*5 == [5,10,15]
-@assert 1/[1,2,5] == [1.0,0.5,0.2]
-@assert [1,2,3]/5 == [0.2,0.4,0.6]
+@assert isequal(5*[1,2,3], [5,10,15])
+@assert isequal([1,2,3]*5, [5,10,15])
+@assert isequal(1/[1,2,5], [1.0,0.5,0.2])
+@assert isequal([1,2,3]/5, [0.2,0.4,0.6])
 
 a = ones(2,2)
 a[1,1] = 1
@@ -61,8 +61,8 @@ v = pop(l)
 @assert length(l)==2
 
 # concatenation
-@assert [ones(2,2)  2*ones(2,1)] == [1 1 2; 1 1 2]
-@assert [ones(2,2), 2*ones(1,2)] == [1 1; 1 1; 2 2]
+@assert isequal([ones(2,2)  2*ones(2,1)], [1 1 2; 1 1 2])
+@assert isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
 
 # "end"
 X = [ i+2j | i=1:5, j=1:5 ]
@@ -135,7 +135,7 @@ for i=1:16
     z[i] = i
 end
 
-@assert sum(z) == sum(z,(1,2,3,4)) == 136
+@assert sum(z) == sum(z,(1,2,3,4))[1] == 136
 
 v = cell(2,2,1,1)
 v[1,1,1,1] = 28.0

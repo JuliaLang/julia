@@ -28,8 +28,8 @@ r = [5:-1:1]
 X = [ i+2j | i=1:5, j=1:5 ]
 @assert X[2,3] == 8
 @assert X[4,5] == 14
-@assert ones(2,3) * ones(2,3)' == [3. 3.; 3. 3.] #'
-@assert [ [1,2] | i=1:2, : ] == [1 2; 1 2]
+@assert isequal(ones(2,3) * ones(2,3)', [3. 3.; 3. 3.])
+@assert isequal([ [1,2] | i=1:2, : ], [1 2; 1 2])
 # where element type is a Union. try to confuse type inference.
 foo32_64(x) = (x<2) ? int32(x) : int64(x)
 boo32_64() = [ foo32_64(i) | i=1:2 ]

@@ -2408,6 +2408,8 @@ void jl_init_types(void)
                                     jl_lambda_info_type));
     jl_function_type->fptr = jl_f_no_function;
 
+    jl_bottom_func = jl_new_closure(jl_f_no_function, JL_NULL, NULL);
+
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
 

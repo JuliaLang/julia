@@ -425,6 +425,23 @@ end # macro
 @_jl_binary_op_A_sparse_B_sparse_res_sparse (.^)
 
 sum(A::SparseMatrixCSC) = sum(sub(A.nzval,1:nnz(A)))
+function sum{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, dim::Int)
+    if dim == 1
+        S = Array(Tv, 1, A.n)
+        for i = 1 : A.n
+            S[i] = sum(sub(A.nzval,A.colptr[i]:A.colptr[i+1]-1))
+        end
+        return S
+    elseif dim == 2
+        S = zeros(Tv, A.m, 1)
+        for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
+            S[A.rowval[j]] += A.nzval[j]
+        end
+        return S
+    else
+        return full(A)
+    end
+end
 
 ## ref
 ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))

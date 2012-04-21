@@ -105,24 +105,31 @@ var MSG_INPUT_NULL              = 0;
 var MSG_INPUT_START             = 1;
 var MSG_INPUT_POLL              = 2;
 var MSG_INPUT_EVAL              = 3;
+var MSG_INPUT_REPLAY_HISTORY    = 4;
+var MSG_INPUT_GET_USER          = 5;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
-var MSG_OUTPUT_READY            = 1;
-var MSG_OUTPUT_MESSAGE          = 2;
-var MSG_OUTPUT_OTHER            = 3;
-var MSG_OUTPUT_FATAL_ERROR      = 4;
-var MSG_OUTPUT_PARSE_ERROR      = 5;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 6;
-var MSG_OUTPUT_PARSE_COMPLETE   = 7;
-var MSG_OUTPUT_EVAL_RESULT      = 8;
-var MSG_OUTPUT_EVAL_ERROR       = 9;
-var MSG_OUTPUT_PLOT             = 10;
-
+var MSG_OUTPUT_WELCOME          = 1;
+var MSG_OUTPUT_READY            = 2;
+var MSG_OUTPUT_MESSAGE          = 3;
+var MSG_OUTPUT_OTHER            = 4;
+var MSG_OUTPUT_EVAL_INPUT       = 5;
+var MSG_OUTPUT_FATAL_ERROR      = 6;
+var MSG_OUTPUT_PARSE_ERROR      = 7;
+var MSG_OUTPUT_PARSE_INCOMPLETE = 8;
+var MSG_OUTPUT_PARSE_COMPLETE   = 9;
+var MSG_OUTPUT_EVAL_RESULT      = 10;
+var MSG_OUTPUT_EVAL_ERROR       = 11;
+var MSG_OUTPUT_PLOT             = 12;
+var MSG_OUTPUT_GET_USER         = 13;
 
 /*
     REPL implementation.
 */
+
+// the user name
+var user_name = "julia";
 
 // indent string
 var indent_str = "    ";
@@ -132,6 +139,18 @@ var poll_interval = 200;
 
 // keep track of whether we are waiting for a message (and don't send more if we are)
 var waiting_for_response = false;
+
+// a queue of messages to be sent to the server
+var outbox_queue = [];
+
+// a queue of messages from the server to be processed
+var inbox_queue = [];
+
+// keep track of whether new terminal data will appear on a new line
+var new_line = true;
+
+// keep track of whether we have received a fatal message
+var dead = false;
 
 // keep track of terminal history
 var input_history = [];
@@ -150,18 +169,6 @@ if (Modernizr.localstorage) {
         input_history_current = JSON.parse(localStorage.getItem("input_history_current"));
     }
 }
-
-// a queue of messages to be sent to the server
-var outbox_queue = [];
-
-// a queue of messages from julia to be processed
-var inbox_queue = [];
-
-// keep track of whether new terminal data will appear on a new line
-var new_line = true;
-
-// keep track of whether we have received a fatal message
-var dead = false;
 
 // reset the width of the terminal input
 function set_input_width() {
@@ -358,7 +365,8 @@ function add_to_terminal(data) {
 // the first request
 function init_session() {
     // send a start message
-    outbox_queue.push([MSG_INPUT_START]);
+    outbox_queue.push([MSG_INPUT_GET_USER]);
+    outbox_queue.push([MSG_INPUT_REPLAY_HISTORY]);
     process_outbox();
 }
 
@@ -387,6 +395,7 @@ function process_outbox() {
     }
 }
 
+// an array of message handlers
 var message_handlers = [];
 
 message_handlers[MSG_OUTPUT_NULL] = function(msg) {}; // do nothing
@@ -444,9 +453,6 @@ message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
     }
 
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
     // print the error message
     add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
 
@@ -489,9 +495,6 @@ message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
         localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
     }
 
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
     // clear the input field
     $("#terminal-input").val("");
 
@@ -529,6 +532,19 @@ message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
     // focus the input field
     $("#terminal-input").focus();
 };
+
+
+message_handlers[MSG_OUTPUT_GET_USER] = function(msg) {
+    // set the user name
+    user_name = indent_and_escape_html(msg[0]);
+    $("#prompt").html("<span class=\"color-scheme-prompt\">"+user_name+"&gt;&nbsp;</span>");
+    apply_color_scheme();
+}
+
+message_handlers[MSG_OUTPUT_EVAL_INPUT] = function(msg) {
+    // add the prompt and the input to the log
+    add_to_terminal("<span class=\"color-scheme-prompt\">"+indent_and_escape_html(msg[0])+"&gt;&nbsp;</span>"+indent_and_escape_html(msg[1])+"<br />");
+}
 
 var plotters = {};
 
@@ -863,7 +879,7 @@ $(document).ready(function() {
                     var input = $("#terminal-input").val();
 
                     // send the input to the server via AJAX
-                    outbox_queue.push([MSG_INPUT_EVAL, input]);
+                    outbox_queue.push([MSG_INPUT_EVAL, user_name, input]);
                     process_outbox();
                 }
 
