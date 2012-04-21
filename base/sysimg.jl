@@ -86,6 +86,7 @@ include("datafmt.jl")
 
 # linear algebra
 include("linalg.jl")
+include("linalg_dense.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
 
