@@ -102,7 +102,7 @@ isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 
 # TODO: isless?
 
-intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(r))
+intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
 
 # TODO: general intersect?
 function intersect(r::Range1, s::Range)
