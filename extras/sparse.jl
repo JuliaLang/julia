@@ -453,7 +453,7 @@ ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
 ref(A::SparseMatrixCSC, I::(Integer,Integer)) = ref(A, I[1], I[2])
 
 function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
-    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("ref: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("ref: index out of bounds"); end
     first = A.colptr[i1]
     last = A.colptr[i1+1]-1
     while first <= last
@@ -511,7 +511,7 @@ assign(A::SparseMatrixCSC, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
     i1 = convert(T_int, i1)
-    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("assign: index out of bounds"); end
     v = convert(T, v)
     if v == 0 #either do nothing or delete entry if it exists
         first = A.colptr[i1]

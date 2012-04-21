@@ -83,3 +83,70 @@ function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{Tv
 
     SparseMatrixCSC(mX, nY, colptr, rowval, nzval)
 end
+
+## triu, tril
+
+function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+    m,n = size(S)
+    colptr = Array(Ti, n+1)
+    nnz = 0
+    for col = 1 : min(max(k+1,1), n+1)
+        colptr[col] = 1
+    end
+    for col = max(k+1,1) : n
+        for c1 = S.colptr[col] : S.colptr[col+1]-1
+            if S.rowval[c1] > col - k
+                break;
+            end
+            nnz += 1
+        end
+        colptr[col+1] = nnz+1
+    end
+    rowval = Array(Ti, nnz)
+    nzval = Array(Tv, nnz)
+    A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    for col = max(k+1,1) : S.n
+        c1 = S.colptr[col]
+        for c2 = A.colptr[col] : A.colptr[col+1]-1
+            A.rowval[c2] = S.rowval[c1]
+            A.nzval[c2] = S.nzval[c1]
+            c1 += 1
+        end
+    end
+    return A
+end
+triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer) = triu(S, int(k))
+
+function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
+    m,n = size(S)
+    colptr = Array(Ti, n+1)
+    nnz = 0
+    colptr[1] = 1
+    for col = 1 : min(n, m+k)
+        l1 = S.colptr[col+1]-1
+        for c1 = 0 : l1 - S.colptr[col]
+            if S.rowval[l1 - c1] < col - k
+                break;
+            end
+            nnz += 1
+        end
+        colptr[col+1] = nnz+1
+    end
+    for col = max(min(n, m+k)+2,1) : n+1
+        colptr[col] = nnz+1
+    end
+    rowval = Array(Ti, nnz)
+    nzval = Array(Tv, nnz)
+    A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    for col = 1 : min(n, m+k)
+        c1 = S.colptr[col+1]-1
+        l2 = A.colptr[col+1]-1
+        for c2 = 0 : l2 - A.colptr[col]
+            A.rowval[l2 - c2] = S.rowval[c1]
+            A.nzval[l2 - c2] = S.nzval[c1]
+            c1 -= 1
+        end
+    end
+    return A
+end
+tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer) = tril(S, int(k))
