@@ -29,7 +29,7 @@ pointer{T}(x::AbstractArray{T}, i::Int) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 pointer_to_array(p, dims) = pointer_to_array(p, dims, false)
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int},
                                julia_malloc::Bool)
-    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr, Any, Int32),
+    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, julia_malloc)
 end
 
