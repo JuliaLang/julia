@@ -542,7 +542,7 @@
 	  ((eq? t '|::|)
 	   ;; allow ::T, omitting argument name
 	   (take-token s)
-	   `(|::| ,(gensym) ,(parse-call s)))
+	   `(|::| ,(parse-call s)))
 	  (else
 	   (parse-factor s)))))
 
