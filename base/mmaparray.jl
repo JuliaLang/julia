@@ -5,63 +5,40 @@ function munmap(p,len)
     end
 end
 
-type MmapArray{T,N} <: AbstractArray{T,N}
-    a::Array{T,N}
-end
-function MmapArray{T,N}(::Type{T},dims::Dims,s::IOStream,opts::Options)
-    # Are all IOstreams mappable??
-    # Is there a way to get the read/write mode from s?
-    const PROT_READ::Int = 1
-    const PROT_WRITE::Int = 2
-    const MAP_SHARED::Int = 1
-    const MAP_PRIVATE::Int = 2
-    const MAP_ANONYMOUS::Int = 32
-    @defaults opts rwmode="r" sharemode="p" offset=position(s)
-    @check_used opts
-    if rwmode == "r"
-        prot = PROT_READ
-    elseif rwmode == "w"
-        prot = PROT_WRITE
-    elseif rwmode == "rw" || rwmode == "wr"
-        prot = PROT_READ | PROT_WRITE
-    else
-        error("Read/write mode not recognized")
-    end
-    sharemode = sharemode[1]
-    if sharemode == 'p'
-        flags = MAP_PRIVATE
-    elseif sharemode == 's'
-        flags = MAP_SHARED
-    elseif sharemode = 'a'
-        flags = MAP_ANONYMOUS
-    else
-        error("Sharing mode not recognized")
-    end
-    #Do we need pagesize = int(ccall(:jl_get_pagesize, Int32, ()))?
-    #  (which just calls sysconf(_SC_PAGE_SIZE))
-    pagesize = 4096
-    offset_page = ifloor(offset/pagesize)*pagesize
-    len::Int = prod(dims)*sizeof(T) + (offset-offset_page)
-    p = ccall(:mmap,Ptr{Void},(Ptr{Void},Int,Int,Int,Int,FileOffset),C_NULL,len,prot,flags,fd(s),offset_page)
-    println(p)
+# Bare-bones mmapped-array constructor
+# This is needed for fancy stuff, such as MAP_ANONYMOUS.
+function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, prot::Int, flags::Int, fd::Integer, offset::FileOffset)
+    const pagesize::Int = 4096
+    offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
+    len::Int = prod(dims)*sizeof(T) + offset - offset_page
+    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Int, Int, Int, Int, FileOffset), C_NULL, len, prot, flags, fd, offset_page)
     if convert(Int,p) < 1
         println("Memory mapping failed")
         error(strerror())
     end
-    # Note: need new array declaration syntax. Naively, this would
-    # just create a new jl_array_t object, but instead of allocating
-    # memory for "data", it would just use the supplied pointer. My
-    # main concern is, what happens upon garbage collection? Do we
-    # need a new "allocated" flag in jl_array_t? I don't understand
-    # JL_GC_PUSH and this makes me a bit reluctant to dive into
-    # something so fundamental...
-    ret = MmapArray(Array(T,p+(offset-offset_page),dims...))
-    finalizer(ret,x->munmap(p,len))
+    A = pointer_to_array(convert(Ptr{T},p), dims)
+    finalizer(A,x->munmap(p,len))
+    return A
 end
 
-ref(MA::MmapArray,ind...) = ref(MA.a,ind...)
-assign(MA::MmapArray,X,ind...) = assign(MA.a,X,ind...)
-length(MA::MmapArray) = length(MA.a)
-size(MA::MmapArray) = size(MA.a)
-numel(MA::MmapArray) = numel(MA.a)
-eltype(MA::MmapArray) = eltype(MA.a)
+# More user-friendly mmapped-array constructor
+function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    const PROT_READ::Int = 1
+    const PROT_WRITE::Int = 2
+    const MAP_SHARED::Int = 1
+    const F_GETFL::Int = 3
+    # Get the stream's mode
+    mode = ccall(:fcntl,Int,(Int,Int),fd(s),F_GETFL)
+    mode = mode & 3
+    if mode == 0
+        prot = PROT_READ
+    elseif mode == 1
+        prot = PROT_WRITE
+    else
+        prot = PROT_READ | PROT_WRITE
+    end
+    flags = MAP_SHARED
+    A = Array(T, dims, prot, flags, fd(s), offset)
+    return A
+end
+Array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = Array(T, dims, s, position(s))
