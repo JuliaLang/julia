@@ -241,7 +241,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // some special functions
     if (fptr == &jl_array_ptr) {
-        Value *ary = emit_expr(args[4], ctx, true);
+        Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
         return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),T_pint8),
                                rt);
@@ -286,7 +286,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *arg = emit_expr(argi, ctx, true);
         Type *largty;
         jl_value_t *jargty;
         if (isVa && ai >= nargty-1) {
@@ -297,6 +296,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             largty = fargt[ai];
             jargty = jl_tupleref(tt,ai);
         }
+        Value *arg;
+        if (largty == jl_pvalue_llvmt)
+            arg = emit_expr(argi, ctx, true);
+        else
+            arg = emit_unboxed(argi, ctx);
         /*
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
