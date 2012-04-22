@@ -788,7 +788,7 @@ string get_response(request* req)
                             }
 
                             // get the new session pointer
-                            julia_session* julia_session_ptr = 0;
+                            julia_session_ptr = 0;
                             for (size_t j = 0; j < julia_session_list.size(); j++)
                             {
                                 if (julia_session_list[j]->web_session_map.find(session_token) != julia_session_list[j]->web_session_map.end())

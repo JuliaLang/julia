@@ -74,6 +74,9 @@ var outbox_queue = [];
 // a queue of messages from the server to be processed
 var inbox_queue = [];
 
+// keep track of whether we have received a fatal message
+var dead = false;
+
 // an array of message handlers
 var message_handlers = [];
 
@@ -90,6 +93,11 @@ message_handlers[MSG_OUTPUT_MESSAGE] = function(msg) {
 message_handlers[MSG_OUTPUT_FATAL_ERROR] = function(msg) {
     // crappy way to show the user a message for now
     alert(msg[0]);
+
+    // stop processing new messages
+    dead = true;
+    inbox_queue = [];
+    outbox_queue = [];
 };
 
 // check the server for data
@@ -101,6 +109,10 @@ function poll() {
 
 // called when the server has responded
 function callback(data, textStatus, jqXHR) {
+    // if we are dead, don't keep polling the server
+    if (dead)
+        return;
+
     // allow sending new messages
     waiting_for_response = false;
 
