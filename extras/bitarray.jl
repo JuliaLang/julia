@@ -94,15 +94,15 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
 
     u = ~(uint64(0))
     if delta_kd ==  0
-        msk_d0 = ((u >>> (63 - ld0) >>> 1) | (u << ld1 << 1))
+        msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
-        msk_d0 = (u >>> (63 - ld0) >>> 1)
-        msk_d1 = ~(u >>> (63 - ld1))
+        msk_d0 = ~(u << ld0)
+        msk_d1 = (u << ld1 << 1)
     end
     if delta_ks == 0
-        msk_s0 = ~((u >>> (63 - ls0) >>> 1) | (u << ls1 << 1))
+        msk_s0 = (u << ls0) & ~(u << ls1 << 1)
     else
-        msk_s0 = ~(u >>> (63 - ls0) >>> 1)
+        msk_s0 = (u << ls0)
     end
 
     chunk_s0 = _jl_glue_src_bitchunks(src, ks0, ks1, msk_s0, ls0)
@@ -192,6 +192,22 @@ bitones(args...) = fill!(BitArray(args...), 1)
 bitfalses(args...) = bitzeros(Bool, args...)
 bittrues(args...) = bitones(Bool, args...)
 
+biteye(n::Integer) = biteye(n, n)
+function biteye(m::Integer, n::Integer)
+    a = bitzeros(m,n)
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
+function one{T}(x::BitMatrix{T})
+    m, n = size(x)
+    a = bitzeros(T,size(x))
+    for i = 1:min(m,n)
+        a[i,i] = 1
+    end
+    return a
+end
 
 function copy_to(dest::BitArray, src::BitArray)
     nc_d = length(dest.chunks)
@@ -299,7 +315,7 @@ function ref{T<:Integer}(B::BitArray{T}, i::Integer)
         throw(BoundsError())
     end
     i1, i2 = _jl_get_chunks_id(i)
-    return (B.chunks[i1] >>> i2) & 0x1 == 0x1 ? one(T) : zero(T)
+    return (B.chunks[i1] >>> i2) & one(Uint64) == one(Uint64) ? one(T) : zero(T)
 end
 
 # 0d bitarray
@@ -351,7 +367,7 @@ let ref_cache = nothing
             ref_cache = HashTable()
         end
         gap_lst = [last(r)-first(r)+1 | r in I]
-        stride_lst = Array(Int, nI - 1)
+        stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
@@ -360,8 +376,9 @@ let ref_cache = nothing
             ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
-        reverse!(stride_lst)
-        reverse!(gap_lst)
+        # we only need nI-1 elements, the last one
+        # is dummy (used in bodies[k,2] below)
+        stride_lst[nI] = 0
 
         gen_cartesian_map(ref_cache,
             ivars->begin
@@ -373,20 +390,18 @@ let ref_cache = nothing
                     end
                 for k = 2 : nI
                     bodies[k, 1] = quote
-                        loop_ind += 1
+                        loop_ind -= 1
                     end
                     bodies[k, 2] = quote
                         ind -= gap_lst[loop_ind]
-                        loop_ind -= 1
-                        if loop_ind > 0
-                            ind += stride_lst[loop_ind]
-                        end
+                        loop_ind += 1
+                        ind += stride_lst[loop_ind]
                     end
                 end
                 return bodies
             end,
             I, (:B, :X, :storeind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
         return X
     end
 end
@@ -501,7 +516,7 @@ let assign_cache = nothing
             assign_cache = HashTable()
         end
         gap_lst = [last(r)-first(r)+1 | r in I]
-        stride_lst = Array(Int, nI - 1)
+        stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
         for k = 1 : nI - 1
@@ -510,8 +525,9 @@ let assign_cache = nothing
             ind += stride * (first(I[k]) - 1)
             gap_lst[k] *= stride
         end
-        reverse!(stride_lst)
-        reverse!(gap_lst)
+        # we only need nI-1 elements, the last one
+        # is dummy (used in bodies[k,2] below)
+        stride_lst[nI] = 0
 
         gen_cartesian_map(assign_cache,
             ivars->begin
@@ -523,20 +539,18 @@ let assign_cache = nothing
                     end
                 for k = 2 : nI
                     bodies[k, 1] = quote
-                        loop_ind += 1
+                        loop_ind -= 1
                     end
                     bodies[k, 2] = quote
                         ind -= gap_lst[loop_ind]
-                        loop_ind -= 1
-                        if loop_ind > 0
-                            ind += stride_lst[loop_ind]
-                        end
+                        loop_ind += 1
+                        ind += stride_lst[loop_ind]
                     end
                 end
                 return bodies
             end,
             I, (:B, :X, :refind, :ind, :l0, :stride_lst, :gap_lst, :loop_ind),
-            B, X, 1, ind, l0, stride_lst, gap_lst, 0)
+            B, X, 1, ind, l0, stride_lst, gap_lst, nI)
         return B
     end
 end
@@ -780,8 +794,8 @@ function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
             B.chunks[t] = (B.chunks[t] << 1) | (B.chunks[t - 1] >>> 63) 
         end
 
-        msk_bef = (~uint64(0)) >>> (63 - j) >>> 1
-        msk_aft = ~msk_bef
+        msk_aft = ((~uint64(0)) << j)
+        msk_bef = ~msk_aft
         B.chunks[k] = (msk_bef & B.chunks[k]) | ((msk_aft & B.chunks[k]) << 1)
     end
     B[i] = item
@@ -857,6 +871,12 @@ function del_all(B::BitVector)
     ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, length(B.chunks))
     B.dims[1] = 0
     return B
+end
+
+## Misc functions
+
+for f in (:iround, :itrunc, :ifloor, :iceil, :abs)
+    @eval ($f)(B::BitArray) = copy(B)
 end
 
 ## Unary operators ##
@@ -1731,4 +1751,65 @@ function cumprod{T}(v::BitVector{T})
         end
     end
     return c
+end
+
+## Linear algebra
+
+function dot{T,S}(x::BitVector{T}, y::BitVector{S})
+    # simplest way to mimic generic dot behavior
+    s = zero(one(T) * one(S))
+    for i = 1 : length(x.chunks)
+        s += count_ones(x.chunks[i] & y.chunks[i])
+    end
+    return s
+end
+
+## slower than the unpacked version, which is MUCH slower
+#  than blas'd (this one saves storage though, keeping it commented
+#  just in case)
+#function aTb{T,S}(A::BitMatrix{T}, B::BitMatrix{S})
+    #(mA, nA) = size(A)
+    #(mB, nB) = size(B)
+    #C = zeros(promote_type(T,S), nA, nB)
+    #z = zero(eltype(C))
+    #if mA != mB; error("*: argument shapes do not match"); end
+    #if mA == 0; return C; end
+    #col_ch = _jl_num_bit_chunks(mA)
+    ## TODO: avoid using aux chunks and copy (?)
+    #aux_chunksA = zeros(Uint64, col_ch)
+    #aux_chunksB = [zeros(Uint64, col_ch) | j=1:nB]
+    #for j = 1:nB
+        #_jl_copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
+    #end
+    #for i = 1:nA
+        #_jl_copy_chunks(aux_chunksA, 1, A.chunks, (i-1)*mA+1, mA)
+        #for j = 1:nB
+            #for k = 1:col_ch
+                #C[i, j] += count_ones(aux_chunksA[k] & aux_chunksB[j][k])
+            #end
+        #end
+    #end
+    #return C
+#end
+
+#aCb{T, S}(A::BitMatrix{T}, B::BitMatrix{S}) = aTb(A, B)
+
+function triu{T}(B::BitMatrix{T}, k)
+    m,n = size(B)
+    A = bitzeros(T, m,n)
+    for i = max(k+1,1):n
+        j = clamp((i - 1) * m + 1, 1, i * m)
+        _jl_copy_chunks(A.chunks, j, B.chunks, j, min(i-k, m))
+    end
+    return A
+end
+
+function tril{T}(B::BitMatrix{T}, k)
+    m,n = size(B)
+    A = bitzeros(T, m, n)
+    for i = 1:min(n, m+k)
+        j = clamp((i - 1) * m + i - k, 1, i * m)
+        _jl_copy_chunks(A.chunks, j, B.chunks, j, max(m-i+k+1, 0))
+    end
+    return A
 end

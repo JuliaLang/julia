@@ -146,11 +146,7 @@ jl_array_t *jl_takebuf_array(ios_t *s)
     else {
         assert(s->julia_alloc);
         char *b = ios_takebuf(s, &n);
-        a = jl_alloc_array_1d(jl_array_uint8_type, 0);
-        a->data = b;
-        a->length = n-1;
-        a->nrows = n-1;
-        jl_gc_acquire_buffer(b);
+        a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
     return a;
 }

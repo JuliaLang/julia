@@ -14,7 +14,7 @@ end
 cross(a::AbstractVector, b::AbstractVector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-# blas.jl defines matmul for floats; other integer and mixed precision
+# linalg_blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
 # TODO: It will be faster for large matrices to convert to float,

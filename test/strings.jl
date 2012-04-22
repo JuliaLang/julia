@@ -291,3 +291,19 @@ for str in {u8str, GenericString(u8str)}
     @assert strchr(str, 'ε', 6) == 54
     @assert strchr(str, 'ε', 55) == 0
 end
+
+# split
+@assert isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
+@assert isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
+@assert isequal(split("foo,bar,baz", r","), ["foo","bar","baz"])
+@assert isequal(split("foo,bar,baz", ',', 0), ["foo","bar","baz"])
+@assert isequal(split("foo,bar,baz", ',', 1), ["foo,bar,baz"])
+@assert isequal(split("foo,bar,baz", ',', 2), ["foo","bar,baz"])
+@assert isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
+@assert isequal(split("foo,bar", "o,b"), ["fo","ar"])
+@assert isequal(split("", ','), [""])
+@assert isequal(split(",", ','), ["",""])
+@assert isequal(split(",,", ','), ["","",""])
+@assert isequal(split("", ',', false), [])
+@assert isequal(split(",", ',', false), [])
+@assert isequal(split(",,", ',', false), [])

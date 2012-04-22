@@ -4,7 +4,7 @@
         <meta charset="utf-8" />
         <title>Julia - A fresh approach to technical computing.</title>
         <link href="reset.css" rel="stylesheet" type="text/css" />
-        <link href="styles.css" rel="stylesheet" type="text/css" />
+        <link href="index.css" rel="stylesheet" type="text/css" />
         <link href="favicon.ico" rel="shortcut icon" />
         <link href="http://fonts.googleapis.com/css?family=Droid+Sans+Mono&v2" rel="stylesheet" type="text/css">
         <script type="text/javascript" src="localstorage.js"></script>
@@ -13,39 +13,24 @@
         <script type="text/javascript" src="jquery.json.js"></script>
         <script type="text/javascript" src="jquery.autoresize.js"></script>
         <script type="text/javascript" src="d3.js"></script>
-        <script type="text/javascript" src="layout.js"></script>
-        <script type="text/javascript" src="repl.js"></script>
+        <script type="text/javascript" src="index.js"></script>
     </head>
     <body>
         <div id="main">
-            <div id="left-column">
-                <h1>The Julia Language</h1>
-                
-                <ul>
-                    <li><a href="/" class="current-page">Interactive Prompt</a></li>
-                    <li><a href="http://julialang.org/" target="_blank">Julia Home</a></li>
-                    <li><a href="http://julialang.org/manual/" target="_blank">Documentation</a></li>
-                    <li><a href="https://github.com/JuliaLang/julia/issues" target="_blank">Issues</a></li>
-                </ul>
-                
-                <h2>Color Scheme</h2>
-                <select id="color-scheme-picker"> </select>
-                <h2>Quick Reference</h2>
-                <p>For help, try one of these:</p>
-                <code>help()</code> <br />
-                <code>help(function)</code> <br />
-                <code>apropos("string")</code>
-            </div>
-            <div id="right-column">
-                <form id="terminal-form">
-                    <div id="terminal"><span class="color-scheme-message">&lt;initializing&gt;</span></div>
-                    <div>
-                        <div id="prompt"><span class="color-scheme-prompt">julia&gt;&nbsp;</span></div>
-                        <textarea id="terminal-input" spellcheck="false" rows="1" cols="20" disabled="disabled" /></textarea>
-                    </div>
-                </form>
-            </div>
-            <div class="float-clear"> </div>
+            <h1>The Julia Language</h1>
+            <h2>Web Interface</h2>
+            <div class="clear"> </div>
+            <form action="#" method="get" id="session_form">
+                <div id="user_name_container">
+                    <input type="text" name="user_name" id="user_name" />
+                    <p>Your Name:</p>
+                </div>
+                <div id="session_name_container">
+                    <input type="text" name="session_name" id="session_name" />
+                    <p>Session Name:</p>
+                </div>
+                <a href="#" id="submit_button"><span class="light">Try</span> Julia <span class="light">Now</span></a>
+            </form>
         </div>
     </body>
 </html>

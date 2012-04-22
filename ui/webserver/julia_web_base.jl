@@ -106,9 +106,12 @@ function __socket_callback(fd)
     __msg = __read_message()
     
     # MSG_INPUT_EVAL
-    if __msg.msg_type == __MSG_INPUT_EVAL
+    if __msg.msg_type == __MSG_INPUT_EVAL && length(__msg.args) == 2
+        # send everyone the input
+        __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__msg.args[1], __msg.args[2]}))
+
         # split the input into lines
-        __lines = split(__msg.args[1], '\n')
+        __lines = split(__msg.args[2], '\n')
 
         # try to parse each line incrementally
         __parsed_exprs = {}

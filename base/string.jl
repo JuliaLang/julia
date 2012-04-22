@@ -577,6 +577,9 @@ function _jl_interp_parse(s::String, unescape::Function, printer::Function)
                 push(sx, unescape(s[i:j-1]))
             end
             ex, j = parseatom(s,k)
+            if isa(ex,Expr) && is(ex.head,:continue)
+                throw(ParseError("incomplete expression"))
+            end
             push(sx, ex)
             i = j
         elseif c == '\\' && !done(s,k)
@@ -822,7 +825,7 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
         if keep_empty || i < j-1
             push(strs, str[i:j-1])
         end
-        if done(str,k) return strs end
+        # if done(str,k) return strs end
         i = k
     end
     if keep_empty || !done(str,i)

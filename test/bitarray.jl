@@ -10,7 +10,7 @@ macro check_bit_operation(func, RetT, args)
 end
 
 macro timesofar(str)
-    return # no-op
+    return # no-op, comment to see timings
     global t0
     local t1 = gensym()
     quote
@@ -409,3 +409,19 @@ for m1 = 1 : n1 - 1
 end
 
 @timesofar "cat"
+
+# Linear algebra
+
+b1 = bitrand(T, v1)
+b2 = bitrand(T, v1)
+@check_bit_operation dot typeof(one(T) * one(T)) (b1, b2)
+b2 = bitrand(Bool, v1)
+@check_bit_operation dot typeof(one(T) * true) (b1, b2)
+
+b1 = bitrand(T, n1, n2)
+for k = -max(n1,n2) : max(n1,n2)
+    @check_bit_operation tril BitArray{T} (b1, k)
+    @check_bit_operation triu BitArray{T} (b1, k)
+end
+
+@ timesofar "linalg"
