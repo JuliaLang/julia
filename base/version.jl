@@ -135,7 +135,7 @@ try
     ver = print_to_string(print,VERSION)
     commit = chomp(readall(`git rev-parse HEAD`))
     tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
-             catch; "doesn't reference a commit"; end
+             catch "doesn't reference a commit"; end
     ctime = int(readall(`git log -1 --pretty=format:%ct`))
     if commit != tagged
         push(VERSION.build, ctime)

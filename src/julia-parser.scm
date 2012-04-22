@@ -1146,7 +1146,7 @@
 	   (take-token s)
 	   (parse-backquote s))
 
-	  (else (take-token s)))))
+	  (else (error (string "invalid syntax: " (take-token s)))))))
 
 ; --- main entry point ---
 
