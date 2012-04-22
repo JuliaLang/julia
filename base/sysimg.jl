@@ -74,8 +74,9 @@ include("statistics.jl")
 # random number generation
 include("random.jl")
 
-# distributed arrays
+# distributed arrays and memory-mapped arrays
 include("darray.jl")
+include("mmaparray.jl")
 
 # utilities - version, timing, help, edit
 include("version.jl")

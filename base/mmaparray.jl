@@ -1,13 +1,6 @@
-function munmap(p,len)
-    ret = ccall(:munmap,Int,(Ptr{Void},Int),p,len)
-    if ret != 0
-        error(strerror())
-    end
-end
-
 # Bare-bones mmapped-array constructor
 # This is needed for fancy stuff, such as MAP_ANONYMOUS.
-function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, prot::Int, flags::Int, fd::Integer, offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, prot::Int, flags::Int, fd::Integer, offset::FileOffset)
     const pagesize::Int = 4096
     offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
     len::Int = prod(dims)*sizeof(T) + offset - offset_page
@@ -22,7 +15,7 @@ function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, prot::Int, flags::Int, fd::I
 end
 
 # More user-friendly mmapped-array constructor
-function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     const PROT_READ::Int = 1
     const PROT_WRITE::Int = 2
     const MAP_SHARED::Int = 1
@@ -38,7 +31,14 @@ function Array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOff
         prot = PROT_READ | PROT_WRITE
     end
     flags = MAP_SHARED
-    A = Array(T, dims, prot, flags, fd(s), offset)
+    A = mmap_array(T, dims, prot, flags, fd(s), offset)
     return A
 end
-Array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = Array(T, dims, s, position(s))
+mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_array(T, dims, s, position(s))
+
+function munmap(p::Ptr,len::Int)
+    ret = ccall(:munmap,Int,(Ptr{Void},Int),p,len)
+    if ret != 0
+        error(strerror())
+    end
+end
