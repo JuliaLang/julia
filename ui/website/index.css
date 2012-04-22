@@ -90,10 +90,6 @@ input {
     outline: none;
 }
 
-input.error {
-    outline: 2px dotted red;
-}
-
 div.clear {
     clear: both;
 }

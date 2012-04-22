@@ -8,19 +8,22 @@ $(document).ready(function() {
         $("form#session_form").submit();
     });
 
+    // submit the form when the user hits enter
+    $("input#user_name").keydown(function(e) {
+        if (e.keyCode == 13) {
+            $("form#session_form").submit();
+            return false;
+        }
+    });
+    $("input#session_name").keydown(function(e) {
+        if (e.keyCode == 13) {
+            $("form#session_form").submit();
+            return false;
+        }
+    });
+
     // form handler
     $("form#session_form").submit(function() {
-        // validate the input
-        $("input").removeClass("error");
-        if ($("input#session_name").val() == "") {
-            $("input#session_name").addClass("error");
-            $("input#session_name").focus();
-        }
-        if ($("input#user_name").val() == "") {
-            $("input#user_name").addClass("error");
-            $("input#user_name").focus();
-        }
-
         // send a start message
         outbox_queue.push([MSG_INPUT_START, $("input#user_name").val(), $("input#session_name").val()]);
         process_outbox();

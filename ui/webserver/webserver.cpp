@@ -602,7 +602,7 @@ string get_session(string user_name, string session_name)
     for (size_t i = 0; i < julia_session_list.size(); i++)
     {
         // look for the right session name
-        if (julia_session_list[i]->session_name == session_name)
+        if (julia_session_list[i]->session_name == session_name && session_name != "")
         {
             // create a user for this session
             web_session ws;
@@ -701,7 +701,10 @@ string get_session(string user_name, string session_name)
 
     // print a message
     cout<<"New user \""<<user_name<<"\".\n";
-    cout<<"User \""<<user_name<<"\" has started session \""<<session_name<<"\".\n";
+    if (session_name == "")
+        cout<<"User \""<<user_name<<"\" has started a new private session.\n";
+    else
+        cout<<"User \""<<user_name<<"\" has started session \""<<session_name<<"\".\n";
 
     // print the number of open sessions
     if (julia_session_list.size() == 1)
@@ -774,6 +777,8 @@ string get_response(request* req)
                         {
                             // get the user name and session name
                             string user_name = request_message.args[0];
+                            if (user_name == "")
+                                user_name = "julia";
                             string session_name = request_message.args[1];
 
                             // try to create a new session
