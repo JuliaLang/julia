@@ -127,6 +127,16 @@ edit(f::Function, t) = edit(function_loc(f,t)...)
 less(f::Function)    = less(function_loc(f)...)
 less(f::Function, t) = less(function_loc(f,t)...)
 
+# Package management
+# Store list of files and their load time
+global _jl_package_list = HashTable{ByteString,Float64}()
+function require(name::ByteString)
+    if !has(_jl_package_list,name)
+        load(name)
+    end
+end
+
+
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
@@ -169,6 +179,7 @@ load(fname::String) = load(cstring(fname))
 function load(fname::ByteString)
     if in_load
         path = find_in_path(fname)
+        _jl_package_list[fname] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))
