@@ -21,6 +21,8 @@
     jl_new_closure;
     jl_new_array;
     jl_reshape_array;
+    jl_ptr_to_array_1d;
+    jl_ptr_to_array;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;

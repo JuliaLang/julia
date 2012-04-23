@@ -6,8 +6,9 @@ type IOString <: IO
     ptr::Int
     
     IOString(data::Vector{Uint8}) = new(data, 1)
+    # TODO: should be copy on write if given a string
     IOString(str::String) = IOString(str.data)
-    IOString() = IOString("")
+    IOString() = IOString(Uint8[])
 end
 
 function read{T}(from::IOString, a::Array{T})

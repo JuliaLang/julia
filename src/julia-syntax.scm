@@ -5,16 +5,13 @@
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 
-; convert x => (x), (tuple x y) => (x y)
-; used to normalize function signatures like "x->y" and "function +(a,b)"
-(define (fsig-to-lambda-list arglist)
-  (if (pair? arglist)
-      (if (eq? (car arglist) 'tuple)
-	  (cdr arglist)
-	  arglist)
-      (if (symbol? arglist)
-	  (list arglist)
-	  arglist)))
+;; allow (:: T) => (:: #gensym T) in formal argument lists
+(define (fix-arglist l)
+  (map (lambda (a)
+	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
+	     `(|::| ,(gensy) ,(cadr a))
+	     a))
+       l))
 
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
@@ -227,8 +224,7 @@
 (define (method-def-expr name sparams argl body)
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  (let* ((argl  (fsig-to-lambda-list argl))
-	 (types (llist-types argl))
+  (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
     (if (null? sparams)
 	`(method ,name (tuple ,@types) ,body (tuple))
@@ -484,11 +480,11 @@
   (pattern-set
    ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (method-def-expr name sparams argl body))
+		   (method-def-expr name sparams (fix-arglist argl) body))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
-		   (method-def-expr name '() argl body))
+		   (method-def-expr name '() (fix-arglist argl) body))
 
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
@@ -505,7 +501,7 @@
 				     (eq? (car a) 'tuple))
 				(cdr a)
 				(list a))))
-		     (function-expr a
+		     (function-expr (fix-arglist a)
 				    `(block
 				      ,@(map (lambda (d)
 					       `(= ,(cadr d)
@@ -834,6 +830,10 @@
    ; <expr>::T => typeassert(expr, T)
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
+
+   ;; ::T outside arg list syntax error
+   (pattern-lambda (|::| _)
+		   (error "invalid :: syntax"))
 
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
