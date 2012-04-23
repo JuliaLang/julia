@@ -253,8 +253,11 @@ end
 # string manipulation
 @assert strip("\t  hi   \n") == "hi"
 
-# ascii strchr
+# some test strings
 astr = "Hello, world.\n"
+u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
+
+# ascii strchr
 for str in {astr, GenericString(astr)}
     @assert strchr(str, 'x') == 0
     @assert strchr(str, '\0') == 0
@@ -271,7 +274,6 @@ for str in {astr, GenericString(astr)}
 end
 
 # utf-8 strchr
-u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 for str in {u8str, GenericString(u8str)}
     @assert strchr(str, 'z') == 0
     @assert strchr(str, '\0') == 0
@@ -290,6 +292,92 @@ for str in {u8str, GenericString(u8str)}
     @assert strchr(str, 'ε') == 5
     @assert strchr(str, 'ε', 6) == 54
     @assert strchr(str, 'ε', 55) == 0
+end
+
+# string search with a char
+@assert search(astr, 'x')[1] == 0
+@assert search(astr, 'H') == (1,2)
+@assert search(astr, 'H', 2)[1] == 0
+@assert search(astr, 'l') == (3,4)
+@assert search(astr, 'l', 4) == (4,5)
+@assert search(astr, 'l', 5) == (11,12)
+@assert search(astr, 'l', 12)[1] == 0
+@assert search(astr, '\n') == (14,15)
+@assert search(astr, '\n', 15)[1] == 0
+@assert search(u8str, 'z')[1] == 0
+@assert search(u8str, '∄')[1] == 0
+@assert search(u8str, '∀') == (1,4)
+@assert search(u8str, '∀', 4)[1] == 0
+@assert search(u8str, '∃') == (13,16)
+@assert search(u8str, '∃', 16)[1] == 0
+@assert search(u8str, 'x') == (26,27)
+@assert search(u8str, 'x', 27) == (43,44)
+@assert search(u8str, 'x', 44)[1] == 0
+@assert search(u8str, 'ε') == (5,7)
+@assert search(u8str, 'ε', 7) == (54,56)
+@assert search(u8str, 'ε', 56)[1] == 0
+
+# string search with a single-char string
+@assert search(astr, "x")[1] == 0
+@assert search(astr, "H") == (1,2)
+@assert search(astr, "H", 2)[1] == 0
+@assert search(astr, "l") == (3,4)
+@assert search(astr, "l", 4) == (4,5)
+@assert search(astr, "l", 5) == (11,12)
+@assert search(astr, "l", 12)[1] == 0
+@assert search(astr, "\n") == (14,15)
+@assert search(astr, "\n", 15)[1] == 0
+@assert search(u8str, "z")[1] == 0
+@assert search(u8str, "∄")[1] == 0
+@assert search(u8str, "∀") == (1,4)
+@assert search(u8str, "∀", 4)[1] == 0
+@assert search(u8str, "∃") == (13,16)
+@assert search(u8str, "∃", 16)[1] == 0
+@assert search(u8str, "x") == (26,27)
+@assert search(u8str, "x", 27) == (43,44)
+@assert search(u8str, "x", 44)[1] == 0
+@assert search(u8str, "ε") == (5,7)
+@assert search(u8str, "ε", 7) == (54,56)
+@assert search(u8str, "ε", 56)[1] == 0
+
+# string search with a single-char regex
+@assert search(astr, r"x")[1] == 0
+@assert search(astr, r"H") == (1,2)
+@assert search(astr, r"H", 2)[1] == 0
+@assert search(astr, r"l") == (3,4)
+@assert search(astr, r"l", 4) == (4,5)
+@assert search(astr, r"l", 5) == (11,12)
+@assert search(astr, r"l", 12)[1] == 0
+@assert search(astr, r"\n") == (14,15)
+@assert search(astr, r"\n", 15)[1] == 0
+@assert search(u8str, r"z")[1] == 0
+@assert search(u8str, r"∄")[1] == 0
+@assert search(u8str, r"∀") == (1,4)
+@assert search(u8str, r"∀", 4)[1] == 0
+@assert search(u8str, r"∃") == (13,16)
+@assert search(u8str, r"∃", 16)[1] == 0
+@assert search(u8str, r"x") == (26,27)
+@assert search(u8str, r"x", 27) == (43,44)
+@assert search(u8str, r"x", 44)[1] == 0
+@assert search(u8str, r"ε") == (5,7)
+@assert search(u8str, r"ε", 7) == (54,56)
+@assert search(u8str, r"ε", 56)[1] == 0
+for i = 1:length(astr)
+    @assert search(astr, r"."s, i) == (i,i+1)
+end
+for i = 1:length(u8str)
+    # TODO: should regex search fast-forward invalid indices?
+    if isvalid(u8str,i)
+        @assert search(u8str, r"."s, i) == (i,nextind(u8str,i))
+    end
+end
+
+# string search with a zero-char string
+for i = 1:length(astr)
+    @assert search(astr, "", i) == (i,i)
+end
+for i = 1:length(u8str)
+    @assert search(u8str, "", i) == (i,i)
 end
 
 # split
