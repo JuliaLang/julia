@@ -137,8 +137,8 @@ function __socket_callback(fd)
             # stop now if there was a parsing error
             if __expr_multitoken && __expr.head == :error
                 # send everyone the input
-                __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
-                return __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
+                __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
+                return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
             end
             
             # if the expression was incomplete, just keep going
@@ -184,7 +184,7 @@ function __eval_exprs(__parsed_exprs)
         try
             ans = eval(__parsed_exprs[i][2])
         catch __error
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, print_to_string(show, __error)}))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, print_to_string(show, __error)}))
         end
     end
     
