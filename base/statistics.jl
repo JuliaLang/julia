@@ -12,31 +12,60 @@ function median(v::AbstractArray)
     end
 end
 
-# variance with known mean
-function var(v::AbstractArray, m::Number)
-    n = numel(v)
-    d = 0.0
-    for i = 1:n
-        d += (v[i] - m) ^ 2
+## variance with known mean
+function var(v::AbstractVector, m::Number, corrected::Bool)
+    n = length(v)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
     end
-    return d / (n - 1)
+    x = v - m
+    return dot(x, x) / (n - (corrected ? 1 : 0))
 end
-
-# variance
-var(v::AbstractArray) = var(v, mean(v))
-
-# standard deviation with known mean
-function std(v::AbstractArray, m::Number)
-    sqrt(var(v, m))
+var(v::AbstractVector, m::Number) = var(v, m, true)
+var(v::AbstractArray, m::Number, corrected::Bool) = var(reshape(v, numel(v)), m, corrected)
+var(v::AbstractArray, m::Number) = var(v, m, true)
+function var(v::Ranges, m::Number, corrected::Bool)
+    f = first(v) - m
+    s = step(v)
+    l = length(v)
+    if l == 0 || (l == 1 && corrected)
+        return NaN
+    end
+    if corrected
+        return f^2 * l / (l - 1) + f * s * l + s^2 * l * (2 * l - 1) / 6
+    else
+        return f^2 + f * s * (l - 1) + s^2 * (l - 1) * (2 * l - 1) / 6
+    end
 end
+var(v::Ranges, m::Number) = var(v, m, true)
 
-# standard deviation
-std(v::AbstractArray) = std(v, mean(v))
+## variance
+function var(v::Ranges, corrected::Bool)
+    s = step(v)
+    l = length(v)
+    if l == 0 || (l == 1 && corrected)
+        return NaN
+    end
+    return abs2(s) * (l + 1) * (corrected ? l : (l - 1)) / 12
+end
+var(v::AbstractVector, corrected::Bool) = var(v, mean(v), corrected)
+var(v::AbstractArray, corrected::Bool) = var(reshape(v, numel(v)), corrected)
+var(v::AbstractArray) = var(v, true)
 
-# median absolute deviation with known center
+## standard deviation with known mean
+std(v::AbstractArray, m::Number, corrected::Bool) = sqrt(var(v, m, corrected))
+std(v::AbstractArray, m::Number) = std(v, m, true)
+
+## standard deviation
+std(v::AbstractArray, corrected::Bool) = std(v, mean(v), corrected)
+std(v::AbstractArray) = std(v, true)
+std(v::Ranges, corrected::Bool) = sqrt(var(v, corrected))
+std(v::Ranges) = std(v, true)
+
+## median absolute deviation with known center
 mad(v::AbstractArray, center::Number) = median(abs(v - center))
 
-#median absolute deviation
+## median absolute deviation
 mad(v::AbstractArray) = mad(v, median(v))
 
 ## hist ##
@@ -48,13 +77,13 @@ function hist(v::StridedVector, nbins::Integer)
     end
     lo, hi = min(v), max(v)
     if lo == hi
-        lo = lo - div(nbins,2)
-        hi = hi + div(nbins,2)
+        lo -= div(nbins,2)
+        hi += div(nbins,2) + int(isodd(nbins))
     end
-    binsz = (hi-lo)/nbins
+    binsz = (hi - lo) / nbins
     for x in v
         if isfinite(x)
-            i = iround((x-lo+binsz/2)/binsz)
+            i = iround((x - lo) / binsz + 0.5)
             h[i > nbins ? nbins : i] += 1
         end
     end
@@ -67,8 +96,7 @@ function hist(A::StridedMatrix, nbins::Integer)
     m, n = size(A)
     h = Array(Int, nbins, n)
     for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = hist(sub(A, i:(i+m-1)), nbins)
+        h[:,j] = hist(sub(A, 1:m, j), nbins)
     end
     h
 end
@@ -76,6 +104,9 @@ end
 function histc(v::StridedVector, edg)
     n = length(edg)
     h = zeros(Int, n)
+    if n == 0
+        return h
+    end
     first = edg[1]
     last = edg[n]
     for x in v
@@ -94,13 +125,12 @@ function histc(A::StridedMatrix, edg)
     m, n = size(A)
     h = Array(Int, length(edg), n)
     for j=1:n
-        i = 1+(j-1)*m
-        h[:,j] = histc(sub(A, i:(i+m-1)), edg)
+        h[:,j] = histc(sub(A, 1:m, j), edg)
     end
     h
 end
 
-# order (aka, rank), resolving ties using the mean rank
+## order (aka, rank), resolving ties using the mean rank
 function tiedrank(v::AbstractArray)
     n     = length(v)
     place = order(v)
@@ -128,185 +158,187 @@ function tiedrank(v::AbstractArray)
     return ord
 end
 
-# pearson covariance with known means
-function _jl_cov_pearson1(x::AbstractVector, y::AbstractVector, mx::Number, my::Number)
+## pearson covariance functions ##
+
+# pearson covariance between two vectors, with known means
+function _jl_cov_pearson1(x::AbstractArray, y::AbstractArray, mx::Number, my::Number, corrected::Bool)
     n = numel(x)
-    r = 0.0
-    for i = 1:n
-        r += (x[i] - mx) * (y[i] - my)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
     end
-    r / (n - 1)
+    x0 = x - mx
+    y0 = y - my
+    return (x0'*y0)[1] / (n - (corrected ? 1 : 0))
 end
 
-# pearson covariance
-function cov_pearson(x::AbstractVector, y::AbstractVector)
+# pearson covariance between two vectors
+function cov_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     if numel(x) != numel(y) 
         error("cov_pearson: incompatible dimensions")
     end
 
     mx = mean(x)
     my = mean(y)
-    _jl_cov_pearson1(x, y, mx, my)
+    _jl_cov_pearson1(x, y, mx, my, corrected)
 end
+cov_pearson(x::AbstractVector, y::AbstractVector) = cov_pearson(x, y, true)
 
-# pearson covariance over all pairs of columns
-function _jl_cov_pearson{T}(x::AbstractMatrix, mxs::AbstractVector{T})
-    (n,m) = size(x)
-    R = Array(T, (m,m))
-    for i = 1:m
-        R[i,i] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                  sub(x, (1:n, i)),
-                                  mxs[i], mxs[i])
-
-        for j = (i+1):m
-            R[i,j] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                      sub(x, (1:n, j)),
-                                      mxs[i], mxs[j])
-            R[j,i] = R[i,j]
-        end
+# pearson covariance over all pairs of columns of a matrix
+function _jl_cov_pearson(x::AbstractMatrix, mxs::AbstractMatrix, corrected::Bool)
+    n = size(x, 1)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
     end
-    return R
+    x0 = x - repmat(mxs, n, 1)
+    return (x0'*x0) / (n - (corrected ? 1 : 0))
 end
-cov_pearson(x::AbstractMatrix) = _jl_cov_pearson(x, amap(mean, x, 2))
+cov_pearson(x::AbstractMatrix, corrected::Bool) = _jl_cov_pearson(x, mean(x, 1), corrected)
+cov_pearson(x::AbstractMatrix) = cov_pearson(x, true)
 
-# pearson covariance over all pairs of columns with known means
-function _jl_cov_pearson{T}(x::AbstractMatrix, y::AbstractMatrix, 
-                            mxs::AbstractVector{T}, mys::AbstractVector{T})
-    (n,m) = size(x)
-    R = Array(T, (m,m))
-    for i = 1:m
-        for j = 1:m
-            R[i,j] = _jl_cov_pearson1(sub(x, (1:n, i)),
-                                      sub(y, (1:n, j)),
-                                      mxs[i], mys[j])
-        end
+# pearson covariance over all pairs of columns of two matrices
+function _jl_cov_pearson(x::AbstractMatrix, y::AbstractMatrix,
+                     mxs::AbstractMatrix, mys::AbstractMatrix,
+                     corrected::Bool)
+    n = size(x, 1)
+    if n == 0 || (n == 1 && corrected)
+        return NaN
     end
-    return R
+    x0 = x - repmat(mxs, n, 1)
+    y0 = y - repmat(mys, n, 1)
+    return (x0'*y0) / (n - (corrected ? 1 : 0))
 end
-
-# pearson covariance over all pairs of columns
-function cov_pearson(x::AbstractMatrix, y::AbstractMatrix)
+function cov_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if size(x) != size(y)
         error("cov_pearson: incompatible dimensions")
     end
 
     if is(x, y)
-        return cov_pearson(x)
+        return cov_pearson(x, corrected)
     end
 
-    _jl_cov_pearson(x, y, amap(mean, x, 2), amap(mean, y, 2))
+    n = size(x, 1)
+    mxs = mean(x, 1)
+    mys = mean(y, 1)
+    return _jl_cov_pearson(x, y, mxs, mys, corrected)
 end
+cov_pearson(x::AbstractMatrix, y::AbstractMatrix) = cov_pearson(x, y, true)
 
-# spearman covariance
-function cov_spearman(x::AbstractVector, y::AbstractVector)
-    cov_pearson(tiedrank(x), tiedrank(y))
+## spearman covariance functions ##
+
+# spearman covariance between two vectors
+function cov_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool)
+    cov_pearson(tiedrank(x), tiedrank(y), corrected)
 end
+cov_spearman(x::AbstractVector, y::AbstractVector) = cov_spearman(x, y, true)
 
-# spearman covariance over all pairs of columns
-function cov_spearman(x::AbstractMatrix)
-    cov_pearson(apply(hcat, amap(tiedrank, x, 2)))
+# spearman covariance over all pairs of columns of a matrix
+function cov_spearman(x::AbstractMatrix, corrected::Bool)
+    cov_pearson(apply(hcat, amap(tiedrank, x, 2)), corrected)
 end
+cov_spearman(x::AbstractMatrix) = cov_spearman(x, true)
 
-# spearman covariance over all pairs of columns
-function cov_spearman(x::AbstractMatrix, y::AbstractMatrix)
+# spearman covariance over all pairs of columns of two matrices
+function cov_spearman(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if is(x, y)
-        return cov_spearman(x)
+        return cov_spearman(x, corrected)
     end
 
     cov_pearson(
         apply(hcat, amap(tiedrank, x, 2)),
-        apply(hcat, amap(tiedrank, y, 2)))
+        apply(hcat, amap(tiedrank, y, 2)),
+        corrected)
 end
+cov_spearman(x::AbstractMatrix, y::AbstractMatrix) = cov_spearman(x, y, true)
 
 const cov = cov_pearson
 
-# pearson correlation
-function cor_pearson(x::AbstractVector, y::AbstractVector)
+## pearson correlation functions ##
+
+# pearson correlation between two vectors
+function cor_pearson(x::AbstractVector, y::AbstractVector, corrected::Bool)
     if numel(x) != numel(y)
         error("cor_pearson: incompatible dimensions")
     end
 
     mx = mean(x)
     my = mean(y)
-    sx = std(x, mx)
-    sy = std(y, my)
+    sx = std(x, mx, corrected)
+    sy = std(y, my, corrected)
 
-    r = _jl_cov_pearson1(x, y, mx, my)
-    r / (sx * sy)
+    return _jl_cov_pearson1(x, y, mx, my, corrected) / (sx * sy)
 end
+cor_pearson(x::AbstractVector, y::AbstractVector) = cor_pearson(x, y, true)
 
-# pearson correlation over all pairs of columns
-function cor_pearson(x::AbstractMatrix)
+# pearson correlation over all pairs of columns of a matrix
+function cor_pearson{T}(x::AbstractMatrix{T}, corrected::Bool)
     (n,m) = size(x)
-    mxs = amap(mean, x, 2)
+    mxs = mean(x, 1)
     sxs = similar(mxs)
     for i = 1:m
-        sxs[i] = std(x[:,i], mxs[i])
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i], corrected)
     end
-    R = _jl_cov_pearson(x, mxs)
+    R = _jl_cov_pearson(x, mxs, corrected) ./ (sxs' * sxs)
 
-    for i = 1:m
-        R[i,i] = 1.0
-        for j = (i+1):m
-            R[i,j] /= sxs[i] * sxs[j]
-            R[j,i] = R[i,j]
-        end
-    end
+    R[1:m+1:end] = one(T) # fix diagonal for numerical errors
+
     return R
 end
+cor_pearson(x::AbstractMatrix) = cor_pearson(x, true)
 
-# pearson correlation over all pairs of columns
-function cor_pearson(x::AbstractMatrix, y::AbstractMatrix)
+# pearson correlation over all pairs of columns of two matrices
+function cor_pearson(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if size(x) != size(y)
         error("cor_pearson: incompatible dimensions")
     end
 
     if is(x, y)
-        return cor_pearson(x)
+        return cor_pearson(x, corrected)
     end
 
     (n,m) = size(x)
-    mxs = amap(mean, x, 2)
-    mys = amap(mean, y, 2)
-
+    mxs = mean(x, 1)
+    mys = mean(y, 1)
     sxs = similar(mxs)
     sys = similar(mys)
     for i = 1:m
-        sxs[i] = std(x[:,i], mxs[i])
-        sys[i] = std(y[:,i], mys[i])
+        sxs[i] = std(sub(x, (1:n, i)), mxs[i], corrected)
+        sys[i] = std(sub(y, (1:n, i)), mys[i], corrected)
     end
-    R = _jl_cov_pearson(x, y, mxs, mys)
 
-    for i = 1:m
-        for j = 1:m
-            R[i,j] /= sxs[i] * sys[j]
-        end
-    end
-    return R
+    return _jl_cov_pearson(x, y, mxs, mys, corrected) ./ (sxs' * sys)
 end
+cor_pearson(x::AbstractMatrix, y::AbstractMatrix) = cor_pearson(x, y, true)
 
-# spearman correlation
-function cor_spearman(x::AbstractVector, y::AbstractVector)
-    cor_pearson(tiedrank(x), tiedrank(y))
+## spearman correlation functions ##
+
+# spearman correlation between two vectors
+function cor_spearman(x::AbstractVector, y::AbstractVector, corrected::Bool)
+    cor_pearson(tiedrank(x), tiedrank(y), corrected)
 end
+cor_spearman(x::AbstractVector, y::AbstractVector) = cor_spearman(x, y, true)
 
-# spearman correlation over all pairs of columns
-function cor_spearman(x::AbstractMatrix)
-    cor_pearson(apply(hcat, amap(tiedrank, x, 2)))
+# spearman correlation over all pairs of columns of a matrix
+function cor_spearman(x::AbstractMatrix, corrected::Bool)
+    cor_pearson(apply(hcat, amap(tiedrank, x, 2)), corrected)
 end
+cor_spearman(x::AbstractMatrix) = cor_spearman(x, true)
 
-# spearman correlation over all pairs of columns
-function cor_spearman(x::AbstractMatrix, y::AbstractMatrix)
+# spearman correlation over all pairs of columns of two matrices
+function cor_spearman(x::AbstractMatrix, y::AbstractMatrix, corrected::Bool)
     if is(x, y)
-        return cor_spearman(x)
+        return cor_spearman(x, corrected)
     end
 
     cor_pearson(
         apply(hcat, amap(tiedrank, x, 2)),
-        apply(hcat, amap(tiedrank, y, 2)))
+        apply(hcat, amap(tiedrank, y, 2)),
+        corrected)
 end
+cor_spearman(x::AbstractMatrix, y::AbstractMatrix) = cor_spearman(x, y, true)
 
 const cor = cor_pearson
+
+## quantiles ##
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
