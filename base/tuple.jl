@@ -40,7 +40,18 @@ map(f, t::(Any,Any,Any), s::(Any,Any,Any)) =
 map(f, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f, ts::Tuple...) = ntuple(length(ts[1]), n->f(map(t->t[n],ts)...))
+map(f, ts::Tuple...) = ntuple(length_checked_equal(ts...), 
+                              n->f(map(t->t[n],ts)...) )
+
+function length_checked_equal(args...) 
+    n = length(args[1])
+    for i=2:length(args)
+        if length(args[i]) != n
+            error("argument dimensions must match")
+        end
+    end
+    n
+end
 
 ## comparison ##
 

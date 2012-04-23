@@ -1174,7 +1174,9 @@ end
 
 function map(f, A::StridedArray, B::StridedArray)
     shp = promote_shape(size(A),size(B))
-    if isempty(A); return A; end
+    if isempty(A)
+        return similar(A, eltype(A), shp)
+    end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
     return map_to2(first, dest, f, A, B)
@@ -1244,9 +1246,12 @@ function map_to2(first, dest::StridedArray, f, As::StridedArray...)
 end
 
 function map(f, As::StridedArray...)
-    if isempty(As[1]); return As[1]; end
+    shape = mapreduce(promote_shape, size, As)
+    if prod(shape) == 0
+        return similar(As[1], eltype(As[1]), shape)
+    end
     first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first))
+    dest = similar(As[1], typeof(first), shape)
     return map_to2(first, dest, f, As...)
 end
 
