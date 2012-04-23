@@ -1040,7 +1040,17 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                  0, jl_pgcstack };
     jl_pgcstack = &__gc_stkf3_;
 
-    ti = jl_type_intersect(a, b, &env, &eqc, covariant);
+    JL_TRY {
+        // This is kind of awful, but an inner call to instantiate_type
+        // might fail due to a mismatched type parameter. The problem is
+        // that we allow Range{T} to exist, even though the declaration of
+        // Range specifies Range{T<:Real}. Therefore intersection cannot see
+        // that some parameter values actually don't match.
+        ti = jl_type_intersect(a, b, &env, &eqc, covariant);
+    }
+    JL_CATCH {
+        ti = (jl_value_t*)jl_bottom_type;
+    }
     if (ti == (jl_value_t*)jl_bottom_type ||
         !(env.n > 0 || eqc.n > 0 || tvars != jl_null)) {
         JL_GC_POP(); JL_GC_POP(); JL_GC_POP();

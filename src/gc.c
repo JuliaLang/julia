@@ -301,7 +301,7 @@ static void add_page(pool_t *p)
     p->freelist = fl;
 }
 
-static void *pool_alloc(pool_t *p)
+static inline void *pool_alloc(pool_t *p)
 {
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();

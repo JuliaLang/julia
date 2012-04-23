@@ -149,7 +149,7 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
                                    (jl_value_t*)bt);
         // TODO: bigger sizes
     }
-    return emit_expr(e, ctx, true);
+    return emit_expr(e, ctx, false);
 }
 
 // emit code to unpack a raw value from a box
