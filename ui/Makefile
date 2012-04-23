@@ -5,7 +5,8 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	    -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS)
+	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS) \
+	-Xlinker -rpath -Xlinker ./
 
 DEBUGFLAGS = $(FLAGS)
 SHIPFLAGS = $(FLAGS)

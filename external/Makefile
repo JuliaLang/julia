@@ -112,6 +112,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
+	install_name_tool -id @rpath/lib/libLLVM-3.0.dylib $(JULIALIB)/libLLVM-3.0.dylib 
 	touch $@
 
 clean-llvm:
@@ -655,7 +656,7 @@ endif
 
 
 compile-glpk: install-glpk
-install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_h.jl
+install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT)
 
 glpk-$(GLPK_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
