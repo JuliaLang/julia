@@ -463,8 +463,6 @@ void* outbox_thread(void* arg) {
 
                 // add the message to the outbox queue of all the users of this julia session if necessary
                 if (msg.type == MSG_OUTPUT_EVAL_INPUT ||
-                    msg.type == MSG_OUTPUT_PARSE_ERROR ||
-                    msg.type == MSG_OUTPUT_PARSE_COMPLETE ||
                     msg.type == MSG_OUTPUT_EVAL_RESULT ||
                     msg.type == MSG_OUTPUT_EVAL_ERROR ||
                     msg.type == MSG_OUTPUT_PLOT) {
@@ -472,7 +470,7 @@ void* outbox_thread(void* arg) {
                     for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
                         iter->second.outbox.push_back(msg);
                 }
-                if (msg.type == MSG_OUTPUT_PARSE_INCOMPLETE) {
+                if (msg.type == MSG_OUTPUT_EVAL_INCOMPLETE) {
                     for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++) {
                         if (iter->first == msg.args[0])
                             iter->second.outbox.push_back(msg);

@@ -137,8 +137,8 @@ function __socket_callback(fd)
             # stop now if there was a parsing error
             if __expr_multitoken && __expr.head == :error
                 # send everyone the input
-                __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_name, __user_id, __input}))
-                return __write_message(__Message(__MSG_OUTPUT_PARSE_ERROR, {__user_id, __expr.args[1]}))
+                __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
+                return __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
             end
             
             # if the expression was incomplete, just keep going
@@ -154,21 +154,17 @@ function __socket_callback(fd)
         # if the input was empty, stop early
         if __all_nothing
             # send everyone the input
-            __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_name, __user_id, __input}))
-            __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {__user_id}))
+            __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
             return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {__user_id, ""}))
         end
 
         # tell the browser if we didn't get a complete expression
         if length(__parsed_exprs) == 0
-            return __write_message(__Message(__MSG_OUTPUT_PARSE_INCOMPLETE, {__user_id}))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {__user_id}))
         end
 
         # send everyone the input
-        __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_name, __user_id, __input}))
-        
-        # tell the browser all the lines were parsed
-        __write_message(__Message(__MSG_OUTPUT_PARSE_COMPLETE, {__user_id}))
+        __write_message(__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
 
         put(__eval_channel, __parsed_exprs)
     end

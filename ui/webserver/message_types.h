@@ -74,7 +74,7 @@ __MSG_OUTPUT_OTHER = uint8(4) # {text}, standard output pipe (stored in replay h
 #ifndef notdefined
 #define MSG_OUTPUT_EVAL_INPUT 5
 #else
-__MSG_OUTPUT_EVAL_INPUT = uint8(5) # {user_name, user_id, input}, input from a user (stored in replay history)
+__MSG_OUTPUT_EVAL_INPUT = uint8(5) # {user_id, user_name, input}, input from a user (this message comes from julia, stored in replay history)
 #endif
 
 #ifndef notdefined
@@ -84,43 +84,31 @@ __MSG_OUTPUT_FATAL_ERROR = uint8(6) # {message}, fatal error message (terminates
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_ERROR 7
+#define MSG_OUTPUT_EVAL_INCOMPLETE 7
 #else
-__MSG_OUTPUT_PARSE_ERROR = uint8(7) # {user_id, message}, parsing error message (stored in replay history)
+__MSG_OUTPUT_EVAL_INCOMPLETE = uint8(7) # {user_id}, incomplete expression (this message comes from julia)
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_INCOMPLETE 8
+#define MSG_OUTPUT_EVAL_RESULT 8
 #else
-__MSG_OUTPUT_PARSE_INCOMPLETE = uint8(8) # {user_id}, incomplete expression
+__MSG_OUTPUT_EVAL_RESULT = uint8(8) # {user_id, result}, expression result (this message comes from julia, stored in replay history)
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_PARSE_COMPLETE 9
+#define MSG_OUTPUT_EVAL_ERROR 9
 #else
-__MSG_OUTPUT_PARSE_COMPLETE = uint8(9) # {user_id}, complete expression
+__MSG_OUTPUT_EVAL_ERROR = uint8(9) # {user_id, message}, error evaluating expression (this message comes from julia, stored in replay history)
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_EVAL_RESULT 10
+#define MSG_OUTPUT_PLOT 10
 #else
-__MSG_OUTPUT_EVAL_RESULT = uint8(10) # {user_id, result}, expression result (stored in replay history)
+__MSG_OUTPUT_PLOT = uint8(10) # {type, ...} create a plot, the format of the data depends on the type of plot (this message comes from julia, stored in replay history)
 #endif
 
 #ifndef notdefined
-#define MSG_OUTPUT_EVAL_ERROR 11
+#define MSG_OUTPUT_GET_USER 11
 #else
-__MSG_OUTPUT_EVAL_ERROR = uint8(11) # {user_id, message}, error evaluating expression (stored in replay history)
-#endif
-
-#ifndef notdefined
-#define MSG_OUTPUT_PLOT 12
-#else
-__MSG_OUTPUT_PLOT = uint8(12) # {type, ...} create a plot, the format of the data depends on the type of plot (stored in replay history)
-#endif
-
-#ifndef notdefined
-#define MSG_OUTPUT_GET_USER 13
-#else
-__MSG_OUTPUT_GET_USER = uint8(13) # {user_name, user_id} response to MSG_GET_USER
+__MSG_OUTPUT_GET_USER = uint8(11) # {user_name, user_id} response to MSG_GET_USER
 #endif
