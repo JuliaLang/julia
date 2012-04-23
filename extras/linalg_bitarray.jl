@@ -95,21 +95,7 @@ end
 # TODO: improve this!
 (*)(A::BitArray{Bool}, B::BitArray{Bool}) = bitpack(bitunpack(A) * bitunpack(B))
 
-
-
-
-diff{T}(a::BitVector{T}) = [ (a[i+1] - a[i])::promote_type(T,Int) | i=1:length(a)-1 ]
-
-function diff{T}(a::BitMatrix{T}, dim)
-    S = promote_type(T, Int)
-    if dim == 1
-        [ (a[i+1,j] - a[i,j])::S | i=1:size(a,1)-1, j=1:size(a,2) ]
-    else
-        [ (a[i,j+1] - a[i,j])::S | i=1:size(a,1), j=1:size(a,2)-1 ]
-    end
-end
-
-diff(a::BitMatrix) = diff(a, 1)
+## diff and gradient
 
 # TODO: this could be improved (is it worth it?)
 gradient(F::BitVector) = gradient(bitunpack(F))
@@ -118,8 +104,7 @@ gradient(F::Vector, h::BitVector) = gradient(F, bitunpack(h))
 gradient(F::BitVector, h::Vector) = gradient(bitunpack(F), h)
 gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
 
-diag(A::BitVector) = error("Perhaps you meant to use diagm().")
-diag{T}(A::BitMatrix{T}) = [ A[i,i]::T | i=1:min(size(A,1),size(A,2)) ]
+## diag and related
 
 function diagm{T}(v::Union(BitVector{T},BitMatrix{T}))
     if isa(v, BitMatrix)
@@ -137,23 +122,6 @@ function diagm{T}(v::Union(BitVector{T},BitMatrix{T}))
     return a
 end
 
+## norm and rank
+
 svd(A::BitMatrix) = svd(float(A))
-
-function norm(A::BitMatrix, p)
-    if size(A,1) == 1 || size(A,2) == 1
-        return norm(reshape(A, numel(A)), p)
-    elseif p == 1
-        return max(sum(abs(A),1))
-    elseif p == 2
-        return max(svd(A)[2])
-    elseif p == Inf
-        max(sum(abs(A),2))
-    elseif p == "fro"
-        return sqrt(sum(diag(A'*A)))
-    end
-end
-
-norm(A::BitMatrix) = norm(A, 2)
-rank(A::BitMatrix, tol::Real) = sum(svd(A)[2] > tol)
-rank(A::BitMatrix) = rank(A, 0)
-

@@ -25,7 +25,7 @@ tril(M::AbstractMatrix) = tril(M,0)
 
 #diff(a::AbstractVector)
 
-#diff(a::AbstractMatrix, dim)
+#diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
 
 gradient(F::AbstractVector) = gradient(F, [1:length(F)])

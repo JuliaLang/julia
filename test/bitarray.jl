@@ -425,9 +425,9 @@ for k = -max(n1,n2) : max(n1,n2)
     @check_bit_operation triu BitArray{T} (b1, k)
 end
 
-b1 = bitrand(T, v1)
-@check_bit_operation diff Array{S} (b1,)
-b1 = bitrand(T, n1, n2)
-@check_bit_operation diff Array{S} (b1,)
+#b1 = bitrand(T, v1)
+#@check_bit_operation diff Array{S} (b1,)
+#b1 = bitrand(T, n1, n2)
+#@check_bit_operation diff Array{S} (b1,)
 
 @ timesofar "linalg"
