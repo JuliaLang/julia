@@ -19,8 +19,7 @@ using namespace scgi;
 /////////////////////////////////////////////////////////////////////////////
 
 // convert a value to a string
-template <class T> std::string to_string(const T& t)
-{
+template <class T> std::string to_string(const T& t) {
     // convert a value to a string
     stringstream ss;
     ss<<t;
@@ -28,8 +27,7 @@ template <class T> std::string to_string(const T& t)
 }
 
 // parse a string from a value
-template <class T> T from_string(const std::string& t)
-{
+template <class T> T from_string(const std::string& t) {
     // parse a value from a string
     T ret;
     stringstream(t)>>ret;
@@ -41,8 +39,7 @@ template <class T> T from_string(const std::string& t)
 /////////////////////////////////////////////////////////////////////////////
 
 // a message
-class message
-{
+class message {
 public:
     // see ui/webserver/julia_web_base.jl for documentation
     uint8_t type;
@@ -57,8 +54,7 @@ public:
 const int WEB_SESSION_TIMEOUT = 20; // in seconds
 
 // a web session
-struct web_session
-{
+struct web_session {
     // time since watchdog was last "pet"
     time_t update_time;
 
@@ -70,16 +66,14 @@ struct web_session
 };
 
 // julia session states
-enum julia_session_status
-{
+enum julia_session_status {
     SESSION_WAITING_FOR_PORT_NUM,
     SESSION_NORMAL,
     SESSION_TERMINATING,
 };
 
 // a julia session
-struct julia_session
-{
+struct julia_session {
     // a map from session tokens to web sessions that use this julia session
     map<string, web_session> web_session_map;
 
@@ -98,15 +92,16 @@ struct julia_session
     // to be converted into messages
     string outbox_raw;
 
-    // keep track of every message sent to the clients
+    // keep track of messages sent to all the clients (not messages sent to particular users)
     vector<message> outbox_history;
 
     // process id of julia instance
     int pid;
 
-    // write to julia_in[1], read from julia_out[0]
+    // write to julia_in[1], read from julia_out[0] and julia_err[0]
     int julia_in[2];
     int julia_out[2];
+    int julia_err[2];
 
     // the socket for communicating to julia
     network::socket* sock;
@@ -140,8 +135,7 @@ pthread_mutex_t julia_session_mutex;
 const int INBOX_INTERVAL = 10000; // in nanoseconds
 
 // this thread sends input from the client to julia
-void* inbox_thread(void* arg)
-{
+void* inbox_thread(void* arg) {
     // get the session
     julia_session* julia_session_ptr = (julia_session*)arg;
 
@@ -264,8 +258,7 @@ const int OUTBOX_INTERVAL = 10000; // in nanoseconds
 const int PORT_NUM_INTERVAL = 10000; // in nanoseconds
 
 // this thread waits for output from julia and stores it in a buffer (for later polling by the client)
-void* outbox_thread(void* arg)
-{
+void* outbox_thread(void* arg) {
     // get the session
     julia_session* julia_session_ptr = (julia_session*)arg;
 
@@ -293,26 +286,54 @@ void* outbox_thread(void* arg)
         bool new_formatted_data = false;
 
         // prepare for reading from julia
-        int pipe = julia_session_ptr->julia_out[0];
+        int pipe_out = julia_session_ptr->julia_out[0];
+        int pipe_err = julia_session_ptr->julia_err[0];
 
         // unlock the mutex
         pthread_mutex_unlock(&julia_session_mutex);
 
-        // read while there is data
+        // read output data while there is data
         while (true)
         {
             // select to determine if there is a byte to read
             char buffer[2];
             fd_set set;
             FD_ZERO(&set);
-            FD_SET(pipe, &set);
+            FD_SET(pipe_out, &set);
             timeval select_timeout;
             select_timeout.tv_sec = 0;
             select_timeout.tv_usec = 100000;
             if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
             {
                 // try to read the byte
-                if (read(pipe, buffer, 1) > 0)
+                if (read(pipe_out, buffer, 1) > 0)
+                    new_raw_data = true;
+                else
+                    break;
+            }
+            else
+                break;
+            buffer[1] = 0;
+
+            // add the byte to the outbox
+            outbox_std += buffer[0];
+        }
+
+        // read error data while there is data
+        while (true)
+        {
+            // select to determine if there is a byte to read
+            char buffer[2];
+            fd_set set;
+            FD_ZERO(&set);
+            FD_SET(pipe_err, &set);
+            timeval select_timeout;
+            select_timeout.tv_sec = 0;
+            select_timeout.tv_usec = 100000;
+            if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
+            {
+                // try to read the byte
+                if (read(pipe_err, buffer, 1) > 0)
                     new_raw_data = true;
                 else
                     break;
@@ -440,10 +461,23 @@ void* outbox_thread(void* arg)
                 // we have a whole message - eat it from outbox_raw
                 julia_session_ptr->outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
 
-                // add the message to the outbox queue of all the users of this julia session
-                julia_session_ptr->outbox_history.push_back(msg);
-                for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-                    iter->second.outbox.push_back(msg);
+                // add the message to the outbox queue of all the users of this julia session if necessary
+                if (msg.type == MSG_OUTPUT_EVAL_INPUT ||
+                    msg.type == MSG_OUTPUT_PARSE_ERROR ||
+                    msg.type == MSG_OUTPUT_PARSE_COMPLETE ||
+                    msg.type == MSG_OUTPUT_EVAL_RESULT ||
+                    msg.type == MSG_OUTPUT_EVAL_ERROR ||
+                    msg.type == MSG_OUTPUT_PLOT) {
+                    julia_session_ptr->outbox_history.push_back(msg);
+                    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+                        iter->second.outbox.push_back(msg);
+                }
+                if (msg.type == MSG_OUTPUT_PARSE_INCOMPLETE) {
+                    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++) {
+                        if (iter->first == msg.args[0])
+                            iter->second.outbox.push_back(msg);
+                    }
+                }
             }
         }
 
@@ -484,8 +518,7 @@ void* outbox_thread(void* arg)
 const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
 
 // this thread kills old web sessions and kills julia sessions with no users
-void* watchdog_thread(void* arg)
-{
+void* watchdog_thread(void* arg) {
     // run forever
     while (true)
     {
@@ -530,6 +563,7 @@ void* watchdog_thread(void* arg)
             // close the pipes
             close(julia_session_ptr->julia_in[1]);
             close(julia_session_ptr->julia_out[0]);
+            close(julia_session_ptr->julia_err[0]);
 
             // kill the julia process
             kill(julia_session_ptr->pid, 9);
@@ -577,15 +611,13 @@ const int JULIA_TIMEOUT = 500; // in milliseconds
 const int JULIA_TIMEOUT_INTERVAL = 10000; // in nanoseconds
 
 // generate a session token
-string make_session_token()
-{
+string make_session_token() {
     // add a random integer to a prefix
     return "SESSION_"+to_string(rand());
 }
 
 // format a web response with the appropriate header
-string respond(string session_token, string body)
-{
+string respond(string session_token, string body) {
     string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
     header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
@@ -593,8 +625,8 @@ string respond(string session_token, string body)
 }
 
 // get a session with a particular name (creating it if it does not exist) and return a session token
-string get_session(string user_name, string session_name)
-{
+// returns the empty string if a new session could not be created
+string get_session(string user_name, string session_name) {
     // generate a session token
     string session_token = make_session_token();
 
@@ -654,6 +686,14 @@ string get_session(string user_name, string session_name)
         close(session_data->julia_in[1]);
         return "";
     }
+    if (pipe(session_data->julia_err))
+    {
+        close(session_data->julia_in[0]);
+        close(session_data->julia_in[1]);
+        close(session_data->julia_out[0]);
+        close(session_data->julia_out[1]);
+        return "";
+    }
     
     pid_t pid = fork();
     if (pid == -1)
@@ -662,6 +702,8 @@ string get_session(string user_name, string session_name)
         close(session_data->julia_in[1]);
         close(session_data->julia_out[0]);
         close(session_data->julia_out[1]);
+        close(session_data->julia_err[0]);
+        close(session_data->julia_err[1]);
         return "";
     }
     if (pid == 0)
@@ -671,10 +713,13 @@ string get_session(string user_name, string session_name)
         close(STDOUT_FILENO);
         dup2(session_data->julia_in[0], STDIN_FILENO);
         dup2(session_data->julia_out[1], STDOUT_FILENO);
+        dup2(session_data->julia_err[1], STDERR_FILENO);
         close(session_data->julia_in[0]);
         close(session_data->julia_in[1]);
         close(session_data->julia_out[0]);
         close(session_data->julia_out[1]);
+        close(session_data->julia_err[0]);
+        close(session_data->julia_err[1]);
 
         // acutally spawn julia instance
         execl("./julia", "julia", "./ui/webserver/julia_web_base.jl", (char*)0);
@@ -684,6 +729,7 @@ string get_session(string user_name, string session_name)
     }
     close(session_data->julia_in[0]);
     close(session_data->julia_out[1]);
+    close(session_data->julia_err[1]);
 
     // set the pid of the julia instance
     session_data->pid = pid;
@@ -717,8 +763,7 @@ string get_session(string user_name, string session_name)
 }
 
 // this function is called when an HTTP request is made - the response is the return value
-string get_response(request* req)
-{
+string get_response(request* req) {
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
 
@@ -772,7 +817,7 @@ string get_response(request* req)
                     // MSG_INPUT_START
                     if (request_message.type == MSG_INPUT_START)
                     {
-                        // make sure the mssage is well-formed
+                        // make sure the message is well-formed
                         if (request_message.args.size() >= 2)
                         {
                             // get the user name and session name
@@ -781,7 +826,7 @@ string get_response(request* req)
                                 user_name = "julia";
                             string session_name = request_message.args[1];
 
-                            // try to create a new session
+                            // try to create/join a new session
                             session_token = get_session(user_name, session_name);
                             if (session_token == "")
                             {
@@ -823,6 +868,25 @@ string get_response(request* req)
 
                         // don't send this message to julia
                         continue;
+                    }
+
+                    // MSG_INPUT_EVAL
+                    if (request_message.type == MSG_INPUT_EVAL)
+                    {
+                        // make sure we have a valid session
+                        if (session_token == "")
+                        {
+                            // if not, send an error message
+                            message msg;
+                            msg.type = MSG_OUTPUT_FATAL_ERROR;
+                            msg.args.push_back("session expired");
+                            response_messages.push_back(msg);
+                        }
+                        else
+                        {
+                            // forward the message to this julia session
+                            julia_session_ptr->inbox.push_back(request_message);
+                        }
                     }
 
                     // MSG_INPUT_REPLAY_HISTORY
@@ -867,6 +931,7 @@ string get_response(request* req)
                             message msg;
                             msg.type = MSG_OUTPUT_GET_USER;
                             msg.args.push_back(julia_session_ptr->web_session_map[session_token].user_name);
+                            msg.args.push_back(session_token);
                             response_messages.push_back(msg);
                         }
 
@@ -874,20 +939,7 @@ string get_response(request* req)
                         continue;
                     }
 
-                    // make sure we have a valid session
-                    if (session_token == "")
-                    {
-                        // if not, send an error message
-                        message msg;
-                        msg.type = MSG_OUTPUT_FATAL_ERROR;
-                        msg.args.push_back("session expired");
-                        response_messages.push_back(msg);
-                    }
-                    else
-                    {
-                        // forward the message to this julia session
-                        julia_session_ptr->inbox.push_back(request_message);
-                    }
+                    // bad message, just ignore it
                 }
             }
         }
@@ -942,8 +994,7 @@ string get_response(request* req)
 }
 
 // CTRL+C signal handler
-void sigproc(int)
-{
+void sigproc(int) {
     // print a message
     cout<<"cleaning up...\n";
 
@@ -956,6 +1007,7 @@ void sigproc(int)
         // close the pipes
         close(julia_session_list[i]->julia_in[1]);
         close(julia_session_list[i]->julia_out[0]);
+        close(julia_session_list[i]->julia_err[0]);
 
         // kill the julia process
         kill(julia_session_list[i]->pid, 9);
@@ -973,8 +1025,7 @@ void sigproc(int)
 }
 
 // program entrypoint
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     // set the Ctrl+C handler
     signal(SIGINT, sigproc);
 
