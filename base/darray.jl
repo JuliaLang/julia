@@ -129,6 +129,29 @@ myindexes(s::SubDArray) = pieceindexes(s, s.parent.localpiece)
 
 myindexes(s::SubDArray, locl) = pieceindexes(s, s.parent.localpiece, locl)
 
+# Utility function to help get other processes started on their piece
+# before tackling a big job.
+# Example (out is a DArray):
+#   order = permute_to_last(out.pmap,myid())
+#   @sync begin
+#       for i in order
+#           @spawnat out.pmap[i] myfunc(out,...)
+#       end
+#   end
+function permute_to_last{T}(v::Vector{T},val::T)
+    iother = Int[]
+    iindx = Int[]
+    for i = 1:length(v)
+        if v[i] == val
+            push(iindx,i)
+        else
+            push(iother,i)
+        end
+    end
+    [iother,iindx]
+end
+
+
 localize(d::DArray) = d.locl
 
 localize(s::SubDArray) = sub(localize(s.parent), myindexes(s, true))
