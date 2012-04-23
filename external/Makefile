@@ -112,7 +112,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	install_name_tool -id @rpath/lib/libLLVM-3.0.dylib $(JULIALIB)/libLLVM-3.0.dylib 
+	install_name_tool -id @executable_path/lib/libLLVM-3.0.$(SHLIB_EXT) $(JULIALIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
@@ -143,6 +143,8 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
+	chmod +w $(JULIALIB)/libreadline.*
+	install_name_tool -id @executable_path/lib/libreadline.$(SHLIB_EXT) $(JULIALIB)/libreadline.$(SHLIB_EXT) 
 	touch $@
 
 clean-readline:
@@ -292,7 +294,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) -install_name @rpath/librandom.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) -install_name @executable_path/lib/librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -325,7 +327,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
-	install_name_tool -id @rpath/libopenblas.dylib $(EXTROOTLIB)/libopenblas.dylib
+	install_name_tool -id @executable_path/lib/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -477,14 +479,14 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.dylib && \
-	install_name_tool -id @rpath/libamd.dylib $(JULIALIB)/libamd.dylib && \
-	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.dylib && \
-	install_name_tool -id @rpath/libcolamd.dylib $(JULIALIB)/libcolamd.dylib && \
-	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.dylib -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @rpath/libcholmod.dylib $(JULIALIB)/libcholmod.dylib && \
-	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.dylib -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @rpath/libumfpack.dylib $(JULIALIB)/libumfpack.dylib
+	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.$(SHLIB_EXT) && \
+	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(JULIALIB)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
+	install_name_tool -id @executable_path/lib/libcolamd.$(SHLIB_EXT) $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.$(SHLIB_EXT) -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @executable_path/lib/libcholmod.$(SHLIB_EXT) $(JULIALIB)/libcholmod.$(SHLIB_EXT) && \
+	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.$(SHLIB_EXT) -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @executable_path/lib/libumfpack.$(SHLIB_EXT) $(JULIALIB)/libumfpack.$(SHLIB_EXT)
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
