@@ -478,6 +478,7 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
+	echo "OBJ_TARGET"
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
 	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.$(SHLIB_EXT) && \
 	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(JULIALIB)/libamd.$(SHLIB_EXT) && \
