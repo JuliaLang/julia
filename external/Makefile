@@ -65,9 +65,9 @@ ifeq ($(USE_SYSTEM_ARPACK), 0)
 LIBS += arpack
 endif
 
-ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+#ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
-endif
+#endif
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
 LIBS += glpk
@@ -458,13 +458,18 @@ distclean-fftw:
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
-SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
-else
-SUITESPARSE_OBJ_SOURCE = 
 endif
 
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
+
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
+else:
+compile-suitesparse:
+endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+
+
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(WGET) http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
@@ -477,17 +482,17 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX) 
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	echo "OBJ_TARGET"
-	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.$(SHLIB_EXT) && \
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
+	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared -Xlinker -all_load libamd.a -o $(JULIALIB)/libamd.$(SHLIB_EXT) && \
 	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(JULIALIB)/libamd.$(SHLIB_EXT) && \
-	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CC) -shared -Xlinker -all_load libcolamd.a -o $(JULIALIB)/libcolamd.dylib && \
 	install_name_tool -id @executable_path/lib/libcolamd.$(SHLIB_EXT) $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.$(SHLIB_EXT) -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(CXX) -shared -Xlinker -all_load libcholmod.a -o $(JULIALIB)/libcholmod.$(SHLIB_EXT) -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
 	install_name_tool -id @executable_path/lib/libcholmod.$(SHLIB_EXT) $(JULIALIB)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.$(SHLIB_EXT) -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @executable_path/lib/libumfpack.$(SHLIB_EXT) $(JULIALIB)/libumfpack.$(SHLIB_EXT)
+	$(CXX) -shared -Xlinker -all_load libumfpack.a -o $(JULIALIB)/libumfpack.$(SHLIB_EXT) -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @executable_path/lib/libumfpack.dylib $(JULIALIB)/libumfpack.dylib
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
