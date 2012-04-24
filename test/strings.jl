@@ -408,10 +408,23 @@ end
 @assert isequal(split("foo,bar,baz", ',', 2), ["foo","bar,baz"])
 @assert isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
 @assert isequal(split("foo,bar", "o,b"), ["fo","ar"])
+
 @assert isequal(split("", ','), [""])
 @assert isequal(split(",", ','), ["",""])
 @assert isequal(split(",,", ','), ["","",""])
 @assert isequal(split("", ',', false), [])
 @assert isequal(split(",", ',', false), [])
 @assert isequal(split(",,", ',', false), [])
+
 @assert isequal(split("a b c"), ["a","b","c"])
+@assert isequal(split("a  b \t c\n"), ["a","b","c"])
+
+let str = "a.:.ba..:..cba.:.:.dcba.:."
+@assert isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
+@assert isequal(split(str, ".:.", false), ["a","ba.",".cba",":.dcba"])
+@assert isequal(split(str, ".:."), ["a","ba.",".cba",":.dcba",""])
+@assert isequal(split(str, r"\.(:\.)+"), ["a","ba.",".cba","dcba",""])
+@assert isequal(split(str, r"\.(:\.)+", false), ["a","ba.",".cba","dcba"])
+@assert isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
+@assert isequal(split(str, r"\.+:\.+", false), ["a","ba","cba",":.dcba"])
+end
