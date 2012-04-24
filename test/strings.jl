@@ -375,3 +375,4 @@ end
 @assert isequal(split("", ',', false), [])
 @assert isequal(split(",", ',', false), [])
 @assert isequal(split(",,", ',', false), [])
+@assert isequal(split("a b c"), ["a","b","c"])
