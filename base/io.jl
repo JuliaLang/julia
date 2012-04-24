@@ -344,12 +344,12 @@ end
 
 ## high-level iterator interfaces ##
 
-type LineIterator
+type EachLine
     stream::IOStream
 end
 
-start(itr::LineIterator) = readline(itr.stream)
-function done(itr::LineIterator, line)
+start(itr::EachLine) = readline(itr.stream)
+function done(itr::EachLine, line)
     if !isempty(line)
         return false
     end
@@ -357,11 +357,11 @@ function done(itr::LineIterator, line)
     true
 end
 
-function next(itr::LineIterator, this_line)
+function next(itr::EachLine, this_line)
     this_line, readline(itr.stream)
 end
 
-each_line(stream::IOStream) = LineIterator(stream)
+each_line(stream::IOStream) = EachLine(stream)
 
 function readlines(s, fx::Function...)
     a = {}
