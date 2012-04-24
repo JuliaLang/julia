@@ -689,8 +689,8 @@ jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
-DLLEXPORT void jl_show(jl_value_t *v);
-void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one);
+DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v);
+void jl_show_tuple(ios_t *s, jl_tuple_t *t, char opn, char cls, int comma_one);
 
 // modules
 extern jl_module_t *jl_core_module;
@@ -886,7 +886,6 @@ typedef struct _jl_savestate_t {
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
     jl_value_t *ostream_obj;
-    ios_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
@@ -922,10 +921,6 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void jl_raise(jl_value_t *e);
 DLLEXPORT void jl_register_toplevel_eh(void);
 
-DLLEXPORT jl_value_t *jl_current_output_stream_obj(void);
-DLLEXPORT ios_t *jl_current_output_stream(void);
-DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
-
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
@@ -937,7 +932,6 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     jl_current_task->state.eh_ctx = ss->eh_ctx;
     jl_current_task->state.bt = ss->bt;
     jl_current_task->state.ostream_obj = ss->ostream_obj;
-    jl_current_task->state.current_output_stream = ss->current_output_stream;
     jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
     jl_pgcstack = ss->gcstack;

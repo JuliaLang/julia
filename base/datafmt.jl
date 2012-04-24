@@ -153,24 +153,19 @@ csvread(f, T::Type) = dlmread(f, ',', T)
 # todo: keyword argument for # of digits to print
 function dlmwrite(f, a, dlm::Char)
     nr, nc = size(a)
-    try
-        set_current_output_stream(f)
-        for i = 1:nr
-            for j = 1:nc
-                elt = a[i,j]
-                if isa(elt,Float)
-                    print_shortest(elt)
-                else
-                    print(elt)
-                end
-                if j < nc
-                    write(f, dlm)
-                end
+    for i = 1:nr
+        for j = 1:nc
+            elt = a[i,j]
+            if isa(elt,Float)
+                print_shortest(f, elt)
+            else
+                print(f, elt)
             end
-            write(f, '\n')
+            if j < nc
+                write(f, dlm)
+            end
         end
-    catch e
-        throw(e)
+        write(f, '\n')
     end
     nothing
 end

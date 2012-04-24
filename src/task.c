@@ -514,7 +514,6 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     // there is no active exception handler available on this stack yet
     t->state.eh_ctx = NULL;
     t->state.ostream_obj = jl_current_task->state.ostream_obj;
-    t->state.current_output_stream = jl_current_task->state.current_output_stream;
     t->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     t->state.gcstack = NULL;
@@ -633,7 +632,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    jl_current_task->state.current_output_stream = ios_stdout;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;
