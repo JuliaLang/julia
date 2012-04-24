@@ -360,6 +360,45 @@ for i = 1:length(u8str)
     @assert search(u8str, "", i) == (i,i)
 end
 
+# string search with a zero-char regex
+for i = 1:length(astr)
+    @assert search(astr, r"", i) == (i,i)
+end
+for i = 1:length(u8str)
+    # TODO: should regex search fast-forward invalid indices?
+    if isvalid(u8str,i)
+        @assert search(u8str, r""s, i) == (i,i)
+    end
+end
+
+# string search with a two-char string literal
+@assert search("foo,bar,baz", "xx")[1] == 0
+@assert search("foo,bar,baz", "fo") == (1,3)
+@assert search("foo,bar,baz", "fo", 3)[1] == 0
+@assert search("foo,bar,baz", "oo") == (2,4)
+@assert search("foo,bar,baz", "oo", 4)[1] == 0
+@assert search("foo,bar,baz", "o,") == (3,5)
+@assert search("foo,bar,baz", "o,", 5)[1] == 0
+@assert search("foo,bar,baz", ",b") == (4,6)
+@assert search("foo,bar,baz", ",b", 6) == (8,10)
+@assert search("foo,bar,baz", ",b", 10)[1] == 0
+@assert search("foo,bar,baz", "az") == (10,12)
+@assert search("foo,bar,baz", "az", 12)[1] == 0
+
+# string search with a two-char regex
+@assert search("foo,bar,baz", r"xx")[1] == 0
+@assert search("foo,bar,baz", r"fo") == (1,3)
+@assert search("foo,bar,baz", r"fo", 3)[1] == 0
+@assert search("foo,bar,baz", r"oo") == (2,4)
+@assert search("foo,bar,baz", r"oo", 4)[1] == 0
+@assert search("foo,bar,baz", r"o,") == (3,5)
+@assert search("foo,bar,baz", r"o,", 5)[1] == 0
+@assert search("foo,bar,baz", r",b") == (4,6)
+@assert search("foo,bar,baz", r",b", 6) == (8,10)
+@assert search("foo,bar,baz", r",b", 10)[1] == 0
+@assert search("foo,bar,baz", r"az") == (10,12)
+@assert search("foo,bar,baz", r"az", 12)[1] == 0
+
 # split
 @assert isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
 @assert isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
