@@ -123,7 +123,7 @@ end
 typealias Chars Union(Char,AbstractVector{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
-    if i < 1 error("strchr: index out of range") end
+    if i < 1 error("index out of range") end
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
@@ -142,7 +142,11 @@ search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
 search(s::String, c::Chars) = search(s,c,start(s))
 
 function search(s::String, t::String, i::Integer)
-    if isempty(t) return (i,i) end
+    if isempty(t)
+        return 1 <= i <= length(s)+1 ? (i,i) :
+               i == length(s)+2      ? (0,0) :
+               error("index out of range")
+    end
     t1, j2 = next(t,start(t))
     while true
         i = strchr(s,t1,i)
@@ -169,6 +173,17 @@ function search(s::String, t::String, i::Integer)
     end
 end
 search(s::String, t::String) = search(s,t,start(s))
+
+type EachSearch
+    string::String
+    pattern
+end
+each_search(string::String, pattern) = EachSearch(string, pattern)
+
+start(itr::EachSearch) = search(itr.string, itr.pattern)
+done(itr::EachSearch, st) = (st[1]==0)
+next(itr::EachSearch, st) =
+    (st, search(itr.string, itr.pattern, max(nextind(itr.string,st[1]),st[2])))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -271,7 +286,7 @@ length(s::SubString) = s.length
 
 function ref(s::String, r::Range1{Int})
     if first(r) < 1 || length(s) < last(r)
-        error("in substring slice: index out of range")
+        error("index out of range")
     end
     SubString(s, first(r), last(r))
 end
@@ -816,16 +831,17 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
 function split(str::String, splitter, limit::Integer, keep_empty::Bool)
-    i = start(str)
     strs = String[]
-    while length(strs) != limit-1
-        j, k = search(str, splitter, i)
-        if j == 0 break end
-        if k == i; j = k = i+1 end
+    if isempty(str) return strs end
+    i = start(str)
+    m = length(str)+1
+    for (j,k) = each_search(str,splitter)
+        if length(strs)==limit-1 break end
+        if k <= i continue end
+        if j >= m break end
         if keep_empty || i < j
             push(strs, str[i:j-1])
         end
-        # if done(str,k) return strs end
         i = k
     end
     if keep_empty || !done(str,i)
@@ -1082,9 +1098,9 @@ end
 # find the index of the first occurrence of a value in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
-    if i < 1 error("memchr: index out of range") end
+    if i < 1 error("index out of range") end
     n = length(a)
-    if i > n return 0 end
+    if i > n return i == n+1 ? 0 : error("index out of range") end
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)

@@ -347,6 +347,7 @@ end
 type EachLine
     stream::IOStream
 end
+each_line(stream::IOStream) = EachLine(stream)
 
 start(itr::EachLine) = readline(itr.stream)
 function done(itr::EachLine, line)
@@ -356,12 +357,7 @@ function done(itr::EachLine, line)
     close(itr.stream)
     true
 end
-
-function next(itr::EachLine, this_line)
-    this_line, readline(itr.stream)
-end
-
-each_line(stream::IOStream) = EachLine(stream)
+next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
 
 function readlines(s, fx::Function...)
     a = {}

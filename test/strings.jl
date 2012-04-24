@@ -400,6 +400,7 @@ end
 @assert search("foo,bar,baz", r"az", 12)[1] == 0
 
 # split
+@assert isequal(split("foo,bar,baz", 'x'), ["foo,bar,baz"])
 @assert isequal(split("foo,bar,baz", ','), ["foo","bar","baz"])
 @assert isequal(split("foo,bar,baz", ","), ["foo","bar","baz"])
 @assert isequal(split("foo,bar,baz", r","), ["foo","bar","baz"])
@@ -409,7 +410,7 @@ end
 @assert isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
 @assert isequal(split("foo,bar", "o,b"), ["fo","ar"])
 
-@assert isequal(split("", ','), [""])
+@assert isequal(split("", ','), [])
 @assert isequal(split(",", ','), ["",""])
 @assert isequal(split(",,", ','), ["","",""])
 @assert isequal(split("", ',', false), [])
@@ -428,3 +429,10 @@ let str = "a.:.ba..:..cba.:.:.dcba.:."
 @assert isequal(split(str, r"\.+:\.+"), ["a","ba","cba",":.dcba",""])
 @assert isequal(split(str, r"\.+:\.+", false), ["a","ba","cba",":.dcba"])
 end
+
+# zero-width splits
+@assert isequal(split("", ""), [])
+@assert isequal(split("", r""), [])
+@assert isequal(split("abc", ""), ["a","b","c"])
+@assert isequal(split("abc", r""), ["a","b","c"])
+@assert isequal(split("abcd", r"b?"), ["a","c","d"])
