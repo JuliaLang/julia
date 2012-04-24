@@ -1,7 +1,7 @@
 # set up non-serializable state
 
 const stdout_stream = make_stdout_stream()
-set_current_output_stream(stdout_stream)
+OUTPUT_STREAM = stdout_stream
 const stdin_stream = make_stdin_stream()
 const stderr_stream = make_stderr_stream()
 
@@ -22,4 +22,3 @@ _jl_libfftwf = dlopen("libfftw3f")
 
 ##_jl_libglpk = dlopen("libglpk")
 ##_jl_libglpk = dlopen("libglpk_wrapper")
-
