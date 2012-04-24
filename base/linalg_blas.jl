@@ -240,7 +240,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     if nA != mX; error("*: argument shapes do not match"); end
 
     if stride(A, 1) != 1
-        return invoke(*, (AbstractMatrix, AbstractVector), A, X)
+        return invoke(*, (Matrix, Vector), A, X)
     end
 
     # Result array does not need to be initialized as long as beta==0

@@ -210,6 +210,11 @@ function speye(T::Type, m::Int, n::Int)
     _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
 
+function one{T}(S::SparseMatrixCSC{T})
+    m, n = size(S)
+    return speye(T, m, n)
+end
+
 ## Structure query functions
 
 issym(A::SparseMatrixCSC) = nnz(A - A.') == 0 #'
@@ -448,7 +453,7 @@ ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
 ref(A::SparseMatrixCSC, I::(Integer,Integer)) = ref(A, I[1], I[2])
 
 function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
-    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("ref: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("ref: index out of bounds"); end
     first = A.colptr[i1]
     last = A.colptr[i1+1]-1
     while first <= last
@@ -506,7 +511,7 @@ assign(A::SparseMatrixCSC, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
     i1 = convert(T_int, i1)
-    if i0 < 1 || i0 > A.m || i1 < 1 || i1 > A.n; error("assign: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("assign: index out of bounds"); end
     v = convert(T, v)
     if v == 0 #either do nothing or delete entry if it exists
         first = A.colptr[i1]
@@ -665,84 +670,6 @@ function assign{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, v::AbstractMatrix, I::Abstract
     A.rowval = rowval
     A.nzval = nzval
     return A
-end
-
-## Matrix multiplication
-
-# In matrix-vector multiplication, the correct orientation of the vector is assumed.
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
-    Y = zeros(promote_type(T1,T2), A.m)
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[A.rowval[k]] += A.nzval[k] * X[col]
-    end
-    return Y
-end
-
-# In vector-matrix multiplication, the correct orientation of the vector is assumed.
-function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
-    Y = zeros(promote_type(T1,T2), A.n)
-    for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
-        Y[col] += X[A.rowval[k]] * A.nzval[k]
-    end
-    return Y
-end
-
-function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
-    mX, nX = size(X)
-    if A.n != mX; error("error in *: mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), A.m, nX)
-    for multivec_col = 1:nX
-        for col = 1 : A.n
-            for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[A.rowval[k], multivec_col] += A.nzval[k] * X[col, multivec_col]
-            end
-        end
-    end
-    return Y
-end
-
-function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
-    mX, nX = size(X)
-    if nX != A.m; error("error in *: mismatched dimensions"); end
-    Y = zeros(promote_type(T1,T2), mX, A.n)
-    for multivec_row = 1:mX
-        for col = 1 : A.n
-            for k = A.colptr[col] : (A.colptr[col+1]-1)
-                Y[multivec_row, col] += X[multivec_row, A.rowval[k]] * A.nzval[k]
-            end
-        end
-    end
-    return Y
-end
-
-# sparse matmul (sparse * sparse)
-function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{TvY,TiY})
-    mX, nX = size(X)
-    mY, nY = size(Y)
-    if nX != mY; error("error in *: mismatched dimensions"); end
-    Tv = promote_type(TvX, TvY)
-    Ti = promote_type(TiX, TiY)
-
-    colptr = Array(Ti, nY+1)
-    colptr[1] = 1
-    nnz_res = nnz(X) + nnz(Y)
-    rowval = Array(Ti, nnz_res)  # TODO: Need better estimation of result space
-    nzval = Array(Tv, nnz_res)
-
-    colptrY = Y.colptr
-    rowvalY = Y.rowval
-    nzvalY = Y.nzval
-
-    spa = SparseAccumulator(Tv, Ti, mX);
-    for y_col = 1:nY
-        for y_elt = colptrY[y_col] : (colptrY[y_col+1]-1)
-            x_col = rowvalY[y_elt]
-            _jl_spa_axpy(spa, nzvalY[y_elt], X, x_col)
-        end
-        (rowval, nzval) = _jl_spa_store_reset(spa, y_col, colptr, rowval, nzval)
-    end
-
-    SparseMatrixCSC(mX, nY, colptr, rowval, nzval)
 end
 
 # Sparse concatenation
