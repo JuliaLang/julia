@@ -3,9 +3,8 @@
 # This file mostly contains commented functions which are supposed
 # to be defined in type-specific linalg_<type>.jl files.
 #
-# It only actually defines default argument versions which will
-# fail without a proper implementation anyway.
-
+# It defines functions in cases where sufficiently few assumptions about
+# storage can be made.
 
 #aCb(x::AbstractVector, y::AbstractVector)
 #aTb{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
@@ -24,7 +23,6 @@ tril(M::AbstractMatrix) = tril(M,0)
 #tril{T}(M::AbstractMatrix{T}, k::Integer)
 
 #diff(a::AbstractVector)
-
 #diff(a::AbstractMatrix, dim::Integer)
 diff(a::AbstractMatrix) = diff(a, 1)
 
@@ -37,51 +35,64 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
 
-#norm(x::AbstractVector, p::Number)
-#norm(x::AbstractVector)
+function norm(x::AbstractVector, p::Number)
+    if p == Inf
+        return max(abs(x))
+    elseif p == -Inf
+        return min(abs(x))
+    else
+        return sum(abs(x).^p).^(1/p)
+    end
+end
 
-#norm(A::AbstractMatrix, p)
+norm(x::AbstractVector) = sqrt(real(dot(x,x)))
+
+function norm(A::AbstractMatrix, p)
+    if size(A,1) == 1 || size(A,2) == 1
+        return norm(reshape(A, numel(A)), p)
+    elseif p == 1
+        return max(sum(abs(A),1))
+    elseif p == 2
+        return max(svd(A)[2])
+    elseif p == Inf
+        max(sum(abs(A),2))
+    elseif p == "fro"
+        return sqrt(sum(diag(A'*A)))
+    end
+end
+
 norm(A::AbstractMatrix) = norm(A, 2)
 rank(A::AbstractMatrix, tol::Real) = sum(svd(A)[2] > tol)
 rank(A::AbstractMatrix) = rank(A, 0)
 
-#trace{T}(A::AbstractMatrix{T})
+trace(A::AbstractMatrix) = sum(diag(A))
 
 #kron(a::AbstractVector, b::AbstractVector)
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-#inv(a::AbstractMatrix)
-#cond(a::AbstractMatrix, p)
+inv(a::AbstractMatrix) = a \ one(a)
+cond(a::AbstractMatrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::AbstractMatrix) = cond(a, 2)
 
-#XXX this doens't seem to belong here
-function randsym(n)
-    a = randn(n,n)
-    for j=1:n-1, i=j+1:n
-        x = (a[i,j]+a[j,i])/2
-        a[i,j] = x
-        a[j,i] = x
-    end
-    a
-end
-
 #issym(A::AbstractMatrix)
-
-# Randomized matrix symmetry test
-# Theorem: AbstractMatrix is symmetric iff x'*A*y == y'*A*x, for randomly chosen x and y.
-#issym_rnd(A::AbstractArray)
-
 #ishermitian(A::AbstractMatrix)
 #istriu(A::AbstractMatrix)
 #istril(A::AbstractMatrix)
 
-# XXX needs type annotation
-#linreg(x, y)
+function linreg(x::AbstractVector, y::AbstractVector)
+    M = [ones(length(x)) x]
+    Mt = M'
+    ((Mt*M)\Mt)*y
+end
 
 # weighted least squares
-# XXX needs type annotation
-#linreg(x, y, w)
+function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
+    w = sqrt(w)
+    M = [w w.*x]
+    Mt = M'
+    ((Mt*M)\Mt)*(w.*y)
+end
 
 # multiply by diagonal matrix as vector
 #diagmm!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)

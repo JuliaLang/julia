@@ -37,9 +37,7 @@ function (*){T,S}(A::Matrix{T}, B::Vector{S})
     return C
 end
 
-function (*){T,S}(A::Vector{S}, B::Matrix{T})
-    return reshape(A,length(A),1)*B
-end
+(*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
 # TODO: support transposed arguments
 function (*){T,S}(A::Matrix{T}, B::Matrix{S})
@@ -200,38 +198,6 @@ function diagm{T}(v::Union(Vector{T},Matrix{T}))
     return a
 end
 
-function norm(x::Vector, p::Number)
-    if p == Inf
-        return max(abs(x))
-    elseif p == -Inf
-        return min(abs(x))
-    else
-        return sum(abs(x).^p).^(1/p)
-    end
-end
-
-norm(x::Vector) = sqrt(real(dot(x,x)))
-
-function norm(A::Matrix, p)
-    if size(A,1) == 1 || size(A,2) == 1
-        return norm(reshape(A, numel(A)), p)
-    elseif p == 1
-        return max(sum(abs(A),1))
-    elseif p == 2
-        return max(svd(A)[2])
-    elseif p == Inf
-        max(sum(abs(A),2))
-    elseif p == "fro"
-        return sqrt(sum(diag(A'*A)))
-    end
-end
-
-norm(A::Matrix) = norm(A, 2)
-rank(A::Matrix, tol::Real) = sum(svd(A)[2] > tol)
-rank(A::Matrix) = rank(A, 0)
-
-# trace(A::Matrix) = sum(diag(A))
-
 function trace{T}(A::Matrix{T})
     t = zero(T)
     for i=1:min(size(A))
@@ -261,13 +227,16 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
 end
 
 det(a::Matrix) = prod(diag(qr(a)[2]))
-inv(a::Matrix) = a \ one(a)
-cond(a::Matrix, p) = norm(a, p) * norm(inv(a), p)
-cond(a::Matrix) = cond(a, 2)
 
-# XXX this was left in linalg.jl
-#     it seems to belong somewhere else though
-#function randsym(n)
+function randsym(n)
+    a = randn(n,n)
+    for j=1:n-1, i=j+1:n
+        x = (a[i,j]+a[j,i])/2
+        a[i,j] = x
+        a[j,i] = x
+    end
+    a
+end
 
 function issym(A::Matrix)
     m, n = size(A)
@@ -282,7 +251,7 @@ end
 
 # Randomized matrix symmetry test
 # Theorem: Matrix is symmetric iff x'*A*y == y'*A*x, for randomly chosen x and y.
-function issym_rnd(A::Array)
+function issym_rnd(A::Matrix)
     m, n = size(A)
     if m != n; return false; end
     ntrials = 5
@@ -329,22 +298,6 @@ function istril(A::Matrix)
     return true
 end
 
-# XXX needs type annotation
-function linreg(x, y)
-    M = [ones(length(x)) x]
-    Mt = M'
-    ((Mt*M)\Mt)*y
-end
-
-# weighted least squares
-# XXX needs type annotation
-function linreg(x, y, w)
-    w = sqrt(w)
-    M = [w w.*x]
-    Mt = M'
-    ((Mt*M)\Mt)*(w.*y)
-end
-
 # multiply by diagonal matrix as vector
 function diagmm!(C::Matrix, A::Matrix, b::Vector)
     m, n = size(A)
@@ -372,9 +325,6 @@ function diagmm!(C::Matrix, b::Vector, A::Matrix)
     end
     return C
 end
-
-diagmm!(A::Matrix, b::Vector) = diagmm!(A,A,b)
-diagmm!(b::Vector, A::Matrix) = diagmm!(A,b,A)
 
 diagmm(A::Matrix, b::Vector) =
     diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
