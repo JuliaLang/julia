@@ -65,9 +65,9 @@ ifeq ($(USE_SYSTEM_ARPACK), 0)
 LIBS += arpack
 endif
 
-ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+#ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
-endif
+#endif
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
 LIBS += glpk
@@ -112,7 +112,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	install_name_tool -id @executable_path/lib/libLLVM-3.0.$(SHLIB_EXT) $(JULIALIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	install_name_tool -id @executable_path/lib/libLLVM-3.0.$(SHLIB_EXT) $(EXTROOTLIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
@@ -143,8 +143,8 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
-	chmod +w $(JULIALIB)/libreadline.*
-	install_name_tool -id @executable_path/lib/libreadline.$(SHLIB_EXT) $(JULIALIB)/libreadline.$(SHLIB_EXT) 
+	chmod +w $(EXTROOTLIB)/libreadline.*
+	install_name_tool -id @executable_path/lib/libreadline.$(SHLIB_EXT) $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) 
 	touch $@
 
 clean-readline:
@@ -458,13 +458,18 @@ distclean-fftw:
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
-SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
-else
-SUITESPARSE_OBJ_SOURCE = 
 endif
 
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
+
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
+else:
+compile-suitesparse:
+endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+
+
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(WGET) http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
@@ -477,16 +482,17 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX) 
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(CC) -shared -Xlinker -all_load AMD/lib/libamd.a -o $(JULIALIB)/libamd.$(SHLIB_EXT) && \
-	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(JULIALIB)/libamd.$(SHLIB_EXT) && \
-	$(CC) -shared -Xlinker -all_load COLAMD/lib/libcolamd.a -o $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
-	install_name_tool -id @executable_path/lib/libcolamd.$(SHLIB_EXT) $(JULIALIB)/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load CHOLMOD/lib/libcholmod.a -o $(JULIALIB)/libcholmod.$(SHLIB_EXT) -L$(JULIALIB) -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @executable_path/lib/libcholmod.$(SHLIB_EXT) $(JULIALIB)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load UMFPACK/lib/libumfpack.a -o $(JULIALIB)/libumfpack.$(SHLIB_EXT) -L$(JULIALIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @executable_path/lib/libumfpack.$(SHLIB_EXT) $(JULIALIB)/libumfpack.$(SHLIB_EXT)
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
+	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared -Xlinker -all_load libamd.a -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared -Xlinker -all_load libcolamd.a -o $(EXTROOTLIB)/libcolamd.dylib && \
+	install_name_tool -id @executable_path/lib/libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared -Xlinker -all_load libcholmod.a -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @executable_path/lib/libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(CXX) -shared -Xlinker -all_load libumfpack.a -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	install_name_tool -id @executable_path/lib/libumfpack.dylib $(EXTROOTLIB)/libumfpack.dylib
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
