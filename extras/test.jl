@@ -42,14 +42,20 @@ end
 # the default printer
 function test_printer_raw(hdl::Task)
     for t = hdl
-        if (t.result)
+        if (t.succeed)
             print(".")
         else
             println("")
-            show(t) # TODO spiff up
+            println("In $(t.context) / $(t.group)")
+            println("$(t.expr_str) FAILED")
+            println("$(t.operation) with args:")
+            println("1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
+            println("Exception: $(t.exception_thrown)")
+            println(sprintf("%0.3f seconds\n", t.elapsed))
             println("")
         end
     end
+    println("")
 end
 
 # things to set state
@@ -68,7 +74,7 @@ type TestResult
     context
     group
     expr_str::String
-    result::Bool
+    succeed::Bool # good outcome == true
     elapsed::Float
     exception_thrown::Exception
     operation
@@ -82,11 +88,17 @@ TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothin
 # that does the real work
 macro test(ex)
     quote
-        $_test(expr(:quote, ex))
+        $_test(expr(:quote, ex), true)
     end
 end
 
-function _test(ex::Expr)
+macro testfails(ex)
+    quote
+        $_test(expr(:quote, ex), false)
+    end
+end
+
+function _test(ex::Expr, expect_succeed::Bool)
     local tr = TestResult()
     tr.context = tls(:context)
     tr.group = tls(:group)
@@ -99,20 +111,20 @@ function _test(ex::Expr)
     
     # eval the whole thing, capturing exceptions and times
     try
-        tr.elapsed = @elapsed tr.result = eval(ex)
+        tr.elapsed = @elapsed tr.succeed = eval(ex)
     catch except
         tr.exception_thrown = except
     end
     
     # if we failed without an exception, pull apart the expression and see about evaluating
     # the parts
-    if (tr.result == false && tr.exception_thrown == NoException())
+    if (!tr.succeed && tr.exception_thrown == NoException())
         if (ex.head == :comparison)
             tr.operation = ex.head
             tr.arg1 = eval(ex.args[1])
             tr.arg2 = eval(ex.args[3])
         elseif (ex.head == :call) # is it a helper we know about?
-            if (ex.args[1] == :approx_eq)
+            if (ex.args[1] == :isclose)
                 tr.operation = ex.args[1]
                 tr.arg1 = eval(ex.args[2])
                 tr.arg2 = eval(ex.args[3])
@@ -124,14 +136,25 @@ function _test(ex::Expr)
         end
     end
     
+    # if we failed with an exception, handle throws_exception
+    if tr.exception_thrown != NoException() && ex.args[1] == :throws_exception
+        if isa(tr.exception_thrown, eval(ex.args[3])) # we got the right one
+            tr.succeed = true
+        end
+    end
+    
     # if we're running takes_less_than, see how we did
     if (ex.args[1] == :takes_less_than)
-        tr.result = tr.elapsed < eval(ex.args[3])
+        tr.succeed = tr.elapsed < eval(ex.args[3])
         tr.operation = ex.args[1]
         tr.arg1 = tr.elapsed
         tr.arg2 = eval(ex.args[3])
     end
     
+    # flip the result if we expect to fail
+    if !expect_succeed
+        tr.succeed = !tr.succeed
+    end
     
     produce(tr)
 end
@@ -149,6 +172,11 @@ function prints(fn::Function, args, expected::String)
 end
 
 function takes_less_than(anything, expected)
+    # the magic happens in _test
+    true
+end
+
+function throws_exception(anything, expected_exception)
     # the magic happens in _test
     true
 end

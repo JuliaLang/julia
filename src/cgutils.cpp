@@ -465,6 +465,16 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
 
 // --- boxing ---
 
+static Value *init_bits_value(Value *newv, jl_value_t *jt, Type *t, Value *v)
+{
+    builder.CreateStore(literal_pointer_val(jt),
+                        builder.CreateBitCast(newv, jl_ppvalue_llvmt));
+    builder.CreateStore(v,
+                        builder.CreateBitCast(bitstype_pointer(newv),
+                                              PointerType::get(t,0)));
+    return newv;
+}
+
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
 // if it's already a pointer it's left alone.
@@ -485,7 +495,16 @@ static Value *boxed(Value *v)
     if (jb == jl_int32_type) return builder.CreateCall(box_int32_func, v);
     if (jb == jl_int64_type) return builder.CreateCall(box_int64_func, v);
     if (jb == jl_float32_type) return builder.CreateCall(box_float32_func, v);
-    if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
+    //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
+    if (jb == jl_float64_type) {
+        // manually inline alloc & init of Float64 box. cheap, I know.
+#ifdef __LP64__
+        Value *newv = builder.CreateCall(jlalloc2w_func);
+#else
+        Value *newv = builder.CreateCall(jlalloc3w_func);
+#endif
+        return init_bits_value(newv, jt, t, v);
+    }
     if (jb == jl_uint8_type)
         return builder.CreateCall(box_uint8_func,
                                   builder.CreateZExt(v, T_int32));
@@ -510,13 +529,8 @@ static Value *boxed(Value *v)
         size_t sz = sizeof(void*) + (nb+7)/8;
         Value *newv = builder.CreateCall(jlallocobj_func,
                                          ConstantInt::get(T_size, sz));
-        builder.CreateStore(literal_pointer_val(jt),
-                            builder.CreateBitCast(newv, jl_ppvalue_llvmt));
-        builder.CreateStore(v,
-                            builder.CreateBitCast(bitstype_pointer(newv),
-                                                  PointerType::get(t,0)));
         // TODO: make sure this is rooted. I think it is.
-        return builder.CreateBitCast(newv, jl_pvalue_llvmt);
+        return init_bits_value(newv, jt, t, v);
     }
     assert("Don't know how to box this type" && false);
     return NULL;

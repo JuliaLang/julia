@@ -301,7 +301,7 @@ static void add_page(pool_t *p)
     p->freelist = fl;
 }
 
-static void *pool_alloc(pool_t *p)
+static inline void *pool_alloc(pool_t *p)
 {
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
@@ -485,7 +485,7 @@ static void gc_markval_(jl_value_t *v)
                 gc_setmark(data);
             }
         }
-        if (gc_typeof(jl_tparam0(vt)) != (jl_value_t*)jl_bits_kind) {
+        if (a->ptrarray) {
             size_t l = a->length;
             if (l > 0) {
                 for(size_t i=0; i < l-1; i++) {
@@ -584,6 +584,7 @@ static void gc_mark(void)
     GC_Markval(jl_exception_in_transit);
     GC_Markval(jl_task_arg_in_transit);
     GC_Markval(jl_unprotect_stack_func);
+    GC_Markval(jl_bottom_func);
     GC_Markval(jl_typetype_type);
 
     // constants

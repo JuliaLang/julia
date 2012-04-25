@@ -1604,16 +1604,6 @@ function finfer(f, types)
     tree
 end
 
-tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
+#tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
 
 ccall(:jl_enable_inference, Void, ())
-
-# stuff for testing
-
-# T=typevar(:T)
-# S=typevar(:S)
-# R=typevar(:R)
-# a=typevar(:a)
-# b=typevar(:b)
-# c=typevar(:c)
-# d=typevar(:d)

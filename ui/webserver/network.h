@@ -1,10 +1,3 @@
-/*
- * Networking Library
- * Version 1.0
- * Stephan Boyer
- * May 2011
- */
-
 #ifndef INCLUDE_NETWORK
 #define INCLUDE_NETWORK
 

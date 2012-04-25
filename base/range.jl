@@ -16,8 +16,9 @@ type Range{T<:Real} <: Ranges{T}
         new(start, step, len)
     end
     Range(start::T, step::T, len::Integer) = Range(start, step, int(len))
+    Range(start::T, step, len::Integer) = Range(start, convert(T,step), int(len))
 end
-Range{T}(start::T, step::T, len::Integer) = Range{T}(start, step, len)
+Range{T}(start::T, step, len::Integer) = Range{T}(start, step, len)
 
 type Range1{T<:Real} <: Ranges{T}
     start::T
@@ -101,7 +102,7 @@ isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 
 # TODO: isless?
 
-intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(r))
+intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
 
 # TODO: general intersect?
 function intersect(r::Range1, s::Range)
@@ -218,8 +219,7 @@ sortperm(r::Range1) = (r, 1:length(r))
 sortperm{T<:Real}(r::Range{T}) = issorted(r) ? (r, 1:1:length(r)) :
                                                (reverse(r), length(r):-1:1)
 
-function sum(r::Range1)
-    n1, n2 = r.start, last(r)
-    div((n2*(n2+1) - (n1-1)*n1), 2)
-    # TODO: verify that this is actually correct
+function sum(r::Ranges)
+    l = length(r)
+    return l * first(r) + step(r) * div(l * (l - 1), 2)
 end

@@ -35,10 +35,16 @@ end
 
 copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
 
-function reinterpret{T,S}(::Type{T}, a::Array{S})
-    b = Array(T, div(numel(a)*sizeof(S),sizeof(T)))
-    ccall(:memcpy, Ptr{T}, (Ptr{T}, Ptr{S}, Uint), b, a, length(b)*sizeof(T))
-    return b
+function reinterpret{T,S}(::Type{T}, a::Array{S,1})
+    nel = int(div(numel(a)*sizeof(S),sizeof(T)))
+    ccall(:jl_reshape_array, Array{T,1}, (Any, Any, Any), Array{T,1}, a, (nel,))
+end
+function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
+    nel = div(numel(a)*sizeof(S),sizeof(T))
+    if prod(dims) != nel
+        error("reinterpret: invalid dimensions")
+    end
+    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
 reinterpret(t,x) = reinterpret(t,[x])[1]
 
@@ -46,7 +52,7 @@ function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != numel(a)
         error("reshape: invalid dimensions")
     end
-    ccall(:jl_reshape_array, Any, (Any, Any, Any), Array{T,N}, a, dims)::Array{T,N}
+    ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
 
 ## Constructors ##
@@ -192,7 +198,7 @@ let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
     i = length(I)
-    while 1 > 0 && isa(I[i],Integer); i-=1; end
+    while i > 0 && isa(I[i],Integer); i-=1; end
     d = map(length, I)::Dims
     X = similar(A, d[1:i])
 
@@ -281,8 +287,10 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    for i = 1:length(I)
-        A[I[i]] = X[i]
+    count = 1
+    for i in I
+        A[i] = X[count]
+        count += 1
     end
     return A
 end
@@ -1168,7 +1176,9 @@ end
 
 function map(f, A::StridedArray, B::StridedArray)
     shp = promote_shape(size(A),size(B))
-    if isempty(A); return A; end
+    if isempty(A)
+        return similar(A, eltype(A), shp)
+    end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
     return map_to2(first, dest, f, A, B)
@@ -1238,9 +1248,12 @@ function map_to2(first, dest::StridedArray, f, As::StridedArray...)
 end
 
 function map(f, As::StridedArray...)
-    if isempty(As[1]); return As[1]; end
+    shape = mapreduce(promote_shape, size, As)
+    if prod(shape) == 0
+        return similar(As[1], eltype(As[1]), shape)
+    end
     first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first))
+    dest = similar(As[1], typeof(first), shape)
     return map_to2(first, dest, f, As...)
 end
 

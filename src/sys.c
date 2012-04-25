@@ -78,6 +78,17 @@ DLLEXPORT int32_t jl_nb_available(ios_t *s)
     return (int32_t)(s->size - s->bpos);
 }
 
+DLLEXPORT int jl_ios_eof(ios_t *s)
+{
+    if (ios_eof(s))
+        return 1;
+    if (s->state == bst_rd) {
+        if (ios_readprep(s, 1) < 1)
+            return 1;
+    }
+    return 0;
+}
+
 // --- io constructors ---
 
 DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
@@ -135,11 +146,7 @@ jl_array_t *jl_takebuf_array(ios_t *s)
     else {
         assert(s->julia_alloc);
         char *b = ios_takebuf(s, &n);
-        a = jl_alloc_array_1d(jl_array_uint8_type, 0);
-        a->data = b;
-        a->length = n-1;
-        a->nrows = n-1;
-        jl_gc_acquire_buffer(b);
+        a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
     return a;
 }

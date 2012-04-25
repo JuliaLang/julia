@@ -105,33 +105,53 @@ var MSG_INPUT_NULL              = 0;
 var MSG_INPUT_START             = 1;
 var MSG_INPUT_POLL              = 2;
 var MSG_INPUT_EVAL              = 3;
+var MSG_INPUT_REPLAY_HISTORY    = 4;
+var MSG_INPUT_GET_USER          = 5;
 
 // output messages (to the browser)
 var MSG_OUTPUT_NULL             = 0;
-var MSG_OUTPUT_READY            = 1;
-var MSG_OUTPUT_MESSAGE          = 2;
-var MSG_OUTPUT_OTHER            = 3;
-var MSG_OUTPUT_FATAL_ERROR      = 4;
-var MSG_OUTPUT_PARSE_ERROR      = 5;
-var MSG_OUTPUT_PARSE_INCOMPLETE = 6;
-var MSG_OUTPUT_PARSE_COMPLETE   = 7;
+var MSG_OUTPUT_WELCOME          = 1;
+var MSG_OUTPUT_READY            = 2;
+var MSG_OUTPUT_MESSAGE          = 3;
+var MSG_OUTPUT_OTHER            = 4;
+var MSG_OUTPUT_EVAL_INPUT       = 5;
+var MSG_OUTPUT_FATAL_ERROR      = 6;
+var MSG_OUTPUT_EVAL_INCOMPLETE  = 7;
 var MSG_OUTPUT_EVAL_RESULT      = 8;
 var MSG_OUTPUT_EVAL_ERROR       = 9;
 var MSG_OUTPUT_PLOT             = 10;
-
+var MSG_OUTPUT_GET_USER         = 11;
 
 /*
     REPL implementation.
 */
 
+// the user name
+var user_name = "julia";
+
+// the user id
+var user_id = "";
+
 // indent string
 var indent_str = "    ";
 
 // how long we delay in ms before polling the server again
-var poll_interval = 200;
+var poll_interval = 300;
 
 // keep track of whether we are waiting for a message (and don't send more if we are)
 var waiting_for_response = false;
+
+// a queue of messages to be sent to the server
+var outbox_queue = [];
+
+// a queue of messages from the server to be processed
+var inbox_queue = [];
+
+// keep track of whether new terminal data will appear on a new line
+var new_line = true;
+
+// keep track of whether we have received a fatal message
+var dead = false;
 
 // keep track of terminal history
 var input_history = [];
@@ -150,18 +170,6 @@ if (Modernizr.localstorage) {
         input_history_current = JSON.parse(localStorage.getItem("input_history_current"));
     }
 }
-
-// a queue of messages to be sent to the server
-var outbox_queue = [];
-
-// a queue of messages from julia to be processed
-var inbox_queue = [];
-
-// keep track of whether new terminal data will appear on a new line
-var new_line = true;
-
-// keep track of whether we have received a fatal message
-var dead = false;
 
 // reset the width of the terminal input
 function set_input_width() {
@@ -358,7 +366,8 @@ function add_to_terminal(data) {
 // the first request
 function init_session() {
     // send a start message
-    outbox_queue.push([MSG_INPUT_START]);
+    outbox_queue.push([MSG_INPUT_GET_USER]);
+    outbox_queue.push([MSG_INPUT_REPLAY_HISTORY]);
     process_outbox();
 }
 
@@ -387,6 +396,7 @@ function process_outbox() {
     }
 }
 
+// an array of message handlers
 var message_handlers = [];
 
 message_handlers[MSG_OUTPUT_NULL] = function(msg) {}; // do nothing
@@ -425,42 +435,39 @@ message_handlers[MSG_OUTPUT_FATAL_ERROR] = function(msg) {
     outbox_queue = [];
 };
 
-message_handlers[MSG_OUTPUT_PARSE_ERROR] = function(msg) {
-    // get the input from form
-    var input = $("#terminal-input").val();
+message_handlers[MSG_OUTPUT_EVAL_INPUT] = function(msg) {
+    // check if this was from us
+    if (msg[0] == user_id) {
+        // get the input from form
+        var input = $("#terminal-input").val();
 
-    // input history
-    if (input.replace(/^\s+|\s+$/g, '') != "")
-        input_history.push(input);
-    if (input_history.length > input_history_size)
-        input_history = input_history.slice(input_history.length-input_history_size);
-    input_history_current = input_history.slice(0);
-    input_history_current.push("");
-    input_history_id = input_history_current.length-1;
-    
-    // Save the changed values to localstorage
-    if (Modernizr.localstorage) {
-        localStorage.setItem("input_history", JSON.stringify(input_history));
-        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+        // input history
+        if (input.replace(/^\s+|\s+$/g, '') != "")
+            input_history.push(input);
+        if (input_history.length > input_history_size)
+            input_history = input_history.slice(input_history.length-input_history_size);
+        input_history_current = input_history.slice(0);
+        input_history_current.push("");
+        input_history_id = input_history_current.length-1;
+        
+        // Save the changed values to localstorage
+        if (Modernizr.localstorage) {
+            localStorage.setItem("input_history", JSON.stringify(input_history));
+            localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+        }
+
+        // clear the input field (it is disabled at this point)
+        $("#terminal-input").val("");
+
+        // hide the prompt until the result comes in
+        $("#prompt").hide();
     }
 
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
+    // add the prompt and the input to the log
+    add_to_terminal("<span class=\"color-scheme-prompt\">"+indent_and_escape_html(msg[1])+"&gt;&nbsp;</span>"+indent_and_escape_html(msg[2])+"<br />");
+}
 
-    // print the error message
-    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
-
-    // clear the input field
-    $("#terminal-input").val("");
-
-    // re-enable the input field
-    $("#terminal-input").removeAttr("disabled");
-
-    // focus the input field
-    $("#terminal-input").focus();
-};
-
-message_handlers[MSG_OUTPUT_PARSE_INCOMPLETE] = function(msg) {
+message_handlers[MSG_OUTPUT_EVAL_INCOMPLETE] = function(msg) {
     // re-enable the input field
     $("#terminal-input").removeAttr("disabled");
 
@@ -471,64 +478,49 @@ message_handlers[MSG_OUTPUT_PARSE_INCOMPLETE] = function(msg) {
     $("#terminal-input").newline_at_caret();
 };
 
-message_handlers[MSG_OUTPUT_PARSE_COMPLETE] = function(msg) {
-    // get the input from form
-    var input = $("#terminal-input").val();
+message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
+    // print the error message
+    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[1])+"</span><br /><br />");
 
-    // input history
-    if (input.replace(/^\s+|\s+$/g, '') != "")
-        input_history.push(input);
-    if (input_history.length > input_history_size)
-        input_history = input_history.slice(input_history.length-input_history_size);
-    input_history_current = input_history.slice(0);
-    input_history_current.push("");
-    input_history_id = input_history_current.length-1;
-    
-    if (Modernizr.localstorage) {
-        localStorage.setItem("input_history", JSON.stringify(input_history));
-        localStorage.setItem("input_history_current", JSON.stringify(input_history_current));
+    // check if this was from us
+    if (msg[0] == user_id) {
+        // show the prompt
+        $("#prompt").show();
+
+        // re-enable the input field
+        $("#terminal-input").removeAttr("disabled");
+
+        // focus the input field
+        $("#terminal-input").focus();
     }
-
-    // add the julia prompt and the input to the log
-    add_to_terminal("<span class=\"color-scheme-prompt\">julia&gt;&nbsp;</span>"+indent_and_escape_html(input)+"<br />");
-
-    // clear the input field
-    $("#terminal-input").val("");
-
-    // hide the prompt until the result comes in
-    $("#prompt").hide();
 };
 
 message_handlers[MSG_OUTPUT_EVAL_RESULT] = function(msg) {
     // print the result
-    if ($.trim(msg[0]) == "")
+    if ($.trim(msg[1]) == "")
         add_to_terminal("<br />");
     else
-        add_to_terminal(escape_html(msg[0])+"<br /><br />");
+        add_to_terminal(escape_html(msg[1])+"<br /><br />");
 
-    // show the prompt
-    $("#prompt").show();
+    if (msg[0] == user_id) {
+        // show the prompt
+        $("#prompt").show();
 
-    // re-enable the input field
-    $("#terminal-input").removeAttr("disabled");
+        // re-enable the input field
+        $("#terminal-input").removeAttr("disabled");
 
-    // focus the input field
-    $("#terminal-input").focus();
+        // focus the input field
+        $("#terminal-input").focus();
+    }
 };
 
-message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
-    // print the error
-    add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[0])+"</span><br /><br />");
-
-    // show the prompt
-    $("#prompt").show();
-
-    // re-enable the input field
-    $("#terminal-input").removeAttr("disabled");
-
-    // focus the input field
-    $("#terminal-input").focus();
-};
+message_handlers[MSG_OUTPUT_GET_USER] = function(msg) {
+    // set the user name
+    user_name = indent_and_escape_html(msg[0]);
+    user_id = indent_and_escape_html(msg[1]);
+    $("#prompt").html("<span class=\"color-scheme-prompt\">"+user_name+"&gt;&nbsp;</span>");
+    apply_color_scheme();
+}
 
 var plotters = {};
 
@@ -863,7 +855,7 @@ $(document).ready(function() {
                     var input = $("#terminal-input").val();
 
                     // send the input to the server via AJAX
-                    outbox_queue.push([MSG_INPUT_EVAL, input]);
+                    outbox_queue.push([MSG_INPUT_EVAL, user_name, user_id, input]);
                     process_outbox();
                 }
 

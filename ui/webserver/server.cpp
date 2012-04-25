@@ -1,10 +1,3 @@
-/*
- * SCGI Server
- * Version 1.0
- * Stephan Boyer
- * May 2011
- */
-
 #include "server.h"
 
 using namespace std;

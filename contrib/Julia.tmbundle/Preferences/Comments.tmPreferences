@@ -8,6 +8,10 @@
 	<string>source.julia</string>
 	<key>settings</key>
 	<dict>
+		<key>decreaseIndentPattern</key>
+		<string>^\s*((end|else|elsif)\b)</string>
+		<key>increaseIndentPattern</key>
+		<string>^\s*(if|while|for|begin|function|macro|module|type|let)\b.*\s*$</string>
 		<key>shellVariables</key>
 		<array>
 			<dict>

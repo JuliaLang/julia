@@ -5,16 +5,13 @@
 (define (lam:vinfo x) (caddr x))
 (define (lam:body x) (cadddr x))
 
-; convert x => (x), (tuple x y) => (x y)
-; used to normalize function signatures like "x->y" and "function +(a,b)"
-(define (fsig-to-lambda-list arglist)
-  (if (pair? arglist)
-      (if (eq? (car arglist) 'tuple)
-	  (cdr arglist)
-	  arglist)
-      (if (symbol? arglist)
-	  (list arglist)
-	  arglist)))
+;; allow (:: T) => (:: #gensym T) in formal argument lists
+(define (fix-arglist l)
+  (map (lambda (a)
+	 (if (and (pair? a) (eq? (car a) '|::|) (null? (cddr a)))
+	     `(|::| ,(gensy) ,(cadr a))
+	     a))
+       l))
 
 (define (arg-name v)
   (cond ((and (symbol? v) (not (eq? v 'true)) (not (eq? v 'false)))
@@ -227,8 +224,7 @@
 (define (method-def-expr name sparams argl body)
   (if (not (symbol? name))
       (error (string "invalid method name " name)))
-  (let* ((argl  (fsig-to-lambda-list argl))
-	 (types (llist-types argl))
+  (let* ((types (llist-types argl))
 	 (body  (method-lambda-expr argl body)))
     (if (null? sparams)
 	`(method ,name (tuple ,@types) ,body (tuple))
@@ -484,11 +480,11 @@
   (pattern-set
    ;; function with static parameters
    (pattern-lambda (function (call (curly name . sparams) . argl) body)
-		   (method-def-expr name sparams argl body))
+		   (method-def-expr name sparams (fix-arglist argl) body))
 
    ;; function definition
    (pattern-lambda (function (call name . argl) body)
-		   (method-def-expr name '() argl body))
+		   (method-def-expr name '() (fix-arglist argl) body))
 
    (pattern-lambda (function (tuple . args) body)
 		   `(-> (tuple ,@args) ,body))
@@ -505,7 +501,7 @@
 				     (eq? (car a) 'tuple))
 				(cdr a)
 				(list a))))
-		     (function-expr a
+		     (function-expr (fix-arglist a)
 				    `(block
 				      ,@(map (lambda (d)
 					       `(= ,(cadr d)
@@ -561,8 +557,8 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(call (top def_macro) (quote ,name)
-			  (-> (tuple ,@argl) ,body)))
+		   `(macro ,name
+		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
    (pattern-lambda (type sig (block . fields))
@@ -835,6 +831,10 @@
    (pattern-lambda (|::| (-- expr (-^ (-s))) T)
 		   `(call (top typeassert) ,expr ,T))
 
+   ;; ::T outside arg list syntax error
+   (pattern-lambda (|::| _)
+		   (error "invalid :: syntax"))
+
    ;; constant definition
    (pattern-lambda (const (= lhs rhs))
 		   `(block (const ,(const-check-symbol (decl-var lhs)))
@@ -933,7 +933,19 @@
 		   `(call (top hcat) ,@a))
 
    (pattern-lambda (vcat . a)
-		   `(call (top vcat) ,@a))
+		   (if (any (lambda (x)
+			      (and (pair? x) (eq? (car x) 'row)))
+			    a)
+		       ;; convert nested hcat inside vcat to hvcat
+		       (let ((rows (map (lambda (x)
+					  (if (and (pair? x) (eq? (car x) 'row))
+					      (cdr x)
+					      (list x)))
+					a)))
+			 `(call (top hvcat)
+				(tuple ,@(map length rows))
+				,@(apply nconc rows)))
+		       `(call (top vcat) ,@a)))
 
    ;; transpose operator
    (pattern-lambda (|'| a) `(call ctranspose ,a))
@@ -1839,8 +1851,8 @@ So far only the second case can actually occur.
 	   (if (null? p)
 	       (let ((forms (reverse q)))
 		 `(call (top expr) ,(expand-backquote (car e))
-			(call (top append) ,@forms)))
-	       ; look for splice inside backquote, e.g. (a,$(x...),b)
+			(call (top append_any) ,@forms)))
+	       ;; look for splice inside backquote, e.g. (a,$(x...),b)
 	       (if (match '($ (tuple (... x))) (car p))
 		   (loop (cdr p)
 			 (cons (cadr (cadadr (car p))) q))

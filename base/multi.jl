@@ -1531,18 +1531,18 @@ end
 # A=randn(800,800);A=A*A';
 # pmap(fv, {A,A,A})
 
-all2all() = at_each(hello_from, myid())
+#all2all() = at_each(hello_from, myid())
 
-hello_from(i) = print("message from $i to $(myid())\n")
+#hello_from(i) = print("message from $i to $(myid())\n")
 
 # monte carlo estimate of pi
-function buffon(niter)
-    nc =
-    @parallel (+) for i=1:niter
-        rand() <= sin(rand()*pi/2) ? 1 : 0
-    end
-    2/(nc/niter)
-end
+# function buffon(niter)
+#     nc =
+#     @parallel (+) for i=1:niter
+#         rand() <= sin(rand()*pi/2) ? 1 : 0
+#     end
+#     2/(nc/niter)
+# end
 
 ## event processing, I/O and work scheduling ##
 

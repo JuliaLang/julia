@@ -62,8 +62,11 @@ end
 
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
+<<(x,y::Int32)    = no_op_err("<<", typeof(x))
 >>(x,y::Integer)  = x >> convert(Int32,y)
+>>(x,y::Int32)    = no_op_err(">>", typeof(x))
 >>>(x,y::Integer) = x >>> convert(Int32,y)
+>>>(x,y::Int32)   = no_op_err(">>>", typeof(x))
 
 # fallback div, fld, rem & mod implementations
 div{T<:Real}(x::T, y::T) = convert(T,trunc(x/y))
@@ -93,7 +96,6 @@ oftype{T}(x::T,c) = convert(T,c)
 
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
-two(x)  = oftype(x,2)
 
 sizeof(T::Type) = error(strcat("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)

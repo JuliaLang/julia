@@ -25,6 +25,14 @@ pointer{T}(::Type{T}, x::Uint) = convert(Ptr{T}, x)
 pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
 pointer{T}(x::AbstractArray{T}, i::Int) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
+# unsafe pointer to array conversions
+pointer_to_array(p, dims) = pointer_to_array(p, dims, false)
+function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int},
+                               julia_malloc::Bool)
+    ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
+          Array{T,N}, p, dims, julia_malloc)
+end
+
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 

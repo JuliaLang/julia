@@ -1,24 +1,24 @@
 ## file formats ##
 
-function _jl_dlm_readrow(f, dlm)
-    row = split(readline(f), dlm, true)
+function _jl_dlm_readrow(f, dlm, eol)
+    row = split(readuntil(f, eol), dlm, true)
     row[end] = chomp(row[end])
     row
 end
 
 # all strings
-function _jl_dlmread(a, f, dlm, nr, nc, row)
+function _jl_dlmread(a, f, dlm, nr, nc, row, eol)
     for i=1:nr
         a[i,:] = row
         if i < nr
-            row = _jl_dlm_readrow(f, dlm)
+            row = _jl_dlm_readrow(f, dlm, eol)
         end
     end
     a
 end
 
 # all numeric, with NaN for invalid data
-function _jl_dlmread{T<:Number}(a::Array{T}, f, dlm, nr, nc, row)
+function _jl_dlmread{T<:Number}(a::Array{T}, f, dlm, nr, nc, row, eol)
     tmp = Array(Float64,1)
     for i=1:nr
         for j=1:nc
@@ -29,15 +29,15 @@ function _jl_dlmread{T<:Number}(a::Array{T}, f, dlm, nr, nc, row)
             end
         end
         if i < nr
-            row = _jl_dlm_readrow(f, dlm)
+            row = _jl_dlm_readrow(f, dlm, eol)
         end
     end
 end
 
 # float64 or string
-_jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row) =
-    _jl_dlmread(a, f, dlm, nr, nc, row, 1, 1)
-function _jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row, i0, j0)
+_jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row, eol) =
+    _jl_dlmread(a, f, dlm, nr, nc, row, eol, 1, 1)
+function _jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row, eol, i0, j0)
     tmp = Array(Float64,1)
     j = j0
     for i=i0:nr
@@ -52,72 +52,97 @@ function _jl_dlmread(a::Array{Any}, f, dlm, nr, nc, row, i0, j0)
         end
         j = 1
         if i < nr
-            row = _jl_dlm_readrow(f, dlm)
+            row = _jl_dlm_readrow(f, dlm, eol)
         end
     end
     a
 end
 
 # float64 or cell depending on data
-function _jl_dlmread_auto(a, f, dlm, nr, nc, row)
+function _jl_dlmread_auto(a, f, dlm, nr, nc, row, eol)
     tmp = Array(Float64, 1)
     for i=1:nr
         for j=1:nc
             el = row[j]
             if !float64_isvalid(el, tmp)
                 a = convert(Array{Any,2}, a)
-                _jl_dlmread(a, f, dlm, nr, nc, row, i, j)
+                _jl_dlmread(a, f, dlm, nr, nc, row, eol, i, j)
                 return a
             else
                 a[i,j] = tmp[1]
             end
         end
         if i < nr
-            row = _jl_dlm_readrow(f, dlm)
+            row = _jl_dlm_readrow(f, dlm, eol)
         end
     end
     a
 end
 
-function _jl_dlmread_setup(fname::String, dlm::(Char...))
+countlines(f) = countlines(f, '\n')
+function countlines(f::String, eol::Char)
+    fh = open(f)
+    n = countlines(fh, eol)
+    close(fh)
+    return n
+end
+function countlines(f::IOStream, eol::Char)
+    if !iswascii(eol)
+        error("countlines: only ASCII line terminators supported")
+    end
+    a = Array(Uint8, 8192)
+    nl = 0
+    while !eof(f)
+        fill!(a, uint8(eol)+1)  # fill with byte we're not looking for
+        try
+            read(f, a)
+        end
+        for i=1:length(a)
+            if a[i] == eol
+                nl+=1
+            end
+        end
+    end
+    skip(f,-1)
+    if read(f,Uint8) != eol
+        nl+=1
+    end
+    nl
+end
+
+function _jl_dlmread_setup(fname::String, dlm, eol)
     if length(dlm) == 0
         error("dlmread: no separator characters specified")
     end
-    nr = integer(split(readall(`wc -l $fname`),' ',false)[1])
+    nr = countlines(fname,eol)
     f = open(fname)
-    row = _jl_dlm_readrow(f, dlm)
+    row = _jl_dlm_readrow(f, dlm, eol)
     nc = length(row)
     return (f, nr, nc, row)
 end
 
-const _jl_dlmread_default_delimiters = (' ', ',', ';', '\t', '\v')
+const _jl_dlmread_default_delimiters = [' ', ',', ';', '\t', '\v']
 
-dlmread(fname::String, T::Type) = dlmread(fname, _jl_dlmread_default_delimiters, T)
+dlmread(fname::String, T::Type) = dlmread(fname, _jl_dlmread_default_delimiters, T, '\n')
 
-dlmread(fname::String) = dlmread(fname, _jl_dlmread_default_delimiters)
+dlmread(fname::String, dlm, T::Type) = dlmread(fname, dlm, T, '\n')
 
-dlmread(fname::String, dlm::Char, T::Type) = dlmread(fname, (dlm,), T)
-
-dlmread(fname::String, dlm::Union(Vector{Char}, ASCIIString), T::Type) =
-    dlmread(fname, ntuple(length(dlm), i->dlm[i]), T)
-
-function dlmread(fname::String, dlm::(Char...), T::Type)
-    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
+function dlmread(fname::String, dlm, T::Type, eol::Char)
+    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm, eol)
     a = Array(T, nr, nc)
-    _jl_dlmread(a, f, dlm, nr, nc, row)
+    _jl_dlmread(a, f, dlm, nr, nc, row, eol)
     close(f)
     return a
 end
 
-dlmread(fname::String, dlm::Char) = dlmread(fname, (dlm,))
+dlmread(fname::String) = dlmread(fname, _jl_dlmread_default_delimiters, '\n')
 
-dlmread(fname::String, dlm::Union(Vector{Char}, ASCIIString)) =
-    dlmread(fname, ntuple(length(dlm), i->dlm[i]))
+dlmread(fname::String, dlm) = dlmread(fname, dlm, '\n')
 
-function dlmread(fname::String, dlm::(Char...))
-    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm)
+function dlmread(fname::String, dlm, eol::Char)
+    (f, nr, nc, row) = _jl_dlmread_setup(fname, dlm, eol)
     a = Array(Float64, nr, nc)
-    a = _jl_dlmread_auto(a, f, dlm, nr, nc, row)
+    a = _jl_dlmread_auto(a, f, dlm, nr, nc, row, eol)
     close(f)
     return a
 end

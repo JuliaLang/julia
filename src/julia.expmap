@@ -21,6 +21,8 @@
     jl_new_closure;
     jl_new_array;
     jl_reshape_array;
+    jl_ptr_to_array_1d;
+    jl_ptr_to_array;
     jl_alloc_array_1d;
     jl_alloc_array_2d;
     jl_alloc_array_3d;
@@ -112,6 +114,7 @@
     jl_ios_size;
     jl_ios_fd;
     jl_nb_available;
+    jl_ios_eof;
     jl_gc_add_finalizer;
     jl_gc_collect;
     jl_gc_lookfor;

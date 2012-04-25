@@ -74,8 +74,9 @@ include("statistics.jl")
 # random number generation
 include("random.jl")
 
-# distributed arrays
+# distributed arrays and memory-mapped arrays
 include("darray.jl")
+include("mmap.jl")
 
 # utilities - version, timing, help, edit
 include("version.jl")
@@ -86,6 +87,7 @@ include("datafmt.jl")
 
 # linear algebra
 include("linalg.jl")
+include("linalg_dense.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
 
@@ -122,7 +124,6 @@ compile_hint(isempty, (Array{WorkItem,1},))
 compile_hint(ref, (HashTable{Any,Any}, Int32))
 compile_hint(event_loop, (Bool,))
 compile_hint(_start, ())
-compile_hint(_jl_color_available, ())
 compile_hint(process_options, (Array{Any,1},))
 compile_hint(run_repl, ())
 compile_hint(anyp, (Function, Array{Any,1}))

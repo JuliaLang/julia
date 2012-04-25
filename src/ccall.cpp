@@ -216,13 +216,32 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!isVa)
             fargt_sig.push_back(t);
     }
+    // check for calling convention specifier
+    CallingConv::ID cc = CallingConv::C;
+    jl_value_t *last = args[nargs];
+    if (jl_is_expr(last)) {
+        jl_sym_t *lhd = ((jl_expr_t*)last)->head;
+        if (lhd == jl_symbol("stdcall")) {
+            cc = CallingConv::X86_StdCall;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("cdecl")) {
+            cc = CallingConv::C;
+            nargs--;
+        }
+        else if (lhd == jl_symbol("fastcall")) {
+            cc = CallingConv::X86_FastCall;
+            nargs--;
+        }
+    }
+    
     if ((!isVa && tt->length  != (nargs-2)/2) ||
         ( isVa && tt->length-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
     if (fptr == &jl_array_ptr) {
-        Value *ary = emit_expr(args[4], ctx, true);
+        Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
         return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),T_pint8),
                                rt);
@@ -267,7 +286,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *arg = emit_expr(argi, ctx, true);
         Type *largty;
         jl_value_t *jargty;
         if (isVa && ai >= nargty-1) {
@@ -278,6 +296,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             largty = fargt[ai];
             jargty = jl_tupleref(tt,ai);
         }
+        Value *arg;
+        if (largty == jl_pvalue_llvmt)
+            arg = emit_expr(argi, ctx, true);
+        else
+            arg = emit_unboxed(argi, ctx);
         /*
 #ifdef JL_GC_MARKSWEEP
         // make sure args are rooted
@@ -294,6 +317,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // the actual call
     Value *result = builder.CreateCall(llvmf,
                                        ArrayRef<Value*>(&argvals[0],(nargs-3)/2));
+    if (cc != CallingConv::C)
+        ((CallInst*)result)->setCallingConv(cc);
 
     // restore temp argument area stack pointer
     if (haspointers) {
