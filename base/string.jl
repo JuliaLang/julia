@@ -835,14 +835,16 @@ function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     if isempty(str) return strs end
     i = start(str)
     m = length(str)+1
-    for (j,k) = each_search(str,splitter)
-        if length(strs)==limit-1 break end
-        if k <= i continue end
-        if j >= m break end
-        if keep_empty || i < j
-            push(strs, str[i:j-1])
+    j, k = search(str,splitter,i)
+    while 0 < j < m && length(strs) != limit-1
+        if i < k
+            if keep_empty || i < j
+                push(strs, str[i:j-1])
+            end
+            i = k
         end
-        i = k
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,splitter,k)
     end
     if keep_empty || !done(str,i)
         push(strs, str[i:])
