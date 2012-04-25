@@ -833,11 +833,10 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 
 function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     strs = String[]
-    if isempty(str) return strs end
     i = start(str)
-    m = length(str)+1
+    n = length(str)
     j, k = search(str,splitter,i)
-    while 0 < j < m && length(strs) != limit-1
+    while 0 < j <= n && length(strs) != limit-1
         if i < k
             if keep_empty || i < j
                 push(strs, str[i:j-1])

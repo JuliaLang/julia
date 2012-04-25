@@ -410,7 +410,7 @@ end
 @assert isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
 @assert isequal(split("foo,bar", "o,b"), ["fo","ar"])
 
-@assert isequal(split("", ','), [])
+@assert isequal(split("", ','), [""])
 @assert isequal(split(",", ','), ["",""])
 @assert isequal(split(",,", ','), ["","",""])
 @assert isequal(split("", ',', false), [])
@@ -431,8 +431,8 @@ let str = "a.:.ba..:..cba.:.:.dcba.:."
 end
 
 # zero-width splits
-@assert isequal(split("", ""), [])
-@assert isequal(split("", r""), [])
+@assert isequal(split("", ""), [""])
+@assert isequal(split("", r""), [""])
 @assert isequal(split("abc", ""), ["a","b","c"])
 @assert isequal(split("abc", r""), ["a","b","c"])
 @assert isequal(split("abcd", r"b?"), ["a","c","d"])
