@@ -269,6 +269,7 @@ type SubString <: String
 end
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
+SubString(s::String, i::Integer) = SubString(s, i, length(s))
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length
@@ -368,6 +369,7 @@ type RopeString <: String
     RopeString(h::String, t::String) =
         new(h, t, 1, length(h)+length(t))
 end
+RopeString(s::String) = RopeString(s,"")
 
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
@@ -863,14 +865,16 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     rstr = ""
     i = start(str)
     for (j,k) in each_search(str,pattern)
-        rstr *= str[i:j-1]*string(repl(str[j:k-1]))
+        rstr = RopeString(rstr,SubString(str,i,j-1))
+        rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
         i = k
         if n == limit
             break
         end
         n += 1
     end
-    rstr * str[i:]
+    rstr = RopeString(rstr,SubString(str,i))
+    print_to_string(length(rstr),print,rstr)
 end
 replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
 replace(s::String, spl, r, n::Integer) = replace(s, spl, _->r, n)
