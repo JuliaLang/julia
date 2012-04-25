@@ -445,3 +445,9 @@ end
 @assert isequal(split("abcd", r"d*"), ["a","b","c",""])
 @assert isequal(split("abcd", r"d+"), ["abc",""])
 @assert isequal(split("abcd", r"[ad]?"), ["","b","c",""])
+
+# replace
+@assert replace("foobar",'o','0') == "f00bar"
+@assert replace("foobar",'o','0',1) == "f0obar"
+@assert replace("foobar",'o',"") == "fbar"
+@assert replace("foobar",'o',"",1) == "fobar"

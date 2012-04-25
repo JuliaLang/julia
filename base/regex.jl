@@ -125,17 +125,3 @@ next(itr::RegexMatchIterator, m) =
 
 each_match(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
 each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
-
-replace(s::String, regex::Regex, repl::String, limit::Integer) =
-    join(split(s, regex, limit, true), repl)
-
-replace(s::String, regex::Regex, repl::String) =
-    join(split(s, regex, 0, true), repl)
-
-replace(s::String, x::String, repl::String, limit::Integer) =
-    strwidth(x) == 1 ? replace(s, x[1], repl, limit) :
-    replace(s, Regex(strcat("\\Q",x)), repl, limit)
-
-replace(s::String, x::String, repl::String) =
-    strwidth(x) == 1 ? replace(s, x[1], repl) :
-    replace(s, Regex(strcat("\\Q",x)), repl)
