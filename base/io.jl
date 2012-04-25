@@ -29,7 +29,7 @@ type IOStream <: IO
     IOStream(name::String) = IOStream(name, true)
 end
 
-convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
+convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 
 # "own" means the descriptor will be closed with the IOStream
 function fdio(name::String, fd::Integer, own::Bool)

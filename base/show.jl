@@ -1,38 +1,44 @@
-# formerly built-in methods. can be replaced any time.
-print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
-print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
-show(x) = ccall(:jl_show_any, Void, (Any,), x)
+print(x) = fprint(current_output_stream(), x)
+show(x) = show(current_output_stream(), x)
+fprint(f,x) = show(f,x)
 
-print(x) = show(x)
+# formerly built-in methods. can be replaced any time.
+fprint(f,a::Array{Uint8,1}) =
+    ccall(:jl_print_array_uint8, Void, (Ptr{Void}, Any,), f, a)
+fprint(f,s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), f, s)
+show(f, x) = ccall(:jl_show_any, Void, (Ptr{Void}, Any,), f, x)
+
 showcompact(x) = show(x)
+showcompact(f,x) = show(f,x)
 show_to_string(x) = print_to_string(show, x)
 showcompact_to_string(x) = print_to_string(showcompact, x)
 
-show(s::Symbol) = print(s)
-show(tn::TypeName) = show(tn.name)
-show(::Nothing) = print("nothing")
-show(b::Bool) = print(b ? "true" : "false")
-show(n::Integer)  = print(dec(int64(n)))
+show(f,s::Symbol) = fprint(f,s)
+show(f,tn::TypeName) = show(f,tn.name)
+show(f,::Nothing) = fprint(f,"nothing")
+show(f,b::Bool) = fprint(f,b ? "true" : "false")
+show(f,n::Integer)  = fprint(f,dec(int64(n)))
 
-function show_trailing_hex(n::Uint64, ndig::Integer)
+function show_trailing_hex(f, n::Uint64, ndig::Integer)
     for s = ndig-1:-1:0
         d = (n >> 4*s) & uint64(0xf)
-        print("0123456789abcdef"[d+1])
+        fprint(f, "0123456789abcdef"[d+1])
     end
 end
-show(n::Unsigned) = (print("0x"); show_trailing_hex(uint64(n),sizeof(n)<<1))
+show(f,n::Unsigned) = (fprint(f,"0x");
+                       show_trailing_hex(f, uint64(n), sizeof(n)<<1))
 
-show{T}(p::Ptr{T}) =
-    print(is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
+show{T}(f, p::Ptr{T}) =
+    fprint(f, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
-function show(l::LambdaStaticData)
-    print("AST(")
-    show(l.ast)
-    print(")")
+function show(f, l::LambdaStaticData)
+    fprint(f, "AST(")
+    show(f, l.ast)
+    fprint(f, ")")
 end
 
-function show_delim_array(itr, open, delim, close, delim_one)
-    print(open)
+function show_delim_array(f, itr, open, delim, close, delim_one)
+    fprint(f, open)
     state = start(itr)
     newline = true
     first = true
@@ -41,76 +47,76 @@ function show_delim_array(itr, open, delim, close, delim_one)
 	    x, state = next(itr,state)
             multiline = isa(x,AbstractArray) && ndims(x)>1 && numel(x)>0
             if newline
-                if multiline; println(); end
+                if multiline; fprintln(f); end
             end
-	    show(x)
+	    show(f,x)
 	    if done(itr,state)
                 if delim_one && first
-                    print(delim)
+                    fprint(f,delim)
                 end
 		break
 	    end
             first = false
-            print(delim)
+            fprint(f,delim)
             if multiline
-                println(); println(); newline=false
+                fprintln(f); fprintln(f); newline=false
             else
                 newline = true
             end
 	end
     end
-    print(close)
+    fprint(f,close)
 end
 
-show_comma_array(itr, o, c) = show_delim_array(itr, o, ',', c, false)
-show(t::Tuple) = show_delim_array(t, '(', ',', ')', true)
+show_comma_array(f, itr, o, c) = show_delim_array(f, itr, o, ',', c, false)
+show(f, t::Tuple) = show_delim_array(f, t, '(', ',', ')', true)
 
-function show_expr_type(ty)
+function show_expr_type(f, ty)
     if !is(ty, Any)
         if is(ty, Function)
-            print("::F")
+            fprint(f,"::F")
         elseif is(ty, IntrinsicFunction)
-            print("::I")
+            fprint(f,"::I")
         else
-            print("::$ty")
+            fprint(f,"::$ty")
         end
     end
 end
 
-function show(e::Expr)
+function show(f,e::Expr)
     hd = e.head
     if is(hd,:call)
-        print(e.args[1])
-        show_comma_array(e.args[2:],'(',')')
+        fprint(f,e.args[1])
+        show_comma_array(f,e.args[2:],'(',')')
     elseif is(hd,:(=))
-        print("$(e.args[1]) = $(e.args[2])")
+        fprint(f,"$(e.args[1]) = $(e.args[2])")
     elseif is(hd,:null)
-        print("nothing")
+        fprint(f,"nothing")
     elseif is(hd,:gotoifnot)
-        print("unless $(e.args[1]) goto $(e.args[2])")
+        fprint(f,"unless $(e.args[1]) goto $(e.args[2])")
     elseif is(hd,:return)
-        print("return $(e.args[1])")
+        fprint(f,"return $(e.args[1])")
     elseif is(hd,:string)
-        show(e.args[1])
+        show(f,e.args[1])
     elseif is(hd,symbol("::"))
-        show(e.args[1]); print("::"); show(e.args[2])
+        show(f,e.args[1]); fprint(f,"::"); show(f,e.args[2])
     elseif is(hd,:quote)
-        show_quoted_expr(e.args[1])
+        show_quoted_expr(f,e.args[1])
     elseif is(hd,:body) || is(hd,:block)
-        println("\nbegin")
+        fprintln(f,"\nbegin")
         for a in e.args
-            print("  "); show(a); println()
+            fprint(f,"  "); show(f,a); fprintln(f)
         end
-        println("end")
+        fprintln(f,"end")
     elseif is(hd,:comparison)
-        for a in e.args; show(a); end
+        for a in e.args; show(f,a); end
     elseif is(hd,:(.))
-        show(e.args[1]); print('.'); show(e.args[2])
+        show(f,e.args[1]); fprint(f,'.'); show(f,e.args[2])
     else
-        print(hd)
-        show_comma_array(e.args,'(',')')
+        fprint(f,hd)
+        show_comma_array(f,e.args,'(',')')
     end
-    show_expr_type(e.typ)
+    show_expr_type(f,e.typ)
 end
 
 show(e::SymbolNode) = (print(e.name); show_expr_type(e.typ))
