@@ -102,6 +102,10 @@ match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE_EXECUTE
 match(r::Regex, s::String) = match(r, s, start(s))
 
 function search(str::ByteString, re::Regex, idx::Integer)
+    len = length(str)
+    if idx >= len+2
+        return idx == len+2 ? (0,0) : error("index out of range")
+    end
     opts = re.options & PCRE_EXECUTE_MASK
     m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
     isempty(m) ? (0,0) : (m[1]+1,m[2]+1)

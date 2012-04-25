@@ -287,8 +287,10 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    for i = 1:length(I)
-        A[I[i]] = X[i]
+    count = 1
+    for i in I
+        A[i] = X[count]
+        count += 1
     end
     return A
 end

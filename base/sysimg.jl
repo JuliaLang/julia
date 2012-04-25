@@ -75,7 +75,7 @@ include("random.jl")
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
-include("mmaparray.jl")
+include("mmap.jl")
 
 # utilities - version, timing, help, edit
 include("version.jl")
