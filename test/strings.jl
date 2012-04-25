@@ -410,7 +410,7 @@ end
 @assert isequal(split("foo,bar,baz", ',', 3), ["foo","bar","baz"])
 @assert isequal(split("foo,bar", "o,b"), ["fo","ar"])
 
-@assert isequal(split("", ','), [])
+@assert isequal(split("", ','), [""])
 @assert isequal(split(",", ','), ["",""])
 @assert isequal(split(",,", ','), ["","",""])
 @assert isequal(split("", ',', false), [])
@@ -431,8 +431,8 @@ let str = "a.:.ba..:..cba.:.:.dcba.:."
 end
 
 # zero-width splits
-@assert isequal(split("", ""), [])
-@assert isequal(split("", r""), [])
+@assert isequal(split("", ""), [""])
+@assert isequal(split("", r""), [""])
 @assert isequal(split("abc", ""), ["a","b","c"])
 @assert isequal(split("abc", r""), ["a","b","c"])
 @assert isequal(split("abcd", r"b?"), ["a","c","d"])
@@ -445,3 +445,9 @@ end
 @assert isequal(split("abcd", r"d*"), ["a","b","c",""])
 @assert isequal(split("abcd", r"d+"), ["abc",""])
 @assert isequal(split("abcd", r"[ad]?"), ["","b","c",""])
+
+# replace
+@assert replace("foobar",'o','0') == "f00bar"
+@assert replace("foobar",'o','0',1) == "f0obar"
+@assert replace("foobar",'o',"") == "fbar"
+@assert replace("foobar",'o',"",1) == "fobar"

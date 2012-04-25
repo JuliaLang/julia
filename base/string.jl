@@ -269,6 +269,7 @@ type SubString <: String
 end
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
+SubString(s::String, i::Integer) = SubString(s, i, length(s))
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length
@@ -368,6 +369,7 @@ type RopeString <: String
     RopeString(h::String, t::String) =
         new(h, t, 1, length(h)+length(t))
 end
+RopeString(s::String) = RopeString(s,"")
 
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
@@ -830,19 +832,21 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
+
 function split(str::String, splitter, limit::Integer, keep_empty::Bool)
     strs = String[]
-    if isempty(str) return strs end
     i = start(str)
-    m = length(str)+1
-    for (j,k) = each_search(str,splitter)
-        if length(strs)==limit-1 break end
-        if k <= i continue end
-        if j >= m break end
-        if keep_empty || i < j
-            push(strs, str[i:j-1])
+    n = length(str)
+    j, k = search(str,splitter,i)
+    while 0 < j <= n && length(strs) != limit-1
+        if i < k
+            if keep_empty || i < j
+                push(strs, str[i:j-1])
+            end
+            i = k
         end
-        i = k
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,splitter,k)
     end
     if keep_empty || !done(str,i)
         push(strs, str[i:])
@@ -855,6 +859,26 @@ split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
+
+function replace(str::ByteString, pattern, repl::Function, limit::Integer)
+    n = 1
+    rstr = ""
+    i = start(str)
+    for (j,k) in each_search(str,pattern)
+        rstr = RopeString(rstr,SubString(str,i,j-1))
+        rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
+        i = k
+        if n == limit
+            break
+        end
+        n += 1
+    end
+    rstr = RopeString(rstr,SubString(str,i))
+    print_to_string(length(rstr),print,rstr)
+end
+replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
+replace(s::String, spl, r, n::Integer) = replace(s, spl, _->r, n)
+replace(s::String, spl, r) = replace(s, spl, r, 0)
 
 function print_joined(strings, delim, last)
     i = start(strings)
