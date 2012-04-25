@@ -96,8 +96,8 @@ end
 # Create 3d plan
 
 for (libname, fname_complex, fname_real, T_in, T_out) in
-    ((:_jl_libfftw,"fftw_plan_dft_2d","fftw_plan_dft_r2c_2d",:Float64,:Complex128),
-     (:_jl_libfftwf,"fftwf_plan_dft_2d","fftwf_plan_dft_r2c_2d",:Float32,:Complex64))
+    ((:_jl_libfftw,"fftw_plan_dft_3d","fftw_plan_dft_r2c_3d",:Float64,:Complex128),
+     (:_jl_libfftwf,"fftwf_plan_dft_3d","fftwf_plan_dft_r2c_3d",:Float32,:Complex64))
     @eval begin
         function _jl_fftw_plan_dft(X::Array{$T_out,3}, Y::Array{$T_out,3}, direction::Integer)
             ccall(dlsym($libname, $fname_complex),
