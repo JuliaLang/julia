@@ -1,84 +1,90 @@
+# Dates and Times for Julia
+#
+# The types and functions in this class store and manipulate representations of dates and times
+# Instances are stored internally as a Julian Date (jd), which is a representation of dates counting linearly 
+# in days since midnight localtime on January 1, 4713 BCE. The original Julian Day Number, counting in days
+# since noon GMT, is refered to as the astronomical julian date (ajd) within this code base. 
 
-TIME_SCALE = 1000 #Millisecond precision on DateTime objects
+# Only minimal timezone support exists. DateTime objects keep track of timezones supplied, and use timezones 
+# in difference calculations. However, no timezone conversion functionality is provided. DST is also not 
+# considered by this code. Both these items are cosidered to be the responsibility of the calling code. 
 
 MONTHS = ["January" , "February", "March", "April", "May", "June", "July", "August", "Septempber", "October", "November", "December"]
 SHORT_MONTHS = ["Jan" , "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 DAY_OF_WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 SHORT_DAY_OF_WEEK = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
+_UNIXEPOCH = 2440588 # JD of midnight localtime 1/1/70 
 
-type DateTime
-	jd::Float
-	year::Integer
-	mon::Integer
-	mday::Integer
-	hour::Integer
-	min::Integer
-	sec::Integer
-	subsec::Integer
-	isdst::Integer
-	utc_offset::Integer
-	zone::String
 
-	function DateTime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer, sss::Integer, dst::Integer, off::Integer, z::String)
-		jd = valid_date(y, m, d)
-		if jd==-1 
-			throw ("Invalid date: $y-$m-$d")
-		else 
-			new(jd, y, m, d, hh, mm, ss, sss, dst, off, z)
-		end
+
+type DateTime{T<:Real} 
+	jd::T
+	off::Float
+	zone::ASCIIString
+
+	function DateTime{T<:Real}(jd::T)
+		new(jd, 0.0, "UTC")
+	end
+
+	function DateTime{T<:Real}(jd::T, off::Float, zone::ASCIIString)
+		new(jd, off, zone)
+	end	
+end
+
+typealias Date DateTime{Int}
+
+#creation functions. 
+function date(y::Int,m::Int,d::Int)
+	jd::Int = valid_date(y, m, d)
+	if jd==-1 
+		throw ("Invalid date: $y-$m-$d")
+	else 
+		DateTime{Int}(jd,0.0, "UTC")
 	end
 end
 
-type Date
-	jd::Int
-	year::Integer
-	mon::Integer
-	mday::Integer
-
-	function Date(y::Integer, m::Integer, d::Integer)
-		jd = valid_date(y, m, d)
-		if jd==-1 
-			throw ("Invalid date: $y-$m-$d")
-		else 
-			new(jd, y, m, d)
-		end
+function datetime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer, frac::Float, off::Float, zone::ASCIIString)
+	jd = valid_date(int(y), int(m), int(d))
+	if jd==-1 
+		throw ("Invalid date: $y-$m-$d")
+	else 
+		jd=jd+_time_to_day_frac(hh,mm,ss) + frac/86400
+		DateTime{Float64}(jd, off/24, zone)
 	end
 end
 
-
-convert(::Type{Date}, d::DateTime) = Date(d.year, d.mon, d.mday)
-convert(::Type{DateTime}, d::Date) = DateTime(d.year, d.mon, d.mday,0,0,0,0,
-						ccall(:default_isdst, Int32, ()) ,
-						ccall(:default_gmtoff, Int, ()), 
-						cstring(ccall(:default_tzone, Ptr{Uint8}, ())) )
-
-
-function string(d::DateTime) 
-	"$(d.mday) $(SHORT_MONTHS[d.mon]) $(d.year) $(d.hour):$(d.min):$(d.sec).$(d.subsec) $(d.zone)"
+#Create a datetime upto seconds accuracy with local timezone
+function datetime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer)
+	datetime(y,m,d,hh,mm,ss,0.0, TZ_OFFSET, TZ)
 end
 
-function string(d::Date) 
-	"$(d.mday) $(SHORT_MONTHS[d.mon]) $(d.year)"
+function string{T<:Float}(dt::DateTime{T}) 
+	(y,m,d, hh, mm, ss, fr) = civil(dt)
+	"$(d) $(SHORT_MONTHS[m]) $(y) $(hh):$(mm):$(ss).$(string(round(fr*100)/100)[3:end]) ($(dec(int(dt.off * 2400),4))) "
+end
+
+function string{T<:Integer}(dt::DateTime{T}) 
+	(y,m,d) = civil(dt)
+	"$(d) $(SHORT_MONTHS[m]) $(y)"
 end
 
 show(d::DateTime) = print(string(d))
-show(d::Date) = print(string(d))
 
-(-) (x::Date, y::Date) = x.jd - y.jd
-(-) (x::Date, y::Integer) = Date(_jd_to_date(x.jd-y)...)
-(+) (x::Date, y::Integer) = Date(_jd_to_date(x.jd+y)...)
-(+) (x::Integer, y::Date) = Date(_jd_to_date(y.jd+x)...)
-
-
-<=(x::Date, y::Date) = x-y <= 0 
->=(x::Date, y::Date) = x-y >= 0 
-<(x::Date, y::Date) = x-y < 0 
->(x::Date, y::Date) = x-y > 0 
+(-){T<:Real,S<:Real} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd - (x.off - y.off))
+(-){T<:Real, S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd - y, x.off, x.zone)
+(+){T<:Real,S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd + y, x.off, x.zone)
+(+){T<:Real,S<:Real} (x::S, y::DateTime{T}) = DateTime{promote_type(T,S)}(y.jd + x, y.off, x.zone)
 
 
-hash(d::Date) = hash(d.jd)
-isequal(x::Date, y::Date) = isequal(x.jd, y.jd) 
+<=(x::DateTime, y::DateTime) = x-y <= 0 
+>=(x::DateTime, y::DateTime) = x-y >= 0 
+<(x::DateTime, y::DateTime) = x-y < 0 
+>(x::DateTime, y::DateTime) = x-y > 0 
+
+
+hash(d::DateTime) = bitmix(hash(d.jd), hash(d.off))
+isequal(x::DateTime, y::DateTime) = isequal(x.jd, y.jd) && isequal(x.off, y.off)
 
 function current_time_millis()
     return int(floor(time()*10^3))
@@ -89,32 +95,26 @@ function current_time_micros()
 end
 
 function now()
-	t = ccall(:clock_now, Float64, ())
-	tm = ccall(:localtime, Ptr{Void}, (Ptr{Int},), &(int(floor(t))))
-
-	DateTime( ccall(:read_tm_year, Int32, (Ptr{Void},), tm) + 1900,
-			ccall(:read_tm_mon, Int32, (Ptr{Void},), tm) + 1 ,
-			ccall(:read_tm_mday, Int32, (Ptr{Void},), tm) ,
-			ccall(:read_tm_hour, Int32, (Ptr{Void},), tm) ,
-			ccall(:read_tm_min, Int32, (Ptr{Void},), tm) ,
-			ccall(:read_tm_sec, Int32, (Ptr{Void},), tm) ,
-			int((t-floor(t))*TIME_SCALE),
-			ccall(:read_tm_isdst, Int32, (Ptr{Void},), tm) ,
-			ccall(:read_tm_gmtoff, Int, (Ptr{Void},), tm) ,
-			cstring(ccall(:read_tm_zone, Ptr{Uint8}, (Ptr{Void},), tm)) 
+	t = ccall(:clock_now, Float64, ())  #Seconds since unix epoch
+	tm = Array(Uint32, 14)
+    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Uint32}), &t, tm)
+	datetime( int(tm[6]) + 1900,  	#int tm_year
+			int(tm[5]) + 1 ,		#int tm_mon
+			int(tm[4]) ,			#int tm_mday
+			int(tm[3]) ,			#int tm_hour
+			int(tm[2]) ,			#int tm_min
+			int(tm[1]) , 			#int tm_sec
+			(t-floor(t)),
+			tm[11] / 3600,			#long tm_gmtoff
+			cstring(convert(Ptr{Uint8}, ((uint64(0)|tm[14]) << 32 ) | tm[13])) #char *tm_zone
 		)
 end
 
 #Day of the week for any day, 1=Sunday, 7=Saturday
-function day_of_week(d::Date)
-	year::Integer = d.year; month::Integer = d.mon; day::Integer = d.mday
-	a = div((14 - month) , 12);
-    y = year + 4800 - a;
-    m = month + 12 * a - 3;
-    wday = day + div((153*m+2),5) + 365*y + div(y,4) - div(y,100) + div(y,400) + 2;
-    wday = wday  % 7;
-    return wday + 1;
+function wday(d::DateTime)
+	((ifloor(d.jd) + 1) % 7) +1
 end
+
 
 common_year_yday_offset = [
     0,
@@ -146,16 +146,16 @@ leap_year_yday_offset = [
 
 
 #Day of the year for any date 1=1JanYY, 365/366=31DecYY
-function yday(d::Date)
-
-	tm_year = d.year - 1900 ; 
+function yday(dt::DateTime)
+	y,m,d = _jd_to_date(dt.jd)
+	tm_year = y - 1900 ; 
     tm_year_mod400::Integer = tm_year % 400;
-    tm_yday = d.mday;
+    tm_yday = d;
 
     if (leap_year(tm_year_mod400 + 1900))
-		tm_yday = tm_yday + leap_year_yday_offset[d.mon];
+		tm_yday = tm_yday + leap_year_yday_offset[m];
     else
-		tm_yday = tm_yday + common_year_yday_offset[d.mon];
+		tm_yday = tm_yday + common_year_yday_offset[m];
 	end
 end
 
@@ -172,8 +172,13 @@ function is_julian(jd::Integer)
 	jd < 2299161 # Date of Gregorian Calendar Reform, ITALY; 1582-10-15 
 end
 
-#The following three functions are used during construction of a Date object, 
-#   and thus operate on primitive arguments
+function civil{T<:Float}(dt::DateTime{T})
+	return append(_jd_to_date(ifloor(dt.jd)), _day_frac_to_time(dt.jd-ifloor(dt.jd)))
+end
+
+function civil{T<:Integer}(dt::DateTime{T})
+	return _jd_to_date(dt.jd)
+end
 
 #convert a date to a Julian Day Number
 function _date_to_jd (y,m,d)
@@ -198,10 +203,10 @@ function _jd_to_date (jd::Integer)
 	    a = jd + 1 + x - int(floor(x / 4.0))
 	end
     b = a + 1524
-    c = int(floor((b - 122.1) / 365.25))
-    d = int(floor(365.25 * c))
-    e = int(floor((b - d) / 30.6001))
-    dom = b - d - int(floor(30.6001 * e))
+    c = ifloor((b - 122.1) / 365.25)
+    d = ifloor(365.25 * c)
+    e = ifloor((b - d) / 30.6001)
+    dom = b - d - ifloor(30.6001 * e)
     if e <= 13
       m = e - 1
       y = c - 4716
@@ -213,6 +218,17 @@ function _jd_to_date (jd::Integer)
     return y, m , dom
 end
 
+function _day_frac_to_time(fr::Float)
+    h,   fr = divmod(fr, 1//24)
+    min, fr = divmod(fr, 1//1440)
+    s,   fr = divmod(fr, 1//86400)
+    return int(h), int(min), int(s), float64(fr*86400)
+ end
+
+function _time_to_day_frac(hh::Integer, mm::Integer, ss::Integer )
+	 hh/24 + mm/1440 + ss/86400
+end
+
 function valid_date(y,m,d)
 	jd=_date_to_jd(y,m,d)
 	if (y, m, d) == _jd_to_date(jd)
@@ -221,6 +237,32 @@ function valid_date(y,m,d)
 		return -1
 	end
 end
+
+function _ajd_to_jd(ajd::Real, off::Float)
+	ajd + off + 0.5
+end
+
+function _jd_to_ajd(jd::Real, off::Float)
+	jd -off - 0.5
+end
+
+function unixtime(dt::DateTime)
+	(dt.jd-_UNIXEPOCH)*86400
+end
+
+TZ = 0
+TZ_OFFSET = ""
+function init()
+	d=now();
+	global TZ = d.zone
+	global TZ_OFFSET = d.off * 24
+end	
+
+divmod(x, y) = (div(x,y) , mod(x, y)) 
+
+init()
+
+
 
 
 

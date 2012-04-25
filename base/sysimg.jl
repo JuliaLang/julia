@@ -84,7 +84,6 @@ include("mmap.jl")
 include("version.jl")
 include("util.jl")
 include("datafmt.jl")
-include("date.jl")
 
 ## Load optional external libraries
 
