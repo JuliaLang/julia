@@ -203,7 +203,7 @@ function ref(A::Array, I::Indices...)
     X = similar(A, d[1:i])
 
     if is(ref_cache,nothing)
-        ref_cache = HashTable()
+        ref_cache = Dict()
     end
     gen_cartesian_map(ref_cache, ivars -> quote
             X[storeind] = A[$(ivars...)]
@@ -358,7 +358,7 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
-        assign_cache = HashTable()
+        assign_cache = Dict()
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
                       tuple(I0, I...),
@@ -372,7 +372,7 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
-        assign_cache = HashTable()
+        assign_cache = Dict()
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
                                              refind += 1),
@@ -926,7 +926,7 @@ function findn{T}(A::StridedArray{T})
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
     if is(findn_cache,nothing)
-        findn_cache = HashTable()
+        findn_cache = Dict()
     end
 
     gen_cartesian_map(findn_cache, findn_one, ranges,
@@ -1023,7 +1023,7 @@ function areduce(f::Function, A::StridedArray, region::Region, v0, RType::Type)
     R = similar(A, RType, dimsR)
 
     if is(areduce_cache,nothing)
-        areduce_cache = HashTable()
+        areduce_cache = Dict()
     end
 
     key = ndimsA
@@ -1345,7 +1345,7 @@ function permute(A::StridedArray, perm)
     end
 
     if is(permute_cache,nothing)
-	permute_cache = HashTable()
+	permute_cache = Dict()
     end
 
     gen_cartesian_map(permute_cache, permute_one, ranges,

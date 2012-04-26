@@ -187,7 +187,7 @@ function _start()
         ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
-        global const Waiting = HashTable(64)
+        global const Waiting = Dict(64)
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode

@@ -13,7 +13,7 @@ end
 type CheckError <: OptionsChecking
 end
 type Options{T<:OptionsChecking}
-    key2index::HashTable{Symbol,Int}
+    key2index::Dict{Symbol,Int}
     vals::Vector
     used::Vector{Bool}
     check_lock::Vector{Bool}
@@ -31,7 +31,7 @@ function Options{T<:OptionsChecking}(::Type{T},args...)
     else
         ((), (), Array(Any, 0))
     end
-    ht = HashTable{Symbol,Int}(keys,index)
+    ht = Dict{Symbol,Int}(keys,index)
     used = falses(n)
     check_lock = falses(n)
     Options{T}(ht,vals,used,check_lock)
@@ -39,7 +39,7 @@ end
 # Constructor: supply type followed by list of assignment expressions, e.g.,
 #   o = Options(CheckNone,:(a=5),:(b=rand(3)),...)
 function Options{T<:OptionsChecking}(::Type{T},ex::Expr...)
-    ht = HashTable{Symbol,Int}()
+    ht = Dict{Symbol,Int}()
     vals = Array(Any,0)
     n = length(ex)
     for i = 1:n

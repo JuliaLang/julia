@@ -61,7 +61,7 @@ begin
                 return h
             end
         elseif x[1] == '{' && x[end] == '}'
-            style = HashTable()
+            style = Dict()
             pairs = map( strip, split(x[2:end-1], ',', false) )
             for pair in pairs
                 kv = split( pair, ':', false )
@@ -90,7 +90,7 @@ begin
 
     function config_options( sec::String )
         global _winston_config
-        opts = HashTable()
+        opts = Dict()
         if sec == "defaults"
             for (k,v) in _winston_config.inifile.defaults
                 opts[k] = _atox(v)
@@ -107,7 +107,7 @@ end
 # utils -----------------------------------------------------------------------
 
 function args2hashtable(args...)
-    opts = HashTable()
+    opts = Dict()
     if length(args) == 0
         return opts
     end
@@ -545,7 +545,7 @@ end
 # =============================================================================
 
 abstract RenderObject
-typealias RenderStyle HashTable{String,Union(Integer,Float,String)}
+typealias RenderStyle Dict{String,Union(Integer,Float,String)}
 
 function kw_init( self::RenderObject, args...)
     for (k,v) in kw_defaults(self)
@@ -895,7 +895,7 @@ type Legend <: PlotComponent
 
     function Legend( x, y, components, args... )
         #_PlotComponent.__init__( self )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr( self )
         kw_init(self, args...)
         self.x = x
@@ -960,7 +960,7 @@ type ErrorBarsX <: ErrorBar
     hi
 
     function ErrorBarsX( y, lo, hi, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.y = y
@@ -999,7 +999,7 @@ type ErrorBarsY <: ErrorBar
     hi
 
     function ErrorBarsY( x, lo, hi, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -1274,7 +1274,7 @@ end
 abstract HalfAxis <: PlotComponent
 
 type HalfAxisX <: HalfAxis
-    attr::HashTable
+    attr::Dict
     func_ticks_default
     func_ticks_num
     func_subticks_default
@@ -1282,7 +1282,7 @@ type HalfAxisX <: HalfAxis
 
     function HalfAxisX(args...)
         self = new(
-            HashTable(),
+            Dict(),
             (_ticks_default_linear, _ticks_default_log),
             (_ticks_num_linear, _ticks_num_log),
             (_subticks_linear, _subticks_log),
@@ -1372,7 +1372,7 @@ function _make_grid( self::HalfAxisX, context, ticks )
 end
 
 type HalfAxisY <: HalfAxis
-    attr::HashTable
+    attr::Dict
     func_ticks_default
     func_ticks_num
     func_subticks_default
@@ -1380,7 +1380,7 @@ type HalfAxisY <: HalfAxis
 
     function HalfAxisY(args...)
         self = new(
-            HashTable(),
+            Dict(),
             (_ticks_default_linear, _ticks_default_log),
             (_ticks_num_linear, _ticks_num_log),
             (_subticks_linear, _subticks_log),
@@ -1530,7 +1530,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
 
     halign, valign = _align(self)
 
-    style = HashTable{String,Any}()
+    style = Dict{String,Any}()
     style["texthalign"] = halign
     style["textvalign"] = valign
     for (k,v) in getattr(self, "ticklabels_style")
@@ -1620,12 +1620,12 @@ end
 # PlotComposite ---------------------------------------------------------------
 
 type PlotComposite <: HasStyle
-    attr::HashTable
+    attr::Dict
     components::List
     dont_clip::Bool
 
     function PlotComposite(args...)
-        self = new(HashTable(), {}, false)
+        self = new(Dict(), {}, false)
         kw_init(self, args...)
         self
     end
@@ -1786,7 +1786,7 @@ type FramedPlot <: PlotContainer
         y2 = HalfAxisY()
         setattr(y2, "draw_ticklabels", nothing)
         self = new(
-            HashTable(),
+            Dict(),
             PlotComposite(),
             PlotComposite(),
             x1, y1, x2, y2,
@@ -1961,7 +1961,7 @@ type Table <: PlotContainer
     modified
 
     function Table( rows, cols, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self, args... )
         self.rows = rows
         self.cols = cols
@@ -2026,7 +2026,7 @@ type Plot <: PlotContainer
     content
 
     function Plot( args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self, args... )
         self.content = PlotComposite()
         self
@@ -2100,7 +2100,7 @@ type FramedArray <: PlotContainer
     content
 
     function FramedArray( nrows, ncols, args... )
-        self = new(HashTable())
+        self = new(Dict())
         self.nrows = nrows
         self.ncols = ncols
         self.content = cell(nrows, ncols)
@@ -2401,7 +2401,7 @@ function compose_interior( self::PlotContainer, device::Renderer, int_bbox::Boun
         ext_bbox = exterior( self, device, int_bbox )
         x = center(int_bbox)[1]
         y = yrange(ext_bbox)[2] + offset
-        style = HashTable()
+        style = Dict()
         for (k,v) in getattr(self, "title_style")
             style[k] = v
         end
@@ -2517,12 +2517,12 @@ function make_key( self::LineComponent, bbox::BoundingBox )
 end
 
 type Curve <: LineComponent
-    attr::HashTable
+    attr::Dict
     x
     y
 
     function Curve(x, y, args...)
-        attr = HashTable() 
+        attr = Dict() 
         self = new(attr, x, y)
         iniattr(self)
         kw_init(self, args2hashtable(args...)...)
@@ -2547,13 +2547,13 @@ function make( self::Curve, context )
 end
 
 type Slope <: LineComponent
-    attr::HashTable
+    attr::Dict
     slope::Real
     intercept
 
     function Slope( slope, intercept, args... )
         #LineComponent.__init__( self )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.slope = slope
@@ -2608,7 +2608,7 @@ type Histogram <: LineComponent
     binsize
 
     function Histogram( values, binsize, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.values = values
@@ -2661,7 +2661,7 @@ type LineX <: LineComponent
     x
 
     function LineX( x, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2685,7 +2685,7 @@ type LineY <: LineComponent
     y
 
     function LineY( y, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.y = y
@@ -2713,7 +2713,7 @@ type BoxLabel <: PlotComponent
 
     function BoxLabel( obj, str::String, side, offset, args... )
         @assert str != nothing
-        self = new(HashTable(), obj, str, side, offset)
+        self = new(Dict(), obj, str, side, offset)
         kw_init(self, args...)
         self
     end
@@ -2768,7 +2768,7 @@ type DataLabel <: LabelComponent
     str
 
     function DataLabel( x, y, str, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.pos = x, y
@@ -2789,7 +2789,7 @@ type PlotLabel <: LabelComponent
     str
 
     function PlotLabel( x, y, str, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.pos = x, y
@@ -2860,7 +2860,7 @@ type FillAbove <: FillComponent
     y
 
     function __init__( self, x, y, args...)
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2889,7 +2889,7 @@ type FillBelow <: FillComponent
     y
 
     function FillBelow( x, y, args...)
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -2920,7 +2920,7 @@ type FillBetween <: FillComponent
     y2
 
     function FillBetween(x1, y1, x2, y2, args...)
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x1 = x1
@@ -2966,7 +2966,7 @@ type Points <: SymbolDataComponent
     y
 
     function Points( x, y, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -3002,7 +3002,7 @@ type ColoredPoints <: SymbolDataComponent
     c
 
     function ColoredPoints( x, y, c, args... )
-        self = new(HashTable())
+        self = new(Dict())
         conf_setattr(self)
         kw_init(self, args...)
         self.x = x
@@ -3066,7 +3066,7 @@ end
 
 # HasAttr ---------------------------------------------------------------------
 
-_attr_map(::HasAttr) = HashTable()
+_attr_map(::HasAttr) = Dict()
 
 function hasattr(self::HasAttr, name)
     key = get(_attr_map(self), name, name)
@@ -3108,12 +3108,12 @@ const conf_setattr = iniattr
 
 # HasStyle ---------------------------------------------------------------
 
-kw_defaults(x) = HashTable()
-_kw_rename(x) = HashTable{String,String}()
+kw_defaults(x) = Dict()
+_kw_rename(x) = Dict{String,String}()
 
 function kw_init( self::HasStyle, args...)
     # jeez, what a mess...
-    sty = HashTable()
+    sty = Dict()
     for (k,v) in kw_defaults(self)
         sty[k] = v
     end

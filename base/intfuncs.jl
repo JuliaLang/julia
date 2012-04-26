@@ -276,7 +276,7 @@ bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
 
 # TODO: maybe implement a proper Eratosthenes's sieve.
 
-function factor{T<:Integer}(n::T, h::HashTable{T,Int})
+function factor{T<:Integer}(n::T, h::Dict{T,Int})
     if n <= 0
         error("factor: number to be factored must be positive")
     end
@@ -298,4 +298,4 @@ function factor{T<:Integer}(n::T, h::HashTable{T,Int})
     h[n] = get(h,n,0)+1
     return h
 end
-factor{T<:Integer}(n::T) = factor(n, HashTable{T,Int}())
+factor{T<:Integer}(n::T) = factor(n, Dict{T,Int}())

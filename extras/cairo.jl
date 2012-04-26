@@ -248,10 +248,10 @@ end
 # -----------------------------------------------------------------------------
 
 type RendererState
-    current::HashTable
-    saved::Vector{HashTable}
+    current::Dict
+    saved::Vector{Dict}
 
-    RendererState() = new(HashTable(),HashTable[])
+    RendererState() = new(Dict(),Dict[])
 end
 
 function set( self::RendererState, name, value )
@@ -273,7 +273,7 @@ end
 
 function save( self::RendererState )
     enqueue( self.saved, self.current )
-    self.current = HashTable()
+    self.current = Dict()
 end
 
 function restore( self::RendererState )

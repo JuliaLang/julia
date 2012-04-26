@@ -41,7 +41,7 @@ end
 @assert (10.^[-1.])[1] == 0.1
 
 # hash table
-h = HashTable()
+h = Dict()
 for i=1:10000
     h[i] = i+1
 end
@@ -80,7 +80,7 @@ for i=10000:20000
 end
 
 let
-    z = HashTable()
+    z = Dict()
     get_KeyError = false
     try
         z["a"]
