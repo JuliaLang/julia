@@ -201,10 +201,11 @@
     `(lambda ,argl
        (scope-block ,body))))
 
-(define (symbols->typevars sl upperbounds)
-  (if (null? upperbounds)
-      (map (lambda (x)    `(call (top typevar) ',x)) sl)
-      (map (lambda (x ub) `(call (top typevar) ',x ,ub)) sl upperbounds)))
+(define (symbols->typevars sl upperbounds bnd)
+  (let ((bnd (if bnd '(true) '())))
+    (if (null? upperbounds)
+	(map (lambda (x)    `(call (top typevar) ',x ,@bnd)) sl)
+	(map (lambda (x ub) `(call (top typevar) ',x ,ub ,@bnd)) sl upperbounds))))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -233,7 +234,7 @@
 	 (let ((f (gensy)))
 	   `(call (lambda (,@names ,f)
 		    (method ,name (tuple ,@types) ,f (tuple ,@names)))
-		  ,@(symbols->typevars names bounds)
+		  ,@(symbols->typevars names bounds #t)
 		  ,body))))))
 
 (define (struct-def-expr name params super fields)
@@ -364,7 +365,7 @@
 	       (call (top new_struct_fields)
 		     ,name ,super (tuple ,@field-types))
 	       ,name)))
-	    ,@(symbols->typevars params bounds)))
+	    ,@(symbols->typevars params bounds #f)))
 	   ,@(if (null? defs)
 		 `(,(default-outer-ctor name field-names field-types
 		      params bounds))
@@ -388,7 +389,7 @@
 		      (quote ,name) (tuple ,@params)))
 	     (call (top new_tag_type_super) ,name ,super)
 	     ,name)))
-	 ,@(symbols->typevars params bounds)))
+	 ,@(symbols->typevars params bounds #f)))
      (null))))
 
 (define (bits-def-expr n name params super)
@@ -408,7 +409,7 @@
 		      (quote ,name) (tuple ,@params) ,n))
 	     (call (top new_tag_type_super) ,name ,super)
 	     ,name)))
-	 ,@(symbols->typevars params bounds)))
+	 ,@(symbols->typevars params bounds #f)))
      (null))))
 
 ; take apart a type signature, e.g. T{X} <: S{Y}
@@ -683,7 +684,7 @@
 			     (const
 			      (= ,name (call (top new_type_constructor)
 					     (tuple ,@params) ,type-ex))))
-			   ,@(symbols->typevars params bounds))))
+			   ,@(symbols->typevars params bounds #f))))
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 

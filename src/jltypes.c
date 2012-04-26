@@ -503,6 +503,8 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         for(i=0; i < eqc->n; i+=2) {
             if (eqc->data[i] == (jl_value_t*)a) {
                 jl_value_t *v = eqc->data[i+1];
+                if (jl_is_typevar(v))
+                    continue;
                 if (jl_is_long(b)) {
                     if (jl_is_long(v)) {
                         /*
@@ -559,7 +561,10 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         return (jl_value_t*)a;
     }
     if ((jl_value_t*)a != b) {
-        extend((jl_value_t*)a, b, penv);
+        if (var == invariant)
+            extend((jl_value_t*)a, b, eqc);
+        else
+            extend((jl_value_t*)a, b, penv);
     }
     return (jl_value_t*)a;
 }
@@ -572,10 +577,18 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_typector(b))
         b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (a == b) return a;
-    if (jl_is_typevar(a) && a != jl_ANY_flag)
-        return intersect_typevar((jl_tvar_t*)a, b, penv, eqc, var);
-    if (jl_is_typevar(b) && b != jl_ANY_flag)
-        return intersect_typevar((jl_tvar_t*)b, a, penv, eqc, var);
+    if (jl_is_typevar(a)) {
+        if (var == covariant && !((jl_tvar_t*)a)->bound)
+            a = ((jl_tvar_t*)a)->ub;
+        else if (a != jl_ANY_flag)
+            return intersect_typevar((jl_tvar_t*)a, b, penv, eqc, var);
+    }
+    if (jl_is_typevar(b)) {
+        if (var == covariant && !((jl_tvar_t*)b)->bound)
+            b = ((jl_tvar_t*)b)->ub;
+        else if (b != jl_ANY_flag)
+            return intersect_typevar((jl_tvar_t*)b, a, penv, eqc, var);
+    }
     if (a == (jl_value_t*)jl_bottom_type || b == (jl_value_t*)jl_bottom_type)
         return (jl_value_t*)jl_bottom_type;
     if (!jl_has_typevars(a) && !jl_has_typevars(b)) {
@@ -755,7 +768,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         for(int e=0; e < ((jl_tuple_t*)env)->length; e+=2) {
             if (jl_tupleref(env, e) == tp) {
                 elt = jl_type_intersect(elt, jl_tupleref(env, e+1),
-                                        penv, eqc, var);
+                                        penv, eqc, invariant);
                 // note: elt might be None if "None" was the type parameter
                 break;
             }
@@ -1315,7 +1328,7 @@ static jl_type_t *lookup_type(jl_tuple_t *table,
     return NULL;
 }
 
-static int t_uid_ctr = 1;  // TODO: lock
+static int t_uid_ctr = 1;
 
 int  jl_get_t_uid_ctr(void) { return t_uid_ctr; }
 void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
@@ -1325,7 +1338,6 @@ int jl_assign_type_uid(void)
     return t_uid_ctr++;
 }
 
-// TODO: synchronize
 static void cache_type_(jl_type_t *type)
 {
     // only cache concrete types
@@ -1336,6 +1348,8 @@ static void cache_type_(jl_type_t *type)
             return;
     }
     else {
+        if (jl_has_typevars_((jl_value_t*)type,0))
+            return;
         for(int i=0; i < t->length; i++) {
             if (jl_is_typevar(jl_tupleref(t,i)))
                 return;
@@ -1748,9 +1762,10 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
                 for(i=0; i < tta->parameters->length; i++) {
                     jl_value_t *apara = jl_tupleref(tta->parameters,i);
                     jl_value_t *bpara = jl_tupleref(ttb->parameters,i);
-                    if (invariant && jl_is_typevar(bpara) &&
+                    if (invariant && !morespecific && jl_is_typevar(bpara) &&
                         !((jl_tvar_t*)bpara)->bound) {
-                        return apara==bpara;
+                        if (!jl_is_typevar(apara))
+                            return 0;
                     }
                     if (!jl_subtype_le(apara, bpara, 0, morespecific, 1))
                         return 0;
@@ -2116,17 +2131,14 @@ jl_tvar_t *jl_new_typevar(jl_sym_t *name, jl_value_t *lb, jl_value_t *ub)
     tv->name = name;
     tv->lb = lb;
     tv->ub = ub;
-    tv->bound = 1;
+    tv->bound = 0;
     return tv;
 }
 
 static jl_tvar_t *tvar(const char *name)
 {
-    jl_tvar_t *tv =
-        jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
-                       (jl_value_t*)jl_any_type);
-    tv->bound=0;
-    return tv;
+    return jl_new_typevar(jl_symbol(name), (jl_value_t*)jl_bottom_type,
+                          (jl_value_t*)jl_any_type);
 }
 
 extern void jl_init_int32_int64_cache(void);
@@ -2275,7 +2287,6 @@ void jl_init_types(void)
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
                                        (jl_value_t*)jl_bottom_type,
                                        jl_top_type);
-    tttvar->bound = 0;
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
@@ -2432,7 +2443,6 @@ void jl_init_types(void)
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),
                                       (jl_value_t*)jl_bottom_type,
                                       jl_top_type);
-    jl_typetype_tvar->bound = 0;
     jl_typetype_type = (jl_tag_type_t*)
         jl_apply_type((jl_value_t*)jl_type_type,
                       jl_tuple(1,jl_typetype_tvar));

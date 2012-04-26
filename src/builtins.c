@@ -1025,6 +1025,11 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
+    int b = 0;
+    if (args[nargs-1] == jl_true) {
+        b = 1;
+        nargs--;
+    }
     if (nargs > 1) {
         JL_TYPECHK(typevar, type, args[1]);
         if (nargs > 2) {
@@ -1036,7 +1041,9 @@ JL_CALLABLE(jl_f_typevar)
             ub = args[1];
         }
     }
-    return (jl_value_t*)jl_new_typevar((jl_sym_t*)args[0], lb, ub);
+    jl_tvar_t *tv = jl_new_typevar((jl_sym_t*)args[0], lb, ub);
+    tv->bound = b;
+    return (jl_value_t*)tv;
 }
 
 JL_CALLABLE(jl_f_union)
