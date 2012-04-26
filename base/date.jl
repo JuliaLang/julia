@@ -180,6 +180,13 @@ function civil{T<:Integer}(dt::DateTime{T})
 	return _jd_to_date(dt.jd)
 end
 
+hour{T<:Float}(dt::DateTime{T}) = civil(dt)[4]
+minute{T<:Float}(dt::DateTime{T}) = civil(dt)[5]
+second{T<:Float}(dt::DateTime{T}) = civil(dt)[6]
+mday(dt::DateTime) = civil(dt)[3]
+month(dt::DateTime) = civil(dt)[2]
+year(dt::DateTime) = civil(dt)[1]
+
 #convert a date to a Julian Day Number
 function _date_to_jd (y,m,d)
 	if m <= 2

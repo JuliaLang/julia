@@ -83,3 +83,19 @@ test_week_cycle()
 @assert_approx_eq ( datetime(2012, 4, 24, 13,0,0) - datetime(2012, 4,24,14,0,0)  ) * 24  -1
 @assert isa(datetime(2012, 4, 24, 13,0,0) - datetime(2012, 4,24,14,0,0), Float64)
 @assert_approx_eq ( datetime(2012, 4, 24, 13,0,0, 0.0, 0.0, "GMT") - datetime(2012, 4,24,14,0,0, 0.0, 1.0, "BST")  ) * 24  0
+
+
+d= datetime(2012, 4, 24, 13,10,5) 
+@assert hour(d) == 13
+@assert minute(d)==10
+@assert second(d) = 5
+@assert mday(d) == 24
+@assert month(d) == 4
+@assert year(d) == 2012
+
+d=date(2012,2,1)
+@assert year(d) = 2012
+@assert month(d) = 2
+@assert mday(d) = 1
+
+
