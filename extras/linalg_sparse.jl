@@ -299,7 +299,7 @@ end
 
 ## diag and related
 
-diag(A::SparseMatrixCSC) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
+diag(A::SparseMatrixCSC) = [ A[i,i] | i=1:min(size(A)) ]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)
@@ -376,4 +376,94 @@ function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
     end
 
     return SparseMatrixCSC{T,Int32}(n, n, colptr, rowval, nzval)
+end
+
+## norm and rank
+
+# TODO
+
+## trace
+
+function trace{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
+    t = zero(Tv)
+    for col=1:min(size(A))
+        first = A.colptr[col]
+        last = A.colptr[col+1]-1
+        while first <= last
+            mid = (first + last) >> 1
+            row = A.rowval[mid]
+            if row == col
+                t += A.nzval[mid]
+                break
+            elseif row > col
+                last = mid - 1
+            else
+                first = mid + 1
+            end
+        end
+    end
+    return t
+end
+
+# kron
+
+function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{TvB,TiB})
+    Tv = promote_type(TvA,TvB)
+    Ti = promote_type(TiA,TiB)
+
+    numnzA = nnz(a)
+    numnzB = nnz(b)
+
+    numnz = numnzA * numnzB
+
+    mA,nA = size(a)
+    mB,nB = size(b)
+
+    m, n = mA*mB, nA * nB
+
+    colptr = Array(Ti, n+1)
+    rowval = Array(Ti, numnz)
+    nzval = Array(Tv, numnz)
+
+    fill!(colptr, 0)
+    fill!(rowval, 0)
+    fill!(nzval, 0)
+
+    colptr[1] = 1
+
+    colptrA = a.colptr
+    colptrB = b.colptr
+    rowvalA = a.rowval
+    rowvalB = b.rowval
+    nzvalA = a.nzval
+    nzvalB = b.nzval
+
+    col = 1
+    ptr = 1
+
+    for j = 1:nA
+        startA = colptrA[j]
+        stopA = colptrA[j+1]-1
+        lA = stopA - startA + 1
+
+        for l = 1:nB
+            startB = colptrB[l]
+            stopB = colptrB[l+1]-1
+            lB = stopB - startB + 1
+
+            colptr[col+1] = colptr[col] + lA * lB
+            col += 1
+
+            for ptrA = startA : stopA
+                rowA = rowvalA[ptrA]
+                xA = nzvalA[ptrA]
+
+                rowval[ptr:ptr+lB-1] = (rowA-1)*mB + rowvalB[startB:stopB]
+                nzval[ptr:ptr+lB-1] = xA * nzvalB[startB:stopB]
+                ptr += lB
+            end
+        end
+    end
+
+    return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
