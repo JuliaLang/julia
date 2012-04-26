@@ -40,7 +40,7 @@ end
 @assert (10.^[-1])[1] == 0.1
 @assert (10.^[-1.])[1] == 0.1
 
-# hash table
+# dict
 h = Dict()
 for i=1:10000
     h[i] = i+1
@@ -78,6 +78,8 @@ end
 for i=10000:20000
     @assert h[i]==i+1
 end
+h = {"a" => 3}
+@assert h["a"] == 3
 
 let
     z = Dict()

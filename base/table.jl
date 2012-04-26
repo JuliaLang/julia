@@ -139,7 +139,7 @@ else
 end
 
 
-# hash table
+# dict
 
 type Dict{K,V} <: Associative
     keys::Array{Any,1}
@@ -187,10 +187,10 @@ function deserialize(s, T::Type{Dict})
 end
 
 # syntax entry point
-hashtable{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
-hashtable{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
-hashtable{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
-hashtable     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
+dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
+dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
+dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
+dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 

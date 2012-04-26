@@ -106,7 +106,7 @@ end
 
 # utils -----------------------------------------------------------------------
 
-function args2hashtable(args...)
+function args2dict(args...)
     opts = Dict()
     if length(args) == 0
         return opts
@@ -130,7 +130,7 @@ end
 
 function _draw_text(device, p, str, args...)
     save_state(device)
-    for (key,val) in args2hashtable(args...)
+    for (key,val) in args2dict(args...)
         set( device, key, val )
     end
     text( device, p, str )
@@ -551,7 +551,7 @@ function kw_init( self::RenderObject, args...)
     for (k,v) in kw_defaults(self)
         self.style[k] = v
     end
-    for (key, value) in args2hashtable(args...)
+    for (key, value) in args2dict(args...)
         self.style[key] = value
     end
 end
@@ -2443,7 +2443,7 @@ end
 function x11( self::PlotContainer, args...)
     println("sorry, not implemented yet")
     return
-    opts = args2hashtable(args...)
+    opts = args2dict(args...)
     width = has(opts,"width") ? opts["width"] : config_value("window","width")
     height = has(opts,"height") ? opts["height"] : config_value("window","height")
     reuse_window = in_repl() && config_value("window","reuse")
@@ -2468,7 +2468,7 @@ end
 
 function file( self::PlotContainer, filename::String, args... )
     extn = filename[end-2:end]
-    opts = args2hashtable(args...)
+    opts = args2dict(args...)
     if extn == "eps"
         width = has(opts,"width") ? opts["width"] : config_value("eps","width")
         height = has(opts,"height") ? opts["height"] : config_value("eps","height")
@@ -2525,7 +2525,7 @@ type Curve <: LineComponent
         attr = Dict() 
         self = new(attr, x, y)
         iniattr(self)
-        kw_init(self, args2hashtable(args...)...)
+        kw_init(self, args2dict(args...)...)
         self
     end
 end
@@ -3099,7 +3099,7 @@ function iniattr(self::HasAttr, args...)
             setattr(self, k, v)
         end
     end
-    for (k,v) in args2hashtable(args...)
+    for (k,v) in args2dict(args...)
         setattr(self, k, v)
     end
 end
@@ -3123,7 +3123,7 @@ function kw_init( self::HasStyle, args...)
         end
     end
     setattr(self, "style", sty)
-    for (key, value) in args2hashtable(args...)
+    for (key, value) in args2dict(args...)
         kw_set(self, key, value)
     end
 end
@@ -3137,7 +3137,7 @@ function kw_set( self::HasStyle, name, value )
 end
 
 function style( self::HasStyle, args...)
-    for (key,val) in args2hashtable(args...)
+    for (key,val) in args2dict(args...)
         kw_set(self, key, val)
     end
 end
