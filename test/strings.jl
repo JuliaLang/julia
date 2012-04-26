@@ -460,7 +460,7 @@ end
 
 @assert replace("abcd", "", "^") == "^a^b^c^d^"
 @assert replace("abcd", "b", "^") == "a^cd"
-@assert replace("abcd", r"b?", "^") == "^a^^c^d^"
+@assert replace("abcd", r"b?", "^") == "^a^c^d^"
 @assert replace("abcd", r"b+", "^") == "a^cd"
-@assert replace("abcd", r"b?c?", "^") == "^a^^d^"
-@assert replace("abcd", r"[bc]?", "^") == "^a^^^d^"
+@assert replace("abcd", r"b?c?", "^") == "^a^d^"
+@assert replace("abcd", r"[bc]?", "^") == "^a^^d^"

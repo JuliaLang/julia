@@ -857,12 +857,14 @@ split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 function replace(str::ByteString, splitter, repl::Function, limit::Integer)
     n = 1
     rstr = ""
-    i = start(str)
+    i = a = start(str)
     j, k = search(str,splitter,i)
     while j != 0
-        rstr = RopeString(rstr,SubString(str,i,j-1))
-        rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
-        i = k
+        if i == a || i < k
+            rstr = RopeString(rstr,SubString(str,i,j-1))
+            rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
+            i = k
+        end
         if k <= j; k = nextind(str,j) end
         j, k = search(str,splitter,k)
         if n == limit break end
