@@ -4,26 +4,26 @@ if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
     length(a::Array) = arraylen(a)
-    print(a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
-    print(s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
-    print(s::ASCIIString) = print(s.data)
-    print(x) = show(x)
-    println(x) = (print(x);print("\n"))
-    show(x) = ccall(:jl_show_any, Void, (Any,), x)
-    show(s::ASCIIString) = print(s.data)
-    show(s::Symbol) = print(s)
-    show(b::Bool) = print(b ? "true" : "false")
-    show(n::Int64) = ccall(:jl_print_int64, Void, (Int64,), n)
-    show(n::Integer)  = show(int64(n))
+    fprint(f,a::Array{Uint8,1}) = ccall(:jl_print_array_uint8, Void, (Any,), a)
+    fprint(f,s::Symbol) = ccall(:jl_print_symbol, Void, (Any,), s)
+    fprint(f,s::ASCIIString) = fprint(f,s.data)
+    fprint(f,x) = show(f,x)
+    fprintln(f,x) = (fprint(f,x);fprint(f,"\n"))
+    show(f,x) = ccall(:jl_show_any, Void, (Ptr{Void}, Any,), f, x)
+    show(f,s::ASCIIString) = fprint(f,s.data)
+    show(f,s::Symbol) = fprint(f,s)
+    show(f,b::Bool) = fprint(f,b ? "true" : "false")
+    show(f,n::Int64) = ccall(:jl_print_int64, Void, (Ptr{Void}, Int64,), f, n)
+    show(f,n::Integer)  = show(f,int64(n))
     print(a...) = for x=a; print(x); end
-    function show(e::Expr)
-        print(e.head)
-        print("(")
+    function show(f,e::Expr)
+        fprint(f,e.head)
+        fprint(f,"(")
         for i=1:arraylen(e.args)
-            show(arrayref(e.args,i))
-            print(", ")
+            show(f,arrayref(e.args,i))
+            fprint(f,", ")
         end
-        print(")\n")
+        fprint(f,")\n")
     end
 end
 
