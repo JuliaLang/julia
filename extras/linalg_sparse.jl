@@ -467,3 +467,74 @@ function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{T
 
     return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
+
+## det, inv, cond
+
+# TODO
+
+## Structure query functions
+
+function issym(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    return nnz(A - A.') == 0
+end
+
+function ishermitian(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    return nnz(A - A') == 0
+end
+
+function istril(A::SparseMatrixCSC)
+    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
+        if A.rowval[i] < col && A.nzval[i] != 0; return false; end
+    end
+    return true
+end
+
+function istriu(A::SparseMatrixCSC)
+    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
+        if A.rowval[i] > col && A.nzval[i] != 0; return false; end
+    end
+    return true
+end
+
+## diagmm
+
+# multiply by diagonal matrix as vector
+function diagmm!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
+    m, n = size(A)
+    if n != length(b) || size(A) != size(C)
+        error("argument dimensions do not match")
+    end
+    numnz = nnz(A)
+    C.colptr = convert(Array{Ti}, A.colptr)
+    C.rowval = convert(Array{Ti}, A.rowval)
+    C.nzval = Array(Tv, numnz)
+    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
+        C.nzval[p] = A.nzval[p] * b[col]
+    end
+    return C
+end
+
+function diagmm!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
+    m, n = size(A)
+    if n != length(b) || size(A) != size(C)
+        error("argument dimensions do not match")
+    end
+    numnz = nnz(A)
+    C.colptr = convert(Array{Ti}, A.colptr)
+    C.rowval = convert(Array{Ti}, A.rowval)
+    C.nzval = Array(Tv, numnz)
+    for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
+        C.nzval[p] = A.nzval[p] * b[A.rowval[p]]
+    end
+    return C
+end
+
+diagmm{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
+    diagmm!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), A, b)
+
+diagmm{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
+    diagmm!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), b, A)
