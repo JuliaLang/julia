@@ -215,24 +215,6 @@ function one{T}(S::SparseMatrixCSC{T})
     return speye(T, m, n)
 end
 
-## Structure query functions
-
-issym(A::SparseMatrixCSC) = nnz(A - A.') == 0 #'
-
-function istril(A::SparseMatrixCSC)
-    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
-        if A.rowval[i] < col && A.nzval[i] != 0; return false; end
-    end
-    return true
-end
-
-function istriu(A::SparseMatrixCSC)
-    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
-        if A.rowval[i] > col && A.nzval[i] != 0; return false; end
-    end
-    return true
-end
-
 ## Transpose
 
 # Based on: http://www.cise.ufl.edu/research/sparse/CSparse/CSparse/Source/cs_transpose.c
