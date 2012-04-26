@@ -296,3 +296,84 @@ function diff(a::SparseMatrixCSC, dim::Integer)
         _jl_sparse_diff2(a)
     end
 end
+
+## diag and related
+
+diag(A::SparseMatrixCSC) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
+
+function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
+    if (size(v,1) != 1 && size(v,2) != 1)
+        error("Input should be nx1 or 1xn")
+    end
+
+    n = numel(v)
+    numnz = nnz(v)
+    colptr = Array(Ti, n+1)
+    rowval = Array(Ti, numnz)
+    nzval = Array(Tv, numnz)
+
+    if size(v,1) == 1
+        copy_to(colptr, 1, v.colptr, 1, n+1)
+        ptr = 1
+        for col = 1:n
+            if colptr[col] != colptr[col+1]
+                rowval[ptr] = col
+                nzval[ptr] = v.nzval[ptr]
+                ptr += 1
+            end
+        end
+    else
+        copy_to(rowval, 1, v.rowval, 1, numnz)
+        copy_to(nzval, 1, v.nzval, 1, numnz)
+        colptr[1] = 1
+        ptr = 1
+        col = 1
+        while col <= n && ptr <= numnz
+            while rowval[ptr] > col
+                colptr[col+1] = colptr[col]
+                col += 1
+            end
+            colptr[col+1] = colptr[col] + 1
+            ptr += 1
+            col += 1
+        end
+        if col <= n
+            colptr[(col+1):(n+1)] = colptr[col]
+        end
+    end
+
+    return SparseMatrixCSC{Tv,Ti}(n, n, colptr, rowval, nzval)
+end
+
+function spdiagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
+    if isa(v, AbstractMatrix)
+        if (size(v,1) != 1 && size(v,2) != 1)
+            error("Input should be nx1 or 1xn")
+        end
+    end
+
+    n = numel(v)
+    numnz = nnz(v)
+    colptr = Array(Int32, n+1)
+    rowval = Array(Int32, numnz)
+    nzval = Array(T, numnz)
+
+    colptr[1] = 1
+
+    z = zero(T)
+
+    ptr = 1
+    for col=1:n
+        x = v[col]
+        if x != z
+            colptr[col+1] = colptr[col] + 1
+            rowval[ptr] = col
+            nzval[ptr] = x
+            ptr += 1
+        else
+            colptr[col+1] = colptr[col]
+        end
+    end
+
+    return SparseMatrixCSC{T,Int32}(n, n, colptr, rowval, nzval)
+end
