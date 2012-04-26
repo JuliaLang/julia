@@ -38,6 +38,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
+#set_current_output_stream(make_stdout_stream()) # for error reporting
 include("string.jl")
 include("ascii.jl")
 include("utf8.jl")
@@ -171,6 +172,7 @@ compile_hint(istaskdone, (Task,))
 compile_hint(make_stdout_stream, ())
 compile_hint(make_stdin_stream, ())
 compile_hint(make_stderr_stream, ())
+compile_hint(set_current_output_stream, (IOStream,))
 compile_hint(int, (Uint64,))
 compile_hint(copy, (Bool,))
 compile_hint(bool, (Bool,))

@@ -29,8 +29,6 @@ type IOStream <: IO
     IOStream(name::String) = IOStream(name, true)
 end
 
-convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
-
 # "own" means the descriptor will be closed with the IOStream
 function fdio(name::String, fd::Integer, own::Bool)
     s = IOStream(name)
@@ -75,8 +73,6 @@ function open(fname::String, mode::String)
     error("invalid open mode: ", mode)
 end
 
-current_output_stream() = (OUTPUT_STREAM::IOStream)
-
 function memio(x::Integer, finalize::Bool)
     s = IOStream("<memio>", finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
@@ -85,19 +81,53 @@ end
 memio(x::Integer) = memio(x, true)
 memio() = memio(0, true)
 
-StringBuilder() = memio()
-StringBuilder(n) = memio(n)
-string!(s::IOStream) = takebuf_string(s)
+convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
+
+current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
+
+set_current_output_stream(s::IOStream) =
+    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
+
+function with_output_stream(s::IOStream, f::Function, args...)
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        throw(e)
+    end
+end
+
+# custom version for print_to_*
+function _jl_with_output_stream(s::IOStream, f::Function, args...)
+    try
+        set_current_output_stream(s)
+        f(args...)
+    catch e
+        # only add finalizer if takebuf doesn't happen
+        finalizer(s, close)
+        throw(e)
+    end
+end
+
+takebuf_array(s::IOStream) =
+    ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
 
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
+function print_to_array(size::Integer, f::Function, args...)
+    s = memio(size, false)
+    _jl_with_output_stream(s, f, args...)
+    takebuf_array(s)
+end
+
 function print_to_string(size::Integer, f::Function, args...)
     s = memio(size, false)
-    f(s, args...)
+    _jl_with_output_stream(s, f, args...)
     takebuf_string(s)
 end
 
+print_to_array(f::Function, args...) = print_to_array(0, f, args...)
 print_to_string(f::Function, args...) = print_to_string(0, f, args...)
 
 nthbyte(x::Integer, n::Integer) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))

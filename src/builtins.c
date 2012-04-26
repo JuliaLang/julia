@@ -90,6 +90,7 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     ss->eh_ctx = jl_current_task->state.eh_ctx;
     ss->bt = jl_current_task->state.bt;
     ss->ostream_obj = jl_current_task->state.ostream_obj;
+    ss->current_output_stream = jl_current_task->state.current_output_stream;
     ss->prev = jl_current_task->state.prev;
 #ifdef JL_GC_MARKSWEEP
     ss->gcstack = jl_pgcstack;
@@ -711,20 +712,20 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 
 // printing -------------------------------------------------------------------
 
-DLLEXPORT void jl_print_array_uint8(ios_t *s, jl_array_t *b)
+DLLEXPORT void jl_print_array_uint8(jl_array_t *b)
 {
-    ios_write(s, (char*)b->data, b->length);
+    ios_write(jl_current_output_stream(), (char*)b->data, b->length);
 }
 
-DLLEXPORT void jl_print_symbol(ios_t *s, jl_sym_t *sym)
+DLLEXPORT void jl_print_symbol(jl_sym_t *sym)
 {
-    ios_puts(sym->name, s);
+    ios_puts(sym->name, jl_current_output_stream());
 }
 
 // for bootstrap
-DLLEXPORT void jl_print_int64(ios_t *s, int64_t i)
+DLLEXPORT void jl_print_int64(int64_t i)
 {
-    ios_printf(s, "%lld", i);
+    ios_printf(jl_current_output_stream(), "%lld", i);
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
@@ -763,20 +764,20 @@ DLLEXPORT int jl_strtof(char *str, float *out)
 
 static jl_function_t *jl_show_gf=NULL;
 
-void jl_show(jl_value_t *stream, jl_value_t *v)
+void jl_show(jl_value_t *v)
 {
     if (jl_base_module) {
         if (jl_show_gf == NULL) {
             jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
-        jl_value_t *args[2] = {stream,v};
-        jl_apply(jl_show_gf, args, 2);
+        jl_apply(jl_show_gf, &v, 1);
     }
 }
 
 // comma_one prints a comma for 1 element, e.g. "(x,)"
-void jl_show_tuple(ios_t *s, jl_tuple_t *t, char opn, char cls, int comma_one)
+void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one)
 {
+    ios_t *s = jl_current_output_stream();
     ios_putc(opn, s);
     size_t i, n=t->length;
     for(i=0; i < n; i++) {
@@ -787,8 +788,9 @@ void jl_show_tuple(ios_t *s, jl_tuple_t *t, char opn, char cls, int comma_one)
     ios_putc(cls, s);
 }
 
-static void show_function(ios_t *s, jl_value_t *v)
+static void show_function(jl_value_t *v)
 {
+    ios_t *s = jl_current_output_stream();
     if (jl_is_gf(v)) {
         ios_puts(jl_gf_name(v)->name, s);
     }
@@ -797,8 +799,9 @@ static void show_function(ios_t *s, jl_value_t *v)
     }
 }
 
-static void show_type(ios_t *s, jl_value_t *t)
+static void show_type(jl_value_t *t)
 {
+    ios_t *s = jl_current_output_stream();
     if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             ios_write(s, "None", 4);
@@ -828,9 +831,10 @@ static void show_type(ios_t *s, jl_value_t *t)
     }
 }
 
-DLLEXPORT void jl_show_any(ios_t *s, jl_value_t *v)
+DLLEXPORT void jl_show_any(jl_value_t *v)
 {
     // fallback for printing some other builtin types
+    ios_t *s = jl_current_output_stream();
     if (jl_is_tuple(v)) {
         jl_show_tuple((jl_tuple_t*)v, '(', ')', 1);
     }

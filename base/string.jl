@@ -16,17 +16,17 @@ ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
-    print_to_string(length(v), f->(for i in v fprint(f,s[i])) end)
+    print_to_string(length(v), @thunk for i in v print(s[i]) end)
 
 symbol(s::String) = symbol(cstring(s))
 string(s::String) = s
 
+print(s::String) = for c in s print(c) end
 print(x...) = for i in x print(i) end
-fprint(f,s::String) = for c in s fprint(f,c) end
 println(args...) = print(args..., '\n')
-fprintln(f,args...) = fprint(f, args..., '\n')
 
-show(f,s::String) = print_quoted(f,s)
+show(s::String) = print_quoted(s)
+showln(x) = (show(x); println())
 
 (*)(s::String...) = strcat(s...)
 (^)(s::String, r::Integer) = repeat(s,r)

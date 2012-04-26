@@ -915,14 +915,21 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         char *n = fname->name;
         jl_value_t *errstream = jl_get_global(jl_base_module,
                                               jl_symbol("stderr_stream"));
-        ios_t *s = ios_stderr;
-        ios_printf(s, "Warning: New definition %s", n);
-        jl_show(errstream, (jl_value_t*)type);
-        ios_printf(s, " is ambiguous with %s", n);
-        jl_show(errstream, (jl_value_t*)sig);
-        ios_printf(s, ".\n         Make sure %s", n);
-        jl_show(errstream, isect);
-        ios_printf(s, " is defined first.\n");
+        JL_TRY {
+            if (errstream)
+                jl_set_current_output_stream_obj(errstream);
+            ios_t *s = jl_current_output_stream();
+            ios_printf(s, "Warning: New definition %s", n);
+            jl_show((jl_value_t*)type);
+            ios_printf(s, " is ambiguous with %s", n);
+            jl_show((jl_value_t*)sig);
+            ios_printf(s, ".\n         Make sure %s", n);
+            jl_show(isect);
+            ios_printf(s, " is defined first.\n");
+        }
+        JL_CATCH {
+            jl_raise(jl_exception_in_transit);
+        }
     done_chk_amb:
         JL_GC_POP();
     }
@@ -1321,21 +1328,19 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 
 static void print_methlist(char *name, jl_methlist_t *ml)
 {
-    ios_t *s = ios_stdout;
-    jl_value_t *outstr = jl_get_global(jl_base_module,
-                                       jl_symbol("stdout_stream"));
+    ios_t *s = jl_current_output_stream();
     while (ml != JL_NULL) {
         ios_printf(s, "%s", name);
         if (ml->tvars != jl_null) {
             if (jl_is_typevar(ml->tvars)) {
-                ios_putc('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
+                ios_putc('{', s); jl_show((jl_value_t*)ml->tvars);
                 ios_putc('}', s);
             }
             else {
-                jl_show_tuple(s, ml->tvars, '{', '}', 0);
+                jl_show_tuple(ml->tvars, '{', '}', 0);
             }
         }
-        jl_show(outstr, (jl_value_t*)ml->sig);
+        jl_show((jl_value_t*)ml->sig);
         if (ml->func == jl_bottom_func)  {
             // mark dummy cache entries
             ios_printf(s, " *");
