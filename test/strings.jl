@@ -447,7 +447,20 @@ end
 @assert isequal(split("abcd", r"[ad]?"), ["","b","c",""])
 
 # replace
-@assert replace("foobar",'o','0') == "f00bar"
-@assert replace("foobar",'o','0',1) == "f0obar"
-@assert replace("foobar",'o',"") == "fbar"
-@assert replace("foobar",'o',"",1) == "fobar"
+@assert replace("foobar", 'o', '0') == "f00bar"
+@assert replace("foobar", 'o', '0', 1) == "f0obar"
+@assert replace("foobar", 'o', "") == "fbar"
+@assert replace("foobar", 'o', "", 1) == "fobar"
+@assert replace("foobar", 'f', 'F') == "Foobar"
+@assert replace("foobar", 'r', 'R') == "foobaR"
+
+@assert replace("", "", "") == ""
+@assert replace("", "", "x") == "x"
+@assert replace("", "x", "y") == ""
+
+@assert replace("abcd", "", "^") == "^a^b^c^d^"
+@assert replace("abcd", "b", "^") == "a^cd"
+@assert replace("abcd", r"b?", "^") == "^a^^c^d^"
+@assert replace("abcd", r"b+", "^") == "a^cd"
+@assert replace("abcd", r"b?c?", "^") == "^a^^d^"
+@assert replace("abcd", r"[bc]?", "^") == "^a^^^d^"
