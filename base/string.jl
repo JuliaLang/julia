@@ -259,14 +259,15 @@ end
 
 ## substrings reference original strings ##
 
-type SubString <: String
-    string::String
+type SubString{T<:String} <: String
+    string::T
     offset::Int
     length::Int
 
-    SubString(s::String, i::Int, j::Int) =
+    SubString(s::T, i::Int, j::Int) =
         (o=nextind(s,i-1)-1; new(s,o,thisind(s,j)-o))
 end
+SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
 SubString(s::String, i::Integer) = SubString(s, i, length(s))
