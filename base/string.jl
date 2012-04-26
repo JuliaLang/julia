@@ -339,13 +339,6 @@ reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
-# Idea: instead of this standard binary tree structure,
-# how about we keep an array of substrings, with an
-# offset array. We can do binary search on the offset
-# array so we get O(log(n)) indexing time still, but we
-# can compute the offsets lazily and avoid all the
-# futzing around while the string is being constructed.
-
 type RopeString <: String
     head::String
     tail::String
@@ -878,7 +871,7 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     print_to_string(length(rstr),print,rstr)
 end
 replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
-replace(s::String, spl, r, n::Integer) = replace(s, spl, _->r, n)
+replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
 replace(s::String, spl, r) = replace(s, spl, r, 0)
 
 function print_joined(strings, delim, last)
