@@ -192,7 +192,7 @@ int true_main(int argc, char *argv[])
         return exec_program();
     }
 
-    init_repl_environment();
+    init_repl_environment(argc, argv);
 
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));

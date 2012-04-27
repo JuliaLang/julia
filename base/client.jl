@@ -164,6 +164,8 @@ function process_options(args::Array{Any,1})
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version $VERSION")
             exit(0)
+        elseif args[i]=="--no-history"
+            # see repl-readline.c
         elseif args[i][1]!='-'
             # program
             repl = false

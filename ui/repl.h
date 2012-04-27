@@ -24,7 +24,7 @@
 extern int tab_width;
 extern DLLEXPORT char *julia_home;
 
-extern void init_repl_environment();
+extern void init_repl_environment(int argc, char *argv[]);
 extern char *read_expr(char *prompt);
 extern void handle_input(jl_value_t *ast, int end, int show_value);
 extern int ends_with_semicolon(const char *input);

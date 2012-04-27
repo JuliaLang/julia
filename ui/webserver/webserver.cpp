@@ -720,7 +720,7 @@ string get_session(string user_name, string session_name) {
         close(session_data->julia_err[1]);
 
         // acutally spawn julia instance
-        execl("./julia", "julia", "./ui/webserver/julia_web_base.jl", (char*)0);
+        execl("./julia", "julia", "--no-history", "./ui/webserver/julia_web_base.jl", (char*)0);
 
         // if exec failed, terminate with an error
         exit(1);
