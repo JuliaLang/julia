@@ -27,19 +27,19 @@ type CacheItem{K,V}
 end
 
 type UnboundedLRU{K,V} <: LRU{K,V}
-    ht::HashTable{K,CacheItem{K,V}}
+    ht::Dict{K,CacheItem{K,V}}
     q::Vector{CacheItem{K,V}}
 
-    UnboundedLRU() = new(HashTable{K,CacheItem{K,V}}(), similar(Array(CacheItem{K,V},1), 0))
+    UnboundedLRU() = new(Dict{K,CacheItem{K,V}}(), similar(Array(CacheItem{K,V},1), 0))
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 
 type BoundedLRU{K,V} <: LRU{K,V}
-    ht::HashTable
+    ht::Dict
     q::Vector{CacheItem}
     maxsize::Int
 
-    BoundedLRU(m) = new(HashTable(), similar(Array(CacheItem,1), 0), m)
+    BoundedLRU(m) = new(Dict(), similar(Array(CacheItem,1), 0), m)
     BoundedLRU() = BoundedLRU(__MAXCACHE)
 end
 BoundedLRU(m) = BoundedLRU{Any, Any}(m)

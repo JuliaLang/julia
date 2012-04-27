@@ -339,13 +339,6 @@ reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
-# Idea: instead of this standard binary tree structure,
-# how about we keep an array of substrings, with an
-# offset array. We can do binary search on the offset
-# array so we get O(log(n)) indexing time still, but we
-# can compute the offsets lazily and avoid all the
-# futzing around while the string is being constructed.
-
 type RopeString <: String
     head::String
     tail::String
@@ -861,24 +854,27 @@ split(s::String, spl)             = split(s, spl, 0, true)
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 
-function replace(str::ByteString, pattern, repl::Function, limit::Integer)
+function replace(str::ByteString, splitter, repl::Function, limit::Integer)
     n = 1
     rstr = ""
-    i = start(str)
-    for (j,k) in each_search(str,pattern)
-        rstr = RopeString(rstr,SubString(str,i,j-1))
-        rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
-        i = k
-        if n == limit
-            break
+    i = a = start(str)
+    j, k = search(str,splitter,i)
+    while j != 0
+        if i == a || i < k
+            rstr = RopeString(rstr,SubString(str,i,j-1))
+            rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
+            i = k
         end
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,splitter,k)
+        if n == limit break end
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
     print_to_string(length(rstr),print,rstr)
 end
 replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
-replace(s::String, spl, r, n::Integer) = replace(s, spl, _->r, n)
+replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
 replace(s::String, spl, r) = replace(s, spl, r, 0)
 
 function print_joined(strings, delim, last)

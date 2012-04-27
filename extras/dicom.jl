@@ -1,7 +1,7 @@
 include("dcm_dict.jl")
 
 function dcm_init()
-    dcm_dict = HashTable()
+    dcm_dict = Dict()
     for d in (_dcmdict_data_::Array{Any,1})
         dcm_dict[(uint16(d[1][1]),uint16(d[1][2]))] = d[2:]
     end

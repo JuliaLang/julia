@@ -217,14 +217,14 @@ end
 # help
 
 function parse_help(stream)
-    helpdb = HashTable()
+    helpdb = Dict()
     for l = each_line(stream)
         if isempty(l)
             continue
         end
         if length(l) >= 3 && l[1:3]=="## "
             heading = l[4:end-1]
-            category = HashTable()
+            category = Dict()
             helpdb[heading] = category
             continue
         end

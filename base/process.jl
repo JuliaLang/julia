@@ -160,7 +160,7 @@ end
 
 type Cmd
     exec::Executable
-    pipes::HashTable{FileDes,PipeEnd}
+    pipes::Dict{FileDes,PipeEnd}
     pipeline::Set{Cmd}
     pid::Int32
     status::ProcessStatus
@@ -171,7 +171,7 @@ type Cmd
             error("Cmd: too few words to exec")
         end
         this = new(exec,
-                   HashTable{FileDes,PipeEnd}(),
+                   Dict{FileDes,PipeEnd}(),
                    Set{Cmd}(),
                    0,
                    ProcessNotRun(),

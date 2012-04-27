@@ -28,7 +28,7 @@ static ptrint_t VALUE_TAGS;
 // pointers to non-AST-ish objects in a compressed tree
 static jl_array_t *tree_literal_values=NULL;
 
-// queue of IdTables to rehash
+// queue of ObjectIdDicts to rehash
 static jl_array_t *idtable_list=NULL;
 static jl_value_t *jl_idtable_type=NULL;
 void jl_idtable_rehash(jl_array_t **pa, size_t newsz);
@@ -751,7 +751,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
         mt->defs->func->linfo->specializations = NULL;
     }
 
-    jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("IdTable"));
+    jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
     idtable_list = jl_alloc_cell_1d(0);
 
     jl_serialize_value(&f, jl_array_type->env);
@@ -805,7 +805,7 @@ void jl_restore_system_image(char *fname)
                                                  jl_symbol("Base"));
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
-    // rehash IdTables
+    // rehash ObjectIdDicts
     for(int i=0; i < idtl->length; i++) {
         jl_value_t *v = jl_cellref(idtl, i);
         jl_idtable_rehash(&((jl_array_t**)v)[1],

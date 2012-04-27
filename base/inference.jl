@@ -60,7 +60,7 @@ isType(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name,Type.name)
 
 isseqtype(t::ANY) = isa(t,AbstractKind) && is((t::AbstractKind).name.name,:...)
 
-const t_func = IdTable()
+const t_func = ObjectIdDict()
 #t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 t_func[throw] = (1, 1, x->None)
 t_func[boxsi8] = (1, 1, x->Int8)
@@ -318,7 +318,7 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return limit_tuple_depth(argtypes)
     end
-    tf = get(t_func::IdTable, f, false)
+    tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
         # struct constructor
         if isa(f, CompositeKind)
@@ -342,7 +342,7 @@ end
 
 type StaticVarInfo
     sp::Tuple
-    cenv::IdTable   # types of closed vars
+    cenv::ObjectIdDict   # types of closed vars
 end
 
 function a2t(a::AbstractVector)
@@ -679,7 +679,7 @@ abstract_eval(s::SymbolNode, vtypes, sv::StaticVarInfo) =
 
 abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
 
-typealias VarTable IdTable
+typealias VarTable ObjectIdDict
 
 type StateUpdate
     var::Symbol
@@ -778,12 +778,12 @@ end
 
 function stupdate(state, changes::Union(StateUpdate,VarTable), vars)
     if is(state,())
-        state = IdTable()
+        state = ObjectIdDict()
     end
     for i = 1:length(vars)
         v = vars[i]
         newtype = changes[v]
-        oldtype = get(state::IdTable,v,NF)
+        oldtype = get(state::ObjectIdDict,v,NF)
         if tchanged(newtype, oldtype)
             state[v] = tmerge(oldtype, newtype)
         end
@@ -931,7 +931,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # initial set of pc
     add(W,1)
     # initial types
-    s[1] = IdTable()
+    s[1] = ObjectIdDict()
     for v in vars
         s[1][v] = Undef
     end
@@ -949,7 +949,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         s[1][args[i]] = atypes[i]
     end
     # types of closed vars
-    cenv = IdTable()
+    cenv = ObjectIdDict()
     for vi = ((ast.args[2][3])::Array{Any,1})
         vi::Array{Any,1}
         vname = vi[1]
@@ -1108,7 +1108,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 end
 
 function record_var_type(e::Symbol, t, decls)
-    otherTy = get(decls::IdTable, e, false)
+    otherTy = get(decls::ObjectIdDict, e, false)
     # keep track of whether a variable is always the same type
     if !is(otherTy,false)
         if !is(otherTy, t)
@@ -1175,7 +1175,7 @@ end
 # annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
-    decls = IdTable()
+    decls = ObjectIdDict()
     closures = LambdaStaticData[]
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)

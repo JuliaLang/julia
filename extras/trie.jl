@@ -1,12 +1,12 @@
 
 type Trie{T}
     value::T
-    children::HashTable{Char,Trie{T}}
+    children::Dict{Char,Trie{T}}
     is_key::Bool
 
     function Trie()
         self = new()
-        self.children = HashTable{Char,Trie{T}}()
+        self.children = Dict{Char,Trie{T}}()
         self.is_key = false
         self
     end
