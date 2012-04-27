@@ -1417,6 +1417,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         for(i=0; i < ntp+2; i++) iparams[i] = NULL;
         jl_value_t **rt1 = &iparams[ntp+0];  // some extra gc roots
         jl_value_t **rt2 = &iparams[ntp+1];
+        int cacheable = 1;
         JL_GC_PUSHARGS(iparams, ntp+2);
         for(i=0; i < ntp; i++) {
             jl_value_t *elt = jl_tupleref(tp, i);
@@ -1439,6 +1440,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     }
                 }
             }
+            if (jl_has_typevars_(iparams[i],0))
+                cacheable = 0;
         }
 
         // if an identical instantiation is already in process somewhere
@@ -1448,8 +1451,10 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         if (lkup != NULL) { result = lkup; goto done_inst_tt; }
 
         // check type cache
-        lkup = lookup_type(tn->cache, tn, iparams, ntp);
-        if (lkup != NULL) { result = lkup; goto done_inst_tt; }
+        if (cacheable) {
+            lkup = lookup_type(tn->cache, tn, iparams, ntp);
+            if (lkup != NULL) { result = lkup; goto done_inst_tt; }
+        }
 
         // always use original type constructor
         if (tc != t) {
@@ -1480,7 +1485,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ntt->super = jl_any_type;
             ntt->parameters = iparams_tuple;
             ntt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)tagt->super,env,n,stack);
-            cache_type_((jl_type_t*)ntt);
+            if (cacheable) cache_type_((jl_type_t*)ntt);
             result = (jl_type_t*)ntt;
         }
         else if (jl_is_bits_type(t)) {
@@ -1501,7 +1506,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
             nbt->uid = 0;
-            cache_type_((jl_type_t*)nbt);
+            if (cacheable) cache_type_((jl_type_t*)nbt);
             result = (jl_type_t*)nbt;
         }
         else {
@@ -1540,7 +1545,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                                           env,n,stack));
                 }
             }
-            cache_type_((jl_type_t*)nst);
+            if (cacheable) cache_type_((jl_type_t*)nst);
             result = (jl_type_t*)nst;
         }
     done_inst_tt:
