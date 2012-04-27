@@ -42,7 +42,65 @@ function show(S::SparseMatrixCSC)
     end
 end
 
-## Reshape
+## Reinterpret and Reshape
+
+function reinterpret{T,Tv,Ti}(::Type{T}, a::SparseMatrixCSC{Tv,Ti})
+    if sizeof(T) != sizeof(Tv)
+        error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
+    end
+    mA,nA = size(a)
+    colptr = copy(a.colptr)
+    rowval = copy(a.rowval)
+    nzval = reinterpret(T, a.nzval)
+    return SparseMatrixCSC{T,Ti}(mA, nA, colptr, rowval, nzval)
+end
+
+function _jl_sparse_compute_reshaped_colptr_and_rowval(colptrS, rowvalS, mS, nS, colptrA, rowvalA, mA, nA)
+    colptrS[1] = 1
+
+    colA = 1
+    colS = 1
+    ptr = 1
+
+    while colA <= nA
+        while ptr <= colptrA[colA+1]-1
+            rowA = rowvalA[ptr]
+            i = (colA - 1) * mA + rowA - 1
+            colSn = div(i, mS) + 1
+            rowS = mod(i, mS) + 1
+            while colS < colSn
+                colptrS[colS+1] = ptr
+                colS += 1
+            end
+            rowvalS[ptr] = rowS
+            ptr += 1
+        end
+        colA += 1
+    end
+    while colS <= nS
+        colptrS[colS+1] = ptr
+        colS += 1
+    end
+end
+
+function reinterpret{T,Tv,Ti,N}(::Type{T}, a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{N,Int})
+    if sizeof(T) != sizeof(Tv)
+        error("SparseMatrixCSC reinterpret is only supported for element types of the same size")
+    end
+    if prod(dims) != numel(a)
+        error("reinterpret: invalid dimensions")
+    end
+    mS,nS = dims
+    mA,nA = size(a)
+    numnz = nnz(a)
+    colptr = Array(Ti, nS+1)
+    rowval = Array(Ti, numnz)
+    nzval = reinterpret(T, a.nzval)
+
+    _jl_sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
+
+    return SparseMatrixCSC{T,Ti}(mS, nS, colptr, rowval, nzval)
+end
 
 function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     if prod(dims) != numel(a)
@@ -55,31 +113,8 @@ function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
     rowval = Array(Ti, numnz)
     nzval = a.nzval
 
-    colptr[1] = 1
+    _jl_sparse_compute_reshaped_colptr_and_rowval(colptr, rowval, mS, nS, a.colptr, a.rowval, mA, nA)
 
-    colA = 1
-    colS = 1
-    ptr = 1
-
-    while colA <= nA
-        while ptr <= a.colptr[colA+1]-1
-            rowA = a.rowval[ptr]
-            i = (colA - 1) * mA + rowA - 1
-            colSn = div(i, mS) + 1
-            rowSn = mod(i, mS) + 1
-            while colS < colSn
-                colptr[colS+1] = ptr
-                colS += 1
-            end
-            rowval[ptr] = rowSn
-            ptr += 1
-        end
-        colA += 1
-    end
-    while colS <= nS
-        colptr[colS+1] = ptr
-        colS += 1
-    end
     return SparseMatrixCSC{Tv,Ti}(mS, nS, colptr, rowval, nzval)
 end
 
