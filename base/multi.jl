@@ -179,10 +179,10 @@ type ProcessGroup
     np::Int
 
     # global references
-    refs::HashTable
+    refs::Dict
 
     function ProcessGroup(myid::Integer, w::Array{Any,1}, locs::Array{Any,1})
-        return new(myid, w, locs, length(w), HashTable())
+        return new(myid, w, locs, length(w), Dict())
     end
 end
 
@@ -192,7 +192,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
     newlocs = append(PGRP.locs, locs)
-    sockets = HashTable()
+    sockets = Dict()
     handler = fd->message_handler(fd, sockets)
     for i=1:n
         push(PGRP.workers, w[i])
@@ -269,7 +269,7 @@ end
 
 ## remote refs and core messages: do, call, fetch, wait, ref, put ##
 
-const _jl_client_refs = WeakKeyHashTable()
+const _jl_client_refs = WeakKeyDict()
 
 type RemoteRef
     where::Int
@@ -958,7 +958,7 @@ function start_worker(wrfd)
 
     global const Scheduler = current_task()
 
-    worker_sockets = HashTable()
+    worker_sockets = Dict()
     add_fd_handler(sockfd, fd->accept_handler(fd, worker_sockets))
 
     try
@@ -1554,7 +1554,7 @@ end
 
 yield() = yieldto(Scheduler)
 
-const _jl_fd_handlers = HashTable()
+const _jl_fd_handlers = Dict()
 
 add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
 del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)

@@ -4,9 +4,9 @@ show(t::Task) = print("Task")
 function tls()
     t = current_task()
     if is(t.tls, nothing)
-        t.tls = IdTable()
+        t.tls = ObjectIdDict()
     end
-    (t.tls)::IdTable
+    (t.tls)::ObjectIdDict
 end
 
 function tls(key)

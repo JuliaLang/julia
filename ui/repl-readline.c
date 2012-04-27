@@ -28,6 +28,7 @@ char jl_prompt_color[] = "\001\033[1m\033[32m\002julia> \001\033[0m\033[1m\002";
 char prompt_plain[] = "julia> ";
 char *prompt_string = prompt_plain;
 int prompt_length;
+int disable_history;
 static char *history_file = NULL;
 static jl_value_t *rl_ast = NULL;
 
@@ -43,6 +44,7 @@ static void init_history(void) {
     using_history();
     char *home = getenv("HOME");
     if (!home) return;
+    if (disable_history) return;
     asprintf(&history_file, "%s/.julia_history", home);
     struct stat stat_info;
     if (!stat(history_file, &stat_info)) {
@@ -498,8 +500,18 @@ static void init_rl(void)
     signal(SIGCONT, sigcont_handler);
 }
 
-void init_repl_environment(void)
+void init_repl_environment(int argc, char *argv[])
 {
+    disable_history = 0;
+    for (int i = 0; i < argc; i++)
+    {
+        if (!strcmp(argv[i], "--no-history"))
+        {
+            disable_history = 1;
+            break;
+        }
+    }
+
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();

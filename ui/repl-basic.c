@@ -3,7 +3,7 @@
 char jl_prompt_color[] = "\033[1m\033[32mjulia> \033[0m\033[1m";
 char *prompt_string = "julia> ";
 
-void init_repl_environment(void)
+void init_repl_environment(int argc, char *argv[])
 {
 }
 

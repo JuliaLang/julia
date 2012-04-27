@@ -1,8 +1,8 @@
 type Set{T}
-    hash::HashTable{T,Bool}
+    hash::Dict{T,Bool}
 
-    Set() = new(HashTable{T,Bool}())
-    Set(x...) = add_each(new(HashTable{T,Bool}(length(x))), x)
+    Set() = new(Dict{T,Bool}())
+    Set(x...) = add_each(new(Dict{T,Bool}(length(x))), x)
 end
 Set() = Set{Any}()
 Set(x...) = Set{Any}(x...)
