@@ -40,3 +40,20 @@ for i = 1:length(m4)
     @assert_approx_eq fftn_m4[i] true_fftn_m4[i]
     @assert_approx_eq ifftn_fftn_m4[i] m4[i]*16
 end
+
+m3d = float32(reshape(1:5*3*2, 5, 3, 2))
+ifft3_fft3_m3d = ifft3(fft3(m3d))
+fftd3_m3d = fft(m3d,3)
+ifftd3_fftd3_m3d = ifft(fftd3_m3d,3)
+@assert isa(fftd3_m3d, Array{Complex64,3})
+
+true_fftd3_m3d = Array(Float32, 5, 3, 2)
+true_fftd3_m3d[:,:,1] = 17:2:45
+true_fftd3_m3d[:,:,2] = -15
+
+for i = 1:length(m3d)
+    @assert_approx_eq fftd3_m3d[i] true_fftd3_m3d[i]
+    @assert_approx_eq ifftd3_fftd3_m3d[i] m3d[i]*2
+    @assert_approx_eq ifft3_fft3_m3d[i] m3d[i]*30
+end
+
