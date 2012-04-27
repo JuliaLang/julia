@@ -42,6 +42,47 @@ function show(S::SparseMatrixCSC)
     end
 end
 
+## Reshape
+
+function reshape{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti}, dims::NTuple{2,Int})
+    if prod(dims) != numel(a)
+        error("reshape: invalid dimensions")
+    end
+    mS,nS = dims
+    mA,nA = size(a)
+    numnz = nnz(a)
+    colptr = Array(Ti, nS+1)
+    rowval = Array(Ti, numnz)
+    nzval = a.nzval
+
+    colptr[1] = 1
+
+    colA = 1
+    colS = 1
+    ptr = 1
+
+    while colA <= nA
+        while ptr <= a.colptr[colA+1]-1
+            rowA = a.rowval[ptr]
+            i = (colA - 1) * mA + rowA - 1
+            colSn = div(i, mS) + 1
+            rowSn = mod(i, mS) + 1
+            while colS < colSn
+                colptr[colS+1] = ptr
+                colS += 1
+            end
+            rowval[ptr] = rowSn
+            ptr += 1
+        end
+        colA += 1
+    end
+    while colS <= nS
+        colptr[colS+1] = ptr
+        colS += 1
+    end
+    return SparseMatrixCSC{Tv,Ti}(mS, nS, colptr, rowval, nzval)
+end
+
 ## Constructors
 
 function similar(S::SparseMatrixCSC)
