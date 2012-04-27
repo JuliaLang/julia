@@ -269,16 +269,21 @@ end
 convert{T<:Integer,S<:Integer,n}(::Type{BitArray{T,n}}, B::BitArray{S,n}) =
     copy_to(similar(B, T), B)
 
-# XXX : this is what Array does; but here it would make sense to keep
-#       dimensionality!
-function reinterpret{T<:Integer}(::Type{T}, B::BitArray)
-    A = BitArray(T, numel(B))
+# this version keeps dimensionality
+# (it's an extension of Array's behavior, which only does
+# this for Vectors)
+function reinterpret{T<:Integer,S<:Integer,N}(::Type{T}, B::BitArray{S,N})
+    A = BitArray{T,N}()
+    A.dims = copy(B.dims)
     A.chunks = B.chunks
     return A
 end
-# this version keeps dimensionality
-function bitreinterpret{T<:Integer}(::Type{T}, B::BitArray)
-    A = similar(B, T)
+function reinterpret{T<:Integer,S<:Integer,N}(::Type{T}, B::BitArray{S}, dims::NTuple{N,Int})
+    if prod(dims) != numel(B)
+        error("reinterpret: invalid dimensions")
+    end
+    A = BitArray{T,N}()
+    A.dims = [i::Int | i=dims]
     A.chunks = B.chunks
     return A
 end
