@@ -129,18 +129,24 @@ ifeq ($(OS), Linux)
 SHLIB_EXT = so
 JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
 JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
 JLDFLAGS = 
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices 
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices
+WHOLE_ARCHIVE = -Xlinker -all_load
+NO_WHOLE_ARCHIVE = 
 endif
 
 # Colors for make

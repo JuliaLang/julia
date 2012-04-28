@@ -29,23 +29,17 @@ ifeq ($(OS), Linux)
 WGET = wget
 WGET_DASH_O = wget -O
 LIBS += unwind
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), Darwin)
 WGET = curl -kLO
 WGET_DASH_O = curl -kLo
-WHOLE_ARCHIVE = -Xlinker -all_load
-NO_WHOLE_ARCHIVE = 
 endif
 
 ifeq ($(OS), FreeBSD)
 WGET = curl -LO
 WGET_DASH_O = curl -Lo
 LIBS += unwind
-WHOLE_ARCHIVE = -Wl,--whole-archive
-NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), FreeBSD)

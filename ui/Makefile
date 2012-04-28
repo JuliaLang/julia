@@ -5,8 +5,7 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
-	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS) \
-	-Xlinker -rpath -Xlinker ./
+	-I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS)
 
 DEBUGFLAGS = $(FLAGS)
 SHIPFLAGS = $(FLAGS)
@@ -28,7 +27,7 @@ julia-release-readline: $(JULIAHOME)/julia-release-readline
 julia-debug-readline: $(JULIAHOME)/julia-debug-readline
 
 $(JULIAHOME)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(SHIPFLAGS) $^ -o $@ -L$(JULIALIB) -ljulia-release
+	$(CXX) $(LDFLAGS) $(SHIPFLAGS) $^ -o $@ -L$(JULIALIB) -ljulia-release
 $(JULIAHOME)/julia-debug-basic: repl.do repl-basic.do
 	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(DEBUGFLAGS) $^ -o $@ -L$(JULIALIB) -ljulia-debug
 
