@@ -44,15 +44,16 @@ end
 logN0(x::Number) = x == 0 ? x : log(x)
 logN0{T<:Number}(x::AbstractArray{T}) = reshape([ logN0(x[i]) | i=1:numel(x) ], size(x))
 y_log_y(y, mu) = y .* logN0(y ./ mu)    # provides correct limit at y == 0
+y_log_mu(y::Vector{Float64}, mu::Vector{Float64}) = [log(bool(y[i]) ? mu[i] : (1. - mu[i])) | i=1:numel(y)]
 
 BernoulliDist =
     Dist("Bernoulli",
          logitLink,
          mu  -> max(eps(Float64), mu .* (1. - mu)),
-         (y, mu, wt)-> 2 * wt .* (y_log_y(y, mu) +  y_log_y(1. - y, 1. - mu)),
-         (y, mu, wt)-> -2. * sum(y .* log(mu) + (1. - y) .* log(1. - mu)),
+         (y, mu, wt)-> -2. * wt .* y_log_mu(y, mu),
+         (y, mu, wt)-> -2. * sum(wt .* y_log_mu(y, mu)),
          (y, wt)-> (wt .* y + 0.5) ./ (wt + 1.),
-         mu  -> all((0 < mu) & (mu < 1)),
+         mu  -> all(0. < mu < 1.),
          eta -> true)
 
 GaussianDist =
@@ -161,4 +162,6 @@ gammaDist =
          (y, mu, wt)-> (n=sum(wt); disp=sum(-2 * wt .* (logN0(y ./ mu) - (y - mu) ./ mu))/n; invdisp(1/disp); sum(wt .* dgamma(y, invdisp, mu * disp, true))),
          (y, wt)-> all(y > 0) ? y : error("non-positive response values not allowed for gammaDist"),
          mu  -> all(mu > 0.),
-         eta -> all(eta > 0.))
+         eta -> all(eta > 0.)
+         )
+         
