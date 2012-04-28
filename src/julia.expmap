@@ -66,6 +66,7 @@
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;
+    ios_mem;
     jl_ios_mem;
     jl_boundp;
     jl_get_root_symbol;
