@@ -6,12 +6,15 @@ default: benchmarks.html
 bin/perf%: perf.cpp
 	$(CXX) -O$* $< -o $@ $(JULIAHOME)/external/openblas-v0.1.0/libopenblas.a
 
-benchmarks/c.csv: bin/perf0 bin/perf1 bin/perf2 bin/perf3
-	rm -f $@
-	for t in 1 2 3 4 5; do bin/perf0; done >>$@
-	for t in 1 2 3 4 5; do bin/perf1; done >>$@
-	for t in 1 2 3 4 5; do bin/perf2; done >>$@
-	for t in 1 2 3 4 5; do bin/perf3; done >>$@
+benchmarks/c.csv: \
+	benchmarks/c0.csv \
+	benchmarks/c1.csv \
+	benchmarks/c2.csv \
+	benchmarks/c3.csv
+	cat $^ > $@
+
+benchmarks/c%.csv: bin/perf%
+	for t in 1 2 3 4 5; do $<; done >$@
 
 benchmarks/julia.csv: perf.jl
 	for t in 1 2 3 4 5; do ../../julia $<; done >$@

@@ -26,7 +26,7 @@
 @assert isa(ComplexPair,Type{ComplexPair})
 @assert !subtype(Type{Ptr{None}},Type{Ptr})
 @assert !subtype(Type{Rational{Int}}, Type{Rational})
-let T = typevar(:T)
+let T = typevar(:T,true)
     @assert !is(None, tintersect(Array{None},AbstractArray{T}))
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
                                  (Type{Ptr{T}},Ptr{T})))
@@ -43,8 +43,9 @@ let T = typevar(:T)
 
     @assert isequal(tintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                     (Number, Array{Number,1}))
+    @assert !is(None, tintersect((Array{T}, Array{T}), (Array, Array{Any})))
 end
-let N = typevar(:N)
+let N = typevar(:N,true)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
                                ((Integer,Integer), (Integer...))),
                     ((Integer,Integer), (Integer,Integer)))
@@ -55,7 +56,7 @@ end
 @assert is(None, tintersect(Type{Any},Type{ComplexPair}))
 @assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
 @assert !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
-@assert subtype(Type{Array{Integer}},Type{Array{typevar(:T,Integer)}})
+@assert !subtype(Type{Array{Integer}},Type{Array{typevar(:T,Integer)}})
 @assert is(None, tintersect(Type{Function},BitsKind))
 @assert is(Type{Int32}, tintersect(Type{Int32},BitsKind))
 @assert !subtype(Type,TypeVar)
@@ -247,4 +248,22 @@ begin
     foob(x::AbstractArray)=0
     foob{T}(x::AbstractVector{T})=1
     @assert foob(x) == 1
+end
+
+begin
+    local f, g, a
+    f{T}(a::Vector{Vector{T}}) = a
+    g{T}(a::Vector{Vector{T}}) = a
+    a = Vector{Int}[]
+    @assert is(f(a), a)
+    @assert is(g(a), a)
+end
+
+type _AA{T}; a::T; end
+typealias _AoA{T} _AA{_AA{T}}
+begin
+    local g, a
+    g{T}(a::_AA{_AA{T}}) = a
+    a = _AA(_AA(1))
+    @assert is(g(a),a)
 end

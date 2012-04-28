@@ -94,7 +94,9 @@ pcre_study(re::Array{Uint8}) = pcre_study(re, int32(0))
 
 function pcre_exec(regex::Array{Uint8}, extra::Ptr{Void},
                    str::ByteString, offset::Integer, options::Integer, cap::Bool)
-    if offset > length(str) error("pcre_exec: index out of range") end
+    if offset < 0 || length(str) < offset
+        error("index out of range")
+    end
     ncap = pcre_info(regex, extra, PCRE_INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))
     n = ccall(dlsym(_jl_libpcre, :pcre_exec), Int32,

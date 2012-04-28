@@ -1,15 +1,15 @@
 # .ini file parser
 
 let
-    typealias HTSS HashTable{String,String}
+    typealias HTSS Dict{String,String}
 
     global IniFile
     type IniFile
-        sections::HashTable{String,HTSS}
+        sections::Dict{String,HTSS}
         defaults::HTSS
     end
 
-    IniFile() = IniFile(HashTable{String,HTSS}(), HTSS())
+    IniFile() = IniFile(Dict{String,HTSS}(), HTSS())
 
     global read
     function read(inifile::IniFile, stream::IOStream)

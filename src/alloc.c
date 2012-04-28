@@ -340,16 +340,6 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     return tn;
 }
 
-static void unbind_tvars(jl_tuple_t *parameters)
-{
-    size_t i;
-    for(i=0; i < parameters->length; i++) {
-        jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(parameters, i);
-        if (jl_is_typevar(tv))
-            tv->bound = 0;
-    }
-}
-
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters)
 {
@@ -364,7 +354,6 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                                               TAG_TYPE_NW);
     t->name = tn;
     t->super = super;
-    unbind_tvars(parameters);
     t->parameters = parameters;
     t->fptr = NULL;
     t->env = NULL;
@@ -438,7 +427,6 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;
-    unbind_tvars(parameters);
     t->parameters = parameters;
     t->names = fnames;
     t->types = ftypes;
@@ -484,7 +472,6 @@ jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
         t->name = tn;
     }
     t->super = super;
-    unbind_tvars(parameters);
     t->parameters = parameters;
     if (jl_int32_type != NULL)
         t->bnbits = jl_box_int32(nbits);
@@ -518,7 +505,6 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_type_t *body)
 {
     jl_typector_t *tc = (jl_typector_t*)newobj((jl_type_t*)jl_typector_type,2);
-    unbind_tvars(params);
     tc->parameters = params;
     tc->body = body;
     return (jl_typector_t*)tc;

@@ -29,40 +29,42 @@ function show(t::Associative)
         print(typeof(t).name.name,"()")
     else
         print("{")
+        first = true
         for (k, v) = t
+            first || print(',')
+            first = false
             show(k)
             print("=>")
             show(v)
-            print(",")
         end
         print("}")
     end
 end
 
-type IdTable <: Associative
+type ObjectIdDict <: Associative
     ht::Array{Any,1}
-    IdTable(sz::Integer) = new(cell(2*_tablesz(sz)))
-    IdTable() = IdTable(0)
+    ObjectIdDict(sz::Integer) = new(cell(2*_tablesz(sz)))
+    ObjectIdDict() = ObjectIdDict(0)
 end
 
-function assign(t::IdTable, v::ANY, k::ANY)
+function assign(t::ObjectIdDict, v::ANY, k::ANY)
     t.ht = ccall(:jl_eqtable_put, Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
     return t
 end
 
-get(t::IdTable, key::ANY, default::ANY) =
+get(t::ObjectIdDict, key::ANY, default::ANY) =
     ccall(:jl_eqtable_get, Any, (Any, Any, Any), t.ht, key, default)
 
-del(t::IdTable, key::ANY) =
+del(t::ObjectIdDict, key::ANY) =
     (ccall(:jl_eqtable_del, Int32, (Any, Any), t.ht, key); t)
 
-del_all(t::IdTable) = (t.ht = cell(length(t.ht)); t)
+del_all(t::ObjectIdDict) = (t.ht = cell(length(t.ht)); t)
 
-start(t::IdTable) = 0
-done(t::IdTable, i) = is(next(t,i),())
-next(t::IdTable, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
+start(t::ObjectIdDict) = 0
+done(t::ObjectIdDict, i) = is(next(t,i),())
+next(t::ObjectIdDict, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
 
-isempty(t::IdTable) = is(next(t,0),())
+isempty(t::ObjectIdDict) = is(next(t,0),())
 
 # hashing
 
@@ -137,34 +139,34 @@ else
 end
 
 
-# hash table
+# dict
 
-type HashTable{K,V} <: Associative
+type Dict{K,V} <: Associative
     keys::Array{Any,1}
     vals::Array{Any,1}
     ndel::Int
     deleter::Function
 
-    HashTable() = HashTable{K,V}(0)
-    function HashTable(n::Integer)
+    Dict() = Dict{K,V}(0)
+    function Dict(n::Integer)
         n = _tablesz(n)
         new(fill!(cell(n), _jl_secret_table_token),
             fill!(cell(n), _jl_secret_table_token),
             0, identity)
     end
-    function HashTable(ks::Tuple, vs::Tuple)
+    function Dict(ks::Tuple, vs::Tuple)
         n = length(ks)
-        h = HashTable{K,V}(n)
+        h = Dict{K,V}(n)
         for i=1:n
             h[ks[i]] = vs[i]
         end
         return h
     end
 end
-HashTable() = HashTable(0)
-HashTable(n::Integer) = HashTable{Any,Any}(n)
+Dict() = Dict(0)
+Dict(n::Integer) = Dict{Any,Any}(n)
 
-function serialize(s, t::HashTable)
+function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
     write(s, int32(length(t)))
     for (k,v) in t
@@ -173,7 +175,7 @@ function serialize(s, t::HashTable)
     end
 end
 
-function deserialize(s, T::Type{HashTable})
+function deserialize(s, T::Type{Dict})
     n = read(s, Int32)
     t = T(n)
     for i = 1:n
@@ -185,14 +187,14 @@ function deserialize(s, T::Type{HashTable})
 end
 
 # syntax entry point
-hashtable{K,V}(ks::(K...), vs::(V...)) = HashTable{K,V}    (ks, vs)
-hashtable{K}  (ks::(K...), vs::Tuple ) = HashTable{K,Any}  (ks, vs)
-hashtable{V}  (ks::Tuple , vs::(V...)) = HashTable{Any,V}  (ks, vs)
-hashtable     (ks::Tuple , vs::Tuple)  = HashTable{Any,Any}(ks, vs)
+dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
+dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
+dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
+dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-function rehash{K,V}(h::HashTable{K,V}, newsz)
+function rehash{K,V}(h::Dict{K,V}, newsz)
     oldk = copy(h.keys)
     oldv = copy(h.vals)
     sz = length(oldk)
@@ -213,14 +215,14 @@ function rehash{K,V}(h::HashTable{K,V}, newsz)
     return h
 end
 
-function del_all{K,V}(h::HashTable{K,V})
+function del_all{K,V}(h::Dict{K,V})
     fill!(h.keys, _jl_secret_table_token)
     fill!(h.vals, _jl_secret_table_token)
     h.ndel = 0
     return h
 end
 
-function assign{K,V}(h::HashTable{K,V}, v, key)
+function assign{K,V}(h::Dict{K,V}, v, key)
     key = convert(K,key)
     v = convert(V,v)
 
@@ -279,7 +281,7 @@ function assign{K,V}(h::HashTable{K,V}, v, key)
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::HashTable{K,V}, key)
+function ht_keyindex{K,V}(h::Dict{K,V}, key)
     key = convert(K,key)
 
     sz = length(h.keys)
@@ -307,17 +309,17 @@ function ht_keyindex{K,V}(h::HashTable{K,V}, key)
     return -1
 end
 
-function get(h::HashTable, key, deflt)
+function get(h::Dict, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.vals[index]
 end
 
-function key(h::HashTable, key, deflt)
+function key(h::Dict, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.keys[index]
 end
 
-function del(h::HashTable, key)
+function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
         h.vals[index] = _jl_secret_table_token
@@ -334,12 +336,12 @@ function skip_deleted(vals, i)
     return i
 end
 
-start(t::HashTable) = skip_deleted(t.vals, 1)
-done(t::HashTable, i) = done(t.vals, i)
-next(t::HashTable, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.vals,i+1))
+start(t::Dict) = skip_deleted(t.vals, 1)
+done(t::Dict, i) = done(t.vals, i)
+next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.vals,i+1))
 
-isempty(t::HashTable) = done(t, start(t))
-function length(t::HashTable)
+isempty(t::Dict) = done(t, start(t))
+function length(t::Dict)
     n = 0
     for v in t.vals
         n += int(!is(v,_jl_secret_table_token))
@@ -347,7 +349,7 @@ function length(t::HashTable)
     return n
 end
 
-function add_weak_key(t::HashTable, k, v)
+function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
         t.deleter = x->del(t, x)
     end
@@ -356,22 +358,22 @@ function add_weak_key(t::HashTable, k, v)
     return t
 end
 
-function add_weak_value(t::HashTable, k, v)
+function add_weak_value(t::Dict, k, v)
     t[k] = WeakRef(v)
     finalizer(v, x->del(t, k))
     return t
 end
 
-type WeakKeyHashTable{K,V} <: Associative
-    ht::HashTable{K,V}
+type WeakKeyDict{K,V} <: Associative
+    ht::Dict{K,V}
 
-    WeakKeyHashTable() = new(HashTable{K,V}())
+    WeakKeyDict() = new(Dict{K,V}())
 end
-WeakKeyHashTable() = WeakKeyHashTable{Any,Any}()
+WeakKeyDict() = WeakKeyDict{Any,Any}()
 
-assign(wkh::WeakKeyHashTable, v, key) = add_weak_key(wkh.ht, key, v)
+assign(wkh::WeakKeyDict, v, key) = add_weak_key(wkh.ht, key, v)
 
-function key(wkh::WeakKeyHashTable, kk, deflt)
+function key(wkh::WeakKeyDict, kk, deflt)
     k = key(wkh.ht, kk, _jl_secret_table_token)
     if is(k, _jl_secret_table_token)
         return deflt
@@ -379,13 +381,13 @@ function key(wkh::WeakKeyHashTable, kk, deflt)
     return k.value
 end
 
-get(wkh::WeakKeyHashTable, key, deflt) = get(wkh.ht, key, deflt)
-del(wkh::WeakKeyHashTable, key) = del(wkh.ht, key)
-del_all(wkh::WeakKeyHashTable)  = (del_all(wkh.ht); wkh)
-has(wkh::WeakKeyHashTable, key) = has(wkh.ht, key)
-ref(wkh::WeakKeyHashTable, key) = ref(wkh.ht, key)
-isempty(wkh::WeakKeyHashTable) = isempty(wkh.ht)
+get(wkh::WeakKeyDict, key, deflt) = get(wkh.ht, key, deflt)
+del(wkh::WeakKeyDict, key) = del(wkh.ht, key)
+del_all(wkh::WeakKeyDict)  = (del_all(wkh.ht); wkh)
+has(wkh::WeakKeyDict, key) = has(wkh.ht, key)
+ref(wkh::WeakKeyDict, key) = ref(wkh.ht, key)
+isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 
-start(t::WeakKeyHashTable) = start(t.ht)
-done(t::WeakKeyHashTable, i) = done(t.ht, i)
-next(t::WeakKeyHashTable, i) = next(t.ht, i)
+start(t::WeakKeyDict) = start(t.ht)
+done(t::WeakKeyDict, i) = done(t.ht, i)
+next(t::WeakKeyDict, i) = next(t.ht, i)

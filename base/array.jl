@@ -203,7 +203,7 @@ function ref(A::Array, I::Indices...)
     X = similar(A, d[1:i])
 
     if is(ref_cache,nothing)
-        ref_cache = HashTable()
+        ref_cache = Dict()
     end
     gen_cartesian_map(ref_cache, ivars -> quote
             X[storeind] = A[$(ivars...)]
@@ -287,8 +287,10 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
-    for i = 1:length(I)
-        A[I[i]] = X[i]
+    count = 1
+    for i in I
+        A[i] = X[count]
+        count += 1
     end
     return A
 end
@@ -356,7 +358,7 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
-        assign_cache = HashTable()
+        assign_cache = Dict()
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
                       tuple(I0, I...),
@@ -370,7 +372,7 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
-        assign_cache = HashTable()
+        assign_cache = Dict()
     end
     gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
                                              refind += 1),
@@ -924,7 +926,7 @@ function findn{T}(A::StridedArray{T})
     ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
     if is(findn_cache,nothing)
-        findn_cache = HashTable()
+        findn_cache = Dict()
     end
 
     gen_cartesian_map(findn_cache, findn_one, ranges,
@@ -1021,7 +1023,7 @@ function areduce(f::Function, A::StridedArray, region::Region, v0, RType::Type)
     R = similar(A, RType, dimsR)
 
     if is(areduce_cache,nothing)
-        areduce_cache = HashTable()
+        areduce_cache = Dict()
     end
 
     key = ndimsA
@@ -1174,7 +1176,9 @@ end
 
 function map(f, A::StridedArray, B::StridedArray)
     shp = promote_shape(size(A),size(B))
-    if isempty(A); return A; end
+    if isempty(A)
+        return similar(A, eltype(A), shp)
+    end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
     return map_to2(first, dest, f, A, B)
@@ -1244,9 +1248,12 @@ function map_to2(first, dest::StridedArray, f, As::StridedArray...)
 end
 
 function map(f, As::StridedArray...)
-    if isempty(As[1]); return As[1]; end
+    shape = mapreduce(promote_shape, size, As)
+    if prod(shape) == 0
+        return similar(As[1], eltype(As[1]), shape)
+    end
     first = f(map(a->a[1], As)...)
-    dest = similar(As[1], typeof(first))
+    dest = similar(As[1], typeof(first), shape)
     return map_to2(first, dest, f, As...)
 end
 
@@ -1338,7 +1345,7 @@ function permute(A::StridedArray, perm)
     end
 
     if is(permute_cache,nothing)
-	permute_cache = HashTable()
+	permute_cache = Dict()
     end
 
     gen_cartesian_map(permute_cache, permute_one, ranges,

@@ -1,4 +1,5 @@
 include("../extras/sparse.jl")
+include("../extras/linalg_sparse.jl")
 include("../extras/linalg_suitesparse.jl")
 
 

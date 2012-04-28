@@ -54,7 +54,7 @@ const chartokens = {
 }
 
 function _parse_style(spec::String)
-    style = HashTable()
+    style = Dict()
 
     for (k,v) in { "--" => "dashed", "-." => "dotdashed" }
         splitspec = split(spec, k)

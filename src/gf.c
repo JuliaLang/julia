@@ -925,7 +925,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
             jl_show((jl_value_t*)sig);
             ios_printf(s, ".\n         Make sure %s", n);
             jl_show(isect);
-            ios_printf(s, " is defined first.\n");
+            ios_printf(s, " is defined first.\n\n");
         }
         JL_CATCH {
             jl_raise(jl_exception_in_transit);
@@ -1462,7 +1462,10 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 jl_cell_1d_push(t, (jl_value_t*)matc);
             }
             // (type ∩ ml->sig == type) ⇒ (type ⊆ ml->sig)
-            if (jl_types_equal(jl_t0(matc), type)) {
+            // NOTE: jl_subtype check added in case the intersection is
+            // over-approximated.
+            if (jl_types_equal(jl_t0(matc), type) &&
+                jl_subtype(type, (jl_value_t*)ml->sig, 0)) {
                 JL_GC_POP();
                 return (jl_value_t*)t;
             }

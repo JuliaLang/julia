@@ -1,4 +1,5 @@
 load("../extras/bitarray.jl")
+load("../extras/linalg_bitarray.jl")
 
 macro check_bit_operation(func, RetT, args)
     quote
@@ -423,5 +424,10 @@ for k = -max(n1,n2) : max(n1,n2)
     @check_bit_operation tril BitArray{T} (b1, k)
     @check_bit_operation triu BitArray{T} (b1, k)
 end
+
+#b1 = bitrand(T, v1)
+#@check_bit_operation diff Array{S} (b1,)
+#b1 = bitrand(T, n1, n2)
+#@check_bit_operation diff Array{S} (b1,)
 
 @ timesofar "linalg"

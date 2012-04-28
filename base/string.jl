@@ -123,7 +123,7 @@ end
 typealias Chars Union(Char,AbstractVector{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
-    if i < 1 error("strchr: index out of range") end
+    if i < 1 error("index out of range") end
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
@@ -142,7 +142,11 @@ search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
 search(s::String, c::Chars) = search(s,c,start(s))
 
 function search(s::String, t::String, i::Integer)
-    if isempty(t) return (i,nextind(s,i)) end
+    if isempty(t)
+        return 1 <= i <= length(s)+1 ? (i,i) :
+               i == length(s)+2      ? (0,0) :
+               error("index out of range")
+    end
     t1, j2 = next(t,start(t))
     while true
         i = strchr(s,t1,i)
@@ -169,6 +173,17 @@ function search(s::String, t::String, i::Integer)
     end
 end
 search(s::String, t::String) = search(s,t,start(s))
+
+type EachSearch
+    string::String
+    pattern
+end
+each_search(string::String, pattern) = EachSearch(string, pattern)
+
+start(itr::EachSearch) = search(itr.string, itr.pattern)
+done(itr::EachSearch, st) = (st[1]==0)
+next(itr::EachSearch, st) =
+    (st, search(itr.string, itr.pattern, max(nextind(itr.string,st[1]),st[2])))
 
 function chars(s::String)
     cx = Array(Char,strlen(s))
@@ -244,16 +259,18 @@ end
 
 ## substrings reference original strings ##
 
-type SubString <: String
-    string::String
+type SubString{T<:String} <: String
+    string::T
     offset::Int
     length::Int
 
-    SubString(s::String, i::Int, j::Int) =
+    SubString(s::T, i::Int, j::Int) =
         (o=nextind(s,i-1)-1; new(s,o,thisind(s,j)-o))
 end
+SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
 SubString(s::String, i::Integer, j::Integer) = SubString(s, int(i), int(j))
+SubString(s::String, i::Integer) = SubString(s, i, length(s))
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length
@@ -271,7 +288,7 @@ length(s::SubString) = s.length
 
 function ref(s::String, r::Range1{Int})
     if first(r) < 1 || length(s) < last(r)
-        error("in substring slice: index out of range")
+        error("index out of range")
     end
     SubString(s, first(r), last(r))
 end
@@ -322,13 +339,6 @@ reverse(s::RevString) = s.string
 
 ## ropes for efficient concatenation, etc. ##
 
-# Idea: instead of this standard binary tree structure,
-# how about we keep an array of substrings, with an
-# offset array. We can do binary search on the offset
-# array so we get O(log(n)) indexing time still, but we
-# can compute the offsets lazily and avoid all the
-# futzing around while the string is being constructed.
-
 type RopeString <: String
     head::String
     tail::String
@@ -353,6 +363,7 @@ type RopeString <: String
     RopeString(h::String, t::String) =
         new(h, t, 1, length(h)+length(t))
 end
+RopeString(s::String) = RopeString(s,"")
 
 depth(s::String) = 0
 depth(s::RopeString) = s.depth
@@ -815,18 +826,21 @@ rpad(s, n::Integer) = rpad(string(s), n, " ")
 
 # splitter can be a Char, Vector{Char}, String, Regex, ...
 # any splitter that provides search(s::String, splitter)
+
 function split(str::String, splitter, limit::Integer, keep_empty::Bool)
-    i = start(str)
     strs = String[]
-    while length(strs) != limit-1
-        j, k = search(str, splitter, i)
-        if j == 0 break end
-        if k == i; j = k = i+1 end
-        if keep_empty || i < j-1
-            push(strs, str[i:j-1])
+    i = start(str)
+    n = length(str)
+    j, k = search(str,splitter,i)
+    while 0 < j <= n && length(strs) != limit-1
+        if i < k
+            if keep_empty || i < j
+                push(strs, str[i:j-1])
+            end
+            i = k
         end
-        # if done(str,k) return strs end
-        i = k
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,splitter,k)
     end
     if keep_empty || !done(str,i)
         push(strs, str[i:])
@@ -839,6 +853,29 @@ split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
+
+function replace(str::ByteString, splitter, repl::Function, limit::Integer)
+    n = 1
+    rstr = ""
+    i = a = start(str)
+    j, k = search(str,splitter,i)
+    while j != 0
+        if i == a || i < k
+            rstr = RopeString(rstr,SubString(str,i,j-1))
+            rstr = RopeString(rstr,string(repl(SubString(str,j,k-1))))
+            i = k
+        end
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,splitter,k)
+        if n == limit break end
+        n += 1
+    end
+    rstr = RopeString(rstr,SubString(str,i))
+    print_to_string(length(rstr),print,rstr)
+end
+replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
+replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
+replace(s::String, spl, r) = replace(s, spl, r, 0)
 
 function print_joined(strings, delim, last)
     i = start(strings)
@@ -1082,9 +1119,9 @@ end
 # find the index of the first occurrence of a value in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
-    if i < 1 error("memchr: index out of range") end
+    if i < 1 error("index out of range") end
     n = length(a)
-    if i > n return 0 end
+    if i > n return i == n+1 ? 0 : error("index out of range") end
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
