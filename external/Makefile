@@ -112,7 +112,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	install_name_tool -id @executable_path/lib/libLLVM-3.0.$(SHLIB_EXT) $(EXTROOTLIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	$(EXT)/install-name-$(OS).sh libLLVM-3.0.$(SHLIB_EXT) $(EXTROOTLIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
@@ -146,7 +146,7 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
 	chmod +w $(EXTROOTLIB)/libreadline.*
-	install_name_tool -id @executable_path/lib/libreadline.$(SHLIB_EXT) $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) 
+	$(EXT)/install-name-$(OS).sh libreadline.$(SHLIB_EXT) $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) 
 	touch $@
 
 clean-readline:
@@ -246,7 +246,8 @@ install-rmath: $(RMATH_OBJ_TARGET)
 
 $(RMATH_OBJ_SOURCE): Rmath/src/Makefile
 	cd Rmath/src && \
-	$(MAKE) CC=$(CC)
+	$(MAKE) CC=$(CC) && \
+	$(EXT)/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -297,7 +298,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
 	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) && \
-	install_name_tool -id @executable_path/lib/librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
+	$(EXT)/install-name-$(OS).sh librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -330,7 +331,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
-	install_name_tool -id @executable_path/lib/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
+	$(EXT)/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -488,13 +489,13 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . 
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	$(CC) -shared -Xlinker -all_load libamd.a -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
-	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared -Xlinker -all_load libcolamd.a -o $(EXTROOTLIB)/libcolamd.dylib && \
-	install_name_tool -id @executable_path/lib/libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
 	$(CXX) -shared -Xlinker -all_load libcholmod.a -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @executable_path/lib/libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared -Xlinker -all_load libumfpack.a -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	install_name_tool -id @executable_path/lib/libumfpack.dylib $(EXTROOTLIB)/libumfpack.dylib
+	$(EXT)/install-name-$(OS).sh libumfpack.dylib $(EXTROOTLIB)/libumfpack.dylib
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
