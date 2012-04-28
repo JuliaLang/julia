@@ -109,8 +109,9 @@ namespace scgi
     void run_server(int port, callback cb);
 }
 
+struct julia_session;
 struct clientData {
-    std::string session_token;
+    julia_session *session;
     std::string buf;
 };
 
