@@ -131,9 +131,11 @@ install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
 	$(WGET) http://ftp.gnu.org/gnu/readline/$@
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
 	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
 	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
@@ -412,7 +414,7 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 
 fftw-$(FFTW_VER).tar.gz:
 	$(WGET) http://www.fftw.org/$@
@@ -423,7 +425,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-sse --enable-float && \
+	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-shared --disable-fortran --enable-sse --enable-single --enable-threads && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
