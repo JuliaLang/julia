@@ -23,7 +23,7 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
+LIBS = fdlibm dsfmt double-conversion amos rmath suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -471,8 +471,6 @@ compile-suitesparse:
 endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
-
-
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(WGET) http://www.cise.ufl.edu/research/sparse/SuiteSparse/$@ 
 SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
@@ -485,8 +483,9 @@ $(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
+	-cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . 
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
-	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
 	$(CC) -shared -Xlinker -all_load libamd.a -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	install_name_tool -id @executable_path/lib/libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared -Xlinker -all_load libcolamd.a -o $(EXTROOTLIB)/libcolamd.dylib && \
