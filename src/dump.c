@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 #include "newobj_internal.h"
@@ -787,8 +790,8 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = jl_find_file_in_path(fname);
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        ios_printf(ios_stderr, "system image file not found\n");
-        exit(1);
+        jl_printf(jl_stderr_tty, "system image file not found\n");
+        jl_exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
@@ -867,7 +870,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     tree_literal_values = li->roots;
     jl_serialize_value(&dest, ast);
 
-    //ios_printf(ios_stderr, "%d bytes, %d values\n", dest.size, vals->length);
+    //jl_printf(jl_stderr_tty, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (tree_literal_values->length == 0) {
@@ -1060,6 +1063,7 @@ void jl_init_serializer(void)
                       jl_f_invoke, jl_apply_generic, 
                       jl_unprotect_stack, jl_f_task, 
                       jl_f_yieldto, jl_f_ctor_trampoline,
+                      jl_f_make_callback,
                       NULL };
     i=2;
     while (fptrs[i-2] != NULL) {

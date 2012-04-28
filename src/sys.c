@@ -6,7 +6,7 @@
 #include <string.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
+//#include <sys/wait.h>
 #include <errno.h>
 #include <signal.h>
 #include <libgen.h>
@@ -16,13 +16,6 @@
 #include "julia.h"
 
 // --- io and select ---
-
-void jl__not__used__(void)
-{
-    // force inclusion of lib/socket.o in executable
-    short p=0;
-    open_any_tcp_port(&p);
-}
 
 DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
 
@@ -89,21 +82,6 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
     return 0;
 }
 
-// --- io constructors ---
-
-DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
-
-// hack to expose ios_stdout to julia. we could create a new iostream pointing
-// to stdout, but then there would be two buffers for one descriptor, and
-// ios_stdout is used before julia IOStream is available, creating a potential
-// mess.
-DLLEXPORT jl_value_t *jl_stdout_stream(void)
-{
-    jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
-    a->data = (void*)ios_stdout;
-    return (jl_value_t*)a;
-}
-
 // --- current output stream ---
 
 jl_value_t *jl_current_output_stream_obj(void)
@@ -111,7 +89,7 @@ jl_value_t *jl_current_output_stream_obj(void)
     return jl_current_task->state.ostream_obj;
 }
 
-DLLEXPORT ios_t *jl_current_output_stream(void)
+DLLEXPORT uv_stream_t *jl_current_output_stream(void)
 {
     return jl_current_task->state.current_output_stream;
 }
@@ -119,7 +97,7 @@ DLLEXPORT ios_t *jl_current_output_stream(void)
 void jl_set_current_output_stream_obj(jl_value_t *v)
 {
     jl_current_task->state.ostream_obj = v;
-    ios_t *s = (ios_t*)jl_array_data(jl_fieldref(v,0));
+    uv_stream_t *s = (uv_stream_t*)jl_array_data(jl_fieldref(v,0));
     jl_current_task->state.current_output_stream = s;
     // if current stream has never been set before, propagate to all
     // outer contexts.
@@ -225,6 +203,21 @@ jl_value_t *jl_environ(int i)
 
 // -- child process status --
 
+#if defined _MSC_VER || defined __MINGW32__
+
+/* Native Woe32 API.  */
+#include <process.h>
+#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
+#define WAIT_T int
+#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
+#define WCOREDUMP(x) 0
+#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
+#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
+#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
+#define WIFSTOPPED(x) 0
+#define WSTOPSIG(x) 0 //Is this correct?
+#endif
+
 int jl_process_exited(int status)      { return WIFEXITED(status); }
 int jl_process_signaled(int status)    { return WIFSIGNALED(status); }
 int jl_process_stopped(int status)     { return WIFSTOPPED(status); }
@@ -235,12 +228,18 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-int jl_stdin(void)  { return STDIN_FILENO; }
-int jl_stdout(void) { return STDOUT_FILENO; }
-int jl_stderr(void) { return STDERR_FILENO; }
+uv_stream_t *jl_stdin_tty=0;
+uv_stream_t *jl_stdout_tty=0;
+uv_stream_t *jl_stderr_tty=0;
+
+uv_tty_t *jl_stdin(void)  { return (uv_tty_t*) jl_stdin_tty; }
+uv_tty_t *jl_stdout(void) { return (uv_tty_t*) jl_stdout_tty; }
+uv_tty_t *jl_stderr(void) { return (uv_tty_t*) jl_stderr_tty; }
+
 
 // -- I/O thread --
 
+/*
 static pthread_t io_thread;
 static pthread_mutex_t q_mut;
 static pthread_mutex_t wake_mut;
@@ -260,6 +259,7 @@ int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten);
 
 static void *run_io_thr(void *arg)
 {
+//@TODO
     sigset_t set;
     sigemptyset(&set);
     sigaddset(&set, SIGFPE);
@@ -286,8 +286,12 @@ static void *run_io_thr(void *arg)
             if (waittime > 0) {
                 struct timespec wt;
                 wt.tv_sec = 0;
+				#ifdef __WIN32__
+				Sleep(waittime);
+				#else
                 wt.tv_nsec = waittime * 1000;
                 nanosleep(&wt, NULL);
+				#endif
             }
         }
 
@@ -307,7 +311,7 @@ static void *run_io_thr(void *arg)
         pthread_mutex_unlock(&q_mut);
     }
     return NULL;
-}
+}*/
 
 DLLEXPORT void jl_buf_mutex_lock(ios_t *s)
 {
@@ -322,7 +326,7 @@ DLLEXPORT void jl_buf_mutex_unlock(ios_t *s)
 {
     pthread_mutex_unlock(&s->mutex);
 }
-
+/*
 DLLEXPORT void jl_enq_send_req(ios_t *dest, ios_t *buf, int now)
 {
     pthread_mutex_lock(&q_mut);
@@ -382,4 +386,10 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
+}
+*/
+
+DLLEXPORT size_t jl_sizeof_ios_t(void)
+{
+    return sizeof(ios_t);
 }

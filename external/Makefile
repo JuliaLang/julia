@@ -20,9 +20,7 @@ GMP_VER=5.0.4
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-OS = $(shell uname)
-ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
+LIBS = uv fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
 LIBS += unwind
@@ -68,8 +66,12 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
 endif
 
-WGET = wget
-WGET_DASH_O = wget -O
+ifeq ($(OS),WINNT)
+READLINE_VER = 5.0
+endif
+
+WGET = wget --no-check-certificate
+WGET_DASH_O = wget --no-check-certificate -O
 ifeq ($(OS), Darwin)
 WGET = curl -kLO
 WGET_DASH_O = curl -kLo
@@ -87,10 +89,18 @@ cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf root
 
+## PATHS ##
+$(EXTROOTLIB): 
+	mkdir -p $(EXTROOTLIB)
+
 ## LLVM ##
 
 LLVM_OBJ_TARGET = $(EXTROOTLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
-LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+ifeq ($(OS),WINNT)
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
+else
+	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/lib/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
+endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
@@ -120,21 +130,32 @@ distclean-llvm:
 READLINE_OBJ_TARGET = $(EXTROOTLIB)/libreadline.$(SHLIB_EXT)
 READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER).$(SHLIB_EXT)
 
+READLINE_OPTS = --disable-shared --enable-static
+ifeq ($(OS),WINNT)
+	READLINE_URL = https://github.com/loladiro/readline/tarball/master
+	READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
+else
+	READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz
+	READLINE_OPTS += --with-curses
+	READLINE_CFLAGS = 
+endif
+
 compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET) ftp://ftp.gnu.org/gnu/readline/$@
+	$(WGET_DASH_O) $@ $(READLINE_URL)
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
-	tar zxf $<
+	mkdir readline-$(READLINE_VER)
+	tar -C readline-$(READLINE_VER) --strip-components 1 -xf $<
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
-	$(MAKE)
+	./configure --prefix=$(abspath $(EXTROOT)) $(READLINE_OPTS)  && \
+	$(MAKE) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
-	$(MAKE) -C readline-$(READLINE_VER) install
+	$(MAKE) -C readline-$(READLINE_VER) $(READLINE_CFLAGS) install
 	touch $@
 
 clean-readline:
@@ -160,6 +181,10 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	./configure --prefix=$(abspath $(EXTROOT)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
+ifeq ($(OS),WINNT)
+	-rm root/lib/libpcre.dll
+	mv root/bin/libpcre-0.dll root/lib/libpcre.dll
+endif
 	touch $@
 
 clean-pcre:
@@ -170,10 +195,11 @@ distclean-pcre:
 
 ## Grisu floating-point printing library ##
 
-GRISU_OPTS = -fPIC -O3 -fvisibility=hidden
+GRISU_OPTS = -O3 -fvisibility=hidden $(fPIC)
 
-compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
+
+compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu_.$(SHLIB_EXT)
+install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT) | $(EXTROOTLIB)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
@@ -194,7 +220,6 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) -c $(GRISU_OPTS) -o src/libdouble-conversion.o -I.. -Isrc ../double_conversion_wrapper.cpp && \
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
-	mkdir -p $(EXTROOTLIB)
 	cp -f $< $@
 
 clean-double-conversion:
@@ -209,14 +234,13 @@ FDLIBM_OBJ_TARGET = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 FDLIBM_OBJ_SOURCE = fdlibm/libfdm.$(SHLIB_EXT)
 
 compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
-install-fdlibm: $(FDLIBM_OBJ_TARGET)
+install-fdlibm: $(FDLIBM_OBJ_TARGET) | $(EXTROOTLIB)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	$(MAKE) CC=$(CC) CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 -fPIC -O2 $(CONFIG)" && \
+	$(MAKE) CC=$(CC) CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-fdlibm:
@@ -250,14 +274,14 @@ AMOS_OBJ_TARGET = $(EXTROOTLIB)/libamos.$(SHLIB_EXT)
 AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
 
 compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET)
+install-amos: $(AMOS_OBJ_TARGET) | $(EXTROOTLIB)
+
 
 $(AMOS_OBJ_SOURCE): amos/*.f
 	cd amos && \
 	$(MAKE) && \
 	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
 $(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-amos:
@@ -271,7 +295,7 @@ DSFMT_OBJ_TARGET = $(EXTROOTLIB)/librandom.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
-install-dsfmt: $(DSFMT_OBJ_TARGET)
+install-dsfmt: $(DSFMT_OBJ_TARGET) | $(EXTROOTLIB)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
@@ -284,10 +308,9 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-dsfmt:
@@ -298,9 +321,13 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+ifeq ($(OS),WINNT)
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.lib
 else
-OPENBLAS_OBJ_SOURCE =
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+endif
+else
+OPENBLAS_OBJ_SOURCE = 
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
@@ -333,22 +360,22 @@ LAPACK_OBJ_SOURCE =
 endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
-install-lapack: $(LAPACK_OBJ_TARGET)
+install-lapack: $(LAPACK_OBJ_TARGET) | $(EXTROOTLIB)
 
 lapack-$(LAPACK_VER).tgz:
 	$(WGET) http://www.netlib.org/lapack/$@
 lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 	tar zxf $<
 	touch $@
-lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile
+lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 -fPIC" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC) LOADER=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 $(fPIC)" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC) LOADER=$(FC)
+	touch $@
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.o INSTALL/dlamch.o INSTALL/dsecnd_INT_ETIME.o INSTALL/ilaver.o INSTALL/slamch.o $(LIBBLAS) -o liblapack.$(SHLIB_EXT)
 $(LAPACK_OBJ_TARGET): $(LAPACK_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
 	cp $< $@
 
 clean-lapack:
@@ -371,8 +398,8 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	tar zxf $<
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
+$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE) | $(EXTROOTLIB)
+
 	cd arpack-ng-$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
@@ -399,6 +426,9 @@ install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
+ifeq ($(OS),WINNT)
+	FFTW_CONFIG += --with-our-malloc
+endif
 
 fftw-$(FFTW_VER).tar.gz:
 	$(WGET) http://www.fftw.org/$@
@@ -414,6 +444,10 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
+ifeq ($(OS),WINNT)
+	-rm root/lib/libfftw3f.dll
+	mv root/bin/libfftw3f-3.dll root/lib/libfftw3f.dll
+endif
 	touch $@
 
 fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
@@ -427,6 +461,10 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double install
+ifeq ($(OS),WINNT)
+	-rm root/lib/libfftw3.dll
+	mv root/bin/libfftw3-3.dll root/lib/libfftw3.dll
+endif
 	touch $@
 
 clean-fftw: clean-fftw-single clean-fftw-double
@@ -462,7 +500,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) && \
+	$(MAKE) CC=${CC} CXX=${CXX} && \
 	mkdir -p lib && \
 	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
 	cd lib && \
@@ -498,9 +536,8 @@ SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSpar
 SUITESPARSE_LIB = 
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	mkdir -p $(EXTROOTLIB)
-	$(CC) $(CFLAGS) -O2 -shared -fPIC $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET) | $(EXTROOTLIB)
+	$(CC) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
@@ -551,7 +588,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE -fPIC" --prefix=$(abspath $(EXTROOT))
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)" --prefix=$(abspath $(EXTROOT))
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -629,13 +666,42 @@ GMP_LIB = -L$(EXTROOTLIB)/ -lgmp
 
 $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
 	mkdir -p $(EXTROOTLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GMP_INC) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB) $(GMP_LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB) $(GMP_LIB)
 	touch $@
 install-gmp-wrapper: $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 
 clean-gmp-wrapper:
 	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
+
+## libuv
+
+## libuv
+
+ifneq ($(OS), WINNT) 
+	UV_CFLAGS=
+else
+	UV_CFLAGS=CFLAGS="-DEV_SIGNAL_ENABLE=0"
+endif
+
+UV_OBJ_TARGET = $(EXTROOTLIB)/uv.a
+UV_OBJ_SOURCE = libuv/uv.a
+
+libuv/Makefile:
+	(cd .. && git submodule update --init --recursive)
+$(UV_OBJ_SOURCE): libuv/Makefile
+	$(MAKE) -C libuv $(UV_CFLAGS)
+$(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
+	mkdir -p $(EXTROOT)/include
+	cp $(UV_OBJ_SOURCE) $(EXTROOTLIB)
+	cp libuv/include/uv.h $(EXTROOT)/include/uv.h 
+	cp -r libuv/include/uv-private $(EXTROOT)/include
+install-uv: $(UV_OBJ_TARGET) | $(EXTROOTLIB)
+
+clean-uv:
+	$(MAKE) -C libuv clean
+	rm -f $(EXTROOTLIB)/uv.a $(EXTROOT)/include/uv.h
+distclean-uv: clean-uv
 
 ## phony targets ##
 

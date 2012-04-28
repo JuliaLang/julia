@@ -97,7 +97,7 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
 end
 function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
     if isa(T,BitsKind) && convert(T,x) == 0
-        ccall(:bzero, Void, (Ptr{T}, Int), a, length(a)*sizeof(T))
+        ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
     else
         for i = 1:numel(a)
             a[i] = x

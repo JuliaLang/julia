@@ -1,8 +1,10 @@
 _jl_librandom = dlopen("librandom")
+@windows_only _jl_advapi32 = dlopen("Advapi32")
 
 ## initialization
 
 function _jl_librandom_init()
+@unix_only begin
     try
         srand("/dev/urandom")
     catch
@@ -17,6 +19,13 @@ function _jl_librandom_init()
         srand(seed)
     end
     _jl_randn_zig_init()
+end
+@windows_only begin
+    a=zeros(Uint32,2) #TODO FIX
+    #ccall(:jl_RtlGenRandom,Uint8,(Ptr{Void},Ptr{Void},Uint64),dlsym(_jl_advapi32,:SystemFunction036),convert(Ptr{Void},a),8)
+    #ccall(dlsym(_jl_advapi32,:SystemFunction036),Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+    srand(a)
+end
 end
 
 # macros to generate random arrays
@@ -79,6 +88,8 @@ srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
+rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
+
 const _jl_dsfmt_get_min_array_size =
     ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
 
@@ -98,7 +109,6 @@ function rand!(A::Array{Float64})
     return A
 end
 
-rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Int...) = rand(dims)
 
@@ -223,14 +233,17 @@ function randg(a::Real)
         if log(U) < 0.5*x2 + d*(1.0 - v + log(v)); return d*v; end
     end
 end
-@_jl_rand_matrix_builder_1arg Float64 randg
+
+#@TODO
+#this macro lead to julia trying to define a function named '\0' - Error!
+#@_jl_rand_matrix_builder_1arg Float64 randg
 
 # randchi2()
 
-randchi2(v) = 2*randg(v/2)
-@_jl_rand_matrix_builder_1arg Float64 randchi2
+#randchi2(v) = 2*randg(v/2)
+#@_jl_rand_matrix_builder_1arg Float64 randchi2
 
-const chi2rnd = randchi2 # alias chi2rnd
+#const chi2rnd = randchi2 # alias chi2rnd
 
 # From John D. Cook
 # http://www.johndcook.com/julia_rng.html

@@ -6,7 +6,7 @@
 #include <string.h>
 #include <setjmp.h>
 #include <assert.h>
-#include <sys/mman.h>
+//#include <sys/mman.h>
 #include <signal.h>
 #include <libgen.h>
 #include <unistd.h>
@@ -15,6 +15,11 @@
 #include "builtin_proto.h"
 #if defined(__APPLE__)
 #include <execinfo.h>
+#elif defined(__WIN32__)
+#include <Winbase.h>
+#include <setjmp.h>
+#define sigsetjmp(a,b) setjmp(a)
+#define siglongjmp(a,b) longjmp(a,b)
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -52,9 +57,9 @@ static void probe(struct _probe_data *p)
 {
     p->prior_local = p->probe_local;
     p->probe_local = (intptr_t)&p;
-    setjmp( *(p->ref_probe) );
+    sigsetjmp( *(p->ref_probe), 1 );
     p->ref_probe = &p->probe_env;
-    setjmp( p->probe_sameAR );
+    sigsetjmp( p->probe_sameAR, 1 );
     boundhigh(p);
 }
 
@@ -163,14 +168,14 @@ static void restore_stack(jl_task_t *t, jmp_buf *where)
 {
     volatile int _x[64];
 
-    if ((char*)&_x[0] > (char*)(t->stackbase-t->ssize)) {
+    if ((char*)&_x[64] > (char*)(t->stackbase-t->ssize)) {
         restore_stack(t, where);
     }
     jl_jmp_target = where;
     if (t->stkbuf != NULL) {
         memcpy(t->stackbase-t->ssize, t->stkbuf, t->ssize);
     }
-    longjmp(*jl_jmp_target, 1);
+    siglongjmp(*jl_jmp_target, 1);
 }
 
 static void switch_stack(jl_task_t *t, jmp_buf *where)
@@ -198,7 +203,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
     /*
       making task switching interrupt-safe is going to be challenging.
       we need JL_SIGATOMIC_BEGIN in jl_enter_handler, and then
-      JL_SIGATOMIC_END after every JL_TRY setjmp that returns zero.
+      JL_SIGATOMIC_END after every JL_TRY sigsetjmp that returns zero.
       also protect jl_eh_restore_state.
       then we need JL_SIGATOMIC_BEGIN at the top of this function (ctx_switch).
       the JL_SIGATOMIC_END at the end of this function handles the case
@@ -208,7 +213,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
       *IF AND ONLY IF* throwing the exception involved a task switch.
     */
     //JL_SIGATOMIC_BEGIN();
-    if (!setjmp(jl_current_task->ctx)) {
+    if (!sigsetjmp(jl_current_task->ctx, 1)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
@@ -223,9 +228,9 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
 #ifdef COPY_STACKS
         jl_jmp_target = where;
-        longjmp(lastt->base_ctx, 1);
+        siglongjmp(lastt->base_ctx, 1);
 #else
-        longjmp(*where, 1);
+        siglongjmp(*where, 1);
 #endif
     }
     //JL_SIGATOMIC_END();
@@ -356,7 +361,7 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (setjmp(t->base_ctx)) {
+    if (sigsetjmp(t->base_ctx, 1)) {
         // we get here to remove our data from the process stack
         switch_stack(jl_current_task, jl_jmp_target);
     }
@@ -385,7 +390,7 @@ static void start_task(jl_task_t *t)
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
-    if (setjmp(t->ctx)) {
+    if (sigsetjmp(t->ctx, 1)) {
         start_task(t);
     }
     // this runs when the task is created
@@ -437,6 +442,51 @@ static jl_value_t *build_backtrace(void)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+#elif defined(__WIN32__)
+static jl_value_t *build_backtrace(void)
+{
+    void *array[1024];
+    size_t ip;
+    size_t *p;
+    jl_array_t *a;
+	unsigned short num;
+    a = jl_alloc_cell_1d(0);
+    JL_GC_PUSH(&a);
+
+	/** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
+	#if defined(__MINGW_H)
+	HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
+
+	if(kernel32 != NULL){
+		typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
+		CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+
+		if(func==NULL){
+			FreeLibrary(kernel32);
+			kernel32 = NULL;
+			func = NULL;
+			return (jl_value_t*)a;
+		}else
+		{
+			num = func( 0, 1023, array, NULL );
+		}
+    }else
+    {
+        jl_puts("Failed to load kernel32.dll",jl_stderr_tty);
+        jl_exit(1);
+    }
+	FreeLibrary(kernel32);
+	#else
+	num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+	#endif
+
+    p = (size_t*)array;
+    while ((ip = *(p++)) != 0 && (num--)>0) {
+        push_frame_info_from_ip(a, ip);
+    }
+    JL_GC_POP();
+    return (jl_value_t*)a;
+}
 #else
 // stacktrace using libunwind
 static jl_value_t *build_backtrace(void)
@@ -465,6 +515,8 @@ DLLEXPORT void jl_register_toplevel_eh(void)
     jl_current_task->state.eh_task->state.bt = 1;
 }
 
+
+
 // yield to exception handler
 void jl_raise(jl_value_t *e)
 {
@@ -480,13 +532,13 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh) {
-        longjmp(*eh->state.eh_ctx, 1);
+    if (jl_current_task == eh&&eh->state.eh_ctx!=0) {
+        siglongjmp(*eh->state.eh_ctx, 1);
     }
     else {
         if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
-            ios_printf(ios_stderr, "warning: exception handler exited\n");
+            jl_printf(jl_stderr_tty, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
         // for now, exit the task
@@ -494,6 +546,7 @@ void jl_raise(jl_value_t *e)
         ctx_switch(eh, eh->state.eh_ctx);
         // TODO: continued exception
     }
+    jl_exit(1);
 }
 
 jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
@@ -633,7 +686,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    jl_current_task->state.current_output_stream = ios_stdout;
+    jl_current_task->state.current_output_stream = jl_stdout_tty;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;

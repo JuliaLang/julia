@@ -1,3 +1,7 @@
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
 #include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
@@ -152,11 +156,6 @@ static Function *to_function(jl_lambda_info_t *li)
     nested_compile = last_n_c;
     FPM->run(*f);
     //n_compile++;
-    // print out the function's LLVM code
-    //ios_printf(ios_stderr, "%s:%d\n",
-    //           ((jl_sym_t*)li->file)->name, jl_unbox_long(li->line));
-    //f->dump();
-    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -518,7 +517,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      ios_printf(ios_stdout, "call %s%s\n",
+                      jl_printf(jl_stdout_tty, "call %s%s\n",
                       jl_print_to_string(args[0]),
                       jl_print_to_string((jl_value_t*)aty));
                   }
@@ -1413,7 +1412,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
     //jl_print((jl_value_t*)ast);
-    //ios_printf(ios_stdout, "\n");
+    //jl_printf(jl_stdout_tty, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, Value*> localVars;
@@ -1471,8 +1470,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
-    
-    dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
+	
+    // TODO: Fix when moving to new LLVM version
+    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
@@ -2117,6 +2117,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
 #endif
+    //llvm::JITEmitDebugInfoToDisk = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 

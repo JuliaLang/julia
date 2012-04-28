@@ -7,10 +7,10 @@ override CXXFLAGS += $(JCXXFLAGS)
 FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	    -I$(JULIAHOME)/src -I$(JULIAHOME)/src/support -I$(EXTROOT)/include $(CFLAGS)
 
-DEBUGFLAGS = $(FLAGS)
-SHIPFLAGS = $(FLAGS)
+DEBUGFLAGS += $(FLAGS)
+SHIPFLAGS += $(FLAGS)
 
-julia-release julia-debug: %: %-basic %-readline
+julia-release julia-debug: %: %-basic  %-readline
 	@$(MAKE) -C webserver $@
 
 release debug:

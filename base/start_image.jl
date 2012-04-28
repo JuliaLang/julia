@@ -2,15 +2,16 @@
 
 const stdout_stream = make_stdout_stream()
 set_current_output_stream(stdout_stream)
-const stdin_stream = make_stdin_stream()
-const stderr_stream = make_stderr_stream()
+const STDIN  = _uv_tty2tty(ccall(:jl_stdin ,Ptr{Void},()))
+const STDOUT = _uv_tty2tty(ccall(:jl_stdout,Ptr{Void},()))
+const STDERR = _uv_tty2tty(ccall(:jl_stderr,Ptr{Void},()))
 
 # restore shared library handles
 
 # Essential libraries
 _jl_libpcre = dlopen("libpcre")
 _jl_libgrisu = dlopen("libgrisu")
-_jl_libm = dlopen("libm")
+#_jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 

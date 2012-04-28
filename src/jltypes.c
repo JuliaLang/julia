@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"
@@ -939,7 +942,7 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
 {
-    //ios_printf(ios_stdout, "\n");
+    //jl_printf(jl_stdout_tty, "\n");
     jl_value_t *v=NULL;
     for(int i=0; i < env->n; i+=2) {
         jl_value_t *T = env->data[i];
@@ -1017,27 +1020,25 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
     return 1;
 }
 
-#if 0
-static char *type_summary(jl_value_t *t)
+ char *type_summary(jl_value_t *t)
 {
     if (jl_is_tuple(t)) return "Tuple";
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     return "?";
 }
-static void print_env(cenv_t *soln)
+void print_env(cenv_t *soln)
 {
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
         T = soln->data[i]; S = soln->data[i+1];
-        ios_printf(ios_stdout,
+        jl_printf(jl_stdout_tty,
                    "%s@%x=%s ",
                    ((jl_tvar_t*)T)->name->name, T,
                    type_summary(S));
     }
-    ios_printf(ios_stdout, "\n");
+    jl_printf(jl_stdout_tty, "\n");
 }
-#endif
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)
@@ -1098,8 +1099,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
-    //ios_printf(ios_stdout, "env: "); print_env(&env);
-    //ios_printf(ios_stdout, "sol: "); print_env(&eqc);
+    //jl_printf(jl_stdout_tty, "env: "); print_env(&env);
+    //jl_printf(jl_stdout_tty, "sol: "); print_env(&eqc);
 
     // convert non-specific integer vars to typevars
     for(e=0; e < eqc.n; e+=2) {

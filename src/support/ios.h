@@ -3,11 +3,14 @@
 
 #include <stdarg.h>
 #include <pthread.h>
+#include "../../external/libuv/include/uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-typedef enum { bm_none, bm_line, bm_block, bm_mem } bufmode_t;
+
+//make it compatible with UV Handles
+typedef enum { bm_none=UV_FS_EVENT+1, bm_line, bm_block, bm_mem } bufmode_t;
 
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
@@ -15,16 +18,16 @@ typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 #define IOS_BUFSIZE 131072
 
 typedef struct {
-    bufmode_t bm;
-
     // the state only indicates where the underlying file position is relative
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
-    bufstate_t state;
+    char *buf;        // start of buffer
+    bufmode_t bm;
 
     int errcode;
 
-    char *buf;        // start of buffer
+    bufstate_t state;
+
     off_t maxsize;    // space allocated to buffer
     off_t size;       // length of valid data in buf, >=ndirty
     off_t bpos;       // current position in buffer
@@ -89,9 +92,12 @@ DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
 DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
+// like ios_readprep, but can never call os_read
+DLLEXPORT size_t ios_fillprep(ios_t *from, size_t n);
 //void ios_lock(ios_t *s);
 //int ios_trylock(ios_t *s);
 //int ios_unlock(ios_t *s);
+DLLEXPORT void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos);
 
 /* stream creation */
 DLLEXPORT

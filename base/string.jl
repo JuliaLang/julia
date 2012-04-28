@@ -439,6 +439,10 @@ function cstring(p::Ptr{Uint8})
 end
 
 convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+function cstring(p::Ptr{Uint8},len::Int)
+    p == C_NULL ? error("cannot convert NULL to string") :
+    ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), p, len)::ByteString
+end
 
 ## string promotion rules ##
 
@@ -472,8 +476,8 @@ function print_escaped(s::String, esc::String)
         c == '\e'       ? print(L"\e") :
         c == '\\'       ? print("\\\\") :
         contains(esc,c) ? print('\\', c) :
-        iswprint(c)     ? print(c) :
         7 <= c <= 13    ? print('\\', "abtnvfr"[c-6]) :
+        iswprint(c)     ? print(c) :
         c <= '\x7f'     ? print(L"\x", hex(c, 2)) :
         c <= '\uffff'   ? print(L"\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
                           print(L"\U", hex(c, need_full_hex(s,j) ? 8 : 4))
@@ -537,7 +541,7 @@ function print_unescaped(s::String)
                 n = c-'0'
                 while (k+=1) <= 3 && !done(s,i)
                     c, j = next(s,i)
-                    n = '0' <= c <= '7' ? n<<3 + c-'0' : break
+                    n = ('0' <= c <= '7') ? n<<3 + c-'0' : break
                     i = j
                 end
                 if n > 255

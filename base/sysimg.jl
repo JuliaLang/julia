@@ -1,5 +1,30 @@
 ## Load essential files and libraries
 
+ccall(:putchar, Void, (Char,), 'B')
+ccall(:putchar, Void, (Char,), 'u')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'l')
+ccall(:putchar, Void, (Char,), 'd')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'n')
+ccall(:putchar, Void, (Char,), 'g')
+ccall(:putchar, Void, (Char,), ' ')
+ccall(:putchar, Void, (Char,), 's')
+ccall(:putchar, Void, (Char,), 'y')
+ccall(:putchar, Void, (Char,), 's')
+ccall(:putchar, Void, (Char,), 't')
+ccall(:putchar, Void, (Char,), 'e')
+ccall(:putchar, Void, (Char,), 'm')
+ccall(:putchar, Void, (Char,), ' ')
+ccall(:putchar, Void, (Char,), 'i')
+ccall(:putchar, Void, (Char,), 'm')
+ccall(:putchar, Void, (Char,), 'a')
+ccall(:putchar, Void, (Char,), 'g')
+ccall(:putchar, Void, (Char,), 'e')
+ccall(:putchar, Void, (Char,), ':')
+ccall(:putchar, Void, (Char,), '\n')
+ccall(:jl_load_progress_setmax, Void, (Int,), 69)
+
 include("base.jl")
 
 # core operations & types
@@ -38,7 +63,10 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
-#set_current_output_stream(make_stdout_stream()) # for error reporting
+include("stream.jl")
+stream=make_stdout_stream()
+set_current_output_stream(stream) # for error reporting
+
 include("string.jl")
 include("ascii.jl")
 include("utf8.jl")
@@ -48,14 +76,23 @@ include("grisu.jl")
 include("printf.jl")
 
 # system & environment
+include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno_h.jl")
 
+# core math functions
+include("intfuncs.jl")
+include("floatfuncs.jl")
+include("math.jl")
+include("math_libm.jl")
+include("sort.jl")
+include("combinatorics.jl")
+include("statistics.jl")
+
 # concurrency and parallelism
 include("iterator.jl")
 include("task.jl")
-include("process.jl")
 include("serialize.jl")
 include("multi.jl")
 
@@ -134,7 +171,7 @@ compile_hint(assign, (Dict{Any,Any}, Bool, Cmd))
 compile_hint(rehash, (Dict{Any,Any}, Int))
 compile_hint(run, (Cmd,))
 compile_hint(spawn, (Cmd,))
-compile_hint(assign, (Dict{Any,Any}, Bool, FileDes))
+#compile_hint(assign, (Dict{Any,Any}, Bool, FileDes))
 compile_hint(wait, (Int32,))
 compile_hint(system_error, (ASCIIString, Bool))
 compile_hint(SystemError, (ASCIIString,))
@@ -154,7 +191,7 @@ compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
 compile_hint(perform_work, (WorkItem,))
 compile_hint(notify_done, (WorkItem,))
 compile_hint(work_result, (WorkItem,))
-compile_hint(del_fd_handler, (Int32,))
+compile_hint(del_io_handler, (Int32,))
 compile_hint(enqueue, (Array{WorkItem,1}, WorkItem))
 compile_hint(enq_work, (WorkItem,))
 compile_hint(pop, (Array{WorkItem,1},))
@@ -170,9 +207,7 @@ compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int))
 compile_hint(istaskdone, (Task,))
 compile_hint(make_stdout_stream, ())
-compile_hint(make_stdin_stream, ())
-compile_hint(make_stderr_stream, ())
-compile_hint(set_current_output_stream, (IOStream,))
+compile_hint(set_current_output_stream, (AsyncStream,))
 compile_hint(int, (Uint64,))
 compile_hint(copy, (Bool,))
 compile_hint(bool, (Bool,))
@@ -206,3 +241,7 @@ compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
 compile_hint(ref, (Type{String}, ASCIIString, ASCIIString, ASCIIString))
+
+ccall(:jl_load_progress_setmax, Void, (Int,), 0);
+println()
+

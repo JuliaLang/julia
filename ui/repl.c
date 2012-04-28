@@ -4,6 +4,9 @@
 */
 
 #include "repl.h"
+#include "uv.h"
+#define WHOLE_ARCHIVE
+#include "../src/julia.h"
 
 static int lisp_prompt = 0;
 static char *program = NULL;
@@ -171,13 +174,46 @@ static void print_profile(void)
 }
 #endif
 
+void jl_noWriteAction(uv_write_t *uvw,int status) {
+    free(uvw);
+}
+
+void jl_freeBuffer(uv_write_t *uvw,int status) {
+    //leak memory - doesn't matter only temporary test
+    free(uvw);
+}
+
+void jl_status(char *str)
+{
+    uv_write_t *uvw = malloc(sizeof(uv_write_t));
+    uv_buf_t *buf =  malloc(sizeof(uv_buf_t));
+    buf->base=str;
+    buf->len=strlen(str)-1;
+    uv_write(uvw,jl_stdout_tty,buf,1,&jl_noWriteAction);
+}
+
+void echoBack(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
+{
+    jl_status("Test!\n");
+    jl_write(stream,buf.base,buf.len);
+}
+
+uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
+{
+    if(suggested_size>512) suggested_size = 512; //Readline has a max buffer of 512
+    char *buf = malloc(suggested_size);
+    uv_buf_t *ret = malloc(sizeof(uv_buf_t));
+    *ret = uv_buf_init(buf,suggested_size);
+    return ret;
+}
+
+
 int true_main(int argc, char *argv[])
 {
     if (lisp_prompt) {
         jl_lisp_prompt();
         return 0;
     }
-
     jl_array_t *args = jl_alloc_cell_1d(argc);
     jl_set_global(jl_current_module, jl_symbol("ARGS"), (jl_value_t*)args);
     int i;
@@ -189,7 +225,9 @@ int true_main(int argc, char *argv[])
 
     // run program if specified, otherwise enter REPL
     if (program) {
-        return exec_program();
+        int ret = exec_program();
+        uv_tty_reset_mode();
+        return ret;
     }
 
     init_repl_environment(argc, argv);
@@ -197,39 +235,47 @@ int true_main(int argc, char *argv[])
     jl_function_t *start_client =
         (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
 
+    //uv_read_start(jl_stdin_tty,jl_alloc_read_buffer,&readBuffer);
+
     if (start_client) {
         jl_apply(start_client, NULL, 0);
+        uv_tty_reset_mode();
+        //rl_cleanup_after_signal();
         return 0;
     }
+    //uv_pipe_t pipe;
+    //uv_pipe_init(jl_event_loop,&pipe,1);
+    //jl_status("\033[34mThis is a test\n");
+
+    //install_event_handler("julia> ",&parseAndExecute);
+
+    //jl_event_loop->data=&pipe;
+    //uv_run(jl_event_loop);
+    //uv_run_once(jl_io_loop);
 
     // client event loop not available; use fallback blocking version
+    //install_read_event_handler(&echoBack);
     int iserr = 0;
+
  again:
     ;
     JL_TRY {
         if (iserr) {
-            jl_show(jl_exception_in_transit);
+            //jl_show(jl_exception_in_transit);# What if the error was in show?
             ios_printf(ios_stdout, "\n\n");
             iserr = 0;
         }
-        while (1) {
-            char *input = read_expr("julia> ");
-            if (!input || ios_eof(ios_stdin)) {
-                ios_printf(ios_stdout, "\n");
-                break;
-            }
-            jl_value_t *ast = jl_parse_input_line(input);
-            jl_value_t *value = jl_toplevel_eval(ast);
-            jl_show(value);
-            ios_printf(ios_stdout, "\n\n");
-        }
+    uv_run(jl_io_loop);
     }
     JL_CATCH {
         iserr = 1;
+        jl_puts("error during run:\n",jl_stderr_tty);
+        jl_show(jl_exception_in_transit);
+        jl_puts( "\n",jl_stdout_tty);
         goto again;
     }
-
-    return 0;
+    uv_tty_reset_mode();
+    return iserr;
 }
 
 int main(int argc, char *argv[])

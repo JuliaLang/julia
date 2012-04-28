@@ -28,7 +28,7 @@
 // Other compilers
 
 #else	// defined(_MSC_VER)
-
+#endif // !defined(_MSC_VER)
 #define	FORCE_INLINE __attribute__((always_inline))
 
 static inline uint32_t rotl32 ( uint32_t x, int8_t r )
@@ -46,7 +46,7 @@ static inline uint64_t rotl64 ( uint64_t x, int8_t r )
 
 #define BIG_CONSTANT(x) (x##LLU)
 
-#endif // !defined(_MSC_VER)
+
 
 //-----------------------------------------------------------------------------
 // Block read - if your platform needs to do endian-swapping or can only

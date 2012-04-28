@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "flisp.h"
 
@@ -58,7 +61,7 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     JL_CATCH {
         JL_GC_POP();
         jl_show(jl_exception_in_transit);
-        ios_putc('\n', jl_current_output_stream());
+        jl_putc('\n', jl_current_output_stream());
         return fl_cons(symbol("error"), FL_NIL);
     }
     // protect result from GC, otherwise it could be freed during future
@@ -88,8 +91,8 @@ void jl_init_frontend(void)
     ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
-        ios_printf(ios_stderr, "fatal error loading system image\n");
-        exit(1);
+        jl_printf(jl_stderr_tty, "fatal error loading system image\n");
+        jl_exit(1);
     }
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));
