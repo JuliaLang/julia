@@ -83,7 +83,9 @@ void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen)
 				raise(SIGTERM);
 				break;
 			case '\x1A':
+#ifndef __WIN32__
 				raise(SIGTSTP);
+#endif
 				break;
 			case '\e':
 				esc = 1;
