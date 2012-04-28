@@ -628,11 +628,23 @@ void restart(void)
 }
 
 void rl_clear_input(void) {
-    ios_printf(ios_stdout, "\n");
-	rl_replace_line("\0",0);
+	//todo: how to do this better / the correct way / ???
+	//move the cursor to a clean line:
+	char *p = rl_line_buffer;
+	int i;
+	for (i = 0; *p != '\0'; p++, i++) {
+		if (i >= rl_point && *p == '\n') {
+			ios_printf(ios_stdout, "\n");
+		}
+	}
+	ios_printf(ios_stdout, "\n");
+	//reset state:
 	rl_reset_line_state();
+	reset_indent();
+	rl_initialize();
+	//and redisplay prompt:
 	rl_forced_update_display();
-	restart();
+	rl_on_new_line_with_prompt();
 #ifndef __WIN32__
     ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
 #endif
