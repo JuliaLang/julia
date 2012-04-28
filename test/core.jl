@@ -258,3 +258,12 @@ begin
     @assert is(f(a), a)
     @assert is(g(a), a)
 end
+
+type _AA{T}; a::T; end
+typealias _AoA{T} _AA{_AA{T}}
+begin
+    local g, a
+    g{T}(a::_AA{_AA{T}}) = a
+    a = _AA(_AA(1))
+    @assert is(g(a),a)
+end
