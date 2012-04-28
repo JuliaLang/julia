@@ -206,7 +206,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             break;
         default:
             handle=0;
-            ios_puts("This type of handle for stdio is not yet supported!",ios_stderr);
+            jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);
             break;
     }
     return handle;
