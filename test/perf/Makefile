@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 default: benchmarks.html
 
 bin/perf%: perf.cpp
-	$(CXX) -O$* $< -o $@ $(JULIAHOME)/external/openblas-v0.1.0/libopenblas.a
+	$(CXX) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.0/libopenblas.a
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \

@@ -148,7 +148,7 @@ Julia uses the following external libraries, which are automatically downloaded 
     base/          source code for julia's standard library
     contrib/       emacs and textmate support for julia
     examples/      example julia programs
-    external/      external dependencies
+    deps/      external dependencies
     extras/        useful optional libraries
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
@@ -199,7 +199,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities.
 Follow these instructions for setting up the web repl locally.
-In external, doing `make install-lighttpd` will download and build lighttpd.
+In deps, doing `make install-lighttpd` will download and build lighttpd.
 Use the launch-webserver script to start the webserver and web-repl.
 Point your browser to `http://localhost:2000/`.
 Try `plot(cumsum(randn(1000)))`

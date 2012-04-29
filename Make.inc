@@ -4,8 +4,8 @@ JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
 JULIALIB = $(JULIAHOME)/lib
-EXT = $(JULIAHOME)/external
-EXTROOT = $(JULIAHOME)/external/root
+EXT = $(JULIAHOME)/deps
+EXTROOT = $(JULIAHOME)/deps/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 
