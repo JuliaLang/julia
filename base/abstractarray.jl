@@ -302,8 +302,6 @@ end
 # 1-d indexing is assumed defined on subtypes
 assign(t::AbstractArray, x, i::Integer) =
     error("assign not defined for ",typeof(t))
-assign(t::AbstractArray, x::AbstractArray, i::Integer) =
-    error("assign not defined for ",typeof(t))
 
 assign(t::AbstractArray, x, i::Real)          = (t[iround(i)] = x)
 assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
