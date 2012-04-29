@@ -10,6 +10,8 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 DEBUGFLAGS = $(FLAGS)
 SHIPFLAGS = $(FLAGS)
 
+JLDFLAGS =  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH) 
+
 julia-release julia-debug: %: %-basic %-readline
 	@$(MAKE) -C webserver $@
 
@@ -27,14 +29,14 @@ julia-release-readline: $(JULIAHOME)/julia-release-readline
 julia-debug-readline: $(JULIAHOME)/julia-debug-readline
 
 $(JULIAHOME)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(JULIALIB)/libjulia-release.a $(LIBS) $(LDFLAGS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(JULIALIB) -ljulia-release $(JLDFLAGS)
 $(JULIAHOME)/julia-debug-basic: repl.do repl-basic.do
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(DEBUGFLAGS) $^ -o $@ -Wl,--whole-archive $(JULIALIB)/libjulia-debug.a
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(JULIALIB) -ljulia-debug $(JLDFLAGS)
 
 $(JULIAHOME)/julia-release-readline: repl.o repl-readline.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) $(JULIALIB)/libjulia-release.a $(LIBS) $(LDFLAGS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(JULIALIB) -ljulia-release $(JLDFLAGS)
 $(JULIAHOME)/julia-debug-readline: repl.do repl-readline.do
-	$(QUIET_LINK) $(CXX) $(LDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -Wl,--whole-archive $(JULIALIB)/libjulia-debug.a 
+	$(QUIET_LINK) $(CXX) $(JLDFLAGS) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(JULIALIB) -ljulia-debug
 
 clean:
 	$(MAKE) -C webserver $@

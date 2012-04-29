@@ -76,8 +76,6 @@ end
 ## Library code
 
 _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
-dlopen("libamd")
-dlopen("libcolamd")
 _jl_libcholmod = dlopen("libcholmod")
 _jl_libumfpack = dlopen("libumfpack")
 
