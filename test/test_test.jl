@@ -10,8 +10,8 @@ test_group("string tests")
 @testfails strip("\t  this should fail   \n") == "hi" 
 
 test_group("numeric tests")
-@test isclose(.1+.1+.1, .3)
-@testfails isclose(.1+.1+.1, .4)
+@test isapprox(.1+.1+.1, .3)
+@testfails isapprox(.1+.1+.1, .4)
 
 test_group("array tests")
 a = Array(Float64, 2, 2, 2, 2, 2)

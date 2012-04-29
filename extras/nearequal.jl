@@ -1,29 +1,29 @@
-#ISCLOSE Check for nearly equal values.
-#   ISCLOSE(x::T1, y::T2) checks if x and y are nearly equal. The default tolerance is
+#ISAPPROX Check for nearly equal values.
+#   ISAPPROX(x::T1, y::T2) checks if x and y are nearly equal. The default tolerance is
 #   determined by the types. If tol = max(eps(T1), eps(T2)), then the values need to be
 #   within sqrt(tol)+tol^(1/3)*max(abs(x), abs(y)).
 #
-#   ISCLOSE(x, y, rtol, atol) provides specific values in place of tol^(1/3) and sqrt(tol),
+#   ISAPPROX(x, y, rtol, atol) provides specific values in place of tol^(1/3) and sqrt(tol),
 #   respectively.
 #
-#   ISCLOSE(x::T1, y::T2) where T1<:Integer and T2<:Integer is the same as ISEQUAL.
-function isclose(x, y, rtol, atol)
+#   ISAPPROX(x::T1, y::T2) where T1<:Integer and T2<:Integer is the same as ISEQUAL.
+function isapprox(x, y, rtol, atol)
     if isinf(x) || isinf(y)
         return x == y
     end
     abs(x-y) <= atol+rtol.*max(abs(x), abs(y))
 end
 
-#ISCLOSEN Check for nearly equal values, treating NaNs as mutually equal.
-#   ISCLOSEN(x, y, ...) checks if x and y are nearly equal in the same way as ISCLOSE, but
+#ISAPPROXN Check for nearly equal values, treating NaNs as mutually equal.
+#   ISAPPROXN(x, y, ...) checks if x and y are nearly equal in the same way as ISAPPROX, but
 #   allowing NaNs to evaluate as equal. This is useful if two methods of computing the same
 #   values are being verified against one another, and that computation can produce NaNs.
 #
-#   ISCLOSEN(x, y, ...) gives the same results as ISCLOSE(x, y, ...) if neither x nor
+#   ISAPPROXN(x, y, ...) gives the same results as ISAPPROX(x, y, ...) if neither x nor
 #   y contain NaN values.
-isclosen(x, y, rtol, atol) = isclose(x, y, rtol, atol) || (isnan(x) && isnan(y))
+isapproxn(x, y, rtol, atol) = isapprox(x, y, rtol, atol) || (isnan(x) && isnan(y))
 
-for fun in (:isclose, :isclosen)
+for fun in (:isapprox, :isapproxn)
     @eval begin
         function ($fun){T1<:Float, T2<:Float}(x::T1, y::T2)
             tol = max(eps(T1), eps(T2))
@@ -48,9 +48,9 @@ for fun in (:isclose, :isclosen)
     end
 end
 
-# For integers, isclose() is just isequal() unless you specify nondefault tolerances.
-isclose{T1<:Integer, T2<:Integer}(x::T1, y::T2) = isequal(x, y)
-#isclosen() doesn't apply to two Integer types, since typeof(NaN)<:Float
+# For integers, isapprox() is just isequal() unless you specify nondefault tolerances.
+isapprox{T1<:Integer, T2<:Integer}(x::T1, y::T2) = isequal(x, y)
+#isapproxn() doesn't apply to two Integer types, since typeof(NaN)<:Float
 
 #ISEQUALN Check for equality, treating NaNs as mutually equal.
 #   ISEQUALN(x, y) gives the same results as ISEQUAL(x, y), unless both x and y are NaN
