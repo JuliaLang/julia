@@ -328,11 +328,16 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
+ifeq ($(OS), Darwin)
 	cd openblas-$(OPENBLAS_VER) && \
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH) && \
 	rm -f libopenblas.$(SHLIB_EXT) libopenblas.a && \
 	gfortran -shared $(WHOLE_ARCHIVE) libopenblas*.a -o libopenblas.$(SHLIB_EXT) && \
 	cp -f libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
+else
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
+endif
 	$(EXT)/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
