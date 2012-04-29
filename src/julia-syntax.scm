@@ -1094,13 +1094,19 @@
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
 
+      (define (lhs-vars e)
+	(cond ((and (pair? e) (eq? (car e) 'tuple))
+	       (apply append (map lhs-vars (cdr e))))
+	      (else (list e))))
+
       ;; Evaluate the comprehension
       (let ((loopranges
 	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
 	`(scope-block
 	  (block
 	   (local ,oneresult)
-	   ,@(map (lambda (r) `(local ,(cadr r))) ranges)
+	   ,@(map (lambda (r) `(local ,r))
+		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   ;; the evaluate-one code is used by type inference but does not run
 	   (if (call (top !) true) ,(evaluate-one loopranges))
