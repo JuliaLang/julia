@@ -239,13 +239,9 @@ ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),fin
 
 ## Indexing: assign ##
 
-assign(A::Array{Any}, x::AbstractArray, i::Int) = arrayset(A,i,x)
 assign(A::Array{Any}, x::AbstractArray, i::Integer) = arrayset(A,int(i),x)
-assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,i,x)
 assign(A::Array{Any}, x::ANY, i::Integer) = arrayset(A,int(i),x)
-assign{T}(A::Array{T}, x::AbstractArray, i::Int) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x::AbstractArray, i::Integer) = arrayset(A,int(i),convert(T, x))
-assign{T}(A::Array{T}, x, i::Int) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Integer) = arrayset(A,int(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
@@ -436,7 +432,7 @@ end
 
 function push(a::Array{Any,1}, item::ANY)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
-    a[end] = item
+    arrayset(a, length(a), item)
     return a
 end
 
