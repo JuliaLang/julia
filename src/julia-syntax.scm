@@ -863,10 +863,8 @@
    ;; for loops
 
    (pattern-lambda
-    (for (= var (: a b)) body)
+    (for (= lhs (: a b)) body)
     (begin
-      (if (not (symbol? var))
-	  (error "invalid for loop syntax: expected symbol"))
       (let ((cnt (gensy))
 	    (lim (if (number? b) b (gensy))))
 	`(scope-block
@@ -876,7 +874,7 @@
 	   (break-block loop-exit
 			(_while (call <= ,cnt ,lim)
 				(block
-				 (= ,var ,cnt)
+				 (= ,lhs ,cnt)
 				 (break-block loop-cont
 					      ,body)
 				 (= ,cnt (call (top convert)
@@ -885,7 +883,7 @@
 
    ; for loop over arbitrary vectors
    (pattern-lambda
-    (for (= i X) body)
+    (for (= lhs X) body)
     (let ((coll  (gensy))
 	  (state (gensy)))
       `(scope-block
@@ -893,7 +891,7 @@
 	       (= ,state (call (top start) ,coll))
 	       (while (call (top !) (call (top done) ,coll ,state))
 		      (block
-		       (= (tuple ,i ,state) (call (top next) ,coll ,state))
+		       (= (tuple ,lhs ,state) (call (top next) ,coll ,state))
 		       ,body))))))
 
    ; update operators
@@ -1095,9 +1093,10 @@
 		  ,(construct-loops (cdr ranges)))))
 
       (define (lhs-vars e)
-	(cond ((and (pair? e) (eq? (car e) 'tuple))
+	(cond ((symbol? e) (list e))
+	      ((and (pair? e) (eq? (car e) 'tuple))
 	       (apply append (map lhs-vars (cdr e))))
-	      (else (list e))))
+	      (else '())))
 
       ;; Evaluate the comprehension
       (let ((loopranges

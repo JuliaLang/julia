@@ -36,6 +36,8 @@ boo32_64() = [ foo32_64(i) | i=1:2 ]
 let a36 = boo32_64()
     @assert a36[1]==1 && a36[2]==2
 end
+@assert isequal([1,2,3], [b | (a,b) in enumerate(2:4)])
+@assert isequal([2,3,4], [a | (a,b) in enumerate(2:4)])
 
 @assert (10.^[-1])[1] == 0.1
 @assert (10.^[-1.])[1] == 0.1
