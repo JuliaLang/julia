@@ -728,8 +728,3 @@ distclean-glpk-wrapper: clean-glpk-wrapper
 	default compile install cleanall distclean \
 	compile-* install-* clean-* distclean-*
 
-## phony targets ##
-
-.PHONY: \
-	default compile install cleanall distclean \
-	compile-* install-* clean-* distclean-*
