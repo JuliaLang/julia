@@ -7,11 +7,21 @@ override CXXFLAGS += $(JCXXFLAGS)
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
 	alloc dlload sys init task array dump
+ifeq ($(OS),WINNT)
+	SRCS+=asprintf
+endif
 FLAGS = \
+	-D_GNU_SOURCE \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
-	-I$(EXTROOT)/include
+	-I$(JULIAHOME)/external/libuv  -I$(EXTROOT)/include
+
+ifneq ($(MAKECMDGOALS),debug)
+TARGET = "debug"
+else
+TARGET = 
+endif
 
 OBJS = $(SRCS:%=%.o)
 DOBJS = $(SRCS:%=%.do)
@@ -52,7 +62,7 @@ codegen.o codegen.do: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp
 builtins.o builtins.do: table.c
 
 support/libsupport.a: support/*.h support/*.c
-	$(MAKE) -C support
+	$(MAKE) -C support $(TARGET)
 
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
@@ -62,14 +72,14 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-libjulia-debug: libjulia-debug.a ../libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: libjulia-debug.a 
 
 ../libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o ../libjulia-release.$(SHLIB_EXT) $(LIBS)
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-libjulia-release: libjulia-release.a ../libjulia-release.$(SHLIB_EXT)
+libjulia-release: libjulia-release.a 
 
 clean:
 	rm -f libjulia*.$(SHLIB_EXT)
