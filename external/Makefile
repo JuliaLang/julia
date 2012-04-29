@@ -471,6 +471,7 @@ else:
 compile-suitesparse:
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	rm -f *.a && \
 	cp -f `find /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
@@ -496,6 +497,7 @@ $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	rm -f *.a && \
 	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
