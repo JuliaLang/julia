@@ -151,7 +151,9 @@ endif
 
 # Colors for make
 
-ifeq ($(USE_QUIET), 0)
+USE_QUIET = 1
+
+ifeq ($(USE_QUIET), 1)
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
