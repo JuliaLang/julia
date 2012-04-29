@@ -127,7 +127,7 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+JLDFLAGS = -Wl,-rpath -Wl,$(JULIAHOME)/lib
 OSLIBS += -ldl -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -135,7 +135,7 @@ endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+JLDFLAGS = -Wl,-rpath -Wl,$(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -151,6 +151,7 @@ endif
 
 # Colors for make
 
+ifeq ($(USE_QUIET), 0)
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
@@ -169,3 +170,4 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+endif
