@@ -391,7 +391,7 @@ static char chars[] = {
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 {
-    if(stream->type<UV_FS_EVENT) { //is uv handle
+    if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = chars+c,.len=1}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);
@@ -403,7 +403,7 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
-    if(stream->type<UV_FS_EVENT) { //is uv handle
+    if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = str,.len=n}};
         return uv_write(uvw,stream,buf,1,&jl_free_buffer);

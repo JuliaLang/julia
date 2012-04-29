@@ -10,7 +10,7 @@
 // never moves out.
 
 //make it compatible with UV Handles
-typedef enum { bm_none=UV_FS_EVENT+1, bm_line, bm_block, bm_mem } bufmode_t;
+typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
 
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 

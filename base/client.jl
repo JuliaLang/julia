@@ -223,8 +223,6 @@ function _start()
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 
-        global _jl_have_color = _jl_color_available()
-
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
             global const Scheduler = Task(make_callback(()->event_loop(true)), 1024*1024)
