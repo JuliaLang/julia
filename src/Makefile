@@ -19,7 +19,7 @@ DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --ldflags) -lLLVM-3.0 -L$(JULIALIB) -Xlinker -all_load $(JULIAHOME)/src/flisp/libflisp.a -Xlinker -all_load $(JULIAHOME)/src/support/libsupport.a -lutil -lm $(OSLIBS) -lpthread 
+LIBS = $(shell $(LLVM_CONFIG) --ldflags) -lLLVM-3.0 -L$(JULIALIB) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(NO_WHOLE_ARCHIVE) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a $(NO_WHOLE_ARCHIVE) -lutil -lm $(OSLIBS) -lpthread 
 
 ifeq ($(JULIAGC),MARKSWEEP)
 SRCS += gc
@@ -61,7 +61,8 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
 libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ -install_name @executable_path/lib/$@ $(LIBS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) 
+	$(EXT)/install-name-$(OS).sh $@ $@
 	cp -f $@ $(JULIALIB)/$@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
@@ -69,7 +70,8 @@ libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 libjulia-debug: libjulia-debug.a libjulia-debug.$(SHLIB_EXT)
 
 libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $@ -install_name @executable_path/lib/$@ $(LIBS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $@ $(LIBS)
+	$(EXT)/install-name-$(OS).sh $@ $@
 	cp -f $@ $(JULIALIB)/$@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@

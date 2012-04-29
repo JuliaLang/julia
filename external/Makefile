@@ -26,11 +26,23 @@ ARCH = $(shell uname -m)
 LIBS = fdlibm dsfmt double-conversion amos rmath suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
+WGET = wget
+WGET_DASH_O = wget -O
+LIBS += unwind
+endif
+
+ifeq ($(OS), Darwin)
+WGET = curl -kLO
+WGET_DASH_O = curl -kLo
+endif
+
+ifeq ($(OS), FreeBSD)
+WGET = curl -LO
+WGET_DASH_O = curl -Lo
 LIBS += unwind
 endif
 
 ifeq ($(OS), FreeBSD)
-LIBS += unwind
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -71,18 +83,6 @@ LIBS += suitesparse
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
 LIBS += glpk
-endif
-
-WGET = wget
-WGET_DASH_O = wget -O
-ifeq ($(OS), Darwin)
-WGET = curl -kLO
-WGET_DASH_O = curl -kLo
-endif
-
-ifeq ($(OS), FreeBSD)
-WGET = curl -LO
-WGET_DASH_O = curl -Lo
 endif
 
 default: install
@@ -326,7 +326,6 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	tar -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
-	$(WGET_DASH_O) openblas-$(OPENBLAS_VER)/Makefile.system https://raw.github.com/xianyi/OpenBLAS/fad089ffff6cc8dd3d2f70397f6e4054372fe6f0/Makefile.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
@@ -391,7 +390,7 @@ $(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/configure
 	cd arpack-ng-$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared
 	touch $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
+$(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng-$(ARPACK_VER) && \
 	make install
@@ -470,6 +469,17 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 else:
 compile-suitesparse:
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
+	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	cp -f `find /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libumfpack.$(SHLIB_EXT) $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
 endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
@@ -479,23 +489,22 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile
+$(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX) 
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX)
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
-	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
-	-cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
-	cp -f `find .. /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . 
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
-	$(CC) -shared -Xlinker -all_load libamd.a -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
 	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
-	$(CC) -shared -Xlinker -all_load libcolamd.a -o $(EXTROOTLIB)/libcolamd.dylib && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
 	$(EXT)/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load libcholmod.a -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
 	$(EXT)/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared -Xlinker -all_load libumfpack.a -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	$(EXT)/install-name-$(OS).sh libumfpack.dylib $(EXTROOTLIB)/libumfpack.dylib
+	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libumfpack.$(SHLIB_EXT) $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean

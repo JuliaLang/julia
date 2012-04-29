@@ -66,6 +66,7 @@
     jl_sizeof_ios_t;
     jl_stdout_stream;
     ios_fd;
+    ios_mem;
     jl_ios_mem;
     jl_boundp;
     jl_get_root_symbol;
@@ -163,6 +164,7 @@
     jl_pgcstack;
     jl_symbol;
     jl_base_module;
+    jl_current_module;
     jl_get_global;
     jl_set_global;
     jl_set_const;
