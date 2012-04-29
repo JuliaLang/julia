@@ -132,7 +132,7 @@ READLINE_OBJ_SOURCE = readline-$(READLINE_VER)/shlib/libreadline.$(READLINE_VER)
 
 READLINE_OPTS = --disable-shared --enable-static
 ifeq ($(OS),WINNT)
-	READLINE_URL = https://github.com/loladiro/readline/tarball/master
+	READLINE_URL = https://github.com/JuliaLang/readline/tarball/master
 	READLINE_CFLAGS = LOCAL_DEFS="-include $(abspath .)/readline-win.h"
 else
 	READLINE_URL = ftp://ftp.gnu.org/gnu/readline/readline-$(READLINE_VER).tar.gz

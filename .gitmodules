@@ -1,3 +1,3 @@
 [submodule "external/libuv"]
 	path = external/libuv
-	url = https://github.com/loladiro/libuv.git
+	url = https://github.com/JuliaLang/libuv.git
