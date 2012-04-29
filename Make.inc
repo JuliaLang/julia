@@ -94,7 +94,7 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline -lncurses -lcurses
 else
-READLINE = -L$(JULIALIB) -lreadline -lncurses -lcurses
+READLINE = $(EXTROOT)/lib/libreadline.a -lncurses -lcurses
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
@@ -148,6 +148,10 @@ OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE = 
 endif
+
+# Libraries to link
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a
+LDFLAGS =  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread
 
 # Colors for make
 
