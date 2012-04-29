@@ -6,8 +6,8 @@ PCRE_VER = 8.30
 GRISU_VER = 1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.1.1
-LAPACK_VER = 3.4.0
-ARPACK_VER = 3.0.2
+LAPACK_VER = 3.4.1
+ARPACK_VER = 3.1.0
 FFTW_VER = 3.3.1
 SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
@@ -312,7 +312,7 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 else
 OPENBLAS_OBJ_SOURCE =
 endif
@@ -328,10 +328,12 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
-	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
+	cd openblas-$(OPENBLAS_VER) && \
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH) && \
+	rm -f libopenblas.$(SHLIB_EXT) libopenblas.a && \
+	gfortran -shared $(WHOLE_ARCHIVE) libopenblas*.a -o libopenblas.$(SHLIB_EXT) && \
+	cp -f libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 	$(EXT)/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
-
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
@@ -375,32 +377,32 @@ distclean-lapack:
 ## ARPACK ##
 
 ARPACK_OBJ_TARGET = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = arpack-ng-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
-arpack-ng-$(ARPACK_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
+arpack-ng_$(ARPACK_VER).tar.gz:
+	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
+arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_SOURCE): arpack-ng-$(ARPACK_VER)/configure
-	cd arpack-ng-$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared
+$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure
+	cd arpack-ng_$(ARPACK_VER) && \
+	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared MPIF77=$(FC)
 	touch $@
 $(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
-	cd arpack-ng-$(ARPACK_VER) && \
-	make install
+	cd arpack-ng_$(ARPACK_VER) && \
+	make install MPIF77=$(FC)
 	touch $@
 
 clean-arpack:
-	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
+	$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng_$(ARPACK_VER)
 
 ## FFTW ##
 
