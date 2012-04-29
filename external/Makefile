@@ -388,11 +388,11 @@ arpack-ng_$(ARPACK_VER).tar.gz:
 arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure
+$(ARPACK_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared MPIF77=$(FC)
 	touch $@
-$(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
+$(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) arpack-ng_$(ARPACK_VER)/Makefile
 	mkdir -p $(EXTROOTLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	make install MPIF77=$(FC)
