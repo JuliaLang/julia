@@ -569,7 +569,7 @@ jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
 jl_value_t *jl_box_char(uint32_t x);
-jl_value_t *jl_box_int64(int64_t x);
+DLLEXPORT jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
@@ -695,7 +695,7 @@ void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one);
 // modules
 extern jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
-extern jl_module_t *jl_current_module;
+extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
