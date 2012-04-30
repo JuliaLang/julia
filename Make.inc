@@ -5,7 +5,7 @@ JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
 EXTROOTLIB = $(JULIAHOME)/lib
 EXT = $(JULIAHOME)/deps
-EXTROOT = $(JULIAHOME)/root
+EXTROOT = $(JULIAHOME)/deps/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 
