@@ -9,7 +9,7 @@ debug release:
 	@$(MAKE) -s sys.ji
 
 julia-debug julia-release:
-	@$(MAKE) -sC external
+	@$(MAKE) -sC deps
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
