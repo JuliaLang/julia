@@ -3,11 +3,11 @@
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-EXTROOTLIB = $(JULIAHOME)/lib
-EXT = $(JULIAHOME)/deps
-EXTROOT = $(JULIAHOME)/deps/root
-EXTROOTLIB = $(EXTROOT)/lib
-LLVMROOT = $(EXTROOT)
+USR = $(JULIAHOME)/usr
+USRLIB = $(USR)/lib
+USRBIN = $(USR)/bin
+USRINC = $(USR)/include
+LLVMROOT = $(USR)
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
@@ -92,7 +92,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(EXTROOTLIB)/libunwind-generic.a $(EXTROOTLIB)/libunwind.a
+LIBUNWIND=$(USRLIB)/libunwind-generic.a $(USRLIB)/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -104,19 +104,19 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(EXTROOT)/lib/libreadline.a
+READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses -lcurses
 else
-READLINE += $(EXTROOT)/lib/libhistory.a
+READLINE += $(USR)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(EXTROOT)/bin/pcre-config
+PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 1)
@@ -127,9 +127,9 @@ LIBBLAS = -lblas
 endif
 else
 ifeq ($(OS), WINNT)
-LIBBLAS = $(EXT)/openblas-$(OPENBLAS_VER)/libopenblas.lib
+LIBBLAS = deps/openblas-$(OPENBLAS_VER)/libopenblas.lib
 else
-LIBBLAS = -L$(EXTROOTLIB) -lopenblas
+LIBBLAS = -L$(USRLIB) -lopenblas
 endif
 endif
 
@@ -140,14 +140,14 @@ else
 LIBLAPACK = -llapack
 endif
 else
-LIBLAPACK = -L$(EXTROOTLIB) -lopenblas
+LIBLAPACK = -L$(USRLIB) -lopenblas
 endif
 
 # OS specific stuff
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -178,7 +178,7 @@ NO_WHOLE_ARCHIVE =
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 
