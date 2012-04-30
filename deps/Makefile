@@ -218,7 +218,7 @@ UV_OBJ_TARGET = $(USRLIB)/uv.a
 UV_OBJ_SOURCE = libuv/uv.a
 
 libuv/Makefile:
-	(cd .. && git submodule update --init --recursive)
+	(cd .. && git submodule update --init)
 $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) -C libuv $(UV_CFLAGS)
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
