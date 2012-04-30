@@ -13,7 +13,7 @@ julia-debug julia-release:
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
-	@ln -sf $(USRBIN)/$@-$(DEFAULT_REPL) julia
+	@ln -f $@-$(DEFAULT_REPL) julia
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl

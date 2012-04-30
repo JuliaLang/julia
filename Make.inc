@@ -147,7 +147,7 @@ endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -156,7 +156,7 @@ endif
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lutil -lm  $(LIBUNWIND)
-RPATH = -Wl,-rpath,'$$ORIGIN/lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif

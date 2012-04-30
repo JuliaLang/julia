@@ -51,9 +51,9 @@ void *jl_load_dynamic_library(char *fname)
         handle = NULL;
         if (modname[0] != '/') {
             if (julia_home) {
-                /* try julia_home/lib */
+                /* try julia_home/usr/lib */
                 strncpy(path, julia_home, PATHBUF-1);
-                strncat(path, "/lib/", PATHBUF-1-strlen(path));
+                strncat(path, "/usr/lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 handle = dlopen(path, RTLD_NOW);
