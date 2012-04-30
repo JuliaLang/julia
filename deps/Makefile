@@ -325,7 +325,7 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 compile-rmath: $(RMATH_OBJ_SOURCE)
 install-rmath: $(RMATH_OBJ_TARGET)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(DSFMT_OBJ_TARGET)
 	cd Rmath/src && \
 	$(MAKE) CC=$(CC) && \
 	$(EXT)/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
@@ -412,7 +412,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
 	$(EXT)/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 
@@ -587,7 +587,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX)
+	$(MAKE) CC=$(CC) CXX=$(CXX)
 	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
@@ -783,12 +783,12 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
 	./configure --prefix=$(abspath $(EXTROOT))
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
-	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) install
+	$(MAKE) -C glpk-$(GLPK_VER) install
 	touch $@
 
 clean-glpk:
-	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
-	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
+	-$(MAKE) -C glpk-$(GLPK_VER) uninstall || true
+	-$(MAKE) -C glpk-$(GLPK_VER) clean
 distclean-glpk: clean-glpk
 	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
 
