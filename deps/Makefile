@@ -89,7 +89,7 @@ endif
 
 ## Common build target prefixes
 
-default: install
+default: $(EXTROOT) install
 compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
@@ -97,8 +97,10 @@ distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf root
 
 ## PATHS ##
-$(EXTROOTLIB): 
-	mkdir -p $(EXTROOTLIB)
+$(EXTROOT): 
+	mkdir -p $(EXTROOT)/lib
+	mkdir -p $(EXTROOT)/include
+	mkdir -p $(EXTROOT)/bin
 
 ## LLVM ##
 
@@ -221,10 +223,10 @@ $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) -C libuv $(UV_CFLAGS)
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(EXTROOT)/include
-	cp $(UV_OBJ_SOURCE) $(EXTROOTLIB)
+	cp $(UV_OBJ_SOURCE) $(EXTROOTLIB)/
 	cp libuv/include/uv.h $(EXTROOT)/include/uv.h 
 	cp -r libuv/include/uv-private $(EXTROOT)/include
-install-uv: $(UV_OBJ_TARGET) | $(EXTROOTLIB)
+install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
 	$(MAKE) -C libuv clean
@@ -266,7 +268,7 @@ GRISU_OPTS = -O3 -fvisibility=hidden $(fPIC)
 
 
 compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu_.$(SHLIB_EXT)
-install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT) | $(EXTROOTLIB)
+install-double-conversion: $(EXTROOTLIB)/libgrisu.$(SHLIB_EXT)
 
 double-conversion-$(GRISU_VER).tar.gz:
 	$(WGET) http://double-conversion.googlecode.com/files/double-conversion-$(GRISU_VER).tar.gz
@@ -301,7 +303,7 @@ FDLIBM_OBJ_TARGET = $(EXTROOTLIB)/libfdm.$(SHLIB_EXT)
 FDLIBM_OBJ_SOURCE = fdlibm/libfdm.$(SHLIB_EXT)
 
 compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
-install-fdlibm: $(FDLIBM_OBJ_TARGET) | $(EXTROOTLIB)
+install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
@@ -342,7 +344,7 @@ AMOS_OBJ_TARGET = $(EXTROOTLIB)/libamos.$(SHLIB_EXT)
 AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
 
 compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET) | $(EXTROOTLIB)
+install-amos: $(AMOS_OBJ_TARGET)
 
 
 $(AMOS_OBJ_SOURCE): amos/*.f
@@ -363,7 +365,7 @@ DSFMT_OBJ_TARGET = $(EXTROOTLIB)/librandom.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
-install-dsfmt: $(DSFMT_OBJ_TARGET) | $(EXTROOTLIB)
+install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
@@ -437,7 +439,7 @@ LAPACK_OBJ_SOURCE =
 endif
 
 compile-lapack: $(LAPACK_OBJ_SOURCE)
-install-lapack: $(LAPACK_OBJ_TARGET) | $(EXTROOTLIB)
+install-lapack: $(LAPACK_OBJ_TARGET)
 
 lapack-$(LAPACK_VER).tgz:
 	$(WGET) http://www.netlib.org/lapack/$@
@@ -624,7 +626,7 @@ SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSpar
 SUITESPARSE_LIB = 
 endif
 
-$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET) | $(EXTROOTLIB)
+$(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
 	$(CC) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	touch $@
 install-suitesparse-wrapper: $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
