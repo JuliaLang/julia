@@ -2,18 +2,19 @@
 
 LLVM_VER = 3.0
 READLINE_VER = 6.2
-PCRE_VER = 8.21
+PCRE_VER = 8.30
 GRISU_VER = 1.1
 DSFMT_VER = 2.1
-OPENBLAS_VER = v0.1.0
-LAPACK_VER = 3.4.0
-ARPACK_VER = 3.0.2
+OPENBLAS_VER = v0.1.1
+LAPACK_VER = 3.4.1
+ARPACK_VER = 3.1.0
 FFTW_VER = 3.3.1
 SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 GMP_VER=5.0.4
+GLPK_VER = 4.43
 
 ## high-level setup ##
 
@@ -22,14 +23,26 @@ include $(JULIAHOME)/Make.inc
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
-LIBS = fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
+LIBS = fdlibm dsfmt double-conversion amos rmath suitesparse-wrapper gmp-wrapper
 
 ifeq ($(OS), Linux)
+WGET = wget
+WGET_DASH_O = wget -O
+LIBS += unwind
+endif
+
+ifeq ($(OS), Darwin)
+WGET = curl -kLO
+WGET_DASH_O = curl -kLo
+endif
+
+ifeq ($(OS), FreeBSD)
+WGET = curl -LO
+WGET_DASH_O = curl -Lo
 LIBS += unwind
 endif
 
 ifeq ($(OS), FreeBSD)
-LIBS += unwind
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -48,9 +61,9 @@ ifeq ($(USE_SYSTEM_BLAS), 0)
 LIBS += openblas
 endif
 
-ifeq ($(USE_SYSTEM_LAPACK), 0)
-LIBS += lapack
-endif
+#ifeq ($(USE_SYSTEM_LAPACK), 0)
+#LIBS += lapack
+#endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
 LIBS += fftw
@@ -64,20 +77,12 @@ ifeq ($(USE_SYSTEM_ARPACK), 0)
 LIBS += arpack
 endif
 
-ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
+#ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
-endif
+#endif
 
-WGET = wget
-WGET_DASH_O = wget -O
-ifeq ($(OS), Darwin)
-WGET = curl -kLO
-WGET_DASH_O = curl -kLo
-endif
-
-ifeq ($(OS), FreeBSD)
-WGET = curl -LO
-WGET_DASH_O = curl -Lo
+ifeq ($(USE_SYSTEM_GLPK), 0)
+LIBS += glpk
 endif
 
 default: install
@@ -107,6 +112,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
+	$(EXT)/install-name-$(OS).sh libLLVM-3.0.$(SHLIB_EXT) $(EXTROOTLIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
@@ -124,17 +130,23 @@ compile-readline: $(READLINE_OBJ_SOURCE)
 install-readline: $(READLINE_OBJ_TARGET)
 
 readline-$(READLINE_VER).tar.gz:
-	$(WGET) ftp://ftp.gnu.org/gnu/readline/$@
+	$(WGET) http://ftp.gnu.org/gnu/readline/$@
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-001
+	$(WGET) http://ftp.gnu.org/gnu/readline/readline-6.2-patches/readline62-002
 readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	tar zxf $<
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-001
+	cd readline-$(READLINE_VER) && patch -p0 < ../readline62-002
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(EXTROOT)) --disable-shared --enable-static --with-curses && \
+	./configure --prefix=$(abspath $(EXTROOT)) --enable-shared --enable-static --with-curses && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
+	chmod +w $(EXTROOTLIB)/libreadline.*
+	$(EXT)/install-name-$(OS).sh libreadline.$(SHLIB_EXT) $(EXTROOTLIB)/libreadline.$(SHLIB_EXT) 
 	touch $@
 
 clean-readline:
@@ -234,7 +246,8 @@ install-rmath: $(RMATH_OBJ_TARGET)
 
 $(RMATH_OBJ_SOURCE): Rmath/src/Makefile
 	cd Rmath/src && \
-	$(MAKE) CC=$(CC)
+	$(MAKE) CC=$(CC) && \
+	$(EXT)/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
 	cp $< $@
@@ -284,7 +297,8 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 -fPIC -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
@@ -298,7 +312,7 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.a
+OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
 else
 OPENBLAS_OBJ_SOURCE =
 endif
@@ -314,9 +328,17 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+ifeq ($(OS), Darwin)
+	cd openblas-$(OPENBLAS_VER) && \
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH) && \
+	rm -f libopenblas.$(SHLIB_EXT) libopenblas.a && \
+	gfortran -shared $(WHOLE_ARCHIVE) libopenblas*.a -o libopenblas.$(SHLIB_EXT) && \
+	cp -f libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
+else
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)
-
+endif
+	$(EXT)/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(EXTROOTLIB)/libopenblas.$(SHLIB_EXT)
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
 distclean-openblas:
@@ -360,30 +382,32 @@ distclean-lapack:
 ## ARPACK ##
 
 ARPACK_OBJ_TARGET = $(EXTROOTLIB)/libarpack.$(SHLIB_EXT)
-ARPACK_OBJ_SOURCE = arpack-$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
+ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
-arpack-ng-$(ARPACK_VER).tar.gz:
-	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/353/get/
+arpack-ng_$(ARPACK_VER).tar.gz:
+	$(WGET_DASH_O) $@ http://forge.scilab.org/index.php/p/arpack-ng/downloads/get/arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
-	tar zxf $<
+arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
+	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_TARGET): arpack-ng-$(ARPACK_VER)/configure $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure
+	cd arpack-ng_$(ARPACK_VER) && \
+	./configure  --prefix=$(abspath $(EXTROOT)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared MPIF77=$(FC)
+	touch $@
+$(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(EXTROOTLIB)
-	cd arpack-ng-$(ARPACK_VER) && \
-	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
-	cp libarpack.$(SHLIB_EXT) $(EXTROOTLIB)
+	cd arpack-ng_$(ARPACK_VER) && \
+	make install MPIF77=$(FC)
 	touch $@
 
 clean-arpack:
-	$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
+	$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng_$(ARPACK_VER)
 
 ## FFTW ##
 
@@ -398,7 +422,7 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 
 fftw-$(FFTW_VER).tar.gz:
 	$(WGET) http://www.fftw.org/$@
@@ -409,7 +433,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-sse --enable-float && \
+	./configure --prefix=$(abspath $(EXTROOT)) $(FFTW_CONFIG) --enable-shared --disable-fortran --enable-sse --enable-single --enable-threads && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -442,16 +466,29 @@ distclean-fftw:
 
 ## SUITESPARSE ##
 
-SUITESPARSE_LOCAL_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/lib/libsuitesparse.$(SHLIB_EXT)
-SUITESPARSE_SYSTEM_OBJ_SOURCE = SuiteSparse-SYSTEM/lib/libsuitesparse.$(SHLIB_EXT)
-SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libsuitesparse.$(SHLIB_EXT)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_LOCAL_OBJ_SOURCE)
-else
-SUITESPARSE_OBJ_SOURCE = $(SUITESPARSE_SYSTEM_OBJ_SOURCE)
+SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 endif
 
+SUITESPARSE_OBJ_TARGET = $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
+
+ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
+else:
+compile-suitesparse:
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
+	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	rm -f *.a && \
+	cp -f `find /lib /usr/lib /usr/local/lib $(subst -L,,$(LDFLAGS)) -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libumfpack.$(SHLIB_EXT) $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
+endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(EXTROOTLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
@@ -460,33 +497,29 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
 	tar -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
 	touch $@
-$(SUITESPARSE_LOCAL_OBJ_SOURCE): SuiteSparse-$(SUITESPARSE_VER)/Makefile $(LAPACK_OBJ_TARGET) $(OPENBLAS_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) && \
-	mkdir -p lib && \
-	cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib && \
-	cd lib && \
-	for i in *.a; do ar x $$i; done && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
-$(SUITESPARSE_SYSTEM_OBJ_SOURCE):
-	mkdir -p SuiteSparse-SYSTEM/lib && \
-	cd SuiteSparse-SYSTEM/lib && \
-	cp `find /lib /usr/lib /usr/local/lib $(subst :, ,$(LD_LIBRARY_PATH)) $(subst :, ,$(DYLD_LIBRARY_PATH)) \
-	$(subst :, ,$(LIBRARY_PATH)) -name libamd.a -o -name libbtf.a -o -name libcamd.a -o -name libccolamd.a \
-	-o -name libcholmod.a -o -name libcolamd.a -o -name libspqr.a -o -name libufconfig.a \
-	-o -name libcerbla.a -o -name libumfpack.a` . && \
-	for i in *.a; do ar x $$i; done && \
-	$(FC) -shared $(FFLAGS) $(JFFLAGS) *.o $(LIBLAPACK) $(LIBBLAS) -lstdc++ -o libsuitesparse.$(SHLIB_EXT)
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) CC=$(CC) CXX=$(CXX)
+	touch $@
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
-	mkdir -p $(EXTROOTLIB)
-	cp -f $< $@
+	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
+	rm -f *.a && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(EXTROOTLIB)/libamd.$(SHLIB_EXT) && \
+	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(EXT)/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(EXTROOTLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(EXTROOTLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT) -L$(EXTROOTLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
+	$(EXT)/install-name-$(OS).sh libumfpack.$(SHLIB_EXT) $(EXTROOTLIB)/libumfpack.$(SHLIB_EXT)
 
 clean-suitesparse:
 	-$(MAKE) -C SuiteSparse-$(SUITESPARSE_VER) clean
 	rm -fr SuiteSparse-$(SUITESPARSE_VER)/lib
-	rm -fr SuiteSparse-SYSTEM/lib
 distclean-suitesparse: clean-suitesparse
-	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER) SuiteSparse-SYSTEM
+	rm -rf SuiteSparse-$(SUITESPARSE_VER).tar.gz SuiteSparse-$(SUITESPARSE_VER)
 
 # SUITESPARSE WRAPPER
 
@@ -637,8 +670,68 @@ clean-gmp-wrapper:
 	rm -f $(GMP_OBJ_TARGET) $(EXTROOTLIB)/libgmp_wrapper.$(SHLIB_EXT)
 distclean-gmp-wrapper: clean-gmp-wrapper
 
+
+## GLPK ##
+
+GLPK_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
+
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPK_PREFIX = /usr/
+GLPK_OBJ_TARGET =
+else
+GLPK_PREFIX = glpk-$(GLPK_VER)/
+GLPK_OBJ_TARGET = $(EXTROOTLIB)/libglpk.$(SHLIB_EXT)
+endif
+
+
+compile-glpk: install-glpk
+install-glpk: $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT)
+
+glpk-$(GLPK_VER).tar.gz:
+	$(WGET) http://ftp.gnu.org/gnu/glpk/$@
+
+glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
+	tar zxf $<
+	touch $@
+glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
+	cd glpk-$(GLPK_VER) && \
+	./configure --prefix=$(abspath $(EXTROOT))
+$(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
+	$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) install
+	touch $@
+
+clean-glpk:
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) uninstall || true
+	-$(MAKE) $(jPARALLEL_BUILD_JOBS) -C glpk-$(GLPK_VER) clean
+distclean-glpk: clean-glpk
+	rm -rf glpk-$(GLPK_VER).tar.bz2 glpk-$(GLPK_VER)
+
+
+## GLPK Wrapper
+
+ifeq ($(USE_SYSTEM_GLPK), 1)
+GLPKW_INC = -I /usr/include/
+GLPKW_LIB = -lglpk
+else
+GLPKW_INC = -I glpk-$(GLPK_VER)/include/
+GLPKW_LIB = -L$(EXTROOTLIB)/ -lglpk
+endif
+
+
+$(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
+	mkdir -p $(EXTROOTLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(EXTROOTLIB)
+	touch $@
+install-glpk-wrapper: $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
+
+clean-glpk-wrapper:
+	rm -f $(GLPK_OBJ_TARGET) $(EXTROOTLIB)/libglpk_wrapper.$(SHLIB_EXT)
+distclean-glpk-wrapper: clean-glpk-wrapper
+
+
 ## phony targets ##
 
 .PHONY: \
 	default compile install cleanall distclean \
 	compile-* install-* clean-* distclean-*
+
