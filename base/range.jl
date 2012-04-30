@@ -68,6 +68,11 @@ last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
+min(r::Range1) = r.start
+max(r::Range1) = last(r)
+min(r::Range) = r.step > 0 ? r.start : last(r)
+max(r::Range) = r.step > 0 ? last(r) : r.start
+
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
