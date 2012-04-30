@@ -21,7 +21,7 @@ GLPK_VER = 4.43
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-LIBS = uv fdlibm dsfmt double-conversion amos rmath suitesparse-wrapper gmp-wrapper
+LIBS = uv fdlibm dsfmt double-conversion amos suitesparse-wrapper gmp-wrapper
 
 ## WGET / CURL
 ifeq ($(OS), Linux)
