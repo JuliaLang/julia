@@ -60,11 +60,9 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
 
-On some Linux distributions (for instance Ubuntu 11.10) you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
+On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
 On Ubuntu, you may also need to install the package `libncurses5-dev`.
-
-If OpenBLAS fails to build in `getarch_2nd.c`, you need to specify the architecture of your processor in Make.inc.
 
 On OS X, you may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
 
@@ -150,7 +148,7 @@ Julia uses the following external libraries, which are automatically downloaded 
     base/          source code for julia's standard library
     contrib/       emacs and textmate support for julia
     examples/      example julia programs
-    external/      external dependencies
+    deps/      external dependencies
     extras/        useful optional libraries
     lib/           shared libraries loaded by julia's standard libraries
     src/           source for julia language core
@@ -201,7 +199,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
 Julia has a web REPL with very preliminary graphics capabilities.
 Follow these instructions for setting up the web repl locally.
-In external, doing `make install-lighttpd` will download and build lighttpd.
+In deps, doing `make install-lighttpd` will download and build lighttpd.
 Use the launch-webserver script to start the webserver and web-repl.
 Point your browser to `http://localhost:2000/`.
 Try `plot(cumsum(randn(1000)))`

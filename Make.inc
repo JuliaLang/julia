@@ -3,8 +3,9 @@
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-JULIALIB = $(JULIAHOME)/lib
-EXTROOT = $(JULIAHOME)/external/root
+EXTROOTLIB = $(JULIAHOME)/lib
+EXT = $(JULIAHOME)/deps
+EXTROOT = $(JULIAHOME)/deps/root
 EXTROOTLIB = $(EXTROOT)/lib
 LLVMROOT = $(EXTROOT)
 
@@ -91,7 +92,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
+LIBUNWIND=$(EXTROOTLIB)/libunwind-generic.a $(EXTROOTLIB)/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -126,9 +127,9 @@ LIBBLAS = -lblas
 endif
 else
 ifeq ($(OS), WINNT)
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
+LIBBLAS = $(EXT)/openblas-$(OPENBLAS_VER)/libopenblas.lib
 else
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
+LIBBLAS = -L$(EXTROOTLIB) -lopenblas
 endif
 endif
 
@@ -139,39 +140,53 @@ else
 LIBLAPACK = -llapack
 endif
 else
-LIBLAPACK = $(JULIAHOME)/external/lapack-$(LAPACK_VER)/liblapack.a
+LIBLAPACK = -L$(EXTROOTLIB) -lopenblas
 endif
 
 # OS specific stuff
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
+RPATH = -Wl,-rpath,'$$ORIGIN/lib'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lutil -lm  $(LIBUNWIND)
+RPATH = -Wl,-rpath,'$$ORIGIN/lib'
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-JLDFLAGS = 
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices  -lutil -lm 
+RPATH = 
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices
+WHOLE_ARCHIVE = -Xlinker -all_load
+NO_WHOLE_ARCHIVE = 
 endif
 
 ifeq ($(OS), WINNT)
 SHLIB_EXT = dll
+RPATH = 
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
+WHOLE_ARCHIVE =
+NO_WHOLE_ARCHIVE =
 endif
 
 # Libraries to link
 LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
+endif
+
 # Colors for make
 
+USE_QUIET = 1
+
+ifeq ($(USE_QUIET), 1)
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
@@ -190,3 +205,4 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+endif

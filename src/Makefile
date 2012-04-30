@@ -36,6 +36,9 @@ ifeq ($(USE_COPY_STACKS),1)
 JCFLAGS += -DCOPY_STACKS
 endif
 
+# Libraries to link
+LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a $(OSLIBS)
+
 default: release
 
 release debug: %: libjulia-%
@@ -67,29 +70,30 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-../libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o ../libjulia-debug.$(SHLIB_EXT) $(LIBS)
+libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
+	$(EXT)/install-name-$(OS).sh $@ $@
+	cp -f $@ $(EXTROOTLIB)/$@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-libjulia-debug: libjulia-debug.a 
+	cp -f $@ $(EXTROOTLIB)/$@
+libjulia-debug: libjulia-debug.a libjulia-debug.$(SHLIB_EXT)
 
-../libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o ../libjulia-release.$(SHLIB_EXT) $(LIBS)
+libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
+	$(EXT)/install-name-$(OS).sh $@ $@
+	cp -f $@ $(EXTROOTLIB)/$@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-libjulia-release: libjulia-release.a 
+	cp -f $@ $(EXTROOTLIB)/$@
+libjulia-release: libjulia-release.a libjulia-release.$(SHLIB_EXT)
 
 clean:
-	rm -f libjulia*.$(SHLIB_EXT)
-	rm -f libjulia*.a
-	rm -f ../libjulia*.$(SHLIB_EXT)
-	rm -f julia_flisp.boot
-	rm -f julia_flisp.boot.inc
-	rm -f *.do
-	rm -f *.o
-	rm -f *~ *#
+	rm -f $(EXTROOTLIB)/libjulia*
+	rm -f julia_flisp.boot julia_flisp.boot.inc
+	rm -f *.do *.o *~ *# *.$(SHLIB_EXT) *.a
 
 clean-flisp:
 	$(MAKE) -C flisp clean
