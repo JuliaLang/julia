@@ -3,9 +3,12 @@ _jl_libRmath = dlopen("libRmath")
 
 macro _jl_libRmath_vectorize_3arg(f)
     quote
-        ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::T3) = reshape([ ($f)(x[i], y, z) | i=1:numel(x) ], size(x))
-        ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::AbstractArray{T2}, z::T3) = reshape([ ($f)(x, y[i], z) | i=1:numel(y) ], size(y))
-        ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::T2, z::AbstractArray{T3}) = reshape([ ($f)(x, y, z[i]) | i=1:numel(z) ], size(z))
+        ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::T3) =
+            reshape([ ($f)(x[i], y, z) | i=1:numel(x) ], size(x))
+        ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::AbstractArray{T2}, z::T3) =
+            reshape([ ($f)(x, y[i], z) | i=1:numel(y) ], size(y))
+        ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::T2, z::AbstractArray{T3}) =
+            reshape([ ($f)(x, y, z[i]) | i=1:numel(z) ], size(z))
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::AbstractArray{T2}, z::T3)
             shp = promote_shape(size(x), size(y))
             reshape([ ($f)(x[i], y[i], z) | i=1:numel(x) ], shp)
@@ -35,11 +38,13 @@ set_seed(a1::Integer, a2::Integer) =
 
 ## The d-p-q functions in Rmath for signrank allocate storage that must be freed
 ## Signrank - Wilcoxon Signed Rank statistic
-rsignrank(nn::Integer, p1::Number) = [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) | i=1:nn ]
+rsignrank(nn::Integer, p1::Number) =
+    [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) | i=1:nn ]
 
 ## Need to handle the d-p-q for Wilcox separately because the Rmath functions allocate storage that must be freed.
 ## Wilcox - Wilcox's Rank Sum statistic (m, n) - probably only makes sense for positive integers
-rwilcox(nn::Integer, p1::Number, p2::Number) = [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
+rwilcox(nn::Integer, p1::Number, p2::Number) =
+    [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
 
 ## Vectorize over four numeric arguments
 macro _jl_libRmath_vectorize_4arg(f)
