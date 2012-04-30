@@ -180,8 +180,6 @@ endif
 # Libraries to link
 LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
-endif
-
 # Colors for make
 
 USE_QUIET = 1
