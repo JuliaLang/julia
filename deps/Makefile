@@ -470,11 +470,11 @@ arpack-ng_$(ARPACK_VER).tar.gz:
 arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure
+$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure install-openblas
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared MPIF77=$(FC)
 	touch $@
-$(ARPACK_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) $(ARPACK_OBJ_SOURCE)
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	make install MPIF77=$(FC)
@@ -563,7 +563,7 @@ SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 else:
-compile-suitesparse:
+compile-suitesparse: install-openblas
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
