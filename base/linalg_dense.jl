@@ -278,9 +278,8 @@ end
 
 function istriu(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = 1:n
-        if A[i,j] != 0 && j < i
+    for j = 1:min(n,m-1), i = j+1:m
+        if A[i,j] != 0
             return false
         end
     end
@@ -289,9 +288,8 @@ end
 
 function istril(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = n:-1:1
-        if A[i,j] != 0 && j > i
+    for j = 2:n, i = 1:min(j-1,m)
+        if A[i,j] != 0
             return false
         end
     end
