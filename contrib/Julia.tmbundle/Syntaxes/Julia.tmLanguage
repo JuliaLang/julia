@@ -155,7 +155,7 @@
 			<array>
 				<dict>
 					<key>match</key>
-					<string>\b(Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|IdTable|HashTable|WeakKeyHashTable|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)?)\b</string>
+					<string>\b(Range1?|NDRange|Tuple|Real|Vector|Array|AbstractArray|ObjectIdDict|Dict|WeakKeyDict|EnvHash|LineIterator|String|IntSet|FDSet|Set|Task|ASCIIString|UTF8String|Bool|Int(8|16|32|64)?|Uint(8|16|32|64)?|Float(32|64)?|Complex(64|128)?)\b</string>
 					<key>name</key>
 					<string>support.type.julia</string>
 				</dict>
