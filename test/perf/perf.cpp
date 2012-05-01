@@ -7,7 +7,7 @@
 #include <complex>
 #include <algorithm>
 
-#include "../../deps/openblas-v0.1.0/cblas.h"
+#include "../../deps/openblas-v0.1.1/cblas.h"
 
 #define DSFMT_MEXP 19937
 #include "../../deps/random/dsfmt-2.1/dSFMT.c"
