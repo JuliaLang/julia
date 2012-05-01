@@ -1350,8 +1350,8 @@ sum(B::BitArray) = nnz(B)
 
 prod{T}(B::BitArray{T}) = (nnz(B) == length(B) ? one(T) : zero(T))
 
-min(B::BitArray) = prod(B)
-max{T}(B::BitArray{T}) = (nnz(B) > 0 ? one(T) : zero(T))
+min{T}(B::BitArray{T}) = length(B) > 0 ? prod(B) : typemax(T)
+max{T}(B::BitArray{T}) = length(B) > 0 ? (nnz(B) > 0 ? one(T) : zero(T)) : typemin(T)
 
 ## map over bitarrays ##
 

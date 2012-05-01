@@ -16,7 +16,6 @@ end
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
     #C = zeros(promote_type(T,S), nA, nB)
-    #z = zero(eltype(C))
     #if mA != mB; error("*: argument shapes do not match"); end
     #if mA == 0; return C; end
     #col_ch = _jl_num_bit_chunks(mA)
@@ -240,4 +239,51 @@ function istril(A::BitMatrix)
         end
     end
     return true
+end
+
+function findmax(a::BitArray)
+    if length(a) == 0
+        return (typemin(eltype(a)), 0)
+    end
+    m = zero(eltype(a))
+    o = one(eltype(a))
+    mi = 1
+    ti = 1
+    for i=1:length(a.chunks)
+        k = trailing_zeros(a.chunks[i])
+        ti += k
+        if k != 64
+            m = o
+            mi = ti
+            break
+        end
+    end
+    return (m, mi)
+end
+
+function findmin(a::BitArray)
+    if length(a) == 0
+        return (typemax(eltype(a)), 0)
+    end
+    m = one(eltype(a))
+    z = zero(eltype(a))
+    mi = 1
+    ti = 1
+    for i=1:length(a.chunks) - 1
+        k = trailing_ones(a.chunks[i])
+        ti += k
+        if k != 64
+            return (z, ti)
+        end
+    end
+    u = ~uint64(0)
+    l = (length(a)-1) & 63 + 1
+    msk = (u >>> (64 - l))
+    k = trailing_ones(a.chunks[end] & msk)
+    ti += k
+    if k != l
+        m = z
+        mi = ti
+    end
+    return (m, mi)
 end
