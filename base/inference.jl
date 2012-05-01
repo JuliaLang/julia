@@ -1299,6 +1299,9 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, vars)
+    if !(isa(f,Function)||isa(f,CompositeKind))
+        return NF
+    end
     argexprs = a2t_butfirst(e.args)
     atypes = limit_tuple_type(map(exprtype, argexprs))
 
