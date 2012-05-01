@@ -124,7 +124,7 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Int)
     colptr[1] = 1
     for col = 1 : min(n, m+k)
         l1 = S.colptr[col+1]-1
-        for c1 = 0 : l1 - S.colptr[col]
+        for c1 = 0 : (l1 - S.colptr[col])
             if S.rowval[l1 - c1] < col - k
                 break;
             end
@@ -419,15 +419,11 @@ function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{T
     mA,nA = size(a)
     mB,nB = size(b)
 
-    m, n = mA*mB, nA * nB
+    m,n = mA*mB, nA*nB
 
     colptr = Array(Ti, n+1)
     rowval = Array(Ti, numnz)
     nzval = Array(Tv, numnz)
-
-    fill!(colptr, 0)
-    fill!(rowval, 0)
-    fill!(nzval, 0)
 
     colptr[1] = 1
 
@@ -439,28 +435,27 @@ function kron{TvA,TvB,TiA,TiB}(a::SparseMatrixCSC{TvA,TiA}, b::SparseMatrixCSC{T
     nzvalB = b.nzval
 
     col = 1
-    ptr = 1
 
     for j = 1:nA
         startA = colptrA[j]
         stopA = colptrA[j+1]-1
         lA = stopA - startA + 1
 
-        for l = 1:nB
-            startB = colptrB[l]
-            stopB = colptrB[l+1]-1
+        for i = 1:nB
+            startB = colptrB[i]
+            stopB = colptrB[i+1]-1
             lB = stopB - startB + 1
+
+            r = (1:lB) + (colptr[col]-1)
+            rB = startB:stopB
 
             colptr[col+1] = colptr[col] + lA * lB
             col += 1
 
             for ptrA = startA : stopA
-                rowA = rowvalA[ptrA]
-                xA = nzvalA[ptrA]
-
-                rowval[ptr:ptr+lB-1] = (rowA-1)*mB + rowvalB[startB:stopB]
-                nzval[ptr:ptr+lB-1] = xA * nzvalB[startB:stopB]
-                ptr += lB
+                rowval[r] = (rowvalA[ptrA]-1)*mB + rowvalB[rB]
+                nzval[r] = nzvalA[ptrA] * nzvalB[rB]
+                r += lB
             end
         end
     end
@@ -486,16 +481,31 @@ function ishermitian(A::SparseMatrixCSC)
     return nnz(A - A') == 0
 end
 
-function istril(A::SparseMatrixCSC)
-    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
-        if A.rowval[i] < col && A.nzval[i] != 0; return false; end
+function istriu(A::SparseMatrixCSC)
+    for col = 1:min(A.n,A.m-1)
+        l1 = A.colptr[col+1]-1
+        for i = 0 : (l1 - A.colptr[col])
+            if A.rowval[l1-i] <= col
+                break
+            end
+            if A.nzval[l1-i] != 0
+                return false
+            end
+        end
     end
     return true
 end
 
-function istriu(A::SparseMatrixCSC)
-    for col = 1:A.n, i = A.colptr[col]:(A.colptr[col]-1)
-        if A.rowval[i] > col && A.nzval[i] != 0; return false; end
+function istril(A::SparseMatrixCSC)
+    for col = 2:A.n
+        for i = A.colptr[col] : (A.colptr[col+1]-1)
+            if A.rowval[i] >= col
+                break
+            end
+            if A.nzval[i] != 0
+                return false
+            end
+        end
     end
     return true
 end
