@@ -84,6 +84,12 @@ function edit(file::String, line::Int)
     editor = get(ENV, "JULIA_EDITOR", "emacs")
     issrc = file[end-2:end] == ".jl"
     if issrc
+        if file[1]!='/' && !is_file_readable(file)
+            file2 = "$JULIA_HOME/base/$file"
+            if is_file_readable(file2)
+                file = file2
+            end
+        end
         if editor == "emacs"
             jmode = "$JULIA_HOME/contrib/julia-mode.el"
             run(`emacs $file --eval "(progn
