@@ -325,7 +325,7 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 compile-rmath: $(RMATH_OBJ_SOURCE)
 install-rmath: $(RMATH_OBJ_TARGET)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile $(DSFMT_OBJ_TARGET)
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	cd Rmath/src && \
 	$(MAKE) CC=$(CC) && \
 	$(JULIAHOME)/deps/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
