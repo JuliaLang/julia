@@ -93,7 +93,7 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
     delta_ks = ks1 - ks0
 
     u = ~(uint64(0))
-    if delta_kd ==  0
+    if delta_kd == 0
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
         msk_d0 = ~(u << ld0)
