@@ -229,6 +229,41 @@ for (fname,direction) in ((:fft,:_jl_FFTW_FORWARD),(:ifft,:_jl_FFTW_BACKWARD))
     end
 end
 
+# rfft/rfftn
+
+rfft(X) = rfft(X, 1)
+for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
+    @eval begin
+        function rfftn(X::Array{$Tr})
+            osize = [size(X)...]
+            osize[1] = ifloor(osize[1]/2) + 1
+            Y = Array($Tc, osize...)
+            plan = _jl_fftw_plan_dft(X, Y)
+            _jl_fftw_execute($Tr, plan)
+            _jl_fftw_destroy_plan($Tr, plan)
+            return Y
+        end
+
+        function rfft(X::Array{$Tr}, dim::Int)
+            isize = [size(X)...]
+            osize = [size(X)...]
+            osize[dim] = ifloor(osize[dim]/2) + 1
+            istrides = [ prod(isize[1:i-1]) | i=1:length(isize) ]
+            ostrides = [ prod(osize[1:i-1]) | i=1:length(osize) ]
+            Y = Array($Tc, osize...)
+            dims = [isize[dim],istrides[dim],ostrides[dim]]''
+            del(isize, dim)
+            del(istrides, dim)
+            del(ostrides, dim)
+            howmany = [isize istrides ostrides]'
+            plan = _jl_fftw_plan_guru_dft(dims, howmany, X, Y)
+            _jl_fftw_execute($Tr, plan)
+            _jl_fftw_destroy_plan($Tr, plan)
+            return Y
+        end
+    end
+end
+
 # Transpose
 # NOTE: Using _jl_FFTW_MEASURE and _jl_FFTW_PATIENT zeros out the input the 
 # first time it is used for a particular size. Use _jl_FFTW_ESTIMATE

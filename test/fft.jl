@@ -57,3 +57,28 @@ for i = 1:length(m3d)
     @assert_approx_eq ifft3_fft3_m3d[i] m3d[i]*30
 end
 
+# rfft/rfftn
+
+rfft_m4 = rfft(m4)
+rfftd2_m4 = rfft(m4,2)
+rfftn_m4 = rfftn(m4)
+
+for i = 1:3, j = 1:4
+    @assert_approx_eq rfft_m4[i,j] true_fft_m4[i,j]
+    @assert_approx_eq rfftd2_m4[j,i] true_fftd2_m4[j,i]
+    @assert_approx_eq rfftn_m4[i,j] true_fftn_m4[i,j]
+end
+
+rfftd3_m3d = rfft(m3d,3)
+@assert size(rfftd3_m3d) == size(fftd3_m3d)
+for i = 1:length(m3d)
+    @assert_approx_eq rfftd3_m3d[i] true_fftd3_m3d[i]
+end
+
+fftn_m3d = fftn(m3d)
+@assert size(fftn_m3d) == (5,3,2)
+rfftn_m3d = rfftn(m3d)
+@assert size(rfftn_m3d) == (3,3,2)
+for i = 1:3, j = 1:3, k = 1:2
+    @assert_approx_eq rfftn_m3d[i,j,k] fftn_m3d[i,j,k]
+end
