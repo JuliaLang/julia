@@ -883,31 +883,31 @@
 	     (error "unexpected comma in matrix expression"))
 	    ((#\] #\})
 	     (error (string "unexpected " t)))
+	    ((for)
+	     (error "invalid comprehension syntax"))
 	    (else
 	     (loop (cons (parse-eq* s) vec) outer)))))))
 
 (define (parse-cat s closer)
   (with-normal-ops
    (with-space-sensitive
-    (parse-cat- s closer))))
-(define (parse-cat- s closer)
-  (if (eqv? (require-token s) closer)
-      (begin (take-token s)
-	     (list 'vcat))  ; [] => (vcat)
-      (let ((first (without-bitor (parse-eq* s))))
-	(case (peek-token s)
-	  ;; dispatch to array syntax, comprehension, or matrix syntax
-	  ((#\,)
-	   (parse-vcat s first closer))
-	  ((|\||)
-	   (take-token s)
-	   (let ((r (parse-comma-separated-iters s)))
-	     (if (not (eqv? (require-token s) closer))
-		 (error (string "expected " closer))
-		 (take-token s))
-	     `(comprehension ,first ,@r)))
-	  (else
-	   (parse-matrix s first closer))))))
+    (if (eqv? (require-token s) closer)
+	(begin (take-token s)
+	       (list 'vcat))  ; [] => (vcat)
+	(let ((first (without-bitor (parse-eq* s))))
+	  (case (peek-token s)
+	    ;; dispatch to array syntax, comprehension, or matrix syntax
+	    ((#\,)
+	     (parse-vcat s first closer))
+	    ((|\|| for)
+	     (take-token s)
+	     (let ((r (parse-comma-separated-iters s)))
+	       (if (not (eqv? (require-token s) closer))
+		   (error (string "expected " closer))
+		   (take-token s))
+	       `(comprehension ,first ,@r)))
+	    (else
+	     (parse-matrix s first closer))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
