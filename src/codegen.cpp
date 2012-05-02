@@ -260,7 +260,7 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
         if (is_global(sym, ctx)) {
             size_t i;
             if (sparams) {
-                for(i=0; i < ctx->sp->length; i+=2) {
+                for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
                     if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                         // static parameter
                         return true;
@@ -635,7 +635,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             Value *arg1 = emit_expr(args[1], ctx);
             if (jl_is_long(args[2])) {
-                size_t tlen = ((jl_tuple_t*)tty)->length;
+                size_t tlen = jl_tuple_len(tty);
                 int isseqt =
                     tlen>0 && jl_is_seq_type(jl_tupleref(tty, tlen-1));
                 size_t idx = jl_unbox_long(args[2]);
@@ -894,7 +894,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *ty =
                 jl_interpret_toplevel_expr_in(ctx->module, expr,
                                               &jl_tupleref(ctx->sp,0),
-                                              ctx->sp->length/2);
+                                              jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
                 JL_GC_POP();
                 return literal_pointer_val(ty);
@@ -1077,7 +1077,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
     if (isglobal) {
         size_t i;
         // look for static parameter
-        for(i=0; i < ctx->sp->length; i+=2) {
+        for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
             assert(jl_is_symbol(jl_tupleref(ctx->sp, i)));
             if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                 return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
@@ -1305,7 +1305,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             jl_is_struct_type(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             ty = jl_tparam0(ty);
-            size_t nf = ((jl_struct_type_t*)ty)->names->length;
+            size_t nf = jl_tuple_len(((jl_struct_type_t*)ty)->names);
             if (nf > 0) {
                 Value *strct =
                     builder.CreateCall(jlallocobj_func,
