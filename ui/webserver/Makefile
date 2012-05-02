@@ -18,15 +18,15 @@ julia-release julia-debug: %: %-webserver
 release debug:
 	$(MAKE) julia-$@
 
-julia-release-webserver: $(USRBIN)/julia-release-webserver
-julia-debug-webserver: $(USRBIN)/julia-debug-webserver
+julia-release-webserver: $(JULIAHOME)/julia-release-webserver
+julia-debug-webserver: $(JULIAHOME)/julia-debug-webserver
 
-$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
+$(JULIAHOME)/julia-release-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
+$(JULIAHOME)/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
 clean:
 	rm -f *.o *.do
-	rm -f $(USRBIN)/julia-*-webserver
+	rm -f $(JULIAHOME)/julia-*-webserver
