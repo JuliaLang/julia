@@ -472,12 +472,12 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared MPIF77=$(FC)
+	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC)
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
-	make install MPIF77=$(FC)
+	make install F77=$(FC) MPIF77=$(FC)
 	touch $@
 
 clean-arpack:
