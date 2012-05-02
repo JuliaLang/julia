@@ -60,7 +60,7 @@ end
 
 const nCr = binomial
 
-pascal(n) = [binomial(i+j-2,i-1) | i=1:n,j=1:n]
+pascal(n) = [binomial(i+j-2,i-1) for i=1:n,j=1:n]
 
 ## other ordering related functions ##
 
@@ -137,7 +137,7 @@ function combinations(a::AbstractVector, t::Integer)
   else
     while true
       # T2
-      produce([ a[c[i]+1] | i=1:t ])
+      produce([ a[c[i]+1] for i=1:t ])
 
       if j > 0
         x = j
@@ -236,7 +236,7 @@ function partitions{T}(s::AbstractVector{T})
   while true
     # H2
     # convert from restricted growth string a[1:n] to set of sets
-    temp = [ Array(T,0) | k = 1:n ]
+    temp = [ Array(T,0) for k = 1:n ]
     for k = 1:n
       push(temp[a[k]+1], s[k])
     end

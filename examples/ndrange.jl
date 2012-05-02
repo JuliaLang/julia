@@ -25,7 +25,7 @@ start(r::NDRange{0}) = false
 done(r::NDRange{0}, st) = st
 next(r::NDRange{0}, st) = ((), true)
 
-start(r::NDRange) = { start(r.ranges[i]) | i=1:length(r.ranges) }
+start(r::NDRange) = { start(r.ranges[i]) for i=1:length(r.ranges) }
 done(r::NDRange, st) = r.empty || !bool(st)
 
 function next{N}(r::NDRange{N}, st)

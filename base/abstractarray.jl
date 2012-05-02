@@ -197,8 +197,8 @@ end
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
-        dimargnames = { gensym() | i=1:N }
-        ivars = { gensym() | i=1:N }
+        dimargnames = { gensym() for i=1:N }
+        ivars = { gensym() for i=1:N }
         bodies = genbodies(ivars)
 
         ## creating a 2d array, to pass as bodies
@@ -318,15 +318,15 @@ vcat() = Array(None, 0)
 hcat() = Array(None, 0)
 
 ## cat: special cases
-hcat{T}(X::T...) = [ X[j] | i=1, j=1:length(X) ]
-vcat{T}(X::T...) = [ X[i] | i=1:length(X) ]
+hcat{T}(X::T...) = [ X[j] for i=1, j=1:length(X) ]
+vcat{T}(X::T...) = [ X[i] for i=1:length(X) ]
 
 function hcat{T}(V::AbstractVector{T}...)
     height = length(V[1])
     for j = 2:length(V)
         if length(V[j]) != height; error("hcat: mismatched dimensions"); end
     end
-    [ V[j][i]::T | i=1:length(V[1]), j=1:length(V) ]
+    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
 
 function vcat{T}(V::AbstractVector{T}...)
@@ -718,7 +718,7 @@ function sub2ind(dims, I::Integer...)
 end
 
 sub2ind(dims, I::AbstractVector...) =
-    [ sub2ind(dims, map(X->X[i], I)...) | i=1:length(I[1]) ]
+    [ sub2ind(dims, map(X->X[i], I)...) for i=1:length(I[1]) ]
 
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
 ind2sub(dims::(), ind::Integer) = throw(BoundsError())
@@ -829,9 +829,9 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
     end
     c = Array(promote_type(eltype(a),eltype(b)), shp...)
 
-    aidxs = { 1:size(a,i) | i=1:nd }
-    bidxs = { 1:size(b,i) | i=1:nd }
-    cidxs = { 1:size(c,i) | i=1:nd }
+    aidxs = { 1:size(a,i) for i=1:nd }
+    bidxs = { 1:size(b,i) for i=1:nd }
+    cidxs = { 1:size(c,i) for i=1:nd }
 
     sliceop = function (idxs::Int...)
         j = 1

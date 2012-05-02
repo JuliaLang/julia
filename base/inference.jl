@@ -925,7 +925,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     rec = false
 
-    s = { () | i=1:n }
+    s = { () for i=1:n }
     recpts = IntSet(n+1)  # statements that depend recursively on our value
     W = IntSet(n+1)
     # initial set of pc
@@ -972,7 +972,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     # exception handlers
     cur_hand = ()
-    handler_at = { () | i=1:n }
+    handler_at = { () for i=1:n }
 
     while !isempty(W)
         pc = choose(W)
@@ -1399,7 +1399,7 @@ function inlineable(f, e::Expr, vars)
         return NF
     end
     # ok, substitute argument expressions for argument names in the body
-    spnames = { sp[i].name | i=1:2:length(sp) }
+    spnames = { sp[i].name for i=1:2:length(sp) }
     return sym_replace(copy(expr), append(args,spnames),
                        append(argexprs,spvals))
 end
@@ -1487,7 +1487,7 @@ function inlining_pass(e::Expr, vars)
                     newargs[i-2] = aarg.args[2:]
                 elseif isa(t,Tuple) && isleaftype(t)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
-                    newargs[i-2] = { _jl_mk_tupleref(aarg,j) | j=1:length(t) }
+                    newargs[i-2] = { _jl_mk_tupleref(aarg,j) for j=1:length(t) }
                 else
                     # not all args expandable
                     return e
@@ -1547,7 +1547,7 @@ function tuple_elim_pass(ast::Expr)
                     if nv > 0
                         del(body, i)  # remove (multiple_value)
                         del(body, i)  # remove tuple allocation
-                        vals = { unique_name(ast) | j=1:nv }
+                        vals = { unique_name(ast) for j=1:nv }
                         # convert tuple allocation to a series of assignments
                         # to local variables
                         for j=1:nv

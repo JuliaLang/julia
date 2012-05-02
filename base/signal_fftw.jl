@@ -200,7 +200,7 @@ for (fname,direction) in ((:fft,:_jl_FFTW_FORWARD),(:ifft,:_jl_FFTW_BACKWARD))
     @eval begin
         function ($fname){T<:Union(Complex128,Complex64)}(X::Array{T}, dim::Int)
             s = [size(X)...]
-            strides = [ prod(s[1:i-1]) | i=1:length(s) ]
+            strides = [ prod(s[1:i-1]) for i=1:length(s) ]
             dims = [s[dim],strides[dim],strides[dim]]''
             del(s, dim)
             del(strides, dim)
@@ -214,7 +214,7 @@ for (fname,direction) in ((:fft,:_jl_FFTW_FORWARD),(:ifft,:_jl_FFTW_BACKWARD))
 
         function ($fname){T<:Union(Float64,Float32)}(X::Array{T}, dim::Int)
             s = [size(X)...]
-            strides = [ prod(s[1:i-1]) | i=1:length(s) ]
+            strides = [ prod(s[1:i-1]) for i=1:length(s) ]
             n = s[dim]
             dims = [n,strides[dim],strides[dim]]''
             del(s, dim)

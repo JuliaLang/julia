@@ -791,7 +791,8 @@
      (let loop ((exprs '()))
        (if (or (closing-token? (peek-token s))
 	       (newline? (peek-token s))
-	       (and inside-vec (eq? (peek-token s) '|\||)))
+	       (and inside-vec (or (eq? (peek-token s) '|\||)
+				   (eq? (peek-token s) 'for))))
 	   (reverse! exprs)
 	   (let ((e (parse-eq s)))
 	     (case (peek-token s)
@@ -899,6 +900,8 @@
 	    ;; dispatch to array syntax, comprehension, or matrix syntax
 	    ((#\,)
 	     (parse-vcat s first closer))
+	    ;;((|\||)
+	    ;; (error "old syntax"))
 	    ((|\|| for)
 	     (take-token s)
 	     (let ((r (parse-comma-separated-iters s)))

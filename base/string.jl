@@ -244,7 +244,7 @@ type CharString <: String
     chars::Array{Char,1}
 
     CharString(a::Array{Char,1}) = new(a)
-    CharString(c::Char...) = new([ c[i] | i=1:length(c) ])
+    CharString(c::Char...) = new([ c[i] for i=1:length(c) ])
 end
 CharString(x...) = CharString(map(char,x)...)
 

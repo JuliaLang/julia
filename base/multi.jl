@@ -1028,8 +1028,8 @@ end #func
 function addprocs_ssh(machines, keys)
     if !(isa(keys, Array)) && isa(machines,Array)
         key = keys
-        keys = [ key | x = 1:numel(machines)]
-        cmdargs = { {machines[x],keys[x]} | x = 1:numel(machines)}
+        keys = [ key for x = 1:numel(machines)]
+        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
     else
         cmdargs = {{machines,keys}}
     end #if/else
@@ -1039,8 +1039,8 @@ end #func
 worker_local_cmd() = `$JULIA_HOME/julia --worker`
 
 addprocs_local(np::Integer) =
-    add_workers(PGRP, start_remote_workers({ "localhost" | i=1:np },
-                                           { worker_local_cmd() | i=1:np }))
+    add_workers(PGRP, start_remote_workers({ "localhost" for i=1:np },
+                                           { worker_local_cmd() for i=1:np }))
 
 
 function start_sge_workers(n)
@@ -1176,7 +1176,7 @@ type GlobalObject
                 midx = i
             end
         end
-        rids = { rr2id(r[i]) | i=1:np }
+        rids = { rr2id(r[i]) for i=1:np }
         for p in procs
             if p != mi
                 remote_do(p, init_GlobalObject, p, procs, rids, initializer)
@@ -1393,7 +1393,7 @@ end
 function pmap_static(f, lsts...)
     np = nprocs()
     n = length(lsts[1])
-    { remote_call((i-1)%np+1, f, map(L->L[i], lsts)...) | i = 1:n }
+    { remote_call((i-1)%np+1, f, map(L->L[i], lsts)...) for i = 1:n }
 end
 
 pmap(f) = f()

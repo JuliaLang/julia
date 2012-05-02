@@ -294,7 +294,7 @@ deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
 function deserialize_expr(s, len)
     hd = deserialize(s)::Symbol
     ty = force(deserialize(s))
-    args = { deserialize(s) | i=1:len }
+    args = { deserialize(s) for i=1:len }
     function ()
         e = expr(hd, map(force, args))
         e.typ = ty
