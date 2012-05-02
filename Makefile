@@ -24,7 +24,7 @@ sys.ji: VERSION sys0.ji base/*.jl
 	$(QUIET_JULIA) cd base && ../julia `test -f ../sys.ji && echo stage1.jl || echo -J sys0.ji stage1.jl`
 
 install: release
-	install -d $(DESTDIR)$(PREFIX)/share/julia/lib
+	install -d $(DESTDIR)$(PREFIX)/share/julia/usr/lib
 	install -d $(DESTDIR)$(PREFIX)/share/julia/base
 	install -d $(DESTDIR)$(PREFIX)/share/julia/contrib
 	install -d $(DESTDIR)$(PREFIX)/share/julia/examples
@@ -36,7 +36,7 @@ install: release
 	install -v base/* $(DESTDIR)$(PREFIX)/share/julia/base
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
-	-install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
+	install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/usr/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
