@@ -204,7 +204,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
-                                      ctx->sp->length/2);
+                                      jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("unbox: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
@@ -217,7 +217,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
-                                      ctx->sp->length/2);
+                                      jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("box: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
@@ -250,7 +250,7 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
-                                      ctx->sp->length/2);
+                                      jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);
@@ -263,7 +263,7 @@ static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
                                       &jl_tupleref(ctx->sp,0),
-                                      ctx->sp->length/2);
+                                      jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("zext_int: expected bits type as first argument");
     unsigned int nb = jl_bitstype_nbits(bt);

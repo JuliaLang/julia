@@ -429,6 +429,8 @@ void *allocobj(size_t sz);
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
+#define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
+#define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
