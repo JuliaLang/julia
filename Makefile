@@ -36,7 +36,7 @@ install: release
 	install -v base/* $(DESTDIR)$(PREFIX)/share/julia/base
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
-	-install -v lib/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
+	-install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/lib
 
 dist: release
 	rm -fr dist julia-*.tar.gz
