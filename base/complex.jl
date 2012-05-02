@@ -34,8 +34,8 @@ function _jl_show(io, z::Complex, compact::Bool)
         print(io, "complex(",r,",",i,")")
     end
 end
-show(io, z::Complex) = _jl_show(z, false)
-showcompact(io, z::Complex) = _jl_show(z, true)
+show(io, z::Complex) = _jl_show(io, z, false)
+showcompact(io, z::Complex) = _jl_show(io, z, true)
 
 ## packed complex float types ##
 
