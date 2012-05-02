@@ -44,6 +44,7 @@
     jl_takebuf_array;
     jl_takebuf_string;
     jl_readuntil;
+    jl_cpu_cores;
     jl_cstr_to_string;
     jl_array_to_string;
     jl_parse_string;

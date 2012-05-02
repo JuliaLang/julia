@@ -22,3 +22,6 @@ _jl_libfftwf = dlopen("libfftw3f")
 
 ##_jl_libglpk = dlopen("libglpk")
 ##_jl_libglpk = dlopen("libglpk_wrapper")
+
+# set CPU core count
+const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
