@@ -72,9 +72,9 @@ extern "C" void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn)
             return ((jl_array_t*)v)->data;
         if (jl_is_cpointer_type(jt)) {
             jl_array_t *ar = (jl_array_t*)v;
-            void **temp=(void**)alloc_temp_arg_space(ar->length*sizeof(void*));
+            void **temp=(void**)alloc_temp_arg_space(jl_array_len(ar)*sizeof(void*));
             size_t i;
-            for(i=0; i < ar->length; i++) {
+            for(i=0; i < jl_array_len(ar); i++) {
                 temp[i] = jl_value_to_pointer(jl_tparam0(jt),
                                               jl_arrayref(ar, i), argn);
             }
@@ -166,10 +166,10 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_GC_PUSH(&ptr, &rt, &at);
     ptr = jl_interpret_toplevel_expr_in(ctx->module, args[1],
                                         &jl_tupleref(ctx->sp,0),
-                                        ctx->sp->length/2);
+                                        jl_tuple_len(ctx->sp)/2);
     rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
                                         &jl_tupleref(ctx->sp,0),
-                                        ctx->sp->length/2);
+                                        jl_tuple_len(ctx->sp)/2);
     if (jl_is_tuple(rt)) {
         std::string msg = "in " + ctx->funcName +
             ": ccall: missing return type";
@@ -177,7 +177,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
                                         &jl_tupleref(ctx->sp,0),
-                                        ctx->sp->length/2);
+                                        jl_tuple_len(ctx->sp)/2);
     void *fptr;
     if (jl_is_symbol(ptr)) {
         // just symbol, default to JuliaDLHandle
@@ -201,7 +201,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     size_t i;
     bool haspointers = false;
     bool isVa = false;
-    for(i=0; i < tt->length; i++) {
+    for(i=0; i < jl_tuple_len(tt); i++) {
         jl_value_t *tti = jl_tupleref(tt,i);
         if (jl_is_seq_type(tti)) {
             isVa = true;
@@ -235,8 +235,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
     }
     
-    if ((!isVa && tt->length  != (nargs-2)/2) ||
-        ( isVa && tt->length-1 > (nargs-2)/2))
+    if ((!isVa && jl_tuple_len(tt)  != (nargs-2)/2) ||
+        ( isVa && jl_tuple_len(tt)-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
@@ -277,7 +277,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // emit arguments
     Value *argvals[(nargs-3)/2];
     int last_depth = ctx->argDepth;
-    int nargty = tt->length;
+    int nargty = jl_tuple_len(tt);
     for(i=4; i < nargs+1; i+=2) {
         int ai = (i-4)/2;
         jl_value_t *argi = args[i];

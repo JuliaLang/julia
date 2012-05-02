@@ -77,7 +77,7 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     if (type->instance != NULL) return type->instance;
     va_list args;
-    size_t nf = type->names->length;
+    size_t nf = jl_tuple_len(type->names);
     size_t i;
     va_start(args, type);
     jl_value_t *jv = newobj((jl_type_t*)type, nf);
@@ -92,7 +92,7 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
 {
     if (type->instance != NULL) return type->instance;
-    size_t nf = type->names->length;
+    size_t nf = jl_tuple_len(type->names);
     size_t i;
     jl_value_t *jv = newobj((jl_type_t*)type, nf);
     for(i=0; i < nf; i++) {
@@ -104,9 +104,9 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
 
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
 {
-    assert(type->names->length == t->length);
+    assert(jl_tuple_len(type->names) == jl_tuple_len(t));
     jl_value_t *jv = jl_new_struct_uninit(type);
-    for(size_t i=0; i < t->length; i++) {
+    for(size_t i=0; i < jl_tuple_len(t); i++) {
         ((jl_value_t**)jv)[i+1] = jl_tupleref(t, i);
     }
     return jv;
@@ -119,7 +119,7 @@ jl_tuple_t *jl_tuple(size_t n, ...)
     if (n == 0) return jl_null;
     va_start(args, n);
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
-    jv->length = n;
+    jl_tuple_set_len_unsafe(jv, n);
     for(i=0; i < n; i++) {
         jl_tupleset(jv, i, va_arg(args, jl_value_t*));
     }
@@ -131,7 +131,7 @@ jl_tuple_t *jl_tuple1(void *a)
 {
     jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
     t->type = (jl_type_t*)jl_tuple_type;
-    t->length = 1;
+    jl_tuple_set_len_unsafe(t, 1);
     jl_tupleset(t, 0, a);
     return t;
 }
@@ -140,7 +140,7 @@ jl_tuple_t *jl_tuple2(void *a, void *b)
 {
     jl_tuple_t *t = (jl_tuple_t*)alloc_4w();
     t->type = (jl_type_t*)jl_tuple_type;
-    t->length = 2;
+    jl_tuple_set_len_unsafe(t, 2);
     jl_tupleset(t, 0, a);
     jl_tupleset(t, 1, b);
     return t;
@@ -150,7 +150,7 @@ jl_tuple_t *jl_alloc_tuple_uninit(size_t n)
 {
     if (n == 0) return jl_null;
     jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_type_t*)jl_tuple_type, n+1);
-    jv->length = n;
+    jl_tuple_set_len_unsafe(jv, n);
     return jv;
 }
 
@@ -167,13 +167,13 @@ jl_tuple_t *jl_alloc_tuple(size_t n)
 
 jl_tuple_t *jl_tuple_append(jl_tuple_t *a, jl_tuple_t *b)
 {
-    jl_tuple_t *c = jl_alloc_tuple_uninit(a->length + b->length);
+    jl_tuple_t *c = jl_alloc_tuple_uninit(jl_tuple_len(a) + jl_tuple_len(b));
     size_t i=0, j;
-    for(j=0; j < a->length; j++) {
+    for(j=0; j < jl_tuple_len(a); j++) {
         jl_tupleset(c, i, jl_tupleref(a,j));
         i++;
     }
-    for(j=0; j < b->length; j++) {
+    for(j=0; j < jl_tuple_len(b); j++) {
         jl_tupleset(c, i, jl_tupleref(b,j));
         i++;
     }
@@ -377,16 +377,16 @@ void jl_add_constructors(jl_struct_type_t *t)
 
     if (t->ctor_factory == (jl_value_t*)jl_nothing ||
         t->ctor_factory == (jl_value_t*)jl_null) {
-        assert(t->parameters->length == 0);
+        assert(jl_tuple_len(t->parameters) == 0);
     }
     else {
-        assert(t->parameters->length > 0);
+        assert(jl_tuple_len(t->parameters) > 0);
         if (t != (jl_struct_type_t*)t->name->primary) {
             // instantiating
             assert(jl_is_function(t->ctor_factory));
             
             // add type's static parameters to the ctor factory
-            size_t np = t->parameters->length;
+            size_t np = jl_tuple_len(t->parameters);
             jl_tuple_t *sparams = jl_alloc_tuple_uninit(np*2);
             jl_function_t *cfactory = NULL;
             JL_GC_PUSH(&sparams, &cfactory);
@@ -495,7 +495,7 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
     jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_type_t*)jl_union_kind, 1);
     // don't make unions of 1 type; Union(T)==T
-    assert(types->length != 1);
+    assert(jl_tuple_len(types) != 1);
     t->types = types;
     return t;
 }

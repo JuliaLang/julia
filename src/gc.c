@@ -459,7 +459,7 @@ static void gc_markval_(jl_value_t *v)
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t l = ((jl_tuple_t*)v)->length;
+        size_t l = jl_tuple_len(v);
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
             if (elt != NULL)
@@ -541,7 +541,7 @@ static void gc_markval_(jl_value_t *v)
         // don't mark contents
     }
     else {
-        int nf = (int)((jl_struct_type_t*)vt)->names->length;
+        int nf = (int)jl_tuple_len(((jl_struct_type_t*)vt)->names);
         if (nf > 0) {
             int i = 0;
             if (vt == (jl_value_t*)jl_struct_kind ||
