@@ -635,21 +635,13 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_get_global(jl_base_module,
-                                          jl_symbol("stderr_stream"));
-    JL_TRY {
-        if (errstream)
-            jl_set_current_output_stream_obj(errstream);
-        ios_t *s = jl_current_output_stream();
-        for(int i=0; i < obj_counts.size; i+=2) {
-            if (obj_counts.table[i+1] != HT_NOTFOUND) {
-                ios_printf(s, "%d ", obj_counts.table[i+1]-1);
-                jl_show(obj_counts.table[i]);
-                ios_printf(s, "\n");
-            }
+    jl_value_t *errstream = jl_stderr_obj();
+    for(int i=0; i < obj_counts.size; i+=2) {
+        if (obj_counts.table[i+1] != HT_NOTFOUND) {
+            ios_printf(ios_stderr, "%d ", obj_counts.table[i+1]-1);
+            jl_show(errstream, obj_counts.table[i]);
+            ios_printf(ios_stderr, "\n");
         }
-    }
-    JL_CATCH {
     }
 }
 #endif

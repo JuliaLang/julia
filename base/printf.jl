@@ -75,7 +75,7 @@ end
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
 _jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
-    error("invalid printf format string: ", show_to_string(s))
+    error("invalid printf format string: ", sprint(show, s))
 
 function _jl_printf_parse1(s::String, k::Integer)
     j = k
@@ -119,7 +119,7 @@ function _jl_printf_parse1(s::String, k::Integer)
     end
     # validate conversion
     if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
-        error("invalid printf format string: ", show_to_string(s))
+        error("invalid printf format string: ", sprint(show, s))
     end
     # TODO: warn about silly flag/conversion combinations
     flags, width, precision, c, k
@@ -450,7 +450,7 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         if !contains(flags,'#')
             push(blk.args, :($x = string($x)))
         else
-            push(blk.args, :($x = show_to_string($x)))
+            push(blk.args, :($x = sprint(show, $x)))
         end
         if !contains(flags,'-')
             push(blk.args, _jl_printf_pad(width, :($width-strwidth($x)), ' '))
@@ -768,5 +768,5 @@ end
 
 fprintf(s::IOStream, f::Function, args...) = f(s, args...)
 fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
-printf(f::Union(Function,String), args...) = fprintf(current_output_stream(), f, args...)
-sprintf(f::Union(Function,String), args...) = print_to_string(printf, f, args...)
+printf(f::Union(Function,String), args...) = fprintf(OUTPUT_STREAM, f, args...)
+sprintf(f::Union(Function,String), args...) = sprint(printf, f, args...)

@@ -65,6 +65,8 @@
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
     jl_stdout_stream;
+    jl_stdout_obj;
+    jl_stderr_obj;
     ios_fd;
     ios_mem;
     jl_ios_mem;

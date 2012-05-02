@@ -6,7 +6,7 @@ function _jl_librandom_init()
     try
         srand("/dev/urandom")
     catch
-        println("Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
+        println(stderr, "Entropy pool not available to seed RNG, using ad-hoc entropy sources.")
         seed = reinterpret(Uint64, time())
         seed = bitmix(seed, uint64(getpid()))
         try

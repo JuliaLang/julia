@@ -134,7 +134,7 @@ void julia_init(char *imageFile)
         }
         JL_CATCH {
             ios_printf(ios_stderr, "error during init:\n");
-            jl_show(jl_exception_in_transit);
+            jl_show(jl_stderr_obj(), jl_exception_in_transit);
             ios_printf(ios_stdout, "\n");
             exit(1);
         }

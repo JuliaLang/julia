@@ -28,8 +28,10 @@ function repl_show(v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)
             print(summary(v))
-            println(":")
-            print_matrix(reshape(v,(length(v),1)))
+            if !isempty(v)
+                println(":")
+                print_matrix(OUTPUT_STREAM, reshape(v,(length(v),1)))
+            end
         else
             show(v)
         end

@@ -184,7 +184,7 @@ function __eval_exprs(__parsed_exprs)
         try
             ans = eval(__parsed_exprs[i][2])
         catch __error
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, print_to_string(show, __error)}))
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, sprint(show, __error)}))
         end
     end
     
@@ -192,7 +192,7 @@ function __eval_exprs(__parsed_exprs)
     if ans == nothing
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, ""}))
     else
-        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, print_to_string(show, ans)}))
+        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(show, ans)}))
     end
 end
 

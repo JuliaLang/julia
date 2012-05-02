@@ -34,10 +34,10 @@ isequal(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 
 hash(fd::FileDes) = hash(fd.fd)
 
-show(fd::FileDes) =
-    fd == STDIN  ? print("STDIN")  :
-    fd == STDOUT ? print("STDOUT") :
-    fd == STDERR ? print("STDERR") :
+show(io, fd::FileDes) =
+    fd == STDIN  ? print(io, "STDIN")  :
+    fd == STDOUT ? print(io, "STDOUT") :
+    fd == STDERR ? print(io, "STDERR") :
     invoke(show, (Any,), fd)
 
 type Pipe
@@ -152,7 +152,7 @@ function exec(thunk::Function)
     try
         thunk()
     catch e
-        show(e)
+        show(io, e)
         exit(0xff)
     end
     exit(0)
@@ -184,17 +184,17 @@ end
 setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
 ignorestatus(cmd::Cmd) = setsuccess(cmd, status->status!=0xff)
 
-function show(cmd::Cmd)
+function show(io, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
-        print('`')
+        print(io, '`')
         for c in esc
             if c == '`'
-                print('\\')
+                print(io, '\\')
             end
-            print(c)
+            print(io, c)
         end
-        print('`')
+        print(io, '`')
     else
         invoke(show, (Any,), cmd.exec)
     end
@@ -376,7 +376,7 @@ function spawn(cmd::Cmd)
                 # dup2 manually inlined to avoid potential heap stomping
                 r = ccall(:dup2, Int32, (Int32, Int32), dup2_fds[i], dup2_fds[i+1])
                 if r == -1
-                    println("dup2: ", strerror())
+                    println(stderr, "dup2: ", strerror())
                     exit(0xff)
                 end
                 i += 2
@@ -387,14 +387,14 @@ function spawn(cmd::Cmd)
                 # close manually inlined to avoid potential heap stomping
                 r = ccall(:close, Int32, (Int32,), close_fds[i])
                 if r != 0
-                    println("close: ", strerror())
+                    println(stderr, "close: ", strerror())
                     exit(0xff)
                 end
                 i += 1
             end
             if ptrs != nothing
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
-                println("exec: ", strerror())
+                println(stderr, "exec: ", strerror())
                 exit(0xff)
             end
             # other ways of execing (e.g. a julia function)
@@ -403,7 +403,7 @@ function spawn(cmd::Cmd)
             try
                 exec(c)
             catch err
-                show(err)
+                show(stderr, err)
                 exit(0xff)
             end
             error("exec should not return but has")

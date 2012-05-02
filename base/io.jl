@@ -29,6 +29,8 @@ type IOStream <: IO
     IOStream(name::String) = IOStream(name, true)
 end
 
+convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
+
 # "own" means the descriptor will be closed with the IOStream
 function fdio(name::String, fd::Integer, own::Bool)
     s = IOStream(name)
@@ -44,7 +46,7 @@ make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
 make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
 make_stdout_stream() = IOStream("<stdout>", ccall(:jl_stdout_stream, Any, ()))
 
-show(s::IOStream) = print("IOStream(",s.name,")")
+show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
@@ -81,58 +83,36 @@ end
 memio(x::Integer) = memio(x, true)
 memio() = memio(0, true)
 
-convert(T::Type{Ptr}, s::IOStream) = convert(T, s.ios)
-
-current_output_stream() = ccall(:jl_current_output_stream_obj, IOStream, ())
-
-set_current_output_stream(s::IOStream) =
-    ccall(:jl_set_current_output_stream_obj, Void, (Any,), s)
-
-function with_output_stream(s::IOStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        throw(e)
-    end
-end
-
-# custom version for print_to_*
-function _jl_with_output_stream(s::IOStream, f::Function, args...)
-    try
-        set_current_output_stream(s)
-        f(args...)
-    catch e
-        # only add finalizer if takebuf doesn't happen
-        finalizer(s, close)
-        throw(e)
-    end
-end
-
-takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Any, (Ptr{Void},), s.ios)::Array{Uint8,1}
-
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
-function print_to_array(size::Integer, f::Function, args...)
+function sprint(size::Integer, f::Function, args...)
     s = memio(size, false)
-    _jl_with_output_stream(s, f, args...)
-    takebuf_array(s)
-end
-
-function print_to_string(size::Integer, f::Function, args...)
-    s = memio(size, false)
-    _jl_with_output_stream(s, f, args...)
+    f(s, args...)
     takebuf_string(s)
 end
 
-print_to_array(f::Function, args...) = print_to_array(0, f, args...)
-print_to_string(f::Function, args...) = print_to_string(0, f, args...)
+sprint(f::Function, args...) = sprint(0, f, args...)
+
+# using this is not recommended
+function with_output_to_string(thunk)
+    global OUTPUT_STREAM
+    oldio = OUTPUT_STREAM
+    m = memio()
+    OUTPUT_STREAM = m
+    try
+        thunk()
+        OUTPUT_STREAM = oldio
+    catch e
+        OUTPUT_STREAM = oldio
+        throw(e)
+    end
+    takebuf_string(m)
+end
 
 nthbyte(x::Integer, n::Integer) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
 
-write(x) = write(current_output_stream(), x)
+write(x) = write(OUTPUT_STREAM::IOStream, x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 function write(s, x::Integer)

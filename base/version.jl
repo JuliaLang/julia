@@ -40,22 +40,22 @@ VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, [], [
 VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [])
 VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
 
-function print(v::VersionNumber)
-    print(v.major)
-    print('.')
-    print(v.minor)
-    print('.')
-    print(v.patch)
+function print(io::IO, v::VersionNumber)
+    print(io, v.major)
+    print(io, '.')
+    print(io, v.minor)
+    print(io, '.')
+    print(io, v.patch)
     if !isempty(v.prerelease)
-        print('-')
-        print_joined(v.prerelease,'.')
+        print(io, '-')
+        print_joined(io, v.prerelease,'.')
     end
     if !isempty(v.build)
-        print('+')
-        print_joined(v.build,'.')
+        print(io, '+')
+        print_joined(io, v.build,'.')
     end
 end
-show(v::VersionNumber) = print("v\"",v,"\"")
+show(io, v::VersionNumber) = print(io, "v\"",v,"\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -132,7 +132,7 @@ end
 
 const VERSION = convert(VersionNumber,chomp(readall(open("$JULIA_HOME/VERSION"))))
 try
-    ver = print_to_string(print,VERSION)
+    ver = sprint(print,VERSION)
     commit = chomp(readall(`git rev-parse HEAD`))
     tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
              catch "doesn't reference a commit"; end

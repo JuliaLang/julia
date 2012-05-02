@@ -82,17 +82,17 @@ strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
 
 transform_to_utf8(s::String, f::Function) =
-    print_to_string(length(s), @thunk for c=s; print(f(c)); end)
+    sprint(length(s), io->for c=s; print(io,f(c)); end)
 
 uppercase(s::UTF8String) = transform_to_utf8(s, uppercase)
 lowercase(s::UTF8String) = transform_to_utf8(s, lowercase)
 
-ucfirst(s::UTF8String) = print_to_string(length(s), print, uppercase(s[1]), s[2:])
-lcfirst(s::UTF8String) = print_to_string(length(s), print, lowercase(s[1]), s[2:])
+ucfirst(s::UTF8String) = sprint(length(s), io->print(io, uppercase(s[1]), s[2:]))
+lcfirst(s::UTF8String) = sprint(length(s), io->print(io, lowercase(s[1]), s[2:]))
 
 ## outputing UTF-8 strings ##
 
-print(s::UTF8String) = print(s.data)
+print(io::IO, s::UTF8String) = print(io, s.data)
 write(io, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##

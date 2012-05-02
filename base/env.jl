@@ -63,9 +63,9 @@ function next(::EnvHash, i)
     (m.captures, i+1)
 end
 
-function show(::EnvHash)
+function show(io, ::EnvHash)
     for (k,v) = ENV
-        println("$k=$v")
+        println(io, "$k=$v")
     end
 end
 
