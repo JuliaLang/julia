@@ -47,3 +47,7 @@ a_roots = copy(pN.a)
 @assert length(roots(p5)) == 4
 @assert all(roots(pNULL) == [])
 
+@assert pNULL + 2 == p0 + 2 == 2 + p0 == Polynomial([2])
+@assert p2 - 2 == -2 + p2 == Polynomial([1,-1])
+@assert 2 - p2 == Polynomial([-1,1])
+
