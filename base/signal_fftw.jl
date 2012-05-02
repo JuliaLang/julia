@@ -93,27 +93,6 @@ for (libname, fname_complex, fname_real, T_in, T_out) in
     end
 end
 
-# Create 3d plan
-
-for (libname, fname_complex, fname_real, T_in, T_out) in
-    ((:_jl_libfftw,"fftw_plan_dft_3d","fftw_plan_dft_r2c_3d",:Float64,:Complex128),
-     (:_jl_libfftwf,"fftwf_plan_dft_3d","fftwf_plan_dft_r2c_3d",:Float32,:Complex64))
-    @eval begin
-        function _jl_fftw_plan_dft(X::Array{$T_out,3}, Y::Array{$T_out,3}, direction::Integer)
-            ccall(dlsym($libname, $fname_complex),
-                  Ptr{Void},
-                  (Int32, Int32, Int32, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                  size(X,3), size(X,2), size(X,1), X, Y, direction, _jl_FFTW_ESTIMATE)
-        end
-        function _jl_fftw_plan_dft(X::Array{$T_in,3}, Y::Array{$T_out,3})
-            ccall(dlsym($libname, $fname_real),
-                  Ptr{Void},
-                  (Int32, Int32, Int32, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                  size(X,3), size(X,2), size(X,1), X, Y, _jl_FFTW_ESTIMATE)
-        end
-    end
-end
-
 # Create nd plan
 
 for (libname, fname_complex, fname_real, T_in, T_out) in
@@ -124,13 +103,13 @@ for (libname, fname_complex, fname_real, T_in, T_out) in
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32, ),
-                  ndims(X), int32([size(X)...]), X, Y, direction, _jl_FFTW_ESTIMATE)
+                  ndims(X), int32(reverse([size(X)...])), X, Y, direction, _jl_FFTW_ESTIMATE)
         end
         function _jl_fftw_plan_dft(X::Array{$T_in}, Y::Array{$T_out})
             ccall(dlsym($libname, $fname_real),
                   Ptr{Void},
                   (Int32, Ptr{Int32}, Ptr{$T_in}, Ptr{$T_out}, Uint32, ),
-                  ndims(X), int32([size(X)...]), X, Y, _jl_FFTW_ESTIMATE)
+                  ndims(X), int32(reverse([size(X)...])), X, Y, _jl_FFTW_ESTIMATE)
         end
     end
 end
