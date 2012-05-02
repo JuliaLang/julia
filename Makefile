@@ -31,7 +31,7 @@ install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v julia $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
-	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
+	install -v usr/bin/julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
 	install -v base/* $(DESTDIR)$(PREFIX)/share/julia/base
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
