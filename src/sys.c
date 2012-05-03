@@ -16,6 +16,10 @@
 #include <pthread.h>
 #include "julia.h"
 
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
+
 // --- io and select ---
 
 void jl__not__used__(void)
@@ -377,4 +381,27 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
+}
+
+DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
+{
+#ifdef __SSE2__
+    // SSE2 supports both FZ and DAZ
+    uint32_t flags = 0x8040;
+#elif __SSE__
+    // SSE supports only the FZ flag
+    uint32_t flags = 0x8000;
+#endif
+
+#ifdef __SSE__
+    if (isZero) {
+	_mm_setcsr(_mm_getcsr() | flags);
+    }
+    else {
+	_mm_setcsr(_mm_getcsr() & ~flags);
+    }
+    return 1;
+#else
+    return 0;
+#endif
 }

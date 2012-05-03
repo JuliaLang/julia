@@ -151,6 +151,7 @@
     jl_buf_mutex_lock;
     jl_buf_mutex_unlock;
     jl_start_io_thread;
+    jl_zero_denormals;
     jl_save_system_image;
     jl_restore_system_image;
     jl_compress_ast;
