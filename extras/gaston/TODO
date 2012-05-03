@@ -1,0 +1,27 @@
+To do file for Gaston
+
+v 0.5:
+
+* keep improving error checking
+* keep improving documentation
+* remove the restriction to have only one image per figure
+* add high-level plotting functions for 3-d and images
+* add unit tests that try to break the program
+* add demo for high-level functions
+* add support for pdfcairo (or pngcairo?) for basic print-to-file support
+
+v 0.6 and later:
+
+* keep improving error checking
+* keep improving documentation
+* improve high-level, 'quick plot' functions, similar to Octave's
+* improve demo() and unit tests as needed
+* review type annotations to see if they can be improved
+* review which other plot styles may be supported (filledcurves, map, dot)
+* add suport for setting the colormap
+* add debug options: print gnuplot command line, etc
+* let image types specify x,y coordinates (will allow spectrograms)
+* review the new 'optional arguments' framework and see if we can use it
+* allow user setting gnuplot command
+* add support for curve smoothing
+* look into the mmap interface to avoid creating files
