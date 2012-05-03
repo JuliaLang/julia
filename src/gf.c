@@ -1320,10 +1320,9 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     return jl_apply(mfunc, args, nargs);
 }
 
-static void print_methlist(char *name, jl_methlist_t *ml)
+static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
-    ios_t *s = ios_stdout;
-    jl_value_t *outstr = jl_stdout_obj();
+    ios_t *s = (ios_t*)jl_iostr_data(outstr);
     while (ml != JL_NULL) {
         ios_printf(s, "%s", name);
         if (ml->tvars != jl_null) {
@@ -1355,13 +1354,13 @@ static void print_methlist(char *name, jl_methlist_t *ml)
     }
 }
 
-void jl_show_method_table(jl_function_t *gf)
+void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf)
 {
     char *name = jl_gf_name(gf)->name;
     jl_methtable_t *mt = jl_gf_mtable(gf);
-    print_methlist(name, mt->defs);
+    print_methlist(outstr, name, mt->defs);
     //ios_printf(ios_stdout, "\ncache:\n");
-    //print_methlist(name, mt->cache);
+    //print_methlist(outstr, name, mt->cache);
 }
 
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)

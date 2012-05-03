@@ -741,7 +741,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
 
-DLLEXPORT void jl_show_method_table(jl_function_t *gf);
+DLLEXPORT void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
                                         int cache);

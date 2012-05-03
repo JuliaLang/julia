@@ -192,7 +192,7 @@ function __eval_exprs(__parsed_exprs)
     if ans == nothing
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, ""}))
     else
-        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(show, ans)}))
+        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)}))
     end
 end
 
