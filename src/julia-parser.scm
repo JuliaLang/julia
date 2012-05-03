@@ -539,10 +539,6 @@
 			       (eq? (car arg) 'tuple))
 			  (list* 'call op (cdr arg))
 			  (list  'call op arg)))))))
-	  ((eq? t '|::|)
-	   ;; allow ::T, omitting argument name
-	   (take-token s)
-	   `(|::| ,(parse-call s)))
 	  (else
 	   (parse-factor s)))))
 
@@ -566,7 +562,21 @@
 (define (parse-factor s)
   (parse-factor-h s parse-decl (prec-ops 11)))
 
-(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 12)))
+(define (parse-decl s)
+  (let loop ((ex (if (eq? (peek-token s) '|::|)
+		     (begin (take-token s)
+			    `(|::| ,(parse-call s)))
+		     (parse-call s))))
+    (let ((t (peek-token s)))
+      (case t
+	((|::|) (take-token s)
+	 (loop (list t ex (parse-call s))))
+	((->)   (take-token s)
+	 ;; -> is unusual: it binds tightly on the left and
+	 ;; loosely on the right.
+	 (list '-> ex (parse-eq* s)))
+	(else
+	 ex)))))
 
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
@@ -613,10 +623,6 @@
 					       ,(string (take-token s))))
 			     (loop `(macrocall ,macname ,(car str)))))
 		       ex))
-		  ((->)  (take-token s)
-		   ;; -> is unusual: it binds tightly on the left and
-		   ;; loosely on the right.
-		   (list '-> ex (parse-eq* s)))
 		  (else ex))))))))
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 13)))
