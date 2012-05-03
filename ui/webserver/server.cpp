@@ -206,21 +206,23 @@ bool scgi::request::get_field_exists(string name)
 namespace scgi
 {
 
-#define PASS_ON(f) stream->read_cb = &f; \
-                uv_buf_t buf2;          \
-    buf2.base=pos;                      \
-    buf2.len=buf.len-i;                 \
-    f(stream,nread-i,buf2);
+#define PASS_ON(f) stream->read_cb = &f;    \
+                uv_buf_t buf2;              \
+    buf2.base=pos;                          \
+    buf2.len=buf.len-nread-(pos-buf.base);  \
+    f(stream,nread-(pos-buf.base),buf2);
 
 void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     reading_in_progress *p = (reading_in_progress*)(stream->data);
-    if(p->isComma)
+    if(p->isComma) {
         buf.base=buf.base+2;
+        nread-=2;
+    }
     if(p->bufBase==0) p->bufBase=buf.base;
-    if(p->body_length>p->pos+buf.len) {
-        p->body+=buf.base;
-        p->pos+=buf.len;
+    if(p->body_length>p->pos+nread) {
+        p->body.append(buf.base,nread);
+        p->pos+=nread;
     } else {
         p->body.append(buf.base,p->body_length-p->pos);
         //do the actual processing
@@ -487,7 +489,10 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->bufBase==0)p->bufBase=buf.base;
     int i;
-    if(p->isComma) (++(p->pos),++pos);
+    if(p->isComma) {
+        (++(p->pos),++pos);
+        p->isComma=false;
+    }
     for(i=0; i<buf.len&&p->pos<p->header_length; ++i, ++pos, ++p->pos)
     {
         if(p->inName) {
@@ -513,6 +518,8 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
             }
         }
     }
+    if(p->current_header.name!="")
+        p->header_list.push_back(p->current_header);
     if(p->pos>=p->header_length) {
         //process cookies
         for (size_t j = 0; j < p->header_list.size(); j++)

@@ -164,8 +164,7 @@ void closeInput(uv_stream_t *handle,int status)
 
 void free_socket_write_buffer(uv_write_t* req, int status)
 {
-    vector<string>* tmp = (vector<string>*) req->data;
-    delete tmp;
+    delete[] ((char*)req->data);
     delete req;
 }
 
@@ -237,48 +236,35 @@ void read_client(uv_async_t* handle, int status)
         // get the message
         message msg = julia_session_ptr->inbox[i];
 
-        uv_buf_t bufs[2*(1+msg.args.size())];
         uv_write_t *req2 = new uv_write_s;
 
-        vector<string> *tmp = new vector<string>(msg.args);
-        req2->data=(void*)tmp;
+        size_t total_size=2+4*msg.args.size();
+        for (size_t j = 0; j < msg.args.size(); j++) {
+            total_size+=msg.args[j].size();
+        }
+        char *msg_buf = new char[total_size];
+        uv_buf_t buf;
+        buf.base=msg_buf;
+        buf.len=total_size;
+        req2->data = msg_buf;
 
-        //write the message type
-        string t=" ";
-        t[0]=msg.type;
-        bufs[0].base=t.data();
-        bufs[0].len=1;
-
-        tmp->push_back(t);
-
-        string t2=" ";
-        t2[0]=msg.args.size();
-        // write the number of arguments
-        bufs[1].base=t2.data();
-        bufs[1].len=1;
-
-        tmp->push_back(t2);
-
+        *(msg_buf++)=msg.type;
+        *(msg_buf++)=msg.args.size();
 
         if(msg.args.size()>0) {
 
             // iterate through the arguments
-            for (size_t j = 0; j < msg.args.size(); j++)
-            {
+            for (size_t j = 0; j < msg.args.size(); j++) {
                 // write the size of the argument
-                string str_arg_size = "    ";
-                *((uint32_t*)(&(str_arg_size[0]))) = (uint32_t)msg.args[j].size();
-                tmp->push_back(str_arg_size);
-                bufs[2*(j+1)].base=str_arg_size.data();
-                bufs[2*(j+1)].len=str_arg_size.size();
-                //assert(str_arg_size.size()==4);
-
-                bufs[2*(j+1)+1].base=msg.args[j].data();
-                bufs[2*(j+1)+1].len=msg.args[j].size();
+                *((uint32_t*)(msg_buf)) = (uint32_t)msg.args[j].size();
+                memcpy((msg_buf+sizeof(uint32_t)),msg.args[j].data(),msg.args[j].size());
+                msg_buf+=sizeof(uint32_t)+msg.args[j].size();
             }
         }
 
-        uv_write(req2,(uv_stream_t*)julia_session_ptr->sock,bufs,2*(1+msg.args.size()),&free_socket_write_buffer);
+
+        uv_buf_t buf2;
+        uv_write(req2,(uv_stream_t*)julia_session_ptr->sock,&buf,1,&free_socket_write_buffer);
     }
     julia_session_ptr->inbox.clear();
 
@@ -324,6 +310,9 @@ void close_julia_session(uv_handle_t *stream)
 //read from julia on metadata socket (4444)
 void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
 {
+    if(nread <= 0)
+        return;
+
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
 
@@ -421,6 +410,9 @@ void connected(uv_connect_t* req, int status)
 //read from julia (on stdin)
 void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+    if(nread<0)
+        return;
+
     clientData *data = (clientData *)stream->data;
     julia_session *julia_session_ptr=data->session;
     // lock the mutex
@@ -444,13 +436,15 @@ void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
     if (julia_session_ptr->status == SESSION_NORMAL)
     {
         // just dump the output into the julia_session
-        julia_session_ptr->outbox_std.append(buf.base,buf.len);
+        julia_session_ptr->outbox_std.append(buf.base,nread);
     }
 
     // get the port number
     if (julia_session_ptr->status == SESSION_WAITING_FOR_PORT_NUM)
     {
-        data->buf+=buf.base;
+        if(stream!=(uv_stream_t*)julia_session_ptr->julia_out) //allow debugging tools to print to stderr before startup
+            return;
+        data->buf.append(buf.base,nread);
         // wait for a newline
         size_t newline_pos = data->buf.find("\n");
         if (newline_pos == string::npos)
@@ -587,7 +581,7 @@ string make_session_token() {
 
 // format a web response with the appropriate header
 string respond(string session_token, string body) {
-    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
+    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nCache-control: no-cache\r\n";
     header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
     return header+body;
@@ -606,6 +600,8 @@ void process_exited(uv_process_t*p, int exit_status, int term_signal)
     ((clientData*)p->data)->session->status = SESSION_TERMINATING;
     cout<<"Process Exited";
 }
+
+//#define READ_STDERR
 
 // get a session with a particular name (creating it if it does not exist) and return a session token
 // returns the empty string if a new session could not be created
@@ -660,17 +656,22 @@ string get_session(string user_name, string session_name) {
     session_data->should_terminate = false;
     session_data->status = SESSION_WAITING_FOR_PORT_NUM;
 
-	//allocate pipess
-    session_data->julia_in=new uv_pipe_t;
-    session_data->julia_out=new uv_pipe_t;
-    session_data->julia_err=new uv_pipe_t;
-	
     session_data->proc=new uv_process_t;
     session_data->event_loop=uv_loop_new();
 
+	//allocate pipess
+    session_data->julia_in=new uv_pipe_t;
     uv_pipe_init(session_data->event_loop,session_data->julia_in,0);
+    session_data->julia_out=new uv_pipe_t;
     uv_pipe_init(session_data->event_loop,session_data->julia_out,0);
+
+#ifdef READ_STDERR
+    session_data->julia_err=new uv_pipe_t;
     uv_pipe_init(session_data->event_loop,session_data->julia_err,0);
+#else
+    session_data->julia_err=0;
+#endif
+
 	
     uv_process_options_t opts;
     opts.stdin_stream = session_data->julia_in;
@@ -682,9 +683,8 @@ string get_session(string user_name, string session_name) {
     char arg0[]="./julia-release-readline";
 	char arg1[]="--no-history";
     char arg2[]="ui/webserver/julia_web_base.jl";
-    char *argv[3]={arg0,arg1,NULL};
+    char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
-    opts.stderr_stream = 0; //parent stderr
     opts.exit_cb=&process_exited;
     opts.cwd=NULL; //cwd
     #ifndef __WIN32__
@@ -711,7 +711,10 @@ string get_session(string user_name, string session_name) {
 
     //start reading
     uv_read_start((uv_stream_t*)opts.stdout_stream,&alloc_buf,&julia_incoming);
+#ifdef READ_STDERR
     uv_read_start((uv_stream_t*)opts.stderr_stream,&alloc_buf,&julia_incoming);
+    session_data->julia_err->data = data;
+#endif
 	
 	/*
     // start the inbox thread
@@ -877,6 +880,7 @@ void get_response(request* req,uv_stream_t *client)
                         {
                             // forward the message to this julia session
                             julia_session_ptr->inbox.push_back(request_message);
+                            uv_async_send(julia_session_ptr->data_notifier);
                         }
                     }
 					
