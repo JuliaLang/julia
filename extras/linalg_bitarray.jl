@@ -21,7 +21,7 @@ end
     #col_ch = _jl_num_bit_chunks(mA)
     ## TODO: avoid using aux chunks and copy (?)
     #aux_chunksA = zeros(Uint64, col_ch)
-    #aux_chunksB = [zeros(Uint64, col_ch) | j=1:nB]
+    #aux_chunksB = [zeros(Uint64, col_ch) for j=1:nB]
     #for j = 1:nB
         #_jl_copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
     #end

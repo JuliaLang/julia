@@ -299,7 +299,7 @@ end
 
 ## diag and related
 
-diag(A::SparseMatrixCSC) = [ A[i,i] | i=1:min(size(A)) ]
+diag(A::SparseMatrixCSC) = [ A[i,i] for i=1:min(size(A)) ]
 
 function diagm{Tv,Ti}(v::SparseMatrixCSC{Tv,Ti})
     if (size(v,1) != 1 && size(v,2) != 1)

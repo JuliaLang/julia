@@ -15,7 +15,7 @@ type BitArray{T<:Integer, N} <: AbstractArray{T, N}
         if nc > 0
             chunks[end] = uint64(0)
         end
-        new(chunks, [i::Int | i=dims])
+        new(chunks, [i::Int for i in dims])
     end
 end
 
@@ -244,7 +244,7 @@ function reshape{T,N}(B::BitArray{T}, dims::NTuple{N,Int})
     end
     Br = BitArray{T,N}()
     Br.chunks = B.chunks
-    Br.dims = [i::Int | i=dims]
+    Br.dims = [i::Int for i in dims]
     return Br
 end
 
@@ -283,7 +283,7 @@ function reinterpret{T<:Integer,S<:Integer,N}(::Type{T}, B::BitArray{S}, dims::N
         error("reinterpret: invalid dimensions")
     end
     A = BitArray{T,N}()
-    A.dims = [i::Int | i=dims]
+    A.dims = [i::Int for i in dims]
     A.chunks = B.chunks
     return A
 end
@@ -371,7 +371,7 @@ let ref_cache = nothing
         if is(ref_cache,nothing)
             ref_cache = Dict()
         end
-        gap_lst = [last(r)-first(r)+1 | r in I]
+        gap_lst = [last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
@@ -520,7 +520,7 @@ let assign_cache = nothing
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
-        gap_lst = [last(r)-first(r)+1 | r in I]
+        gap_lst = [last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
@@ -1473,7 +1473,7 @@ function permute(B::BitArray, perm)
     end
 
     #calculates all the strides
-    strides = [ stride(B, perm[dim]) | dim = 1:length(perm) ]
+    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -1589,7 +1589,7 @@ function vcat{T}(A::BitMatrix{T}...)
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
     B = BitArray(T, nrows, ncols)
-    nrowsA = [size(a, 1) | a = A]
+    nrowsA = [size(a, 1) for a in A]
     pos_d = 1
     pos_s = ones(Int, nargs)
     for j = 1:ncols
