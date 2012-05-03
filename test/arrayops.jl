@@ -78,7 +78,7 @@ v = pop(l)
 @assert isequal([ones(2,2), 2*ones(1,2)], [1 1; 1 1; 2 2])
 
 # "end"
-X = [ i+2j | i=1:5, j=1:5 ]
+X = [ i+2j for i=1:5, j=1:5 ]
 @assert X[end,end] == 15
 @assert X[end]     == 15  # linear index
 @assert X[2,  end] == 12
