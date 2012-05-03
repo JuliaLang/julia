@@ -4,9 +4,16 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread
+LIBS = -lpthread $(USRLIB)/uv.a 
+ifeq ($(OS), Linux)
+LIBS += -lrt 
+endif
 
-WEBSERVER_SRCS = webserver.cpp server.cpp network.cpp jsoncpp.cpp
+ifeq ($(OS),WINNT)
+LIBS += -lWs2_32 -lIphlpapi -lpsapi
+endif
+
+WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 
 %.o: %.c
 	$(QUIET_CC)$(CC) $(CFLAGS) $(SHIPFLAGS) -c $< -o $@
