@@ -43,9 +43,9 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), GRISU_PRECISION, int32(n))
 end
 
-function _show(s, x::Float, mode::Int32, n::Int)
-    if isnan(x); return write(s, "NaN"); end
-    if isinf(x); return write(s, x < 0 ? "-Inf" : "Inf"); end
+function _show(io, x::Float, mode::Int32, n::Int)
+    if isnan(x); return write(io, "NaN"); end
+    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode n
     pdigits = pointer(_jl_digits)
     neg = _jl_neg[1]
@@ -57,39 +57,39 @@ function _show(s, x::Float, mode::Int32, n::Int)
         end
     end
     if neg
-        write(s,'-')
+        write(io, '-')
     end
     if pt <= -4 || pt > 6 # .00001 to 100000.
         # => #.#######e###
-        write(s, pdigits, 1)
-        write(s, '.')
+        write(io, pdigits, 1)
+        write(io, '.')
         if len > 1
-            write(s, pdigits+1, len-1)
+            write(io, pdigits+1, len-1)
         else
-            write(s, '0')
+            write(io, '0')
         end
-        write(s, 'e')
-        write(s, dec(pt-1))
+        write(io, 'e')
+        write(io, dec(pt-1))
     elseif pt <= 0
         # => 0.00########
-        write(s, "0.")
+        write(io, "0.")
         while pt < 0
-            write(s, '0')
+            write(io, '0')
             pt += 1
         end
-        write(s, pdigits, len)
+        write(io, pdigits, len)
     elseif pt >= len
         # => ########00.0
-        write(s, pdigits, len)
+        write(io, pdigits, len)
         while pt > len
-            write(s, '0')
+            write(io, '0')
             len += 1
         end
-        write(s, ".0")
+        write(io, ".0")
     else # => ####.####
-        write(s, pdigits, pt)
-        write(s, '.')
-        write(s, pdigits+pt, len-pt)
+        write(io, pdigits, pt)
+        write(io, '.')
+        write(io, pdigits+pt, len-pt)
     end
     nothing
 end
@@ -107,51 +107,50 @@ showcompact(io, x::Float) = _show(io, x, GRISU_PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function f_jl_print_shortest(io, x::Float, dot::Bool, mode::Int32)
-    s = current_output_stream()
-    if isnan(x); return write(s, "NaN"); end
-    if isinf(x); return write(s, x < 0 ? "-Inf" : "Inf"); end
+function _jl_print_shortest(io, x::Float, dot::Bool, mode::Int32)
+    if isnan(x); return write(io, "NaN"); end
+    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode 0
     pdigits = pointer(_jl_digits)
     neg = _jl_neg[1]
     len = _jl_length[1]
     pt  = _jl_point[1]
     if neg
-        write(s, '-')
+        write(io, '-')
     end
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
         # => ########e###
-        write(s, pdigits+0, len)
-        write(s, 'e')
-        write(s, dec(e))
+        write(io, pdigits+0, len)
+        write(io, 'e')
+        write(io, dec(e))
     elseif pt <= 0
         # => .000########
-        write(s, '.')
+        write(io, '.')
         while pt < 0
-            write(s, '0')
+            write(io, '0')
             pt += 1
         end
-        write(s, pdigits+0, len)
+        write(io, pdigits+0, len)
     elseif e >= dot
         # => ########000.
-        write(s, pdigits+0, len)
+        write(io, pdigits+0, len)
         while e > 0
-            write(s, '0')
+            write(io, '0')
             e -= 1
         end
         if dot
-            write(s, '.')
+            write(io, '.')
         end
     else # => ####.####
-        write(s, pdigits+0, pt)
-        write(s, '.')
-        write(s, pdigits+pt, len-pt)
+        write(io, pdigits+0, pt)
+        write(io, '.')
+        write(io, pdigits+pt, len-pt)
     end
     nothing
 end
 
-print_shortest(io, x::Float64, dot::Bool) = f_jl_print_shortest(io, x, dot, GRISU_SHORTEST)
-print_shortest(io, x::Float32, dot::Bool) = f_jl_print_shortest(io, x, dot, GRISU_SHORTEST_SINGLE)
+print_shortest(io, x::Float64, dot::Bool) = _jl_print_shortest(io, x, dot, GRISU_SHORTEST)
+print_shortest(io, x::Float32, dot::Bool) = _jl_print_shortest(io, x, dot, GRISU_SHORTEST_SINGLE)
 print_shortest(io, x::Union(Float,Integer)) = print_shortest(io, float(x), false)
