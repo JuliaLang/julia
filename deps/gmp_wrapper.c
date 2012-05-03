@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include <gmp.h>
 
+void _jl_gmp_free(void *p)
+{
+    void (*freefunc) (void *, size_t);
+    mp_get_memory_functions (NULL, NULL, &freefunc);
+    freefunc(p, 0);
+}
+
 extern void* _jl_mpz_init()
 {
   mpz_t* integ = malloc(sizeof(mpz_t));
