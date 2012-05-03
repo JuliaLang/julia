@@ -93,6 +93,57 @@ for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
     end
 end
 
+# SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
+# *     .. Scalar Arguments ..
+#       REAL ALPHA,BETA
+#       INTEGER K,LDA,LDC,N
+#       CHARACTER TRANS,UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       REAL A(LDA,*),C(LDC,*)
+for (fname, elty) in ((:dsyrk_,:Float64), (:ssyrk_,:Float32),
+                      (:zsyrk_,:Complex128), (:csyrk_,:Complex64))
+   @eval begin
+       function _jl_blas_syrk(uplo, trans, n::Integer, k::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &uplo, &trans, &n, &k,
+                 &alpha, A, &lda,
+                 &beta, C, &ldc)
+       end
+   end
+end
+
+# SUBROUTINE CHERK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
+# *     .. Scalar Arguments ..
+#       REAL ALPHA,BETA
+#       INTEGER K,LDA,LDC,N
+#       CHARACTER TRANS,UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       COMPLEX A(LDA,*),C(LDC,*)
+for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
+   @eval begin
+       function _jl_blas_herk(uplo, trans, n::Integer, k::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &uplo, &trans, &n, &k,
+                 &alpha, A, &lda,
+                 &beta, C, &ldc)
+       end
+   end
+end
+
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -130,12 +181,20 @@ end
 
 function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
-    _jl_gemm('T', 'N', A, B)
+    if is(A, B)
+        _jl_syrk('T', A)
+    else
+        _jl_gemm('T', 'N', A, B)
+    end
 end
 
 function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
-    _jl_gemm('N', 'T', A, B)
+    if is(A, B)
+        _jl_syrk('N', A)
+    else
+        _jl_gemm('N', 'T', A, B)
+    end
 end
 
 function aTbT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
@@ -143,19 +202,109 @@ function aTbT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T
     _jl_gemm('T', 'T', A, B)
 end
 
-function aCb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                             B::StridedMatrix{T})
-    _jl_gemm('C', 'N', A, B)
+aCb{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = aTb(A, B)
+function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+                                             B::StridedMatrix{T})
+    if is(A, B)
+        _jl_herk('C', A)
+    else
+        _jl_gemm('C', 'N', A, B)
+    end
 end
 
-function abC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                             B::StridedMatrix{T})
-    _jl_gemm('N', 'C', A, B)
+abC{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = abT(A, B)
+function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+                                             B::StridedMatrix{T})
+    if is(A, B)
+        _jl_herk('N', A)
+    else
+        _jl_gemm('N', 'C', A, B)
+    end
 end
 
 function aCbC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('C', 'C', A, B)
+end
+
+function _jl_copy_upper_to_lower(A::StridedMatrix)
+    n = size(A, 1)
+    for i = 1:n-1
+        for j = i+1:n
+            A[j, i] = A[i, j]
+        end
+    end
+end
+
+function _jl_syrk{T<:Union(Float64,Float32,Complex128,Complex64)}(tA,
+                                                                  A::StridedMatrix{T})
+    if tA == 'T'
+        (nA, mA) = size(A)
+        tAt = 'N'
+    else
+        (mA, nA) = size(A)
+        tAt = 'T'
+    end
+
+    if mA == 2 && nA == 2; return matmul2x2(tA,tAt,A,A); end
+    if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
+
+    if stride(A, 1) != 1
+        if tA == 'T'
+            return _jl_generic_matmatmul(A.', A)
+        else
+            return _jl_generic_matmatmul(A, A.')
+        end
+    end
+
+    # Result array does not need to be initialized as long as beta==0
+    C = Array(T, mA, mA)
+
+    _jl_blas_syrk('U', tA, mA, nA,
+                  one(T), A, stride(A, 2),
+                  zero(T), C, mA)
+    _jl_copy_upper_to_lower(C)
+    return C
+end
+
+function _jl_copy_upper_to_lower_conj(A::StridedMatrix)
+    n = size(A, 1)
+    for i = 1:n-1
+        for j = i+1:n
+            A[j, i] = conj(A[i, j])
+        end
+    end
+end
+
+function _jl_herk{T<:Union(Float64,Float32,Complex128,Complex64)}(tA,
+                                                                  A::StridedMatrix{T})
+    if tA == 'C'
+        (nA, mA) = size(A)
+        tAt = 'N'
+    else
+        (mA, nA) = size(A)
+        tAt = 'C'
+    end
+
+    if mA == 2 && nA == 2; return matmul2x2(tA,tAt,A,A); end
+    if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
+
+    if stride(A, 1) != 1
+        if tA == 'C'
+            return _jl_generic_matmatmul(A', A)
+        else
+            return _jl_generic_matmatmul(A, A')
+        end
+    end
+
+    # Result array does not need to be initialized as long as beta==0
+    C = Array(T, mA, mA)
+
+    _jl_blas_herk('U', tA, mA, nA,
+                  one(T), A, stride(A, 2),
+                  zero(T), C, mA)
+    _jl_copy_upper_to_lower_conj(C)
+    return C
 end
 
 function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
@@ -188,7 +337,7 @@ function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
         elseif tB == 'C'
             B = B'
         end
-        return invoke(*, (AbstractMatrix, AbstractMatrix), A, B)
+        return _jl_generic_matmatmul(A, B)
     end
 
     # Result array does not need to be initialized as long as beta==0
@@ -240,7 +389,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     if nA != mX; error("*: argument shapes do not match"); end
 
     if stride(A, 1) != 1
-        return invoke(*, (Matrix, Vector), A, X)
+        return _jl_generic_matvecmul(A, X)
     end
 
     # Result array does not need to be initialized as long as beta==0
