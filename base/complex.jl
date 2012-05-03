@@ -24,7 +24,7 @@ function _jl_show(io, z::Complex, compact::Bool)
         else
             print(io, compact ? "+" : " + ")
         end
-        compact ? (i) : show(io, i)
+        compact ? showcompact(io, i) : show(io, i)
         if !(isa(i,Integer) || isa(i,Rational) ||
              isa(i,Float) && isfinite(i))
             print(io, "*")

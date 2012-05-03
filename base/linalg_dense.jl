@@ -24,7 +24,10 @@ cross(a::Vector, b::Vector) =
 # call BLAS, and convert back to required type.
 
 # TODO: support transposed arguments
-function (*){T,S}(A::Matrix{T}, B::Vector{S})
+# NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
+#       in libalg_blas.jl
+(*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = _jl_generic_matvecmul(A, B)
+function _jl_generic_matvecmul{T,S}(A::StridedMatrix{T}, B::StridedVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
     C = zeros(promote_type(T,S), mA)
@@ -40,7 +43,10 @@ end
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
 # TODO: support transposed arguments
-function (*){T,S}(A::Matrix{T}, B::Matrix{S})
+# NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
+#       in libalg_blas.jl
+(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(A, B)
+function _jl_generic_matmatmul{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
@@ -73,7 +79,7 @@ function (*){T,S}(A::Matrix{T}, B::Matrix{S})
 end
 
 # multiply 2x2 matrices
-function matmul2x2{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
+function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
 
@@ -100,7 +106,7 @@ function matmul2x2{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
     return C
 end
 
-function matmul3x3{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
+function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
 
