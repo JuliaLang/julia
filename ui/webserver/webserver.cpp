@@ -2,14 +2,19 @@
 #include <map>
 #include <ctime>
 #include <stdlib.h>
+#include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
 #include <pthread.h>
 #include <signal.h>
-#include <sys/wait.h>
 #include "server.h"
 #include "json.h"
 #include "message_types.h"
+#ifndef __WIN32__
+#include <sys/wait.h>
+#endif
+
+extern char **environ; //only unistd.h post- POSIX 2008
 
 using namespace std;
 using namespace scgi;
@@ -19,7 +24,8 @@ using namespace scgi;
 /////////////////////////////////////////////////////////////////////////////
 
 // convert a value to a string
-template <class T> std::string to_string(const T& t) {
+template <class T> std::string to_string(const T& t)
+{
     // convert a value to a string
     stringstream ss;
     ss<<t;
@@ -27,7 +33,8 @@ template <class T> std::string to_string(const T& t) {
 }
 
 // parse a string from a value
-template <class T> T from_string(const std::string& t) {
+template <class T> T from_string(const std::string& t)
+{
     // parse a value from a string
     T ret;
     stringstream(t)>>ret;
@@ -39,21 +46,22 @@ template <class T> T from_string(const std::string& t) {
 /////////////////////////////////////////////////////////////////////////////
 
 // a message
-class message {
+class message
+{
 public:
-    // see ui/webserver/julia_web_base.jl for documentation
+    // see ui/webserver/julia_web_base.j for documentation
     uint8_t type;
     vector<string> args;
 };
 
 /////////////////////////////////////////////////////////////////////////////
-// sessions
+// julia_sessions
 /////////////////////////////////////////////////////////////////////////////
 
-// if a session hasn't been queried in this time, it dies
+// if a julia_session hasn't been queried in this time, it dies
 const int WEB_SESSION_TIMEOUT = 20; // in seconds
 
-// a web session
+// a web julia_session
 struct web_session {
     // time since watchdog was last "pet"
     time_t update_time;
@@ -65,16 +73,17 @@ struct web_session {
     string user_name;
 };
 
-// julia session states
-enum julia_session_status {
+enum julia_session_status
+{
     SESSION_WAITING_FOR_PORT_NUM,
     SESSION_NORMAL,
     SESSION_TERMINATING,
 };
 
-// a julia session
-struct julia_session {
-    // a map from session tokens to web sessions that use this julia session
+// a julia_session
+struct julia_session
+{
+    // a map from julia_session tokens to web julia_sessions that use this julia julia_session
     map<string, web_session> web_session_map;
 
     // the session name
@@ -95,36 +104,39 @@ struct julia_session {
     // keep track of messages sent to all the clients (not messages sent to particular users)
     vector<message> outbox_history;
 
-    // process id of julia instance
-    int pid;
-
-    // write to julia_in[1], read from julia_out[0] and julia_err[0]
-    int julia_in[2];
-    int julia_out[2];
-    int julia_err[2];
+    //pipes
+    uv_process_t *proc;
+    uv_pipe_t *julia_in;
+    uv_pipe_t *julia_out;
+	uv_pipe_t *julia_err;
 
     // the socket for communicating to julia
-    network::socket* sock;
+    uv_tcp_t *sock;
 
     // io threads
-    pthread_t inbox_proc;
-    pthread_t outbox_proc;
+    pthread_t thread;
 
-    // when both threads have terminated, we can kill the session
+    // when both threads have terminated, we can kill the julia_session
     bool inbox_thread_alive;
     bool outbox_thread_alive;
 
-    // whether the session should terminate
+    // whether the julia_session should terminate
     bool should_terminate;
 
-    // the status of the session
+    // the status of the julia_session
     julia_session_status status;
+
+    //event loop
+    uv_loop_t *event_loop;
+
+    //notifier
+    uv_async_t *data_notifier;
 };
 
-// a list of julia sessions
+// a list of julia julia_sessions
 vector<julia_session*> julia_session_list;
 
-// a mutex for accessing session_map
+// a mutex for accessing julia_session_map
 pthread_mutex_t julia_session_mutex;
 
 /////////////////////////////////////////////////////////////////////////////
@@ -134,105 +146,11 @@ pthread_mutex_t julia_session_mutex;
 // add to the inbox regularly according to this interval
 const int INBOX_INTERVAL = 10000; // in nanoseconds
 
-// this thread sends input from the client to julia
-void* inbox_thread(void* arg) {
-    // get the session
-    julia_session* julia_session_ptr = (julia_session*)arg;
 
-    // loop for the duration of the session
-    while (true)
-    {
-        // lock the mutex
-        pthread_mutex_lock(&julia_session_mutex);
-
-        // terminate if necessary
-        if (julia_session_ptr->status == SESSION_TERMINATING)
-        {
-            // unlock the mutex
-            pthread_mutex_unlock(&julia_session_mutex);
-
-            // terminate
-            break;
-        }
-
-        // get the inbox data
-        string inbox = julia_session_ptr->inbox_std;
-
-        // if there is no inbox data and no messages to send, or if julia isn't ready, wait and try again
-        if ((inbox == "" && julia_session_ptr->inbox.empty()) || julia_session_ptr->status != SESSION_NORMAL)
-        {
-            // unlock the mutex
-            pthread_mutex_unlock(&julia_session_mutex);
-
-            // no data from client; pause before checking again
-            timespec timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_nsec = INBOX_INTERVAL;
-            nanosleep(&timeout, 0);
-
-            // try again
-            continue;
-        }
-
-        // prepare for writing to julia
-        int pipe = julia_session_ptr->julia_in[1];
-
-        // unlock the mutex
-        pthread_mutex_unlock(&julia_session_mutex);
-
-        // write if there is data
-        fd_set set;
-        FD_ZERO(&set);
-        FD_SET(pipe, &set);
-        timeval select_timeout;
-        select_timeout.tv_sec = 0;
-        select_timeout.tv_usec = 100000;
-        ssize_t bytes_written = 0;
-        if (select(FD_SETSIZE, 0, &set, 0, &select_timeout))
-            bytes_written = write(pipe, inbox.c_str(), inbox.size());
-
-        // lock the mutex
-        pthread_mutex_lock(&julia_session_mutex);
-
-        // write messages to julia
-        for (size_t i = 0; i < julia_session_ptr->inbox.size(); i++)
-        {
-            // get the message
-            message msg = julia_session_ptr->inbox[i];
-
-            // write the message type
-            string str_msg_type = " ";
-            str_msg_type[0] = msg.type;
-            julia_session_ptr->sock->write(str_msg_type);
-
-            // write the number of arguments
-            string str_arg_num = " ";
-            str_arg_num[0] = msg.args.size();
-            julia_session_ptr->sock->write(str_arg_num);
-
-            // iterate through the arguments
-            for (size_t j = 0; j < msg.args.size(); j++)
-            {
-                // write the size of the argument
-                string str_arg_size = "    ";
-                *((uint32_t*)(&(str_arg_size[0]))) = (uint32_t)msg.args[j].size();
-                julia_session_ptr->sock->write(str_arg_size);
-
-                // write the argument
-                julia_session_ptr->sock->write(msg.args[j]);
-            }
-        }
-        julia_session_ptr->inbox.clear();
-
-        // remove the written data from the inbox
-        if (bytes_written < 0)
-            julia_session_ptr->inbox_std = "";
-        else
-            julia_session_ptr->inbox_std = julia_session_ptr->inbox_std.substr(bytes_written, julia_session_ptr->inbox_std.size()-bytes_written);
-
-        // unlock the mutex
-        pthread_mutex_unlock(&julia_session_mutex);
-    }
+void closeInput(uv_stream_t *handle,int status)
+{
+    clientData *data = (clientData *)handle->data;
+    julia_session *julia_session_ptr=data->session;
 
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
@@ -242,9 +160,119 @@ void* inbox_thread(void* arg) {
 
     // unlock the mutex
     pthread_mutex_unlock(&julia_session_mutex);
+}
 
-    // terminate
-    return 0;
+void free_socket_write_buffer(uv_write_t* req, int status)
+{
+    delete[] ((char*)req->data);
+    delete req;
+}
+
+void free_write_buffer(uv_write_t* req, int status)
+{
+    delete[] (char*)req->data;
+    delete req;
+}
+
+
+static uv_buf_t alloc_buf(uv_handle_t* handle, size_t suggested_size) {
+    uv_buf_t buf;
+    buf.len = suggested_size;
+    buf.base = new char[suggested_size];
+    return buf;
+}
+
+
+//when data arrives from client (currently async, will be websocket)
+void read_client(uv_async_t* handle, int status)
+{
+    // lock the mutex
+    pthread_mutex_lock(&julia_session_mutex);
+
+    clientData *data = (clientData *)handle->data;
+    julia_session *julia_session_ptr=data->session;
+
+    // terminate if necessary
+    if (julia_session_ptr->status == SESSION_TERMINATING)
+    {
+        // unlock the mutex
+        pthread_mutex_unlock(&julia_session_mutex);
+
+        // terminate
+        uv_close((uv_handle_t*)handle,(uv_close_cb)&closeInput);
+
+        return;
+    } else if(julia_session_ptr->status != SESSION_NORMAL)
+        return;
+
+    // get the inbox data
+    string inbox = julia_session_ptr->inbox_std;
+
+    // if there is no inbox data and no messages to send, or if julia isn't ready, wait and try again
+    if ((inbox == "" && julia_session_ptr->inbox.empty()) || julia_session_ptr->status != SESSION_NORMAL)
+    {
+        // unlock the mutex
+        pthread_mutex_unlock(&julia_session_mutex);
+
+        return;
+    }
+
+    if(inbox.size()>0) {
+        char *cstr = new char [inbox.size()];
+        memcpy (cstr, inbox.data(), inbox.size());
+
+        uv_buf_t buffer;
+        buffer.base = cstr;
+        buffer.len = inbox.size();
+
+        uv_write_t *req = new uv_write_s;
+        req->data=(void*)cstr;
+        uv_write(req,(uv_stream_t*)julia_session_ptr->julia_in,&buffer,1,&free_write_buffer);
+    }
+
+    // write messages to julia
+    for (size_t i = 0; i < julia_session_ptr->inbox.size(); i++)
+    {
+        // get the message
+        message msg = julia_session_ptr->inbox[i];
+
+        uv_write_t *req2 = new uv_write_s;
+
+        size_t total_size=2+4*msg.args.size();
+        for (size_t j = 0; j < msg.args.size(); j++) {
+            total_size+=msg.args[j].size();
+        }
+        char *msg_buf = new char[total_size];
+        uv_buf_t buf;
+        buf.base=msg_buf;
+        buf.len=total_size;
+        req2->data = msg_buf;
+
+        *(msg_buf++)=msg.type;
+        *(msg_buf++)=msg.args.size();
+
+        if(msg.args.size()>0) {
+
+            // iterate through the arguments
+            for (size_t j = 0; j < msg.args.size(); j++) {
+                // write the size of the argument
+                *((uint32_t*)(msg_buf)) = (uint32_t)msg.args[j].size();
+                memcpy((msg_buf+sizeof(uint32_t)),msg.args[j].data(),msg.args[j].size());
+                msg_buf+=sizeof(uint32_t)+msg.args[j].size();
+            }
+        }
+
+
+        uv_buf_t buf2;
+        uv_write(req2,(uv_stream_t*)julia_session_ptr->sock,&buf,1,&free_socket_write_buffer);
+    }
+    julia_session_ptr->inbox.clear();
+
+    // remove the written data from the inbox
+    julia_session_ptr->inbox_std.clear();
+
+    // unlock the mutex
+    pthread_mutex_unlock(&julia_session_mutex);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -257,241 +285,15 @@ const int OUTBOX_INTERVAL = 10000; // in nanoseconds
 // check for the port number from julia according to this interval
 const int PORT_NUM_INTERVAL = 10000; // in nanoseconds
 
-// this thread waits for output from julia and stores it in a buffer (for later polling by the client)
-void* outbox_thread(void* arg) {
-    // get the session
-    julia_session* julia_session_ptr = (julia_session*)arg;
+void socketClosed(uv_handle_t *stream)
+{
+    delete (uv_tcp_t *)stream;
+}
 
-    // keep track of the output from julia
-    string outbox_std;
-
-    // loop for the duration of the session
-    while (true)
-    {
-        // lock the mutex
-        pthread_mutex_lock(&julia_session_mutex);
-
-        // terminate if necessary
-        if (julia_session_ptr->status == SESSION_TERMINATING)
-        {
-            // unlock the mutex
-            pthread_mutex_unlock(&julia_session_mutex);
-
-            // terminate
-            break;
-        }
-
-        // flags to indicate whether raw and formatted data was available
-        bool new_raw_data = false;
-        bool new_formatted_data = false;
-
-        // prepare for reading from julia
-        int pipe_out = julia_session_ptr->julia_out[0];
-        int pipe_err = julia_session_ptr->julia_err[0];
-
-        // unlock the mutex
-        pthread_mutex_unlock(&julia_session_mutex);
-
-        // read output data while there is data
-        while (true)
-        {
-            // select to determine if there is a byte to read
-            char buffer[2];
-            fd_set set;
-            FD_ZERO(&set);
-            FD_SET(pipe_out, &set);
-            timeval select_timeout;
-            select_timeout.tv_sec = 0;
-            select_timeout.tv_usec = 100000;
-            if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
-            {
-                // try to read the byte
-                if (read(pipe_out, buffer, 1) > 0)
-                    new_raw_data = true;
-                else
-                    break;
-            }
-            else
-                break;
-            buffer[1] = 0;
-
-            // add the byte to the outbox
-            outbox_std += buffer[0];
-        }
-
-        // read error data while there is data
-        while (true)
-        {
-            // select to determine if there is a byte to read
-            char buffer[2];
-            fd_set set;
-            FD_ZERO(&set);
-            FD_SET(pipe_err, &set);
-            timeval select_timeout;
-            select_timeout.tv_sec = 0;
-            select_timeout.tv_usec = 100000;
-            if (select(FD_SETSIZE, &set, 0, 0, &select_timeout))
-            {
-                // try to read the byte
-                if (read(pipe_err, buffer, 1) > 0)
-                    new_raw_data = true;
-                else
-                    break;
-            }
-            else
-                break;
-            buffer[1] = 0;
-
-            // add the byte to the outbox
-            outbox_std += buffer[0];
-        }
-
-        // lock the mutex
-        pthread_mutex_lock(&julia_session_mutex);
-
-        // send the outbox data to the client
-        if (julia_session_ptr->status == SESSION_NORMAL)
-        {
-            // just dump the output into the session
-            julia_session_ptr->outbox_std += outbox_std;
-            outbox_std = "";
-        }
-
-        // get the port number
-        if (julia_session_ptr->status == SESSION_WAITING_FOR_PORT_NUM)
-        {
-            // wait for a newline
-            size_t newline_pos = outbox_std.find("\n");
-            if (newline_pos == string::npos)
-            {
-                // unlock the mutex
-                pthread_mutex_unlock(&julia_session_mutex);
-
-                // wait before trying again
-                timespec timeout;
-                timeout.tv_sec = 0;
-                timeout.tv_nsec = PORT_NUM_INTERVAL;
-                nanosleep(&timeout, 0);
-
-                // try again
-                continue;
-            }
-
-            // read the port number
-            string num_string = outbox_std.substr(0, newline_pos);
-            outbox_std = outbox_std.substr(newline_pos+1, outbox_std.size()-(newline_pos+1));
-            int port_num = from_string<int>(num_string);
-
-            // start
-            julia_session_ptr->sock = new network::socket;
-            julia_session_ptr->sock->connect("127.0.0.1", port_num);
-
-            // switch to normal operation
-            julia_session_ptr->status = SESSION_NORMAL;
-
-            // send a ready message to all users of this julia session
-            message ready_message;
-            ready_message.type = MSG_OUTPUT_READY;
-            julia_session_ptr->outbox_history.push_back(ready_message);
-            for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-                iter->second.outbox.push_back(ready_message);
-        }
-
-        // try to read some data from the socket
-        if (julia_session_ptr->status == SESSION_NORMAL)
-        {
-            // get the socket before we unlock the mutex
-            network::socket* sock = julia_session_ptr->sock;
-
-            // unlock the mutex
-            pthread_mutex_unlock(&julia_session_mutex);
-
-            // try to read some data
-            string data;
-            if (sock->has_data())
-            {
-                data += sock->read();
-                new_formatted_data = true;
-            }
-            
-            // lock the mutex
-            pthread_mutex_lock(&julia_session_mutex);
-
-            // add the data to the outbox
-            julia_session_ptr->outbox_raw += data;
-        }
-
-        // try to convert the raw outbox data into messages
-        string outbox_raw = julia_session_ptr->outbox_raw;
-        if (outbox_raw.size() >= 2)
-        {
-            // construct the message
-            message msg;
-
-            // get the message type
-            msg.type = (*((uint8_t*)(&outbox_raw[0])));
-
-            // get the number of arguments
-            uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
-
-            // try to read the arguments
-            int pos = 2;
-            for (uint8_t i = 0; i < arg_num; i++)
-            {
-                // make sure there is enough data left to read
-                if (outbox_raw.size() < pos+4)
-                    break;
-
-                // get the size of this argument
-                uint32_t arg_size = *((uint32_t*)(&outbox_raw[pos]));
-                pos += 4;
-
-                // make sure there is enough data left to read
-                if (outbox_raw.size() < pos+arg_size)
-                    break;
-
-                // get the argument
-                msg.args.push_back(outbox_raw.substr(pos, arg_size));
-                pos += arg_size;
-            }
-
-            // check if we have a whole message
-            if (msg.args.size() == arg_num)
-            {
-                // we have a whole message - eat it from outbox_raw
-                julia_session_ptr->outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
-
-                // add the message to the outbox queue of all the users of this julia session if necessary
-                if (msg.type == MSG_OUTPUT_EVAL_INPUT ||
-                    msg.type == MSG_OUTPUT_EVAL_RESULT ||
-                    msg.type == MSG_OUTPUT_EVAL_ERROR ||
-                    msg.type == MSG_OUTPUT_PLOT) {
-                    julia_session_ptr->outbox_history.push_back(msg);
-                    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-                        iter->second.outbox.push_back(msg);
-                }
-                if (msg.type == MSG_OUTPUT_EVAL_INCOMPLETE) {
-                    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++) {
-                        if (iter->first == msg.args[0])
-                            iter->second.outbox.push_back(msg);
-                    }
-                }
-            }
-        }
-
-        // unlock the mutex
-        pthread_mutex_unlock(&julia_session_mutex);
-
-        // nothing from julia; wait before trying again
-        if (!new_raw_data && !new_formatted_data)
-        {
-            timespec timeout;
-            timeout.tv_sec = 0;
-            timeout.tv_nsec = OUTBOX_INTERVAL;
-            nanosleep(&timeout, 0);
-        }
-    }
-
+void close_julia_session(uv_handle_t *stream)
+{
+    clientData *data = (clientData *)stream->data;
+    julia_session *julia_session_ptr = data->session;
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
 
@@ -499,13 +301,177 @@ void* outbox_thread(void* arg) {
     julia_session_ptr->outbox_thread_alive = false;
 
     // release the socket
-    delete julia_session_ptr->sock;
+    uv_close((uv_handle_t*)julia_session_ptr->sock,&socketClosed);
 
     // unlock the mutex
     pthread_mutex_unlock(&julia_session_mutex);
+}
 
-    // terminate
-    return 0;
+//read from julia on metadata socket (4444)
+void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
+{
+    if(nread <= 0)
+        return;
+
+    // lock the mutex
+    pthread_mutex_lock(&julia_session_mutex);
+
+    clientData *data = (clientData* )sock->data;
+    julia_session *julia_session_ptr=data->session;
+    if(julia_session_ptr->status != SESSION_NORMAL)
+        return;
+
+    julia_session_ptr->outbox_raw.append(buf.base,nread);
+
+    // try to convert the raw outbox data into messages
+    string outbox_raw = julia_session_ptr->outbox_raw;
+    while (outbox_raw.size() >= 2)
+    {
+        // construct the message
+        message msg;
+
+        // get the message type
+        msg.type = (*((uint8_t*)(&outbox_raw[0])));
+
+        // get the number of arguments
+        uint8_t arg_num = *((uint8_t*)(&outbox_raw[1]));
+
+        // try to read the arguments
+        int pos = 2;
+        for (uint8_t i = 0; i < arg_num; i++)
+        {
+            // make sure there is enough data left to read
+            if (outbox_raw.size() < pos+4)
+                goto done;
+
+            // get the size of this argument
+            uint32_t arg_size = *((uint32_t*)(&outbox_raw[pos]));
+            pos += 4;
+
+            // make sure there is enough data left to read
+            if (outbox_raw.size() < pos+arg_size)
+                goto done;
+
+            // get the argument
+            msg.args.push_back(outbox_raw.substr(pos, arg_size));
+            pos += arg_size;
+        }
+
+        // check if we have a whole message
+        if (msg.args.size() == arg_num)
+        {
+            // we have a whole message - eat it from outbox_raw
+            outbox_raw = julia_session_ptr->outbox_raw = outbox_raw.substr(pos, outbox_raw.size()-pos);
+
+
+            // add the message to the outbox queue of all the users of this julia session if necessary
+            if (msg.type == MSG_OUTPUT_EVAL_INPUT ||
+                msg.type == MSG_OUTPUT_EVAL_RESULT ||
+                msg.type == MSG_OUTPUT_EVAL_ERROR ||
+                msg.type == MSG_OUTPUT_PLOT) {
+                julia_session_ptr->outbox_history.push_back(msg);
+                for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+                    iter->second.outbox.push_back(msg);
+            }
+            if (msg.type == MSG_OUTPUT_EVAL_INCOMPLETE) {
+                for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++) {
+                    if (iter->first == msg.args[0])
+                        iter->second.outbox.push_back(msg);
+                }
+            }
+        }
+    }
+
+    done:
+
+    // unlock the mutex
+    pthread_mutex_unlock(&julia_session_mutex);
+}
+
+
+void connected(uv_connect_t* req, int status)
+{
+    clientData *data = (clientData* )req->handle->data;
+    julia_session *julia_session_ptr=data->session;
+    // switch to normal operation
+    julia_session_ptr->status = SESSION_NORMAL;
+
+    // send a ready message
+    message ready_message;
+    ready_message.type = MSG_OUTPUT_READY;
+    julia_session_ptr->outbox_history.push_back(ready_message);
+    for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+		iter->second.outbox.push_back(ready_message);
+				
+    uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
+
+}
+
+//read from julia (on stdin)
+void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
+{
+    if(nread<0)
+        return;
+
+    clientData *data = (clientData *)stream->data;
+    julia_session *julia_session_ptr=data->session;
+    // lock the mutex
+    pthread_mutex_lock(&julia_session_mutex);
+
+    // terminate if necessary
+    if (julia_session_ptr->status == SESSION_TERMINATING)
+    {
+        // unlock the mutex
+        pthread_mutex_unlock(&julia_session_mutex);
+
+        // terminate
+        uv_close((uv_handle_t*)stream,&close_julia_session);
+    }
+
+    // prepare for reading from julia
+    uv_pipe_t *pipe = julia_session_ptr->julia_out;
+
+
+    // send the outbox data to the client
+    if (julia_session_ptr->status == SESSION_NORMAL)
+    {
+        // just dump the output into the julia_session
+        julia_session_ptr->outbox_std.append(buf.base,nread);
+    }
+
+    // get the port number
+    if (julia_session_ptr->status == SESSION_WAITING_FOR_PORT_NUM)
+    {
+        if(stream!=(uv_stream_t*)julia_session_ptr->julia_out) //allow debugging tools to print to stderr before startup
+            return;
+        data->buf.append(buf.base,nread);
+        // wait for a newline
+        size_t newline_pos = data->buf.find("\n");
+        if (newline_pos == string::npos)
+        {
+            // unlock the mutex
+            pthread_mutex_unlock(&julia_session_mutex);
+            return;
+        }
+
+        // read the port number
+        string num_string = data->buf.substr(0, newline_pos);
+        data->buf = data->buf.substr(newline_pos+1, data->buf.size()-(newline_pos+1));
+        int port_num = from_string<int>(num_string);
+
+        // start
+        julia_session_ptr->sock = new uv_tcp_t;
+        uv_tcp_init(julia_session_ptr->event_loop,julia_session_ptr->sock);
+        uv_connect_t *c=new uv_connect_t;
+        sockaddr_in address=uv_ip4_addr("127.0.0.1", port_num);
+        julia_session_ptr->sock->data=data;
+        uv_tcp_connect(c, julia_session_ptr->sock,address,&connected);
+    }
+
+    delete[] buf.base;
+
+    // unlock the mutex
+    pthread_mutex_unlock(&julia_session_mutex);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -515,91 +481,90 @@ void* outbox_thread(void* arg) {
 // the watchdog runs regularly according to this interval
 const int WATCHDOG_INTERVAL = 100000000; // in nanoseconds
 
-// this thread kills old web sessions and kills julia sessions with no users
-void* watchdog_thread(void* arg) {
-    // run forever
-    while (true)
-    {
-        // lock the mutex
-        pthread_mutex_lock(&julia_session_mutex);
+// this is defined below but we need it here too
+std::string create_julia_session(bool idle);
 
-        // get the current time
-        time_t t = time(0);
 
-        // delete old web sessions and mark julia sessions with no web sessions as terminating
-        for (size_t i = 0; i < julia_session_list.size(); i++)
-        {
-            julia_session* julia_session_ptr = julia_session_list[i];
-            vector<string> web_session_zombies;
-            for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-            {
-                if (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT)
-                    web_session_zombies.push_back(iter->first);
-            }
-            for (size_t j = 0; j < web_session_zombies.size(); j++)
-            {
-                cout<<"User \""<<julia_session_ptr->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<julia_session_ptr->session_name<<"\".\n";
-                julia_session_ptr->web_session_map.erase(web_session_zombies[j]);
-            }
-            if (julia_session_ptr->web_session_map.empty())
-                julia_session_ptr->status = SESSION_TERMINATING;
-        }
-
-        // kill julia sessions whose i/o threads have terminated
-        for (size_t i = 0; i < julia_session_list.size(); i++)
-        {
-            julia_session* julia_session_ptr = julia_session_list[i];
-            if (julia_session_ptr->inbox_thread_alive || julia_session_ptr->outbox_thread_alive)
-                continue;
-
-            // wait for the threads to terminate
-            if (julia_session_ptr->inbox_proc)
-                pthread_join(julia_session_ptr->inbox_proc, 0);
-            if (julia_session_ptr->outbox_proc)
-                pthread_join(julia_session_ptr->outbox_proc, 0);
-
-            // close the pipes
-            close(julia_session_ptr->julia_in[1]);
-            close(julia_session_ptr->julia_out[0]);
-            close(julia_session_ptr->julia_err[0]);
-
-            // kill the julia process
-            kill(julia_session_ptr->pid, 9);
-            waitpid(julia_session_ptr->pid, 0, 0);
-
-            // print a message
-            cout<<"Session \""<<julia_session_ptr->session_name<<"\" is terminating because it has no more users.\n";
-
-            // remove the session from the map
-            delete julia_session_ptr;
-            julia_session_list.erase(julia_session_list.begin()+i);
-
-            // print the number of open sessions
-            if (julia_session_list.size() == 1)
-                cout<<julia_session_list.size()<<" open session.\n";
-            else
-                cout<<julia_session_list.size()<<" open sessions.\n";
-        }
-
-        // unlock the mutex
-        pthread_mutex_unlock(&julia_session_mutex);
-
-        // don't waste cpu time
-        timespec timeout;
-        timeout.tv_sec = 0;
-        timeout.tv_nsec = WATCHDOG_INTERVAL;
-        nanosleep(&timeout, 0);
-    }
-
-    // never reached
-    return 0;
+void pipes_done(uv_handle_t *pipe)
+{
+    delete (uv_pipe_t*)pipe;
 }
+
+void watchdog(uv_timer_t* handle, int status)
+{
+    // lock the mutex
+    pthread_mutex_lock(&julia_session_mutex);
+
+    // get the current time
+    time_t t = time(0);
+
+	// delete old web sessions and mark julia sessions with no web sessions as terminating
+	for (size_t i = 0; i < julia_session_list.size(); i++)
+	{
+		julia_session* julia_session_ptr = julia_session_list[i];
+		vector<string> web_session_zombies;
+		for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+		{
+			if (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT)
+				web_session_zombies.push_back(iter->first);
+		}
+		for (size_t j = 0; j < web_session_zombies.size(); j++)
+		{
+			cout<<"User \""<<julia_session_ptr->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<julia_session_ptr->session_name<<"\".\n";
+			julia_session_ptr->web_session_map.erase(web_session_zombies[j]);
+		}
+		if (julia_session_ptr->web_session_map.empty())
+			julia_session_ptr->status = SESSION_TERMINATING;
+	}
+
+	// kill julia sessions whose i/o threads have terminated
+	for (size_t i = 0; i < julia_session_list.size(); i++)
+	{
+		julia_session* julia_session_ptr = julia_session_list[i];
+		if (julia_session_ptr->inbox_thread_alive || julia_session_ptr->outbox_thread_alive)
+			continue;
+
+		/*
+		// wait for the threads to terminate
+		if (julia_session_ptr->inbox_proc)
+			pthread_join(julia_session_ptr->inbox_proc, 0);
+		if (julia_session_ptr->outbox_proc)
+			pthread_join(julia_session_ptr->outbox_proc, 0);
+		*/
+			
+		// close the pipes
+        uv_close((uv_handle_t*)julia_session_ptr->julia_in,&pipes_done);
+        uv_close((uv_handle_t*)julia_session_ptr->julia_out,&pipes_done);
+        uv_close((uv_handle_t*)julia_session_ptr->julia_err,&pipes_done);
+
+		// kill the julia process
+		uv_process_kill(julia_session_ptr->proc, 9);
+
+		// print a message
+		cout<<"Session \""<<julia_session_ptr->session_name<<"\" is terminating because it has no more users.\n";
+
+		// remove the session from the map
+		delete julia_session_ptr;
+		julia_session_list.erase(julia_session_list.begin()+i);
+
+		// print the number of open sessions
+		if (julia_session_list.size() == 1)
+			cout<<julia_session_list.size()<<" open session.\n";
+		else
+			cout<<julia_session_list.size()<<" open sessions.\n";
+	}
+	
+    // unlock the mutex
+    pthread_mutex_unlock(&julia_session_mutex);
+
+}
+
 
 /////////////////////////////////////////////////////////////////////////////
 // THREAD:  main_thread
 /////////////////////////////////////////////////////////////////////////////
 
-// the maximum number of concurrent sessions
+// the maximum number of concurrent julia_sessions
 const size_t MAX_CONCURRENT_SESSIONS = 4;
 
 // give julia this much time to respond to messages
@@ -616,11 +581,27 @@ string make_session_token() {
 
 // format a web response with the appropriate header
 string respond(string session_token, string body) {
-    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\n";
+    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nCache-control: no-cache\r\n";
     header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
     header += "\r\n";
     return header+body;
 }
+
+
+void *run_event_loop(void *session)
+{
+    uv_loop_t *loop = ((julia_session *)session)->event_loop;
+    uv_run(loop);
+    return 0;
+}
+
+void process_exited(uv_process_t*p, int exit_status, int term_signal)
+{
+    ((clientData*)p->data)->session->status = SESSION_TERMINATING;
+    cout<<"Process Exited";
+}
+
+//#define READ_STDERR
 
 // get a session with a particular name (creating it if it does not exist) and return a session token
 // returns the empty string if a new session could not be created
@@ -669,76 +650,82 @@ string get_session(string user_name, string session_name) {
     // session name
     session_data->session_name = session_name;
 
-    // keep the session alive for now
+    // keep the julia_session alive for now
     session_data->inbox_thread_alive = true;
     session_data->outbox_thread_alive = true;
     session_data->should_terminate = false;
     session_data->status = SESSION_WAITING_FOR_PORT_NUM;
 
-    // start the julia instance
-    if (pipe(session_data->julia_in))
-        return "";
-    if (pipe(session_data->julia_out))
-    {
-        close(session_data->julia_in[0]);
-        close(session_data->julia_in[1]);
-        return "";
-    }
-    if (pipe(session_data->julia_err))
-    {
-        close(session_data->julia_in[0]);
-        close(session_data->julia_in[1]);
-        close(session_data->julia_out[0]);
-        close(session_data->julia_out[1]);
-        return "";
-    }
-    
-    pid_t pid = fork();
-    if (pid == -1)
-    {
-        close(session_data->julia_in[0]);
-        close(session_data->julia_in[1]);
-        close(session_data->julia_out[0]);
-        close(session_data->julia_out[1]);
-        close(session_data->julia_err[0]);
-        close(session_data->julia_err[1]);
-        return "";
-    }
-    if (pid == 0)
-    {
-        // this is the child process - redirect standard streams
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        dup2(session_data->julia_in[0], STDIN_FILENO);
-        dup2(session_data->julia_out[1], STDOUT_FILENO);
-        dup2(session_data->julia_err[1], STDERR_FILENO);
-        close(session_data->julia_in[0]);
-        close(session_data->julia_in[1]);
-        close(session_data->julia_out[0]);
-        close(session_data->julia_out[1]);
-        close(session_data->julia_err[0]);
-        close(session_data->julia_err[1]);
+    session_data->proc=new uv_process_t;
+    session_data->event_loop=uv_loop_new();
 
-        // acutally spawn julia instance
-        execl("./julia", "julia", "--no-history", "./ui/webserver/julia_web_base.jl", (char*)0);
+	//allocate pipess
+    session_data->julia_in=new uv_pipe_t;
+    uv_pipe_init(session_data->event_loop,session_data->julia_in,0);
+    session_data->julia_out=new uv_pipe_t;
+    uv_pipe_init(session_data->event_loop,session_data->julia_out,0);
 
-        // if exec failed, terminate with an error
-        exit(1);
+#ifdef READ_STDERR
+    session_data->julia_err=new uv_pipe_t;
+    uv_pipe_init(session_data->event_loop,session_data->julia_err,0);
+#else
+    session_data->julia_err=0;
+#endif
+
+	
+    uv_process_options_t opts;
+    opts.stdin_stream = session_data->julia_in;
+    opts.stdout_stream = session_data->julia_out;
+    opts.stderr_stream = session_data->julia_err;
+#if 0
+    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
+#else
+    char arg0[]="./julia-release-readline";
+	char arg1[]="--no-history";
+    char arg2[]="ui/webserver/julia_web_base.jl";
+    char *argv[4]={arg0,arg1,arg2,NULL};
+#endif
+    opts.exit_cb=&process_exited;
+    opts.cwd=NULL; //cwd
+    #ifndef __WIN32__
+    opts.env=environ;
+    #else
+    opts.env=NULL;
+    #endif
+    opts.args=argv;
+    opts.file=argv[0];
+    int err = uv_spawn(uv_default_loop(),session_data->proc,opts);
+    if(err!=0)
+        return "";
+
+    clientData *data = new clientData;
+
+    session_data->data_notifier = new uv_async_t;
+    session_data->data_notifier->data = (void*)data;
+    uv_async_init(uv_default_loop(),session_data->data_notifier,read_client);
+
+    data->session=session_data;
+    session_data->proc->data = session_data->julia_in->data = session_data->julia_out->data = data;
+    if (pthread_create(&session_data->thread, 0, &run_event_loop, (void*)session_data))
+    {
+        //session_data->thread = 0;
     }
-    close(session_data->julia_in[0]);
-    close(session_data->julia_out[1]);
-    close(session_data->julia_err[1]);
 
-    // set the pid of the julia instance
-    session_data->pid = pid;
-    
+    //start reading
+    uv_read_start((uv_stream_t*)opts.stdout_stream,&alloc_buf,&julia_incoming);
+#ifdef READ_STDERR
+    uv_read_start((uv_stream_t*)opts.stderr_stream,&alloc_buf,&julia_incoming);
+    session_data->julia_err->data = data;
+#endif
+	
+	/*
     // start the inbox thread
     if (pthread_create(&session_data->inbox_proc, 0, inbox_thread, (void*)session_data))
         session_data->inbox_proc = 0;
 
     // start the outbox thread
     if (pthread_create(&session_data->outbox_proc, 0, outbox_thread, (void*)session_data))
-        session_data->outbox_proc = 0;
+        session_data->outbox_proc = 0; */
 
     // store the session
     julia_session_list.push_back(session_data);
@@ -760,14 +747,22 @@ string get_session(string user_name, string session_name) {
     return session_token;
 }
 
+void requestDone(uv_handle_t *handle)
+{
+    delete (reading_in_progress*)handle->data;
+    delete (uv_tcp_t*)(handle);
+}
+
+
 // this function is called when an HTTP request is made - the response is the return value
-string get_response(request* req) {
+void get_response(request* req,uv_stream_t *client)
+{
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
 
-    // the session token
+    // the julia_session token
     string session_token;
-
+	
     // check for the session cookie
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
@@ -792,6 +787,9 @@ string get_response(request* req) {
     // the response
     vector <message> response_messages;
 
+    // whether we are waiting for an eval
+    bool waiting_for_eval = false;
+
     // process input if there is any
     if (req->get_field_exists("request"))
     {
@@ -815,7 +813,7 @@ string get_response(request* req) {
                     // MSG_INPUT_START
                     if (request_message.type == MSG_INPUT_START)
                     {
-                        // make sure the message is well-formed
+						// make sure the message is well-formed
                         if (request_message.args.size() >= 2)
                         {
                             // get the user name and session name
@@ -884,10 +882,11 @@ string get_response(request* req) {
                         {
                             // forward the message to this julia session
                             julia_session_ptr->inbox.push_back(request_message);
+                            uv_async_send(julia_session_ptr->data_notifier);
                         }
                     }
-
-                    // MSG_INPUT_REPLAY_HISTORY
+					
+                                        // MSG_INPUT_REPLAY_HISTORY
                     if (request_message.type == MSG_INPUT_REPLAY_HISTORY)
                     {
                         if (julia_session_ptr == 0)
@@ -972,6 +971,7 @@ string get_response(request* req) {
         julia_session_ptr->web_session_map[session_token].outbox.clear();
     }
 
+
     // unlock the mutex
     pthread_mutex_unlock(&julia_session_mutex);
 
@@ -988,29 +988,47 @@ string get_response(request* req) {
 
     // return the header and response
     Json::StyledWriter writer;
-    return respond(session_token, writer.write(response_root));
+    string response =  respond(session_token, writer.write(response_root));
+
+    reading_in_progress *p = (reading_in_progress *)client->data;
+    p->cstr = new char [response.size()];
+    memcpy (p->cstr, response.data(),response.size());
+    // write the response
+    uv_buf_t buf;
+    buf.base=p->cstr;
+    buf.len=response.size();
+    uv_write_t *wr = new uv_write_t;
+    uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
+    wr->data=(void*)buf.base;
+
+    // close the connection to the client
+    uv_close((uv_handle_t*)client,&requestDone);
 }
 
+
 // CTRL+C signal handler
-void sigproc(int) {
+void sigproc(int)
+{
     // print a message
     cout<<"cleaning up...\n";
 
     // lock the mutex
     pthread_mutex_lock(&julia_session_mutex);
 
+	
     // clean up
     for (size_t i = 0; i < julia_session_list.size(); i++)
     {
         // close the pipes
-        close(julia_session_list[i]->julia_in[1]);
-        close(julia_session_list[i]->julia_out[0]);
-        close(julia_session_list[i]->julia_err[0]);
+        uv_close((uv_handle_t*)(julia_session_list[i]->julia_in),&pipes_done);
+        uv_close((uv_handle_t*)(julia_session_list[i]->julia_out),&pipes_done);
+        uv_close((uv_handle_t*)(julia_session_list[i]->julia_err),&pipes_done);
 
         // kill the julia process
-        kill(julia_session_list[i]->pid, 9);
-        waitpid(julia_session_list[i]->pid, 0, 0);
+        uv_process_kill(julia_session_list[i]->proc, 9);
+        run_event_loop(julia_session_list[i]);
 
+        uv_loop_delete((julia_session_list[i])->event_loop);
         // delete the session
         delete julia_session_list[i];
     }
@@ -1023,7 +1041,8 @@ void sigproc(int) {
 }
 
 // program entrypoint
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[])
+{
     // set the Ctrl+C handler
     signal(SIGINT, sigproc);
 
@@ -1035,27 +1054,29 @@ int main(int argc, char* argv[]) {
             port_num = from_string<int>(argv[i+1]);
     }
 
-    // seed the random number generator for generating session tokens
+    // seed the random number generator for generating julia_session tokens
     srand(time(0));
 
+#ifndef __WIN32__
     // ignore the SIGPIPE signal (when julia crashes or exits, we don't want to die too)
     struct sigaction act;
     act.sa_flags = 0;
     act.sa_handler = SIG_IGN;
     sigemptyset(&act.sa_mask);
     sigaction(SIGPIPE, &act, NULL);
+#endif
 
     // initialize the mutex
     pthread_mutex_init(&julia_session_mutex, 0);
 
-    // start the watchdog thread
-    pthread_t watchdog;
-    pthread_create(&watchdog, 0, watchdog_thread, 0);
+    uv_timer_t wd;
+    uv_timer_init(uv_default_loop(),&wd);
+    uv_timer_start(&wd,&watchdog,WATCHDOG_INTERVAL,WATCHDOG_INTERVAL);
 
     // print a welcome message
     cout<<"SCGI server started on port "<<port_num<<".\n";
 
-    // print the number of open sessions
+    // print the number of open julia_sessions
     cout<<"0 open sessions.\n";
 
     // start the server
