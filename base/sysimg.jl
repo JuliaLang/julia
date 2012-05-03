@@ -84,6 +84,8 @@ include("datafmt.jl")
 
 ## Load optional external libraries
 
+include("buildinfo.jl")
+
 # linear algebra
 include("linalg.jl")
 include("linalg_dense.jl")

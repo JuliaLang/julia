@@ -12,7 +12,7 @@ LLVMROOT = $(USR)
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
-USE_MKL = 1
+USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
 ifeq ($(OS), MINGW32_NT-6.1)

@@ -15,7 +15,10 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.jl src/dump.c base/stage0.jl
+base/buildinfo.jl: Make.inc
+	@echo "BUILT_WITH_MKL = $(USE_MKL) == 1" > $@
+
+sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/buildinfo.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f sys.ji
 

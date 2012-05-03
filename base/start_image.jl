@@ -15,8 +15,7 @@ _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 
 # Optional libraries
-const MKL = true
-const _jl_libblas = dlopen(MKL ? "libmkl_rt" : "libopenblas")
+const _jl_libblas = dlopen(BUILT_WITH_MKL ? "libmkl_rt" : "libopenblas")
 const _jl_liblapack = _jl_libblas
 _jl_libfftw = dlopen("libfftw3")
 _jl_libfftwf = dlopen("libfftw3f")
