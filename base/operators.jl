@@ -97,7 +97,7 @@ oftype{T}(x::T,c) = convert(T,c)
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
-sizeof(T::Type) = error(strcat("size of type ",T," unknown"))
+sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 

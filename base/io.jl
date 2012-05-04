@@ -39,7 +39,7 @@ function fdio(name::String, fd::Integer, own::Bool)
     return s
 end
 fdio(name::String, fd::Integer) = fdio(name, fd, false)
-fdio(fd::Integer, own::Bool) = fdio(strcat("<fd ",fd,">"), fd, own)
+fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
 make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
@@ -93,6 +93,12 @@ function sprint(size::Integer, f::Function, args...)
 end
 
 sprint(f::Function, args...) = sprint(0, f, args...)
+
+function sshow(x)
+    s = memio(0, false)
+    show(s, x)
+    takebuf_string(s)
+end
 
 # using this is not recommended
 function with_output_to_string(thunk)

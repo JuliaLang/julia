@@ -21,7 +21,7 @@ macro cpp(ex)
     fstr = string(sym)
     fstr = fstr[2:end]   # strip the :
     #GNU3-4 ABI
-    fstr = strcat("_Z",strlen(fstr),fstr)
+    fstr = string("_Z",strlen(fstr),fstr)
     # Parse the arguments to ccall and construct the parameter type string
     extmp = ex.args[3]
     if extmp.head != :tuple
@@ -35,14 +35,14 @@ macro cpp(ex)
     for iarg = 1:length(exargs)
         thisarg = exargs[iarg]
         if isa(thisarg,Expr) && thisarg.head == :curly && thisarg.args[1] == :Ptr
-            pstr = strcat(pstr,'P')
+            pstr = string(pstr,'P')
             thisarg = thisarg.args[2]
         end
         matched = false
         for isym = 1:length(symtable)
             if thisarg == symtable[isym]
                 matched = true
-                pstr = strcat(pstr,ptable[isym])
+                pstr = string(pstr,ptable[isym])
                 # Cchar is a special notation just for name mangling,
                 # convert back to :Int8
                 if thisarg == :Cchar

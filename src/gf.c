@@ -1091,7 +1091,7 @@ static char *type_summary(jl_value_t *t)
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     ios_printf(ios_stderr, "unexpected argument type: ");
-    jl_show(t);
+    jl_show(jl_stderr_obj(), t);
     ios_printf(ios_stderr, "\n");
     assert(0);
     return NULL;

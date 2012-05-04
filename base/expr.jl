@@ -56,11 +56,11 @@ isequal(x::Symbol    , y::SymbolNode) = is(x,y.name)
 function show(io, tv::TypeVar)
     if !is(tv.lb, None)
         show(io, tv.lb)
-        print(io, "<:".data)
+        print(io, "<:")
     end
     print(io, tv.name)
     if !is(tv.ub, Any)
-        print(io, "<:".data)
+        print(io, "<:")
         show(io, tv.ub)
     end
 end

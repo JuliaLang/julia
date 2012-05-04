@@ -162,7 +162,6 @@
     jl_exception_in_transit;
     jl_show;
     jl_show_any;
-    jl_print_array_uint8;
     jl_print_symbol;
     jl_print_int64;
     jl_pgcstack;

@@ -75,7 +75,7 @@ end
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
 _jl_next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
-    error("invalid printf format string: ", sprint(show, s))
+    error("invalid printf format string: ", sshow(s))
 
 function _jl_printf_parse1(s::String, k::Integer)
     j = k
@@ -119,7 +119,7 @@ function _jl_printf_parse1(s::String, k::Integer)
     end
     # validate conversion
     if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
-        error("invalid printf format string: ", sprint(show, s))
+        error("invalid printf format string: ", sshow(s))
     end
     # TODO: warn about silly flag/conversion combinations
     flags, width, precision, c, k
@@ -450,7 +450,7 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         if !contains(flags,'#')
             push(blk.args, :($x = string($x)))
         else
-            push(blk.args, :($x = sprint(show, $x)))
+            push(blk.args, :($x = sshow($x)))
         end
         if !contains(flags,'-')
             push(blk.args, _jl_printf_pad(width, :($width-strwidth($x)), ' '))

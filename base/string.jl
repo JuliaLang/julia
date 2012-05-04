@@ -25,12 +25,13 @@ ref(s::String, x::Real) = s[iround(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
-    sprint(length(v), io->(for i in v print(io,s[i]) end))
+    sprint(length(v), io->(for i in v write(io,s[i]) end))
 
 symbol(s::String) = symbol(cstring(s))
+string() = ""
 string(s::String) = s
 
-print(io::IO, s::String) = for c in s print(io, c) end
+print(io::IO, s::String) = for c in s write(io, c) end
 show(io::IO, s::String) = print_quoted(io, s)
 
 (*)(s::String...) = strcat(s...)
@@ -252,15 +253,6 @@ next(s::CharString, i::Int) = (s.chars[i], i+1)
 length(s::CharString) = length(s.chars)
 strlen(s::CharString) = length(s)
 
-function string(c::Char, x::Char...)
-    s = memio(1+length(x), false)
-    write(s, c)
-    for ch in x
-        write(s, ch)
-    end
-    takebuf_string(s)
-end
-
 ## substrings reference original strings ##
 
 type SubString{T<:String} <: String
@@ -386,9 +378,9 @@ strlen(s::RopeString) = strlen(s.head) + strlen(s.tail)
 
 strcat() = ""
 strcat(s::String) = s
-strcat(x...) = strcat(map(string,x)...)
 strcat(s::String, t::String...) =
     (t = strcat(t...); isempty(s) ? t : isempty(t) ? s : RopeString(s, t))
+strcat(xs...) = string(xs...)  # backwards compat
 
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 
@@ -434,8 +426,17 @@ end
 
 ## conversion of general objects to strings ##
 
-string(x) = sprint(show, x)
-cstring(x...) = sprint(print, x...)
+cstring() = ""
+
+function cstring(xs...)
+    s = memio(isa(xs[1],String) ? length(xs[1]) : 0, false)
+    for x in xs
+        print(s, x)
+    end
+    takebuf_string(s)
+end
+
+string(xs...) = cstring(xs...)
 
 function cstring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
@@ -497,7 +498,7 @@ quote_string(s::String) = sprint(length(s)+2, io->print_quoted(io,s))
 
 function print_unescaped_chars(io, s::String, esc::String)
     if !contains(esc,'\\')
-        esc = strcat("\\", esc)
+        esc = string("\\", esc)
     end
     i = start(s)
     while !done(s,i)
@@ -734,7 +735,7 @@ function shell_split(s::String)
     parsed = _jl_shell_parse(s,false)
     args = String[]
     for arg in parsed
-       push(args, strcat(arg...))
+       push(args, string(arg...))
     end
     args
 end
@@ -878,7 +879,7 @@ function replace(str::ByteString, splitter, repl::Function, limit::Integer)
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
-    sprint(length(rstr),print,rstr)
+    cstring(rstr)
 end
 replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
 replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
@@ -951,7 +952,7 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     while true
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sprint(show, s) ,")"
+                "premature end of integer (in ", sshow(s) ,")"
             )))
         end
         c,i = next(s,i)
@@ -964,14 +965,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         sgn = -sgn
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sprint(show, s), ")"
+                "premature end of integer (in ", sshow(s), ")"
             )))
         end
         c,i = next(s,i)
     elseif c == '+'
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sprint(show, s), ")"
+                "premature end of integer (in ", sshow(s), ")"
             )))
         end
         c,i = next(s,i)
@@ -985,14 +986,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         if d >= base
             if !iswspace(c)
                 throw(ArgumentError(strcat(
-                    sprint(show, c)," is not a valid digit (in ", sprint(show, s), ")"
+                    sshow(c)," is not a valid digit (in ", sshow(s), ")"
                 )))
             end
             while !done(s,i)
                 c,i = next(s,i)
                 if !iswspace(c)
                     throw(ArgumentError(strcat(
-                        "extra characters after whitespace (in ", sprint(show, s), ")"
+                        "extra characters after whitespace (in ", sshow(s), ")"
                     )))
                 end
             end
