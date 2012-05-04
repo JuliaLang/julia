@@ -4,30 +4,30 @@ _jl_libRmath = dlopen("libRmath")
 macro _jl_libRmath_vectorize_3arg(f)
     quote
         ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::T3) =
-            reshape([ ($f)(x[i], y, z) | i=1:numel(x) ], size(x))
+            reshape([ ($f)(x[i], y, z) for i=1:numel(x) ], size(x))
         ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::AbstractArray{T2}, z::T3) =
-            reshape([ ($f)(x, y[i], z) | i=1:numel(y) ], size(y))
+            reshape([ ($f)(x, y[i], z) for i=1:numel(y) ], size(y))
         ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::T2, z::AbstractArray{T3}) =
-            reshape([ ($f)(x, y, z[i]) | i=1:numel(z) ], size(z))
+            reshape([ ($f)(x, y, z[i]) for i=1:numel(z) ], size(z))
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::AbstractArray{T2}, z::T3)
             shp = promote_shape(size(x), size(y))
-            reshape([ ($f)(x[i], y[i], z) | i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y[i], z) for i=1:numel(x) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::AbstractArray{T2}, z::AbstractArray{T3})
             shp = promote_shape(size(y), size(z))
-            reshape([ ($f)(x, y[i], z[i]) | i=1:numel(y) ], shp)
+            reshape([ ($f)(x, y[i], z[i]) for i=1:numel(y) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::AbstractArray{T3})
             shp = promote_shape(size(x), size(z))
-            reshape([ ($f)(x[i], y, z[i]) | i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y, z[i]) for i=1:numel(x) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::AbstractArray{T3})
             shp = promote_shape(size(x), size(z))
-            reshape([ ($f)(x[i], y, z[i]) | i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y, z[i]) for i=1:numel(x) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::AbstractArray{T2}, z::AbstractArray{T3})
             shp = promote_shape(promote_shape(size(x), size(y)), size(z))
-            reshape([ ($f)(x[i], y, z[i]) | i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y, z[i]) for i=1:numel(x) ], shp)
         end
     end
 end
@@ -39,67 +39,67 @@ set_seed(a1::Integer, a2::Integer) =
 ## The d-p-q functions in Rmath for signrank allocate storage that must be freed
 ## Signrank - Wilcoxon Signed Rank statistic
 rsignrank(nn::Integer, p1::Number) =
-    [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) | i=1:nn ]
+    [ ccall(dlsym(_jl_libRmath, "rsignrank"), Float64, (Float64,), p1) for i=1:nn ]
 
 ## Need to handle the d-p-q for Wilcox separately because the Rmath functions allocate storage that must be freed.
 ## Wilcox - Wilcox's Rank Sum statistic (m, n) - probably only makes sense for positive integers
 rwilcox(nn::Integer, p1::Number, p2::Number) =
-    [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
+    [ ccall(dlsym(_jl_libRmath, "rwilcox"), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
 
 ## Vectorize over four numeric arguments
 macro _jl_libRmath_vectorize_4arg(f)
     quote
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::T2, a3::T3, a4::T4) =
-            reshape([ ($f)(a1[i], a2, a3, a4) | i=1:numel(a1) ], size(a1))
+            reshape([ ($f)(a1[i], a2, a3, a4) for i=1:numel(a1) ], size(a1))
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::AbstractArray{T2}, a3::T3, a4::T4) =
-            reshape([ ($f)(a1, a2[i], a3, a4) | i=1:numel(a2) ], size(a2))
+            reshape([ ($f)(a1, a2[i], a3, a4) for i=1:numel(a2) ], size(a2))
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::T2, a3::AbstractArray{T3}, a4::T4) =
-            reshape([ ($f)(a1, a2, a3[i], a4) | i=1:numel(a3) ], size(a3))
+            reshape([ ($f)(a1, a2, a3[i], a4) for i=1:numel(a3) ], size(a3))
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::T2, a3::T3, a4::AbstractArray{T4}) =
-            reshape([ ($f)(a1, a2, a3, a4[i]) | i=1:numel(a4) ], size(a4))
+            reshape([ ($f)(a1, a2, a3, a4[i]) for i=1:numel(a4) ], size(a4))
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::AbstractArray{T2}, a3::T3, a4::T4)
             shp = promote_shape(size(a1), size(a2))
-            reshape([ ($f)(a1[i], a2[i], a3, a4) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2[i], a3, a4) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::T2, a3::AbstractArray{T3}, a4::T4)
             shp = promote_shape(size(a1), size(a3))
-            reshape([ ($f)(a1[i], a2, a3[i], a4) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2, a3[i], a4) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::T2, a3::T3, a4::AbstractArray{T4})
             shp = promote_shape(size(a1), size(a4))
-            reshape([ ($f)(a1[i], a2, a3, a4[i]) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2, a3, a4[i]) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::AbstractArray{T2}, a3::AbstractArray{T3}, a4::T4)
             shp = promote_shape(size(a2), size(a3))
-            reshape([ ($f)(a1, a2[i], a3[i], a4) | i=1:numel(a2) ], shp)
+            reshape([ ($f)(a1, a2[i], a3[i], a4) for i=1:numel(a2) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::AbstractArray{T2}, a3::T3, a4::AbstractArray{T4})
             shp = promote_shape(size(a2), size(a4))
-            reshape([ ($f)(a1, a2[i], a3, a4[i]) | i=1:numel(a2) ], shp)
+            reshape([ ($f)(a1, a2[i], a3, a4[i]) for i=1:numel(a2) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::T2, a3::AbstractArray{T3}, a4::AbstractArray{T4})
             shp = promote_shape(size(a3), size(a4))
-            reshape([ ($f)(a1, a2, a3[i], a4[i]) | i=1:numel(a3) ], shp)
+            reshape([ ($f)(a1, a2, a3[i], a4[i]) for i=1:numel(a3) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::AbstractArray{T2}, a3::AbstractArray{T3}, a4::T4)
             shp = promote_shape(promote_shape(size(a1), size(a2)), size(a3))
-            reshape([ ($f)(a1[i], a2[i], a3[i], a4) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2[i], a3[i], a4) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::AbstractArray{T2}, a3::T3, a4::AbstractArray{T4})
             shp = promote_shape(promote_shape(size(a1), size(a2)), size(a4))
-            reshape([ ($f)(a1[i], a2[i], a3, a4[i]) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2[i], a3, a4[i]) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::T2, a3::AbstractArray{T3}, a4::AbstractArray{T4})
             shp = promote_shape(promote_shape(size(a1), size(a3)), size(a4))
-            reshape([ ($f)(a1[i], a2, a3[i], a4[i]) | i=1:numel(a1) ], shp)
+            reshape([ ($f)(a1[i], a2, a3[i], a4[i]) for i=1:numel(a1) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::AbstractArray{T2}, a3::AbstractArray{T3}, a4::AbstractArray{T4})
             shp = promote_shape(promote_shape(size(a2), size(a3)), size(a4))
-            reshape([ ($f)(a1, a2[i], a3[i], a4[i]) | i=1:numel(a2) ], shp)
+            reshape([ ($f)(a1, a2[i], a3[i], a4[i]) for i=1:numel(a2) ], shp)
         end
         function ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::AbstractArray{T2}, a3::AbstractArray{T3}, a4::AbstractArray{T4})
             shp = promote_shape(promote_shape(promote_shape(size(a1), size(a2)), size(a3)), size(a4))
-            reshape([ ($f)(a1[i], a2[i], a3[i], a4[i]) | i=1:numel(a2) ], shp)
+            reshape([ ($f)(a1[i], a2[i], a3[i], a4[i]) for i=1:numel(a2) ], shp)
         end
     end
 end
@@ -114,14 +114,14 @@ macro _jl_libRmath_1par_0d(base)
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number) = ($dd)(x, p1, false)
         @vectorize_2arg Number $dd
 
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
         ($pp)(q::Number, p1::Number) = ($pp)(q, p1, true, false)
@@ -130,14 +130,14 @@ macro _jl_libRmath_1par_0d(base)
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
         ($qq)(p::Number, p1::Number) = ($qq)(p, p1, true, false)
         @vectorize_2arg Number $qq
 
         ($rr)(nn::Integer, p1::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) for i=1:nn ]
     end
 end
 
@@ -156,7 +156,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, give_log::Bool) = ($dd)(x, $d1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, give_log::Bool) = ($dd)(x, $d1, give_log)
         ($dd)(x::Number, p1::Number) = ($dd)(x, p1, false)
@@ -167,7 +167,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, $d1, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, lower_tail::Bool, log_p::Bool) = ($pp)(q, $d1, lower_tail, log_p)
         ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
@@ -182,7 +182,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, $d1, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, lower_tail::Bool, log_p::Bool) = ($qq)(p, $d1, lower_tail, log_p)
         ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
@@ -195,7 +195,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($qq){T<:Number}(p::AbstractArray{T}) = ($qq)(p, $d1, true, false)
 
         ($rr)(nn::Integer, p1::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) for i=1:nn ]
         ($rr)(nn::Integer) = ($rr)(nn, $d1)
     end
 end
@@ -213,32 +213,32 @@ macro _jl_libRmath_2par_0d(base)
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, p2, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, p2::Number) = ($dd)(x, p1, p2, false)
         @_jl_libRmath_vectorize_3arg $dd
 
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool) = ($pp)(q, p1, p2, lower_tail, false)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, false) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, false) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number) = ($pp)(q, p1, p2, true, false)
         @_jl_libRmath_vectorize_3arg $pp
 
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool) = ($qq)(p, p1, p2, lower_tail, false)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, false) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, false) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number) = ($qq)(p, p1, p2, true, false)
         @_jl_libRmath_vectorize_3arg $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
     end
 end
 
@@ -259,7 +259,7 @@ macro _jl_libRmath_2par_1d(base, d2)
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, p2, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
         ($dd)(x::Number, p1::Number, p2::Number) = ($dd)(x, p1, p2, false)
@@ -271,7 +271,7 @@ macro _jl_libRmath_2par_1d(base, d2)
             ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool) = ($pp)(q, p1, p2, lower_tail, false)
         ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, $d2, lower_tail, false)
@@ -286,7 +286,7 @@ macro _jl_libRmath_2par_1d(base, d2)
             ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool) = ($qq)(p, p1, p2, lower_tail, false)
         ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, $d2, lower_tail, false)
@@ -298,7 +298,7 @@ macro _jl_libRmath_2par_1d(base, d2)
         @vectorize_2arg Number $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
         ($rr)(nn::Integer, p1::Number) = ($rr)(nn, p1, $d2)
     end
 end
@@ -321,7 +321,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(ddsym)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, p2, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
         ($dd)(x::Number, give_log::Bool) = ($dd)(x, $d1, $d2, give_log)
@@ -337,7 +337,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(ppsym)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
         ($pp)(q::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, $d1, $d2, lower_tail, log_p)
@@ -358,7 +358,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(qqsym)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
         ($qq)(p::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, $d1, $d2, lower_tail, log_p)
@@ -377,7 +377,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($qq){T<:Number}(p::AbstractArray{T}) = ($qq)(p, $d1, $d2, true, false)
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
         ($rr)(nn::Integer, p1::Number) = ($rr)(nn, p1, $d2)
         ($rr)(nn::Integer) = ($rr)(nn, $d1, $d2)
     end
@@ -399,32 +399,32 @@ macro _jl_libRmath_3par_0d(base)
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Float64,Int32), x, p1, p2, p3, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, p3::Number, give_log::Bool) =
-            reshape([ ($dd)(x[i], p1, p2, p3, give_log) | i=1:numel(x) ], size(x))
+            reshape([ ($dd)(x[i], p1, p2, p3, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number) = ($dd)(x, p1, p2, p3, false)
         @_jl_libRmath_vectorize_4arg $dd
 
         ($pp)(q::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), q, p1, p2, p3, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, p3, lower_tail, log_p) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, p3, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool) = ($pp)(q, p1, p2, p3, lower_tail, false)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool) =
-            reshape([ ($pp)(q[i], p1, p2, p3, lower_tail, false) | i=1:numel(q) ], size(q))
+            reshape([ ($pp)(q[i], p1, p2, p3, lower_tail, false) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number, p3::Number) = ($pp)(q, p1, p2, p3, true, false)
         @_jl_libRmath_vectorize_4arg $pp
 
         ($qq)(p::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
             ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), p, p1, p2, p3, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, p3, lower_tail, log_p) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, p3, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool) = ($qq)(p, p1, p2, p3, lower_tail, false)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool) =
-            reshape([ ($qq)(p[i], p1, p2, p3, lower_tail, false) | i=1:numel(p) ], size(p))
+            reshape([ ($qq)(p[i], p1, p2, p3, lower_tail, false) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number, p3::Number) = ($qq)(p, p1, p2, p3, true, false)
         @_jl_libRmath_vectorize_4arg $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number, p3::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64,Float64), p1, p2, p3) | i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64,Float64), p1, p2, p3) for i=1:nn ]
     end
 end
 
@@ -440,11 +440,11 @@ ptukey(q::Number, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool)
 ptukey(q::Number, nmeans::Number, df::Number, nranges::Number) =
     ccall(dlsym(_jl_libRmath, :ptukey), Float64, (Float64,Float64,Float64,Int32,Int32),q,nranges,nmeans,df,true,false)
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool, log_p::Bool) =
-    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,log_p)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,log_p) for i=1:numel(q)], size(q))
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool) =
-    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,false)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,false) for i=1:numel(q)], size(q))
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number) =
-    reshape([ptukey(q[i],nmeans,df,nranges,true,false)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,true,false) for i=1:numel(q)], size(q))
 
 ## tukey (Studentized Range Distribution - p and q only - 3pars)
 ptukey(q::Number, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool, log_p::Bool) =
@@ -456,13 +456,13 @@ ptukey(q::Number, nmeans::Number, df::Number, nranges::Number) =
 ptukey(q::Number, nmeans::Number, df::Number, nranges::Number) =
     ccall(dlsym(_jl_libRmath, :ptukey), Float64, (Float64,Float64,Float64,Int32,Int32),q,nranges,1.,df,true,false)
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool, log_p::Bool) =
-    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,log_p)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,log_p) for i=1:numel(q)], size(q))
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool) =
-    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,false)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,lower_tail,false) for i=1:numel(q)], size(q))
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number) =
-    reshape([ptukey(q[i],nmeans,df,nranges,true,false)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,nranges,true,false) for i=1:numel(q)], size(q))
 ptukey{T<:Number}(q::AbstractArray{T}, nmeans::Number, df::Number) =
-    reshape([ptukey(q[i],nmeans,df,1.,true,false)|i=1:numel(q)], size(q))
+    reshape([ptukey(q[i],nmeans,df,1.,true,false) for i=1:numel(q)], size(q))
 
 qtukey(q::Number, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool, log_p::Bool) =
     ccall(dlsym(_jl_libRmath, :qtukey), Float64, (Float64,Float64,Float64,Int32,Int32),p,nranges,nmeans,df,lower_tail,log_p)
@@ -473,10 +473,10 @@ qtukey(p::Number, nmeans::Number, df::Number, nranges::Number) =
 qtukey(p::Number, nmeans::Number, df::Number) =
     ccall(dlsym(_jl_libRmath, :qtukey), Float64, (Float64,Float64,Float64,Int32,Int32),p,nranges,1.,df,true,false)
 qtukey{T<:Number}(p::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool, log_p::Bool) =
-    reshape([qtukey(p[i],nmeans,df,nranges,lower_tail,log_p)|i=1:numel(p)], size(p))
+    reshape([qtukey(p[i],nmeans,df,nranges,lower_tail,log_p) for i=1:numel(p)], size(p))
 qtukey{T<:Number}(p::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number, lower_tail::Bool) =
-    reshape([qtukey(p[i],nmeans,df,nranges,lower_tail,false)|i=1:numel(p)], size(p))
+    reshape([qtukey(p[i],nmeans,df,nranges,lower_tail,false) for i=1:numel(p)], size(p))
 qtukey{T<:Number}(p::AbstractArray{T}, nmeans::Number, df::Number, nranges::Number) =
-    reshape([qtukey(p[i],nmeans,df,nranges,true,false)|i=1:numel(p)], size(p))
+    reshape([qtukey(p[i],nmeans,df,nranges,true,false) for i=1:numel(p)], size(p))
 qtukey{T<:Number}(p::AbstractArray{T}, nmeans::Number, df::Number) =
-    reshape([qtukey(p[i],nmeans,df,1.,true,false)|i=1:numel(p)], size(p))
+    reshape([qtukey(p[i],nmeans,df,1.,true,false) for i=1:numel(p)], size(p))
