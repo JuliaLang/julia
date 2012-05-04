@@ -58,9 +58,7 @@ end
 
 function _jl_get_bit_chunk_string(c::Uint64, l::Integer)
     bs = "01"
-    bitstrs = [join([bs[(c >>> (s*8+t)) & 1+1] |
-                    t in 0 : min(7, (l-s*8-1))], "") |
-              s in 0 : iceil((l - 1)/8)]
+    bitstrs = [join([bs[(c >>> (s*8+t)) & 1 + 1] for t in 0 : min(7, (l-s*8-1))], "") for s in 0 : iceil((l - 1)/8)]
     return join(bitstrs, " ")
 end
 
@@ -71,7 +69,7 @@ function bitstring(B::BitArray)
         return ""
     end
     l = ((length(B) - 1) & 0x3f) + 1
-    bitstr = join(append([_jl_get_bit_chunk_string(B.chunks[i]) | i in 1:length(B.chunks)-1],
+    bitstr = join(append([_jl_get_bit_chunk_string(B.chunks[i]) for i in 1:length(B.chunks)-1],
                          [_jl_get_bit_chunk_string(B.chunks[end], l)]), ": ")
 
     return bitstr
