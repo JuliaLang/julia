@@ -91,7 +91,7 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
 {
     size_t i;
     jl_array_t *a;
-    size_t ndims = dims->length;
+    size_t ndims = jl_tuple_len(dims);
 
     int ndimwords = (ndims > 2 ? (ndims-2) : 0);
 #ifndef __LP64__
@@ -168,7 +168,7 @@ jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data, jl_tuple_t *dims,
 {
     size_t i, elsz, nel=1;
     jl_array_t *a;
-    size_t ndims = dims->length;
+    size_t ndims = jl_tuple_len(dims);
 
     for(i=0; i < ndims; i++) {
         nel *= jl_unbox_long(jl_tupleref(dims, i));
@@ -226,7 +226,7 @@ jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims)
 
 jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims)
 {
-    size_t ndims = dims->length;
+    size_t ndims = jl_tuple_len(dims);
     size_t *adims = alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)

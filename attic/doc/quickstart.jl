@@ -203,7 +203,7 @@ end
 # other data structures
 # =============================================================================
 
-h = HashTable()
+h = Dict()
 h["key"] = val
 get(h, "key", val_if_not_found)
 

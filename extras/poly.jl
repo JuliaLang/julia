@@ -28,7 +28,7 @@ length(p::Polynomial) = length(p.a)-p.nzfirst
 ref(p::Polynomial, i) = p.a[i+p.nzfirst]
 assign(p::Polynomial, v, i) = (p.a[i+p.nzfirst] = v)
 
-copy(p::Polynomial) = Polynomial(copy(p.a[p.nzeros:end]))
+copy(p::Polynomial) = Polynomial(copy(p.a[p.nzfirst:end]))
 
 zero{T}(p::Polynomial{T}) = Polynomial([zero(T)])
 one{T}(p::Polynomial{T}) = Polynomial([one(T)])
@@ -79,6 +79,27 @@ end
 *(p::Polynomial, c::Number) = Polynomial(c * p.a[1+p.nzfirst:end])
 /(p::Polynomial, c::Number) = Polynomial(p.a[1+p.nzfirst:end] / c)
 -(p::Polynomial) = Polynomial(-p.a[1+p.nzfirst:end])
+
+-(p::Polynomial, c::Number) = +(p, -c)
++(c::Number, p::Polynomial) = +(p, c)
+function +(p::Polynomial, c::Number)
+    if length(p) < 1
+        return Polynomial([c,])
+    else
+        p2 = copy(p)
+        p2.a[end] += c;
+        return p2;
+    end
+end
+function -(c::Number, p::Polynomial)
+    if length(p) < 1
+        return Polynomial([c,])
+    else
+        p2 = -p;
+        p2.a[end] += c;
+        return p2;
+    end
+end
 
 function +{T,S}(p1::Polynomial{T}, p2::Polynomial{S})
     R = promote_type(T,S)

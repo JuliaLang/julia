@@ -68,6 +68,11 @@ last{T}(r::Range1{T}) = r.start + oftype(T,r.len-1)
 step(r::Range)  = r.step
 step(r::Range1) = one(r.start)
 
+min(r::Range1) = r.start
+max(r::Range1) = last(r)
+min(r::Range) = r.step > 0 ? r.start : last(r)
+max(r::Range) = r.step > 0 ? last(r) : r.start
+
 # Ranges are intended to be immutable
 copy(r::Ranges) = r
 
@@ -89,8 +94,8 @@ ref(r::Range, s::Range1{Int}) =
 ref(r::Range1, s::Range1{Int}) =
     r.len < last(s) ? error(BoundsError) : Range1(r[s.start], s.len)
 
-show(r::Range)  = print(r.start,':',r.step,':',last(r))
-show(r::Range1) = print(r.start,':',last(r))
+show(io, r::Range)  = print(io, r.start,':',r.step,':',last(r))
+show(io, r::Range1) = print(io, r.start,':',last(r))
 
 start(r::Ranges) = 0
 next(r::Range,  i) = (r.start + oftype(r.start,i)*step(r), i+1)
@@ -152,29 +157,29 @@ end
 
 ## non-linear operations on ranges ##
 
-./(x::Number, r::Ranges) = [ x/y | y=r ]
-./(r::Ranges, y::Number) = [ x/y | x=r ]
+./(x::Number, r::Ranges) = [ x/y for y=r ]
+./(r::Ranges, y::Number) = [ x/y for x=r ]
 function ./(r::Ranges, s::Ranges)
     if length(r) != length(s)
         error("argument dimensions must match")
     end
-    [ r[i]/s[i] | i = 1:length(r) ]
+    [ r[i]/s[i] for i = 1:length(r) ]
 end
 
 function .*(r::Ranges, s::Ranges)
     if length(r) != length(s)
         error("argument dimensions must match")
     end
-    [ r[i]*s[i] | i = 1:length(r) ]
+    [ r[i]*s[i] for i = 1:length(r) ]
 end
 
-.^(x::Number, r::Ranges) = [ x^y | y=r ]
-.^(r::Ranges, y::Number) = [ x^y | x=r ]
+.^(x::Number, r::Ranges) = [ x^y for y=r ]
+.^(r::Ranges, y::Number) = [ x^y for x=r ]
 function .^(r::Ranges, s::Ranges)
     if length(r) != length(s)
         error("argument dimensions must match")
     end
-    [ r[i]^s[i] | i = 1:length(r) ]
+    [ r[i]^s[i] for i = 1:length(r) ]
 end
 
 ## concatenation ##

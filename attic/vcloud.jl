@@ -40,7 +40,7 @@ function vcloud_delnode(name)
     run(`python $VCPATH/delvapp.py -n $name`)
 end
 
-VCNodesInUse = HashTable()
+VCNodesInUse = Dict()
 
 function vcloud_waitboot(name)
     print("powering on node $name"); flush(stdout_stream)

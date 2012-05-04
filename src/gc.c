@@ -463,7 +463,7 @@ static void gc_markval_(jl_value_t *v)
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t l = ((jl_tuple_t*)v)->length;
+        size_t l = jl_tuple_len(v);
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
             if (elt != NULL)
@@ -545,7 +545,7 @@ static void gc_markval_(jl_value_t *v)
         // don't mark contents
     }
     else {
-        int nf = (int)((jl_struct_type_t*)vt)->names->length;
+        int nf = (int)jl_tuple_len(((jl_struct_type_t*)vt)->names);
         if (nf > 0) {
             int i = 0;
             if (vt == (jl_value_t*)jl_struct_kind ||
@@ -639,21 +639,13 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_get_global(jl_base_module,
-                                          jl_symbol("stderr_stream"));
-    JL_TRY {
-        if (errstream)
-            jl_set_current_output_stream_obj(errstream);
-        uv_stream_t *s = jl_current_output_stream();
-        for(int i=0; i < obj_counts.size; i+=2) {
-            if (obj_counts.table[i+1] != HT_NOTFOUND) {
-                jl_printf(s, "%d ", obj_counts.table[i+1]-1);
-                jl_show(obj_counts.table[i]);
-                jl_printf(s, "\n");
-            }
+    jl_value_t *errstream = jl_stderr_obj();
+    for(int i=0; i < obj_counts.size; i+=2) {
+        if (obj_counts.table[i+1] != HT_NOTFOUND) {
+            ios_printf(ios_stderr, "%d ", obj_counts.table[i+1]-1);
+            jl_show(errstream, obj_counts.table[i]);
+            ios_printf(ios_stderr, "\n");
         }
-    }
-    JL_CATCH {
     }
 }
 #endif

@@ -18,3 +18,5 @@
 /build
 /root2
 
+/glpk-*
+/readline62-*

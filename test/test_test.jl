@@ -10,8 +10,8 @@ test_group("string tests")
 @testfails strip("\t  this should fail   \n") == "hi" 
 
 test_group("numeric tests")
-@test isclose(.1+.1+.1, .3)
-@testfails isclose(.1+.1+.1, .4)
+@test isapprox(.1+.1+.1, .3)
+@testfails isapprox(.1+.1+.1, .4)
 
 test_group("array tests")
 a = Array(Float64, 2, 2, 2, 2, 2)
@@ -30,7 +30,7 @@ test_group("exception tests")
 @testfails throws_exception(complex(1,2) > 0, SystemError) 
 
 test_group("printing tests")
-@test print_to_string(show, :(1+2)) == "+(1,2)"
+@test sprint(show, :(1+2)) == "+(1,2)"
 @test prints(print_joined, ([1,2,3], " : "), "1 : 2 : 3") # prints is a helper
 @testfails prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3")
 

@@ -263,7 +263,7 @@ void julia_init(char *imageFile)
         }
         JL_CATCH {
             jl_printf(jl_stderr_tty, "error during init:\n");
-            jl_show(jl_exception_in_transit);
+            jl_show(jl_stderr_obj(), jl_exception_in_transit);
             jl_printf(jl_stdout_tty, "\n");
             jl_exit(1);
         }

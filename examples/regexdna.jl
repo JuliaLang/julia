@@ -17,7 +17,7 @@ const variants = [
       "agggtaa[cgt]|[acg]ttaccct" ]
 
 for variant in variants
-    k = sum([1 | mat in each_match(Regex(variant), seq)])
+    k = sum([1 for mat in each_match(Regex(variant), seq)])
     printf("%s %d\n", variant, k)
 end
 

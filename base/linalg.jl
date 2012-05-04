@@ -58,6 +58,8 @@ function norm(A::AbstractMatrix, p)
         max(sum(abs(A),2))
     elseif p == "fro"
         return sqrt(sum(diag(A'*A)))
+    else
+        error("invalid parameter to matrix norm")
     end
 end
 

@@ -189,7 +189,7 @@ procs(s::SubDArray) = s.parent.pmap[_jl_sub_da_pieces(s)]
 
 function dist(s::SubDArray)
     pcs = _jl_sub_da_pieces(s)
-    sizes = [ length(pieceindex(s, p)) | p = pcs ]
+    sizes = [ length(pieceindex(s, p)) for p = pcs ]
     cumsum([1, sizes])
 end
 
@@ -356,7 +356,7 @@ function _jl_distribute_one(T, lsz, da, distdim, owner, orig_array)
     i1 = da.dist[p]             # my first index in distdim
     iend = i1+lsz[distdim]-1    # my last  "
     # indexes of original array I will take
-    idxs = { 1:lsz[i] | i=1:length(da.dims) }
+    idxs = { 1:lsz[i] for i=1:length(da.dims) }
     idxs[distdim] = (i1:iend)
     remote_call_fetch(owner, ref, orig_array, idxs...)
 end
@@ -365,7 +365,7 @@ convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
 
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
-    idxs = { 1:size(a,i) | i=1:N }
+    idxs = { 1:size(a,i) for i=1:N }
     for p = 1:length(d.dist)-1
         idxs[d.distdim] = d.dist[p]:(d.dist[p+1]-1)
         a[idxs...] = remote_call_fetch(d.pmap[p], localize, d)
@@ -878,7 +878,7 @@ end # for
 
 function reduce(f, v::DArray)
     mapreduce(f, fetch,
-              { @spawnat p reduce(f,localize(v)) | p = procs(v) })
+              { @spawnat p reduce(f,localize(v)) for p = procs(v) })
 end
 
 sum(d::DArray) = reduce(+, d)

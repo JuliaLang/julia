@@ -612,7 +612,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
             ipiv = Array(Int32, n)
 
             # Check for SPD matrix
-            if ishermitian(Acopy) && all([ Acopy[i,i] > 0 | i=1:n ])
+            if ishermitian(Acopy) && all([ Acopy[i,i] > 0 for i=1:n ])
                 case = :spd
             end
 

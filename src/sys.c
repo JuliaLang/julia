@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <sys/stat.h>
 //#include <sys/wait.h>
+#include <sys/sysctl.h>
 #include <errno.h>
 #include <signal.h>
 #include <libgen.h>
@@ -14,6 +15,10 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "julia.h"
+
+#ifdef __SSE__
+#include <xmmintrin.h>
+#endif
 
 // --- io and select ---
 
@@ -82,32 +87,6 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
     return 0;
 }
 
-// --- current output stream ---
-
-jl_value_t *jl_current_output_stream_obj(void)
-{
-    return jl_current_task->state.ostream_obj;
-}
-
-DLLEXPORT uv_stream_t *jl_current_output_stream(void)
-{
-    return jl_current_task->state.current_output_stream;
-}
-
-void jl_set_current_output_stream_obj(jl_value_t *v)
-{
-    jl_current_task->state.ostream_obj = v;
-    uv_stream_t *s = (uv_stream_t*)jl_array_data(jl_fieldref(v,0));
-    jl_current_task->state.current_output_stream = s;
-    // if current stream has never been set before, propagate to all
-    // outer contexts.
-    jl_savestate_t *ss = jl_current_task->state.prev;
-    while (ss != NULL && ss->ostream_obj == (jl_value_t*)jl_null) {
-        ss->ostream_obj = v;
-        ss->current_output_stream = s;
-        ss = ss->prev;
-    }
-}
 
 // --- buffer manipulation ---
 
@@ -182,6 +161,27 @@ jl_value_t *jl_strerror(int errnum)
 {
     char *str = strerror(errnum);
     return jl_pchar_to_string((char*)str, strlen(str));
+}
+
+// -- get the number of CPU cores --
+
+DLLEXPORT int jl_cpu_cores(void) {
+#if defined(__APPLE__)
+    size_t len = 4;
+    int32_t count;
+    int nm[2] = {CTL_HW, HW_AVAILCPU};
+    sysctl(nm, 2, &count, &len, NULL, 0);
+    if (count < 1) {
+        nm[1] = HW_NCPU;
+        sysctl(nm, 2, &count, &len, NULL, 0);
+        if (count < 1) { count = 1; }
+    }
+    return count;
+#elif defined(__linux)
+    return sysconf(_SC_NPROCESSORS_ONLN);
+#else // test for Windows?
+    return GetActiveProcessorCount(__in WORD GroupNumber);
+#endif
 }
 
 // -- iterating the environment --
@@ -387,9 +387,26 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
 }
-*/
 
-DLLEXPORT size_t jl_sizeof_ios_t(void)
+DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
 {
-    return sizeof(ios_t);
+#ifdef __SSE2__
+    // SSE2 supports both FZ and DAZ
+    uint32_t flags = 0x8040;
+#elif __SSE__
+    // SSE supports only the FZ flag
+    uint32_t flags = 0x8000;
+#endif
+
+#ifdef __SSE__
+    if (isZero) {
+	_mm_setcsr(_mm_getcsr() | flags);
+    }
+    else {
+	_mm_setcsr(_mm_getcsr() & ~flags);
+    }
+    return 1;
+#else
+    return 0;
+#endif
 }

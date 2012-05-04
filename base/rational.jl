@@ -29,11 +29,11 @@ function //(x::Complex, y::Complex)
     complex(real(xy)//yy, imag(xy)//yy)
 end
 
-function show(x::Rational)
+function show(io, x::Rational)
     if isinf(x)
-        print(x.num > 0 ? "Inf" : "-Inf")
+        print(io, x.num > 0 ? "Inf" : "-Inf")
     else
-        show(num(x)); print("//"); show(den(x))
+        show(io, num(x)); print(io, "//"); show(io, den(x))
     end
 end
 

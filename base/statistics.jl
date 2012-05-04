@@ -375,5 +375,5 @@ function _bound_quantiles(qs)
     if (any(qs < -epsilon) || any(qs > 1 + epsilon))
         error("quantiles out of [0,1] range!")
     end
-    [min(1, max(0, q)) | q = qs]
+    [min(1, max(0, q)) for q = qs]
 end

@@ -83,7 +83,7 @@ mip_opts["msg_lev"] = GLP_MSG_ERR
 mip_opts["presolve"] = GLP_ON
 
 # Use binary variables
-colkind = int32([ GLP_BV | i = 1 : 9 ])
+colkind = int32([ GLP_BV for i = 1 : 9 ])
 
 (z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
 

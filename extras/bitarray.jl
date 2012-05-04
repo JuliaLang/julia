@@ -15,7 +15,7 @@ type BitArray{T<:Integer, N} <: AbstractArray{T, N}
         if nc > 0
             chunks[end] = uint64(0)
         end
-        new(chunks, [i::Int | i=dims])
+        new(chunks, [i::Int for i in dims])
     end
 end
 
@@ -93,7 +93,7 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
     delta_ks = ks1 - ks0
 
     u = ~(uint64(0))
-    if delta_kd ==  0
+    if delta_kd == 0
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
         msk_d0 = ~(u << ld0)
@@ -244,7 +244,7 @@ function reshape{T,N}(B::BitArray{T}, dims::NTuple{N,Int})
     end
     Br = BitArray{T,N}()
     Br.chunks = B.chunks
-    Br.dims = [i::Int | i=dims]
+    Br.dims = [i::Int for i in dims]
     return Br
 end
 
@@ -283,7 +283,7 @@ function reinterpret{T<:Integer,S<:Integer,N}(::Type{T}, B::BitArray{S}, dims::N
         error("reinterpret: invalid dimensions")
     end
     A = BitArray{T,N}()
-    A.dims = [i::Int | i=dims]
+    A.dims = [i::Int for i in dims]
     A.chunks = B.chunks
     return A
 end
@@ -371,7 +371,7 @@ let ref_cache = nothing
         if is(ref_cache,nothing)
             ref_cache = Dict()
         end
-        gap_lst = [last(r)-first(r)+1 | r in I]
+        gap_lst = [last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
@@ -520,7 +520,7 @@ let assign_cache = nothing
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
-        gap_lst = [last(r)-first(r)+1 | r in I]
+        gap_lst = [last(r)-first(r)+1 for r in I]
         stride_lst = Array(Int, nI)
         stride = 1
         ind = f0
@@ -1231,7 +1231,7 @@ end
 
 let findn_cache = nothing
 function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
+    s = { quote I[$i][count] = $ivars[i] end for i = 1:length(ivars)}
     quote
     	Bind = B[$(ivars...)]
     	if Bind != z
@@ -1273,11 +1273,11 @@ areduce(f::Function, B::BitArray, region::Region, v0, RType::Type) =
 let bitareduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
 function gen_bitareduce_func(n, f)
-    ivars = { gensym() | i=1:n }
+    ivars = { gensym() for i=1:n }
     # limits and vars for reduction loop
-    lo    = { gensym() | i=1:n }
-    hi    = { gensym() | i=1:n }
-    rvars = { gensym() | i=1:n }
+    lo    = { gensym() for i=1:n }
+    hi    = { gensym() for i=1:n }
+    rvars = { gensym() for i=1:n }
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
@@ -1286,8 +1286,8 @@ function gen_bitareduce_func(n, f)
         else
             $lo[i] = $hi[i] = $ivars[i]
         end
-               end | i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+               end for i=1:n }
+    rranges = { :( ($lo[i]):($hi[i]) ) for i=1:n }  # lo:hi for all dims
     body =
     quote
         _tot = v0
@@ -1301,7 +1301,7 @@ function gen_bitareduce_func(n, f)
         local _F_
         function _F_(f, A, region, R, v0)
             _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
+            $make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body)
         end
         _F_
     end
@@ -1350,8 +1350,8 @@ sum(B::BitArray) = nnz(B)
 
 prod{T}(B::BitArray{T}) = (nnz(B) == length(B) ? one(T) : zero(T))
 
-min(B::BitArray) = prod(B)
-max{T}(B::BitArray{T}) = (nnz(B) > 0 ? one(T) : zero(T))
+min{T}(B::BitArray{T}) = length(B) > 0 ? prod(B) : typemax(T)
+max{T}(B::BitArray{T}) = length(B) > 0 ? (nnz(B) > 0 ? one(T) : zero(T)) : typemin(T)
 
 ## map over bitarrays ##
 
@@ -1473,7 +1473,7 @@ function permute(B::BitArray, perm)
     end
 
     #calculates all the strides
-    strides = [ stride(B, perm[dim]) | dim = 1:length(perm) ]
+    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -1484,7 +1484,7 @@ function permute(B::BitArray, perm)
 
     function permute_one(ivars)
         len = length(ivars)
-        counts = { gensym() | i=1:len}
+        counts = { gensym() for i=1:len}
         toReturn = cell(len+1,2)
         for i = 1:numel(toReturn)
             toReturn[i] = nothing
@@ -1589,7 +1589,7 @@ function vcat{T}(A::BitMatrix{T}...)
         if size(A[j], 2) != ncols; error("vcat: mismatched dimensions"); end
     end
     B = BitArray(T, nrows, ncols)
-    nrowsA = [size(a, 1) | a = A]
+    nrowsA = [size(a, 1) for a in A]
     pos_d = 1
     pos_s = ones(Int, nargs)
     for j = 1:ncols
