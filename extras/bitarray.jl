@@ -55,6 +55,29 @@ function bitshow(B::BitArray)
     _jl_print_bit_chunk(B.chunks[end], l)
 end
 
+
+function _jl_get_bit_chunk_string(c::Uint64, l::Integer)
+    bs = "01"
+    bitstrs = [join([bs[(c >>> (s*8+t)) & 1+1] |
+                    t in 0 : min(7, (l-s*8-1))], "") |
+              s in 0 : iceil((l - 1)/8)]
+    return join(bitstrs, " ")
+end
+
+_jl_get_bit_chunk_string(c::Uint64) = _jl_get_bit_chunk_string(c, 64)
+
+function bitstring(B::BitArray)
+    if length(B) == 0
+        return ""
+    end
+    l = ((length(B) - 1) & 0x3f) + 1
+    bitstr = join(append([_jl_get_bit_chunk_string(B.chunks[i]) | i in 1:length(B.chunks)-1],
+                         [_jl_get_bit_chunk_string(B.chunks[end], l)]), ": ")
+
+    return bitstr
+end
+
+
 ## utility functions ##
 
 length(B::BitArray) = prod(B.dims)
