@@ -122,11 +122,14 @@ else
 PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
+LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
+LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
+LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
@@ -187,6 +190,7 @@ USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
+LIBBLASNAME = libmkl_rt
 endif
 
 # Libraries to link

@@ -16,7 +16,7 @@ julia-debug julia-release:
 	@ln -f $@-$(DEFAULT_REPL) julia
 
 base/buildinfo.jl: Make.inc
-	@echo "BUILT_WITH_MKL = $(USE_MKL) == 1" > $@
+	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/buildinfo.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
