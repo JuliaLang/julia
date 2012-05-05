@@ -694,7 +694,7 @@ distclean-unwind:
 
 ## GNU LIGHTTPD ##
 
-ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
+ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
 LIGHTTPD_OBJ_TARGET = $(USR)/sbin/lighttpd
 else
 LIGHTTPD_OBJ_TARGET = 
