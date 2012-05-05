@@ -34,7 +34,6 @@ install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
 	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/website/assets
 	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
-	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
 	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-readline $(DESTDIR)$(PREFIX)/share/julia
@@ -47,7 +46,7 @@ install: release
 	install -v usr/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
 	install -v launch-julia-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v ui/webserver/*.jl $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
-	install -v ui/website/*.{js,htm,css,scgi,ico} $(DESTDIR)$(PREFIX)/share/julia/ui/website
+	install -v ui/website/*.* $(DESTDIR)$(PREFIX)/share/julia/ui/website
 	install -v ui/website/assets/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/assets
 	install -v ui/website/images/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
 	install -v usr/etc/lighttpd.conf $(DESTDIR)$(PREFIX)/share/julia/usr/etc
