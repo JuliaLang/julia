@@ -6,6 +6,8 @@
 # A straight port from the Java version
 # 
 
+load("timing.jl")
+
 # Constants
 const solar_mass = 4 * pi * pi
 const days_per_year = 365.24
@@ -134,4 +136,4 @@ if length(ARGS) >= 1
 else
     N = 1000
 end
-nbody(N)
+@timeit nbody(N) "nbody"

@@ -6,6 +6,8 @@
 # A vectorized version of the Java port from nbody.jl
 # 
 
+load("timing.jl")
+
 # Constants
 const solar_mass = 4 * pi * pi
 const days_per_year = 365.24
@@ -72,15 +74,9 @@ function advance(bodies, dt)
             dsq = sum(delta .^ 2)
             distance = sqrt(dsq)
             mag = dt / (dsq * distance)
-            #printf("%3.4f %3.2f %3.2f %3.9f\n", dt, dsq, distance, bodies[i].mass * mag)
 
-            printf("B: %2.9f %2.9f %2.9f\n", bodies[i].v[1], bodies[i].v[2], bodies[i].v[3])
-            printf("D: %2.2f %2.2f %2.2f\n", delta[1], delta[2], delta[3])
-            dd = delta * (bodies[i].mass * mag)
-            printf("DD: %2.9f %2.9f %2.9f\n", dd[1], dd[2], dd[3])
-            bodies[i].v -= delta * (bodies[i].mass * mag)
-            printf("A: %2.9f %2.9f %2.9f\n", bodies[i].v[1], bodies[i].v[2], bodies[i].v[3])
-            bodies[j].v += delta * (bodies[j].mass * mag)
+            bodies[i].v -= delta * (bodies[j].mass * mag)
+            bodies[j].v += delta * (bodies[i].mass * mag)
         end
     end
 
@@ -109,7 +105,6 @@ function nbody(N::Int)
     printf("%.9f\n", energy(bodies))
     for i = 1:N
         advance(bodies, 0.01)
-        printf("%2.2f %2.2f %2.2f\n", bodies[3].v[1], bodies[3].v[2], bodies[3].v[3])
     end
     printf("%.9f\n", energy(bodies))
 end
@@ -120,4 +115,4 @@ if length(ARGS) >= 1
 else
     N = 1000
 end
-nbody(N)
+@timeit nbody(N) "nbody"
