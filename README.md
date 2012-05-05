@@ -60,15 +60,23 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 <a name="Platform-Specific-Notes"/>
 ### Platform-Specific Notes
 
+#### Linux
+
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-On Ubuntu, you may also need to install the package `libncurses5-dev`.
+#### Ubuntu
 
-On OS X, you may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
+You may also need to install the package `libncurses5-dev`.
+
+#### OS X
+
+You may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
-On FreeBSD the prerequisites can be installed from ports like this:
+#### FreeBSD
+
+The prerequisites can be installed from ports like this:
 
     cd /usr/ports/devel/gmake
     make install
@@ -86,6 +94,15 @@ On FreeBSD the prerequisites can be installed from ports like this:
 Other versions of gcc are also exist but currently gfortran45 is the one used by all the ports that depend on Fortran.
 
 **Use the gmake command on FreeBSD instead of make**
+
+#### MKL
+
+To use the Intel [MKL] BLAS & LAPACK libraries, edit the following settings in `Make.inc`:
+
+    USE_MKL = 1
+    MKLLIB = /path/to/mkl/lib/arch
+
+`MKLLIB` points to the directory containing `libmkl_rt.so`. Requires v10.3 or greater.
 
 <a name="Required-Build-Tools-External-Libraries"/>
 ## Required Build Tools & External Libraries
@@ -109,6 +126,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[MKL]** (optional)      – OpenBLAS & LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                — subroutines for computing Bessel and Airy functions.
 - **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
@@ -129,6 +147,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
+[MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
 [AMOS]:         http://netlib.org/amos
 [ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/

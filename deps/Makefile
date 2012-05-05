@@ -47,6 +47,10 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
 endif
 
+ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
+LIBS += lighttpd
+endif
+
 ifeq ($(OS),WINNT)
 READLINE_VER = 5.0
 endif
@@ -97,10 +101,12 @@ distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf root
 
 ## PATHS ##
-$(USR): 
+$(USR):
 	mkdir -p $(USR)/lib
 	mkdir -p $(USR)/include
 	mkdir -p $(USR)/bin
+	mkdir -p $(USR)/share
+	mkdir -p $(USR)/etc
 
 ## LLVM ##
 
@@ -688,10 +694,16 @@ distclean-unwind:
 
 ## GNU LIGHTTPD ##
 
+ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
 LIGHTTPD_OBJ_TARGET = $(USR)/sbin/lighttpd
+else
+LIGHTTPD_OBJ_TARGET = 
+endif
 
 compile-lighttpd: install-lighttpd
-install-lighttpd: $(LIGHTTPD_OBJ_TARGET)
+install-lighttpd: $(LIGHTTPD_OBJ_TARGET) lighttpd.conf
+	mkdir -p $(USR)/etc
+	cp -f lighttpd.conf $(USR)/etc/lighttpd.conf
 
 lighttpd-$(LIGHTTPD_VER).tar.gz:
 	$(WGET) http://download.lighttpd.net/lighttpd/releases-1.4.x/lighttpd-$(LIGHTTPD_VER).tar.gz
