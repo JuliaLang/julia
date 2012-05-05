@@ -666,7 +666,7 @@
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected " nxt))))))
     ((let)
-     (let* ((binds (if (eqv? (peek-token s) #\newline)
+     (let* ((binds (if (memv (peek-token s) '(#\newline #\;))
 		       (begin (take-token s)
 			      '())
 		       (parse-comma-separated-assignments s)))
