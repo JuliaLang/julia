@@ -12,6 +12,9 @@ LLVMROOT = $(USR)
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
+USE_MKL = 0
+MKLLIB = /path/to/mkl/lib/intel64
+
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
@@ -121,11 +124,14 @@ else
 PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
+LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
+LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
+LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
@@ -177,6 +183,16 @@ RPATH =
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
 WHOLE_ARCHIVE =
 NO_WHOLE_ARCHIVE =
+endif
+
+# MKL
+
+ifeq ($(USE_MKL), 1)
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+LIBBLAS   = -L$(MKLLIB) -lmkl_rt
+LIBLAPACK = -L$(MKLLIB) -lmkl_rt
+LIBBLASNAME = libmkl_rt
 endif
 
 # Libraries to link

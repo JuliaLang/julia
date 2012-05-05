@@ -1,4 +1,3 @@
-_jl_libblas = dlopen("libopenblas")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),

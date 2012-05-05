@@ -15,8 +15,8 @@ _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom"); _jl_librandom_init();
 
 # Optional libraries
-_jl_libblas = dlopen("libopenblas")
-_jl_liblapack = _jl_libblas
+const _jl_libblas = dlopen(_jl_libblas_name)
+const _jl_liblapack = _jl_libblas
 _jl_libfftw = dlopen("libfftw3")
 _jl_libfftwf = dlopen("libfftw3f")
 

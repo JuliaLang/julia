@@ -15,7 +15,10 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.jl src/dump.c base/stage0.jl
+base/build_h.jl: Make.inc
+	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
+
+sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f sys.ji
 
