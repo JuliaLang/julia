@@ -29,7 +29,7 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 include("intset.jl")
-include("table.jl")
+include("dict.jl")
 include("set.jl")
 
 # compiler
