@@ -61,6 +61,27 @@ bitshow(B::BitArray) = bitshow(stdout_stream, B)
 
 bitstring(B::BitArray) = sprint(bitshow, B)
 
+
+function _jl_get_bit_chunk_string(c::Uint64, l::Integer)
+    bs = "01"
+    bitstrs = [join([bs[(c >>> (s*8+t)) & 1 + 1] for t in 0 : min(7, (l-s*8-1))], "") for s in 0 : iceil((l - 1)/8)]
+    return join(bitstrs, " ")
+end
+
+_jl_get_bit_chunk_string(c::Uint64) = _jl_get_bit_chunk_string(c, 64)
+
+function bitstring(B::BitArray)
+    if length(B) == 0
+        return ""
+    end
+    l = ((length(B) - 1) & 0x3f) + 1
+    bitstr = join(append([_jl_get_bit_chunk_string(B.chunks[i]) for i in 1:length(B.chunks)-1],
+                         [_jl_get_bit_chunk_string(B.chunks[end], l)]), ": ")
+
+    return bitstr
+end
+
+
 ## utility functions ##
 
 length(B::BitArray) = prod(B.dims)
@@ -778,6 +799,72 @@ function shift(B::BitVector)
 
     return item
 end
+
+
+function (<<){T}(B::BitVector{T}, i::Int32)
+    # Note that right now, this is implemented as a shift right internally,
+    # because BitVectors number from 1->N, left to right, but internally,
+    # the bits in Ints, etc., number from right to left.  So a shift-left
+    # in array orientation is a shift-right in bit orientation, and vice versa
+    if i == 0
+        return copy(B)
+    end
+
+    # Note that returning a zero is different from current julia shift operators on
+    # integers, which automatically mods the shift with the length of the operand
+    C = bitzeros(T, size(B))
+    if i >= length(B)
+        return C
+    end
+
+    chunk_bits = sizeof(eltype(B.chunks)) * 8
+    chunk_shift = div(i, chunk_bits)
+    bit_shift = i % chunk_bits
+
+    # Internally: chunk numbering & bit numbering are both N,N-1,...,2,1
+    # Implemented as a shift right by chunk_shift chunks, bit_shift bits
+    for s = 1+chunk_shift:length(B.chunks)-1
+        C.chunks[s-chunk_shift] = (B.chunks[s+1] << (chunk_bits-bit_shift)) | (B.chunks[s] >>> bit_shift)
+    end
+    C.chunks[end-chunk_shift] = B.chunks[end] >>> bit_shift
+
+    return C
+end
+
+
+function (>>>){T}(B::BitVector{T}, i::Int32)
+    # See implementation comment in (<<) above
+    if i == 0
+        return copy(B)
+    end
+
+    # Note that returning a zero is different from current julia shift operators on
+    # integers, which automatically mods the shift with the length of the operand
+    C = bitzeros(T, size(B))
+    if i >= length(B)
+        return C
+    end
+
+    chunk_bits = sizeof(eltype(B.chunks)) * 8
+    chunk_shift = div(i, chunk_bits)
+    bit_shift = mod(i, chunk_bits)
+
+    # Internally: chunk numbering & bit numbering are both N,N-1,...,2,1
+    # Implemented as a shift left by chunk_shift chunks, bit_shift bits
+    C.chunks[1+chunk_shift] = B.chunks[1] << bit_shift
+    for s = 2:length(B.chunks)-chunk_shift
+        C.chunks[s+chunk_shift] = (B.chunks[s-1] >>> (chunk_bits-bit_shift)) | (B.chunks[s] << bit_shift)
+    end
+
+    return C
+end
+
+rol{T}(B::BitVector{T}, y::Int32) = (B << (y % length(B))) | (B >>> (length(B) - (y % length(B))))
+rol(x,y::Integer) = rol(x, convert(Int32,y))
+
+ror{T}(B::BitVector{T}, y::Int32) = (B >>> (y % length(B))) | (B << (length(B) - (y % length(B))))
+ror(x,y::Integer) = ror(x, convert(Int32,y))
+
 
 function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
     if i < 1
