@@ -1,4 +1,18 @@
-_jl_num_bit_chunks(n::Integer) = (n + 0x3f) >>> 6
+# prelimnary definitions: constants, macros
+# and functions used throughout the code
+const _msk64 = ~uint64(0)
+macro _mskr(l) quote _msk64 >>> (64-$l) end end
+macro _div64(l) quote $l >>> 6 end end
+macro _mod64(l) quote $l & 63 end end
+macro _msk_end(l) quote @_mskr @_mod64 $l end end
+_jl_num_bit_chunks(n::Int) = @_div64 (n+63)
+function _jl_check_is_valid_bit{T}(x::T)
+    if !(isequal(x, zero(T)) || isequal(x, one(T)))
+        error("invalid BitArray value")
+    end
+end
+
+## BitArray
 
 # notes: bits are stored in contiguous chunks
 #        unused bits must always be set to 0
@@ -54,7 +68,7 @@ function bitshow(io::IO, B::BitArray)
         _jl_print_bit_chunk(io, B.chunks[i])
         print(io, ": ")
     end
-    l = ((length(B) - 1) & 0x3f) + 1
+    l = (@_mod64 (length(B)-1)) + 1
     _jl_print_bit_chunk(io, B.chunks[end], l)
 end
 bitshow(B::BitArray) = bitshow(stdout_stream, B)
@@ -72,8 +86,8 @@ size(B::BitArray) = tuple(B.dims...)
 ## Aux functions ##
 
 function _jl_get_chunks_id(i::Integer)
-    j = uint64(i - 1)
-    return int(j >>> 6) + 1, int(j & 0x3f)
+    j = int(i-1)
+    return (@_div64 j)+1, @_mod64 j
 end
 
 function _jl_glue_src_bitchunks(src::Vector{Uint64}, k::Int, ks1::Int, msk_s0::Uint64, ls0::Int)
@@ -98,7 +112,7 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
     delta_kd = kd1 - kd0
     delta_ks = ks1 - ks0
 
-    u = ~(uint64(0))
+    u = _msk64
     if delta_kd == 0
         msk_d0 = ~(u << ld0) | (u << ld1 << 1)
     else
@@ -164,12 +178,10 @@ function fill!{T<:Integer}(B::BitArray{T}, x::Number)
         if length(B) == 0
             return B
         end
-        u = ~uint64(0)
         for i = 1 : length(B.chunks) - 1
-            B.chunks[i] = u
+            B.chunks[i] = _msk64
         end
-        l = length(B) & 0x3f
-        B.chunks[end] = (u >>> (64 - l))
+        B.chunks[end] = @_msk_end length(B)
     else
         error("invalid BitArray value")
     end
@@ -202,7 +214,7 @@ biteye(m::Integer, n::Integer) = biteye(Int, m, n)
 function one{T}(x::BitMatrix{T})
     m, n = size(x)
     a = bitzeros(T,size(x))
-    for i = 1:min(m,n)
+    for i = 1 : min(m,n)
         a[i,i] = one(T)
     end
     return a
@@ -221,8 +233,7 @@ function copy_to(dest::BitArray, src::BitArray)
     if length(src) >= length(dest)
         dest.chunks[nc] = src.chunks[nc]
     else
-        l = length(src) & 0x3f
-        msk_s = (~uint64(0)) >>> (64 - l)
+        msk_s = @_msk_end length(src)
         msk_d = ~msk_s
         dest.chunks[nc] = (msk_d & dest.chunks[nc]) | (msk_s & src.chunks[nc])
     end
@@ -265,12 +276,12 @@ function convert{T,S,n}(::Type{BitArray{S,n}}, A::AbstractArray{T,n})
     return B
 end
 
+convert{T<:Integer,n}(::Type{BitArray{T,n}}, B::BitArray{T,n}) = B
 convert{T<:Integer,S<:Integer,n}(::Type{BitArray{T,n}}, B::BitArray{S,n}) =
     copy_to(similar(B, T), B)
 
 # this version keeps dimensionality
-# (it's an extension of Array's behavior, which only does
-# this for Vectors)
+# (it's an extension of Array's behavior, which only does this for Vectors)
 function reinterpret{T<:Integer,S<:Integer,N}(::Type{T}, B::BitArray{S,N})
     A = BitArray{T,N}()
     A.dims = copy(B.dims)
@@ -297,11 +308,10 @@ function bitrand!(B::BitArray)
     if length(B) == 0
         return B
     end
-    for i = 1:length(B.chunks) - 1
+    for i = 1 : length(B.chunks) - 1
         B.chunks[i] = _jl_dsfmt_randui64()
     end
-    l = length(B) & 0x3f
-    msk = (~uint64(0)) >>> (64 - l)
+    msk = @_msk_end length(B)
     B.chunks[end] = msk & _jl_dsfmt_randui64()
     return B
 end
@@ -463,9 +473,9 @@ function assign{T<:Integer}(B::BitArray{T}, x::Number, i::Integer)
     i1, i2 = _jl_get_chunks_id(i)
     u = uint64(1)
     y = convert(T, x)
-    if y == 0
+    if isequal(y, zero(T))
         B.chunks[i1] &= ~(u << i2)
-    elseif y == 1
+    elseif isequal(y, one(T))
         B.chunks[i1] |= (u << i2)
     else
         error("invalid BitArray value")
@@ -668,10 +678,9 @@ assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::Abstr
 function push{T<:Integer}(B::BitVector{T}, item)
     # convert first so we don't grow the bitarray if the assignment won't work
     item = convert(T, item)
-    if item != 0 && item != 1
-        error("invalid BitArray value")
-    end
-    l = length(B) & 0x3f
+    _jl_check_is_valid_bit(item)
+
+    l = @_mod64 length(B)
     if l == 0
         ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
         B.chunks[end] = uint64(0)
@@ -688,7 +697,7 @@ function append!(B::BitVector, items::BitVector)
         return B
     end
     k0 = length(B.chunks)
-    k1 = int(_jl_num_bit_chunks(n0 + n1))
+    k1 = _jl_num_bit_chunks(n0 + n1)
     if k1 > k0
         ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, k1 - k0)
         B.chunks[end] = uint64(0)
@@ -704,7 +713,7 @@ append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(it
 function grow(B::BitVector, n::Integer)
     n0 = length(B)
     k0 = length(B.chunks)
-    k1 = int(_jl_num_bit_chunks(n0 + n))
+    k1 = _jl_num_bit_chunks(n0 + int(n))
     if k1 > k0
         ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, k1 - k0)
         B.chunks[end] = uint64(0)
@@ -715,12 +724,12 @@ end
 
 function pop(B::BitVector)
     if isempty(B)
-        error("pop: bitarray is empty")
+        error("pop: BitArray is empty")
     end
     item = B[end]
     B[end] = 0
 
-    l = length(B) & 0x3f
+    l = @_mod64 length(B)
     if l == 1
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
     end
@@ -731,10 +740,9 @@ end
 
 function enqueue{T<:Integer}(B::BitVector{T}, item)
     item = convert(T, item)
-    if item != 0 && item != 1
-        error("invalid BitArray value")
-    end
-    l = length(B) & 0x3f
+    _jl_check_is_valid_bit(item)
+
+    l = @_mod64 length(B)
     if l == 0
         ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
         B.chunks[end] = uint64(0)
@@ -745,7 +753,7 @@ function enqueue{T<:Integer}(B::BitVector{T}, item)
         return B
     end
     for i = length(B.chunks) : -1 : 2
-        B.chunks[i] = (B.chunks[i] << 1) | (B.chunks[i - 1] >>> 63) 
+        B.chunks[i] = (B.chunks[i] << 1) | (B.chunks[i-1] >>> 63) 
     end
     B.chunks[1] = uint64(item) | (B.chunks[1] << 1)
     return B
@@ -753,15 +761,15 @@ end
 
 function shift(B::BitVector)
     if isempty(B)
-        error("shift: bitarray is empty")
+        error("shift: BitArray is empty")
     end
     item = B[1]
 
     for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = (B.chunks[i] >>> 1) | (B.chunks[i + 1] << 63) 
+        B.chunks[i] = (B.chunks[i] >>> 1) | (B.chunks[i+1] << 63) 
     end
 
-    l = length(B) & 0x3f
+    l = @_mod64 length(B)
     if l == 1
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
     else
@@ -777,9 +785,8 @@ function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
         throw(BoundsError())
     end
     item = convert(T, item)
-    if item != 0 && item != 1
-        error("invalid BitArray value")
-    end
+    _jl_check_is_valid_bit(item)
+
     n = length(B)
     if i > n
         x = bitzeros(T, i - n)
@@ -787,7 +794,7 @@ function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
     else
         k, j = _jl_get_chunks_id(i)
 
-        l = length(B) & 0x3f
+        l = @_mod64 length(B)
         if l == 0
             ccall(:jl_array_grow_end, Void, (Any, Uint), B.chunks, 1)
             B.chunks[end] = uint64(0)
@@ -798,7 +805,7 @@ function insert{T<:Integer}(B::BitVector{T}, i::Integer, item)
             B.chunks[t] = (B.chunks[t] << 1) | (B.chunks[t - 1] >>> 63) 
         end
 
-        msk_aft = ((~uint64(0)) << j)
+        msk_aft = (_msk64 << j)
         msk_bef = ~msk_aft
         B.chunks[k] = (msk_bef & B.chunks[k]) | ((msk_aft & B.chunks[k]) << 1)
     end
@@ -813,7 +820,7 @@ function del(B::BitVector, i::Integer)
 
     k, j = _jl_get_chunks_id(i)
 
-    msk_bef = (~uint64(0)) >>> (63 - j)
+    msk_bef = _msk64 >>> (63 - j)
     msk_aft = ~msk_bef
     msk_bef >>>= 1
 
@@ -826,7 +833,7 @@ function del(B::BitVector, i::Integer)
         B.chunks[t] = (B.chunks[t] >>> 1) | (B.chunks[t + 1] << 63) 
     end
 
-    l = length(B) & 0x3f
+    l = @_mod64 length(B)
 
     if l == 1
         ccall(:jl_array_del_end, Void, (Any, Uint), B.chunks, 1)
@@ -861,9 +868,7 @@ function del(B::BitVector, r::Range1{Int})
     end
 
     if new_l > 0
-        u = ~(uint64(0))
-        l = new_l & 0x3f
-        B.chunks[end] &= (u >>> (64 - l))
+        B.chunks[end] &= @_msk_end new_l
     end
 
     B.dims[1] = new_l
@@ -901,8 +906,7 @@ function flipbits(B::BitArray)
     for i = 1:length(B.chunks) - 1
         C.chunks[i] = ~B.chunks[i]
     end
-    l = length(B) & 0x3f
-    msk = (~uint64(0)) >>> (64 - l)
+    msk = @_msk_end length(B)
     C.chunks[end] = msk & (~B.chunks[end])
     return C
 end
@@ -930,8 +934,7 @@ for f in (:&, :|, :$)
             for i = 1:length(F.chunks) - 1
                 F.chunks[i] = ($f)(A.chunks[i], B.chunks[i])
             end
-            l = length(F) & 0x3f
-            msk = (~uint64(0)) >>> (64 - l)
+            msk = @_msk_end length(F)
             F.chunks[end] = msk & ($f)(A.chunks[end], B.chunks[end])
             return F
         end
@@ -1164,11 +1167,10 @@ function reverse!(B::BitVector)
         return B
     end
 
-    l = ((n + 63) & 63) + 1
     i = hnc + 1
     j = hnc << 6
-    u = ~(uint64(0))
-    msk = (u >>> (64 - l))
+    l = (@_mod64 (n+63)) + 1
+    msk = @_mskr l
 
     @_jl_reverse_bits aux_chunks[1] (B.chunks[i] & msk)
     aux_chunks[1] >>>= (64 - l)
@@ -1257,7 +1259,7 @@ function findn{T<:Integer}(B::BitMatrix{T})
     z = zero(T)
     count = 1
     for j=1:size(B,2), i=1:size(B,1)
-        if B[i,j] != z
+        if !isequal(B[i,j], z)
             I[count] = i
             J[count] = j
             count += 1
@@ -1468,11 +1470,11 @@ function _jl_form_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, m::Int, cgap::Int, c
         end
         x |= ((B.chunks[k] >>> l) & msk8) << r
         if l + 8 >= 64 && nc > k
-            r0 = 8 - ((l + 8) & 63)
+            r0 = 8 - (@_mod64 (l + 8))
             x |= (B.chunks[k + 1] & (msk8 >>> r0)) << (r + r0)
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = (l + cinc) & 63
+        l = @_mod64 (l + cinc)
         r += 8
     end
     return x
@@ -1488,11 +1490,11 @@ function _jl_put_8x8_chunk(B::BitMatrix, i1::Int, i2::Int, x::Uint64, m::Int, cg
         end
         B.chunks[k] |= ((x >>> r) & msk8) << l
         if l + 8 >= 64 && nc > k
-            r0 = 8 - ((l + 8) & 63)
+            r0 = 8 - (@_mod64 (l + 8))
             B.chunks[k + 1] |= ((x >>> (r + r0)) & (msk8 >>> r0))
         end
         k += cgap + (l + cinc >= 64 ? 1 : 0)
-        l = (l + cinc) & 63
+        l = @_mod64 (l + cinc)
         r += 8
     end
     return
@@ -1503,11 +1505,11 @@ function transpose{T<:Integer}(B::BitMatrix{T})
     l2 = size(B, 2)
     Bt = bitzeros(T, l2, l1)
 
-    cgap1 = l1 >>> 6
-    cinc1 = l1 & 63
+    cgap1 = @_div64 l1
+    cinc1 = @_mod64 l1
 
-    cgap2 = l2 >>> 6
-    cinc2 = l2 & 63
+    cgap2 = @_div64 l2
+    cinc2 = @_mod64 l2
     nc = length(B.chunks)
 
 
