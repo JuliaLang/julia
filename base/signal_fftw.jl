@@ -1,8 +1,5 @@
 ## FFT: Implement fft by calling fftw.
 
-_jl_libfftw = dlopen("libfftw3")
-_jl_libfftwf = dlopen("libfftw3f")
-
 ## Direction of FFT
 
 const _jl_FFTW_FORWARD = int32(-1)
@@ -34,6 +31,20 @@ const _jl_FFTW_RODFT10 = int32(9)
 const _jl_FFTW_RODFT11 = int32(10)
 
 ## Julia wrappers around FFTW functions
+
+# Threads
+
+function fftw_init_threads()
+    stat = ccall(dlsym(_jl_libfftw,:fftw_init_threads), Int32, ())
+    @assert stat != 0
+    stat = ccall(dlsym(_jl_libfftwf,:fftwf_init_threads), Int32, ())
+    @assert stat != 0
+end
+
+function fftw_plan_with_nthreads(nthreads::Int)
+    ccall(dlsym(_jl_libfftw,:fftw_plan_with_nthreads), Void, (Int32,), nthreads)
+    ccall(dlsym(_jl_libfftwf,:fftwf_plan_with_nthreads), Void, (Int32,), nthreads)
+end
 
 # Execute
 
