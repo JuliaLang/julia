@@ -142,9 +142,6 @@ function _jl_copy_chunks(dest::Vector{Uint64}, pos_d::Integer, src::Vector{Uint6
     return
 end
 
-_jl_copy_chunks(dest::Vector{Uint64}, pos_d::Int, src::Vector{Uint64}, numbits::Int) =
-    _jl_copy_chunks(dest, pos_d, src, 1, numbits)
-
 
 ## similar, fill, copy_to etc ##
 
@@ -704,7 +701,7 @@ function append!(B::BitVector, items::BitVector)
         B.chunks[end] = uint64(0)
     end
     B.dims[1] += n1
-    _jl_copy_chunks(B.chunks, n0 + 1, items.chunks, n1)
+    _jl_copy_chunks(B.chunks, n0+1, items.chunks, 1, n1)
     return B
 end
 
@@ -860,7 +857,7 @@ function del(B::BitVector, r::Range1{Int})
         return B
     end
 
-    _jl_copy_chunks(B.chunks, i_f, B.chunks, i_l + 1, n - i_l)
+    _jl_copy_chunks(B.chunks, i_f, B.chunks, i_l+1, n-i_l)
 
     delta_l = i_l - i_f + 1
     new_l = length(B) - delta_l
@@ -1176,9 +1173,9 @@ function reverse!(B::BitVector)
     for i = 1 : hnc
         j = ((i - 1) << 6)
         aux_chunks[1] = _jl_reverse_bits(B.chunks[i])
-        _jl_copy_chunks(B.chunks, j + 1, B.chunks, n - 63 - j, 64)
+        _jl_copy_chunks(B.chunks, j+1, B.chunks, n-63-j, 64)
         B.chunks[i] = _jl_reverse_bits(B.chunks[i])
-        _jl_copy_chunks(B.chunks, n - 63 - j, aux_chunks, 1, 64)
+        _jl_copy_chunks(B.chunks, n-63-j, aux_chunks, 1, 64)
     end
 
     if pnc == 0
@@ -1192,7 +1189,7 @@ function reverse!(B::BitVector)
     msk = (u >>> (64 - l))
 
     aux_chunks[1] = _jl_reverse_bits(B.chunks[i] & msk) >>> (64 - l)
-    _jl_copy_chunks(B.chunks, j + 1, aux_chunks, 1, l)
+    _jl_copy_chunks(B.chunks, j+1, aux_chunks, 1, l)
 
     return B
 end
@@ -1595,7 +1592,7 @@ function hcat{T}(B::BitVector{T}...)
     end
     M = BitArray(T, height, length(B))
     for j = 1:length(B)
-        _jl_copy_chunks(M.chunks, (height * (j - 1)) + 1, B[j].chunks, height)
+        _jl_copy_chunks(M.chunks, (height*(j-1))+1, B[j].chunks, 1, height)
     end
     return M
 end
@@ -1608,7 +1605,7 @@ function vcat{T}(V::BitVector{T}...)
     B = BitArray(T, n)
     j = 1
     for Vk in V
-        _jl_copy_chunks(B.chunks, j, Vk.chunks, length(Vk))
+        _jl_copy_chunks(B.chunks, j, Vk.chunks, 1, length(Vk))
         j += length(Vk)
     end
     return B
@@ -1632,7 +1629,7 @@ function hcat{T}(A::Union(BitMatrix{T},BitVector{T})...)
     for k=1:nargs
         Ak = A[k]
         n = numel(Ak)
-        _jl_copy_chunks(B.chunks, pos, Ak.chunks, n)
+        _jl_copy_chunks(B.chunks, pos, Ak.chunks, 1, n)
         pos += n
     end
     return B
