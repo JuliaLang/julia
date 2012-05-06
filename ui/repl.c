@@ -101,6 +101,12 @@ void parse_opts(int *argcp, char ***argvp) {
 #ifdef JL_SYSTEM_IMAGE_PATH
     if (image_file && !imagepathspecified) {
         image_file = JL_SYSTEM_IMAGE_PATH;
+        if (image_file[0] != PATHSEP) {
+            char path[512];
+            snprintf(path, sizeof(path), "%s%s%s",
+                     julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+            image_file = strdup(path);
+        }
     }
 #endif
 }

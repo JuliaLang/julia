@@ -55,6 +55,9 @@ DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
 
+# if not absolute, then relative to JULIA_HOME
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="sys.ji"'
+
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
 TARGET_OPENBLAS_ARCH=
