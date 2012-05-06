@@ -56,8 +56,8 @@ i1 = randi(2, n1, n2) - 1
 @assert isequal(bitunpack(bitones(T, n1, n2)), ones(T, n1, n2))
 @assert isequal(bitunpack(bitzeros(T, n1, n2)), zeros(T, n1, n2))
 
-@assert isequal(fill(b1, one(T)), bitones(T, size(b1)))
-@assert isequal(fill(b1, zero(T)), bitzeros(T, size(b1)))
+@assert isequal(fill!(b1, one(T)), bitones(T, size(b1)))
+@assert isequal(fill!(b1, zero(T)), bitzeros(T, size(b1)))
 
 @timesofar "utils"
 

@@ -156,11 +156,11 @@ similar(B::BitArray, T::Type, dims::Dims) = Array(T, dims)
 
 function fill!{T<:Integer}(B::BitArray{T}, x::Number)
     y = convert(T, x)
-    if y == 0
+    if isequal(y, zero(T))
         for i = 1 : length(B.chunks)
             B.chunks[i] = uint64(0)
         end
-    elseif y == 1
+    elseif isequal(y, one(T))
         if length(B) == 0
             return B
         end
@@ -177,13 +177,6 @@ function fill!{T<:Integer}(B::BitArray{T}, x::Number)
 end
 
 fill!(B::BitArray, x) = fill!(B, int(x))
-
-fill{T}(B::BitArray{T}, x::Integer) = fill!(similar(B), x)
-# disambiguation
-# (this is going to throw an error anyway)
-fill{T}(B::BitArray{T}, x::(Int64...,)) = fill(B, int(x))
-# end disambiguation
-fill{T}(B::BitArray{T}, x) = fill(B, convert(T, x))
 
 bitzeros{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 0)
 bitzeros(args...) = fill!(BitArray(Int, args...), 0)
