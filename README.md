@@ -165,14 +165,14 @@ Julia uses the following external libraries, which are automatically downloaded 
 ## Directories
 
     attic/         old, now-unused code
-    base/          source code for julia's standard library
-    contrib/       emacs and textmate support for julia
-    examples/      example julia programs
-    deps/      external dependencies
+    base/          source code for Julia's standard library
+    contrib/       emacs, vim and textmate support for Julia
+    deps/          external dependencies
+    examples/      example Julia programs
     extras/        useful optional libraries
-    lib/           shared libraries loaded by julia's standard libraries
-    src/           source for julia language core
-    test/          unit and function test cases
+    lib/           shared libraries loaded by Julia's standard libraries
+    src/           source for Julia language core
+    test/          unit and functional test cases
     ui/            source for various front ends
 
 <a name="Binary-Installation"/>
