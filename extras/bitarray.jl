@@ -906,21 +906,22 @@ imag{T}(B::BitArray{T}) = bitzeros(T, size(B))
 conj!(B::BitArray) = B
 conj(B::BitArray) = copy(B)
 
-# Bools have special treatment
-function (~)(B::BitArray{Bool})
+function flipbits(B::BitArray)
     C = similar(B)
     for i = 1:length(B.chunks) - 1
-        C.chunks[i] = (~)(B.chunks[i])
+        C.chunks[i] = ~B.chunks[i]
     end
     l = length(B) & 0x3f
     msk = (~uint64(0)) >>> (64 - l)
     C.chunks[end] = msk & (~B.chunks[end])
     return C
 end
-!(B::BitArray{Bool}) = ~B
+
+# Bools have special treatment
+(~)(B::BitArray{Bool}) = flipbits(B)
+!(B::BitArray{Bool}) = flipbits(B)
 (-)(B::BitArray{Bool}) = copy(B)
 sign(B::BitArray{Bool}) = convert(BitArray{Int}, B)
-
 
 ## Binary arithmetic operators ##
 
