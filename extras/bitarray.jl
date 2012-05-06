@@ -31,29 +31,35 @@ typealias BitMatrix{T} BitArray{T,2}
 
 # non-standard compact representation
 
-function _jl_print_bit_chunk(c::Uint64, l::Integer)
+function _jl_print_bit_chunk(io::IO, c::Uint64, l::Integer)
     for s = 0 : l - 1
         d = (c >>> s) & 1
-        print("01"[d + 1])
+        print(io, "01"[d + 1])
         if (s + 1) & 7 == 0
-            print(" ")
+            print(io, " ")
         end
     end
 end
 
-_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(c, 64)
+_jl_print_bit_chunk(io::IO, c::Uint64) = _jl_print_bit_chunk(io, c, 64)
 
-function bitshow(B::BitArray)
+_jl_print_bit_chunk(c::Uint64, l::Integer) = _jl_print_bit_chunk(stdout_stream, c, l)
+_jl_print_bit_chunk(c::Uint64) = _jl_print_bit_chunk(stdout_stream, c)
+
+function bitshow(io::IO, B::BitArray)
     if length(B) == 0
         return
     end
     for i = 1 : length(B.chunks) - 1
-        _jl_print_bit_chunk(B.chunks[i])
-        print(": ")
+        _jl_print_bit_chunk(io, B.chunks[i])
+        print(io, ": ")
     end
     l = ((length(B) - 1) & 0x3f) + 1
-    _jl_print_bit_chunk(B.chunks[end], l)
+    _jl_print_bit_chunk(io, B.chunks[end], l)
 end
+bitshow(B::BitArray) = bitshow(stdout_stream, B)
+
+bitstring(B::BitArray) = sprint(bitshow, B)
 
 ## utility functions ##
 
@@ -1188,6 +1194,52 @@ function reverse!(B::BitVector)
 end
 
 reverse(v::BitVector) = reverse!(copy(v))
+
+function (<<){T}(B::BitVector{T}, i::Int64)
+    n = length(B)
+    i %= n
+    if i == 0; return copy(B); end
+    A = bitzeros(T, n);
+    _jl_copy_chunks(A.chunks, 1, B.chunks, i+1, n-i)
+    return A
+end
+(<<){T}(B::BitVector{T}, i::Int32) = B << int64(i)
+(<<){T}(B::BitVector{T}, i::Integer) = B << int64(i)
+
+function (>>>){T}(B::BitVector{T}, i::Int64)
+    n = length(B)
+    i %= n
+    if i == 0; return copy(B); end
+    A = bitzeros(T, n);
+    _jl_copy_chunks(A.chunks, i+1, B.chunks, 1, n-i)
+    return A
+end
+(>>>){T}(B::BitVector{T}, i::Int32) = B >>> int64(i)
+(>>>){T}(B::BitVector{T}, i::Integer) = B >>> int64(i)
+
+(>>)(B::BitVector, i::Int32) = B >>> i
+(>>)(B::BitVector, i::Integer) = B >>> i
+
+function rotl{T}(B::BitVector{T}, i::Integer)
+    n = length(B)
+    i %= n
+    if i == 0; return copy(B); end
+    A = bitzeros(T, n);
+    _jl_copy_chunks(A.chunks, 1, B.chunks, i+1, n-i)
+    _jl_copy_chunks(A.chunks, n-i+1, B.chunks, 1, i)
+    return A
+end
+
+function rotr{T}(B::BitVector{T}, i::Integer)
+    n = length(B)
+    i %= n
+    if i == 0; return copy(B); end
+    A = bitzeros(T, n);
+    _jl_copy_chunks(A.chunks, i+1, B.chunks, 1, n-i)
+    _jl_copy_chunks(A.chunks, 1, B.chunks, n-i+1, i)
+    return A
+end
+
 
 ## nnz & find ##
 
