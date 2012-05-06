@@ -20,11 +20,11 @@ type BitArray{T<:Integer, N} <: AbstractArray{T, N}
 end
 
 BitArray{T}(::Type{T}) = BitArray{T, 1}(0)
-BitArray() = BitArray(Int, 0)
+BitArray() = BitArray(Bool, 0)
 BitArray{T}(::Type{T}, dims::Dims) = BitArray{T, max(length(dims), 1)}(dims...)
-BitArray(dims::Dims) = BitArray(Int, dims)
+BitArray(dims::Dims) = BitArray(Bool, dims)
 BitArray{T}(::Type{T}, dims::Int...) = BitArray{T, max(length(dims), 1)}(dims...)
-BitArray(dims::Int...) = BitArray(Int, dims...)
+BitArray(dims::Int...) = BitArray(Bool, dims...)
 
 typealias BitVector{T} BitArray{T,1}
 typealias BitMatrix{T} BitArray{T,2}
@@ -189,10 +189,10 @@ fill{T}(B::BitArray{T}, x::(Int64...,)) = fill(B, int(x))
 fill{T}(B::BitArray{T}, x) = fill(B, convert(T, x))
 
 bitzeros{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 0)
-bitzeros(args...) = fill!(BitArray(args...), 0)
+bitzeros(args...) = fill!(BitArray(Int, args...), 0)
 
 bitones{T}(::Type{T}, args...) = fill!(BitArray(T, args...), 1)
-bitones(args...) = fill!(BitArray(args...), 1)
+bitones(args...) = fill!(BitArray(Int, args...), 1)
 
 # XXX: temporary!?
 bitfalses(args...) = bitzeros(Bool, args...)

@@ -317,7 +317,7 @@ for m = 0 : v1
 end
 
 b1 = bitrand(T, v1)
-for m = [randi(v1) 1 63 64 65 191 192 193 v1-1]
+for m = [randi(v1) 0 1 63 64 65 191 192 193 v1-1]
     @assert isequal(b1 << m, [ b1[m+1:end]; bitzeros(T, m) ])
     @assert isequal(b1 >>> m, [ bitzeros(T, m); b1[1:end-m] ])
     @assert isequal(rotl(b1, m), [ b1[m+1:end]; b1[1:m] ])
