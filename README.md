@@ -224,8 +224,9 @@ Use the launch-webserver script to start the webserver and web-repl.
 Point your browser to `http://localhost:2000/`.
 Try `plot(cumsum(randn(1000)))`
 
-### Run it Online
-[julia.forio.com](http://julia.forio.com)
+### Try it Online
+
+Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
 
 ### Pre-installed lighttpd
 
