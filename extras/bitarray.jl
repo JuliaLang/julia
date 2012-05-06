@@ -198,19 +198,22 @@ bitones(args...) = fill!(BitArray(Int, args...), 1)
 bitfalses(args...) = bitzeros(Bool, args...)
 bittrues(args...) = bitones(Bool, args...)
 
-biteye(n::Integer) = biteye(n, n)
-function biteye(m::Integer, n::Integer)
-    a = bitzeros(m,n)
+biteye{T}(::Type{T}, n::Integer) = biteye(T, n, n)
+function biteye{T}(::Type{T}, m::Integer, n::Integer)
+    a = bitzeros(T, m, n)
     for i = 1:min(m,n)
-        a[i,i] = 1
+        a[i,i] = one(T)
     end
     return a
 end
+biteye(n::Integer) = biteye(Int, n)
+biteye(m::Integer, n::Integer) = biteye(Int, m, n)
+
 function one{T}(x::BitMatrix{T})
     m, n = size(x)
     a = bitzeros(T,size(x))
     for i = 1:min(m,n)
-        a[i,i] = 1
+        a[i,i] = one(T)
     end
     return a
 end
@@ -1266,13 +1269,14 @@ end
 
 findn(B::BitVector) = find(B)
 
-function findn(B::BitMatrix)
+function findn{T<:Integer}(B::BitMatrix{T})
     nnzB = nnz(B)
     I = Array(Int, nnzB)
     J = Array(Int, nnzB)
+    z = zero(T)
     count = 1
     for j=1:size(B,2), i=1:size(B,1)
-        if B[i,j] != 0
+        if B[i,j] != z
             I[count] = i
             J[count] = j
             count += 1
@@ -1305,7 +1309,7 @@ function findn(B::BitArray)
     end
 
     gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:B, :I, :count, :z), B,I,1, 0)
+                      (:B, :I, :count, :z), B, I, 1, 0)
     return I
 end
 end
