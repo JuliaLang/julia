@@ -733,10 +733,6 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 
 // printing -------------------------------------------------------------------
 
-DLLEXPORT void jl_print_array_uint8(uv_stream_t *s, jl_array_t *b)
-{
-    ios_write(s, (char*)b->data, b->length);
-}
 
 DLLEXPORT void jl_print_symbol(uv_stream_t *s, jl_sym_t *sym)
 {

@@ -1,4 +1,3 @@
-_jl_libblas = dlopen("libopenblas")
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
@@ -181,7 +180,7 @@ end
 
 function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
-    if is(A, B)
+    if is(A, B) && size(A,1)>=500
         _jl_syrk('T', A)
     else
         _jl_gemm('T', 'N', A, B)
@@ -190,7 +189,7 @@ end
 
 function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
-    if is(A, B)
+    if is(A, B) && size(A,2)>=500
         _jl_syrk('N', A)
     else
         _jl_gemm('N', 'T', A, B)
@@ -205,7 +204,7 @@ end
 aCb{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = aTb(A, B)
 function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
-    if is(A, B)
+    if is(A, B) && size(A,1)>=500
         _jl_herk('C', A)
     else
         _jl_gemm('C', 'N', A, B)
@@ -215,7 +214,7 @@ end
 abC{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = abT(A, B)
 function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
-    if is(A, B)
+    if is(A, B) && size(A,2)>=500
         _jl_herk('N', A)
     else
         _jl_gemm('N', 'C', A, B)

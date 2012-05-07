@@ -16,7 +16,7 @@
 # 
 # You can also work with indexed heaps:
 #   z = rand(8)
-#   h = MinHeapIndirect(typeof(z))
+#   h = MinHeapIndirect(eltype(z))
 #   for i = 1:length(z)
 #     push!(h,z[i])
 #   end
@@ -106,12 +106,12 @@ end
 
 # Test whether a vector is a valid heap
 function isheap{T}(value::Vector{T})
-    for i = 1:convert(Int,ifloor(length(iptr)/2))
+    for i = 1:convert(Int,ifloor(length(value)/2))
         i2 = 2*i
         if isless(value[i2],value[i])
             return false
         end
-        if i2 < length(x) && isless(value[i2+1],value[i])
+        if i2 < length(value) && isless(value[i2+1],value[i])
             return false
         end
     end
@@ -123,7 +123,7 @@ function isheap{T}(iptr::Vector{Int},value::Vector{T})
         if isless(value[iptr[i2]],value[iptr[i]])
             return false
         end
-        if i2 < length(x) && isless(value[iptr[i2+1]],value[iptr[i]])
+        if i2 < length(iptr) && isless(value[iptr[i2+1]],value[iptr[i]])
             return false
         end
     end
@@ -217,19 +217,19 @@ MinHeap{T}(v::Vector{T}) = MinHeap{T}(v)
 MinHeap{T}(::Type{T}) = MinHeap{T}(zeros(T,0))
 
 function push!{T}(h::MinHeap{T},item::T)
-    heap_push!(h.data,item)
+    heap_push!(h.value,item)
 end
 
 function pop!{T}(h::MinHeap{T})
-    min_item = heap_pop!(h.data)
+    min_item = heap_pop!(h.value)
     return min_item
 end
 
-function length{T}(h::HeapDirect)
+function length(h::HeapDirect)
     return length(h.value)
 end
 
-function isempty{T}(h::HeapDirect)
+function isempty(h::HeapDirect)
     return isempty(h.value)
 end
 
@@ -247,11 +247,11 @@ MaxHeap{T}(v::Vector{T}) = MaxHeap{T}(v)
 MaxHeap{T}(::Type{T}) = MaxHeap{T}(zeros(T,0))
 
 function push!{T}(h::MaxHeap{T},item::T)
-    heap_push!(h.data,-item)
+    heap_push!(h.value,-item)
 end
 
 function pop!{T}(h::MaxHeap{T})
-    max_item = -heap_pop!(h.data)
+    max_item = -heap_pop!(h.value)
     return max_item
 end
 
@@ -280,10 +280,10 @@ function pop!{T}(h::MinHeapIndirect{T})
     return (min_index, h.value[min_index])
 end
 
-function length{T}(h::HeapIndirect)
+function length(h::HeapIndirect)
     return length(h.index)
 end
-function isempty{T}(h::HeapIndirect)
+function isempty(h::HeapIndirect)
     return isempty(h.index)
 end
 
@@ -292,7 +292,7 @@ type MaxHeapIndirect{T} <: HeapIndirect
     index::Vector{Int}
     value::Vector{T}
     
-    function HeapIndirect(v::Vector{T})
+    function MaxHeapIndirect(v::Vector{T})
         value = copy(v)
         index = linspace(1,length(v),length(v))
         vector2heap!(index,value)
@@ -308,5 +308,5 @@ end
 
 function pop!{T}(h::MaxHeapIndirect{T})
     min_index = heap_pop!(h.index,h.value)
-    return min_index, -h.value[index]
+    return min_index, -h.value[min_index]
 end

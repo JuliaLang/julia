@@ -64,8 +64,11 @@ function norm(A::AbstractMatrix, p)
 end
 
 norm(A::AbstractMatrix) = norm(A, 2)
-rank(A::AbstractMatrix, tol::Real) = sum(svd(A)[2] > tol)
-rank(A::AbstractMatrix) = rank(A, 0)
+rank(A::AbstractMatrix, tol::Real) = sum(svdvals(A) > tol)
+function rank(A::AbstractMatrix)
+    sv = svdvals(A)
+    sum(sv > max(size(A,1),size(A,2))*eps(sv[1]))
+end
 
 trace(A::AbstractMatrix) = sum(diag(A))
 

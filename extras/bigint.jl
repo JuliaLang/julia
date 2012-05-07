@@ -119,12 +119,12 @@ end
 function string(x::BigInt) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
 	ret = cstring(s) #This copies s. 
-	_c_free(s)
+        ccall(dlsym(_jl_libgmp_wrapper,:_jl_gmp_free), Void, (Ptr{Void},), s)
 	ret
 end
 
-function show(x::BigInt) 
-	print (string(x))
+function show(io, x::BigInt)
+    print(io, string(x))
 end	
 
 function _jl_bigint_clear(x::BigInt) 

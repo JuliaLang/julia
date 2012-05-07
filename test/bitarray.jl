@@ -56,8 +56,8 @@ i1 = randi(2, n1, n2) - 1
 @assert isequal(bitunpack(bitones(T, n1, n2)), ones(T, n1, n2))
 @assert isequal(bitunpack(bitzeros(T, n1, n2)), zeros(T, n1, n2))
 
-@assert isequal(fill(b1, one(T)), bitones(T, size(b1)))
-@assert isequal(fill(b1, zero(T)), bitzeros(T, size(b1)))
+@assert isequal(fill!(b1, one(T)), bitones(T, size(b1)))
+@assert isequal(fill!(b1, zero(T)), bitzeros(T, size(b1)))
 
 @timesofar "utils"
 
@@ -314,6 +314,14 @@ end
 for m = 0 : v1
     b1 = bitrand(T, m)
     @check_bit_operation reverse BitArray{T} (b1,)
+end
+
+b1 = bitrand(T, v1)
+for m = [randi(v1)-1 0 1 63 64 65 191 192 193 v1-1]
+    @assert isequal(b1 << m, [ b1[m+1:end]; bitzeros(T, m) ])
+    @assert isequal(b1 >>> m, [ bitzeros(T, m); b1[1:end-m] ])
+    @assert isequal(rotl(b1, m), [ b1[m+1:end]; b1[1:m] ])
+    @assert isequal(rotr(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
 end
 
 @timesofar "datamove"

@@ -94,6 +94,7 @@ type Foo_{T} x::Foo_{Int} end
 
 type Circ_{T} x::Circ_{T} end
 # this does not necessarily have to be true, but it's nice
+# TODO: it shouldn't be true!! (issue #786)
 @assert is(Circ_, Circ_.types[1])
 
 x = (2,3)

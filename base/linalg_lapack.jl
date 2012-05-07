@@ -1,4 +1,3 @@
-_jl_liblapack = _jl_libblas
 
 for (potrf, elty) in ((:dpotrf_,:Float64), (:spotrf_,:Float32),
                       (:zpotrf_,:Complex128), (:cpotrf_,:Complex64))

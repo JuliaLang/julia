@@ -12,6 +12,9 @@ LLVMROOT = $(USR)
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
+USE_MKL = 0
+MKLLIB = /path/to/mkl/lib/intel64
+
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
@@ -52,6 +55,9 @@ DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
 
+# if not absolute, then relative to JULIA_HOME
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="sys.ji"'
+
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
 TARGET_OPENBLAS_ARCH=
@@ -59,6 +65,7 @@ TARGET_OPENBLAS_ARCH=
 # Use libraries available on the system instead of building them
 
 USE_SYSTEM_LLVM=0
+USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
@@ -72,6 +79,7 @@ USE_SYSTEM_GLPK=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LLVM=1
+USE_SYSTEM_LIGHTTPD=1
 USE_SYSTEM_LIBUNWIND=1
 USE_SYSTEM_READLINE=1
 USE_SYSTEM_PCRE=1
@@ -119,11 +127,14 @@ else
 PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
+LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
+LIBBLASNAME = libBLAS
 else
 LIBBLAS = -lblas
+LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
@@ -175,6 +186,16 @@ RPATH =
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
 WHOLE_ARCHIVE =
 NO_WHOLE_ARCHIVE =
+endif
+
+# MKL
+
+ifeq ($(USE_MKL), 1)
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+LIBBLAS   = -L$(MKLLIB) -lmkl_rt
+LIBLAPACK = -L$(MKLLIB) -lmkl_rt
+LIBBLASNAME = libmkl_rt
 endif
 
 # Libraries to link

@@ -15,7 +15,10 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia
 
-sys0.ji: src/boot.jl src/dump.c base/stage0.jl
+base/build_h.jl: Make.inc
+	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
+
+sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f sys.ji
 
@@ -25,18 +28,31 @@ sys.ji: VERSION sys0.ji base/*.jl
 
 install: release
 	install -d $(DESTDIR)$(PREFIX)/share/julia/usr/lib
+	install -d $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
+	install -d $(DESTDIR)$(PREFIX)/share/julia/usr/etc
 	install -d $(DESTDIR)$(PREFIX)/share/julia/base
 	install -d $(DESTDIR)$(PREFIX)/share/julia/contrib
 	install -d $(DESTDIR)$(PREFIX)/share/julia/examples
 	install -d $(DESTDIR)$(PREFIX)/share/julia/extras
-	install -v julia $(DESTDIR)$(PREFIX)/share/julia
+	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
+	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/website/assets
+	install -d $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
 	install -v julia-release-basic $(DESTDIR)$(PREFIX)/share/julia
 	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/share/julia
+	install -v julia-release-readline $(DESTDIR)$(PREFIX)/share/julia
+	install -v julia $(DESTDIR)$(PREFIX)/share/julia
 	install -v sys.ji $(DESTDIR)$(PREFIX)/share/julia
 	install -v base/* $(DESTDIR)$(PREFIX)/share/julia/base
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
 	install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/usr/lib
+	install -v usr/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
+	install -v launch-julia-webserver $(DESTDIR)$(PREFIX)/share/julia
+	install -v ui/webserver/*.jl $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
+	install -v ui/website/*.* $(DESTDIR)$(PREFIX)/share/julia/ui/website
+	install -v ui/website/assets/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/assets
+	install -v ui/website/images/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
+	install -v usr/etc/lighttpd.conf $(DESTDIR)$(PREFIX)/share/julia/usr/etc
 
 dist: release
 	rm -fr dist julia-*.tar.gz

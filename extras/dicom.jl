@@ -229,7 +229,7 @@ function string_parse(st, sz, maxlen, spaces)
             push(data, "")
             first = true
         else
-            data[end] = strcat(data[end],c)  # TODO: inefficient
+            data[end] = string(data[end],c)  # TODO: inefficient
             first = false
         end
     end

@@ -103,7 +103,7 @@ function edit(file::String, line::Int)
         elseif editor == "subl"
             run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(sprint(show, editor))")
+            error("Invalid JULIA_EDITOR value: $(sshow(editor))")
         end
     else
         if editor == "emacs"
@@ -115,7 +115,7 @@ function edit(file::String, line::Int)
         elseif editor == "subl"
             run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(sprint(show, editor))")
+            error("Invalid JULIA_EDITOR value: $(sshow(editor))")
         end
     end
     nothing

@@ -1094,7 +1094,7 @@ static char *type_summary(jl_value_t *t)
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
     jl_printf(jl_stderr_tty, "unexpected argument type: ");
-    jl_show(t);
+    jl_show(jl_stderr_obj(), t);
     jl_printf(jl_stderr_tty, "\n");
     assert(0);
     return NULL;
