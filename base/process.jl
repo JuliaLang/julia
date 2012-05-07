@@ -392,7 +392,7 @@ function spawn(cmd::Cmd)
                 end
                 i += 1
             end
-            if ptrs != nothing
+            if !isequal(ptrs, nothing)
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
                 println(stderr, "exec: ", strerror())
                 exit(0xff)
