@@ -34,9 +34,9 @@ endif
 default: release
 
 %.o: %.c
-	$(QUIET_CC) $(CC) -fPIC -std=gnu99 -I../include -DMATHLIB_STANDALONE -DNDEBUG -O2  -c $< -o $@
+	$(QUIET_CC) $(CC) $(fPIC) -std=gnu99 -I../include -DMATHLIB_STANDALONE -DNDEBUG -O2  -c $< -o $@
 %.do: %.c
-	$(QUIET_CC) $(CC) -fPIC -std=gnu99 -I../include -DMATHLIB_STANDALONE -g  -c $< -o $@
+	$(QUIET_CC) $(CC) $(fPIC) -std=gnu99 -I../include -DMATHLIB_STANDALONE -g  -c $< -o $@
 
 sunif.o: sunif.c
 	$(QUIET_CC) $(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800 -std=c99 -DDSFMT_MEXP=19937 -DDSFMT_DO_NOT_USE_OLD_NAMES -fPIC -I../include -c $< -o $@
