@@ -3,6 +3,8 @@
 ## for optimization and constraint satisfaction problems
 ##
 
+# note: be sure to load "sparse.jl" and "glpk.jl" before this file
+
 # General notes: the interface is provided as a collection of
 # high-level functions which use the glpk library.
 # Most functions have almost same interface
@@ -39,8 +41,6 @@
 #
 # Some methods have slightly different function calls, see
 # individual notes for additional information
-
-include("glpk.jl")
 
 # Linear Programming, Interior point method (default)
 #{{{
@@ -345,7 +345,6 @@ function _jl_linprog__check_A_b{T}(A::MatOrNothing{T}, b::VecOrNothing{T}, n::In
             error("b is empty but a is not")
         end
         if size(b, 1) != m
-            #printf(f"m=%i\n", m)
             error("invalid b size: $(size(b))")
         end
     else

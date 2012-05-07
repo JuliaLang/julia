@@ -2,8 +2,6 @@
 ### GLPK API Wrapper
 ###
 
-# Note: be sure to load "sparse.jl" before this file
-
 ## Shared library interface setup
 #{{{
 load("glpk_h.jl")
@@ -128,10 +126,9 @@ end
 # In this framework, optional arguments can be passed either
 # as an empty vector [] or as the 'nothing' constant
 
-typealias VecOrNothing{T} Union(AbstractVector{T}, AbstractVector{None}, Nothing)
-typealias MatOrNothing{T} Union(AbstractMatrix{T}, AbstractVector{None}, Nothing)
-_jl_glpk__is_empty{T}(x::Union(VecOrNothing{T}, MatOrNothing{T})) =
-        isa(x, Union(AbstractVector{None}, Nothing))
+typealias VecOrNothing{T} Union(AbstractVector{T}, Vector{None})
+typealias MatOrNothing{T} Union(AbstractMatrix{T}, Vector{None})
+_jl_glpk__is_empty(x) = isempty(x)
 
 # General exception: all GLP functions
 # throw this in case of errors
