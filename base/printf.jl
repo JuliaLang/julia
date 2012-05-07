@@ -769,4 +769,4 @@ end
 fprintf(s::IOStream, f::Function, args...) = f(s, args...)
 fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
 printf(f::Union(Function,String), args...) = fprintf(OUTPUT_STREAM, f, args...)
-sprintf(f::Union(Function,String), args...) = sprint(printf, f, args...)
+sprintf(f::Union(Function,String), args...) = sprint(fprintf, f, args...)
