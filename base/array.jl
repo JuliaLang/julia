@@ -722,17 +722,19 @@ end
 #       we need to substitute:
 #           ($f)(A, B::Array) = _jl_compare_scalar_to_array($isf, A, B)
 #       with:
-#           ($f){T<:Number,S<:Number}(A::T, B::Array{S}) = _jl_compare_scalar_to_array($isf, A, B)
-#           ($f){T<:String,S<:String}(A::T, B::Array{S}) = _jl_compare_scalar_to_array($isf, A, B)
 #           ($f){T}(A::T, B::Array{T}) = _jl_compare_scalar_to_array($isf, A, B)
 #       etc.
+#       (and then add spcialized String versions, similar to those for Numbers)
 #
 for (f,isf) in ((:(==),:isequal), (:(<), :isless),
         (:(!=),:((x,y)->!isequal(x,y))), (:(<=), :((x,y)->!isless(y,x))))
     @eval begin
         ($f)(A::Array, B::Array) = _jl_compare_array_to_array($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::Array{T}, B::Array{S}) = _jl_compare_array_to_array($f, A, B)
         ($f)(A, B::Array) = _jl_compare_scalar_to_array($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::T, B::Array{S}) = _jl_compare_scalar_to_array($f, A, B)
         ($f)(A::Array, B) = _jl_compare_array_to_scalar($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::Array{T}, B::S) = _jl_compare_array_to_scalar($f, A, B)
     end
 end
 
