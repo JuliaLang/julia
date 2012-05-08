@@ -43,6 +43,7 @@ let initialized = false
             if stat == 0 || statf == 0
                 error("could not initialize fft threads")
             end
+            initialized = true
         end
         ccall(dlsym(_jl_libfftw,:fftw_plan_with_nthreads), Void, (Int32,), nthreads)
         ccall(dlsym(_jl_libfftwf,:fftwf_plan_with_nthreads), Void, (Int32,), nthreads)
