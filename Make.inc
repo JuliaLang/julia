@@ -131,7 +131,7 @@ LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
-LIBBLASNAME = libBLAS
+LIBBLASNAME = libblas
 else
 LIBBLAS = -lblas
 LIBBLASNAME = libblas
@@ -144,11 +144,14 @@ LIBBLAS = -L$(USRLIB) -lopenblas
 endif
 endif
 
+LIBLAPACKNAME = libopenblas
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 ifeq ($(OS), Darwin)
 LIBLAPACK = -framework vecLib -lLAPACK
+LIBLAPACKNAME = liblapack
 else
 LIBLAPACK = -llapack
+LIBLAPACKNAME = liblapack
 endif
 else
 LIBLAPACK = -L$(USRLIB) -lopenblas
@@ -196,6 +199,7 @@ USE_SYSTEM_LAPACK=1
 LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
+LIBLAPACKNAME = libmkl_rt
 endif
 
 # Libraries to link

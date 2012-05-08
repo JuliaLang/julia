@@ -3,6 +3,8 @@
 ## for optimization and constraint satisfaction problems
 ##
 
+# note: be sure to load "sparse.jl" and "glpk.jl" before this file
+
 # General notes: the interface is provided as a collection of
 # high-level functions which use the glpk library.
 # Most functions have almost same interface
@@ -40,15 +42,14 @@
 # Some methods have slightly different function calls, see
 # individual notes for additional information
 
-include("glpk.jl")
+typealias SparseOrFullMat{T} Union(Matrix{T}, SparseMatrixCSC{T})
+typealias MatOrNothing Union(Matrix, SparseMatrixCSC, Vector{None}, Nothing)
 
 # Linear Programming, Interior point method (default)
 #{{{
 
-function linprog_interior{T<:Real, P<:Union(GLPInteriorParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T},
-        params::P)
+function linprog_interior{T<:Real,P<:Union(GLPInteriorParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+        Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
     lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
@@ -67,17 +68,29 @@ function linprog_interior{T<:Real, P<:Union(GLPInteriorParam, Nothing)}(f::Abstr
         return (nothing, nothing, ret)
     end
 end
+function linprog_interior{T<:Real,P<:Union(GLPInteriorParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+    cA = _jl_linprog__convert_matornothing(T, A)
+    cb = _jl_linprog__convert_vecornothing(T, b)
+    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
+    cbeq = _jl_linprog__convert_vecornothing(T, beq)
+    clb = _jl_linprog__convert_vecornothing(T, lb)
+    cub = _jl_linprog__convert_vecornothing(T, ub)
+    return linprog_interior(f, cA, cb, cAeq, cbeq, clb, cub, params)
+
+end
+
+linprog_interior{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing) =
         linprog_interior(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
-linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+linprog_interior{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing) =
         linprog_interior(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
-linprog_interior{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) =
+linprog_interior{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing) =
         linprog_interior(f, A, b, Aeq, beq, lb, ub, nothing)
 
 linprog = linprog_interior
@@ -85,10 +98,8 @@ linprog = linprog_interior
 
 # Linear Programming, Simplex Method
 #{{{
-function linprog_simplex{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T},
-        params::P)
+function linprog_simplex{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+        Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
     lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
@@ -107,17 +118,29 @@ function linprog_simplex{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::Abstrac
         return (nothing, nothing, ret)
     end
 end
+function linprog_simplex{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+    cA = _jl_linprog__convert_matornothing(T, A)
+    cb = _jl_linprog__convert_vecornothing(T, b)
+    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
+    cbeq = _jl_linprog__convert_vecornothing(T, beq)
+    clb = _jl_linprog__convert_vecornothing(T, lb)
+    cub = _jl_linprog__convert_vecornothing(T, ub)
+    return linprog_simplex(f, cA, cb, cAeq, cbeq, clb, cub, params)
+
+end
+
+linprog_simplex{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing) =
         linprog_simplex(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
-linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+linprog_simplex{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing) =
         linprog_simplex(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
-linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) =
+linprog_simplex{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing) =
         linprog_simplex(f, A, b, Aeq, beq, lb, ub, nothing)
 #}}}
 
@@ -129,10 +152,8 @@ linprog_simplex{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothi
 #  * the exact step only accepts the "it_lim" and "tm_lim" options,
 #    which means no message suppression is possible
 
-function linprog_exact{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T},
-        params::P)
+function linprog_exact{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+        Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
     lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
 
@@ -155,17 +176,29 @@ function linprog_exact{T<:Real, P<:Union(GLPSimplexParam, Nothing)}(f::AbstractV
         return (nothing, nothing, ret)
     end
 end
+function linprog_exact{T<:Real,P<:Union(GLPSimplexParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing, ub::VecOrNothing, params::P)
 
-linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+    cA = _jl_linprog__convert_matornothing(T, A)
+    cb = _jl_linprog__convert_vecornothing(T, b)
+    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
+    cbeq = _jl_linprog__convert_vecornothing(T, beq)
+    clb = _jl_linprog__convert_vecornothing(T, lb)
+    cub = _jl_linprog__convert_vecornothing(T, ub)
+    return linprog_exact(f, cA, cb, cAeq, cbeq, clb, cub, params)
+
+end
+
+linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing) =
         linprog_exact(f, A, b, nothing, nothing, nothing, nothing, nothing)
 
-linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing) =
         linprog_exact(f, A, b, Aeq, beq, nothing, nothing, nothing)
 
-linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) =
+linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing) =
         linprog_exact(f, A, b, Aeq, beq, lb, ub, nothing)
 #}}}
 
@@ -188,13 +221,9 @@ linprog_exact{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing
 #      method to use (GLPSimplexParam -> simplex, GLPInteriorParam -> interior
 #      point)
 
-function mixintprog{T<:Real, Ti<:Integer, P<:Union(GLPIntoptParam, Nothing), Px<:Union(GLPParam, Nothing)}(
-        f::AbstractVector{T},
-        A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T},
-        col_kind::VecOrNothing{Ti},
-        params::P, params_presolve::Px)
+function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPParam,Nothing)}(
+        f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T}, Aeq::SparseOrFullMat{T}, beq::Vector{T},
+        lb::Vector{T}, ub::Vector{T}, col_kind::Vector{Ti}, params::P, params_presolve::Px)
 
     lp, n = _jl_linprog__setup_prob(f, A, b, Aeq, beq, lb, ub, params)
     _jl_mixintprog_set_col_kind(lp, n, col_kind)
@@ -232,37 +261,81 @@ function mixintprog{T<:Real, Ti<:Integer, P<:Union(GLPIntoptParam, Nothing), Px<
         return (nothing, nothing, ret, ret_ps)
     end
 end
+function mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPParam,Nothing)}(
+        f::Vector{T}, A::MatOrNothing, b::VecOrNothing, Aeq::MatOrNothing, beq::VecOrNothing,
+        lb::VecOrNothing, ub::VecOrNothing, col_kind::VecOrNothing, params::P, params_presolve::Px)
 
-mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T}) =
+    cA = _jl_linprog__convert_matornothing(T, A)
+    cb = _jl_linprog__convert_vecornothing(T, b)
+    cAeq = _jl_linprog__convert_matornothing(T, Aeq)
+    cbeq = _jl_linprog__convert_vecornothing(T, beq)
+    clb = _jl_linprog__convert_vecornothing(T, lb)
+    cub = _jl_linprog__convert_vecornothing(T, ub)
+    ccol_kind = _jl_linprog__convert_vecornothing(Int32, col_kind)
+    return mixintprog(f, cA, cb, cAeq, cbeq, clb, cub, ccol_kind, params, params_presolve)
+
+end
+
+mixintprog{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing) =
         mixintprog(f, A, b, nothing, nothing, nothing, nothing, nothing, nothing, nothing)
 
-mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}) =
+mixintprog{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing) =
         mixintprog(f, A, b, Aeq, beq, nothing, nothing, nothing, nothing, nothing)
 
-mixintprog{T<:Real}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}) =
+mixintprog{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, nothing, nothing, nothing)
 
-mixintprog{T<:Real, Ti<:Integer}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}, col_kind::VecOrNothing{Ti}) =
+mixintprog{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing, col_kind::VecOrNothing) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, nothing, nothing)
 
-mixintprog{T<:Real, Ti<:Integer, P<:Union(GLPIntoptParam, Nothing), }(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T}, lb::VecOrNothing{T},
-        ub::VecOrNothing{T}, col_kind::VecOrNothing{Ti},
-        params::P) =
+mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing)}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
+        Aeq::MatOrNothing, beq::VecOrNothing, lb::VecOrNothing,
+        ub::VecOrNothing, col_kind::VecOrNothing, params::P) =
         mixintprog(f, A, b, Aeq, beq, lb, ub, col_kind, params, nothing)
 #}}}
 
 ## Common auxiliary functions
 #{{{
-function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::AbstractVector{T}, A::MatOrNothing{T}, b::VecOrNothing{T},
-        Aeq::MatOrNothing{T}, beq::VecOrNothing{T},
-        lb::VecOrNothing{T}, ub::VecOrNothing{T},
-        params::P)
+function _jl_linprog__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
+    if isequal(a, nothing) || isa(a, Array{None})
+        return T[]
+    elseif T <: Integer
+        if !(eltype(a) <: Integer)
+            error("integer-valued array required, or [] or nothing")
+        end
+    elseif T <: Real
+        if !(eltype(a) <: Real)
+            error("real-valued array required, or [] or nothing")
+        end
+    end
+    return convert(Array{T}, a)
+end
+function _jl_linprog__convert_matornothing{T}(::Type{T}, a::MatOrNothing)
+    if isequal(a, nothing) || isa(a, Array{None})
+        return Array(T, 0, 0)
+    elseif T <: Integer
+        if !(eltype(a) <: Integer)
+            error("integer-valued array required, or [] or nothing")
+        end
+    elseif T <: Real
+        if !(eltype(a) <: Real)
+            error("real-valued array required, or [] or nothing")
+        end
+    end
+    if issparse(a)
+        return convert(SparseMatrixCSC{T}, a)
+    else
+        return convert(Array{T}, a)
+    end
+end
+
+function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T},
+        Aeq::SparseOrFullMat{T}, beq::Vector{T}, lb::Vector{T}, ub::Vector{T}, params::P)
 
     lp = GLPProb()
     glp_set_obj_dir(lp, GLP_MIN)
@@ -334,38 +407,37 @@ function _jl_linprog__setup_prob{T<:Real, P<:Union(GLPParam, Nothing)}(f::Abstra
     return (lp, n)
 end
 
-function _jl_linprog__check_A_b{T}(A::MatOrNothing{T}, b::VecOrNothing{T}, n::Int)
+function _jl_linprog__check_A_b{T}(A::SparseOrFullMat{T}, b::Vector{T}, n::Int)
     m = 0
-    if !_jl_glpk__is_empty(A)
+    if !isempty(A)
         if size(A, 2) != n
             error("invlid A size: $(size(A))")
         end
         m = size(A, 1)
-        if _jl_glpk__is_empty(b)
+        if isempty(b)
             error("b is empty but a is not")
         end
         if size(b, 1) != m
-            #printf(f"m=%i\n", m)
             error("invalid b size: $(size(b))")
         end
     else
-        if !_jl_glpk__is_empty(b)
+        if !isempty(b)
             error("A is empty but b is not")
         end
     end
     return m
 end
 
-function _jl_linprog__check_lb_ub{T}(lb::VecOrNothing{T}, ub::VecOrNothing{T}, n::Int)
+function _jl_linprog__check_lb_ub{T}(lb::Vector{T}, ub::Vector{T}, n::Int)
     has_lb = false
     has_ub = false
-    if ! _jl_glpk__is_empty(lb)
+    if !isempty(lb)
         if size(lb, 1) != n
             error("invlid lb size: $(size(lb))")
         end
         has_lb = true
     end
-    if ! _jl_glpk__is_empty(ub)
+    if !isempty(ub)
         if size(ub, 1) != n
             error("invalid ub size: $(size(ub))")
         end
@@ -402,8 +474,8 @@ function _jl_linprog__dense_matrices_to_glp_format(m, meq, n, A, Aeq)
     return (ia, ja, ar)
 end
 
-function _jl_mixintprog_set_col_kind{Ti<:Integer}(lp::GLPProb, n::Int, col_kind::VecOrNothing{Ti})
-    if _jl_glpk__is_empty(col_kind)
+function _jl_mixintprog_set_col_kind{Ti<:Integer}(lp::GLPProb, n::Int, col_kind::Vector{Ti})
+    if isempty(col_kind)
         for i = 1 : n
             glp_set_col_kind(lp, i, GLP_IV)
         end

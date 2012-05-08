@@ -47,4 +47,5 @@ end
 
 for t in ARGS
     runtests(t)
+    println("    \033[32;1mSUCCESS\033[0m")
 end
