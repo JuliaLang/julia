@@ -2,6 +2,8 @@
 ### GLPK API Wrapper
 ###
 
+# note: be sure to load "sparse.jl" before this file
+
 ## Shared library interface setup
 #{{{
 load("glpk_h.jl")
@@ -128,7 +130,7 @@ end
 
 typealias VecOrNothing Union(Vector, Nothing)
 function _jl_glpk__convert_vecornothing{T}(::Type{T}, a::VecOrNothing)
-    if (a == nothing) || (isa(a, Array{Any}) && isempty(a))
+    if isequal(a, nothing) || isa(a, Array{None})
         return T[]
     elseif T <: Integer
         if !(eltype(a) <: Integer)
@@ -408,14 +410,14 @@ function _jl_glpk__check_col_is_valid_w0(glp_prob::GLPProb, col::Integer)
 end
 
 function _jl_glpk__check_obj_dir_is_valid(dir::Integer)
-    if ~(dir == GLP_MIN || dir == GLP_MAX)
+    if !(dir == GLP_MIN || dir == GLP_MAX)
         throw(GLPError("Invalid obj_dir $dir (use GLP_MIN or GLP_MAX)"))
     end
     return true
 end
 
 function _jl_glpk__check_bounds_type_is_valid(bounds_type::Integer)
-    if ~(bounds_type == GLP_FR ||
+    if !(bounds_type == GLP_FR ||
          bounds_type == GLP_LO ||
          bounds_type == GLP_UP ||
          bounds_type == GLP_DB ||
