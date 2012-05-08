@@ -243,7 +243,7 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             return Y
         end
 
-        function brfft(X::Array{$Tc}, dim::Int, d::Int)
+        function brfft(X::Array{$Tc}, d::Int, dim::Int)
             isize = [size(X)...]
             osize = [size(X)...]
             @assert osize[dim] == ifloor(d/2) + 1
@@ -264,7 +264,9 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
     end
 end
 
-irfft(X,dim,d::Int) = brfft(X,dim,d)./d
+brfft(X,d) = brfft(X,d,1)
+irfft(X,d) = irfft(X,d,1)
+irfft(X,d,dim) = brfft(X,d,dim)./d
 irfftn(X,d) = (Y=brfftn(X,d); Y./length(Y))
 
 # Transpose
