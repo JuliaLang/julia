@@ -2232,26 +2232,6 @@ void jl_init_types(void)
     jl_sym_type->uid = jl_assign_type_uid();
 
     // now they can be used to create the remaining base kinds and types
-    jl_method_type =
-        jl_new_struct_type(jl_symbol("Method"), jl_any_type, jl_null,
-                           jl_tuple(6, jl_symbol("sig"), jl_symbol("va"),
-                                    jl_symbol("tvars"), jl_symbol("func"),
-                                    jl_symbol("invokes"), jl_symbol("next")),
-                           jl_tuple(6, jl_tuple_type, jl_bool_type,
-                                    jl_tuple_type, jl_function_type,
-                                    jl_any_type, jl_any_type));
-    jl_method_type->fptr = jl_f_no_function;
-
-    jl_methtable_type =
-        jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
-                           jl_tuple(6, jl_symbol("name"), jl_symbol("defs"),
-                                    jl_symbol("cache"), jl_symbol("cache_arg1"),
-                                    jl_symbol("cache_targ"),
-                                    jl_symbol("max_args")),
-                           jl_tuple(6, jl_sym_type, jl_any_type, jl_any_type,
-                                    jl_any_type, jl_any_type, jl_long_type));
-    jl_methtable_type->fptr = jl_f_no_function;
-
     jl_union_kind = jl_new_struct_type(jl_symbol("UnionKind"),
                                        jl_type_type, jl_null,
                                        jl_tuple(1, jl_symbol("types")),
@@ -2326,6 +2306,26 @@ void jl_init_types(void)
                                    jl_any_type, jl_null, 8);
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
+
+    jl_method_type =
+        jl_new_struct_type(jl_symbol("Method"), jl_any_type, jl_null,
+                           jl_tuple(6, jl_symbol("sig"), jl_symbol("va"),
+                                    jl_symbol("tvars"), jl_symbol("func"),
+                                    jl_symbol("invokes"), jl_symbol("next")),
+                           jl_tuple(6, jl_tuple_type, jl_bool_type,
+                                    jl_tuple_type, jl_function_type,
+                                    jl_any_type, jl_any_type));
+    jl_method_type->fptr = jl_f_no_function;
+
+    jl_methtable_type =
+        jl_new_struct_type(jl_symbol("MethodTable"), jl_any_type, jl_null,
+                           jl_tuple(6, jl_symbol("name"), jl_symbol("defs"),
+                                    jl_symbol("cache"), jl_symbol("cache_arg1"),
+                                    jl_symbol("cache_targ"),
+                                    jl_symbol("max_args")),
+                           jl_tuple(6, jl_sym_type, jl_any_type, jl_any_type,
+                                    jl_any_type, jl_any_type, jl_long_type));
+    jl_methtable_type->fptr = jl_f_no_function;
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_abstractarray_type = jl_new_tagtype((jl_value_t*)jl_symbol("AbstractArray"),
@@ -2433,6 +2433,8 @@ void jl_init_types(void)
                            jl_tuple(3, jl_any_type, jl_any_type,
                                     jl_lambda_info_type));
     jl_function_type->fptr = jl_f_no_function;
+
+    jl_tupleset(jl_method_type->types, 3, jl_function_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, JL_NULL, NULL);
 

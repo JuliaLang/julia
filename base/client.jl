@@ -40,12 +40,8 @@ function repl_show(io, v::ANY)
     if isgeneric(v)
         if isa(v,CompositeKind)
             println(io)
-            name = v.name.name
-        else
-            name = string(v)
         end
-        println(io, "Methods for generic function ", name)
-        ccall(:jl_show_method_table, Void, (Any, Any,), io, v)
+        show(io, v.env)
     end
 end
 

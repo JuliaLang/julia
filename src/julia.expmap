@@ -171,7 +171,6 @@
     jl_get_global;
     jl_set_global;
     jl_set_const;
-    jl_show_method_table;
     jl_current_output_stream;
     jl_apply_generic;
     julia_init;
