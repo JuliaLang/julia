@@ -154,7 +154,7 @@ end
 
 # fftn/ifftn
 
-for (fname,direction) in ((:fftn,:_jl_FFTW_FORWARD),(:ifftn,:_jl_FFTW_BACKWARD))
+for (fname,direction) in ((:fftn,:_jl_FFTW_FORWARD),(:bfftn,:_jl_FFTW_BACKWARD))
     @eval begin
         function ($fname){T<:Union(Complex128,Complex64)}(X::Array{T})
             Y = similar(X, T)
@@ -174,6 +174,8 @@ for (fname,direction) in ((:fftn,:_jl_FFTW_FORWARD),(:ifftn,:_jl_FFTW_BACKWARD))
     end
 end
 
+ifftn(X) = bfftn(X)./length(X)
+
 # Convenience functions
 
 fft2{T}(X::Matrix{T}) = fftn(X)
@@ -185,8 +187,9 @@ ifft3{T}(X::Array{T,3}) = ifftn(X)
 
 fft(X) = fft(X, 1)
 ifft(X) = ifft(X, 1)
+ifft(X,dim) = bfft(X,dim)./size(X,dim)
 
-for (fname,direction) in ((:fft,:_jl_FFTW_FORWARD),(:ifft,:_jl_FFTW_BACKWARD))
+for (fname,direction) in ((:fft,:_jl_FFTW_FORWARD),(:bfft,:_jl_FFTW_BACKWARD))
     @eval begin
         function ($fname){T<:Union(Complex128,Complex64)}(X::Array{T}, dim::Int)
             s = [size(X)...]

@@ -1,6 +1,6 @@
 # fft
 a = rand(8) + im*rand(8)
-@assert norm((1/length(a))*ifft(fft(a)) - a) < 1e-8
+@assert norm(ifft(fft(a)) - a) < 1e-8
 
 m4 = [16.    2     3    13;
     5    11    10     8;
@@ -36,9 +36,9 @@ for i = 1:length(m4)
     @assert_approx_eq fft_m4[i] true_fft_m4[i]
     @assert_approx_eq fft2_m4[i] true_fftn_m4[i]
     @assert_approx_eq fftd2_m4[i] true_fftd2_m4[i]
-    @assert_approx_eq ifft_fft_m4[i] m4[i]*4
+    @assert_approx_eq ifft_fft_m4[i] m4[i]
     @assert_approx_eq fftn_m4[i] true_fftn_m4[i]
-    @assert_approx_eq ifftn_fftn_m4[i] m4[i]*16
+    @assert_approx_eq ifftn_fftn_m4[i] m4[i]
 end
 
 m3d = float32(reshape(1:5*3*2, 5, 3, 2))
@@ -53,8 +53,8 @@ true_fftd3_m3d[:,:,2] = -15
 
 for i = 1:length(m3d)
     @assert_approx_eq fftd3_m3d[i] true_fftd3_m3d[i]
-    @assert_approx_eq ifftd3_fftd3_m3d[i] m3d[i]*2
-    @assert_approx_eq ifft3_fft3_m3d[i] m3d[i]*30
+    @assert_approx_eq ifftd3_fftd3_m3d[i] m3d[i]
+    @assert_approx_eq ifft3_fft3_m3d[i] m3d[i]
 end
 
 # rfft/rfftn

@@ -695,8 +695,8 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         n = length(x)+sa[2]
         B = zeros(T, m, n)
         B[int((length(x))/2)+1:sa[1]+int((length(x))/2),int((length(y))/2)+1:sa[2]+int((length(y))/2)] = A
-        y = fft([zeros(T,int((m-length(y)-1)/2)); y; zeros(T,int((m-length(y)-1)/2))])./m
-        x = fft([zeros(T,int((m-length(x)-1)/2)); x; zeros(T,int((n-length(x)-1)/2))])./n
+        y = fft([zeros(T,int((m-length(y)-1)/2)); y; zeros(T,int((m-length(y)-1)/2))])
+        x = fft([zeros(T,int((m-length(x)-1)/2)); x; zeros(T,int((n-length(x)-1)/2))])
         C = fftshift(ifft2(fft2(B) .* (y * x.')))
         if T <: Real
             C = real(C)
@@ -708,7 +708,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         Bt = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
         At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
         Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = filter
-        C = fftshift(ifft2(fft2(At).*fft2(Bt))./((sa[1]+sb[1]-1)*(sa[2]+sb[2]-1)))
+        C = fftshift(ifft2(fft2(At).*fft2(Bt)))
         if T <: Real
             C = real(C)
         end
