@@ -366,7 +366,7 @@ void *allocobj(size_t sz);
 #endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
 
