@@ -34,16 +34,19 @@ const _jl_FFTW_RODFT11 = int32(10)
 
 # Threads
 
-function fftw_init_threads()
-    stat = ccall(dlsym(_jl_libfftw,:fftw_init_threads), Int32, ())
-    @assert stat != 0
-    stat = ccall(dlsym(_jl_libfftwf,:fftwf_init_threads), Int32, ())
-    @assert stat != 0
-end
-
-function fftw_plan_with_nthreads(nthreads::Int)
-    ccall(dlsym(_jl_libfftw,:fftw_plan_with_nthreads), Void, (Int32,), nthreads)
-    ccall(dlsym(_jl_libfftwf,:fftwf_plan_with_nthreads), Void, (Int32,), nthreads)
+let initialized = false
+    global fft_num_threads
+    function fft_num_threads(nthreads::Integer)
+        if !initialized
+            stat = ccall(dlsym(_jl_libfftw,:fftw_init_threads), Int32, ())
+            statf = ccall(dlsym(_jl_libfftwf,:fftwf_init_threads), Int32, ())
+            if stat == 0 || statf == 0
+                error("could not initialize fft threads")
+            end
+        end
+        ccall(dlsym(_jl_libfftw,:fftw_plan_with_nthreads), Void, (Int32,), nthreads)
+        ccall(dlsym(_jl_libfftwf,:fftwf_plan_with_nthreads), Void, (Int32,), nthreads)
+    end
 end
 
 # Execute
