@@ -21,10 +21,7 @@ A = [ 2. 1. ;
 b = [ 100.; 80 ];
 lb = [ 0.; 0.];
 
-vM = Array(Float64,0,0)
-vV = Array(Float64,0)
-
-(z, x, flag) = linprog_simplex(-f, A, b, vM, vV, lb, vV, lps_opts);
+(z, x, flag) = linprog_simplex(-f, A, b, [], [], lb, [], lps_opts);
 
 @assert flag == 0
 @assert z == -180.0
@@ -50,7 +47,7 @@ beq = ones(Float64, 6);
 lb = zeros(Float64, 9);
 ub = ones(Float64, 9);
 
-(z, x, flag) = linprog_simplex(f, vM, vV, Aeq, beq, lb, ub, lps_opts);
+(z, x, flag) = linprog_simplex(f, [], [], Aeq, beq, lb, ub, lps_opts);
 
 @assert flag == 0
 @assert z == 5.
@@ -66,7 +63,7 @@ ub = ones(Float64, 9);
 lpi_opts = GLPInteriorParam()
 lpi_opts["msg_lev"] = GLP_MSG_ERR
 
-(z, x, ret) = linprog(f, vM, vV, Aeq, beq, lb, ub, lpi_opts);
+(z, x, ret) = linprog(f, [], [], Aeq, beq, lb, ub, lpi_opts);
 
 tol = 1e-4
 
@@ -88,7 +85,7 @@ mip_opts["presolve"] = GLP_ON
 # Use binary variables
 colkind = int32([ GLP_BV for i = 1 : 9 ])
 
-(z, x, ret, ret_ps) = mixintprog(f, vM, vV, Aeq, beq, vV, vV, colkind, mip_opts);
+(z, x, ret, ret_ps) = mixintprog(f, [], [], Aeq, beq, [], [], colkind, mip_opts);
 
 @assert flag == 0
 @assert z == 5.
