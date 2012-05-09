@@ -653,13 +653,11 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         info = _jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
+        X = Y[1:n, :]
+
         ##if B is a vector, format answer as vector
-        if isa(B, Vector)
-            X = zeros(T, size(Y,1))
-            for i = 1:size(Y,1); X[i] = Y[i,1]; end
-        else
-            X = Y
-        end
+        if isa(B, Vector); X = reshape(X, (n,)); end
+
     end # Square / Rectangular
 
     if info == 0; return X; end
