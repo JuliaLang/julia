@@ -96,34 +96,34 @@ end
 # Guru plans
 
 for (libname, fname_complex, fname_r2c, fname_c2r, T_in, T_out) in
-    ((:_jl_libfftw,"fftw_plan_guru_dft","fftw_plan_guru_dft_r2c","fftw_plan_guru_dft_c2r",:Float64,:Complex128),
-     (:_jl_libfftwf,"fftwf_plan_guru_dft","fftwf_plan_guru_dft_r2c","fftwf_plan_guru_dft_c2r",:Float32,:Complex64))
+    ((:_jl_libfftw,"fftw_plan_guru64_dft","fftw_plan_guru64_dft_r2c","fftw_plan_guru64_dft_c2r",:Float64,:Complex128),
+     (:_jl_libfftwf,"fftwf_plan_guru64_dft","fftwf_plan_guru64_dft_r2c","fftwf_plan_guru64_dft_c2r",:Float32,:Complex64))
     @eval begin
         function _jl_fftw_plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_out}, Y::Array{$T_out}, direction::Int32)
             ccall(dlsym($libname, $fname_complex),
                   Ptr{Void},
-                  (Int32, Ptr{Int32}, Int32, Ptr{Int32},
+                  (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_out}, Ptr{$T_out}, Int32, Uint32),
-                  size(dims,2), int32(dims), size(howmany,2), int32(howmany),
+                  size(dims,2), dims, size(howmany,2), howmany,
                   X, Y, direction, _jl_FFTW_ESTIMATE)
         end
         function _jl_fftw_plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_in}, Y::Array{$T_out})
             ccall(dlsym($libname, $fname_r2c),
                   Ptr{Void},
-                  (Int32, Ptr{Int32}, Int32, Ptr{Int32},
+                  (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_in}, Ptr{$T_out}, Uint32),
-                  size(dims,2), int32(dims), size(howmany,2), int32(howmany),
+                  size(dims,2), dims, size(howmany,2), howmany,
                   X, Y, _jl_FFTW_ESTIMATE)
         end
         function _jl_fftw_plan_guru_dft(dims::Array{Int,2}, howmany::Array{Int,2},
             X::Array{$T_out}, Y::Array{$T_in})
             ccall(dlsym($libname, $fname_c2r),
                   Ptr{Void},
-                  (Int32, Ptr{Int32}, Int32, Ptr{Int32},
+                  (Int32, Ptr{Int}, Int32, Ptr{Int},
                    Ptr{$T_out}, Ptr{$T_in}, Uint32),
-                  size(dims,2), int32(dims), size(howmany,2), int32(howmany),
+                  size(dims,2), dims, size(howmany,2), howmany,
                   X, Y, _jl_FFTW_ESTIMATE)
         end
     end
