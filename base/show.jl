@@ -474,7 +474,7 @@ function whos()
     global VARIABLES
     for v = map(symbol,sort(map(string, VARIABLES)))
         if isbound(v)
-            println(io, rpad(v, 30), summary(eval(v)))
+            println(rpad(v, 30), summary(eval(v)))
         end
     end
 end
