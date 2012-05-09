@@ -1,4 +1,3 @@
-
 for (potrf, elty) in ((:dpotrf_,:Float64), (:spotrf_,:Float32),
                       (:zpotrf_,:Complex128), (:cpotrf_,:Complex64))
     @eval begin
@@ -26,7 +25,7 @@ end
 chol{T<:Integer}(x::StridedMatrix{T}) = chol(float64(x))
 
 function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    R = chol!(copy(A))
+    chol!(copy(A))
 end
 
 function chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
@@ -653,13 +652,9 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
 
         info = _jl_lapack_gels("N", m, n, nrhs, Acopy, m, Y, max(m,n), work, lwork)
 
+        Y = X[1:n, :]
         ##if B is a vector, format answer as vector
-        if isa(B, Vector)
-            X = zeros(T, size(Y,1))
-            for i = 1:size(Y,1); X[i] = Y[i,1]; end
-        else
-            X = Y
-        end
+        if isa(B, Vector); Y = reshape(Y, (n,)); end
     end # Square / Rectangular
 
     if info == 0; return X; end
