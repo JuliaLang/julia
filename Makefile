@@ -98,19 +98,19 @@ test-%: release
 	@$(MAKE) -sC test $*
 
 lib:
-	mkdir -p external/root/lib
+	mkdir -p usr/lib
 ifeq ($(OS),WINNT)
-	cmd //C mklink //J lib external\\root\\lib
+	cmd //C mklink //J lib usr\\lib
 else
-	test ! -h lib && ln -s external/root/lib lib
+	test ! -h lib && ln -s usr/lib lib
 endif
 
 include:
-	mkdir -p external/root/include
+	mkdir -p usr/include
 ifeq ($(OS),WINNT)
-	cmd //C mklink //J include external\\root\\include
+	cmd //C mklink //J include usr\\include
 else
-	test ! -h include && ln -s external/root/include include
+	test ! -h include && ln -s usr/include include
 endif
 
 

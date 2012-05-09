@@ -138,7 +138,7 @@ LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
-LIBBLAS = deps/openblas-$(OPENBLAS_VER)/libopenblas.lib
+LIBBLAS = $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.lib
 else
 LIBBLAS = -L$(USRLIB) -lopenblas
 endif
@@ -155,6 +155,12 @@ LIBLAPACK = -L$(USRLIB) -lopenblas
 endif
 
 # OS specific stuff
+
+ifeq ($(OS), WINNT)
+SHELL_EXT = bat
+else
+SHELL_EXT = sh
+endif
 
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
