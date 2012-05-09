@@ -169,5 +169,5 @@ end
 ## basic darray ##
 
 d = drand(10,10)
-@assert all(d'' == d)
-@assert all(convert(Array,d)==d)
+@assert isequal(d'', d)
+@assert isequal(convert(Array,d), d)

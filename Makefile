@@ -17,6 +17,7 @@ julia-debug julia-release:
 
 base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
+	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl

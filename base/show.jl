@@ -202,6 +202,35 @@ function show(io, bt::BackTrace)
     end
 end
 
+function show(io, m::Method)
+    tv = m.tvars
+    if !isa(tv,Tuple)
+        tv = (tv,)
+    end
+    if !isempty(tv)
+        show_delim_array(io, tv, '{', ',', '}', false)
+    end
+    show(io, m.sig)
+    li = m.func.code
+    if li.line > 0
+        print(io, " at ", li.file, ":", li.line)
+    end
+end
+
+function show(io, mt::MethodTable)
+    name = mt.name
+    println(io, "Methods for generic function ", name)
+    d = mt.defs
+    while !is(d,())
+        print(io, name)
+        show(io, d)
+        d = d.next
+        if !is(d,())
+            println(io)
+        end
+    end
+end
+
 function dump(io, x)
     T = typeof(x)
     if isa(x,Array)
@@ -445,7 +474,7 @@ function whos()
     global VARIABLES
     for v = map(symbol,sort(map(string, VARIABLES)))
         if isbound(v)
-            println(io, rpad(v, 30), summary(eval(v)))
+            println(rpad(v, 30), summary(eval(v)))
         end
     end
 end

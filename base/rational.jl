@@ -7,9 +7,7 @@ type Rational{T<:Integer} <: Real
             error("invalid rational: 0//0")
         end
         g = gcd(den, num)
-        num = div(num, g)
-        den = div(den, g)
-        new(num, den)
+        new(div(num, g), div(den, g))
     end
 end
 Rational{T<:Integer}(n::T, d::T) = Rational{T}(n,d)

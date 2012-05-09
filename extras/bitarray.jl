@@ -1013,8 +1013,8 @@ end
 
 for f in (:(==), :!=, :<, :<=)
     @eval begin
-        ($f)(A::BitArray, B::AbstractArray) = ($f)(bitunpack(A), B)
-        ($f)(A::AbstractArray, B::BitArray) = ($f)(A, bitunpack(B))
+        ($f)(A::BitArray, B::Array) = ($f)(bitunpack(A), B)
+        ($f)(A::Array, B::BitArray) = ($f)(A, bitunpack(B))
     end
 end
 

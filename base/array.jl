@@ -696,29 +696,45 @@ end
 
 ## Binary comparison operators ##
 
-for f in (:(==), :!=, :<, :<=)
+function _jl_compare_array_to_array(isf::Function, A::Array, B::Array)
+    F = Array(Bool, promote_shape(size(A),size(B)))
+    for i = 1:numel(B)
+        F[i] = isf(A[i], B[i])
+    end
+    return F
+end
+function _jl_compare_scalar_to_array(isf::Function, A, B::Array)
+    F = similar(B, Bool)
+    for i = 1:numel(B)
+        F[i] = isf(A, B[i])
+    end
+    return F
+end
+function _jl_compare_array_to_scalar(isf::Function, A::Array, B)
+    F = similar(A, Bool)
+    for i = 1:numel(A)
+        F[i] = isf(A[i], B)
+    end
+    return F
+end
+# TODO: restrict scalar/array comparisons as soon as issue #804 is
+#       solved.
+#       we need to substitute:
+#           ($f)(A, B::Array) = _jl_compare_scalar_to_array($isf, A, B)
+#       with:
+#           ($f){T}(A::T, B::Array{T}) = _jl_compare_scalar_to_array($isf, A, B)
+#       etc.
+#       (and then add spcialized String versions, similar to those for Numbers)
+#
+for (f,isf) in ((:(==),:isequal), (:(<), :isless),
+        (:(!=),:((x,y)->!isequal(x,y))), (:(<=), :((x,y)->!isless(y,x))))
     @eval begin
-        function ($f)(A::Array, B::Array)
-            F = Array(Bool, promote_shape(size(A),size(B)))
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B[i])
-            end
-            return F
-        end
-        function ($f)(A::Number, B::Array)
-            F = similar(B, Bool)
-            for i = 1:numel(B)
-                F[i] = ($f)(A, B[i])
-            end
-            return F
-        end
-        function ($f)(A::Array, B::Number)
-            F = similar(A, Bool)
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B)
-            end
-            return F
-        end
+        ($f)(A::Array, B::Array) = _jl_compare_array_to_array($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::Array{T}, B::Array{S}) = _jl_compare_array_to_array($f, A, B)
+        ($f)(A, B::Array) = _jl_compare_scalar_to_array($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::T, B::Array{S}) = _jl_compare_scalar_to_array($f, A, B)
+        ($f)(A::Array, B) = _jl_compare_array_to_scalar($isf, A, B)
+        ($f){T<:Number,S<:Number}(A::Array{T}, B::S) = _jl_compare_array_to_scalar($f, A, B)
     end
 end
 
