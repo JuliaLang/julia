@@ -22,6 +22,24 @@ function show(io, t::Associative)
     end
 end
 
+function keys(a::Associative)
+    i = 0
+    keyz = Array(Any,length(a))
+    for (k,v) in a
+        keyz[i+=1] = k
+    end
+    return keyz
+end
+
+function values(a::Associative)
+    i = 0
+    vals = Array(Any,length(a))
+    for (k,v) in a
+        vals[i+=1] = v
+    end
+    return vals
+end
+
 # some support functions
 
 function _tablesz(i::Integer)
