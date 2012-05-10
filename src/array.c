@@ -99,22 +99,25 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
     a->type = atype;
     *((jl_array_t**)(&a->_space[0] + ndimwords*sizeof(size_t))) = data;
     a->data = data->data;
-    a->length = data->length;
     a->elsize = data->elsize;
     a->ndims = ndims;
     a->ptrarray = data->ptrarray;
     a->reshaped = 1;
 
     if (ndims == 1) {
+        a->length = jl_unbox_long(jl_tupleref(dims,0));
         a->nrows = a->length;
         a->maxsize = a->length;
         a->offset = 0;
     }
     else {
         size_t *adims = &a->nrows;
+        size_t l=1;
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            l *= adims[i];
         }
+        a->length = l;
     }
     
     return a;
