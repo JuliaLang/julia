@@ -168,8 +168,6 @@ type InterruptException <: Exception end
 abstract String
 abstract DirectIndexString <: String
 
-abstract Associative
-
 # simple convert for use by constructors of types in Core
 convert(T, x) = convert_default(T, x, convert)
 

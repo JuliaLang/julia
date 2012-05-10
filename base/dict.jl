@@ -1,5 +1,7 @@
 # generic operations on associative collections
 
+abstract Associative{K,V}
+
 const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
@@ -22,23 +24,25 @@ function show(io, t::Associative)
     end
 end
 
-function keys(a::Associative)
+function keys(T::Type, a::Associative)
     i = 0
-    keyz = Array(Any,length(a))
+    keyz = Array(T,length(a))
     for (k,v) in a
         keyz[i+=1] = k
     end
     return keyz
 end
+keys{K,V}(a::Associative{K,V}) = keys(K,a)
 
-function values(a::Associative)
+function values(T::Type, a::Associative)
     i = 0
-    vals = Array(Any,length(a))
+    vals = Array(T,length(a))
     for (k,v) in a
         vals[i+=1] = v
     end
     return vals
 end
+values{K,V}(a::Associative{K,V}) = values(V,a)
 
 # some support functions
 
@@ -65,7 +69,7 @@ end
 
 # hashing objects by identity
 
-type ObjectIdDict <: Associative
+type ObjectIdDict <: Associative{Any,Any}
     ht::Array{Any,1}
     ObjectIdDict(sz::Integer) = new(cell(2*_tablesz(sz)))
     ObjectIdDict() = ObjectIdDict(0)
@@ -165,7 +169,7 @@ end
 
 # dict
 
-type Dict{K,V} <: Associative
+type Dict{K,V} <: Associative{K,V}
     keys::Array{Any,1}
     vals::Array{Any,1}
     ndel::Int
@@ -390,7 +394,7 @@ function add_weak_value(t::Dict, k, v)
     return t
 end
 
-type WeakKeyDict{K,V} <: Associative
+type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{K,V}
 
     WeakKeyDict() = new(Dict{K,V}())

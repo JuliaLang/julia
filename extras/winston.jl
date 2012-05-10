@@ -8,7 +8,7 @@ abstract PlotComponent <: HasStyle
 abstract PlotContainer <: HasAttr
 
 typealias List Array{Any,1}
-typealias PlotAttributes Associative
+typealias PlotAttributes Associative # TODO: does Associative need {K,V}?
 
 macro desc(x)
     :( println($string(x)," = ",$x) )
@@ -1763,7 +1763,7 @@ end
 #end
 
 type FramedPlot <: PlotContainer
-    attr::Associative
+    attr::Associative # TODO: does Associative need {K,V}?
     content1::PlotComposite
     content2::PlotComposite
     x1::HalfAxis

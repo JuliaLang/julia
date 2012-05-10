@@ -24,7 +24,7 @@ end
 
 ## ENV: hash interface ##
 
-type EnvHash <: Associative; end
+type EnvHash <: Associative{ByteString,ByteString}; end
 
 const ENV = EnvHash()
 
@@ -61,6 +61,13 @@ function next(::EnvHash, i)
         error("malformed environment entry: $env")
     end
     (m.captures, i+1)
+end
+function length(::EnvHash)
+    i = 0
+    for (k,v) in ENV
+        i += 1
+    end
+    return i
 end
 
 function show(io, ::EnvHash)

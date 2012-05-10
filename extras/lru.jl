@@ -16,7 +16,7 @@
 # collections, the difference in performance is small, and this implmentation
 # be simpler and easier to understand.
 
-abstract LRU{K,V} <: Associative
+abstract LRU{K,V} <: Associative{K,V}
 
 # Default cache size
 const __MAXCACHE = 1024
