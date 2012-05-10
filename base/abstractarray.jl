@@ -285,7 +285,7 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Integer) = circshift(a, [shiftamt])
+circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
 function circshift(a, shiftamts)
     n = ndims(a)
     I = cell(n)
