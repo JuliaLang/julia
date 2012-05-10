@@ -1,25 +1,6 @@
-function _tablesz(i::Integer)
-    if i < 16
-        return 16
-    end
-    if i&(i-1) == 0
-        return i
-    end
-    while (i&(i-1) != 0)
-        i = i&(i-1)
-    end
-    return i<<1
-end
+# generic operations on associative collections
 
 const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
-
-function ref(t::Associative, key)
-    v = get(t, key, _jl_secret_table_token)
-    if is(v,_jl_secret_table_token)
-        throw(KeyError(key))
-    end
-    return v
-end
 
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
@@ -40,6 +21,31 @@ function show(io, t::Associative)
         print(io, "}")
     end
 end
+
+# some support functions
+
+function _tablesz(i::Integer)
+    if i < 16
+        return 16
+    end
+    if i&(i-1) == 0
+        return i
+    end
+    while (i&(i-1) != 0)
+        i = i&(i-1)
+    end
+    return i<<1
+end
+
+function ref(t::Associative, key)
+    v = get(t, key, _jl_secret_table_token)
+    if is(v,_jl_secret_table_token)
+        throw(KeyError(key))
+    end
+    return v
+end
+
+# hashing objects by identity
 
 type ObjectIdDict <: Associative
     ht::Array{Any,1}
@@ -348,6 +354,8 @@ function length(t::Dict)
     end
     return n
 end
+
+# weak key dictionaries
 
 function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
