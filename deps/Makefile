@@ -771,8 +771,6 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 
 ## GLPK ##
 
-GLPK_CONST = 0x[0-9a-fA-F]+|[-+]?\s*[0-9]+
-
 ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPK_PREFIX = /usr/
 GLPK_OBJ_TARGET =
