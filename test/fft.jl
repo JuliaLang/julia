@@ -69,10 +69,24 @@ for i = 1:3, j = 1:4
     @assert_approx_eq rfftn_m4[i,j] true_fftn_m4[i,j]
 end
 
+irfft_rfft_m4 = irfft(rfft_m4,size(m4,1))
+irfft_rfftd2_m4 = irfft(rfftd2_m4,size(m4,2),2)
+irfftn_rfftn_m4 = irfftn(rfftn_m4,size(m4,1))
+for i = 1:length(m4)
+    @assert_approx_eq irfft_rfft_m4[i] m4[i]
+    @assert_approx_eq irfft_rfftd2_m4[i] m4[i]
+    @assert_approx_eq irfftn_rfftn_m4[i] m4[i]
+end
+
+rfftn_m3d = rfftn(m3d)
 rfftd3_m3d = rfft(m3d,3)
 @assert size(rfftd3_m3d) == size(fftd3_m3d)
+irfft_rfftd3_m3d = irfft(rfftd3_m3d,size(m3d,3),3)
+irfftn_rfftn_m3d = irfftn(rfftn_m3d,size(m3d,1))
 for i = 1:length(m3d)
     @assert_approx_eq rfftd3_m3d[i] true_fftd3_m3d[i]
+    @assert_approx_eq irfft_rfftd3_m3d[i] m3d[i]
+    @assert_approx_eq irfftn_rfftn_m3d[i] m3d[i]
 end
 
 fftn_m3d = fftn(m3d)

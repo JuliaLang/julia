@@ -171,3 +171,17 @@ end
 d = drand(10,10)
 @assert isequal(d'', d)
 @assert isequal(convert(Array,d), d)
+
+## cumsum
+
+begin
+    local A, A1, A2, A3
+    A = ones(Int,2,3,4)
+    A1 = reshape(repmat([1,2],1,12),2,3,4)
+    A2 = reshape(repmat([1 2 3],2,4),2,3,4)
+    A3 = reshape(repmat([1 2 3 4],6,1),2,3,4)
+    @assert isequal(cumsum(A),A1)
+    @assert isequal(cumsum(A,1),A1)
+    @assert isequal(cumsum(A,2),A2)
+    @assert isequal(cumsum(A,3),A3)
+end
