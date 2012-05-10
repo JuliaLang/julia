@@ -421,3 +421,5 @@ function chdir(f::Function, dir::String)
         throw(err)
     end
 end
+
+macro chdir(dir,ex); :(chdir(()->$ex,$dir)); end
