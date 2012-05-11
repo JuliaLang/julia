@@ -44,8 +44,8 @@ macro _jl_rand_matrix_builder_1arg(T, f)
             end
             return A
         end
-        ($f)(arg, dims::Dims) = ($f!)(arg, Array($T, dims))
-        ($f)(arg, dims::Int...) = ($f)(arg, dims)
+        ($f)(arg::Number, dims::Dims) = ($f!)(arg, Array($T, dims))
+        ($f)(arg::Number, dims::Int...) = ($f)(arg, dims)
     end
 end
 
