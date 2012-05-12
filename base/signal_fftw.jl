@@ -241,8 +241,8 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             isize = [size(X)...]
             osize = [size(X)...]
             osize[dim] = ifloor(osize[dim]/2) + 1
-            istrides = [ prod(isize[1:i-1]) | i=1:length(isize) ]
-            ostrides = [ prod(osize[1:i-1]) | i=1:length(osize) ]
+            istrides = [ prod(isize[1:i-1]) for i=1:length(isize) ]
+            ostrides = [ prod(osize[1:i-1]) for i=1:length(osize) ]
             Y = Array($Tc, osize...)
             dims = [isize[dim],istrides[dim],ostrides[dim]]''
             del(isize, dim)
@@ -271,8 +271,8 @@ for (Tr,Tc) in ((:Float32,:Complex64),(:Float64,:Complex128))
             osize = [size(X)...]
             @assert osize[dim] == ifloor(d/2) + 1
             osize[dim] = d
-            istrides = [ prod(isize[1:i-1]) | i=1:length(isize) ]
-            ostrides = [ prod(osize[1:i-1]) | i=1:length(osize) ]
+            istrides = [ prod(isize[1:i-1]) for i=1:length(isize) ]
+            ostrides = [ prod(osize[1:i-1]) for i=1:length(osize) ]
             Y = Array($Tr, osize...)
             dims = [osize[dim],istrides[dim],ostrides[dim]]''
             del(osize, dim)
