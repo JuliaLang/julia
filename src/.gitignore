@@ -5,7 +5,6 @@
 /boot.j.inc
 julia_flisp.boot
 julia_flisp.boot.inc
-flisp.boot
 flisp.boot.inc
 
 /libjulia-debug.a
