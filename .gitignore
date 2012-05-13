@@ -19,4 +19,21 @@
 /sys0.ji
 /h2j
 
+*.exe
+*.dll
+*.do
+*.o
+
+*.out
+
+*.files
+*.config
+*.includes
+*.creator
+*.user
+*.orig
+
+include
+lib
+
 /usr
