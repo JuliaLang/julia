@@ -646,7 +646,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                       ArrayRef<Type*>(x->getType())), x);
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     HANDLE(ctlz_int,1)
-        x = INT(x)
+        x = INT(x);
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
                                       ArrayRef<Type*>(x->getType())), x);
