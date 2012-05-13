@@ -21,9 +21,8 @@ function _jl_librandom_init()
     _jl_randn_zig_init()
 end
 @windows_only begin
-    a=zeros(Uint32,2) #TODO FIX
-    #ccall(:jl_RtlGenRandom,Uint8,(Ptr{Void},Ptr{Void},Uint64),dlsym(_jl_advapi32,:SystemFunction036),convert(Ptr{Void},a),8)
-    #ccall(dlsym(_jl_advapi32,:SystemFunction036),Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+    a=zeros(Uint32,2)
+    ccall(dlsym(_jl_advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
     srand(a)
 end
 end
@@ -234,16 +233,14 @@ function randg(a::Real)
     end
 end
 
-#@TODO
-#this macro lead to julia trying to define a function named '\0' - Error!
-#@_jl_rand_matrix_builder_1arg Float64 randg
+@_jl_rand_matrix_builder_1arg Float64 randg
 
 # randchi2()
 
-#randchi2(v) = 2*randg(v/2)
-#@_jl_rand_matrix_builder_1arg Float64 randchi2
+randchi2(v) = 2*randg(v/2)
+@_jl_rand_matrix_builder_1arg Float64 randchi2
 
-#const chi2rnd = randchi2 # alias chi2rnd
+const chi2rnd = randchi2 # alias chi2rnd
 
 # From John D. Cook
 # http://www.johndcook.com/julia_rng.html
