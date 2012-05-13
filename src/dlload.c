@@ -21,7 +21,7 @@ typedef void * module_handle_t;
 static char *extensions[] = { "", ".dylib", ".bundle" };
 #define N_EXTENSIONS 3
 #elif defined(__WIN32__)
-#include <windef.h>
+#define _WIN32_WINNT 0x0501
 #include <windows.h>
 #include <direct.h>
 #define GET_FUNCTION_FROM_MODULE dlsym
@@ -49,9 +49,10 @@ uv_lib_t jl_load_dynamic_library(char *fname)
     modname = fname;
     if (modname == NULL) {
 #if defined(__WIN32__)
-		HMODULE this_process;
-		this_process=GetModuleHandle(NULL);
-                handle=this_process;
+		if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+          (LPCSTR)(&jl_load_dynamic_library),
+          &handle))
+			    jl_errorf("could not load base module", fname);
 #else
         handle = dlopen(NULL,RTLD_NOW);
 #endif

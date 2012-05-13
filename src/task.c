@@ -685,7 +685,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    jl_current_task->state.current_output_stream = ios_stdout;
+    //jl_current_task->state.current_output_stream = ios_stdout;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;

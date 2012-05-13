@@ -132,7 +132,7 @@ static int exec_program(void)
     JL_TRY {
         jl_register_toplevel_eh();
         if (err) {
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_show(jl_stderr_tty, jl_exception_in_transit);
             ios_printf(ios_stderr, "\n");
             JL_EH_POP();
             return 1;
@@ -276,7 +276,7 @@ int true_main(int argc, char *argv[])
     JL_CATCH {
         iserr = 1;
         jl_puts("error during run:\n",jl_stderr_tty);
-        jl_show(jl_exception_in_transit);
+        jl_show(jl_stderr_tty,jl_exception_in_transit);
         jl_puts( "\n",jl_stdout_tty);
         goto again;
     }

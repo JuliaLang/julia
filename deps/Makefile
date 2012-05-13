@@ -23,9 +23,6 @@ include $(JULIAHOME)/Make.inc
 
 LIBS = uv fdlibm dsfmt rmath double-conversion amos suitesparse-wrapper gmp-wrapper
 
-
-INSTALL_NAME_CMD = $(JULIAHOME)/deps/install-name-$(OS).$(SHELL_EXT)
-
 ## WGET / CURL
 ifeq ($(OS), Linux)
 WGET = wget --no-check-certificate
@@ -240,8 +237,7 @@ $(UV_OBJ_SOURCE): libuv/Makefile
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
-	cp libuv/include/uv.h $(USR)/include/uv.h 
-	cp -r libuv/include/uv-private $(USR)/include
+	cp -r libuv/include/* $(USR)/include
 install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
@@ -513,7 +509,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads
 endif
 
 fftw-$(FFTW_VER).tar.gz:
@@ -529,7 +525,7 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-single install
+	$(MAKE) -C fftw-$(FFTW_VER)-single LIBS="-lpthread" install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
@@ -546,7 +542,7 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-double install
+	$(MAKE) -C fftw-$(FFTW_VER)-double LIBS="-lpthread" install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
@@ -572,7 +568,6 @@ endif
 SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
-endif
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:

@@ -245,6 +245,5 @@
     jl_is_unix;
     jl_os_name;
     jl_test;
-  local:
     *;
 };

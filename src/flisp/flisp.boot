@@ -426,4 +426,4 @@
 	  vector.map #fn("8000r2c0qc1}3141;" [#fn("8000r1c0qc1|3141;" [#fn(":000r1`~axc0qu2|;" [#fn(":000r1~|i20i21|[31\\;" [])])
   #fn(vector.alloc)]) #fn(length)] vector.map)
 	  void #fn("6000r0];" [] void) zero?
-	  #fn("7000r1|`W;" [] zero?))
+	  #fn("7000r1|`W;" [] zero?))

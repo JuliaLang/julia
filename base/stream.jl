@@ -78,6 +78,8 @@ function _uv_tty2tty(handle::Ptr{Void})
     TTY(handle,memio(),false)
 end
 
+OUTPUT_STREAM = make_stdout_stream()
+
 ## SOCKETS ##
 
 abstract Socket <: AsyncStream
@@ -555,7 +557,6 @@ macro cmd(str)
 end
 
 ## low-level calls
-print(b::ASCIIString) = write(current_output_stream(),b)
 
 write(s::AsyncStream, b::ASCIIString) =
     ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,s.handle)
@@ -565,8 +566,6 @@ write(s::AsyncStream, b::Uint8) =
 
 write(s::AsyncStream, c::Char) =
     ccall(:jl_pututf8, Int32, (Ptr{Void},Char), s.handle,c)
-
-write(c::Char) = write(current_output_stream(),c)
 
 function write{T}(s::AsyncStream, a::Array{T})
     if isa(T,BitsKind)

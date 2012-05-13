@@ -7,7 +7,9 @@
 #include <assert.h>
 #include <sys/stat.h>
 //#include <sys/wait.h>
+#ifndef __WIN32__
 #include <sys/sysctl.h>
+#endif
 #include <errno.h>
 #include <signal.h>
 #include <libgen.h>
@@ -65,6 +67,8 @@ DLLEXPORT size_t jl_ios_size(ios_t *s)
 }
 
 DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
+
+DLLEXPORT int jl_sizeof_ios_t(void) { return sizeof(ios_t); }
 
 DLLEXPORT long jl_ios_fd(ios_t *s)
 {
@@ -165,6 +169,13 @@ jl_value_t *jl_strerror(int errnum)
 
 // -- get the number of CPU cores --
 
+#ifdef __WIN32__
+typedef DWORD (WINAPI *GAPC)(WORD);
+#ifndef ALL_PROCESSOR_GROUPS
+#define ALL_PROCESSOR_GROUPS 0xffff
+#endif
+#endif
+
 DLLEXPORT int jl_cpu_cores(void) {
 #if defined(__APPLE__)
     size_t len = 4;
@@ -179,8 +190,21 @@ DLLEXPORT int jl_cpu_cores(void) {
     return count;
 #elif defined(__linux)
     return sysconf(_SC_NPROCESSORS_ONLN);
-#else // test for Windows?
-    return GetActiveProcessorCount(__in WORD GroupNumber);
+#else 
+	// test for Windows!
+	//Try to get WIN7 API method
+    GAPC gapc = (GAPC) jl_dlsym(
+		jl_kernel32_handle,
+        "GetActiveProcessorCount"
+    );
+
+    if (gapc) {
+        return gapc(ALL_PROCESSOR_GROUPS);
+    } else { //fall back on GetSystemInfo
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return info.dwNumberOfProcessors;
+    }
 #endif
 }
 
@@ -386,7 +410,7 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
     pthread_create(&io_thread, NULL, run_io_thr, NULL);
-}
+}*/
 
 DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
 {
@@ -410,3 +434,4 @@ DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)
     return 0;
 #endif
 }
+

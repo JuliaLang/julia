@@ -137,11 +137,7 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
-ifeq ($(OS), WINNT)
-LIBBLAS = $(JULIAHOME)/deps/openblas-$(OPENBLAS_VER)/libopenblas.lib
-else
 LIBBLAS = -L$(USRLIB) -lopenblas
-endif
 endif
 
 LIBLAPACKNAME = libopenblas
@@ -192,10 +188,12 @@ endif
 ifeq ($(OS), WINNT)
 SHLIB_EXT = dll
 RPATH = 
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
-WHOLE_ARCHIVE =
-NO_WHOLE_ARCHIVE =
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
 endif
+
+INSTALL_NAME_CMD = $(JULIAHOME)/deps/install-name-$(OS).$(SHELL_EXT)
 
 # MKL
 
@@ -209,7 +207,7 @@ LIBLAPACKNAME = libmkl_rt
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 

@@ -5,12 +5,12 @@ all: default
 default: release
 
 debug release: makelinks
-	@$(MAKE) -s julia-$@
+	$(MAKE) -s julia-$@
 	@$(MAKE) -s sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC deps
-	@$(MAKE) -sC src lib$@
+	$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia

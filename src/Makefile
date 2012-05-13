@@ -36,9 +36,6 @@ ifeq ($(USE_COPY_STACKS),1)
 JCFLAGS += -DCOPY_STACKS
 endif
 
-# Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a $(OSLIBS)
-
 default: release
 
 release debug: %: libjulia-%
@@ -72,23 +69,23 @@ flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 
 libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
-	$(JULIAHOME)/deps/install-name-$(OS).sh $@ $@
+	$(INSTALL_NAME_CMD) $@ $@
 	cp -f $@ $(USRLIB)/$@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
 	cp -f $@ $(USRLIB)/$@
-libjulia-debug: libjulia-debug.a libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: libjulia-debug.$(SHLIB_EXT)
 
 libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
-	$(JULIAHOME)/deps/install-name-$(OS).sh $@ $@
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) -shared -o $@ $(LDFLAGS)
+	$(INSTALL_NAME_CMD) $@ $@
 	cp -f $@ $(USRLIB)/$@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
 	cp -f $@ $(USRLIB)/$@
-libjulia-release: libjulia-release.a libjulia-release.$(SHLIB_EXT)
+libjulia-release: libjulia-release.$(SHLIB_EXT)
 
 clean:
 	rm -f $(USRLIB)/libjulia*

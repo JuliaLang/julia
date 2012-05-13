@@ -2,6 +2,8 @@
 ##             and REPL
 
 const _jl_color_normal = "\033[0m"
+@unix_only const _jl_repl = dlopen(C_NULL);
+@windows_only const _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 
 function _jl_answer_color()
     c = get(ENV, "JL_ANSWER_COLOR", "")
@@ -31,7 +33,7 @@ function repl_callback(ast::ANY, show_value)
         exit(0)
     end
     _jl_eval_user_input(ast, show_value!=0)
-    ccall(:repl_callback_enable, Void, ())
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 end
 
@@ -90,20 +92,20 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(handle::Ptr,nread::PtrSize,base::Ptr,len::Int32)
-    ccall(:jl_readBuffer,Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
 end
 
 function run_repl()
     global const _jl_repl_channel = RemoteRef()
 
     if _jl_have_color
-        ccall(:jl_enable_color, Void, ())
+        ccall(dlsym(_jl_repl,:jl_enable_color), Void, ())
     end
 
     # ctrl-C interrupt for interactive use
     ccall(:jl_install_sigint_handler, Void, ())
 
-    ccall(:repl_callback_enable, Void, ())
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 
     cont = true
@@ -117,7 +119,7 @@ function run_repl()
             if isa(e, InterruptException)
                 println("^C")
                 show(e)
-                ccall(:rl_clear_input, Void, ());
+                ccall(dlsym(_jl_repl,:rl_clear_input), Void, ());
                 cont = true
             else
                 iserr = true

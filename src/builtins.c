@@ -447,8 +447,8 @@ void jl_parse_eval_all(char *fname)
 {
 	if (jl_load_progress_max > 0) {
 		jl_load_progress_i++;
-		ios_printf(ios_stdout, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
-		ios_flush(ios_stdout);
+        jl_printf((uv_stream_t*)jl_stdout_tty, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+		//jl_flush(jl_stdout);
     }
     int lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
@@ -736,13 +736,13 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 
 DLLEXPORT void jl_print_symbol(uv_stream_t *s, jl_sym_t *sym)
 {
-    ios_puts(s,sym->name, s);
+    jl_puts(sym->name,s);
 }
 
 // for bootstrap
 DLLEXPORT void jl_print_int64(uv_stream_t *s, int64_t i)
 {
-    ios_printf(s, "%lld", i);
+    jl_printf(s, "%lld", i);
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
@@ -805,8 +805,8 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
-    ios_putc(opn, s);
+    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(st);
+    jl_putc(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
         jl_show(st, jl_tupleref(t, i));
@@ -828,7 +828,7 @@ static void show_function(uv_stream_t *s, jl_value_t *v)
 
 static void show_type(jl_value_t *st, jl_value_t *t)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
+    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(st);
     if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             jl_write(s, "None", 4);
@@ -860,7 +860,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
 
 DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(str);
+    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(str);
     // fallback for printing some other builtin types
     if (jl_is_tuple(v)) {
         jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
