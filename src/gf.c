@@ -9,6 +9,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -1169,8 +1172,11 @@ DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
 
 #ifdef JL_TRACE
 static int trace_en = 0;
-static void enable_trace(int x) { trace_en=x; }
+static int error_en = 1;
+static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
+extern char *type_summary(jl_value_t *t);
 #endif
+
 
 JL_CALLABLE(jl_apply_generic)
 {
@@ -1180,13 +1186,13 @@ JL_CALLABLE(jl_apply_generic)
 #endif
 #ifdef JL_TRACE
     if (trace_en) {
-        ios_printf(ios_stdout, "%s(", jl_gf_name(F)->name);
+        jl_printf(jl_stdout_tty, "%s(",  jl_gf_name(F)->name);
         size_t i;
         for(i=0; i < nargs; i++) {
-            if (i > 0) ios_printf(ios_stdout, ", ");
-            ios_printf(ios_stdout, "%s", type_summary(jl_typeof(args[i])));
+            if (i > 0) jl_printf(jl_stdout_tty, ", ");
+            jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
         }
-        ios_printf(ios_stdout, ")\n");
+        jl_printf(jl_stdout_tty, ")\n");
     }
 #endif
     /*
@@ -1219,6 +1225,17 @@ JL_CALLABLE(jl_apply_generic)
     }
 
     if (mfunc == jl_bottom_func) {
+#ifdef JL_TRACE
+        if (error_en) {
+            jl_printf(jl_stdout_tty, "%s(", jl_gf_name(F)->name);
+            size_t i;
+            for(i=0; i < nargs; i++) {
+                if (i > 0) jl_printf(jl_stdout_tty, ", ");
+                jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
+            }
+            jl_printf(jl_stdout_tty, ")\n");
+        }
+#endif
         return jl_no_method_error((jl_function_t*)F, args, nargs);
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);

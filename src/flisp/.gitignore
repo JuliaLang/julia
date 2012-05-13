@@ -4,3 +4,4 @@
 /flisp
 /flisp-debug
 /flisp-release
+*.exe

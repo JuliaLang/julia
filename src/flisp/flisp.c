@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <ctype.h>

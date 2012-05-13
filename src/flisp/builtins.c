@@ -349,14 +349,21 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     if (args[1] == FL_F) {
 #ifdef __linux
         result = unsetenv(name);
+#elif defined(__WIN32__)
+        result = SetEnvironmentVariable(name,NULL);
 #else
         (void)unsetenv(name);
         result = 0;
 #endif
+
     }
     else {
         char *val = tostring(args[1], "os.setenv");
-        result = setenv(name, val, 1);
+#if defined (__WIN32__)
+        result = SetEnvironmentVariable(name,val);
+#else
+		result = setenv(name, val, 1);
+#endif
     }
     if (result != 0)
         lerror(ArgError, "os.setenv: invalid environment variable");

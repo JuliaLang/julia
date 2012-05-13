@@ -1,13 +1,42 @@
 #ifndef JULIA_H
 #define JULIA_H
+#define JL_TRACE
+
+#if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
+    #define __WIN32__
+#endif
 
 #include "libsupport.h"
+#include <stdint.h>
+#include "uv.h"
 
 #define JL_GC_MARKSWEEP
 
 #include "htable.h"
 #include "arraylist.h"
 #include <setjmp.h>
+
+// Check windows
+#if _WIN32 || _WIN64
+#if _WIN64
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#endif
+
+// Check GCC
+#if __GNUC__
+#define NORETURN __attribute__ ((noreturn))
+#if __x86_64__ || __ppc64__
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#else
+#define NORETURN
+#endif
+
 
 #define JL_STRUCT_TYPE \
     struct _jl_type_t *type;

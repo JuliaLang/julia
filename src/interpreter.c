@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 

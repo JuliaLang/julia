@@ -18,6 +18,13 @@
 #include <libgen.h>
 #include <getopt.h>
 #include "julia.h"
+#include <stdio.h>
+#ifdef __WIN32__
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#else
+#include "../external/libuv/include/uv-private/ev.h"
+#endif
 
 int jl_boot_file_loaded = 0;
 
@@ -39,6 +46,7 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
+#ifndef __WIN32__
 void fpe_handler(int arg)
 {
     (void)arg;
@@ -155,35 +163,46 @@ void julia_init(char *imageFile)
     ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
-        exit(1);
+        jl_printf(jl_stderr_tty, "sigaltstack: %s\n", strerror(errno));
+        jl_exit(1);
     }
+	
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
-
+#endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
+
 }
 
 DLLEXPORT void jl_install_sigint_handler()
 {
+#ifdef __WIN32__
+	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+		GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+		TRUE, DUPLICATE_SAME_ACCESS );
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+#else
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
+#endif
+    //printf("sigint installed\n");
+
 }
 
 DLLEXPORT
