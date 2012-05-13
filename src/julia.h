@@ -356,7 +356,13 @@ extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-extern void *jl_dl_handle;
+extern uv_lib_t jl_dl_handle;
+#if defined(__WIN32__) || defined (_WIN32)
+extern uv_lib_t jl_ntdll_handle;
+extern uv_lib_t jl_kernel32_handle;
+extern uv_lib_t jl_crtdll_handle;
+extern uv_lib_t jl_winsock_handle;
+#endif
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -609,6 +615,7 @@ jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
 jl_value_t *jl_box64(jl_bits_type_t *t, int64_t x);
+jl_value_t *jl_box_pointer(void *p);
 int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);

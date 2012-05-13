@@ -141,21 +141,23 @@ void julia_init(char *imageFile)
             jl_restore_system_image(imageFile);
         }
         JL_CATCH {
-            ios_printf(ios_stderr, "error during init:\n");
+            JL_PRINTF(JL_STDERR, "error during init:\n");
             jl_show(jl_stderr_obj(), jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
-            exit(1);
+            JL_PRINTF(JL_STDOUT, "\n");
+            jl_exit(1);
         }
     }
 
+#ifndef __WIN32__
+	
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
 
     stack_t ss;
@@ -163,7 +165,7 @@ void julia_init(char *imageFile)
     ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaltstack: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
         jl_exit(1);
     }
 	
@@ -173,7 +175,7 @@ void julia_init(char *imageFile)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 #endif
@@ -197,7 +199,7 @@ DLLEXPORT void jl_install_sigint_handler()
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 #endif

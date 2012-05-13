@@ -341,15 +341,15 @@ static void print_sig(jl_tuple_t *type)
 {
     size_t i;
     for(i=0; i < jl_tuple_len(type); i++) {
-        if (i > 0) ios_printf(ios_stderr, ", ");
+        if (i > 0) JL_PRINTF(JL_STDERR, ", ");
         jl_value_t *v = jl_tupleref(type,i);
         if (jl_is_tuple(v)) {
-            ios_putc('(', ios_stderr);
+            JL_PUTC('(', JL_STDERR);
             print_sig((jl_tuple_t*)v);
-            ios_putc(')', ios_stderr);
+            JL_PUTC(')', JL_STDERR);
         }
         else {
-            ios_printf(ios_stderr, "%s", type_summary(v));
+            JL_PRINTF(JL_STDERR, "%s", type_summary(v));
         }
     }
 }
@@ -403,9 +403,9 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[2] = (jl_value_t*)jl_null;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        ios_printf(ios_stderr,"inference on %s(", li->name->name);
+        JL_PRINTF(JL_STDERR,"inference on %s(", li->name->name);
         print_sig(argtypes);
-        ios_printf(ios_stderr, ")\n");
+        JL_PRINTF(JL_STDERR, ")\n");
 #endif
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
@@ -1093,9 +1093,9 @@ static char *type_summary(jl_value_t *t)
     if (jl_is_tuple(t)) return "Tuple";
     if (jl_is_some_tag_type(t))
         return ((jl_tag_type_t*)t)->name->name->name;
-    ios_printf(ios_stderr, "unexpected argument type: ");
+    JL_PRINTF(JL_STDERR, "unexpected argument type: ");
     jl_show(jl_stderr_obj(), t);
-    ios_printf(ios_stderr, "\n");
+    JL_PRINTF(JL_STDERR, "\n");
     assert(0);
     return NULL;
 }
@@ -1186,13 +1186,13 @@ JL_CALLABLE(jl_apply_generic)
 #endif
 #ifdef JL_TRACE
     if (trace_en) {
-        jl_printf(jl_stdout_tty, "%s(",  jl_gf_name(F)->name);
+        JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
         size_t i;
         for(i=0; i < nargs; i++) {
-            if (i > 0) jl_printf(jl_stdout_tty, ", ");
-            jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
+            if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
+            JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
         }
-        jl_printf(jl_stdout_tty, ")\n");
+        JL_PRINTF(JL_STDOUT, ")\n");
     }
 #endif
     /*
@@ -1227,13 +1227,13 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc == jl_bottom_func) {
 #ifdef JL_TRACE
         if (error_en) {
-            jl_printf(jl_stdout_tty, "%s(", jl_gf_name(F)->name);
+            JL_PRINTF(JL_STDOUT, "%s(", jl_gf_name(F)->name);
             size_t i;
             for(i=0; i < nargs; i++) {
-                if (i > 0) jl_printf(jl_stdout_tty, ", ");
-                jl_printf(jl_stdout_tty, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
+                if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
+                JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
             }
-            jl_printf(jl_stdout_tty, ")\n");
+            JL_PRINTF(JL_STDOUT, ")\n");
         }
 #endif
         return jl_no_method_error((jl_function_t*)F, args, nargs);
@@ -1341,11 +1341,11 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
     ios_t *s = (ios_t*)jl_iostr_data(outstr);
     while (ml != JL_NULL) {
-        ios_printf(s, "%s", name);
+        JL_PRINTF(s, "%s", name);
         if (ml->tvars != jl_null) {
             if (jl_is_typevar(ml->tvars)) {
-                ios_putc('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
-                ios_putc('}', s);
+                JL_PUTC('{', s); jl_show(outstr, (jl_value_t*)ml->tvars);
+                JL_PUTC('}', s);
             }
             else {
                 jl_show_tuple(outstr, ml->tvars, '{', '}', 0);
@@ -1354,7 +1354,7 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
         jl_show(outstr, (jl_value_t*)ml->sig);
         if (ml->func == jl_bottom_func)  {
             // mark dummy cache entries
-            ios_printf(s, " *");
+            JL_PRINTF(s, " *");
         }
         else {
             jl_lambda_info_t *li = ml->func->linfo;
@@ -1362,11 +1362,11 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
             long lno = jl_unbox_long(li->line);
             if (lno > 0) {
                 char *fname = ((jl_sym_t*)li->file)->name;
-                ios_printf(s, " at %s:%d", fname, lno);
+                JL_PRINTF(s, " at %s:%d", fname, lno);
             }
         }
         if (ml->next != JL_NULL)
-            ios_printf(s, "\n");
+            JL_PRINTF(s, "\n");
         ml = ml->next;
     }
 }
@@ -1376,7 +1376,7 @@ void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf)
     char *name = jl_gf_name(gf)->name;
     jl_methtable_t *mt = jl_gf_mtable(gf);
     print_methlist(outstr, name, mt->defs);
-    //ios_printf(ios_stdout, "\ncache:\n");
+    //JL_PRINTF(JL_STDOUT, "\ncache:\n");
     //print_methlist(outstr, name, mt->cache);
 }
 

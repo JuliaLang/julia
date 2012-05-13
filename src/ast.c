@@ -91,8 +91,8 @@ void jl_init_frontend(void)
     ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
-        ios_printf(ios_stderr, "fatal error loading system image\n");
-        exit(1);
+        JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
+        jl_exit(1);
     }
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));
