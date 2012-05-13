@@ -155,7 +155,7 @@ end
 ## Main types definitions
 #{{{
 # All structs in original glpk are wrapped up in
-# composite types, which initialize and destry themselves
+# composite types, which initialize and destroy themselves
 # as needed, and expose pointers when asked to by
 # ccall's.
 #
@@ -768,7 +768,7 @@ function glp_set_mat_row{Ti<:Integer, Tv<:Real}(glp_prob::GLPProb, row::Integer,
     val64p = pointer(val64) - off64
     _jl_glpk__check_cols_ids(glp_prob, 0, len, ind32)
 
-    @glpk_ccall set_mat_row Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob row len ind32p val64p
+    @glpk_ccall set_mat_row Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p row len ind32p val64p
 end
 glp_set_mat_row{Tv<:Real}(glp_prob::GLPProb, row::Integer, len::Integer, ::Nothing, val::Vector{Tv}) =
     glp_set_mat_row(glp_prob, row, len, Int32[], val)
@@ -785,7 +785,7 @@ function glp_set_mat_col{Ti<:Integer, Tv<:Real}(glp_prob::GLPProb, col::Integer,
     val64p = pointer(val64) - off64
     _jl_glpk__check_rows_ids(glp_prob, 0, len, ind32)
 
-    @glpk_ccall set_mat_col Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob col len ind32p val64p
+    @glpk_ccall set_mat_col Void (Ptr{Void}, Int32, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p col len ind32p val64p
 end
 glp_set_mat_col{Tv<:Real}(glp_prob::GLPProb, col::Integer, len::Integer, ::Nothing, val::Vector{Tv}) =
     glp_set_mat_col(glp_prob::GLPProb, col, len, Int32[], val)
@@ -1399,7 +1399,7 @@ glp_write_mps(glp_prob::GLPProb, format::Integer, filename::String) =
 
 function glp_read_lp(glp_prob::GLPProb, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_lp_par(param)
+    _jl_glpk__check_lp_param(param)
     _jl_glpk__check_file_is_readable(filename)
     ret = @glpk_ccall read_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param cstring(filename)
     return ret
@@ -1410,7 +1410,7 @@ glp_read_lp(glp_prob::GLPProb, filename::String) =
 
 function glp_write_lp(glp_prob::GLPProb, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_lp_par(param)
+    _jl_glpk__check_lp_param(param)
     _jl_glpk__check_file_is_writable(filename)
     ret = @glpk_ccall write_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param cstring(filename)
     return ret
@@ -1555,14 +1555,14 @@ end
 
 function glp_get_bfcp(glp_prob::GLPProb, glp_param::GLPBasisFactParam)
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_bfcp(glp_prob)
-    @glpk_ccall get_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_prob)
+    _jl_glpk__check_bfcp(glp_param)
+    @glpk_ccall get_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_param)
 end
 
 function glp_set_bfcp(glp_prob::GLPProb, glp_param::GLPBasisFactParam)
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_bfcp(glp_prob)
-    @glpk_ccall set_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_prob)
+    _jl_glpk__check_bfcp(glp_param)
+    @glpk_ccall set_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_param)
 end
 
 function glp_get_bhead(glp_prob::GLPProb, k::Integer)
