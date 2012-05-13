@@ -525,7 +525,7 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-single LIBS="-lpthread" install
+	$(MAKE) -C fftw-$(FFTW_VER)-single install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
@@ -542,7 +542,7 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-double LIBS="-lpthread" install
+	$(MAKE) -C fftw-$(FFTW_VER)-double install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
