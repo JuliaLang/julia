@@ -19,7 +19,7 @@ void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs)
 
     hexc[2] = hexc[3] = ' ';
     do {
-        jl_printf(dest, "%.8x  ", offs+startoffs);
+        JL_PRINTF(dest, "%.8x  ", offs+startoffs);
         pos = 10;
         for(i=0; i < 16 && offs < len; i++, offs++) {
             ch = buffer[offs];

@@ -660,7 +660,7 @@ void jl_gc_collect(void)
 #endif
         gc_mark();
 #ifdef GCTIME
-        jl_printf(jl_stderr_tty, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
@@ -672,7 +672,7 @@ void jl_gc_collect(void)
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        jl_printf(jl_stderr_tty, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
         run_finalizers();
         JL_SIGATOMIC_END();
@@ -804,7 +804,7 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
         pg = nextpg;
     }
     *pwaste = npgs*GC_PAGE_SZ - (nused*p->osize);
-    jl_printf(jl_stdout_tty,
+    JL_PRINTF(JL_STDOUT,
                "%4d : %7d/%7d objects, %5d pages, %8d bytes, %8d waste\n",
                p->osize,
                nused,
@@ -830,7 +830,7 @@ static void all_pool_stats(void)
         no += (b/ephe_pools[i].osize);
         tw += w;
     }
-    jl_printf(jl_stdout_tty,
+    JL_PRINTF(JL_STDOUT,
                "%d objects, %d total allocated, %d total fragments\n",
                no, nb, tw);
 }
@@ -850,6 +850,6 @@ static void big_obj_stats(void)
         }
         v = v->next;
     }
-    jl_printf(jl_stdout_tty, "%d bytes in %d large objects\n", nbytes, nused);
+    JL_PRINTF(JL_STDOUT, "%d bytes in %d large objects\n", nbytes, nused);
 }
 #endif //MEMPROFILE

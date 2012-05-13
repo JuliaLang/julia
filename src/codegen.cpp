@@ -522,7 +522,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      jl_printf(jl_stdout_tty, "call %s%s\n",
+                      JL_PRINTF(JL_STDOUT, "call %s%s\n",
                       jl_sprint(args[0]),
                       jl_sprint((jl_value_t*)aty));
                   }
@@ -1416,8 +1416,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
-    //jl_print((jl_value_t*)ast);
-    //jl_printf(jl_stdout_tty, "\n");
+    //JL_PRINTF((jl_value_t*)ast);
+    //JL_PRINTF(JL_STDOUT, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, Value*> localVars;

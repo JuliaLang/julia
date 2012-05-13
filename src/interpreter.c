@@ -81,7 +81,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         if (v == NULL) {
         if (jl_errorexception_type == NULL) {
-            jl_printf(jl_stderr_tty, "%s not defined", ((jl_sym_t*)e)->name);
+            JL_PRINTF(JL_STDERR, "%s not defined", ((jl_sym_t*)e)->name);
             jl_exit(1);
         } else {
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);

@@ -91,7 +91,7 @@ void jl_init_frontend(void)
     ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
-        jl_printf(jl_stderr_tty, "fatal error loading system image\n");
+        JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
         jl_exit(1);
     }
 

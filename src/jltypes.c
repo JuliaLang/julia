@@ -942,7 +942,7 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
 {
-    //jl_printf(jl_stdout_tty, "\n");
+    //JL_PRINTF(JL_STDOUT, "\n");
     jl_value_t *v=NULL;
     for(int i=0; i < env->n; i+=2) {
         jl_value_t *T = env->data[i];
@@ -1032,12 +1032,12 @@ void print_env(cenv_t *soln)
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
         T = soln->data[i]; S = soln->data[i+1];
-        jl_printf(jl_stdout_tty,
+        JL_PRINTF(JL_STDOUT,
                    "%s@%x=%s ",
                    ((jl_tvar_t*)T)->name->name, T,
                    type_summary(S));
     }
-    jl_printf(jl_stdout_tty, "\n");
+    JL_PRINTF(JL_STDOUT, "\n");
 }
 
 jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
@@ -1099,8 +1099,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
-    //jl_printf(jl_stdout_tty, "env: "); print_env(&env);
-    //jl_printf(jl_stdout_tty, "sol: "); print_env(&eqc);
+    //JL_PRINTF(JL_STDOUT, "env: "); print_env(&env);
+    //JL_PRINTF(JL_STDOUT, "sol: "); print_env(&eqc);
 
     // convert non-specific integer vars to typevars
     for(e=0; e < eqc.n; e+=2) {

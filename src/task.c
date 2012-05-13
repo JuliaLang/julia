@@ -472,7 +472,7 @@ static jl_value_t *build_backtrace(void)
 		}
     }else
     {
-        jl_puts("Failed to load kernel32.dll",jl_stderr_tty);
+        JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
         jl_exit(1);
     }
 	FreeLibrary(kernel32);
@@ -538,7 +538,7 @@ void jl_raise(jl_value_t *e)
     else {
         if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
-            jl_printf(jl_stderr_tty, "warning: exception handler exited\n");
+            JL_PRINTF(JL_STDERR, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
         // for now, exit the task
