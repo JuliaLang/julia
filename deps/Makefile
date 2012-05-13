@@ -108,7 +108,11 @@ $(USR):
 	mkdir -p $(USR)/share
 	mkdir -p $(USR)/etc
 
+$(USRLIB): $(USR)
+
 ## LLVM ##
+
+LLVM_TARGETS = x86,x86_64
 
 LLVM_OBJ_TARGET = $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
@@ -118,7 +122,6 @@ else
 endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
-install-llvm: $(LLVM_OBJ_TARGET)
 
 llvm-$(LLVM_VER).tar.gz:
 	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
@@ -126,18 +129,22 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
-$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
+    
+llvm-$(LLVM_VER)/config.status: llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=gcc CXX=g++ && \
-	$(MAKE)
-$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
-	$(MAKE) -C llvm-$(LLVM_VER) install
-	$(JULIAHOME)/deps/install-name-$(OS).sh libLLVM-3.0.$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-debug --enable-assertions --disable-profiling --disable-assertions --enable-shared --enable-targets=$(LLVM_TARGETS) --disable-bindings --disable-docs CC=gcc CXX=g++
+    
+$(USRBIN)/llvm-config: llvm-$(LLVM_VER)/config.status
+	$(MAKE) -C llvm-$(LLVM_VER) && \
+	$(MAKE) -C llvm-$(LLVM_VER) install	
+ 
+install-llvm: $(USRBIN)/llvm-config
+	$(JULIAHOME)/deps/install-name-$(OS).sh libLLVM-$(shell $(USRBIN)/llvm-config --version).$(SHLIB_EXT) $(USRLIB)/libLLVM-$(shell $(USRBIN)/llvm-config --version).$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
 	$(MAKE) -C llvm-$(LLVM_VER) clean
-	rm -f $(LLVM_OBJ_TARGET)
+	rm -f $(USRBIN)/llvm-config
 distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
 
@@ -336,7 +343,6 @@ $(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	$(MAKE) CC=$(CC) && \
 	$(JULIAHOME)/deps/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
-	mkdir -p $(USRLIB)
 	cp $< $@
 
 clean-rmath:
@@ -408,7 +414,7 @@ OPENBLAS_OBJ_SOURCE =
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
-install-openblas: compile-openblas
+install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(WGET_DASH_O) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
@@ -419,6 +425,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+$(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(JULIAHOME)/deps/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
@@ -480,8 +487,7 @@ $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC)
 	touch $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
-	mkdir -p $(USRLIB)
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	make install F77=$(FC) MPIF77=$(FC)
 	touch $@
@@ -580,7 +586,7 @@ $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_TARGET): install-openblas $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
@@ -759,8 +765,7 @@ distclean-gmp:
 GMP_INC = -I gmp-$(GMP_VER)/
 GMP_LIB = -L$(USRLIB)/ -lgmp
 
-$(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
-	mkdir -p $(USRLIB)
+$(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)
@@ -814,8 +819,7 @@ GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 
 
-$(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
-	mkdir -p $(USRLIB)
+$(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET) | $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
 	touch $@
 install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c

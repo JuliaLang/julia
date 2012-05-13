@@ -27,7 +27,7 @@ namespace JL_I {
         // conversion
         sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
-        fptoui32, fptosi32, fptoui64, fptosi64, 
+        fptoui32, fptosi32, fptoui64, fptosi64,
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
@@ -644,8 +644,9 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctpop,
                                       ArrayRef<Type*>(x->getType())), x);
+#if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     HANDLE(ctlz_int,1)
-        x = INT(x);
+        x = INT(x)
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
                                       ArrayRef<Type*>(x->getType())), x);
@@ -654,6 +655,22 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateCall(
             Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz,
                                       ArrayRef<Type*>(x->getType())), x);
+#elif LLVM_VERSION_MAJOR==3 && LLVM_VERSION_MINOR >= 1
+        HANDLE(ctlz_int,2) {
+        x = INT(x);
+        y = INT(y);
+        Type *types[2] = {x->getType(),y->getType()};
+        return builder.CreateCall2(
+                    Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, ArrayRef<Type*>(types)),x,y);
+        }
+    HANDLE(cttz_int,1) {
+            x = INT(x);
+            y = INT(y);
+            Type *types[2] = {x->getType(),y->getType()};
+            return builder.CreateCall2(
+                Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types)),x,y);
+    }
+#endif
 
     HANDLE(sext16,1) return builder.CreateSExt(INT(x), T_int16);
     HANDLE(zext16,1) return builder.CreateZExt(INT(x), T_int16);

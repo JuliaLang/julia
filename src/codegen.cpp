@@ -14,6 +14,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
 #include <sstream>
@@ -38,6 +39,9 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+static TargetMachine *jl_TargetMachine;
+#endif
 static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
@@ -156,7 +160,7 @@ static Function *to_function(jl_lambda_info_t *li)
     //ios_printf(ios_stderr, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, jl_unbox_long(li->line));
     //f->dump();
-    //verifyFunction(*f);
+    verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -173,6 +177,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     Function *llvmf = (Function*)li->functionObject;
     if (li->fptr == &jl_trampoline) {
         JL_SIGATOMIC_BEGIN();
+        verifyFunction(*llvmf);
+        if(strcmp(li->name->name,"show")==0)
+            llvmf->dump();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         JL_SIGATOMIC_END();
         llvmf->deleteBody();
@@ -2114,16 +2121,28 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
+    
+    InitializeNativeTarget();
+    jl_Module = new Module("julia", jl_LLVMContext);
+
+
+#if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
+    jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
 #endif
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
-
-    InitializeNativeTarget();
-    jl_Module = new Module("julia", jl_LLVMContext);
-    jl_ExecutionEngine =
-        EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();
+#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+    EngineBuilder builder = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT);
+    jl_ExecutionEngine = builder.create(jl_TargetMachine=builder.selectTarget());
+#ifdef DEBUG
+    jl_TargetMachine->Options.JITEmitDebugInfo = true;
+#endif 
+    jl_TargetMachine->Options.NoFramePointerElim = true;
+    jl_TargetMachine->Options.NoFramePointerElimNonLeaf = true;
+#endif
+    
     dbuilder = new DIBuilder(*jl_Module);
 
     init_julia_llvm_env(jl_Module);
