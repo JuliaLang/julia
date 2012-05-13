@@ -16,8 +16,8 @@ strcat(a::Latin1String, b::Latin1String, c::Latin1String...) = Latin1String(memc
 
 ## outputing Latin-1 strings ##
 
-#print(s::Latin1String) = print(s.data)
-#write(io, s::Latin1String) = write(io, s.data)
+print(s::Latin1String) = print(s.data)
+write(io, s::Latin1String) = write(io, s.data)
 
 ## transcoding to Latin-1 ##
 

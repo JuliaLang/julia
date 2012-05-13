@@ -4,13 +4,13 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-debug release: makelinks
-	$(MAKE) -s julia-$@
+debug release:
+	@$(MAKE) -s julia-$@
 	@$(MAKE) -s sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC deps
-	$(MAKE) -sC src lib$@
+	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
 	@ln -f $@-$(DEFAULT_REPL) julia
@@ -87,7 +87,7 @@ distclean: cleanall
 	rm -fr dist
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* sloccount clean cleanall makelinks
+	test testall test-* sloccount clean cleanall
 
 test: release
 	@$(MAKE) -sC test default
@@ -97,23 +97,3 @@ testall: release
 
 test-%: release
 	@$(MAKE) -sC test $*
-
-lib:
-	mkdir -p usr/lib
-ifeq ($(OS),WINNT)
-	cmd //C mklink //J lib usr\\lib
-else
-	test ! -h lib && ln -s usr/lib lib
-endif
-
-include:
-	mkdir -p usr/include
-ifeq ($(OS),WINNT)
-	cmd //C mklink //J include usr\\include
-else
-	test ! -h include && ln -s usr/include include
-endif
-
-
-makelinks: lib include
-
