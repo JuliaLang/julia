@@ -1383,6 +1383,8 @@
 	       (to-lff '(null) dest tail)))
 
 	  (else
+	   (if (and dest (not tail) (eq? (car e) 'method))
+	       (error (string "misplaced method definition for " (cadr e))))
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			 (cdr e))))
 	     (cond ((symbol? dest)

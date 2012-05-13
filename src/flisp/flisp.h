@@ -3,6 +3,7 @@
 
 #include <setjmp.h>
 #include "libsupport.h"
+#include <stdint.h>
 
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;

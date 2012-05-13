@@ -1,13 +1,42 @@
 #ifndef JULIA_H
 #define JULIA_H
+#define JL_TRACE
+
+#if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
+    #define __WIN32__
+#endif
 
 #include "libsupport.h"
+#include <stdint.h>
+#include "uv.h"
 
 #define JL_GC_MARKSWEEP
 
 #include "htable.h"
 #include "arraylist.h"
 #include <setjmp.h>
+
+// Check windows
+#if _WIN32 || _WIN64
+#if _WIN64
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#endif
+
+// Check GCC
+#if __GNUC__
+#define NORETURN __attribute__ ((noreturn))
+#if __x86_64__ || __ppc64__
+#define ENVIRONMENT64
+#else
+#define ENVIRONMENT32
+#endif
+#else
+#define NORETURN
+#endif
+
 
 #define JL_STRUCT_TYPE \
     struct _jl_type_t *type;
@@ -327,7 +356,13 @@ extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-extern void *jl_dl_handle;
+extern uv_lib_t *jl_dl_handle;
+#if defined(__WIN32__) || defined (_WIN32)
+extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_kernel32_handle;
+extern uv_lib_t *jl_crtdll_handle;
+extern uv_lib_t *jl_winsock_handle;
+#endif
 
 // some important symbols
 extern jl_sym_t *call_sym;
@@ -580,6 +615,7 @@ jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
 jl_value_t *jl_box64(jl_bits_type_t *t, int64_t x);
+jl_value_t *jl_box_pointer(void *p);
 int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);
@@ -720,8 +756,8 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
-DLLEXPORT void *jl_load_dynamic_library(char *fname);
-DLLEXPORT void *jl_dlsym(void *handle, char *symbol);
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 
 // compiler
 void jl_compile(jl_function_t *f);
@@ -931,6 +967,15 @@ DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 DLLEXPORT int jl_cpu_cores(void);
+
+#define JL_STDOUT ios_stdout
+#define JL_STDERR ios_stderr
+#define JL_PRINTF ios_printf
+#define JL_PUTC	  ios_putc
+#define JL_PUTS	  ios_puts
+#define JL_WRITE  ios_write
+#define jl_exit   exit
+#define JL_STREAM ios_t
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

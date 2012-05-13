@@ -244,7 +244,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
         elseif dims == 1
             :(write($stream, ($convert)(getfield($struct, ($fieldnames)[$elnum]))))
         else
-            ranges = tuple([1:d | d in dims]...)
+            ranges = tuple([1:d for d in dims]...)
             :(write($stream, map($convert, ref(getfield($struct, ($fieldnames)[$elnum]), ($ranges)...))))
         end
         xprs = {xprs...; xpr}
@@ -276,7 +276,7 @@ end
 
 function struct_utils(struct_type)
     @eval ref(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
-    @eval ref(struct::($struct_type), x) = [struct.(($struct_type).names[i]) | i in x]
+    @eval ref(struct::($struct_type), x) = [struct.(($struct_type).names[i]) for i in x]
     @eval length(struct::($struct_type)) = length(($struct_type).names)
     # this could be better
     @eval isequal(a::($struct_type), b::($struct_type)) = isequal(a[1:end], b[1:end])

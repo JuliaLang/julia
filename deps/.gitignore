@@ -1,6 +1,7 @@
 /root
 /llvm-*
 /readline-*
+!readline-win.h
 /pcre-*
 /dsfmt-*
 /openblas-*
@@ -13,5 +14,7 @@
 /SuiteSparse-*
 /double-conversion-*
 /gmp-*
+/grisu-*
+
 /glpk-*
 /readline62-*
