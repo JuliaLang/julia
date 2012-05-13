@@ -614,23 +614,23 @@ function _jl_glpk__check_intopt_param(glp_param::GLPIntoptParam)
     return true
 end
 
-function _jl_glpk__check_file_is_readable(filname::String)
+function _jl_glpk__check_file_is_readable(filename::String)
     try
-        f = open(f, "r")
+        f = open(filename, "r")
+        close(f)
     catch err
-        throw(GLPError("file $filaneme not readable"))
+        throw(GLPError("file $filename not readable"))
     end
-    close(f)
     return true
 end
 
-function _jl_glpk__check_file_is_writable(filname::String)
+function _jl_glpk__check_file_is_writable(filename::String)
     try
-        f = open(f, "w")
+        f = open(filename, "w")
+        close(f)
     catch err
-        throw(GLPError("file $filaneme not writable"))
+        throw(GLPError("file $filename not writable"))
     end
-    close(f)
     return true
 end
 
@@ -1000,7 +1000,7 @@ end
 function glp_get_mat_row(glp_prob::GLPProb, row::Integer, ind::Union(Vector{Int32},Nothing), val::Union(Vector{Float64},Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_row_is_valid(glp_prob, row)
-    numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob row C_NULL C_NULL
+    numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p row C_NULL C_NULL
     if numel == 0
         return 0
     end
@@ -1018,13 +1018,13 @@ function glp_get_mat_row(glp_prob::GLPProb, row::Integer, ind::Union(Vector{Int3
     else
         val64p = C_NULL
     end
-    numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob row ind32p int64p
+    numel = @glpk_ccall get_mat_row Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p row ind32p val64p
 end
 
 function glp_get_mat_col(glp_prob::GLPProb, col::Integer, ind::Union(Vector{Int32},Nothing), val::Union(Vector{Float64},Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_col_is_valid(glp_prob, col)
-    numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob col C_NULL C_NULL
+    numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p col C_NULL C_NULL
     if numel == 0
         return 0
     end
@@ -1042,7 +1042,7 @@ function glp_get_mat_col(glp_prob::GLPProb, col::Integer, ind::Union(Vector{Int3
     else
         val64p = C_NULL
     end
-    numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob col ind32p int64p
+    numel = @glpk_ccall get_mat_col Int32 (Ptr{Void}, Int32, Ptr{Int32}, Ptr{Float64}) glp_prob.p col ind32p val64p
 end
 
 function glp_create_index(glp_prob::GLPProb)
@@ -1376,7 +1376,7 @@ end
 function glp_read_mps(glp_prob::GLPProb, format::Integer, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_mps_format(format)
-    _jl_glpk__check_mps_par(param)
+    _jl_glpk__check_mps_param(param)
     _jl_glpk__check_file_is_readable(filename)
     ret = @glpk_ccall read_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param cstring(filename)
     return ret
@@ -1388,7 +1388,7 @@ glp_read_mps(glp_prob::GLPProb, format::Integer, filename::String) =
 function glp_write_mps(glp_prob::GLPProb, format::Integer, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_mps_format(format)
-    _jl_glpk__check_mps_par(param)
+    _jl_glpk__check_mps_param(param)
     _jl_glpk__check_file_is_writable(filename)
     ret = @glpk_ccall write_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param cstring(filename)
     return ret
