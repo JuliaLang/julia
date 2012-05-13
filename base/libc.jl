@@ -63,6 +63,7 @@ function setcwd(p::String)
     end
     getcwd()
 end
+setcwd() = setcwd(ENV["HOME"])
 
 ## Memory related ##
 
