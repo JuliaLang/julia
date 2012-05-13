@@ -285,7 +285,7 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a, shiftamt::Integer) = circshift(a, [shiftamt])
+circshift(a, shiftamt::Real) = circshift(a, [integer(shiftamt)])
 function circshift(a, shiftamts)
     n = ndims(a)
     I = cell(n)
@@ -653,6 +653,31 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
         end
         return c
     end
+
+    @eval function ($f)(A::AbstractArray, axis::Integer)
+        dimsA = size(A)
+        ndimsA = ndims(A)
+        axis_size = dimsA[axis]
+        axis_stride = stride(A, axis)
+
+        if axis_size <= 1
+            return A
+        end
+
+        B = similar(A)
+
+        for i = 1:length(A)
+            if div(i-1, axis_stride) % axis_size == 0
+               B[i] = A[i]
+            else
+               B[i] = ($op)(A[i], B[i-axis_stride])
+            end
+        end
+
+        return B
+    end
+
+    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
 end
 
 ## ipermute in terms of permute ##

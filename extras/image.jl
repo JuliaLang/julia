@@ -455,7 +455,7 @@ function ppmwrite(img, file::String)
 end
 
 # demo:
-# m = [ mandel(complex(r,i)) | i=-1:.01:1, r=-2:.01:0.5 ];
+# m = [ mandel(complex(r,i)) for i=-1:.01:1, r=-2:.01:0.5 ];
 # ppmwrite(indexedcolor(m, palette_fire), "mandel.ppm")
 
 function imread(file::String)
@@ -590,7 +590,7 @@ function gaussian2d(sigma::Number, filter_size)
     if mod(m, 2) != 1 || mod(n, 2) != 1
         error("filter dimensions must be odd")
     end
-    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) | X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
+    g = [exp(-(X.^2+Y.^2)/(2*sigma.^2)) for X=-floor(m/2):floor(m/2), Y=-floor(n/2):floor(n/2)]
     return g/sum(g)
 end
 
@@ -608,7 +608,7 @@ imdog() = imdog(0.5)
 # laplacian of gaussian
 function imlog(sigma::Number)
     m = 4*ceil(sigma)+1
-    return [((x^2+y^2-sigma^2)/sigma^4)*exp(-(x^2+y^2)/(2*sigma^2)) | x=-floor(m/2):floor(m/2), y=-floor(m/2):floor(m/2)]
+    return [((x^2+y^2-sigma^2)/sigma^4)*exp(-(x^2+y^2)/(2*sigma^2)) for x=-floor(m/2):floor(m/2), y=-floor(m/2):floor(m/2)]
 end
 
 imlog() = imlog(0.5)

@@ -405,3 +405,19 @@ function help(x)
         println("  which has fields $(t.names)")
     end
 end
+
+# run some code in a different directory
+function chdir(f::Function, dir::String)
+    old = getcwd()
+    try
+        setcwd(dir)
+        res = f()
+        setcwd(old)
+        res
+    catch err
+        setcwd(old)
+        throw(err)
+    end
+end
+
+macro chdir(dir,ex); :(chdir(()->$ex,$dir)); end

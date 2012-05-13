@@ -4,7 +4,7 @@
 
 (defvar julia-mode-hook nil)
 
-(add-to-list 'auto-mode-alist '("\\.j\\'\\|\\.jl\\'" . julia-mode))
+(add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
 (defvar julia-mode-syntax-table
   (let ((table (make-syntax-table)))

@@ -17,11 +17,8 @@
      (|::|)
      (|.|)))
 
-(define-macro (prec-ops n) `(aref ops-by-prec ,n))
+(define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
-(define normal-ops (vector.map identity ops-by-prec))
-(define no-pipe-ops (vector.map identity ops-by-prec))
-(vector-set! no-pipe-ops 7 '(+ - $))
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
@@ -30,13 +27,8 @@
 (define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
-  `(with-bindings ((ops-by-prec normal-ops)
-		   (range-colon-enabled #t)
+  `(with-bindings ((range-colon-enabled #t)
 		   (space-sensitive #f))
-		  ,@body))
-
-(define-macro (without-bitor . body)
-  `(with-bindings ((ops-by-prec no-pipe-ops))
 		  ,@body))
 
 (define-macro (without-range-colon . body)
@@ -901,14 +893,14 @@
     (if (eqv? (require-token s) closer)
 	(begin (take-token s)
 	       (list 'vcat))  ; [] => (vcat)
-	(let ((first (without-bitor (parse-eq* s))))
+	(let ((first (parse-eq* s)))
 	  (case (peek-token s)
 	    ;; dispatch to array syntax, comprehension, or matrix syntax
 	    ((#\,)
 	     (parse-vcat s first closer))
 	    ;;((|\||)
 	    ;; (error "old syntax"))
-	    ((|\|| for)
+	    ((for)
 	     (take-token s)
 	     (let ((r (parse-comma-separated-iters s)))
 	       (if (not (eqv? (require-token s) closer))

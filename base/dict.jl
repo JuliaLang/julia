@@ -1,25 +1,8 @@
-function _tablesz(i::Integer)
-    if i < 16
-        return 16
-    end
-    if i&(i-1) == 0
-        return i
-    end
-    while (i&(i-1) != 0)
-        i = i&(i-1)
-    end
-    return i<<1
-end
+# generic operations on associative collections
+
+abstract Associative{K,V}
 
 const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
-
-function ref(t::Associative, key)
-    v = get(t, key, _jl_secret_table_token)
-    if is(v,_jl_secret_table_token)
-        throw(KeyError(key))
-    end
-    return v
-end
 
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
@@ -41,7 +24,52 @@ function show(io, t::Associative)
     end
 end
 
-type ObjectIdDict <: Associative
+function keys(T::Type, a::Associative)
+    i = 0
+    keyz = Array(T,length(a))
+    for (k,v) in a
+        keyz[i+=1] = k
+    end
+    return keyz
+end
+keys{K,V}(a::Associative{K,V}) = keys(K,a)
+
+function values(T::Type, a::Associative)
+    i = 0
+    vals = Array(T,length(a))
+    for (k,v) in a
+        vals[i+=1] = v
+    end
+    return vals
+end
+values{K,V}(a::Associative{K,V}) = values(V,a)
+
+# some support functions
+
+function _tablesz(i::Integer)
+    if i < 16
+        return 16
+    end
+    if i&(i-1) == 0
+        return i
+    end
+    while (i&(i-1) != 0)
+        i = i&(i-1)
+    end
+    return i<<1
+end
+
+function ref(t::Associative, key)
+    v = get(t, key, _jl_secret_table_token)
+    if is(v,_jl_secret_table_token)
+        throw(KeyError(key))
+    end
+    return v
+end
+
+# hashing objects by identity
+
+type ObjectIdDict <: Associative{Any,Any}
     ht::Array{Any,1}
     ObjectIdDict(sz::Integer) = new(cell(2*_tablesz(sz)))
     ObjectIdDict() = ObjectIdDict(0)
@@ -141,7 +169,7 @@ end
 
 # dict
 
-type Dict{K,V} <: Associative
+type Dict{K,V} <: Associative{K,V}
     keys::Array{Any,1}
     vals::Array{Any,1}
     ndel::Int
@@ -349,6 +377,8 @@ function length(t::Dict)
     return n
 end
 
+# weak key dictionaries
+
 function add_weak_key(t::Dict, k, v)
     if is(t.deleter, identity)
         t.deleter = x->del(t, x)
@@ -364,7 +394,7 @@ function add_weak_value(t::Dict, k, v)
     return t
 end
 
-type WeakKeyDict{K,V} <: Associative
+type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{K,V}
 
     WeakKeyDict() = new(Dict{K,V}())

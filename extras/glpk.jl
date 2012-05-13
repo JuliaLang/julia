@@ -77,8 +77,8 @@ type GLPParamDescriptor
     function GLPParamDescriptor(cstr::String, struct_desc)
         struct_name = cstr
         c_struct_desc = convert(Vector{GLPParamFieldDescriptor}, struct_desc)
-        field_names = [ x[1]::ASCIIString | x = c_struct_desc ]
-        field_types = [ x[2]::BitsKind | x = c_struct_desc ]
+        field_names = [ x[1]::ASCIIString for x = c_struct_desc ]
+        field_types = [ x[2]::BitsKind for x = c_struct_desc ]
         new(struct_name, field_names, field_types)
     end
 end
