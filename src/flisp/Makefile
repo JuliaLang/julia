@@ -11,7 +11,7 @@ LIBTARGET = lib$(NAME)
 SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
 
-ifeq ($(OS), MINGW32_NT-6.1)
+ifeq ($(OS), WINNT)
 SRCS += asprintf.c
 endif
 

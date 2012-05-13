@@ -447,7 +447,7 @@ void jl_parse_eval_all(char *fname)
 {
 	if (jl_load_progress_max > 0) {
 		jl_load_progress_i++;
-        JL_PRINTF((uv_stream_t*)JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+        JL_PRINTF(JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
 		//jl_flush(jl_stdout);
     }
     int lineno=0;
@@ -734,13 +734,13 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 // printing -------------------------------------------------------------------
 
 
-DLLEXPORT void JL_PRINTF_symbol(uv_stream_t *s, jl_sym_t *sym)
+DLLEXPORT void jl_print_symbol(JL_STREAM *s, jl_sym_t *sym)
 {
     JL_PUTS(sym->name,s);
 }
 
 // for bootstrap
-DLLEXPORT void JL_PRINTF_int64(uv_stream_t *s, int64_t i)
+DLLEXPORT void jl_print_int64(JL_STREAM *s, int64_t i)
 {
     JL_PRINTF(s, "%lld", i);
 }
@@ -805,7 +805,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(st);
+    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(st);
     JL_PUTC(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
@@ -816,7 +816,7 @@ void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_
     JL_PUTC(cls, s);
 }
 
-static void show_function(uv_stream_t *s, jl_value_t *v)
+static void show_function(JL_STREAM *s, jl_value_t *v)
 {
     if (jl_is_gf(v)) {
         JL_PUTS(jl_gf_name(v)->name, s);

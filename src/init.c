@@ -22,10 +22,7 @@
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
-#else
-#include "../external/libuv/include/uv-private/ev.h"
 #endif
-
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -145,7 +142,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 #endif
 void jl_get_builtin_hooks(void);
 
-uv_lib_t jl_dl_handle;
+uv_lib_t *jl_dl_handle;
 #ifdef __WIN32__
 uv_lib_t jl_ntdll_handle;
 uv_lib_t jl_kernel32_handle;

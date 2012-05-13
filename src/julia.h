@@ -369,16 +369,13 @@ extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-extern uv_lib_t jl_dl_handle;
+extern uv_lib_t *jl_dl_handle;
 #if defined(__WIN32__) || defined (_WIN32)
-extern uv_lib_t jl_ntdll_handle;
-extern uv_lib_t jl_kernel32_handle;
-extern uv_lib_t jl_crtdll_handle;
-extern uv_lib_t jl_winsock_handle;
+extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_kernel32_handle;
+extern uv_lib_t *jl_crtdll_handle;
+extern uv_lib_t *jl_winsock_handle;
 #endif
-extern uv_loop_t *jl_event_loop;
-extern uv_loop_t *jl_io_loop;
-
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
@@ -405,14 +402,6 @@ extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
 extern uv_stream_t *JL_STDOUT;
 extern uv_stream_t *JL_STDERR;
-
-#define JL_STDOUT jl_stdout_tty
-#define JL_STDERR jl_stderr_tty
-#define JL_PRINTF jl_printf
-#define JL_PUTC	  jl_putc
-#define JL_PUTS	  jl_puts
-#define JL_WRITE  jl_write
-
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -820,10 +809,8 @@ void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
 DLLEXPORT uv_lib_t jl_load_dynamic_library(char *fname);
-DLLEXPORT void *jl_dlsym(uv_lib_t handle, char *symbol);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t handle, char *symbol); //supress errors
-DLLEXPORT void JL_PRINTF();
-
+DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
+DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 //event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
@@ -1046,9 +1033,15 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 DLLEXPORT int jl_cpu_cores(void);
 
-DLLEXPORT int JL_WRITE(uv_stream_t *stream,char *str,size_t n);
-DLLEXPORT int JL_PRINTF(uv_stream_t *s, const char *format, ...);
+DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
+DLLEXPORT intjl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+#define JL_STDOUT jl_stdout_tty
+#define JL_STDERR jl_stderr_tty
+#define JL_PRINTF jl_printf
+#define JL_PUTC	  jl_putc
+#define JL_PUTS	  jl_puts
+#define JL_WRITE  jl_write
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

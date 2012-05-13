@@ -919,7 +919,7 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         }
         char *n = fname->name;
         jl_value_t *errstream = jl_stderr_obj();
-        ios_t *s = ios_stderr;
+        ios_t *s = JL_STDERR;
         ios_printf(s, "Warning: New definition %s", n);
         jl_show(errstream, (jl_value_t*)type);
         ios_printf(s, " is ambiguous with %s", n);

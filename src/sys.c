@@ -2,13 +2,15 @@
   sys.c
   I/O and operating system utility functions
 */
+#include "julia.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <sys/stat.h>
-//#include <sys/wait.h>
 #ifndef __WIN32__
 #include <sys/sysctl.h>
+#include <sys/wait.h>
+#endif
 #endif
 #include <errno.h>
 #include <signal.h>
@@ -16,7 +18,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "julia.h"
+
 
 #ifdef __SSE__
 #include <xmmintrin.h>
