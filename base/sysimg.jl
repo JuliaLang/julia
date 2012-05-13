@@ -47,6 +47,7 @@ include("grisu.jl")
 include("printf.jl")
 
 # system & environment
+include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno_h.jl")
