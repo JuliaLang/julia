@@ -30,6 +30,11 @@ WGET_DASH_O = wget --no-check-certificate -O
 LIBS += unwind
 endif
 
+ifeq ($(OS), WINNT)
+WGET = wget --no-check-certificate
+WGET_DASH_O = wget --no-check-certificate -O
+endif
+
 ifeq ($(OS), Darwin)
 WGET = curl -kLO
 WGET_DASH_O = curl -kLo
@@ -48,7 +53,9 @@ LIBS += llvm
 endif
 
 ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
+ifneq ($(OS),WINNT)
 LIBS += lighttpd
+endif
 endif
 
 ifeq ($(OS),WINNT)
@@ -98,7 +105,7 @@ compile: $(addprefix compile-, $(LIBS))
 install: $(addprefix install-, $(LIBS))
 cleanall: $(addprefix clean-, $(LIBS))
 distclean: $(addprefix distclean-, $(LIBS))
-	rm -rf root
+	rm -rf $(USR)
 
 ## PATHS ##
 $(USR):
@@ -132,7 +139,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	$(JULIAHOME)/deps/install-name-$(OS).sh libLLVM-3.0.$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD) libLLVM-3.0.$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
@@ -201,7 +208,7 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
 	chmod +w $(USRLIB)/libreadline.*
-	$(JULIAHOME)/deps/install-name-$(OS).sh libreadline.$(SHLIB_EXT) $(USRLIB)/libreadline.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD) libreadline.$(SHLIB_EXT) $(USRLIB)/libreadline.$(SHLIB_EXT) 
 	touch $@
 
 clean-readline:
@@ -230,8 +237,7 @@ $(UV_OBJ_SOURCE): libuv/Makefile
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
-	cp libuv/include/uv.h $(USR)/include/uv.h 
-	cp -r libuv/include/uv-private $(USR)/include
+	cp -r libuv/include/* $(USR)/include
 install-uv: $(UV_OBJ_TARGET)
 
 clean-uv:
@@ -257,8 +263,8 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
 ifeq ($(OS),WINNT)
-	-rm root/lib/libpcre.dll
-	mv root/bin/libpcre-0.dll root/lib/libpcre.dll
+	-rm $(USRLIB)/libpcre.dll
+	mv $(USRBIN)/libpcre-1.dll $(USRLIB)/libpcre.dll
 endif
 	touch $@
 
@@ -334,7 +340,7 @@ install-rmath: $(RMATH_OBJ_TARGET)
 $(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	cd Rmath/src && \
 	$(MAKE) CC=$(CC) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD) libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	mkdir -p $(USRLIB)
 	cp $< $@
@@ -385,7 +391,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
 	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD) librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
 	cp $< $@
@@ -398,11 +404,7 @@ distclean-dsfmt: clean-dsfmt
 ## OpenBLAS ##
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-ifeq ($(OS),WINNT)
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.lib
-else
 OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
-endif
 else
 OPENBLAS_OBJ_SOURCE = 
 endif
@@ -420,7 +422,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
-	$(JULIAHOME)/deps/install-name-$(OS).sh libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD) libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
 clean-openblas:
 	$(MAKE) -C openblas-$(OPENBLAS_VER) clean
@@ -507,7 +509,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads
 endif
 
 fftw-$(FFTW_VER).tar.gz:
@@ -523,10 +525,10 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-single install
+	$(MAKE) -C fftw-$(FFTW_VER)-single LIBS="-lpthread" install
 ifeq ($(OS),WINNT)
-	-rm root/lib/libfftw3f.dll
-	mv root/bin/libfftw3f-3.dll root/lib/libfftw3f.dll
+	-rm $(USRLIB)/libfftw3f.dll
+	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
 endif
 	touch $@
 
@@ -540,10 +542,10 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-double install
+	$(MAKE) -C fftw-$(FFTW_VER)-double LIBS="-lpthread" install
 ifeq ($(OS),WINNT)
-	-rm root/lib/libfftw3.dll
-	mv root/bin/libfftw3-3.dll root/lib/libfftw3.dll
+	-rm $(USRLIB)/libfftw3.dll
+	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
 endif
 	touch $@
 
@@ -586,13 +588,13 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	rm -f *.a && \
 	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libamd.$(SHLIB_EXT) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD) libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh libcolamd.$(SHLIB_EXT) $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD) libcolamd.$(SHLIB_EXT) $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
+	$(INSTALL_NAME_CMD) libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) && \
-	$(JULIAHOME)/deps/install-name-$(OS).sh libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD) libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
 else
 $(SUITESPARSE_OBJ_TARGET):
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib
@@ -816,7 +818,7 @@ endif
 
 $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
 	mkdir -p $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
 	touch $@
 install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 
