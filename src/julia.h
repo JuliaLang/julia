@@ -968,6 +968,14 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
 DLLEXPORT int jl_cpu_cores(void);
 
+#define JL_STDOUT ios_stdout_tty
+#define JL_STDERR ios_stderr_tty
+#define JL_PRINTF ios_printf
+#define JL_PUTC	  ios_putc
+#define JL_PUTS	  ios_puts
+#define JL_WRITE  ios_write
+
+
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
     JL_SIGATOMIC_BEGIN();
