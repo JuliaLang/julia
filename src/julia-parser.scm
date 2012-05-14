@@ -7,15 +7,15 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (<- -- -->)
-     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
-     (: ..)
+     (> < >= <= == === != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
+     (:)
      (+ - |\|| $)
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
      (|::|)
-     (|.|)))
+     (|.| |..|)))
 
 (define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
@@ -98,7 +98,7 @@
 ;; characters that can be in an operator
 (define (opchar? c) (string.find op-chars c))
 ;; characters that can follow . in an operator
-(define (dot-opchar? c) (and (char? c) (string.find "*^/\\" c)))
+(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\" c)))
 (define (operator? c) (memq c operators))
 
 (define (skip-to-eol port)
@@ -598,6 +598,11 @@
 		   (if (eqv? (peek-token s) #\()
 		       (loop `(|.| ,ex ,(parse-atom s)))
 		       (loop `(|.| ,ex (quote ,(parse-atom s))))))
+		  ((|..|)
+		   (take-token s)
+		   (if (eqv? (peek-token s) #\()
+		       (loop `(call ,t ,ex ,(parse-atom s)))
+		       (loop `(call ,t ,ex (quote ,(parse-atom s))))))
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
