@@ -504,7 +504,9 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 arg_gen(x::String) = ByteString[x]
 
 function arg_gen(head)
-    if applicable(start,head)
+    if isa(head,Cmd)
+        return head.exec
+    elseif applicable(start,head)
         vals = ByteString[]
         for x in head
             push(vals,cstring(x))

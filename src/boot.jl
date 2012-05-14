@@ -120,6 +120,8 @@
 type Nothing; end
 const nothing = Nothing()
 
+const (===) = is
+
 abstract Number
 abstract Real     <: Number
 abstract Float    <: Real

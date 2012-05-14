@@ -15,6 +15,13 @@
 #include "julia.h"
 #include "builtin_proto.h"
 
+#define ENABLE_INFERENCE
+
+// debugging options
+//#define TRACE_INFERENCE
+//#define JL_TRACE
+//#define JL_GF_PROFILE
+
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
@@ -332,11 +339,22 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
 }
 
 extern jl_function_t *jl_typeinf_func;
-#define ENABLE_INFERENCE
-//#define TRACE_INFERENCE
+
+#if defined(JL_TRACE) || defined(TRACE_INFERENCE)
+static char *type_summary(jl_value_t *t)
+{
+    if (jl_is_tuple(t)) return "Tuple";
+    if (jl_is_some_tag_type(t))
+        return ((jl_tag_type_t*)t)->name->name->name;
+    JL_PRINTF(JL_STDERR, "unexpected argument type: ");
+    jl_show(jl_stderr_obj(), t);
+    JL_PRINTF(JL_STDERR, "\n");
+    assert(0);
+    return NULL;
+}
+#endif
 
 #ifdef TRACE_INFERENCE
-static char *type_summary(jl_value_t *t);
 static void print_sig(jl_tuple_t *type)
 {
     size_t i;
@@ -1086,21 +1104,6 @@ jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
     return jl_apply(jl_method_missing_func, a, na+1);
 }
 
-//#define JL_TRACE
-#if defined(JL_TRACE) || defined(TRACE_INFERENCE)
-static char *type_summary(jl_value_t *t)
-{
-    if (jl_is_tuple(t)) return "Tuple";
-    if (jl_is_some_tag_type(t))
-        return ((jl_tag_type_t*)t)->name->name->name;
-    JL_PRINTF(JL_STDERR, "unexpected argument type: ");
-    jl_show(jl_stderr_obj(), t);
-    JL_PRINTF(JL_STDERR, "\n");
-    assert(0);
-    return NULL;
-}
-#endif
-
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
@@ -1174,9 +1177,16 @@ DLLEXPORT void jl_compile_hint(jl_function_t *f, jl_tuple_t *types)
 static int trace_en = 0;
 static int error_en = 1;
 static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
-extern char *type_summary(jl_value_t *t);
+static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
+{
+    JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
+    for(size_t i=0; i < nargs; i++) {
+        if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
+        JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
+    }
+    JL_PRINTF(JL_STDOUT, ")\n");
+}
 #endif
-
 
 JL_CALLABLE(jl_apply_generic)
 {
@@ -1186,13 +1196,7 @@ JL_CALLABLE(jl_apply_generic)
 #endif
 #ifdef JL_TRACE
     if (trace_en) {
-        JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
-        size_t i;
-        for(i=0; i < nargs; i++) {
-            if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
-            JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
-        }
-        JL_PRINTF(JL_STDOUT, ")\n");
+        show_call(F, args, nargs);
     }
 #endif
     /*
@@ -1227,13 +1231,7 @@ JL_CALLABLE(jl_apply_generic)
     if (mfunc == jl_bottom_func) {
 #ifdef JL_TRACE
         if (error_en) {
-            JL_PRINTF(JL_STDOUT, "%s(", jl_gf_name(F)->name);
-            size_t i;
-            for(i=0; i < nargs; i++) {
-                if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
-                JL_PRINTF(JL_STDOUT, "%s", type_summary((jl_value_t*)jl_typeof(args[i])));
-            }
-            JL_PRINTF(JL_STDOUT, ")\n");
+            show_call(F, args, nargs);
         }
 #endif
         return jl_no_method_error((jl_function_t*)F, args, nargs);

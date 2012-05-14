@@ -25,6 +25,10 @@ DLLEXPORT char *julia_home = NULL;
 
 void jl_error(const char *str)
 {
+    if (jl_errorexception_type == NULL) {
+        JL_PRINTF(JL_STDERR, "%s", str);
+        jl_exit(1);
+    }
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH(&msg);
     jl_raise(jl_new_struct(jl_errorexception_type, msg));
@@ -37,15 +41,13 @@ void jl_errorf(const char *fmt, ...)
     va_start(args, fmt);
     int nc = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    jl_value_t *msg = jl_pchar_to_string(buf, nc);
-    JL_GC_PUSH(&msg);
-    if(jl_errorexception_type!=NULL) {
-        jl_raise(jl_new_struct(jl_errorexception_type, msg));
-    } else {
-        JL_PRINTF(JL_STDERR,"%s",&buf);
+    if (jl_errorexception_type == NULL) {
+        JL_PRINTF(JL_STDERR, "%s", &buf);
         jl_exit(1);
     }
-
+    jl_value_t *msg = jl_pchar_to_string(buf, nc);
+    JL_GC_PUSH(&msg);
+    jl_raise(jl_new_struct(jl_errorexception_type, msg));
 }
 
 void jl_too_few_args(const char *fname, int min)
@@ -494,13 +496,7 @@ char *jl_find_file_in_path(const char *fname)
     }
     if (fid == -1) {
         if (fpath != fname) free(fpath);
-        if (jl_errorexception_type == NULL) {
-            JL_PRINTF(JL_STDERR, "could not open file %s\n", fname);
-            jl_exit(1);
-        }
-        else {
-            jl_errorf("could not open file %s", fname);
-        }
+        jl_errorf("could not open file %s", fname);
     }
     close(fid);
 

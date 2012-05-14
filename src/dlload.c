@@ -102,7 +102,6 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
         if (!error) goto done;
     }
 
-fail:
     JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s", fname, handle->errmsg!=NULL?handle->errmsg:"");
     jl_errorf("could not load module %s", fname);
     free(handle);

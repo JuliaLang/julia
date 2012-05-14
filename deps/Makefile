@@ -13,7 +13,7 @@ SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
-GMP_VER=5.0.4
+GMP_VER=5.0.5
 GLPK_VER = 4.43
 
 ## high-level setup ##
@@ -221,10 +221,10 @@ endif
 
 ## LIBUV
 
-ifneq ($(OS), WINNT) 
-	UV_CFLAGS=
+ifeq ($(OS), WINNT) 
+UV_CFLAGS=
 else
-	UV_CFLAGS=CFLAGS="-DEV_SIGNAL_ENABLE=0"
+UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a
@@ -525,7 +525,7 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-single LIBS="-lpthread" install
+	$(MAKE) -C fftw-$(FFTW_VER)-single install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
@@ -542,7 +542,7 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
-	$(MAKE) -C fftw-$(FFTW_VER)-double LIBS="-lpthread" install
+	$(MAKE) -C fftw-$(FFTW_VER)-double install
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
@@ -737,7 +737,7 @@ compile-gmp: install-gmp
 install-gmp: $(GMP_OBJ_TARGET)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(WGET) ftp://ftp.gmplib.org/pub/gmp-5.0.4/$@
+	$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	tar jxf $<
 	touch $@
