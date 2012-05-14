@@ -46,7 +46,7 @@
 #define WIN32
 #endif
 
-#if defined(__APPLE__)
+#if !defined(WIN32)
 #define HAVE_VASPRINTF 1
 #endif
 
