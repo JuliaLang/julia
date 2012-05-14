@@ -221,10 +221,10 @@ endif
 
 ## LIBUV
 
-ifneq ($(OS), WINNT) 
-	UV_CFLAGS=
+ifeq ($(OS), WINNT) 
+UV_CFLAGS=
 else
-	UV_CFLAGS=CFLAGS="-DEV_SIGNAL_ENABLE=0"
+UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a

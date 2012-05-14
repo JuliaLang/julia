@@ -164,7 +164,7 @@ endif
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
-OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
