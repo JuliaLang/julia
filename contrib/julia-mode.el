@@ -95,11 +95,19 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
-; TODO: skip keywords and # characters inside strings
-
 (defun in-comment ()
-  (member ?# (string-to-list (buffer-substring (line-beginning-position)
-					       (point)))))
+  (save-excursion
+    (block incomment
+      (end-of-line)
+      (backward-char 1)
+      (let ((p0 (line-beginning-position)))
+	(while (>= (point) p0)
+	  (if (and (equal (char-after (point)) ?#)
+		   (evenp (strcount
+			   (buffer-substring p0 (point)) ?\")))
+	      (return-from incomment t))
+	  (backward-char 1))
+	nil))))
 
 (defun strcount (str chr)
   (let ((i 0)
@@ -122,17 +130,17 @@
 		(not (equal (char-before (point)) ?:))))
        (not (in-comment))
        (not (in-brackets))
-       (member (current-word) kw-list)))
+       (member (current-word t) kw-list)))
 
 ; get the position of the last open block
 (defun last-open-block-pos (min)
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
-      (backward-word 1)
+      (backward-sexp)
       (setq count
 	    (cond ((at-keyword julia-block-start-keywords)
 		   (+ count 1))
-		  ((and (equal (current-word) "end")
+		  ((and (equal (current-word t) "end")
 			(not (in-comment)) (not (in-brackets)))
 		   (- count 1))
 		  (t count))))
@@ -147,25 +155,6 @@
 	 (progn
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
-
-; return indent implied by a special form opening on the previous line, if any
-(defun form-indent ()
-  (forward-line -1)
-  (end-of-line)
-  (backward-sexp)
-  (if (at-keyword julia-block-other-keywords)
-      (+ julia-basic-offset (current-indentation))
-    (if (char-equal (char-after (point)) ?\()
-        (progn
-          (backward-word 1)
-          (let ((cur (current-indentation)))
-            (if (at-keyword julia-block-start-keywords)
-                (+ julia-basic-offset cur)
-              nil)))
-      nil)))
-
-;(defun far-back ()
-;  (max (point-min) (- (point) 2000)))
 
 (defmacro error2nil (body) `(condition-case nil ,body (error nil)))
 
@@ -182,14 +171,6 @@
     (if (or (= 0 (car p)) (null pos))
         nil
       (progn (goto-char pos) (+ 1 (current-column))))))
-;  (forward-line -1)
-;  (end-of-line)
-;  (let ((pos (condition-case nil
-;                (scan-lists (point) -1 1)
-;              (error nil))))
-;   (if pos
-;       (progn (goto-char pos) (+ 1 (current-column)))
-;     nil)))
 
 (defun julia-indent-line ()
   "Indent current line of julia code"
@@ -197,8 +178,7 @@
 ;  (save-excursion
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (error2nil (form-indent)))
-         (save-excursion (error2nil (paren-indent)))
+     (or (save-excursion (error2nil (paren-indent)))
          (save-excursion
            (let ((endtok (progn
                            (beginning-of-line)
