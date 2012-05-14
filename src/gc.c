@@ -23,10 +23,6 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
-/*
-#define MEMBEBUG
-#define MEMPROFILE*/
-
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
 #  define BVOFFS 3

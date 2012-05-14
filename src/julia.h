@@ -1,6 +1,5 @@
 #ifndef JULIA_H
 #define JULIA_H
-#define JL_TRACE
 
 #if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
     #define __WIN32__
