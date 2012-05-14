@@ -13,7 +13,7 @@ SUITESPARSE_VER = 3.7.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
-GMP_VER=5.0.4
+GMP_VER=5.0.5
 GLPK_VER = 4.43
 
 ## high-level setup ##
@@ -737,7 +737,7 @@ compile-gmp: install-gmp
 install-gmp: $(GMP_OBJ_TARGET)
 
 gmp-$(GMP_VER).tar.bz2:
-	$(WGET) ftp://ftp.gmplib.org/pub/gmp-5.0.4/$@
+	$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	tar jxf $<
 	touch $@
