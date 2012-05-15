@@ -40,52 +40,6 @@
 #define BVOFFS 2
 #endif
 
-/** vasprintf windows implelemntation by Michael Clark <michael@metaparadigm.com> as part of http://oss.metaparadigm.com/json-c/ lincensed under the MIT LICENSE */
-
-#if defined(__WIN32__) && !defined(WIN32)
-#define WIN32
-#endif
-
-#if !defined(WIN32)
-#define HAVE_VASPRINTF 1
-#endif
-
-#ifndef HAVE_VASPRINTF
-/* CAW: compliant version of vasprintf */
-static int vasprintf(char **buf, const char *fmt, va_list ap)
-{
-#ifndef WIN32
-        static char _T_emptybuffer = '\0';
-#endif /* !defined(WIN32) */
-        int chars;
-        char *b;
-
-        if(!buf) { return -1; }
-
-#ifdef WIN32
-        chars = _vscprintf(fmt, ap)+1;
-#else /* !defined(WIN32) */
-        /* CAW: RAWR! We have to hope to god here that vsnprintf doesn't overwrite
-           our buffer like on some 64bit sun systems.... but hey, its time to move on */
-        chars = vsnprintf(&_T_emptybuffer, 0, fmt, ap)+1;
-        if(chars < 0) { chars *= -1; } /* CAW: old glibc versions have this problem */
-#endif /* defined(WIN32) */
-
-        b = (char*)malloc(sizeof(char)*chars);
-        if(!b) { return -1; }
-
-        if((chars = vsprintf(b, fmt, ap)) < 0)
-        {
-                free(b);
-        } else {
-                *buf = b;
-        }
-
-        return chars;
-}
-#endif /* !HAVE_VASPRINTF */
-
-
 // allocate a buffer that can be used as a bigval_t in julia's GC
 void *julia_malloc(size_t n)
 {
@@ -1082,7 +1036,7 @@ char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-int vasprintf(char **strp, const char *fmt, va_list ap);
+extern int vasprintf(char **strp, const char *fmt, va_list ap);
 
 int ios_vprintf(ios_t *s, const char *format, va_list args)
 {
