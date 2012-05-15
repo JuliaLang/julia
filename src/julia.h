@@ -376,6 +376,9 @@ extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
+extern uv_loop_t *jl_event_loop;
+extern uv_loop_t *jl_io_loop;
+
 // some important symbols
 extern jl_sym_t *call_sym;
 extern jl_sym_t *call1_sym;
@@ -398,10 +401,7 @@ extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 
-//IO objects
-extern uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
-extern uv_stream_t *JL_STDOUT;
-extern uv_stream_t *JL_STDERR;
+
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -719,11 +719,11 @@ DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
-DLLEXPORT int JL_PUTC(unsigned char c, uv_stream_t *stream);
-DLLEXPORT int JL_WRITE(uv_stream_t *stream,char *str,size_t n);
+DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
+DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
-int JL_PRINTF(uv_stream_t *s, const char *format, ...);
-DLLEXPORT int JL_PUTS(char *str, uv_stream_t *stream);
+int jl_printf(uv_stream_t *s, const char *format, ...);
+DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
 DLLEXPORT uv_timer_t *jl_timer_init(uv_loop_t *loop);
@@ -808,9 +808,9 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
-DLLEXPORT uv_lib_t jl_load_dynamic_library(char *fname);
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 //event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
@@ -1012,10 +1012,10 @@ typedef struct _jl_task_t {
     jl_savestate_t state;
 } jl_task_t;
 
-union jl_stream {
+typedef union jl_stream {
     ios_t ios;
     uv_stream_t stream;
-};
+} JL_STREAM;
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;
@@ -1034,7 +1034,7 @@ DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 DLLEXPORT int jl_cpu_cores(void);
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
-DLLEXPORT intjl_printf(uv_stream_t *s, const char *format, ...);
+DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 #define JL_STDOUT jl_stdout_tty
 #define JL_STDERR jl_stderr_tty
@@ -1042,6 +1042,11 @@ DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
 #define JL_PUTC	  jl_putc
 #define JL_PUTS	  jl_puts
 #define JL_WRITE  jl_write
+
+//IO objects
+extern DLLEXPORT uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern DLLEXPORT uv_stream_t * JL_STDOUT;
+extern DLLEXPORT uv_stream_t * JL_STDERR;
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
@@ -1060,10 +1065,15 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
 DLLEXPORT void jl_pop_handler(int n);
 
+#if defined(__WIN32__)
+#define sigsetjmp(a,b) setjmp(a)
+#define siglongjmp(a,b) longjmp(a,b)
+#endif
+
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!setjmp(__handlr))                                              \
+    if (!sigsetjmp(__handlr,1))                                              \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
 #define JL_EH_POP() jl_eh_restore_state(&__ss)

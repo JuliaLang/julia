@@ -2,7 +2,7 @@
 ##             and REPL
 
 const _jl_color_normal = "\033[0m"
-@unix_only const _jl_repl = dlopen(C_NULL);
+@unix_only const _jl_repl = C_NULL
 @windows_only const _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 
 function _jl_answer_color()
@@ -85,6 +85,9 @@ function _jl_eval_user_input(ast::ANY, show_value)
             end
             break
         catch e
+            if iserr
+                println("SYSTEM ERROR: show(lasterr) caused an error")
+            end
             iserr, lasterr = true, e
         end
     end

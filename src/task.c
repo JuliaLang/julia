@@ -17,9 +17,6 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
-#include <setjmp.h>
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -532,7 +529,7 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh&&eh->state.eh_ctx!=0) {
+    if (jl_current_task == eh && eh->state.eh_ctx!=0) {
         siglongjmp(*eh->state.eh_ctx, 1);
     }
     else {

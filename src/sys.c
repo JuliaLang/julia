@@ -11,7 +11,6 @@
 #include <sys/sysctl.h>
 #include <sys/wait.h>
 #endif
-#endif
 #include <errno.h>
 #include <signal.h>
 #include <libgen.h>

@@ -167,6 +167,7 @@ RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -175,6 +176,7 @@ OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expma
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLD_FLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), Darwin)
@@ -182,7 +184,8 @@ SHLIB_EXT = dylib
 RPATH = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
-NO_WHOLE_ARCHIVE = 
+NO_WHOLE_ARCHIVE =
+JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)

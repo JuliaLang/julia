@@ -23,7 +23,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 69)
+ccall(:jl_load_progress_setmax, Void, (Int,), 73)
 
 include("base.jl")
 
@@ -131,7 +131,6 @@ include("linalg_lapack.jl")
 # signal processing
 include("signal.jl")
 include("signal_fftw.jl")
-
 
 # prime method cache with some things we know we'll need right after startup
 length(1:2:3)

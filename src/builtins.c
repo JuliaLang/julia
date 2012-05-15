@@ -445,6 +445,7 @@ DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
+	//ios_printf(ios_stdout, "\ninclude(%s)\n", fname);
 	if (jl_load_progress_max > 0) {
 		jl_load_progress_i++;
         JL_PRINTF(JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);

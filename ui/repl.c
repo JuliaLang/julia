@@ -271,7 +271,7 @@ int true_main(int argc, char *argv[])
             ios_printf(ios_stdout, "\n\n");
             iserr = 0;
         }
-    uv_run(jl_io_loop);
+    uv_run(jl_global_event_loop());
     }
     JL_CATCH {
         iserr = 1;
