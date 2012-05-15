@@ -1,9 +1,10 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+@unix_only _jl_repl = _jl_lib
+@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
+
 const _jl_color_normal = "\033[0m"
-@unix_only const _jl_repl = C_NULL
-@windows_only const _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 
 function _jl_answer_color()
     c = get(ENV, "JL_ANSWER_COLOR", "")

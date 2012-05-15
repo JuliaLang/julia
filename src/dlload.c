@@ -52,17 +52,16 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
 #if defined(__WIN32__)
 		if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
           (LPCSTR)(&jl_load_dynamic_library),
-          &handle))
+          handle->handle))
 			    jl_errorf("could not load base module", fname);
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
 #endif
-		if (handle->handle == NULL) goto fail;
         goto done;
     }
     else if (modname[0] == '/') {
-        uv_dlopen(modname,handle);
-        if (handle != NULL) goto done;
+        error = uv_dlopen(modname,handle);
+        if (!error) goto done;
     }
     char *cwd;
 
@@ -102,9 +101,7 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
         error = uv_dlopen(path, handle);
         if (!error) goto done;
     }
-    //assert(handle == NULL);
 
-fail:
     JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", fname, error, uv_dlerror(handle));
     jl_errorf("could not load module %s", fname);
     free(handle);
@@ -114,38 +111,18 @@ done:
 }
 
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol) {
-	void *ptr;
-	int  error=uv_dlsym(handle, symbol, &ptr);
+    void *ptr;
+    int  error=uv_dlsym(handle, symbol, &ptr);
     if(error) ptr=NULL;
     return ptr;
 }
 
-void *jl_dlsym(uv_lib_t *handle, char *symbol) {
-    void *fptr;
-    if (!handle) {
-#ifdef __WIN32__
-	fptr = jl_dlsym_e(jl_dl_handle, symbol);
-	if(!fptr) {
-		fptr = jl_dlsym_e(jl_kernel32_handle, symbol);
-		if(!fptr) {
-			fptr = jl_dlsym_e(jl_ntdll_handle, symbol);
-			if(!fptr) {
-				fptr = jl_dlsym_e(jl_crtdll_handle, symbol);
-				if(!fptr) {
-					fptr = jl_dlsym(jl_winsock_handle, symbol);
-				}
-			}
-		}
-	}
-#else
-	fptr = jl_dlsym(jl_dl_handle, symbol);
-#endif
-	} else {
-    	int error = uv_dlsym(handle, symbol, &fptr);
-    	if (error != 0) {
-    	    JL_PRINTF(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
-    	}
-	}
-    return fptr;
+void *jl_dlsym(uv_lib_t *handle, char *symbol)
+{
+    void *ptr;
+    int  error = uv_dlsym(handle, symbol, &ptr);
+    if (error != 0) {
+        JL_PRINTF(JL_STDERR, "symbol could not be found %s (%d): %s", symbol, error, uv_dlerror(handle));
+    }
+    return ptr;
 }
-
