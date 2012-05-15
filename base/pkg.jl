@@ -18,23 +18,21 @@ pkg_init()            = pkg_init(PKG_DEFAULT_DIR)
 
 # checkpoint a repo, recording submodule commits as parents
 
-function pkg_checkpoint(dir::String, msg::String)
+function pkg_commit(dir::String, msg::String)
     @chdir dir begin
         tree = chomp(readall(`git write-tree`))
-        commit_tree = `git commit-tree $tree -p HEAD`
         for line in each_line(`git ls-tree $tree`)
             m = match(r"^160000 commit ([0-9a-f]{40})\t(.*)$", line)
             if m != nothing
                 sha1, name = m.captures
                 run(`git fetch-pack $name HEAD`)
-                commit_tree = `$commit_tree -p $sha1`
+                run(`git tag -f submodules/$name/$(sha1[1:10]) $sha1`)
             end
         end
-        commit = chomp(readall((`echo $msg` | commit_tree)))
-        run(`git reset $commit`)
+        run(`git commit -m $msg`)
     end
 end
-pkg_checkpoint(msg::String) = pkg_checkpoint(PKG_DEFAULT_DIR, msg)
+pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
 
 # install packages by name and, optionally, git url
 
@@ -46,10 +44,11 @@ function pkg_install(dir::String, urls::Associative)
             url = urls[pkg]
             head = "master"
             run(`git fetch $url +$head:packages/$pkg`)
-            run(`git submodule add --reference . -b $head $url $pkg`)
+            run(`git clone --reference . -b $head $url $pkg`)
+            run(`git submodule add $url $pkg`)
             # TODO: try setting submodule push URL
         end
-        pkg_checkpoint(dir, "[jul] install "*join(names, ", "))
+        pkg_commit(dir, "[jul] install "*join(names, ", "))
     end
 end
 function pkg_install(dir::String, names::AbstractVector)
@@ -75,7 +74,7 @@ function pkg_remove(dir::String, names::AbstractVector)
             run(`git config --file .gitmodules --remove-section submodule.$pkg`)
             run(`git add .gitmodules`)
         end
-        pkg_checkpoint(dir, "[jul] remove "*join(names, ", "))
+        pkg_commit(dir, "[jul] remove "*join(names, ", "))
     end
 end
 pkg_remove(names::AbstractVector) = pkg_remove(PKG_DEFAULT_DIR, names)
