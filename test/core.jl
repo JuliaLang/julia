@@ -209,6 +209,9 @@ glotest()
 @assert glob_x == 88
 @assert loc_x == 10
 
+# syntax
+@assert (true ? 1 : false ? 2 : 3) == 1
+
 # dispatch
 begin
     local foo, bar, baz
@@ -228,9 +231,6 @@ begin
     @assert baz(Rational) == 1
     @assert baz(Rational{Int}) == 2
 end
-
-# syntax
-@assert (true ? 1 : false ? 2 : 3) == 1
 
 begin
     local mytype
@@ -267,4 +267,16 @@ begin
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
     @assert is(g(a),a)
+end
+
+# allow typevar in Union to match as long as the arguments contain
+# sufficient information
+# issue #814
+begin
+    local MatOrNothing, my_func, M
+    typealias MatOrNothing{T} Union(AbstractMatrix{T}, Vector{None})
+    my_func{T<:Real}(A::MatOrNothing{T}, B::MatOrNothing{T},
+                     C::MatOrNothing{T}) = 0
+    M = [ 2. 1. ; 1. 1. ]
+    @assert my_func([], M, M) == 0
 end

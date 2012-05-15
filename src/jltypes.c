@@ -280,10 +280,11 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < jl_tuple_len(t); i++) {
+        int eq_l = eqc->n, co_l = penv->n;
         jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                            penv, eqc, var);
         if (ti == (jl_value_t*)jl_bottom_type) {
-            int eq1 = eqc->n, co1 = penv->n;
+            //int eq1 = eqc->n, co1 = penv->n;
             eqc->n = eq0; penv->n = co0;
             ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                    penv, eqc, var);
@@ -294,8 +295,8 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
             }
             else {
                 // union element doesn't overlap no matter what.
-                // so keep constraints.
-                eqc->n = eq1; penv->n = co1;
+                // so remove only its constraints.
+                eqc->n = eq_l; penv->n = co_l;
             }
         }
         jl_tupleset(t, i, ti);
