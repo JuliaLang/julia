@@ -25,8 +25,9 @@ function pkg_commit(dir::String, msg::String)
             m = match(r"^160000 commit ([0-9a-f]{40})\t(.*)$", line)
             if m != nothing
                 sha1, name = m.captures
-                run(`git fetch-pack $name HEAD`)
+                run(`git fetch-pack -q $name HEAD`)
                 run(`git tag -f submodules/$name/$(sha1[1:10]) $sha1`)
+                run(`git --git-dir=$name/.git gc -q`)
             end
         end
         run(`git commit -m $msg`)
@@ -42,10 +43,7 @@ function pkg_install(dir::String, urls::Associative)
     @chdir dir begin
         for pkg in names
             url = urls[pkg]
-            head = "master"
-            run(`git fetch $url +$head:packages/$pkg`)
-            run(`git clone --reference . -b $head $url $pkg`)
-            run(`git submodule add $url $pkg`)
+            run(`git submodule add --reference . $url $pkg`)
             # TODO: try setting submodule push URL
         end
         pkg_commit(dir, "[jul] install "*join(names, ", "))
@@ -70,11 +68,11 @@ function pkg_remove(dir::String, names::AbstractVector)
     @chdir dir begin
         for pkg in names
             run(`git rm --cached $pkg`)
-            run(`rm -rf $pkg`)
             run(`git config --file .gitmodules --remove-section submodule.$pkg`)
-            run(`git add .gitmodules`)
         end
+        run(`git add .gitmodules`)
         pkg_commit(dir, "[jul] remove "*join(names, ", "))
+        run(`rm -rf $names`)
     end
 end
 pkg_remove(names::AbstractVector) = pkg_remove(PKG_DEFAULT_DIR, names)
@@ -85,8 +83,32 @@ pkg_remove(names::String...)      = pkg_remove([names...])
 function pkg_checkout(dir::String, rev::String)
     @chdir dir begin
         run(`git checkout -q $rev`)
-        run(`git submodule update`)
+        run(`git submodule init`)
+        run(`git submodule update --reference . --recursive`)
         run(`git ls-files --other` | `xargs rm -rf`)
     end
 end
 pkg_checkout(rev::String) = pkg_checkout(PKG_DEFAULT_DIR, rev)
+
+# push & pull package repos to/from remotes
+
+pkg_push(dir::String) = @chdir dir run(`git push --all`)
+pkg_push() = pkg_push(PKG_DEFAULT_DIR)
+
+function pkg_pull(dir::String)
+    @chdir dir begin
+        run(`git pull`)
+        run(`git fetch --tags`)
+        if !success(`git diff --quiet`)
+            run(`git submodule update --init --reference . --recursive`)
+        end
+    end
+end
+pkg_pull() = pkg_pull(PKG_DEFAULT_DIR)
+
+# clone a new package repo from a URL
+
+function pkg_clone(dir::String, url::String)
+    run(`git clone $url $dir`)
+    @chdir dir run(`git submodule update --init --reference . --recursive`)
+end

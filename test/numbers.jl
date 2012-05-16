@@ -829,9 +829,9 @@ for x = 2^53-10:2^53+10
     @assert int64(round(y)) == i
     @assert int64(floor(y)) == i
     @assert int64(ceil(y))  == i
-    @assert iround(y)     == i
-    @assert ifloor(y)     == i
-    @assert iceil(y)      == i
+    @assert iround(y)       == i
+    @assert ifloor(y)       == i
+    @assert iceil(y)        == i
 end
 
 for x = 2^24-10:2^24+10
