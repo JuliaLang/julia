@@ -22,11 +22,11 @@ r = chol(asym)
 (l,u,p) = lu(a)
 @assert norm(l*u - a[p,:]) < Eps
 @assert all(p == invPerm(invPerm(p)))  # make sure invPerm works
-@assert norm(l[invPerm(p),:]*u - a) < 1e-8
+@assert norm(l[invPerm(p),:]*u - a) < Eps
 
 (q,r,p) = qr(a)
 @assert norm(q*r - a[:,p]) < Eps
-@assert norm(q*r[:,invPerm(p)] - a) < 1e-8
+@assert norm(q*r[:,invPerm(p)] - a) < Eps
 
 (d,v) = eig(asym)
 @assert norm(asym*v[:,1]-d[1]*v[:,1]) < Eps
