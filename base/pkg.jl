@@ -2,6 +2,7 @@
 
 const PKG_DEFAULT_DIR = string(ENV["HOME"], "/.julia")
 const PKG_DEFAULT_META = "git://github.com/StefanKarpinski/jul-METADATA.git"
+const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # create a new empty packge repository
 
@@ -28,6 +29,7 @@ function pkg_commit(dir::String, msg::String)
                 run(`git fetch-pack -q $name HEAD`)
                 run(`git tag -f submodules/$name/$(sha1[1:10]) $sha1`)
                 run(`git --git-dir=$name/.git gc -q`)
+                # TODO: recursively save sub-sub-module commits
             end
         end
         run(`git commit -m $msg`)
@@ -37,6 +39,8 @@ pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
 
 # install packages by name and, optionally, git url
 
+pkg_gitmodules(args::Cmd) = run(`git config --file .gitmodules $args`)
+
 function pkg_install(dir::String, urls::Associative)
     names = sort!(keys(urls))
     if isempty(names) return end
@@ -44,7 +48,6 @@ function pkg_install(dir::String, urls::Associative)
         for pkg in names
             url = urls[pkg]
             run(`git submodule add --reference . $url $pkg`)
-            # TODO: try setting submodule push URL
         end
         pkg_commit(dir, "[jul] install "*join(names, ", "))
     end
@@ -68,7 +71,7 @@ function pkg_remove(dir::String, names::AbstractVector)
     @chdir dir begin
         for pkg in names
             run(`git rm --cached $pkg`)
-            run(`git config --file .gitmodules --remove-section submodule.$pkg`)
+            pkg_gitmodules(`--remove-section submodule.$pkg`)
         end
         run(`git add .gitmodules`)
         pkg_commit(dir, "[jul] remove "*join(names, ", "))
@@ -112,3 +115,4 @@ function pkg_clone(dir::String, url::String)
     run(`git clone $url $dir`)
     @chdir dir run(`git submodule update --init --reference . --recursive`)
 end
+pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
