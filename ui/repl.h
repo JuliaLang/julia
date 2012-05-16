@@ -34,5 +34,6 @@ DLLEXPORT extern void jl_enable_color();
 DLLEXPORT extern void jl_stdin_callback();
 DLLEXPORT extern void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen);
 extern void parseAndExecute(char *str);
+DLLEXPORT extern void jl_clear_input(void);
 
 #endif // JL_REPL_H

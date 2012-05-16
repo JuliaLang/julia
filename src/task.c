@@ -420,6 +420,18 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
+//DLLEXPORT void debug_print_function_info(size_t ip) {
+//    char *func_name;
+//    int line_num;
+//    const char *file_name;
+//    getFunctionInfo(&func_name, &line_num, &file_name, ip);
+//    if (func_name != NULL) {
+//        JL_PRINTF(JL_STDERR, "%% %s @ %s : %d\n", func_name, file_name, line_num);
+//	} else {
+//        JL_PRINTF(JL_STDERR, "ip unknown\n", func_name, file_name, line_num);
+//	}
+//}
+
 #if defined(__APPLE__)
 // stacktrace using execinfo
 static jl_value_t *build_backtrace(void)

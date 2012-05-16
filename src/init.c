@@ -91,9 +91,12 @@ void win_raise_sigint() {
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {	
 	int sig;
-	switch(sig){
-	//	case ...: usig = ...; break;
-		default: sig = wsig;
+	//windows signals use different numbers from unix
+	switch(wsig){
+		case CTRL_C_EVENT: sig = SIGINT; break;
+		//case CTRL_BREAK_EVENT: sig = SIGTERM; break;
+		// etc.
+		default: sig = SIGTERM; break;
 	}
     if (jl_defer_signal) {
         jl_signal_pending = sig;

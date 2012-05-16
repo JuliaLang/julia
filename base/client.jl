@@ -123,7 +123,7 @@ function run_repl()
             if isa(e, InterruptException)
                 println("^C")
                 show(e)
-                ccall(dlsym(_jl_repl,:rl_clear_input), Void, ());
+                ccall(dlsym(_jl_repl,:jl_clear_input), Void, ());
                 cont = true
             else
                 iserr = true
