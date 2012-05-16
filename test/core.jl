@@ -44,6 +44,8 @@ let T = typevar(:T,true)
     @assert isequal(tintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                     (Number, Array{Number,1}))
     @assert !is(None, tintersect((Array{T}, Array{T}), (Array, Array{Any})))
+    @assert is(None, tintersect((Vector{Vector{Int}},Vector{Vector}),
+                                (Vector{Vector{T}},Vector{Vector{T}})))
 end
 let N = typevar(:N,true)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -60,6 +62,11 @@ end
 @assert is(None, tintersect(Type{Function},BitsKind))
 @assert is(Type{Int32}, tintersect(Type{Int32},BitsKind))
 @assert !subtype(Type,TypeVar)
+@assert !is(None, tintersect(BitsKind, Type))
+@assert !is(None, tintersect(BitsKind, Type{Int}))
+@assert is(None, tintersect(BitsKind, Type{Integer}))
+@assert !is(None, tintersect(BitsKind, Type{typevar(:T,Int)}))
+@assert !is(None, tintersect(BitsKind, Type{typevar(:T,Integer)}))
 
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
@@ -279,4 +286,17 @@ begin
                      C::MatOrNothing{T}) = 0
     M = [ 2. 1. ; 1. 1. ]
     @assert my_func([], M, M) == 0
+end
+
+begin
+    local my_func, a, c
+    my_func{T}(P::Vector{T}, Q::Vector{T}) = 0
+    my_func{T}(x::T, P::Vector{T}) = 1
+    # todo: this gives an ambiguity warning
+    #my_func{T}(P::Vector{T}, x::T) = 2
+    a = Int[3]
+    c = Vector[a]
+
+    @assert my_func(c,c)==0
+    @assert_fails my_func(a,c)
 end

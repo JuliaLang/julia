@@ -260,6 +260,7 @@ end
 
 ## Conversions ##
 
+convert{T,S,n}(::Type{Array{T}}, B::BitArray{S,n}) = convert(Array{T,n},B)
 function convert{T,S,n}(::Type{Array{T,n}}, B::BitArray{S,n})
     A = Array(T, size(B))
     for i = 1:length(A)
@@ -268,6 +269,7 @@ function convert{T,S,n}(::Type{Array{T,n}}, B::BitArray{S,n})
     return A
 end
 
+convert{T,S,n}(::Type{BitArray{S}}, A::AbstractArray{T,n}) = convert(BitArray{S,n},A)
 function convert{T,S,n}(::Type{BitArray{S,n}}, A::AbstractArray{T,n})
     B = BitArray(S, size(A))
     for i = 1:length(B)
