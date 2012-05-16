@@ -17,6 +17,7 @@ include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
+_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 _jl_libfdm = dlopen("libfdm")
 
 include("float.jl")
