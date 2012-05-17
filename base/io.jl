@@ -236,7 +236,18 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 
-readline(s::IOStream) = readuntil(s, uint8('\n'))
+function readall(filename::String)
+    io = open(filename)
+    str = try readall(io)
+    catch err
+        close(io)
+        throw(err)
+    end
+    close(io)
+    return str
+end
+
+readline(s::IOStream) = readuntil(s, '\n')
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 

@@ -156,7 +156,9 @@ logspace(start::Real, stop::Real) = logspace(start, stop, 50)
 
 ## Conversions ##
 
+convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
 ## Indexing: ref ##

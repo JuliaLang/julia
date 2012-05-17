@@ -150,7 +150,7 @@ csvread(io)          = dlmread(io, ',')
 csvread(io, T::Type) = dlmread(io, ',', T)
 
 # todo: keyword argument for # of digits to print
-function dlmwrite(io, a, dlm::Char)
+function dlmwrite(io, a::Matrix, dlm::Char)
     nr, nc = size(a)
     for i = 1:nr
         for j = 1:nc
@@ -169,7 +169,9 @@ function dlmwrite(io, a, dlm::Char)
     nothing
 end
 
-function dlmwrite(fname::String, a, dlm::Char)
+dlmwrite(io, a::Vector, dlm::Char) = dlmwrite(io, reshape(a,length(a),1), dlm)
+
+function dlmwrite(fname::String, a::Matrix, dlm::Char)
     io = open(fname, "w")
     dlmwrite(io, a, dlm)
     close(io)

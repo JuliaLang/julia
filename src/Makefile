@@ -7,9 +7,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 SRCS = \
 	jltypes gf ast builtins module codegen interpreter \
 	alloc dlload sys init task array dump wrapper
-ifeq ($(OS),WINNT)
-	SRCS+=asprintf
-endif
+
 FLAGS = \
 	-D_GNU_SOURCE \
     -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
