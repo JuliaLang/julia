@@ -1,16 +1,5 @@
 # blas, lapack
 Eps = sqrt(eps())
-isPerm{T <: Integer}(p::Vector{T}) = all(int(1:length(p)) == int(sort(p)))
-
-function invPerm{T <: Integer}(p::Vector{T})
-    if !isPerm(p)
-        error("p must be a permutation of 1:length(p)")
-    end
-    lp = length(p)
-    ip = Array(Int, size(p))
-    for i=1:lp; ip[p[i]] = i; end
-    ip
-end
 
 n = 10
 a = rand(n,n)
@@ -21,12 +10,11 @@ r = chol(asym)
 
 (l,u,p) = lu(a)
 @assert norm(l*u - a[p,:]) < Eps
-@assert all(p == invPerm(invPerm(p)))  # make sure invPerm works
-@assert norm(l[invPerm(p),:]*u - a) < Eps
+@assert norm(l[invperm(p),:]*u - a) < Eps
 
 (q,r,p) = qr(a)
 @assert norm(q*r - a[:,p]) < Eps
-@assert norm(q*r[:,invPerm(p)] - a) < Eps
+@assert norm(q*r[:,invperm(p)] - a) < Eps
 
 (d,v) = eig(asym)
 @assert norm(asym*v[:,1]-d[1]*v[:,1]) < Eps
