@@ -116,8 +116,11 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
+isperm(a::AbstractVector) = all(int(1:length(a)) == int(sort(a)))
+
 # inverse permutation
 function invperm(a::AbstractVector)
+    if !isperm(a) error("a must be a permutation") end
     b = similar(a)
     for i=1:length(a)
         b[a[i]] = i
