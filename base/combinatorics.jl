@@ -120,10 +120,16 @@ isperm(a::AbstractVector) = all(int(1:length(a)) == int(sort(a)))
 
 # inverse permutation
 function invperm(a::AbstractVector)
-    if !isperm(a) error("a must be a permutation") end
-    b = similar(a)
-    for i=1:length(a)
-        b[a[i]] = i
+    b = zero(a) # similar vector of zeros
+    try
+        for i = 1:length(a)
+            b[a[i]] = i
+        end
+        for x in b if x == 0 error() end end
+    catch
+        # TODO: should catch more selectively, but at
+        # the moment, this is just an ExceptionError.
+        error("invperm: input must be a permutation")
     end
     return b
 end
