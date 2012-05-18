@@ -19,7 +19,7 @@ pkg_init()            = pkg_init(PKG_DEFAULT_DIR)
 
 # checkpoint a repo, recording submodule commits as parents
 
-function pkg_commit(dir::String, msg::String)
+function pkg_checkpoint(dir::String)
     @chdir dir begin
         tree = chomp(readall(`git write-tree`))
         for line in each_line(`git ls-tree $tree`)
@@ -32,14 +32,37 @@ function pkg_commit(dir::String, msg::String)
                 # TODO: recursively save sub-sub-module commits
             end
         end
-        run(`git commit -m $msg`)
     end
+end
+pkg_checkpoint() = pkg_checkpoint(PKG_DEFAULT_DIR)
+
+# commit the current state of the repo with the given message
+
+function pkg_commit(dir::String, msg::String)
+    pkg_checkpoint(dir, msg)
+    @chdir dir run(`git commit -m $msg`)
 end
 pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
 
-# install packages by name and, optionally, git url
+# some utility functions for working with git repos
 
-pkg_gitmodules(args::Cmd) = run(`git config --file .gitmodules $args`)
+# NOTE: these assume being run with cwd in the relevant git repo
+
+git_dir() = chomp(readall(`git rev-parse --git-dir`))
+git_head() = chomp(readall(string(git_dir(),"/HEAD")))
+git_modules(args::Cmd) = run(`git config --file .gitmodules $args`)
+
+function git_each_submodule(f::Function, recursive::Bool)
+    cmd = `git submodule foreach --quiet`
+    if recursive cmd = `$cmd --recursive` end
+    cmd = `$cmd 'echo "$name\t$path\t$sha1"'`
+    for line in each_line(cmd)
+        f(match(r"^(.*)\t(.*)\t([0-9a-f]{40})$", line).captures...)
+    end
+end
+git_each_submodule(f::Function) = git_each_submodule(f,false)
+
+# install packages by name and, optionally, git url
 
 function pkg_install(dir::String, urls::Associative)
     names = sort!(keys(urls))
@@ -71,7 +94,7 @@ function pkg_remove(dir::String, names::AbstractVector)
     @chdir dir begin
         for pkg in names
             run(`git rm --cached $pkg`)
-            pkg_gitmodules(`--remove-section submodule.$pkg`)
+            git_modules(`--remove-section submodule.$pkg`)
         end
         run(`git add .gitmodules`)
         pkg_commit(dir, "[jul] remove "*join(names, ", "))
@@ -95,13 +118,18 @@ pkg_checkout(rev::String) = pkg_checkout(PKG_DEFAULT_DIR, rev)
 
 # push & pull package repos to/from remotes
 
-pkg_push(dir::String) = @chdir dir run(`git push --all`)
+function pkg_push(dir::String)
+    @chdir dir begin
+        run(`git push --tags`)
+        run(`git push`)
+    end
+end
 pkg_push() = pkg_push(PKG_DEFAULT_DIR)
 
 function pkg_pull(dir::String)
     @chdir dir begin
-        run(`git pull`)
         run(`git fetch --tags`)
+        run(`git pull`)
         if !success(`git diff --quiet`)
             run(`git submodule update --init --reference . --recursive`)
         end
