@@ -1136,7 +1136,7 @@ function _format_ticklabel( x, range )
         a, b = _magform( range )
         return "%.*f" % (abs(b),x)
     end
-    return showcompact_to_string(x)
+    return sprint(showcompact, x)
 end
 
 _ticklist_linear( lo, hi, sep ) = _ticklist_linear( lo, hi, sep, 0. )

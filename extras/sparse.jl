@@ -34,7 +34,7 @@ function show(S::SparseMatrixCSC)
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
             println("\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
-                    showcompact_to_string(S.nzval[k]))
+                    sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
             println("\t."); println("\t."); println("\t.");
         end
