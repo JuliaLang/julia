@@ -13,7 +13,6 @@
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
-     ;; juxtaposition goes here
      (^ |.^|)
      (|::|)
      (|.| |..|)))
@@ -502,17 +501,7 @@
 		      (loop (list 'call t ex (parse-rational s))
 			    (and (eq? t '*) t)))))))))
 
-(define (parse-rational s) (parse-LtoR s parse-juxtaposition (prec-ops 10)))
-
-(define (parse-juxtaposition s)
-  (let loop ((ex (list (parse-unary s))))
-    (let ((t (peek-token s)))
-      (if (and (juxtapose? (car ex) t)
-	       (not (ts:space? s)))
-	  (loop (cons (parse-unary s) ex))
-	  (if (length= ex 1)
-	      (car ex)
-	      `(call * ,@(reverse ex)))))))
+(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -552,7 +541,13 @@
 			  (list* 'call op (cdr arg))
 			  (list  'call op arg)))))))
 	  (else
-	   (parse-factor s)))))
+	   (let ((ex (parse-factor s)))
+	     (let ((next (peek-token s)))
+	       ;; numeric literal juxtaposition is a unary operator
+	       (if (and (juxtapose? ex next)
+			(not (ts:space? s)))
+		   `(call * ,ex ,(parse-unary s))
+		   ex)))))))
 
 ; handle ^, .^, and postfix ...
 (define (parse-factor-h s down ops)
