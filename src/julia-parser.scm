@@ -13,17 +13,22 @@
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
+     ;; juxtaposition goes here
      (^ |.^|)
      (|::|)
      (|.| |..|)))
 
 (define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
+; disable range colon for parsing ternary conditional operator
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
+; treat newline like ordinary whitespace instead of as a potential separator
+(define whitespace-newline #f)
+
 (define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
@@ -36,11 +41,20 @@
 		  ,@body))
 
 (define-macro (with-space-sensitive . body)
-  `(with-bindings ((space-sensitive #t))
+  `(with-bindings ((space-sensitive #t)
+		   (whitespace-newline #f))
 		  ,@body))
 
 (define-macro (with-end-symbol . body)
   `(with-bindings ((end-symbol #t))
+		  ,@body))
+
+(define-macro (with-whitespace-newline . body)
+  `(with-bindings ((whitespace-newline #t))
+		  ,@body))
+
+(define-macro (without-whitespace-newline . body)
+  `(with-bindings ((whitespace-newline #f))
 		  ,@body))
 
 (define assignment-ops (prec-ops 0))
@@ -208,7 +222,7 @@
   #t)
 
 (define (next-token port s)
-  (aset! s 2 (eq? (skip-ws port #f) #t))
+  (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c))  (read-char port))
 
@@ -476,15 +490,9 @@
     (let loop ((ex       (parse-rational s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
-	(cond ((and (juxtapose? ex t)
-		    (not (ts:space? s)))
-	       (if (eq? chain-op '*)
-		   (loop (append ex (list (parse-rational s)))
-			 chain-op)
-		   (loop (list 'call '* ex (parse-rational s))
-			 '*)))
-	      ((not (memq t ops))
+	(cond ((not (memq t ops))
 	       ex)
+	      ;; TODO: maybe parse 2x*y as (call * 2 x y)
 	      ((eq? t chain-op)
 	       (begin (take-token s)
 		      (loop (append ex (list (parse-rational s)))
@@ -493,6 +501,18 @@
 	       (begin (take-token s)
 		      (loop (list 'call t ex (parse-rational s))
 			    (and (eq? t '*) t)))))))))
+
+(define (parse-rational s) (parse-LtoR s parse-juxtaposition (prec-ops 10)))
+
+(define (parse-juxtaposition s)
+  (let loop ((ex (list (parse-unary s))))
+    (let ((t (peek-token s)))
+      (if (and (juxtapose? (car ex) t)
+	       (not (ts:space? s)))
+	  (loop (cons (parse-unary s) ex))
+	  (if (length= ex 1)
+	      (car ex)
+	      `(call * ,@(reverse ex)))))))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -546,8 +566,6 @@
 	    (else
 	     (list 'call
 		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
-
-(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
 
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
@@ -635,6 +653,7 @@
 			 current-filename ":" current-line
 			 " requires end")))))
   (with-normal-ops
+  (without-whitespace-newline
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
@@ -761,7 +780,7 @@
 	   ;; place (callingconv) at end of arglist
 	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 	   `(ccall ,.al))))
-    (else (error "unhandled reserved word")))))
+    (else (error "unhandled reserved word"))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)
@@ -807,7 +826,9 @@
 ; . expressions after a ; are enclosed in (parameters ...)
 ; . an expression followed by ... becomes (... x)
 (define (parse-arglist s closer)
-  (with-normal-ops (parse-arglist- s closer)))
+  (with-normal-ops
+   (with-whitespace-newline
+    (parse-arglist- s closer))))
 (define (parse-arglist- s closer)
   (let loop ((lst '()))
     (let ((t (require-token s)))
@@ -1055,6 +1076,7 @@
 	  ((eqv? t #\( )
 	   (take-token s)
 	   (with-normal-ops
+	   (with-whitespace-newline
 	   (if (eqv? (require-token s) #\) )
 	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
@@ -1088,7 +1110,7 @@
 		       ((memv t '(#\] #\}))
 			(error (string "unexpected " t " in tuple")))
 		       (else
-			(error "missing separator in tuple")))))))
+			(error "missing separator in tuple"))))))))
 
 	  ;; cell expression
 	  ((eqv? t #\{ )
