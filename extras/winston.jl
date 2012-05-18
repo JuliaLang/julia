@@ -193,16 +193,16 @@ end
 
 function python_min(x, y)
     # in python, min(number,None) = None
-    if x == nothing || y == nothing
+    if isequal(x,nothing) || isequal(y,nothing)
         return nothing
     end
     min(x,y)
 end
 
 function pt_min( a, b )
-    if a == nothing
+    if isequal(a,nothing)
         return b
-    elseif b == nothing
+    elseif isequal(b,nothing)
         return a
     else
         return python_min(a[1],b[1]), python_min(a[2],b[2])
@@ -211,18 +211,18 @@ end
 
 function python_max(x, y)
     # in python, max(number,None) = number
-    if x == nothing
+    if isequal(x,nothing)
         return y
-    elseif y == nothing
+    elseif isequal(y,nothing)
         return x
     end
     max(x,y)
 end
 
 function pt_max( a, b )
-    if a == nothing
+    if isequal(a,nothing)
         return b
-    elseif b == nothing
+    elseif isequal(b,nothing)
         return a
     end
     return python_max(a[1],b[1]), python_max(a[2],b[2])
@@ -1361,7 +1361,7 @@ function _range( self::HalfAxisX, context )
 end
 
 function _make_grid( self::HalfAxisX, context, ticks )
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return
     end
     objs = {}
@@ -1459,7 +1459,7 @@ function _range( self::HalfAxisY, context )
 end
 
 function _make_grid( self::HalfAxisY, context, ticks )
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return
     end
     objs = {}
@@ -1482,7 +1482,7 @@ function _ticks( self::HalfAxis, context )
     logidx = _log(self, context) ? 2 : 1
     r = _range(self, context)
     ticks = getattr(self, "ticks")
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return self.func_ticks_default[logidx](r)
     elseif typeof(ticks) <: Integer
         return self.func_ticks_num[logidx](r, ticks)
@@ -1495,7 +1495,7 @@ function _subticks( self::HalfAxis, context, ticks )
     logidx = _log( self, context ) ? 2 : 1
     r = _range( self, context )
     subticks = getattr(self, "subticks")
-    if subticks == nothing
+    if isequal(subticks,nothing)
         return self.func_subticks_default[logidx]( r, ticks )
     elseif typeof(subticks) <: Integer 
         return self.func_subticks_num[logidx]( r, ticks, subticks )
@@ -1506,7 +1506,7 @@ end
 
 function _ticklabels( self::HalfAxis, context, ticks )
     ticklabels = getattr(self, "ticklabels")
-    if ticklabels != nothing
+    if !isequal(ticklabels,nothing)
         return ticklabels
     end
     r = max(ticks) - min(ticks)
@@ -1514,7 +1514,7 @@ function _ticklabels( self::HalfAxis, context, ticks )
 end
 
 function _make_ticklabels( self::HalfAxis, context, pos, labels )
-    if labels == nothing || length(labels) <= 0
+    if isequal(labels,nothing) || length(labels) <= 0
         return
     end
 
@@ -1526,7 +1526,8 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         offset = offset + _size_relative(
             getattr(self, "ticks_size"), context.dev_bbox )
     end
-    labelpos = [ _pos(self, context, pos[i], dir*offset) for i=1:length(labels) ]
+    # XXX:why did square brackets stop working?
+    labelpos = { _pos(self, context, pos[i], dir*offset) for i=1:length(labels) }
 
     halign, valign = _align(self)
 
@@ -1548,13 +1549,14 @@ function _make_spine( self::HalfAxis, context )
 end
 
 function _make_ticks( self::HalfAxis, context, ticks, size, style )
-    if ticks == nothing || length(ticks) <= 0
+    if isequal(ticks,nothing) || length(ticks) <= 0
         return
     end
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
     ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
-    tickpos = [ _pos(self, context, tick) for tick in ticks ]
+    # XXX:why did square brackets stop working?
+    tickpos = { _pos(self, context, tick) for tick in ticks }
 
     CombObject(tickpos, ticklen, style)
 end
