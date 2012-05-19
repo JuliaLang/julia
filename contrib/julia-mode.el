@@ -95,19 +95,21 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
+(defun find-comment-open (p0)
+  (if (< (point) p0)
+      nil
+    (if (and (equal (char-after (point)) ?#)
+	     (evenp (strcount
+		     (buffer-substring p0 (point)) ?\")))
+	t
+      (progn (backward-char 1)
+	     (find-comment-open p0)))))
+
 (defun in-comment ()
   (save-excursion
-    (block incomment
-      (end-of-line)
-      (backward-char 1)
-      (let ((p0 (line-beginning-position)))
-	(while (>= (point) p0)
-	  (if (and (equal (char-after (point)) ?#)
-		   (evenp (strcount
-			   (buffer-substring p0 (point)) ?\")))
-	      (return-from incomment t))
-	  (backward-char 1))
-	nil))))
+    (end-of-line)
+    (backward-char 1)
+    (find-comment-open (line-beginning-position))))
 
 (defun strcount (str chr)
   (let ((i 0)
