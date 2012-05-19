@@ -143,6 +143,65 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
    end
 end
 
+# SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA,BETA
+#       INTEGER INCX,INCY,KL,KU,LDA,M,N
+#       CHARACTER TRANS
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
+                      (:zgbmv_,:Complex128), (:cgbmv_,:Complex64))
+   @eval begin
+       function _jl_blas_gbmv(trans, m::Integer, n::Integer, kl::Integer, ku::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             x::StridedVector{$elty}, incx::Integer,
+                             beta::($elty), y::StridedVector{$elty}, incy::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &trans, &m, &n, &kl, &ku,
+                 &alpha, A, &lda,
+                 x, &incx,
+                 &beta, y, &incy)
+       end
+
+   end
+end
+
+#       SUBROUTINE DSBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA,BETA
+#       INTEGER INCX,INCY,K,LDA,N
+#       CHARACTER UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
+                      (:zsbmv_,:Complex128), (:csbmv_,:Complex64))
+   @eval begin
+       function _jl_blas_sbmv(uplo, n::Integer, k::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             x::StridedVector{$elty}, incx::Integer,
+                             beta::($elty), y::StridedVector{$elty}, incy::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &uplo, &n, &k,
+                 &alpha, A, &lda,
+                 x, &incx,
+                 &beta, y, &incy)
+       end
+
+   end
+end
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
