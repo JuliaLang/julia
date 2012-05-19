@@ -79,14 +79,14 @@ function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax
             end
         end
     end
-    x_safe = [pairs[i][1] | i=1:length(pairs)]
-    y_safe = [pairs[i][2] | i=1:length(pairs)]
+    x_safe = [pairs[i][1] for i=1:length(pairs)]
+    y_safe = [pairs[i][2] for i=1:length(pairs)]
 
     # send the message to the browser
     __write_message(__Message(__MSG_OUTPUT_PLOT, {
         plottype,
-        strcat("[", join([string(i) | i=x_safe], ","), "]"),
-        strcat("[", join([string(i) | i=y_safe], ","), "]"),
+        strcat("[", join([string(i) for i=x_safe], ","), "]"),
+        strcat("[", join([string(i) for i=y_safe], ","), "]"),
         string(float64(xmin)),
         string(float64(xmax)),
         string(float64(ymin)),
@@ -166,7 +166,7 @@ function plot(y::Array, plottype)
     end
 
     # determine the window
-    x_safe = [i-1 | i=1:length(y_safe)]
+    x_safe = [i-1 for i=1:length(y_safe)]
     xmin = 0
     xmax = length(y)-1
     ymin = __safe_min(y_safe)
@@ -211,8 +211,8 @@ function plot(f::Function, xmin::Number, xmax::Number, plottype::String)
     if xmin >= xmax return error("xmax must be greater than xmin") end
 
     # make the range
-    x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
-    y = [try float64(f(i)) catch 0 end | i=x]
+    x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) for i=1:__PLOT_POINTS]
+    y = [try float64(f(i)) catch 0 end for i=x]
 
     # make the plot
     plot(x, y, plottype)
@@ -233,8 +233,8 @@ function plot(f::Function, xmin::Number, xmax::Number, ymin::Number, ymax::Numbe
     if ymin >= ymax return error("ymax must be greater than ymin") end
 
     # make the range
-    x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) | i=1:__PLOT_POINTS]
-    y = [try float64(f(i)) catch 0 end | i=x]
+    x = [xmin+float64(i-1)*(xmax-xmin)/(__PLOT_POINTS-1) for i=1:__PLOT_POINTS]
+    y = [try float64(f(i)) catch 0 end for i=x]
 
     # make the plot
     plot(x, y, xmin, xmax, ymin, ymax, plottype)
