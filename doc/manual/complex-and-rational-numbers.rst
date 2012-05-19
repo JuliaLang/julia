@@ -11,6 +11,8 @@ Promotions are defined so that operations on any combination of
 predefined numeric types, whether primitive or composite, behave as
 expected.
 
+.. _man-complex-numbers:
+
 Complex Numbers
 ---------------
 
@@ -18,8 +20,8 @@ The global constant ``im`` is bound to the complex number *i*,
 representing one of the square roots of -1. It was deemed harmful to
 co-opt the name ``i`` for a global constant, since it is such a popular
 index variable name. Since Julia allows numeric literals to be
-`juxtaposed with identifiers as
-coefficients <../integers-and-floating-point-numbers#Numeric+Literal+Coefficients>`_,
+:ref:`juxtaposed with identifiers as
+coefficients <man-numeric-literal-coefficients>`,
 this binding suffices to provide convenient syntax for complex numbers,
 similar to the traditional mathematical notation:
 
@@ -198,6 +200,8 @@ complex values directly, however, gives more intuitive results:
 On the other hand, it can be argued that these values do not represent
 meaningful complex numbers, and are thus not appreciably different from
 the results gotten when multiplying explicitly by ``im``.
+
+.. _man-rational-numbers:
 
 Rational Numbers
 ----------------

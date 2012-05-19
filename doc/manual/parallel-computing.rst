@@ -83,7 +83,7 @@ but is more efficient.
     julia> remote_call_fetch(2, ref, r, 1, 1)
     0.10824216411304866
 
-Remember that ``ref(r,1,1)`` is `equivalent <../arrays#Indexing>`_ to
+Remember that ``ref(r,1,1)`` is :ref:`equivalent <man-array-indexing>` to
 ``r[1,1]``, so this call fetches the first element of the remote
 reference ``r``.
 
@@ -110,7 +110,7 @@ case, ``@spawn`` is smart enough to perform the computation on the
 processor that owns ``r``, so the ``fetch`` will be a no-op.
 
 (It is worth noting that ``@spawn`` is not built-in but defined in Julia
-as a `macro <../metaprogramming#Macros>`_. It is possible to define your
+as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
 One important point is that your code must be available on any processor
@@ -547,7 +547,7 @@ Scheduling
 ----------
 
 Julia's parallel programming platform uses
-`Tasks <../control-flow#Tasks+%28aka+Coroutines%29>`_ to switch among
+:ref:`man-tasks` to switch among
 multiple computations. Whenever code performs a communication operation
 like ``fetch`` or ``wait``, the current task is suspended and a
 scheduler picks another task to run. A task is restarted when the event

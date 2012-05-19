@@ -164,11 +164,9 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
 
 The values returned by ``typemin`` and ``typemax`` are always of the
 given argument type. The above expression uses several features we have
-yet to introduce, including `for
-loops <../control-flow#Repeated+Evaluation:+Loops>`_,
-:ref:`man-strings`, and `string
-interpolation <../strings#Interpolation>`_, but should be easy enough to
-understand for people with some programming experience.
+yet to introduce, including :ref:`for loops <man-loops>`,
+:ref:`man-strings`, and :ref:`man-string-interpolation`,
+but should be easy enough to understand for people with some programming experience.
 
 Floating-Point Numbers
 ----------------------
@@ -220,8 +218,8 @@ correspond to a point on the real number line:
    values (including itself).
 
 For further discussion of how these non-finite floating-point values are
-ordered with respect to each other and other floats, see `Numeric
-Comparison <../mathematical-operations#Numeric+Comparisons>`_. By the
+ordered with respect to each other and other floats, see
+:ref:`man-numeric-comparisons`. By the
 `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_, these
 floating-point values are the results of certain arithmetic operations:
 
@@ -341,6 +339,8 @@ Kahan <http://en.wikipedia.org/wiki/William_Kahan>`_, commonly known as
 the "Father of Floating-Point". Of particular interest may be `An
 Interview with the Old Man of
 Floating-Point <http://www.cs.berkeley.edu/~wkahan/ieee754status/754story.html>`_.
+
+.. _man-numeric-literal-coefficients:
 
 Numeric Literal Coefficients
 ----------------------------

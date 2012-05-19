@@ -57,6 +57,8 @@ There are a few noteworthy high-level features about Julia's strings:
    strings from external sources can be supported easily and
    efficiently.
 
+.. _man-characters:
+
 Characters
 ----------
 
@@ -368,6 +370,8 @@ for the time being. For further discussion of UTF-8 encoding issues, see
 the section below on `byte array literals <#Byte+Array+Literals>`_,
 which goes into some greater detail.
 
+.. _man-string-interpolation:
+
 Interpolation
 -------------
 
@@ -523,6 +527,8 @@ Some other useful functions include:
    and including any at index ``i``.
 -  ``chr2ind(str,j)`` gives the index at which the ``j``\ th character
    in ``str`` occurs.
+
+.. _man-non-standard-string-literals:
 
 Non-Standard String Literals
 ----------------------------

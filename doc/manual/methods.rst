@@ -81,8 +81,7 @@ type and count.
 
 When defining a function, one can optionally constrain the types of
 parameters it is applicable to, using the ``::`` type-assertion
-operator, introduced in the section on `composite
-types <../types#Composite+Types>`_:
+operator, introduced in the section on :ref:`man-composite-types`:
 
 ::
 
@@ -313,6 +312,8 @@ To suppress Julia's warning, the disambiguating method must be defined
 first, since otherwise the ambiguity exists, if transiently, until the
 more specific method is defined.
 
+.. _man-parametric-methods:
+
 Parametric Methods
 ------------------
 
@@ -390,7 +391,7 @@ return value:
     Float64
 
 Just as you can put subtype constraints on type parameters in type
-declarations (see `Parametric Types <../types#Parametric+Types>`_), you
+declarations (see :ref:`man-parametric-types`), you
 can also constrain type parameters of methods:
 
 ::

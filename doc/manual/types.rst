@@ -157,6 +157,8 @@ The "declaration" behavior only occurs in specific contexts:
 In value contexts, such as ``f(x::Int8)``, the ``::`` is a type
 assertion again and not a declaration.
 
+.. _man-abstract-types:
+
 Abstract Types
 --------------
 
@@ -305,6 +307,8 @@ objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
 dictates behavior, it would be impossible to make ``Bool`` behave any
 differently than ``Int8`` or ``Uint8``.
+
+.. _man-composite-types:
 
 Composite Types
 ---------------
@@ -489,6 +493,8 @@ Note that the empty tuple ``()`` is its own type:
 
     julia> typeof(())
     ()
+
+.. _man-parametric-types:
 
 Parametric Types
 ----------------
@@ -829,6 +835,8 @@ type ``T`` is restricted to being a subtype of ``Integer``, and a ratio
 of integers represents a value on the real number line, so any
 ``Rational`` is an instance of the ``Real`` abstraction.
 
+.. _man-singleton-types:
+
 Singleton Types
 ^^^^^^^^^^^^^^^
 
@@ -878,8 +886,8 @@ Any object that is not a type is not an instance of ``Type``:
     julia> isa("foo",Type)
     false
 
-Until we discuss `parametric methods <../methods#Parametric+Methods>`_
-and `conversions <../conversion-and-promotion#Conversion>`_, it is
+Until we discuss :ref:`man-parametric-methods`
+and :ref:`conversions <man-conversion>`, it is
 difficult to explain the utility of the singleton type construct, but in
 short, it allows one to specialize function behavior on specific type
 *values*, rather just kinds of types, which is all that would be

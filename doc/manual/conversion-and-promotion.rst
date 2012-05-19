@@ -58,6 +58,8 @@ participate in this promotion system by defining methods for conversion
 to and from other types, and providing a handful of promotion rules
 defining what types they should promote to when mixed with other types.
 
+.. _man-conversion:
+
 Conversion
 ----------
 
@@ -114,8 +116,8 @@ number to a boolean is simply this:
 
     convert(::Type{Bool}, x::Number) = (x!=0)
 
-The type of the first argument of this method is a `singleton
-type <../types#Singleton+Types>`_, ``Type{Bool}``, the only instance of
+The type of the first argument of this method is a :ref:`singleton
+type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
 argument is the type value ``Bool``. When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
@@ -319,7 +321,7 @@ range extends below 0. In the latter case, the result type is ``Int32``
 since ``Int32`` is large enough to contain all possible Unicode code
 points, and numeric operations on characters always result in plain old
 integers unless explicitly cast back to characters (see
-`Strings <../strings#Characters>`_). Also note that one does not need to
+:ref:`man-characters`). Also note that one does not need to
 define both ``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by the
 way ``promote_rule`` is used in the promotion process.

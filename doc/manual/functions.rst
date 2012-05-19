@@ -45,8 +45,8 @@ equivalent to the following compact "assignment form":
     f(x,y) = x + y
 
 In the assignment form, the body of the function must be a single
-expression, although it can be a compound expression (see `Compound
-Expressions <../control-flow#Compound+Expressions>`_). Short, simple
+expression, although it can be a compound expression (see
+:ref:`man-compound-expressions`). Short, simple
 function definitions are common in Julia. The short function syntax is
 accordingly quite idiomatic, considerably reducing both typing and
 visual noise.
@@ -80,6 +80,8 @@ function:
 
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
+
+.. _man-return-keyword:
 
 The "return" Keyword
 --------------------
@@ -152,8 +154,7 @@ Operators Are Functions
 In Julia, most operators are just functions with support for special
 syntax. The exceptions are operators with special evaluation semantics
 like ``&&`` and ``||``. These operators cannot be functions since
-short-circuit evaluation (see `Short-Circuit
-Evaluation <../control-flow#Short-Circuit+Evaluation>`_) requires that
+short-circuit evaluation (see :ref:`man-short-circuit-evaluation`) requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
 just as you would any other function:
@@ -180,6 +181,8 @@ This also means that you can assign and pass around operators such as
 
 Under the name ``f``, the function does not support infix notation,
 however.
+
+.. _man-anonymous-functions:
 
 Anonymous Functions
 -------------------

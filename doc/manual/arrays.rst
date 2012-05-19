@@ -123,6 +123,8 @@ NOTE: In the above example, ``x`` is declared as constant because type
 inference in Julia does not work as well on non-constant global
 variables.
 
+.. _man-array-indexing:
+
 Indexing
 --------
 

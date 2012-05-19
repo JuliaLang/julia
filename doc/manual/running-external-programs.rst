@@ -42,6 +42,8 @@ is the return value of the command, indicating that it succeeded. (These
 are colored differently by the interactive session if your terminal
 supports color.)
 
+.. _man-command-interpolation:
+
 Interpolation
 -------------
 

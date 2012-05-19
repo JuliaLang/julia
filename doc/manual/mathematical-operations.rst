@@ -102,6 +102,9 @@ are:
 
     +=  -=  *=  /=  &=  |=  $=  >>>=  >>=  <<=
 
+
+.. _man-numeric-comparisons:
+
 Numeric Comparisons
 -------------------
 
@@ -227,8 +230,7 @@ would be if the expression were written as
 chained comparison is undefined. It is strongly recommended not to use
 expressions with side effects (such as printing) in chained comparisons.
 If side effects are required, the short-circuit ``&&`` operator should
-be used explicitly (see `Control
-Flow <../control-flow#Short-Circuit+Evaluation>`_).
+be used explicitly (see :ref:`man-short-circuit-evaluation`).
 
 Mathematical Functions
 ----------------------

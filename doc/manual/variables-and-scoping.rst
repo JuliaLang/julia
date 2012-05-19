@@ -34,7 +34,7 @@ introducing such blocks are:
 -  ``type`` blocks.
 
 Notably missing from this list are
-```begin`` <../control-flow#Compound+Expressions>`_ blocks, which do
+:ref:```begin`` <man-compound-expressions>` blocks, which do
 *not* introduce a new scope block.
 
 Certain constructs introduce new variables into the current innermost

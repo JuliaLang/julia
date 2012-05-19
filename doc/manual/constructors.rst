@@ -5,7 +5,7 @@
 **************
 
 Constructors are functions that create new objects — specifically,
-instances of `composite types <../types#Composite+Types>`_. In Julia,
+instances of :ref:`man-composite-types`. In Julia,
 type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
 This much was already mentioned briefly when composite types were
@@ -312,7 +312,7 @@ Parametric Constructors
 -----------------------
 
 Parametric types add a few wrinkles to the constructor story. Recall
-from `Parametric Types <../types#Parametric+Types>`_ that, by default,
+from :ref:`man-parametric-types` that, by default,
 instances of parametric composite types can be constructed either with
 explicitly given type parameters or with type parameters implied by the
 types of the arguments given to the constructor. Here are some examples:
@@ -470,8 +470,7 @@ Perhaps the best way to tie all these pieces together is to present a
 real world example of a parametric composite type and its constructor
 methods. To that end, here is beginning of
 ```rational.jl`` <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
-which implements Julia's `rational
-numbers <../complex-and-rational-numbers#Rational+Numbers>`_:
+which implements Julia's :ref:`man-rational-numbers`:
 
 ::
 
@@ -538,7 +537,7 @@ Following the outer constructor definitions, we have a number of methods
 for the ``//`` operator, which provides a syntax for writing rationals.
 Before these definitions, ``//`` is a completely undefined operator with
 only syntax and no meaning. Afterwards, it behaves just as described in
-`Rational Numbers <../complex-and-rational-numbers#Rational+Numbers>`_
+:ref:`man-rational-numbers`
 — its entire behavior is defined in these few lines. The first and most
 basic definition just makes ``a//b`` construct a ``Rational`` by
 applying the ``Rational`` constructor to ``a`` and ``b`` when they are

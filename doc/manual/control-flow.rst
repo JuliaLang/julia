@@ -6,17 +6,15 @@
 
 Julia provides a variety of control flow constructs:
 
--  `Compound expressions <#Compound+Expressions>`_: ``begin`` and
-   ``(;)``.
--  `Conditional evaluation <#Conditional+Evaluation>`_:
+-  :ref:`man-compound-expressions`: ``begin`` and ``(;)``.
+-  :ref:`man-conditional-evaluation`:
    ``if``-``elseif``-``else`` and ``?:`` (ternary operator).
--  `Short-circuit evaluation <#Short-Circuit+Evaluation>`_: ``&&``,
-   ``||`` and chained comparisons.
--  `Repeated evaluation (loops) <#Repeated+Evaluation:+Loops>`_:
-   ``while`` and ``for``.
--  `Exception handling <#Exception+Handling>`_: ``try``-``catch``,
-   ``error`` and ``throw``.
--  `Tasks (coroutines) <#Tasks+%28aka+Coroutines%29>`_: ``yieldto``.
+-  :ref:`man-short-circuit-evaluation`:
+   ``&&``, ``||`` and chained comparisons.
+-  :ref:`man-loops`: ``while`` and ``for``.
+-  :ref:`man-exception-handling`:
+   ``try``-``catch``, ``error`` and ``throw``.
+-  :ref:`man-tasks`: ``yieldto``.
 
 The first five control flow mechanisms are standard to high-level
 programming languages. Tasks are not so standard: they provide non-local
@@ -25,6 +23,8 @@ computations. This is a powerful construct: both exception handling and
 cooperative multitasking are implemented in Julia using tasks. Everyday
 programming requires no direct usage of tasks, but certain problems can
 be solved much more easily by using tasks.
+
+.. _man-compound-expressions:
 
 Compound Expressions
 --------------------
@@ -68,6 +68,8 @@ or that ``(;)`` chains be single-line:
             y = 2;
             x + y)
     3
+
+.. _man-conditional-evaluation:
 
 Conditional Evaluation
 ----------------------
@@ -204,6 +206,8 @@ expression evaluates to ``true`` or ``false``, respectively:
     no
     "no"
 
+.. _man-short-circuit-evaluation:
+
 Short-Circuit Evaluation
 ------------------------
 
@@ -296,6 +300,8 @@ values (``true`` or ``false``). Using a non-boolean value is an error:
 
     julia> 1 && 2
     type error: lambda: in if, expected Bool, got Int64
+
+.. _man-loops:
 
 Repeated Evaluation: Loops
 --------------------------
@@ -462,6 +468,8 @@ forming the cartesian product of its iterables:
     (2,3)
     (2,4)
 
+.. _man-exception-handling:
+
 Exception Handling
 ------------------
 
@@ -617,6 +625,8 @@ the ability to unwind the stack and pass a value to a higher level is
 desirable. These are the circumstances in which ``throw`` should be used
 rather than ``error``.
 
+.. _man-tasks:
+
 Tasks (aka Coroutines)
 ----------------------
 
@@ -708,8 +718,8 @@ case the loop variable takes on all the produced values:
 
 Note that the ``Task()`` constructor expects a 0-argument function. A
 common pattern is for the producer to be parameterized, in which case a
-partial function application is needed to create a 0-argument `anonymous
-function <../functions#Anonymous+Functions>`_. This can be done either
+partial function application is needed to create a 0-argument :ref:`anonymous
+function <man-anonymous-functions>`. This can be done either
 directly or by use of a convenience macro:
 
 ::

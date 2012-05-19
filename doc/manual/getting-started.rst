@@ -119,8 +119,8 @@ differences that may trip up Julia users accustomed to MATLAB®:
    construct a full vector, use ``linspace``, or "concatenate" the range
    by enclosing it in brackets, ``[a:b]``.
 -  Functions return values using the ``return`` keyword, instead of by
-   listing their names in the function definition (see `The "return"
-   Keyword <../functions#The+return+Keyword>`_ for details).
+   listing their names in the function definition (see
+   :ref:`man-return-keyword` for details).
 -  A file may contain any number of functions, and all definitions will
    be externally visible when the file is loaded.
 -  Reductions such as ``sum``, ``prod``, and ``max`` are performed over
