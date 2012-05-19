@@ -5,7 +5,7 @@ include("../extras/linalg_suitesparse.jl")
 
 # check matrix operations
 se33 = speye(3)
-@assert se33 * se33 == se33
+@assert isequal(se33 * se33, se33)
 
 # check mixed sparse-dense matrix operations
 do33 = ones(3)

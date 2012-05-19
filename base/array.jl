@@ -705,32 +705,32 @@ end
 
 for (f,isf) in ((:(==),:isequal), (:(<), :isless))
     @eval begin
-        function ($f)(A::Array, B::Array)
+        function ($f)(A::AbstractArray, B::AbstractArray)
             F = Array(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(B)
                 F[i] = ($isf)(A[i], B[i])
             end
             return F
         end
-        ($f)(A, B::Array) =
+        ($f)(A, B::AbstractArray) =
             reshape([ ($isf)(A, B[i]) for i=1:length(B)], size(B))
-        ($f)(A::Array, B) =
+        ($f)(A::AbstractArray, B) =
             reshape([ ($isf)(A[i], B) for i=1:length(A)], size(A))
     end
 end
 
 for (f,isf) in ((:(!=),:isequal), (:(<=), :isless))
     @eval begin
-        function ($f)(A::Array, B::Array)
+        function ($f)(A::AbstractArray, B::AbstractArray)
             F = Array(Bool, promote_shape(size(A),size(B)))
             for i = 1:numel(B)
                 F[i] = !($isf)(B[i], A[i])
             end
             return F
         end
-        ($f)(A, B::Array) =
+        ($f)(A, B::AbstractArray) =
             reshape([ !($isf)(B[i], A) for i=1:length(B)], size(B))
-        ($f)(A::Array, B) =
+        ($f)(A::AbstractArray, B) =
             reshape([ !($isf)(B, A[i]) for i=1:length(A)], size(A))
     end
 end

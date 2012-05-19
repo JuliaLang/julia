@@ -856,13 +856,13 @@ for f = (:ceil,   :floor,  :trunc,  :round,
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
 
-for f in (:(==), :!=, :<, :<=)
+for (f,t) in ((:(==),:Number), (:!=,:Number), (:<,:Real), (:<=,:Real))
     @eval begin
-        function ($f)(A::Number, B::SubOrDArray)
+        function ($f)(A::($t), B::SubOrDArray)
             darray((T,lsz,da)->($f)(A, localize(B, da)),
                    Bool, size(B), distdim(B), procs(B))
         end
-        function ($f)(A::SubOrDArray, B::Number)
+        function ($f)(A::SubOrDArray, B::($t))
             darray((T,lsz,da)->($f)(localize(A, da), B),
                    Bool, size(A), distdim(A), procs(A))
         end
