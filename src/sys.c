@@ -190,7 +190,7 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 
 DLLEXPORT int jl_cpu_cores(void) {
-#if defined(__APPLE__)
+#if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
     int nm[2] = {CTL_HW, HW_AVAILCPU};
@@ -201,13 +201,12 @@ DLLEXPORT int jl_cpu_cores(void) {
         if (count < 1) { count = 1; }
     }
     return count;
-#elif defined(__linux)
+#elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
-#else 
-	// test for Windows!
-	//Try to get WIN7 API method
+#elif defined(__WIN32__)
+    //Try to get WIN7 API method
     GAPC gapc = (GAPC) jl_dlsym(
-		jl_kernel32_handle,
+        jl_kernel32_handle,
         "GetActiveProcessorCount"
     );
 
@@ -218,6 +217,8 @@ DLLEXPORT int jl_cpu_cores(void) {
         GetSystemInfo(&info);
         return info.dwNumberOfProcessors;
     }
+#else
+    return 1;
 #endif
 }
 
