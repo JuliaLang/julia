@@ -42,7 +42,7 @@ function write{T}(to::IOString, a::Array{T})
         if nshort > 0
             grow(to.data, nshort)
         end
-        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a[:])
+        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a, (numel(a),))
         to.ptr += nb
     else
         error("Write to IOString only supports bits types or arrays of bits types; got $T.")
