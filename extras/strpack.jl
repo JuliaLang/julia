@@ -372,7 +372,13 @@ unpack(str::String, ctyp) = unpack(IOString(str), ctyp)
 ## Alignment strategies and utility functions ##
 
 # default alignment for bitstype T is nextpow2(sizeof(::Type{T}))
-type_alignment_default(typ) = nextpow2(sizeof(typ))
+# TODO: figure out why this can't be done with multiple dispatch
+function type_alignment_default(typ)
+    if typ <: AbstractArray
+        typ = eltype(typ)
+    end
+    nextpow2(sizeof(typ))
+end
 
 # default strategy
 align_default = DataAlign(type_alignment_default, x -> max(map(type_alignment_default, x)))
@@ -442,14 +448,6 @@ function alignment_for(strategy::DataAlign, s::Struct)
     else
         strategy.aggregate(map(x->x[1], s.types))
     end
-end
-
-function show_alignments(s::Struct, strategy::DataAlign)
-    aligns, finalalign = alignments(s, strategy)
-    for ((typ,), align) in zip(s.types, aligns)
-        println("$typ: $align")
-    end
-    println("Struct alignment: $finalalign")
 end
 
 function pad_next(offset, typ, strategy::DataAlign)
