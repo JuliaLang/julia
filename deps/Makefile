@@ -135,7 +135,7 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
 	touch $@
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=gcc CXX=g++ && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
@@ -485,7 +485,7 @@ $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
 	mkdir -p $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
-	make install F77=$(FC) MPIF77=$(FC)
+	$(MAKE) install F77=$(FC) MPIF77=$(FC)
 	touch $@
 
 clean-arpack:

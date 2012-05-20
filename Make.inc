@@ -37,9 +37,12 @@ JFFLAGS = -O2 $(fPIC)
 USEGCC = 1
 USECLANG = 0
 
+GCC = gcc
+GPLUSPLUS = g++
+
 ifeq ($(USEGCC),1)
-CC = gcc
-CXX = g++
+CC = $(GCC)
+CXX = $(GPLUSPLUS)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
