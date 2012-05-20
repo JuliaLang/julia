@@ -39,6 +39,14 @@ function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(numel(a)*sizeof(S),sizeof(T)))
     ccall(:jl_reshape_array, Array{T,1}, (Any, Any, Any), Array{T,1}, a, (nel,))
 end
+
+function reinterpret{T,S}(::Type{T}, a::Array{S})
+    if sizeof(S) != sizeof(T)
+        error("reinterpret: result shape not specified")
+    end
+    reinterpret(T, a, size(a))
+end
+
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     nel = div(numel(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
@@ -46,7 +54,7 @@ function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     end
     ccall(:jl_reshape_array, Array{T,N}, (Any, Any, Any), Array{T,N}, a, dims)
 end
-reinterpret(t,x) = reinterpret(t,[x])[1]
+reinterpret(t::Type,x) = reinterpret(t,[x])[1]
 
 function reshape{T,N}(a::Array{T}, dims::NTuple{N,Int})
     if prod(dims) != numel(a)
