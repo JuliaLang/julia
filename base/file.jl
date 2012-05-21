@@ -11,7 +11,7 @@ end
 
 function cd(dir::String)
     if ccall(:chdir, Int32, (Ptr{Uint8},), dir) == -1
-        throw(SystemError("cd($dir)"))
+        throw(SystemError("cd"))
     end
     cwd()
 end
