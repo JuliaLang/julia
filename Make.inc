@@ -174,10 +174,10 @@ endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lutil -lm  $(LIBUNWIND)
-RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
