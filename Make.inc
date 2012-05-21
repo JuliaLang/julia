@@ -158,6 +158,9 @@ endif
 
 # OS specific stuff
 
+RPATH = 
+RPATH_ORIGIN = 
+
 ifeq ($(OS), WINNT)
 SHELL_EXT = bat
 else
@@ -167,6 +170,7 @@ endif
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -175,6 +179,7 @@ endif
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib' -Wl,-z,origin
+RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
@@ -182,7 +187,6 @@ endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-RPATH = 
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE = 
@@ -190,7 +194,6 @@ endif
 
 ifeq ($(OS), WINNT)
 SHLIB_EXT = dll
-RPATH = 
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
