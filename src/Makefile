@@ -10,7 +10,7 @@ SRCS = \
 
 FLAGS = \
 	-D_GNU_SOURCE \
-    -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
+	-Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
 	-I$(JULIAHOME)/external/libuv  -I$(USR)/include
