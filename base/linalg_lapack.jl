@@ -99,6 +99,52 @@ function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}
     error("error in LU")
 end
 
+for (gbtrf, elty) in ((:dgbtrf_,:Float64), (:sgbtrf_,:Float32),
+                      (:zgbtrf_,:Complex128), (:cgbtrf_,:Complex64))
+    @eval begin
+        # SUBROUTINE DGBTRF( M, N, KL, KU, AB, LDAB, IPIV, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, KL, KU, LDAB, M, N
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   AB( LDAB, * )
+        function _jl_lapack_gbtrf(m, n, kl, ku, AB::StridedMatrix{$elty}, ldab, ipiv)
+            info = Array(Int32, 1)
+            ccall(dlsym(_jl_liblapack, $string(gbtrf)),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+                  &m, &n, &kl, &ku, AB, &ldab, ipiv, info)
+            return info[1]
+        end
+    end
+end
+
+for (gbtrs, elty) in ((:dgbtrs_,:Float64), (:sgbtrs_,:Float32),
+                      (:zgbtrs_,:Complex128), (:cgbtrs_,:Complex64))
+    @eval begin
+        # SUBROUTINE DGBTRS( TRANS, N, KL, KU, NRHS, AB, LDAB, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          TRANS
+        #       INTEGER            INFO, KL, KU, LDAB, LDB, N, NRHS
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   AB( LDAB, * ), B( LDB, * )
+        # *     ..
+        function _jl_lapack_gbtrs(trans, n, kl, ku, nrhs,
+                                 AB::StridedMatrix{$elty}, ldab, ipiv,
+                                 B::StridedMatrix{$elty}, ldb, info)
+            info = Array(Int32, 1)
+            ccall(dlsym(_jl_liblapack, $string(gbtrs)),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+                  &trans, &n, &kl, &ku, &nrhs, AB, &ldab, ipiv, B, &ldb, info)
+            return info[1]
+        end
+    end
+end
 
 for (real_geqp3, complex_geqp3, orgqr, ungqr, elty, celty) in
     (("dgeqp3_","zgeqp3_","dorgqr_","zungqr_",:Float64,:Complex128),
@@ -668,3 +714,27 @@ end
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
 (/){T1<:Real, T2<:Real}(A::StridedVecOrMat{T1}, B::StridedVecOrMat{T2}) = (B' \ A')'
+
+for (gbsv, elty) in ((:dgbsv_,:Float64), (:sgbsv_,:Float32),
+                     (:zgbsv_,:Complex128), (:cgbsv_,:Complex64))
+    @eval begin
+        # SUBROUTINE DGBSV( N, KL, KU, NRHS, AB, LDAB, IPIV, B, LDB, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, KL, KU, LDAB, LDB, N, NRHS
+        # *     .. Array Arguments ..
+        #       INTEGER            IPIV( * )
+        #       DOUBLE PRECISION   AB( LDAB, * ), B( LDB, * )
+        function _jl_lapack_gbsv(n, kl, ku, nrhs,
+                                 AB::StridedMatrix{$elty}, ldab, ipiv,
+                                 B::StridedMatrix{$elty}, ldb, info)
+            info = Array(Int32, 1)
+            ccall(dlsym(_jl_liblapack, $string(gbsv)),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+                  &n, &kl, &ku, &nrhs, AB, &ldab, ipiv, B, &ldb, info)
+            return info[1]
+        end
+    end
+end
