@@ -16,9 +16,9 @@ FLAGS = \
 	-I$(JULIAHOME)/external/libuv  -I$(USR)/include
 
 ifneq ($(MAKECMDGOALS),debug)
-TARGET = "debug"
+TARGET =
 else
-TARGET = 
+TARGET = "debug"
 endif
 
 OBJS = $(SRCS:%=%.o)

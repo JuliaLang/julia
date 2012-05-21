@@ -231,7 +231,7 @@ BINCOLOR="\033[37;1m"
 JULCOLOR="\033[34;1m"
 ENDCOLOR="\033[0m"
 
-GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $(CURDIR)/$@))
+GOAL=$(subst $(abspath $(JULIAHOME)),,$(abspath $(CURDIR)/$@))
 
 QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
