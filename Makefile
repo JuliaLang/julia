@@ -47,13 +47,13 @@ install: release
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
 	install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/usr/lib
-	install -v usr/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
+	install -v $(USR)/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
 	install -v launch-julia-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v ui/webserver/*.jl $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
 	install -v ui/website/*.* $(DESTDIR)$(PREFIX)/share/julia/ui/website
 	install -v ui/website/assets/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/assets
 	install -v ui/website/images/* $(DESTDIR)$(PREFIX)/share/julia/ui/website/images
-	install -v usr/etc/lighttpd.conf $(DESTDIR)$(PREFIX)/share/julia/usr/etc
+	install -v $(USR)/etc/lighttpd.conf $(DESTDIR)$(PREFIX)/share/julia/usr/etc
 
 dist: release
 	rm -fr dist julia-*.tar.gz
