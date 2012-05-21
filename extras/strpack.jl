@@ -3,10 +3,16 @@ load("lru.jl")
 
 bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
 
+# Represents data endianness
+abstract Endianness
+type BigEndian <: Endianness; end
+type LittleEndian <: Endianness; end
+type NativeEndian <: Endianness; end
+
 # Represents a packed composite type
 type Struct
     canonical::String
-    endianness::Type
+    endianness::Endianness
     types
     pack::Function
     unpack::Function
@@ -32,7 +38,7 @@ function Struct{T}(::Type{T}, endianness)
     struct_utils(T)
     STRUCTS[s] = Struct(s, endianness, types, pack, unpack, T, size)
 end
-Struct{T}(::Type{T}) = Struct(T, NativeEndian)
+Struct{T}(::Type{T}) = Struct(T, NativeEndian())
 
 # Represents a particular way of adding bytes to maintain certain alignments
 type DataAlign
@@ -106,17 +112,17 @@ function struct_parse(s::String)
     t = {}
     i = 2
     endianness = if s[1] == '<'
-        LittleEndian
+        LittleEndian()
     elseif s[1] == '>' || s[1] == '!'
-        BigEndian
+        BigEndian()
     elseif s[1] == '='
-        NativeEndian
+        NativeEndian()
     elseif s[1] == '@'
         println("Warning: struct does not support fully native structures.")
-        NativeEndian
+        NativeEndian()
     else
         i = 1 # no byte order command
-        NativeEndian
+        NativeEndian()
     end
     
     tmap = {'x' => PadByte,
@@ -288,15 +294,10 @@ function struct_pack(convert, types, struct_type)
     eval(packdef)
 end
 
-abstract Endianness
-type BigEndian <: Endianness; end
-type LittleEndian <: Endianness; end
-type NativeEndian <: Endianness; end
-
-endianness_converters{T<:Endianness}(::Type{T}) = error("endianness type $T not recognized")
-endianness_converters(::Type{BigEndian}) = hton, ntoh
-endianness_converters(::Type{LittleEndian}) = htol, ltoh
-endianness_converters(::Type{NativeEndian}) = identity, identity
+endianness_converters{T<:Endianness}(::T) = error("endianness type $T not recognized")
+endianness_converters(::BigEndian) = hton, ntoh
+endianness_converters(::LittleEndian) = htol, ltoh
+endianness_converters(::NativeEndian) = identity, identity
 
 function struct_utils(struct_type)
     @eval ref(struct::($struct_type), i::Integer) = struct.(($struct_type).names[i])
