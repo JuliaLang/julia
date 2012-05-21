@@ -1,6 +1,8 @@
 load("../extras/arpack.jl")
 
 # arpack
+begin
+local n,a,asym,d,v
 n = 10
 a = rand(n,n)
 asym = a+a'+n*eye(n)
@@ -10,3 +12,4 @@ asym = a+a'+n*eye(n)
 
 (d,v) = eigs(a,3)
 @assert abs(sum(a*v[:,2]-d[2]*v[:,2])) < 1e-8
+end
