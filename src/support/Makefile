@@ -6,7 +6,7 @@ override CXXFLAGS += $(JCXXFLAGS)
 
 SRCS = hashing.c timefuncs.c dblprint.c ptrhash.c operators.c socket.c \
 	utf8.c ios.c dirpath.c htable.c bitvector.c \
-	int2str.c dump.c libsupportinit.c arraylist.c
+	int2str.c libsupportinit.c arraylist.c
 
 ifeq ($(OS),WINNT)
 SRCS += asprintf
