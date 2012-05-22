@@ -98,6 +98,31 @@ function lufact{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseM
     
 end
 
+function lufact!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
+    Scopy = SparseMatrixCSC(S.m,S.n,S.colptr,S.rowval,S.nzval)
+    Scopy = _jl_convert_to_0_based_indexing!(Scopy)
+    numeric = []
+
+    try
+        symbolic = _jl_umfpack_symbolic(Scopy)
+        numeric = _jl_umfpack_numeric(Scopy, symbolic)
+    catch e
+        Scopy = _jl_convert_to_1_based_indexing!(Scopy)
+        if is(e,MatrixIllConditionedException)
+            error("Input matrix is ill conditioned or singular");
+        else
+            error("Error calling UMFPACK")
+        end
+    end
+
+    S.rowval = []
+    S.nzval = []
+    S.colptr = zeros(S.n+1)
+    
+    return UmfpackLUFactorization(numeric,Scopy) 
+    
+end
+
 function (\){Tv<:Union(Float64,Complex128),
              Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
     return _jl_sparse_lusolve(S,b)
