@@ -618,7 +618,7 @@ end
 function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
     F = Array(Float64, promote_shape(size(A), size(B)))
     for i=1:numel(A)
-        F[i] = A[i]^B[i]
+        F[i] = float64(A[i])^float64(B[i])
     end
     return F
 end
@@ -626,14 +626,14 @@ end
 function .^{T<:Integer}(A::Integer, B::Array{T})
     F = similar(B, Float64)
     for i=1:numel(B)
-        F[i] = A^B[i]
+        F[i] = float64(A)^float64(B[i])
     end
     return F
 end
 
-function _jl_power_array_int_body(F, A, B)
+function _jl_power_array_int_body{T}(F::Array{T}, A, B)
     for i=1:numel(A)
-        F[i] = A[i]^B
+        F[i] = A[i]^convert(T,B)
     end
     return F
 end

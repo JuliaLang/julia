@@ -53,7 +53,7 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    jl_divide_by_zero_error();
+    jl_raise(jl_divbyzero_exception);
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -260,6 +260,12 @@ void jl_get_builtin_hooks(void)
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
     jl_divbyzero_exception =
         jl_apply((jl_function_t*)core("DivideByZeroError"), NULL, 0);
+    jl_domain_exception =
+        jl_apply((jl_function_t*)core("DomainError"), NULL, 0);
+    jl_overflow_exception =
+        jl_apply((jl_function_t*)core("OverflowError"), NULL, 0);
+    jl_inexact_exception =
+        jl_apply((jl_function_t*)core("InexactError"), NULL, 0);
     jl_undefref_exception =
         jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
     jl_interrupt_exception =

@@ -77,16 +77,6 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
-void jl_undef_ref_error(void)
-{
-    jl_raise(jl_undefref_exception);
-}
-
-void jl_divide_by_zero_error(void)
-{
-    jl_raise(jl_divbyzero_exception);
-}
-
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
@@ -610,7 +600,7 @@ static jl_value_t *nth_field(jl_value_t *v, size_t i)
 {
     jl_value_t *fld = ((jl_value_t**)v)[1+i];
     if (fld == NULL)
-        jl_undef_ref_error();
+        jl_raise(jl_undefref_exception);
     return fld;
 }
 

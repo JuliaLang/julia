@@ -246,7 +246,7 @@ const chi2rnd = randchi2 # alias chi2rnd
 # http://www.johndcook.com/julia_rng.html
 function randbeta(a, b)
     if a <= 0 || b <= 0
-        error("Beta parameters must be positive")
+        error("beta parameters must be positive")
     end
     
     ## There are more efficient methods for generating beta samples.
