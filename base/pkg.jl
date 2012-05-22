@@ -51,10 +51,7 @@ pkg_checkpoint() = pkg_checkpoint(PKG_DEFAULT_DIR)
 
 # commit the current state of the repo with the given message
 
-function pkg_commit(dir::String, msg::String)
-    pkg_checkpoint(dir)
-    @cd dir run(`git commit -m $msg`)
-end
+pkg_commit(dir::String, msg::String) = @cd dir run(`git commit -m $msg`)
 pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
 
 # install packages by name and, optionally, git url
@@ -63,12 +60,14 @@ function pkg_install(dir::String, urls::Associative)
     names = sort!(keys(urls))
     if isempty(names) return end
     @cd dir begin
+        dir = cwd()
         for pkg in names
             url = urls[pkg]
-            run(`git submodule add --reference . $url $pkg`)
-            run(`git update --init --reference . --recursive $pkg`)
+            run(`git submodule add --reference $dir $url $pkg`)
         end
         pkg_commit(dir, "[jul] install "*join(names, ", "))
+        pkg_checkout(dir, "HEAD")
+        pkg_checkpoint(dir)
     end
 end
 function pkg_install(dir::String, names::AbstractVector)
@@ -94,6 +93,7 @@ function pkg_remove(dir::String, names::AbstractVector)
         end
         run(`git add .gitmodules`)
         pkg_commit(dir, "[jul] remove "*join(names, ", "))
+        pkg_checkpoint(dir)
         run(`rm -rf $names`)
     end
 end
@@ -104,8 +104,9 @@ pkg_remove(names::String...)      = pkg_remove([names...])
 
 function pkg_checkout(dir::String, rev::String)
     @cd dir begin
+        dir = cwd()
         run(`git checkout -q $rev`)
-        run(`git submodule update --init --reference . --recursive`)
+        run(`git submodule update --init --reference $dir --recursive`)
         run(`git ls-files --other` | `xargs rm -rf`)
     end
 end
@@ -123,10 +124,11 @@ pkg_push() = pkg_push(PKG_DEFAULT_DIR)
 
 function pkg_pull(dir::String)
     @cd dir begin
+        dir = cwd()
         run(`git fetch --tags`)
         run(`git pull`)
         if !success(`git diff --quiet`)
-            run(`git submodule update --init --reference . --recursive`)
+            run(`git submodule update --init --reference $dir --recursive`)
         end
     end
 end
@@ -136,6 +138,9 @@ pkg_pull() = pkg_pull(PKG_DEFAULT_DIR)
 
 function pkg_clone(dir::String, url::String)
     run(`git clone $url $dir`)
-    @cd dir run(`git submodule update --init --reference . --recursive`)
+    @cd dir begin
+        dir = cwd()
+        run(`git submodule update --init --reference $dir --recursive`)
+    end
 end
 pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
