@@ -1170,7 +1170,7 @@ function _ticks_default_linear( lim )
         x = 10
     end
 
-    major_div = x * pow(10, b)
+    major_div = x * pow(10.0, b)
     return _ticklist_linear( lim[1], lim[2], major_div )
 end
 
