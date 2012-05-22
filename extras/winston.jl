@@ -2352,7 +2352,7 @@ end
 
 # PlotContainer ---------------------------------------------------------------
 
-function show(self::PlotContainer)
+function show(io::IO, self::PlotContainer)
     print(typeof(self),"()")
 end
 
@@ -3036,7 +3036,7 @@ end
 
 # PlotComponent ---------------------------------------------------------------
 
-function show(self::PlotComponent)
+function show(io::IO, self::PlotComponent)
     print(typeof(self),"()")
 end
 
