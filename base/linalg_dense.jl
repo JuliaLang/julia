@@ -350,7 +350,7 @@ function ^(A::Matrix, p::Number)
         error("matrix must be square")
     end
     (v, X) = eig(A)
-    if isreal(v) && any(v<0)
+    if isreal(v) && any(v.<0)
         v = complex(v)
     end
     if ishermitian(A)
