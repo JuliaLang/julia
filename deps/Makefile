@@ -84,17 +84,11 @@ ifeq ($(USE_SYSTEM_ARPACK), 0)
 LIBS += arpack
 endif
 
-#ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 LIBS += suitesparse
-#endif
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
 LIBS += glpk
 endif
-
-#ifeq ($(USE_SYSTEM_LAPACK), 0)
-#LIBS += lapack
-#endif
 
 ## Common build target prefixes
 
