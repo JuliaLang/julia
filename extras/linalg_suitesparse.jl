@@ -5,6 +5,16 @@ type UmfpackPtr{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
     val::Vector{Ptr{Void}} 
 end
 
+type UmfpackLUFactorization{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)} # doesn't print well
+    numeric::UmfpackPtr{Tv,Ti}
+    mat::SparseMatrixCSC{Tv,Ti}
+end
+
+type UmfpackLUFactorizationTransposed{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
+    numeric::UmfpackPtr{Tv,Ti}
+    mat::SparseMatrixCSC{Tv,Ti}
+end
+
 function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})
     cm = _jl_cholmod_start()
     S = _jl_convert_to_0_based_indexing!(S)
@@ -45,7 +55,7 @@ function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int
     return sol
 end
 
-
+# this version doesn't make an (unnecessary) copy
 function _jl_sparse_lusolve(S, b)
 
     S = _jl_convert_to_0_based_indexing!(S)
@@ -68,13 +78,44 @@ function _jl_sparse_lusolve(S, b)
     return x
 end
 
+function lufact{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
+    Scopy = copy(S) 
+    Scopy = _jl_convert_to_0_based_indexing!(Scopy)
+    numeric = []
+
+    try
+        symbolic = _jl_umfpack_symbolic(Scopy)
+        numeric = _jl_umfpack_numeric(Scopy, symbolic)
+    catch e
+        if is(e,MatrixIllConditionedException)
+            error("Input matrix is ill conditioned or singular");
+        else
+            error("Error calling UMFPACK")
+        end
+    end
+    
+    return UmfpackLUFactorization(numeric,Scopy) 
+    
+end
 
 function (\){Tv<:Union(Float64,Complex128),
              Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
-    return _jl_sparse_lusolve(S, b)
+    return _jl_sparse_lusolve(S,b)
 end
 
+(\){T}(fact::UmfpackLUFactorization{T}, b::Vector{T}) = _jl_umfpack_solve(fact.mat,b,fact.numeric)
+
+(\){T}(fact::UmfpackLUFactorizationTransposed{T}, b::Vector{T}) = _jl_umfpack_transpose_solve(fact.mat,b,fact.numeric)
+
+(\){T}(fact::UmfpackLUFactorization{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+
+(\){T}(fact::UmfpackLUFactorizationTransposed{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+
+ctranspose(fact::UmfpackLUFactorization) = UmfpackLUFactorizationTransposed(fact.numeric, fact.mat)
+
 (\){T}(S::SparseMatrixCSC{T}, b::Vector) = S \ convert(Array{T,1}, b)
+
+
 
 ## Library code
 
@@ -436,6 +477,33 @@ for (f_sol_r, f_sol_c, inttype) in
                            (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, 
                             Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
                            _jl_UMFPACK_A, S.colptr, S.rowval, real(S.nzval), imag(S.nzval), 
+                           xr, xi, real(b), imag(b), Numeric.val[1], C_NULL, C_NULL)
+            if status != _jl_UMFPACK_OK; error("Error in solve"); end
+            return complex(xr,xi)
+        end
+
+        function _jl_umfpack_transpose_solve{Tv<:Float64,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
+                                                             b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
+            x = similar(b)
+            status = ccall(dlsym(_jl_libumfpack, $f_sol_r),
+                           Ti,
+                           (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, 
+                            Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                           _jl_UMFPACK_At, S.colptr, S.rowval, S.nzval, 
+                           x, b, Numeric.val[1], C_NULL, C_NULL)
+            if status != _jl_UMFPACK_OK; error("Error in solve"); end
+            return x
+        end
+
+        function _jl_umfpack_transpose_solve{Tv<:Complex128,Ti<:$inttype}(S::SparseMatrixCSC{Tv,Ti}, 
+                                                                b::Vector{Tv}, Numeric::UmfpackPtr{Tv,Ti})
+            xr = similar(b, Float64)
+            xi = similar(b, Float64)
+            status = ccall(dlsym(_jl_libumfpack, $f_sol_c),
+                           Ti,
+                           (Ti, Ptr{Ti}, Ptr{Ti}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, 
+                            Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Float64}, Ptr{Float64}),
+                           _jl_UMFPACK_At, S.colptr, S.rowval, real(S.nzval), imag(S.nzval), 
                            xr, xi, real(b), imag(b), Numeric.val[1], C_NULL, C_NULL)
             if status != _jl_UMFPACK_OK; error("Error in solve"); end
             return complex(xr,xi)
