@@ -9,7 +9,8 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 git_dir() = chomp(readall(`git rev-parse --git-dir`))
 git_head() = chomp(readall(string(git_dir(),"/HEAD")))
 git_dirty() = !success(`git diff --quiet`)
-git_modules(args::Cmd) = run(`git config --file .gitmodules $args`)
+
+git_modules(args::Cmd) = chomp(readall(`git config -f .gitmodules $args`))
 
 function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
@@ -22,7 +23,7 @@ function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
     end
 end
 git_each_submodule(f::Function, r::Bool) = git_each_submodule(f, r, cwd())
-git_each_submodule(f::Function) = git_each_submodule(f, false, cwd())
+git_each_submodule(f::Function)          = git_each_submodule(f, false, cwd())
 
 # create a new empty packge repository
 
@@ -45,7 +46,16 @@ function pkg_checkpoint(dir::String)
             run(`git fetch-pack -q $path HEAD`)
             run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
             run(`git --git-dir=$path/.git gc -q`)
+            head = @cd path chomp(readall(`git rev-parse --symbolic-full-name HEAD`))
+            m = match(r"^refs/heads/(.*)$", head)
+            if m != nothing
+                branch = m.captures[1]
+                git_modules(`submodule.$name.branch $branch`)
+            else
+                try git_modules(`--unset submodule.$name.branch`) end
+            end
         end, true)
+        run(`git add .gitmodules`)
     end
 end
 pkg_checkpoint() = pkg_checkpoint(PKG_DEFAULT_DIR)
@@ -58,19 +68,26 @@ function pkg_checkout(dir::String, rev::String)
         run(`git checkout -q $rev`)
         run(`git submodule update --init --reference $dir --recursive`)
         run(`git ls-files --other` | `xargs rm -rf`)
+        git_each_submodule((name,path,sha1)->begin
+            branch = try git_modules(`submodule.$name.branch`) end
+            if branch != nothing
+                @cd path begin
+                    run(`git branch -f $branch $sha1`)
+                    run(`git checkout $branch`)
+                end
+            end
+        end, true)
     end
 end
 pkg_checkout(rev::String) = pkg_checkout(PKG_DEFAULT_DIR, rev)
 
 # commit the current state of the repo with the given message
 
-function pkg_commit(dir::String, msg::String, co::Bool)
-    @cd dir run(`git commit -m $msg`)
-    if co pkg_checkout(dir, "HEAD") end
+function pkg_commit(dir::String, msg::String)
     pkg_checkpoint(dir)
+    @cd dir run(`git commit -m $msg`)
 end
-pkg_commit(msg::String, co::Bool) = pkg_commig(PKG_DEFAULT_DIR, msg, co)
-pkg_commit(msg::String)           = pkg_commit(PKG_DEFAULT_DIR, msg, false)
+pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
 
 # install packages by name and, optionally, git url
 
@@ -83,7 +100,8 @@ function pkg_install(dir::String, urls::Associative)
             url = urls[pkg]
             run(`git submodule add --reference $dir $url $pkg`)
         end
-        pkg_commit(dir, "[jul] install "*join(names, ", "), true)
+        pkg_checkout(dir, "HEAD")
+        pkg_commit(dir, "[jul] install "*join(names, ", "))
     end
 end
 function pkg_install(dir::String, names::AbstractVector)
