@@ -217,19 +217,19 @@ const exprnd = randexp
 
 function randg(a::Real)
     d = a - 1.0/3.0
-    c = 1.0 / sqrt(9*d)
-    while(true)
-        x = randn()
-        v = 1.0 + c*x
-        while (v <= 0.0)
+    c = 1.0/sqrt(9d)
+    v = x = 0.0
+    while true
+        while v <= 0.0
             x = randn()
             v = 1.0 + c*x
         end
-        v = v*v*v
+        v = v^3
         U = rand()
-        x2 = x*x
-        if U < 1.0 - 0.331*x2*x2; return d*v; end
-        if log(U) < 0.5*x2 + d*(1.0 - v + log(v)); return d*v; end
+        x2 = x^2
+        if U < 1.0-0.331x2^2 || log(U) < 0.5x2+d*(1.0-v+log(v))
+            return d*v
+        end
     end
 end
 
