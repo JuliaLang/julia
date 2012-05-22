@@ -47,7 +47,7 @@ install: release
 	install -v extras/* $(DESTDIR)$(PREFIX)/share/julia/extras
 	install -v examples/*.jl $(DESTDIR)$(PREFIX)/share/julia/examples
 	install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/share/julia/usr/lib
-	install -v $(USR)/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
+	test -z "$(ls -A $(USR)/sbin/*)" || install -v $(USR)/sbin/* $(DESTDIR)$(PREFIX)/share/julia/usr/sbin
 	install -v launch-julia-webserver $(DESTDIR)$(PREFIX)/share/julia
 	install -v ui/webserver/*.jl $(DESTDIR)$(PREFIX)/share/julia/ui/webserver
 	install -v ui/website/*.* $(DESTDIR)$(PREFIX)/share/julia/ui/website
