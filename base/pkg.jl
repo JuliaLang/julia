@@ -8,6 +8,7 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 
 git_dir() = chomp(readall(`git rev-parse --git-dir`))
 git_head() = chomp(readall(string(git_dir(),"/HEAD")))
+git_dirty() = !success(`git diff --quiet`)
 git_modules(args::Cmd) = run(`git config --file .gitmodules $args`)
 
 function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
@@ -36,7 +37,7 @@ end
 pkg_init(dir::String) = pkg_init(dir, PKG_DEFAULT_META)
 pkg_init()            = pkg_init(PKG_DEFAULT_DIR)
 
-# checkpoint a repo, recording submodule commits as parents
+# checkpoint a repo, recording submodule commits as tags
 
 function pkg_checkpoint(dir::String)
     @cd dir begin
@@ -49,10 +50,27 @@ function pkg_checkpoint(dir::String)
 end
 pkg_checkpoint() = pkg_checkpoint(PKG_DEFAULT_DIR)
 
+# checkout a particular repo version
+
+function pkg_checkout(dir::String, rev::String)
+    @cd dir begin
+        dir = cwd()
+        run(`git checkout -q $rev`)
+        run(`git submodule update --init --reference $dir --recursive`)
+        run(`git ls-files --other` | `xargs rm -rf`)
+    end
+end
+pkg_checkout(rev::String) = pkg_checkout(PKG_DEFAULT_DIR, rev)
+
 # commit the current state of the repo with the given message
 
-pkg_commit(dir::String, msg::String) = @cd dir run(`git commit -m $msg`)
-pkg_commit(msg::String) = pkg_commit(PKG_DEFAULT_DIR, msg)
+function pkg_commit(dir::String, msg::String, co::Bool)
+    @cd dir run(`git commit -m $msg`)
+    if co pkg_checkout(dir, "HEAD") end
+    pkg_checkpoint(dir)
+end
+pkg_commit(msg::String, co::Bool) = pkg_commig(PKG_DEFAULT_DIR, msg, co)
+pkg_commit(msg::String)           = pkg_commit(PKG_DEFAULT_DIR, msg, false)
 
 # install packages by name and, optionally, git url
 
@@ -65,9 +83,7 @@ function pkg_install(dir::String, urls::Associative)
             url = urls[pkg]
             run(`git submodule add --reference $dir $url $pkg`)
         end
-        pkg_commit(dir, "[jul] install "*join(names, ", "))
-        pkg_checkout(dir, "HEAD")
-        pkg_checkpoint(dir)
+        pkg_commit(dir, "[jul] install "*join(names, ", "), true)
     end
 end
 function pkg_install(dir::String, names::AbstractVector)
@@ -93,24 +109,11 @@ function pkg_remove(dir::String, names::AbstractVector)
         end
         run(`git add .gitmodules`)
         pkg_commit(dir, "[jul] remove "*join(names, ", "))
-        pkg_checkpoint(dir)
         run(`rm -rf $names`)
     end
 end
 pkg_remove(names::AbstractVector) = pkg_remove(PKG_DEFAULT_DIR, names)
 pkg_remove(names::String...)      = pkg_remove([names...])
-
-# checkout a particular repo version
-
-function pkg_checkout(dir::String, rev::String)
-    @cd dir begin
-        dir = cwd()
-        run(`git checkout -q $rev`)
-        run(`git submodule update --init --reference $dir --recursive`)
-        run(`git ls-files --other` | `xargs rm -rf`)
-    end
-end
-pkg_checkout(rev::String) = pkg_checkout(PKG_DEFAULT_DIR, rev)
 
 # push & pull package repos to/from remotes
 
@@ -124,12 +127,9 @@ pkg_push() = pkg_push(PKG_DEFAULT_DIR)
 
 function pkg_pull(dir::String)
     @cd dir begin
-        dir = cwd()
         run(`git fetch --tags`)
         run(`git pull`)
-        if !success(`git diff --quiet`)
-            run(`git submodule update --init --reference $dir --recursive`)
-        end
+        pkg_checkout(dir, "HEAD")
     end
 end
 pkg_pull() = pkg_pull(PKG_DEFAULT_DIR)
@@ -138,9 +138,6 @@ pkg_pull() = pkg_pull(PKG_DEFAULT_DIR)
 
 function pkg_clone(dir::String, url::String)
     run(`git clone $url $dir`)
-    @cd dir begin
-        dir = cwd()
-        run(`git submodule update --init --reference $dir --recursive`)
-    end
+    pkg_checkout(dir, "HEAD")
 end
 pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
