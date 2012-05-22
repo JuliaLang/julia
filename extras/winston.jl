@@ -1155,7 +1155,7 @@ function _ticklist_linear( lo, hi, sep, origin )
 end
 
 function _pow10(x)
-    return pow(10,x)
+    return pow(10.0,x)
 end
 
 function _ticks_default_linear( lim )
