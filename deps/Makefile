@@ -52,10 +52,8 @@ ifeq ($(USE_SYSTEM_LLVM), 0)
 LIBS += llvm
 endif
 
-ifeq ($(USE_SYSTEM_LIGHTTPD), 0)
 ifneq ($(OS),WINNT)
 LIBS += lighttpd
-endif
 endif
 
 ifeq ($(OS),WINNT)
