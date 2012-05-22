@@ -2353,7 +2353,7 @@ end
 # PlotContainer ---------------------------------------------------------------
 
 function show(io::IO, self::PlotContainer)
-    print(typeof(self),"()")
+    print(io,typeof(self),"()")
 end
 
 function interior( self::PlotContainer, device::Renderer, exterior_bbox::BoundingBox )
@@ -3037,7 +3037,7 @@ end
 # PlotComponent ---------------------------------------------------------------
 
 function show(io::IO, self::PlotComponent)
-    print(typeof(self),"()")
+    print(io,typeof(self),"()")
 end
 
 function limits( self::PlotComponent )
