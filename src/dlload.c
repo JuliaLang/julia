@@ -52,7 +52,7 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
 #if defined(__WIN32__)
 		if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
           (LPCSTR)(&jl_load_dynamic_library),
-          handle->handle))
+          &handle->handle))
 			    jl_errorf("could not load base module", fname);
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);

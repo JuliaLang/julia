@@ -147,10 +147,15 @@ void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
 #ifdef __WIN32__
-uv_lib_t jl_ntdll_handle;
-uv_lib_t jl_kernel32_handle;
-uv_lib_t jl_crtdll_handle;
-uv_lib_t jl_winsock_handle;
+uv_lib_t _jl_ntdll_handle;
+uv_lib_t _jl_kernel32_handle;
+uv_lib_t _jl_crtdll_handle;
+uv_lib_t _jl_winsock_handle;
+
+uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
+uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
+uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
 uv_loop_t *jl_event_loop;
 uv_loop_t *jl_io_loop;
@@ -225,10 +230,10 @@ void julia_init(char *imageFile)
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
 #ifdef __WIN32__
-    uv_dlopen("ntdll.dll",&jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("Kernel32.dll",&jl_kernel32_handle);
-    uv_dlopen("msvcrt.dll",&jl_crtdll_handle);
-    uv_dlopen("Ws2_32.dll",&jl_winsock_handle);
+    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
+    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
+    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
 #endif
     jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
     jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
