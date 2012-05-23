@@ -227,7 +227,7 @@ function randg(a::Real)
         v = v^3
         U = rand()
         x2 = x^2
-        if U < 1.0-0.331x2^2 || log(U) < 0.5x2+d*(1.0-v+log(v))
+        if U < 1.0-0.331*x2^2 || log(U) < 0.5*x2+d*(1.0-v+log(v))
             return d*v
         end
     end
