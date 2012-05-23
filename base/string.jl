@@ -628,7 +628,7 @@ _jl_interp_parse(s::String, u::Function) = _jl_interp_parse(s, u, print)
 _jl_interp_parse(s::String) = _jl_interp_parse(s, x->check_utf8(unescape_string(x)))
 
 function _jl_interp_parse_bytes(s::String)
-    writer(x...) = for w=x; write(w); end
+    writer(io,x...) = for w=x; write(io,w); end
     _jl_interp_parse(s, unescape_string, writer)
 end
 

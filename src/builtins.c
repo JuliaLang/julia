@@ -77,16 +77,6 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
     jl_type_error_rt(fname, "", expected, got);
 }
 
-void jl_undef_ref_error(void)
-{
-    jl_raise(jl_undefref_exception);
-}
-
-void jl_divide_by_zero_error(void)
-{
-    jl_raise(jl_divbyzero_exception);
-}
-
 JL_CALLABLE(jl_f_throw)
 {
     JL_NARGS(throw, 1, 1);
@@ -613,7 +603,7 @@ static jl_value_t *nth_field(jl_value_t *v, size_t i)
 {
     jl_value_t *fld = ((jl_value_t**)v)[1+i];
     if (fld == NULL)
-        jl_undef_ref_error();
+        jl_raise(jl_undefref_exception);
     return fld;
 }
 
@@ -1047,6 +1037,10 @@ JL_CALLABLE(jl_f_typevar)
         JL_NARGS(typevar, 1, 1);
     }
     JL_TYPECHK(typevar, symbol, args[0]);
+    if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
+        jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
+        ios_printf(ios_stderr, "Warning: type parameter name %s shadows an identifier\n", ((jl_sym_t*)args[0])->name);
+    }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     int b = 0;

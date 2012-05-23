@@ -46,24 +46,6 @@ function getipaddr()
     cstring(convert(Ptr{Uint8},ip))
 end
 
-## file and directory ##
-
-function getcwd()
-    b = Array(Uint8,1024)
-    err = ccall(:jl_cwd, Int32, (Ptr{Uint8}, Uint), b, length(b))
-    if err != 0
-        error("path too long")
-    end
-    cstring(b)
-end
-
-function setcwd(p::String)
-    if ccall(:chdir, Int32, (Ptr{Uint8},), p) == -1
-        throw(SystemError("setcwd"))
-    end
-    getcwd()
-end
-setcwd() = setcwd(ENV["HOME"])
 
 ## Memory related ##
 

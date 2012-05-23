@@ -35,6 +35,10 @@ namespace JL_I {
         abs_float32, abs_float64,
         copysign_float32, copysign_float64,
         flipsign_int32, flipsign_int64,
+        // checked arithmetic
+        checked_sadd, checked_uadd, checked_ssub, checked_usub,
+        checked_smul, checked_umul,
+        checked_fptoui32, checked_fptosi32, checked_fptoui64, checked_fptosi64,
         // c interface
         ccall,
     };
@@ -271,6 +275,28 @@ static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return builder.CreateZExt(JL_INT(auto_unbox(x,ctx)), to);
 }
 
+static Value *emit_eqfsi64(Value *x, Value *y)
+{
+    x = FP(x);
+    Value *fy = JL_INT(y);
+    return builder.CreateAnd
+        (builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
+         builder.CreateICmpEQ(fy, builder.CreateFPToSI
+                              (builder.CreateSIToFP(fy, T_float64),
+                               T_int64)));
+}
+
+static Value *emit_eqfui64(Value *x, Value *y)
+{
+    x = FP(x);
+    Value *fy = JL_INT(y);
+    return builder.CreateAnd
+        (builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
+         builder.CreateICmpEQ(fy, builder.CreateFPToUI
+                              (builder.CreateUIToFP(fy, T_float64),
+                               T_int64)));
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -356,15 +382,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_int,2) return builder.CreateMul(JL_INT(x), JL_INT(y));
     HANDLE(sdiv_int,2)
         den = JL_INT(y);
-        call_error_func_unless(builder.CreateICmpNE(den,
+        raise_exception_unless(builder.CreateICmpNE(den,
                                                     ConstantInt::get(t,0)),
-                               jldiverror_func, ctx);
+                               jldiverr_var, ctx);
         return builder.CreateSDiv(JL_INT(x), den);
     HANDLE(udiv_int,2)
         den = JL_INT(y);
-        call_error_func_unless(builder.CreateICmpNE(den,
+        raise_exception_unless(builder.CreateICmpNE(den,
                                                     ConstantInt::get(t,0)),
-                               jldiverror_func, ctx);
+                               jldiverr_var, ctx);
         return builder.CreateUDiv(JL_INT(x), den);
 
     HANDLE(srem_int,2) return builder.CreateSRem(JL_INT(x), JL_INT(y));
@@ -376,6 +402,34 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_float,2) return builder.CreateFMul(FP(x), FP(y));
     HANDLE(div_float,2) return builder.CreateFDiv(FP(x), FP(y));
     HANDLE(rem_float,2) return builder.CreateFRem(FP(x), FP(y));
+
+    HANDLE(checked_sadd,2)
+    HANDLE(checked_uadd,2)
+    HANDLE(checked_ssub,2)
+    HANDLE(checked_usub,2)
+    HANDLE(checked_smul,2)
+    HANDLE(checked_umul,2) {
+        Value *ix = JL_INT(x); Value *iy = JL_INT(y);
+        Type *atypes[2] = { ix->getType(), iy->getType() };
+        Value *res = builder.CreateCall2
+            (Intrinsic::getDeclaration(jl_Module,
+                                       f==checked_sadd ?
+                                       Intrinsic::sadd_with_overflow :
+                                       (f==checked_uadd ?
+                                        Intrinsic::uadd_with_overflow :
+                                        (f==checked_ssub ?
+                                         Intrinsic::ssub_with_overflow :
+                                         (f==checked_usub ?
+                                          Intrinsic::usub_with_overflow :
+                                          (f==checked_smul ?
+                                           Intrinsic::smul_with_overflow :
+                                           Intrinsic::umul_with_overflow)))),
+                                       ArrayRef<Type*>(atypes)),
+             ix, iy);
+        Value *obit = builder.CreateExtractValue(res, ArrayRef<unsigned>(1));
+        raise_exception_if(obit, jlovferr_var, ctx);
+        return builder.CreateExtractValue(res, ArrayRef<unsigned>(0));
+    }
 
     HANDLE(eq_int,2)  return builder.CreateICmpEQ(JL_INT(x), JL_INT(y));
     HANDLE(ne_int,2)  return builder.CreateICmpNE(JL_INT(x), JL_INT(y));
@@ -389,32 +443,8 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(lt_float,2) return builder.CreateFCmpOLT(FP(x), FP(y));
     HANDLE(le_float,2) return builder.CreateFCmpOLE(FP(x), FP(y));
 
-    HANDLE(eqfsi64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        return builder.CreateAnd(
-            builder.CreateFCmpOEQ(x, builder.CreateSIToFP(fy, T_float64)),
-            builder.CreateICmpEQ(
-                fy, builder.CreateFPToSI(
-                    builder.CreateSIToFP(fy, T_float64),
-                    T_int64
-                )
-            )
-        );
-    }
-    HANDLE(eqfui64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        return builder.CreateAnd(
-            builder.CreateFCmpOEQ(x, builder.CreateUIToFP(fy, T_float64)),
-            builder.CreateICmpEQ(
-                fy, builder.CreateFPToUI(
-                    builder.CreateUIToFP(fy, T_float64),
-                    T_int64
-                )
-            )
-        );
-    }
+    HANDLE(eqfsi64,2) return emit_eqfsi64(x, y);
+    HANDLE(eqfui64,2) return emit_eqfui64(x, y);
     HANDLE(ltfsi64,2) {
         x = FP(x);
         fy = JL_INT(y);
@@ -746,6 +776,37 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return builder.CreateFPExt(builder.CreateLoad(jlfloat32temp_var, true),
                                    T_float64);
 
+    HANDLE(checked_fptosi32,1) {
+        x = FP(x);
+        Value *v = builder.CreateFPToSI(x, T_int32);
+        raise_exception_unless
+            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+                                   builder.CreateSIToFP(v, T_float64)),
+             jlinexacterr_var, ctx);
+        return v;
+    }
+    HANDLE(checked_fptoui32,1) {
+        x = FP(x);
+        Value *v = builder.CreateFPToUI(x, T_int32);
+        raise_exception_unless
+            (builder.CreateFCmpOEQ(builder.CreateFPExt(x, T_float64),
+                                   builder.CreateUIToFP(v, T_float64)),
+             jlinexacterr_var, ctx);
+        return v;
+    }
+    HANDLE(checked_fptosi64,1) {
+        x = FP(x);
+        Value *v = builder.CreateFPToSI(x, T_int64);
+        raise_exception_unless(emit_eqfsi64(x, v), jlinexacterr_var, ctx);
+        return v;
+    }
+    HANDLE(checked_fptoui64,1) {
+        x = FP(x);
+        Value *v = builder.CreateFPToUI(x, T_int64);
+        raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
+        return v;
+    }
+
     HANDLE(abs_float32,1)
     {
         Value *bits = builder.CreateBitCast(FP(x), T_int32);
@@ -906,5 +967,10 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(abs_float32); ADD_I(abs_float64);
     ADD_I(copysign_float32); ADD_I(copysign_float64);
     ADD_I(flipsign_int32); ADD_I(flipsign_int64);
+    ADD_I(checked_sadd); ADD_I(checked_uadd);
+    ADD_I(checked_ssub); ADD_I(checked_usub);
+    ADD_I(checked_smul); ADD_I(checked_umul);
+    ADD_I(checked_fptosi32); ADD_I(checked_fptoui32);
+    ADD_I(checked_fptosi64); ADD_I(checked_fptoui64);
     ADD_I(ccall);
 }

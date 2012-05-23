@@ -31,9 +31,9 @@ type ArgumentError <: Exception
     msg::String
 end
 
-type UnboundError <: Exception
-    var::Symbol
-end
+#type UnboundError <: Exception
+#    var::Symbol
+#end
 
 type KeyError <: Exception
     key

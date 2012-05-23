@@ -1,4 +1,4 @@
-setcwd("../extras")
+cd("../extras")
 load("sparse.jl")
 load("glpk.jl")
 

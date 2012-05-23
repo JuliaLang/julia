@@ -19,11 +19,15 @@
 
 (define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
+; disable range colon for parsing ternary conditional operator
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
+; treat newline like ordinary whitespace instead of as a potential separator
+(define whitespace-newline #f)
+
 (define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
@@ -36,11 +40,20 @@
 		  ,@body))
 
 (define-macro (with-space-sensitive . body)
-  `(with-bindings ((space-sensitive #t))
+  `(with-bindings ((space-sensitive #t)
+		   (whitespace-newline #f))
 		  ,@body))
 
 (define-macro (with-end-symbol . body)
   `(with-bindings ((end-symbol #t))
+		  ,@body))
+
+(define-macro (with-whitespace-newline . body)
+  `(with-bindings ((whitespace-newline #t))
+		  ,@body))
+
+(define-macro (without-whitespace-newline . body)
+  `(with-bindings ((whitespace-newline #f))
 		  ,@body))
 
 (define assignment-ops (prec-ops 0))
@@ -124,13 +137,23 @@
 		  (string->symbol str)))
 	    (string->symbol str)))))
 
-(define (accum-tok-eager c pred port)
-  (let loop ((str '())
-	     (c c))
-    (if (and (not (eof-object? c)) (pred c))
-	(begin (read-char port)
-	       (loop (cons c str) (peek-char port)))
-	(list->string (reverse str)))))
+(define (accum-digits c pred port lz)
+  (if (and (not lz) (eqv? c #\_))
+      (cons "_" #f)
+      (let loop ((str '())
+		 (c c))
+	(if (eqv? c #\_)
+	    (begin (read-char port)
+		   (let ((c (peek-char port)))
+		     (if (and (not (eof-object? c)) (pred c))
+			 (loop str c)
+			 (begin
+			   (io.ungetc port #\_)
+			   (cons (list->string (reverse str)) #t)))))
+	    (if (and (not (eof-object? c)) (pred c))
+		(begin (read-char port)
+		       (loop (cons c str) (peek-char port)))
+		(cons (list->string (reverse str)) #t))))))
 
 (define (char-hex? c)
   (or (char-numeric? c)
@@ -139,7 +162,8 @@
 
 (define (read-number port . leadingdot)
   (let ((str  (open-output-string))
-	(pred char-numeric?))
+	(pred char-numeric?)
+	(leadingzero #f))
     (define (allow ch)
       (let ((c (peek-char port)))
 	(and (eqv? c ch)
@@ -151,26 +175,35 @@
 		     (io.ungetc port #\.)
 		     (error (string "invalid numeric constant "
 				    (get-output-string str) #\.))))))
-    (define (read-digs)
-      (let ((d (accum-tok-eager (peek-char port) pred port)))
-	(and (not (equal? d ""))
-	     (not (eof-object? d))
-	     (display d str)
-	     #t)))
+    (define (read-digs lz)
+      (let ((D (accum-digits (peek-char port) pred port lz)))
+	(let ((d  (car D))
+	      (ok (cdr D)))
+	  (if (not ok)
+	      (begin (display d str)
+		     (error (string "invalid numeric constant "
+				    (get-output-string str)))))
+	  (and (not (equal? d ""))
+	       (not (eof-object? d))
+	       (display d str)
+	       #t))))
     (if (pair? leadingdot)
 	(write-char #\. str)
 	(if (eqv? (peek-char port) #\0)
 	    (begin (write-char (read-char port) str)
+		   (set! leadingzero #t)
 		   (if (allow #\x)
-		       (set! pred char-hex?)))
+		       (begin
+			 (set! leadingzero #f)
+			 (set! pred char-hex?))))
 	    (allow #\.)))
-    (read-digs)
+    (read-digs leadingzero)
     (if (eqv? (peek-char port) #\.)
 	(begin (read-char port)
 	       (if (dot-opchar? (peek-char port))
 		   (io.ungetc port #\.)
 		   (begin (write-char #\. str)
-			  (read-digs)
+			  (read-digs #f)
 			  (disallow-dot)))))
     (let ((c (peek-char port)))
       (if (or (eqv? c #\e) (eqv? c #\E))
@@ -180,7 +213,7 @@
 			    (or (char-numeric? d) (eqv? d #\+) (eqv? d #\-)))
 		       (begin (write-char c str)
 			      (write-char (read-char port) str)
-			      (read-digs)
+			      (read-digs #f)
 			      (disallow-dot))
 		       (io.ungetc port c))))))
     (let* ((s (get-output-string str))
@@ -208,7 +241,7 @@
   #t)
 
 (define (next-token port s)
-  (aset! s 2 (eq? (skip-ws port #f) #t))
+  (aset! s 2 (eq? (skip-ws port whitespace-newline) #t))
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c))  (read-char port))
 
@@ -476,15 +509,9 @@
     (let loop ((ex       (parse-rational s))
 	       (chain-op #f))
       (let ((t (peek-token s)))
-	(cond ((and (juxtapose? ex t)
-		    (not (ts:space? s)))
-	       (if (eq? chain-op '*)
-		   (loop (append ex (list (parse-rational s)))
-			 chain-op)
-		   (loop (list 'call '* ex (parse-rational s))
-			 '*)))
-	      ((not (memq t ops))
+	(cond ((not (memq t ops))
 	       ex)
+	      ;; TODO: maybe parse 2x*y as (call * 2 x y)
 	      ((eq? t chain-op)
 	       (begin (take-token s)
 		      (loop (append ex (list (parse-rational s)))
@@ -493,6 +520,8 @@
 	       (begin (take-token s)
 		      (loop (list 'call t ex (parse-rational s))
 			    (and (eq? t '*) t)))))))))
+
+(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
 
 (define (parse-comparison s ops)
   (let loop ((ex (parse-range s))
@@ -532,7 +561,16 @@
 			  (list* 'call op (cdr arg))
 			  (list  'call op arg)))))))
 	  (else
-	   (parse-factor s)))))
+	   (let ((ex (parse-factor s)))
+	     (let ((next (peek-token s)))
+	       ;; numeric literal juxtaposition is a unary operator
+	       (if (and (juxtapose? ex next)
+			(not (ts:space? s)))
+		   (begin
+		     (if (and (number? ex) (= ex 0))
+			 (error "juxtaposition with literal 0"))
+		     `(call * ,ex ,(parse-unary s)))
+		   ex)))))))
 
 ; handle ^, .^, and postfix ...
 (define (parse-factor-h s down ops)
@@ -546,8 +584,6 @@
 	    (else
 	     (list 'call
 		   (take-token s) ex (parse-factor-h s parse-unary ops)))))))
-
-(define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
 
 ; -2^3 is parsed as -(2^3), so call parse-decl for the first argument,
 ; and parse-unary from then on (to handle 2^-3)
@@ -635,6 +671,7 @@
 			 current-filename ":" current-line
 			 " requires end")))))
   (with-normal-ops
+  (without-whitespace-newline
   (case word
     ((begin)  (begin0 (parse-block s)
 		      (expect-end s)))
@@ -761,7 +798,7 @@
 	   ;; place (callingconv) at end of arglist
 	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 	   `(ccall ,.al))))
-    (else (error "unhandled reserved word")))))
+    (else (error "unhandled reserved word"))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)
@@ -807,7 +844,9 @@
 ; . expressions after a ; are enclosed in (parameters ...)
 ; . an expression followed by ... becomes (... x)
 (define (parse-arglist s closer)
-  (with-normal-ops (parse-arglist- s closer)))
+  (with-normal-ops
+   (with-whitespace-newline
+    (parse-arglist- s closer))))
 (define (parse-arglist- s closer)
   (let loop ((lst '()))
     (let ((t (require-token s)))
@@ -1055,6 +1094,7 @@
 	  ((eqv? t #\( )
 	   (take-token s)
 	   (with-normal-ops
+	   (with-whitespace-newline
 	   (if (eqv? (require-token s) #\) )
 	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
@@ -1088,7 +1128,7 @@
 		       ((memv t '(#\] #\}))
 			(error (string "unexpected " t " in tuple")))
 		       (else
-			(error "missing separator in tuple")))))))
+			(error "missing separator in tuple"))))))))
 
 	  ;; cell expression
 	  ((eqv? t #\{ )

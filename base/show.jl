@@ -6,7 +6,7 @@ show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), i
 show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
 
 showcompact(io, x) = show(io, x)
-showcompact(x)     = show(x)
+showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")

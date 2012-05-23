@@ -1,4 +1,4 @@
-FC = gfortran
+include ../../Make.inc
 
 FFLAGS = -O2 -fPIC
 

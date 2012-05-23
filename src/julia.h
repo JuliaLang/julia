@@ -321,6 +321,9 @@ extern jl_struct_type_t *jl_backtrace_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
+extern jl_value_t *jl_domain_exception;
+extern jl_value_t *jl_overflow_exception;
+extern jl_value_t *jl_inexact_exception;
 extern jl_value_t *jl_undefref_exception;
 extern jl_value_t *jl_interrupt_exception;
 extern jl_value_t *jl_an_empty_cell;
@@ -749,8 +752,6 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
-void jl_undef_ref_error(void);
-void jl_divide_by_zero_error(void);
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);
