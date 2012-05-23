@@ -71,10 +71,7 @@ function pkg_checkout(dir::String, rev::String)
         git_each_submodule((name,path,sha1)->begin
             branch = try git_modules(`submodule.$name.branch`) end
             if branch != nothing
-                @cd path begin
-                    run(`git branch -f $branch $sha1`)
-                    run(`git checkout $branch`)
-                end
+                @cd path run(`git checkout -B $branch $sha1`)
             end
         end, true)
     end
