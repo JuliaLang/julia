@@ -99,15 +99,15 @@ function lufact{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseM
 end
 
 function lufact!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
-    Scopy = SparseMatrixCSC(S.m,S.n,S.colptr,S.rowval,S.nzval)
-    Scopy = _jl_convert_to_0_based_indexing!(Scopy)
+    Sshallow = SparseMatrixCSC(S.m,S.n,S.colptr,S.rowval,S.nzval)
+    Sshallow = _jl_convert_to_0_based_indexing!(Sshallow)
     numeric = []
 
     try
-        symbolic = _jl_umfpack_symbolic(Scopy)
-        numeric = _jl_umfpack_numeric(Scopy, symbolic)
+        symbolic = _jl_umfpack_symbolic(Sshallow)
+        numeric = _jl_umfpack_numeric(Sshallow, symbolic)
     catch e
-        Scopy = _jl_convert_to_1_based_indexing!(Scopy)
+        Sshallow = _jl_convert_to_1_based_indexing!(Sshallow)
         if is(e,MatrixIllConditionedException)
             error("Input matrix is ill conditioned or singular");
         else
@@ -117,9 +117,9 @@ function lufact!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::Sparse
 
     S.rowval = []
     S.nzval = []
-    S.colptr = zeros(S.n+1)
+    S.colptr = ones(S.n+1)
     
-    return UmfpackLUFactorization(numeric,Scopy) 
+    return UmfpackLUFactorization(numeric,Sshallow) 
     
 end
 
