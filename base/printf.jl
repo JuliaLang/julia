@@ -461,9 +461,9 @@ function _jl_printf_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     else
         if !contains(flags,'#')
-            push(blk.args, :(print($x)))
+            push(blk.args, :(print(out, $x)))
         else
-            push(blk.args, :(show($x)))
+            push(blk.args, :(show(out, $x)))
         end
     end
     :(($x)::Any), blk

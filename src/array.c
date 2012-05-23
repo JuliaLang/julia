@@ -371,7 +371,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     else {
         elt = ((jl_value_t**)a->data)[i];
         if (elt == NULL) {
-            jl_undef_ref_error();
+            jl_raise(jl_undefref_exception);
         }
     }
     return elt;

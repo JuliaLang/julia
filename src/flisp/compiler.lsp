@@ -621,17 +621,17 @@
 
 (define (compile f) (compile-f () f))
 
-(define (ref-int32-LE a i)
+#;(define (ref-int32-LE a i)
   (int32 (+ (ash (aref a (+ i 0)) 0)
 	    (ash (aref a (+ i 1)) 8)
 	    (ash (aref a (+ i 2)) 16)
 	    (ash (aref a (+ i 3)) 24))))
 
-(define (ref-int16-LE a i)
+#;(define (ref-int16-LE a i)
   (int16 (+ (ash (aref a (+ i 0)) 0)
 	    (ash (aref a (+ i 1)) 8))))
 
-(define (hex5 n)
+#;(define (hex5 n)
   (string.lpad (number->string n 16) 5 #\0))
 
 #;(define (disassemble f . lev?)

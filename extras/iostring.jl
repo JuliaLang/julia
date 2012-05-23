@@ -38,12 +38,12 @@ seek(io::IOString, n::Integer) = io.ptr = n+1
 function write{T}(to::IOString, a::Array{T})
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
-        if to.ptr + nb > length(to.data)
-            # this is absurdly inefficient
-            to.data = [to.data; Array(Uint8, to.ptr + nb - length(to.data) - 1)]
+        nshort = to.ptr + nb - length(to.data)
+        if nshort > 0
+            grow(to.data, nshort)
         end
-        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a)
-        ptr += nb
+        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a, (numel(a),))
+        to.ptr += nb
     else
         error("Write to IOString only supports bits types or arrays of bits types; got $T.")
     end
@@ -52,9 +52,10 @@ end
 
 function write(to::IOString, a::Uint8)
     if to.ptr + 1 > length(to.data)
-        # even more absurdly inefficient
-        to.data = [to.data; uint8(0)]
+        push(to.data, a)
+    else
+        to.data[to.ptr] = a
     end
-    to.data[to.ptr] = a
     to.ptr += 1
+    sizeof(Uint8)
 end

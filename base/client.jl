@@ -243,7 +243,7 @@ function _start()
         global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/extras/"]
 
         # Load customized startup
-        try include(strcat(getcwd(),"/startup.jl")) end
+        try include(strcat(cwd(),"/startup.jl")) end
         try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
 
         (quiet,repl) = process_options(ARGS)

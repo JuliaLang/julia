@@ -1,0 +1,15 @@
+
+{# Silence the sidebar's, relbar's #}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block sidebar1 %}{% endblock %}
+{% block sidebar2 %}{% endblock %}
+{% block relbar1 %}{% endblock %}
+{% block relbar2 %}{% endblock %}
+
+{% extends "basic/layout.html" %}
+{%- block content %}
+<div id="site">
+    {% block body %} {% endblock %}
+</div>
+{%- endblock %}

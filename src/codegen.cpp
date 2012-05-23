@@ -89,13 +89,16 @@ static GlobalVariable *jlfloat32temp_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
+static GlobalVariable *jldiverr_var;
+static GlobalVariable *jlundeferr_var;
+static GlobalVariable *jldomerr_var;
+static GlobalVariable *jlovferr_var;
+static GlobalVariable *jlinexacterr_var;
 
 // important functions
 static Function *jlnew_func;
 static Function *jlraise_func;
 static Function *jlerror_func;
-static Function *jluniniterror_func;
-static Function *jldiverror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
@@ -1906,6 +1909,16 @@ static void init_julia_llvm_env(Module *m)
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
+    jldiverr_var = global_to_llvm("jl_divbyzero_exception",
+                                  (void*)&jl_divbyzero_exception);
+    jlundeferr_var = global_to_llvm("jl_undefref_exception",
+                                    (void*)&jl_undefref_exception);
+    jldomerr_var = global_to_llvm("jl_domain_exception",
+                                  (void*)&jl_domain_exception);
+    jlovferr_var = global_to_llvm("jl_overflow_exception",
+                                  (void*)&jl_overflow_exception);
+    jlinexacterr_var = global_to_llvm("jl_inexact_exception",
+                                      (void*)&jl_inexact_exception);
     jlfloat32temp_var =
         new GlobalVariable(*jl_Module, T_float32,
                            false, GlobalVariable::PrivateLinkage,
@@ -1937,22 +1950,6 @@ static void init_julia_llvm_env(Module *m)
                                          (void*)&jl_new_struct_uninit);
 
     std::vector<Type*> empty_args(0);
-    jluniniterror_func =
-        Function::Create(FunctionType::get(T_void, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_undef_ref_error", jl_Module);
-    jluniniterror_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
-                                         (void*)&jl_undef_ref_error);
-
-    jldiverror_func =
-        Function::Create(FunctionType::get(T_void, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_divide_by_zero_error", jl_Module);
-    jldiverror_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jldiverror_func,
-                                         (void*)&jl_divide_by_zero_error);
-
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),
                          Function::ExternalLinkage, "_setjmp", jl_Module);

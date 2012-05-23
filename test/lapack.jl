@@ -1,6 +1,8 @@
 # blas, lapack
 Eps = sqrt(eps())
 
+begin
+local n
 n = 10
 a = rand(n,n)
 asym = a+a'+n*eye(n)
@@ -34,3 +36,4 @@ x = triu(a) \ b
 
 x = tril(a) \ b
 @assert norm(tril(a)*x - b) < Eps
+end

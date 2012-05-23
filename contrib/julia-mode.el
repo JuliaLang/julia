@@ -57,7 +57,7 @@
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
 
 (defconst julia-forloop-in-regex
-  "for +[^ 	]+ +.*\\(in\\)\\(\\s-\\|$\\)+")
+  "for +.*[^ 	].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-font-lock-keywords
   (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexNum\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|PtrInt\\|Long\\|Ulong\\)\\>" .
@@ -95,19 +95,21 @@
     (or (equal item (car lst))
 	(member item (cdr lst)))))
 
+(defun find-comment-open (p0)
+  (if (< (point) p0)
+      nil
+    (if (and (equal (char-after (point)) ?#)
+	     (evenp (strcount
+		     (buffer-substring p0 (point)) ?\")))
+	t
+      (progn (backward-char 1)
+	     (find-comment-open p0)))))
+
 (defun in-comment ()
   (save-excursion
-    (block incomment
-      (end-of-line)
-      (backward-char 1)
-      (let ((p0 (line-beginning-position)))
-	(while (>= (point) p0)
-	  (if (and (equal (char-after (point)) ?#)
-		   (evenp (strcount
-			   (buffer-substring p0 (point)) ?\")))
-	      (return-from incomment t))
-	  (backward-char 1))
-	nil))))
+    (end-of-line)
+    (backward-char 1)
+    (find-comment-open (line-beginning-position))))
 
 (defun strcount (str chr)
   (let ((i 0)
