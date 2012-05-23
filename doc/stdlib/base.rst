@@ -652,7 +652,23 @@ Mathematical Functions
 
    Accurately compute ``exp(x)-1``
 
-``exp2`` ``ldexp`` ``ceil`` ``floor`` ``trunc`` ``round`` ``iceil`` ``ifloor`` ``itrunc`` ``iround`` ``ipart`` ``fpart`` ``min`` ``max`` ``clamp`` ``abs``
+.. function:: ceil(x) -> Float
+
+   Returns the nearest integer not less than ``x``.
+
+.. function:: floor(x) -> Float
+
+   Returns the nearest integer not greater than ``x``.
+
+.. function:: iceil(x) -> Integer
+
+   Returns the nearest integer not less than ``x``.
+
+.. function:: ifloor(x) -> Integer
+
+   Returns the nearest integer not greater than ``x``.
+
+``exp2`` ``ldexp`` ``trunc`` ``round`` ``itrunc`` ``iround`` ``ipart`` ``fpart`` ``min`` ``max`` ``clamp`` ``abs``
 
 .. function:: abs2(x)
 
