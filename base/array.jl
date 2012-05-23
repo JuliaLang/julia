@@ -156,7 +156,9 @@ logspace(start::Real, stop::Real) = logspace(start, stop, 50)
 
 ## Conversions ##
 
+convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
+convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
 ## Indexing: ref ##
@@ -187,12 +189,12 @@ function ref(A::Array, I::Integer...)
 end
 
 # note: this is also useful for Ranges
-ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] | i=I ]
-ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] | i=I ]
+ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] for i=I ]
+ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] for i=I ]
 
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] | i=I ]
-ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] | i=I, j=J ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] | i=I, j=J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I ]
+ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 
 let ref_cache = nothing
 global ref
@@ -239,13 +241,9 @@ ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),fin
 
 ## Indexing: assign ##
 
-assign(A::Array{Any}, x::AbstractArray, i::Int) = arrayset(A,i,x)
 assign(A::Array{Any}, x::AbstractArray, i::Integer) = arrayset(A,int(i),x)
-assign(A::Array{Any}, x::ANY, i::Int) = arrayset(A,i,x)
 assign(A::Array{Any}, x::ANY, i::Integer) = arrayset(A,int(i),x)
-assign{T}(A::Array{T}, x::AbstractArray, i::Int) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x::AbstractArray, i::Integer) = arrayset(A,int(i),convert(T, x))
-assign{T}(A::Array{T}, x, i::Int) = arrayset(A,i,convert(T, x))
 assign{T}(A::Array{T}, x, i::Integer) = arrayset(A,int(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
@@ -436,7 +434,7 @@ end
 
 function push(a::Array{Any,1}, item::ANY)
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
-    a[end] = item
+    arrayset(a, length(a), item)
     return a
 end
 
@@ -601,13 +599,13 @@ end
 
 # ^ is difficult, since negative exponents give a different type
 
-./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] | i=1:numel(x) ], size(x) )
-./(x::Number,y::Array ) = reshape( [ x    ./ y[i] | i=1:numel(y) ], size(y) )
-./(x::Array, y::Number) = reshape( [ x[i] ./ y    | i=1:numel(x) ], size(x) )
+./(x::Array, y::Array ) = reshape( [ x[i] ./ y[i] for i=1:numel(x) ], size(x) )
+./(x::Number,y::Array ) = reshape( [ x    ./ y[i] for i=1:numel(y) ], size(y) )
+./(x::Array, y::Number) = reshape( [ x[i] ./ y    for i=1:numel(x) ], size(x) )
 
-.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] | i=1:numel(x) ], size(x) )
-.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] | i=1:numel(y) ], size(y) )
-.^(x::Array, y::Number) = reshape( [ x[i] ^ y    | i=1:numel(x) ], size(x) )
+.^(x::Array, y::Array ) = reshape( [ x[i] ^ y[i] for i=1:numel(x) ], size(x) )
+.^(x::Number,y::Array ) = reshape( [ x    ^ y[i] for i=1:numel(y) ], size(y) )
+.^(x::Array, y::Number) = reshape( [ x[i] ^ y    for i=1:numel(x) ], size(x) )
 
 function .^{S<:Integer,T<:Integer}(A::Array{S}, B::Array{T})
     F = Array(Float64, promote_shape(size(A), size(B)))
@@ -700,29 +698,40 @@ end
 
 ## Binary comparison operators ##
 
-for f in (:(==), :!=, :<, :<=)
+@vectorize_2arg Number (==)
+@vectorize_2arg Number (!=)
+@vectorize_2arg Real (<)
+@vectorize_2arg Real (<=)
+
+for (f,isf) in ((:(==),:isequal), (:(<), :isless))
     @eval begin
         function ($f)(A::Array, B::Array)
             F = Array(Bool, promote_shape(size(A),size(B)))
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B[i])
-            end
-            return F
-        end
-        function ($f)(A::Number, B::Array)
-            F = similar(B, Bool)
             for i = 1:numel(B)
-                F[i] = ($f)(A, B[i])
+                F[i] = ($isf)(A[i], B[i])
             end
             return F
         end
-        function ($f)(A::Array, B::Number)
-            F = similar(A, Bool)
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B)
+        ($f)(A, B::Array) =
+            reshape([ ($isf)(A, B[i]) for i=1:length(B)], size(B))
+        ($f)(A::Array, B) =
+            reshape([ ($isf)(A[i], B) for i=1:length(A)], size(A))
+    end
+end
+
+for (f,isf) in ((:(!=),:isequal), (:(<=), :isless))
+    @eval begin
+        function ($f)(A::Array, B::Array)
+            F = Array(Bool, promote_shape(size(A),size(B)))
+            for i = 1:numel(B)
+                F[i] = !($isf)(B[i], A[i])
             end
             return F
         end
+        ($f)(A, B::Array) =
+            reshape([ !($isf)(B[i], A) for i=1:length(B)], size(B))
+        ($f)(A::Array, B) =
+            reshape([ !($isf)(B, A[i]) for i=1:length(A)], size(A))
     end
 end
 
@@ -853,7 +862,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = k % 2 == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
-reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] | i=1:n ])
+reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 function reverse!(v::StridedVector)
     n = length(v)
     r = n
@@ -908,7 +917,7 @@ end
 
 let findn_cache = nothing
 function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end | i = 1:length(ivars)}
+    s = { quote I[$i][count] = $ivars[i] end for i = 1:length(ivars)}
     quote
     	Aind = A[$(ivars...)]
     	if Aind != z
@@ -981,11 +990,11 @@ areduce{T}(f::Function, A::StridedArray{T}, region::Region, v0) =
 let areduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
 function gen_areduce_func(n, f)
-    ivars = { gensym() | i=1:n }
+    ivars = { gensym() for i=1:n }
     # limits and vars for reduction loop
-    lo    = { gensym() | i=1:n }
-    hi    = { gensym() | i=1:n }
-    rvars = { gensym() | i=1:n }
+    lo    = { gensym() for i=1:n }
+    hi    = { gensym() for i=1:n }
+    rvars = { gensym() for i=1:n }
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
@@ -994,8 +1003,8 @@ function gen_areduce_func(n, f)
         else
             $lo[i] = $hi[i] = $ivars[i]
         end
-               end | i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) | i=1:n }  # lo:hi for all dims
+               end for i=1:n }
+    rranges = { :( ($lo[i]):($hi[i]) ) for i=1:n }  # lo:hi for all dims
     body =
     quote
         _tot = v0
@@ -1009,7 +1018,7 @@ function gen_areduce_func(n, f)
         local _F_
         function _F_(f, A, region, R, v0)
             _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) | i=1:n }, body)
+            $make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body)
         end
         _F_
     end
@@ -1271,7 +1280,7 @@ function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     if numel(A) > 50000
         return _jl_fftw_transpose(reshape(A, size(A, 2), size(A, 1)))
     else
-        return [ A[j,i] | i=1:size(A,2), j=1:size(A,1) ]
+        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
     end
 end
 
@@ -1279,11 +1288,11 @@ ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
 ctranspose(x::StridedVecOrMat) = transpose(x)
 
-transpose(x::StridedVector) = [ x[j] | i=1, j=1:size(x,1) ]
-transpose(x::StridedMatrix) = [ x[j,i] | i=1:size(x,2), j=1:size(x,1) ]
+transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
+transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) | i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) | i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 ## Permute ##
 
@@ -1300,7 +1309,7 @@ function permute(A::StridedArray, perm)
     end
 
     #calculates all the strides
-    strides = [ stride(A, perm[dim]) | dim = 1:length(perm) ]
+    strides = [ stride(A, perm[dim]) for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0
@@ -1311,7 +1320,7 @@ function permute(A::StridedArray, perm)
 
     function permute_one(ivars)
         len = length(ivars)
-        counts = { gensym() | i=1:len}
+        counts = { gensym() for i=1:len}
         toReturn = cell(len+1,2)
         for i = 1:numel(toReturn)
             toReturn[i] = nothing

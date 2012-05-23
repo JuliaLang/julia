@@ -16,13 +16,12 @@ end
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
     #C = zeros(promote_type(T,S), nA, nB)
-    #z = zero(eltype(C))
     #if mA != mB; error("*: argument shapes do not match"); end
     #if mA == 0; return C; end
     #col_ch = _jl_num_bit_chunks(mA)
     ## TODO: avoid using aux chunks and copy (?)
     #aux_chunksA = zeros(Uint64, col_ch)
-    #aux_chunksB = [zeros(Uint64, col_ch) | j=1:nB]
+    #aux_chunksB = [zeros(Uint64, col_ch) for j=1:nB]
     #for j = 1:nB
         #_jl_copy_chunks(aux_chunksB[j], 1, B.chunks, (j-1)*mA+1, mA)
     #end
@@ -106,6 +105,15 @@ gradient(F::BitVector, h::BitVector) = gradient(bitunpack(F), bitunpack(h))
 
 ## diag and related
 
+function diag(B::BitMatrix)
+    n = min(size(B))
+    v = similar(B, n)
+    for i = 1:n
+        v[i] = B[i,i]
+    end
+    return v
+end
+
 function diagm{T}(v::Union(BitVector{T},BitMatrix{T}))
     if isa(v, BitMatrix)
         if (size(v,1) != 1 && size(v,2) != 1)
@@ -125,3 +133,157 @@ end
 ## norm and rank
 
 svd(A::BitMatrix) = svd(float(A))
+
+qr(A::BitMatrix) = qr(float(A))
+
+## kron
+
+function kron{T,S}(a::BitVector{T}, b::BitVector{S})
+    m = length(a)
+    n = length(b)
+    R = BitArray(promote_type(T,S), m, n)
+    zS = zero(S)
+    for j = 1:n
+        if b[j] != zS
+            _jl_copy_chunks(R.chunks, (j-1)*m+1, a.chunks, 1, m)
+        end
+    end
+    return R
+end
+
+function kron{T,S}(a::BitMatrix{T}, b::BitMatrix{S})
+    mA,nA = size(a)
+    mB,nB = size(b)
+    R = bitzeros(promote_type(T,S), mA*mB, nA*nB)
+
+    zT = zero(T)
+    for i = 1:mA
+        ri = (1:mB)+(i-1)*mB
+        for j = 1:nA
+            if a[i,j] != zT
+                rj = (1:nB)+(j-1)*nB
+                R[ri,rj] = b
+            end
+        end
+    end
+    return R
+end
+
+## Structure query functions
+
+function issym(A::BitMatrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    return nnz(A - A.') == 0
+end
+
+ishermitian(A::BitMatrix) = issym(A)
+
+function _jl_nonzero_chunks(chunks::Vector{Uint64}, pos0::Int, pos1::Int)
+
+    k0, l0 = _jl_get_chunks_id(pos0)
+    k1, l1 = _jl_get_chunks_id(pos1)
+
+    delta_k = k1 - k0
+
+    z = uint64(0)
+    u = ~z
+    if delta_k == 0
+        msk_0 = (u << l0) & ~(u << l1 << 1)
+    else
+        msk_0 = (u << l0)
+        msk_1 = ~(u << l1 << 1)
+    end
+
+    if (chunks[k0] & msk_0) != z
+        return true
+    end
+
+    if delta_k == 0
+        return false
+    end
+
+    for i = k0 + 1 : k1 - 1
+        if chunks[i] != z
+            return true
+        end
+    end
+
+    if (chunks[k1] & msk_1) != z
+        return true
+    end
+
+    return false
+end
+
+function istriu(A::BitMatrix)
+    m, n = size(A)
+    for j = 1:min(n,m-1)
+        stride = (j-1)*m
+        if _jl_nonzero_chunks(A.chunks, stride+j+1, stride+m)
+            return false
+        end
+    end
+    return true
+end
+
+function istril(A::BitMatrix)
+    m, n = size(A)
+    if m == 0 || n == 0
+        return true
+    end
+    for j = 2:n
+        stride = (j-1)*m
+        if _jl_nonzero_chunks(A.chunks, stride+1, stride+min(j-1,m))
+            return false
+        end
+    end
+    return true
+end
+
+function findmax(a::BitArray)
+    if length(a) == 0
+        return (typemin(eltype(a)), 0)
+    end
+    m = zero(eltype(a))
+    o = one(eltype(a))
+    mi = 1
+    ti = 1
+    for i=1:length(a.chunks)
+        k = trailing_zeros(a.chunks[i])
+        ti += k
+        if k != 64
+            m = o
+            mi = ti
+            break
+        end
+    end
+    return (m, mi)
+end
+
+function findmin(a::BitArray)
+    if length(a) == 0
+        return (typemax(eltype(a)), 0)
+    end
+    m = one(eltype(a))
+    z = zero(eltype(a))
+    mi = 1
+    ti = 1
+    for i=1:length(a.chunks) - 1
+        k = trailing_ones(a.chunks[i])
+        ti += k
+        if k != 64
+            return (z, ti)
+        end
+    end
+    u = ~uint64(0)
+    l = (length(a)-1) & 63 + 1
+    msk = (u >>> (64 - l))
+    k = trailing_ones(a.chunks[end] & msk)
+    ti += k
+    if k != l
+        m = z
+        mi = ti
+    end
+    return (m, mi)
+end

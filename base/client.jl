@@ -1,6 +1,9 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+@unix_only _jl_repl = _jl_lib
+@windows_only _jl_repl = Ptr{Void}[ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL),C_NULL] # fragile struct allocation of a uv_lib_t*
+
 const _jl_color_normal = "\033[0m"
 
 function _jl_answer_color()
@@ -31,30 +34,29 @@ function repl_callback(ast::ANY, show_value)
         exit(0)
     end
     _jl_eval_user_input(ast, show_value!=0)
-    ccall(:repl_callback_enable, Void, ())
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 end
 
 # called to show a REPL result
-function repl_show(v::ANY)
+repl_show(v::ANY) = repl_show(OUTPUT_STREAM, v)
+function repl_show(io, v::ANY)
     if !(isa(v,Function) && isgeneric(v))
         if isa(v,AbstractVector) && !isa(v,Ranges)
-            print(summary(v))
-            println(":")
-            print_matrix(reshape(v,(length(v),1)))
+            print(io, summary(v))
+            if !isempty(v)
+                println(io, ":")
+                print_matrix(io, reshape(v,(length(v),1)))
+            end
         else
-            show(v)
+            show(io, v)
         end
     end
     if isgeneric(v)
         if isa(v,CompositeKind)
-            println()
-            name = v.name.name
-        else
-            name = string(v)
+            println(io)
         end
-        println("Methods for generic function ", name)
-        ccall(:jl_show_method_table, Void, (Any,), v)
+        show(io, v.env)
     end
 end
 
@@ -84,6 +86,9 @@ function _jl_eval_user_input(ast::ANY, show_value)
             end
             break
         catch e
+            if iserr
+                println("SYSTEM ERROR: show(lasterr) caused an error")
+            end
             iserr, lasterr = true, e
         end
     end
@@ -91,20 +96,20 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(handle::Ptr,nread::PtrSize,base::Ptr,len::Int32)
-    ccall(:jl_readBuffer,Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
 end
 
 function run_repl()
     global const _jl_repl_channel = RemoteRef()
 
     if _jl_have_color
-        ccall(:jl_enable_color, Void, ())
+        ccall(dlsym(_jl_repl,:jl_enable_color), Void, ())
     end
 
     # ctrl-C interrupt for interactive use
     ccall(:jl_install_sigint_handler, Void, ())
 
-    ccall(:repl_callback_enable, Void, ())
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 
     cont = true
@@ -118,7 +123,7 @@ function run_repl()
             if isa(e, InterruptException)
                 println("^C")
                 show(e)
-                ccall(:rl_clear_input, Void, ());
+                ccall(dlsym(_jl_repl,:jl_clear_input), Void, ());
                 cont = true
             else
                 iserr = true

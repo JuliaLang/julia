@@ -1,6 +1,5 @@
 #ifndef JULIA_H
 #define JULIA_H
-#define JL_TRACE
 
 #if (defined(_WIN32) || defined (_MSC_VER)) && !defined(__WIN32__)
     #define __WIN32__
@@ -369,12 +368,12 @@ extern jl_function_t *jl_method_missing_func;
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-extern uv_lib_t jl_dl_handle;
+extern uv_lib_t *jl_dl_handle;
 #if defined(__WIN32__) || defined (_WIN32)
-extern uv_lib_t jl_ntdll_handle;
-extern uv_lib_t jl_kernel32_handle;
-extern uv_lib_t jl_crtdll_handle;
-extern uv_lib_t jl_winsock_handle;
+extern uv_lib_t *jl_ntdll_handle;
+extern uv_lib_t *jl_kernel32_handle;
+extern uv_lib_t *jl_crtdll_handle;
+extern uv_lib_t *jl_winsock_handle;
 #endif
 extern uv_loop_t *jl_event_loop;
 extern uv_loop_t *jl_io_loop;
@@ -401,10 +400,7 @@ extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 
-//IO objects
-extern uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
-extern uv_stream_t *jl_stdout_tty;
-extern uv_stream_t *jl_stderr_tty;
+
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -421,7 +417,7 @@ void *allocobj(size_t sz);
 #endif
 
 #define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(x))
+#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
 #define jl_t0(t) jl_tupleref(t,0)
 #define jl_t1(t) jl_tupleref(t,1)
 
@@ -484,12 +480,15 @@ void *allocobj(size_t sz);
 #define jl_is_pointer(v)     jl_is_cpointer_type(jl_typeof(v))
 #define jl_is_gf(f)          (((jl_function_t*)(f))->fptr==jl_apply_generic)
 
+#define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
+#define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
 #define jl_array_len(a)   (((jl_array_t*)(a))->length)
 #define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
 #define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
 #define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
+#define jl_iostr_data(s)  ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
@@ -624,7 +623,7 @@ jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
 jl_value_t *jl_box_uint32(uint32_t x);
 jl_value_t *jl_box_char(uint32_t x);
-jl_value_t *jl_box_int64(int64_t x);
+DLLEXPORT jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
@@ -632,7 +631,6 @@ jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
 jl_value_t *jl_box64(jl_bits_type_t *t, int64_t x);
-jl_value_t *jl_box_pointer(void *p);
 int8_t jl_unbox_bool(jl_value_t *v);
 int8_t jl_unbox_int8(jl_value_t *v);
 uint8_t jl_unbox_uint8(jl_value_t *v);
@@ -736,6 +734,7 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
+DLLEXPORT int jl_sizeof_ios_t();
 
 #ifdef __WIN32__
 DLLEXPORT struct tm* localtime_r(const time_t *t, struct tm *tm);
@@ -779,14 +778,15 @@ jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
-DLLEXPORT void jl_show(jl_value_t *v);
-DLLEXPORT void jl_show_any(jl_value_t *v);
-void jl_show_tuple(jl_tuple_t *t, char opn, char cls, int comma_one);
+DLLEXPORT void jl_show(jl_value_t *stream, jl_value_t *v);
+void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one);
+DLLEXPORT jl_value_t *jl_stdout_obj();
+DLLEXPORT jl_value_t *jl_stderr_obj();
 
 // modules
 extern jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
-extern jl_module_t *jl_current_module;
+extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
@@ -806,11 +806,9 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
-DLLEXPORT uv_lib_t jl_load_dynamic_library(char *fname);
-DLLEXPORT void *jl_dlsym(uv_lib_t handle, char *symbol);
-DLLEXPORT void *jl_dlsym_e(uv_lib_t handle, char *symbol); //supress errors
-DLLEXPORT void jl_print();
-
+DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
+DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
+void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
 //event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
@@ -833,7 +831,7 @@ jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
 void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
                    jl_lambda_info_t *def);
 
-DLLEXPORT void jl_show_method_table(jl_function_t *gf);
+DLLEXPORT void jl_show_method_table(jl_value_t *outstr, jl_function_t *gf);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
                                         int cache);
@@ -986,7 +984,6 @@ typedef struct _jl_savestate_t {
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
     jl_value_t *ostream_obj;
-    uv_stream_t *current_output_stream;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
@@ -1013,10 +1010,10 @@ typedef struct _jl_task_t {
     jl_savestate_t state;
 } jl_task_t;
 
-union jl_stream {
+typedef union jl_stream {
     ios_t ios;
     uv_stream_t stream;
-};
+} JL_STREAM;
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;
@@ -1027,17 +1024,27 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
 DLLEXPORT void NORETURN jl_raise(jl_value_t *e);
 DLLEXPORT void jl_register_toplevel_eh(void);
 
-DLLEXPORT jl_value_t *jl_current_output_stream_obj(void);
-DLLEXPORT uv_stream_t *jl_current_output_stream(void);
-DLLEXPORT void jl_set_current_output_stream_obj(jl_value_t *v);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 
+DLLEXPORT int jl_cpu_cores(void);
+
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+#define JL_STDOUT jl_stdout_tty
+#define JL_STDERR jl_stderr_tty
+#define JL_PRINTF jl_printf
+#define JL_PUTC	  jl_putc
+#define JL_PUTS	  jl_puts
+#define JL_WRITE  jl_write
+
+//IO objects
+extern DLLEXPORT uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern DLLEXPORT uv_stream_t * JL_STDOUT;
+extern DLLEXPORT uv_stream_t * JL_STDERR;
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {
@@ -1046,7 +1053,6 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     jl_current_task->state.eh_ctx = ss->eh_ctx;
     jl_current_task->state.bt = ss->bt;
     jl_current_task->state.ostream_obj = ss->ostream_obj;
-    jl_current_task->state.current_output_stream = ss->current_output_stream;
     jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
     jl_pgcstack = ss->gcstack;
@@ -1057,10 +1063,15 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
 DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
 DLLEXPORT void jl_pop_handler(int n);
 
+#if defined(__WIN32__)
+#define sigsetjmp(a,b) setjmp(a)
+#define siglongjmp(a,b) longjmp(a,b)
+#endif
+
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!setjmp(__handlr))                                              \
+    if (!sigsetjmp(__handlr,1))                                              \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
 #define JL_EH_POP() jl_eh_restore_state(&__ss)

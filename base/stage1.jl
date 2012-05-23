@@ -9,7 +9,7 @@ begin
     local minf = getmethods(typeinf, atypes)
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
-print("calling jl_save_sys_img", "\n") #don't use println here as it may compile w/ the wrong version of write that "does not support byte I/O"
+
 ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
       "$JULIA_HOME/sys.ji", "start_image.jl")
 

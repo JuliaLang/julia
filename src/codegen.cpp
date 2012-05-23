@@ -156,6 +156,11 @@ static Function *to_function(jl_lambda_info_t *li)
     nested_compile = last_n_c;
     FPM->run(*f);
     //n_compile++;
+    // print out the function's LLVM code
+    //ios_printf(ios_stderr, "%s:%d\n",
+    //           ((jl_sym_t*)li->file)->name, jl_unbox_long(li->line));
+    //f->dump();
+    //verifyFunction(*f);
     if (old != NULL) {
         builder.SetInsertPoint(old);
         builder.SetCurrentDebugLocation(olddl);
@@ -259,7 +264,7 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
         if (is_global(sym, ctx)) {
             size_t i;
             if (sparams) {
-                for(i=0; i < ctx->sp->length; i+=2) {
+                for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
                     if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                         // static parameter
                         return true;
@@ -517,9 +522,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      jl_printf(jl_stdout_tty, "call %s%s\n",
-                      jl_print_to_string(args[0]),
-                      jl_print_to_string((jl_value_t*)aty));
+                      JL_PRINTF(JL_STDOUT, "call %s%s\n",
+                      jl_sprint(args[0]),
+                      jl_sprint((jl_value_t*)aty));
                   }
                 */
                 f = jl_get_specialization(f, aty);
@@ -634,7 +639,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
             Value *arg1 = emit_expr(args[1], ctx);
             if (jl_is_long(args[2])) {
-                size_t tlen = ((jl_tuple_t*)tty)->length;
+                size_t tlen = jl_tuple_len(tty);
                 int isseqt =
                     tlen>0 && jl_is_seq_type(jl_tupleref(tty, tlen-1));
                 size_t idx = jl_unbox_long(args[2]);
@@ -893,7 +898,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             jl_value_t *ty =
                 jl_interpret_toplevel_expr_in(ctx->module, expr,
                                               &jl_tupleref(ctx->sp,0),
-                                              ctx->sp->length/2);
+                                              jl_tuple_len(ctx->sp)/2);
             if (jl_is_leaf_type(ty)) {
                 JL_GC_POP();
                 return literal_pointer_val(ty);
@@ -1076,7 +1081,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
     if (isglobal) {
         size_t i;
         // look for static parameter
-        for(i=0; i < ctx->sp->length; i+=2) {
+        for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
             assert(jl_is_symbol(jl_tupleref(ctx->sp, i)));
             if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                 return literal_pointer_val(jl_tupleref(ctx->sp, i+1));
@@ -1304,7 +1309,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             jl_is_struct_type(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
             ty = jl_tparam0(ty);
-            size_t nf = ((jl_struct_type_t*)ty)->names->length;
+            size_t nf = jl_tuple_len(((jl_struct_type_t*)ty)->names);
             if (nf > 0) {
                 Value *strct =
                     builder.CreateCall(jlallocobj_func,
@@ -1411,8 +1416,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
-    //jl_print((jl_value_t*)ast);
-    //jl_printf(jl_stdout_tty, "\n");
+    //JL_PRINTF((jl_value_t*)ast);
+    //JL_PRINTF(JL_STDOUT, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, Value*> localVars;

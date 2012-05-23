@@ -1,5 +1,5 @@
 #include "server.h"
-#include "../../external/libuv/include/uv.h"
+#include "../../deps/libuv/include/uv.h"
 
 using namespace std;
 

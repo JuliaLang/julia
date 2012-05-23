@@ -17,9 +17,6 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
-#include <setjmp.h>
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -423,6 +420,18 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
+//DLLEXPORT void debug_print_function_info(size_t ip) {
+//    char *func_name;
+//    int line_num;
+//    const char *file_name;
+//    getFunctionInfo(&func_name, &line_num, &file_name, ip);
+//    if (func_name != NULL) {
+//        JL_PRINTF(JL_STDERR, "%% %s @ %s : %d\n", func_name, file_name, line_num);
+//	} else {
+//        JL_PRINTF(JL_STDERR, "ip unknown\n", func_name, file_name, line_num);
+//	}
+//}
+
 #if defined(__APPLE__)
 // stacktrace using execinfo
 static jl_value_t *build_backtrace(void)
@@ -472,7 +481,7 @@ static jl_value_t *build_backtrace(void)
 		}
     }else
     {
-        jl_puts("Failed to load kernel32.dll",jl_stderr_tty);
+        JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
         jl_exit(1);
     }
 	FreeLibrary(kernel32);
@@ -532,13 +541,13 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh&&eh->state.eh_ctx!=0) {
+    if (jl_current_task == eh && eh->state.eh_ctx!=0) {
         siglongjmp(*eh->state.eh_ctx, 1);
     }
     else {
         if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
-            jl_printf(jl_stderr_tty, "warning: exception handler exited\n");
+            JL_PRINTF(JL_STDERR, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
         // for now, exit the task
@@ -567,7 +576,6 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     // there is no active exception handler available on this stack yet
     t->state.eh_ctx = NULL;
     t->state.ostream_obj = jl_current_task->state.ostream_obj;
-    t->state.current_output_stream = jl_current_task->state.current_output_stream;
     t->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     t->state.gcstack = NULL;
@@ -686,7 +694,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    jl_current_task->state.current_output_stream = jl_stdout_tty;
+    //jl_current_task->state.current_output_stream = ios_stdout;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;

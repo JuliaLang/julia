@@ -40,22 +40,22 @@ VersionNumber(x::Integer, y::Integer, z::Integer) = VersionNumber(x, y, z, [], [
 VersionNumber(x::Integer, y::Integer)             = VersionNumber(x, y, 0, [], [])
 VersionNumber(x::Integer)                         = VersionNumber(x, 0, 0, [], [])
 
-function print(v::VersionNumber)
-    print(v.major)
-    print('.')
-    print(v.minor)
-    print('.')
-    print(v.patch)
+function print(io::IO, v::VersionNumber)
+    print(io, v.major)
+    print(io, '.')
+    print(io, v.minor)
+    print(io, '.')
+    print(io, v.patch)
     if !isempty(v.prerelease)
-        print('-')
-        print_joined(v.prerelease,'.')
+        print(io, '-')
+        print_joined(io, v.prerelease,'.')
     end
     if !isempty(v.build)
-        print('+')
-        print_joined(v.build,'.')
+        print(io, '+')
+        print_joined(io, v.build,'.')
     end
 end
-show(v::VersionNumber) = print("v\"",v,"\"")
+show(io, v::VersionNumber) = print(io, "v\"",v,"\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -130,15 +130,16 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,0)#chomp(readall(open("$JULIA_HOME/VERSION"))))
+const VERSION = convert(VersionNumber,chomp(readall("$JULIA_HOME/VERSION")))
 try
-    ver = print_to_string(print,VERSION)
+    ver = string(VERSION)
     commit = chomp(readall(`git rev-parse HEAD`))
     tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
              catch "doesn't reference a commit"; end
     ctime = int(readall(`git log -1 --pretty=format:%ct`))
     if commit != tagged
-        push(VERSION.build, ctime)
+        # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
+        push(VERSION.build, ctime - 1250998746)
         push(VERSION.build, "r$(commit[1:4])")
     end
     clean = success(`git diff --quiet`)
@@ -165,7 +166,6 @@ I"               _
 |__/                   |
 
 "
-local reset = "\033[0m"
 local tx = "\033[0m\033[1m" # text
 local jl = "\033[0m\033[1m" # julia
 local d1 = "\033[34m" # first dot
@@ -173,7 +173,7 @@ local d2 = "\033[31m" # second dot
 local d3 = "\033[32m" # third dot
 local d4 = "\033[35m" # fourth dot
 const _jl_banner_color =
-"$(jl)               $(d3)_
+"\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |
    $(jl)_ _   _| |_  __ _$(tx)   |  A fresh approach to technical computing
@@ -182,5 +182,5 @@ const _jl_banner_color =
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
 $(jl)|__/$(tx)                   |
 
-$(reset)"
+\033[0m"
 end # begin

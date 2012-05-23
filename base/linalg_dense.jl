@@ -24,7 +24,10 @@ cross(a::Vector, b::Vector) =
 # call BLAS, and convert back to required type.
 
 # TODO: support transposed arguments
-function (*){T,S}(A::Matrix{T}, B::Vector{S})
+# NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
+#       in libalg_blas.jl
+(*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = _jl_generic_matvecmul(A, B)
+function _jl_generic_matvecmul{T,S}(A::StridedMatrix{T}, B::StridedVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
     C = zeros(promote_type(T,S), mA)
@@ -40,7 +43,10 @@ end
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
 # TODO: support transposed arguments
-function (*){T,S}(A::Matrix{T}, B::Matrix{S})
+# NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
+#       in libalg_blas.jl
+(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(A, B)
+function _jl_generic_matmatmul{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
     (mA, nA) = size(A)
     (mB, nB) = size(B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
@@ -73,7 +79,7 @@ function (*){T,S}(A::Matrix{T}, B::Matrix{S})
 end
 
 # multiply 2x2 matrices
-function matmul2x2{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
+function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
 
@@ -100,7 +106,7 @@ function matmul2x2{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
     return C
 end
 
-function matmul3x3{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
+function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
 
@@ -148,18 +154,18 @@ function matmul3x3{T,S}(tA, tB, A::Matrix{T}, B::Matrix{S})
 end
 
 
-triu{T}(M::Matrix{T}, k::Integer) = [ j-i >= k ? M[i,j] : zero(T) |
-                                    i=1:size(M,1), j=1:size(M,2) ]
-tril{T}(M::Matrix{T}, k::Integer) = [ j-i <= k ? M[i,j] : zero(T) |
-                                    i=1:size(M,1), j=1:size(M,2) ]
+triu{T}(M::Matrix{T}, k::Integer) = [ j-i >= k ? M[i,j] : zero(T) for
+                                     i=1:size(M,1), j=1:size(M,2) ]
+tril{T}(M::Matrix{T}, k::Integer) = [ j-i <= k ? M[i,j] : zero(T) for
+                                     i=1:size(M,1), j=1:size(M,2) ]
 
-diff(a::Vector) = [ a[i+1] - a[i] | i=1:length(a)-1 ]
+diff(a::Vector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
 function diff(a::Matrix, dim::Integer)
     if dim == 1
-        [ a[i+1,j] - a[i,j] | i=1:size(a,1)-1, j=1:size(a,2) ]
+        [ a[i+1,j] - a[i,j] for i=1:size(a,1)-1, j=1:size(a,2) ]
     else
-        [ a[i,j+1] - a[i,j] | i=1:size(a,1), j=1:size(a,2)-1 ]
+        [ a[i,j+1] - a[i,j] for i=1:size(a,1), j=1:size(a,2)-1 ]
     end
 end
 
@@ -180,7 +186,7 @@ function gradient(F::Vector, h::Vector)
     return g
 end
 
-diag(A::Matrix) = [ A[i,i] | i=1:min(size(A,1),size(A,2)) ]
+diag(A::Matrix) = [ A[i,i] for i=1:min(size(A,1),size(A,2)) ]
 
 function diagm{T}(v::Union(Vector{T},Matrix{T}))
     if isa(v, Matrix)
@@ -206,7 +212,7 @@ function trace{T}(A::Matrix{T})
     return t
 end
 
-kron(a::Vector, b::Vector) = [ a[i]*b[j] | i=1:length(a), j=1:length(b) ]
+kron(a::Vector, b::Vector) = [ a[i]*b[j] for i=1:length(a), j=1:length(b) ]
 
 function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R = Array(promote_type(T,S), size(a,1)*size(b,1), size(a,2)*size(b,2))
@@ -278,9 +284,8 @@ end
 
 function istriu(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = 1:n
-        if A[i,j] != 0 && j < i
+    for j = 1:min(n,m-1), i = j+1:m
+        if A[i,j] != 0
             return false
         end
     end
@@ -289,9 +294,8 @@ end
 
 function istril(A::Matrix)
     m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = n:-1:1
-        if A[i,j] != 0 && j > i
+    for j = 2:n, i = 1:min(j-1,m)
+        if A[i,j] != 0
             return false
         end
     end

@@ -55,7 +55,7 @@ type BackTrace <: Exception
     trace::Array{Any,1}
 end
 
-show(bt::BackTrace) = show(bt.e)
+show(io, bt::BackTrace) = show(io,bt.e)
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
@@ -69,6 +69,11 @@ uint(x::Uint) = x
 
 # function version of field assignment
 setfield(s, f, v) = (s.(f) = v)
+
+# index colon
+type Colon
+end
+const (:) = Colon()
 
 hash(w::WeakRef) = hash(w.value)
 isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)

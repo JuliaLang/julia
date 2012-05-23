@@ -23,10 +23,6 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
-/*
-#define MEMBEBUG
-#define MEMPROFILE*/
-
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
 #  define BVOFFS 3
@@ -463,7 +459,7 @@ static void gc_markval_(jl_value_t *v)
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t l = ((jl_tuple_t*)v)->length;
+        size_t l = jl_tuple_len(v);
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
             if (elt != NULL)
@@ -545,7 +541,7 @@ static void gc_markval_(jl_value_t *v)
         // don't mark contents
     }
     else {
-        int nf = (int)((jl_struct_type_t*)vt)->names->length;
+        int nf = (int)jl_tuple_len(((jl_struct_type_t*)vt)->names);
         if (nf > 0) {
             int i = 0;
             if (vt == (jl_value_t*)jl_struct_kind ||
@@ -639,21 +635,13 @@ static void big_obj_stats(void);
 #ifdef OBJPROFILE
 static void print_obj_profile(void)
 {
-    jl_value_t *errstream = jl_get_global(jl_base_module,
-                                          jl_symbol("stderr_stream"));
-    JL_TRY {
-        if (errstream)
-            jl_set_current_output_stream_obj(errstream);
-        uv_stream_t *s = jl_current_output_stream();
-        for(int i=0; i < obj_counts.size; i+=2) {
-            if (obj_counts.table[i+1] != HT_NOTFOUND) {
-                jl_printf(s, "%d ", obj_counts.table[i+1]-1);
-                jl_show(obj_counts.table[i]);
-                jl_printf(s, "\n");
-            }
+    jl_value_t *errstream = jl_stderr_obj();
+    for(int i=0; i < obj_counts.size; i+=2) {
+        if (obj_counts.table[i+1] != HT_NOTFOUND) {
+            ios_printf(ios_stderr, "%d ", obj_counts.table[i+1]-1);
+            jl_show(errstream, obj_counts.table[i]);
+            ios_printf(ios_stderr, "\n");
         }
-    }
-    JL_CATCH {
     }
 }
 #endif
@@ -668,7 +656,7 @@ void jl_gc_collect(void)
 #endif
         gc_mark();
 #ifdef GCTIME
-        jl_printf(jl_stderr_tty, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
@@ -680,7 +668,7 @@ void jl_gc_collect(void)
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        jl_printf(jl_stderr_tty, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
         run_finalizers();
         JL_SIGATOMIC_END();
@@ -812,7 +800,7 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
         pg = nextpg;
     }
     *pwaste = npgs*GC_PAGE_SZ - (nused*p->osize);
-    jl_printf(jl_stdout_tty,
+    JL_PRINTF(JL_STDOUT,
                "%4d : %7d/%7d objects, %5d pages, %8d bytes, %8d waste\n",
                p->osize,
                nused,
@@ -838,7 +826,7 @@ static void all_pool_stats(void)
         no += (b/ephe_pools[i].osize);
         tw += w;
     }
-    jl_printf(jl_stdout_tty,
+    JL_PRINTF(JL_STDOUT,
                "%d objects, %d total allocated, %d total fragments\n",
                no, nb, tw);
 }
@@ -858,6 +846,6 @@ static void big_obj_stats(void)
         }
         v = v->next;
     }
-    jl_printf(jl_stdout_tty, "%d bytes in %d large objects\n", nbytes, nused);
+    JL_PRINTF(JL_STDOUT, "%d bytes in %d large objects\n", nbytes, nused);
 }
 #endif //MEMPROFILE

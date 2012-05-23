@@ -7,21 +7,18 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (<- -- -->)
-     (> < >= <= == != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
-     (: ..)
+     (> < >= <= == === != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
+     (:)
      (+ - |\|| $)
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
      (|::|)
-     (|.|)))
+     (|.| |..|)))
 
-(define-macro (prec-ops n) `(aref ops-by-prec ,n))
+(define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
-(define normal-ops (vector.map identity ops-by-prec))
-(define no-pipe-ops (vector.map identity ops-by-prec))
-(vector-set! no-pipe-ops 7 '(+ - $))
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
@@ -30,13 +27,8 @@
 (define current-filename 'none)
 
 (define-macro (with-normal-ops . body)
-  `(with-bindings ((ops-by-prec normal-ops)
-		   (range-colon-enabled #t)
+  `(with-bindings ((range-colon-enabled #t)
 		   (space-sensitive #f))
-		  ,@body))
-
-(define-macro (without-bitor . body)
-  `(with-bindings ((ops-by-prec no-pipe-ops))
 		  ,@body))
 
 (define-macro (without-range-colon . body)
@@ -106,7 +98,7 @@
 ;; characters that can be in an operator
 (define (opchar? c) (string.find op-chars c))
 ;; characters that can follow . in an operator
-(define (dot-opchar? c) (and (char? c) (string.find "*^/\\" c)))
+(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\" c)))
 (define (operator? c) (memq c operators))
 
 (define (skip-to-eol port)
@@ -539,10 +531,6 @@
 			       (eq? (car arg) 'tuple))
 			  (list* 'call op (cdr arg))
 			  (list  'call op arg)))))))
-	  ((eq? t '|::|)
-	   ;; allow ::T, omitting argument name
-	   (take-token s)
-	   `(|::| ,(parse-call s)))
 	  (else
 	   (parse-factor s)))))
 
@@ -566,7 +554,21 @@
 (define (parse-factor s)
   (parse-factor-h s parse-decl (prec-ops 11)))
 
-(define (parse-decl s) (parse-LtoR s parse-call (prec-ops 12)))
+(define (parse-decl s)
+  (let loop ((ex (if (eq? (peek-token s) '|::|)
+		     (begin (take-token s)
+			    `(|::| ,(parse-call s)))
+		     (parse-call s))))
+    (let ((t (peek-token s)))
+      (case t
+	((|::|) (take-token s)
+	 (loop (list t ex (parse-call s))))
+	((->)   (take-token s)
+	 ;; -> is unusual: it binds tightly on the left and
+	 ;; loosely on the right.
+	 (list '-> ex (parse-eq* s)))
+	(else
+	 ex)))))
 
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
@@ -596,6 +598,11 @@
 		   (if (eqv? (peek-token s) #\()
 		       (loop `(|.| ,ex ,(parse-atom s)))
 		       (loop `(|.| ,ex (quote ,(parse-atom s))))))
+		  ((|..|)
+		   (take-token s)
+		   (if (eqv? (peek-token s) #\()
+		       (loop `(call ,t ,ex ,(parse-atom s)))
+		       (loop `(call ,t ,ex (quote ,(parse-atom s))))))
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
@@ -613,10 +620,6 @@
 					       ,(string (take-token s))))
 			     (loop `(macrocall ,macname ,(car str)))))
 		       ex))
-		  ((->)  (take-token s)
-		   ;; -> is unusual: it binds tightly on the left and
-		   ;; loosely on the right.
-		   (list '-> ex (parse-eq* s)))
 		  (else ex))))))))
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 13)))
@@ -660,7 +663,7 @@
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected " nxt))))))
     ((let)
-     (let* ((binds (if (eqv? (peek-token s) #\newline)
+     (let* ((binds (if (memv (peek-token s) '(#\newline #\;))
 		       (begin (take-token s)
 			      '())
 		       (parse-comma-separated-assignments s)))
@@ -791,7 +794,8 @@
      (let loop ((exprs '()))
        (if (or (closing-token? (peek-token s))
 	       (newline? (peek-token s))
-	       (and inside-vec (eq? (peek-token s) '|\||)))
+	       (and inside-vec (or (eq? (peek-token s) '|\||)
+				   (eq? (peek-token s) 'for))))
 	   (reverse! exprs)
 	   (let ((e (parse-eq s)))
 	     (case (peek-token s)
@@ -883,31 +887,33 @@
 	     (error "unexpected comma in matrix expression"))
 	    ((#\] #\})
 	     (error (string "unexpected " t)))
+	    ((for)
+	     (error "invalid comprehension syntax"))
 	    (else
 	     (loop (cons (parse-eq* s) vec) outer)))))))
 
 (define (parse-cat s closer)
   (with-normal-ops
    (with-space-sensitive
-    (parse-cat- s closer))))
-(define (parse-cat- s closer)
-  (if (eqv? (require-token s) closer)
-      (begin (take-token s)
-	     (list 'vcat))  ; [] => (vcat)
-      (let ((first (without-bitor (parse-eq* s))))
-	(case (peek-token s)
-	  ;; dispatch to array syntax, comprehension, or matrix syntax
-	  ((#\,)
-	   (parse-vcat s first closer))
-	  ((|\||)
-	   (take-token s)
-	   (let ((r (parse-comma-separated-iters s)))
-	     (if (not (eqv? (require-token s) closer))
-		 (error (string "expected " closer))
-		 (take-token s))
-	     `(comprehension ,first ,@r)))
-	  (else
-	   (parse-matrix s first closer))))))
+    (if (eqv? (require-token s) closer)
+	(begin (take-token s)
+	       (list 'vcat))  ; [] => (vcat)
+	(let ((first (parse-eq* s)))
+	  (case (peek-token s)
+	    ;; dispatch to array syntax, comprehension, or matrix syntax
+	    ((#\,)
+	     (parse-vcat s first closer))
+	    ;;((|\||)
+	    ;; (error "old syntax"))
+	    ((for)
+	     (take-token s)
+	     (let ((r (parse-comma-separated-iters s)))
+	       (if (not (eqv? (require-token s) closer))
+		   (error (string "expected " closer))
+		   (take-token s))
+	       `(comprehension ,first ,@r)))
+	    (else
+	     (parse-matrix s first closer))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)

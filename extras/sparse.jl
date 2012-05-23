@@ -734,8 +734,8 @@ end
 
 function vcat(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) | x = X ] 
-    nX = [ size(x, 2) | x = X ]
+    mX = [ size(x, 1) for x in X ] 
+    nX = [ size(x, 2) for x in X ]
     n = nX[1]
     for i = 2 : num
         if nX[i] != n; error("error in vcat: mismatched dimensions"); end
@@ -746,7 +746,7 @@ function vcat(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nnz(x) | x = X ]
+    nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)
@@ -772,8 +772,8 @@ end
 
 function hcat(X::SparseMatrixCSC...)
     num = length(X)
-    mX = [ size(x, 1) | x = X ]
-    nX = [ size(x, 2) | x = X ]
+    mX = [ size(x, 1) for x in X ]
+    nX = [ size(x, 2) for x in X ]
     m = mX[1]
     for i = 2 : num
         if mX[i] != m; error("error in hcat: mismatched dimensions"); end
@@ -784,7 +784,7 @@ function hcat(X::SparseMatrixCSC...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
     colptr = Array(Ti, n + 1)
-    nnzX = [ nnz(x) | x = X ]
+    nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
     rowval = Array(Ti, nnz_res)
     nzval = Array(Tv, nnz_res)

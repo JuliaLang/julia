@@ -217,6 +217,7 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pi
     opts.env = NULL;
     opts.cwd = NULL;
     opts.args = argv;
+	opts.flags = 0;
     opts.stdin_stream = jlopts->in = stdin_pipe;
     opts.stdout_stream = jlopts->out = stdout_pipe;
     opts.stderr_stream = NULL;

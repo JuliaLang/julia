@@ -6,7 +6,7 @@ oo = options(:a, true, :b, 7)
 @test oo[:a] == true
 @test oo[:b] > 6
 @test oo[:c] == nothing
-@test print_to_string(show, oo) == "a = true, b = 7"
+@test sprint(show, oo) == "a = true, b = 7"
 
 test_group("adding defaults")
 uu = add_defaults!(oo, :a, false, :b, 0, :c, "cat")

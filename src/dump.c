@@ -222,7 +222,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
 
     size_t i;
     if (jl_is_tuple(v)) {
-        size_t l = ((jl_tuple_t*)v)->length;
+        size_t l = jl_tuple_len(v);
         if (l <= 255) {
             writetag(s, jl_tuple_type);
             write_uint8(s, (uint8_t)l);
@@ -255,18 +255,18 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         for (i=0; i < ar->ndims; i++)
             jl_serialize_value(s, jl_box_long(jl_array_dim(ar,i)));
         if (jl_is_bits_type(elty)) {
-            size_t tot = ar->length * ar->elsize;
-            ios_write(s, ar->data, tot);
+            size_t tot = jl_array_len(ar) * ar->elsize;
+            ios_write(s, jl_array_data(ar), tot);
         }
         else {
-            for(i=0; i < ar->length; i++) {
+            for(i=0; i < jl_array_len(ar); i++) {
                 jl_serialize_value(s, jl_cellref(v, i));
             }
         }
     }
     else if (jl_is_expr(v)) {
         jl_expr_t *e = (jl_expr_t*)v;
-        size_t l = e->args->length;
+        size_t l = jl_array_len(e->args);
         if (l <= 255) {
             writetag(s, jl_expr_type);
             write_uint8(s, (uint8_t)l);
@@ -349,7 +349,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         else if (jl_is_struct_type(t)) {
             writetag(s, jl_struct_kind);
             jl_serialize_value(s, t);
-            size_t nf = ((jl_struct_type_t*)t)->names->length;
+            size_t nf = jl_tuple_len(((jl_struct_type_t*)t)->names);
             size_t i;
             for(i=0; i < nf; i++) {
                 jl_value_t *fld = ((jl_value_t**)v)[i+1];
@@ -539,11 +539,11 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, (jl_value_t*)a);
         if (jl_is_bits_type(elty)) {
-            size_t tot = a->length * a->elsize;
-            ios_read(s, a->data, tot);
+            size_t tot = jl_array_len(a) * a->elsize;
+            ios_read(s, jl_array_data(a), tot);
         }
         else {
-            for(i=0; i < a->length; i++) {
+            for(i=0; i < jl_array_len(a); i++) {
                 ((jl_value_t**)a->data)[i] = jl_deserialize_value(s);
             }
         }
@@ -675,7 +675,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         jl_struct_type_t *typ = (jl_struct_type_t*)jl_deserialize_value(s);
         if (typ == jl_struct_kind || typ == jl_bits_kind)
             return jl_deserialize_tag_type(s, typ, pos);
-        size_t nf = typ->names->length;
+        size_t nf = jl_tuple_len(typ->names);
         jl_value_t *v = jl_new_struct_uninit(typ);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
@@ -790,7 +790,7 @@ void jl_restore_system_image(char *fname)
     ios_t f;
     char *fpath = jl_find_file_in_path(fname);
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
-        jl_printf(jl_stderr_tty, "system image file not found\n");
+        JL_PRINTF(JL_STDERR, "system image file not found\n");
         jl_exit(1);
     }
 #ifdef JL_GC_MARKSWEEP
@@ -809,14 +809,14 @@ void jl_restore_system_image(char *fname)
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash ObjectIdDicts
-    for(int i=0; i < idtl->length; i++) {
+    for(int i=0; i < jl_array_len(idtl); i++) {
         jl_value_t *v = jl_cellref(idtl, i);
         jl_idtable_rehash(&((jl_array_t**)v)[1],
-                          ((jl_array_t**)v)[1]->length);
+                          jl_array_len(((jl_array_t**)v)[1]));
     }
 
     // cache builtin parametric types
-    for(int i=0; i < tagtype_list->length; i++) {
+    for(int i=0; i < jl_array_len(tagtype_list); i++) {
         jl_value_t *v = jl_cellref(tagtype_list, i);
         uint32_t uid=0;
         if (jl_is_struct_type(v))
@@ -870,10 +870,10 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     tree_literal_values = li->roots;
     jl_serialize_value(&dest, ast);
 
-    //jl_printf(jl_stderr_tty, "%d bytes, %d values\n", dest.size, vals->length);
+    //JL_PRINTF(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
-    if (tree_literal_values->length == 0) {
+    if (jl_array_len(tree_literal_values) == 0) {
         tree_literal_values = (jl_array_t*)jl_an_empty_cell;
         li->roots = NULL;
     }
@@ -894,8 +894,8 @@ jl_value_t *jl_uncompress_ast(jl_tuple_t *data)
     tree_literal_values = (jl_array_t*)jl_tupleref(data, 1);
     ios_t src;
     jl_ios_mem(&src, 0);
-    ios_setbuf(&src, bytes->data, bytes->length, 0);
-    src.size = bytes->length;
+    ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);
+    src.size = jl_array_len(bytes);
     int en = jl_gc_is_enabled();
     jl_gc_disable();
     jl_gc_ephemeral_on();

@@ -1,7 +1,7 @@
 #ifndef INCLUDE_SERVER
 #define INCLUDE_SERVER
 
-#include "../../external/libuv/include/uv.h"
+#include "../../deps/libuv/include/uv.h"
 #include <string>
 #include <vector>
 #include <sstream>

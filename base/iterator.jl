@@ -22,7 +22,7 @@ end
 zip(itrs...) = Zip(itrs...)
 
 length(z::Zip) = min(length, z.itrs)
-start(z::Zip) = { start(itr) | itr in z.itrs }
+start(z::Zip) = { start(itr) for itr in z.itrs }
 function next(z::Zip, state)
     v = Array(Any, length(z.itrs))
     s = Array(Any, length(z.itrs))

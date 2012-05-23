@@ -14,8 +14,8 @@ p1000 = Polynomial(randn(1000))
 
 @assert length(pNULL) == 0
 @assert length(p1000) == 1000
-print_to_string(show, p1000)
-print_to_string(show, pNULL)
+sprint(show, p1000)
+sprint(show, pNULL)
 
 @assert p3 == Polynomial([1,2,1])
 @assert pN*10 == Polynomial([240, 150, 870, 30, 2760])
@@ -46,4 +46,8 @@ a_roots = copy(pN.a)
 @assert all(abs(sort(roots(poly(a_roots))) - sort(a_roots)) < 1e6)
 @assert length(roots(p5)) == 4
 @assert all(roots(pNULL) == [])
+
+@assert pNULL + 2 == p0 + 2 == 2 + p0 == Polynomial([2])
+@assert p2 - 2 == -2 + p2 == Polynomial([1,-1])
+@assert 2 - p2 == Polynomial([-1,1])
 

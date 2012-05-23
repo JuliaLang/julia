@@ -60,8 +60,8 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     }
     JL_CATCH {
         JL_GC_POP();
-        jl_show(jl_exception_in_transit);
-        jl_putc('\n', jl_current_output_stream());
+        jl_show(jl_stderr_obj(), jl_exception_in_transit);
+        ios_putc('\n', ios_stderr);
         return fl_cons(symbol("error"), FL_NIL);
     }
     // protect result from GC, otherwise it could be freed during future
@@ -91,7 +91,7 @@ void jl_init_frontend(void)
     ios_static_buffer(pi, flisp_system_image, sizeof(flisp_system_image));
     
     if (fl_load_system_image(img)) {
-        jl_printf(jl_stderr_tty, "fatal error loading system image\n");
+        JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
         jl_exit(1);
     }
 
@@ -314,7 +314,7 @@ static value_t array_to_list(jl_array_t *a)
     value_t lst=FL_NIL, temp=FL_NIL;
     fl_gc_handle(&lst);
     fl_gc_handle(&temp);
-    for(i=a->length-1; i >= 0; i--) {
+    for(i=jl_array_len(a)-1; i >= 0; i--) {
         temp = julia_to_scm(jl_cellref(a,i));
         lst = fl_cons(temp, lst);
     }
@@ -560,7 +560,7 @@ int jl_is_rest_arg(jl_value_t *ex)
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
     jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
     if (!jl_is_expr(atype)) return 0;
-    if (atype->head != call_sym || atype->args->length != 3)
+    if (atype->head != call_sym || jl_array_len(atype->args) != 3)
         return 0;
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;
@@ -571,7 +571,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 {
     if (jl_is_symbol(expr)) {
         // pre-evaluate certain static parameters to help type inference
-        for(int i=0; i < sp->length; i+=2) {
+        for(int i=0; i < jl_tuple_len(sp); i+=2) {
             assert(jl_is_typevar(jl_tupleref(sp,i)));
             if ((jl_sym_t*)expr == ((jl_tvar_t*)jl_tupleref(sp,i))->name) {
                 jl_value_t *spval = jl_tupleref(sp,i+1);
@@ -597,20 +597,20 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
     }
     else if (jl_typeis(expr,jl_array_any_type)) {
         jl_array_t *a = (jl_array_t*)expr;
-        jl_array_t *na = jl_alloc_cell_1d(a->length);
+        jl_array_t *na = jl_alloc_cell_1d(jl_array_len(a));
         JL_GC_PUSH(&na);
         size_t i;
-        for(i=0; i < a->length; i++)
+        for(i=0; i < jl_array_len(a); i++)
             jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp));
         JL_GC_POP();
         return (jl_value_t*)na;
     }
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
-        jl_expr_t *ne = jl_exprn(e->head, e->args->length);
+        jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH(&ne);
         size_t i;
-        for(i=0; i < e->args->length; i++)
+        for(i=0; i < jl_array_len(e->args); i++)
             jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp);
         JL_GC_POP();
         return (jl_value_t*)ne;
@@ -622,22 +622,22 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
 static void eval_decl_types(jl_array_t *vi, jl_tuple_t *spenv)
 {
     size_t i;
-    for(i=0; i < vi->length; i++) {
+    for(i=0; i < jl_array_len(vi); i++) {
         jl_array_t *v = (jl_array_t*)jl_cellref(vi, i);
-        assert(v->length > 1);
+        assert(jl_array_len(v) > 1);
         jl_value_t *ty =
             jl_interpret_toplevel_expr_with(jl_cellref(v,1),
                                             &jl_tupleref(spenv,0),
-                                            spenv->length/2);
+                                            jl_tuple_len(spenv)/2);
         jl_cellref(v, 1) = ty;
     }
 }
 
 jl_tuple_t *jl_tuple_tvars_to_symbols(jl_tuple_t *t)
 {
-    jl_tuple_t *s = jl_alloc_tuple_uninit(t->length);
+    jl_tuple_t *s = jl_alloc_tuple_uninit(jl_tuple_len(t));
     size_t i;
-    for(i=0; i < s->length; i+=2) {
+    for(i=0; i < jl_tuple_len(s); i+=2) {
         assert(jl_is_typevar(jl_tupleref(t,i)));
         jl_tupleset(s, i,
                     (jl_value_t*)((jl_tvar_t*)jl_tupleref(t,i))->name);

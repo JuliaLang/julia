@@ -8,7 +8,7 @@ abstract PlotComponent <: HasStyle
 abstract PlotContainer <: HasAttr
 
 typealias List Array{Any,1}
-typealias PlotAttributes Associative
+typealias PlotAttributes Associative # TODO: does Associative need {K,V}?
 
 macro desc(x)
     :( println($string(x)," = ",$x) )
@@ -1151,7 +1151,7 @@ function _ticklist_linear( lo, hi, sep, origin )
     #    push(r, r0 + i*sep )
     #end
     #return r
-    [ r0 + i*sep | i = 0:(b-a) ]
+    [ r0 + i*sep for i = 0:(b-a) ]
 end
 
 function _pow10(x)
@@ -1182,10 +1182,10 @@ function _ticks_default_log( lim )
 
     if nn >= 10
         #return map( _pow10, _ticks_default_linear(log_lim) )
-        return [ pow(10.,x) | x=_ticks_default_linear(log_lim) ]
+        return [ pow(10.,x) for x=_ticks_default_linear(log_lim) ]
     elseif nn >= 2
         #return map( _pow10, range(nlo, nhi+1) )
-        return [ pow(10.,i) | i=nlo:nhi ]
+        return [ pow(10.,i) for i=nlo:nhi ]
     else
         return _ticks_default_linear( lim )
     end
@@ -1199,7 +1199,7 @@ function _ticks_num_linear( lim, num )
     #    push(ticks, a + i*b )
     #end
     #return ticks
-    [ a + i*b | i=0:num-1 ]
+    [ a + i*b for i=0:num-1 ]
 end
 
 function _ticks_num_log( lim, num )
@@ -1210,7 +1210,7 @@ function _ticks_num_log( lim, num )
     #    push( ticks, a + i*b )
     #end
     #return map( _pow10, ticks )
-    [ pow(10., a + i*b) | i=0:num-1 ]
+    [ pow(10., a + i*b) for i=0:num-1 ]
 end
 
 _subticks_linear( lim, ticks ) = _subticks_linear(lim, ticks, nothing)
@@ -1510,7 +1510,7 @@ function _ticklabels( self::HalfAxis, context, ticks )
         return ticklabels
     end
     r = max(ticks) - min(ticks)
-    [ _format_ticklabel(x,r) | x=ticks ]
+    [ _format_ticklabel(x,r) for x=ticks ]
 end
 
 function _make_ticklabels( self::HalfAxis, context, pos, labels )
@@ -1526,7 +1526,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         offset = offset + _size_relative(
             getattr(self, "ticks_size"), context.dev_bbox )
     end
-    labelpos = [ _pos(self, context, pos[i], dir*offset) | i=1:length(labels) ]
+    labelpos = [ _pos(self, context, pos[i], dir*offset) for i=1:length(labels) ]
 
     halign, valign = _align(self)
 
@@ -1554,7 +1554,7 @@ function _make_ticks( self::HalfAxis, context, ticks, size, style )
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
     ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
-    tickpos = [ _pos(self, context, tick) | tick in ticks ]
+    tickpos = [ _pos(self, context, tick) for tick in ticks ]
 
     CombObject(tickpos, ticklen, style)
 end
@@ -1763,7 +1763,7 @@ end
 #end
 
 type FramedPlot <: PlotContainer
-    attr::Associative
+    attr::Associative # TODO: does Associative need {K,V}?
     content1::PlotComposite
     content2::PlotComposite
     x1::HalfAxis

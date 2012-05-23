@@ -124,13 +124,13 @@ function _test(ex::Expr, expect_succeed::Bool)
             tr.arg1 = eval(ex.args[1])
             tr.arg2 = eval(ex.args[3])
         elseif (ex.head == :call) # is it a helper we know about?
-            if (ex.args[1] == :isclose)
+            if (ex.args[1] == :isapprox)
                 tr.operation = ex.args[1]
                 tr.arg1 = eval(ex.args[2])
                 tr.arg2 = eval(ex.args[3])
             elseif (ex.args[1] == :prints)
                 tr.operation = ex.args[1]
-                tr.arg1 = print_to_string(eval(ex.args[2]), eval(ex.args[3])...)
+                tr.arg1 = sprint(eval(ex.args[2]), eval(ex.args[3])...)
                 tr.arg2 = eval(ex.args[4]) 
             end
         end
@@ -168,7 +168,7 @@ end
 approx_eq(a, b) = approx_eq(a, b, 1e-6)
 
 function prints(fn::Function, args, expected::String) 
-    print_to_string(fn, args...) == expected
+    sprint(fn, args...) == expected
 end
 
 function takes_less_than(anything, expected)

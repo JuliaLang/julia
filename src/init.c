@@ -22,10 +22,7 @@
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
-#else
-#include "../external/libuv/include/uv-private/ev.h"
 #endif
-
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -94,9 +91,12 @@ void win_raise_sigint() {
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
 {	
 	int sig;
-	switch(sig){
-	//	case ...: usig = ...; break;
-		default: sig = wsig;
+	//windows signals use different numbers from unix
+	switch(wsig){
+		case CTRL_C_EVENT: sig = SIGINT; break;
+		//case CTRL_BREAK_EVENT: sig = SIGTERM; break;
+		// etc.
+		default: sig = SIGTERM; break;
 	}
     if (jl_defer_signal) {
         jl_signal_pending = sig;
@@ -145,12 +145,17 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 #endif
 void jl_get_builtin_hooks(void);
 
-uv_lib_t jl_dl_handle;
+uv_lib_t *jl_dl_handle;
 #ifdef __WIN32__
-uv_lib_t jl_ntdll_handle;
-uv_lib_t jl_kernel32_handle;
-uv_lib_t jl_crtdll_handle;
-uv_lib_t jl_winsock_handle;
+uv_lib_t _jl_ntdll_handle;
+uv_lib_t _jl_kernel32_handle;
+uv_lib_t _jl_crtdll_handle;
+uv_lib_t _jl_winsock_handle;
+
+uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
+uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
+uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
 uv_loop_t *jl_event_loop;
 uv_loop_t *jl_io_loop;
@@ -215,8 +220,8 @@ void *init_stdio_handle(uv_file fd,int readable)
 void init_stdio()
 {
     jl_stdin_tty = init_stdio_handle(0,1);
-    jl_stdout_tty = init_stdio_handle(1,0);
-    jl_stderr_tty = init_stdio_handle(2,0);
+    JL_STDOUT = init_stdio_handle(1,0);
+    JL_STDERR = init_stdio_handle(2,0);
 }
 
 void julia_init(char *imageFile)
@@ -225,10 +230,10 @@ void julia_init(char *imageFile)
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
 #ifdef __WIN32__
-    uv_dlopen("ntdll.dll",&jl_ntdll_handle); //bypass julia's pathchecking for system dlls
-    uv_dlopen("Kernel32.dll",&jl_kernel32_handle);
-    uv_dlopen("msvcrt.dll",&jl_crtdll_handle);
-    uv_dlopen("Ws2_32.dll",&jl_winsock_handle);
+    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
+    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
+    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
 #endif
     jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
     jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
@@ -262,9 +267,9 @@ void julia_init(char *imageFile)
             jl_restore_system_image(imageFile);
         }
         JL_CATCH {
-            jl_printf(jl_stderr_tty, "error during init:\n");
-            jl_show(jl_exception_in_transit);
-            jl_printf(jl_stdout_tty, "\n");
+            JL_PRINTF(JL_STDERR, "error during init:\n");
+            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            JL_PRINTF(JL_STDOUT, "\n");
             jl_exit(1);
         }
     }
@@ -277,7 +282,7 @@ void julia_init(char *imageFile)
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 
@@ -286,7 +291,7 @@ void julia_init(char *imageFile)
     ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaltstack: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
         jl_exit(1);
     }
 	
@@ -296,7 +301,7 @@ void julia_init(char *imageFile)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 #endif
@@ -320,7 +325,7 @@ DLLEXPORT void jl_install_sigint_handler()
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        jl_printf(jl_stderr_tty, "sigaction: %s\n", strerror(errno));
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
 #endif

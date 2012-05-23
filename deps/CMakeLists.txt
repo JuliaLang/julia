@@ -61,7 +61,7 @@ endif(NOT DEFINED BACKUP_DOWNLOADER)
 	
 ## Download Packages ##
 
-set(PACKAGES llvm pcre dsfmt openblas lapack arpack fftw suitesparse grisu)
+set(PACKAGES llvm pcre dsfmt openblas lapack arpack fftw suitesparse)
 
 ## Linux Specific Packages ##
 
@@ -133,11 +133,18 @@ foreach(package ${PACKAGES})
 	
 endforeach(package)
 
+## Duplicate FFTW ##
+IF(NOT EXISTS ${CMAKE_SOURCE_DIR}/fftw-double-${fftw_VER})
+message(STATUS "creating fftw-double")
+file(COPY fftw-${fftw_VER} DESTINATION ${CMAKE_BINARY_DIR})
+file(RENAME ${CMAKE_BINARY_DIR}/fftw-${fftw_VER} ${CMAKE_SOURCE_DIR}/fftw-double-${fftw_VER})
+message(STATUS "creation of fftw-double completed (hopefully)")
+ENDIF()
 ## General Setup ##
 
-if(NOT DEFINED(CMAKE_INSTALL_PREFIX))
-	set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/root")
-endif()
+if(NOT DEFINED CMAKE_INSTALL_PREFIX)
+	set(CMAKE_INSTALL_PREFIX ${CMAKE_CURRENT_SOURCE_DIR}/"root")
+endif(NOT DEFINED CMAKE_INSTALL_PREFIX)
 
 if( CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR AND NOT MSVC_IDE )
   message(FATAL_ERROR "In-source builds are not allowed.
@@ -158,7 +165,6 @@ add_subdirectory(llvm-${llvm_VER})
 set(PCRE_SUPPORT_UNICODE_PROPERTIES ON)
 set(PCRE_SUPPORT_UTF8 ON)
 set(PCRE_SUPPORT_JIT ON)
-set(BUILD_SHARED_LIBS ON)
 add_subdirectory(pcre-${pcre_VER})
 
 
@@ -186,16 +192,13 @@ elseif( USE_OPTIMIZED_BLAS )
   find_package( BLAS )
 endif (BLAS_LIBRARIES)
 
-IF(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-	set(CMAKE_STATIC_LIBRARY_SUFFIX .lib)
-endif(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-
-set(OpenBlasLIB ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas${CMAKE_STATIC_LIBRARY_SUFFIX})
+set(OpenBlasLIB ${CMAKE_SOURCE_DIR}/openblas-${openblas_VER}/libopenblas.${CMAKE_STATIC_LIBRARY_SUFFIX})
 # Neither user specified or optimized BLAS libraries can be used
 if(NOT BLAS_FOUND)
   message(STATUS "Using OpenBlas")
-  set(BLAS_LIBRARIES ${OpenBlasLIB})
+  set( BLAS_LIBRARIES ${OpenBlasLIB})
   set( BUILD_OPENBLAS ON)
+  set( BLAS_TARGET openblas)
 else()
   set( CMAKE_EXE_LINKER_FLAGS 
     "${CMAKE_EXE_LINKER_FLAGS} ${BLAS_LINKER_FLAGS}" 
@@ -211,30 +214,75 @@ endif( NOT BLAS_FOUND )
 set(BUILD_SHARED_LIBS ON)
 set(BLAS_FOUND 1) #Prevent LaPack from using it's own blas version
 add_subdirectory(lapack-${lapack_VER})
+set( LAPACK_TARGET lapack-static )
 
 add_subdirectory(amos)
+##Set ASM Env var -- should not be necessary technically
+include(CMakeDetermineASMCompiler)
+set(CMAKE_ASM_CREATE_SHARED_LIBRARY ${CMAKE_C_CREATE_SHARED_LIBRARY})
+
 add_subdirectory(fdlibm)
 set(LapackLIB lapack)
 
 add_subdirectory(cmake)
 
-message(STATUS ${OpenBlasLIB})
+set(FFTW_CONFIG --enable-shared --disable-fortran --disable-mpi --disable-openmp --disable-threads --enable-sse2 --enable-fma)
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
+set(FFTW_CONFIG ${FFTW_CONFIG} --with-our-malloc)
+ENDIF()
 
-add_custom_command(OUTPUT ${OpenBlasLIB}
-COMMAND perl -i -ple "'s/^\\s*(EXTRALIB\\s*\\+=\\s*-lSystemStubs)\\s*$$/# $$1/g'" ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}/Makefile.system
-COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH}
-COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="${CMAKE_FORTRAN_COMPILER_FLAGS}" TARGET=${TARGET_OPENBLAS_ARCH} PREFIX=${CMAKE_INSTALL_PREFIX} install
-WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER})
-add_custom_target(openblas DEPENDS ${OpenBlasLIB})
+macro(autoconfTarget name options)
+message(STATUS ${name})
+set(${name}_SRC_DIR ${CMAKE_SOURCE_DIR}/${name}-${${name}_VER})
+set(${name}_BINARY_DIR ${CMAKE_BINARY_DIR}/${name}-${${name}_VER})
+set(${name}_CONFIGURE ${${name}_SRC_DIR}/configure)
+message(STATUS ${name}_SRC_DIR)
+message(STATUS ${${name}_SRC_DIR})
+message(STATUS ${${name}_BINARY_DIR})
+file(MAKE_DIRECTORY ${${name}_BINARY_DIR})
+add_custom_command(OUTPUT ${${name}_BINARY_DIR}/Makefile  COMMAND ${${name}_CONFIGURE} --prefix=${CMAKE_INSTALL_PREFIX} ${options} WORKING_DIRECTORY ${${name}_BINARY_DIR})
+add_custom_command(OUTPUT ${${name}_BINARY_DIR}/BuildDone COMMAND $(MAKE) -C ${${name}_BINARY_DIR}
+COMMAND touch ${${name}_CONFIGURE}
+COMMAND $(MAKE) -C ${${name}_BINARY_DIR} install
+COMMAND touch ${${name}_BINARY_DIR}/BuildDone
+DEPENDS ${${name}_BINARY_DIR}/Makefile
+WORKING_DIRECTORY ${${name}_BINARY_DIR})
+endmacro()
+
+#set(fftw-double_VER ${fftw_VER})
+#set(fftwDoubleFeatures --enable-sse --enable-float ${FFTW_CONFIG})
+#autoconfTarget(fftw-double "${fftwDoubleFeatures}")
+#
+#autoconfTarget(fftw "${FFTW_CONFIG}")
+
+IF(OFF)
+autoconfTarget(clp)
+ENDIF()
+
+
+IF(BUILD_OPENBLAS)
+set(OPENBLAS_SRC_DIR ${CMAKE_SOURCE_DIR}/openblas-${openblas_VER})
+set(OPENBLAS_BINARY_DIR ${CMAKE_BINARY_DIR}/openblas-${openblas_VER})
+set(OPENBLAS_CONFIGURE ${OPENBLAS_SRC_DIR}/configure)
+file(MAKE_DIRECTORY ${OPENBLAS_BINARY_DIR})
+add_custom_target(openblas COMMAND perl -i -ple "'s/^\\s*(EXTRALIB\\s*\\+=\\s*-lSystemStubs)\\s*$$/# $$1/g'" ${CMAKE_CURRENT_SOURCE_DIR}/openblas-${openblas_VER}/Makefile.system
+COMMAND $(MAKE) DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+COMMAND $(MAKE) install PREFIX=${CMAKE_INSTALL_PREFIX} DYNAMIC_ARCH=1 USE_THREAD=0 NO_LAPACK=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+WORKING_DIRECTORY ${OPENBLAS_SRC_DIR})
+ENDIF()
+
+IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+set(UNWIND_SRC_DIR ${CMAKE_SOURCE_DIR}/unwind-${unwind_VER})
+set(UNWIND_BINARY_DIR ${CMAKE_BINARY_DIR}/unwind-${unwind_VER})
+set(UNWIND_CONFIGURE ${UNWIND_SRC_DIR}/configure)
+add_custom_target(unwind ALL cd ${UNWIND_DIR} COMMAND ${UNWIND_CONFIGURE} CFLAGS="-U_FORTIFY_SOURCE -fPIC" --prefix=${CMAKE_INSTALL_PREFIX} 
+COMMAND $(MAKE) -C ${UNWIND_BINARY_DIR}
+COMMAND touch ${UNWIND_CONFIGURE}
+COMMAND $(MAKE) -C ${UNWIND_BINARY_DIR} install
+WORKING_DIRECTORY ${UNWIND_BINARY_DIR})
+ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+
+#add_custom_target(dependencies ALL DEPENDS ${fftw_BINARY_DIR}/BuildDone ${fftw-double_BINARY_DIR}/BuildDone)
+
 add_dependencies(lapack openblas)
-#add_dependencies(lapack-static openblas)
-
-include(ExternalProject)
-#  ExternalProject_Add(suitesparse 
-#    URL ${CMAKE_CURRENT_SOURCE_DIR}/suitesparse-${suitesparse_VER}           # Source dir to be used for build
-#    BUILD_COMMAND 
-#	$(MAKE);mkdir -p lib;cp `find UMFPACK CHOLMOD SPQR *AMD BTF UFconfig -name *.a` lib;cd lib;for i in *.a; do ar x $$i; done;
-#	gfortran -shared $(FFLAGS) *.o ${LapackLIB} ${OpenBlasLIB} -lstdc++ -o libsuitesparse${CMAKE_SHARED_LIBRARY_SUFFIX}
-#	BUILD_IN_SOURCE 1)
-	
-#add_dependencies(suitesparse lapack openblas)
+add_dependencies(arpack openblas lapack)

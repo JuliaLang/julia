@@ -44,6 +44,7 @@
     jl_takebuf_array;
     jl_takebuf_string;
     jl_readuntil;
+    jl_cpu_cores;
     jl_cstr_to_string;
     jl_pchar_to_string;
     jl_array_to_string;
@@ -67,7 +68,10 @@
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
     jl_stdout_stream;
+    jl_stdout_obj;
+    jl_stderr_obj;
     ios_fd;
+    ios_mem;
     jl_ios_mem;
     jl_boundp;
     jl_get_root_symbol;
@@ -149,6 +153,7 @@
     jl_buf_mutex_lock;
     jl_buf_mutex_unlock;
     jl_start_io_thread;
+    jl_zero_denormals;
     jl_save_system_image;
     jl_restore_system_image;
     jl_compress_ast;
@@ -159,16 +164,15 @@
     jl_exception_in_transit;
     jl_show;
     jl_show_any;
-    jl_print_array_uint8;
     jl_print_symbol;
     jl_print_int64;
     jl_pgcstack;
     jl_symbol;
     jl_base_module;
+    jl_current_module;
     jl_get_global;
     jl_set_global;
     jl_set_const;
-    jl_show_method_table;
     jl_current_output_stream;
     jl_apply_generic;
     julia_init;
@@ -241,6 +245,5 @@
     jl_is_unix;
     jl_os_name;
     jl_test;
-  local:
     *;
 };

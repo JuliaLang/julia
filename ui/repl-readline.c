@@ -71,11 +71,11 @@ static void init_history(void) {
             char *p = strchr(first->line, '\0');
             for (k = i+1; k < j; k++) {
                 *p = '\n';
-				#ifndef __WIN32__
+                #ifndef __WIN32__
                 p = stpcpy(p+1, history_get(i+1)->line);
-				#else
-				p = strcpy(p+1, history_get(i+1)->line);
-				#endif
+                #else
+                p = strcpy(p+1, history_get(i+1)->line);
+                #endif
                 free_history_entry(history_rem(i+1));
             }
         }
@@ -328,6 +328,13 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int sigint_callback(int count, int key) {
+    //use either line, but not both:
+    //raise(SIGINT);
+    ios_write(ios_stdout, "^C\n", 3); jl_clear_input();
+    return 0;
+}
+
 static int callback_en=0;
 
 void jl_input_line_callback(char *input)
@@ -528,7 +535,7 @@ static void init_rl(void)
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
-
+        rl_bind_keyseq_in_map("\\C-C", sigint_callback,     keymaps[i]);
     }
 #ifndef __WIN32__
     signal(SIGTSTP, sigtstp_handler);
@@ -559,7 +566,8 @@ void jl_prep_terminal (int meta_flag)
 void jl_deprep_terminal ()
 {
     rl_deprep_terminal();
-    uv_tty_reset_mode();
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,0);
+    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,0);
 }
 
 void init_repl_environment(int argc, char *argv[])
@@ -579,7 +587,7 @@ void init_repl_environment(int argc, char *argv[])
 #endif
     rl_prep_terminal(1);
     rl_prep_term_function=&jl_prep_terminal;
-	rl_deprep_term_function=&jl_deprep_terminal;
+    rl_deprep_term_function=&jl_deprep_terminal;
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
@@ -627,24 +635,24 @@ void restart(void)
     rl_on_new_line();
 }
 
-void rl_clear_input(void) {
-	//todo: how to do this better / the correct way / ???
-	//move the cursor to a clean line:
-	char *p = rl_line_buffer;
-	int i;
-	for (i = 0; *p != '\0'; p++, i++) {
-		if (i >= rl_point && *p == '\n') {
-			ios_printf(ios_stdout, "\n");
-		}
-	}
-	ios_printf(ios_stdout, "\n");
-	//reset state:
-	rl_reset_line_state();
-	reset_indent();
-	rl_initialize();
-	//and redisplay prompt:
-	rl_forced_update_display();
-	rl_on_new_line_with_prompt();
+void jl_clear_input(void) {
+    //todo: how to do this better / the correct way / ???
+    //move the cursor to a clean line:
+    char *p = rl_line_buffer;
+    int i;
+    for (i = 0; *p != '\0'; p++, i++) {
+        if (i >= rl_point && *p == '\n') {
+            ios_putc('\n', ios_stdout);
+        }
+    }
+    ios_putc('\n', ios_stdout);
+    //reset state:
+    rl_reset_line_state();
+    reset_indent();
+    rl_initialize();
+    //and redisplay prompt:
+    rl_forced_update_display();
+    rl_on_new_line_with_prompt();
 #ifndef __WIN32__
     ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
 #endif

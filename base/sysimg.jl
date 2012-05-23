@@ -23,7 +23,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 69)
+ccall(:jl_load_progress_setmax, Void, (Int,), 73)
 
 include("base.jl")
 
@@ -42,10 +42,10 @@ include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
+_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 _jl_libfdm = dlopen("libfdm")
 
 include("float.jl")
-include("char.jl")
 include("reduce.jl")
 include("complex.jl")
 include("rational.jl")
@@ -55,7 +55,7 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 include("intset.jl")
-include("table.jl")
+include("dict.jl")
 include("set.jl")
 
 # compiler
@@ -64,12 +64,11 @@ include("inference.jl")
 # I/O, strings & printing
 include("io.jl")
 include("stream.jl")
-stream=make_stdout_stream()
-set_current_output_stream(stream) # for error reporting
-
+include("char.jl")
 include("string.jl")
 include("ascii.jl")
 include("utf8.jl")
+include("string.jl")
 include("regex.jl")
 include("show.jl")
 include("grisu.jl")
@@ -122,6 +121,8 @@ include("datafmt.jl")
 
 ## Load optional external libraries
 
+include("build_h.jl")
+
 # linear algebra
 include("linalg.jl")
 include("linalg_dense.jl")
@@ -131,7 +132,6 @@ include("linalg_lapack.jl")
 # signal processing
 include("signal.jl")
 include("signal_fftw.jl")
-
 
 # prime method cache with some things we know we'll need right after startup
 length(1:2:3)
@@ -207,7 +207,6 @@ compile_hint(alignment, (Float64,))
 compile_hint(repl_callback, (Expr, Int))
 compile_hint(istaskdone, (Task,))
 compile_hint(make_stdout_stream, ())
-compile_hint(set_current_output_stream, (AsyncStream,))
 compile_hint(int, (Uint64,))
 compile_hint(copy, (Bool,))
 compile_hint(bool, (Bool,))

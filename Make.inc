@@ -3,13 +3,17 @@
 JULIA_VERSION = $(shell cat $(JULIAHOME)/VERSION)
 JULIA_COMMIT = $(shell git rev-parse --short=10 HEAD)
 
-JULIALIB = $(JULIAHOME)/lib
-EXTROOT = $(JULIAHOME)/external/root
-EXTROOTLIB = $(EXTROOT)/lib
-LLVMROOT = $(EXTROOT)
+USR = $(JULIAHOME)/usr
+USRLIB = $(USR)/lib
+USRBIN = $(USR)/bin
+USRINC = $(USR)/include
+LLVMROOT = $(USR)
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
+
+USE_MKL = 0
+MKLLIB = /path/to/mkl/lib/intel64
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
@@ -51,6 +55,9 @@ DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 endif
 
+# if not absolute, then relative to JULIA_HOME
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="sys.ji"'
+
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
 TARGET_OPENBLAS_ARCH=
@@ -58,6 +65,7 @@ TARGET_OPENBLAS_ARCH=
 # Use libraries available on the system instead of building them
 
 USE_SYSTEM_LLVM=0
+USE_SYSTEM_LIGHTTPD=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_READLINE=0
 USE_SYSTEM_PCRE=0
@@ -71,6 +79,7 @@ USE_SYSTEM_GLPK=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LLVM=1
+USE_SYSTEM_LIGHTTPD=1
 USE_SYSTEM_LIBUNWIND=1
 USE_SYSTEM_READLINE=1
 USE_SYSTEM_PCRE=1
@@ -91,7 +100,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
-LIBUNWIND=$(EXTROOT)/lib/libunwind-generic.a $(EXTROOT)/lib/libunwind.a
+LIBUNWIND=$(USRLIB)/libunwind-generic.a $(USRLIB)/libunwind.a
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 1)
@@ -103,75 +112,111 @@ endif
 ifeq ($(USE_SYSTEM_READLINE), 1)
 READLINE = -lreadline 
 else
-READLINE = $(EXTROOT)/lib/libreadline.a
+READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
 READLINE += -lncurses -lcurses
 else
-READLINE += $(EXTROOT)/lib/libhistory.a
+READLINE += $(USR)/lib/libhistory.a
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 1)
 PCRE_CONFIG = pcre-config
 else
-PCRE_CONFIG = $(EXTROOT)/bin/pcre-config
+PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
+LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
+LIBBLASNAME = libblas
 else
 LIBBLAS = -lblas
+LIBBLASNAME = libblas
 endif
 else
-ifeq ($(OS), WINNT)
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.lib
-else
-LIBBLAS = $(JULIAHOME)/external/openblas-$(OPENBLAS_VER)/libopenblas.a
-endif
+LIBBLAS = -L$(USRLIB) -lopenblas
 endif
 
+LIBLAPACKNAME = libopenblas
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 ifeq ($(OS), Darwin)
 LIBLAPACK = -framework vecLib -lLAPACK
+LIBLAPACKNAME = liblapack
 else
 LIBLAPACK = -llapack
+LIBLAPACKNAME = liblapack
 endif
 else
-LIBLAPACK = $(JULIAHOME)/external/lapack-$(LAPACK_VER)/liblapack.a
+LIBLAPACK = -L$(USRLIB) -lopenblas
 endif
 
 # OS specific stuff
 
+ifeq ($(OS), WINNT)
+SHELL_EXT = bat
+else
+SHELL_EXT = sh
+endif
+
 ifeq ($(OS), Linux)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
-OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(LIBUNWIND)
+RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
 SHLIB_EXT = so
-JLDFLAGS = -Xlinker -rpath $(JULIAHOME)/lib
 OSLIBS += -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lutil -lm  $(LIBUNWIND)
+RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLD_FLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), Darwin)
 SHLIB_EXT = dylib
-JLDFLAGS = 
-OSLIBS += -ldl -Wl,-w -framework ApplicationServices  -lutil -lm 
+RPATH = 
+OSLIBS += -ldl -Wl,-w -framework ApplicationServices
+WHOLE_ARCHIVE = -Xlinker -all_load
+NO_WHOLE_ARCHIVE =
+JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
 SHLIB_EXT = dll
-OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -L"F:\Program Files\Microsoft SDKs\Windows\v7.1\Lib" -lntdll -lkernel32 -lWs2_32 -lIphlpapi
+RPATH = 
+WHOLE_ARCHIVE = -Wl,--whole-archive
+NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
+endif
+
+INSTALL_NAME_CMD = $(JULIAHOME)/deps/install-name-$(OS).$(SHELL_EXT)
+
+# MKL
+
+ifeq ($(USE_MKL), 1)
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+LIBBLAS   = -L$(MKLLIB) -lmkl_rt
+LIBLAPACK = -L$(MKLLIB) -lmkl_rt
+LIBBLASNAME = libmkl_rt
+LIBLAPACKNAME = libmkl_rt
 endif
 
 # Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(JULIAHOME)/src/flisp/libflisp.a $(JULIAHOME)/src/support/libsupport.a -L$(EXTROOT)/lib $(EXTROOTLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
+LIBS = $(WHOLE_ARCHIVE) $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
 # Colors for make
 
+USE_QUIET = 1
+
+ifeq ($(USE_QUIET), 1)
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
@@ -190,3 +235,4 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+endif

@@ -97,7 +97,7 @@ oftype{T}(x::T,c) = convert(T,c)
 zero(x) = oftype(x,0)
 one(x)  = oftype(x,1)
 
-sizeof(T::Type) = error(strcat("size of type ",T," unknown"))
+sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
@@ -146,30 +146,30 @@ end
 
 macro vectorize_1arg(S,f)
     quote
-        function ($f){T<:$S}(x::AbstractArray{T,1})
-            [ ($f)(x[i]) | i=1:length(x) ]
+        function ($f){T<:$S}(x::Array{T,1})
+            [ ($f)(x[i]) for i=1:length(x) ]
         end
-        function ($f){T<:$S}(x::AbstractArray{T,2})
-            [ ($f)(x[i,j]) | i=1:size(x,1), j=1:size(x,2) ]
+        function ($f){T<:$S}(x::Array{T,2})
+            [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         end
-        function ($f){T<:$S}(x::AbstractArray{T})
-            reshape([ ($f)(x[i]) | i=1:numel(x) ], size(x))
+        function ($f){T<:$S}(x::Array{T})
+            reshape([ ($f)(x[i]) for i=1:numel(x) ], size(x))
         end
     end
 end
 
 macro vectorize_2arg(S,f)
     quote
-        function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
-            reshape([ ($f)(x, y[i]) | i=1:numel(y) ], size(y))
+        function ($f){T1<:$S, T2<:$S}(x::T1, y::Array{T2})
+            reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::T2)
-            reshape([ ($f)(x[i], y) | i=1:numel(x) ], size(x))
+        function ($f){T1<:$S, T2<:$S}(x::Array{T1}, y::T2)
+            reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
 
-        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
+        function ($f){T1<:$S, T2<:$S}(x::Array{T1}, y::Array{T2})
             shp = promote_shape(size(x),size(y))
-            reshape([ ($f)(x[i], y[i]) | i=1:numel(x) ], shp)
+            reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end
     end
 end

@@ -1,7 +1,0 @@
-#!/bin/sh
-
-test -x ./external/root/sbin/lighttpd || { echo "Install lighttpd with \"make -C external install-lighttpd\" " && exit 0; }
-
-echo "Connect to http://localhost:2000/ for the web REPL."
-./external/root/sbin/lighttpd -D -f ./external/lighttpd.conf &
-./julia-release-webserver -p 2001 

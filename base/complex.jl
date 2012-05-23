@@ -14,28 +14,28 @@ imag(x::Real) = zero(x)
 isfinite(z::Complex) = isfinite(real(z)) && isfinite(imag(z))
 reim(z) = (real(z), imag(z))
 
-function _jl_show(z::Complex, compact::Bool)
+function _jl_show(io, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
-        compact ? showcompact(r) : show(r)
+        compact ? showcompact(io,r) : show(io,r)
         if signbit(i)==1 && !isnan(i)
             i = -i
-            print(compact ? "-" : " - ")
+            print(io, compact ? "-" : " - ")
         else
-            print(compact ? "+" : " + ")
+            print(io, compact ? "+" : " + ")
         end
-        compact ? showcompact(i) : show(i)
+        compact ? showcompact(io, i) : show(io, i)
         if !(isa(i,Integer) || isa(i,Rational) ||
              isa(i,Float) && isfinite(i))
-            print("*")
+            print(io, "*")
         end
-        print("im")
+        print(io, "im")
     else
-        print("complex(",r,",",i,")")
+        print(io, "complex(",r,",",i,")")
     end
 end
-show(z::Complex) = _jl_show(z, false)
-showcompact(z::Complex) = _jl_show(z, true)
+show(io, z::Complex) = _jl_show(io, z, false)
+showcompact(io, z::Complex) = _jl_show(io, z, true)
 
 ## packed complex float types ##
 

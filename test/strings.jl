@@ -66,9 +66,9 @@ end
 for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
                      "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
     c = char(i)
-    cp = strcat(c,p)
-    op = strcat(char(div(i,8)), oct(i%8), p)
-    hp = strcat(char(div(i,16)), hex(i%16), p)
+    cp = string(c,p)
+    op = string(char(div(i,8)), oct(i%8), p)
+    hp = string(char(div(i,16)), hex(i%16), p)
     @assert strcat(unescape_string(strcat("\\",oct(i,1),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,2),p))) == cp
     @assert strcat(unescape_string(strcat("\\",oct(i,3),p))) == cp

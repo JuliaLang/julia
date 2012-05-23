@@ -4,7 +4,7 @@ include $(JULIAHOME)/Make.inc
 override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 
-LIBS = -lpthread $(EXTROOTLIB)/uv.a 
+LIBS = -lpthread $(USRLIB)/uv.a 
 ifeq ($(OS), Linux)
 LIBS += -lrt 
 endif
