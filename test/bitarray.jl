@@ -288,10 +288,10 @@ b2 = bitrand(Bool, n1, n2)
 
 b1 = bitrand(TT, n1, n2)
 b2 = bitrand(TT, n1, n2)
-@check_bit_operation (==) BitArray{Bool} (b1, b2)
-@check_bit_operation (!=) BitArray{Bool} (b1, b2)
-@check_bit_operation (<) BitArray{Bool} (b1, b2)
-@check_bit_operation (<=) BitArray{Bool} (b1, b2)
+@check_bit_operation (.==) BitArray{Bool} (b1, b2)
+@check_bit_operation (.!=) BitArray{Bool} (b1, b2)
+@check_bit_operation (.<) BitArray{Bool} (b1, b2)
+@check_bit_operation (.<=) BitArray{Bool} (b1, b2)
 
 @timesofar "binary comparison"
 

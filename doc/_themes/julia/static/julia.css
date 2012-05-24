@@ -1,3 +1,6 @@
+
+@import url("basic.css");
+
 /* general site formatting */
 
 * {
@@ -74,6 +77,10 @@ ul {
   list-style-type: circle;
 }
 
+li {
+  margin-top: 0.5em;
+}
+
 .figure {
   text-align: center;
 }
@@ -81,7 +88,7 @@ ul {
 
 /* inline code and code blocks */
 
-code {
+code,tt,pre {
   font: 80% Monaco, 'Courier New', Courier, monospace;
 }
 
@@ -89,7 +96,6 @@ pre {
   border: 1px solid #ddd;
   margin: 1em 2em 1em 1.5em;
   padding: .75em 1.25em;
-  line-height: 1em;
 }
 
 .sidebar {

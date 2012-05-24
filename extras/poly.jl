@@ -170,7 +170,7 @@ function ==(p1::Polynomial, p2::Polynomial)
     if length(p1) != length(p2)
         return false
     else
-        return all(p1.a[1+p1.nzfirst:end] == p2.a[1+p2.nzfirst:end])
+        return p1.a[1+p1.nzfirst:end] == p2.a[1+p2.nzfirst:end]
     end
 end
 

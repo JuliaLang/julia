@@ -8,10 +8,8 @@
 :Release: |version|
 :Date: |today|
 
-Contents:
-
 .. toctree::
-   :numbered:
+   :maxdepth: 1
 
    introduction
    getting-started

@@ -218,8 +218,9 @@ const exprnd = randexp
 function randg(a::Real)
     d = a - 1.0/3.0
     c = 1.0/sqrt(9d)
-    v = x = 0.0
+    x = 0.0
     while true
+        v = 0.0
         while v <= 0.0
             x = randn()
             v = 1.0 + c*x
