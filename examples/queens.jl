@@ -1,7 +1,7 @@
 addqueen(queens::Array{Vector{Int}}, queen::Vector{Int}) = push(copy(queens), queen)
 
 hitsany(queen::Vector{Int}, queens::Array{Vector{Int}}) = any(map((x) -> hits(queen, x), queens))
-hits(a::Array{Int}, b::Array{Int}) = any(a == b) || abs(a-b)[1] == abs(a-b)[2]
+hits(a::Array{Int}, b::Array{Int}) = any(a .== b) || abs(a-b)[1] == abs(a-b)[2]
 
 function solve(x::Int, y::Int, n::Int, d::Array{Vector{Int}})
   if n == 0
