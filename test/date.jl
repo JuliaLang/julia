@@ -88,14 +88,14 @@ test_week_cycle()
 d= datetime(2012, 4, 24, 13,10,5) 
 @assert hour(d) == 13
 @assert minute(d)==10
-@assert second(d) = 5
+@assert second(d) == 5
 @assert mday(d) == 24
 @assert month(d) == 4
 @assert year(d) == 2012
 
 d=date(2012,2,1)
-@assert year(d) = 2012
-@assert month(d) = 2
-@assert mday(d) = 1
+@assert year(d) == 2012
+@assert month(d) == 2
+@assert mday(d) == 1
 
 

@@ -71,6 +71,7 @@ end
 
 show(d::DateTime) = print(string(d))
 
+(-){T<:Integer,S<:Integer} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd )
 (-){T<:Real,S<:Real} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd - (x.off - y.off))
 (-){T<:Real, S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd - y, x.off, x.zone)
 (+){T<:Real,S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd + y, x.off, x.zone)
