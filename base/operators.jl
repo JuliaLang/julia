@@ -60,6 +60,13 @@ end
 .*(x,y) = x*y
 .^(x,y) = x^y
 
+.==(x,y) = x==y
+.!=(x,y) = x!=y
+.< (x,y) = x<y
+.> (x,y) = y.<x
+.<=(x,y) = x<=y
+.>=(x,y) = y.<=x
+
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
 <<(x,y::Int32)    = no_op_err("<<", typeof(x))

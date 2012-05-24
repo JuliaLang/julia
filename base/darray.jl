@@ -856,7 +856,7 @@ for f = (:ceil,   :floor,  :trunc,  :round,
     @eval ($f)(A::SubOrDArray) = map_vectorized($f, A)
 end
 
-for (f,t) in ((:(==),:Number), (:!=,:Number), (:<,:Real), (:<=,:Real))
+for (f,t) in ((:(.==),:Number), (:.!=,:Number), (:.<,:Real), (:.<=,:Real))
     @eval begin
         function ($f)(A::($t), B::SubOrDArray)
             darray((T,lsz,da)->($f)(A, localize(B, da)),
@@ -875,6 +875,22 @@ for (f,t) in ((:(==),:Number), (:!=,:Number), (:<,:Real), (:<=,:Real))
         end
     end # eval
 end # for
+
+function (==)(A::DArray, B::DArray)
+    if size(A) != size(B)
+        return false
+    end
+    mapreduce(all, fetch,
+              { @spawnat p localize(A)==localize(B,A) for p in procs(A) })
+end
+
+function (!=)(A::DArray, B::DArray)
+    if size(A) != size(B)
+        return true
+    end
+    mapreduce(any, fetch,
+              { @spawnat p localize(A)!=localize(B,A) for p in procs(A) })
+end
 
 function reduce(f, v::DArray)
     mapreduce(f, fetch,

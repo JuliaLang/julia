@@ -372,7 +372,7 @@ decile(x) = quantile(x, [.1:.1:.9])
 
 function _bound_quantiles(qs)
     epsilon = 100 * eps()
-    if (any(qs < -epsilon) || any(qs > 1 + epsilon))
+    if (any(qs .< -epsilon) || any(qs .> 1 + epsilon))
         error("quantiles out of [0,1] range!")
     end
     [min(1, max(0, q)) for q = qs]
