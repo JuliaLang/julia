@@ -583,7 +583,7 @@ void init_repl_environment(int argc, char *argv[])
     }
 
 #ifdef __WIN32__
-    rl_outstream=(void*)jl_stdout_tty;
+    rl_outstream=(void*)jl_uv_stdout;
 #endif
     rl_prep_terminal(1);
     rl_prep_term_function=&jl_prep_terminal;
