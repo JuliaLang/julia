@@ -28,7 +28,7 @@
 #define DLLEXPORT __attribute__ ((visibility("default")))
 #endif
 
-#ifdef __linux
+#ifdef __linux__
 #include <features.h>
 #include <endian.h>
 #define LITTLE_ENDIAN  __LITTLE_ENDIAN

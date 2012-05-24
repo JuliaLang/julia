@@ -1,7 +1,7 @@
 #ifndef IEEE754_H
 #define IEEE754_H
 
-#ifdef __linux
+#ifdef __linux__
 
 #include <ieee754.h>
 

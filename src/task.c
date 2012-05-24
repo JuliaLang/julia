@@ -107,11 +107,11 @@ static void _probe_arch(void)
     /* do a probe without filler */
     boundlow(&p);
 
-#if defined(__linux) && defined(__i386__)
+#if defined(__linux__) && defined(__i386__)
     char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[4] > jl_stack_lo &&
                         s[4] < jl_stack_hi);
-#elif defined(__linux) && defined(__x86_64__)
+#elif defined(__linux__) && defined(__x86_64__)
     char **s = (char**)p.ref_probe;
     mangle_pointers = !(s[6] > jl_stack_lo &&
                         s[6] < jl_stack_hi);
@@ -250,7 +250,7 @@ static jl_value_t *switchto(jl_task_t *t)
 
 #ifndef COPY_STACKS
 
-#ifdef __linux
+#ifdef __linux__
 #if defined(__i386__)
 static intptr_t ptr_mangle(intptr_t p)
 {
@@ -294,20 +294,20 @@ static intptr_t ptr_demangle(intptr_t p)
     return ret;
 }
 #endif
-#endif //__linux
+#endif //__linux__
 
 /* rebase any values in saved state to the new stack */
 static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
-#if defined(__linux) && defined(__i386__)
+#if defined(__linux__) && defined(__i386__)
     s[3] += diff;
     if (mangle_pointers)
         s[4] = ptr_mangle(ptr_demangle(s[4])+diff);
     else
         s[4] += diff;
-#elif defined(__linux) && defined(__x86_64__)
+#elif defined(__linux__) && defined(__x86_64__)
     if (mangle_pointers) {
         s[1] = ptr_mangle(ptr_demangle(s[1])+diff);
         s[6] = ptr_mangle(ptr_demangle(s[6])+diff);

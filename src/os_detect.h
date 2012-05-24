@@ -52,7 +52,7 @@ XX(ISUNIX)              - OS Traits
 
 #if defined(__WIN32__)
     #define OS_CURRENT Windows
-#elif defined(__linux)
+#elif defined(__linux__)
     #define OS_CURRENT  Linux
 #elif defined(__FreeBSD__)
     #define OS_CURRENT  FreeBSD
