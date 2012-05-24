@@ -137,13 +137,16 @@ function pkg_pull()
     run(`git fetch`)
     fetch_head = chomp(readall(`git rev-parse FETCH_HEAD`))
     git_each_submodule((name,path,sha1)->begin
-        alt = chomp(readall(`git rev-parse $fetch_head:$path`))
-        @cd path run(`git merge --no-edit $alt`)
-        run(`git add $path`)
+        alt = try chomp(readall(`git rev-parse $fetch_head:$path`)) end
+        if alt != nothing
+            @cd path run(`git merge --no-edit $alt`)
+            run(`git add $path`)
+        end
     end, false)
-    if git_staged()
+    if git_dirty()
         run(`git commit -m "[jul] pull: merge submodules"`)
     end
+    # TODO: if merge in progress, just commit
     run(`git merge -m "[jul] pull: merge main" $fetch_head`)
     pkg_checkout("HEAD")
     pkg_checkpoint()
