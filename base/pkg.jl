@@ -24,6 +24,20 @@ function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
 end
 git_each_submodule(f::Function, r::Bool) = git_each_submodule(f, r, cwd())
 
+function git_canonicalize_config(file::String)
+    dict = Dict{ByteString,ByteString}()
+    # TODO: use --null option for better handling of weird values.
+    for line in each_line(`git config -f $file --get-regexp '.*'`)
+        key, val = match(r"^(\S+)\s+(.*)$", line).captures
+        dict[key] = val
+    end
+    tmp = cstring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
+    for key in sort!(keys(dict))
+        run(`git config -f $tmp $key $(dict[key])`)
+    end
+    run(`mv -f $tmp $file`)
+end
+
 # create a new empty packge repository
 
 function pkg_init(dir::String, meta::String)
@@ -84,6 +98,7 @@ pkg_checkout() = pkg_checkout("HEAD")
 
 function pkg_commit(msg::String)
     pkg_checkpoint()
+    git_canonicalize_config(".gitmodules")
     run(`git commit -m $msg`)
 end
 
