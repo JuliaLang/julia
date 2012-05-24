@@ -1,6 +1,7 @@
 #TODO: fix return types of run, success
 #TODO: missing functions: successful, wait
 #TODO: stop | and & from mutating inputs
+#TODO: broken test case? (`a`|`b`)&((`c`&`d`)|`e`)|`f` -> (`c` & `d` & (`a` | `b`)) | `e` | `f`
 
 typealias PtrSize Int
 const UVHandle = Ptr{Void}
@@ -141,7 +142,7 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     end
     err = _jl_listen(socket,int32(4),cb)
     if(err!=0)
-        print(err)
+        show(err)
         error("open_any_tcp_port: could not listen on socket")
     end
     return (addr.port,socket)
@@ -267,7 +268,7 @@ function readall(stream::AsyncStream)
     return takebuf_string(stream.buf)
 end
 
-show(p::Process) = print("Process")
+show(io, p::Process) = show(io, "Process")
 
 
 function finish_read(pipe::NamedPipe)
@@ -603,55 +604,55 @@ function (|)(src::AbstractCmd,dest::AbstractCmd)
     return src
 end
 
-show(cmd::AbstractCmd) = show(cmd, false)
-function show(cmd::Cmd, embedded::Bool)
+show(io,cmd::AbstractCmd) = show(io, cmd, false)
+function show(io, cmd::Cmd, embedded::Bool)
     if cmd.pipeline != false && embedded
-        print('(')
+        print(io,'(')
     end
     if isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
-        print('`')
+        print(io,'`')
         for c in esc
             if c == '`'
-                print('\\')
+                print(io,'\\')
             end
-            print(c)
+            print(io,c)
         end
-        print('`')
+        print(io,'`')
     else
-        invoke(show, (Any,), cmd.exec)
+        print(io, cmd.exec)
     end
     if cmd.pipeline != false
-        print(" | ")
-        show(cmd.pipeline, isa(cmd,Cmds))
+        print(io," | ")
+        show(io,cmd.pipeline, isa(cmd,Cmds))
         if embedded
-            print(')')
+            print(io,')')
         end
     end
 end
-function show(cmds::Cmds, embedded::Bool)
+function show(io,cmds::Cmds, embedded::Bool)
     if cmds.pipeline != false && embedded
-        print('(')
+        print(io,'(')
     end
     if length(cmds.siblings) > 1 || (embedded || cmds.pipeline != false)
-        print('(')
+        print(io,'(')
     end
     first = true
     for cmd = cmds.siblings
         if !first
-            print(" & ")
+            print(io," & ")
         end
-        show(cmd, true)
+        show(io, cmd, true)
         first = false
     end
     if length(cmds.siblings) > 1 || (embedded || cmds.pipeline != false)
-        print(')')
+        print(io,')')
     end
     if cmds.pipeline != false
-        print(" | ")
-        show(cmds.pipeline, false)
+        print(io, " | ")
+        show(io, cmds.pipeline, false)
         if embedded
-            print(')')
+            print(io, ')')
         end
     end
 end

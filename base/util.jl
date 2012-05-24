@@ -80,8 +80,8 @@ function whicht(f, types)
             d = f.env.defs
             while !is(d,())
                 if is(d.func.code, lsd)
-                    print(stdout_stream, f.env.name)
-                    show(stdout_stream, d); println(stdout_stream)
+                    print(OUTPUT_STREAM, f.env.name)
+                    show(OUTPUT_STREAM, d); println(OUTPUT_STREAM)
                     return
                 end
                 d = d.next
