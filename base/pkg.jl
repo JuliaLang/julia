@@ -7,8 +7,8 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 # some utility functions for working with git repos
 
 git_dir() = chomp(readall(`git rev-parse --git-dir`))
-git_head() = chomp(readall(string(git_dir(),"/HEAD")))
 git_dirty() = !success(`git diff --quiet`)
+git_staged() = !success(`git diff --cached --quiet`)
 
 git_modules(args::Cmd) = chomp(readall(`git config -f .gitmodules $args`))
 
@@ -97,9 +97,9 @@ function pkg_install(dir::String, urls::Associative)
             url = urls[pkg]
             run(`git submodule add --reference $dir $url $pkg`)
         end
-        pkg_checkout(dir, "HEAD")
-        pkg_commit(dir, "[jul] install "*join(names, ", "))
     end
+    pkg_checkout(dir, "HEAD")
+    pkg_commit(dir, "[jul] install "*join(names, ", "))
 end
 function pkg_install(dir::String, names::AbstractVector)
     urls = Dict()
@@ -123,7 +123,7 @@ function pkg_remove(dir::String, names::AbstractVector)
             git_modules(`--remove-section submodule.$pkg`)
         end
         run(`git add .gitmodules`)
-        pkg_commit(dir, "[jul] remove "*join(names, ", "))
+        pkg_commit(cwd(), "[jul] remove "*join(names, ", "))
         run(`rm -rf $names`)
     end
 end
@@ -133,6 +133,7 @@ pkg_remove(names::String...)      = pkg_remove([names...])
 # push & pull package repos to/from remotes
 
 function pkg_push(dir::String)
+    pkg_checkpoint(dir)
     @cd dir begin
         run(`git push --tags`)
         run(`git push`)
@@ -143,9 +144,20 @@ pkg_push() = pkg_push(PKG_DEFAULT_DIR)
 function pkg_pull(dir::String)
     @cd dir begin
         run(`git fetch --tags`)
-        run(`git pull`)
-        pkg_checkout(dir, "HEAD")
+        run(`git fetch`)
+        fetch_head = chomp(readall(`git rev-parse FETCH_HEAD`))
+        git_each_submodule((name,path,sha1)->begin
+            alt = chomp(readall(`git rev-parse $fetch_head:$path`))
+            @cd path run(`git merge --no-edit $alt`)
+            run(`git add $path`)
+        end, false)
+        if git_staged()
+            run(`git commit -m "[jul] pull: merge submodules"`)
+        end
+        run(`git merge -m "[jul] pull: merge main" $fetch_head`)
     end
+    pkg_checkout(dir, "HEAD")
+    pkg_checkpoint(dir)
 end
 pkg_pull() = pkg_pull(PKG_DEFAULT_DIR)
 
