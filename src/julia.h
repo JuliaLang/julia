@@ -805,7 +805,9 @@ void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 // external libraries
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
 DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
+DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle);
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol); //supress errors
+
 //event loop
 DLLEXPORT void jl_runEventLoop();
 DLLEXPORT void jl_processEvents();
