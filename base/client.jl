@@ -2,7 +2,7 @@
 ##             and REPL
 
 @unix_only _jl_repl = _jl_lib
-@windows_only _jl_repl = Ptr{Void}[ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL),C_NULL] # fragile struct allocation of a uv_lib_t*
+@windows_only _jl_repl = ccall(:jl_wrap_raw_dl_handle,Ptr{Void},(Ptr{Void},),ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL))
 
 const _jl_color_normal = "\033[0m"
 
