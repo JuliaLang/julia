@@ -180,30 +180,6 @@ static void print_profile(void)
 }
 #endif
 
-void jl_noWriteAction(uv_write_t *uvw,int status) {
-    free(uvw);
-}
-
-void jl_freeBuffer(uv_write_t *uvw,int status) {
-    //leak memory - doesn't matter only temporary test
-    free(uvw);
-}
-
-void jl_status(char *str)
-{
-    uv_write_t *uvw = malloc(sizeof(uv_write_t));
-    uv_buf_t *buf =  malloc(sizeof(uv_buf_t));
-    buf->base=str;
-    buf->len=strlen(str)-1;
-    uv_write(uvw,jl_stdout_tty,buf,1,&jl_noWriteAction);
-}
-
-void echoBack(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
-{
-    jl_status("Test!\n");
-    jl_write(stream,buf.base,buf.len);
-}
-
 uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
 {
     if(suggested_size>512) suggested_size = 512; //Readline has a max buffer of 512
@@ -249,15 +225,6 @@ int true_main(int argc, char *argv[])
         //rl_cleanup_after_signal();
         return 0;
     }
-    //uv_pipe_t pipe;
-    //uv_pipe_init(jl_event_loop,&pipe,1);
-    //jl_status("\033[34mThis is a test\n");
-
-    //install_event_handler("julia> ",&parseAndExecute);
-
-    //jl_event_loop->data=&pipe;
-    //uv_run(jl_event_loop);
-    //uv_run_once(jl_io_loop);
 
     // client event loop not available; use fallback blocking version
     //install_read_event_handler(&echoBack);
@@ -275,9 +242,9 @@ int true_main(int argc, char *argv[])
     }
     JL_CATCH {
         iserr = 1;
-        jl_puts("error during run:\n",jl_stderr_tty);
+        JL_PUTS("error during run:\n",JL_STDERR);
         jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        jl_puts( "\n",jl_stdout_tty);
+        JL_PUTS("\n",JL_STDOUT);
         goto again;
     }
     uv_tty_reset_mode();

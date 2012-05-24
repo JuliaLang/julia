@@ -74,7 +74,7 @@ end
 
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 
-make_stdout_stream() = TTY(ccall(:jl_stdout, Ptr{Void}, ()),memio(),false)
+make_stdout_stream() = TTY(ccall(:jl_stdout_stream, Ptr{Void}, ()),memio(),false)
 
 function _uv_tty2tty(handle::Ptr{Void})
     TTY(handle,memio(),false)

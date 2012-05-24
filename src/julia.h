@@ -630,6 +630,7 @@ DLLEXPORT jl_value_t *jl_box_int64(int64_t x);
 jl_value_t *jl_box_uint64(uint64_t x);
 jl_value_t *jl_box_float32(float x);
 jl_value_t *jl_box_float64(double x);
+jl_value_t *jl_box_pointer(void *x);
 jl_value_t *jl_box8 (jl_bits_type_t *t, int8_t  x);
 jl_value_t *jl_box16(jl_bits_type_t *t, int16_t x);
 jl_value_t *jl_box32(jl_bits_type_t *t, int32_t x);
@@ -693,11 +694,6 @@ DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
-
-//async stuff
-DLLEXPORT uv_tty_t *jl_stdin(void);
-DLLEXPORT uv_tty_t *jl_stdout(void);
-DLLEXPORT uv_tty_t *jl_stderr(void);
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
@@ -1011,10 +1007,10 @@ typedef struct _jl_task_t {
     jl_savestate_t state;
 } jl_task_t;
 
-typedef union jl_stream {
+typedef union jl_any_stream {
     ios_t ios;
     uv_stream_t stream;
-} JL_STREAM;
+} jl_any_stream;
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;
@@ -1035,17 +1031,24 @@ DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
-#define JL_STDOUT jl_stdout_tty
-#define JL_STDERR jl_stderr_tty
+
+#define JL_STREAM uv_stream_t
+#define JL_STDOUT jl_uv_stdout
+#define JL_STDERR jl_uv_stderr
+#define JL_STDIN  jl_uv_stdin
 #define JL_PRINTF jl_printf
 #define JL_PUTC	  jl_putc
 #define JL_PUTS	  jl_puts
 #define JL_WRITE  jl_write
 
 //IO objects
-extern DLLEXPORT uv_stream_t *jl_stdin_tty; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
-extern DLLEXPORT uv_stream_t * JL_STDOUT;
-extern DLLEXPORT uv_stream_t * JL_STDERR;
+extern DLLEXPORT uv_stream_t *jl_uv_stdin; //these are actually uv_tty_t's and can be cast to such, but that gives warnings whenver they are used as streams
+extern DLLEXPORT uv_stream_t * jl_uv_stdout;
+extern DLLEXPORT uv_stream_t * jl_uv_stderr;
+
+DLLEXPORT JL_STREAM *jl_stdout_stream();
+DLLEXPORT JL_STREAM *jl_stdin_stream();
+DLLEXPORT JL_STREAM *jl_stderr_stream();
 
 static inline void jl_eh_restore_state(jl_savestate_t *ss)
 {

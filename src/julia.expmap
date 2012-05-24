@@ -67,7 +67,6 @@
     jl_array_ptr;
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
-    jl_stdout_stream;
     jl_stdout_obj;
     jl_stderr_obj;
     ios_fd;
@@ -131,9 +130,9 @@
     jl_errno;
     jl_strerror;
     jl_environ;
-    jl_stdin;
-    jl_stdout;
-    jl_stderr;
+    jl_stdin_stream;
+    jl_stdout_stream;
+    jl_stderr_stream;
     jl_process_exited;
     jl_process_signaled;
     jl_process_stopped;

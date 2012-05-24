@@ -219,7 +219,7 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {
-    jl_stdin_tty = init_stdio_handle(0,1);
+    JL_STDIN = init_stdio_handle(0,1);
     JL_STDOUT = init_stdio_handle(1,0);
     JL_STDERR = init_stdio_handle(2,0);
 }

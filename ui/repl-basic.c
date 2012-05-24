@@ -20,15 +20,15 @@ DLLEXPORT void jl_enable_color(void)
 
 void jl_prep_terminal (int meta_flag)
 {
-    uv_tty_set_mode((uv_tty_t*)jl_stdout_tty,1);
-    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,1);
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
+    uv_tty_set_mode((uv_tty_t*)JL_STDIN,1);
 }
 
 /* Restore the terminal's normal settings and modes. */
 void jl_deprep_terminal ()
 {
-    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,0);
-    uv_tty_set_mode((uv_tty_t*)jl_stdin_tty,0);
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
+    uv_tty_set_mode((uv_tty_t*)JL_STDIN,0);
 }
 
 void jl_input_line_callback(char *input)

@@ -937,14 +937,14 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         }
         char *n = fname->name;
         jl_value_t *errstream = jl_stderr_obj();
-        ios_t *s = JL_STDERR;
-        ios_printf(s, "Warning: New definition %s", n);
+        JL_STREAM *s = JL_STDERR;
+        JL_PRINTF(s, "Warning: New definition %s", n);
         jl_show(errstream, (jl_value_t*)type);
-        ios_printf(s, " is ambiguous with %s", n);
+        JL_PRINTF(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
-        ios_printf(s, ".\n         Make sure %s", n);
+        JL_PRINTF(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
-        ios_printf(s, " is defined first.\n");
+        JL_PRINTF(s, " is defined first.\n");
     done_chk_amb:
         JL_GC_POP();
     }
@@ -1337,7 +1337,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 
 static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(outstr);
+    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
     while (ml != JL_NULL) {
         JL_PRINTF(s, "%s", name);
         if (ml->tvars != jl_null) {

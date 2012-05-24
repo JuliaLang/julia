@@ -243,7 +243,9 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-extern int mk_wcwidth(uint32_t ch);
+#ifdef __WIN32__
+extern int wcwidth(uint32_t ch);
+#endif
 
 size_t u8_strwidth(const char *s)
 {
@@ -271,8 +273,7 @@ size_t u8_strwidth(const char *s)
             case 0: ch += (unsigned char)*s++;
             }
             ch -= offsetsFromUTF8[nb];
-            //@FIXME
-            w = mk_wcwidth(ch);  // might return -1
+            w = wcwidth(ch);  // might return -1
             w=0;
             if (w > 0) tot += w;
         }
