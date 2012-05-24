@@ -41,7 +41,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Julia Language'
-copyright = u'2012, AUTHORS'
+AUTHORS = u"Jeff Bezanson, Stefan Karpinski, Viral Shah, Alan Edelman, et al."
+copyright = u'2012, '+AUTHORS
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -94,7 +95,7 @@ highlight_language = 'julia'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = 'julia'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -102,7 +103,7 @@ html_theme = 'default'
 #html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-#html_theme_path = []
+html_theme_path = ['_themes']
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -194,7 +195,7 @@ latex_elements = {
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
   ('index', 'JuliaLanguage.tex', u'Julia Language Documentation',
-   u'AUTHORS', 'manual'),
+   AUTHORS, 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
@@ -224,7 +225,7 @@ latex_documents = [
 # (source start file, name, description, authors, manual section).
 man_pages = [
     ('index', 'julialanguage', u'Julia Language Documentation',
-     [u'AUTHORS'], 1)
+     [AUTHORS], 1)
 ]
 
 # If true, show URL addresses after external links.
@@ -238,7 +239,7 @@ man_pages = [
 #  dir menu entry, description, category)
 texinfo_documents = [
   ('index', 'JuliaLanguage', u'Julia Language Documentation',
-   u'AUTHORS', 'JuliaLanguage', 'One line description of project.',
+   AUTHORS, 'JuliaLanguage', 'One line description of project.',
    'Miscellaneous'),
 ]
 
