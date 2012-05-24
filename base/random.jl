@@ -22,7 +22,7 @@ function _jl_librandom_init()
 end
 @windows_only begin
     a=zeros(Uint32,2)
-    ccall(dlsym(_jl_advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
+    #ccall(dlsym(_jl_advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint64),convert(Ptr{Void},a),8)
     srand(a)
 end
 end

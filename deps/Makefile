@@ -5,7 +5,7 @@ READLINE_VER = 6.2
 PCRE_VER = 8.30
 GRISU_VER = 1.1
 DSFMT_VER = 2.1
-OPENBLAS_VER = v0.1.1
+OPENBLAS_VER = develop
 LAPACK_VER = 3.4.1
 ARPACK_VER = 3.1.0
 FFTW_VER = 3.3.2
@@ -507,7 +507,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads LIBS=-lpthread
 endif
 
 fftw-$(FFTW_VER).tar.gz:

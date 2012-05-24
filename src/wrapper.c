@@ -650,6 +650,14 @@ DLLEXPORT int jl_RtlGenRandom(unsigned char (*fptr)(void*,uint64_t),void *array,
 }
 #endif
 
+DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
+{
+    uv_lib_t *lib = malloc(sizeof(uv_lib_t));
+    lib->handle=handle;
+    lib->errmsg=NULL;
+    return lib;
+}
+
 //#include "os_detect.h"
 
 #ifdef __cplusplus
