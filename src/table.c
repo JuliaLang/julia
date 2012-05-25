@@ -3,7 +3,7 @@
 // compute empirical max-probe for a given size
 #define max_probe(size) ((size)<=(HT_N_INLINE*2) ? (HT_N_INLINE/2) : (size)>>3)
 
-#define keyhash(k)     inthash((uptrint_t)(k))
+#define keyhash(k)     jl_uid(k)
 #define h2index(hv,sz) (index_t)(((hv) & ((sz)-1))*2)
 
 static void **jl_table_lookup_bp(jl_array_t **pa, void *key);
@@ -43,7 +43,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
             return &tab[index+1];
         }
 
-        if (key == tab[index])
+        if (jl_egal(key, tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
@@ -91,7 +91,7 @@ static void **jl_table_peek_bp(jl_array_t *a, void *key)
     do {
         if (tab[index] == NULL)
             return NULL;
-        if (key == tab[index])
+        if (jl_egal(key, tab[index]))
             return &tab[index+1];
 
         index = (index+2) & (sz-1);
