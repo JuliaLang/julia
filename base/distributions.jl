@@ -4,14 +4,41 @@ abstract ContinuousDistribution <: Distribution
 
 _jl_libRmath = dlopen("libRmath")
 
-macro _jl_dist_1p(T, b, p)
+## Fallback methods, usually overridden for specific distributions
+## cdf      -> cumulative distribution function
+## ccdf     -> complementary cdf, i.e. 1 - cdf
+## pdf      -> probability density function (ContinuousDistribution)
+## pmf      -> probability mass function (DiscreteDistribution)
+## quantile -> inverse of cdf (defined for p in (0,1))
+## mean, median -> as the name implies
+## var      -> variance
+## std      -> standard deviation
+## rand     -> random sampler
+ccdf(d::Distribution, q::Real)             = 1 - cdf(d,q)
+logpdf(d::ContinuousDistribution, x::Real) = log(pdf(d,x))
+logpmf(d::DiscreteDistribution, x::Real)   = log(pmf(d,x))
+logcdf(d::Distribution, q::Real)           = log(cdf(d,q))
+logccdf(d::Distribution, q::Real)          = log(ccdf(d,q))
+cquantile(d::Distribution, p::Real)        = quantile(d, 1-p)
+invlogcdf(d::Distribution, lp::Real)       = quantile(d, exp(lp))
+invlogccdf(d::Distribution, lp::Real)      = quantile(d, exp(-lp))
+std(d::Distribution)                       = sqrt(var(d))
+rand(d::Distribution, n::Int)              = [rand(d) for i=1:n]
+## Should we add?
+## rand(d::DiscreteDistribution, n::Int)      = [int(rand(d)) for i=1:n]
+
+## FIXME: Replace the three _jl_dist_*p macros with one by defining
+## the argument tuples for the ccall dynamically from pn
+macro _jl_dist_1p(T, b)
     dd = expr(:quote,strcat("d",b))     # C name for pdf or pmf
     pp = expr(:quote,strcat("p",b))     # C name for cdf
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
-    pf = eval(T) <: DiscreteDistribution ? :pmf : :pdf
-    lf = eval(T) <: DiscreteDistribution ? :logpmf : :logpdf
-    p =  expr(:quote,p)
+    Ty = eval(T)
+    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
+    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    pn = Ty.names                       # parameter names
+    p  = expr(:quote,pn[1])
     quote
         function ($pf)(d::($T), x::Real)
             ccall(dlsym(_jl_libRmath, $dd),
@@ -70,15 +97,17 @@ macro _jl_dist_1p(T, b, p)
     end
 end
 
-macro _jl_dist_2p(T, b, p1, p2)
+macro _jl_dist_2p(T, b)
     dd = expr(:quote,strcat("d",b))     # C name for pdf or pmf
     pp = expr(:quote,strcat("p",b))     # C name for cdf
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
-    pf = eval(T) <: DiscreteDistribution ? :pmf : :pdf
-    lf = eval(T) <: DiscreteDistribution ? :logpmf : :logpdf
-    p1 = expr(:quote,p1)
-    p2 = expr(:quote,p2)
+    Ty = eval(T)
+    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
+    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    pn = Ty.names                       # parameter names
+    p1 = expr(:quote,pn[1])
+    p2 = expr(:quote,pn[2])    
     if string(b) == "norm"              # normal dist has unusual names
         dd = expr(:quote, :dnorm4)
         pp = expr(:quote, :pnorm5)
@@ -142,16 +171,18 @@ macro _jl_dist_2p(T, b, p1, p2)
     end
 end
 
-macro _jl_dist_3p(T, b, p1, p2, p3)
+macro _jl_dist_3p(T, b)
     dd = expr(:quote,strcat("d",b))     # C name for pdf or pmf
     pp = expr(:quote,strcat("p",b))     # C name for cdf
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
-    pf = eval(T) <: DiscreteDistribution ? :pmf : :pdf
-    lf = eval(T) <: DiscreteDistribution ? :logpmf : :logpdf
-    p1 = expr(:quote,p1)
-    p2 = expr(:quote,p2)
-    p3 = expr(:quote,p3)
+    Ty = eval(T)
+    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
+    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    pn = Ty.names                       # parameter names
+    p1 = expr(:quote,pn[1])
+    p2 = expr(:quote,pn[2])    
+    p3 = expr(:quote,pn[3])
     quote
         function ($pf)(d::($T), x::Real)
             ccall(dlsym(_jl_libRmath, $dd),
@@ -226,16 +257,13 @@ type Bernoulli <: DiscreteDistribution
 end
 Bernoulli() = Bernoulli(0.5)
 mean(d::Bernoulli)     = d.prob
-variance(d::Bernoulli) = d.prob * (1. - d.prob)
-
-## default methods are those for the Binomial with size = 1
-@_jl_dist_2p Bernoulli binom 1 prob
-
-## Redefine common methods
+var(d::Bernoulli)      = d.prob * (1. - d.prob)
+skewness(d::Bernoulli) = (1-2d.prob)/std(d)
+kurtosis(d::Bernoulli) = 1/var(d) - 6
 pmf(d::Bernoulli, x::Real) = x == 0 ? (1 - d.prob) : (x == 1 ? d.prob : 0)
 cdf(d::Bernoulli, q::Real) = q < 0. ? 0. : (q >= 1. ? 1. : 1. - d.prob)
-rand(d::Bernoulli) = rand() > d.prob ? 0 : 1
 quantile(d::Bernoulli, p::Real) = 0 < p < 1 ? (p <= (1. - d.prob) ? 0 : 1) : NaN
+rand(d::Bernoulli) = rand() > d.prob ? 0 : 1
 
 type Beta <: ContinuousDistribution
     alpha::Float64
@@ -244,9 +272,10 @@ type Beta <: ContinuousDistribution
 end
 Beta(a) = Beta(a, a)                    # symmetric in [0,1]
 Beta()  = Beta(1)                       # uniform
+@_jl_dist_2p Beta beta
 mean(d::Beta) = d.alpha / (d.alpha + d.beta)
-variance(d::Beta) = (ab = d.alpha + d.beta; d.alpha * d.beta /(ab * ab * (ab + 1.)))
-@_jl_dist_2p Beta beta alpha beta
+var(d::Beta) = (ab = d.alpha + d.beta; d.alpha * d.beta /(ab * ab * (ab + 1.)))
+skewness(d::Beta) = 2(d.beta - d.alpha)*sqrt(d.alpha + d.beta + 1)/((d.alpha + d.beta + 2)*sqrt(d.alpha*d.beta))
 
 type BetaPrime <: ContinuousDistribution
     alpha::Float64
@@ -260,9 +289,11 @@ type Binomial <: DiscreteDistribution
 end
 Binomial(size) = Binomial(size, 0.5)
 Binomial()     = Binomial(1, 0.5)
+@_jl_dist_2p Binomial binom
 mean(d::Binomial)     = d.size * d.prob
-variance(d::Binomial) = d.size * d.prob * (1. - d.prob)
-@_jl_dist_2p Binomial binom size prob
+var(d::Binomial)      = d.size * d.prob * (1. - d.prob)
+skewness(d::Binomial) = (1-2d.prob)/std(d)
+kurtosis(d::Binomial) = (1-2d.prob*(1-d.prob))/var(d)
 
 type Cauchy <: ContinuousDistribution
     location::Real
@@ -271,9 +302,11 @@ type Cauchy <: ContinuousDistribution
 end
 Cauchy(l) = Cauchy(l, 1)
 Cauchy()  = Cauchy(0, 1)
-mean(d::Cauchy) = NaN
-variance(d::Cauchy) = NaN
-@_jl_dist_2p Cauchy cauchy location scale
+@_jl_dist_2p Cauchy cauchy
+mean(d::Cauchy)     = NaN
+var(d::Cauchy)      = NaN
+skewness(d::Cauchy) = NaN
+kurtosis(d::Cauchy) = NaN
 
 type Chi <: ContinuousDistribution
     df::Float64
@@ -283,7 +316,11 @@ type Chisq <: ContinuousDistribution
     df::Float64      # non-integer degrees of freedom are meaningful
     Chisq(d) = d > 0 ? new(float64(d)) : error("df must be positive")
 end
-@_jl_dist_1p Chisq chisqr df
+@_jl_dist_1p Chisq chisq
+mean(d::Chisq)     = d.df
+var(d::Chisq)      = 2d.df
+skewness(d::Chisq) = sqrt(8/d.df)
+kurtosis(d::Chisq) = 12/d.df
 
 type Erlang <: ContinuousDistribution
     shape::Float64
@@ -294,15 +331,22 @@ type Exponential <: ContinuousDistribution
     scale::Float64                      # note: scale not rate
     Exponential(sc) = sc > 0 ? new(float64(sc)) : error("scale must be positive")
 end
-@_jl_dist_1p Exponential exp scale
+Exponential() = Exponential(1.)
+@_jl_dist_1p Exponential exp
+mean(d::Exponential)     = d.scale
+median(d::Exponential)   = d.scale * log(2.)
+var(d::Exponential)      = d.scale * d.scale
+skewness(d::Exponential) = 2.
+kurtosis(d::Exponential) = 6.
 
 type FDist <: ContinuousDistribution
     ndf::Float64
     ddf::Float64
     FDist(d1,d2) = d1 > 0 && d2 > 0 ? new(float64(d1), float64(d2)) : error("Both numerator and denominator degrees of freedom must be positive")
 end
-
-@_jl_dist_2p FDist f ndf ddf
+@_jl_dist_2p FDist f
+mean(d::FDist) = 2 < d.ddf ? d.ddf/(d.ddf - 2) : NaN
+var(d::FDist)  = 4 < d.ddf ? 2d.ddf^2*(d.ndf+d.ddf-2)/(d.ndf*(d.ddf-2)^2*(d.ddf-4)) : NaN
 
 type Gamma <: ContinuousDistribution
     shape::Float64
@@ -310,43 +354,52 @@ type Gamma <: ContinuousDistribution
     Gamma(sh,sc) = sh > 0 && sc > 0 ? new(float64(sh), float64(sc)) : error("Both schape and scale must be positive")
 end
 Gamma(sh) = Gamma(sh, 1.)
-Gamma()   = Gamma(1., 1.)               # Exponential distribution
-mean(d::Gamma) = d.shape * d.scale
-variance(d::Gamma) = d.shape * d.scale * d.scale
+Gamma()   = Gamma(1., 1.)               # Standard exponential distribution
+@_jl_dist_2p Gamma gamma
+mean(d::Gamma)     = d.shape * d.scale
+var(d::Gamma)      = d.shape * d.scale * d.scale
+skewness(d::Gamma) = 2/sqrt(d.shape)
+rand(d::Gamma)     = d.scale * randg(d.shape)
 
-@_jl_dist_2p Gamma gamma shape scale
-## redefine the rand method
-rand(d::Gamma) = d.scale * randg(d.shape)
-
-type Geometric <: DiscreteDistribution
+type Geometric <: DiscreteDistribution  # In the form of # of failures before the first success
     prob::Float64
     Geometric(p) = 0 < p < 1 ? new(float64(p)) : error("prob must be in (0,1)")
 end
 Geometric() = Geometric(0.5)            # Flips of a fair coin
-mean(d::Geometric) = 1 / d.prob         # assuming total number of trials - check this
-variance(d::Geometric) = (1 - d.prob)/d.prob^2
-@_jl_dist_1p Geometric geom prob
+@_jl_dist_1p Geometric geom
+mean(d::Geometric)     = (1-d.prob)/d.prob
+var(d::Geometric)      = (1-d.prob)/d.prob^2
+skewness(d::Geometric) = (2-d.prob)/sqrt(1-d.prob)
+kurtosis(d::Geometric) = 6+d.prob^2/(1-d.prob)
 
 type HyperGeometric <: DiscreteDistribution
     ns::Float64                         # number of successes in population
     nf::Float64                         # number of failures in population
     n::Float64                          # sample size
     function HyperGeometric(s,f,n)
-        n=int(n)
-        s=int(s)
-        f=int(f)
-        n > 0 && s >= 0 && f >= 0 && n >= (s+f) ? new(float64(s), float64(f), float64(n)) : error("ns, nf and n must be non-negative integers satisfying n >= (ns + nf)")
+        s = 0 <= s && int(s) == s ? int(s) : error("ns must be a non-negative integer")
+        f = 0 <= f && int(f) == f ? int(f) : error("nf must be a non-negative integer")        
+        n = 0 < n <= (s+f) && int(n) == n ? new(float64(s), float64(f), float64(n)) : error("n must be a positive integer <= (ns + nf)")
     end
 end
-@_jl_dist_3p HyperGeometric hyper ns nf n
+@_jl_dist_3p HyperGeometric hyper
+mean(d::HyperGeometric) = d.n*d.ns/(d.ns+d.nf)
+var(d::HyperGeometric)  = (N=d.ns+d.nf; p=d.ns/N; d.n*p*(1-p)*(N-d.n)/(N-1))
 
 type Logistic <: ContinuousDistribution
     location::Real
     scale::Real
     Logistic(l, s) = s > 0 ? new(float64(l), float64(s)) : error("scale must be positive")
 end
-
-@_jl_dist_2p Logistic logis location scale
+Logistic(l) = Logistic(l, 1)
+Logistic()  = Logistic(0, 1)
+@_jl_dist_2p Logistic logis
+mean(d::Logistic)     = d.location
+median(d::Logistic)   = d.location
+var(d::Logistic)      = (pi*d.scale)^2/3.
+std(d::Logistic)      = pi*d.scale/sqrt(3.)
+skewness(d::Logistic) = 0.
+kurtosis(d::Logistic) = 1.2
 
 type logNormal <: ContinuousDistribution
     meanlog::Float64
@@ -355,7 +408,9 @@ type logNormal <: ContinuousDistribution
 end
 logNormal(ml) = logNormal(ml, 1)
 logNormal()   = logNormal(0, 1)
-@_jl_dist_2p logNormal lnorm meanlog sdlog
+@_jl_dist_2p logNormal lnorm
+mean(d::logNormal) = exp(d.meanlog + d.sdlog^2/2)
+var(d::logNormal)  = (sigsq=d.sdlog^2; (exp(sigsq) - 1)*exp(2d.meanlog+sigsq))
 
 ## NegativeBinomial is the distribution of the number of failures
 ## before the size'th success in a sequence of Bernoulli trials.
@@ -367,7 +422,7 @@ type NegativeBinomial <: DiscreteDistribution
     prob::Float64
     NegativeBinomial(s,p) = 0 < p <= 1 ? (s >= 0 ? new(float64(s),float64(p)) : error("size must be non-negative")) : error("prob must be in (0,1]")
 end
-@_jl_dist_2p NegativeBinomial nbinom size prob
+@_jl_dist_2p NegativeBinomial nbinom
 
 type NoncentralBeta <: ContinuousDistribution
     alpha::Float64
@@ -375,14 +430,14 @@ type NoncentralBeta <: ContinuousDistribution
     ncp::Float64
     NonCentralBeta(a,b,nc) = a > 0 && b > 0 && nc >= 0 ? new(float64(a),float64(b),float64(nc)) : error("alpha and beta must be > 0 and ncp >= 0")
 end
-@_jl_dist_3p NoncentralBeta nbeta alpha beta ncp
+@_jl_dist_3p NoncentralBeta nbeta
 
 type NoncentralChisq <: ContinuousDistribution
     df::Float64
     ncp::Float64
     NonCentralChisq(d,nc) = d >= 0 && nc >= 0 ? new(float64(d),float64(nc)) : error("df and ncp must be non-negative")
 end
-@_jl_dist_2p NoncentralChisq nchisq df ncp
+@_jl_dist_2p NoncentralChisq nchisq
 
 type NoncentralF <: ContinuousDistribution
     ndf::Float64
@@ -390,14 +445,14 @@ type NoncentralF <: ContinuousDistribution
     ncp::Float64
     NonCentralF(n,d,nc) = n > 0 && d > 0 && nc >= 0 ? new(float64(n),float64(d),float64(nc)) : error("ndf and ddf must be > 0 and ncp >= 0")
 end
-@_jl_dist_3p NoncentralF nf ndf ddf ncp
+@_jl_dist_3p NoncentralF nf
 
 type NoncentralT <: ContinuousDistribution
     df::Float64
     ncp::Float64
     NonCentralT(d,nc) = d >= 0 && nc >= 0 ? new(float64(d),float64(nc)) : error("df and ncp must be non-negative")
 end
-@_jl_dist_2p NoncentralT nt df ncp
+@_jl_dist_2p NoncentralT nt
 
 type Normal <: ContinuousDistribution
     mean::Float64
@@ -407,13 +462,14 @@ end
 Normal(mu) = Normal(mu, 1)
 Normal() = Normal(0,1)
 const Gaussian = Normal
+@_jl_dist_2p Normal norm
 mean(d::Normal) = d.mean
 median(d::Normal) = d.mean
-variance(d::Normal) = d.std^2
-
-@_jl_dist_2p Normal norm mean std
+var(d::Normal) = d.std^2
+skewness(d::Normal) = 0.
+kurtosis(d::Normal) = 0.
 ## redefine common methods
-cdf(d::Normal, x::Real) = (1+erf(x-d.mean)/(d.std*sqrt(2)))/2
+cdf(d::Normal, x::Real) = (1+erf((x-d.mean)/(d.std*sqrt(2))))/2
 pdf(d::Normal, x::Real) = exp(-(x-d.mean)^2/(2d.std^2))/(d.std*sqrt(2pi))
 rand(d::Normal) = d.mean + d.std * randn()
 
@@ -421,31 +477,31 @@ type Poisson <: DiscreteDistribution
     lambda::Float64
     Poisson(l) = l > 0 ? new(float64(l)) : error("lambda must be positive")
 end
+Poisson() = Poisson(1)
 mean(d::Poisson) = d.lambda
-variance(d::Poisson) = d.lambda
-@_jl_dist_1p Poisson pois lambda
+var(d::Poisson) = d.lambda
+@_jl_dist_1p Poisson pois
 
 type TDist <: ContinuousDistribution
     df::Float64                         # non-integer degrees of freedom allowed
     TDist(d) = d > 0 ? new(float(d)) : error("df must be positive")
 end
-@_jl_dist_1p TDist t df
+@_jl_dist_1p TDist t
 mean(d::TDist) = d.df > 1 ? 0. : NaN
 median(d::TDist) = 0.
-variance(d::TDist) = d.df > 2 ? d.df/(d.df-2) : d.df > 1 ? Inf : NaN
+var(d::TDist) = d.df > 2 ? d.df/(d.df-2) : d.df > 1 ? Inf : NaN
 
 type Uniform <: ContinuousDistribution
     a::Float64
     b::Float64
-    Uniform(aa, bb) = aa > bb ? new(float64(aa), float(bb)) : error("a < b required for range [a, b]")
+    Uniform(aa, bb) = aa < bb ? new(float64(aa), float(bb)) : error("a < b required for range [a, b]")
 end
 Uniform() = Uniform(0, 1)
-@_jl_dist_2p Uniform unif a b
-## Specific methods
+@_jl_dist_2p Uniform unif
 mean(d::Uniform) = (d.a + d.b) / 2.
 median(d::Uniform) = (d.a + d.b)/2.
-rand(d::Uniform) = d.a + d.b * rand()   # override the Rmath method
-variance(d::Uniform) = (w = d.b - d.a; w * w / 12.)
+rand(d::Uniform) = d.a + d.b * rand()
+var(d::Uniform) = (w = d.b - d.a; w * w / 12.)
 
 type Weibull <: ContinuousDistribution
     shape::Float64
@@ -453,31 +509,28 @@ type Weibull <: ContinuousDistribution
     Weibull(sh,sc) = 0 < sh && 0 < sc ? new(float64(sh), float(sc)) : error("Both shape and scale must be positive")
 end
 Weibull(sh) = Weibull(sh, 1)
-@_jl_dist_2p Weibull weibull shape scale
-## Specific methods
+@_jl_dist_2p Weibull weibull
 mean(d::Weibull) = d.scale * gamma(1 + 1/d.shape)
-variance(d::Weibull) = d.scale^2*gamma(1 + 2/d.shape) - mean(d)^2
+var(d::Weibull) = d.scale^2*gamma(1 + 2/d.shape) - mean(d)^2
 
 for f in (:cdf, :logcdf, :ccdf, :logccdf, :quantile, :cquantile, :invlogcdf, :invlogccdf)
     @eval begin
-        function ($f){T<:Real}(d::Distribution, p::AbstractVector{T})
-            reshape([($f)(d, e) for e in p], size(x))
+        function ($f){T<:Real}(d::Distribution, x::AbstractVector{T})
+            reshape([($f)(d, e) for e in x], size(x))
         end
     end
 end
 for f in (:pmf, :logpmf)
     @eval begin
-        function ($f){T<:Real}(d::DiscreteDistribution, p::AbstractVector{T})
-            reshape([($f)(d, e) for e in p], size(x))
+        function ($f){T<:Real}(d::DiscreteDistribution, x::AbstractVector{T})
+            reshape([($f)(d, e) for e in x], size(x))
         end
     end
 end
 for f in (:pdf, :logpdf)
     @eval begin
-        function ($f){T<:Real}(d::ContinuousDistribution, p::AbstractVector{T})
-            reshape([($f)(d, e) for e in p], size(x))
+        function ($f){T<:Real}(d::ContinuousDistribution, x::AbstractVector{T})
+            reshape([($f)(d, e) for e in x], size(x))
         end
     end
 end
-rand(d::Distribution, n::Int) = [rand(d) for i=1:n]
-std(d::Distribution) = sqrt(variance(d))
