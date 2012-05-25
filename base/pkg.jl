@@ -26,11 +26,11 @@ end
 git_each_submodule(f::Function, r::Bool) = git_each_submodule(f, r, cwd())
 
 function git_read_config(file::String)
-    cfg = Dict{ByteString,ByteString}()
+    cfg = Dict()
     # TODO: use --null option for better handling of weird values.
     for line in each_line(`git config -f $file --get-regexp '.*'`)
         key, val = match(r"^(\S+)\s+(.*)$", line).captures
-        cfg[key] = val
+        cfg[key] = has(cfg,key) ? [cfg[key],val] : val
     end
     return cfg
 end
@@ -53,7 +53,14 @@ end
 function git_write_config(file::String, cfg::Dict)
     tmp = tmpnam()
     for key in sort!(keys(cfg))
-        run(`git config -f $tmp $key $(cfg[key])`)
+        val = cfg[key]
+        if isa(val,Array)
+            for x in val
+                run(`git config -f $tmp --add $key $x`)
+            end
+        else
+            run(`git config -f $tmp $key $val`)
+        end
     end
     run(`mv -f $tmp $file`)
 end
@@ -183,20 +190,18 @@ function pkg_pull()
     run(`git fetch`)
     base = chomp(readall(`git merge-base HEAD FETCH_HEAD`))
     if git_different("HEAD","FETCH_HEAD",".gitmodules")
-        A_cfg = git_read_config(".gitmodules")
-        B_cfg = git_read_config_blob("FETCH_HEAD:.gitmodules")
-        C_cfg = git_read_config_blob("$base:.gitmodules")
-        git_write_config(".gitmodules", merge(B_cfg, A_cfg))
-        A = git_config_sections(A_cfg)
-        B = git_config_sections(B_cfg)
-        C = git_config_sections(C_cfg)
-        for section in C - A & B
-            m = match(r"^submodule\.(.+)$", section)
-            if m != nothing
-                run(`git rm --cached $(m.captures[1])`)
-                git_modules(`--remove-section $section`)
-            end
+        Ac = git_read_config(".gitmodules")
+        Bc = git_read_config_blob("FETCH_HEAD:.gitmodules")
+        Cc = git_read_config_blob("$base:.gitmodules")
+        As = git_config_sections(Ac)
+        Bs = git_config_sections(Bc)
+        Cs = git_config_sections(Cc)
+        # expunge removed sections from both sides
+        for section in Cs - As & Bs
+            filter!((k,v)->!begins_with("$section.",k),Ac)
+            filter!((k,v)->!begins_with("$section.",k),Bc)
         end
+        # TODO: merge what's left, failing if there are conflicts
         run(`git add .gitmodules`)
     end
     git_each_submodule((name,path,sha1)->begin
