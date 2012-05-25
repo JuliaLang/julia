@@ -190,6 +190,8 @@ type Dict{K,V} <: Associative{K,V}
         end
         return h
     end
+    global copy
+    copy(d::Dict{K,V}) = new(copy(d.keys),copy(d.vals),d.ndel,d.deleter)
 end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
@@ -376,6 +378,26 @@ function length(t::Dict)
     end
     return n
 end
+
+function merge!(d::Dict, others::Dict...)
+    for other in others
+        for (k,v) in other
+            d[k] = v
+        end
+    end
+    return d
+end
+merge(d::Dict, others::Dict...) = merge!(copy(d), others...)
+
+function filter!(f::Function, d::Dict)
+    for (k,v) in d
+        if !f(k,v)
+            del(d,k)
+        end
+    end
+    return d
+end
+filter(f::Function, d::Dict) = filter!(f,copy(d))
 
 # weak key dictionaries
 
