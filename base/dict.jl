@@ -132,8 +132,6 @@ hash(x::Integer) = _jl_hash64(uint64(x))
     isnan(x) ? $_jl_hash64(NaN) : _jl_hash64(float64(x))
 end
 
-hash(s::Symbol) = ccall(:jl_hash_symbol, Uint, (Any,), s)
-
 function hash(t::Tuple)
     h = int(0)
     for i=1:length(t)
@@ -150,7 +148,7 @@ function hash(a::Array)
     return uint(h)
 end
 
-hash(x::Any) = uid(x)
+hash(x::ANY) = uid(x)
 
 if WORD_SIZE == 64
     hash(s::ByteString) =
