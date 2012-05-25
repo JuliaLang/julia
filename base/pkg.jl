@@ -9,8 +9,9 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 git_dir() = chomp(readall(`git rev-parse --git-dir`))
 git_dirty() = !success(`git diff --quiet`)
 git_staged() = !success(`git diff --cached --quiet`)
-
 git_modules(args::Cmd) = chomp(readall(`git config -f .gitmodules $args`))
+git_different(verA::String, verB::String, path::String) =
+    !success(`git diff --quiet $verA $verB -- $path`)
 
 function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
@@ -24,18 +25,48 @@ function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
 end
 git_each_submodule(f::Function, r::Bool) = git_each_submodule(f, r, cwd())
 
-function git_canonicalize_config(file::String)
-    dict = Dict{ByteString,ByteString}()
+function git_read_config(file::String)
+    cfg = Dict{ByteString,ByteString}()
     # TODO: use --null option for better handling of weird values.
     for line in each_line(`git config -f $file --get-regexp '.*'`)
         key, val = match(r"^(\S+)\s+(.*)$", line).captures
-        dict[key] = val
+        cfg[key] = val
     end
-    tmp = cstring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
-    for key in sort!(keys(dict))
-        run(`git config -f $tmp $key $(dict[key])`)
+    return cfg
+end
+
+# TODO: provide a clean way to avoid this disaster
+function git_read_config_blob(blob::String)
+    tmp = tmpnam()
+    fh = open(tmp,"w")
+    try write(fh,readall(`git cat-file blob $blob`))
+    catch err
+        close(fh)
+        throw(err)
+    end
+    close(fh)
+    cfg = git_read_config(tmp)
+    run(`rm -f tmp`)
+    return cfg
+end
+
+function git_write_config(file::String, cfg::Dict)
+    tmp = tmpnam()
+    for key in sort!(keys(cfg))
+        run(`git config -f $tmp $key $(cfg[key])`)
     end
     run(`mv -f $tmp $file`)
+end
+
+git_canonicalize_config(file::String) = git_write_config(file, git_read_config(file))
+
+function git_config_sections(cfg::Dict)
+    sections = Set{ByteString}()
+    for key in keys(cfg)
+        m = match(r"^(.+)\.", key)
+        if m != nothing add(sections,m.captures[1]) end
+    end
+    sections
 end
 
 # create a new empty packge repository
@@ -82,7 +113,7 @@ end
 
 function pkg_checkout(rev::String)
     dir = cwd()
-    run(`git checkout -q $rev`)
+    run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
     run(`git ls-files --other` | `xargs rm -rf`)
     git_each_submodule((name,path,sha1)->begin
@@ -150,19 +181,35 @@ end
 function pkg_pull()
     run(`git fetch --tags`)
     run(`git fetch`)
-    fetch_head = chomp(readall(`git rev-parse FETCH_HEAD`))
+    base = chomp(readall(`git merge-base HEAD FETCH_HEAD`))
+    if git_different("HEAD","FETCH_HEAD",".gitmodules")
+        A_cfg = git_read_config(".gitmodules")
+        B_cfg = git_read_config_blob("FETCH_HEAD:.gitmodules")
+        C_cfg = git_read_config_blob("$base:.gitmodules")
+        git_write_config(".gitmodules", merge(B_cfg, A_cfg))
+        A = git_config_sections(A_cfg)
+        B = git_config_sections(B_cfg)
+        C = git_config_sections(C_cfg)
+        for section in C - A & B
+            m = match(r"^submodule\.(.+)$", section)
+            if m != nothing
+                run(`git rm --cached $(m.captures[1])`)
+                git_modules(`--remove-section $section`)
+            end
+        end
+        run(`git add .gitmodules`)
+    end
     git_each_submodule((name,path,sha1)->begin
-        alt = try chomp(readall(`git rev-parse $fetch_head:$path`)) end
-        if alt != nothing
+        if git_different(ours,theirs,path)
+            alt = chomp(readall(`git rev-parse $theirs:$path`))
             @cd path run(`git merge --no-edit $alt`)
             run(`git add $path`)
         end
-    end, false)
-    if git_dirty()
-        run(`git commit -m "[jul] pull: merge submodules"`)
-    end
+    end)
+
+    if git_dirty() run(`git commit -m "[jul] pull: merge submodules"`) end
     # TODO: if merge in progress, just commit
-    run(`git merge -m "[jul] pull: merge main" $fetch_head`)
+    run(`git merge -m "[jul] pull: merge main" $theirs`)
     pkg_checkout("HEAD")
     pkg_checkpoint()
 end
