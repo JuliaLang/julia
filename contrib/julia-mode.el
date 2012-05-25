@@ -89,29 +89,29 @@
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch"))
 
-(defun member (item lst)
+(defun julia-member (item lst)
   (if (null lst)
       nil
     (or (equal item (car lst))
-	(member item (cdr lst)))))
+	(julia-member item (cdr lst)))))
 
-(defun find-comment-open (p0)
+(defun julia-find-comment-open (p0)
   (if (< (point) p0)
       nil
     (if (and (equal (char-after (point)) ?#)
-	     (evenp (strcount
+	     (evenp (julia-strcount
 		     (buffer-substring p0 (point)) ?\")))
 	t
       (progn (backward-char 1)
-	     (find-comment-open p0)))))
+	     (julia-find-comment-open p0)))))
 
-(defun in-comment ()
+(defun julia-in-comment ()
   (save-excursion
     (end-of-line)
     (backward-char 1)
-    (find-comment-open (line-beginning-position))))
+    (julia-find-comment-open (line-beginning-position))))
 
-(defun strcount (str chr)
+(defun julia-strcount (str chr)
   (let ((i 0)
 	(c 0))
     (while (< i (length str))
@@ -120,30 +120,30 @@
       (setq i (+ i 1)))
     c))
 
-(defun in-brackets ()
+(defun julia-in-brackets ()
   (let ((before (buffer-substring (line-beginning-position) (point))))
-    (> (strcount before ?[)
-       (strcount before ?]))))
+    (> (julia-strcount before ?[)
+       (julia-strcount before ?]))))
 
-(defun at-keyword (kw-list)
+(defun julia-at-keyword (kw-list)
   ; not a keyword if used as a field name, X.word, or quoted, :word
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
-       (not (in-comment))
-       (not (in-brackets))
-       (member (current-word t) kw-list)))
+       (not (julia-in-comment))
+       (not (julia-in-brackets))
+       (julia-member (current-word t) kw-list)))
 
 ; get the position of the last open block
-(defun last-open-block-pos (min)
+(defun julia-last-open-block-pos (min)
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
       (backward-sexp)
       (setq count
-	    (cond ((at-keyword julia-block-start-keywords)
+	    (cond ((julia-at-keyword julia-block-start-keywords)
 		   (+ count 1))
 		  ((and (equal (current-word t) "end")
-			(not (in-comment)) (not (in-brackets)))
+			(not (julia-in-comment)) (not (julia-in-brackets)))
 		   (- count 1))
 		  (t count))))
     (if (> count 0)
@@ -151,8 +151,8 @@
       nil)))
 
 ; get indent for last open block
-(defun last-open-block (min)
-  (let ((pos (last-open-block-pos min)))
+(defun julia-last-open-block (min)
+  (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
 	   (goto-char pos)
@@ -160,12 +160,12 @@
 
 (defmacro error2nil (body) `(condition-case nil ,body (error nil)))
 
-(defun paren-indent ()
+(defun julia-paren-indent ()
   (let* ((p (parse-partial-sexp (save-excursion
 				  ;; only indent by paren if the last open
 				  ;; paren is closer than the last open
 				  ;; block
-				  (or (last-open-block-pos (point-min))
+				  (or (julia-last-open-block-pos (point-min))
 				      (point-min)))
 				(progn (beginning-of-line)
 				       (point))))
@@ -180,13 +180,13 @@
 ;  (save-excursion
     (end-of-line)
     (indent-line-to
-     (or (save-excursion (error2nil (paren-indent)))
+     (or (save-excursion (error2nil (julia-paren-indent)))
          (save-excursion
            (let ((endtok (progn
                            (beginning-of-line)
                            (forward-to-indentation 0)
-                           (at-keyword julia-block-end-keywords))))
-             (error2nil (+ (last-open-block (point-min))
+                           (julia-at-keyword julia-block-end-keywords))))
+             (error2nil (+ (julia-last-open-block (point-min))
                            (if endtok (- julia-basic-offset) 0)))))
 	 ;; previous line ends in =
 	 (save-excursion
@@ -201,7 +201,7 @@
 	 (save-excursion (forward-line -1)
 			 (current-indentation))
          0))
-    (when (at-keyword julia-block-end-keywords)
+    (when (julia-at-keyword julia-block-end-keywords)
       (forward-word 1)))
 
 (defun julia-mode ()
