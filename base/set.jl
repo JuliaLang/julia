@@ -12,6 +12,7 @@ show(io, s::Set) = (show(io, typeof(s)); show_comma_array(io, s,'(',')'))
 
 isempty(s::Set) = isempty(s.hash)
 length(s::Set)  = length(s.hash)
+elements(s::Set) = keys(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
@@ -33,19 +34,40 @@ done(s::Set, state) = done(s.hash, state)
 next(s::Set, state) = (((k,v),state) = next(s.hash, state); (k,state))
 
 union() = Set()
-union(s::Set) = s
+union(s::Set) = copy(s)
 function union(s::Set, sets::Set...)
     U = eltype(s)
-    for t in sets
-        if U == Any
-            break
+    if U != Any
+        for t in sets
+            T = eltype(t)
+            U = subtype(T,U) ? U :
+                subtype(U,T) ? T : Any # TODO: tigher upper bound
         end
-        T = eltype(t)
-        U = subtype(T,U) ? U :
-            subtype(U,T) ? T : Any
     end
+    u = Set{U}()
+    add_each(u,s)
     for t in sets
-        add_each(s, t)
+        add_each(u,t)
     end
-    return s
+    return u
 end
+
+inter() = Set()
+inter(s::Set) = copy(s)
+function inter(s::Set, sets::Set...)
+    i = copy(s)
+    for x in s
+        for t in sets
+            if !has(t,x)
+                del(i,x)
+            end
+        end
+    end
+    return i
+end
+
+diff(a::Set, b::Set) = del_each(copy(a),b)
+
+|(s::Set...) = union(s...)
+(&)(s::Set...) = inter(s...)
+-(a::Set, b::Set) = diff(a,b)
