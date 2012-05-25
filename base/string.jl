@@ -218,10 +218,28 @@ isless(a::String, b::String)  = cmp(a,b) <  0
 
 hash(s::String) = hash(cstring(s))
 
+# begins with and ends with predicates
+
+function begins_with(a::String, b::String)
+    i = start(a)
+    j = start(b)
+    while !done(a,i) && !done(b,i)
+        c, i = next(a,i)
+        d, j = next(b,j)
+        if c != d return false end
+    end
+    done(a,i)
+end
+
+# TODO: better ends_with
+ends_with(a::String, b::String) = begins_with(reverse(a),reverse(b))
+
 # faster comparisons for byte strings
 
 cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = length(a)==length(b) && cmp(a,b)==0
+
+# TODO: fast begins_with and ends_with
 
 ## character column width function ##
 
