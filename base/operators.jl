@@ -108,8 +108,12 @@ sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
-copy(x::ANY) = x
 foreach(f::Function, itr) = for x = itr; f(x); end
+
+# copying immutable things
+copy(x::Union(Symbol,Number,String)) = x
+copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
+copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 
 # function composition
 one(f::Function) = identity
