@@ -951,23 +951,27 @@
    (pattern-lambda (|.'| a) `(call transpose ,a))
 
    ;; transposed multiply
-   (pattern-lambda (call (-/ *) (|'| a) b)
-		   `(call aCb ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) (|'| b))   `(call aCbC ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b)) `(call aTbT ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) b)  `(call aCb ,a ,b))
+   (pattern-lambda (call (-/ *) a (|'| b))  `(call abC ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) b) `(call aTb ,a ,b))
+   (pattern-lambda (call (-/ *) a (|.'| b)) `(call abT ,a ,b))
 
-   (pattern-lambda (call (-/ *) a (|'| b))
-		   `(call abC ,a ,b))
+   ;; transposed divide
+   (pattern-lambda (call (-/ /) (|'| a) (|'| b))   `(call aC_rdiv_bC ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) (|.'| b)) `(call aT_rdiv_bT ,a ,b))
+   (pattern-lambda (call (-/ /) (|'| a) b)  `(call aC_rdiv_b ,a ,b))
+   (pattern-lambda (call (-/ /) a (|'| b))  `(call a_rdiv_bC ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) b) `(call aT_rdiv_b ,a ,b))
+   (pattern-lambda (call (-/ /) a (|.'| b)) `(call a_rdiv_bT ,a ,b))
 
-   (pattern-lambda (call (-/ *) (|'| a) (|'| b))
-		   `(call aCbC ,a ,b))
-
-   (pattern-lambda (call (-/ *) (|.'| a) b)
-		   `(call aTb ,a ,b))
-
-   (pattern-lambda (call (-/ *) a (|.'| b))
-		   `(call abT ,a ,b))
-
-   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
-		   `(call aTbT ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) (|'| b))   `(call aC_ldiv_bC ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) (|.'| b)) `(call aT_ldiv_bT ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) b)  `(call aC_ldiv_b ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|'| b))  `(call a_ldiv_bC ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) b) `(call aT_ldiv_b ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|.'| b)) `(call a_ldiv_bT ,a ,b))
 
    (pattern-lambda (ccall name RT argtypes . args)
 		   (begin

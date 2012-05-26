@@ -98,6 +98,22 @@ aTb (a,b) = transpose(a)*b
 abT (a,b) = a*transpose(b)
 aTbT(a,b) = transpose(a)*transpose(b)
 
+# transposed divide
+aC_rdiv_b (a,b) = ctranspose(a)/b
+a_rdiv_bC (a,b) = a/ctranspose(b)
+aC_rdiv_bC(a,b) = ctranspose(a)/ctranspose(b)
+aT_rdiv_b (a,b) = transpose(a)/b
+a_rdiv_bT (a,b) = a/transpose(b)
+aT_rdiv_bT(a,b) = transpose(a)/transpose(b)
+
+aC_ldiv_b (a,b) = ctranspose(a)\b
+a_ldiv_bC (a,b) = a\ctranspose(b)
+aC_ldiv_bC(a,b) = ctranspose(a)\ctranspose(b)
+aT_ldiv_b (a,b) = transpose(a)\b
+a_ldiv_bT (a,b) = a\transpose(b)
+aT_ldiv_bT(a,b) = transpose(a)\transpose(b)
+
+
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
 
