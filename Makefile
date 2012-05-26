@@ -13,14 +13,14 @@ julia-debug julia-release:
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
-	@ln -f $@-$(DEFAULT_REPL) julia
+	@ln -sf usr/bin/$@-$(DEFAULT_REPL) julia
 
 base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
 sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/build_h.jl
-	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
+	$(QUIET_JULIA) cd base && $(USRBIN)/julia-release-$(DEFAULT_REPL) -b stage0.jl
 	@rm -f sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
@@ -71,7 +71,7 @@ h2j: usr/lib/libLLVM*.a usr/lib/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
 
 clean:
-	@rm -f julia
+	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *#
 	@rm -f sys0.ji
 	@rm -f sys.ji

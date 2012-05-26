@@ -168,6 +168,7 @@ SHELL_EXT = sh
 endif
 
 ifeq ($(OS), Linux)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
@@ -177,6 +178,7 @@ NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 endif
 
 ifeq ($(OS), FreeBSD)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -186,6 +188,7 @@ OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/
 endif
 
 ifeq ($(OS), Darwin)
+INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -193,13 +196,12 @@ NO_WHOLE_ARCHIVE =
 endif
 
 ifeq ($(OS), WINNT)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = dll
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
 endif
-
-INSTALL_NAME_CMD = $(JULIAHOME)/deps/install-name-$(OS).$(SHELL_EXT)
 
 # MKL
 
