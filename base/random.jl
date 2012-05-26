@@ -233,14 +233,20 @@ function randg2(d::Float64, c::Float64)
 end
 
 function randg!(a::Real, A::Array{Float64})
-    d = a >= 1 ? a - 1.0/3.0 : error("require shape parameter a >= 1")
+    if a <= 0. error("shape parameter a must be > 0") end
+    d = (a < 1. ? a + 1 : a) - 1.0/3.0
     c = 1.0/sqrt(9.0d)
     for i in 1:numel(A) A[i] = randg2(d, c) end
+    if a < 1.
+        ainv = 1./a
+        for i in 1:numel(A) A[i] *= rand()^ainv end
+    end
     A
 end
 function randg(a::Real)
-    d = a >= 1 ? a - 1.0/3.0 : error("require shape parameter a >= 1")
-    randg2(d, 1.0/sqrt(9.0d))
+    if a <= 0. error("shape parameter a must be > 0") end
+    d = (a < 1. ? a + 1 : a) - 1.0/3.0
+    randg2(d, 1.0/sqrt(9.0d)) * (a > 1. ? 1. : rand()^(1./a))
 end
 randg(a::Real, dims::Dims) = randg!(a, Array(Float64, dims))
 randg(a::Real, dims::Int...) = randg(a, dims)
