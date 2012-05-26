@@ -931,6 +931,12 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"trunc",E"trunc(x) -> Float
+
+   Returns the nearest integer not greater in magnitude than 'x'.
+
+"),
+
 (E"Mathematical Functions",E"iceil",E"iceil(x) -> Integer
 
    Returns the nearest integer not less than 'x'.
@@ -940,6 +946,12 @@ collection[key...] = value
 (E"Mathematical Functions",E"ifloor",E"ifloor(x) -> Integer
 
    Returns the nearest integer not greater than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"itrunc",E"itrunc(x) -> Integer
+
+   Returns the nearest integer not greater in magnitude than 'x'.
 
 "),
 
