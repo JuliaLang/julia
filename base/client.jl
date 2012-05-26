@@ -186,6 +186,9 @@ end
 const _jl_roottask = current_task()
 const _jl_roottask_wi = WorkItem(_jl_roottask)
 
+_jl_is_interactive = false
+isinteractive() = (_jl_is_interactive::Bool)
+
 function _start()
     try
         ccall(:jl_register_toplevel_eh, Void, ())
@@ -214,6 +217,7 @@ function _start()
         (quiet,repl) = process_options(ARGS)
         if repl
             global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+            global _jl_is_interactive = true
             if !quiet
                 _jl_banner()
             end
