@@ -660,6 +660,10 @@ Mathematical Functions
 
    Returns the nearest integer not greater than ``x``.
 
+.. function:: trunc(x) -> Float
+
+   Returns the nearest integer not greater in magnitude than ``x``.
+
 .. function:: iceil(x) -> Integer
 
    Returns the nearest integer not less than ``x``.
@@ -668,7 +672,11 @@ Mathematical Functions
 
    Returns the nearest integer not greater than ``x``.
 
-``exp2`` ``ldexp`` ``trunc`` ``round`` ``itrunc`` ``iround`` ``ipart`` ``fpart`` ``min`` ``max`` ``clamp`` ``abs``
+.. function:: itrunc(x) -> Integer
+
+   Returns the nearest integer not greater in magnitude than ``x``.
+
+``exp2`` ``ldexp`` ``round`` ``iround`` ``ipart`` ``fpart`` ``min`` ``max`` ``clamp`` ``abs``
 
 .. function:: abs2(x)
 
