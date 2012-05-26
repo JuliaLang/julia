@@ -14,18 +14,27 @@ _jl_libRmath = dlopen("libRmath")
 ## var      -> variance
 ## std      -> standard deviation
 ## rand     -> random sampler
-ccdf(d::Distribution, q::Real)             = 1 - cdf(d,q)
-logpdf(d::ContinuousDistribution, x::Real) = log(pdf(d,x))
-logpmf(d::DiscreteDistribution, x::Real)   = log(pmf(d,x))
-logcdf(d::Distribution, q::Real)           = log(cdf(d,q))
-logccdf(d::Distribution, q::Real)          = log(ccdf(d,q))
-cquantile(d::Distribution, p::Real)        = quantile(d, 1-p)
-invlogcdf(d::Distribution, lp::Real)       = quantile(d, exp(lp))
-invlogccdf(d::Distribution, lp::Real)      = quantile(d, exp(-lp))
-std(d::Distribution)                       = sqrt(var(d))
-rand(d::Distribution, n::Int)              = [rand(d) for i=1:n]
-## Should we add?
-## rand(d::DiscreteDistribution, n::Int)      = [int(rand(d)) for i=1:n]
+ccdf(d::Distribution, q::Real)                = 1 - cdf(d,q)
+logpdf(d::ContinuousDistribution, x::Real)    = log(pdf(d,x))
+logpmf(d::DiscreteDistribution, x::Real)      = log(pmf(d,x))
+logcdf(d::Distribution, q::Real)              = log(cdf(d,q))
+logccdf(d::Distribution, q::Real)             = log(ccdf(d,q))
+cquantile(d::Distribution, p::Real)           = quantile(d, 1-p)
+invlogcdf(d::Distribution, lp::Real)          = quantile(d, exp(lp))
+invlogccdf(d::Distribution, lp::Real)         = quantile(d, exp(-lp))
+std(d::Distribution)                          = sqrt(var(d))
+function rand!(d::ContinuousDistribution, A::Array{Float64})
+    for i in 1:numel(A) A[i] = rand(d) end
+    A
+end
+rand(d::ContinuousDistribution, dims::Dims)   = rand!(d, Array(Float64,dims))
+rand(d::ContinuousDistribution, dims::Int...) = rand(d, dims)
+function rand!(d::DiscreteDistribution, A::Array{Int})
+    for i in 1:numel(A) A[i] = int(rand(d)) end
+    A
+end
+rand(d::DiscreteDistribution, dims::Dims)     = rand!(d, Array(Int,dims))
+rand(d::DiscreteDistribution, dims::Int...)   = rand(d, dims)
 
 ## FIXME: Replace the three _jl_dist_*p macros with one by defining
 ## the argument tuples for the ccall dynamically from pn
@@ -276,6 +285,8 @@ Beta()  = Beta(1)                       # uniform
 mean(d::Beta) = d.alpha / (d.alpha + d.beta)
 var(d::Beta) = (ab = d.alpha + d.beta; d.alpha * d.beta /(ab * ab * (ab + 1.)))
 skewness(d::Beta) = 2(d.beta - d.alpha)*sqrt(d.alpha + d.beta + 1)/((d.alpha + d.beta + 2)*sqrt(d.alpha*d.beta))
+rand(d::Beta) = randbeta(d.alpha, d.beta)
+rand!(d::Beta, A::Array{Float64}) = randbeta!(alpha, beta, A)
 
 type BetaPrime <: ContinuousDistribution
     alpha::Float64
@@ -321,6 +332,8 @@ mean(d::Chisq)     = d.df
 var(d::Chisq)      = 2d.df
 skewness(d::Chisq) = sqrt(8/d.df)
 kurtosis(d::Chisq) = 12/d.df
+rand(d::Chisq)     = randchi2(d.df)
+rand!(d::Chisq, A::Array{Float64}) = randchi2!(d.df, A)
 
 type Erlang <: ContinuousDistribution
     shape::Float64
@@ -332,12 +345,43 @@ type Exponential <: ContinuousDistribution
     Exponential(sc) = sc > 0 ? new(float64(sc)) : error("scale must be positive")
 end
 Exponential() = Exponential(1.)
-@_jl_dist_1p Exponential exp
 mean(d::Exponential)     = d.scale
 median(d::Exponential)   = d.scale * log(2.)
 var(d::Exponential)      = d.scale * d.scale
 skewness(d::Exponential) = 2.
 kurtosis(d::Exponential) = 6.
+function cdf(d::Exponential, q::Real)
+    q <= 0. ? 0. : -expm1(-q/d.scale)
+end
+function logcdf(d::Exponential, q::Real)
+    q <= 0. ? -Inf : (qs = -q/d.scale; qs > log(0.5) ? log(-expm1(qs)) : log1p(-exp(qs)))
+end
+function ccdf(d::Exponential, q::Real)
+    q <= 0. ? 1. : exp(-q/d.scale)
+end
+function logccdf(d::Exponential, q::Real)
+    q <= 0. ? 0. : -q/d.scale
+end
+function pdf(d::Exponential, x::Real)
+    x <= 0. ? 0. : exp(-x/d.scale) / d.scale
+end
+function logpdf(d::Exponential, x::Real)
+    x <= 0. ? -Inf : (-x/d.scale) - log(d.scale)
+end
+function quantile(d::Exponential, p::Real)
+    0. <= p <= 1. ? -d.scale * log1p(-p) : NaN
+end
+function invlogcdf(d::Exponential, lp::Real)
+    lp <= 0. ? -d.scale * (lp > log(0.5) ? log(-expm1(lp)) : log1p(-exp(lp))) : NaN
+end
+function cquantile(d::Exponential, p::Real)
+    0. <= p <= 1. ? -d.scale * log(p) : NaN
+end
+function invlogccdf(d::Exponential, lp::Real)
+    lp <= 0. ? -d.scale * lp : NaN
+end
+rand(d::Exponential)                     = d.scale * randexp()
+rand!(d::Exponential, A::Array{Float64}) = d.scale * randexp!(A)
 
 type FDist <: ContinuousDistribution
     ndf::Float64
@@ -360,6 +404,7 @@ mean(d::Gamma)     = d.shape * d.scale
 var(d::Gamma)      = d.shape * d.scale * d.scale
 skewness(d::Gamma) = 2/sqrt(d.shape)
 rand(d::Gamma)     = d.scale * randg(d.shape)
+rand!(d::Gamma, A::Array{Float64}) = d.scale * randg!(d.shape, A)
 
 type Geometric <: DiscreteDistribution  # In the form of # of failures before the first success
     prob::Float64
