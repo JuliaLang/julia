@@ -394,20 +394,26 @@ promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
 
-promote_rule(::Type{Uint8} , ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int16}) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int32}) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int64}) = Uint64
+promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int
+promote_rule(::Type{Uint8} , ::Type{Int16}) = Int
+promote_rule(::Type{Uint8} , ::Type{Int32}) = Int
+promote_rule(::Type{Uint8} , ::Type{Int64}) = Int64
 
-promote_rule(::Type{Uint16}, ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int16}) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int32}) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int64}) = Uint64
+promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int
+promote_rule(::Type{Uint16}, ::Type{Int16}) = Int
+promote_rule(::Type{Uint16}, ::Type{Int32}) = Int
+promote_rule(::Type{Uint16}, ::Type{Int64}) = Int64
 
-promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int64}) = Uint64
+if WORD_SIZE == 64
+    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int
+    promote_rule(::Type{Uint32}, ::Type{Int16}) = Int
+    promote_rule(::Type{Uint32}, ::Type{Int32}) = Int
+else
+    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
+    promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
+    promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
+end
+promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
 
 promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64
 promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64
