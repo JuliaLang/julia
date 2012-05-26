@@ -75,14 +75,14 @@ test_week_cycle()
 @assert typeof(now()) == DateTime{Float64}
 
 @assert typeof(datetime(2012, 4, 24, 13,0,0)) == DateTime{Float64}
-@assert typeof(datetime(2012, 4,24,14,0,0, 0.0, 1.0, "BST")) == DateTime{Float64}
+@assert typeof(datetime(2012, 4,24,14,0,0, 0.0, 1.0)) == DateTime{Float64}
 #Test unix time and julian days are congruous, upto second accuracy
 #ifloor(strptime("Tue 24 Apr 13:57:16 2012")) = 1335275836
-@assert ifloor((datetime(2012, 4,24, 13,57, 16, 0.0, 1.0, "BST").jd-_UNIXEPOCH)*86400) - 1335275836 == 0
+@assert ifloor((datetime(2012, 4,24, 13,57, 16, 0.0, 1.0).jd-_UNIXEPOCH)*86400) - 1335275836 == 0
 
 @assert_approx_eq ( datetime(2012, 4, 24, 13,0,0) - datetime(2012, 4,24,14,0,0)  ) * 24  -1
 @assert isa(datetime(2012, 4, 24, 13,0,0) - datetime(2012, 4,24,14,0,0), Float64)
-@assert_approx_eq ( datetime(2012, 4, 24, 13,0,0, 0.0, 0.0, "GMT") - datetime(2012, 4,24,14,0,0, 0.0, 1.0, "BST")  ) * 24  0
+@assert_approx_eq ( datetime(2012, 4, 24, 13,0,0, 0.0, 0.0) - datetime(2012, 4,24,14,0,0, 0.0, 1.0)  ) * 24  0
 
 
 d= datetime(2012, 4, 24, 13,10,5) 

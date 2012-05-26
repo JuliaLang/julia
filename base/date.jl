@@ -19,16 +19,19 @@ _UNIXEPOCH = 2440588 # JD of midnight localtime 1/1/70
 
 
 type DateTime{T<:Real} 
-	jd::T
-	off::Float
-	zone::ASCIIString
+	jd::T #Julian Date 
+	off::Int8 #TZ offset in number of 15 minutes intervals
 
 	function DateTime{T<:Real}(jd::T)
-		new(jd, 0.0, "UTC")
+		new(jd, 0)
 	end
 
-	function DateTime{T<:Real}(jd::T, off::Float, zone::ASCIIString)
-		new(jd, off, zone)
+	function DateTime{T<:Real}(jd::T, off::Int8) 
+		new(jd, off)
+	end	
+
+	function DateTime{T<:Real}(jd::T, off::Float64) #Offset in hour
+		new(jd, int8(ifloor(off * 4)) ) 
 	end	
 end
 
@@ -40,28 +43,29 @@ function date(y::Int,m::Int,d::Int)
 	if jd==-1 
 		throw ("Invalid date: $y-$m-$d")
 	else 
-		DateTime{Int}(jd,0.0, "UTC")
+		DateTime{Int}(jd,0.0)
 	end
 end
 
-function datetime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer, frac::Float, off::Float, zone::ASCIIString)
+function datetime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer, frac::Float, off::Float) #Offset in hours
 	jd = valid_date(int(y), int(m), int(d))
 	if jd==-1 
 		throw ("Invalid date: $y-$m-$d")
 	else 
 		jd=jd+_time_to_day_frac(hh,mm,ss) + frac/86400
-		DateTime{Float64}(jd, off/24, zone)
+		DateTime{Float64}(jd, off)
 	end
 end
 
 #Create a datetime upto seconds accuracy with local timezone
 function datetime(y::Integer, m::Integer, d::Integer, hh::Integer, mm::Integer, ss::Integer)
-	datetime(y,m,d,hh,mm,ss,0.0, TZ_OFFSET, TZ)
+	datetime(y,m,d,hh,mm,ss,0.0, TZ_OFFSET)
 end
 
 function string{T<:Float}(dt::DateTime{T}) 
 	(y,m,d, hh, mm, ss, fr) = civil(dt)
-	"$(d) $(SHORT_MONTHS[m]) $(y) $(hh):$(mm):$(ss).$(string(round(fr*100)/100)[3:end]) ($(dec(int(dt.off * 2400),4))) "
+	hoff = dt.off/4
+	"$(d) $(SHORT_MONTHS[m]) $(y) $(hh):$(mm):$(ss).$(string(round(fr*100)/100)[3:end]) ($(dec(int((floor(hoff)*100) + (hoff - floor(hoff))*60), 4))) "
 end
 
 function string{T<:Integer}(dt::DateTime{T}) 
@@ -69,13 +73,13 @@ function string{T<:Integer}(dt::DateTime{T})
 	"$(d) $(SHORT_MONTHS[m]) $(y)"
 end
 
-show(d::DateTime) = print(string(d))
+show(io, d::DateTime) = print(io, string(d))
 
 (-){T<:Integer,S<:Integer} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd )
-(-){T<:Real,S<:Real} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd - (x.off - y.off))
-(-){T<:Real, S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd - y, x.off, x.zone)
-(+){T<:Real,S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd + y, x.off, x.zone)
-(+){T<:Real,S<:Real} (x::S, y::DateTime{T}) = DateTime{promote_type(T,S)}(y.jd + x, y.off, x.zone)
+(-){T<:Real,S<:Real} (x::DateTime{T}, y::DateTime{S}) = convert(promote_type(T,S), x.jd - y.jd - ((x.off - y.off) / 96) )
+(-){T<:Real, S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd - y, x.off)
+(+){T<:Real,S<:Real} (x::DateTime{T}, y::S) = DateTime{promote_type(T,S)}(x.jd + y, x.off)
+(+){T<:Real,S<:Real} (x::S, y::DateTime{T}) = DateTime{promote_type(T,S)}(y.jd + x, y.off)
 
 
 <=(x::DateTime, y::DateTime) = x-y <= 0 
@@ -107,8 +111,17 @@ function now()
 			int(tm[1]) , 			#int tm_sec
 			(t-floor(t)),
 			tm[11] / 3600,			#long tm_gmtoff
-			cstring(convert(Ptr{Uint8}, ((uint64(0)|tm[14]) << 32 ) | tm[13])) #char *tm_zone
+			#cstring(convert(Ptr{Uint8}, ((uint64(0)|tm[14]) << 32 ) | tm[13])) #char *tm_zone
 		)
+end
+
+function _default_zone() 
+	t = ccall(:clock_now, Float64, ())  #Seconds since unix epoch
+	tm = Array(Uint32, 14)
+    ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Uint32}), &t, tm)
+    zone = cstring(convert(Ptr{Uint8}, ((uint64(0)|tm[14]) << 32 ) | tm[13])) #char *tm_zone
+    off = tm[11] / 3600
+    return (off,zone)
 end
 
 #Day of the week for any day, 1=Sunday, 7=Saturday
@@ -262,13 +275,15 @@ TZ = 0
 TZ_OFFSET = ""
 function init()
 	d=now();
-	global TZ = d.zone
-	global TZ_OFFSET = d.off * 24
+	(off, zone) = _default_zone()
+	global  TZ = zone
+	global  TZ_OFFSET = off 
 end	
 
 divmod(x, y) = (div(x,y) , mod(x, y)) 
 
 init()
+
 
 
 
