@@ -1071,7 +1071,7 @@ function start_sge_workers(n)
     end
     id = split(readline(out),'.')[1]
     println("job id is $id")
-    print("waiting for job to start"); flush(stdout_stream)
+    print("waiting for job to start"); flush(OUTPUT_STREAM)
     workers = cell(n)
     for i=1:n
         # wait for each output stream file to get created
@@ -1090,7 +1090,7 @@ function start_sge_workers(n)
                 end
                 fexists = true
             catch
-                print("."); flush(stdout_stream)
+                print("."); flush(OUTPUT_STREAM)
                 sleep(0.5)
             end
         end
