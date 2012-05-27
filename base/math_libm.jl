@@ -1,8 +1,8 @@
 
 macro _jl_libmfunc_1arg_float(T,f)
     quote
-        ($f)(x::Float64) = ccall($expr(:quote,f), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall($expr(:quote,symbol(string(f,"f"))), Float32, (Float32,), x)
+        ($f)(x::Float64) = ccall(dlsym(_jl_libm,$string(f)), Float64, (Float64,), x)
+        ($f)(x::Float32) = ccall(dlsym(_jl_libm,$string(f,"f")), Float32, (Float32,), x)
         ($f)(x::Real) = ($f)(float(x))
         @vectorize_1arg $T $f
     end
@@ -24,8 +24,8 @@ macro _jl_libmfunc_1arg_int(T,f,name...)
         fname = f
     end
     quote
-        ($fname)(x::Float64) = ccall($expr(:quote,f), Int32, (Float64,), x)
-        ($fname)(x::Float32) = ccall($expr(:quote,symbol(string(f,"f"))), Int32, (Float32,), x)
+        ($fname)(x::Float64) = ccall(dlsym(_jl_libm,$string(f)), Int32, (Float64,), x)
+        ($fname)(x::Float32) = ccall(dlsym(_jl_libm,$string(f,"f")), Int32, (Float32,), x)
         @vectorize_1arg $T $fname
     end
 end
@@ -96,12 +96,12 @@ gamma(x::Real) = gamma(float(x))
 lfact(x::Real) = (x<=1 ? zero(x) : lgamma(x+one(x)))
 @vectorize_1arg Number lfact
 
-max(x::Float64, y::Float64) = ccall(:fmax,  Float64, (Float64,Float64), x, y)
-max(x::Float32, y::Float32) = ccall(:fmaxf, Float32, (Float32,Float32), x, y)
+max(x::Float64, y::Float64) = ccall(dlsym(_jl_libm, :fmax),  Float64, (Float64,Float64), x, y)
+max(x::Float32, y::Float32) = ccall(dlsym(_jl_libm, :fmaxf), Float32, (Float32,Float32), x, y)
 @vectorize_2arg Real max
 
-min(x::Float64, y::Float64) = ccall(:fmin,  Float64, (Float64,Float64), x, y)
-min(x::Float32, y::Float32) = ccall(:fminf, Float32, (Float32,Float32), x, y)
+min(x::Float64, y::Float64) = ccall(dlsym(_jl_libm, :fmin),  Float64, (Float64,Float64), x, y)
+min(x::Float32, y::Float32) = ccall(dlsym(_jl_libm, :fminf), Float32, (Float32,Float32), x, y)
 @vectorize_2arg Real min
 
 ldexp(x::Float64,e::Int) = ccall(dlsym(_jl_libfdm, :ldexp),  Float64, (Float64,Int32), x, int32(e))
