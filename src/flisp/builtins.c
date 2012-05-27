@@ -347,7 +347,7 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
     char *name = tostring(args[0], "os.setenv");
     int result;
     if (args[1] == FL_F) {
-#ifdef __linux
+#ifdef __linux__
         result = unsetenv(name);
 #elif defined(__WIN32__)
         result = SetEnvironmentVariable(name,NULL);

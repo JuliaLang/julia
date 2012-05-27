@@ -237,7 +237,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     _jl_gemm('N', 'N', A, B)
 end
 
-function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_syrk('T', A)
@@ -246,7 +246,7 @@ function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     end
 end
 
-function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_syrk('N', A)
@@ -255,13 +255,13 @@ function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     end
 end
 
-function aTbT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function At_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('T', 'T', A, B)
 end
 
-aCb{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = aTb(A, B)
-function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
+function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_herk('C', A)
@@ -270,8 +270,8 @@ function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
     end
 end
 
-abC{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = abT(A, B)
-function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+A_mul_Bc{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(A, B)
+function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_herk('N', A)
@@ -280,7 +280,7 @@ function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
     end
 end
 
-function aCbC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function Ac_mul_Bc{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('C', 'C', A, B)
 end

@@ -141,42 +141,6 @@ itrunc(x::Integer) = x
 ifloor(x::Integer) = x
 iceil (x::Integer) = x
 
-## integer promotions ##
-
-promote_rule(::Type{Int16}, ::Type{Int8} ) = Int
-promote_rule(::Type{Int32}, ::Type{Int8} ) = Int
-promote_rule(::Type{Int32}, ::Type{Int16}) = Int
-promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
-promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
-promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
-
-promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Uint
-promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Uint
-promote_rule(::Type{Uint32}, ::Type{Uint16}) = Uint
-promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
-
-promote_rule(::Type{Uint8} , ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int16}) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int32}) = Uint
-promote_rule(::Type{Uint8} , ::Type{Int64}) = Uint64
-
-promote_rule(::Type{Uint16}, ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int16}) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int32}) = Uint
-promote_rule(::Type{Uint16}, ::Type{Int64}) = Uint64
-
-promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
-promote_rule(::Type{Uint32}, ::Type{Int64}) = Uint64
-
-promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int32}) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
-
 ## integer arithmetic ##
 
 -(x::Signed) = -int(x)
@@ -410,6 +374,52 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 <=(x::Signed  , y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
 <=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
 
+## system word size ##
+
+const WORD_SIZE = int(Int.nbits)
+
+## integer promotions ##
+
+promote_rule(::Type{Int16}, ::Type{Int8} ) = Int
+promote_rule(::Type{Int32}, ::Type{Int8} ) = Int
+promote_rule(::Type{Int32}, ::Type{Int16}) = Int
+promote_rule(::Type{Int64}, ::Type{Int8} ) = Int64
+promote_rule(::Type{Int64}, ::Type{Int16}) = Int64
+promote_rule(::Type{Int64}, ::Type{Int32}) = Int64
+
+promote_rule(::Type{Uint16}, ::Type{Uint8} ) = Uint
+promote_rule(::Type{Uint32}, ::Type{Uint8} ) = Uint
+promote_rule(::Type{Uint32}, ::Type{Uint16}) = Uint
+promote_rule(::Type{Uint64}, ::Type{Uint8} ) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Uint16}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Uint32}) = Uint64
+
+promote_rule(::Type{Uint8} , ::Type{Int8} ) = Int
+promote_rule(::Type{Uint8} , ::Type{Int16}) = Int
+promote_rule(::Type{Uint8} , ::Type{Int32}) = Int
+promote_rule(::Type{Uint8} , ::Type{Int64}) = Int64
+
+promote_rule(::Type{Uint16}, ::Type{Int8} ) = Int
+promote_rule(::Type{Uint16}, ::Type{Int16}) = Int
+promote_rule(::Type{Uint16}, ::Type{Int32}) = Int
+promote_rule(::Type{Uint16}, ::Type{Int64}) = Int64
+
+if WORD_SIZE == 64
+    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int
+    promote_rule(::Type{Uint32}, ::Type{Int16}) = Int
+    promote_rule(::Type{Uint32}, ::Type{Int32}) = Int
+else
+    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
+    promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
+    promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
+end
+promote_rule(::Type{Uint32}, ::Type{Int64}) = Int64
+
+promote_rule(::Type{Uint64}, ::Type{Int8} ) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int16}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int32}) = Uint64
+promote_rule(::Type{Uint64}, ::Type{Int64}) = Uint64
+
 ## traits ##
 
 typemin(::Type{Int8  }) = int8(-128)
@@ -437,7 +447,3 @@ sizeof(::Type{Int32})  = 4
 sizeof(::Type{Uint32}) = 4
 sizeof(::Type{Int64})  = 8
 sizeof(::Type{Uint64}) = 8
-
-## system word size ##
-
-const WORD_SIZE = int(Int.nbits)

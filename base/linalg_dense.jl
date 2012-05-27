@@ -3,8 +3,8 @@
 # note that many functions have specific versions for Float/Complex arguments
 # which use BLAS instead
 
-aCb(x::Vector, y::Vector) = [dot(x, y)]
-aTb{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
+Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
+At_mul_B{T<:Real}(x::Vector{T}, y::Vector{T}) = [dot(x, y)]
 
 function dot(x::Vector, y::Vector)
     s = zero(eltype(x))
@@ -350,7 +350,7 @@ function ^(A::Matrix, p::Number)
         error("matrix must be square")
     end
     (v, X) = eig(A)
-    if isreal(v) && any(v<0)
+    if isreal(v) && any(v.<0)
         v = complex(v)
     end
     if ishermitian(A)

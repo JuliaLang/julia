@@ -919,6 +919,42 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"ceil",E"ceil(x) -> Float
+
+   Returns the nearest integer not less than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"floor",E"floor(x) -> Float
+
+   Returns the nearest integer not greater than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"trunc",E"trunc(x) -> Float
+
+   Returns the nearest integer not greater in magnitude than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"iceil",E"iceil(x) -> Integer
+
+   Returns the nearest integer not less than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"ifloor",E"ifloor(x) -> Integer
+
+   Returns the nearest integer not greater than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"itrunc",E"itrunc(x) -> Integer
+
+   Returns the nearest integer not greater in magnitude than 'x'.
+
+"),
+
 (E"Mathematical Functions",E"abs2",E"abs2(x)
 
    Squared absolute value of 'x'
@@ -1899,8 +1935,7 @@ collection[key...] = value
 
 (E"Signal Processing",E"ifft",E"ifft(A, dim)
 
-   Inverse FFT. Same arguments as 'fft'. Julia does not normalize the
-   results of 'ifft'.
+   Inverse FFT. Same arguments as 'fft'.
 
 "),
 
@@ -1919,6 +1954,21 @@ collection[key...] = value
 (E"Signal Processing",E"ifftn",E"ifftn()
 
    Inverse N-d FFT
+
+"),
+
+(E"Signal Processing",E"rfft",E"rfft(A[, dim=1])
+
+   One-dimensional FFT of real array A along dimension dim. If A has
+   size '(..., n_dim, ...)', the result has size '(...,
+   floor(n_dim/2)+1, ...)'.
+
+"),
+
+(E"Signal Processing",E"rfftn",E"rfftn(A)
+
+   N-d FFT of real array A. If A has size '(n_1, ..., n_d)', the
+   result has size '(floor(n_1/2)+1, ..., n_d)'.
 
 "),
 

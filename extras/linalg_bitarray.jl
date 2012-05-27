@@ -276,9 +276,8 @@ function findmin(a::BitArray)
             return (z, ti)
         end
     end
-    u = ~uint64(0)
-    l = (length(a)-1) & 63 + 1
-    msk = (u >>> (64 - l))
+    l = (@_mod64 (length(a)-1)) + 1
+    msk = @_mskr l
     k = trailing_ones(a.chunks[end] & msk)
     ti += k
     if k != l

@@ -294,8 +294,12 @@ function log(z::Complex)
         r = ar/ai
         re = log(ai) + 0.5*log1p(r*r)
     else
-        r = ai/ar
-        re = log(ar) + 0.5*log1p(r*r)
+        if ar == 0
+            re = -inv(ar)
+        else
+            r = ai/ar
+            re = log(ar) + 0.5*log1p(r*r)
+        end
     end
     complex(re, atan2(imag(z), real(z)))
 end

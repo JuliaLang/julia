@@ -567,7 +567,7 @@
 	       (if (and (juxtapose? ex next)
 			(not (ts:space? s)))
 		   (begin
-		     (if (and (number? ex) (= ex 0))
+		     #;(if (and (number? ex) (= ex 0))
 			 (error "juxtaposition with literal 0"))
 		     `(call * ,ex ,(parse-unary s)))
 		   ex)))))))

@@ -10,9 +10,21 @@ type UmfpackLUFactorization{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)
     mat::SparseMatrixCSC{Tv,Ti}
 end
 
+function show(io, f::UmfpackLUFactorization)
+    printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
+           size(f.mat,1), size(f.mat,2))
+    println(f.numeric)
+end
+
 type UmfpackLUFactorizationTransposed{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
     numeric::UmfpackPtr{Tv,Ti}
     mat::SparseMatrixCSC{Tv,Ti}
+end
+
+function show(io, f::UmfpackLUFactorization)
+    printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
+           size(f.mat,1), size(f.mat,2))
+    println(f.numeric)
 end
 
 function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})

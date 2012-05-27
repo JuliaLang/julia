@@ -6,7 +6,6 @@
     memhash_seed;
     memhash32;
     memhash32_seed;
-    jl_hash_symbol;
     jl_symbol_name;
     jl_uid;
     jl_strtod;

@@ -50,7 +50,7 @@ int set_cwd(char *buf)
     return 0;
 }
 
-#ifdef __linux
+#ifdef __linux__
 char *get_exename(char *buf, size_t size)
 {
     char linkname[64]; /* /proc/<pid>/exe */

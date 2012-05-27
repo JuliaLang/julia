@@ -115,12 +115,47 @@ void jl_pop_handler(int n)
 
 // primitives -----------------------------------------------------------------
 
+int jl_egal(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b)
+        return 1;
+    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
+    if (ta != (jl_value_t*)jl_typeof(b))
+        return 0;
+    if (jl_is_bits_type(ta)) {
+        size_t nb = jl_bitstype_nbits(ta)/8;
+        switch (nb) {
+        case 1:
+            return *(int8_t*)jl_bits_data(a) == *(int8_t*)jl_bits_data(b);
+        case 2:
+            return *(int16_t*)jl_bits_data(a) == *(int16_t*)jl_bits_data(b);
+        case 4:
+            return *(int32_t*)jl_bits_data(a) == *(int32_t*)jl_bits_data(b);
+        case 8:
+            return *(int64_t*)jl_bits_data(a) == *(int64_t*)jl_bits_data(b);
+        default:
+            return memcmp(jl_bits_data(a), jl_bits_data(b), nb)==0;
+        }
+    }
+    if (jl_is_tuple(a)) {
+        size_t l = jl_tuple_len(a);
+        if (l != jl_tuple_len(b))
+            return 0;
+        for(size_t i=0; i < l; i++) {
+            if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 JL_CALLABLE(jl_f_is)
 {
     JL_NARGS(is, 2, 2);
     if (args[0] == args[1])
         return jl_true;
-    return jl_false;
+    return jl_egal(args[0],args[1]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_no_function)
@@ -1168,14 +1203,49 @@ JL_CALLABLE(jl_f_invoke)
 
 // hashing --------------------------------------------------------------------
 
-DLLEXPORT uptrint_t jl_hash_symbol(jl_sym_t *s)
-{
-    return s->hash;
-}
+#ifdef __LP64__
+#define bitmix(a,b) int64hash((a)^bswap_64(b))
+#define hash64(a)   int64hash(a)
+#else
+#define bitmix(a,b) int64to32hash((((uint64_t)a)<<32)|((uint64_t)b))
+#define hash64(a)   int64to32hash(a)
+#endif
 
 DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
 {
-    return (uptrint_t)v;
+    if (jl_is_symbol(v))
+        return ((jl_sym_t*)v)->hash;
+    jl_value_t *tv = (jl_value_t*)jl_typeof(v);
+    if (jl_is_struct_type(tv))
+        return inthash((uptrint_t)v);
+    if (jl_is_bits_type(tv)) {
+        size_t nb = jl_bitstype_nbits(tv)/8;
+        uptrint_t h = inthash((uptrint_t)tv);
+        switch (nb) {
+        case 1:
+            return int32hash(*(int8_t*)jl_bits_data(v) ^ h);
+        case 2:
+            return int32hash(*(int16_t*)jl_bits_data(v) ^ h);
+        case 4:
+            return int32hash(*(int32_t*)jl_bits_data(v) ^ h);
+        case 8:
+            return hash64(*(int64_t*)jl_bits_data(v) ^ h);
+        default:
+#ifdef __LP64__
+            return h ^ memhash((char*)jl_bits_data(v), nb);
+#else
+            return h ^ memhash32((char*)jl_bits_data(v), nb);
+#endif
+        }
+    }
+    assert(jl_is_tuple(v));
+    uptrint_t h = 0;
+    size_t l = jl_tuple_len(v);
+    for(size_t i = 0; i < l; i++) {
+        uptrint_t u = jl_uid(jl_tupleref(v,i));
+        h = bitmix(h, u);
+    }
+    return h;
 }
 
 // init -----------------------------------------------------------------------

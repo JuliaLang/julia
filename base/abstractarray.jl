@@ -641,6 +641,30 @@ function isless(A::AbstractArray, B::AbstractArray)
     return nA < nB
 end
 
+function (==)(A::AbstractArray, B::AbstractArray)
+    if size(A) != size(B)
+        return false
+    end
+    for i = 1:numel(A)
+        if !(A[i]==B[i])
+            return false
+        end
+    end
+    return true
+end
+
+function (!=)(A::AbstractArray, B::AbstractArray)
+    if size(A) != size(B)
+        return true
+    end
+    for i = 1:numel(A)
+        if A[i]!=B[i]
+            return true
+        end
+    end
+    return false
+end
+
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)
