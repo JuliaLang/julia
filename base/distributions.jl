@@ -406,7 +406,8 @@ skewness(d::Gamma) = 2/sqrt(d.shape)
 rand(d::Gamma)     = d.scale * randg(d.shape)
 rand!(d::Gamma, A::Array{Float64}) = d.scale * randg!(d.shape, A)
 
-type Geometric <: DiscreteDistribution  # In the form of # of failures before the first success
+type Geometric <: DiscreteDistribution
+    # In the form of # of failures before the first success
     prob::Float64
     Geometric(p) = 0 < p < 1 ? new(float64(p)) : error("prob must be in (0,1)")
 end
@@ -416,6 +417,21 @@ mean(d::Geometric)     = (1-d.prob)/d.prob
 var(d::Geometric)      = (1-d.prob)/d.prob^2
 skewness(d::Geometric) = (2-d.prob)/sqrt(1-d.prob)
 kurtosis(d::Geometric) = 6+d.prob^2/(1-d.prob)
+function cdf(d::Geometric, q::Real)
+    # allow a small amount of fuzz in floor(x)
+    q < 0. ? 0. : -expm1(log1p(-d.prob) * (floor(q + 1e-7) + 1.))
+end
+function cdf{T<:Real}(d::Geometric, q::AbstractArray{T})
+    lp = log1p(-d.prob)
+    reshape([e < 0.?0.:-expm1(lp * (floor(e + 1e-7) + 1.)) for e in q], size(q))
+end
+function ccdf(d::Geometric, q::Real)
+    q < 0. ? 1. : exp(log1p(-d.prob) * (floor(q + 1e-7) + 1.))
+end
+function ccdf{T<:Real}(d::Geometric, q::AbstractArray{T})
+    lp = log1p(-d.prob)
+    reshape([e < 0. ? 1.:exp(lp * (floor(e + 1e-7) + 1.)) for e in q], size(q))
+end
 
 type HyperGeometric <: DiscreteDistribution
     ns::Float64                         # number of successes in population
@@ -560,21 +576,21 @@ var(d::Weibull) = d.scale^2*gamma(1 + 2/d.shape) - mean(d)^2
 
 for f in (:cdf, :logcdf, :ccdf, :logccdf, :quantile, :cquantile, :invlogcdf, :invlogccdf)
     @eval begin
-        function ($f){T<:Real}(d::Distribution, x::AbstractVector{T})
+        function ($f){T<:Real}(d::Distribution, x::AbstractArray{T})
             reshape([($f)(d, e) for e in x], size(x))
         end
     end
 end
 for f in (:pmf, :logpmf)
     @eval begin
-        function ($f){T<:Real}(d::DiscreteDistribution, x::AbstractVector{T})
+        function ($f){T<:Real}(d::DiscreteDistribution, x::AbstractArray{T})
             reshape([($f)(d, e) for e in x], size(x))
         end
     end
 end
 for f in (:pdf, :logpdf)
     @eval begin
-        function ($f){T<:Real}(d::ContinuousDistribution, x::AbstractVector{T})
+        function ($f){T<:Real}(d::ContinuousDistribution, x::AbstractArray{T})
             reshape([($f)(d, e) for e in x], size(x))
         end
     end
