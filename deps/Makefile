@@ -143,7 +143,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	$(INSTALL_NAME_CMD) libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD) libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 	touch $@
 
 clean-llvm:
