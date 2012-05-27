@@ -3,7 +3,7 @@
 
 #include <stdarg.h>
 #include <pthread.h>
-#include "../../usr/include/uv.h"
+#include "../../deps/libuv/include/uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
