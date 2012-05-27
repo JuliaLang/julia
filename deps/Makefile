@@ -132,7 +132,7 @@ llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
     
 llvm-$(LLVM_VER)/config.status: llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-debug --enable-assertions --disable-profiling --disable-assertions --enable-shared --enable-targets=$(LLVM_TARGETS) --disable-bindings --disable-docs CC=gcc CXX=g++
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=$(LLVM_TARGETS) --disable-bindings --disable-docs CC=gcc CXX=g++
     
 $(USRBIN)/llvm-config: llvm-$(LLVM_VER)/config.status
 	$(MAKE) -C llvm-$(LLVM_VER) && \
