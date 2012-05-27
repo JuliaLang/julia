@@ -234,6 +234,8 @@ type BoundingBox
     end
 end
 
+copy(bb::BoundingBox) = BoundingBox(bb.p0, bb.p1)
+
 function is_null( self::BoundingBox )
     return self.p0 == nothing || self.p1 == nothing
 end
