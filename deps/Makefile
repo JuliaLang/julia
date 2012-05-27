@@ -7,9 +7,9 @@ GRISU_VER = 1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = develop
 LAPACK_VER = 3.4.1
-ARPACK_VER = 3.1.0
+ARPACK_VER = 3.1.1
 FFTW_VER = 3.3.2
-SUITESPARSE_VER = 3.7.0
+SUITESPARSE_VER = 3.7.1
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
@@ -476,14 +476,11 @@ arpack-ng_$(ARPACK_VER).tar.gz:
 arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	tar zxf $< 
 	touch $@
-$(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
+$(ARPACK_OBJ_TARGET): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC)
-	touch $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
-	mkdir -p $(USRLIB)
-	cd arpack-ng_$(ARPACK_VER) && \
-	$(MAKE) install F77=$(FC) MPIF77=$(FC)
+	rm -f UTIL/second_NONE.f && \
+	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
+	cp libarpack.$(SHLIB_EXT) $(USRLIB)
 	touch $@
 
 clean-arpack:
@@ -581,6 +578,7 @@ $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+	echo $(LIBBLAS) && \
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \

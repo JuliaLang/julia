@@ -140,7 +140,11 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
+ifeq ($(OS), WINNT)
+LIBBLAS = $(USRLIB)/libopenblas-r0.1.1.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
+else
 LIBBLAS = -L$(USRLIB) -lopenblas
+endif
 endif
 
 LIBLAPACKNAME = libopenblas
@@ -153,7 +157,7 @@ LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 endif
 else
-LIBLAPACK = -L$(USRLIB) -lopenblas
+LIBLAPACK = $(LIBBLAS)
 endif
 
 # OS specific stuff

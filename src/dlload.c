@@ -81,7 +81,7 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
-                    JL_PRINTF(JL_STDERR, "%d\n", error);
+					JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", fname, error, uv_dlerror(handle));
                     jl_errorf("could not load module %s", fname);
                 }
             }
