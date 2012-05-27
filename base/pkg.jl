@@ -186,35 +186,67 @@ function pkg_push()
 end
 
 function pkg_pull()
+    # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
-    base = chomp(readall(`git merge-base HEAD FETCH_HEAD`))
+
+    # intelligently 3-way merge .gitmodules versions
+    Rc = git_read_config_blob("FETCH_HEAD:.gitmodules")
+    Rs = git_config_sections(Rc)
     if git_different("HEAD","FETCH_HEAD",".gitmodules")
-        Ac = git_read_config(".gitmodules")
-        Bc = git_read_config_blob("FETCH_HEAD:.gitmodules")
-        Cc = git_read_config_blob("$base:.gitmodules")
-        As = git_config_sections(Ac)
+        base = chomp(readall(`git merge-base HEAD FETCH_HEAD`))
+        Lc = git_read_config(".gitmodules")
+        Bc = git_read_config_blob("$base:.gitmodules")
+        Ls = git_config_sections(Lc)
         Bs = git_config_sections(Bc)
-        Cs = git_config_sections(Cc)
-        # expunge removed sections from both sides
-        for section in Cs - As & Bs
-            filter!((k,v)->!begins_with("$section.",k),Ac)
-            filter!((k,v)->!begins_with("$section.",k),Bc)
+        # expunge removed submodules from both sides
+        for section in Bs - Ls & Rs
+            m = match(r"^submodule\.(.*?)$",section)
+            if m == nothing continue end
+            filter!((k,v)->!begins_with("$section.",k),Lc)
+            filter!((k,v)->!begins_with("$section.",k),Rc)
+            run(`git rm -rf --cache $(m.captures[1])`)
         end
-        # TODO: merge what's left, failing if there are conflicts
+        # merge the remaining config key-value pairs
+        cfg = Dict()
+        for key in keys(merge(Lc,Rc))
+            Lv = get(Lc,key,nothing)
+            Rv = get(Rc,key,nothing)
+            Bv = get(Bc,key,nothing)
+            if Lv == Rv || Rv == Bv
+                if Lv != nothing cfg[key] = Lv end
+            elseif Lv == Bv
+                if Rv != nothing cfg[key] = Rv end
+            else # conflict!
+                print(stderr_stream,
+                    "\n*** WARNING ***\n\n",
+                    "Module configuration conflict for $key:\n",
+                    "  local value = $Lv\n",
+                    "  remote value = $Rv\n",
+                    "\n",
+                    "Both values written to .gitmodules -- please edit and choose one.\n\n",
+                )
+                cfg[key] = [Lv,Rv]
+            end
+        end
+        # write the result and stage it
+        git_write_config(".gitmodules",cfg)
         run(`git add .gitmodules`)
     end
+
+    # merge submodules
+    fetch_head = chomp(readall(`git rev-parse FETCH_HEAD`))
     git_each_submodule((name,path,sha1)->begin
-        if git_different(ours,theirs,path)
-            alt = chomp(readall(`git rev-parse $theirs:$path`))
+        if has(Rs,"submodule.$name") && git_different("HEAD","FETCH_HEAD",path)
+            alt = chomp(readall(`git rev-parse $fetch_head:$path`))
             @cd path run(`git merge --no-edit $alt`)
             run(`git add $path`)
         end
-    end)
+    end,false)
 
-    if git_dirty() run(`git commit -m "[jul] pull: merge submodules"`) end
-    # TODO: if merge in progress, just commit
-    run(`git merge -m "[jul] pull: merge main" $theirs`)
-    pkg_checkout("HEAD")
-    pkg_checkpoint()
+    # if git_dirty() run(`git commit -m "[jul] pull: merge submodules"`) end
+    # # TODO: if merge in progress, just commit
+    # run(`git merge -m "[jul] pull: merge main" $theirs`)
+    # pkg_checkout("HEAD")
+    # pkg_checkpoint()
 end
