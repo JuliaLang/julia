@@ -91,27 +91,27 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 cmp{T<:Real}(x::T, y::T) = int(sign(x-y))
 
 # transposed multiply
-aCb (a,b) = ctranspose(a)*b
-abC (a,b) = a*ctranspose(b)
-aCbC(a,b) = ctranspose(a)*ctranspose(b)
-aTb (a,b) = transpose(a)*b
-abT (a,b) = a*transpose(b)
-aTbT(a,b) = transpose(a)*transpose(b)
+Ac_mul_B (a,b) = ctranspose(a)*b
+A_mul_Bc (a,b) = a*ctranspose(b)
+Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
+At_mul_B (a,b) = transpose(a)*b
+A_mul_Bt (a,b) = a*transpose(b)
+At_mul_Bt(a,b) = transpose(a)*transpose(b)
 
 # transposed divide
-aC_rdiv_b (a,b) = ctranspose(a)/b
-a_rdiv_bC (a,b) = a/ctranspose(b)
-aC_rdiv_bC(a,b) = ctranspose(a)/ctranspose(b)
-aT_rdiv_b (a,b) = transpose(a)/b
-a_rdiv_bT (a,b) = a/transpose(b)
-aT_rdiv_bT(a,b) = transpose(a)/transpose(b)
+Ac_rdiv_B (a,b) = ctranspose(a)/b
+A_rdiv_Bc (a,b) = a/ctranspose(b)
+Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
+At_rdiv_B (a,b) = transpose(a)/b
+A_rdiv_Bt (a,b) = a/transpose(b)
+At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
 
-aC_ldiv_b (a,b) = ctranspose(a)\b
-a_ldiv_bC (a,b) = a\ctranspose(b)
-aC_ldiv_bC(a,b) = ctranspose(a)\ctranspose(b)
-aT_ldiv_b (a,b) = transpose(a)\b
-a_ldiv_bT (a,b) = a\transpose(b)
-aT_ldiv_bT(a,b) = transpose(a)\transpose(b)
+Ac_ldiv_B (a,b) = ctranspose(a)\b
+A_ldiv_Bc (a,b) = a\ctranspose(b)
+Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
+At_ldiv_B (a,b) = transpose(a)\b
+A_ldiv_Bt (a,b) = a\transpose(b)
+At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 
 
 oftype{T}(::Type{T},c) = convert(T,c)

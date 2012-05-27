@@ -6,8 +6,8 @@
 # It defines functions in cases where sufficiently few assumptions about
 # storage can be made.
 
-#aCb(x::AbstractVector, y::AbstractVector)
-#aTb{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
+#Ac_mul_B(x::AbstractVector, y::AbstractVector)
+#At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
 
 #dot(x::AbstractVector, y::AbstractVector)
 

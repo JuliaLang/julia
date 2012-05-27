@@ -34,15 +34,6 @@ end
 
 _winston_config = WinstonConfig()
 
-function in_repl()
-    # XXX:fixme
-    try
-        s = string(_jl_repl_channel)
-        return true
-    end
-    return false
-end
-
 begin
     global config_value
     global config_options
@@ -242,6 +233,8 @@ type BoundingBox
         end
     end
 end
+
+copy(bb::BoundingBox) = BoundingBox(bb.p0, bb.p1)
 
 function is_null( self::BoundingBox )
     return self.p0 == nothing || self.p1 == nothing
@@ -2448,7 +2441,7 @@ function x11( self::PlotContainer, args...)
     opts = args2dict(args...)
     width = has(opts,"width") ? opts["width"] : config_value("window","width")
     height = has(opts,"height") ? opts["height"] : config_value("window","height")
-    reuse_window = in_repl() && config_value("window","reuse")
+    reuse_window = isinteractive() && config_value("window","reuse")
     device = ScreenRenderer( reuse_window, width, height )
     page_compose( self, device )
 end

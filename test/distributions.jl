@@ -3,6 +3,7 @@ load("base/distributions.jl")
 # n probability points, i.e. the midpoints of the intervals [0, 1/n],...,[1-1/n, 1]
 probpts(n::Int) = ((1:n) - 0.5)/n  
 pp = float(probpts(1000))
+lpp = log(pp)
 
 tol = sqrt(eps())
 
@@ -27,8 +28,13 @@ for d in (Beta(), Cauchy(), Chisq(12), Exponential(), Exponential(23.1),
 ##    println(d)  # uncomment if an assertion fails
     qq = quantile(d, pp)
     @assert absdiff(cdf(d, qq), pp) < tol
+    @assert absdiff(ccdf(d, qq), 1 - pp) < tol
     @assert reldiff(cquantile(d, 1 - pp), qq) < tol
     @assert reldiff(logpdf(d, qq), log(pdf(d, qq))) < tol
+    @assert reldiff(logcdf(d, qq), lpp) < tol
+    @assert reldiff(logccdf(d, qq), lpp[end:-1:1]) < tol
+    @assert reldiff(invlogcdf(d, lpp), qq) < tol
+    @assert reldiff(invlogccdf(d, lpp), qq[end:-1:1]) < tol
 ## These tests are not suitable for routine use as they can fail due to sampling
 ## variability.
 #    ss = rand(d, int(1e6))  
