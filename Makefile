@@ -28,7 +28,7 @@ sys.ji: VERSION sys0.ji base/*.jl
 	$(QUIET_JULIA) cd base && ../julia `test -f ../sys.ji && echo stage1.jl || echo -J sys0.ji stage1.jl`
 
 install: release
-	install -d $(DESTDIR)$(PREFIX)/julia/usr/lib
+	install -d $(DESTDIR)$(PREFIX)/julia/usr/lib/julia
 	install -d $(DESTDIR)$(PREFIX)/julia/usr/sbin
 	install -d $(DESTDIR)$(PREFIX)/julia/usr/etc
 	install -d $(DESTDIR)$(PREFIX)/julia/base

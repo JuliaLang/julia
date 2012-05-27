@@ -170,7 +170,7 @@ endif
 ifeq ($(OS), Linux)
 INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
@@ -180,7 +180,7 @@ endif
 ifeq ($(OS), FreeBSD)
 INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib' -Wl,-z,origin
+RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
