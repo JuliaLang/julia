@@ -15,6 +15,7 @@ function _jl_answer_color()
            c == "magenta" ? "\033[1m\033[35m" :
            c == "cyan"    ? "\033[1m\033[36m" :
            c == "white"   ? "\033[1m\033[37m" :
+           c == "normal"  ? _jl_color_normal  :
            "\033[1m\033[34m"
 end
 

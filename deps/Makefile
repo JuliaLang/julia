@@ -21,7 +21,7 @@ GLPK_VER = 4.43
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-LIBS = uv fdlibm dsfmt rmath double-conversion amos suitesparse-wrapper gmp-wrapper
+LIBS = uv fdlibm dsfmt rmath double-conversion amos suitesparse-wrapper gmp-wrapper openlibm
 
 ## WGET / CURL
 ifeq ($(OS), Linux)
@@ -223,6 +223,28 @@ distclean-readline:
 
 endif
 
+# openlibm
+
+ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
+OPENLIBM_FLAGS = ARCH=i386
+endif
+
+OPENLIBM_OBJ_TARGET = $(USRLIB)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
+
+openlibm/Makefile:
+	(cd .. && git submodule update --init)
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS)
+$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
+	cp $< $@
+install-openlibm: $(OPENLIBM_OBJ_TARGET)
+
+clean-openlibm:
+	$(MAKE) -C openlibm clean
+	rm $(OPENLIBM_OBJ_TARGET)
+distclean-openlibm: clean-openlibm	
+	
 ## LIBUV
 
 ifeq ($(OS), WINNT) 
@@ -313,6 +335,7 @@ clean-double-conversion:
 distclean-double-conversion:
 	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
+	
 ## fdlibm ##
 
 FDLIBM_OBJ_TARGET = $(USRLIB)/libfdm.$(SHLIB_EXT)

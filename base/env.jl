@@ -1,14 +1,39 @@
 ## core libc calls ##
 
-hasenv(s::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), s) != C_NULL
+@unix_only _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
+@unix_only hasenv(s::String) = _getenv(s) != C_NULL
 
-function getenv(var::String)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
+@windows_only begin
+_getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),var,C_NULL,0)
+hasenv(s::String) = false#_getenvlen(s)!=0
+function _jl_win_getenv(s::String,len::Uint32)
+    val=zeros(Uint8,len)
+    ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
+    if(ret==0||ret!=len-1) #Trailing 0 is only included on first call to GetEnvA
+        error("getenv: unknown system error: ", s, len, ret)
+    end
+    val
+end
+end
+
+macro accessEnv(var,errorcase)
+@unix_only quote
+    val=_getenv($var)
     if val == C_NULL
-        error("getenv: undefined variable: ", var)
+        $errorcase
     end
     cstring(val)
 end
+@windows_only quote
+    len=_getenvlen($var)
+    if len == 0
+        $errorcase
+    end
+    cstring(convert(Ptr{Uint8},_jl_win_getenv($var,len)))
+end
+end
+
+getenv(var::String) = @accessEnv var error("getenv: undefined variable: ", var)
 
 function setenv(var::String, val::String, overwrite::Bool)
 @unix_only begin
@@ -16,8 +41,10 @@ function setenv(var::String, val::String, overwrite::Bool)
     system_error(:setenv, ret != 0)
 end
 @windows_only begin
+if(overwrite||!hasenv(var))
     ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
     system_error(:setenv, ret == 0)
+end
 end
 end
 
@@ -40,21 +67,9 @@ type EnvHash <: Associative{ByteString,ByteString}; end
 
 const ENV = EnvHash()
 
-function ref(::EnvHash, k::String)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), k)
-    if val == C_NULL
-        throw(KeyError(k))
-    end
-    cstring(val)
-end
+ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
 
-function get(::EnvHash, k::String, deflt)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), k)
-    if val == C_NULL
-        return deflt
-    end
-    cstring(val)
-end
+get(::EnvHash, k::String, deflt) = @accessEnv k (return deflt)
 
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)

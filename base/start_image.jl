@@ -10,6 +10,9 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 @unix_only _jl_repl = _jl_lib
 @windows_only _jl_repl = ccall(:jl_wrap_raw_dl_handle,Ptr{Void},(Ptr{Void},),ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL))
 
+# Set up envrionment variables
+@windows_only setenv("JL_ANSWER_COLOR","normal",false)
+
 # Essential libraries
 _jl_libpcre = dlopen("libpcre")
 _jl_libgrisu = dlopen("libgrisu")
