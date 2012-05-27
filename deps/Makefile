@@ -125,9 +125,15 @@ endif
 compile-llvm: $(LLVM_OBJ_SOURCE)
 install-llvm: $(LLVM_OBJ_TARGET)
 
-llvm-$(LLVM_VER).tar.gz:
+ifeq ($(LLVM_VER), 3.0)
+LLVM_TAR=llvm-$(LLVM_VER).tar.gz
+else
+LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+endif
+
+$(LLVM_TAR):
 	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
-llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER).tar.gz
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) 
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
@@ -137,7 +143,7 @@ $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
-	$(INSTALL_NAME_CMD) libLLVM-3.0.$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD) libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-3.0.$(SHLIB_EXT) 
 	touch $@
 
 clean-llvm:
