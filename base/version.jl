@@ -142,7 +142,7 @@ try
         push(VERSION.build, ctime - 1250998746)
         push(VERSION.build, "r$(commit[1:4])")
     end
-    clean = success(`git diff --quiet`)
+    clean = success(`git diff --quiet HEAD`)
     if !clean; push(VERSION.build, "dirty"); end
     clean = clean ? "" : "*"
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)
