@@ -44,7 +44,7 @@ First, acquire the source code by cloning the git repository:
 Next, enter the `julia/` directory and run `make` to build the `julia` executable. To perform a parallel build, use `make -j N` and supply the maximum number of concurrent processes.
 When compiled the first time, it will automatically download and build its [external dependencies](#Required-Build-Tools-External-Libraries).
 This takes a while, but only has to be done once.
-Building julia requires 1.5GiB of diskspace and 512MiB of memory.
+Building julia requires 1.5GiB of diskspace and approximately 700MiB of virtual memory.
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
