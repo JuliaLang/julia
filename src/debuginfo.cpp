@@ -40,8 +40,13 @@ void getFunctionInfo(const char **name, int *line, const char **filename, size_t
     for (std::map<size_t, FuncInfo>::iterator it= info.begin(); it!= info.end(); it++) {
         if ((*it).first <= pointer) {
             if ((size_t)(*it).first + (*it).second.lengthAdr >= pointer) {
+#if LLVM_VERSION_MAJOR == 3
+#if LLVM_VERSION_MINOR == 0
                 *name = &(*(*it).second.func).getNameStr()[0];
-                
+#elif LLVM_VERSION_MINOR >= 1
+                *name = (((*(*it).second.func).getName()).data());
+#endif
+#endif
                 if ((*it).second.lines.size() == 0) {
                     continue;
                 }
