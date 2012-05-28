@@ -185,9 +185,6 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     Function *llvmf = (Function*)li->functionObject;
     if (li->fptr == &jl_trampoline) {
         JL_SIGATOMIC_BEGIN();
-        verifyFunction(*llvmf);
-        if(strcmp(li->name->name,"show")==0)
-            llvmf->dump();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         JL_SIGATOMIC_END();
         llvmf->deleteBody();

@@ -1,6 +1,6 @@
 ## library versions ##
 
-LLVM_VER = 3.0
+LLVM_VER = 3.1
 READLINE_VER = 6.2
 PCRE_VER = 8.30
 GRISU_VER = 1.1
@@ -127,6 +127,7 @@ else
 endif
 
 compile-llvm: $(LLVM_OBJ_SOURCE)
+install-llvm: $(LLVM_OBJ_TARGET)
 
 ifeq ($(LLVM_VER), 3.0)
 LLVM_TAR=llvm-$(LLVM_VER).tar.gz
@@ -141,7 +142,7 @@ llvm-$(LLVM_VER)/configure: $(LLVM_TAR)
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
 
-llvm-$(LLVM_VER)/config.status: llvm-$(LLVM_VER)/configure
+$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
 	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
 	$(MAKE)
@@ -808,14 +809,9 @@ GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 
 
-<<<<<<< HEAD
-$(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET) | $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared -fPIC $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
-=======
 $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
 	mkdir -p $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
->>>>>>> 3c2ce667a3064aaf7f267479b731a119f22380b7
 	touch $@
 install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 

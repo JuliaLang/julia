@@ -686,19 +686,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz,
                                       ArrayRef<Type*>(x->getType())), x);
 #elif LLVM_VERSION_MAJOR==3 && LLVM_VERSION_MINOR >= 1
-        HANDLE(ctlz_int,2) {
-        x = INT(x);
-        y = INT(y);
-        Type *types[2] = {x->getType(),y->getType()};
+    HANDLE(ctlz_int,1) {
+        x = JL_INT(x);
+        Type *types[1] = {x->getType()};
         return builder.CreateCall2(
-                    Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz, ArrayRef<Type*>(types)),x,y);
-        }
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::ctlz,
+                                      ArrayRef<Type*>(types)), x, ConstantInt::get(T_int1,0));
+    }
     HANDLE(cttz_int,1) {
-            x = INT(x);
-            y = INT(y);
-            Type *types[2] = {x->getType(),y->getType()};
-            return builder.CreateCall2(
-                Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types)),x,y);
+        x = JL_INT(x);
+        Type *types[1] = {x->getType()};
+        return builder.CreateCall2(
+            Intrinsic::getDeclaration(jl_Module, Intrinsic::cttz, ArrayRef<Type*>(types)), x, ConstantInt::get(T_int1, 0));
     }
 #endif
 
