@@ -5,6 +5,10 @@ all: default
 default: release
 
 debug release:
+	test -d usr/bin || mkdir -p usr/bin 
+	test -d usr/etc || mkdir -p usr/lib/julia
+	test -L usr/lib/julia/extras || cd usr/lib/julia && ln -sf ../../extras .
+	test -L usr/lib/julia/base || cd usr/lib/julia && ln -sf ../../base .
 	@$(MAKE) -s julia-$@
 	@$(MAKE) -s usr/lib/julia/sys.ji
 
@@ -73,7 +77,7 @@ h2j: usr/lib/libLLVM*.a usr/lib/libclang*.a src/h2j.cpp
 clean:
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *#
-	@rm -f usr/lib/julia/sys*.ji
+	@rm -fr usr/lib/julia
 	@$(MAKE) -sC base clean
 	@$(MAKE) -sC src clean
 	@$(MAKE) -sC ui clean
