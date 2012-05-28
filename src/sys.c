@@ -229,7 +229,7 @@ jl_value_t *jl_environ(int i)
 #ifdef __WIN32__
 jl_value_t *jl_env_done(char *pos)
 {
-    return *pos==0?jl_true:jl_false;
+    return (*pos==0)?jl_true:jl_false;
 }
 #endif
 // -- child process status --
