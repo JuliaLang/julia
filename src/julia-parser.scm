@@ -8,14 +8,14 @@
      ; be an operator.
      (<- -- -->)
      (> < >= <= == === != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
-     (:)
+     (: |..|)
      (+ - |\|| $)
      (<< >> >>>)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
      (|::|)
-     (|.| |..|)))
+     (|.|)))
 
 (define-macro (prec-ops n) `(quote ,(aref ops-by-prec n)))
 
@@ -423,27 +423,28 @@
 ; we will leave : expressions as a syntax form, not a call to ':',
 ; so they can be processed by syntax passes.
 (define (parse-range s)
-  (if (not range-colon-enabled)
-      (return (parse-expr s)))
   (let loop ((ex (parse-expr s))
 	     (first? #t))
     (let* ((t   (peek-token s))
 	   (spc (ts:space? s)))
-      (if (not (eq? t ':))
-	  ex
-	  (begin (take-token s)
-		 (if (and space-sensitive spc
-			  (or (peek-token s) #t) (not (ts:space? s)))
-		     ;; "a :b" in space sensitive mode
-		     (begin (ts:put-back! s ':)
-			    ex)
-		     (let ((argument
-			    (if (closing-token? (peek-token s))
-				':  ; missing last argument
-				(parse-expr s))))
-		       (if first?
-			   (loop (list t ex argument) #f)
-			   (loop (append ex (list argument)) #t)))))))))
+      (cond ((and first? (eq? t '|..|))
+	     (take-token s)
+	     `(call ,t ,ex ,(parse-expr s)))
+	    ((and range-colon-enabled (eq? t ':))
+	     (take-token s)
+	     (if (and space-sensitive spc
+		      (or (peek-token s) #t) (not (ts:space? s)))
+		 ;; "a :b" in space sensitive mode
+		 (begin (ts:put-back! s ':)
+			ex)
+		 (let ((argument
+			(if (closing-token? (peek-token s))
+			    ':  ; missing last argument
+			    (parse-expr s))))
+		   (if first?
+		       (loop (list t ex argument) #f)
+		       (loop (append ex (list argument)) #t)))))
+	    (else ex)))))
 
 ; the principal non-terminals follow, in increasing precedence order
 
@@ -634,11 +635,6 @@
 		   (if (eqv? (peek-token s) #\()
 		       (loop `(|.| ,ex ,(parse-atom s)))
 		       (loop `(|.| ,ex (quote ,(parse-atom s))))))
-		  ((|..|)
-		   (take-token s)
-		   (if (eqv? (peek-token s) #\()
-		       (loop `(call ,t ,ex ,(parse-atom s)))
-		       (loop `(call ,t ,ex (quote ,(parse-atom s))))))
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
