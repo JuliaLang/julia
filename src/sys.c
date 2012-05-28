@@ -226,7 +226,12 @@ jl_value_t *jl_environ(int i)
     char *env = environ[i];
     return env ? jl_pchar_to_string(env, strlen(env)) : jl_nothing;
 }
-
+#ifdef __WIN32__
+jl_value_t *jl_env_done(char *pos)
+{
+    return *pos==0?jl_true:jl_false;
+}
+#endif
 // -- child process status --
 
 #if defined _MSC_VER || defined __MINGW32__

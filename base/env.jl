@@ -52,8 +52,11 @@ end
 
 ## ENV: hash interface ##
 
-type EnvHash <: Associative{ByteString,ByteString}; end
-
+@unix_only type EnvHash <: Associative{ByteString,ByteString}; end
+@windows_only type EnvHas <: Associative{ByteString,ByteString}
+    block::Ptr{Uint8}
+    EnvHash() = new(C_NULL,C_NULL)
+end
 const ENV = EnvHash()
 
 ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
@@ -62,8 +65,10 @@ has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
 assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
 
+@unix_only begin
 start(::EnvHash) = 0
 done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
+
 function next(::EnvHash, i)
     env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
@@ -76,6 +81,30 @@ function next(::EnvHash, i)
     end
     (m.captures, i+1)
 end
+end
+
+@windows_only begin
+start(hash::EnvHash) = (hash.block = ccall(:GetEnvironmentStrings,stdcall,Ptr{Uint8},()))
+function done(hash::EnvHash, pos::Ptr{Uint8})
+    if(ccall(:jl_env_done,Bool,(Ptr{Uint8},),pos))
+        ccall(:FreeEnvironmentStrings,stdcall,Int32,(Ptr{Uint8},),hash.block)
+        hash.block=C_NULL
+        return true
+    end
+    false
+end
+function next(hash::EnvHas, pos::Ptr{Uint8})
+    len = ccall(:strlen, Uint, (Ptr{Uint8},), pos)
+    m = match(r"^(.*?)=(.*)$"s, cstring(pos,len))
+    if m == nothing
+        error("malformed environment entry: $env")
+    end
+    hash.pos=pos+len+1;
+    (m.captures, i+1)
+end
+end
+
+#TODO: Make these more efficent
 function length(::EnvHash)
     i = 0
     for (k,v) in ENV

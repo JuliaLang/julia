@@ -694,6 +694,9 @@ DLLEXPORT jl_value_t *jl_strerror(int errnum);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
+#ifdef __WIN32__
+DLLEXPORT jl_value_t *jl_env_done(char *pos);
+#endif
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
