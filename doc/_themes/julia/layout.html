@@ -1,0 +1,25 @@
+{% extends "basic/layout.html" %}
+
+{# Silence the sidebar's, relbar's #}
+{% block header %}{% endblock %}
+{% block footer %}{% endblock %}
+{% block sidebar1 %}{% endblock %}
+{% block sidebar2 %}{% endblock %}
+{% block relbar1 %}{% endblock %}
+{% block relbar2 %}{% endblock %}
+
+{%- block content %}
+<div id="site">
+<div class="title">Julia Documentation</div>
+<div class="links">
+  <p> <a href="http://julialang.org/">julia</a>
+    | <a href="https://github.com/JuliaLang/julia">source</a>
+    | <a href="http://groups.google.com/group/julia-dev/">dev list</a>
+    | <a href="http://julialang.org/blog/">blog</a>
+    | <a href="http://feeds.feedburner.com/JuliaLang">rss</a>
+  </p>
+</div>
+
+{% block body %} {% endblock %}
+</div>
+{%- endblock %}

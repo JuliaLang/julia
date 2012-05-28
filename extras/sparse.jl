@@ -25,18 +25,18 @@ issparse(S::SparseMatrixCSC) = true
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
-function show(S::SparseMatrixCSC)
-    println(S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
+function show(io, S::SparseMatrixCSC)
+    println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
 
     half_screen_rows = div(tty_rows() - 8, 2)
     pad = alignment(max(S.m,S.n))[1]
     k = 0
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
-            println("\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
-                    showcompact_to_string(S.nzval[k]))
+            println(io, "\t[", rpad(S.rowval[k], pad), ", ", lpad(col, pad), "]  =  ",
+                    sprint(showcompact, S.nzval[k]))
         elseif k == half_screen_rows
-            println("\t."); println("\t."); println("\t.");
+            println(io, "\t."); println(io, "\t."); println(io, "\t.");
         end
         k += 1
     end
@@ -824,7 +824,7 @@ type SparseAccumulator{Tv,Ti} <: AbstractVector{Tv}
     nvals::Integer
 end
 
-show{T}(S::SparseAccumulator{T}) = invoke(show, (Any,), S)
+show{T}(io, S::SparseAccumulator{T}) = invoke(show, (Any,Any), io, S)
 
 function SparseAccumulator{Tv,Ti}(::Type{Tv}, ::Type{Ti}, s::Integer)
     SparseAccumulator(zeros(Tv,int(s)), falses(int(s)), Array(Ti,int(s)), 0)

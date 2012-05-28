@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <setjmp.h>
+#include <stdint.h>
 #include <stdarg.h>
 #include <assert.h>
 #include <ctype.h>
@@ -2293,7 +2294,7 @@ static void lisp_init(size_t initial_heapsize)
     setc(symbol("procedure?"), builtin(OP_FUNCTIONP));
     setc(symbol("top-level-bound?"), builtin(OP_BOUNDP));
 
-#ifdef __linux
+#ifdef __linux__
     set(symbol("*os-name*"), symbol("linux"));
 #elif defined(WIN32) || defined(WIN64)
     set(symbol("*os-name*"), symbol("win32"));

@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 
 // array constructors ---------------------------------------------------------
@@ -368,7 +371,7 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
     else {
         elt = ((jl_value_t**)a->data)[i];
         if (elt == NULL) {
-            jl_undef_ref_error();
+            jl_raise(jl_undefref_exception);
         }
     }
     return elt;

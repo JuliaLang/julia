@@ -29,8 +29,8 @@ end
 
 ## process-related functions ##
 
-getpid() = ccall(:getpid, Uint32, ())
-system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cmd)
+getpid() = int(ccall(:getpid, Int32, ()))
+system(cmd::String) = int(ccall(:system, Int32, (Ptr{Uint8},), cmd))
 
 ## network functions ##
 
@@ -46,23 +46,9 @@ function getipaddr()
     cstring(convert(Ptr{Uint8},ip))
 end
 
-## file and directory ##
+## get a temporary file name ##
 
-function getcwd()
-    b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    if p == C_NULL
-        error("path too long")
-    end
-    cstring(p)
-end
-
-function setcwd(p::String)
-    if ccall(:chdir, Int32, (Ptr{Uint8},), p) == -1
-        throw(SystemError("setcwd"))
-    end
-    getcwd()
-end
+tmpnam() = cstring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
 
 ## Memory related ##
 

@@ -125,3 +125,8 @@ next(itr::RegexMatchIterator, m) =
 
 each_match(re::Regex, str::String, ovr::Bool) = RegexMatchIterator(re,str,ovr)
 each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
+
+# miscellaneous methods that depend on Regex being defined
+
+filter!(r::Regex, d::Dict) = filter!((k,v)->matches(r,k),d)
+filter(r::Regex,  d::Dict) = filter!(r,copy(d))

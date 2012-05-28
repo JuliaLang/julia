@@ -17,6 +17,7 @@ include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
+_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 _jl_libfdm = dlopen("libfdm")
 
 include("float.jl")
@@ -46,17 +47,19 @@ include("show.jl")
 include("grisu.jl")
 include("printf.jl")
 
-# system & environment
-include("libc.jl")
-include("env.jl")
-include("errno_h.jl")
-
 # concurrency and parallelism
 include("iterator.jl")
 include("task.jl")
 include("process.jl")
 include("serialize.jl")
 include("multi.jl")
+
+# system & environment
+include("osutils.jl")
+include("libc.jl")
+include("env.jl")
+include("errno_h.jl")
+include("file.jl")
 
 # front end
 include("client.jl")
@@ -113,7 +116,7 @@ has(FDSet(),0)
 isequal(int32(2),int32(2))
 isequal(int64(2),int64(2))
 
-compile_hint(getcwd, ())
+compile_hint(cwd, ())
 compile_hint(fdio, (Int32,))
 compile_hint(ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
 compile_hint(select_read, (FDSet, Float64))

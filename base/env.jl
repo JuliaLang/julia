@@ -11,15 +11,27 @@ function getenv(var::String)
 end
 
 function setenv(var::String, val::String, overwrite::Bool)
+@unix_only begin
     ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
     system_error(:setenv, ret != 0)
+end
+@windows_only begin
+    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
+    system_error(:setenv, ret == 0)
+end
 end
 
 setenv(var::String, val::String) = setenv(var, val, true)
 
 function unsetenv(var::String)
+@unix_only begin
     ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
     system_error(:unsetenv, ret != 0)
+end
+@windows_only begin
+    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,C_NULL)
+    system_error(:setenv, ret == 0)
+end
 end
 
 ## ENV: hash interface ##

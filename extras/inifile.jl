@@ -14,7 +14,7 @@ let
     global read
     function read(inifile::IniFile, stream::IOStream)
         current_section = inifile.defaults
-        for line in LineIterator(stream)
+        for line in EachLine(stream)
             s = strip(line)
             # comments start with # or ;
             if length(s) < 3 || s[1] == '#' || s[1] == ';'

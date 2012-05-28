@@ -1,6 +1,9 @@
 ## client.jl - frontend handling command line options, environment setup,
 ##             and REPL
 
+@unix_only _jl_repl = _jl_lib
+@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
+
 const _jl_color_normal = "\033[0m"
 
 function _jl_answer_color()
@@ -183,6 +186,9 @@ end
 const _jl_roottask = current_task()
 const _jl_roottask_wi = WorkItem(_jl_roottask)
 
+_jl_is_interactive = false
+isinteractive() = (_jl_is_interactive::Bool)
+
 function _start()
     try
         ccall(:jl_register_toplevel_eh, Void, ())
@@ -205,12 +211,13 @@ function _start()
         global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/extras/"]
 
         # Load customized startup
-        try include(strcat(getcwd(),"/startup.jl")) end
+        try include(strcat(cwd(),"/startup.jl")) end
         try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
 
         (quiet,repl) = process_options(ARGS)
         if repl
             global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+            global _jl_is_interactive = true
             if !quiet
                 _jl_banner()
             end

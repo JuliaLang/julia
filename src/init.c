@@ -6,7 +6,7 @@
 #include <string.h>
 #include <setjmp.h>
 #include <assert.h>
-#if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
@@ -18,6 +18,11 @@
 #include <libgen.h>
 #include <getopt.h>
 #include "julia.h"
+#include <stdio.h>
+#ifdef __WIN32__
+# define WIN32_LEAN_AND_MEAN
+# include <windows.h>
+#endif
 
 int jl_boot_file_loaded = 0;
 
@@ -28,7 +33,7 @@ size_t jl_page_size;
 static void jl_find_stack_bottom(void)
 {
     size_t stack_size;
-#if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
     struct rlimit rl;
     getrlimit(RLIMIT_STACK, &rl);
     stack_size = rl.rlim_cur;
@@ -39,6 +44,7 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
+#ifndef __WIN32__
 void fpe_handler(int arg)
 {
     (void)arg;
@@ -47,7 +53,7 @@ void fpe_handler(int arg)
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
-    jl_divide_by_zero_error();
+    jl_raise(jl_divbyzero_exception);
 }
 
 void segv_handler(int sig, siginfo_t *info, void *context)
@@ -90,10 +96,10 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
         jl_raise(jl_interrupt_exception);
     }
 }
-
+#endif
 void jl_get_builtin_hooks(void);
 
-void *jl_dl_handle;
+uv_lib_t *jl_dl_handle;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jmp_buf *where);
@@ -133,21 +139,23 @@ void julia_init(char *imageFile)
             jl_restore_system_image(imageFile);
         }
         JL_CATCH {
-            ios_printf(ios_stderr, "error during init:\n");
+            JL_PRINTF(JL_STDERR, "error during init:\n");
             jl_show(jl_stderr_obj(), jl_exception_in_transit);
-            ios_printf(ios_stdout, "\n");
-            exit(1);
+            JL_PRINTF(JL_STDOUT, "\n");
+            jl_exit(1);
         }
     }
 
+#ifndef __WIN32__
+	
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
 
     stack_t ss;
@@ -155,35 +163,46 @@ void julia_init(char *imageFile)
     ss.ss_size = SIGSTKSZ;
     ss.ss_sp = malloc(ss.ss_size);
     if (sigaltstack(&ss, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaltstack: %s\n", strerror(errno));
-        exit(1);
+        JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
+        jl_exit(1);
     }
+	
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
-
+#endif
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
+
 }
 
 DLLEXPORT void jl_install_sigint_handler()
 {
+#ifdef __WIN32__
+	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+		GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+		TRUE, DUPLICATE_SAME_ACCESS );
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+#else
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        ios_printf(ios_stderr, "sigaction: %s\n", strerror(errno));
-        exit(1);
+        JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
+        jl_exit(1);
     }
+#endif
+    //printf("sigint installed\n");
+
 }
 
 DLLEXPORT
@@ -241,6 +260,12 @@ void jl_get_builtin_hooks(void)
         jl_apply((jl_function_t*)core("StackOverflowError"), NULL, 0);
     jl_divbyzero_exception =
         jl_apply((jl_function_t*)core("DivideByZeroError"), NULL, 0);
+    jl_domain_exception =
+        jl_apply((jl_function_t*)core("DomainError"), NULL, 0);
+    jl_overflow_exception =
+        jl_apply((jl_function_t*)core("OverflowError"), NULL, 0);
+    jl_inexact_exception =
+        jl_apply((jl_function_t*)core("InexactError"), NULL, 0);
     jl_undefref_exception =
         jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
     jl_interrupt_exception =

@@ -2,32 +2,28 @@
   sys.c
   I/O and operating system utility functions
 */
+#include "julia.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
+#ifndef __WIN32__
 #include <sys/sysctl.h>
+#include <sys/wait.h>
+#endif
 #include <errno.h>
 #include <signal.h>
 #include <libgen.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-#include "julia.h"
+
 
 #ifdef __SSE__
 #include <xmmintrin.h>
 #endif
 
 // --- io and select ---
-
-void jl__not__used__(void)
-{
-    // force inclusion of lib/socket.o in executable
-    short p=0;
-    open_any_tcp_port(&p);
-}
 
 DLLEXPORT int jl_sizeof_fd_set(void) { return sizeof(fd_set); }
 
@@ -186,8 +182,15 @@ jl_value_t *jl_strerror(int errnum)
 
 // -- get the number of CPU cores --
 
+#ifdef __WIN32__
+typedef DWORD (WINAPI *GAPC)(WORD);
+#ifndef ALL_PROCESSOR_GROUPS
+#define ALL_PROCESSOR_GROUPS 0xffff
+#endif
+#endif
+
 DLLEXPORT int jl_cpu_cores(void) {
-#if defined(__APPLE__)
+#if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
     int nm[2] = {CTL_HW, HW_AVAILCPU};
@@ -198,10 +201,24 @@ DLLEXPORT int jl_cpu_cores(void) {
         if (count < 1) { count = 1; }
     }
     return count;
-#elif defined(__linux)
+#elif defined(_SC_NPROCESSORS_ONLN)
     return sysconf(_SC_NPROCESSORS_ONLN);
-#else // test for Windows?
-    return GetActiveProcessorCount(__in WORD GroupNumber);
+#elif defined(__WIN32__)
+    //Try to get WIN7 API method
+    GAPC gapc = (GAPC) jl_dlsym(
+        jl_kernel32_handle,
+        "GetActiveProcessorCount"
+    );
+
+    if (gapc) {
+        return gapc(ALL_PROCESSOR_GROUPS);
+    } else { //fall back on GetSystemInfo
+        SYSTEM_INFO info;
+        GetSystemInfo(&info);
+        return info.dwNumberOfProcessors;
+    }
+#else
+    return 1;
 #endif
 }
 
@@ -223,6 +240,21 @@ jl_value_t *jl_environ(int i)
 }
 
 // -- child process status --
+
+#if defined _MSC_VER || defined __MINGW32__
+
+/* Native Woe32 API.  */
+#include <process.h>
+#define waitpid(pid,statusp,options) _cwait (statusp, pid, WAIT_CHILD)
+#define WAIT_T int
+#define WTERMSIG(x) ((x) & 0xff) /* or: SIGABRT ?? */
+#define WCOREDUMP(x) 0
+#define WEXITSTATUS(x) (((x) >> 8) & 0xff) /* or: (x) ?? */
+#define WIFSIGNALED(x) (WTERMSIG (x) != 0) /* or: ((x) == 3) ?? */
+#define WIFEXITED(x) (WTERMSIG (x) == 0) /* or: ((x) != 3) ?? */
+#define WIFSTOPPED(x) 0
+#define WSTOPSIG(x) 0 //Is this correct?
+#endif
 
 int jl_process_exited(int status)      { return WIFEXITED(status); }
 int jl_process_signaled(int status)    { return WIFSIGNALED(status); }

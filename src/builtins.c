@@ -11,6 +11,9 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include <ctype.h>
 #include <math.h>
 #include "julia.h"
@@ -22,6 +25,10 @@ DLLEXPORT char *julia_home = NULL;
 
 void jl_error(const char *str)
 {
+    if (jl_errorexception_type == NULL) {
+        JL_PRINTF(JL_STDERR, "%s", str);
+        jl_exit(1);
+    }
     jl_value_t *msg = jl_pchar_to_string((char*)str, strlen(str));
     JL_GC_PUSH(&msg);
     jl_raise(jl_new_struct(jl_errorexception_type, msg));
@@ -34,6 +41,10 @@ void jl_errorf(const char *fmt, ...)
     va_start(args, fmt);
     int nc = vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
+    if (jl_errorexception_type == NULL) {
+        JL_PRINTF(JL_STDERR, "%s", &buf);
+        jl_exit(1);
+    }
     jl_value_t *msg = jl_pchar_to_string(buf, nc);
     JL_GC_PUSH(&msg);
     jl_raise(jl_new_struct(jl_errorexception_type, msg));
@@ -64,16 +75,6 @@ void jl_type_error_rt(const char *fname, const char *context,
 void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
-}
-
-void jl_undef_ref_error(void)
-{
-    jl_raise(jl_undefref_exception);
-}
-
-void jl_divide_by_zero_error(void)
-{
-    jl_raise(jl_divbyzero_exception);
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -114,12 +115,47 @@ void jl_pop_handler(int n)
 
 // primitives -----------------------------------------------------------------
 
+int jl_egal(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b)
+        return 1;
+    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
+    if (ta != (jl_value_t*)jl_typeof(b))
+        return 0;
+    if (jl_is_bits_type(ta)) {
+        size_t nb = jl_bitstype_nbits(ta)/8;
+        switch (nb) {
+        case 1:
+            return *(int8_t*)jl_bits_data(a) == *(int8_t*)jl_bits_data(b);
+        case 2:
+            return *(int16_t*)jl_bits_data(a) == *(int16_t*)jl_bits_data(b);
+        case 4:
+            return *(int32_t*)jl_bits_data(a) == *(int32_t*)jl_bits_data(b);
+        case 8:
+            return *(int64_t*)jl_bits_data(a) == *(int64_t*)jl_bits_data(b);
+        default:
+            return memcmp(jl_bits_data(a), jl_bits_data(b), nb)==0;
+        }
+    }
+    if (jl_is_tuple(a)) {
+        size_t l = jl_tuple_len(a);
+        if (l != jl_tuple_len(b))
+            return 0;
+        for(size_t i=0; i < l; i++) {
+            if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
+                return 0;
+        }
+        return 1;
+    }
+    return 0;
+}
+
 JL_CALLABLE(jl_f_is)
 {
     JL_NARGS(is, 2, 2);
     if (args[0] == args[1])
         return jl_true;
-    return jl_false;
+    return jl_egal(args[0],args[1]) ? jl_true : jl_false;
 }
 
 JL_CALLABLE(jl_f_no_function)
@@ -235,7 +271,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     jl_binding_t *b = jl_get_binding_wr(jl_current_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        ios_printf(ios_stderr, "Warning: redefinition of module %s ignored\n",
+        JL_PRINTF(JL_STDERR, "Warning: redefinition of module %s ignored\n",
                    name->name);
         return jl_nothing;
     }
@@ -354,7 +390,7 @@ extern int jl_in_inference;
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
 {
     //jl_show(ex);
-    //ios_printf(ios_stdout, "\n");
+    //JL_PRINTF(JL_STDOUT, "\n");
     if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
 
@@ -428,9 +464,19 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 
 int asprintf(char **strp, const char *fmt, ...);
 
+// load toplevel expressions, from (file ...)
+static int jl_load_progress_max = 0;
+static int jl_load_progress_i = 0;
+DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
+
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
+	if (jl_load_progress_max > 0) {
+		jl_load_progress_i++;
+        JL_PRINTF(JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+		//jl_flush(jl_stdout);
+    }
     int lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
     JL_GC_PUSH(&fn, &ln, &form);
@@ -475,13 +521,7 @@ char *jl_find_file_in_path(const char *fname)
     }
     if (fid == -1) {
         if (fpath != fname) free(fpath);
-        if (jl_errorexception_type == NULL) {
-            ios_printf(ios_stderr, "could not open file %s\n", fname);
-            exit(1);
-        }
-        else {
-            jl_errorf("could not open file %s", fname);
-        }
+        jl_errorf("could not open file %s", fname);
     }
     close(fid);
 
@@ -595,7 +635,7 @@ static jl_value_t *nth_field(jl_value_t *v, size_t i)
 {
     jl_value_t *fld = ((jl_value_t**)v)[1+i];
     if (fld == NULL)
-        jl_undef_ref_error();
+        jl_raise(jl_undefref_exception);
     return fld;
 }
 
@@ -704,6 +744,7 @@ DLLEXPORT void *jl_symbol_name(jl_sym_t *s)
     return s->name;
 }
 
+//WARNING: THIS FUNCTION IS NEVER CALLED BUT INLINE BY CCALL
 DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
@@ -711,15 +752,16 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 
 // printing -------------------------------------------------------------------
 
-DLLEXPORT void jl_print_symbol(ios_t *s, jl_sym_t *sym)
+
+DLLEXPORT void jl_print_symbol(JL_STREAM *s, jl_sym_t *sym)
 {
-    ios_puts(sym->name, s);
+    JL_PUTS(sym->name,s);
 }
 
 // for bootstrap
-DLLEXPORT void jl_print_int64(ios_t *s, int64_t i)
+DLLEXPORT void jl_print_int64(JL_STREAM *s, int64_t i)
 {
-    ios_printf(s, "%lld", i);
+    JL_PRINTF(s, "%lld", i);
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
@@ -783,23 +825,23 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
     ios_t *s = (ios_t*)jl_iostr_data(st);
-    ios_putc(opn, s);
+    JL_PUTC(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
         jl_show(st, jl_tupleref(t, i));
         if ((i < n-1) || (n==1 && comma_one))
-            ios_putc(',', s);
+            JL_PUTC(',', s);
     }
-    ios_putc(cls, s);
+    JL_PUTC(cls, s);
 }
 
-static void show_function(ios_t *s, jl_value_t *v)
+static void show_function(JL_STREAM *s, jl_value_t *v)
 {
     if (jl_is_gf(v)) {
-        ios_puts(jl_gf_name(v)->name, s);
+        JL_PUTS(jl_gf_name(v)->name, s);
     }
     else {
-        ios_puts("#<function>", s);
+        JL_PUTS("#<function>", s);
     }
 }
 
@@ -808,19 +850,19 @@ static void show_type(jl_value_t *st, jl_value_t *t)
     ios_t *s = (ios_t*)jl_iostr_data(st);
     if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
-            ios_write(s, "None", 4);
+            JL_WRITE(s, "None", 4);
         }
         else if (t == jl_top_type) {
-            ios_write(s, "Top", 3);
+            JL_WRITE(s, "Top", 3);
         }
         else {
-            ios_write(s, "Union", 5);
+            JL_WRITE(s, "Union", 5);
             jl_show_tuple(st, ((jl_uniontype_t*)t)->types, '(', ')', 0);
         }
     }
     else if (jl_is_seq_type(t)) {
         jl_show(st, jl_tparam0(t));
-        ios_write(s, "...", 3);
+        JL_WRITE(s, "...", 3);
     }
     else if (jl_is_typector(t)) {
         jl_show(st, (jl_value_t*)((jl_typector_t*)t)->body);
@@ -828,7 +870,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
     else {
         assert(jl_is_some_tag_type(t));
         jl_tag_type_t *tt = (jl_tag_type_t*)t;
-        ios_puts(tt->name->name->name, s);
+        JL_PUTS(tt->name->name->name, s);
         jl_tuple_t *p = tt->parameters;
         if (jl_tuple_len(p) > 0)
             jl_show_tuple(st, p, '{', '}', 0);
@@ -849,22 +891,22 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
         show_function(s, v);
     }
     else if (jl_typeis(v,jl_intrinsic_type)) {
-        ios_printf(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
+        JL_PRINTF(s, "#<intrinsic-function %d>", *(uint32_t*)jl_bits_data(v));
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
         if (jl_is_struct_type(t)) {
             jl_struct_type_t *st = (jl_struct_type_t*)t;
-            ios_puts(st->name->name->name, s);
-            ios_putc('(', s);
+            JL_PUTS(st->name->name->name, s);
+            JL_PUTC('(', s);
             size_t i;
             size_t n = jl_tuple_len(st->names);
             for(i=0; i < n; i++) {
                 jl_show(str, nth_field(v, i));
                 if (i < n-1)
-                    ios_putc(',', s);
+                    JL_PUTC(',', s);
             }
-            ios_putc(')', s);
+            JL_PUTC(')', s);
         }
     }
 }
@@ -1027,6 +1069,10 @@ JL_CALLABLE(jl_f_typevar)
         JL_NARGS(typevar, 1, 1);
     }
     JL_TYPECHK(typevar, symbol, args[0]);
+    if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
+        jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
+        ios_printf(ios_stderr, "Warning: type parameter name %s shadows an identifier\n", ((jl_sym_t*)args[0])->name);
+    }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
     int b = 0;
@@ -1150,14 +1196,49 @@ JL_CALLABLE(jl_f_invoke)
 
 // hashing --------------------------------------------------------------------
 
-DLLEXPORT uptrint_t jl_hash_symbol(jl_sym_t *s)
-{
-    return s->hash;
-}
+#ifdef __LP64__
+#define bitmix(a,b) int64hash((a)^bswap_64(b))
+#define hash64(a)   int64hash(a)
+#else
+#define bitmix(a,b) int64to32hash((((uint64_t)a)<<32)|((uint64_t)b))
+#define hash64(a)   int64to32hash(a)
+#endif
 
 DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
 {
-    return (uptrint_t)v;
+    if (jl_is_symbol(v))
+        return ((jl_sym_t*)v)->hash;
+    jl_value_t *tv = (jl_value_t*)jl_typeof(v);
+    if (jl_is_struct_type(tv))
+        return inthash((uptrint_t)v);
+    if (jl_is_bits_type(tv)) {
+        size_t nb = jl_bitstype_nbits(tv)/8;
+        uptrint_t h = inthash((uptrint_t)tv);
+        switch (nb) {
+        case 1:
+            return int32hash(*(int8_t*)jl_bits_data(v) ^ h);
+        case 2:
+            return int32hash(*(int16_t*)jl_bits_data(v) ^ h);
+        case 4:
+            return int32hash(*(int32_t*)jl_bits_data(v) ^ h);
+        case 8:
+            return hash64(*(int64_t*)jl_bits_data(v) ^ h);
+        default:
+#ifdef __LP64__
+            return h ^ memhash((char*)jl_bits_data(v), nb);
+#else
+            return h ^ memhash32((char*)jl_bits_data(v), nb);
+#endif
+        }
+    }
+    assert(jl_is_tuple(v));
+    uptrint_t h = 0;
+    size_t l = jl_tuple_len(v);
+    for(size_t i = 0; i < l; i++) {
+        uptrint_t u = jl_uid(jl_tupleref(v,i));
+        h = bitmix(h, u);
+    }
+    return h;
 }
 
 // init -----------------------------------------------------------------------

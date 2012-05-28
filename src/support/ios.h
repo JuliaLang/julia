@@ -3,11 +3,14 @@
 
 #include <stdarg.h>
 #include <pthread.h>
+#include "../../deps/libuv/include/uv.h"
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
-typedef enum { bm_none, bm_line, bm_block, bm_mem } bufmode_t;
+
+//make it compatible with UV Handles
+typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
 
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
@@ -15,16 +18,16 @@ typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 #define IOS_BUFSIZE 131072
 
 typedef struct {
-    bufmode_t bm;
-
     // the state only indicates where the underlying file position is relative
     // to the buffer. reading: at the end. writing: at the beginning.
     // in general, you can do any operation in any state.
-    bufstate_t state;
+    char *buf;        // start of buffer
+    bufmode_t bm;
 
     int errcode;
 
-    char *buf;        // start of buffer
+    bufstate_t state;
+
     off_t maxsize;    // space allocated to buffer
     off_t size;       // length of valid data in buf, >=ndirty
     off_t bpos;       // current position in buffer
@@ -114,8 +117,6 @@ DLLEXPORT int ios_pututf8(ios_t *s, uint32_t wc);
 int ios_putstringz(ios_t *s, char *str, bool_t do_write_nulterm);
 DLLEXPORT int ios_printf(ios_t *s, const char *format, ...);
 DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
-
-void hexdump(ios_t *dest, const char *buffer, size_t len, size_t startoffs);
 
 /* high-level stream functions - input */
 int ios_getnum(ios_t *s, char *data, uint32_t type);

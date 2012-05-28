@@ -116,11 +116,21 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
+# todo: should be O(n)
+isperm(a::AbstractVector) = isequal([1:length(a)], sort(a))
+
 # inverse permutation
 function invperm(a::AbstractVector)
-    b = similar(a)
-    for i=1:length(a)
-        b[a[i]] = i
+    b = zero(a) # similar vector of zeros
+    try
+        for i = 1:length(a)
+            if b[a[i]] != 0 error() end
+            b[a[i]] = i
+        end
+    catch
+        # TODO: should catch more selectively, but at
+        # the moment, this is just an ExceptionError.
+        error("invperm: input must be a permutation")
     end
     return b
 end

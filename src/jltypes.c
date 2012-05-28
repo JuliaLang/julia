@@ -7,6 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "newobj_internal.h"
 #include "jltypes_internal.h"
@@ -245,10 +248,20 @@ typedef struct {
     size_t n;
 } cenv_t;
 
+static inline int is_btv(jl_value_t *v)
+{
+    return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
+}
+
 static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow)
 {
     if (!allow && var == val)
         return;
+    if (val < var && is_btv(val) && is_btv(var)) {
+        jl_value_t *temp = val;
+        val = var;
+        var = temp;
+    }
     for(int i=0; i < soln->n; i+=2) {
         if (soln->data[i]==var &&
             (soln->data[i+1]==val || (!jl_is_typevar(val) &&
@@ -277,10 +290,10 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
     JL_GC_PUSH(&t);
     size_t i;
     for(i=0; i < jl_tuple_len(t); i++) {
+        int eq_l = eqc->n, co_l = penv->n;
         jl_value_t *ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                            penv, eqc, var);
         if (ti == (jl_value_t*)jl_bottom_type) {
-            int eq1 = eqc->n, co1 = penv->n;
             eqc->n = eq0; penv->n = co0;
             ti = jl_type_intersect(jl_tupleref(a->types,i), b,
                                    penv, eqc, var);
@@ -291,8 +304,8 @@ static jl_value_t *intersect_union(jl_uniontype_t *a, jl_value_t *b,
             }
             else {
                 // union element doesn't overlap no matter what.
-                // so keep constraints.
-                eqc->n = eq1; penv->n = co1;
+                // so remove only its constraints.
+                eqc->n = eq_l; penv->n = co_l;
             }
         }
         jl_tupleset(t, i, ti);
@@ -420,6 +433,14 @@ static jl_value_t *intersect_tag(jl_tag_type_t *a, jl_tag_type_t *b,
             jl_value_t *ap = jl_tupleref(a->parameters,i);
             jl_value_t *bp = jl_tupleref(b->parameters,i);
             if (jl_is_typevar(ap)) {
+                if (var==invariant && jl_is_typevar(bp)) {
+                    if (((jl_tvar_t*)ap)->bound != ((jl_tvar_t*)bp)->bound) {
+                        // Foo{T} and Foo can never be equal since the former
+                        // is always a subtype of the latter
+                        JL_GC_POP();
+                        return (jl_value_t*)jl_bottom_type;
+                    }
+                }
                 ti = jl_type_intersect(ap,bp,penv,eqc,invariant);
                 if (bp == (jl_value_t*)jl_bottom_type &&
                     !((jl_tvar_t*)ap)->bound) {
@@ -498,7 +519,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     else {
         return (jl_value_t*)jl_bottom_type;
     }
-    if (var == invariant && !jl_has_typevars_(b,1)) {
+    if (var == invariant && !jl_has_typevars_(b,0)) {
         int i;
         for(i=0; i < eqc->n; i+=2) {
             if (eqc->data[i] == (jl_value_t*)a) {
@@ -678,6 +699,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     while (tta != jl_any_type) {
         if (tta->name == ttb->name) {
             sub = (jl_tag_type_t*)a;
+            super = (jl_tag_type_t*)b;
             break;
         }
         tta = tta->super;
@@ -687,6 +709,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         while (ttb != jl_any_type) {
             if (tta->name == ttb->name) {
                 sub = (jl_tag_type_t*)b;
+                super = (jl_tag_type_t*)a;
                 break;
             }
             ttb = ttb->super;
@@ -695,17 +718,28 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             JL_GC_POP();
             return (jl_value_t*)jl_bottom_type;
         }
-        // sub == b
-        super = (jl_tag_type_t*)jl_type_intersect(a, (jl_value_t*)((jl_tag_type_t*)b)->super, penv,eqc,var);
     }
-    else {
-        // sub == a
-        super = (jl_tag_type_t*)jl_type_intersect((jl_value_t*)((jl_tag_type_t*)a)->super, b, penv,eqc,var);
+
+    if (sub->super == jl_type_type && jl_is_type_type((jl_value_t*)super)) {
+        // subtypes of Type like BitsKind do not constrain the type
+        // parameter, and yet contain Type instances with a more specific
+        // parameter (like Type{Int}). This is a special case.
+        jl_value_t *tp0 = jl_tparam0(super);
+        if (jl_is_typevar(tp0) || (jl_type_t*)sub == jl_typeof(tp0)) {
+            JL_GC_POP();
+            return (jl_value_t*)super;
+        }
+        JL_GC_POP();
+        return (jl_value_t*)jl_bottom_type;
     }
+
+    super = (jl_tag_type_t*)jl_type_intersect((jl_value_t*)sub->super, (jl_value_t*)super, penv, eqc, var);
+
     if ((jl_type_t*)super == jl_bottom_type) {
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
+
     // super needs to be instantiated so the matching below finds actual types
     // and doesn't fail due to the presence of extra typevars.
     super = (jl_tag_type_t*)jl_instantiate_type_with((jl_type_t*)super, eqc->data, eqc->n/2);
@@ -835,11 +869,6 @@ jl_value_t *jl_type_intersection(jl_value_t *a, jl_value_t *b)
       else return X
 */
 
-static inline int is_btv(jl_value_t *v)
-{
-    return jl_is_typevar(v) && ((jl_tvar_t*)v)->bound;
-}
-
 static jl_value_t **tvar_lookup(cenv_t *env, jl_value_t **pX)
 {
     jl_value_t *v = *pX;
@@ -939,16 +968,11 @@ static jl_value_t *meet(jl_value_t *X, jl_value_t *Y, variance_t var)
 
 static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
 {
-    //ios_printf(ios_stdout, "\n");
+    //JL_PRINTF(JL_STDOUT, "\n");
     jl_value_t *v=NULL;
     for(int i=0; i < env->n; i+=2) {
         jl_value_t *T = env->data[i];
         jl_value_t *S = env->data[i+1];
-        if (S < T && is_btv(S)) {
-            jl_value_t *temp = S;
-            S = T;
-            T = temp;
-        }
         jl_value_t **pT;
         pT = tvar_lookup(soln, &T);
         if (pT != &T) {
@@ -978,6 +1002,10 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                     *pU = S;
             }
             else {
+                if (!jl_subtype(*pU, S, 0)) {
+                    // T<:S and T=U and !(U<:S)
+                    return 0;
+                }
                 v = meet(*pU, S, covariant);
                 if (v == NULL) {
                     return 0;
@@ -1098,8 +1126,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         JL_GC_POP(); JL_GC_POP(); JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
-    //ios_printf(ios_stdout, "env: "); print_env(&env);
-    //ios_printf(ios_stdout, "sol: "); print_env(&eqc);
+    //JL_PRINTF(JL_STDOUT, "env: "); print_env(&env);
+    //JL_PRINTF(JL_STDOUT, "sol: "); print_env(&eqc);
 
     // convert non-specific integer vars to typevars
     for(e=0; e < eqc.n; e+=2) {

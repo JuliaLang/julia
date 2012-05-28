@@ -694,6 +694,7 @@ string get_session(string user_name, string session_name) {
     #endif
     opts.args=argv;
     opts.file=argv[0];
+	opts.flags=0;
     int err = uv_spawn(uv_default_loop(),session_data->proc,opts);
     if(err!=0)
         return "";

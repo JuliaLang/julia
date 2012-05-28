@@ -168,7 +168,6 @@ int connect_to_addr(struct sockaddr_in *host_addr)
     return sockfd;
 }
 
-DLLEXPORT
 void getlocalip(char *buf, size_t len)
 {
     struct ifaddrs * ifAddrStruct=NULL;

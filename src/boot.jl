@@ -120,6 +120,8 @@
 type Nothing; end
 const nothing = Nothing()
 
+const (===) = is
+
 abstract Number
 abstract Real     <: Number
 abstract Float    <: Real
@@ -158,6 +160,9 @@ abstract Exception
 
 type BoundsError        <: Exception end
 type DivideByZeroError  <: Exception end
+type DomainError        <: Exception end
+type OverflowError      <: Exception end
+type InexactError       <: Exception end
 type MemoryError        <: Exception end
 type IOError            <: Exception end
 type StackOverflowError <: Exception end

@@ -143,6 +143,65 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
    end
 end
 
+# SUBROUTINE DGBMV(TRANS,M,N,KL,KU,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA,BETA
+#       INTEGER INCX,INCY,KL,KU,LDA,M,N
+#       CHARACTER TRANS
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
+                      (:zgbmv_,:Complex128), (:cgbmv_,:Complex64))
+   @eval begin
+       function _jl_blas_gbmv(trans, m::Integer, n::Integer, kl::Integer, ku::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             x::StridedVector{$elty}, incx::Integer,
+                             beta::($elty), y::StridedVector{$elty}, incy::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &trans, &m, &n, &kl, &ku,
+                 &alpha, A, &lda,
+                 x, &incx,
+                 &beta, y, &incy)
+       end
+
+   end
+end
+
+#       SUBROUTINE DSBMV(UPLO,N,K,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
+# *     .. Scalar Arguments ..
+#       DOUBLE PRECISION ALPHA,BETA
+#       INTEGER INCX,INCY,K,LDA,N
+#       CHARACTER UPLO
+# *     ..
+# *     .. Array Arguments ..
+#       DOUBLE PRECISION A(LDA,*),X(*),Y(*)
+for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
+                      (:zsbmv_,:Complex128), (:csbmv_,:Complex64))
+   @eval begin
+       function _jl_blas_sbmv(uplo, n::Integer, k::Integer,
+                             alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
+                             x::StridedVector{$elty}, incx::Integer,
+                             beta::($elty), y::StridedVector{$elty}, incy::Integer)
+           ccall(dlsym(_jl_libblas, $string(fname)),
+                 Void,
+                 (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{Int32},
+                  Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                 &uplo, &n, &k,
+                 &alpha, A, &lda,
+                 x, &incx,
+                 &beta, y, &incy)
+       end
+
+   end
+end
 
 # SUBROUTINE DGEMM(TRANSA,TRANSB,M,N,K,ALPHA,A,LDA,B,LDB,BETA,C,LDC)
 # *     .. Scalar Arguments ..
@@ -178,7 +237,7 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     _jl_gemm('N', 'N', A, B)
 end
 
-function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_syrk('T', A)
@@ -187,7 +246,7 @@ function aTb{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     end
 end
 
-function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_syrk('N', A)
@@ -196,13 +255,13 @@ function abT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     end
 end
 
-function aTbT{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function At_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('T', 'T', A, B)
 end
 
-aCb{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = aTb(A, B)
-function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
+function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_herk('C', A)
@@ -211,8 +270,8 @@ function aCb{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
     end
 end
 
-abC{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = abT(A, B)
-function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
+A_mul_Bc{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(A, B)
+function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                              B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_herk('N', A)
@@ -221,7 +280,7 @@ function abC{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
     end
 end
 
-function aCbC{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function Ac_mul_Bc{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('C', 'C', A, B)
 end

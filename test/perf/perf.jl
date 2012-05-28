@@ -33,13 +33,13 @@ end
 
 ## array constructors ##
 
-@assert all(ones(200,200) == 1)
+@assert all(ones(200,200) .== 1)
 # @timeit ones(200,200) "ones"
 
 ## matmul and transpose ##
 
 A = ones(200,200)
-@assert all(A*A' == 200)
+@assert all(A*A' .== 200)
 # @timeit A*A' "AtA"
 
 ## mandelbrot set: complex arithmetic and comprehensions ##
@@ -56,7 +56,7 @@ function mandel(z)
     return maxiter
 end
 
-mandelperf() = [ mandel(complex(r,i)) | r=-2.0:.1:0.5, i=-1.:.1:1. ]
+mandelperf() = [ mandel(complex(r,i)) for r=-2.0:.1:0.5, i=-1.:.1:1. ]
 @assert sum(mandelperf()) == 14791
 @timeit mandelperf() "mandel"
 

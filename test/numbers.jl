@@ -534,7 +534,7 @@ for yr = {
 }
     for y = yr, x = xr
         # check basic div functionality
-        if 0y <= x < 1y
+        if 0 <= x < 1y
             @assert div(+x,+y) == 0
             @assert div(+x,-y) == 0
             @assert div(-x,+y) == 0
@@ -554,13 +554,13 @@ for yr = {
         end
 
         # check basic fld functionality
-        if 0y == x
+        if 0 == x
             @assert fld(+x,+y) == 0
             @assert fld(+x,-y) == 0
             @assert fld(-x,+y) == 0
             @assert fld(-x,-y) == 0
         end
-        if 0y < x < 1y
+        if 0 < x < 1y
             @assert fld(+x,+y) == +0
             @assert fld(+x,-y) == -1
             @assert fld(-x,+y) == -1
@@ -829,9 +829,9 @@ for x = 2^53-10:2^53+10
     @assert int64(round(y)) == i
     @assert int64(floor(y)) == i
     @assert int64(ceil(y))  == i
-    @assert iround(y)     == i
-    @assert ifloor(y)     == i
-    @assert iceil(y)      == i
+    @assert iround(y)       == i
+    @assert ifloor(y)       == i
+    @assert iceil(y)        == i
 end
 
 for x = 2^24-10:2^24+10

@@ -23,6 +23,16 @@
 // OBJPROFILE counts objects by type
 //#define OBJPROFILE
 
+#if defined(MEMDEBUG) || defined(MEMPROFILE)
+# ifdef __LP64__
+#  define BVOFFS 3
+# else
+#  define BVOFFS 4
+# endif
+#else
+#define BVOFFS 2
+#endif
+
 #define GC_PAGE_SZ (1536*sizeof(void*)+8)//bytes
 
 typedef struct _gcpage_t {
@@ -65,16 +75,6 @@ typedef struct _bigval_t {
     };
     char _data[1];
 } bigval_t;
-
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
 
 #define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
 #define gc_marked(o)  (gc_val(o)->marked)
@@ -656,7 +656,7 @@ void jl_gc_collect(void)
 #endif
         gc_mark();
 #ifdef GCTIME
-        ios_printf(ios_stderr, "mark time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "mark time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
 #if defined(MEMPROFILE)
         all_pool_stats();
@@ -668,7 +668,7 @@ void jl_gc_collect(void)
         sweep_weak_refs();
         gc_sweep();
 #ifdef GCTIME
-        ios_printf(ios_stderr, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
+        JL_PRINTF(JL_STDERR, "sweep time %.3f ms\n", (clock_now()-t0)*1000);
 #endif
         run_finalizers();
         JL_SIGATOMIC_END();
@@ -800,7 +800,7 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
         pg = nextpg;
     }
     *pwaste = npgs*GC_PAGE_SZ - (nused*p->osize);
-    ios_printf(ios_stdout,
+    JL_PRINTF(JL_STDOUT,
                "%4d : %7d/%7d objects, %5d pages, %8d bytes, %8d waste\n",
                p->osize,
                nused,
@@ -826,7 +826,7 @@ static void all_pool_stats(void)
         no += (b/ephe_pools[i].osize);
         tw += w;
     }
-    ios_printf(ios_stdout,
+    JL_PRINTF(JL_STDOUT,
                "%d objects, %d total allocated, %d total fragments\n",
                no, nb, tw);
 }
@@ -846,6 +846,6 @@ static void big_obj_stats(void)
         }
         v = v->next;
     }
-    ios_printf(ios_stdout, "%d bytes in %d large objects\n", nbytes, nused);
+    JL_PRINTF(JL_STDOUT, "%d bytes in %d large objects\n", nbytes, nused);
 }
 #endif //MEMPROFILE

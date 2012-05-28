@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <setjmp.h>
 #include <assert.h>
+#ifdef __WIN32__
+#include <malloc.h>
+#endif
 #include "julia.h"
 #include "builtin_proto.h"
 
@@ -76,8 +79,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (i >= nl) {
             v = jl_get_global(jl_current_module, (jl_sym_t*)e);
         }
-        if (v == NULL)
+        if (v == NULL) {
             jl_errorf("%s not defined", ((jl_sym_t*)e)->name);
+        }
         return v;
     }
     if (jl_is_symbolnode(e)) {

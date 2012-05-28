@@ -1,3 +1,7 @@
+#ifndef __STDC_LIMIT_MACROS
+#define __STDC_LIMIT_MACROS
+#define __STDC_CONSTANT_MACROS
+#endif
 #include "llvm/DerivedTypes.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JIT.h"
@@ -89,13 +93,16 @@ static GlobalVariable *jlfloat32temp_var;
 static GlobalVariable *jlpgcstack_var;
 #endif
 static GlobalVariable *jlexc_var;
+static GlobalVariable *jldiverr_var;
+static GlobalVariable *jlundeferr_var;
+static GlobalVariable *jldomerr_var;
+static GlobalVariable *jlovferr_var;
+static GlobalVariable *jlinexacterr_var;
 
 // important functions
 static Function *jlnew_func;
 static Function *jlraise_func;
 static Function *jlerror_func;
-static Function *jluniniterror_func;
-static Function *jldiverror_func;
 static Function *jltypeerror_func;
 static Function *jlcheckassign_func;
 static Function *jldeclareconst_func;
@@ -107,6 +114,7 @@ static Function *jlclosure_func;
 static Function *jlmethod_func;
 static Function *jlenter_func;
 static Function *jlleave_func;
+static Function *jlegal_func;
 static Function *jlallocobj_func;
 static Function *jlalloc2w_func;
 static Function *jlalloc3w_func;
@@ -525,7 +533,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      ios_printf(ios_stdout, "call %s%s\n",
+                      JL_PRINTF(JL_STDOUT, "call %s%s\n",
                       jl_sprint(args[0]),
                       jl_sprint((jl_value_t*)aty));
                   }
@@ -541,7 +549,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     }
     else if (f->fptr == &jl_f_is && nargs==2) {
         jl_value_t *rt1 = expr_type(args[1], ctx);
-        jl_value_t *rt2  = expr_type(args[2], ctx);
+        jl_value_t *rt2 = expr_type(args[2], ctx);
         if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
             !jl_is_typevar(jl_tparam0(rt1)) &&
             !jl_is_typevar(jl_tparam0(rt2)) &&
@@ -552,9 +560,24 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             return ConstantInt::get(T_int1, 0);
         }
         JL_GC_POP();
-        Value *arg1 = boxed(emit_expr(args[1], ctx));
-        Value *arg2 = boxed(emit_expr(args[2], ctx));
-        return builder.CreateICmpEQ(arg1, arg2);
+        int ptr_comparable = 0;
+        if (rt1==(jl_value_t*)jl_sym_type || rt2==(jl_value_t*)jl_sym_type ||
+            jl_is_struct_type(rt1) || jl_is_struct_type(rt2))
+            ptr_comparable = 1;
+        Value *arg1 = emit_expr(args[1], ctx);
+        Value *arg2 = emit_expr(args[2], ctx);
+        if (arg1->getType() != jl_pvalue_llvmt &&
+            arg2->getType() != jl_pvalue_llvmt) {
+            if (julia_type_of(arg1) != julia_type_of(arg2)) {
+                return ConstantInt::get(T_int1, 0);
+            }
+            return builder.CreateICmpEQ(JL_INT(arg1),JL_INT(arg2));
+        }
+        arg1 = boxed(arg1); arg2 = boxed(arg2);
+        if (ptr_comparable)
+            return builder.CreateICmpEQ(arg1, arg2);
+        else
+            return builder.CreateTrunc(builder.CreateCall2(jlegal_func, arg1, arg2), T_int1);
     }
     else if (f->fptr == &jl_f_typeof && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
@@ -1419,8 +1442,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
-    //jl_print((jl_value_t*)ast);
-    //ios_printf(ios_stdout, "\n");
+    //JL_PRINTF((jl_value_t*)ast);
+    //JL_PRINTF(JL_STDOUT, "\n");
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
     std::map<std::string, Value*> localVars;
@@ -1478,8 +1501,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
-    
-    dbuilder->createCompileUnit(0, filename, ".", "julia", true, "", 0);
+	
+    // TODO: Fix when moving to new LLVM version
+    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
@@ -1908,6 +1932,16 @@ static void init_julia_llvm_env(Module *m)
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null);
     jlexc_var = global_to_llvm("jl_exception_in_transit",
                                (void*)&jl_exception_in_transit);
+    jldiverr_var = global_to_llvm("jl_divbyzero_exception",
+                                  (void*)&jl_divbyzero_exception);
+    jlundeferr_var = global_to_llvm("jl_undefref_exception",
+                                    (void*)&jl_undefref_exception);
+    jldomerr_var = global_to_llvm("jl_domain_exception",
+                                  (void*)&jl_domain_exception);
+    jlovferr_var = global_to_llvm("jl_overflow_exception",
+                                  (void*)&jl_overflow_exception);
+    jlinexacterr_var = global_to_llvm("jl_inexact_exception",
+                                      (void*)&jl_inexact_exception);
     jlfloat32temp_var =
         new GlobalVariable(*jl_Module, T_float32,
                            false, GlobalVariable::PrivateLinkage,
@@ -1939,22 +1973,6 @@ static void init_julia_llvm_env(Module *m)
                                          (void*)&jl_new_struct_uninit);
 
     std::vector<Type*> empty_args(0);
-    jluniniterror_func =
-        Function::Create(FunctionType::get(T_void, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_undef_ref_error", jl_Module);
-    jluniniterror_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jluniniterror_func,
-                                         (void*)&jl_undef_ref_error);
-
-    jldiverror_func =
-        Function::Create(FunctionType::get(T_void, empty_args, false),
-                         Function::ExternalLinkage,
-                         "jl_divide_by_zero_error", jl_Module);
-    jldiverror_func->setDoesNotReturn();
-    jl_ExecutionEngine->addGlobalMapping(jldiverror_func,
-                                         (void*)&jl_divide_by_zero_error);
-
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),
                          Function::ExternalLinkage, "_setjmp", jl_Module);
@@ -2052,6 +2070,15 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "jl_pop_handler", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlleave_func, (void*)&jl_pop_handler);
+
+    std::vector<Type *> args_2vals(0);
+    args_2vals.push_back(jl_pvalue_llvmt);
+    args_2vals.push_back(jl_pvalue_llvmt);
+    jlegal_func =
+        Function::Create(FunctionType::get(T_int32, args_2vals, false),
+                         Function::ExternalLinkage,
+                         "jl_egal", jl_Module);
+    jl_ExecutionEngine->addGlobalMapping(jlegal_func, (void*)&jl_egal);
 
     std::vector<Type*> aoargs(0);
     aoargs.push_back(T_size);

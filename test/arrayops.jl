@@ -53,15 +53,15 @@ a = reshape(b, (2, 2, 2, 2, 2))
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 tmp = A[1:3,2,2:4]
-@assert all(tmp == cat(3,46:48,86:88,126:128))
+@assert tmp == cat(3,46:48,86:88,126:128)
 tmp = A[:,7:-3:1,5]
-@assert all(tmp == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165])
+@assert tmp == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
 tmp = A[:,3:9]
-@assert all(tmp == reshape(11:45,5,7))
+@assert tmp == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
 tmp = zeros(Int,map(max,rng)...)
 tmp[rng...] = A[rng...]
-@assert  all(tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132]))
+@assert  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
 ## arrays as dequeues
 l = {1,2,3}

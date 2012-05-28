@@ -34,15 +34,6 @@ end
 
 _winston_config = WinstonConfig()
 
-function in_repl()
-    # XXX:fixme
-    try
-        s = string(_jl_repl_channel)
-        return true
-    end
-    return false
-end
-
 begin
     global config_value
     global config_options
@@ -193,16 +184,16 @@ end
 
 function python_min(x, y)
     # in python, min(number,None) = None
-    if x == nothing || y == nothing
+    if isequal(x,nothing) || isequal(y,nothing)
         return nothing
     end
     min(x,y)
 end
 
 function pt_min( a, b )
-    if a == nothing
+    if isequal(a,nothing)
         return b
-    elseif b == nothing
+    elseif isequal(b,nothing)
         return a
     else
         return python_min(a[1],b[1]), python_min(a[2],b[2])
@@ -211,18 +202,18 @@ end
 
 function python_max(x, y)
     # in python, max(number,None) = number
-    if x == nothing
+    if isequal(x,nothing)
         return y
-    elseif y == nothing
+    elseif isequal(y,nothing)
         return x
     end
     max(x,y)
 end
 
 function pt_max( a, b )
-    if a == nothing
+    if isequal(a,nothing)
         return b
-    elseif b == nothing
+    elseif isequal(b,nothing)
         return a
     end
     return python_max(a[1],b[1]), python_max(a[2],b[2])
@@ -242,6 +233,8 @@ type BoundingBox
         end
     end
 end
+
+copy(bb::BoundingBox) = BoundingBox(bb.p0, bb.p1)
 
 function is_null( self::BoundingBox )
     return self.p0 == nothing || self.p1 == nothing
@@ -1136,7 +1129,7 @@ function _format_ticklabel( x, range )
         a, b = _magform( range )
         return "%.*f" % (abs(b),x)
     end
-    return showcompact_to_string(x)
+    return sprint(showcompact, x)
 end
 
 _ticklist_linear( lo, hi, sep ) = _ticklist_linear( lo, hi, sep, 0. )
@@ -1155,7 +1148,7 @@ function _ticklist_linear( lo, hi, sep, origin )
 end
 
 function _pow10(x)
-    return pow(10,x)
+    return pow(10.0,x)
 end
 
 function _ticks_default_linear( lim )
@@ -1170,7 +1163,7 @@ function _ticks_default_linear( lim )
         x = 10
     end
 
-    major_div = x * pow(10, b)
+    major_div = x * pow(10.0, b)
     return _ticklist_linear( lim[1], lim[2], major_div )
 end
 
@@ -1361,7 +1354,7 @@ function _range( self::HalfAxisX, context )
 end
 
 function _make_grid( self::HalfAxisX, context, ticks )
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return
     end
     objs = {}
@@ -1459,7 +1452,7 @@ function _range( self::HalfAxisY, context )
 end
 
 function _make_grid( self::HalfAxisY, context, ticks )
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return
     end
     objs = {}
@@ -1482,7 +1475,7 @@ function _ticks( self::HalfAxis, context )
     logidx = _log(self, context) ? 2 : 1
     r = _range(self, context)
     ticks = getattr(self, "ticks")
-    if ticks == nothing
+    if isequal(ticks,nothing)
         return self.func_ticks_default[logidx](r)
     elseif typeof(ticks) <: Integer
         return self.func_ticks_num[logidx](r, ticks)
@@ -1495,7 +1488,7 @@ function _subticks( self::HalfAxis, context, ticks )
     logidx = _log( self, context ) ? 2 : 1
     r = _range( self, context )
     subticks = getattr(self, "subticks")
-    if subticks == nothing
+    if isequal(subticks,nothing)
         return self.func_subticks_default[logidx]( r, ticks )
     elseif typeof(subticks) <: Integer 
         return self.func_subticks_num[logidx]( r, ticks, subticks )
@@ -1506,7 +1499,7 @@ end
 
 function _ticklabels( self::HalfAxis, context, ticks )
     ticklabels = getattr(self, "ticklabels")
-    if ticklabels != nothing
+    if !isequal(ticklabels,nothing)
         return ticklabels
     end
     r = max(ticks) - min(ticks)
@@ -1514,7 +1507,7 @@ function _ticklabels( self::HalfAxis, context, ticks )
 end
 
 function _make_ticklabels( self::HalfAxis, context, pos, labels )
-    if labels == nothing || length(labels) <= 0
+    if isequal(labels,nothing) || length(labels) <= 0
         return
     end
 
@@ -1526,7 +1519,8 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
         offset = offset + _size_relative(
             getattr(self, "ticks_size"), context.dev_bbox )
     end
-    labelpos = [ _pos(self, context, pos[i], dir*offset) for i=1:length(labels) ]
+    # XXX:why did square brackets stop working?
+    labelpos = { _pos(self, context, pos[i], dir*offset) for i=1:length(labels) }
 
     halign, valign = _align(self)
 
@@ -1548,13 +1542,14 @@ function _make_spine( self::HalfAxis, context )
 end
 
 function _make_ticks( self::HalfAxis, context, ticks, size, style )
-    if ticks == nothing || length(ticks) <= 0
+    if isequal(ticks,nothing) || length(ticks) <= 0
         return
     end
 
     dir = getattr(self, "tickdir") * getattr(self, "ticklabels_dir")
     ticklen = _dpos( self, dir * _size_relative(size, context.dev_bbox) )
-    tickpos = [ _pos(self, context, tick) for tick in ticks ]
+    # XXX:why did square brackets stop working?
+    tickpos = { _pos(self, context, tick) for tick in ticks }
 
     CombObject(tickpos, ticklen, style)
 end
@@ -2350,8 +2345,8 @@ end
 
 # PlotContainer ---------------------------------------------------------------
 
-function show(self::PlotContainer)
-    print(typeof(self),"()")
+function show(io::IO, self::PlotContainer)
+    print(io,typeof(self),"()")
 end
 
 function interior( self::PlotContainer, device::Renderer, exterior_bbox::BoundingBox )
@@ -2446,7 +2441,7 @@ function x11( self::PlotContainer, args...)
     opts = args2dict(args...)
     width = has(opts,"width") ? opts["width"] : config_value("window","width")
     height = has(opts,"height") ? opts["height"] : config_value("window","height")
-    reuse_window = in_repl() && config_value("window","reuse")
+    reuse_window = isinteractive() && config_value("window","reuse")
     device = ScreenRenderer( reuse_window, width, height )
     page_compose( self, device )
 end
@@ -3034,8 +3029,8 @@ end
 
 # PlotComponent ---------------------------------------------------------------
 
-function show(self::PlotComponent)
-    print(typeof(self),"()")
+function show(io::IO, self::PlotComponent)
+    print(io,typeof(self),"()")
 end
 
 function limits( self::PlotComponent )

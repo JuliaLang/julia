@@ -67,7 +67,7 @@ void *julia_realloc(void *b, size_t n)
 
 /* OS-level primitive wrappers */
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__WIN32__)
 void *memrchr(const void *s, int c, size_t n)
 {
     const unsigned char *src = s + n;
@@ -1036,7 +1036,7 @@ char *ios_readline(ios_t *s)
     return ios_takebuf(&dest, &n);
 }
 
-int vasprintf(char **strp, const char *fmt, va_list ap);
+extern int vasprintf(char **strp, const char *fmt, va_list ap);
 
 int ios_vprintf(ios_t *s, const char *format, va_list args)
 {

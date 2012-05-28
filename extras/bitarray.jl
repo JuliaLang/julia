@@ -260,6 +260,7 @@ end
 
 ## Conversions ##
 
+convert{T,S,n}(::Type{Array{T}}, B::BitArray{S,n}) = convert(Array{T,n},B)
 function convert{T,S,n}(::Type{Array{T,n}}, B::BitArray{S,n})
     A = Array(T, size(B))
     for i = 1:length(A)
@@ -268,6 +269,7 @@ function convert{T,S,n}(::Type{Array{T,n}}, B::BitArray{S,n})
     return A
 end
 
+convert{T,S,n}(::Type{BitArray{S}}, A::AbstractArray{T,n}) = convert(BitArray{S,n},A)
 function convert{T,S,n}(::Type{BitArray{S,n}}, A::AbstractArray{T,n})
     B = BitArray(S, size(A))
     for i = 1:length(B)
@@ -983,39 +985,62 @@ end
 # TODO?
 
 ## Binary comparison operators ##
-
 # note: these return BitArray{Bool}
-for f in (:(==), :!=, :<, :<=)
+for (f,scalarf,t) in ((:(.==),:(==),:Number), (:.<, :<,:Real), (:.!=,:!=,:Number), (:.<=,:<=,:Real))
     @eval begin
         function ($f)(A::BitArray, B::BitArray)
             F = BitArray(Bool, promote_shape(size(A),size(B)))
-            for i = 1:numel(A)
-                F[i] = ($f)(A[i], B[i])
+            for i = 1:numel(B)
+                F[i] = ($scalarf)(A[i], B[i])
             end
             return F
         end
-        function ($f)(x::Number, B::BitArray)
+        function ($f)(x::($t), B::BitArray)
             F = similar(B, Bool)
             for i = 1:numel(F)
-                F[i] = ($f)(x, B[i])
+                F[i] = ($scalarf)(x, B[i])
             end
             return F
         end
-        function ($f)(A::BitArray, x::Number)
+        function ($f)(A::BitArray, x::($t))
             F = similar(A, Bool)
             for i = 1:numel(F)
-                F[i] = ($f)(A[i], x)
+                F[i] = ($scalarf)(A[i], x)
             end
             return F
         end
     end
 end
 
-for f in (:(==), :!=, :<, :<=)
+for f in (:(==), :(.==), :!=, :.!=, :<, :.<, :<=, :.<=)
     @eval begin
         ($f)(A::BitArray, B::Array) = ($f)(bitunpack(A), B)
         ($f)(A::Array, B::BitArray) = ($f)(A, bitunpack(B))
     end
+end
+
+function (==)(A::BitArray, B::BitArray)
+    if size(A) != size(B)
+        return false
+    end
+    for i = 1:length(A.chunks)
+        if A.chunks[i] != B.chunks[i]
+            return false
+        end
+    end
+    return true
+end
+
+function (!=)(A::BitArray, B::BitArray)
+    if size(A) != size(B)
+        return true
+    end
+    for i = 1:length(A.chunks)
+        if A.chunks[i] != B.chunks[i]
+            return true
+        end
+    end
+    return false
 end
 
 ## Data movement ##
@@ -1237,12 +1262,13 @@ function nnz(B::BitArray)
     return n
 end
 
-function find(B::BitArray)
+function find{T<:Integer}(B::BitArray{T})
     nnzB = nnz(B)
     I = Array(Int, nnzB)
+    z = zero(T)
     count = 1
     for i = 1:length(B)
-        if B[i] != 0
+        if B[i] != z
             I[count] = i
             count += 1
         end
@@ -1281,7 +1307,7 @@ function findn_one(ivars)
 end
 
 global findn
-function findn(B::BitArray)
+function findn{T}(B::BitArray{T})
     ndimsB = ndims(B)
     nnzB = nnz(B)
     I = ntuple(ndimsB, x->Array(Int, nnzB))
@@ -1292,7 +1318,7 @@ function findn(B::BitArray)
     end
 
     gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:B, :I, :count, :z), B, I, 1, 0)
+                      (:B, :I, :count, :z), B, I, 1, zero(T))
     return I
 end
 end
@@ -1684,7 +1710,8 @@ end
 # general case, specialized for BitArrays and Integers
 function cat{T}(catdim::Integer, X::Union(BitArray{T}, Integer)...)
     nargs = length(X)
-    # using integers != 0 or 1 results in conversion to Array{Int}
+    # using integers results in conversion to Array{Int}
+    # (except in the all-Bool case)
     has_bitarray = false
     has_integer = false
     for a in X
@@ -1764,17 +1791,7 @@ end
 
 ## Reductions and scans ##
 
-function isequal(A::BitArray, B::BitArray)
-    if size(A) != size(B)
-        return false
-    end
-    for i = 1:length(A.chunks)
-        if A.chunks[i] != B.chunks[i]
-            return false
-        end
-    end
-    return true
-end
+isequal(A::BitArray, B::BitArray) = (A == B)
 
 function cumsum{T}(v::BitVector{T})
     n = length(v)

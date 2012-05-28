@@ -60,6 +60,13 @@ end
 .*(x,y) = x*y
 .^(x,y) = x^y
 
+.==(x,y) = x==y
+.!=(x,y) = x!=y
+.< (x,y) = x<y
+.> (x,y) = y.<x
+.<=(x,y) = x<=y
+.>=(x,y) = y.<=x
+
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)
 <<(x,y::Int32)    = no_op_err("<<", typeof(x))
@@ -84,12 +91,28 @@ mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
 cmp{T<:Real}(x::T, y::T) = int(sign(x-y))
 
 # transposed multiply
-aCb (a,b) = ctranspose(a)*b
-abC (a,b) = a*ctranspose(b)
-aCbC(a,b) = ctranspose(a)*ctranspose(b)
-aTb (a,b) = transpose(a)*b
-abT (a,b) = a*transpose(b)
-aTbT(a,b) = transpose(a)*transpose(b)
+Ac_mul_B (a,b) = ctranspose(a)*b
+A_mul_Bc (a,b) = a*ctranspose(b)
+Ac_mul_Bc(a,b) = ctranspose(a)*ctranspose(b)
+At_mul_B (a,b) = transpose(a)*b
+A_mul_Bt (a,b) = a*transpose(b)
+At_mul_Bt(a,b) = transpose(a)*transpose(b)
+
+# transposed divide
+Ac_rdiv_B (a,b) = ctranspose(a)/b
+A_rdiv_Bc (a,b) = a/ctranspose(b)
+Ac_rdiv_Bc(a,b) = ctranspose(a)/ctranspose(b)
+At_rdiv_B (a,b) = transpose(a)/b
+A_rdiv_Bt (a,b) = a/transpose(b)
+At_rdiv_Bt(a,b) = transpose(a)/transpose(b)
+
+Ac_ldiv_B (a,b) = ctranspose(a)\b
+A_ldiv_Bc (a,b) = a\ctranspose(b)
+Ac_ldiv_Bc(a,b) = ctranspose(a)\ctranspose(b)
+At_ldiv_B (a,b) = transpose(a)\b
+A_ldiv_Bt (a,b) = a\transpose(b)
+At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
+
 
 oftype{T}(::Type{T},c) = convert(T,c)
 oftype{T}(x::T,c) = convert(T,c)
@@ -101,8 +124,12 @@ sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
-copy(x::ANY) = x
 foreach(f::Function, itr) = for x = itr; f(x); end
+
+# copying immutable things
+copy(x::Union(Symbol,Number,String)) = x
+copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
+copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 
 # function composition
 one(f::Function) = identity
@@ -146,13 +173,13 @@ end
 
 macro vectorize_1arg(S,f)
     quote
-        function ($f){T<:$S}(x::Array{T,1})
+        function ($f){T<:$S}(x::AbstractArray{T,1})
             [ ($f)(x[i]) for i=1:length(x) ]
         end
-        function ($f){T<:$S}(x::Array{T,2})
+        function ($f){T<:$S}(x::AbstractArray{T,2})
             [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         end
-        function ($f){T<:$S}(x::Array{T})
+        function ($f){T<:$S}(x::AbstractArray{T})
             reshape([ ($f)(x[i]) for i=1:numel(x) ], size(x))
         end
     end
@@ -160,14 +187,14 @@ end
 
 macro vectorize_2arg(S,f)
     quote
-        function ($f){T1<:$S, T2<:$S}(x::T1, y::Array{T2})
+        function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f){T1<:$S, T2<:$S}(x::Array{T1}, y::T2)
+        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::T2)
             reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
 
-        function ($f){T1<:$S, T2<:$S}(x::Array{T1}, y::Array{T2})
+        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
             shp = promote_shape(size(x),size(y))
             reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end

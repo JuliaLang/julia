@@ -181,7 +181,24 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     void *fptr;
     if (jl_is_symbol(ptr)) {
         // just symbol, default to JuliaDLHandle
+#ifdef __WIN32__
+
+        fptr = jl_dlsym_e(jl_dl_handle, ((jl_sym_t*)ptr)->name);
+        if(!fptr) {
+            fptr = jl_dlsym_e(jl_kernel32_handle, ((jl_sym_t*)ptr)->name);
+            if(!fptr) {
+                fptr = jl_dlsym_e(jl_ntdll_handle, ((jl_sym_t*)ptr)->name);
+                if(!fptr) {
+                    fptr = jl_dlsym_e(jl_crtdll_handle, ((jl_sym_t*)ptr)->name);
+                    if(!fptr) {
+                        fptr = jl_dlsym(jl_winsock_handle, ((jl_sym_t*)ptr)->name);
+                    }
+                }
+            }
+        }
+#else
         fptr = jl_dlsym(jl_dl_handle, ((jl_sym_t*)ptr)->name);
+#endif
     }
     else {
         JL_TYPECHK(ccall, pointer, ptr);

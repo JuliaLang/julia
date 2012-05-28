@@ -31,9 +31,9 @@ type ArgumentError <: Exception
     msg::String
 end
 
-type UnboundError <: Exception
-    var::Symbol
-end
+#type UnboundError <: Exception
+#    var::Symbol
+#end
 
 type KeyError <: Exception
     key
@@ -70,6 +70,11 @@ uint(x::Uint) = x
 # function version of field assignment
 setfield(s, f, v) = (s.(f) = v)
 
+# index colon
+type Colon
+end
+const (:) = Colon()
+
 hash(w::WeakRef) = hash(w.value)
 isequal(w::WeakRef, v::WeakRef) = isequal(w.value, v.value)
 isequal(w::WeakRef, v) = isequal(w.value, v)
@@ -86,8 +91,8 @@ istaskdone(t::Task) = t.done
 
 cstring(str::ByteString) = str
 
-# return an integer such that uid(x)==uid(y) iff is(x,y)
-uid(x) = ccall(:jl_uid, Uint, (Any,), x)
+# return an integer such that uid(x)==uid(y) if is(x,y)
+uid(x::ANY) = ccall(:jl_uid, Uint, (Any,), x)
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)

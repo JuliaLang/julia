@@ -951,23 +951,27 @@
    (pattern-lambda (|.'| a) `(call transpose ,a))
 
    ;; transposed multiply
-   (pattern-lambda (call (-/ *) (|'| a) b)
-		   `(call aCb ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) (|'| b))   `(call Ac_mul_Bc ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b)) `(call At_mul_Bt ,a ,b))
+   (pattern-lambda (call (-/ *) (|'| a) b)  `(call Ac_mul_B ,a ,b))
+   (pattern-lambda (call (-/ *) a (|'| b))  `(call A_mul_Bc ,a ,b))
+   (pattern-lambda (call (-/ *) (|.'| a) b) `(call At_mul_B ,a ,b))
+   (pattern-lambda (call (-/ *) a (|.'| b)) `(call A_mul_Bt ,a ,b))
 
-   (pattern-lambda (call (-/ *) a (|'| b))
-		   `(call abC ,a ,b))
+   ;; transposed divide
+   (pattern-lambda (call (-/ /) (|'| a) (|'| b))   `(call Ac_rdiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) (|.'| b)) `(call At_rdiv_Bt ,a ,b))
+   (pattern-lambda (call (-/ /) (|'| a) b)  `(call Ac_rdiv_B ,a ,b))
+   (pattern-lambda (call (-/ /) a (|'| b))  `(call A_rdiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ /) (|.'| a) b) `(call At_rdiv_B ,a ,b))
+   (pattern-lambda (call (-/ /) a (|.'| b)) `(call A_rdiv_Bt ,a ,b))
 
-   (pattern-lambda (call (-/ *) (|'| a) (|'| b))
-		   `(call aCbC ,a ,b))
-
-   (pattern-lambda (call (-/ *) (|.'| a) b)
-		   `(call aTb ,a ,b))
-
-   (pattern-lambda (call (-/ *) a (|.'| b))
-		   `(call abT ,a ,b))
-
-   (pattern-lambda (call (-/ *) (|.'| a) (|.'| b))
-		   `(call aTbT ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) (|'| b))   `(call Ac_ldiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) (|.'| b)) `(call At_ldiv_Bt ,a ,b))
+   (pattern-lambda (call (-/ \\) (|'| a) b)  `(call Ac_ldiv_B ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|'| b))  `(call A_ldiv_Bc ,a ,b))
+   (pattern-lambda (call (-/ \\) (|.'| a) b) `(call At_ldiv_B ,a ,b))
+   (pattern-lambda (call (-/ \\) a (|.'| b)) `(call A_ldiv_Bt ,a ,b))
 
    (pattern-lambda (ccall name RT argtypes . args)
 		   (begin
@@ -1383,6 +1387,8 @@
 	       (to-lff '(null) dest tail)))
 
 	  (else
+	   (if (and dest (not tail) (eq? (car e) 'method))
+	       (error (string "misplaced method definition for " (cadr e))))
 	   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 			 (cdr e))))
 	     (cond ((symbol? dest)

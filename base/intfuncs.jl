@@ -93,7 +93,7 @@ function power_by_squaring(x, p::Integer)
     elseif p == 0
         return one(x)
     elseif p < 0
-        error("power_by_squaring: exponent must be non-negative")
+        throw(DomainError())
     elseif p == 2
         return x*x
     end
@@ -120,8 +120,8 @@ function power_by_squaring(x, p::Integer)
     return x
 end
 
-^{T<:Integer}(x::T, p::T) = p < 0 ? x^float(p) : power_by_squaring(x,p)
-^(x::Number, p::Integer)  = p < 0 ? x^float(p) : power_by_squaring(x,p)
+^{T<:Integer}(x::T, p::T) = power_by_squaring(x,p)
+^(x::Number, p::Integer)  = power_by_squaring(x,p)
 ^(x, p::Integer)          = power_by_squaring(x,p)
 
 # x^p mod m
@@ -129,7 +129,7 @@ function powermod(x::Integer, p::Integer, m::Integer)
     if p == 0
         return one(x)
     elseif p < 0
-        error("powermod: exponent must be non-negative")
+        throw(DomainError())
     end
     t = 1
     while t <= p

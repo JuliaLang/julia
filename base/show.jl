@@ -6,7 +6,7 @@ print(io::IOStream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,)
 show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
 
 showcompact(io, x) = show(io, x)
-showcompact(x)     = show(x)
+showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
 show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
@@ -463,8 +463,8 @@ function show_nd(io, a::AbstractArray)
         print(io, "[:, :, ")
         for i = 1:(nd-1); print(io, "$(idxs[i]), "); end
         println(io, idxs[end], "] =")
-        slice = a[:,:,idxs...]
-        print_matrix(io, reshape(slice, size(slice,1), size(slice,2)))
+        slice = sub(a, 1:size(a,1), 1:size(a,2), idxs...)
+        print_matrix(io, slice)
         print(io, idxs == tail ? "" : "\n\n")
     end
     cartesian_map((idxs...)->print_slice(io,idxs...), tail)
