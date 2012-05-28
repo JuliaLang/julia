@@ -6,7 +6,7 @@ default: release
 
 debug release:
 	@$(MAKE) -s julia-$@
-	@$(MAKE) -s sys.ji
+	@$(MAKE) -s usr/lib/julia/sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC deps
@@ -19,13 +19,13 @@ base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
-sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
+usr/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && $(USRBIN)/julia-release-$(DEFAULT_REPL) -b stage0.jl
-	@rm -f sys.ji
+	@rm -f usr/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-sys.ji: VERSION sys0.ji base/*.jl
-	$(QUIET_JULIA) cd base && ../julia `test -f ../sys.ji && echo stage1.jl || echo -J sys0.ji stage1.jl`
+usr/lib/julia/sys.ji: VERSION usr/lib/julia/sys0.ji base/*.jl
+	$(QUIET_JULIA) cd base && ../julia `test -f $(JULIAHOME)/usr/lib/julia/sys.ji && echo stage1.jl || echo -J $(JULIAHOME)/usr/lib/julia/sys0.ji stage1.jl`
 
 install: release
 	install -d $(DESTDIR)$(PREFIX)/julia/usr/lib/julia
@@ -73,8 +73,7 @@ h2j: usr/lib/libLLVM*.a usr/lib/libclang*.a src/h2j.cpp
 clean:
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *#
-	@rm -f sys0.ji
-	@rm -f sys.ji
+	@rm -f usr/lib/julia/sys*.ji
 	@$(MAKE) -sC base clean
 	@$(MAKE) -sC src clean
 	@$(MAKE) -sC ui clean
