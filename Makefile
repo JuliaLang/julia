@@ -19,7 +19,7 @@ base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
-sys0.ji: src/boot.jl src/dump.c base/stage0.jl base/build_h.jl
+sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && $(USRBIN)/julia-release-$(DEFAULT_REPL) -b stage0.jl
 	@rm -f sys.ji
 
