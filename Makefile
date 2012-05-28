@@ -31,39 +31,15 @@ usr/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 usr/lib/julia/sys.ji: VERSION usr/lib/julia/sys0.ji base/*.jl
 	$(QUIET_JULIA) cd base && ../julia `test -f $(JULIAHOME)/usr/lib/julia/sys.ji && echo stage1.jl || echo -J $(JULIAHOME)/usr/lib/julia/sys0.ji stage1.jl`
 
+DESTDIR = julia-$(JULIA_COMMIT)
 install: release
-	install -d $(DESTDIR)$(PREFIX)/julia/usr/lib/julia
-	install -d $(DESTDIR)$(PREFIX)/julia/usr/sbin
-	install -d $(DESTDIR)$(PREFIX)/julia/usr/etc
-	install -d $(DESTDIR)$(PREFIX)/julia/base
-	install -d $(DESTDIR)$(PREFIX)/julia/contrib
-	install -d $(DESTDIR)$(PREFIX)/julia/examples
-	install -d $(DESTDIR)$(PREFIX)/julia/extras
-	install -d $(DESTDIR)$(PREFIX)/julia/ui/webserver
-	install -d $(DESTDIR)$(PREFIX)/julia/ui/website/assets
-	install -d $(DESTDIR)$(PREFIX)/julia/ui/website/images
-	install -v julia-release-basic $(DESTDIR)$(PREFIX)/julia
-	install -v julia-release-webserver $(DESTDIR)$(PREFIX)/julia
-	install -v julia-release-readline $(DESTDIR)$(PREFIX)/julia
-	install -v julia $(DESTDIR)$(PREFIX)/julia
-	install -v sys.ji $(DESTDIR)$(PREFIX)/julia
-	install -v base/* $(DESTDIR)$(PREFIX)/julia/base
-	install -v extras/* $(DESTDIR)$(PREFIX)/julia/extras
-	install -v examples/*.jl $(DESTDIR)$(PREFIX)/julia/examples
-	install -v $(USRLIB)/*.$(SHLIB_EXT) $(DESTDIR)$(PREFIX)/julia/usr/lib
-	test -z "$(ls -A $(USR)/sbin/*)" || install -v $(USR)/sbin/* $(DESTDIR)$(PREFIX)/julia/usr/sbin
-	install -v launch-julia-webserver $(DESTDIR)$(PREFIX)/julia
-	install -v ui/webserver/*.jl $(DESTDIR)$(PREFIX)/julia/ui/webserver
-	install -v ui/website/*.* $(DESTDIR)$(PREFIX)/julia/ui/website
-	install -v ui/website/assets/* $(DESTDIR)$(PREFIX)/julia/ui/website/assets
-	install -v ui/website/images/* $(DESTDIR)$(PREFIX)/julia/ui/website/images
-	install -v $(USR)/etc/lighttpd.conf $(DESTDIR)$(PREFIX)/julia/usr/etc
+	mkdir -p $(DESTDIR)
+	cp -r $(USR)/* $(DESTDIR)
 
-dist: release
-	rm -fr dist julia-*.tar.gz
-	$(MAKE) install DESTDIR=dist
-	cd dist && tar zcvf ../julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia
-	rm -fr dist
+dist: install
+	rm -fr julia-*.tar.gz
+	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz $(DESTDIR)
+	rm -fr julia-$(JULIA_COMMIT)
 
 deb:
 	fakeroot debian/rules binary
