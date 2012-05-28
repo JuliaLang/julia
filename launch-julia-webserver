@@ -4,4 +4,4 @@ test -x ./usr/sbin/lighttpd || { echo "Install lighttpd with \"make -C deps inst
 
 echo "Connect to http://localhost:2000/ for the web REPL."
 ./usr/sbin/lighttpd -D -f ./usr/etc/lighttpd.conf &
-./julia-release-webserver -p 2001 
+./usr/bin/julia-release-webserver -p 2001 
