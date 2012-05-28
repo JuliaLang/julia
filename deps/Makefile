@@ -151,12 +151,12 @@ llvm_python_workaround:
 	mkdir -p llvm-$(LLVM_VER)/python2_path && \
 	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
-$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure llvm_python_workaround
+$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
 	$(MAKE)
-$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) llvm_python_workaround
+$(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
 	$(MAKE) -C llvm-$(LLVM_VER) install
 	$(INSTALL_NAME_CMD) libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
