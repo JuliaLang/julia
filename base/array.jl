@@ -839,14 +839,14 @@ function rot180(A::StridedMatrix)
     end
     return B
 end
-function rotl90(A::StridedMatrix, k::Integer)
-    k = k % 4
+function rotl90(A::AbstractMatrix, k::Integer)
+    k = mod(k, 4)
     k == 1 ? rotl90(A) :
     k == 2 ? rot180(A) :
     k == 3 ? rotr90(A) : copy(A)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
-rot180(A::AbstractMatrix, k::Integer) = k % 2 == 1 ? rot180(A) : copy(A)
+rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
