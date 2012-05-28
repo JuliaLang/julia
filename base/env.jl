@@ -4,6 +4,19 @@
     _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
     hasenv(s::String) = _getenv(s) != C_NULL
 end
+@windows_only begin
+_getenvlen(var::String) = ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),var,C_NULL,0)
+hasenv(s::String) = _getenvlen(s)!=0
+function _jl_win_getenv(s::String,len::Uint32)
+    val=zeros(Uint8,len)
+    ret=ccall(:GetEnvironmentVariableA,stdcall,Uint32,(Ptr{Uint8},Ptr{Uint8},Uint32),s,val,len)
+    if(ret==0||ret!=len-1) #Trailing 0 is only included on first call to GetEnvA
+        error("getenv: unknown system error: ", s, len, ret)
+    end
+    val
+end
+end
+
 
 macro accessEnv(var,errorcase)
 @unix_only return quote
