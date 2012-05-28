@@ -115,6 +115,8 @@ if __name__=="__main__":
         for i in range(1,1000):
             n = random.randint(0,2**32-1)
             s = hex(n)
+            if s[-1]=='L':
+                s = s[0:-1]
             m = int(s,16)
             assert m == n
         t = time.time()-t
