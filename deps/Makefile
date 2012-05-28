@@ -36,13 +36,13 @@ WGET_DASH_O = wget --no-check-certificate -O
 endif
 
 ifeq ($(OS), Darwin)
-WGET = curl -kLO
-WGET_DASH_O = curl -kLo
+WGET = curl -fkLO
+WGET_DASH_O = curl -fkLo
 endif
 
 ifeq ($(OS), FreeBSD)
-WGET = curl -LO
-WGET_DASH_O = curl -Lo
+WGET = curl -fLO
+WGET_DASH_O = curl -fLo
 LIBS += unwind
 endif
 
