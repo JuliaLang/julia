@@ -6,7 +6,8 @@ default: release
 
 debug release:
 	test -d usr/bin || mkdir -p usr/bin 
-	test -d usr/etc || mkdir -p usr/lib/julia
+	test -d usr/etc || mkdir -p usr/etc
+	test -d usr/lib/julia || mkdir -p usr/lib/julia
 	test -L usr/lib/julia/extras || (cd usr/lib/julia && ln -sf ../../../extras .)
 	test -L usr/lib/julia/base || (cd usr/lib/julia && ln -sf ../../../base .)
 	@$(MAKE) -s julia-$@
