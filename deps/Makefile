@@ -1,6 +1,6 @@
 ## library versions ##
 
-LLVM_VER = 3.0
+LLVM_VER = 3.1
 READLINE_VER = 6.2
 PCRE_VER = 8.30
 GRISU_VER = 1.1
@@ -113,7 +113,11 @@ $(USR):
 	mkdir -p $(USR)/share
 	mkdir -p $(USR)/etc
 
+$(USRLIB): $(USR)
+
 ## LLVM ##
+
+LLVM_TARGETS = x86,x86_64
 
 LLVM_OBJ_TARGET = $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
@@ -137,6 +141,7 @@ llvm-$(LLVM_VER)/configure: $(LLVM_TAR)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
 	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
@@ -148,7 +153,7 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 
 clean-llvm:
 	$(MAKE) -C llvm-$(LLVM_VER) clean
-	rm -f $(LLVM_OBJ_TARGET)
+	rm -f $(USRBIN)/llvm-config
 distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
 
@@ -346,7 +351,6 @@ $(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	$(MAKE) CC=$(CC) && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
-	mkdir -p $(USRLIB)
 	cp $< $@
 
 clean-rmath:
@@ -414,7 +418,7 @@ OPENBLAS_OBJ_SOURCE =
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
-install-openblas: compile-openblas
+install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(WGET_DASH_O) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
@@ -425,6 +429,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
 	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+$(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
@@ -486,8 +491,7 @@ $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
 	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC)
 	touch $@
-$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE)
-	mkdir -p $(USRLIB)
+$(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) install F77=$(FC) MPIF77=$(FC)
 	touch $@
@@ -586,7 +590,7 @@ $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_TARGET): install-openblas $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
@@ -751,8 +755,7 @@ distclean-gmp:
 GMP_INC = -I gmp-$(GMP_VER)/
 GMP_LIB = -L$(USRLIB)/ -lgmp
 
-$(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET)
-	mkdir -p $(USRLIB)
+$(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)

@@ -7,8 +7,9 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 # some utility functions for working with git repos
 
 git_dir() = chomp(readall(`git rev-parse --git-dir`))
-git_dirty() = !success(`git diff --quiet`)
+git_dirty() = !success(`git diff --quiet HEAD`)
 git_staged() = !success(`git diff --cached --quiet`)
+git_unstaged() = !success(`git diff --quiet`)
 git_modules(args::Cmd) = chomp(readall(`git config -f .gitmodules $args`))
 git_different(verA::String, verB::String, path::String) =
     !success(`git diff --quiet $verA $verB -- $path`)
@@ -168,7 +169,7 @@ function pkg_remove(names::AbstractVector)
     if isempty(names) return end
     sort!(names)
     for pkg in names
-        run(`git rm --cached $pkg`)
+        run(`git rm --cached -- $pkg`)
         git_modules(`--remove-section submodule.$pkg`)
     end
     run(`git add .gitmodules`)
@@ -190,25 +191,35 @@ function pkg_pull()
     run(`git fetch --tags`)
     run(`git fetch`)
 
-    # intelligently 3-way merge .gitmodules versions
-    Rc = git_read_config_blob("FETCH_HEAD:.gitmodules")
+    # see how far git gets with merging
+    if success(`git merge -m "[jul] pull (simple merge)" FETCH_HEAD`) return end
+
+    # get info about local, remote and base trees
+    Lh = chomp(readall(`git rev-parse --verify HEAD`))
+    Rh = chomp(readall(`git rev-parse --verify FETCH_HEAD`))
+    base = chomp(readall(`git merge-base $Lh $Rh`))
+    Rc = git_read_config_blob("$Rh:.gitmodules")
     Rs = git_config_sections(Rc)
-    if git_different("HEAD","FETCH_HEAD",".gitmodules")
-        base = chomp(readall(`git merge-base HEAD FETCH_HEAD`))
-        Lc = git_read_config(".gitmodules")
+
+    # intelligently 3-way merge .gitmodules versions
+    if git_different(Lh,Rh,".gitmodules")
+        Lc = git_read_config_blob("$Lh:.gitmodules")
         Bc = git_read_config_blob("$base:.gitmodules")
         Ls = git_config_sections(Lc)
         Bs = git_config_sections(Bc)
         # expunge removed submodules from both sides
         for section in Bs - Ls & Rs
-            m = match(r"^submodule\.(.*?)$",section)
-            if m == nothing continue end
+            path = get(Lc,"$section.path",nothing)
+            if path != nothing
+                run(`git rm -qrf --cached --ignore-unmatch -- $path`)
+                run(`rm -rf $path`)
+            end
             filter!((k,v)->!begins_with("$section.",k),Lc)
             filter!((k,v)->!begins_with("$section.",k),Rc)
-            run(`git rm -rf --cache $(m.captures[1])`)
         end
         # merge the remaining config key-value pairs
         cfg = Dict()
+        conflicts = false
         for key in keys(merge(Lc,Rc))
             Lv = get(Lc,key,nothing)
             Rv = get(Rc,key,nothing)
@@ -227,26 +238,37 @@ function pkg_pull()
                     "Both values written to .gitmodules -- please edit and choose one.\n\n",
                 )
                 cfg[key] = [Lv,Rv]
+                conflicts = true
             end
         end
         # write the result and stage it
         git_write_config(".gitmodules",cfg)
-        run(`git add .gitmodules`)
+        if !conflicts run(`git add .gitmodules`) end
     end
 
     # merge submodules
-    fetch_head = chomp(readall(`git rev-parse FETCH_HEAD`))
     git_each_submodule((name,path,sha1)->begin
-        if has(Rs,"submodule.$name") && git_different("HEAD","FETCH_HEAD",path)
-            alt = chomp(readall(`git rev-parse $fetch_head:$path`))
+        if has(Rs,"submodule.$name") && git_different(Lh,Rh,path)
+            alt = chomp(readall(`git rev-parse $Rh:$path`))
             @cd path run(`git merge --no-edit $alt`)
             run(`git add $path`)
         end
     end,false)
 
-    # if git_dirty() run(`git commit -m "[jul] pull: merge submodules"`) end
-    # # TODO: if merge in progress, just commit
-    # run(`git merge -m "[jul] pull: merge main" $theirs`)
-    # pkg_checkout("HEAD")
-    # pkg_checkpoint()
+    # check for remaining merge conflicts
+    if git_unstaged()
+        unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
+        unmerged = replace(unmerged, r"^", "    ")
+        print(stderr_stream,
+            "\n*** WARNING ***\n\n",
+            "You have unresolved merge conflicts in the following files:\n\n",
+            unmerged,
+            "\nPlease resolve these conflicts `git add` the files and commit.\n"
+        )
+        error("pkg_pull: merge conflicts")
+    end
+
+    run(`git commit -m "[jul] pull (complex merge)"`)
+    pkg_checkout("HEAD")
+    pkg_checkpoint()
 end

@@ -479,7 +479,15 @@ function whos()
     end
 end
 
-show{T}(io, x::AbstractArray{T,0}) = (println(io, summary(x),":"); show(io, x[]))
+function show{T}(io, x::AbstractArray{T,0})
+    println(io, summary(x),":")
+    sx = _jl_undef_ref_str
+    try
+        sx = sprint(showcompact, x[])
+    end
+    print(io, sx)
+end
+
 function show(io, X::AbstractArray)
     print(io, summary(X))
     if !isempty(X)

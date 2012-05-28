@@ -179,9 +179,11 @@ inv(x::Integer) = 1.0/float64(x)
 
 div{T<:Signed}(x::T, y::T) = div(int(x),int(y))
 rem{T<:Signed}(x::T, y::T) = rem(int(x),int(y))
+mod{T<:Signed}(x::T, y::T) = mod(int(x),int(y))
 
 div{T<:Unsigned}(x::T, y::T) = div(uint(x),uint(y))
 rem{T<:Unsigned}(x::T, y::T) = rem(uint(x),uint(y))
+mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
 
 div(x::Signed, y::Unsigned) = flipsign(signed(div(unsigned(abs(x)),y)),x)
 div(x::Unsigned, y::Signed) = unsigned(flipsign(signed(div(x,unsigned(abs(y)))),y))
@@ -208,8 +210,8 @@ rem(x::Uint64, y::Uint64) = boxui64(urem_int(unbox64(x), unbox64(y)))
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
 
-mod{T<:Unsigned}(x::T, y::T) = rem(x,y)
-mod{T<:Integer }(x::T, y::T) = rem(y+rem(x,y),y)
+mod(x::Int,    y::Int)    = boxsint(smod_int(unboxwd(x), unboxwd(y)))
+mod(x::Int64,  y::Int64)  = boxsi64(smod_int(unbox64(x), unbox64(y)))
 
 ## integer bitwise operations ##
 
