@@ -1,14 +1,28 @@
 ## core libc calls ##
 
-hasenv(s::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), s) != C_NULL
-
-function getenv(var::String)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
-    if val == C_NULL
-        error("getenv: undefined variable: ", var)
-    end
-    cstring(val)
+@unix_only begin
+    _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
+    hasenv(s::String) = _getenv(s) != C_NULL
 end
+
+macro accessEnv(var,errorcase)
+@unix_only return quote
+     val=_getenv($var)
+     if val == C_NULL
+        $errorcase
+     end
+     cstring(val)
+end
+@windows_only return quote
+    len=_getenvlen($var)
+    if len == 0
+        $errorcase
+    end
+    cstring(convert(Ptr{Uint8},_jl_win_getenv($var,len)))
+end
+end
+
+getenv(var::String) = @accessEnv var error("getenv: undefined variable: ", var)
 
 function setenv(var::String, val::String, overwrite::Bool)
 @unix_only begin
@@ -16,8 +30,10 @@ function setenv(var::String, val::String, overwrite::Bool)
     system_error(:setenv, ret != 0)
 end
 @windows_only begin
-    ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
-    system_error(:setenv, ret == 0)
+    if(overwrite||!hasenv(var))
+        ret = ccall(:SetEnvironmentVariableA,stdcall,Int32,(Ptr{Uint8},Ptr{Uint8}),var,val)
+        system_error(:setenv, ret == 0)
+    end
 end
 end
 
@@ -40,22 +56,8 @@ type EnvHash <: Associative{ByteString,ByteString}; end
 
 const ENV = EnvHash()
 
-function ref(::EnvHash, k::String)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), k)
-    if val == C_NULL
-        throw(KeyError(k))
-    end
-    cstring(val)
-end
-
-function get(::EnvHash, k::String, deflt)
-    val = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), k)
-    if val == C_NULL
-        return deflt
-    end
-    cstring(val)
-end
-
+ref(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
+get(::EnvHash, k::String, deflt) = @accessEnv k (return deflt)
 has(::EnvHash, k::String) = hasenv(k)
 del(::EnvHash, k::String) = unsetenv(k)
 assign(::EnvHash, v::String, k::String) = (setenv(k,v); v)
