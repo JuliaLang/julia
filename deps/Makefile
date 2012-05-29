@@ -505,6 +505,7 @@ $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	$(MAKE) install F77=$(FC) MPIF77=$(FC)
+	$(INSTALL_NAME_CMD)libarpack.$(SHLIB_EXT) $(USRLIB)/libarpack.$(SHLIB_EXT)
 	touch $@
 
 clean-arpack:
