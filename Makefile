@@ -37,7 +37,7 @@ install: release
 	mkdir -p $(DESTDIR)/{sbin,bin,etc,lib/julia/webserver,lib/julia/website}
 	cp usr/bin/*julia* $(DESTDIR)/bin
 	cp usr/lib/julia/sys.ji $(DESTDIR)/lib/julia
-	cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,pcrecpp,pcreposix,profile_rt,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(DESTDIR)/lib
+	cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(DESTDIR)/lib
 	cp -r base extras $(DESTDIR)/lib/julia
 # Web-REPL stuff
 	cp usr/lib/mod* $(DESTDIR)/lib
