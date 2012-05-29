@@ -7,9 +7,9 @@ default: release
 DIRS = usr/bin usr/etc usr/lib/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib)))
+$(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib/julia)))
 
-debug release: | $(DIRS) usr/lib/extras usr/lib/base
+debug release: | $(DIRS) usr/lib/julia/extras usr/lib/julia/base
 	@$(MAKE) -s julia-$@
 	@$(MAKE) -s usr/lib/julia/sys.ji
 
