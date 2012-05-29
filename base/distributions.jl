@@ -273,6 +273,7 @@ pmf(d::Bernoulli, x::Real) = x == 0 ? (1 - d.prob) : (x == 1 ? d.prob : 0)
 cdf(d::Bernoulli, q::Real) = q < 0. ? 0. : (q >= 1. ? 1. : 1. - d.prob)
 quantile(d::Bernoulli, p::Real) = 0 < p < 1 ? (p <= (1. - d.prob) ? 0 : 1) : NaN
 rand(d::Bernoulli) = rand() > d.prob ? 0 : 1
+insupport(d::Bernoulli, x::Number) = (x == 0) || (x == 1)
 
 type Beta <: ContinuousDistribution
     alpha::Float64
@@ -287,6 +288,7 @@ var(d::Beta) = (ab = d.alpha + d.beta; d.alpha * d.beta /(ab * ab * (ab + 1.)))
 skewness(d::Beta) = 2(d.beta - d.alpha)*sqrt(d.alpha + d.beta + 1)/((d.alpha + d.beta + 2)*sqrt(d.alpha*d.beta))
 rand(d::Beta) = randbeta(d.alpha, d.beta)
 rand!(d::Beta, A::Array{Float64}) = randbeta!(alpha, beta, A)
+insupport(d::Beta, x::Number) = real_valued(x) && 0 < x < 1
 
 type BetaPrime <: ContinuousDistribution
     alpha::Float64
@@ -305,6 +307,7 @@ mean(d::Binomial)     = d.size * d.prob
 var(d::Binomial)      = d.size * d.prob * (1. - d.prob)
 skewness(d::Binomial) = (1-2d.prob)/std(d)
 kurtosis(d::Binomial) = (1-2d.prob*(1-d.prob))/var(d)
+insupport(d::Binomial, x::Number) = integer_valued(x) && 0 <= x <= d.size
 
 type Cauchy <: ContinuousDistribution
     location::Real
@@ -318,6 +321,7 @@ mean(d::Cauchy)     = NaN
 var(d::Cauchy)      = NaN
 skewness(d::Cauchy) = NaN
 kurtosis(d::Cauchy) = NaN
+insupport(d::Cauchy, x::Number) = real_valued(x) && isfinite(x)
 
 type Chi <: ContinuousDistribution
     df::Float64
@@ -334,6 +338,7 @@ skewness(d::Chisq) = sqrt(8/d.df)
 kurtosis(d::Chisq) = 12/d.df
 rand(d::Chisq)     = randchi2(d.df)
 rand!(d::Chisq, A::Array{Float64}) = randchi2!(d.df, A)
+insupport(d::Chisq, x::Number) =  real_valued(x) && isfinite(x) && 0 <= x
 
 type Erlang <: ContinuousDistribution
     shape::Float64
@@ -382,6 +387,7 @@ function invlogccdf(d::Exponential, lp::Real)
 end
 rand(d::Exponential)                     = d.scale * randexp()
 rand!(d::Exponential, A::Array{Float64}) = d.scale * randexp!(A)
+insupport(d::Exponential, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 type FDist <: ContinuousDistribution
     ndf::Float64
@@ -391,6 +397,7 @@ end
 @_jl_dist_2p FDist f
 mean(d::FDist) = 2 < d.ddf ? d.ddf/(d.ddf - 2) : NaN
 var(d::FDist)  = 4 < d.ddf ? 2d.ddf^2*(d.ndf+d.ddf-2)/(d.ndf*(d.ddf-2)^2*(d.ddf-4)) : NaN
+insupport(d::FDist, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 type Gamma <: ContinuousDistribution
     shape::Float64
@@ -405,6 +412,7 @@ var(d::Gamma)      = d.shape * d.scale * d.scale
 skewness(d::Gamma) = 2/sqrt(d.shape)
 rand(d::Gamma)     = d.scale * randg(d.shape)
 rand!(d::Gamma, A::Array{Float64}) = d.scale * randg!(d.shape, A)
+insupport(d::Gamma, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 type Geometric <: DiscreteDistribution
     # In the form of # of failures before the first success
@@ -418,20 +426,12 @@ var(d::Geometric)      = (1-d.prob)/d.prob^2
 skewness(d::Geometric) = (2-d.prob)/sqrt(1-d.prob)
 kurtosis(d::Geometric) = 6+d.prob^2/(1-d.prob)
 function cdf(d::Geometric, q::Real)
-    # allow a small amount of fuzz in floor(x)
-    q < 0. ? 0. : -expm1(log1p(-d.prob) * (floor(q + 1e-7) + 1.))
-end
-function cdf{T<:Real}(d::Geometric, q::AbstractArray{T})
-    lp = log1p(-d.prob)
-    reshape([e < 0.?0.:-expm1(lp * (floor(e + 1e-7) + 1.)) for e in q], size(q))
+    q < 0. ? 0. : -expm1(log1p(-d.prob) * (floor(q) + 1.))
 end
 function ccdf(d::Geometric, q::Real)
     q < 0. ? 1. : exp(log1p(-d.prob) * (floor(q + 1e-7) + 1.))
 end
-function ccdf{T<:Real}(d::Geometric, q::AbstractArray{T})
-    lp = log1p(-d.prob)
-    reshape([e < 0. ? 1.:exp(lp * (floor(e + 1e-7) + 1.)) for e in q], size(q))
-end
+insupport(d::Geometric, x::Number) = integer_valued(x) && 0 <= x
 
 type HyperGeometric <: DiscreteDistribution
     ns::Float64                         # number of successes in population
@@ -446,6 +446,7 @@ end
 @_jl_dist_3p HyperGeometric hyper
 mean(d::HyperGeometric) = d.n*d.ns/(d.ns+d.nf)
 var(d::HyperGeometric)  = (N=d.ns+d.nf; p=d.ns/N; d.n*p*(1-p)*(N-d.n)/(N-1))
+insupport(d::HyperGeometric, x::Number) = integer_valued(x) && 0 <= x <= d.n && (d.n - d.nf) <= x <= d.ns
 
 type Logistic <: ContinuousDistribution
     location::Real
@@ -461,6 +462,7 @@ var(d::Logistic)      = (pi*d.scale)^2/3.
 std(d::Logistic)      = pi*d.scale/sqrt(3.)
 skewness(d::Logistic) = 0.
 kurtosis(d::Logistic) = 1.2
+isupport(d::Logistic, x::Number) = real_valued(x) && isfinite(x)
 
 type logNormal <: ContinuousDistribution
     meanlog::Float64
@@ -472,6 +474,7 @@ logNormal()   = logNormal(0, 1)
 @_jl_dist_2p logNormal lnorm
 mean(d::logNormal) = exp(d.meanlog + d.sdlog^2/2)
 var(d::logNormal)  = (sigsq=d.sdlog^2; (exp(sigsq) - 1)*exp(2d.meanlog+sigsq))
+insupport(d::logNormal, x::Number) = real_valued(x) && isfinite(x) && 0 < x
 
 ## NegativeBinomial is the distribution of the number of failures
 ## before the size'th success in a sequence of Bernoulli trials.
@@ -484,6 +487,7 @@ type NegativeBinomial <: DiscreteDistribution
     NegativeBinomial(s,p) = 0 < p <= 1 ? (s >= 0 ? new(float64(s),float64(p)) : error("size must be non-negative")) : error("prob must be in (0,1]")
 end
 @_jl_dist_2p NegativeBinomial nbinom
+insupport(d::NegativeBinomial, x::Number) = integer_valued(x) && 0 <= x
 
 type NoncentralBeta <: ContinuousDistribution
     alpha::Float64
@@ -499,6 +503,7 @@ type NoncentralChisq <: ContinuousDistribution
     NonCentralChisq(d,nc) = d >= 0 && nc >= 0 ? new(float64(d),float64(nc)) : error("df and ncp must be non-negative")
 end
 @_jl_dist_2p NoncentralChisq nchisq
+insupport(d::NoncentralChisq, x::Number) = real_valued(x) && isfinite(x) && 0 < x
 
 type NoncentralF <: ContinuousDistribution
     ndf::Float64
@@ -507,6 +512,7 @@ type NoncentralF <: ContinuousDistribution
     NonCentralF(n,d,nc) = n > 0 && d > 0 && nc >= 0 ? new(float64(n),float64(d),float64(nc)) : error("ndf and ddf must be > 0 and ncp >= 0")
 end
 @_jl_dist_3p NoncentralF nf
+insupport(d::logNormal, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 type NoncentralT <: ContinuousDistribution
     df::Float64
@@ -514,6 +520,7 @@ type NoncentralT <: ContinuousDistribution
     NonCentralT(d,nc) = d >= 0 && nc >= 0 ? new(float64(d),float64(nc)) : error("df and ncp must be non-negative")
 end
 @_jl_dist_2p NoncentralT nt
+insupport(d::NoncentralT, x::Number) = real_valued(x) && isfinite(x)
 
 type Normal <: ContinuousDistribution
     mean::Float64
@@ -533,6 +540,7 @@ kurtosis(d::Normal) = 0.
 cdf(d::Normal, x::Real) = (1+erf((x-d.mean)/(d.std*sqrt(2))))/2
 pdf(d::Normal, x::Real) = exp(-(x-d.mean)^2/(2d.std^2))/(d.std*sqrt(2pi))
 rand(d::Normal) = d.mean + d.std * randn()
+insupport(d::Normal, x::Number) = real_valued(x) && isfinite(x)
 
 type Poisson <: DiscreteDistribution
     lambda::Float64
@@ -542,6 +550,7 @@ Poisson() = Poisson(1)
 mean(d::Poisson) = d.lambda
 var(d::Poisson) = d.lambda
 @_jl_dist_1p Poisson pois
+insupport(d::Poisson, x::Number) = integer_valued(x) && 0 <= x
 
 type TDist <: ContinuousDistribution
     df::Float64                         # non-integer degrees of freedom allowed
@@ -551,6 +560,7 @@ end
 mean(d::TDist) = d.df > 1 ? 0. : NaN
 median(d::TDist) = 0.
 var(d::TDist) = d.df > 2 ? d.df/(d.df-2) : d.df > 1 ? Inf : NaN
+insupport(d::TDist, x::Number) = real_valued(x) && isfinite(x)
 
 type Uniform <: ContinuousDistribution
     a::Float64
@@ -563,6 +573,7 @@ mean(d::Uniform) = (d.a + d.b) / 2.
 median(d::Uniform) = (d.a + d.b)/2.
 rand(d::Uniform) = d.a + d.b * rand()
 var(d::Uniform) = (w = d.b - d.a; w * w / 12.)
+insupport(d::Uniform, x::Number) = real_valued(x) && d.a <= x <= d.b
 
 type Weibull <: ContinuousDistribution
     shape::Float64
@@ -573,6 +584,7 @@ Weibull(sh) = Weibull(sh, 1)
 @_jl_dist_2p Weibull weibull
 mean(d::Weibull) = d.scale * gamma(1 + 1/d.shape)
 var(d::Weibull) = d.scale^2*gamma(1 + 2/d.shape) - mean(d)^2
+insupport(d::Weibull, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 for f in (:cdf, :logcdf, :ccdf, :logccdf, :quantile, :cquantile, :invlogcdf, :invlogccdf)
     @eval begin
