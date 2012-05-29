@@ -34,19 +34,14 @@ usr/lib/julia/sys.ji: VERSION usr/lib/julia/sys0.ji base/*.jl
 
 DESTDIR = julia-$(JULIA_COMMIT)
 install: release
-	mkdir -p $(DESTDIR)/{sbin,bin,etc,lib/julia/webserver,lib/julia/website}
+	mkdir -p $(DESTDIR)/{sbin,bin,etc,lib/julia}
 	cp usr/bin/*julia* $(DESTDIR)/bin
-	cp usr/lib/julia/sys.ji $(DESTDIR)/lib/julia
+	cp -r usr/lib/julia/* $(DESTDIR)/lib/julia
 	cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(DESTDIR)/lib
-	cp -r base extras $(DESTDIR)/lib/julia
 # Web-REPL stuff
 	cp usr/lib/mod* $(DESTDIR)/lib
 	cp usr/sbin/* $(DESTDIR)/sbin
 	cp usr/etc/* $(DESTDIR)/etc
-	cp ui/webserver/*.jl $(DESTDIR)/lib/julia/webserver
-	cp ui/website/*.* $(DESTDIR)/lib/julia/website
-	cp -r ui/website/assets $(DESTDIR)/lib/julia/website
-	cp -r ui/website/images $(DESTDIR)/lib/julia/website
 
 dist: release
 	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
@@ -68,6 +63,7 @@ clean:
 	@rm -f *~ *# *.tar.gz
 	@rm -fr usr/lib/julia
 	@$(MAKE) -sC base clean
+	@$(MAKE) -sC extras clean
 	@$(MAKE) -sC src clean
 	@$(MAKE) -sC ui clean
 	@$(MAKE) -sC ui/webserver clean
