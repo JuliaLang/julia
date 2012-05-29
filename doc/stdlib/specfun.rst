@@ -4,6 +4,24 @@
 .. module:: specfun.jl
    :synopsis: Special mathematical functions.
 
+.. function:: airy(x)
+              airyai(x)
+
+   Airy function :math:`\operatorname{Ai}(x)`.
+
+.. function:: airyprime(x)
+              airyaiprime(x)
+
+   Airy function derivative :math:`\operatorname{Ai}'(x)`.
+
+.. function:: airybi(x)
+
+   Airy function :math:`\operatorname{Bi}(x)`.
+
+.. function:: airybiprime(x)
+
+   Airy function derivative :math:`\operatorname{Bi}'(x)`.
+
 .. function:: besselj0(x)
 
    Bessel function of the first kind of order 0, :math:`J_0(x)`.
