@@ -66,7 +66,7 @@ h2j: usr/lib/libLLVM*.a usr/lib/libclang*.a src/h2j.cpp
 
 clean:
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
-	@rm -f *~ *#
+	@rm -f *~ *# *.tar.gz
 	@rm -fr usr/lib/julia
 	@$(MAKE) -sC base clean
 	@$(MAKE) -sC src clean
