@@ -1,6 +1,0 @@
-As a lisper, I of course understand the ugliness of @. But I think on the balance it is worth it:
-- it alerts you that something different is happening
-- it prevents macro names from conflicting with other things
-- it allows macros to have paren-less syntax
-- it makes it easy to syntax color macros like keywords
-- it makes it easier to save pre-expanded code. otherwise, it would be possible for an expression in one file to turn into a macro call as a result of a definition changing in another file (e.g. changing something from a function to a macro). with @, files stay self-contained since we know exactly which expressions to delay expanding.
