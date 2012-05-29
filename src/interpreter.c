@@ -205,7 +205,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == multivalue_sym) {
         return (jl_value_t*)jl_nothing;
     }
-    jl_error("not supported");
+    jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;
 }
 

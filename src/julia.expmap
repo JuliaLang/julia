@@ -34,6 +34,7 @@
     jl_is_const;
     jl_get_current_module;
     jl_set_current_module;
+    jl_module_names;
     jl_type_match;
     jl_type_intersection;
     jl_types_equal;

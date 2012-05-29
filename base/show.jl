@@ -248,6 +248,8 @@ function dump(io, x)
     end
 end
 
+showall(x) = showall(OUTPUT_STREAM::IOStream, x)
+
 function showall{T}(io, a::AbstractArray{T,1})
     if is(T,Any)
         opn = '{'; cls = '}'

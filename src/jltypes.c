@@ -2499,6 +2499,9 @@ void jl_init_types(void)
     lambda_sym = jl_symbol("lambda");
     macro_sym = jl_symbol("macro");
     module_sym = jl_symbol("module");
+    export_sym = jl_symbol("export");
+    import_sym = jl_symbol("import");
+    importall_sym = jl_symbol("importall");
     assign_sym = jl_symbol("=");
     null_sym = jl_symbol("null");
     body_sym = jl_symbol("body");

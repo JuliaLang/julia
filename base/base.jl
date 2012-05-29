@@ -70,6 +70,10 @@ uint(x::Uint) = x
 # function version of field assignment
 setfield(s, f, v) = (s.(f) = v)
 
+# reflection
+
+names(m::Module) = ccall(:jl_module_names, Any, (Any,), m)::Array{Any,1}
+
 # index colon
 type Colon
 end
@@ -110,8 +114,8 @@ function append_any(xs...)
     end
     out = Array(Any, n)
     i = 1
-    for x = xs
-        for y = x
+    for x in xs
+        for y in x
             arrayset(out, i, y)
             i += 1
         end

@@ -218,6 +218,7 @@ typedef struct {
     jl_sym_t *name;
     jl_value_t *value;
     jl_type_t *type;
+    struct _jl_module_t *owner;  // for individual imported bindings
     int constp:1;
     int exportp:1;
 } jl_binding_t;
@@ -227,7 +228,7 @@ typedef struct _jl_module_t {
     jl_sym_t *name;
     htable_t bindings;
     htable_t macros;
-    arraylist_t imports;
+    arraylist_t imports;  // modules with all bindings imported
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
@@ -377,6 +378,8 @@ extern jl_sym_t *multivalue_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
+extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
+extern jl_sym_t *importall_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
@@ -750,9 +753,8 @@ DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
-jl_module_t *jl_add_module(jl_module_t *m, jl_module_t *child);
-jl_module_t *jl_get_module(jl_module_t *m, jl_sym_t *name);
-jl_module_t *jl_import_module(jl_module_t *to, jl_module_t *from);
+void jl_module_importall(jl_module_t *to, jl_module_t *from);
+void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
