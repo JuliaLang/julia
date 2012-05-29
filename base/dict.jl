@@ -203,7 +203,7 @@ function serialize(s, t::Dict)
     end
 end
 
-function deserialize(s, T::Type{Dict})
+function deserialize{K,V}(s, T::Type{Dict{K,V}})
     n = read(s, Int32)
     t = T(n)
     for i = 1:n
