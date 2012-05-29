@@ -4,12 +4,20 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-debug release:
-	test -d usr/bin || mkdir -p usr/bin 
-	test -d usr/etc || mkdir -p usr/etc
-	test -d usr/lib/julia || mkdir -p usr/lib/julia
-	test -L usr/lib/julia/extras || (cd usr/lib/julia && ln -sf ../../../extras .)
-	test -L usr/lib/julia/base || (cd usr/lib/julia && ln -sf ../../../base .)
+DIRS = usr/bin usr/etc usr/lib/julia
+
+define symlink_target
+$(2)/$(1):
+	@cd $(2) && ln -sf $$(abspath $(1)) .
+endef
+define dir_target 
+$(1):
+	@mkdir -p $$@ 
+endef
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(abspath $(dir)))))
+$(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib)))
+
+debug release: | $(DIRS) usr/lib/extras usr/lib/base
 	@$(MAKE) -s julia-$@
 	@$(MAKE) -s usr/lib/julia/sys.ji
 
