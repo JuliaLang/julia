@@ -126,9 +126,6 @@ struct julia_session
     // the status of the julia_session
     julia_session_status status;
 
-    //event loop
-    uv_loop_t *event_loop;
-
     //notifier
     uv_async_t *data_notifier;
 };
@@ -402,16 +399,22 @@ void connected(uv_connect_t* req, int status)
     julia_session_ptr->outbox_history.push_back(ready_message);
     for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
 		iter->second.outbox.push_back(ready_message);
-				
-    uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
+#ifdef DEBUG
+   cout<<"Julia Process Connected\n"; 
+#endif
+	uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
 
 }
+
+#define JL_TCP_LOOP uv_default_loop()
 
 //read from julia (on stdin)
 void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
     if(nread<0)
         return;
+
+    cout<<"Recevied Data from Julia on STDOUT\n";
 
     clientData *data = (clientData *)stream->data;
     julia_session *julia_session_ptr=data->session;
@@ -461,12 +464,15 @@ void julia_incoming(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 
         // start
         julia_session_ptr->sock = new uv_tcp_t;
-        uv_tcp_init(julia_session_ptr->event_loop,julia_session_ptr->sock);
+        uv_tcp_init(JL_TCP_LOOP,julia_session_ptr->sock);
         uv_connect_t *c=new uv_connect_t;
         sockaddr_in address=uv_ip4_addr("127.0.0.1", port_num);
         julia_session_ptr->sock->data=data;
         uv_tcp_connect(c, julia_session_ptr->sock,address,&connected);
+
+        cout << "Port number received. Connecting ...\n";
     }
+
 
     delete[] buf.base;
 
@@ -587,14 +593,6 @@ string respond(string session_token, string body) {
     return header+body;
 }
 
-
-void *run_event_loop(void *session)
-{
-    uv_loop_t *loop = ((julia_session *)session)->event_loop;
-    uv_run(loop);
-    return 0;
-}
-
 void process_exited(uv_process_t*p, int exit_status, int term_signal)
 {
     ((clientData*)p->data)->session->status = SESSION_TERMINATING;
@@ -657,13 +655,12 @@ string get_session(string user_name, string session_name) {
     session_data->status = SESSION_WAITING_FOR_PORT_NUM;
 
     session_data->proc=new uv_process_t;
-    session_data->event_loop=uv_loop_new();
 
 	//allocate pipess
     session_data->julia_in=new uv_pipe_t;
-    uv_pipe_init(session_data->event_loop,session_data->julia_in,0);
+    uv_pipe_init(uv_default_loop(),session_data->julia_in,0);
     session_data->julia_out=new uv_pipe_t;
-    uv_pipe_init(session_data->event_loop,session_data->julia_out,0);
+    uv_pipe_init(uv_default_loop(),session_data->julia_out,0);
 
 #ifdef READ_STDERR
     session_data->julia_err=new uv_pipe_t;
@@ -680,9 +677,9 @@ string get_session(string user_name, string session_name) {
 #if 0
     char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
 #else
-    char arg0[]="./julia-release-readline";
+    char arg0[]="../upstream/usr/bin/julia-release-readline";
 	char arg1[]="--no-history";
-    char arg2[]="ui/webserver/julia_web_base.jl";
+    char arg2[]="extras/julia_web_base.jl";
     char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
     opts.exit_cb=&process_exited;
@@ -707,12 +704,9 @@ string get_session(string user_name, string session_name) {
 
     data->session=session_data;
     session_data->proc->data = session_data->julia_in->data = session_data->julia_out->data = data;
-    if (pthread_create(&session_data->thread, 0, &run_event_loop, (void*)session_data))
-    {
-        //session_data->thread = 0;
-    }
 
     //start reading
+    cout << "Started Reading from Julia stdout";
     uv_read_start((uv_stream_t*)opts.stdout_stream,&alloc_buf,&julia_incoming);
 #ifdef READ_STDERR
     uv_read_start((uv_stream_t*)opts.stderr_stream,&alloc_buf,&julia_incoming);
@@ -984,6 +978,9 @@ void get_response(request* req,uv_stream_t *client)
         message_root.append(response_messages[i].type);
         for (size_t j = 0; j < response_messages[i].args.size(); j++)
             message_root.append(response_messages[i].args[j]);
+#ifdef DEBUG
+        cout<<"Sending message "<<(int)response_messages[i].type<<" to user "<<session_token<<"\n"; 
+#endif
         response_root.append(message_root);
     }
 
@@ -1027,9 +1024,9 @@ void sigproc(int)
 
         // kill the julia process
         uv_process_kill(julia_session_list[i]->proc, 9);
-        run_event_loop(julia_session_list[i]);
+        //run_event_loop(julia_session_list[i]);
 
-        uv_loop_delete((julia_session_list[i])->event_loop);
+        //uv_loop_delete((julia_session_list[i])->event_loop);
         // delete the session
         delete julia_session_list[i];
     }

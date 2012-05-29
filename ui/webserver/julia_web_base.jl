@@ -27,6 +27,7 @@ macro debug_only(x); x; end
 
 # open a socket on any port
 function connect_cb(accept_fd::Ptr,status::Int32)
+    @debug_only println(STDERR,"Julia: Client instance connected")
     global __client
     if(status == -1)
         error("An error occured during the creation of the server")
@@ -43,6 +44,8 @@ function connect_cb(accept_fd::Ptr,status::Int32)
 end
 
 (port,sock) = open_any_tcp_port(4444,make_callback(connect_cb))
+
+@debug_only println(STDERR,"Julia Instance Started")
 
 # print the socket number so the server knows what it is
 println(STDOUT,int16(port))
