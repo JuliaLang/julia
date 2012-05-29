@@ -1,7 +1,8 @@
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
+@unix_only sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
+@windows_only sleep(s::Real) = ccall(:Sleep, stdcall, Void, (Uint32,), uint32(iround(s*1e3)))
 
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)

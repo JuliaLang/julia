@@ -757,7 +757,7 @@ $(NGINX_BASE)/configure: $(NGINX_BASE).tar.gz $(NGINX_BASE).tar.gz compile-pcre
 	touch $@
 $(NGINX_BASE)/config.status: $(NGINX_BASE)/configure
 	cd $(NGINX_BASE) && \
-	./configure  --with-ld-opt="-L $(USRLIB) -lpcre" --with-debug --prefix=$(abspath $(USR)) 
+	./configure --without-http_gzip_module --without-http_rewrite_module  --with-ld-opt="-L $(USRLIB) -lpcre" --with-debug --prefix=$(abspath $(USR)) 
 $(NGINX_OBJ_TARGET): $(NGINX_BASE)/config.status
 	$(MAKE) -C $(NGINX_BASE) install
 	touch $@
