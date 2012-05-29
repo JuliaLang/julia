@@ -678,11 +678,11 @@ string get_session(string user_name, string session_name) {
     opts.stdout_stream = session_data->julia_out;
     opts.stderr_stream = session_data->julia_err;
 #if 0
-    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
+    char *argv[5] = {"gdbserver","localhost:2222","./usr/bin/julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
 #else
-    char arg0[]="./julia-release-readline";
+    char arg0[]="./usr/bin/julia-release-readline";
 	char arg1[]="--no-history";
-    char arg2[]="ui/webserver/julia_web_base.jl";
+    char arg2[]="./ui/webserver/julia_web_base.jl";
     char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
     opts.exit_cb=&process_exited;

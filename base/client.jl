@@ -208,7 +208,7 @@ function _start()
         end
 
         global const VARIABLES = {}
-        global const LOAD_PATH = String["", "$JULIA_HOME/", "$JULIA_HOME/extras/"]
+        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/"]
 
         # Load customized startup
         try include(strcat(cwd(),"/startup.jl")) end
