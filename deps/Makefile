@@ -12,7 +12,8 @@ FFTW_VER = 3.3.2
 SUITESPARSE_VER = 3.7.1
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
-LIGHTTPD_VER = 1.4.29
+LIGHTTPD_VER = 1.4.30
+NGINX_VER = 1.3.0
 GMP_VER=5.0.5
 GLPK_VER = 4.43
 
@@ -735,6 +736,36 @@ clean-lighttpd:
 	rm -f $(LIGHTTPD_OBJ_TARGET)
 distclean-lighttpd:
 	rm -rf lighttpd-$(LIGHTTPD_VER).tar.gz lighttpd-$(LIGHTTPD_VER)
+
+## NGINX ##
+
+ifeq ($(USE_SYSTEM_NGINX), 0)
+NGINX_OBJ_TARGET = $(USR)/sbin/nginx
+else
+NGINX_OBJ_TARGET =
+endif
+
+compile-nginx: install-nginx
+install-nginx: $(NGINX_OBJ_TARGET)
+
+NGINX_BASE = nginx-$(NGINX_VER)
+
+$(NGINX_BASE).tar.gz:
+	$(WGET) http://www.nginx.org/download/$(NGINX_BASE).tar.gz
+$(NGINX_BASE)/configure: $(NGINX_BASE).tar.gz $(NGINX_BASE).tar.gz compile-pcre
+	tar zxf $<
+	touch $@
+$(NGINX_BASE)/config.status: $(NGINX_BASE)/configure
+	cd $(NGINX_BASE) && \
+	./configure  --with-ld-opt="-L $(USRLIB) -lpcre" --with-debug --prefix=$(abspath $(USR)) 
+$(NGINX_OBJ_TARGET): $(NGINX_BASE)/config.status
+	$(MAKE) -C $(NGINX_BASE) install
+	touch $@
+
+clean-nginx:
+	$(MAKE) -C $(NGINX_BASE) clean
+distclean-nginx:
+	rm -rf $(NGINX_BASE) $(NGINX_BASE).tar.gz
 
 ## GMP ##
 
