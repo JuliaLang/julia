@@ -65,25 +65,21 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+$(USRLIB)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
-	$(INSTALL_NAME_CMD) $@ $@
-	cp -f $@ $(USRLIB)/$@
+	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
-	cp -f $@ $(USRLIB)/$@
-libjulia-debug: libjulia-debug.$(SHLIB_EXT)
+libjulia-debug: $(USRLIB)/libjulia-debug.$(SHLIB_EXT)
 
-libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+$(USRLIB)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) -shared -o $@ $(LDFLAGS)
-	$(INSTALL_NAME_CMD) $@ $@
-	cp -f $@ $(USRLIB)/$@
+	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
 	rm -f $@
 	$(QUIET_LINK) ar -rcs $@ $(OBJS)
-	cp -f $@ $(USRLIB)/$@
-libjulia-release: libjulia-release.$(SHLIB_EXT)
+libjulia-release: $(USRLIB)/libjulia-release.$(SHLIB_EXT)
 
 clean:
 	rm -f $(USRLIB)/libjulia*

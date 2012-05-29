@@ -550,7 +550,7 @@ char *jl_find_file_in_path(const char *fname)
     int fid = open (fpath, O_RDONLY);
     // try adding julia home
     if (fid == -1 && julia_home && fname[0] != '/') {
-        if (-1 != asprintf(&fpath, "%s/%s", julia_home, fname))
+        if (-1 != asprintf(&fpath, "%s/../lib/julia/%s", julia_home, fname))
             fid = open (fpath, O_RDONLY);
     }
     if (fid == -1) {

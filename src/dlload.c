@@ -71,9 +71,9 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
         handle->handle = NULL;
         if (modname[0] != '/') {
             if (julia_home) {
-                /* try julia_home/usr/lib */
+                /* try julia_home/../lib */
                 strncpy(path, julia_home, PATHBUF-1);
-                strncat(path, "/usr/lib/", PATHBUF-1-strlen(path));
+                strncat(path, "/../lib/", PATHBUF-1-strlen(path));
                 strncat(path, modname, PATHBUF-1-strlen(path));
                 strncat(path, ext, PATHBUF-1-strlen(path));
                 error = uv_dlopen(path, handle);
