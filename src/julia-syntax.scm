@@ -688,6 +688,27 @@
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
+   ;; multiple value assignment a,b = x...
+   (pattern-lambda (= (tuple . lhss) (... x))
+		   (let* ((xx  (if (symbol? x) x (gensy)))
+			  (ini (if (eq? x xx) '() `((= ,xx ,x))))
+			  (st  (gensy)))
+		     (if
+		      (and (pair? x) (eq? (car x) 'tuple))
+		      `(= (tuple ,@lhss) ,x)
+		      `(block
+			,@ini
+			(= ,st (call (top start) ,xx))
+			,.(apply append
+				 (map (lambda (lhs)
+					`((if (call (top done) ,xx ,st)
+					      (call (top throw)
+						    (call (top BoundsError))))
+					  (= (tuple ,lhs ,st)
+					     (call (top next) ,xx ,st))))
+				      lhss))
+			,xx))))
+
    ;; multiple value assignment
    (pattern-lambda (= (tuple . lhss) x)
 		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)

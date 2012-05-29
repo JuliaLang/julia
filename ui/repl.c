@@ -179,11 +179,6 @@ static void print_profile(void)
 
 int true_main(int argc, char *argv[])
 {
-    if (lisp_prompt) {
-        jl_lisp_prompt();
-        return 0;
-    }
-
     if (jl_current_module == jl_base_module) {
         jl_array_t *args = jl_alloc_cell_1d(argc);
         jl_set_global(jl_current_module, jl_symbol("ARGS"), (jl_value_t*)args);
@@ -244,6 +239,11 @@ int main(int argc, char *argv[])
 {
     libsupport_init();
     parse_opts(&argc, &argv);
+    if (lisp_prompt) {
+        jl_init_frontend();
+        jl_lisp_prompt();
+        return 0;
+    }
     julia_init(lisp_prompt ? NULL : image_file);
     return julia_trampoline(argc, argv, true_main);
 }

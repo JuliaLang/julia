@@ -83,7 +83,7 @@ static builtinspec_t julia_flisp_ast_ext[] = {
 
 static fltype_t *jvtype;
 
-void jl_init_frontend(void)
+DLLEXPORT void jl_init_frontend(void)
 {
     fl_init(2*512*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));

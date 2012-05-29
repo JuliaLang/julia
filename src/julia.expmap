@@ -175,6 +175,7 @@
     jl_current_output_stream;
     jl_apply_generic;
     julia_init;
+    jl_init_frontend;
     julia_trampoline;
     jl_install_sigint_handler;
     jl_alloc_cell_1d;
