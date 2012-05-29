@@ -244,6 +244,8 @@ function readall(filename::String)
     return str
 end
 
+readchomp(x) = chomp(readall(x))
+
 readline(s::IOStream) = readuntil(s, '\n')
 
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)

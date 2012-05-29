@@ -6,11 +6,11 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 
 # some utility functions for working with git repos
 
-git_dir() = chomp(readall(`git rev-parse --git-dir`))
+git_dir() = readchomp(`git rev-parse --git-dir`)
 git_dirty() = !success(`git diff --quiet HEAD`)
 git_staged() = !success(`git diff --cached --quiet`)
 git_unstaged() = !success(`git diff --quiet`)
-git_modules(args::Cmd) = chomp(readall(`git config -f .gitmodules $args`))
+git_modules(args::Cmd) = readchomp(`git config -f .gitmodules $args`)
 git_different(verA::String, verB::String, path::String) =
     !success(`git diff --quiet $verA $verB -- $path`)
 
@@ -98,14 +98,19 @@ function pkg_clone(dir::String, url::String)
 end
 pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
 
-# checkpoint a repo, recording submodule commits as tags
+# record all submodule commits as tags
 
-function pkg_checkpoint()
+function pkg_tag_submodules()
     git_each_submodule((name,path,sha1)->begin
         run(`git fetch-pack -q $path HEAD`)
         run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
         run(`git --git-dir=$path/.git gc -q`)
-        head = @cd path chomp(readall(`git rev-parse --symbolic-full-name HEAD`))
+    end, true)
+end
+
+function pkg_save_branches()
+    git_each_submodule((name,path,sha1)->begin
+        head = @cd path readchomp(`git rev-parse --symbolic-full-name HEAD`)
         m = match(r"^refs/heads/(.*)$", head)
         if m != nothing
             branch = m.captures[1]
@@ -113,9 +118,11 @@ function pkg_checkpoint()
         else
             try git_modules(`--unset submodule.$name.branch`) end
         end
-    end, true)
+    end, false)
     run(`git add .gitmodules`)
 end
+
+pkg_checkpoint() = (pkg_tag_submodules(); pkg_save_branches())
 
 # checkout a particular repo version
 
@@ -157,7 +164,7 @@ end
 function pkg_install(names::AbstractVector)
     urls = Dict()
     for pkg in names
-        urls[pkg] = chomp(readall(open("METADATA/$pkg/url")))
+        urls[pkg] = readchomp("METADATA/$pkg/url")
     end
     pkg_install(urls)
 end
@@ -195,9 +202,9 @@ function pkg_pull()
     if success(`git merge -m "[jul] pull (simple merge)" FETCH_HEAD`) return end
 
     # get info about local, remote and base trees
-    Lh = chomp(readall(`git rev-parse --verify HEAD`))
-    Rh = chomp(readall(`git rev-parse --verify FETCH_HEAD`))
-    base = chomp(readall(`git merge-base $Lh $Rh`))
+    Lh = readchomp(`git rev-parse --verify HEAD`)
+    Rh = readchomp(`git rev-parse --verify FETCH_HEAD`)
+    base = readchomp(`git merge-base $Lh $Rh`)
     Rc = git_read_config_blob("$Rh:.gitmodules")
     Rs = git_config_sections(Rc)
 
@@ -249,7 +256,7 @@ function pkg_pull()
     # merge submodules
     git_each_submodule((name,path,sha1)->begin
         if has(Rs,"submodule.$name") && git_different(Lh,Rh,path)
-            alt = chomp(readall(`git rev-parse $Rh:$path`))
+            alt = readchomp(`git rev-parse $Rh:$path`)
             @cd path run(`git merge --no-edit $alt`)
             run(`git add $path`)
         end
