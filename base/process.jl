@@ -7,6 +7,7 @@ type ProcessExited   <: ProcessStatus; status::Int32; end
 type ProcessSignaled <: ProcessStatus; signal::Int32; end
 type ProcessStopped  <: ProcessStatus; signal::Int32; end
 
+process_running (s::Int32) = s == -1
 process_exited  (s::Int32) = ccall(:jl_process_exited,   Int32, (Int32,), s) != 0
 process_signaled(s::Int32) = ccall(:jl_process_signaled, Int32, (Int32,), s) != 0
 process_stopped (s::Int32) = ccall(:jl_process_stopped,  Int32, (Int32,), s) != 0
@@ -16,6 +17,7 @@ process_term_signal(s::Int32) = ccall(:jl_process_term_signal, Int32, (Int32,), 
 process_stop_signal(s::Int32) = ccall(:jl_process_stop_signal, Int32, (Int32,), s)
 
 function process_status(s::Int32)
+    process_running (s) ? ProcessRunning() :
     process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
     process_signaled(s) ? ProcessSignaled(process_term_signal(s)) :
     process_stopped (s) ? ProcessStopped (process_stop_signal(s)) :
@@ -118,17 +120,18 @@ function exec(args::String...)
     exec(arr)
 end
 
-function wait(pid::Int32)
-    status = Array(Int32,1)
+function wait(pid::Int32, nohang::Bool)
+    status = Int32[0]
     while true
-        ret = ccall(:waitpid, Int32, (Int32, Ptr{Int32}, Int32), pid, status, 0)
-        if ret != -1
-            break
-        end
+        ret = ccall(:waitpid, Int32, (Int32, Ptr{Int32}, Int32), pid, status, nohang)
+        if ret ==  0 return int32(-1) end
+        if ret != -1 break end
         system_error(:wait, errno() != EINTR)
     end
     status[1]
 end
+wait(x) = wait(x,false)
+wait_nohang(x) = wait(x,true)
 
 exit(n) = ccall(:exit, Void, (Int32,), n)
 exit() = exit(0)
@@ -429,11 +432,12 @@ end
 
 # wait for a single command process to finish
 
-successful(cmd::Cmd) = isa(cmd.status, ProcessExited) &&
+successful(cmd::Cmd) = isa(cmd.status, ProcessRunning) ||
+                       isa(cmd.status, ProcessExited) &&
                        cmd.successful(cmd.status.status)
 
-function wait(cmd::Cmd)
-    cmd.status = process_status(wait(cmd.pid))
+function wait(cmd::Cmd, nohang::Bool)
+    cmd.status = process_status(wait(cmd.pid,nohang))
     successful(cmd)
 end
 
