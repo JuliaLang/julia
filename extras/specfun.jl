@@ -46,7 +46,7 @@ end
 
 airy(z) = airy(0,z)
 airyprime(z) = airy(1,z)
-airyai = airy(0,z)
+airyai(z) = airy(0,z)
 airyaiprime(z) = airy(1,z)
 airybi(z) = airy(2,z)
 airybiprime(z) = airy(3,z)
