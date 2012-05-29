@@ -14,7 +14,7 @@ define dir_target
 $(1):
 	@mkdir -p $$@ 
 endef
-$(foreach dir,$(DIRS),$(eval $(call dir_target,$(abspath $(dir)))))
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib)))
 
 debug release: | $(DIRS) usr/lib/extras usr/lib/base
