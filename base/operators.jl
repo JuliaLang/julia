@@ -127,7 +127,7 @@ sizeof{T}(x::T) = sizeof(T)
 foreach(f::Function, itr) = for x = itr; f(x); end
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String)) = x
+copy(x::Union(Symbol,Number,String,Function)) = x
 copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
 copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 

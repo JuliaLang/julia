@@ -144,12 +144,14 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
+    // set on every startup; don't save
+    jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     writetag(s, jl_module_type);
     jl_serialize_value(s, m->name);
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
+        if (table[i] != HT_NOTFOUND && table[i-1] != jhsym) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             jl_serialize_value(s, b->name);
             jl_serialize_value(s, b->value);
