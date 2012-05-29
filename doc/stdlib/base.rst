@@ -826,7 +826,7 @@ Numbers
 
    Get the additive identity element for the type of x (x can also specify the type itself).
 
-.. function:: pi
+.. data:: pi
 
    The constant pi
 
