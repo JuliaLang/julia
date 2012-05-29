@@ -217,6 +217,20 @@ endif
 # Libraries to link
 LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
+# Make tricks
+
+define symlink_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)):
+	@ln -sf $$(abspath $(1)) $$@ 
+endef
+define dir_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
+$$(abspath $(1)):
+	@mkdir -p $$@
+endef
+
+
 # Colors for make
 
 CCCOLOR="\033[34m"

@@ -106,14 +106,11 @@ distclean: $(addprefix distclean-, $(LIBS))
 	rm -rf $(USR)
 
 ## PATHS ##
-$(USR):
-	mkdir -p $(USR)/lib
-	mkdir -p $(USR)/include
-	mkdir -p $(USR)/bin
-	mkdir -p $(USR)/share
-	mkdir -p $(USR)/etc
+DIRS = $(addprefix $(USR)/,lib include bin share etc)
 
-$(USRLIB): $(USR)
+$(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
+
+$(USR): $(DIRS)
 
 ## LLVM ##
 
