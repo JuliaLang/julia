@@ -6,14 +6,6 @@ default: release
 
 DIRS = usr/bin usr/etc usr/lib/julia
 
-define symlink_target
-$(2)/$(1):
-	@cd $(2) && ln -sf $$(abspath $(1)) .
-endef
-define dir_target 
-$(1):
-	@mkdir -p $$@ 
-endef
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib)))
 

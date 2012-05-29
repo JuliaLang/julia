@@ -1,4 +1,4 @@
-load("specfun.jl")
+load("../extras/specfun.jl")
 
 # airy
 @assert_approx_eq airy(1.8) 0.0470362
