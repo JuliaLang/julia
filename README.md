@@ -166,7 +166,6 @@ Julia uses the following external libraries, which are automatically downloaded 
 <a name="Directories"/>
 ## Directories
 
-    attic/         old, now-unused code
     base/          source code for Julia's standard library
     contrib/       emacs, vim and textmate support for Julia
     deps/          external dependencies

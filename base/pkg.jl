@@ -161,7 +161,7 @@ function pkg_install(names::AbstractVector)
     end
     pkg_install(urls)
 end
-pkg_install(names::String...)      = pkg_install([names...])
+pkg_install(names::String...) = pkg_install([names...])
 
 # remove packages by name
 
