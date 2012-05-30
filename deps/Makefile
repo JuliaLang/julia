@@ -141,10 +141,11 @@ llvm-$(LLVM_VER)/configure: $(LLVM_TAR)
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
 	touch $@
+	cd llvm-$(LLVM_VER) && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS)
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure
 	cd llvm-$(LLVM_VER) && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE)
 	$(MAKE) -C llvm-$(LLVM_VER) install
