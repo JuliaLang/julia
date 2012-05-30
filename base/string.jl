@@ -936,8 +936,17 @@ print_joined(io, strings) = print_joined(io, strings, "")
 join(args...) = sprint(print_joined, args...)
 
 chop(s::String) = s[1:thisind(s,length(s))-1]
-chomp(s::String) = (i=thisind(s,length(s)); i>0 && s[i]=='\n' ? s[1:i-1] : s)
-chomp(s::ByteString) = (isempty(s) || s.data[end]!=0x0a) ? s : s[1:end-1]
+
+function chomp(s::String)
+    i = thisind(s,length(s))
+    if (i < 1 || s[i] != '\n') return s end
+    j = prevind(s,i)
+    if (j < 1 || s[j] != '\r') return s[1:i-1] end
+    return s[1:j-1]
+end
+chomp(s::ByteString) =
+    (length(s) < 1 || s.data[end]   != 0x0a) ? s :
+    (length(s) < 2 || s.data[end-1] != 0x0d) ? s[1:end-1] : s[1:end-2]
 
 function lstrip(s::String)
     i = start(s)
