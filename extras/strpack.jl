@@ -508,22 +508,22 @@ show_struct_layout(s::Struct, strategy::DataAlign, width) = show_struct_layout(s
 ## Native layout ##
 const libLLVM = dlopen("libLLVM-3.0")
 const LLVMAlign = dlsym(libLLVM, :LLVMPreferredAlignmentOfType)
+macro llvmalign(tsym)
+    quote
+        int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
+                  ccall(dlsym(libLLVM, $tsym), Ptr, ())))
+    end
+end
 
 align_native = align_table(align_default, let
     tgtdata = ccall(dlsym(libLLVM, :LLVMCreateTargetData), Ptr, (String,), "")
 
-    int8align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                      ccall(dlsym(libLLVM, :LLVMInt8Type), Ptr, ())))
-    int16align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt16Type), Ptr, ())))
-    int32align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt32Type), Ptr, ())))
-    int64align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt64Type), Ptr, ())))
-    float32align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                         ccall(dlsym(libLLVM, :LLVMFloatType), Ptr, ())))
-    float64align = int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                         ccall(dlsym(libLLVM, :LLVMDoubleType), Ptr, ())))
+    int8align = @llvmalign :LLVMInt8Type
+    int16align = @llvmalign :LLVMInt16Type
+    int32align = @llvmalign :LLVMInt32Type
+    int64align = @llvmalign :LLVMInt64Type
+    float32align = @llvmalign :LLVMFloatType
+    float64align = @llvmalign :LLVMDoubleType
 
     ccall(dlsym(libLLVM, :LLVMDisposeTargetData), Void, (Ptr,), tgtdata)
 
