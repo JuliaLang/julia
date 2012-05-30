@@ -8,6 +8,7 @@ USRLIB = $(USR)/lib
 USRBIN = $(USR)/bin
 USRINC = $(USR)/include
 LLVMROOT = $(USR)
+BUILD = $(USR)
 
 OS = $(shell uname)
 ARCH = $(shell uname -m)
