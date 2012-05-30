@@ -23,7 +23,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 73)
+ccall(:jl_load_progress_setmax, Void, (Int,), 74)
 
 include("base.jl")
 

@@ -1007,7 +1007,9 @@ void get_response(request* req,uv_stream_t *client)
 
     // close the connection to the client
     uv_close((uv_handle_t*)client,&requestDone);
+#ifdef __WIN32__
     cout << "Closing connection "<<WSAGetLastError()<<"\n";
+#endif
 }
 
 
