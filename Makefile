@@ -29,7 +29,8 @@ $(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.
 	@rm -f $(BUILD)/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl
+$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl | doc/helpdb.jl
+	@cp doc/helpdb.jl $(BUILD)/lib/julia
 	$(QUIET_JULIA) cd base && ../julia `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
 
 PREFIX ?= julia-$(JULIA_COMMIT)

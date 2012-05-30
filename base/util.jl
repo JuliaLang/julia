@@ -242,7 +242,7 @@ function _jl_init_help()
     global _jl_help_categories, _jl_help_functions
     if _jl_help_categories == nothing
         println("Loading help data...")
-        load("$JULIA_HOME/doc/helpdb.jl")
+        load("$JULIA_HOME/../lib/julia/helpdb.jl")
         _jl_help_categories = Dict()
         _jl_help_functions = Dict()
         for (cat,func,desc) in _jl_help_db()
