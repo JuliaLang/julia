@@ -830,7 +830,9 @@
 
 (define (parse-do s)
   (set! expect-end-current-line (input-port-line (ts:port s)))
-  (let ((doargs (parse-comma-separated-assignments s)))
+  (let ((doargs (if (eqv? (peek-token s) #\newline)
+		    '()
+		    (parse-comma-separated-assignments s))))
     `(-> (tuple ,@doargs)
 	 ,(begin0 (parse-block s)
 		  (expect-end- s 'do)))))
