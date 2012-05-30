@@ -39,9 +39,9 @@ install: release
 	cp -r usr/lib/julia/* $(DESTDIR)/lib/julia
 	-cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(DESTDIR)/lib
 # Web-REPL stuff
-	cp usr/lib/mod* $(DESTDIR)/lib
-	cp usr/sbin/* $(DESTDIR)/sbin
-	cp usr/etc/* $(DESTDIR)/etc
+	-cp usr/lib/mod* $(DESTDIR)/lib
+	-cp usr/sbin/* $(DESTDIR)/sbin
+	-cp usr/etc/* $(DESTDIR)/etc
 
 dist: release
 	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
