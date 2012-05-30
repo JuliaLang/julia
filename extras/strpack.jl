@@ -225,7 +225,7 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
                 skip($stream, $pad)
-                $offset += pad
+                $offset += $pad
             end
             $offset += sizeof($typ)*prod($dims)
         end)
