@@ -29,7 +29,7 @@ maxintfloat(::Type{Float32}) = float32(16777216.)
 maxintfloat{T<:Float}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-integer_valued(x::Float) = trunc(x) == x
+integer_valued(x::Float) = (trunc(x)==x)&isfinite(x)
 
 sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))
