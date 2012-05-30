@@ -82,7 +82,7 @@ rem{T<:Real}(x::T, y::T) = convert(T,x-y*div(x,y))
 mod{T<:Real}(x::T, y::T) = convert(T,x-y*fld(x,y))
 
 # operator alias
-const % = mod
+const % = rem
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
 mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
@@ -127,7 +127,7 @@ sizeof{T}(x::T) = sizeof(T)
 foreach(f::Function, itr) = for x = itr; f(x); end
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String)) = x
+copy(x::Union(Symbol,Number,String,Function)) = x
 copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
 copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 

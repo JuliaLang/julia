@@ -284,7 +284,6 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
-    // TODO: set up imports and exports
 
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 1))->args;
     JL_TRY {
@@ -387,6 +386,19 @@ static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 
 extern int jl_in_inference;
 
+static jl_module_t *eval_import_path(jl_array_t *args)
+{
+    jl_module_t *m = jl_current_module;
+    for(size_t i=0; i < args->length-1; i++) {
+        jl_value_t *s = jl_cellref(args,i);
+        assert(jl_is_symbol(s));
+        m = (jl_module_t*)jl_eval_global_var(m, (jl_sym_t*)s);
+        if (!jl_is_module(m))
+            jl_errorf("invalid import statement");
+    }
+    return m;
+}
+
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
 {
     //jl_show(ex);
@@ -403,6 +415,28 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
     if (ex->head == module_sym) {
         return jl_eval_module_expr(ex, plineno);
     }
+
+    // handle import, export toplevel-only forms
+    if (ex->head == importall_sym) {
+        jl_module_t *m = eval_import_path(ex->args);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, ex->args->length-1);
+        assert(jl_is_symbol(name));
+        m = (jl_module_t*)jl_eval_global_var(m, name);
+        if (!jl_is_module(m))
+            jl_errorf("invalid import statement");
+        jl_module_importall(jl_current_module, m);
+        return jl_nothing;
+    }
+
+    if (ex->head == import_sym) {
+        jl_module_t *m = eval_import_path(ex->args);
+        jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, ex->args->length-1);
+        assert(jl_is_symbol(name));
+        jl_module_import(jl_current_module, m, name);
+        return jl_nothing;
+    }
+
+    // TODO: export
 
     jl_value_t *thunk=NULL;
     jl_value_t *result;
@@ -519,7 +553,7 @@ char *jl_find_file_in_path(const char *fname)
     int fid = open (fpath, O_RDONLY);
     // try adding julia home
     if (fid == -1 && julia_home && fname[0] != '/') {
-        if (-1 != asprintf(&fpath, "%s/%s", julia_home, fname))
+        if (-1 != asprintf(&fpath, "%s/../lib/julia/%s", julia_home, fname))
             fid = open (fpath, O_RDONLY);
     }
     if (fid == -1) {
@@ -547,7 +581,13 @@ DLLEXPORT void jl_load_(jl_value_t *str)
 JL_CALLABLE(jl_f_top_eval)
 {
     if (nargs == 1) {
-        return jl_toplevel_eval(args[0]);
+        jl_expr_t *ex = (jl_expr_t*)args[0];
+        if (jl_is_expr(ex) && (ex->head == export_sym ||
+                               ex->head == import_sym ||
+                               ex->head == importall_sym)) {
+            jl_errorf("unsupported or misplaced expression %s", ex->head->name);
+        }
+        return jl_toplevel_eval((jl_value_t*)ex);
     }
     if (nargs != 2) {
         JL_NARGS(eval, 1, 1);
@@ -648,8 +688,12 @@ JL_CALLABLE(jl_f_get_field)
     JL_TYPECHK(getfield, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-    if (!jl_is_struct_type(vt))
+    if (vt == (jl_value_t*)jl_module_type) {
+        return jl_eval_global_var((jl_module_t*)v, (jl_sym_t*)args[1]);
+    }
+    if (!jl_is_struct_type(vt)) {
         jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
+    }
     size_t i = field_offset((jl_struct_type_t*)vt, (jl_sym_t*)args[1], 1);
     return nth_field(v, i);
 }

@@ -130,11 +130,11 @@ end
 
 ## julia version info
 
-const VERSION = convert(VersionNumber,chomp(readall("$JULIA_HOME/VERSION")))
+const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
 try
     ver = string(VERSION)
-    commit = chomp(readall(`git rev-parse HEAD`))
-    tagged = try chomp(readall(`git rev-parse --verify --quiet v$ver`))
+    commit = readchomp(`git rev-parse HEAD`)
+    tagged = try readchomp(`git rev-parse --verify --quiet v$ver`)
              catch "doesn't reference a commit"; end
     ctime = int(readall(`git log -1 --pretty=format:%ct`))
     if commit != tagged
@@ -142,7 +142,7 @@ try
         push(VERSION.build, ctime - 1250998746)
         push(VERSION.build, "r$(commit[1:4])")
     end
-    clean = success(`git diff --quiet`)
+    clean = success(`git diff --quiet HEAD`)
     if !clean; push(VERSION.build, "dirty"); end
     clean = clean ? "" : "*"
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctime)

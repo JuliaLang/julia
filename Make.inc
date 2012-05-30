@@ -59,7 +59,7 @@ SHIPFLAGS = -O3 -DNDEBUG
 endif
 
 # if not absolute, then relative to JULIA_HOME
-JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="sys.ji"'
+JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
 
 # If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
 # https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
@@ -173,8 +173,9 @@ SHELL_EXT = sh
 endif
 
 ifeq ($(OS), Linux)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib'
+RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
@@ -183,8 +184,9 @@ JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = so
-RPATH = -Wl,-rpath,'$$ORIGIN/usr/lib' -Wl,-z,origin
+RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -193,6 +195,7 @@ OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/
 endif
 
 ifeq ($(OS), Darwin)
+INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -201,13 +204,12 @@ JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
+INSTALL_NAME_CMD = true -ignore
 SHLIB_EXT = dll
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -lpthread $(NO_WHOLE_ARCHIVE) -lPsapi -lkernel32 -lWs2_32 -lIphlpapi
 endif
-
-INSTALL_NAME_CMD = $(JULIAHOME)/deps/install-name-$(OS).$(SHELL_EXT)
 
 # MKL
 
@@ -223,11 +225,22 @@ endif
 # Libraries to link
 LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
 
+# Make tricks
+
+define symlink_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)):
+	@ln -sf $$(abspath $(1)) $$@ 
+endef
+define dir_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
+$$(abspath $(1)):
+	@mkdir -p $$@
+endef
+
+
 # Colors for make
 
-USE_QUIET = 1
-
-ifeq ($(USE_QUIET), 1)
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
@@ -239,11 +252,10 @@ BINCOLOR="\033[37;1m"
 JULCOLOR="\033[34;1m"
 ENDCOLOR="\033[0m"
 
-GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $(CURDIR))/$@)
+GOAL=$(subst $(abspath $(JULIAHOME))/,,$(abspath $@))
 
 QUIET_CC = @printf '    %b %b\n' $(CCCOLOR)CC$(ENDCOLOR) $(SRCCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
-endif

@@ -51,10 +51,12 @@ body {
 h1 {
   font-size: 110%;
   padding-top: 1ex;
+  margin: 1em 0;
 }
 
 h2 {
   padding-top: 1ex;
+  margin: 1em 0;
 }
 
 p {
@@ -79,6 +81,15 @@ ul {
 
 li {
   margin-top: 0.5em;
+}
+
+tt.descname {
+    font-size: 100%;
+    font-weight: normal;
+}
+
+dl dt big, span.optional {
+    font-size: 100%;
 }
 
 .figure {

@@ -38,7 +38,7 @@ seek(io::IOString, n::Integer) = io.ptr = n+1
 function write{T}(to::IOString, a::Array{T})
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
-        nshort = to.ptr + nb - length(to.data)
+        nshort = to.ptr + nb - length(to.data) - 1
         if nshort > 0
             grow(to.data, nshort)
         end

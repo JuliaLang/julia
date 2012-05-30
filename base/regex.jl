@@ -22,6 +22,8 @@ Regex(p::String, s::Bool)    = Regex(p, 0, s)
 Regex(p::String, o::Integer) = Regex(p, o, false)
 Regex(p::String)             = Regex(p, 0, false)
 
+copy(r::Regex) = r
+
 # TODO: make sure thing are escaped in a way PCRE
 # likes so that Julia all the Julia string quoting
 # constructs are correctly handled.

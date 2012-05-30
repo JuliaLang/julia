@@ -12,6 +12,25 @@ _PROFILE_REPORTS = {}  # list of reporting functions
 _PROFILE_CLEARS = {}   # list of clearing functions
 _PROFILE_TAGS = {}     # line #s for all timing variables
 
+# Profile calibration, to compensate for the overhead of calling time()
+_PROFILE_CALIB = 0
+# Do it inside a let block, just like in real profiling, in case of
+# extra overhead
+let tlast = 0, tnow = 0
+global profile_calib
+function profile_calib(n_iter)
+    ttotal = 0.0
+    for i = 1:n_iter
+        tlast = time()
+        tnow = time()
+        ttotal += tnow - tlast
+    end
+    return ttotal/n_iter
+end
+end
+profile_calib(1)  # to force compile
+_PROFILE_CALIB = profile_calib(10000)
+
 # Utilities
 # Generic expression type testing
 is_expr_head(ex::Expr, s::Symbol) = ex.head == s
@@ -246,7 +265,7 @@ function profile_print(tc)
         counters = tc[i][2]
         for j = 1:length(counters)
             if counters[j] != 0
-                printf("%8d  %f  %s\n",counters[j],timers[j],_PROFILE_TAGS[i][j])
+                printf("%8d  %f  %s\n", counters[j], timers[j] - counters[j]*_PROFILE_CALIB, _PROFILE_TAGS[i][j])
             end
         end
     end
@@ -290,22 +309,3 @@ macro profile(ex)
     end
 end
 
-# Example function expressions. You can test with the following:
-#   exret, tags, funcreport, funcclear = profile_parse(ex);
-#   pprint(exret)  # requires prettyprint.jl (could just do println(exret))
-#   tags
-
-ex = quote
-function f1(x::Int8)
-    println(x)
-    return x-3
-end
-
-function f_noret(x)
-    x+12
-end
-
-f1(x::Int) = x+1
-
-f1(x::Float64) = x+2
-end # quote

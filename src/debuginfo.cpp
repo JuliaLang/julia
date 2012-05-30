@@ -44,7 +44,7 @@ void getFunctionInfo(const char **name, int *line, const char **filename, size_t
 #if LLVM_VERSION_MINOR == 0
                 *name = &(*(*it).second.func).getNameStr()[0];
 #elif LLVM_VERSION_MINOR >= 1
-                *name = &(*(*it).second.func).getName().data();
+                *name = (((*(*it).second.func).getName()).data());
 #endif
 #endif
                 if ((*it).second.lines.size() == 0) {

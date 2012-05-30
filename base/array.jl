@@ -246,6 +246,8 @@ ref(A::Array, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
 ref(A::Matrix, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 ref(A::Matrix, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = [ A[i,j] for i=I, j=find(J) ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = [ A[i,j] for i=find(I), j=J ]
 
 ## Indexing: assign ##
 
@@ -426,6 +428,12 @@ assign(A::Matrix, x, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
 
 assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
 assign(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
+
+assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+
+assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J]=x)
+assign{T<:Integer}(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J]=x)
 
 ## Dequeue functionality ##
 
@@ -839,14 +847,14 @@ function rot180(A::StridedMatrix)
     end
     return B
 end
-function rotl90(A::StridedMatrix, k::Integer)
-    k = k % 4
+function rotl90(A::AbstractMatrix, k::Integer)
+    k = mod(k, 4)
     k == 1 ? rotl90(A) :
     k == 2 ? rot180(A) :
     k == 3 ? rotr90(A) : copy(A)
 end
 rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
-rot180(A::AbstractMatrix, k::Integer) = k % 2 == 1 ? rot180(A) : copy(A)
+rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])

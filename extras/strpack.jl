@@ -17,7 +17,6 @@ type Struct
     pack::Function
     unpack::Function
     struct::Type
-    size::Int
 end
 function Struct{T}(::Type{T}, endianness)
     if !isa(T, CompositeKind)
@@ -31,12 +30,11 @@ function Struct{T}(::Type{T}, endianness)
         return STRUCTS[s]
     end
     types = composite_fieldinfo(T)
-    size = calcsize(types)
     packer, unpacker = endianness_converters(endianness)
     pack = struct_pack(packer, types, T)
     unpack = struct_unpack(unpacker, types, T)
     struct_utils(T)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, T, size)
+    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, T)
 end
 Struct{T}(::Type{T}) = Struct(T, NativeEndian())
 
@@ -225,7 +223,7 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
             $pad = pad_next($offset, $typ, $strategy)
             if $pad > 0
                 skip($stream, $pad)
-                $offset += pad
+                $offset += $pad
             end
             $offset += sizeof($typ)*prod($dims)
         end)
@@ -318,13 +316,12 @@ function interp_struct_parse(str::String)
         return STRUCTS[s]
     end
     endianness, types = struct_parse(s)
-    size = calcsize(types)
     packer, unpacker = endianness_converters(endianness)
     struct_type = gen_type(types)
     pack = struct_pack(packer, types, struct_type)
     unpack = struct_unpack(unpacker, types, struct_type)
     struct_utils(struct_type)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, struct_type, size)
+    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, struct_type)
 end
 
 macro s_str(str)
@@ -350,7 +347,9 @@ unpack{T}(in::IO, ::Type{T}, strategy::DataAlign) = Struct(T).unpack(in, strateg
 unpack{T}(in::IO, ::Type{T}) = Struct(T).unpack(in, align_packed)
 
 struct(s::Struct, items...) = s.struct(items...)
-sizeof(s::Struct) = s.size
+
+sizeof(s::Struct) = calcsize(s.types)
+sizeof(s::Struct, strategy::DataAlign) = calcsize(pad(s, strategy))
 
 # Convenience methods when you just want to use strings
 macro withIOString(iostr, ex)
@@ -507,24 +506,24 @@ show_struct_layout(s::Struct, strategy::DataAlign) = show_struct_layout(s, strat
 show_struct_layout(s::Struct, strategy::DataAlign, width) = show_struct_layout(s, strategy, width, 10)
 
 ## Native layout ##
-const libLLVM = dlopen("libLLVM-3.0")
+const libLLVM = dlopen("libLLVM-3.1")
 const LLVMAlign = dlsym(libLLVM, :LLVMPreferredAlignmentOfType)
+macro llvmalign(tsym)
+    quote
+        int(ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
+                  ccall(dlsym(libLLVM, $tsym), Ptr, ())))
+    end
+end
 
 align_native = align_table(align_default, let
     tgtdata = ccall(dlsym(libLLVM, :LLVMCreateTargetData), Ptr, (String,), "")
 
-    int8align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                      ccall(dlsym(libLLVM, :LLVMInt8Type), Ptr, ()))
-    int16align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt16Type), Ptr, ()))
-    int32align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt32Type), Ptr, ()))
-    int64align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                       ccall(dlsym(libLLVM, :LLVMInt64Type), Ptr, ()))
-    float32align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                         ccall(dlsym(libLLVM, :LLVMFloatType), Ptr, ()))
-    float64align = ccall(LLVMAlign, Uint, (Ptr, Ptr), tgtdata,
-                         ccall(dlsym(libLLVM, :LLVMDoubleType), Ptr, ()))
+    int8align = @llvmalign :LLVMInt8Type
+    int16align = @llvmalign :LLVMInt16Type
+    int32align = @llvmalign :LLVMInt32Type
+    int64align = @llvmalign :LLVMInt64Type
+    float32align = @llvmalign :LLVMFloatType
+    float64align = @llvmalign :LLVMDoubleType
 
     ccall(dlsym(libLLVM, :LLVMDisposeTargetData), Void, (Ptr,), tgtdata)
 

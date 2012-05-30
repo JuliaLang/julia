@@ -256,7 +256,7 @@ void julia_init(char *imageFile)
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
-        jl_load("src/boot.jl");
+        jl_load("boot.jl");
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();

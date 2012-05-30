@@ -682,7 +682,7 @@ Mathematical Functions
 
    Squared absolute value of ``x``
 
-``copysign`` ``sign`` ``signbit`` ``pow`` ``sqrt`` ``cbrt`` ``erf`` ``erfc`` ``gamma`` ``lgamma`` ``lfact`` ``besselj0`` ``besselj1`` ``bessely0`` ``bessely1`` ``real`` ``imag`` ``conj`` ``angle`` ``cis(theta)``
+``copysign`` ``sign`` ``signbit`` ``pow`` ``sqrt`` ``cbrt`` ``erf`` ``erfc`` ``gamma`` ``lgamma`` ``lfact`` ``real`` ``imag`` ``conj`` ``angle`` ``cis(theta)``
 
 .. function:: binomial(n,k)
 
@@ -826,7 +826,7 @@ Numbers
 
    Get the additive identity element for the type of x (x can also specify the type itself).
 
-.. function:: pi
+.. data:: pi
 
    The constant pi
 

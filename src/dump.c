@@ -144,16 +144,19 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
 
 static void jl_serialize_module(ios_t *s, jl_module_t *m)
 {
+    // set on every startup; don't save
+    jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     writetag(s, jl_module_type);
     jl_serialize_value(s, m->name);
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
+        if (table[i] != HT_NOTFOUND && table[i-1] != jhsym) {
             jl_binding_t *b = (jl_binding_t*)table[i];
             jl_serialize_value(s, b->name);
             jl_serialize_value(s, b->value);
             jl_serialize_value(s, b->type);
+            jl_serialize_value(s, b->owner);
             write_int8(s, b->constp);
             write_int8(s, b->exportp);
         }
@@ -167,6 +170,10 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, NULL);
+    write_int32(s, m->imports.len);
+    for(i=0; i < m->imports.len; i++) {
+        jl_serialize_value(s, (jl_value_t*)m->imports.items[i]);
+    }
 }
 
 static int is_ast_node(jl_value_t *v)
@@ -614,10 +621,10 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         return (jl_value_t*)li;
     }
     else if (vtag == (jl_value_t*)jl_module_type) {
-        jl_module_t *m = jl_new_module(anonymous_sym);
+        jl_sym_t *mname = (jl_sym_t*)jl_deserialize_value(s);
+        jl_module_t *m = jl_new_module(mname);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, m);
-        m->name = (jl_sym_t*)jl_deserialize_value(s);
         while (1) {
             jl_value_t *name = jl_deserialize_value(s);
             if (name == NULL)
@@ -625,6 +632,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             jl_binding_t *b = jl_get_binding_wr(m, (jl_sym_t*)name);
             b->value = jl_deserialize_value(s);
             b->type = (jl_type_t*)jl_deserialize_value(s);
+            b->owner = (jl_module_t*)jl_deserialize_value(s);
             b->constp = read_int8(s);
             b->exportp = read_int8(s);
         }
@@ -634,6 +642,10 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
                 break;
             jl_set_expander(m, (jl_sym_t*)name,
                             (jl_function_t*)jl_deserialize_value(s));
+        }
+        size_t ni = read_int32(s);
+        for(size_t i=0; i < ni; i++) {
+            arraylist_push(&m->imports, jl_deserialize_value(s));
         }
         return (jl_value_t*)m;
     }

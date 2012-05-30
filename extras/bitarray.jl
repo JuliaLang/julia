@@ -1149,12 +1149,6 @@ function rot180(A::BitMatrix)
     end
     return B
 end
-function rotl90(A::BitMatrix, k::Integer)
-    k = k % 4
-    k == 1 ? rotl90(A) :
-    k == 2 ? rot180(A) :
-    k == 3 ? rotr90(A) : copy(A)
-end
 
 # implemented as a macro to improve performance
 macro _jl_reverse_bits(dest, src)

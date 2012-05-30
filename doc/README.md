@@ -30,5 +30,6 @@ File layout
     helpdb.jl           REPL help database
     sphinx/             Sphinx extensions and plugins
     sphinx/jlhelp.py    Sphinx plugin to build helpdb.jl
-
+    stdlib/             Julia standard library documentation
+    _themes/            Sphinx html themes
 

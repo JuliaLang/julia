@@ -625,7 +625,7 @@ _jl_fix_dec(x::Integer, n::Int) = (_jl_int_dec(x); _jl_length[1]=_jl_point[1])
 _jl_fix_dec(x::Real, n::Int) = _jl_fix_dec(float(x),n)
 
 function _jl_fix_dec(x::Float, n::Int)
-    if n > 17; n = 17; end
+    if n > _jl_buflen-1; n = _jl_buflen-1; end
     @grisu_ccall x GRISU_FIXED n
     if _jl_length[1] == 0
         _jl_neg[1] = false
