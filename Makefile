@@ -32,16 +32,16 @@ usr/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 usr/lib/julia/sys.ji: VERSION usr/lib/julia/sys0.ji base/*.jl
 	$(QUIET_JULIA) cd base && ../julia `test -f $(JULIAHOME)/usr/lib/julia/sys.ji && echo stage1.jl || echo -J $(JULIAHOME)/usr/lib/julia/sys0.ji stage1.jl`
 
-DESTDIR = julia-$(JULIA_COMMIT)
+PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	mkdir -p $(DESTDIR)/{sbin,bin,etc,lib/julia}
-	cp usr/bin/*julia* $(DESTDIR)/bin
-	cp -r usr/lib/julia/* $(DESTDIR)/lib/julia
-	-cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(DESTDIR)/lib
+	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
+	cp usr/bin/*julia* $(PREFIX)/bin
+	cp -r usr/lib/julia/* $(PREFIX)/lib/julia
+	-cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
-	-cp usr/lib/mod* $(DESTDIR)/lib
-	-cp usr/sbin/* $(DESTDIR)/sbin
-	-cp usr/etc/* $(DESTDIR)/etc
+	-cp usr/lib/mod* $(PREFIX)/lib
+	-cp usr/sbin/* $(PREFIX)/sbin
+	-cp usr/etc/* $(PREFIX)/etc
 
 dist: release
 	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
