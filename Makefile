@@ -25,7 +25,7 @@ base/build_h.jl: Make.inc
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
 usr/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
-	$(QUIET_JULIA) cd base && $(USRBIN)/julia-release-$(DEFAULT_REPL) -b stage0.jl
+	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f usr/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
