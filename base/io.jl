@@ -75,6 +75,16 @@ function open(fname::String, mode::String)
     error("invalid open mode: ", mode)
 end
 
+function open(f::Function, args...)
+    io = open(args...)
+    x = try f(io) catch err
+        close(io)
+        throw(err)
+    end
+    close(io)
+    return x
+end
+
 function memio(x::Integer, finalize::Bool)
     s = IOStream("<memio>", finalize)
     ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
@@ -232,17 +242,7 @@ function readall(s::IOStream)
     ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
-
-function readall(filename::String)
-    io = open(filename)
-    str = try readall(io)
-    catch err
-        close(io)
-        throw(err)
-    end
-    close(io)
-    return str
-end
+readall(filename::String) = open(readall, filename)
 
 readchomp(x) = chomp(readall(x))
 

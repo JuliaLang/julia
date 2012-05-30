@@ -47,13 +47,9 @@ end
 # TODO: provide a clean way to avoid this disaster
 function git_read_config_blob(blob::String)
     tmp = tmpnam()
-    fh = open(tmp,"w")
-    try write(fh,readall(`git cat-file blob $blob`))
-    catch err
-        close(fh)
-        throw(err)
+    open(tmp,"w") do io
+        write(io, readall(`git cat-file blob $blob`))
     end
-    close(fh)
     cfg = git_read_config(tmp)
     run(`rm -f tmp`)
     return cfg
