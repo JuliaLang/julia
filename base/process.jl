@@ -443,10 +443,10 @@ end
 
 # wait for a set of command processes to finish
 
-function wait(cmds::Cmds)
+function wait(cmds::Cmds, nohang::Bool)
     success = true
     for cmd in cmds
-        success &= wait(cmd)
+        success &= wait(cmd, nohang)
     end
     success
 end
