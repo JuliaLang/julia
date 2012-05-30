@@ -8,6 +8,7 @@ function cwd()
 end
 
 cd(dir::String) = (system_error("cd", ccall(:chdir, Int32, (Ptr{Uint8},), dir)==-1); cwd())
+cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
 
@@ -23,11 +24,7 @@ function cd(f::Function, dir::String)
         throw(err)
     end
 end
-
 cd(f::Function) = cd(f, ENV["HOME"])
-cd() = cd(ENV["HOME"])
-
-macro cd(dir,ex); :(cd(()->$ex,$dir)); end
 
 # list the contents of a directory
 

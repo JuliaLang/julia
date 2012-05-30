@@ -18,9 +18,17 @@ function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
     for line in each_line(cmd)
         name, path, sha1 = match(r"^(.*)\t(.*)\t([0-9a-f]{40})$", line).captures
-        @cd dir f(name, path, sha1)
+        cd(dir) do
+            f(name, path, sha1)
+        end
         if recursive
-            @cd path git_each_submodule((n,p,s)->(@cd dir f(n,"$path/$p",s)), true, dir)
+            cd(path) do
+                git_each_submodule(true, dir) do n,p,s
+                    cd(dir) do
+                        f(n,"$path/$p",s)
+                    end
+                end
+            end
         end
     end
 end
@@ -81,7 +89,7 @@ end
 
 function pkg_init(dir::String, meta::String)
     run(`mkdir $dir`)
-    @cd dir begin
+    cd(dir) do
         run(`git init`)
         run(`git commit --allow-empty -m "[jul] empty package repo"`)
         pkg_install({"METADATA" => meta})
@@ -94,23 +102,27 @@ pkg_init() = pkg_init(PKG_DEFAULT_DIR)
 
 function pkg_clone(dir::String, url::String)
     run(`git clone $url $dir`)
-    @cd dir pkg_checkout("HEAD")
+    cd(dir) do
+        pkg_checkout("HEAD")
+    end
 end
 pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
 
 # record all submodule commits as tags
 
 function pkg_tag_submodules()
-    git_each_submodule((name,path,sha1)->begin
+    git_each_submodule(true) do name, path, sha1
         run(`git fetch-pack -q $path HEAD`)
         run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
         run(`git --git-dir=$path/.git gc -q`)
-    end, true)
+    end
 end
 
 function pkg_save_branches()
-    git_each_submodule((name,path,sha1)->begin
-        head = @cd path readchomp(`git rev-parse --symbolic-full-name HEAD`)
+    git_each_submodule(false) do name, path, sha1
+        head = cd(path) do
+            readchomp(`git rev-parse --symbolic-full-name HEAD`)
+        end
         m = match(r"^refs/heads/(.*)$", head)
         if m != nothing
             branch = m.captures[1]
@@ -118,7 +130,7 @@ function pkg_save_branches()
         else
             try git_modules(`--unset submodule.$name.branch`) end
         end
-    end, false)
+    end
     run(`git add .gitmodules`)
 end
 
@@ -131,12 +143,14 @@ function pkg_checkout(rev::String)
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
     run(`git ls-files --other` | `xargs rm -rf`)
-    git_each_submodule((name,path,sha1)->begin
+    git_each_submodule(true) do name, path, sha1
         branch = try git_modules(`submodule.$name.branch`) end
         if branch != nothing
-            @cd path run(`git checkout -B $branch $sha1`)
+            cd(path) do
+                run(`git checkout -B $branch $sha1`)
+            end
         end
-    end, true)
+    end
 end
 pkg_checkout() = pkg_checkout("HEAD")
 
@@ -254,13 +268,15 @@ function pkg_pull()
     end
 
     # merge submodules
-    git_each_submodule((name,path,sha1)->begin
+    git_each_submodule(false) do name, path, sha1
         if has(Rs,"submodule.$name") && git_different(Lh,Rh,path)
             alt = readchomp(`git rev-parse $Rh:$path`)
-            @cd path run(`git merge --no-edit $alt`)
+            cd(path) do
+                run(`git merge --no-edit $alt`)
+            end
             run(`git add $path`)
         end
-    end,false)
+    end
 
     # check for remaining merge conflicts
     if git_unstaged()
