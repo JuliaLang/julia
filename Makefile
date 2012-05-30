@@ -24,13 +24,15 @@ base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
+$(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl
+	@cp $< $@
+
 $(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
 	@rm -f $(BUILD)/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl | doc/helpdb.jl
-	@cp doc/helpdb.jl $(BUILD)/lib/julia
+$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl $(BUILD)/lib/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && ../julia `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
 
 PREFIX ?= julia-$(JULIA_COMMIT)
