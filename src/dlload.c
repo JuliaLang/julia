@@ -59,7 +59,11 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
 #endif
         goto done;
     }
+#if defined(__WIN32__)
+	else if (modname[1] == ':') {
+#else
     else if (modname[0] == '/') {
+#endif
         error = uv_dlopen(modname,handle);
         if (!error) goto done;
     }
