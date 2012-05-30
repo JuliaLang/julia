@@ -1,3 +1,4 @@
+#include <iostream>
 #include "server.h"
 #include "../../deps/libuv/include/uv.h"
 
@@ -212,8 +213,22 @@ namespace scgi
     buf2.len=buf.len-nread-(pos-buf.base);  \
     f(stream,nread-(pos-buf.base),buf2);
 
+void request_aborted(uv_handle_t *stream)
+{
+    std::cout<<"Request Aborted";
+    delete (reading_in_progress*)stream->data;
+    delete (uv_tcp_t*)stream;
+}
+
+void abort_request(uv_stream_t *stream)
+{
+    uv_close((uv_handle_t*)stream,request_aborted);
+}
+
 void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+    if(nread<0)
+        abort_request(stream);
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->isComma) {
         buf.base=buf.base+2;
@@ -485,6 +500,8 @@ void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 
 void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+    if(nread<0)
+        abort_request(stream);
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->bufBase==0)p->bufBase=buf.base;
@@ -556,6 +573,8 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 //read the length of the header;
 void read_header_length(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+    if(nread<0)
+        abort_request(stream);
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->bufBase==0) p->bufBase=buf.base;
@@ -591,6 +610,8 @@ void handle_request_and_release_socket(uv_stream_t* server, int status)
     uv_tcp_t *client = new uv_tcp_t;
     uv_tcp_init(uv_default_loop(),client);
     uv_accept((uv_stream_t*)server,(uv_stream_t*)client);
+
+    std::cout<<"Accepted connection!\n";
 
     // create the request object
 

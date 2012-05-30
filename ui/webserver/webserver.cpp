@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <map>
 #include <ctime>
 #include <stdlib.h>
@@ -113,13 +114,6 @@ struct julia_session
     // the socket for communicating to julia
     uv_tcp_t *sock;
 
-    // io threads
-    pthread_t thread;
-
-    // when both threads have terminated, we can kill the julia_session
-    bool inbox_thread_alive;
-    bool outbox_thread_alive;
-
     // whether the julia_session should terminate
     bool should_terminate;
 
@@ -153,7 +147,7 @@ void closeInput(uv_stream_t *handle,int status)
     pthread_mutex_lock(&julia_session_mutex);
 
     // tell the watchdog that this thread is done
-    julia_session_ptr->inbox_thread_alive = false;
+    //julia_session_ptr->inbox_thread_alive = false;
 
     // unlock the mutex
     pthread_mutex_unlock(&julia_session_mutex);
@@ -295,7 +289,7 @@ void close_julia_session(uv_handle_t *stream)
     pthread_mutex_lock(&julia_session_mutex);
 
     // tell the watchdog that this thread is done
-    julia_session_ptr->outbox_thread_alive = false;
+    //julia_session_ptr->outbox_thread_alive = false;
 
     // release the socket
     uv_close((uv_handle_t*)julia_session_ptr->sock,&socketClosed);
@@ -527,8 +521,8 @@ void watchdog(uv_timer_t* handle, int status)
 	for (size_t i = 0; i < julia_session_list.size(); i++)
 	{
 		julia_session* julia_session_ptr = julia_session_list[i];
-		if (julia_session_ptr->inbox_thread_alive || julia_session_ptr->outbox_thread_alive)
-			continue;
+        //if (julia_session_ptr->inbox_thread_alive || julia_session_ptr->outbox_thread_alive)
+        //	continue;
 
 		/*
 		// wait for the threads to terminate
@@ -649,8 +643,8 @@ string get_session(string user_name, string session_name) {
     session_data->session_name = session_name;
 
     // keep the julia_session alive for now
-    session_data->inbox_thread_alive = true;
-    session_data->outbox_thread_alive = true;
+    //session_data->inbox_thread_alive = true;
+    //session_data->outbox_thread_alive = true;
     session_data->should_terminate = false;
     session_data->status = SESSION_WAITING_FOR_PORT_NUM;
 
@@ -677,14 +671,14 @@ string get_session(string user_name, string session_name) {
 #if 0
     char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "ui/webserver/julia_web_base.jl", NULL};
 #else
-    char arg0[]="../upstream/usr/bin/julia-release-readline";
+    char arg0[]="./julia-release-readline";
 	char arg1[]="--no-history";
-    char arg2[]="extras/julia_web_base.jl";
+    char arg2[]="ui/webserver/julia_web_base.jl";
     char *argv[4]={arg0,arg1,arg2,NULL};
 #endif
     opts.exit_cb=&process_exited;
     opts.cwd=NULL; //cwd
-    #ifndef __WIN32__
+#ifndef __WIN32__
     opts.env=environ;
     #else
     opts.env=NULL;
@@ -744,6 +738,9 @@ string get_session(string user_name, string session_name) {
 
 void requestDone(uv_handle_t *handle)
 {
+#ifdef DEBUG
+    cout << "Request Done";
+#endif
     delete (reading_in_progress*)handle->data;
     delete (uv_tcp_t*)(handle);
 }
@@ -761,6 +758,10 @@ void get_response(request* req,uv_stream_t *client)
     // check for the session cookie
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
+
+#ifdef DEBUG
+    cout << "Request from user " << session_token << "\n";
+#endif
 
     // get the julia session if there is one
     julia_session* julia_session_ptr = 0;
@@ -978,9 +979,7 @@ void get_response(request* req,uv_stream_t *client)
         message_root.append(response_messages[i].type);
         for (size_t j = 0; j < response_messages[i].args.size(); j++)
             message_root.append(response_messages[i].args[j]);
-#ifdef DEBUG
         cout<<"Sending message "<<(int)response_messages[i].type<<" to user "<<session_token<<"\n"; 
-#endif
         response_root.append(message_root);
     }
 
@@ -990,6 +989,13 @@ void get_response(request* req,uv_stream_t *client)
 
     reading_in_progress *p = (reading_in_progress *)client->data;
     p->cstr = new char [response.size()];
+#ifdef VERY_VERBOSE
+    cout<<response;
+    ofstream log;
+    log.open("raw.log", ios::app | ios::out | ios::binary);
+    log<<response;
+    log.close();
+#endif
     memcpy (p->cstr, response.data(),response.size());
     // write the response
     uv_buf_t buf;
@@ -1001,6 +1007,7 @@ void get_response(request* req,uv_stream_t *client)
 
     // close the connection to the client
     uv_close((uv_handle_t*)client,&requestDone);
+    cout << "Closing connection "<<WSAGetLastError()<<"\n";
 }
 
 
