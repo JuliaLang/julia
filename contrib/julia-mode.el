@@ -69,7 +69,7 @@
           '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
             "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
 	    "typealias" "break" "continue" "type" "global" "@\\w+"
-	    "module" "import" "export" "const" "let" "bitstype")
+	    "module" "import" "export" "const" "let" "bitstype" "do")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
     '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\)\\>" . font-lock-constant-face)
@@ -81,7 +81,7 @@
 
 (defconst julia-block-start-keywords
   (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
-	"quote"))
+	"quote" "do"))
 
 (defconst julia-block-other-keywords
   (list "else" "elseif"))

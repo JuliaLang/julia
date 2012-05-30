@@ -18,16 +18,16 @@ length(a::Array) = arraylen(a)
 
 ## copy ##
 
-function copy_to{T}(dest::Array{T}, do, src::Array{T}, so, N)
-    if so+N-1 > numel(src) || do+N-1 > numel(dest) || do < 1 || so < 1
+function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+    if so+N-1 > numel(src) || dsto+N-1 > numel(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
     if isa(T, BitsKind)
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
-              pointer(dest, do), pointer(src, so), N*sizeof(T))
+              pointer(dest, dsto), pointer(src, so), N*sizeof(T))
     else
         for i=0:N-1
-            dest[i+do] = src[i+so]
+            dest[i+dsto] = src[i+so]
         end
     end
     return dest
