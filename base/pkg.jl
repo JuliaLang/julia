@@ -81,6 +81,34 @@ function git_config_sections(cfg::Dict)
     sections
 end
 
+function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
+    # extract section names
+    Bs = git_config_sections(Bc)
+    Ls = git_config_sections(Lc)
+    Rs = git_config_sections(Rc)
+    # expunge removed submodules from left and right sides
+    for section in Bs - Ls & Rs
+        filter!((k,v)->!begins_with("$section.",k),Lc)
+        filter!((k,v)->!begins_with("$section.",k),Rc)
+    end
+    # merge the remaining config key-value pairs
+    cfg = Dict()
+    conflicts = Dict()
+    for key in keys(merge(Lc,Rc))
+        Lv = get(Lc,key,nothing)
+        Rv = get(Rc,key,nothing)
+        Bv = get(Bc,key,nothing)
+        if Lv == Rv || Rv == Bv
+            if Lv != nothing cfg[key] = Lv end
+        elseif Lv == Bv
+            if Rv != nothing cfg[key] = Rv end
+        else # conflict!
+            conflicts[key] = [Lv,Rv]
+        end
+    end
+    return cfg, conflicts
+end
+
 # create a new empty packge repository
 
 function pkg_init(dir::String, meta::String)
@@ -220,47 +248,33 @@ function pkg_pull()
 
     # intelligently 3-way merge .gitmodules versions
     if git_different(Lh,Rh,".gitmodules")
-        Lc = git_read_config_blob("$Lh:.gitmodules")
         Bc = git_read_config_blob("$base:.gitmodules")
+        Lc = git_read_config_blob("$Lh:.gitmodules")
+        Cc, conflicts = git_merge_configs(Bc,Lc,Rc)
         Ls = git_config_sections(Lc)
-        Bs = git_config_sections(Bc)
-        # expunge removed submodules from both sides
-        for section in Bs - Ls & Rs
+        Cs = git_config_sections(Cc)
+        # remove submodules that were deleted
+        for section in Ls - Cs
+            if !begins_with("submodule.",section) continue end
             path = get(Lc,"$section.path",nothing)
             if path != nothing
                 run(`git rm -qrf --cached --ignore-unmatch -- $path`)
                 run(`rm -rf $path`)
             end
-            filter!((k,v)->!begins_with("$section.",k),Lc)
-            filter!((k,v)->!begins_with("$section.",k),Rc)
         end
-        # merge the remaining config key-value pairs
-        cfg = Dict()
-        conflicts = false
-        for key in keys(merge(Lc,Rc))
-            Lv = get(Lc,key,nothing)
-            Rv = get(Rc,key,nothing)
-            Bv = get(Bc,key,nothing)
-            if Lv == Rv || Rv == Bv
-                if Lv != nothing cfg[key] = Lv end
-            elseif Lv == Bv
-                if Rv != nothing cfg[key] = Rv end
-            else # conflict!
-                print(stderr_stream,
-                    "\n*** WARNING ***\n\n",
-                    "Module configuration conflict for $key:\n",
-                    "  local value = $Lv\n",
-                    "  remote value = $Rv\n",
-                    "\n",
-                    "Both values written to .gitmodules -- please edit and choose one.\n\n",
-                )
-                cfg[key] = [Lv,Rv]
-                conflicts = true
-            end
+        for (key,vals) in conflicts
+            print(stderr_stream,
+                "\n*** WARNING ***\n\n",
+                "Module configuration conflict for $key:\n",
+                "  local value  = $(vals[1])\n",
+                "  remote value = $(vals[2])\n",
+                "\n",
+                "Both values written to .gitmodules -- please edit and choose one.\n\n",
+            )
         end
         # write the result and stage it
-        git_write_config(".gitmodules",cfg)
-        if !conflicts run(`git add .gitmodules`) end
+        git_write_config(".gitmodules", merge(Cc,conflicts))
+        if isempty(conflicts) run(`git add .gitmodules`) end
     end
 
     # merge submodules
