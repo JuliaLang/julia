@@ -24,7 +24,7 @@ base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
-$(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl
+$(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 	@cp $< $@
 
 $(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
