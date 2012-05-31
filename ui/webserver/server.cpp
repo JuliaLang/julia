@@ -611,7 +611,9 @@ void handle_request_and_release_socket(uv_stream_t* server, int status)
     uv_tcp_init(uv_default_loop(),client);
     uv_accept((uv_stream_t*)server,(uv_stream_t*)client);
 
+#ifdef DEBUG_TRACE
     std::cout<<"Accepted connection!\n";
+#endif
 
     // create the request object
 

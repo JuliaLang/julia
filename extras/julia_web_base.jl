@@ -88,6 +88,7 @@ __write_message(msg) = __write_message(__client,msg)
 function __print_message(msg)
     println(STDERR,"Writing message: ",msg.msg_type)
     println(STDERR,"Number of arguments: ",length(msg.args))
+    show(STDERR,msg.args)
     for arg=msg.args
         println(STDERR,"Argument Length: ",length(arg))
     end
@@ -118,22 +119,27 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
     pos = 0
     while(pos<nread)
         pos+=1
-                @debug_only println(STDERR,"loop at pos ",pos," of ",length(arr))
+        @debug_only println(STDERR,"loop at pos ",pos," of ",length(arr))
         b=arr[pos]
         if(p.current.msg_type == 255)
             p.current.msg_type = b
             @debug_only println(STDERR,"Message type: ",b)
+            continue
         elseif(p.num_args == 255)
             if(b==255)
                 error("Number of arguments for a message must not exceed 254")
             end
             p.num_args = b
             @debug_only println(STDERR,"Number of arguments: ",b)
+            continue
         elseif(p.curArgHeaderByteNum<4)
             p.curArgLength|=int32(b)<<8*p.curArgHeaderByteNum
             p.curArgHeaderByteNum += 1
-            @debug_only println(STDERR,"received header: ",b)
-        elseif(nread-pos<p.curArgLength-p.curArgPos)
+            @debug_only println(STDERR,"received header: ",b," ",p.curArgHeaderByteNum)
+            if(p.curArgHeaderByteNum != 4 || p.curArgLength != 0)
+                continue
+            end
+         elseif(nread-pos<p.curArgLength-p.curArgPos)
             append!(p.curArg.data,arr[pos:nread])
             @debug_only begin
                 println(STDERR,"message body incomplete")
@@ -143,96 +149,97 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
                 println(STDERR,p.curArgPos)
                 println(STDERR,p.current.msg_type)
                 println(STDERR,p.num_args)
-            p.curArgPos=nread-pos
             end
+            p.curArgPos=nread-pos
             break
         else
             append!(p.curArg.data,arr[pos:(pos+p.curArgLength-p.curArgPos)])
-                        @debug_only println(STDERR,"argument of length ",p.curArgLength," at pos ",p.curArgPos," complete");
-            pos+=p.curArgLength-p.curArgPos;
-            push(p.current.args,p.curArg)
-            p.curArg=ASCIIString(Array(Uint8,0))
-            @debug_only begin
-                println(STDERR,"message body complete")
-                println(STDERR,p.num_args)
-                println(STDERR,p.current.args)
-            end
-            p.curArgLength=0
-            p.curArgHeaderByteNum=0
-            p.curArgPos=1
-            if(numel(p.current.args)>=p.num_args)
-                __msg=p.current
-                p.current=__Message()
-                p.num_args=255
+        end
+        @debug_only println(STDERR,"argument of length ",p.curArgLength," at pos ",p.curArgPos," complete");
+        pos+=p.curArgLength-p.curArgPos;
+        push(p.current.args,p.curArg)
+        p.curArg=ASCIIString(Array(Uint8,0))
+        @debug_only begin
+            println(STDERR,"message body complete")
+            println(STDERR,p.num_args)
+            println(STDERR,p.current.args)
+        end
+        p.curArgLength=0
+        p.curArgHeaderByteNum=0
+        p.curArgPos=1
+        if(numel(p.current.args)>=p.num_args)
+            __msg=p.current
+            p.current=__Message()
+            p.num_args=255
 
-                # MSG_INPUT_EVAL
-                if __msg.msg_type == __MSG_INPUT_EVAL && length(__msg.args) == 3
-                                        @debug_only println(STDERR,"Evaluating input")
-                    # parse the arguments
-                    __user_name = __msg.args[1]
-                    __user_id = __msg.args[2]
-                    __input = __msg.args[3]
+            # MSG_INPUT_EVAL
+            if __msg.msg_type == __MSG_INPUT_EVAL && length(__msg.args) == 3
+                                    @debug_only println(STDERR,"Evaluating input")
+                # parse the arguments
+                __user_name = __msg.args[1]
+                __user_id = __msg.args[2]
+                __input = __msg.args[3]
 
-                    # split the input into lines
-                    __lines = split(__input, '\n')
+                # split the input into lines
+                __lines = split(__input, '\n')
 
-                    # try to parse each line incrementally
-                    __parsed_exprs = {}
-                    __input_so_far = ""
-                    __all_nothing = true
+                # try to parse each line incrementally
+                __parsed_exprs = {}
+                __input_so_far = ""
+                __all_nothing = true
 
-                    for i=1:length(__lines)
-                        # add the next line of input
-                        __input_so_far = strcat(__input_so_far, __lines[i], "\n")
+                for i=1:length(__lines)
+                    # add the next line of input
+                    __input_so_far = strcat(__input_so_far, __lines[i], "\n")
 
-                        # try to parse it
-                        __expr = parse_input_line(__input_so_far)
+                    # try to parse it
+                    __expr = parse_input_line(__input_so_far)
 
-                        # if there was nothing to parse, just keep going
-                        if __expr == nothing
-                                continue
-                        end
-                        __all_nothing = false
-                        __expr_multitoken = isa(__expr, Expr)
-
-                        # stop now if there was a parsing error
-                        if __expr_multitoken && __expr.head == :error
-                            # send everyone the input
-                            __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
-                            return __write_message(client,__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
-                        end
-
-                        # if the expression was incomplete, just keep going
-                        if __expr_multitoken && __expr.head == :continue
+                    # if there was nothing to parse, just keep going
+                    if __expr == nothing
                             continue
-                        end
-
-                        # add the parsed expression to the list
-                        __input_so_far = ""
-                        __parsed_exprs = [__parsed_exprs, {(__user_id, __expr)}]
                     end
+                    __all_nothing = false
+                    __expr_multitoken = isa(__expr, Expr)
 
-                    # if the input was empty, stop early
-                    if __all_nothing
-                            # send everyone the input
+                    # stop now if there was a parsing error
+                    if __expr_multitoken && __expr.head == :error
+                        # send everyone the input
                         __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
-                        return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {__user_id, ""}))
+                        return __write_message(client,__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
                     end
 
-                    # tell the browser if we didn't get a complete expression
-                    if length(__parsed_exprs) == 0
-                        return __write_message(client,__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {__user_id}))
+                    # if the expression was incomplete, just keep going
+                    if __expr_multitoken && __expr.head == :continue
+                        continue
                     end
 
-                    # send everyone the input
-                    __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
-
-                    __eval_exprs(client, __parsed_exprs)
+                    # add the parsed expression to the list
+                    __input_so_far = ""
+                    __parsed_exprs = [__parsed_exprs, {(__user_id, __expr)}]
                 end
+
+                # if the input was empty, stop early
+                if __all_nothing
+                        # send everyone the input
+                    __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
+                    return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {__user_id, ""}))
+                end
+
+                # tell the browser if we didn't get a complete expression
+                if length(__parsed_exprs) == 0
+                    return __write_message(client,__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {__user_id}))
+                end
+
+                # send everyone the input
+                __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
+
+                __eval_exprs(client, __parsed_exprs)
             end
         end
     end
 end
+
 
 function __eval_exprs(client,__parsed_exprs)
     global ans

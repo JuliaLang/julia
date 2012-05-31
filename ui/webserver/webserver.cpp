@@ -393,7 +393,7 @@ void connected(uv_connect_t* req, int status)
     julia_session_ptr->outbox_history.push_back(ready_message);
     for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
 		iter->second.outbox.push_back(ready_message);
-#ifdef DEBUG
+#ifdef DEBUG_TRACE
    cout<<"Julia Process Connected\n"; 
 #endif
 	uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
@@ -668,8 +668,8 @@ string get_session(string user_name, string session_name) {
     opts.stdin_stream = session_data->julia_in;
     opts.stdout_stream = session_data->julia_out;
     opts.stderr_stream = session_data->julia_err;
-#if 0
-    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "julia_web_base.jl", NULL};
+#if 1
+    char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../lib/julia/extras/julia_web_base.jl", NULL};
 #else
     char arg0[]="./julia-release-readline";
     char arg1[]="--no-history";
@@ -738,7 +738,7 @@ string get_session(string user_name, string session_name) {
 
 void requestDone(uv_handle_t *handle)
 {
-#ifdef DEBUG
+#ifdef DEBUG_TRACE
     cout << "Request Done";
 #endif
     delete (reading_in_progress*)handle->data;
@@ -759,7 +759,7 @@ void get_response(request* req,uv_stream_t *client)
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
 
-#ifdef DEBUG
+#ifdef DEBUG_TRACE
     cout << "Request from user " << session_token << "\n";
 #endif
 
@@ -1007,11 +1007,13 @@ void get_response(request* req,uv_stream_t *client)
 
     // close the connection to the client
     uv_close((uv_handle_t*)client,&requestDone);
+#ifdef DEBUG_TRACE
     cout << "Closing connection "
 #ifdef __WIN32__
 <<WSAGetLastError()
 #endif
 <<"\n";
+#endif
 }
 
 
