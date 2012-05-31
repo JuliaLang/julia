@@ -53,7 +53,7 @@ end
 @_jl_libfdmfunc_1arg_float Number log2
 @_jl_libfdmfunc_1arg_float Number log10
 @_jl_libfdmfunc_1arg_float Real   log1p
-#@_jl_libfdmfunc_1arg_float Real   logb
+@_jl_libfdmfunc_1arg_float Real   logb
 @_jl_libfdmfunc_1arg_float Number exp
 @_jl_libfdmfunc_1arg_float Real   expm1
 @_jl_libfdmfunc_1arg_float Number erf
@@ -71,11 +71,10 @@ end
 
 #@_jl_libmfunc_1arg_int Real lrint
 #@_jl_libmfunc_1arg_int Real lround iround
-#@_jl_libmfunc_1arg_int Real ilogb
+@_jl_libmfunc_1arg_int Real ilogb
 
 @_jl_libfdmfunc_2arg Number atan2
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
-#@_jl_libfdmfunc_2arg Real   copysign
 @_jl_libfdmfunc_2arg Number hypot
 hypot(x::Float32, y::Float64) = hypot(float64(x), y)
 hypot(x::Float64, y::Float32) = hypot(x, float64(y))
@@ -84,10 +83,6 @@ ipart(x) = trunc(x)
 fpart(x) = x - trunc(x)
 @vectorize_1arg Real ipart
 @vectorize_1arg Real fpart
-
-#abs(x::Float64) = ccall(dlsym(_jl_libfdm, :fabs),  Float64, (Float64,), x)
-#abs(x::Float32) = ccall(dlsym(_jl_libfdm, :fabsf), Float32, (Float32,), x)
-#@vectorize_1arg Number abs
 
 gamma(x::Float64) = ccall(dlsym(_jl_libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))

@@ -30,6 +30,7 @@ conj(x::Real) = x
 transpose(x::Number) = x
 ctranspose(x::Number) = conj(x)
 inv(x::Number) = one(x)/x
+angle(z::Real) = atan2(zero(z), z)
 
 # TODO: should we really treat numbers as iterable?
 start(a::Real) = a

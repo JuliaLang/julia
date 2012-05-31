@@ -49,4 +49,7 @@ end
 @vectorize_1arg Real itrunc
 @vectorize_1arg Real ifloor
 @vectorize_1arg Real iceil
+
 @vectorize_1arg Number abs
+@vectorize_1arg Number abs2
+@vectorize_1arg Number angle

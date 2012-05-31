@@ -197,8 +197,6 @@ abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 sign(z::Complex) = z/abs(z)
 
-@vectorize_1arg Number abs2
-
 -(z::Complex) = complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
@@ -267,9 +265,7 @@ function cis(z::Complex)
     complex(v*cos(real(z)), v*sin(real(z)))
 end
 
-angle(z::Real) = atan2(zero(z), z)
 angle(z::Complex) = atan2(imag(z), real(z))
-@vectorize_1arg Number angle
 
 function sin(z::Complex)
     u = exp(imag(z))
