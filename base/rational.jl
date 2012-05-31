@@ -55,6 +55,7 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::Float, tol::Real)
 end
 convert{T<:Integer}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
+convert{T<:Rational}(::Type{T}, x::Rational) = x
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
 
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}

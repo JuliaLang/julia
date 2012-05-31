@@ -75,7 +75,7 @@
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
 			 abstract typealias type bitstype
-			 module import export ccall))
+			 module import export ccall do))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -622,7 +622,12 @@
 		ex
 		(case t
 		  ((#\( )   (take-token s)
-		   (loop (list* 'call ex (parse-arglist s #\) ))))
+		   (let ((al (parse-arglist s #\) )))
+		     (if (eq? (peek-token s) 'do)
+			 (begin
+			   (take-token s)
+			   (loop `(call ,ex ,(parse-do s) ,@al)))
+			 (loop `(call ,ex ,@al)))))
 		  ((#\[ )   (take-token s)
 	           ; ref is syntax, so we can distinguish
 	           ; a[i] = x  from
@@ -656,16 +661,20 @@
 
 ;(define (parse-dot s)  (parse-LtoR s parse-atom (prec-ops 13)))
 
+(define expect-end-current-line 0)
+
+(define (expect-end- s word)
+  (let ((t (peek-token s)))
+    (if (eq? t 'end)
+	(take-token s)
+	(error (string "incomplete: " word " at "
+		       current-filename ":" expect-end-current-line
+		       " requires end")))))
+
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
-  (define current-line (input-port-line (ts:port s)))
-  (define (expect-end s)
-    (let ((t (peek-token s)))
-      (if (eq? t 'end)
-	  (take-token s)
-	  (error (string "incomplete: " word " at "
-			 current-filename ":" current-line
-			 " requires end")))))
+  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (define (expect-end s) (expect-end- s word))
   (with-normal-ops
   (without-whitespace-newline
   (case word
@@ -815,7 +824,18 @@
 	   ;; place (callingconv) at end of arglist
 	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
 	   `(ccall ,.al))))
+    ((do)
+     (error "invalid do syntax"))
     (else (error "unhandled reserved word"))))))
+
+(define (parse-do s)
+  (set! expect-end-current-line (input-port-line (ts:port s)))
+  (let ((doargs (if (eqv? (peek-token s) #\newline)
+		    '()
+		    (parse-comma-separated-assignments s))))
+    `(-> (tuple ,@doargs)
+	 ,(begin0 (parse-block s)
+		  (expect-end- s 'do)))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)

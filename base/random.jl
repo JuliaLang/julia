@@ -76,13 +76,12 @@ srand(seed::Int32) = srand(uint32(seed))
 srand(seed::Int64) = srand(uint64(seed))
 
 function srand(filename::String, n::Integer)
-    fd = open(filename)
-    a = Array(Uint32, int(n))
-    read(fd, a)
-    srand(a)
-    close(fd)
+    open(filename) do io
+        a = Array(Uint32, int(n))
+        read(io, a)
+        srand(a)
+    end
 end
-
 srand(filename::String) = srand(filename, 4)
 
 ## rand()

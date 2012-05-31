@@ -31,8 +31,8 @@ function show(io, l::LambdaStaticData)
     print(io, ")")
 end
 
-function show_delim_array(io, itr, open, delim, close, delim_one)
-    print(io, open)
+function show_delim_array(io, itr, op, delim, cl, delim_one)
+    print(io, op)
     state = start(itr)
     newline = true
     first = true
@@ -59,7 +59,7 @@ function show_delim_array(io, itr, open, delim, close, delim_one)
             end
 	end
     end
-    print(io, close)
+    print(io, cl)
 end
 
 show_comma_array(io, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)

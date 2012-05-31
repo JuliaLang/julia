@@ -80,11 +80,10 @@ function _jl_dlmread_auto(a, io, dlm, nr, nc, row, eol)
 end
 
 countlines(io) = countlines(io, '\n')
-function countlines(io::String, eol::Char)
-    fh = open(io)
-    n = countlines(fh, eol)
-    close(fh)
-    return n
+function countlines(filename::String, eol::Char)
+    open(filename) do io
+        countlines(io, eol)
+    end
 end
 function countlines(io::IOStream, eol::Char)
     if !iswascii(eol)
@@ -172,10 +171,9 @@ end
 dlmwrite(io, a::Vector, dlm::Char) = dlmwrite(io, reshape(a,length(a),1), dlm)
 
 function dlmwrite(fname::String, a::Matrix, dlm::Char)
-    io = open(fname, "w")
-    dlmwrite(io, a, dlm)
-    close(io)
-    nothing
+    open(fname, "w") do io
+        dlmwrite(io, a, dlm)
+    end
 end
 
 dlmwrite(io, a) = dlmwrite(io, a, ',')

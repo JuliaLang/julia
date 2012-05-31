@@ -4,45 +4,48 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = usr/bin usr/etc usr/lib/julia
+DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base,$(eval $(call symlink_target,$(link),usr/lib/julia)))
+$(foreach link,extras base,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
 
-debug release: | $(DIRS) usr/lib/julia/extras usr/lib/julia/base
+debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base
 	@$(MAKE) -s julia-$@
-	@$(MAKE) -s usr/lib/julia/sys.ji
+	@$(MAKE) -s $(BUILD)/lib/julia/sys.ji
 
 julia-debug julia-release:
 	@$(MAKE) -sC deps
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
 	@$(MAKE) -sC ui $@
-	@ln -sf usr/bin/$@-$(DEFAULT_REPL) julia
+	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
 base/build_h.jl: Make.inc
 	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
 	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
-usr/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
+$(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
+	@cp $< $@
+
+$(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
 	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
-	@rm -f usr/lib/julia/sys.ji
+	@rm -f $(BUILD)/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-usr/lib/julia/sys.ji: VERSION usr/lib/julia/sys0.ji base/*.jl
-	$(QUIET_JULIA) cd base && ../julia `test -f $(JULIAHOME)/usr/lib/julia/sys.ji && echo stage1.jl || echo -J $(JULIAHOME)/usr/lib/julia/sys0.ji stage1.jl`
+$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl $(BUILD)/lib/julia/helpdb.jl
+	$(QUIET_JULIA) cd base && ../julia `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
-	cp usr/bin/*julia* $(PREFIX)/bin
+	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
-	cp -r usr/lib/julia/* $(PREFIX)/lib/julia
-	-cp usr/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
+	cp -r $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
+	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
-	-cp usr/lib/mod* $(PREFIX)/lib
-	-cp usr/sbin/* $(PREFIX)/sbin
-	-cp usr/etc/* $(PREFIX)/etc
+	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
+	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
+	-cp $(BUILD)/etc/* $(PREFIX)/etc
 
 dist: release
 	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
@@ -56,13 +59,13 @@ deb:
 debclean:
 	fakeroot debian/rules clean
 
-h2j: usr/lib/libLLVM*.a usr/lib/libclang*.a src/h2j.cpp
+h2j: $(BUILD)/lib/libLLVM*.a $(BUILD)/lib/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
 
 clean:
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *# *.tar.gz
-	@rm -fr usr/lib/julia
+	@rm -fr $(BUILD)/lib/julia
 	@$(MAKE) -sC base clean
 	@$(MAKE) -sC extras clean
 	@$(MAKE) -sC src clean

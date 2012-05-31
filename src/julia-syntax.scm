@@ -1003,28 +1003,6 @@
 
    )) ; patterns
 
-; patterns that verify all syntactic sugar was well-formed
-; if any sugary forms remain after the above patterns, it means the
-; patterns didn't match, which implies a syntax error.
-(define check-desugared
-  (pattern-set
-   (pattern-lambda (function . any)
-		   (error "invalid function definition"))
-
-   (pattern-lambda (for . any)
-		   (error "invalid for loop syntax"))
-
-   (pattern-lambda (type . any)
-		   (error "invalid type definition"))
-
-   (pattern-lambda (typealias . any)
-		   (error "invalid typealias statement"))
-
-   (pattern-lambda (macro . any)
-		   (error "macros must be defined at the top level"))
-
-   ))
-
 ;; Comprehensions
 
 (define (lower-nd-comprehension expr ranges)
