@@ -668,7 +668,7 @@ string get_session(string user_name, string session_name) {
     opts.stdin_stream = session_data->julia_in;
     opts.stdout_stream = session_data->julia_out;
     opts.stderr_stream = session_data->julia_err;
-#if 1
+#if 0
     char *argv[5] = {"gdbserver","localhost:2222","./julia-debug-readline", "../lib/julia/extras/julia_web_base.jl", NULL};
 #else
     char arg0[]="./julia-release-readline";

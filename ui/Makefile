@@ -17,7 +17,9 @@ JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(
 julia-release julia-debug: %: %-basic %-readline
 	@$(MAKE) -C webserver $@
 
-release debug:
+$(eval $(call symlink_target,website,$(USR)/lib/julia))
+	
+release debug: | $(USR)/lib/julia/website
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h

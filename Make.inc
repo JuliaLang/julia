@@ -228,16 +228,30 @@ LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flis
 
 # Make tricks
 
-define symlink_target
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)):
-	@ln -sf $$(abspath $(1)) $$@ 
-endef
 define dir_target
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
 $$(abspath $(1)):
 	@mkdir -p $$@
 endef
+
+ifneq ($(OS), WINNT)
+define symlink_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)):
+	@ln -sf $$(abspath $(1)) $$@ 
+endef
+endif
+
+ifeq ($(OS), WINNT)
+define mingw_to_dos
+$$(subst /,\\,$$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
+endef
+define symlink_target
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)):
+	@cmd //C mklink //J $(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $(call mingw_to_dos,$(1),) 
+endef
+endif
 
 
 # Colors for make

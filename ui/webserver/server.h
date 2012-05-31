@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+//#define DEBUG_TRACE
 
 namespace scgi
 {
