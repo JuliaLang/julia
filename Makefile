@@ -28,12 +28,12 @@ $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 	@cp $< $@
 
 $(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
-	$(QUIET_JULIA) cd base && ../julia -b stage0.jl
+	$(QUIET_JULIA) cd base && $(BUILD)/bin/julia-release-$(DEFAULT_REPL) -b stage0.jl
 	@rm -f $(BUILD)/lib/julia/sys.ji
 
 # if sys.ji exists, use it to rebuild, otherwise use sys0.ji
 $(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl $(BUILD)/lib/julia/helpdb.jl
-	$(QUIET_JULIA) cd base && ../julia `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
+	$(QUIET_JULIA) cd base && $(BUILD)/bin/julia-release-$(DEFAULT_REPL) `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
