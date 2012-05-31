@@ -1,5 +1,5 @@
 #!/bin/sh
-
+cd $(dirname $0)
 test -x ../sbin/lighttpd || { echo "Install lighttpd with \"make -C deps install-lighttpd\" " && exit 0; }
 
 echo "Connect to http://localhost:2000/ for the web REPL."

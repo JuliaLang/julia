@@ -25,7 +25,7 @@ static GlobalVariable *stringConst(const std::string &txt)
                                 ConstantDataArray::get(getGlobalContext(),
                                                        ArrayRef<unsigned char>(
                                                        (const unsigned char*)txt.c_str(),
-                                                       txt.length())),
+                                                       txt.length()+1)),
 #endif
         vname);
         stringConstants[txt] = gv;

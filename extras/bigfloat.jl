@@ -116,6 +116,12 @@ function cmp(x::BigFloat, y::BigFloat)
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_cmp), Int32, (Ptr{Void}, Ptr{Void}), x.mpf, y.mpf)
 end
 
+function sqrt(x::BigFloat)
+	z = _jl_BigFloat_init()
+	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_sqrt), Void, (Ptr{Void}, Ptr{Void}), z, x.mpf)
+	BigFloat(z)
+end
+
 function pow(x::BigFloat, y::Uint) 
 	z = _jl_BigFloat_init()
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpf, y)
