@@ -227,7 +227,7 @@ const _jl_CHOLMOD_SUPERNODAL = int32(2)    # always do supernodal
 function _jl_cholmod_start()
     # Allocate space for cholmod_common object
     cm = Array(Ptr{Void}, 1)
-    ccall(dlsym(_jl_libcholmod_wrapper, :jl_cholmod_common),
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common),
           Void,
           (Ptr{Void},),
           cm)
@@ -264,7 +264,7 @@ function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
     if     Tv == Float64 || Tv == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif Tv == Float32 || Tv == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    ccall(dlsym(_jl_libcholmod_wrapper, :jl_cholmod_sparse),
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
            Int32, Int32, Int32, Int32, Int32, Int32),
@@ -288,7 +288,7 @@ function _jl_cholmod_dense{T}(B::VecOrMat{T})
     if     T == Float64 || T == Complex128; dtype = _jl_CHOLMOD_DOUBLE; 
     elseif T == Float32 || T == Complex64 ; dtype = _jl_CHOLMOD_SINGLE; end
 
-    ccall(dlsym(_jl_libcholmod_wrapper, :jl_cholmod_dense),
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense),
           Ptr{Void},
           (Ptr{Void}, Int, Int, Int, Int, Ptr{T}, Ptr{Void}, Int32, Int32),
           cd, m, n, numel(B), m, B, C_NULL, xtype, dtype
@@ -298,7 +298,7 @@ function _jl_cholmod_dense{T}(B::VecOrMat{T})
 end
 
 function _jl_cholmod_dense_copy_out{T}(x::Ptr{Void}, sol::VecOrMat{T})
-    ccall(dlsym(_jl_libcholmod_wrapper, :jl_cholmod_dense_copy_out),
+    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out),
           Void,
           (Ptr{Void}, Ptr{T}),
           x, sol
