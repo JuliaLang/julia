@@ -87,9 +87,11 @@ function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     Ls = git_config_sections(Lc)
     Rs = git_config_sections(Rc)
     # expunge removed submodules from left and right sides
+    deleted = Set{ByteString}()
     for section in Bs - Ls & Rs
         filter!((k,v)->!begins_with("$section.",k),Lc)
         filter!((k,v)->!begins_with("$section.",k),Rc)
+        add(deleted, section)
     end
     # merge the remaining config key-value pairs
     cfg = Dict()
@@ -104,9 +106,10 @@ function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
             if Rv != nothing cfg[key] = Rv end
         else # conflict!
             conflicts[key] = [Lv,Rv]
+            cfg[key] = Bv
         end
     end
-    return cfg, conflicts
+    return cfg, conflicts, deleted
 end
 
 # create a new empty packge repository
@@ -250,18 +253,8 @@ function pkg_pull()
     if git_different(Lh,Rh,".gitmodules")
         Bc = git_read_config_blob("$base:.gitmodules")
         Lc = git_read_config_blob("$Lh:.gitmodules")
-        Cc, conflicts = git_merge_configs(Bc,Lc,Rc)
-        Ls = git_config_sections(Lc)
-        Cs = git_config_sections(Cc)
-        # remove submodules that were deleted
-        for section in Ls - Cs
-            if !begins_with("submodule.",section) continue end
-            path = get(Lc,"$section.path",nothing)
-            if path != nothing
-                run(`git rm -qrf --cached --ignore-unmatch -- $path`)
-                run(`rm -rf $path`)
-            end
-        end
+        Cc, conflicts, deleted = git_merge_configs(Bc,Lc,Rc)
+        # warn about config conflicts
         for (key,vals) in conflicts
             print(stderr_stream,
                 "\n*** WARNING ***\n\n",
@@ -271,9 +264,18 @@ function pkg_pull()
                 "\n",
                 "Both values written to .gitmodules -- please edit and choose one.\n\n",
             )
+            Cc[key] = vals
         end
-        # write the result and stage it
-        git_write_config(".gitmodules", merge(Cc,conflicts))
+        # remove submodules that were deleted
+        for section in deleted
+            if !begins_with("submodule.",section) continue end
+            path = get(Lc,"$section.path",nothing)
+            if path == nothing continue end
+            run(`git rm -qrf --cached --ignore-unmatch -- $path`)
+            run(`rm -rf $path`)
+        end
+        # write the result (unconditionally) and stage it (if no conflicts)
+        git_write_config(".gitmodules", Cc)
         if isempty(conflicts) run(`git add .gitmodules`) end
     end
 
@@ -301,6 +303,7 @@ function pkg_pull()
         error("pkg_pull: merge conflicts")
     end
 
+    # try to commit -- fails if unresolved conflicts remain
     run(`git commit -m "[jul] pull (complex merge)"`)
     pkg_checkout("HEAD")
     pkg_checkpoint()
