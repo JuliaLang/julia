@@ -133,8 +133,11 @@ differences that may trip up Julia users accustomed to MATLAB®:
    ``sort(A,2)``.
 -  Parentheses must be used to call a function with zero arguments, as
    in ``tic()`` and ``toc()``.
--  Do not use commas to end statements. The results of statements are
+-  Do not use semicolons to end statements. The results of statements are
    not automatically printed (except at the interactive prompt), and
    lines of code do not need to end with semicolons. The function
    ``println`` can be used to print a value followed by a newline.
+-  If ``A`` and ``B`` are arrays, ``A == B`` doesn't return an array of
+   booleans. Use ``A .== B`` instead. Likewise for the other boolean
+   operators, ``<``, ``>``, ``!=``, etc.
 
