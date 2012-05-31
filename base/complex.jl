@@ -197,6 +197,8 @@ abs2(z::Complex) = real(z)*real(z) + imag(z)*imag(z)
 inv(z::Complex)  = conj(z)/abs2(z)
 sign(z::Complex) = z/abs(z)
 
+@vectorize_1arg Number abs2
+
 -(z::Complex) = complex(-real(z), -imag(z))
 +(z::Complex, w::Complex) = complex(real(z) + real(w), imag(z) + imag(w))
 -(z::Complex, w::Complex) = complex(real(z) - real(w), imag(z) - imag(w))
