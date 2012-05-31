@@ -17,6 +17,7 @@ julia-debug julia-release:
 	@$(MAKE) -sC deps
 	@$(MAKE) -sC src lib$@
 	@$(MAKE) -sC base
+	@$(MAKE) -sC extras
 	@$(MAKE) -sC ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
