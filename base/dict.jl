@@ -44,6 +44,16 @@ function values(T::Type, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
+function pairs(T::(Type,Type), a::Associative)
+    i = 0
+    pairz = Array(T,length(a))
+    for (k,v) in a
+        pairz[i+=1] = (k,v)
+    end
+    return pairz
+end
+pairs{K,V}(a::Associative{K,V}) = pairs((K,V),a)
+
 # some support functions
 
 function _tablesz(i::Integer)
