@@ -62,3 +62,18 @@
 
    Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
 
+.. function:: beta(x, y)
+
+   Euler integral of the first kind :math:`\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)`.
+
+.. function:: lbeta(x, y)
+
+   Natural logarithm of the beta function :math:`\log(\operatorname{B}(x,y))`.
+
+.. function:: eta(x)
+
+   Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
+
+.. function:: zeta(x)
+
+   Riemann zeta function :math:`\zeta(s)`.

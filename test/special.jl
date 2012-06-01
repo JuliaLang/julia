@@ -2,9 +2,9 @@ load("../extras/specfun.jl")
 
 # airy
 @assert_approx_eq airy(1.8) 0.0470362
-@assert_approx_eq airy(1, 1.8) -0.0685248
-@assert_approx_eq airy(2, 1.8) 2.59587
-@assert_approx_eq airy(3, 1.8) 2.98554
+@assert_approx_eq airyprime(1.8) -0.0685248
+@assert_approx_eq airybi(1.8) 2.59587
+@assert_approx_eq airybiprime(1.8) 2.98554
 
 # besselh
 true_h133 = 0.309063 - 0.538542im
@@ -59,3 +59,21 @@ y33 = bessely(3,3.)
 @assert_approx_eq bessely(-3,3) -y33
 @assert_approx_eq y33 -0.538542
 @assert_approx_eq bessely(3,-3) 0.538542 - 0.618125im
+
+# beta, lbeta
+@assert_approx_eq beta(3/2,7/2) 5pi/128
+@assert_approx_eq beta(3,5) 1/105
+@assert_approx_eq lbeta(5,4) log(beta(5,4))
+@assert_approx_eq beta(5,4) beta(4,5)
+
+# gamma, lgamma (complex argument)
+@assert_approx_eq gamma(0.5) sqrt(pi)
+@assert_approx_eq lgamma(1.4+3.7im) -3.709402533100+2.456809050277im
+@assert_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
+
+# eta, zeta
+@assert_approx_eq eta(1) log(2)
+@assert_approx_eq eta(2) pi^2/12
+@assert_approx_eq zeta(0) -0.5
+@assert_approx_eq zeta(2) pi^2/6
+@assert_approx_eq zeta(4) pi^4/90
