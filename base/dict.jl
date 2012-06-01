@@ -44,7 +44,7 @@ function values(T::Type, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
-function pairs(T::(Type,Type), a::Associative)
+function pairs(T::Union(Type,(Type,Type)), a::Associative)
     i = 0
     pairz = Array(T,length(a))
     for (k,v) in a

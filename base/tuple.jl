@@ -15,12 +15,12 @@ next(t::Tuple, i) = (t[i], i+1)
 ## mapping ##
 
 ntuple(n::Integer, f) = n<=0 ? () :
-                    n==1 ? (f(1),) :
-                    n==2 ? (f(1),f(2),) :
-                    n==3 ? (f(1),f(2),f(3),) :
-                    n==4 ? (f(1),f(2),f(3),f(4),) :
-                    n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
-                    tuple(ntuple(n-2,f)..., f(n-1), f(n))
+                        n==1 ? (f(1),) :
+                        n==2 ? (f(1),f(2),) :
+                        n==3 ? (f(1),f(2),f(3),) :
+                        n==4 ? (f(1),f(2),f(3),f(4),) :
+                        n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
+                        tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
 # 0 argument function
 map(f) = f()
@@ -40,8 +40,7 @@ map(f, t::(Any,Any,Any), s::(Any,Any,Any)) =
 map(f, t::(Any,Any,Any,Any), s::(Any,Any,Any,Any)) =
     (f(t[1],s[1]), f(t[2],s[2]), f(t[3],s[3]), f(t[4],s[4]))
 # n argument function
-map(f, ts::Tuple...) = ntuple(length_checked_equal(ts...), 
-                              n->f(map(t->t[n],ts)...) )
+map(f, ts::Tuple...) = ntuple(length_checked_equal(ts...), n->f(map(t->t[n],ts)...))
 
 function length_checked_equal(args...) 
     n = length(args[1])
@@ -91,3 +90,5 @@ end
 
 isempty(x::()) = true
 isempty(x::Tuple) = false
+
+reverse(x::Tuple) = (n=length(x); ntuple(n, k->x[n-k+1]))
