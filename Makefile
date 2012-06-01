@@ -79,7 +79,7 @@ cleanall: clean
 #	@$(MAKE) -sC deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
-	test testall test-* sloccount clean cleanall
+	test testall test-* clean cleanall
 
 test: release
 	@$(MAKE) -sC test default
