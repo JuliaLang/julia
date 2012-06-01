@@ -47,6 +47,12 @@ install: release
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
 	-cp $(BUILD)/etc/* $(PREFIX)/etc
+ifeq ($(OS), WINNT)
+	-cp dist/windows/* $(PREFIX)
+ifeq ($(shell uname),MINGW32_NT-6.1)
+	-cp bin/{libgcc_s_dw2-1,libstc++,pthreadgc2}.dll $(PREFIX)/lib
+endif
+endif
 
 dist: release
 	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
