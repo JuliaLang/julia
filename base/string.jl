@@ -230,9 +230,11 @@ function begins_with(a::String, b::String)
     end
     done(a,i)
 end
+begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
 # TODO: better ends_with
 ends_with(a::String, b::String) = begins_with(reverse(a),reverse(b))
+ends_with(a::String, c::Char) = length(a) > 0 && a[end] == c
 
 # faster comparisons for byte strings
 
