@@ -166,7 +166,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a given iterable object and iteration state, return the current item and the next iteration state
 
-Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``LineIterator``, ``String``, ``Set``, ``Task``.
+Fully implemented by: ``Range``, ``Range1``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
 
 General Collections
 -------------------
@@ -560,13 +560,9 @@ Text I/O
 
    Read all lines as an array.
 
-.. function:: LineIterator(stream)
+.. function:: EachLine(stream)
 
    Create an iterable object that will yield each line from a stream.
-
-.. function:: each_line(stream or command)
-
-   Construct an iterator to read each line from a stream or from a shell command object
 
 .. function:: dlmread(filename, delim::Char)
 
