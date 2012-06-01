@@ -440,15 +440,15 @@ Strings
 I/O
 ---
 
-.. function:: stdout_stream
+.. data:: stdout_stream
 
    Global variable referring to the standard out stream.
 
-.. function:: stderr_stream
+.. data:: stderr_stream
 
    Global variable referring to the standard error stream.
 
-.. function:: stdin_stream
+.. data:: stdin_stream
 
    Global variable referring to the standard input stream.
 
