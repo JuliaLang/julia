@@ -41,7 +41,7 @@ install: release
 	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
-	cp -r $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
+	cp -rL $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
 	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
