@@ -4,11 +4,12 @@ include ../Make.inc
 default all extra unicode::
 	@$(MAKE) -sC unicode
 
-default all extra \
+TESTS = default all extra \
 core numbers strings corelib hashing arrayops \
 glpk linprog sparse lapack fft arpack random unicode \
-special bigint bigfloat bitarray \
-::
+special bigint bigfloat bitarray distributions
+
+$(TESTS) ::
 	$(QUIET_JULIA) ../julia ./runtests.jl $@
 
 perf:
@@ -25,9 +26,5 @@ clean:
 	@$(MAKE) -C unicode $@
 	@$(MAKE) -C perf $@
 
-.PHONY: \
-	default all extra \
-	core numbers strings corelib hashing arrayops glpk \
-	linprog sparse lapack fft arpack random special \
-	unicode perf bitarray \
-	benchmark clean
+.PHONY: $(TESTS) perf benchmark clean
+
