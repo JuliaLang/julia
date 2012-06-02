@@ -2,13 +2,14 @@
 
 function _jl_dlm_readrow(io::IO, dlm::Char, eol::Char)
     row_string = readuntil(io, eol)
-    while row_string == string(eol)
+    while length(row_string)==1 && row_string[1] == eol
         row_string = readuntil(io, eol)
     end
-    if ends_with(row_string, eol)
-        row_string = chop(row_string)
+    row = split(row_string, dlm, true)
+    if ends_with(row[end], eol)
+        row[end] = chop(row[end])
     end
-    split(row_string, dlm, true)
+    row
 end
 
 # all strings
