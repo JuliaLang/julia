@@ -1,9 +1,14 @@
 ## file formats ##
 
-function _jl_dlm_readrow(io, dlm, eol)
-    row = split(readuntil(io, eol), dlm, true)
-    row[end] = chomp(row[end])
-    row
+function _jl_dlm_readrow(io::IO, dlm::Char, eol::Char)
+    row_string = readuntil(io, eol)
+    while row_string == string(eol)
+        row_string = readuntil(io, eol)
+    end
+    if ends_with(row_string, eol)
+        row_string = chop(row_string)
+    end
+    split(row_string, dlm, true)
 end
 
 # all strings
@@ -91,20 +96,20 @@ function countlines(io::IOStream, eol::Char)
     end
     a = Array(Uint8, 8192)
     nl = 0
+    preceded_by_eol = true
     while !eof(io)
-        fill!(a, uint8(eol)+1)  # fill with byte we're not looking for
+        fill!(a, uint8(eol))
         try
             read(io, a)
         end
         for i=1:length(a)
             if a[i] == eol
+                preceded_by_eol = true
+            elseif preceded_by_eol
+                preceded_by_eol = false
                 nl+=1
             end
         end
-    end
-    skip(io,-1)
-    if read(io,Uint8) != eol
-        nl+=1
     end
     nl
 end
