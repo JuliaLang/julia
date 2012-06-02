@@ -277,8 +277,6 @@ function idump(fn::Function, io::IOStream, x::Array{Any}, n::Int, indent)
         end
     end
 end
-## idump(io::IOStream, x, n::Int, indent) = idump(idump, io, x, n, indent)
-## idump(io::IOStream, x::Array{Any}, n::Int, indent) = idump(idump, io, x, n, indent)
 idump(fn::Function, io::IOStream, x::AbstractKind, n::Int, indent) = println(io, typeof(x), " ", x)
 idump(fn::Function, io::IOStream, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
 idump(fn::Function, io::IOStream, x::Function, n::Int, indent) = println(io, x)
