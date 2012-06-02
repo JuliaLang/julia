@@ -417,6 +417,34 @@ Strings
 
    Return an array of strings by splitting the given string on occurrences of the given character delimiter. The second argument may also be a set of character delimiters to use. The third argument specifies whether empty fields should be included.
 
+.. function:: strip(string)
+
+   Return ``string`` with any leading and trailing whitespace removed.
+
+.. function:: lstrip(string)
+
+   Return ``string`` with any leading whitespace removed.
+
+.. function:: rstrip(string)
+
+   Return ``string`` with any trailing whitespace removed.
+
+.. function:: begins_with(string, prefix)
+
+   Returns ``true`` if ``string`` starts with ``prefix``.
+
+.. function:: ends_with(string, suffix)
+
+   Returns ``true`` if ``string`` ends with ``suffix``.
+
+.. function:: uppercase(string)
+
+   Returns ``string`` with all characters converted to uppercase.
+
+.. function:: lowercase(string)
+
+   Returns ``string`` with all characters converted to lowercase.
+
 .. function:: join(strings, delim)
 
    Join an array of strings into a single string, inserting the given delimiter between adjacent strings.

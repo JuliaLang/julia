@@ -574,6 +574,48 @@ collection[key...] = value
 
 "),
 
+(E"Strings",E"strip",E"strip(string)
+
+   Return 'string' with any leading and trailing whitespace removed.
+
+"),
+
+(E"Strings",E"lstrip",E"lstrip(string)
+
+   Return 'string' with any leading whitespace removed.
+
+"),
+
+(E"Strings",E"rstrip",E"rstrip(string)
+
+   Return 'string' with any trailing whitespace removed.
+
+"),
+
+(E"Strings",E"begins_with",E"begins_with(string, prefix)
+
+   Returns 'true' if 'string' starts with 'prefix'.
+
+"),
+
+(E"Strings",E"ends_with",E"ends_with(string, suffix)
+
+   Returns 'true' if 'string' ends with 'suffix'.
+
+"),
+
+(E"Strings",E"uppercase",E"uppercase(string)
+
+   Returns 'string' with all characters converted to uppercase.
+
+"),
+
+(E"Strings",E"lowercase",E"lowercase(string)
+
+   Returns 'string' with all characters converted to lowercase.
+
+"),
+
 (E"Strings",E"join",E"join(strings, delim)
 
    Join an array of strings into a single string, inserting the given
