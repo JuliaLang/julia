@@ -390,6 +390,8 @@ extern jl_sym_t *exc_sym;     extern jl_sym_t *new_sym;
 extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
+extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
+extern jl_sym_t *compositetype_sym;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)
@@ -576,6 +578,7 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
 jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
                                 jl_tuple_t *parameters, size_t nbits);
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
+void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super);
 
 // constructors
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
@@ -703,6 +706,7 @@ void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
 void jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got);
 jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 // initialization functions
 DLLEXPORT void julia_init(char *imageFile);

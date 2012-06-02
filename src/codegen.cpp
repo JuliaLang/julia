@@ -1234,10 +1234,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
     jl_value_t **args = &jl_cellref(ex->args,0);
+    jl_sym_t *head = ex->head;
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
     // to add new node types.
-    if (ex->head == goto_ifnot_sym) {
+    if (head == goto_ifnot_sym) {
         jl_value_t *cond = args[0];
         int labelname = jl_unbox_long(args[1]);
         Value *condV = emit_unboxed(cond, ctx);
@@ -1266,17 +1267,17 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         builder.SetInsertPoint(ifso);
     }
 
-    else if (ex->head == call_sym || ex->head == call1_sym) {
+    else if (head == call_sym || head == call1_sym) {
         return emit_call(args, ex->args->length, ctx, (jl_value_t*)ex);
     }
 
-    else if (ex->head == assign_sym) {
+    else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (valuepos) {
             return literal_pointer_val((jl_value_t*)jl_nothing);
         }
     }
-    else if (ex->head == method_sym) {
+    else if (head == method_sym) {
         jl_value_t *mn;
         if (jl_is_symbolnode(args[0])) {
             mn = (jl_value_t*)jl_symbolnode_sym(args[0]);
@@ -1301,7 +1302,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         ctx->argDepth = last_depth;
         return literal_pointer_val((jl_value_t*)jl_nothing);
     }
-    else if (ex->head == const_sym) {
+    else if (head == const_sym) {
         jl_sym_t *sym = (jl_sym_t*)args[0];
         jl_binding_t *bnd = NULL;
         (void)var_binding_pointer(sym, &bnd, true, ctx);
@@ -1311,10 +1312,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
     }
 
-    else if (ex->head == null_sym) {
+    else if (head == null_sym) {
         return literal_pointer_val((jl_value_t*)jl_nothing);
     }
-    else if (ex->head == static_typeof_sym) {
+    else if (head == static_typeof_sym) {
         jl_value_t *extype = expr_type((jl_value_t*)ex, ctx);
         if (jl_is_type_type(extype)) {
             extype = jl_tparam0(extype);
@@ -1326,7 +1327,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return literal_pointer_val(extype);
     }
-    else if (ex->head == new_sym) {
+    else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         if (jl_is_type_type(ty) &&
             jl_is_struct_type(jl_tparam0(ty)) &&
@@ -1355,15 +1356,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         Value *typ = emit_expr(args[0], ctx);
         return builder.CreateCall(jlnew_func, typ);
     }
-    else if (ex->head == exc_sym) {
+    else if (head == exc_sym) {
         return builder.CreateLoad(jlexc_var, true);
     }
-    else if (ex->head == leave_sym) {
+    else if (head == leave_sym) {
         assert(jl_is_long(args[0]));
         builder.CreateCall(jlleave_func,
                            ConstantInt::get(T_int32, jl_unbox_long(args[0])));
     }
-    else if (ex->head == enter_sym) {
+    else if (head == enter_sym) {
         assert(jl_is_long(args[0]));
         int labl = jl_unbox_long(args[0]);
         Value *jbuf = builder.CreateGEP((*ctx->jmpbufs)[labl],
@@ -1381,11 +1382,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         builder.CreateCondBr(isz, tryblk, handlr);
         builder.SetInsertPoint(tryblk);
     }
-    if (!strcmp(ex->head->name, "$")) {
-        jl_error("syntax error: prefix $ outside of quote block");
-    }
-    if (valuepos) {
-        jl_errorf("unsupported expression type %s", ex->head->name);
+    else {
+        if (!strcmp(head->name, "$"))
+            jl_error("syntax error: prefix $ outside of quote block");
+        // some expression types are metadata and can be ignored
+        if (valuepos || !(head == line_sym || head == multivalue_sym)) {
+            jl_errorf("unsupported or misplaced expression %s in function %s",
+                      head->name, ctx->linfo->name->name);
+        }
     }
     return NULL;
 }

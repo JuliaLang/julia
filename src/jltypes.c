@@ -2518,4 +2518,7 @@ void jl_init_types(void)
     anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");
     amp_sym = jl_symbol("&");
+    abstracttype_sym = jl_symbol("abstract_type");
+    bitstype_sym = jl_symbol("bits_type");
+    compositetype_sym = jl_symbol("composite_type");
 }

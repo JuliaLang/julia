@@ -318,58 +318,49 @@
 		     defs)))
      (if (null? params)
 	 `(block
+	   (global ,name)
 	   (const ,name)
-	   (= ,name
+	   (composite_type ,name (tuple ,@params) 
+			   (tuple ,@(map (lambda (x) `',x) field-names))
+			   (null) ,super (tuple ,@field-types))
+	   (call
+	    (lambda ()
 	      (scope-block
 	       (block
-		(local ,name)
-		(= ,name
-		   (call (top new_struct_type)
-			 (quote ,name)
-			 (tuple ,@params)
-			 (tuple ,@(map (lambda (x) `',x) field-names))
-			 (null)))
-		(call (top new_struct_fields)
-		      ,name ,super (tuple ,@field-types))
-		,name)))
-	   (scope-block
-	    (block
-	     ,@(map (lambda (c)
-		      (rewrite-ctor c name '() field-names))
-		    defs2)))
+		(global ,name)
+		,@(map (lambda (c)
+			 (rewrite-ctor c name '() field-names))
+		       defs2)))))
 	   (null))
 	 ;; parametric case
 	 `(block
-	   (const ,name)
-	   (= ,name
-	   (call
-	    (lambda (,@params)
-	      (scope-block
-	      (block
-	       (local ,name)
-	       (= ,name
-		  (call (top new_struct_type)
-			(quote ,name)
-			(tuple ,@params)
-			(tuple ,@(map (lambda (x) `',x) field-names))
-			(lambda (,name)
-			  (scope-block
-			   ;; don't capture params; in here they are static
-			   ;; parameters
-			   (block
-			    (global ,@params)
-			    ,@(map (lambda (c)
-				     (rewrite-ctor c name params field-names))
-				   defs2)
-			    ,name)))))
-	       (call (top new_struct_fields)
-		     ,name ,super (tuple ,@field-types))
-	       ,name)))
-	    ,@(symbols->typevars params bounds #f)))
-	   ,@(if (null? defs)
-		 `(,(default-outer-ctor name field-names field-types
-		      params bounds))
-		 '())
+	   (scope-block
+	    (block
+	     (global ,name)
+	     (const ,name)
+	     ,@(map (lambda (v) `(local ,v)) params)
+	     ,@(map make-assignment params (symbols->typevars params bounds #f))
+	     (composite_type ,name (tuple ,@params)
+			     (tuple ,@(map (lambda (x) `',x) field-names))
+			     (lambda (,name)
+			       (scope-block
+				;; don't capture params; in here they are static
+				;; parameters
+				(block
+				 (global ,@params)
+				 ,@(map
+				    (lambda (c)
+				      (rewrite-ctor c name params field-names))
+				    defs2)
+				 ,name)))
+			     ,super (tuple ,@field-types))))
+	   (scope-block
+	    (block
+	     (global ,@params)
+	     ,@(if (null? defs)
+		   `(,(default-outer-ctor name field-names field-types
+			params bounds))
+		   '())))
 	   (null))))))
 
 (define (abstract-type-def-expr name params super)
@@ -378,19 +369,9 @@
    (sparam-name-bounds params '() '())
    `(block
      (const ,name)
-     (= ,name
-	(call
-	 (lambda ,params
-	   (scope-block
-	    (block
-	     (local ,name)
-	     (= ,name
-		(call (top new_tag_type)
-		      (quote ,name) (tuple ,@params)))
-	     (call (top new_tag_type_super) ,name ,super)
-	     ,name)))
-	 ,@(symbols->typevars params bounds #f)))
-     (null))))
+     ,@(map (lambda (v) `(local ,v)) params)
+     ,@(map make-assignment params (symbols->typevars params bounds #f))
+     (abstract_type ,name (tuple ,@params) ,super))))
 
 (define (bits-def-expr n name params super)
   (receive
@@ -398,19 +379,9 @@
    (sparam-name-bounds params '() '())
    `(block
      (const ,name)
-     (= ,name
-	(call
-	 (lambda ,params
-	   (scope-block
-	    (block
-	     (local ,name)
-	     (= ,name
-		(call (top new_bits_type)
-		      (quote ,name) (tuple ,@params) ,n))
-	     (call (top new_tag_type_super) ,name ,super)
-	     ,name)))
-	 ,@(symbols->typevars params bounds #f)))
-     (null))))
+     ,@(map (lambda (v) `(local ,v)) params)
+     ,@(map make-assignment params (symbols->typevars params bounds #f))
+     (bits_type ,name (tuple ,@params) ,n ,super))))
 
 ; take apart a type signature, e.g. T{X} <: S{Y}
 (define (analyze-type-sig ex)
@@ -1535,11 +1506,16 @@ So far only the second case can actually occur.
 	((quoted? e)      e)
 	(else
 	 (let (; remove vars bound by current expr from rename list
-	       (new-renames (without renames
-				     (case (car e)
-				       ((lambda)      (lam:vars e))
-				       ((scope-block) (declared-local-vars e))
-				       (else '())))))
+	       (new-renames
+		(without renames
+			 (case (car e)
+			   ((lambda)
+			    (append (lambda-all-vars e)
+				    (declared-global-vars (cadddr e))))
+			   ((scope-block)
+			    (append (declared-local-vars e)
+				    (declared-global-vars (cadr e))))
+			   (else '())))))
 	   (cons (car e)
 		 (map (lambda (x)
 			(rename-vars x new-renames))
