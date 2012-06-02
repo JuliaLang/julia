@@ -277,25 +277,26 @@ function idump(fn::Function, io::IOStream, x::Array{Any}, n::Int, indent)
         end
     end
 end
-idump(io::IOStream, x, n::Int, indent) = idump(idump, io, x, n, indent)
-idump(io::IOStream, x::Array{Any}, n::Int, indent) = idump(idump, io, x, n, indent)
-idump(io::IOStream, x::AbstractKind, n::Int, indent) = println(io, typeof(x), " ", x)
-idump(io::IOStream, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
-idump(io::IOStream, x::Function, n::Int, indent) = println(io, x)
-idump(io::IOStream, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x[1:min(4,length(x))])
+## idump(io::IOStream, x, n::Int, indent) = idump(idump, io, x, n, indent)
+## idump(io::IOStream, x::Array{Any}, n::Int, indent) = idump(idump, io, x, n, indent)
+idump(fn::Function, io::IOStream, x::AbstractKind, n::Int, indent) = println(io, typeof(x), " ", x)
+idump(fn::Function, io::IOStream, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
+idump(fn::Function, io::IOStream, x::Function, n::Int, indent) = println(io, x)
+idump(fn::Function, io::IOStream, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x[1:min(4,length(x))])
 # defaults:
-idump(io::IOStream, x) = idump(io, x, 5, "")  # default is 5 levels
-idump(io::IOStream, x, n::Int) = idump(io, x, n, "")
-idump(args...) = idump(OUTPUT_STREAM::IOStream, args...)
+idump(fn::Function, io::IOStream, x) = idump(idump, io, x, 5, "")  # default is 5 levels
+idump(fn::Function, io::IOStream, x, n::Int) = idump(idump, io, x, n, "")
+idump(fn::Function, args...) = idump(fn, OUTPUT_STREAM::IOStream, args...)
+idump(io::IOStream, args...) = idump(idump, io, args...)
+idump(args...) = idump(idump, OUTPUT_STREAM::IOStream, args...)
 
 # Here are methods specifically for dump:
-dump(io::IOStream, x, n::Int, indent) = idump(io, x, n, indent)
 dump(io::IOStream, x, n::Int) = dump(io, x, n, "")
 dump(io::IOStream, x) = dump(io, x, 5, "")  # default is 5 levels
 dump(args...) = dump(OUTPUT_STREAM::IOStream, args...)
 dump(io::IOStream, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
 dump(io::IOStream, x::Type, n::Int, indent) = println(io, typeof(x), " ", x)
-dump(io::IOStream, x::Array{Any}, n::Int, indent) = idump(dump, io, x, n, indent)
+dump(io::IOStream, x, n::Int, indent) = idump(dump, io, x, n, indent)
 
 function dump(io::IOStream, x::Dict, n::Int, indent)
     println(typeof(x), " len ", length(x))
