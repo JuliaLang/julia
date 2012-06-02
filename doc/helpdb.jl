@@ -605,19 +605,19 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"stdout_stream",E"stdout_stream()
+(E"I/O",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"stderr_stream",E"stderr_stream()
+(E"I/O",E"stderr_stream",E"stderr_stream
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"stdin_stream",E"stdin_stream()
+(E"I/O",E"stdin_stream",E"stdin_stream
 
    Global variable referring to the standard input stream.
 
@@ -803,16 +803,9 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"LineIterator",E"LineIterator(stream)
+(E"Text I/O",E"EachLine",E"EachLine(stream)
 
    Create an iterable object that will yield each line from a stream.
-
-"),
-
-(E"Text I/O",E"each_line",E"each_line(stream or command)
-
-   Construct an iterator to read each line from a stream or from a
-   shell command object
 
 "),
 
@@ -1176,7 +1169,7 @@ collection[key...] = value
 
 "),
 
-(E"Numbers",E"pi",E"pi()
+(E"Numbers",E"pi",E"pi
 
    The constant pi
 
