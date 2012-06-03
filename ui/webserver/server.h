@@ -110,9 +110,5 @@ namespace scgi
 }
 
 struct julia_session;
-struct clientData {
-    julia_session *session;
-    std::string buf;
-};
 
 #endif
