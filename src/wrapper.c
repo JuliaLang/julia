@@ -196,15 +196,17 @@ DLLEXPORT void jl_connectioncb(uv_stream_t *stream, int status)
 
 DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
 {
-    jl_stream_opts_t *opts = (jl_stream_opts_t *)stream->data;
-    if(!opts) {
+	int err;
+    jl_stream_opts_t *opts;
+    err = uv_listen(stream,backlog,&jl_connectioncb);
+    if(!err&&!stream->data) {
         opts = malloc(sizeof(jl_stream_opts_t));
         opts->stream=0;
         opts->readcb=0;
+        opts->connectcb=cb;
+        stream->data=opts;
     }
-    opts->connectcb=cb;
-    stream->data=opts;
-    return uv_listen(stream,backlog,&jl_connectioncb);
+	return err;
 }
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb)
@@ -497,28 +499,8 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
     addr.sin_addr.s_addr = host;
     addr.sin_family = AF_INET;
     int err = uv_tcp_bind(handle,addr);
-#ifndef __WIN32__
-    if(handle->delayed_error==EADDRINUSE) { //bypass uv delayed error routines to get direct reporting of EADDRINUSE
-        handle->delayed_error=0;
-        err=UV_EADDRINUSE;
-    }
-#endif
     return err;
 }
-
-//WIN32 math functions that are not part of the CRT
-#ifdef __WIN32__
-#include "math.h"
-DLLEXPORT float truncf(float x)
-{
-     return (x > 0) ? floorf(x) : ceilf(x);
-}
-
-DLLEXPORT double trunc(double x)
-{
-     return (x > 0) ? floor(x) : ceil(x);
-}
-#endif
 
 #ifndef __WIN32__
 #include <sys/types.h>

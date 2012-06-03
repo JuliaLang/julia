@@ -4,7 +4,6 @@
 
 /*.tar.gz
 /tmp
-/dist
 
 /julia
 /julia-debug-*

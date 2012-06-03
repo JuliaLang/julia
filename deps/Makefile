@@ -1,6 +1,7 @@
 ## library versions ##
 
-LLVM_VER = 3.1
+LLVM_VER = 3.0
+LLVM_TYPE = release
 READLINE_VER = 6.2
 PCRE_VER = 8.30
 GRISU_VER = 1.1
@@ -133,35 +134,49 @@ else
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
 endif
 
+LLVM_DIR = $(subst -release,,llvm-$(LLVM_VER)-$(LLVM_TYPE))
+
+LLVM_FLAGS = --prefix=$(abspath $(USR)) --disable-threads  --disable-profiling --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS)
+
+ifeq ($(LLVM_TYPE), debug)
+LLVM_FLAGS += --enable-assertions --disable-optimized
+ifeq ($(OS), WINNT)
+LLVM_FLAGS += --disable-embed-stdcxx
+endif
+else
+LLVM_FLAGS += --disable-assertions --enable-optimized
+endif
+
 $(LLVM_TAR):
 	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) 
-	mkdir -p llvm-$(LLVM_VER) && \
-	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
+$(LLVM_DIR)/configure: $(LLVM_TAR) 
+	mkdir -p $(LLVM_DIR) && \
+	tar -C $(LLVM_DIR) --strip-components 1 -xf $<
 	touch $@
 
 ## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
 llvm_python_workaround:
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	test ! -e llvm-$(LLVM_VER)/python2_path/python && \
-	mkdir -p llvm-$(LLVM_VER)/python2_path && \
-	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
+	export PATH=$(abspath $(LLVM_DIR)/python2_path):$$PATH && \
+	test ! -e $(LLVM_DIR)/python2_path/python && \
+	mkdir -p $(LLVM_DIR)/python2_path && \
+	ln -s /usr/bin/python2 "$(LLVM_DIR)/python2_path/python"
 
-$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
-	cd llvm-$(LLVM_VER) && \
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
-	$(MAKE)
+ENABLE_WORKAROUND = export PATH=$(abspath $(LLVM_DIR)/python2_path):$$PATH &&
+	
+$(LLVM_DIR)/config.status: $(LLVM_DIR)/configure | llvm_python_workaround
+	cd $(LLVM_DIR) && \
+	$(ENABLE_WORKAROUND) ./configure $(LLVM_FLAGS)
+$(LLVM_OBJ_SOURCE): $(LLVM_DIR)/config.status | llvm_python_workaround
+	$(ENABLE_WORKAROUND) $(MAKE) -C $(LLVM_DIR)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER) install
+	$(ENABLE_WORKAROUND) $(MAKE) -C $(LLVM_DIR) install
 	$(INSTALL_NAME_CMD)libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 	touch $@
 
 clean-llvm:
-	$(MAKE) -C llvm-$(LLVM_VER) clean
+	$(MAKE) -C $(LLVM_DIR) clean
 	rm -f $(USRBIN)/llvm-config
 distclean-llvm:
 	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
