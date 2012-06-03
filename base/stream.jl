@@ -137,14 +137,15 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
         error("open_any_tcp_port: could not create socket")
     end
     addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
-    while _jl_tcp_bind(socket,addr)!=0
-        addr.port+=1;
-    end
-    err = _jl_listen(socket,int32(4),cb)
-    if(err!=0)
-        show(err)
-        error("open_any_tcp_port: could not listen on socket")
-    end
+	while true
+		if _jl_tcp_bind(socket,addr)!=0
+		    error("open_any_tcp_port: could not bind to socket")
+		end
+		if(_jl_listen(socket,int32(4),cb) == 0)
+			break
+		end
+		addr.port+=1;
+	end
     return (addr.port,socket)
 end
 open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16(preferred_port),cb)
