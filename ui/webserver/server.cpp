@@ -573,6 +573,9 @@ void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 //read the length of the header;
 void read_header_length(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
+#if 1
+    cout << "Header Length!\n";
+#endif
     if(nread<0)
         abort_request(stream);
     const char *pos = buf.base;
@@ -611,7 +614,7 @@ void handle_request_and_release_socket(uv_stream_t* server, int status)
     uv_tcp_init(uv_default_loop(),client);
     uv_accept((uv_stream_t*)server,(uv_stream_t*)client);
 
-#ifdef DEBUG_TRACE
+#if 1
     std::cout<<"Accepted connection!\n";
 #endif
 

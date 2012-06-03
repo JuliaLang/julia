@@ -132,7 +132,6 @@ else
 PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
-LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
@@ -144,12 +143,13 @@ endif
 else
 ifeq ($(OS), WINNT)
 LIBBLAS = $(USRLIB)/libopenblas-r0.1.1.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
+LIBBLASNAME = libopenblas-r0.1.1
 else
 LIBBLAS = -L$(USRLIB) -lopenblas
+LIBBLASNAME = libopenblas
 endif
 endif
 
-LIBLAPACKNAME = libopenblas
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 ifeq ($(OS), Darwin)
 LIBLAPACK = -framework vecLib -lLAPACK
@@ -160,6 +160,7 @@ LIBLAPACKNAME = liblapack
 endif
 else
 LIBLAPACK = $(LIBBLAS)
+LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
 # OS specific stuff

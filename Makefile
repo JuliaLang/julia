@@ -36,13 +36,18 @@ $(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.
 $(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl $(BUILD)/lib/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && $(BUILD)/bin/julia-release-$(DEFAULT_REPL) `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
 
+ifeq ($(OS), WINNT)
+OPENBLASNAME=openblas-r0.1.1
+else
+OPENBLASNAME=openblas
+endif
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -r $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
+	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
@@ -50,12 +55,12 @@ install: release
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
-	-cp bin/{libgcc_s_dw2-1,libstc++,pthreadgc2}.dll $(PREFIX)/lib
+	-cp /mingw/bin/{libgfortran-3,libquadmath-0,libgcc_s_dw2-1,libstdc++-6,pthreadgc2}.dll $(PREFIX)/lib
 endif
 endif
 
 dist: release
-	rm -fr dist julia-*.tar.gz julia-$(JULIA_COMMIT)
+	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
 	$(MAKE) install
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
