@@ -1088,7 +1088,6 @@ function start_sge_workers(n)
 end
 
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
-SGE(n) = addprocs_sge(n)
 
 #include("vcloud.jl")
 

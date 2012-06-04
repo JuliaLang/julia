@@ -159,6 +159,10 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     }
 }
 
+void jl_module_export(jl_module_t *from, jl_sym_t *s)
+{
+}
+
 int jl_boundp(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = jl_get_binding(m, var);
