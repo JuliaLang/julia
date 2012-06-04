@@ -1,5 +1,6 @@
 @echo off
 cd /d %~dp0\bin
+set PATH=..\lib;%PATH%
 if exist ..\sbin\lighttpd.exe goto lighttpd
 if exist ..\sbin\nginx.exe goto nginx
 

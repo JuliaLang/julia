@@ -9,12 +9,9 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
-
-julia-release julia-debug: %: %-basic  %-readline
-
 JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
-julia-release julia-debug: %: %-basic %-readline
+julia-release julia-debug: %: %-basic %-readline | $(USR)/lib/julia/website
 	@$(MAKE) -C webserver $@
 
 $(eval $(call symlink_target,website,$(USR)/lib/julia))

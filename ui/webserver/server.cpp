@@ -647,6 +647,10 @@ void run_server(int port, callback cb)
     err = uv_tcp_bind(&server, addr);
     //assert(err == 0);
 
+#ifdef __WIN32__
+	uv_tcp_simultaneous_accepts(&server,0);
+#endif
+	
     err = uv_listen((uv_stream_t*)&server, 128, &handle_request_and_release_socket);
     //assert(r == 0)
 
