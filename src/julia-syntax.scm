@@ -420,7 +420,7 @@
     (if (or (null? F) (null? A))
 	`(block
 	  ,.(reverse! stmts)
-	  (call (top ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
+	  (call (top _ccall) ,name ,RT (tuple ,@atypes) ,.(reverse! C)
 		,@A))
 	(let* ((a     (car A))
 	       (isseq (and (pair? (car F)) (eq? (caar F) '...)))

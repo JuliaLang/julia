@@ -202,7 +202,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
         return jl_nothing;
     }
 
-    // TODO: export
+    if (ex->head == export_sym) {
+        for(size_t i=0; i < ex->args->length; i++) {
+            jl_module_export(jl_current_module,
+                             (jl_sym_t*)jl_cellref(ex->args, i));
+        }
+        return jl_nothing;
+    }
 
     jl_value_t *thunk=NULL;
     jl_value_t *result;
