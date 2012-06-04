@@ -529,7 +529,9 @@ static void init_rl(void)
         rl_bind_key_in_map('\005',     line_end_callback,   keymaps[i]);
         rl_bind_key_in_map('\002',     left_callback,       keymaps[i]);
         rl_bind_key_in_map('\006',     right_callback,      keymaps[i]);
-        rl_bind_keyseq_in_map("\033[3~",delete_callback,    keymaps[i]);
+        rl_bind_keyseq_in_map("\e[1~", line_start_callback, keymaps[i]);
+        rl_bind_keyseq_in_map("\e[4~", line_end_callback,   keymaps[i]);
+        rl_bind_keyseq_in_map("\e[3~", delete_callback,     keymaps[i]);
         rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
         rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
