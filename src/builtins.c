@@ -158,7 +158,7 @@ JL_CALLABLE(jl_f_is)
 
 JL_CALLABLE(jl_f_no_function)
 {
-    jl_error("function not defined");
+    jl_error("type cannot be constructed");
     return (jl_value_t*)jl_null;
 }
 

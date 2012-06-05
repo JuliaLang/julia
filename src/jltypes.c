@@ -1445,7 +1445,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         for(i=0; i < ntp+2; i++) iparams[i] = NULL;
         jl_value_t **rt1 = &iparams[ntp+0];  // some extra gc roots
         jl_value_t **rt2 = &iparams[ntp+1];
-        int cacheable = 1;
+        int cacheable = 1, isabstract = 0;
         JL_GC_PUSHARGS(iparams, ntp+2);
         for(i=0; i < ntp; i++) {
             jl_value_t *elt = jl_tupleref(tp, i);
@@ -1468,6 +1468,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                     }
                 }
             }
+            if (jl_is_typevar(iparams[i]))
+                isabstract = 1;
             if (jl_has_typevars_(iparams[i],0))
                 cacheable = 0;
         }
@@ -1555,7 +1557,10 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->parameters = iparams_tuple;
             nst->names = st->names;
             nst->types = jl_null; // to be filled in below
-            nst->fptr = jl_f_ctor_trampoline;
+            if (isabstract)
+                nst->fptr = jl_f_no_function;
+            else
+                nst->fptr = jl_f_ctor_trampoline;
             nst->env = (jl_value_t*)nst;
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
