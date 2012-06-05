@@ -1556,7 +1556,7 @@ end
 
 function make( self::HalfAxis, context )
     if getattr(self, "draw_nothing")
-        return
+        return []
     end
 
     ticks = _ticks( self, context )
