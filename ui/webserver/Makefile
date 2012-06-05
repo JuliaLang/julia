@@ -20,7 +20,13 @@ WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 %.do: %.c
 	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
-julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/launch-julia-webserver
+	
+LAUNCH_SCRIPT = launch-julia-webserver
+ifeq ($(OS),WINNT)
+LAUNCH_SCRIPT = launch-julia-webserver.bat
+endif 
+	
+julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
 
 release debug:
 	$(MAKE) julia-$@
@@ -30,10 +36,9 @@ $(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
 
 $(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-
-$(USRBIN)/launch-julia-webserver: launch-julia-webserver
-	cp launch-julia-webserver $@
-	cp -r ../website $(USR)/lib/julia
+	
+$(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
+	cp $< $@
 
 clean:
 	rm -f *.o *.do

@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <sstream>
+//#define DEBUG_TRACE
 
 namespace scgi
 {
@@ -110,9 +111,5 @@ namespace scgi
 }
 
 struct julia_session;
-struct clientData {
-    julia_session *session;
-    std::string buf;
-};
 
 #endif
