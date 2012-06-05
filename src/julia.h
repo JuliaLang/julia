@@ -701,7 +701,11 @@ DLLEXPORT jl_value_t *jl_environ(int i);
 DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb);
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                                 int stdin_flags, uv_stdio_data stdin_pipe,
+                                 int stdout_flags, uv_stdio_data stdout_pipe,
+                                 int stderr_flags, uv_stdio_data stderr_pipe,
+                                 void *exitcb, void *closecb);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
 

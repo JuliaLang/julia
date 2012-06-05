@@ -285,6 +285,40 @@ function end_process(p::Process,h::Ptr{Void},e::Int32, t::Int32)
     p.term_signal=t
 end
 
+## Process Spawning ##
+
+typealias OSPipe Ptr{Void}
+typealias Pipe Union(ASyncStream,OSPipe)
+
+# this MUST match uv.h
+const UV_IGNORE::Int32          = 0x00
+const UV_CREATE_PIPE::Int32     = 0x01
+const UV_INHERIT_FD::Int32      = 0x02
+const UV_INHERIT_STREAM::Int32  = 0x04
+const UV_NATIVE_PIPE::Int32     = 0x08
+
+const UV_READABLE_PIPE::Int32   = 0x10
+const UV_WRITABLE_PIPE::Int32   = 0x20
+
+function flags_from_pipe(stdio::Pipe,writeable::Bool)
+    flags=0
+    if isa(stdio,OSPipe)
+        if stdio == C_NULL
+            return 0
+        else
+            flags = UV_NATIVE_PIPE
+        end
+    elseif isa(stdio,NamedPipe)
+        flags = UV_CREATE_PIPE
+    else
+        flags = UV_INHERIT_STREAM
+    end
+end
+
+function spawn(cmd::Cmd,in::Pipe,out::Pipe,exitcb::Callback,closecb::Callback,pp::Process)
+
+end
+
 #I really hate to do this
 _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void},in::Ptr{Void},out::Ptr{Void},exitcb::Function,closecb::Function) =
     ccall(:jl_spawn, PtrSize, (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void},Ptr{Void}, Ptr{Void},Function,Function),cmd,argv,loop,in,out,exitcb,closecb)

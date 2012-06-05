@@ -209,22 +209,34 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
 	return err;
 }
 
-DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop, uv_pipe_t *stdin_pipe, uv_pipe_t *stdout_pipe, void *exitcb, void *closecb)
+DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                                 int stdin_flags, uv_stdio_data stdin_pipe,
+                                 int stdout_flags, uv_stdio_data stdout_pipe,
+                                 int stderr_flags, uv_stdio_data stderr_pipe,
+                                 void *exitcb, void *closecb)
 {
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
     uv_process_options_t opts;
     int error;
-    opts.file = name;
-    opts.env = NULL;
-    opts.cwd = NULL;
-    opts.args = argv;
-	opts.flags = 0;
-    opts.stdin_stream = jlopts->in = stdin_pipe;
-    opts.stdout_stream = jlopts->out = stdout_pipe;
-    opts.stderr_stream = NULL;
-    //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
-    opts.exit_cb = &jl_return_spawn;
+    uv_stdio_container_t stdio[3];
+
+    opts.file           = name;
+    opts.env            = NULL;
+    opts.cwd            = NULL;
+    opts.args           = argv;
+    opts.flags          = 0;
+    opts.exit_cb        = &jl_return_spawn;
+
+    stdio[0].flags      = stdin_flags;
+    stdio[0].data       = stdin_pipe;
+    stdio[1].flags      = stdout_flags;
+    stdio[1].data       = stdout_pipe;
+    stdio[2].flags      = stderr_flags;
+    stdio[2].data       = stderr_pipe;
+    opts.stdio          = stdio;
+    opts.stdio_count    = 3;
+
     jlopts->exitcb=exitcb;
     jlopts->closecb=closecb;
     error = uv_spawn(loop,proc,opts);

@@ -75,16 +75,16 @@ h2j: $(BUILD)/lib/libLLVM*.a $(BUILD)/lib/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
 
 clean: | $(CLEAN_TARGETS)
-	@rm -f julia-{release,debug}-{basic,readline,webserver}
-	@rm -f *~ *# *.tar.gz
-	@rm -fr $(BUILD)/lib/julia
 	@$(MAKE) -sC base clean
 	@$(MAKE) -sC extras clean
 	@$(MAKE) -sC src clean
 	@$(MAKE) -sC ui clean
 	@$(MAKE) -sC ui/webserver clean
 	@$(MAKE) -sC test/unicode clean
-
+	@rm -f julia-{release,debug}-{basic,readline,webserver}
+	@rm -f *~ *# *.tar.gz
+	@rm -fr $(BUILD)/lib/julia
+	
 cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 #	@$(MAKE) -sC deps clean-uv
