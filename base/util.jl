@@ -185,6 +185,7 @@ local load_dict = {}
 global load, remote_load
 
 load(fname::String) = load(cstring(fname))
+load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load
         path = find_in_path(fname)

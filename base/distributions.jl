@@ -92,12 +92,12 @@ macro _jl_dist_1p(T, b)
         function invlogcdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath, $qq),
                   Float64, (Float64, Float64, Int32, Int32),
-                  lp, d.($p), 0, 1)
+                  lp, d.($p), 1, 1)
         end
         function invlogccdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath,  $qq),
                   Float64, (Float64, Float64, Int32, Int32),
-                  lp, d.($p), 1, 1)
+                  lp, d.($p), 0, 1)
         end
         function rand(d::($T))
             ccall(dlsym(_jl_libRmath,  $rr),
@@ -166,12 +166,12 @@ macro _jl_dist_2p(T, b)
         function invlogcdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath, $qq),
                   Float64, (Float64, Float64, Float64, Int32, Int32),
-                  lp, d.($p1), d.($p2), 0, 1)
+                  lp, d.($p1), d.($p2), 1, 1)
         end
         function invlogccdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath,  $qq),
                   Float64, (Float64, Float64, Float64, Int32, Int32),
-                  lp, d.($p1), d.($p2), 1, 1)
+                  lp, d.($p1), d.($p2), 0, 1)
         end
         function rand(d::($T))
             ccall(dlsym(_jl_libRmath,  $rr),
@@ -236,12 +236,12 @@ macro _jl_dist_3p(T, b)
         function invlogcdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath, $qq),
                   Float64, (Float64, Float64, Float64, Float64, Int32, Int32),
-                  lp, d.($p1), d.($p2), d.($p3), 0, 1)
+                  lp, d.($p1), d.($p2), d.($p3), 1, 1)
         end
         function invlogccdf(d::($T), lp::Real)
             ccall(dlsym(_jl_libRmath,  $qq),
                   Float64, (Float64, Float64, Float64, Float64, Int32, Int32),
-                  lp, d.($p1), d.($p2), d.($p3), 1, 1)
+                  lp, d.($p1), d.($p2), d.($p3), 0, 1)
         end
         function rand(d::($T))
             ccall(dlsym(_jl_libRmath,  $rr),
@@ -554,7 +554,7 @@ insupport(d::Poisson, x::Number) = integer_valued(x) && 0 <= x
 
 type TDist <: ContinuousDistribution
     df::Float64                         # non-integer degrees of freedom allowed
-    TDist(d) = d > 0 ? new(float(d)) : error("df must be positive")
+    TDist(d) = d > 0 ? new(float64(d)) : error("df must be positive")
 end
 @_jl_dist_1p TDist t
 mean(d::TDist) = d.df > 1 ? 0. : NaN
@@ -565,7 +565,7 @@ insupport(d::TDist, x::Number) = real_valued(x) && isfinite(x)
 type Uniform <: ContinuousDistribution
     a::Float64
     b::Float64
-    Uniform(aa, bb) = aa < bb ? new(float64(aa), float(bb)) : error("a < b required for range [a, b]")
+    Uniform(aa, bb) = aa < bb ? new(float64(aa), float64(bb)) : error("a < b required for range [a, b]")
 end
 Uniform() = Uniform(0, 1)
 @_jl_dist_2p Uniform unif
@@ -578,12 +578,13 @@ insupport(d::Uniform, x::Number) = real_valued(x) && d.a <= x <= d.b
 type Weibull <: ContinuousDistribution
     shape::Float64
     scale::Float64
-    Weibull(sh,sc) = 0 < sh && 0 < sc ? new(float64(sh), float(sc)) : error("Both shape and scale must be positive")
+    Weibull(sh,sc) = 0 < sh && 0 < sc ? new(float64(sh), float64(sc)) : error("Both shape and scale must be positive")
 end
 Weibull(sh) = Weibull(sh, 1)
 @_jl_dist_2p Weibull weibull
 mean(d::Weibull) = d.scale * gamma(1 + 1/d.shape)
 var(d::Weibull) = d.scale^2*gamma(1 + 2/d.shape) - mean(d)^2
+cdf(d::Weibull, x::Real) = 0 < x ? 1. - exp(-((x/d.scale)^d.shape)) : 0.
 insupport(d::Weibull, x::Number) = real_valued(x) && isfinite(x) && 0 <= x
 
 for f in (:cdf, :logcdf, :ccdf, :logccdf, :quantile, :cquantile, :invlogcdf, :invlogccdf)
