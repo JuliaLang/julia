@@ -80,6 +80,7 @@ USE_SYSTEM_GMP=0
 USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
+USE_SYSTEM_NGINX=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LLVM=1
@@ -131,7 +132,6 @@ else
 PCRE_CONFIG = $(USR)/bin/pcre-config
 endif
 
-LIBBLASNAME = libopenblas
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(OS), Darwin)
 LIBBLAS = -framework vecLib -lBLAS
@@ -141,10 +141,15 @@ LIBBLAS = -lblas
 LIBBLASNAME = libblas
 endif
 else
+ifeq ($(OS), WINNT)
+LIBBLAS = $(USRLIB)/libopenblas-r0.1.1.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
+LIBBLASNAME = libopenblas-r0.1.1
+else
 LIBBLAS = -L$(USRLIB) -lopenblas
+LIBBLASNAME = libopenblas
+endif
 endif
 
-LIBLAPACKNAME = libopenblas
 ifeq ($(USE_SYSTEM_LAPACK), 1)
 ifeq ($(OS), Darwin)
 LIBLAPACK = -framework vecLib -lLAPACK
@@ -154,7 +159,8 @@ LIBLAPACK = -llapack
 LIBLAPACKNAME = liblapack
 endif
 else
-LIBLAPACK = -L$(USRLIB) -lopenblas
+LIBLAPACK = $(LIBBLAS)
+LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
 # OS specific stuff
@@ -176,6 +182,7 @@ RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
 OSLIBS += -ldl -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLDFLAGS = -Wl,-Bdynamic
 endif
 
 ifeq ($(OS), FreeBSD)
@@ -185,6 +192,7 @@ RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
+JLD_FLAGS = -Wl,-Bdynamic
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
@@ -193,7 +201,8 @@ INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
-NO_WHOLE_ARCHIVE = 
+NO_WHOLE_ARCHIVE =
+JLDFLAGS =
 endif
 
 ifeq ($(OS), WINNT)
@@ -220,16 +229,43 @@ LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flis
 
 # Make tricks
 
-define symlink_target
-$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
-$$(abspath $(2)/$(1)):
-	@ln -sf $$(abspath $(1)) $$@ 
-endef
 define dir_target
 $$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(1))): $$(abspath $(1))
-$$(abspath $(1)):
+$$(abspath $(1)): 
 	@mkdir -p $$@
 endef
+
+ifeq ($(OS), WINNT)
+define mingw_to_dos
+$(subst /,\\,$(subst $(shell $(2) pwd),$(shell $(2) cmd //C cd),$(abspath $(1))))
+endef
+define symlink_target
+CLEAN_TARGETS += clean-$(2)/$(1)
+clean-$$(abspath $(2)/$(1)): 
+	@-cmd //C rmdir $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&)
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)): | $$(abspath $(2))
+	@cmd //C mklink //J $$(call mingw_to_dos,$(2)/$(1),cd $(2) &&) $$(call mingw_to_dos,$(1),) 
+endef
+else
+define symlink_target
+CLEAN_TARGETS += clean-$(2)/$(1)
+clean-$$(abspath $(2)/$(1)): 
+	@-rm $$(abspath $(2)/$(1))
+$$(subst $$(abspath $(JULIAHOME))/,,$$(abspath $(2)/$(1))): $$(abspath $(2)/$(1))
+$$(abspath $(2)/$(1)): | $$(abspath $(2))
+	@ln -sf $$(abspath $(1)) $$@ 
+endef
+endif
+
+JULIA_EXECUTABLE_debug = $(BUILD)/bin/julia-debug-$(DEFAULT_REPL)
+JULIA_EXECUTABLE_release = $(BUILD)/bin/julia-release-$(DEFAULT_REPL)
+
+ifeq ($(OS), WINNT)
+JULIA_EXECUTABLE = $(JULIA_EXECUTABLE_release)
+else
+JULIA_EXECUTABLE = $(JULIAHOME)/julia
+endif
 
 
 # Colors for make

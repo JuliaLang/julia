@@ -10,13 +10,13 @@ glpk linprog sparse lapack fft arpack random unicode \
 special bigint bigfloat bitarray distributions
 
 $(TESTS) ::
-	$(QUIET_JULIA) ../julia ./runtests.jl $@
+	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
 
 perf:
 ifneq ($(MAKECMDGOALS),perf)
-	$(QUIET_JULIA) ../julia perf/$@.jl
+	$(QUIET_JULIA) $(JULIA_EXECUTABLE) perf/$@.jl
 else
-	@../julia perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
+	@$(JULIA_EXECUTABLE) perf/$@.jl | perl -nle '@_=split/,/; printf "%-14s %7.3f\n", $$_[1], $$_[2]'
 endif
 
 benchmark:

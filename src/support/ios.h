@@ -92,9 +92,12 @@ DLLEXPORT size_t ios_copyall(ios_t *to, ios_t *from);
 DLLEXPORT size_t ios_copyuntil(ios_t *to, ios_t *from, char delim);
 // ensure at least n bytes are buffered if possible. returns # available.
 DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
+// like ios_readprep, but can never call os_read
+DLLEXPORT size_t ios_fillprep(ios_t *from, size_t n);
 //void ios_lock(ios_t *s);
 //int ios_trylock(ios_t *s);
 //int ios_unlock(ios_t *s);
+DLLEXPORT void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos);
 
 /* stream creation */
 DLLEXPORT

@@ -1,4 +1,3 @@
-_jl_libm = dlopen("libm")
 
 macro _jl_libmfunc_1arg_float(T,f)
     quote

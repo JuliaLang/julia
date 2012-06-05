@@ -52,14 +52,18 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
 #if defined(__WIN32__)
 		if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
           (LPCSTR)(&jl_load_dynamic_library),
-          handle->handle))
+          &handle->handle))
 			    jl_errorf("could not load base module", fname);
 #else
         handle->handle = dlopen(NULL,RTLD_NOW);
 #endif
         goto done;
     }
+#if defined(__WIN32__)
+	else if (modname[1] == ':') {
+#else
     else if (modname[0] == '/') {
+#endif
         error = uv_dlopen(modname,handle);
         if (!error) goto done;
     }
@@ -81,7 +85,7 @@ uv_lib_t *jl_load_dynamic_library(char *fname)
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
-                    JL_PRINTF(JL_STDERR, "%d\n", error);
+					JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", fname, error, uv_dlerror(handle));
                     jl_errorf("could not load module %s", fname);
                 }
             }

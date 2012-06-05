@@ -937,14 +937,14 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         }
         char *n = fname->name;
         jl_value_t *errstream = jl_stderr_obj();
-        ios_t *s = JL_STDERR;
-        ios_printf(s, "Warning: New definition %s", n);
+        JL_STREAM *s = JL_STDERR;
+        JL_PRINTF(s, "Warning: New definition %s", n);
         jl_show(errstream, (jl_value_t*)type);
-        ios_printf(s, " is ambiguous with %s", n);
+        JL_PRINTF(s, " is ambiguous with %s", n);
         jl_show(errstream, (jl_value_t*)sig);
-        ios_printf(s, ".\n         Make sure %s", n);
+        JL_PRINTF(s, ".\n         Make sure %s", n);
         jl_show(errstream, isect);
-        ios_printf(s, " is defined first.\n");
+        JL_PRINTF(s, " is defined first.\n");
     done_chk_amb:
         JL_GC_POP();
     }
@@ -1337,7 +1337,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 
 static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(outstr);
+    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(outstr);
     while (ml != JL_NULL) {
         JL_PRINTF(s, "%s", name);
         if (ml->tvars != jl_null) {
@@ -1513,4 +1513,55 @@ int jl_is_builtin(jl_value_t *v)
     return ((jl_is_func(v) && (((jl_function_t*)v)->linfo==NULL) &&
              !jl_is_gf(v)) ||
             jl_typeis(v,jl_intrinsic_type));
+}
+
+DLLEXPORT
+int jl_is_genericfunc(jl_value_t *v)
+{
+    return (jl_is_func(v) && jl_is_gf(v));
+}
+
+DLLEXPORT
+jl_sym_t *jl_genericfunc_name(jl_value_t *v)
+{
+    return jl_gf_name(v);
+}
+
+
+//todo implement in Julia
+JL_CALLABLE(jl_f_make_callback)
+{
+    JL_TYPECHK("make_callback",function,args[0]);
+    JL_GC_PUSH(&args[0]);
+    jl_gc_preserve(args[0]);
+    JL_GC_POP();
+    return args[0];
+}
+
+void jl_callback_call(jl_function_t *f,int count,...)
+{
+    jl_value_t **argv = alloca(count*sizeof(jl_value_t*));
+    va_list argp;
+    va_start(argp,count);
+    jl_value_t *v=0;    int i;
+    for(i=0; i<count; ++i) {
+        switch(va_arg(argp,int)) {
+        case CB_PTR:
+            v = jl_box_pointer(va_arg(argp,void*));
+            break;
+        case CB_INT32:
+            v = jl_box_int32(va_arg(argp,int32_t));
+            break;
+        case CB_INT64:
+            v = jl_box_int64(va_arg(argp,int64_t));
+            break;
+        default: jl_error("callback: only Ints and Pointers are supported at this time");
+            //excecution never reaches here
+            break;
+        }
+        argv[i]=v;
+    }
+    JL_GC_PUSHARGS(argv,count);
+    jl_apply(f,(jl_value_t**)argv,count);
+    JL_GC_POP();
 }

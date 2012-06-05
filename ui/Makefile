@@ -9,15 +9,14 @@ FLAGS = -Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 
 DEBUGFLAGS += $(FLAGS)
 SHIPFLAGS += $(FLAGS)
+JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
-julia-release julia-debug: %: %-basic  %-readline
-
-JLDFLAGS =  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH) 
-
-julia-release julia-debug: %: %-basic %-readline
+julia-release julia-debug: %: %-basic %-readline | $(USR)/lib/julia/website
 	@$(MAKE) -C webserver $@
 
-release debug:
+$(eval $(call symlink_target,website,$(USR)/lib/julia))
+	
+release debug: | $(USR)/lib/julia/website
 	$(MAKE) julia-$@
 
 %.o: %.c repl.h
@@ -31,16 +30,16 @@ julia-release-readline: $(USRBIN)/julia-release-readline
 julia-debug-readline: $(USRBIN)/julia-debug-readline
 
 $(USRBIN)/julia-release-basic: repl.o repl-basic.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USRLIB) -ljulia-release $(JLDFLAGS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-basic: repl.do repl-basic.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USRLIB) -ljulia-debug $(JLDFLAGS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
 
 $(USRBIN)/julia-release-readline: repl.o repl-readline.o
-	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) -ljulia-release $(JLDFLAGS)
+	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-release
 $(USRBIN)/julia-debug-readline: repl.do repl-readline.do
-	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) -ljulia-debug $(JLDFLAGS)
+	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $^ -o $@ $(READLINE) -L$(USRLIB) $(JLDFLAGS) -ljulia-debug
 
-clean:
+clean: | $(CLEAN_TARGETS)
 	$(MAKE) -C webserver $@
 	rm -f *.o *.do
 	rm -f $(USRBIN)/julia-*-basic $(USRBIN)/julia-*-readline $(USRBIN)/julia

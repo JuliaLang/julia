@@ -10,8 +10,9 @@ else
     typealias FileOffset Int64
 end
 
-type IOStream <: IO
-    # NOTE: for some reason the order of these field is significant!?
+abstract Stream <: IO
+
+type IOStream <: Stream
     ios::Array{Uint8,1}
     name::String
 
@@ -27,6 +28,7 @@ type IOStream <: IO
         return x
     end
     IOStream(name::String) = IOStream(name, true)
+    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
 end
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
@@ -177,12 +179,12 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
-write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
+write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOStream, c::Char) = ccall(:jl_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 function write{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
-        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
     else
         invoke(write, (Any, Array), s, a)
@@ -190,7 +192,7 @@ function write{T}(s::IOStream, a::Array{T})
 end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
-    ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
+    ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
 function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
@@ -210,7 +212,7 @@ end
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 function read(s::IOStream, ::Type{Uint8})
-    b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
+    b = ccall(:jl_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
     end
@@ -219,7 +221,7 @@ end
 
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
-function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
+function read{T}(s::IOStream, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
@@ -232,9 +234,10 @@ function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Float32
     end
 end
 
-function readuntil(s::IOStream, delim)
-    # TODO: faster versions that avoid the encoding check
-    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
+function readuntil(s::IOStream, delim::Uint8)
+    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+    # TODO: faster versions that avoid this encoding check
+    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
 end
 
 function readall(s::IOStream)
@@ -263,9 +266,7 @@ skip(s::IOStream, delta::Integer) =
 
 position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
-eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
-
-type IOTally <: IO
+type IOTally
     nbytes::Int
     IOTally() = new(0)
 end
@@ -357,6 +358,7 @@ function done(itr::EachLine, line)
     true
 end
 next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
+
 
 function readlines(s, fx::Function...)
     a = {}

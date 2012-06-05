@@ -21,6 +21,7 @@
 
 extern int asprintf(char **strp, const char *fmt, ...);
 
+#define USE_READLINE_STATIC
 #include <readline/readline.h>
 #include <readline/history.h>
 
@@ -70,7 +71,11 @@ static void init_history(void) {
             char *p = strchr(first->line, '\0');
             for (k = i+1; k < j; k++) {
                 *p = '\n';
+                #ifndef __WIN32__
                 p = stpcpy(p+1, history_get(i+1)->line);
+                #else
+                p = strcpy(p+1, history_get(i+1)->line);
+                #endif
                 free_history_entry(history_rem(i+1));
             }
         }
@@ -323,6 +328,13 @@ static int down_callback(int count, int key) {
     }
 }
 
+static int sigint_callback(int count, int key) {
+    //use either line, but not both:
+    //raise(SIGINT);
+    ios_write(ios_stdout, "^C\n", 3); jl_clear_input();
+    return 0;
+}
+
 static int callback_en=0;
 
 void jl_input_line_callback(char *input)
@@ -336,6 +348,9 @@ void jl_input_line_callback(char *input)
     if (rl_ast != NULL) {
         doprint = !ends_with_semicolon(input);
         add_history_permanent(input);
+#ifdef __WIN32__
+        ios_putc('\r', ios_stdout);
+#endif
         ios_putc('\n', ios_stdout);
         free(input);
     }
@@ -420,6 +435,30 @@ int tab_complete(const char *line, char **answer, int *plen)
 
 static char *strtok_saveptr;
 
+#if defined(_WIN32) && !defined(__MINGW_H)
+#define strtok_r(s,d,p) strtok_s(s,d,p)
+#elif defined(__MINGW_H)
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if( !save )
+        return strtok(str, delim);
+    if( !str && !(str = *save) )
+        return NULL;
+    last = str + strlen(str);
+    if( (*save = res = strtok(str, delim)) )
+    {
+        *save += strlen(res);
+        if( *save < last )
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
+
 static char *do_completions(const char *ch, int c)
 {
     static char *completions = NULL;
@@ -450,7 +489,7 @@ static char **julia_completion(const char *text, int start, int end)
 {
     return rl_completion_matches(text, do_completions);
 }
-
+#ifndef __WIN32__
 void sigtstp_handler(int arg)
 {
     rl_cleanup_after_signal();
@@ -471,6 +510,7 @@ void sigcont_handler(int arg)
     if (callback_en)
         rl_forced_update_display();
 }
+#endif
 
 static void init_rl(void)
 {
@@ -489,15 +529,47 @@ static void init_rl(void)
         rl_bind_key_in_map('\005',     line_end_callback,   keymaps[i]);
         rl_bind_key_in_map('\002',     left_callback,       keymaps[i]);
         rl_bind_key_in_map('\006',     right_callback,      keymaps[i]);
+        rl_bind_keyseq_in_map("\e[1~", line_start_callback, keymaps[i]);
+        rl_bind_keyseq_in_map("\e[4~", line_end_callback,   keymaps[i]);
+        rl_bind_keyseq_in_map("\e[3~", delete_callback,     keymaps[i]);
         rl_bind_keyseq_in_map("\e[A",  up_callback,         keymaps[i]);
         rl_bind_keyseq_in_map("\e[B",  down_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[D",  left_callback,       keymaps[i]);
         rl_bind_keyseq_in_map("\e[C",  right_callback,      keymaps[i]);
         rl_bind_keyseq_in_map("\\C-d", delete_callback,     keymaps[i]);
+        rl_bind_keyseq_in_map("\\C-C", sigint_callback,     keymaps[i]);
     }
-
+#ifndef __WIN32__
     signal(SIGTSTP, sigtstp_handler);
     signal(SIGCONT, sigcont_handler);
+#endif
+}
+
+extern int _rl_echoing_p;
+
+void jl_prep_terminal (int meta_flag)
+{
+#ifndef __WIN32__
+    struct termios beforeRl_in = ((uv_tty_t*)jl_uv_stdin)->orig_termios;
+    struct termios beforeRl_out = ((uv_tty_t*)jl_uv_stdout)->orig_termios;
+#endif
+    //terminal is prepped by libuv
+    _rl_echoing_p=1;
+    rl_prep_terminal(1);
+    uv_tty_set_mode((uv_tty_t*)jl_uv_stdin,1);
+    uv_tty_set_mode((uv_tty_t*)jl_uv_stdout,1);
+#ifndef __WIN32__
+    ((uv_tty_t*)jl_uv_stdin)->orig_termios=beforeRl_in;
+    ((uv_tty_t*)jl_uv_stdout)->orig_termios=beforeRl_out;
+#endif
+}
+
+/* Restore the terminal's normal settings and modes. */
+void jl_deprep_terminal ()
+{
+    rl_deprep_terminal();
+    uv_tty_set_mode((uv_tty_t*)jl_uv_stdout,0);
+    uv_tty_set_mode((uv_tty_t*)jl_uv_stdin,0);
 }
 
 void init_repl_environment(int argc, char *argv[])
@@ -512,10 +584,33 @@ void init_repl_environment(int argc, char *argv[])
         }
     }
 
+#ifdef __WIN32__
+    rl_outstream=(void*)jl_uv_stdout;
+#endif
+    rl_prep_terminal(1);
+    rl_prep_term_function=&jl_prep_terminal;
+    rl_deprep_term_function=&jl_deprep_terminal;
     prompt_length = strlen(prompt_plain);
     rl_catch_signals = 0;
     init_history();
     rl_startup_hook = (Function*)init_rl;
+}
+
+void install_event_handler(char *prompt, rl_vcpfunc_t *func)
+{
+    rl_callback_handler_install(prompt, func);
+}
+
+void parseAndExecute(char *str)
+{
+    if (!str || ios_eof(ios_stdin)) {
+        ios_printf(ios_stdout, "\n");
+        return;
+    }
+    jl_value_t *ast = jl_parse_input_line(str);
+    jl_value_t *value = jl_toplevel_eval(ast);
+    jl_show_any(value);
+    ios_printf(ios_stdout, "\n\n");
 }
 
 void repl_callback_enable()
@@ -524,8 +619,44 @@ void repl_callback_enable()
     rl_callback_handler_install(prompt_string, jl_input_line_callback);
 }
 
-void jl_stdin_callback(void)
+#include "uv.h"
+
+void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen)
 {
-    if (callback_en)
-        rl_callback_read_char();
+    char *start = base;
+    while(*start != 0 && nread > 0) {
+        rl_stuff_char(*start);
+        start++;
+        nread--;
+    }
+    rl_callback_read_char();
 }
+
+void restart(void)
+{
+    rl_on_new_line();
+}
+
+void jl_clear_input(void) {
+    //todo: how to do this better / the correct way / ???
+    //move the cursor to a clean line:
+    char *p = rl_line_buffer;
+    int i;
+    for (i = 0; *p != '\0'; p++, i++) {
+        if (i >= rl_point && *p == '\n') {
+            ios_putc('\n', ios_stdout);
+        }
+    }
+    ios_putc('\n', ios_stdout);
+    //reset state:
+    rl_reset_line_state();
+    reset_indent();
+    rl_initialize();
+    //and redisplay prompt:
+    rl_forced_update_display();
+    rl_on_new_line_with_prompt();
+#ifndef __WIN32__
+    ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
+#endif
+}
+

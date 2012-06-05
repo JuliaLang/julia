@@ -40,5 +40,6 @@ JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
 JL_CALLABLE(jl_f_ctor_trampoline);
+JL_CALLABLE(jl_f_make_callback);
 
 #endif

@@ -2159,6 +2159,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef DEBUG
     llvm::JITEmitDebugInfo = true;
 #endif
+    //llvm::JITEmitDebugInfoToDisk = true;
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1

@@ -214,6 +214,32 @@ force(x::Function) = x()
 # we actually make objects. this allows for constructing objects that might
 # interfere with I/O by reading, writing, blocking, etc.
 
+type Deserializer
+    task::Task
+    returntask::Task
+    stream::AsyncStream
+    buf::Array{Uint8}
+    buflen::Int
+    pos::Int
+    function Deserializer(loop::Function,stream::AsyncStream)
+        this=new()
+        this.task=Task(()->loop(this))
+        this.stream=stream
+        this.buflen=0
+        this.pos=1
+        this
+    end
+end
+
+function read(this::Deserializer,::Type{Uint8})
+    if(this.pos>this.buflen)
+        yieldto(this.returntask)
+    end
+    b::Uint8=uint8(this.buf[this.pos])
+    this.pos=this.pos+1
+    b
+end
+
 function deserialize(s)
     b = int32(read(s, Uint8))
     if b == 0

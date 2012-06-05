@@ -23,7 +23,6 @@
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 #endif
-
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -78,21 +77,68 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     }
 }
 
+#endif
+
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-void sigint_handler(int sig, siginfo_t *info, void *context)
-{
-    sigset_t sset;
-    sigemptyset(&sset);
-    sigaddset(&sset, SIGINT);
-    sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
+#ifdef __WIN32__
+volatile HANDLE hMainThread;
+void restore_signals() { }
+void win_raise_sigint() {
+	jl_raise(jl_interrupt_exception);
+}
+BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
+{	
+	int sig;
+	//windows signals use different numbers from unix
+	switch(wsig){
+		case CTRL_C_EVENT: sig = SIGINT; break;
+		//case CTRL_BREAK_EVENT: sig = SIGTERM; break;
+		// etc.
+		default: sig = SIGTERM; break;
+	}
     if (jl_defer_signal) {
         jl_signal_pending = sig;
-    }
-    else {
+    } else {
         jl_signal_pending = 0;
+		SuspendThread(hMainThread);
+		CONTEXT ctxThread;
+		memset(&ctxThread,0,sizeof(CONTEXT));
+		ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+		if (!GetThreadContext(hMainThread, &ctxThread)) {
+			//error
+			printf("error: GetThreadContext failed\n");
+			return 0;
+		}
+		ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
+		if (!SetThreadContext(hMainThread,&ctxThread)) {
+			printf("error: SetThreadContext failed\n");
+			//error
+			return 0;
+		}
+		if ((DWORD)-1 == ResumeThread (hMainThread)) {
+			printf("error: ResumeThread failed\n");
+			//error
+			return 0;
+		}
+    }
+	return 1;
+}
+#else	
+void restore_signals() {
+	sigset_t sset;
+	sigemptyset (&sset);
+	sigprocmask (SIG_SETMASK, &sset, 0);
+}
+void sigint_handler(int sig, siginfo_t *info, void *context)
+{	
+    if (jl_defer_signal) {
+        jl_signal_pending = sig;
+    } else {
+        jl_signal_pending = 0;
+        ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
+        ev_break(jl_local_event_loop()->ev,EVBREAK_CANCEL);
         jl_raise(jl_interrupt_exception);
     }
 }
@@ -100,17 +146,99 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
+#ifdef __WIN32__
+uv_lib_t _jl_ntdll_handle;
+uv_lib_t _jl_kernel32_handle;
+uv_lib_t _jl_crtdll_handle;
+uv_lib_t _jl_winsock_handle;
+
+uv_lib_t *jl_ntdll_handle=&_jl_ntdll_handle;
+uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
+uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
+uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
+#endif
+uv_loop_t *jl_event_loop;
+uv_loop_t *jl_io_loop;
 
 #ifdef COPY_STACKS
 void jl_switch_stack(jl_task_t *t, jmp_buf *where);
 extern jmp_buf * volatile jl_jmp_target;
 #endif
 
+#ifdef __WIN32__
+static long chachedPagesize = 0;
+long getPageSize (void) {
+	if (!chachedPagesize) {
+        SYSTEM_INFO systemInfo;
+        GetSystemInfo (&systemInfo);
+        chachedPagesize = systemInfo.dwPageSize;
+    }
+    return chachedPagesize;
+}
+#else
+long getPageSize (void) {
+	return sysconf(_SC_PAGESIZE);
+}
+#endif
+
+void *init_stdio_handle(uv_file fd,int readable)
+{
+    void *handle;
+    uv_handle_type type = uv_guess_handle(fd);
+    switch(type)
+    {
+        case UV_TTY:
+            handle = malloc(sizeof(uv_tty_t));
+            uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable);
+            ((uv_tty_t*)handle)->data=0;
+            uv_tty_set_mode((void*)handle,1); //raw stdio
+            break;
+        case UV_NAMED_PIPE:
+            handle = malloc(sizeof(uv_pipe_t));
+            uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,0);
+            uv_pipe_open((uv_pipe_t*)handle,fd);
+            ((uv_pipe_t*)handle)->data=0;
+            break;
+        case UV_FILE:
+            if(readable)
+                jl_error("stdin readine from files is not yet supported");
+            if(fd == 1)
+                handle=ios_stdout;
+            else if(fd == 2)
+                handle=ios_stderr;
+            else
+                jl_error("unknown file stream");
+            break;
+        default:
+            handle=0;
+            jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);
+            break;
+    }
+    return handle;
+}
+
+void init_stdio()
+{
+    JL_STDIN = init_stdio_handle(0,1);
+    JL_STDOUT = init_stdio_handle(1,0);
+    JL_STDERR = init_stdio_handle(2,0);
+}
+
 void julia_init(char *imageFile)
 {
-    jl_page_size = sysconf(_SC_PAGESIZE);
+    jl_page_size = getPageSize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
+#ifdef __WIN32__
+    uv_dlopen("ntdll.dll",jl_ntdll_handle); //bypass julia's pathchecking for system dlls
+    uv_dlopen("Kernel32.dll",jl_kernel32_handle);
+    uv_dlopen("msvcrt.dll",jl_crtdll_handle);
+    uv_dlopen("Ws2_32.dll",jl_winsock_handle);
+#endif
+    jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
+    jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
+    //init io
+    init_stdio();
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();
