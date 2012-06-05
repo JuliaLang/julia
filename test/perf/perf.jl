@@ -131,6 +131,7 @@ end
 
 ## printfd ##
 
+@unix_only begin
 function printfd(n)
     f = open("/dev/null","w")
     for i = 1:n
@@ -143,3 +144,4 @@ end
 
 printfd(1)
 @timeit printfd(100000) "printfd"
+end
