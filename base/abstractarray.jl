@@ -666,6 +666,13 @@ function (!=)(A::AbstractArray, B::AbstractArray)
     return false
 end
 
+(<)(A::AbstractArray, B::AbstractArray) =
+    error("< not defined for arrays. Try .< or isless.")
+
+(==)(A::AbstractArray, B) = error("Not defined. Try .== or isequal.")
+
+(==)(A, B::AbstractArray) = error("Not defined. Try .== or isequal.")
+
 for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
     @eval function ($f)(v::AbstractVector)
         n = length(v)

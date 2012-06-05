@@ -1,49 +1,45 @@
 # .ini file parser
 
-let
-    typealias HTSS Dict{String,String}
+typealias HTSS Dict{String,String}
 
-    global IniFile
-    type IniFile
-        sections::Dict{String,HTSS}
-        defaults::HTSS
-    end
+type IniFile
+    sections::Dict{String,HTSS}
+    defaults::HTSS
+end
 
-    IniFile() = IniFile(Dict{String,HTSS}(), HTSS())
+IniFile() = IniFile(Dict{String,HTSS}(), HTSS())
 
-    global read
-    function read(inifile::IniFile, stream::IOStream)
-        current_section = inifile.defaults
-        for line in EachLine(stream)
-            s = strip(line)
-            # comments start with # or ;
-            if length(s) < 3 || s[1] == '#' || s[1] == ';'
-                continue
-            elseif s[1] == '[' && s[end] == ']'
-                section = s[2:end-1]
-                if !has(inifile.sections, section)
-                    inifile.sections[section] = HTSS()
-                end
-                current_section = inifile.sections[section]
+function read(inifile::IniFile, stream::IOStream)
+    current_section = inifile.defaults
+    for line in EachLine(stream)
+        s = strip(line)
+        # comments start with # or ;
+        if length(s) < 3 || s[1] == '#' || s[1] == ';'
+            continue
+        elseif s[1] == '[' && s[end] == ']'
+            section = s[2:end-1]
+            if !has(inifile.sections, section)
+                inifile.sections[section] = HTSS()
+            end
+            current_section = inifile.sections[section]
+        else
+            i = strchr(s, '=')
+            j = strchr(s, ':')
+            if i == 0 && j == 0
+                # TODO: allow multiline values
+                println("skipping malformed line: $s")
             else
-                i = strchr(s, '=')
-                j = strchr(s, ':')
-                if i == 0 && j == 0
-                    # TODO: allow multiline values
-                    println("skipping malformed line: $s")
-                else
-                    idx = min(i, j)
-                    if idx == 0
-                        idx = max(i, j)
-                    end
-                    key = rstrip(s[1:idx-1])
-                    val = lstrip(s[idx+1:end])
-                    current_section[key] = val
+                idx = min(i, j)
+                if idx == 0
+                    idx = max(i, j)
                 end
+                key = rstrip(s[1:idx-1])
+                val = lstrip(s[idx+1:end])
+                current_section[key] = val
             end
         end
-        inifile
     end
+    inifile
 end
 
 function read(inifile::IniFile, filename::String)

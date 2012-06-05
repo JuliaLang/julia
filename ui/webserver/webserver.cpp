@@ -918,7 +918,9 @@ void get_response(request* req,uv_stream_t *client)
         message_root.append(response_messages[i].type);
         for (size_t j = 0; j < response_messages[i].args.size(); j++)
             message_root.append(response_messages[i].args[j]);
+#ifdef DEBUG_TRACE
         cout<<"Sending message "<<(int)response_messages[i].type<<" to user "<<session_token<<"\n"; 
+#endif
         response_root.append(message_root);
     }
 
