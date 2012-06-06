@@ -189,7 +189,7 @@ function __eval_exprs(__parsed_exprs)
     end
     
     # send the result of the last expression
-    if ans == nothing
+    if isa(ans,Nothing)
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, ""}))
     else
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)}))
