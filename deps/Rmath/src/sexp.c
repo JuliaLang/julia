@@ -2,6 +2,7 @@
  *  Mathlib : A C Library of Special Functions
  *  Copyright (C) 1998 Ross Ihaka
  *  Copyright (C) 2000-2002 the R Development Core Team
+ *  Copyright (C) 2012 Viral B. Shah (randmtzig)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -34,9 +35,15 @@
  *    Comm. ACM, 15, 873-882.
  */
 
+extern double randmtzig_exprnd (void);
+
+double exp_rand(void) {
+    return randmtzig_exprnd();
+}
+
 #include "nmath.h"
 
-double exp_rand(void)
+double exp_rand_rmath(void)
 {
     /* q[k-1] = sum(log(2)^k / k!)  k=1,..,n, */
     /* The highest n (here 16) is determined by q[n-1] = 1.0 */
