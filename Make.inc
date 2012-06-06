@@ -176,6 +176,7 @@ endif
 
 ifeq ($(OS), Linux)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
@@ -187,6 +188,7 @@ endif
 
 ifeq ($(OS), FreeBSD)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
@@ -198,6 +200,7 @@ endif
 
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
+INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -207,6 +210,7 @@ endif
 
 ifeq ($(OS), WINNT)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = dll
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
