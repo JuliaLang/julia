@@ -1883,7 +1883,7 @@ function _context2( self::FramedPlot, device, region )
 end
 
 function exterior( self::FramedPlot, device::Renderer, region::BoundingBox )
-    bb = BoundingBox()
+    bb = copy(region)
 
     context1 = _context1( self, device, region )
     bb1 = boundingbox(self.x1, context1)
