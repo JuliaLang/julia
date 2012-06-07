@@ -108,7 +108,7 @@ has(intset(),2)
 del_all(FDSet())
 start(Dict(0))
 done(Dict(0),0)
-get(Dict(0), 0, ())
+get(Dict(0),0,())
 add(FDSet(),int32(0))
 2==2.0
 2.0==2.0

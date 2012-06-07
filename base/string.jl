@@ -463,11 +463,13 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
 function cstring(p::Ptr{Uint8},len::Int)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), p, len)::ByteString
 end
+
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+convert(::Type{ByteString}, s::String) = cstring(s)
 
 ## string promotion rules ##
 
