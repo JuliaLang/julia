@@ -165,11 +165,15 @@
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
             ; expr didn't change; move to subexpressions
-	    (map (lambda (subex)
-		   (if (not (pair? subex))
-		       subex
-		       (pattern-expand plist subex)))
-		 expr)
+	    (let ((sub (lambda (subex)
+			 (if (not (pair? subex))
+			     subex
+			     (pattern-expand plist subex)))))
+	      (if (eq? (car expr) 'lambda)
+		  (list* 'lambda
+			 (map sub (cadr expr))
+			 (map sub (cddr expr)))
+		  (map sub expr)))
 	    ; expr changed; iterate
 	    (pattern-expand plist enew)))))
 
