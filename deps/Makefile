@@ -390,6 +390,11 @@ distclean-amos: clean-amos
 DSFMT_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
+LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+ifeq ($(ARCH), x86_64)
+LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
+endif
+
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
@@ -404,7 +409,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -msse2 -DHAVE_SSE2 -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) && \
+	$(CC) $(LIBRANDOM_CFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
