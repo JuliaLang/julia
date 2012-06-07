@@ -70,7 +70,6 @@ endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 LIBS += openblas
-compile-suitesparse: install-openblas
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
@@ -603,7 +602,7 @@ $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_TARGET): install-openblas $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
