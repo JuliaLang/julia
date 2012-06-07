@@ -1,6 +1,7 @@
 ##
 #
-#
+# (spaghetti) Code to create a text graphic of the Julia type tree
+# Used to generate https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 #
 ##
 
