@@ -114,8 +114,6 @@ $(USR): $(DIRS)
 
 ## LLVM ##
 
-LLVM_TARGETS = x86,x86_64
-
 LLVM_OBJ_TARGET = $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
 	LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/Release/bin/LLVM-$(LLVM_VER).$(SHLIB_EXT)
@@ -151,7 +149,7 @@ llvm_python_workaround:
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=x86,x86_64 --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
