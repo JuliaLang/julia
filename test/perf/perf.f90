@@ -135,11 +135,11 @@ end module
 
 
 module bench
-use utils, only: trace, randn, std, mean
+use utils, only: trace, randn, std, mean, stop_error
 use types, only: dp
 implicit none
 private
-public fib, mandelperf, pisum, randmatstat, randmatmul
+public fib, parse_int, quicksort, mandelperf, pisum, randmatstat, randmatmul
 
 contains
 
@@ -151,6 +151,32 @@ else
     r = fib(n-1) + fib(n-2)
 end if
 end function
+
+integer function parse_int(s, base) result(n)
+character(len=*), intent(in) :: s
+integer, intent(in) :: base
+integer :: i, d
+character :: c
+n = 0
+do i = 1, len(s)
+    c = s(i:i)
+    d = 0
+    if (ichar(c) >= ichar('0') .and. ichar(c) <= ichar('9')) then
+        d = ichar(c) - ichar('0')
+    else if (ichar(c) >= ichar('A') .and. ichar(c) <= ichar('Z')) then
+        d = ichar(c) - ichar('A') + 10
+    else if (ichar(c) >= ichar('a') .and. ichar(c) <= ichar('z')) then
+        d = ichar(c) - ichar('a') + 10
+    else
+        call stop_error("parse_int 1")
+    end if
+
+    if (base <= d) call stop_error("parse_int 2")
+    n = n*base + d
+end do
+
+end function
+
 
 integer function mandel(z0) result(r)
 complex(dp), intent(in) :: z0
@@ -181,6 +207,37 @@ do while (re < 0.49_dp)
     re = re + 0.1_dp
 end do
 end function
+
+recursive subroutine quicksort(a, lo0, hi)
+real(dp), intent(inout) :: a(:)
+integer, intent(in) :: lo0, hi
+integer :: i, j, lo
+real(dp) :: pivot, t
+lo = lo0
+i = lo
+j = hi
+do while (i < hi)
+    pivot = a((lo+hi)/2)
+    do while (i <= j)
+        do while (a(i) < pivot)
+            i = i + 1
+        end do
+        do while (a(j) > pivot)
+            j = j - 1
+        end do
+        if (i <= j) then
+            t = a(i)
+            a(i) = a(j)
+            a(j) = t
+            i = i + 1
+            j = j - 1
+        end if
+    end do
+    if (lo < j) call quicksort(a, lo, j)
+    lo = i
+    j = hi
+end do
+end subroutine
 
 real(dp) function pisum() result(s)
 integer :: j, k
@@ -238,12 +295,14 @@ end module
 program perf
 use types, only: dp
 use utils, only: assert, init_random_seed
-use bench, only: fib, mandelperf, pisum, randmatstat, randmatmul
+use bench, only: fib, parse_int, quicksort, mandelperf, pisum, randmatstat, &
+    randmatmul
 implicit none
 
-integer :: i, f
+integer :: i, f, n, m, k
 real(dp) :: t1, t2, tmin, pi, s1, s2
-real(dp), allocatable :: C(:, :)
+real(dp), allocatable :: C(:, :), d(:)
+character(len=11) :: s
 
 call init_random_seed()
 
@@ -255,7 +314,22 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(f == 6765)
-print *, "fib", tmin*1000
+print "('fortran,fib,',f0.6)", tmin*1000
+
+tmin = 1e9_dp
+do i = 1, 5
+    call cpu_time(t1)
+    do k = 1, 1000
+        call random_number(s1)
+        n = int(s1*huge(n))
+        write(s, '(z0)') n
+        m = parse_int(s(:len_trim(s)), 16)
+        call assert(m == n)
+    end do
+    call cpu_time(t2)
+    if (t2-t1 < tmin) tmin = t2-t1
+end do
+print "('fortran,parse_int,',f0.6)", tmin*1000
 
 tmin = 1e9_dp
 do i = 1, 5
@@ -267,7 +341,19 @@ end do
 ! This number is processor dependent, as it can differ a bit depending on the
 ! floating point rounding errors:
 !call assert(f == 14307)
-print *, "mandel", tmin*1000
+print "('fortran,mandel,',f0.6)", tmin*1000
+
+tmin = 1e9_dp
+do i = 1, 5
+    call cpu_time(t1)
+    allocate(d(5000))
+    call random_number(d)
+    call quicksort(d, 1, size(d))
+    deallocate(d)
+    call cpu_time(t2)
+    if (t2-t1 < tmin) tmin = t2-t1
+end do
+print "('fortran,quicksort,',f0.6)", tmin*1000
 
 tmin = 1e9_dp
 do i = 1, 5
@@ -277,7 +363,7 @@ do i = 1, 5
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 call assert(abs(pi - 1.644834071848065_dp) < 1e-6_dp)
-print *, "pi_sum", tmin*1000
+print "('fortran,pi_sum,',f0.6)", tmin*1000
 
 tmin = 1e9_dp
 do i = 1, 5
@@ -288,7 +374,7 @@ do i = 1, 5
 end do
 call assert(s1 > 0.5_dp .and. s1 < 1)
 call assert(s2 > 0.5_dp .and. s2 < 1)
-print *, "rand_mat_stat", tmin*1000
+print "('fortran,rand_mat_stat,',f0.6)", tmin*1000
 
 tmin = 1e9_dp
 do i = 1, 5
@@ -298,6 +384,6 @@ do i = 1, 5
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print *, "randmatmul", tmin*1000
+print "('fortran,rand_mat_mul,',f0.6)", tmin*1000
 
 end program
