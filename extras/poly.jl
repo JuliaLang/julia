@@ -1,7 +1,6 @@
 # Polynomial type manipulations
 
 #todo: division
-#todo: deprecate polyval(vector) polyint(vector) and polydir(vector)
 #todo: sparse polynomials?
 
 type Polynomial{T<:Number}
@@ -19,39 +18,36 @@ type Polynomial{T<:Number}
     end
 end
 
-# allowing Int based polynomial gives all sorts of bad results below,
-# so following the spirit of / of Integers, we promote to float automatically
-Polynomial{T<:Integer}(a::Vector{T}) = Polynomial{Float64}(float64(a))
 Polynomial{T<:Number}(a::Vector{T}) = Polynomial{T}(a)
 
 length(p::Polynomial) = length(p.a)-p.nzfirst
 ref(p::Polynomial, i) = p.a[i+p.nzfirst]
 assign(p::Polynomial, v, i) = (p.a[i+p.nzfirst] = v)
 
-copy(p::Polynomial) = Polynomial(copy(p.a[p.nzfirst:end]))
+copy(p::Polynomial) = Polynomial(copy(p.a[1+p.nzfirst:end]))
 
 zero{T}(p::Polynomial{T}) = Polynomial([zero(T)])
 one{T}(p::Polynomial{T}) = Polynomial([one(T)])
 
-function show(p::Polynomial)
+function show(io,p::Polynomial)
     n = length(p)
-    print("Polynomial(")
+    print(io,"Polynomial(")
     if n <= 0
-        print("0")
+        print(io,"0")
     elseif n == 1
-        print(p[1])
+        print(io,p[1])
     else
-        print("$(p[1])x^$(n-1)");
+        print(io,"$(p[1])x^$(n-1)");
         for i = 2:n-1
             if p[i] != 0
-                print(" + $(p[i])x^$(n-i)")
+                print(io," + $(p[i])x^$(n-i)")
             end
         end
         if p[n] != 0
-            print(" + $(p[n])")
+            print(io," + $(p[n])")
         end
     end
-    print(")")
+    print(io,")")
 end
 
 function show{T<:Complex}(p::Polynomial{T})
@@ -174,22 +170,21 @@ function ==(p1::Polynomial, p2::Polynomial)
     end
 end
 
-polyval(p::Polynomial, x::Number) = polyval(p.a, x)
-
-function polyval{T}(a::AbstractVector{T}, x::Number)
-    P = promote_type(T, typeof(x))
-    if length(a) == 0
-        return zero(P)
+function polyval{T}(p::Polynomial{T}, x::Number)
+    R = promote_type(T, typeof(x))
+    lenp = length(p)
+    if lenp == 0
+        return zero(R)
     else
-        y = convert(P, a[1])
-        for i = 2:length(a)
-            y = a[i] + x.*y
+        y = convert(R, p[1])
+        for i = 2:lenp
+            y = p[i] + x.*y
         end
         return y
     end
 end
 
-function polyval(a::AbstractVector, x::AbstractVector)
+function polyval(p::Polynomial, x::AbstractVector)
     y = zeros(size(x))
     for i = 1:length(x)
         y[i] = polyval(a, x[i])
@@ -197,29 +192,27 @@ function polyval(a::AbstractVector, x::AbstractVector)
     return y
 end
 
-polyint(p::Polynomial, k::Number) = polyint(p.a, k)
-polyint(p::Polynomial) = polyint(p.a, 0)
-function polyint{T}(a::AbstractVector{T}, k::Number)
-    n = length(a)
-    a2 = Array(T, n+1)
+polyint(p::Polynomial) = polyint(p, 0)
+function polyint{T}(p::Polynomial{T}, k::Number)
+    R = promote_type(promote_type(T, Float64), typeof(k))
+    n = length(p)
+    a2 = Array(R, n+1)
     for i = 1:n
-        a2[i] = a[i] / (n-i+1)
+        a2[i] = p[i] / (n-i+1)
     end
     a2[end] = k
     Polynomial(a2)
 end
-polyint(a::AbstractVector) = polyint(a, 0)
 
-polydir(p::Polynomial) = polydir(p.a)
-function polydir{T}(a::AbstractVector{T})
-    n = length(a)
+function polydir{T}(p::Polynomial{T})
+    n = length(p)
     if n > 0
         a2 = Array(T, n-1)
         for i = 1:n-1
-            a2[i] = a[i] * (n-i)
+            a2[i] = p[i] * (n-i)
         end
     else
-        a2 = Array(T, 0)
+        a2 = zeros(T, 0)
     end
     Polynomial(a2)
 end
@@ -237,10 +230,10 @@ poly(A::Matrix) = poly(eig(A)[1])
 
 function roots{T}(p::Polynomial{T})
     num_zeros = 0
-    if length(p) == 0 return Array(T,0) end
+    if length(p) == 0 return zeros(T,0) end
     while p[end-num_zeros] == 0
         if num_zeros == length(p)-1
-            return Array(T, 0)
+            return zeros(T, 0)
         end
         num_zeros += 1
     end
@@ -248,7 +241,8 @@ function roots{T}(p::Polynomial{T})
     if n < 1
         return zeros(T, length(p)-1)
     end
-    companion = zeros(T, n, n)
+    R = promote_type(T, Float64)
+    companion = zeros(R, n, n)
     a0 = p[end-num_zeros]
     for i = 1:n-1
         companion[1,i] = -p[end-num_zeros-i] / a0
@@ -258,7 +252,7 @@ function roots{T}(p::Polynomial{T})
     D,V = eig(companion)
     T_r = typeof(real(D[1]))
     T_i = typeof(imag(D[1]))
-    if all(imag(D) < 2*eps(T_i))
+    if all(imag(D) .< 2*eps(T_i))
         r = zeros(T_r, length(p)-1)
         r[1:n] = 1./real(D)
         return r

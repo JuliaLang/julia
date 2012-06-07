@@ -40,12 +40,12 @@ sprint(show, pNULL)
 @assert polydir(p1) == polydir(p0) == polydir(pNULL) == pNULL
 
 @assert poly([-1,-1]) == p3
-@assert length(roots(p0) == roots(p1) == roots(pNULL)) == 0
-@assert all(roots(p2) == [-1])
+@assert roots(p0)==roots(p1)==roots(pNULL)==[] 
+@assert roots(p2) == [-1]
 a_roots = copy(pN.a)
-@assert all(abs(sort(roots(poly(a_roots))) - sort(a_roots)) < 1e6)
+@assert all(abs(sort(roots(poly(a_roots))) - sort(a_roots)) .< 1e6)
 @assert length(roots(p5)) == 4
-@assert all(roots(pNULL) == [])
+@assert roots(pNULL) == []
 
 @assert pNULL + 2 == p0 + 2 == 2 + p0 == Polynomial([2])
 @assert p2 - 2 == -2 + p2 == Polynomial([1,-1])
