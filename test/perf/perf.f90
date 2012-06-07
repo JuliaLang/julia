@@ -299,7 +299,8 @@ use bench, only: fib, parse_int, quicksort, mandelperf, pisum, randmatstat, &
     randmatmul
 implicit none
 
-integer :: i, f, n, m, k
+integer, parameter :: NRUNS = 1000
+integer :: i, f, n, m, k, k2
 real(dp) :: t1, t2, tmin, pi, s1, s2
 real(dp), allocatable :: C(:, :), d(:)
 character(len=11) :: s
@@ -309,51 +310,59 @@ call init_random_seed()
 tmin = 1e9_dp
 do i = 1, 5
     call cpu_time(t1)
-    f = fib(20)
-    call cpu_time(t2)
-    if (t2-t1 < tmin) tmin = t2-t1
-end do
-call assert(f == 6765)
-print "('fortran,fib,',f0.6)", tmin*1000
-
-tmin = 1e9_dp
-do i = 1, 5
-    call cpu_time(t1)
-    do k = 1, 1000
-        call random_number(s1)
-        n = int(s1*huge(n))
-        write(s, '(z0)') n
-        m = parse_int(s(:len_trim(s)), 16)
-        call assert(m == n)
+    do k = 1, NRUNS
+        f = fib(20)
     end do
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print "('fortran,parse_int,',f0.6)", tmin*1000
+call assert(f == 6765)
+print "('fortran,fib,',f0.6)", tmin*1000._dp / NRUNS
 
 tmin = 1e9_dp
 do i = 1, 5
     call cpu_time(t1)
-    f = mandelperf()
+    do k2 = 1, NRUNS
+        do k = 1, 1000
+            call random_number(s1)
+            n = int(s1*huge(n))
+            write(s, '(z0)') n
+            m = parse_int(s(:len_trim(s)), 16)
+            call assert(m == n)
+        end do
+    end do
+    call cpu_time(t2)
+    if (t2-t1 < tmin) tmin = t2-t1
+end do
+print "('fortran,parse_int,',f0.6)", tmin*1000._dp / NRUNS
+
+tmin = 1e9_dp
+do i = 1, 5
+    call cpu_time(t1)
+    do k = 1, NRUNS
+        f = mandelperf()
+    end do
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
 ! This number is processor dependent, as it can differ a bit depending on the
 ! floating point rounding errors:
 !call assert(f == 14307)
-print "('fortran,mandel,',f0.6)", tmin*1000
+print "('fortran,mandel,',f0.6)", tmin*1000._dp / NRUNS
 
 tmin = 1e9_dp
 do i = 1, 5
     call cpu_time(t1)
-    allocate(d(5000))
-    call random_number(d)
-    call quicksort(d, 1, size(d))
-    deallocate(d)
+    do k = 1, NRUNS
+        allocate(d(5000))
+        call random_number(d)
+        call quicksort(d, 1, size(d))
+        deallocate(d)
+    end do
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-print "('fortran,quicksort,',f0.6)", tmin*1000
+print "('fortran,quicksort,',f0.6)", tmin*1000._dp / NRUNS
 
 tmin = 1e9_dp
 do i = 1, 5
