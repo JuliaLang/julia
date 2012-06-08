@@ -113,7 +113,7 @@ struct julia_session
     uv_process_t *proc;
     uv_pipe_t *julia_in;
     uv_pipe_t *julia_out;
-	uv_pipe_t *julia_err;
+    uv_pipe_t *julia_err;
 
     // the socket for communicating to julia
     uv_tcp_t *sock;
@@ -151,7 +151,6 @@ void free_write_buffer(uv_write_t* req, int status)
     delete[] (char*)req->data;
     delete req;
 }
-
 
 static uv_buf_t alloc_buf(uv_handle_t* handle, size_t suggested_size) {
     uv_buf_t buf;
@@ -335,11 +334,11 @@ void connected(uv_connect_t* req, int status)
     ready_message.type = MSG_OUTPUT_READY;
     julia_session_ptr->outbox_history.push_back(ready_message);
     for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-		iter->second.outbox.push_back(ready_message);
+        iter->second.outbox.push_back(ready_message);
 #ifdef DEBUG_TRACE
    cout<<"Julia Process Connected\n"; 
 #endif
-	uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
+    uv_read_start((uv_stream_t*)julia_session_ptr->sock,&alloc_buf,readSocketData);
 
 }
 
@@ -465,21 +464,21 @@ void watchdog(uv_timer_t* handle, int status)
     // get the current time
     time_t t = time(0);
 
-	// delete old web sessions and mark julia sessions with no web sessions as terminating
-	for (size_t i = 0; i < julia_session_list.size(); i++)
-	{
-		julia_session* julia_session_ptr = julia_session_list[i];
-		vector<string> web_session_zombies;
-		for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
-		{
-			if (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT)
-				web_session_zombies.push_back(iter->first);
-		}
-		for (size_t j = 0; j < web_session_zombies.size(); j++)
-		{
-			cout<<"User \""<<julia_session_ptr->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<julia_session_ptr->session_name<<"\".\n";
-			julia_session_ptr->web_session_map.erase(web_session_zombies[j]);
-		}
+    // delete old web sessions and mark julia sessions with no web sessions as terminating
+    for (size_t i = 0; i < julia_session_list.size(); i++)
+    {
+        julia_session* julia_session_ptr = julia_session_list[i];
+        vector<string> web_session_zombies;
+        for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
+        {
+            if (t-(iter->second).update_time >= WEB_SESSION_TIMEOUT)
+                web_session_zombies.push_back(iter->first);
+        }
+        for (size_t j = 0; j < web_session_zombies.size(); j++)
+        {
+            cout<<"User \""<<julia_session_ptr->web_session_map[web_session_zombies[j]].user_name<<"\" has left session \""<<julia_session_ptr->session_name<<"\".\n";
+            julia_session_ptr->web_session_map.erase(web_session_zombies[j]);
+        }
         if (julia_session_ptr->web_session_map.empty()) {
             if(julia_session_ptr->status==SESSION_NORMAL)
                 julia_session_ptr->status = SESSION_TERMINATING;
@@ -488,9 +487,9 @@ void watchdog(uv_timer_t* handle, int status)
     }
 
     // remove all sessions that have successfully closed
-	for (size_t i = 0; i < julia_session_list.size(); i++)
-	{
-		julia_session* julia_session_ptr = julia_session_list[i];
+    for (size_t i = 0; i < julia_session_list.size(); i++)
+    {
+        julia_session* julia_session_ptr = julia_session_list[i];
         if(julia_session_ptr->status != SESSION_TERMINATING && julia_session_ptr->status != SESSION_KILLED)
             continue;
         if(julia_session_ptr->proc==0&&julia_session_ptr->julia_in==0&&julia_session_ptr->julia_out==0&&julia_session_ptr->julia_err==0) {
@@ -533,10 +532,13 @@ string make_session_token() {
 
 // format a web response with the appropriate header
 string respond(string session_token, string body) {
-    string header = "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nCache-control: no-cache\r\n";
-    header += "Set-Cookie: SESSION_TOKEN="+session_token+"\r\n";
-    header += "\r\n";
-    return header+body;
+    std::ostringstream header;
+    header << "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=UTF-8\r\nCache-control: no-cache\r\n";
+    header << "Set-Cookie: SESSION_TOKEN=" << session_token << "\r\n";
+    header << "Content-Length: " << body.size() << "\r\n";
+    header << "\r\n";
+    header << body;
+    return header.str();
 }
 
 
@@ -597,7 +599,7 @@ string get_session(string user_name, string session_name) {
 
     session_data->proc=new uv_process_t;
 
-	//allocate pipess
+    //allocate pipess
     session_data->julia_in=new uv_pipe_t;
     uv_pipe_init(uv_default_loop(),session_data->julia_in,0);
     session_data->julia_out=new uv_pipe_t;
@@ -611,7 +613,7 @@ string get_session(string user_name, string session_name) {
     session_data->julia_err=0;
 #endif
 
-	
+    
     uv_process_options_t opts;
     opts.stdin_stream = session_data->julia_in;
     opts.stdout_stream = session_data->julia_out;
@@ -635,7 +637,7 @@ string get_session(string user_name, string session_name) {
     #endif
     opts.args=argv;
     opts.file=argv[0];
-	opts.flags=0;
+    opts.flags=0;
     int err = uv_spawn(uv_default_loop(),session_data->proc,opts);
     if(err!=0)
         return "";
@@ -652,8 +654,8 @@ string get_session(string user_name, string session_name) {
     uv_read_start((uv_stream_t*)opts.stderr_stream,&alloc_buf,&julia_incoming);
     session_data->julia_err->data = data;
 #endif
-	
-	/*
+    
+    /*
     // start the inbox thread
     if (pthread_create(&session_data->inbox_proc, 0, inbox_thread, (void*)session_data))
         session_data->inbox_proc = 0;
@@ -691,13 +693,24 @@ void requestDone(uv_handle_t *handle)
     delete (uv_tcp_t*)(handle);
 }
 
+void close_stream(uv_shutdown_t* req, int status)
+{
+    uv_close((uv_handle_t*)req->handle,&requestDone);
+#ifdef DEBUG_TRACE
+    cout << "Closing connection "
+#ifdef __WIN32__
+<<WSAGetLastError()
+#endif
+<<"\n";
+#endif
+}
 
 // this function is called when an HTTP request is made - the response is the return value
 void get_response(request* req,uv_stream_t *client)
 {
     // the julia_session token
     string session_token;
-	
+    
     // check for the session cookie
     if (req->get_cookie_exists("SESSION_TOKEN"))
         session_token = req->get_cookie_value("SESSION_TOKEN");
@@ -752,7 +765,7 @@ void get_response(request* req,uv_stream_t *client)
                     // MSG_INPUT_START
                     if (request_message.type == MSG_INPUT_START)
                     {
-						// make sure the message is well-formed
+                        // make sure the message is well-formed
                         if (request_message.args.size() >= 2)
                         {
                             // get the user name and session name
@@ -824,7 +837,7 @@ void get_response(request* req,uv_stream_t *client)
                             uv_async_send(julia_session_ptr->data_notifier);
                         }
                     }
-					
+                    
                                         // MSG_INPUT_REPLAY_HISTORY
                     if (request_message.type == MSG_INPUT_REPLAY_HISTORY)
                     {
@@ -946,15 +959,9 @@ void get_response(request* req,uv_stream_t *client)
     uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
     wr->data=(void*)buf.base;
 
-    // close the connection to the client
-    uv_close((uv_handle_t*)client,&requestDone);
-#ifdef DEBUG_TRACE
-    cout << "Closing connection "
-#ifdef __WIN32__
-<<WSAGetLastError()
-#endif
-<<"\n";
-#endif
+    // destroySoon the connection to the client
+    uv_shutdown_t *sr = new uv_shutdown_t;
+    uv_shutdown(sr, (uv_stream_t*)client, &close_stream);
 }
 
 
@@ -963,7 +970,7 @@ void sigproc(int)
 {
     // print a message
     cout<<"cleaning up...\n";
-	
+    
     // clean up
     for (size_t i = 0; i < julia_session_list.size(); i++)
     {
