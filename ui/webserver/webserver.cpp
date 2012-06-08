@@ -696,6 +696,7 @@ void requestDone(uv_handle_t *handle)
 void close_stream(uv_shutdown_t* req, int status)
 {
     uv_close((uv_handle_t*)req->handle,&requestDone);
+	delete req;
 #ifdef DEBUG_TRACE
     cout << "Closing connection "
 #ifdef __WIN32__
