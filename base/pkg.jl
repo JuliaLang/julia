@@ -7,12 +7,16 @@ const PKG_GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com
 # some utility functions for working with git repos
 
 git_dir() = readchomp(`git rev-parse --git-dir`)
-git_dirty() = !success(`git diff --quiet HEAD`)
-git_staged() = !success(`git diff --cached --quiet`)
-git_unstaged() = !success(`git diff --quiet`)
 git_modules(args::Cmd) = readchomp(`git config -f .gitmodules $args`)
 git_different(verA::String, verB::String, path::String) =
     !success(`git diff --quiet $verA $verB -- $path`)
+
+git_dirty() = !success(`git diff --quiet HEAD`)
+git_staged() = !success(`git diff --quiet --cached`)
+git_unstaged() = !success(`git diff --quiet`)
+git_dirty(paths) = !success(`git diff --quiet HEAD -- $paths`)
+git_staged(paths) = !success(`git diff --quiet --cached -- $paths`)
+git_unstaged(paths) = !success(`git diff --quiet -- $paths`)
 
 function git_each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
@@ -67,14 +71,16 @@ function git_write_config(file::String, cfg::Dict)
             run(`git config -f $tmp $key $val`)
         end
     end
-    run(`mv -f $tmp $file`)
+    open(file,"w") do io
+        print(io,readall(tmp))
+    end
 end
 
 git_canonicalize_config(file::String) = git_write_config(file, git_read_config(file))
 
 function git_config_sections(cfg::Dict)
     sections = Set{ByteString}()
-    for key in keys(cfg)
+    for (key,_) in cfg
         m = match(r"^(.+)\.", key)
         if m != nothing add(sections,m.captures[1]) end
     end
@@ -96,7 +102,7 @@ function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     # merge the remaining config key-value pairs
     cfg = Dict()
     conflicts = Dict()
-    for key in keys(merge(Lc,Rc))
+    for (key,_) in merge(Lc,Rc)
         Lv = get(Lc,key,nothing)
         Rv = get(Rc,key,nothing)
         Bv = get(Bc,key,nothing)
@@ -112,13 +118,23 @@ function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     return cfg, conflicts, deleted
 end
 
+# assert that everything is clean or bail
+
+pkg_assert_clean() = (pkg_assert_git_clean(); pkg_assert_config_clean())
+pkg_assert_git_clean() = git_dirty() &&
+    error("Uncommited changes found -- please commit, stash or discard.")
+
 # create a new empty packge repository
 
 function pkg_init(dir::String, meta::String)
     run(`mkdir $dir`)
     cd(dir) do
         run(`git init`)
-        run(`git commit --allow-empty -m "[jul] empty package repo"`)
+        open(".gitignore","w") do io
+            println(io, "*.local")
+        end
+        run(`git add .gitignore`)
+        run(`git commit -m "[jul] empty package repo"`)
         pkg_install({"METADATA" => meta})
     end
 end
@@ -135,6 +151,78 @@ function pkg_clone(dir::String, url::String)
 end
 pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
 
+# commit or localize package config files
+
+function pkg_commit_configs()
+    pkg_assert_git_clean()
+    git_each_submodule(false) do name, path, sha1
+        cfg = git_read_config(cd(git_dir,path)*"/config")
+        if success(`test -e $path.local`)
+            del_each(cfg, keys(git_read_config("$path.local")))
+        end
+        cfg = merge(git_read_config("$path.config"), cfg)
+        git_write_config("$path.config", cfg)
+        run(`git add -- $path.config`)
+    end
+    if git_staged()
+        run(`git commit -m "[jul] config changes"`)
+    end
+end
+
+function pkg_localize_configs()
+    pkg_assert_git_clean()
+    git_each_submodule(false) do name, path, sha1
+        diff = Dict()
+        original = git_read_config("$path.config")
+        modified = git_read_config(cd(git_dir,path)*"/config")
+        for (key,val) in modified
+            if val != get(original,key,nothing)
+                diff[key] = val
+            end
+        end
+        if !isempty(diff)
+            git_write_config("$path.local", diff)
+        else
+            run(`rm -f $path.local`)
+        end
+    end
+end
+
+function pkg_each_config(f::Function)
+    git_each_submodule(false) do name, path, sha1
+        cfg = git_read_config("$path.config")
+        if success(`test -e $path.local`)
+            merge!(cfg, git_read_config("$path.local"))
+        end
+        f(name,path,sha1,cfg)
+    end
+end
+
+function pkg_assert_config_clean()
+    dirty = Set{ByteString}()
+    pkg_each_config() do name, path, sha1, cfg
+        for (key,val) in merge(cfg, git_read_config(cd(git_dir,path)*"/config"))
+            if val != get(cfg,key,nothing)
+                add(dirty,name)
+                break
+            end
+        end
+    end
+    if isempty(dirty) return end
+    print(stderr_stream,
+        "The following packages have unsaved config changes:\n\n",
+        map(pkg->"    $pkg\n", sort!(elements(dirty)))...,
+        "\nPlease either commit, localize or clobber these changes.\n"
+    )
+    error("pkg: unsaved config changes")
+end
+
+function pkg_clobber_configs()
+    pkg_each_config() do name, path, sha1, cfg
+        git_write_config(cd(git_dir,path)*"/config", cfg)
+    end
+end
+
 # record all submodule commits as tags
 
 function pkg_tag_submodules()
@@ -145,23 +233,9 @@ function pkg_tag_submodules()
     end
 end
 
-function pkg_save_branches()
-    git_each_submodule(false) do name, path, sha1
-        head = cd(path) do
-            readchomp(`git rev-parse --symbolic-full-name HEAD`)
-        end
-        m = match(r"^refs/heads/(.*)$", head)
-        if m != nothing
-            branch = m.captures[1]
-            git_modules(`submodule.$name.branch $branch`)
-        else
-            try git_modules(`--unset submodule.$name.branch`) end
-        end
-    end
-    run(`git add .gitmodules`)
+function pkg_checkpoint()
+    pkg_tag_submodules()
 end
-
-pkg_checkpoint() = (pkg_tag_submodules(); pkg_save_branches())
 
 # checkout a particular repo version
 
@@ -184,6 +258,7 @@ pkg_checkout() = pkg_checkout("HEAD")
 # commit the current state of the repo with the given message
 
 function pkg_commit(msg::String)
+    pkg_assert_config_clean()
     pkg_checkpoint()
     git_canonicalize_config(".gitmodules")
     run(`git commit -m $msg`)
@@ -199,8 +274,8 @@ function pkg_install(urls::Associative)
         url = urls[pkg]
         run(`git submodule add --reference $dir $url $pkg`)
     end
-    pkg_checkout()
     pkg_commit("[jul] install "*join(names, ", "))
+    pkg_checkout()
 end
 function pkg_install(names::AbstractVector)
     urls = Dict()
@@ -235,6 +310,9 @@ function pkg_push()
 end
 
 function pkg_pull()
+    # abort if things aren't committed
+    pkg_assert_clean()
+
     # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
@@ -243,22 +321,21 @@ function pkg_pull()
     if success(`git merge -m "[jul] pull (simple merge)" FETCH_HEAD`) return end
 
     # get info about local, remote and base trees
-    Lh = readchomp(`git rev-parse --verify HEAD`)
-    Rh = readchomp(`git rev-parse --verify FETCH_HEAD`)
-    base = readchomp(`git merge-base $Lh $Rh`)
-    Rc = git_read_config_blob("$Rh:.gitmodules")
+    L = readchomp(`git rev-parse --verify HEAD`)
+    R = readchomp(`git rev-parse --verify FETCH_HEAD`)
+    B = readchomp(`git merge-base $L $R`)
+    Rc = git_read_config_blob("$R:.gitmodules")
     Rs = git_config_sections(Rc)
 
     # intelligently 3-way merge .gitmodules versions
-    if git_different(Lh,Rh,".gitmodules")
-        Bc = git_read_config_blob("$base:.gitmodules")
-        Lc = git_read_config_blob("$Lh:.gitmodules")
+    if git_different(L,R,".gitmodules")
+        Bc = git_read_config_blob("$B:.gitmodules")
+        Lc = git_read_config_blob("$L:.gitmodules")
         Cc, conflicts, deleted = git_merge_configs(Bc,Lc,Rc)
         # warn about config conflicts
         for (key,vals) in conflicts
             print(stderr_stream,
-                "\n*** WARNING ***\n\n",
-                "Module configuration conflict for $key:\n",
+                "\nModules config conflict for $key:\n",
                 "  local value  = $(vals[1])\n",
                 "  remote value = $(vals[2])\n",
                 "\n",
@@ -281,13 +358,35 @@ function pkg_pull()
 
     # merge submodules
     git_each_submodule(false) do name, path, sha1
-        if has(Rs,"submodule.$name") && git_different(Lh,Rh,path)
-            alt = readchomp(`git rev-parse $Rh:$path`)
+        if has(Rs,"submodule.$name") && git_different(L,R,path)
+            alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
                 run(`git merge --no-edit $alt`)
             end
-            run(`git add $path`)
+            run(`git add -- $path`)
         end
+    end
+
+    # merge package configs
+    git_each_submodule(false) do name, path, sha1
+        Bpc = git_read_config_blob("$B:$path.config")
+        Lpc = git_read_config_blob("$L:$path.config")
+        Rpc = git_read_config_blob("$R:$path.config")
+        Cpc, conflicts= git_merge_configs(Bpc,Lpc,Rpc)
+        # warn about config conflicts
+        for (key,vals) in conflicts
+            print(stderr_stream,
+                "\nPackage config conflict for package $name and $key:\n",
+                "  local value  = $(vals[1])\n",
+                "  remote value = $(vals[2])\n",
+                "\n",
+                "Both values written to $path.config -- please edit and choose one.\n\n",
+            )
+            Cpc[key] = vals
+        end
+        # write the result (unconditionally) and stage it (if no conflicts)
+        git_write_config("$path.config", Cpc)
+        if isempty(conflicts) run(`git add -- $path.config`) end
     end
 
     # check for remaining merge conflicts
