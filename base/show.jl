@@ -256,11 +256,11 @@ function idump(fn::Function, io::IOStream, x, n::Int, indent)
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    try
+                    ## try
                         fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
-                    catch
-                        println(io)
-                    end
+                    ## catch
+                    ##     println(io)
+                    ## end
                 end
             end
         end
@@ -315,37 +315,80 @@ function _dumptype(io::IOStream, x::Type, n::Int, indent)
         # included or to look in the equivalent of R's search path.
         for s in [names(Core), names(Base)]  
             t = eval(s)
-            try
-                if isa(t, TypeConstructor)
-                    if string(x.name) == split(string(t), "{")[1] ||
-                       ("Union" == split(string(t), "(")[1] &&
-                          any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.body.types)))
-                        targs = join(t.parameters, ",")
-                        println(io, indent, "  ", s,
-                                length(t.parameters) > 0 ? "{$targs}" : "",
-                                " = ", t)
-                    end
-                elseif isa(t, UnionKind)
-                    if any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.types))
-                        println(io, indent, "  ", s, " = ", t)
-                    end
-                elseif super(t).name == x.name
-                    if string(s) != string(t.name) # type aliases
-                        println(io, indent, "  ", s, " = ", t.name)
-                    elseif t != Any 
-                        print(io, indent, "  ")
-                        _dumptype(io, t, n - 1, strcat(indent, "  "))
-                    end
+            if isa(t, TypeConstructor)
+                if string(x.name) == split(string(t), "{")[1] ||
+                   ("Union" == split(string(t), "(")[1] &&
+                      any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.body.types)))
+                    targs = join(t.parameters, ",")
+                    println(io, indent, "  ", s,
+                            length(t.parameters) > 0 ? "{$targs}" : "",
+                            " = ", t)
+                end
+            elseif isa(t, UnionKind)
+                if any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.types))
+                    println(io, indent, "  ", s, " = ", t)
+                end
+            elseif isa(t, Type) && super(t).name == x.name
+                if string(s) != string(t.name) # type aliases
+                    println(io, indent, "  ", s, " = ", t.name)
+                elseif t != Any 
+                    print(io, indent, "  ")
+                    _dumptype(io, t, n - 1, strcat(indent, "  "))
                 end
             end
         end
     end
 end
 
+function _jl_type_hierarchy(x::Type)
+    # Based on Jameson Nash's examples/typetree.jl
+    # Returns a Vector{Any} with the first element being the type
+    #   and following elements are children of that type.
+    result = {x}
+    for s in [names(Core), names(Base)]  
+        t = eval(s)
+        if isa(t, TypeConstructor)
+            if string(x.name) == split(string(t), "{")[1] ||
+               ("Union" == split(string(t), "(")[1] &&
+                  any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.body.types)))
+                targs = join(t.parameters, ",")
+                push(result, (string(s),t)) 
+            end
+        elseif isa(t, UnionKind)
+            if any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.types))
+                push(result, (string(s),t)) 
+            end
+        elseif isa(t, Type) && super(t).name == x.name
+            if string(s) != string(t.name) # type aliases
+                push(result, (string(s),t.name)) 
+            elseif t != Any 
+                nxt = _jl_type_hierarchy(t)
+                if length(nxt) > 0
+                    push(result, nxt)
+                end
+            end
+        end
+    end
+    result
+end
+
 # For abstract types, use _dumptype only if it's a form that will be called
 # interactively.
 idump(fn::Function, io::IOStream, x::AbstractKind) = _dumptype(io, x, 5, "")
 idump(fn::Function, io::IOStream, x::AbstractKind, n::Int) = _dumptype(io, x, n, "")
+
+idump(fn::Function, io::IOStream, x::AbstractKind, n::Int) = idump(fn, io, x, n, "")
+idump(fn::Function, io::IOStream, x::AbstractKind) = idump(fn, io, x, 5, "")
+function idump(fn::Function, io::IOStream, x::AbstractKind, n::Int, indent)
+    tp = _jl_type_children(x)
+    Ntp = length(tp)
+    if Ntp > 0
+        println(indent, tp[1])
+        for idx in 2:length(tp)
+            idump(fn, io, tp[idx], n - 1, strcat(indent, "  "))
+        end
+    end
+end
 
 # defaults:
 idump(fn::Function, io::IOStream, x) = idump(idump, io, x, 5, "")  # default is 5 levels
