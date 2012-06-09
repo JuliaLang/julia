@@ -420,7 +420,7 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
-//DLLEXPORT void debug_print_function_info(size_t ip) {
+//DLLEXPORT void gdb_print_function_info(size_t ip) {
 //    char *func_name;
 //    int line_num;
 //    const char *file_name;
@@ -451,6 +451,17 @@ static jl_value_t *build_backtrace(void)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+//DLLEXPORT void gdb_backtrace(void) {
+//    void *array[4096];
+//    size_t ip;
+//    size_t *p;
+//    
+//    backtrace(array, 4095);
+//    p = (size_t*)array;
+//    while ((ip = *(p++)) != 0) {
+//        debug_print_function_info(ip);
+//    }
+//}
 #elif defined(__WIN32__)
 static jl_value_t *build_backtrace(void)
 {
@@ -517,6 +528,19 @@ static jl_value_t *build_backtrace(void)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+//DLLEXPORT void gdb_backtrace(void) {
+//	unw_cursor_t cursor; unw_context_t uc;
+//    unw_word_t ip;
+//    jl_array_t *a;
+//    size_t n=0;    
+//    unw_getcontext(&uc);
+//    unw_init_local(&cursor, &uc);
+//    while (unw_step(&cursor) && n < 10000) { 
+//        unw_get_reg(&cursor, UNW_REG_IP, &ip);
+//        debug_print_function_info(ip);
+//        n++;
+//    }
+//}
 #endif
 
 DLLEXPORT void jl_register_toplevel_eh(void)
