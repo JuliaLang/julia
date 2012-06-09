@@ -256,11 +256,7 @@ function idump(fn::Function, io::IOStream, x, n::Int, indent)
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    ## try
-                        fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
-                    ## catch
-                    ##     println(io)
-                    ## end
+                    fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
                 end
             end
         end
@@ -288,22 +284,18 @@ function idump(fn::Function, io::IOStream, x::CompositeKind, n::Int, indent)
     if n > 0
         for idx in 1:min(10,length(x.names))
             if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
-                try 
-                    print(io, indent, "  ", x.names[idx], "::")
-                    if isa(x.types[idx], CompositeKind) 
-                        idump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
-                    else
-                        println(x.types[idx])
-                    end
-                catch
-                    println(io)
+                print(io, indent, "  ", x.names[idx], "::")
+                if isa(x.types[idx], CompositeKind) 
+                    idump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
+                else
+                    println(x.types[idx])
                 end
             end
         end
     end
 end
 
-# _dumptype is for displaying abstract type hierarchies like Jameson
+# _jl_dumptype is for displaying abstract type hierarchies like Jameson
 # Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
 
 function _jl_dumptype(io::IOStream, x::Type, n::Int, indent)
@@ -312,21 +304,23 @@ function _jl_dumptype(io::IOStream, x::Type, n::Int, indent)
     if n == 0   # too deeply nested
         return  
     end
-    # This probably needs fixing to allow different modules to be
-    # included or to look in the equivalent of R's search path.
+    typargs(t) = split(string(t), "{")[1]
+    # TODO: When namespaces are worked out, this probably needs fixing
+    # to allow different modules to be included or to look in the
+    # equivalent of R's search path.
     for s in [names(Core), names(Base)]  
         t = eval(s)
         if isa(t, TypeConstructor)
-            if string(x.name) == split(string(t), "{")[1] ||
+            if string(x.name) == typargs(t) ||
                ("Union" == split(string(t), "(")[1] &&
-                  any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.body.types)))
+                  any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
                 targs = join(t.parameters, ",")
                 println(io, indent, "  ", s,
                         length(t.parameters) > 0 ? "{$targs}" : "",
                         " = ", t)
             end
         elseif isa(t, UnionKind)
-            if any(map(tt -> string(x.name) == split(string(tt), "{")[1], t.types))
+            if any(map(tt -> string(x.name) == typargs(tt), t.types))
                 println(io, indent, "  ", s, " = ", t)
             end
         elseif isa(t, Type) && super(t).name == x.name
@@ -377,8 +371,8 @@ end
 
 # More generic representation for common types:
 dump(io::IOStream, x::AbstractKind, n::Int, indent) = println(io, x.name)
-dump(io::IOStream, x::AbstractKind) = _dumptype(io, x, 5, "")
-dump(io::IOStream, x::AbstractKind, n::Int) = _dumptype(io, x, n, "")
+dump(io::IOStream, x::AbstractKind) = _jl_dumptype(io, x, 5, "")
+dump(io::IOStream, x::AbstractKind, n::Int) = _jl_dumptype(io, x, n, "")
 dump(io::IOStream, x::BitsKind, n::Int, indent) = println(io, x.name)
 dump(io::IOStream, x::TypeVar, n::Int, indent) = println(io, x.name)
 
