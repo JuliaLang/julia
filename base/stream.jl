@@ -247,13 +247,14 @@ process_events() = process_events(localEventLoop())
 
 ##pipe functions
 
-function make_pipe(read_julia_only::Bool, write_julia_only::Bool)
+function make_pipe(readable_julia_only::Bool, writeable_julia_only::Bool)
     #make the pipe an unbuffered stream for now
     pipe = NamedPipe(
-        ccall(:jl_make_pipe,Ptr{Void},(Bool,Bool),0,read_julia_only),
-        ccall(:jl_make_pipe,Ptr{Void},(Bool,Bool),1,write_julia_only))
+        ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 0, readable_julia_only),
+        ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 1, writeable_julia_only))
     error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), pipe.read_handle, pipe.write_handle)
     @assert error==0
+    pipe
 end
 
 function close(stream::AsyncStream)
