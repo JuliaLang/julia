@@ -218,28 +218,13 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 <a name="Web-REPL-and-grahpics">
 ## Web REPL and graphics
 
-Julia has a web REPL with very preliminary graphics capabilities.
-Follow these instructions for setting up the web repl locally.
-In deps, doing `make install-lighttpd` will download and build lighttpd.
-Use the launch-webserver script to start the webserver and web-repl.
-Point your browser to `http://localhost:2000/`.
-Try `plot(cumsum(randn(1000)))`
+Julia has a web REPL with very preliminary graphics capabilities. The current web REPL is meant as a showcase to try out new ideas, and does not yet have all the features one would want for daily usage.
+
+1. Do `make -C deps install-lighttpd` to download and build the webserver.
+2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
+3. Point your browser to `http://localhost:2000/`.
+4. Try `plot(cumsum(randn(1000)))` and other things.
 
 ### Try it Online
 
 Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
-
-### Pre-installed lighttpd
-
-If you want to use your own `lighttpd`, then the process is something like this:
-
-1. Install `lighttpd`
-2. Configure `lighttpd`:
-The config file is `/etc/lighttpd/lighttpd.conf`. Add `mod_scgi` to `server.modules`.
-Set `server.document-root` to point to `/path/to/julia/ui/website`.
-Add something like this to the bottom (you can use whatever port you want):
-`scgi.server = (".scgi" => (("host" => "127.0.0.1", "port" => 2001)))`.
-
-3. Start lighttpd: `sudo /etc/init.d/lighttpd start`.
-4. Start the julia server: `path/to/julia/julia-release-webserver -p 2001`.
-5. Point your browser to `http://localhost:2001`.
