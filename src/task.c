@@ -32,16 +32,16 @@ static int _stack_grows_up;
 static size_t _frame_offset;
 
 struct _probe_data {
-    intptr_t low_bound;		/* below probe on stack */
-    intptr_t probe_local;	/* local to probe on stack */
-    intptr_t high_bound;	/* above probe on stack */
-    intptr_t prior_local;	/* value of probe_local from earlier call */
+    intptr_t low_bound;     /* below probe on stack */
+    intptr_t probe_local;   /* local to probe on stack */
+    intptr_t high_bound;    /* above probe on stack */
+    intptr_t prior_local;   /* value of probe_local from earlier call */
 
-    jmp_buf probe_env;	/* saved environment of probe */
-    jmp_buf probe_sameAR;	/* second environment saved by same call */
-    jmp_buf probe_samePC;	/* environment saved on previous call */
+    jmp_buf probe_env;  /* saved environment of probe */
+    jmp_buf probe_sameAR;   /* second environment saved by same call */
+    jmp_buf probe_samePC;   /* environment saved on previous call */
 
-    jmp_buf * ref_probe;	/* switches between probes */
+    jmp_buf * ref_probe;    /* switches between probes */
 };
 
 static void boundhigh(struct _probe_data *p)
@@ -161,18 +161,27 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
+static __inline__ void replace_stack(void *destination, const void *source, size_t num)
+{
+    if (source != NULL) {
+        memcpy(destination, source, num);
+    }
+    longjmp(*jl_jmp_target, 1);
+}
+
 static void restore_stack(jl_task_t *t, jmp_buf *where)
 {
     volatile int _x[64];
 
-    if ((char*)&_x[64] > (char*)(t->stackbase-t->ssize)) {
+    if ((char*)&_x[0] > (char*)(t->stackbase-t->ssize)) {
         restore_stack(t, where);
     }
     jl_jmp_target = where;
-    if (t->stkbuf != NULL) {
-        memcpy(t->stackbase-t->ssize, t->stkbuf, t->ssize);
-    }
-    siglongjmp(*jl_jmp_target, 1);
+    // separating this next function helps ensure the compiler doesn't
+    // use the stack after the memcpy (oddly, llvm-gcc -O0 decides
+    // to save the result of computing the subtraction just before
+    // calling longjmp)
+    replace_stack(t->stackbase-t->ssize, t->stkbuf, t->ssize);
 }
 
 static void switch_stack(jl_task_t *t, jmp_buf *where)
@@ -427,9 +436,9 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
 //    getFunctionInfo(&func_name, &line_num, &file_name, ip);
 //    if (func_name != NULL) {
 //        JL_PRINTF(JL_STDERR, "%% %s @ %s : %d\n", func_name, file_name, line_num);
-//	} else {
+//  } else {
 //        JL_PRINTF(JL_STDERR, "ip unknown\n", func_name, file_name, line_num);
-//	}
+//  }
 //}
 
 #if defined(__APPLE__)
@@ -469,36 +478,36 @@ static jl_value_t *build_backtrace(void)
     size_t ip;
     size_t *p;
     jl_array_t *a;
-	unsigned short num;
+    unsigned short num;
     a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
 
-	/** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-	#if defined(__MINGW_H)
-	HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
+    /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
+    #if defined(__MINGW_H)
+    HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
 
-	if(kernel32 != NULL){
-		typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-		CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+    if(kernel32 != NULL){
+        typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
+        CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
 
-		if(func==NULL){
-			FreeLibrary(kernel32);
-			kernel32 = NULL;
-			func = NULL;
-			return (jl_value_t*)a;
-		}else
-		{
-			num = func( 0, 1023, array, NULL );
-		}
+        if(func==NULL){
+            FreeLibrary(kernel32);
+            kernel32 = NULL;
+            func = NULL;
+            return (jl_value_t*)a;
+        }else
+        {
+            num = func( 0, 1023, array, NULL );
+        }
     }else
     {
         JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
         jl_exit(1);
     }
-	FreeLibrary(kernel32);
-	#else
-	num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
-	#endif
+    FreeLibrary(kernel32);
+    #else
+    num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+    #endif
 
     p = (size_t*)array;
     while ((ip = *(p++)) != 0 && (num--)>0) {
@@ -529,7 +538,7 @@ static jl_value_t *build_backtrace(void)
     return (jl_value_t*)a;
 }
 //DLLEXPORT void gdb_backtrace(void) {
-//	unw_cursor_t cursor; unw_context_t uc;
+//  unw_cursor_t cursor; unw_context_t uc;
 //    unw_word_t ip;
 //    jl_array_t *a;
 //    size_t n=0;    
