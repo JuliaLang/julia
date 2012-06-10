@@ -719,20 +719,14 @@ function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port
     end
 end
 
-function readuntil(s::IOStream, delim::Uint8)
-    a = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
-    # TODO: faster versions that avoid this encoding check
-    ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
-end
+readuntil(s::IOStream, delim::Uint8) = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+readline(s::IOStream) = readuntil(s, uint8('\n'))
 
 function readall(s::IOStream)
     dest = memio()
     ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
 end
-
-readline(s::IOStream) = readuntil(s, uint8('\n'))
-
 
 function connect_to_host(host::ByteString,port::Uint16)
     sock = TcpSocket(_jl_tcp_init(globalEventLoop()))
