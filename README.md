@@ -220,7 +220,7 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 <a name="Web-REPL-and-grahpics">
 ## Web REPL and graphics
 
-Julia has a web REPL with very preliminary graphics capabilities. The current web REPL is meant as a showcase to try out new ideas, and does not yet have all the features one would want for daily usage.
+Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
 1. Do `make -C deps install-lighttpd` to download and build the webserver.
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
