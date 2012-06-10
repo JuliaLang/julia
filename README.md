@@ -217,8 +217,8 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
     keysym Return = Return Linefeed
 
-<a name="Web-REPL-and-grahpics">
-## Web REPL and graphics
+<a name="Web-REPL">
+## Web REPL
 
 Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
 
