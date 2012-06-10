@@ -65,7 +65,7 @@ support/libsupport.a: support/*.h support/*.c
 flisp/libflisp.a: flisp/*.h flisp/*.c support/libsupport.a
 	$(MAKE) -C flisp
 
-$(USRLIB)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
+$(USRLIB)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a ../usr/lib/uv.a
 	$(QUIET_LINK) $(CXX) $(DEBUGFLAGS) $(DOBJS) -shared -o $@ $(LIBS) $(LDFLAGS)
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
@@ -73,7 +73,7 @@ libjulia-debug.a: julia.expmap $(DOBJS) flisp/libflisp.a support/libsupport.a
 	$(QUIET_LINK) ar -rcs $@ $(DOBJS)
 libjulia-debug: $(USRLIB)/libjulia-debug.$(SHLIB_EXT)
 
-$(USRLIB)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a
+$(USRLIB)/libjulia-release.$(SHLIB_EXT): julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a ../usr/lib/uv.a
 	$(QUIET_LINK) $(CXX) $(SHIPFLAGS) $(OBJS) $(LIBS) -shared -o $@ $(LDFLAGS)
 	$(INSTALL_NAME_CMD)libjulia-release.$(SHLIB_EXT) $@
 libjulia-release.a: julia.expmap $(OBJS) flisp/libflisp.a support/libsupport.a

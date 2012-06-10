@@ -32,8 +32,6 @@ typedef struct {
 typedef struct {
     jl_function_t *exitcb;
     jl_function_t *closecb;
-    uv_pipe_t* in;
-    uv_pipe_t* out;
 } jl_proc_opts_t;
 
 typedef struct {
@@ -133,10 +131,14 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
     }
 }
 
-DLLEXPORT uv_pipe_t *jl_make_pipe(void)
+DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only)
 {
+	int flags;
+	flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
+	if (!julia_only)
+		flags |= UV_PIPE_SPAWN_SAFE;
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
-    uv_pipe_init(jl_event_loop,pipe,0);
+    uv_pipe_init(jl_event_loop, pipe, flags);
     pipe->data = 0;//will be initilized on io
 #ifdef __WIN32__
     pipe->handle=0;
@@ -210,38 +212,39 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
 }
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 int stdin_flags, uv_stdio_data stdin_pipe,
-                                 int stdout_flags, uv_stdio_data stdout_pipe,
-                                 int stderr_flags, uv_stdio_data stderr_pipe,
+                                 uv_pipe_t *stdin_pipe,
+                                 uv_pipe_t *stdout_pipe,
+                                 uv_pipe_t *stderr_pipe,
                                  void *exitcb, void *closecb)
 {
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
     uv_process_options_t opts;
+	uv_stdio_container_t stdio[3];
     int error;
-    uv_stdio_container_t stdio[3];
-
-    opts.file           = name;
-    opts.env            = NULL;
-    opts.cwd            = NULL;
-    opts.args           = argv;
-    opts.flags          = 0;
-    opts.exit_cb        = &jl_return_spawn;
-
-    stdio[0].flags      = stdin_flags;
-    stdio[0].data       = stdin_pipe;
-    stdio[1].flags      = stdout_flags;
-    stdio[1].data       = stdout_pipe;
-    stdio[2].flags      = stderr_flags;
-    stdio[2].data       = stderr_pipe;
-    opts.stdio          = stdio;
-    opts.stdio_count    = 3;
-
+    opts.file = name;
+    opts.env = NULL;
+    opts.cwd = NULL;
+    opts.args = argv;
+    opts.flags = 0;
+    opts.stdio = stdio;
+	opts.stdio_count = 3;
+    stdio[0].type = UV_STREAM;
+	stdio[0].data.stream = (uv_stream_t*)(stdin_pipe);
+    stdio[1].type = UV_STREAM;
+    stdio[1].data.stream = (uv_stream_t*)(stdout_pipe);
+    stdio[2].type = UV_STREAM;
+    stdio[2].data.stream = (uv_stream_t*)(stderr_pipe);
+    //opts.detached = 0; #This has been removed upstream to be uncommented once it is possible again
+    opts.exit_cb = &jl_return_spawn;
     jlopts->exitcb=exitcb;
     jlopts->closecb=closecb;
     error = uv_spawn(loop,proc,opts);
-    if(error)
+    if(error) {
+		free(proc);
+		free(jlopts);
         jl_errorf("Failed to create process %s: %d",name,error);
+    }
     proc->data = jlopts;
     return proc;
 }

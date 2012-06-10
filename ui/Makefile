@@ -12,7 +12,7 @@ SHIPFLAGS += $(FLAGS)
 JLDFLAGS +=  $(shell $(LLVM_CONFIG) --ldflags) $(OSLIBS) -lpthread $(LDFLAGS) $(RPATH)
 
 julia-release julia-debug: %: %-basic %-readline | $(USR)/lib/julia/website
-	@$(MAKE) -C webserver $@
+#	@$(MAKE) -C webserver $@
 
 $(eval $(call symlink_target,website,$(USR)/lib/julia))
 	

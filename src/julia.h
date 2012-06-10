@@ -705,9 +705,9 @@ DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                                 int stdin_flags, uv_stdio_data stdin_pipe,
-                                 int stdout_flags, uv_stdio_data stdout_pipe,
-                                 int stderr_flags, uv_stdio_data stderr_pipe,
+                                 uv_pipe_t *stdin_pipe,
+                                 uv_pipe_t *stdout_pipe,
+                                 uv_pipe_t *stderr_pipe,
                                  void *exitcb, void *closecb);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
@@ -715,7 +715,7 @@ DLLEXPORT void jl_process_events(uv_loop_t *loop);
 DLLEXPORT uv_loop_t *jl_global_event_loop();
 DLLEXPORT uv_loop_t *jl_local_event_loop();
 
-DLLEXPORT uv_pipe_t *jl_make_pipe();
+DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
 DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
