@@ -719,7 +719,10 @@ function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port
     end
 end
 
-readuntil(s::IOStream, delim::Uint8) = ccall(:jl_readuntil, Any, (Ptr{Void}, Uint8), s.ios, delim)
+function readuntil(s::IOStream, delim)
+    # TODO: faster versions that avoid the encoding check
+    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
+end
 readline(s::IOStream) = readuntil(s, uint8('\n'))
 
 function readall(s::IOStream)
