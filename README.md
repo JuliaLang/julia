@@ -66,9 +66,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-#### Ubuntu
-
-You may also need to install the package `libncurses5-dev`.
+On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
 
 #### OS X
 
@@ -119,7 +117,6 @@ Building Julia requires that the following software be installed:
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
 - **[m4]**                      — needed to build GMP.
 
-With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
@@ -135,9 +132,12 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
-- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support
+- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[D3]**                  — JavaScript visualization library.
 - **[double-conversion]**   — efficient number-to-text conversion.
+- **[GLPK]**		    - linear programming.
+- **[Rmath]**		    - basic RNGs and distributions.
+
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/

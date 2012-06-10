@@ -7,7 +7,7 @@ bin/perf%: perf.cpp
 	$(CXX) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.1/libopenblas.a -lpthread
 
 bin/fperf%: perf.f90
-	$(FC) -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.1/libopenblas.a -lpthread
+	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.1/libopenblas.a -lpthread
 
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
