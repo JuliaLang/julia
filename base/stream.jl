@@ -1,6 +1,9 @@
 #TODO: fix return types of run, success
 #TODO: missing functions: successful, wait
 #TODO: spawn(AndCmds)
+#TODO: allocate unused streams on the stack
+#TODO: investigate readline() functionality
+
 
 typealias PtrSize Int
 const UVHandle = Ptr{Void}
@@ -253,7 +256,9 @@ function make_pipe(readable_julia_only::Bool, writeable_julia_only::Bool)
         ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 0, readable_julia_only),
         ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 1, writeable_julia_only))
     error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), pipe.read_handle, pipe.write_handle)
-    @assert error==0
+    if error != 0 # don't use assert here as $string isn't be defined yet
+        error("uv_pipe_link failed")
+    end
     pipe
 end
 
@@ -306,12 +311,12 @@ function end_process(p::Process,h::Ptr{Void},e::Int32, t::Int32)
 end
 
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void},
-        in::Ptr{Void}, out::Ptr{Void},
+        in::Ptr{Void}, out::Ptr{Void}, err::Ptr{Void},
         exitcb::Callback, closecb::Callback)
     return ccall(:jl_spawn, PtrSize,
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Ptr{Void},
+        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
             Union(Function, Ptr{Void}),  Union(Function, Ptr{Void})),
-         cmd,        argv,            loop,      in,        out,
+         cmd,        argv,            loop,      in,        out,       err,
             exitcb==false?C_NULL:exitcb, closecb==false?C_NULL:closecb)
 end
 
@@ -328,6 +333,7 @@ function spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closec
     else
         out = C_NULL
     end
+    err = C_NULL
     ptrs = _jl_pre_exec(cmd.exec)
     if exitcb == false
         exitcb = make_callback((args...)->process_exited_chain(pp,args...))
@@ -335,7 +341,7 @@ function spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closec
     if closecb == false
         closecb = make_callback((args...)->process_closed_chain(pp))
     end
-    pp.handle=_jl_spawn(ptrs[1],convert(Ptr{Ptr{Uint8}},ptrs),loop,in,out,exitcb,closecb)
+    pp.handle=_jl_spawn(ptrs[1],convert(Ptr{Ptr{Uint8}},ptrs),loop,in,out,err,exitcb,closecb)
     pp
 end
 spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback) = spawn(cmd,in,out,exitcb,false)
@@ -343,7 +349,7 @@ spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot)=spawn(cmd,in,out,false,false)
 spawn(cmd::Cmd,in::StreamOrNot)=spawn(cmd,in,false,false,false)
 spawn(cmd::Cmd)=spawn(cmd,false,false,false,false)
 function spawn_nostdin(cmd::Cmd,out::StreamOrNot)
-    pipe=make_pipe()
+    pipe=make_pipe(false,false)
     proc=spawn(cmd,pipe,out)
     close(pipe)
     proc
@@ -396,7 +402,7 @@ function process_closed_chain(procs::AndProcesses)
 end
 
 function spawn(cmds::OrCmds,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closecb::Callback)
-    n = make_pipe()
+    n = make_pipe(false,false)
     procs = OrProcesses(
         spawn(cmds.a, in, n),
         spawn(cmds.b, n, out, exitcb, closecb))
@@ -422,12 +428,12 @@ spawn(cmds::AndCmds,in::StreamOrNot,out::StreamOrNot)=spawn(cmds,in,out,false,fa
 #returns a pipe to read from the last command in the pipelines
 read_from(cmds::AbstractCmd)=read_from(cmds,true)
 function read_from(cmds::AbstractCmd,passStdin::Bool)
-    out=make_pipe()
+    out=make_pipe(false,false)
     _init_buf(out) #create buffer for reading
     if(passStdin)
         processes=spawn(cmds,false,out)
     else
-        dummy=make_pipe()
+        dummy=make_pipe(false,false)
         processes=spawn(cmds,dummy,out)
         close(dummy)
     end
@@ -440,7 +446,7 @@ function change_readcb(stream::AsyncStream,readcb::Function)
 end
 
 function write_to(cmds::AbstractCmd)
-    in=make_pipe();
+    in=make_pipe(false,false);
     spawn(cmds,in)
     in
 end
