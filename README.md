@@ -162,6 +162,8 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 [double-conversion]: http://double-conversion.googlecode.com/
+[GLPK]:		http://www.gnu.org/software/glpk/
+[Rmath]:	http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 
 <a name="Directories"/>
 ## Directories
