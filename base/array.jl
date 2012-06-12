@@ -878,6 +878,17 @@ function nnz(a::StridedArray)
     return n
 end
 
+# returns the index of the first non-zero element, or 0 if all zeros
+function findfirst{T}(A::StridedArray{T})
+    z = zero(T)
+    for i = 1:length(A)
+        if A[i] != z
+            return i
+        end
+    end
+    return 0
+end
+
 function find{T}(A::StridedArray{T})
     nnzA = nnz(A)
     I = Array(Int, nnzA)
