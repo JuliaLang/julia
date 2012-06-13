@@ -2468,6 +2468,7 @@ void jl_init_types(void)
     jl_function_type->fptr = jl_f_no_function;
 
     jl_tupleset(jl_method_type->types, 3, jl_function_type);
+    jl_tupleset(jl_lambda_info_type->types, 6, jl_function_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, JL_NULL, NULL);
 
