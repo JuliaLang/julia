@@ -95,6 +95,9 @@ a = [0,1,2,3,0,1,2,3]
 @assert findfirst(a) == 2
 @assert findfirst(a.==0) == 1
 @assert findfirst(a.==5) == 0
+@assert findfirst([1,2,4,1,2,3,4], 3) == 6
+@assert findfirst([2,4,6,3,9,2,0], isodd) == 4
+@assert findfirst([2,4,6,2,0], isodd) == 0
 
 ## findn ##
 

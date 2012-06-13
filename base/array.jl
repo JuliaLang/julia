@@ -889,6 +889,27 @@ function findfirst{T}(A::StridedArray{T})
     return 0
 end
 
+# returns the index of the first matching element
+function findfirst{T}(A::StridedArray{T}, v::T)
+    for i = 1:length(A)
+        if A[i] == v
+            return i
+        end
+    end
+    return 0
+end
+
+# returns the index of the first element for which the function returns true
+function findfirst{T}(A::StridedArray{T}, testf::Function)
+    for i = 1:length(A)
+        if testf(A[i])
+            return i
+        end
+    end
+    return 0
+end
+
+
 function find{T}(A::StridedArray{T})
     nnzA = nnz(A)
     I = Array(Int, nnzA)
