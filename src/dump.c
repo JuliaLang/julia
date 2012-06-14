@@ -162,14 +162,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, NULL);
-    table = m->macros.table;
-    for(i=1; i < m->macros.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_serialize_value(s, table[i-1]);
-            jl_serialize_value(s, table[i]);
-        }
-    }
-    jl_serialize_value(s, NULL);
     write_int32(s, m->imports.len);
     for(i=0; i < m->imports.len; i++) {
         jl_serialize_value(s, (jl_value_t*)m->imports.items[i]);
@@ -635,13 +627,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             b->owner = (jl_module_t*)jl_deserialize_value(s);
             b->constp = read_int8(s);
             b->exportp = read_int8(s);
-        }
-        while (1) {
-            jl_value_t *name = jl_deserialize_value(s);
-            if (name == NULL)
-                break;
-            jl_set_expander(m, (jl_sym_t*)name,
-                            (jl_function_t*)jl_deserialize_value(s));
         }
         size_t ni = read_int32(s);
         for(size_t i=0; i < ni; i++) {

@@ -227,7 +227,6 @@ typedef struct _jl_module_t {
     JL_STRUCT_TYPE
     jl_sym_t *name;
     htable_t bindings;
-    htable_t macros;
     arraylist_t imports;  // modules with all bindings imported
 } jl_module_t;
 
@@ -742,8 +741,10 @@ DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_uid(jl_value_t *v);
 
 // modules
+extern DLLEXPORT jl_module_t *jl_root_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
+extern DLLEXPORT jl_module_t *jl_user_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
