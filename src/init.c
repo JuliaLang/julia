@@ -126,7 +126,8 @@ void julia_init(char *imageFile)
     if (!imageFile) {
         jl_root_module = jl_new_module(jl_symbol("Root"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
-        jl_set_const(jl_root_module, jl_symbol("Core"), jl_core_module);
+        jl_set_const(jl_root_module, jl_symbol("Core"),
+                     (jl_value_t*)jl_core_module);
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -146,6 +147,18 @@ void julia_init(char *imageFile)
             JL_PRINTF(JL_STDOUT, "\n");
             jl_exit(1);
         }
+    }
+
+    if (jl_user_module == NULL) {
+        // the User module is the one which is always open, and set as the
+        // current module for bare (non-module-wrapped) toplevel expressions.
+        // it does import Base.* if Base is available.
+        jl_user_module = jl_new_module(jl_symbol("User"));
+        if (jl_base_module != NULL)
+            jl_module_importall(jl_user_module, jl_base_module);
+        jl_set_const(jl_root_module, jl_symbol("User"),
+                     (jl_value_t*)jl_user_module);
+        jl_current_module = jl_user_module;
     }
 
 #ifndef __WIN32__

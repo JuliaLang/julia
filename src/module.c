@@ -160,6 +160,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
+    // TODO
 }
 
 int jl_boundp(jl_module_t *m, jl_sym_t *var)
