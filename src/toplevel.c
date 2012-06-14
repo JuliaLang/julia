@@ -48,7 +48,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     }
     jl_module_t *newm = jl_new_module(name);
     b->value = (jl_value_t*)newm;
-    if (jl_current_module == jl_core_module && name == jl_symbol("Base")) {
+    if (parent_module == jl_root_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap, and stay within it
         // after loading.
         jl_base_module = last_module = newm;
@@ -159,7 +159,7 @@ extern int jl_in_inference;
 
 static jl_module_t *eval_import_path(jl_array_t *args)
 {
-    jl_module_t *m = jl_current_module;
+    jl_module_t *m = jl_root_module;
     for(size_t i=0; i < args->length-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));

@@ -1,8 +1,8 @@
 ## Base module exports
 
 export
-    # Modules
-    Base,Core,
+    # Module
+    Base,
     # Types
     AbstractMatrix,AbstractVector,Array,Associative,CharString,Chars,Cmd,Cmds,
     Colon,Complex,Complex128,Complex64,ComplexPair,DArray,Dict,Dims,EachLine,

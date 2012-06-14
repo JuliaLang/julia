@@ -816,14 +816,15 @@
 		(error "invalid import statement"))))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
-	 (error "expected ( after ccall"))
-     (take-token s)
-     (let ((al (parse-arglist s #\))))
-       (if (and (length> al 1)
-		(memq (cadr al) '(cdecl stdcall fastcall)))
-	   ;; place (callingconv) at end of arglist
-	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
-	   `(ccall ,.al))))
+	 'ccall
+	 (begin
+	   (take-token s)
+	   (let ((al (parse-arglist s #\))))
+	     (if (and (length> al 1)
+		      (memq (cadr al) '(cdecl stdcall fastcall)))
+		 ;; place (callingconv) at end of arglist
+		 `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
+		 `(ccall ,.al))))))
     ((do)
      (error "invalid do syntax"))
     (else (error "unhandled reserved word"))))))

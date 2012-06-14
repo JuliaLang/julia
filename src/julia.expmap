@@ -168,6 +168,7 @@
     jl_symbol;
     jl_core_module;
     jl_base_module;
+    jl_user_module;
     jl_current_module;
     jl_get_global;
     jl_set_global;

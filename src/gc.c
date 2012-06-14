@@ -570,7 +570,7 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    GC_Markval(jl_core_module);
+    GC_Markval(jl_root_module);
     GC_Markval(jl_current_module);
 
     // invisible builtin values
