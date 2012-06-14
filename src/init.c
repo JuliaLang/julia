@@ -124,7 +124,9 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
+        jl_root_module = jl_new_module(jl_symbol("Root"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_set_const(jl_root_module, jl_symbol("Core"), jl_core_module);
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();

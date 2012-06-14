@@ -423,12 +423,6 @@ static void gc_mark_module(jl_module_t *m)
             GC_Markval(b->type);
         }
     }
-    table = m->macros.table;
-    for(i=1; i < m->macros.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            GC_Markval((jl_value_t*)table[i]);
-        }
-    }
 }
 
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))

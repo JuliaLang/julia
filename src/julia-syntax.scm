@@ -529,7 +529,7 @@
 
    ;; macro definition
    (pattern-lambda (macro (call name . argl) body)
-		   `(macro ,name
+		   `(macro ,(symbol (string #\@ name))
 		      (-> (tuple ,@argl) ,body)))
 
    ;; type definition
@@ -1855,7 +1855,8 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-		(apply invoke-julia-macro (cadr e) (cddr e))))
+		(apply invoke-julia-macro (symbol (string #\@ (cadr e)))
+		       (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (equal? form '(error))

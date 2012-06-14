@@ -31,10 +31,15 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    if (name == jl_current_module->name) {
-        jl_errorf("module name %s conflicts with enclosing module", name->name);
+    jl_module_t *parent_module;
+    if (jl_current_module == jl_core_module ||
+        jl_current_module == jl_user_module) {
+        parent_module = jl_root_module;
     }
-    jl_binding_t *b = jl_get_binding_wr(jl_current_module, name);
+    else {
+        parent_module = jl_current_module;
+    }
+    jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
         JL_PRINTF(JL_STDERR, "Warning: redefinition of module %s ignored\n",

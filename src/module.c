@@ -4,8 +4,10 @@
 #include <assert.h>
 #include "julia.h"
 
+jl_module_t *jl_root_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
+jl_module_t *jl_user_module=NULL;
 jl_module_t *jl_current_module=NULL;
 
 static jl_binding_t *varlist_binding=NULL;
@@ -16,10 +18,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->type = (jl_type_t*)jl_module_type;
     m->name = name;
     htable_new(&m->bindings, 0);
-    htable_new(&m->macros, 0);
     jl_set_const(m, name, (jl_value_t*)m);
-    if (jl_current_module)
-        jl_set_const(m, jl_current_module->name, (jl_value_t*)jl_current_module);
     arraylist_new(&m->imports, 0);
     if (jl_core_module) {
         jl_module_importall(m, jl_core_module);
@@ -223,16 +222,12 @@ void jl_declare_constant(jl_binding_t *b)
 
 jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname)
 {
-    jl_function_t *f = (jl_function_t*)ptrhash_get(&m->macros, macroname);
-    if (f == HT_NOTFOUND)
-        return NULL;
-    return f;
+    return (jl_function_t*)jl_get_global(m, macroname);
 }
 
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
 {
-    jl_function_t **bp = (jl_function_t**)ptrhash_bp(&m->macros, macroname);
-    *bp = f;
+    jl_set_const(m, macroname, (jl_value_t*)f);
 }
 
 DLLEXPORT jl_value_t *jl_get_current_module()
