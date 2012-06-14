@@ -228,7 +228,7 @@ type GLPSimplexParam <: GLPParam
 end
 
 function _jl_glpkw__smcp_delete(param::GLPSimplexParam)
-    @glpkw_ccall smcp_delete(pointer(param))
+    @glpkw_ccall smcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
@@ -248,7 +248,7 @@ type GLPInteriorParam <: GLPParam
 end
 
 function _jl_glpkw__iptcp_delete(param::GLPInteriorParam)
-    @glpkw_ccall iptcp_delete(pointer(param))
+    @glpkw_ccall iptcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
@@ -274,7 +274,7 @@ type GLPIntoptParam <: GLPParam
 end
 
 function _jl_glpkw__iocp_delete(param::GLPIntoptParam)
-    @glpkw_ccall iocp_delete(pointer(param))
+    @glpkw_ccall iocp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
@@ -297,7 +297,7 @@ type GLPBasisFactParam <: GLPParam
 end
 
 function _jl_glpkw__bfcp_delete(param::GLPBasisFactParam)
-    @glpkw_ccall bfcp_delete(pointer(param))
+    @glpkw_ccall bfcp_delete Void (Ptr{Void},) pointer(param)
     param.struct = C_NULL
 end
 
