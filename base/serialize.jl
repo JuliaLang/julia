@@ -14,7 +14,7 @@ let i = 2
              AbstractKind, UnionKind, BitsKind, CompositeKind, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
-             QuoteNode, TopNode, TypeVar, Box,
+             QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :Box,
@@ -149,12 +149,17 @@ function serialize(s, f::Function)
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
         write(s, uint8(1))
-        serialize(s, _jl_lambda_number(linfo))
-        serialize(s, linfo.ast)
-        serialize(s, linfo.sparams)
-        serialize(s, linfo.inferred)
         serialize(s, f.env)
+        serialize(s, linfo)
     end
+end
+
+function serialize(s, linfo::LambdaStaticData)
+    writetag(s, LambdaStaticData)
+    serialize(s, _jl_lambda_number(linfo))
+    serialize(s, linfo.ast)
+    serialize(s, linfo.sparams)
+    serialize(s, linfo.inferred)
 end
 
 function serialize_type_data(s, t)
@@ -246,26 +251,27 @@ function deserialize(s, ::Type{Function})
         name = deserialize(s)::Symbol
         return ()->eval(name)
     end
+    env = deserialize(s)
+    linfo = deserialize(s)
+    function ()
+        ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
+              C_NULL, force(env), linfo)::Function
+    end
+end
+
+function deserialize(s, ::Type{LambdaStaticData})
     lnumber = force(deserialize(s))
     ast = deserialize(s)
     sparams = deserialize(s)
     infr = force(deserialize(s))
-    env = deserialize(s)
     if has(_jl_known_lambda_data, lnumber)
-        linfo = _jl_known_lambda_data[lnumber]
-        function ()
-            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-                  C_NULL, force(env), linfo)::Function
-        end
+        return _jl_known_lambda_data[lnumber]
     else
-        function ()
-            linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
-                          force(ast), force(sparams))
-            linfo.inferred = infr
-            _jl_known_lambda_data[lnumber] = linfo
-            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-                  C_NULL, force(env), linfo)::Function
-        end
+        linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
+                      force(ast), force(sparams))
+        linfo.inferred = infr
+        _jl_known_lambda_data[lnumber] = linfo
+        return linfo
     end
 end
 
