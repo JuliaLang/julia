@@ -1,6 +1,6 @@
 ## file formats ##
 
-function _jl_dlm_readrow(io::IO, dlm::Char, eol::Char)
+function _jl_dlm_readrow(io::IO, dlm, eol::Char)
     row_string = readuntil(io, eol)
     while length(row_string)==1 && row_string[1] == eol
         row_string = readuntil(io, eol)
