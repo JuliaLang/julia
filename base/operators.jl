@@ -131,10 +131,15 @@ copy(x::Union(Symbol,Number,String,Function)) = x
 copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
 copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 
-# function composition
+# function composition & pipelining
 one(f::Function) = identity
 one(::Type{Function}) = identity
 *(f::Function, g::Function) = x->f(g(x))
+|(x, f::Function) = f(x)
+
+# currying of map, filter, etc.
+map(f::Function) = (x...)->map(f, x...)
+filter(f::Function) = (x...)->filter(f, x...)
 
 # vectorization
 
