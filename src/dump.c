@@ -813,7 +813,7 @@ void jl_restore_system_image(char *fname)
     tagtype_list = jl_alloc_cell_1d(0);
 
     jl_array_type->env = jl_deserialize_value(&f);
-    
+
     jl_core_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_current_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_base_module = (jl_module_t*)jl_get_global(jl_core_module,
@@ -956,7 +956,7 @@ void jl_init_serializer(void)
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("X"), jl_symbol("Y"),
                      jl_symbol("add_int"), jl_symbol("sub_int"),
-                     jl_symbol("mul_int"), 
+                     jl_symbol("mul_int"),
                      jl_symbol("add_float"), jl_symbol("sub_float"),
                      jl_symbol("mul_float"), jl_symbol("unbox8"),
                      jl_symbol("unbox32"), jl_symbol("unbox64"),
@@ -1055,23 +1055,23 @@ void jl_init_serializer(void)
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
     void *fptrs[] = { jl_f_new_expr, jl_f_new_box,
-                      jl_f_throw, jl_f_is, 
-                      jl_f_no_function, jl_f_typeof, 
-                      jl_f_subtype, jl_f_isa, 
-                      jl_f_typeassert, jl_f_apply, 
-                      jl_f_top_eval, jl_f_isbound, 
-                      jl_f_tuple, jl_f_tupleref, 
-                      jl_f_tuplelen, jl_f_get_field, 
-                      jl_f_set_field, jl_f_field_type, 
-                      jl_f_arraylen, jl_f_arrayref, 
-                      jl_f_arrayset, jl_f_arraysize, 
+                      jl_f_throw, jl_f_is,
+                      jl_f_no_function, jl_f_typeof,
+                      jl_f_subtype, jl_f_isa,
+                      jl_f_typeassert, jl_f_llvm_dump, jl_f_apply,
+                      jl_f_top_eval, jl_f_isbound,
+                      jl_f_tuple, jl_f_tupleref,
+                      jl_f_tuplelen, jl_f_get_field,
+                      jl_f_set_field, jl_f_field_type,
+                      jl_f_arraylen, jl_f_arrayref,
+                      jl_f_arrayset, jl_f_arraysize,
                       jl_f_instantiate_type,
                       jl_f_convert_default, jl_f_convert_tuple,
-                      jl_trampoline, jl_f_new_type_constructor, 
-                      jl_f_typevar, jl_f_union, 
-                      jl_f_methodexists, jl_f_applicable, 
-                      jl_f_invoke, jl_apply_generic, 
-                      jl_unprotect_stack, jl_f_task, 
+                      jl_trampoline, jl_f_new_type_constructor,
+                      jl_f_typevar, jl_f_union,
+                      jl_f_methodexists, jl_f_applicable,
+                      jl_f_invoke, jl_apply_generic,
+                      jl_unprotect_stack, jl_f_task,
                       jl_f_yieldto, jl_f_ctor_trampoline,
                       NULL };
     i=2;

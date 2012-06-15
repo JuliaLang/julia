@@ -194,6 +194,29 @@ JL_CALLABLE(jl_f_typeassert)
     return args[0];
 }
 
+JL_CALLABLE(jl_f_llvm_dump)
+{
+    JL_NARGS(llvm_dump, 1, 1);
+    jl_lambda_info_t *li = (jl_lambda_info_t*) args[0];
+
+    printf("*** Name: %s\n", li->name->name);
+
+    if (li == NULL)
+        printf("NULL lambda info\n");
+    else if (li->functionObject == NULL) {
+        printf("NULL functionObject, attempt to compile\n");
+        jl_compile_li(li);
+        if (li->functionObject != NULL)
+            jl_llvm_dump(li);
+        else
+            printf("Still no functionObject\n");
+    }
+    else
+        jl_llvm_dump(li);
+
+    return jl_nothing;
+}
+
 static jl_function_t *jl_append_any_func;
 
 JL_CALLABLE(jl_f_apply)
@@ -834,6 +857,7 @@ void jl_init_primitives(void)
     add_builtin_func("subtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
+    add_builtin_func("llvm_dump", jl_f_llvm_dump);
     add_builtin_func("apply", jl_f_apply);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);
@@ -844,7 +868,7 @@ void jl_init_primitives(void)
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isbound", jl_f_isbound);
     add_builtin_func("yieldto", jl_f_yieldto);
-    
+
     // functions for internal use
     add_builtin_func("convert_default", jl_f_convert_default);
     add_builtin_func("convert_tuple", jl_f_convert_tuple);
