@@ -188,7 +188,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         JL_SIGATOMIC_BEGIN();
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         JL_SIGATOMIC_END();
-        //llvmf->deleteBody();
+        llvmf->deleteBody();
     }
     f->fptr = li->fptr;
 }
