@@ -196,23 +196,21 @@ JL_CALLABLE(jl_f_typeassert)
 
 JL_CALLABLE(jl_f_llvm_dump)
 {
-    JL_NARGS(llvm_dump, 1, 1);
+    JL_NARGS(llvm_dump_lambda, 1, 1);
+    JL_TYPECHK(llvm_dump_lambda, lambda_info, args[0]);
     jl_lambda_info_t *li = (jl_lambda_info_t*) args[0];
 
-    printf("*** Name: %s\n", li->name->name);
-
     if (li == NULL)
-        printf("NULL lambda info\n");
+        return jl_nothing;
     else if (li->functionObject == NULL) {
-        printf("NULL functionObject, attempt to compile\n");
         jl_compile_li(li);
         if (li->functionObject != NULL)
-            jl_llvm_dump(li);
+            return jl_cstr_to_string((char*) jl_llvm_dump(li));
         else
-            printf("Still no functionObject\n");
+            return jl_nothing;
     }
     else
-        jl_llvm_dump(li);
+        return jl_cstr_to_string((char*) jl_llvm_dump(li));
 
     return jl_nothing;
 }
@@ -857,7 +855,7 @@ void jl_init_primitives(void)
     add_builtin_func("subtype", jl_f_subtype);
     add_builtin_func("isa", jl_f_isa);
     add_builtin_func("typeassert", jl_f_typeassert);
-    add_builtin_func("llvm_dump", jl_f_llvm_dump);
+    add_builtin_func("llvm_dump_lambda", jl_f_llvm_dump);
     add_builtin_func("apply", jl_f_apply);
     add_builtin_func("throw", jl_f_throw);
     add_builtin_func("tuple", jl_f_tuple);

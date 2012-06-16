@@ -18,6 +18,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
@@ -198,11 +199,14 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     f->fptr = li->fptr;
 }
 
-extern "C" void jl_llvm_dump(jl_lambda_info_t *li)
+extern "C" const char* jl_llvm_dump(jl_lambda_info_t *li)
 {
+    std::string code;
+    llvm::raw_string_ostream stream(code);
     assert(li->functionObject);
     Function *llvmf = (Function*) li->functionObject;
-    llvmf->dump();
+    llvmf->print(stream);
+    return stream.str().c_str();
 }
 
 extern "C" void jl_compile(jl_function_t *f)
