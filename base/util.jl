@@ -146,6 +146,10 @@ edit(f::Function, t) = edit(function_loc(f,t)...)
 less(f::Function)    = less(function_loc(f)...)
 less(f::Function, t) = less(function_loc(f,t)...)
 
+function disassemble(f::Function, types)
+    ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString
+end
+
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
