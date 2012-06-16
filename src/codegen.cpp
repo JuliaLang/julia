@@ -18,6 +18,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
@@ -192,9 +193,29 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     f->fptr = li->fptr;
 }
 
+extern "C" const char* jl_llvm_dump(jl_lambda_info_t *li)
+{
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    assert(li->functionObject);
+    Function *llvmf = (Function*) li->functionObject;
+    llvmf->print(stream);
+    return stream.str().c_str();
+}
+
 extern "C" void jl_compile(jl_function_t *f)
 {
     jl_lambda_info_t *li = f->linfo;
+    if (li->functionObject == NULL) {
+        // objective: assign li->functionObject
+        li->inCompile = 1;
+        (void)to_function(li);
+        li->inCompile = 0;
+    }
+}
+
+extern "C" void jl_compile_li(jl_lambda_info_t *li)
+{
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
@@ -714,7 +735,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         // first, then do hand-over-hand to track the tuple.
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         make_gcroot(arg1, ctx);
-        Value *tup = 
+        Value *tup =
             builder.CreateCall(jlallocobj_func,
                                ConstantInt::get(T_size,
                                                 sizeof(void*)*(nargs+2)));
@@ -1192,7 +1213,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             BasicBlock *bb = (*ctx->labels)[labelname];
             assert(bb);
             builder.CreateBr(bb);
-            BasicBlock *after = BasicBlock::Create(getGlobalContext(), 
+            BasicBlock *after = BasicBlock::Create(getGlobalContext(),
                                                    "br", ctx->f);
             builder.SetInsertPoint(after);
         }
@@ -1502,9 +1523,9 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
-	
+
     // TODO: Fix when moving to new LLVM version
-    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
+    dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
     DIFile fil = dbuilder->createFile(filename, ".");
     DISubprogram SP =
@@ -1516,10 +1537,10 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
                                  dbuilder->createSubroutineType(fil,EltTypeArray),
                                  false, true,
                                  0, true, f);
-    
+
     // set initial line number
     builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
-    
+
     /*
     // check for stack overflow (the slower way)
     Value *cur_sp =
@@ -2104,18 +2125,18 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(jl_Module);
     FPM->add(new TargetData(*jl_ExecutionEngine->getTargetData()));
-    
+
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
-    
+
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createScalarReplAggregatesPass()); // Break up aggregate allocas
     FPM->add(createInstructionCombiningPass()); // Cleanup for scalarrepl.
     FPM->add(createJumpThreadingPass());        // Thread jumps.
     FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     //FPM->add(createInstructionCombiningPass()); // Combine silly seq's
-    
+
     //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
     //FPM->add(createEarlyCSEPass()); //// ****
@@ -2123,17 +2144,17 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createLoopRotatePass());           // Rotate loops.
     FPM->add(createLICMPass());                 // Hoist loop invariants
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
-    FPM->add(createInstructionCombiningPass()); 
+    FPM->add(createInstructionCombiningPass());
     FPM->add(createIndVarSimplifyPass());       // Canonicalize indvars
     //FPM->add(createLoopDeletionPass());         // Delete dead loops
     FPM->add(createLoopUnrollPass());           // Unroll small loops
     //FPM->add(createLoopStrengthReducePass());   // (jwb added)
-    
+
     FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
     FPM->add(createGVNPass());                  // Remove redundancies
-    //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset  
+    //FPM->add(createMemCpyOptPass());            // Remove memcpy / form memset
     FPM->add(createSCCPPass());                 // Constant prop with SCCP
-    
+
     // Run instcombine after redundancy elimination to exploit opportunities
     // opened up by them.
     //FPM->add(createSinkingPass()); ////////////// ****
@@ -2149,7 +2170,7 @@ static void init_julia_llvm_env(Module *m)
 
 extern "C" void jl_init_codegen(void)
 {
-    
+
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
 
@@ -2166,11 +2187,11 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine = builder.create(jl_TargetMachine=builder.selectTarget());
 #ifdef DEBUG
     jl_TargetMachine->Options.JITEmitDebugInfo = true;
-#endif 
+#endif
     jl_TargetMachine->Options.NoFramePointerElim = true;
     jl_TargetMachine->Options.NoFramePointerElimNonLeaf = true;
 #endif
-    
+
     dbuilder = new DIBuilder(*jl_Module);
 
     init_julia_llvm_env(jl_Module);

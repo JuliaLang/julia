@@ -768,7 +768,9 @@ DLLEXPORT void *jl_dlsym(uv_lib_t *handle, char *symbol);
 
 // compiler
 void jl_compile(jl_function_t *f);
+void jl_compile_li(jl_lambda_info_t *li);
 void jl_generate_fptr(jl_function_t *f);
+const char* jl_llvm_dump(jl_lambda_info_t *li);
 void jl_delete_function(jl_lambda_info_t *li);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
@@ -978,8 +980,8 @@ DLLEXPORT int jl_cpu_cores(void);
 #define JL_STDOUT ios_stdout
 #define JL_STDERR ios_stderr
 #define JL_PRINTF ios_printf
-#define JL_PUTC	  ios_putc
-#define JL_PUTS	  ios_puts
+#define JL_PUTC           ios_putc
+#define JL_PUTS           ios_puts
 #define JL_WRITE  ios_write
 #define jl_exit   exit
 #define JL_STREAM ios_t
