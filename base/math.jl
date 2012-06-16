@@ -42,14 +42,13 @@ function hypot(x::Real, y::Real)
     y = abs(y)
     if x > y
         r = y/x
-        return x*sqrt(1+r*r)
+        return x*sqrt(one(r)+r*r)
     end
     if y == 0
         return sqrt(y)  # to give same type as other cases
     end
     r = x/y
-    return y*sqrt(1+r*r)
+    return y*sqrt(one(r)+r*r)
 end
 
 square(x::Number) = x*x
-
