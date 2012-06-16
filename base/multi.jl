@@ -1331,7 +1331,9 @@ function find_vars(e, lst)
             push(lst, e)
         end
     elseif isa(e,Expr)
-        foreach(x->find_vars(x,lst), e.args)
+        for x in e.args
+            find_vars(x,lst)
+        end
     end
     lst
 end
@@ -1342,9 +1344,7 @@ function localize_vars(expr)
     # requires a special feature of the front end that knows how to insert
     # the correct variables. the list of free variables cannot be computed
     # from a macro.
-    Expr(:localize,
-         {:(()->($expr)), v...},
-         Any)
+    Expr(:localize, {:(()->($expr)), v...}, Any)
 end
 
 macro spawn(expr)
