@@ -146,12 +146,6 @@ static Function *box64_func;
   - try using fastcc to get tail calls
 */
 
-extern "C" DLLEXPORT void jl_dump_lambda_info(jl_lambda_info_t *lambda)
-{
-    printf("**********");
-    printf("Name: %s\n", lambda->name->name);
-}
-
 // --- entry point ---
 
 static void emit_function(jl_lambda_info_t *lam, Function *f);
