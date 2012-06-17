@@ -70,6 +70,9 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,max(size(a)))
 
+rowvec{T}(a::AbstractArray{T,2}, i::Int) = vec(a[i,:])
+colvec{T}(a::AbstractArray{T,2}, i::Int) = vec(a[:,i])
+
 function squeeze(A::AbstractArray)
     d = ()
     for i = size(A)
