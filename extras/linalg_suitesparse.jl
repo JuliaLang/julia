@@ -56,6 +56,7 @@ function show(io, f::SparseLU)
     printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
+    _jl_umfpack_report(f)
 end
 
 type SparseLUTrans{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)} <: Factorization{Tv}
@@ -67,6 +68,7 @@ function show(io, f::SparseLUTrans)
     printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
+    _jl_umfpack_report(f)
 end
 
 function SparseLU{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
@@ -356,6 +358,7 @@ const _jl_UMFPACK_Uat   =  14    # U.'x=b
 ## Sizes of Control and Info arrays for returning information from solver
 const _jl_UMFPACK_INFO = 90
 const _jl_UMFPACK_CONTROL = 20
+const _jl_UMFPACK_PRL = 1
 
 ## Status codes
 const _jl_UMFPACK_OK = 0
@@ -527,6 +530,28 @@ for (f_sol_r, f_sol_c, inttype) in
 
     end
 end
+
+for (f_report, elty, inttype) in
+    (("umfpack_di_report_numeric", :Float64,    :Int32),
+     ("umfpack_zi_report_numeric", :Complex128, :Int32),
+     ("umfpack_dl_report_numeric", :Float64,    :Int64),
+     ("umfpack_zl_report_numeric", :Complex128, :Int64))
+     @eval begin
+
+         function _jl_umfpack_report{Tv<:$elty,Ti<:$inttype}(slu::SparseLU{Tv,Ti})
+
+             control = zeros(Float64, _jl_UMFPACK_CONTROL)
+             control[_jl_UMFPACK_PRL] = 4
+         
+             ccall(dlsym(_jl_libumfpack, $f_report),
+                   Ti,
+                   (Ptr{Void}, Ptr{Float64}),
+                   slu.numeric.val[1], control)
+         end
+
+    end
+end
+
 
 for (f_symfree, f_numfree, elty, inttype) in
     (("umfpack_di_free_symbolic","umfpack_di_free_numeric",:Float64,:Int32),
