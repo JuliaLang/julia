@@ -132,8 +132,8 @@ ctranspose(fact::SparseLU) = SparseLUTrans(fact.numeric, fact.mat)
 # Solve directly with matrix
 
 (\)(S::SparseMatrixCSC, b::Vector) = SparseLU(S) \ b
-aT_ldiv_b(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
-aC_ldiv_b(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
+At_ldiv_B(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
+Ac_ldiv_B(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
 
 ## Library code
 
