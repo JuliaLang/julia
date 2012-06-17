@@ -371,7 +371,7 @@ dictates that promoting a rational with a float results in the same type
 as promoting the numerator/denominator type with the float.
 
 This small handful of promotion rules, together with the `conversion
-methods discussed above <#Case+Study:+Rational+Conversions>`_, are
+methods discussed above <#case-study-rational-conversions>`_, are
 sufficient to make rational numbers interoperate completely naturally
 with all of Julia's other numeric types — integers, floating-point
 numbers, and complex numbers. By providing appropriate conversion
