@@ -1175,6 +1175,18 @@ Indexing, Assignment, and Concatenation
 
    Remove singleton dimensions from the shape of array ``A``
 
+.. function:: vec(A)
+
+   Make a vector out of an array with only one non-singleton dimension.
+
+.. function:: rowvec(A, i)
+
+   Return the ith row of matrix A as a vector.
+
+.. function:: colvec(A, i)
+
+   Return the ith column of matrix A as a vector.
+
 Linear Algebra
 --------------
 
