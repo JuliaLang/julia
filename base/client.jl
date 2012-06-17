@@ -40,10 +40,7 @@ function repl_show(io, v::ANY)
             show(io, v)
         end
     end
-    if isgeneric(v)
-        if isa(v,CompositeKind)
-            println(io)
-        end
+    if isgeneric(v) && !isa(v,CompositeKind)
         show(io, v.env)
     end
 end

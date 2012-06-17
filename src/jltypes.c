@@ -502,7 +502,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }
-    else if (var==invariant && !jl_has_typevars(b)) {
+    else if (var==invariant && !jl_has_typevars_(b,1)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
         return (jl_value_t*)jl_bottom_type;
@@ -514,7 +514,12 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
           tintersect(Type{Array{T,n}}, Type{typevar(:_,Vector)})
           should give Type{_<:Vector}
         */
-        if (!a->bound) return (jl_value_t*)a;
+        if (jl_is_typevar(b)) {
+            if (!((jl_tvar_t*)b)->bound) return (jl_value_t*)a;
+        }
+        else {
+            if (!a->bound) return (jl_value_t*)a;
+        }
     }
     else {
         return (jl_value_t*)jl_bottom_type;
