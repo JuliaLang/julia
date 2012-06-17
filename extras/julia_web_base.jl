@@ -196,6 +196,13 @@ function __eval_exprs(__parsed_exprs)
     end
 end
 
+# print version info
+println("Julia ", _jl_version_string)
+println(_jl_commit_string, "\n")
+
+# work around bug displaying "\n "
+#print("  ",replace(_jl_banner_plain, "\n", "\n  "))
+
 ###########################################
 # wait forever while asynchronous processing happens
 ###########################################
