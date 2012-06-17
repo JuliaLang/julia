@@ -168,7 +168,7 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
         if isa(V, AbstractVector); V = V[p]; end
     end
 
-    _jl_make_sparse(I, J, V, m, n, +)
+    _jl_make_sparse(I, J, V, m, n, combine)
 end
 
 # _jl_make_sparse() assumes that I,J are sorted in dictionary order
