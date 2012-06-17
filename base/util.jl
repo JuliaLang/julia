@@ -57,7 +57,7 @@ function peakflops()
     floprate
 end
 
-# source files, editing
+# source files, editing, function reflection
 
 function function_loc(f::Function, types)
     for m = getmethods(f, types)
@@ -149,6 +149,15 @@ less(f::Function, t) = less(function_loc(f,t)...)
 function disassemble(f::Function, types)
     ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString
 end
+
+function methods(f::Function)
+    if !isgeneric(f)
+        error("methods: error: not a generic function")
+    end
+    f.env
+end
+
+methods(t::CompositeKind) = t.env
 
 # remote/parallel load
 
