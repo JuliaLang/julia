@@ -535,11 +535,12 @@ function show_nd(io, a::AbstractArray)
     cartesian_map((idxs...)->print_slice(io,idxs...), tail)
 end
 
-function whos()
-    global VARIABLES
-    for v = map(symbol,sort(map(string, VARIABLES)))
-        if isbound(v)
-            println(rpad(v, 30), summary(eval(v)))
+whos() = whos(ccall(:jl_get_current_module, Module, ()))
+
+function whos(m::Module)
+    for v in map(symbol,sort(map(string, names(m))))
+        if isbound(m,v)
+            println(rpad(v, 30), summary(eval(m,v)))
         end
     end
 end

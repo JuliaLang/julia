@@ -33,7 +33,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     }
     jl_module_t *parent_module;
     if (jl_current_module == jl_core_module ||
-        jl_current_module == jl_user_module) {
+        jl_current_module == jl_main_module) {
         parent_module = jl_root_module;
     }
     else {

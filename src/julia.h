@@ -744,7 +744,7 @@ DLLEXPORT uptrint_t jl_uid(jl_value_t *v);
 extern DLLEXPORT jl_module_t *jl_root_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
-extern DLLEXPORT jl_module_t *jl_user_module;
+extern DLLEXPORT jl_module_t *jl_main_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading

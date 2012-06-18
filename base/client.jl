@@ -204,7 +204,6 @@ function _start()
             global PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const VARIABLES = {}
         global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/"]
 
         # Load customized startup

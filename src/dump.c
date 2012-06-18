@@ -717,7 +717,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_file(&f, fname, 1, 1, 1, 1);
 
     if (jl_current_module != jl_base_module &&
-        jl_current_module != jl_user_module) {
+        jl_current_module != jl_main_module) {
         // set up for stage 1 bootstrap, where the Base module is already
         // loaded and we are loading an updated copy in a separate module.
 
@@ -745,8 +745,8 @@ void jl_save_system_image(char *fname, char *startscriptname)
         // step 6: orphan old Base module
         jl_base_module = jl_current_module;
 
-        // step 7: remove User module
-        b = jl_get_binding_wr(jl_root_module, jl_symbol("User"));
+        // step 7: remove Main module
+        b = jl_get_binding_wr(jl_root_module, jl_symbol("Main"));
         b->value = NULL; b->constp = 0;
     }
     else {
@@ -812,8 +812,8 @@ void jl_restore_system_image(char *fname)
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_root_module,
                                                  jl_symbol("Base"));
-    jl_user_module = (jl_module_t*)jl_get_global(jl_root_module,
-                                                 jl_symbol("User"));
+    jl_main_module = (jl_module_t*)jl_get_global(jl_root_module,
+                                                 jl_symbol("Main"));
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash ObjectIdDicts
