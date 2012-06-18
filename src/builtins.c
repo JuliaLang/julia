@@ -676,7 +676,7 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
         jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
-        ios_printf(ios_stderr, "Warning: type parameter name %s shadows an identifier\n", ((jl_sym_t*)args[0])->name);
+        ios_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
     }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;

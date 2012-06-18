@@ -189,6 +189,7 @@ int true_main(int argc, char *argv[])
     }
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
+    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
 
     // run program if specified, otherwise enter REPL
     if (program) {

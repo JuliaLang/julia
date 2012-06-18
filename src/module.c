@@ -47,7 +47,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     if (*bp != HT_NOTFOUND) {
         if ((*bp)->owner != m) {
             ios_printf(JL_STDERR,
-                       "Warning: imported binding for %s overwritten in module %s", var->name, m->name->name);
+                       "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
         else {
             return *bp;
@@ -94,7 +94,7 @@ static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var, mod_stack_t *p)
     if (b == HT_NOTFOUND) {
         for(size_t i=0; i < m->imports.len; i++) {
             b = get_binding_((jl_module_t*)m->imports.items[i], var, &top);
-            if (b != NULL)
+            if (b != NULL && b->exportp)
                 return b;
         }
         return NULL;
@@ -125,9 +125,9 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     if (to == from)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
-    if (b == NULL) {
+    if (b == NULL || !b->exportp) {
         ios_printf(JL_STDERR,
-                   "Warning: could not import %s.%s into %s",
+                   "Warning: could not import %s.%s into %s\n",
                    from->name->name, s->name, to->name->name);
     }
     else {
@@ -135,12 +135,12 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
         if (*bp != HT_NOTFOUND) {
             if ((*bp)->owner != to) {
                 ios_printf(JL_STDERR,
-                           "Warning: ignoring conflicting import of %s into %s",
+                           "Warning: ignoring conflicting import of %s into %s\n",
                            s->name, to->name->name);
             }
             else if ((*bp)->constp || (*bp)->value) {
                 ios_printf(JL_STDERR,
-                           "Warning: import of %s into %s conflicts with an existing identifier; ignored",
+                           "Warning: import of %s into %s conflicts with an existing identifier; ignored.\n",
                            s->name, to->name->name);
             }
             else if (*bp == b) {
@@ -160,7 +160,17 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
-    // TODO
+    jl_binding_t *b = jl_get_binding(from, s);
+    if (b == NULL) {
+        b = jl_get_binding_wr(from, s);
+    }
+    if (b->owner != from) {
+        // create an explicit import so we can mark as re-exported
+        jl_module_import(from, b->owner, s);
+    }
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+    assert(*bp != HT_NOTFOUND);
+    (*bp)->exportp = 1;
 }
 
 int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -204,7 +214,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
         //jl_errorf("cannot redefine constant %s", b->name->name);
-        JL_PRINTF(JL_STDERR, "Warning: redefinition of constant %s ignored\n",
+        JL_PRINTF(JL_STDERR, "Warning: redefinition of constant %s ignored.\n",
                    b->name->name);
     }
     else {
