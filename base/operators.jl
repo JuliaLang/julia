@@ -124,17 +124,20 @@ sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
-foreach(f::Function, itr) = for x = itr; f(x); end
-
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function)) = x
 copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
 copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 
-# function composition
+# function composition & pipelining
 one(f::Function) = identity
 one(::Type{Function}) = identity
 *(f::Function, g::Function) = x->f(g(x))
+|(x, f::Function) = f(x)
+
+# currying of map, filter, etc.
+map(f::Function) = (x...)->map(f, x...)
+filter(f::Function) = (x...)->filter(f, x...)
 
 # vectorization
 

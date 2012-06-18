@@ -70,7 +70,7 @@ and can be passed around like any value:
 
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
-Functions <#Operators+Are+Functions>`_ below), or with the ``apply``
+Functions <#operators-are-functions>`_ below), or with the ``apply``
 function:
 
 ::

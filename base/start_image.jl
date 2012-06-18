@@ -17,7 +17,7 @@ _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom");
 @windows_only _jl_advapi32 = dlopen("Advapi32")
-_jl_librandom_init();
+_jl_librandom_init()
 
 # Optional libraries
 const _jl_libblas = dlopen(_jl_libblas_name)

@@ -731,7 +731,7 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     return false
 end
 
-function type_too_complex(t, d)
+function type_too_complex(t::ANY, d)
     if d > MAX_TYPEUNION_DEPTH
         return true
     end

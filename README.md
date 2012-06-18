@@ -227,6 +227,3 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.
 
-### Try it Online
-
-Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).

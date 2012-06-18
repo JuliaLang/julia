@@ -6,11 +6,12 @@ runtests("unicode")
 runtests("corelib")
 runtests("hashing")
 
-# array tests
+# array/matrix tests
 runtests("arrayops")
 runtests("lapack")
+# runtests("factorizations")
 runtests("fft")
-runtests("sparse")
+# runtests("sparse")
 runtests("arpack")
 runtests("bitarray")
 

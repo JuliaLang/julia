@@ -187,7 +187,7 @@ end
 function polyval(p::Polynomial, x::AbstractVector)
     y = zeros(size(x))
     for i = 1:length(x)
-        y[i] = polyval(a, x[i])
+        y[i] = polyval(p, x[i])
     end
     return y
 end

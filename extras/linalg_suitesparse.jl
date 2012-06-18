@@ -1,32 +1,5 @@
 type MatrixIllConditionedException <: Exception end
 
-# Wrapper for memory allocated by umfpack. Carry along the value and index types.
-type UmfpackPtr{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
-    val::Vector{Ptr{Void}} 
-end
-
-type UmfpackLUFactorization{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)} # doesn't print well
-    numeric::UmfpackPtr{Tv,Ti}
-    mat::SparseMatrixCSC{Tv,Ti}
-end
-
-function show(io, f::UmfpackLUFactorization)
-    printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
-           size(f.mat,1), size(f.mat,2))
-    println(f.numeric)
-end
-
-type UmfpackLUFactorizationTransposed{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
-    numeric::UmfpackPtr{Tv,Ti}
-    mat::SparseMatrixCSC{Tv,Ti}
-end
-
-function show(io, f::UmfpackLUFactorization)
-    printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
-           size(f.mat,1), size(f.mat,2))
-    println(f.numeric)
-end
-
 function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})
     cm = _jl_cholmod_start()
     S = _jl_convert_to_0_based_indexing!(S)
@@ -67,30 +40,38 @@ function _jl_sparse_cholsolve{Tv<:Union(Float64,Complex128), Ti<:Union(Int64,Int
     return sol
 end
 
-# this version doesn't make an (unnecessary) copy
-function _jl_sparse_lusolve(S, b)
+## Sparse LU Factorization Objects
 
-    S = _jl_convert_to_0_based_indexing!(S)
-    x = []
-
-    try
-        symbolic = _jl_umfpack_symbolic(S)
-        numeric = _jl_umfpack_numeric(S, symbolic)
-        x = _jl_umfpack_solve(S, b, numeric)
-    catch e
-        S = _jl_convert_to_1_based_indexing!(S)
-        if is(e,MatrixIllConditionedException)
-            error("Input matrix is ill conditioned or singular");
-        else
-            error("Error calling UMFPACK")
-        end
-    end
-    
-    S = _jl_convert_to_1_based_indexing!(S)
-    return x
+# Wrapper for memory allocated by umfpack. Carry along the value and index types.
+type UmfpackPtr{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}
+    val::Vector{Ptr{Void}} 
 end
 
-function lufact{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
+type SparseLU{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)} <: Factorization{Tv}
+    numeric::UmfpackPtr{Tv,Ti}
+    mat::SparseMatrixCSC{Tv,Ti}
+end
+
+function show(io, f::SparseLU)
+    printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
+           size(f.mat,1), size(f.mat,2))
+    println(f.numeric)
+    _jl_umfpack_report(f)
+end
+
+type SparseLUTrans{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)} <: Factorization{Tv}
+    numeric::UmfpackPtr{Tv,Ti}
+    mat::SparseMatrixCSC{Tv,Ti}
+end
+
+function show(io, f::SparseLUTrans)
+    printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
+           size(f.mat,1), size(f.mat,2))
+    println(f.numeric)
+    _jl_umfpack_report(f)
+end
+
+function SparseLU{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
     Scopy = copy(S) 
     Scopy = _jl_convert_to_0_based_indexing!(Scopy)
     numeric = []
@@ -106,11 +87,10 @@ function lufact{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseM
         end
     end
     
-    return UmfpackLUFactorization(numeric,Scopy) 
-    
+    return SparseLU(numeric,Scopy) 
 end
 
-function lufact!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
+function SparseLU!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti})
     Sshallow = SparseMatrixCSC(S.m,S.n,S.colptr,S.rowval,S.nzval)
     Sshallow = _jl_convert_to_0_based_indexing!(Sshallow)
     numeric = []
@@ -131,28 +111,29 @@ function lufact!{Tv<:Union(Float64,Complex128),Ti<:Union(Int64,Int32)}(S::Sparse
     S.nzval = []
     S.colptr = ones(S.n+1)
     
-    return UmfpackLUFactorization(numeric,Sshallow) 
-    
+    return SparseLU(numeric,Sshallow)
 end
 
-function (\){Tv<:Union(Float64,Complex128),
-             Ti<:Union(Int64,Int32)}(S::SparseMatrixCSC{Tv,Ti}, b::Vector{Tv})
-    return _jl_sparse_lusolve(S,b)
+function SparseLUTrans(S::SparseMatrixCSC) 
+    x = SparseLU(S)
+    return SparseLUTrans(x.numeric, x.mat)
 end
 
-(\){T}(fact::UmfpackLUFactorization{T}, b::Vector{T}) = _jl_umfpack_solve(fact.mat,b,fact.numeric)
+# Solve with Factorization
 
-(\){T}(fact::UmfpackLUFactorizationTransposed{T}, b::Vector{T}) = _jl_umfpack_transpose_solve(fact.mat,b,fact.numeric)
+(\){T}(fact::SparseLU{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+(\){T}(fact::SparseLU{T}, b::Vector{T}) = _jl_umfpack_solve(fact.mat,b,fact.numeric)
 
-(\){T}(fact::UmfpackLUFactorization{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+(\){T}(fact::SparseLUTrans{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+(\){T}(fact::SparseLUTrans{T}, b::Vector{T}) = _jl_umfpack_transpose_solve(fact.mat,b,fact.numeric)
 
-(\){T}(fact::UmfpackLUFactorizationTransposed{T}, b::Vector) = fact \ convert(Array{T,1}, b)
+ctranspose(fact::SparseLU) = SparseLUTrans(fact.numeric, fact.mat)
 
-ctranspose(fact::UmfpackLUFactorization) = UmfpackLUFactorizationTransposed(fact.numeric, fact.mat)
+# Solve directly with matrix
 
-(\){T}(S::SparseMatrixCSC{T}, b::Vector) = S \ convert(Array{T,1}, b)
-
-
+(\)(S::SparseMatrixCSC, b::Vector) = SparseLU(S) \ b
+At_ldiv_B(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
+Ac_ldiv_B(S::SparseMatrixCSC, b::Vector) = SparseLUTrans(S) \ b
 
 ## Library code
 
@@ -377,6 +358,7 @@ const _jl_UMFPACK_Uat   =  14    # U.'x=b
 ## Sizes of Control and Info arrays for returning information from solver
 const _jl_UMFPACK_INFO = 90
 const _jl_UMFPACK_CONTROL = 20
+const _jl_UMFPACK_PRL = 1
 
 ## Status codes
 const _jl_UMFPACK_OK = 0
@@ -548,6 +530,28 @@ for (f_sol_r, f_sol_c, inttype) in
 
     end
 end
+
+for (f_report, elty, inttype) in
+    (("umfpack_di_report_numeric", :Float64,    :Int32),
+     ("umfpack_zi_report_numeric", :Complex128, :Int32),
+     ("umfpack_dl_report_numeric", :Float64,    :Int64),
+     ("umfpack_zl_report_numeric", :Complex128, :Int64))
+     @eval begin
+
+         function _jl_umfpack_report{Tv<:$elty,Ti<:$inttype}(slu::SparseLU{Tv,Ti})
+
+             control = zeros(Float64, _jl_UMFPACK_CONTROL)
+             control[_jl_UMFPACK_PRL] = 4
+         
+             ccall(dlsym(_jl_libumfpack, $f_report),
+                   Ti,
+                   (Ptr{Void}, Ptr{Float64}),
+                   slu.numeric.val[1], control)
+         end
+
+    end
+end
+
 
 for (f_symfree, f_numfree, elty, inttype) in
     (("umfpack_di_free_symbolic","umfpack_di_free_numeric",:Float64,:Int32),

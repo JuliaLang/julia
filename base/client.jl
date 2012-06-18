@@ -40,10 +40,7 @@ function repl_show(io, v::ANY)
             show(io, v)
         end
     end
-    if isgeneric(v)
-        if isa(v,CompositeKind)
-            println(io)
-        end
+    if isgeneric(v) && !isa(v,CompositeKind)
         show(io, v.env)
     end
 end
@@ -85,6 +82,12 @@ function run_repl()
     if _jl_have_color
         ccall(:jl_enable_color, Void, ())
     end
+    atexit() do
+        if _jl_have_color
+            print(_jl_color_normal)
+        end
+        println()
+    end
 
     # ctrl-C interrupt for interactive use
     ccall(:jl_install_sigint_handler, Void, ())
@@ -99,11 +102,6 @@ function run_repl()
         end
         _jl_eval_user_input(ast, show_value!=0)
     end
-
-    if _jl_have_color
-        print(_jl_color_normal)
-    end
-    println()
 end
 
 function parse_input_line(s::String)
@@ -188,6 +186,7 @@ _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
 function _start()
+    atexit(()->flush(stdout_stream))
     try
         ccall(:jl_register_toplevel_eh, Void, ())
         ccall(:jl_start_io_thread, Void, ())
@@ -226,5 +225,19 @@ function _start()
         println()
         exit(1)
     end
-    flush(stdout_stream)
+end
+
+const _jl_atexit_hooks = {}
+
+atexit(f::Function) = (enqueue(_jl_atexit_hooks, f); nothing)
+
+function _atexit()
+    for f in _jl_atexit_hooks
+        try
+            f()
+        catch e
+            show(e)
+            println()
+        end
+    end
 end
