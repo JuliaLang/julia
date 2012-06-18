@@ -95,6 +95,9 @@
     (or (equal item (car lst))
 	(julia-member item (cdr lst)))))
 
+(if (not (fboundp 'evenp))
+    (defun evenp (x) (zerop (% x 2))))
+
 (defun julia-find-comment-open (p0)
   (if (< (point) p0)
       nil
