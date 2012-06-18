@@ -6,6 +6,7 @@ Eps = sqrt(eps())
 begin
     local n
     n    = 10
+    srand(1234321)
     sqd  = rand(n,n)
     sqz  = reshape([complex128(x) for x in sqd], size(sqd))
     mmd  = rand(3*n, n)
