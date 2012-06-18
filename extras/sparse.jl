@@ -213,7 +213,9 @@ sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(max(I)), int(max(J)), +)
 
 sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
 
-sparse(I,J,v::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
+sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
+
+sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
 
 # Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
 function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
