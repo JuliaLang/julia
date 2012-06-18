@@ -249,25 +249,28 @@ end
 
 # help
 
-_jl_help_categories = nothing
-_jl_help_functions = nothing
+_jl_help_category_list = nothing
+_jl_help_category_dict = nothing
+_jl_help_function_dict = nothing
 
 function _jl_init_help()
-    global _jl_help_categories, _jl_help_functions
-    if _jl_help_categories == nothing
+    global _jl_help_category_list, _jl_help_category_dict, _jl_help_function_dict
+    if _jl_help_category_dict == nothing
         println("Loading help data...")
         load("$JULIA_HOME/../lib/julia/helpdb.jl")
-        _jl_help_categories = Dict()
-        _jl_help_functions = Dict()
+        _jl_help_category_list = {}
+        _jl_help_category_dict = Dict()
+        _jl_help_function_dict = Dict()
         for (cat,func,desc) in _jl_help_db()
-            if !has(_jl_help_categories, cat)
-                _jl_help_categories[cat] = {}
+            if !has(_jl_help_category_dict, cat)
+                push(_jl_help_category_list, cat)
+                _jl_help_category_dict[cat] = {}
             end
-            push(_jl_help_categories[cat], func)
-            if !has(_jl_help_functions, func)
-                _jl_help_functions[func] = {}
+            push(_jl_help_category_dict[cat], func)
+            if !has(_jl_help_function_dict, func)
+                _jl_help_function_dict[func] = {}
             end
-            push(_jl_help_functions[func], desc)
+            push(_jl_help_function_dict[func], desc)
         end
     end
 end
@@ -284,8 +287,8 @@ function help()
  for one of the following categories:
 
 ")
-    for (cat, tabl) = _jl_help_categories
-        if !isempty(tabl)
+    for cat = _jl_help_category_list
+        if !isempty(_jl_help_category_dict[cat])
             print("  ")
             show(cat); println()
         end
@@ -294,12 +297,12 @@ end
 
 function help(cat::String)
     _jl_init_help()
-    if !has(_jl_help_categories, cat)
+    if !has(_jl_help_category_dict, cat)
         # if it's not a category, try another named thing
         return help_for(cat)
     end
     println("Help is available for the following items:")
-    for func = _jl_help_categories[cat]
+    for func = _jl_help_category_dict[cat]
         print(func, " ")
     end
     println()
@@ -319,8 +322,8 @@ end
 help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     _jl_init_help()
-    if has(_jl_help_functions, fname)
-        _jl_print_help_entries(_jl_help_functions[fname])
+    if has(_jl_help_function_dict, fname)
+        _jl_print_help_entries(_jl_help_function_dict[fname])
     else
         if isgeneric(obj)
             repl_show(obj); println()
@@ -335,13 +338,13 @@ function apropos(txt::String)
     n = 0
     r = Regex("\\Q$txt", PCRE_CASELESS)
     first = true
-    for (cat, _) in _jl_help_categories
+    for (cat, _) in _jl_help_category_dict
         if matches(r, cat)
             println("Category: \"$cat\"")
             first = false
         end
     end
-    for (func, entries) in _jl_help_functions
+    for (func, entries) in _jl_help_function_dict
         if matches(r, func) || anyp(e->matches(r,e), entries)
             if !first
                 println()

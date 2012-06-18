@@ -168,7 +168,7 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
         if isa(V, AbstractVector); V = V[p]; end
     end
 
-    _jl_make_sparse(I, J, V, m, n, +)
+    _jl_make_sparse(I, J, V, m, n, combine)
 end
 
 # _jl_make_sparse() assumes that I,J are sorted in dictionary order
@@ -224,6 +224,97 @@ function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::Abstr
 
     SparseMatrixCSC(m, n, colptr, I, V)
 end
+
+# Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
+function newsparse{Ti<:Union(Int32,Int64),Tv}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                                  V::AbstractVector{Tv},
+                                                  nrow::Int, ncol::Int, combine::Function)
+
+# Work array
+Wj = Array(Ti, max(nrow,ncol)+1)
+
+# Allocate sparse matrix data structure
+# Count entries in each row
+nz = length(I)
+Rnz = zeros(Ti, nrow+1)
+Rnz[1] = 1
+for k=1:nz
+    i = I[k]
+    j = J[k]
+    Rnz[i+1] += 1
+end
+Rp = cumsum(Rnz)
+Ri = Array(Ti, nz)
+Rx = Array(Tv, nz)
+
+# Construct row form
+# place triplet (i,j,x) in column i of R
+
+# Use work array for temporary row pointers
+for i=1:nrow; Wj[i] = Rp[i]; end
+
+for k=1:nz
+    t = I[k]
+    p = Wj[t]
+    Rx[p] = V[k]
+    Ri[p] = J[k]
+    Wj[t] += 1
+end
+
+# Reset work array for use in counting duplicates
+for j=1:ncol; Wj[j] = 0; end
+
+# Sum up duplicates and squeeze
+anz = 0
+for i=1:nrow
+    p1 = Rp[i]
+    p2 = Rp[i+1]
+    pdest = p1
+
+    for p = p1:(p2-1)
+        j = Ri[p]
+        pj = Wj[j]
+        if pj >= p1
+            Rx[pj] = combine (Rx[pj], Rx[p])
+        else
+            Wj[j] = pdest
+            if pdest != p
+                Ri[pdest] = j
+                Rx[pdest] = Rx[p]
+            end
+            pdest += 1
+        end
+    end
+
+    Rnz[i] = pdest - p1
+    anz += (pdest - p1)
+end
+
+# Transpose to get the CSC format
+RiT = Array(Ti, anz)
+RxT = Array(Tv, anz)
+
+# Reset work array to build the final colptr
+Wj[1] = 1
+for i=2:(ncol+1); Wj[i] = 0; end
+for j = 1:nrow, p = Rp[j]:(Rp[j]+Rnz[j]-1)
+    Wj[Ri[p]+1] += 1
+end
+RpT = cumsum(sub(Wj,1:(ncol+1)))
+for i=1:length(RpT); Wj[i] = RpT[i]; end
+
+for j = 1:nrow, p = Rp[j]:(Rp[j]+Rnz[j]-1)
+    ind = Ri[p]
+    q = Wj[ind]
+    Wj[ind] += 1
+    RiT[q] = j
+    RxT[q] = Rx[p]
+end
+
+return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
+
+end
+
 
 function find{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     numnz = nnz(S)

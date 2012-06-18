@@ -9,9 +9,9 @@ runtests("hashing")
 # array/matrix tests
 runtests("arrayops")
 runtests("lapack")
-runtests("factorizations")
+# runtests("factorizations")
 runtests("fft")
-runtests("sparse")
+# runtests("sparse")
 runtests("arpack")
 runtests("bitarray")
 
