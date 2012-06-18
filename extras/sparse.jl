@@ -207,32 +207,20 @@ end
 
 ## sparse() can take its inputs in unsorted order
 
-sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), int(max(I)), int(max(J)), +)
 
-sparse(I,J,V,m,n) = sparse(I, J, V, int(m), int(n), +)
+sparse(I,J,V::AbstractVector) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+
+sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
+
+sparse(I,J,v::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
 
 # Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
-#
-# BUG?: I get method_missing for this definition, and I wonder what am I doing wrong. It seems
-# to have something to do with Tv, because things work fine otherwise.
-# function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
-#                                            V::Union(Number, AbstractVector{Tv}),
-#                                            nrow::Int, ncol::Int, combine::Function)
-
-function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V,
-                                        nrow::Int, ncol::Int, combine::Function)
+function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+                                           V::AbstractVector{Tv},
+                                           nrow::Int, ncol::Int, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),m,n); end
-
-    if isa(I, Range1) || isa(I, Range); I = [I]; end
-    if isa(J, Range1) || isa(J, Range); J = [J]; end
-
-    if isa(V, Range1) || isa(V, Range)
-        V = [V]
-    elseif isa(V, Number)
-        V = fill(V, length(I))
-    end
-    Tv = typeof(V[1])
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -243,9 +231,7 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
     Rnz = zeros(Ti, nrow+1)
     Rnz[1] = 1
     for k=1:nz
-        i = I[k]
-        j = J[k]
-        Rnz[i+1] += 1
+        Rnz[I[k]+1] += 1
     end
     Rp = cumsum(Rnz)
     Ri = Array(Ti, nz)
@@ -253,16 +239,15 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
 
     # Construct row form
     # place triplet (i,j,x) in column i of R
-
     # Use work array for temporary row pointers
     for i=1:nrow; Wj[i] = Rp[i]; end
 
     for k=1:nz
-        t = I[k]
-        p = Wj[t]
+        ind = I[k]
+        p = Wj[ind]
+        Wj[ind] += 1
         Rx[p] = V[k]
         Ri[p] = J[k]
-        Wj[t] += 1
     end
 
     # Reset work array for use in counting duplicates
@@ -272,10 +257,10 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
     anz = 0
     for i=1:nrow
         p1 = Rp[i]
-        p2 = Rp[i+1]
+        p2 = Rp[i+1] - 1
         pdest = p1
 
-        for p = p1:(p2-1)
+        for p = p1:p2
             j = Ri[p]
             pj = Wj[j]
             if pj >= p1
@@ -301,19 +286,27 @@ function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector
     # Reset work array to build the final colptr
     Wj[1] = 1
     for i=2:(ncol+1); Wj[i] = 0; end
-    for j = 1:nrow, p = Rp[j]:(Rp[j]+Rnz[j]-1)
-        Wj[Ri[p]+1] += 1
+    for j = 1:nrow
+        p1 = Rp[j]
+        p2 = p1 + Rnz[j] - 1        
+        for p = p1:p2
+            Wj[Ri[p]+1] += 1
+        end
     end
-    RpT = cumsum(sub(Wj,1:(ncol+1)))
-    for i=1:length(RpT); Wj[i] = RpT[i]; end
+    RpT = cumsum(Wj[1:(ncol+1)])
 
     # Transpose 
-    for j = 1:nrow, p = Rp[j]:(Rp[j]+Rnz[j]-1)
-        ind = Ri[p]
-        q = Wj[ind]
-        Wj[ind] += 1
-        RiT[q] = j
-        RxT[q] = Rx[p]
+    for i=1:length(RpT); Wj[i] = RpT[i]; end
+    for j = 1:nrow
+        p1 = Rp[j]
+        p2 = p1 + Rnz[j] - 1
+        for p = p1:p2
+            ind = Ri[p]
+            q = Wj[ind]
+            Wj[ind] += 1
+            RiT[q] = j
+            RxT[q] = Rx[p]
+        end
     end
 
     return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
