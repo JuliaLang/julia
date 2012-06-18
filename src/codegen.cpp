@@ -1247,7 +1247,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
         }
-        else if (jl_is_tuple(expr)) {
+        else if (jl_is_tuple(expr) || jl_is_union_type(expr)) {
             needroot = 1;
         }
         if (needroot) {
