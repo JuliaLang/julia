@@ -141,42 +141,22 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 function sparse(A::Matrix)
     m, n = size(A)
     I, J, V = findn_nzs(A)
-    sparse(int32(I), int32(J), V, m, n)
+    _jl_sparse(int32(I), int32(J), V, m, n)
 end
 
-sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)), +)
-
-sparse(I,J,V,m,n) = sparse(I, J, V, m, n, +)
-
-function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                        V::Union(Number, AbstractVector),
-                                        m::Int, n::Int, combine::Function)
-
-    if length(I) == 0; return spzeros(eltype(V),m,n); end
-
-    if !issorted(I)
-        (I,p) = sortperm(I)
-        J = J[p]
-        if isa(V, AbstractVector); V = V[p]; end
-    else
-        I = copy(I)
-    end
-
-    if !issorted(J)
-        (J,p) = sortperm(J)
-        I = I[p]
-        if isa(V, AbstractVector); V = V[p]; end
-    end
-
-    _jl_make_sparse(I, J, V, m, n, combine)
-end
-
-# _jl_make_sparse() assumes that I,J are sorted in dictionary order
+# _jl_sparse() assumes that I,J are sorted in dictionary order
 # (with J taking precedence)
 # use sparse() with the same arguments if this is not the case
-function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                                 V::Union(Number, AbstractVector),
-                                                 m::Int, n::Int, combine::Function)
+
+_jl_sparse(I,J,V) = _jl_sparse!(copy(I), copy(J), copy(V), int(max(I)), int(max(J)), +)
+
+_jl_sparse(I,J,V,m,n) = _jl_sparse!(copy(I), copy(J), copy(V), m, n, +)
+
+_jl_sparse(I,J,V,m,n,combine) = _jl_sparse!(copy(I), copy(J), copy(V), m, n, combine)
+
+function _jl_sparse!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                             V::Union(Number, AbstractVector),
+                                             m::Int, n::Int, combine::Function)
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
     if isa(I, Range1) || isa(I, Range); I = [I]; end
@@ -222,13 +202,37 @@ function _jl_make_sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::Abstr
         V = V[1:numnz]
     end
 
-    SparseMatrixCSC(m, n, colptr, I, V)
+    return SparseMatrixCSC(m, n, colptr, I, V)
 end
 
+## sparse() can take its inputs in unsorted order
+
+sparse(I,J,V) = sparse(I, J, V, int(max(I)), int(max(J)), +)
+
+sparse(I,J,V,m,n) = sparse(I, J, V, int(m), int(n), +)
+
 # Based on http://www.cise.ufl.edu/research/sparse/cholmod/CHOLMOD/Core/cholmod_triplet.c
-function newsparse{Ti<:Union(Int32,Int64),Tv}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
-                                              V::AbstractVector{Tv},
-                                              nrow::Int, ncol::Int, combine::Function)
+#
+# BUG?: I get method_missing for this definition, and I wonder what am I doing wrong. It seems
+# to have something to do with Tv, because things work fine otherwise.
+# function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, 
+#                                            V::Union(Number, AbstractVector{Tv}),
+#                                            nrow::Int, ncol::Int, combine::Function)
+
+function sparse{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti}, V,
+                                        nrow::Int, ncol::Int, combine::Function)
+
+    if length(I) == 0; return spzeros(eltype(V),m,n); end
+
+    if isa(I, Range1) || isa(I, Range); I = [I]; end
+    if isa(J, Range1) || isa(J, Range); J = [J]; end
+
+    if isa(V, Range1) || isa(V, Range)
+        V = [V]
+    elseif isa(V, Number)
+        V = fill(V, length(I))
+    end
+    Tv = typeof(V[1])
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
@@ -290,7 +294,7 @@ function newsparse{Ti<:Union(Int32,Int64),Tv}(I::AbstractVector{Ti}, J::Abstract
         anz += (pdest - p1)
     end
 
-    # Transpose to get the CSC format
+    # Transpose from row format to get the CSC format
     RiT = Array(Ti, anz)
     RxT = Array(Tv, anz)
 
@@ -303,6 +307,7 @@ function newsparse{Ti<:Union(Int32,Int64),Tv}(I::AbstractVector{Ti}, J::Abstract
     RpT = cumsum(sub(Wj,1:(ncol+1)))
     for i=1:length(RpT); Wj[i] = RpT[i]; end
 
+    # Transpose 
     for j = 1:nrow, p = Rp[j]:(Rp[j]+Rnz[j]-1)
         ind = Ri[p]
         q = Wj[ind]
@@ -373,7 +378,7 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 function speye(T::Type, m::Int, n::Int)
     x = min(m,n)
     L = linspace(int32(1), int32(x), int32(x))
-    _jl_make_sparse(L, L, ones(T, x), m, n, (a,b)->a)
+    _jl_sparse(L, L, ones(T, x), m, n, (a,b)->a)
 end
 
 function one{T}(S::SparseMatrixCSC{T})
