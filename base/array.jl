@@ -878,13 +878,12 @@ function nnz(a::StridedArray)
     return n
 end
 
-function find{T}(A::StridedArray{T})
+function find(A::StridedArray)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
-    z = zero(T)
     count = 1
     for i=1:length(A)
-        if A[i] != z
+        if A[i] != 0
             I[count] = i
             count += 1
         end
@@ -894,14 +893,13 @@ end
 
 findn(A::StridedVector) = find(A)
 
-function findn{T}(A::StridedMatrix{T})
+function findn(A::StridedMatrix)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
     J = Array(Int, nnzA)
-    z = zero(T)
     count = 1
     for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
+        if A[i,j] != 0
             I[count] = i
             J[count] = j
             count += 1
@@ -927,14 +925,16 @@ function findn{T}(A::StridedArray{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->Array(Int, nnzA))
-    ranges = ntuple(ndims(A), d->(1:size(A,d)))
+    if nnzA > 0
+        ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
-    if is(findn_cache,nothing)
-        findn_cache = Dict()
+        if is(findn_cache,nothing)
+            findn_cache = Dict()
+        end
+
+        gen_cartesian_map(findn_cache, findn_one, ranges,
+                          (:A, :I, :count, :z), A,I,1, zero(T))
     end
-
-    gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
 end
@@ -944,14 +944,16 @@ function findn_nzs{T}(A::StridedMatrix{T})
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = zeros(T, nnzA)
-    z = zero(T)
     count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            NZs[count] = A[i,j]
-            count += 1
+    if nnzA > 0
+        for j=1:size(A,2), i=1:size(A,1)
+            Aij = A[i,j]
+            if Aij != 0
+                I[count] = i
+                J[count] = j
+                NZs[count] = Aij
+                count += 1
+            end
         end
     end
     return (I, J, NZs)
@@ -960,13 +962,14 @@ end
 function nonzeros{T}(A::StridedArray{T})
     nnzA = nnz(A)
     V = Array(T, nnzA)
-    z = zero(T)
     count = 1
-    for i=1:length(A)
-        Ai = A[i]
-        if Ai != z
-            V[count] = Ai
-            count += 1
+    if nnzA > 0
+        for i=1:length(A)
+            Ai = A[i]
+            if Ai != 0
+                V[count] = Ai
+                count += 1
+            end
         end
     end
     return V
