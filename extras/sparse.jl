@@ -144,29 +144,45 @@ function sparse(A::Matrix)
     _jl_sparse(int32(I), int32(J), V, m, n)
 end
 
-# _jl_sparse() assumes that I,J are sorted in dictionary order
-# (with J taking precedence)
-# use sparse() with the same arguments if this is not the case
+# _jl_sparse_sortbased uses sort to rearrange the input and construct the sparse matrix
 
-_jl_sparse(I,J,V) = _jl_sparse!(copy(I), copy(J), copy(V), int(max(I)), int(max(J)), +)
+_jl_sparse_sortbased(I,J,V) = _jl_sparse_sortbased(I, J, V, int(max(I)), int(max(J)), +)
 
-_jl_sparse(I,J,V,m,n) = _jl_sparse!(copy(I), copy(J), copy(V), m, n, +)
+_jl_sparse_sortbased(I,J,V,m,n) = _jl_sparse_sortbased(I, J, V, m, n, +)
 
-_jl_sparse(I,J,V,m,n,combine) = _jl_sparse!(copy(I), copy(J), copy(V), m, n, combine)
+_jl_sparse_sortbased(I,J,V,m,n,combine) = _jl_sparse_sortbased(I, J, V, m, n, combine)
 
-function _jl_sparse!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                             V::Union(Number, AbstractVector),
-                                             m::Int, n::Int, combine::Function)
+function _jl_sparse_sortbased{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                            V::Union(Number, AbstractVector),
+                                            m::Int, n::Int, combine::Function)
+
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
-    if isa(I, Range1) || isa(I, Range); I = [I]; end
-    if isa(J, Range1) || isa(J, Range); J = [J]; end
+    issortedI = issorted(I)
+    issortedJ = issorted(J)
 
-    if isa(V, Range1) || isa(V, Range)
-        V = [V]
-    elseif isa(V, Number)
-        V = fill(V, length(I))
+    if !issortedI
+        (I,p) = sortperm(I)
+        J = J[p]
+        if isa(V, AbstractVector); V = V[p]; end
+    else
+        if issortedJ; I = copy(I); end
     end
+
+    if !issortedJ
+        (J,p) = sortperm(J)
+        I = I[p]
+        V = V[p]
+        if isa(V, AbstractVector); V = V[p]; end
+    else
+        if issortedI; J = copy(J); end
+    end
+
+    if issortedI && issortedJ
+        if isa(V, AbstractVector); V = copy(V); end
+    end
+
+    if isa(V, Number); V = fill(V, length(I)); end
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -371,9 +387,11 @@ speye(n::Int) = speye(Float64, n, n)
 speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
-    x = min(m,n)
-    L = linspace(int32(1), int32(x), int32(x))
-    _jl_sparse(L, L, ones(T, x), m, n, (a,b)->a)
+    x = int32(min(m,n))
+    rowval = linspace(int32(1), x, x)
+    colptr = [rowval, int32(x+1)*ones(Int32, n+1-x)]
+    nzval  = ones(T, x)
+    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 function one{T}(S::SparseMatrixCSC{T})
