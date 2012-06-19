@@ -25,4 +25,4 @@ Extras
    :maxdepth: 1
 
    specfun
-
+   profile

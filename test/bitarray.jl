@@ -280,7 +280,7 @@ b2 = bitrand(Bool, n1, n2)
 @check_bit_operation (|) BitArray{Bool} (b1, b2)
 @check_bit_operation ($) BitArray{Bool} (b1, b2)
 @check_bit_operation (.*) BitArray{Bool} (b1, b2)
-@check_bit_operation (*) BitArray{Bool} (b1, b1)
+@check_bit_operation (*) BitArray{Bool} (b1, b1')
 
 @timesofar "binary arithmetic"
 
