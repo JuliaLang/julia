@@ -67,7 +67,7 @@ Julia's type system that should be mentioned up front are:
 Julia's type system is designed to be powerful and expressive, yet
 clear, intuitive and unobtrusive. Many Julia programmers may never feel
 the need to write code that explicitly uses types. Some kinds of
-programming, however, becomes clearer, simpler, faster and more robust
+programming, however, become clearer, simpler, faster and more robust
 with declared types.
 
 .. raw:: html
