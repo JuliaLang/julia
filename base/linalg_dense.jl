@@ -30,6 +30,7 @@ cross(a::Vector, b::Vector) =
 function _jl_generic_matvecmul{T,S}(A::StridedMatrix{T}, B::StridedVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
+    if size(A, 2) != mB; error("*: argument shapes do not match"); end
     C = zeros(promote_type(T,S), mA)
     for k = 1:mB
         b = B[k]
@@ -51,6 +52,7 @@ function _jl_generic_matmatmul{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
     (mB, nB) = size(B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3('N','N',A,B); end
+    if nA != mB; error("*: argument shapes do not match"); end
     C = zeros(promote_type(T,S), mA, nB)
     z = zero(eltype(C))
 
