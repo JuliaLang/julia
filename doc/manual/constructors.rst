@@ -111,7 +111,7 @@ constructor method, with two differences:
    that creates objects of the block's type.
 
 For example, suppose one wants to declare a type that holds a pair of
-real numbers, subject to the constraint that that the first number is
+real numbers, subject to the constraint that the first number is
 not greater than the second one. One could declare it like this:
 
 ::
