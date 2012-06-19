@@ -99,8 +99,8 @@ requested conversion:
     julia> convert(Float, "foo")
     no method convert(Type{Float},ASCIIString)
 
-Some languages consider parsing strings as a numbers or formatting
-numbers as a strings to be conversions (many dynamic languages will even
+Some languages consider parsing strings as numbers or formatting
+numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
