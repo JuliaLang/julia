@@ -528,7 +528,7 @@ session:
     negative x not allowed
 
 Now suppose we want to handle this circumstance rather than just giving
-with an error. To catch an error, you use the ``try`` and ``catch``
+up with an error. To catch an error, you use the ``try`` and ``catch``
 keywords. Here is a rather contrived example that computes the square
 root of the absolute value of ``x`` by handling the error raised by
 ``fussy_sqrt``:
@@ -551,7 +551,7 @@ root of the absolute value of ``x`` by handling the error raised by
 
 Of course, it would be far simpler and more efficient to just return
 ``sqrt(abs(x))``. However, this demonstrates how ``try`` and ``catch``
-operate: the ``try`` block is executed initially, and the value the
+operate: the ``try`` block is executed initially, and the value of the
 entire construct is the value of the last expression if no exceptions
 are thrown during execution; if an exception is thrown during the
 evaluation of the ``try`` block, however, execution of the ``try`` code
