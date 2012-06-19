@@ -1075,47 +1075,6 @@ uint64  (s::String) = parse_int(Uint64,s)
 int128  (s::String) = parse_int(Int128,s)
 uint128 (s::String) = parse_int(Uint128,s)
 
-## integer to string functions ##
-
-const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
-
-function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
-    if b < 2 || b > 36; error("int2str: invalid base ", b); end
-    neg = n < 0
-    n = unsigned(abs(n))
-    b = convert(typeof(n), b)
-    ndig = ndigits(n, b)
-    sz = max(convert(Int, ndig), l) + neg
-    data = Array(Uint8, sz)
-    i = sz
-    if ispow2(b)
-        digmask = b-1
-        shift = trailing_zeros(b)
-        while i > neg
-            ch = n & digmask
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n >>= shift
-            i -= 1
-        end
-    else
-        while i > neg
-            ch = n % b
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n = div(n,b)
-            i -= 1
-        end
-    end
-    if neg
-        data[1] = '-'
-    end
-    ASCIIString(data)
-end
-int2str(n::Integer, b::Integer)         = int2str(n, b, 0)
-int2str(n::Integer, b::Integer, l::Int) = int2str(int64(n), b, l)
-
-string(x::Signed) = dec(int64(x))
-cstring(x::Signed) = dec(int64(x))
-
 ## string to float functions ##
 
 float64_isvalid(s::String, out::Array{Float64,1}) =

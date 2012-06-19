@@ -220,16 +220,6 @@ end
 @assert_fails parse_int("2x")
 @assert_fails parse_int("-")
 
-# printing numbers
-@assert string(uint32(-1)) == "0xffffffff"
-@assert hex(0xffffffffffff) == "ffffffffffff"
-@assert hex(0xffffffffffff+1) == "1000000000000"
-@assert hex(typemax(Uint64)) == "ffffffffffffffff"
-
-@assert int2str(typemin(Int64), 10) == "-9223372036854775808"
-@assert int2str(typemin(Int16), 10) == "-32768"
-@assert int2str(typemin(Int8 ), 10) == "-128"
-
 # string manipulation
 @assert strip("\t  hi   \n") == "hi"
 

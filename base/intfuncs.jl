@@ -217,14 +217,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-macro _jl_int_stringifier(sym)
-    quote
-        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
-        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
-    end
-end
+const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -254,7 +247,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = '0'+mod(x,10)
+        a[i] = '0'+rem(x,10)
         x = div(x,10)
         i -= 1
     end
@@ -266,7 +259,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = _jl_hex_symbols[(x&0xf)+1]
+        a[i] = _jl_dig_syms[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -274,16 +267,42 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
+function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
+    i = neg + max(pad,ndigits0z(x,b))
+    a = Array(Uint8,i)
+    while i > neg
+        a[i] = _jl_dig_syms[rem(x,b)+1]
+        x = div(x,b)
+        i -= 1
+    end
+    if neg; a[1]='-'; end
+    ASCIIString(a)
+end
+
+base(b::Int, x::Unsigned, p::Int) = base(b,x,p,false)
+base(b::Int, x::Unsigned)         = base(b,x,1,false)
+base(b::Int, x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
+base(b::Int, x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
+
+macro _jl_int_stringifier(sym)
+    quote
+        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
+        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
+        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
+        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
+    end
+end
+
 @_jl_int_stringifier bin
 @_jl_int_stringifier oct
 @_jl_int_stringifier dec
 @_jl_int_stringifier hex
 
-bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8  ,x),   8)
-bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16 ,x),  16)
-bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32 ,x),  32)
-bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64 ,x),  64)
-bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x), 128)
+bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8,x),8)
+bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x),16)
+bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
+bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
+bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
 
 const PRIMES = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,

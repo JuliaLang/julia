@@ -783,7 +783,7 @@ Data Formats
 
    Convert an integer to an octal string, optionally specifying a number of digits to pad to.
 
-.. function:: int2str(n, base[, pad])
+.. function:: base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally specifying a number of digits to pad to.
 
