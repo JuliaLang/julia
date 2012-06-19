@@ -635,7 +635,7 @@ for (gesv, posv, gels, trtrs, elty) in
             m, n    = map(int32, size(A))
             vecb    = isa(B, Vector)
             k       = size(B, 1)
-            if (m != n || k != m) error("_jl_lapack_gesv: dimension mismatch") end
+            if k != m error("_jl_lapack_gesv: dimension mismatch") end
             nrhs    = int32(vecb ? 1 : size(B, 2))
             lda     = int32(stride(A, 2))
             ldb     = int32(vecb ? m : stride(B, 2))
