@@ -845,3 +845,11 @@ for x = 2^24-10:2^24+10
     @assert ifloor(y)     == i
     @assert iceil(y)      == i
 end
+
+for n = 1:100
+    m = 1
+    for (p,k) in factor(n)
+        m *= p^k
+    end
+    @assert n == m
+end
