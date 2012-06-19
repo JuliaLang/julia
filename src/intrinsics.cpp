@@ -32,9 +32,8 @@ namespace JL_I {
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        abs_float32, abs_float64,
-        copysign_float32, copysign_float64,
-        flipsign_int32, flipsign_int64,
+        abs_float, copysign_float,
+        flipsign_int,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -826,82 +825,52 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return v;
     }
 
-    HANDLE(abs_float32,1)
+    HANDLE(abs_float,1)
     {
-        Value *bits = builder.CreateBitCast(FP(x), T_int32);
-        Value *absbits = builder.CreateAnd(bits,
-                                           ConstantInt::get(T_int32, ~BIT31));
-        return builder.CreateBitCast(absbits, T_float32);
+        x = FP(x);
+        Type *intt = JL_INTT(x->getType());
+        Value *bits = builder.CreateBitCast(FP(x), intt);
+        Value *absbits =
+            builder.CreateAnd(bits,
+                              ConstantInt::get(intt, APInt::getSignedMaxValue(((IntegerType*)intt)->getBitWidth())));
+        return builder.CreateBitCast(absbits, x->getType());
     }
-    HANDLE(abs_float64,1)
+    HANDLE(copysign_float,2)
     {
-        Value *bits = builder.CreateBitCast(FP(x), T_int64);
-        Value *absbits = builder.CreateAnd(bits,
-                                           ConstantInt::get(T_int64, ~BIT63));
-        return builder.CreateBitCast(absbits, T_float64);
-    }
-    HANDLE(copysign_float32,2)
-    {
+        x = FP(x);
         fy = FP(y);
-        Value *bits = builder.CreateBitCast(FP(x), T_int32);
-        Value *sbits = builder.CreateBitCast(fy, T_int32);
+        Type *intt = JL_INTT(x->getType());
+        Value *bits = builder.CreateBitCast(x, intt);
+        Value *sbits = builder.CreateBitCast(fy, intt);
+        unsigned nb = ((IntegerType*)intt)->getBitWidth();
+        APInt notsignbit = APInt::getSignedMaxValue(nb);
+        APInt signbit(nb, 0); signbit.setBit(nb-1);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int32,
-                                                                ~BIT31)),
+                                               ConstantInt::get(intt,
+                                                                notsignbit)),
                              builder.CreateAnd(sbits,
-                                               ConstantInt::get(T_int32,
-                                                                BIT31)));
-        return builder.CreateBitCast(rbits, T_float32);
+                                               ConstantInt::get(intt,
+                                                                signbit)));
+        return builder.CreateBitCast(rbits, x->getType());
     }
-    HANDLE(copysign_float64,2)
-    {
-        fy = FP(y);
-        Value *bits = builder.CreateBitCast(FP(x), T_int64);
-        Value *sbits = builder.CreateBitCast(fy, T_int64);
-        Value *rbits =
-            builder.CreateOr(builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int64,
-                                                                ~BIT63)),
-                             builder.CreateAnd(sbits,
-                                               ConstantInt::get(T_int64,
-                                                                BIT63)));
-        return builder.CreateBitCast(rbits, T_float64);
-    }
-    HANDLE(flipsign_int32,2)
+    HANDLE(flipsign_int,2)
     {
         x = JL_INT(x);
         fy = JL_INT(y);
+        Type *intt = x->getType();
         ConstantInt *cx = dyn_cast<ConstantInt>(x);
         ConstantInt *cy = dyn_cast<ConstantInt>(fy);
         if (cx && cy) {
-            int32_t ix = cx->getSExtValue();
-            int32_t iy = cy->getSExtValue();
-            return ConstantInt::get(T_int32, iy >= 0 ? ix : -ix);
+            APInt ix = cx->getValue();
+            APInt iy = cy->getValue();
+            return ConstantInt::get(intt, iy.isNonNegative() ? ix : -ix);
         }
         if (cy) {
-            int32_t iy = cy->getSExtValue();
-            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int32,0), x);
+            APInt iy = cy->getValue();
+            return iy.isNonNegative() ? x : builder.CreateSub(ConstantInt::get(intt,0), x);
         }
-        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int32,31));
-        return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
-    }
-    HANDLE(flipsign_int64,2)
-    {
-        x = JL_INT(x);
-        fy = JL_INT(y);
-        ConstantInt *cx = dyn_cast<ConstantInt>(x);
-        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
-        if (cx && cy) {
-            int64_t ix = cx->getSExtValue();
-            int64_t iy = cy->getSExtValue();
-            return ConstantInt::get(T_int64, iy >= 0 ? ix : -ix);
-        }
-        if (cy) {
-            int64_t iy = cy->getSExtValue();
-            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int64,0), x);
-        }
-        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int64,63));
+        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
     default:
@@ -984,9 +953,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
-    ADD_I(abs_float32); ADD_I(abs_float64);
-    ADD_I(copysign_float32); ADD_I(copysign_float64);
-    ADD_I(flipsign_int32); ADD_I(flipsign_int64);
+    ADD_I(abs_float); ADD_I(copysign_float);
+    ADD_I(flipsign_int);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);
