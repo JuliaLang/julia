@@ -1,5 +1,5 @@
 # blas, lapack
-load("../extras/factorizations.jl")
+load("../base/factorizations.jl")
 
 Eps = sqrt(eps())
 
