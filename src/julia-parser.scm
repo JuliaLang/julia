@@ -794,12 +794,13 @@
        (begin0 (list word name (parse-block s))
 	       (expect-end s))))
     ((export)
-     (let ((es (parse-comma-separated-assignments s)))
+     (let ((es (map macrocall-to-atsym
+		    (parse-comma-separated-assignments s))))
        (if (not (every symbol? es))
 	   (error "invalid export statement"))
        `(export ,@es)))
     ((import)
-     (let ((ns (parse-atom s)))
+     (let ((ns (macrocall-to-atsym (parse-atom s))))
        (let loop ((path (list ns)))
 	 (if (not (symbol? (car path)))
 	     (error "invalid import statement: expected identifier"))
@@ -808,7 +809,7 @@
 		`(importall ,@(reverse path)))
 	       ((eq? (peek-token s) '|.|)
 		(take-token s)
-		(loop (cons (parse-atom s) path)))
+		(loop (cons (macrocall-to-atsym (parse-atom s)) path)))
 	       ((or (eqv? (peek-token s) #\newline)
 		    (eof-object? (peek-token s)))
 		`(import ,@(reverse path)))
@@ -837,6 +838,11 @@
     `(-> (tuple ,@doargs)
 	 ,(begin0 (parse-block s)
 		  (expect-end- s 'do)))))
+
+(define (macrocall-to-atsym e)
+  (if (and (pair? e) (eq? (car e) 'macrocall))
+      (symbol (string #\@ (cadr e)))
+      e))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)

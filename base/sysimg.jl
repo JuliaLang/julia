@@ -177,8 +177,14 @@ export
     uid,uint,uint16,uint32,uint64,uint8,unescape_chars,unescape_string,union,
     union!,unique_name,unsetenv,unshift,unsigned,uppercase,utf8,values,var,vcat,
     vec,wait,wait_nohang,weighted_mean,which,whicht,whos,with_output_to_string,
-    write,write_to,xcorr,xor!,yield,zero,zeros,zip
-
+    write,write_to,xcorr,xor!,yield,zero,zeros,zip,
+    # TODO: used by macros, should be removed (use hygiene instead)
+    cmd_gen,
+    # Macros
+    @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
+    @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
+    @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
+    @gensym, @eval, @task, @f_str, @thunk, @L_str
 
 ## Load essential files and libraries
 
