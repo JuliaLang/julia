@@ -819,7 +819,7 @@ use tuple destructuring syntax to bind them to local variables:
     julia> first
     "a"
 
-You can modify the behavior regular expressions by some combination of
+You can modify the behavior of regular expressions by some combination of
 the flags ``i``, ``m``, ``s``, and ``x`` after the closing double quote
 mark. These flags have the same meaning as they do in Perl, as explained
 in this excerpt from the `perlre
