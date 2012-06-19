@@ -677,6 +677,22 @@ for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     end
 end
 
+# functions that should give an Int result for Bool arrays
+for f in (:+, :-, :div)
+    @eval begin
+        function ($f)(x::Bool, y::Array{Bool})
+            reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
+        end
+        function ($f)(x::Array{Bool}, y::Bool)
+            reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
+        end
+        function ($f)(x::Array{Bool}, y::Array{Bool})
+            shp = promote_shape(size(x),size(y))
+            reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
+        end
+    end
+end
+
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
