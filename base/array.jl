@@ -895,10 +895,9 @@ function nnz(a::StridedArray)
 end
 
 # returns the index of the first non-zero element, or 0 if all zeros
-function findfirst{T}(A::StridedArray{T})
-    z = zero(T)
+function findfirst(A::StridedArray)
     for i = 1:length(A)
-        if A[i] != z
+        if A[i] != 0
             return i
         end
     end
@@ -906,7 +905,7 @@ function findfirst{T}(A::StridedArray{T})
 end
 
 # returns the index of the first matching element
-function findfirst{T}(A::StridedArray{T}, v::T)
+function findfirst(A::StridedArray, v)
     for i = 1:length(A)
         if A[i] == v
             return i
@@ -916,7 +915,7 @@ function findfirst{T}(A::StridedArray{T}, v::T)
 end
 
 # returns the index of the first element for which the function returns true
-function findfirst{T}(A::StridedArray{T}, testf::Function)
+function findfirst(testf::Function, A::StridedArray)
     for i = 1:length(A)
         if testf(A[i])
             return i
@@ -925,22 +924,7 @@ function findfirst{T}(A::StridedArray{T}, testf::Function)
     return 0
 end
 
-
-function find{T}(A::StridedArray{T}, v::T)
-    # use a dynamic-length array to store the indexes, then copy to a non-padded
-    # array for the return
-    tmpI = Array(Int, 0)
-    for i = 1:length(A)
-        if A[i] == v
-            push(tmpI, i)
-        end
-    end
-    I = Array(Int, length(tmpI))
-    copy_to(I, tmpI)
-    I
-end
-
-function find{T}(A::StridedArray{T}, testf::Function)
+function find(testf::Function, A::StridedArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -953,7 +937,6 @@ function find{T}(A::StridedArray{T}, testf::Function)
     copy_to(I, tmpI)
     I
 end
-
 
 function find(A::StridedArray)
     nnzA = nnz(A)
