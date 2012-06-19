@@ -19,6 +19,10 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
+function SparseMatrixCSC(m::Int32, n::Int32, colptr, rowval, nzval)
+    return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
+end
+
 issparse(A::AbstractArray) = false
 issparse(S::SparseMatrixCSC) = true
 
@@ -140,8 +144,10 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 
 function sparse(A::Matrix)
     m, n = size(A)
-    I, J, V = findn_nzs(A)
-    _jl_sparse(int32(I), int32(J), V, m, n)
+    colptr = [int32(1):int32(m):int32(m*n+1)]
+    rowval = repmat([int32(1):int32(m)], 1, n)[:]
+    nzval = A[:]
+    return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
 # _jl_sparse_sortbased uses sort to rearrange the input and construct the sparse matrix
@@ -388,8 +394,8 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
     x = int32(min(m,n))
-    rowval = linspace(int32(1), x, x)
-    colptr = [rowval, int32(x+1)*ones(Int32, n+1-x)]
+    rowval = [int32(1):x]
+    colptr = [rowval, int32((x+1)*ones(Int32, n+1-x))]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
