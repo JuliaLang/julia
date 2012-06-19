@@ -1075,6 +1075,11 @@ uint64  (s::String) = parse_int(Uint64,s)
 int128  (s::String) = parse_int(Int128,s)
 uint128 (s::String) = parse_int(Uint128,s)
 
+## stringifying integers more efficiently ##
+
+string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
+cstring(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
+
 ## string to float functions ##
 
 float64_isvalid(s::String, out::Array{Float64,1}) =
