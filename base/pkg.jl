@@ -153,16 +153,20 @@ pkg_clone(url::String) = pkg_clone(PKG_DEFAULT_DIR, url)
 
 # commit or localize package config files
 
+function pkg_stage_config(path)
+    cfg = git_read_config(cd(git_dir,path)*"/config")
+    if success(`test -e $path.local`)
+        del_each(cfg, keys(git_read_config("$path.local")))
+    end
+    cfg = merge(git_read_config("$path.config"), cfg)
+    git_write_config("$path.config", cfg)
+    run(`git add -- $path.config`)
+end
+
 function pkg_commit_configs()
     pkg_assert_git_clean()
     git_each_submodule(false) do name, path, sha1
-        cfg = git_read_config(cd(git_dir,path)*"/config")
-        if success(`test -e $path.local`)
-            del_each(cfg, keys(git_read_config("$path.local")))
-        end
-        cfg = merge(git_read_config("$path.config"), cfg)
-        git_write_config("$path.config", cfg)
-        run(`git add -- $path.config`)
+        pkg_stage_config(path)
     end
     if git_staged()
         run(`git commit -m "[jul] config changes"`)
@@ -233,8 +237,11 @@ function pkg_tag_submodules()
     end
 end
 
-function pkg_checkpoint()
-    pkg_tag_submodules()
+function pkg_save_heads()
+    git_each_submodule(false) do name, path, sha1
+        head = readchomp(cd(git_dir,path)*"/HEAD")
+        git_modules(`submodule.$name.head $head`)
+    end
 end
 
 # checkout a particular repo version
@@ -259,8 +266,10 @@ pkg_checkout() = pkg_checkout("HEAD")
 
 function pkg_commit(msg::String)
     pkg_assert_config_clean()
-    pkg_checkpoint()
+    pkg_tag_submodules()
+    pkg_save_heads()
     git_canonicalize_config(".gitmodules")
+    run(`git add .gitmodules`)
     run(`git commit -m $msg`)
 end
 
@@ -273,6 +282,7 @@ function pkg_install(urls::Associative)
     for pkg in names
         url = urls[pkg]
         run(`git submodule add --reference $dir $url $pkg`)
+        pkg_stage_config(pkg)
     end
     pkg_commit("[jul] install "*join(names, ", "))
     pkg_checkout()
@@ -294,6 +304,8 @@ function pkg_remove(names::AbstractVector)
     for pkg in names
         run(`git rm --cached -- $pkg`)
         git_modules(`--remove-section submodule.$pkg`)
+        run(`git rm $pkg.config`)
+        run(`rm -f $pkg.local`)
     end
     run(`git add .gitmodules`)
     pkg_commit("[jul] remove "*join(names, ", "))
@@ -304,7 +316,7 @@ pkg_remove(names::String...) = pkg_remove([names...])
 # push & pull package repos to/from remotes
 
 function pkg_push()
-    pkg_checkpoint()
+    pkg_tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
@@ -397,7 +409,7 @@ function pkg_pull()
             "\n*** WARNING ***\n\n",
             "You have unresolved merge conflicts in the following files:\n\n",
             unmerged,
-            "\nPlease resolve these conflicts `git add` the files and commit.\n"
+            "\nPlease resolve these conflicts, `git add` the files, and commit.\n"
         )
         error("pkg_pull: merge conflicts")
     end
@@ -405,5 +417,5 @@ function pkg_pull()
     # try to commit -- fails if unresolved conflicts remain
     run(`git commit -m "[jul] pull (complex merge)"`)
     pkg_checkout("HEAD")
-    pkg_checkpoint()
+    pkg_tag_submodules()
 end

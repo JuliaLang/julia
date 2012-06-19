@@ -888,6 +888,53 @@ collection[key...] = value
 
 "),
 
+(E"Memory-mapped I/O",E"mmap_array",E"mmap_array(type, dims, stream[, offset])
+
+   Create an array whose values are linked to a file, using memory-
+   mapping. This provides a convenient way of working with data too
+   large to fit in the computer's memory.
+
+   The type determines how the bytes of the array are interpreted (no
+   format conversions are possible), and dims the size of the array.
+
+   The file is specified via the stream.  When you initialize the
+   stream, use 'r' for a 'read-only' array, and 'w+' to create a new
+   array used to write values to disk. Optionally, you can specify an
+   offset (in bytes) if, for example, you want to skip over a header
+   in the file.
+
+   Example:  A = mmap_array(Int64, (25,30000), s)
+
+   This would create a 25-by-30000 array of Int64s, linked to the file
+   associated with stream s.
+
+"),
+
+(E"Memory-mapped I/O",E"msync",E"msync(array)
+
+   Forces synchronization between the in-memory version of a memory-
+   mapped array and the on-disk version. You may not need to call this
+   function, because synchronization is performed at intervals
+   automatically by the operating system. Hower, you can call this
+   directly if, for example, you are concerned about losing the result
+   of a long-running calculation.
+
+"),
+
+(E"Memory-mapped I/O",E"mmap",E"mmap(len, prot, flags, fd, offset)
+
+   Low-level interface to the mmap system call. See the man page.
+
+"),
+
+(E"Memory-mapped I/O",E"munmap",E"munmap(pointer, len)
+
+   Low-level interface for unmapping memory (see the man page). With
+   mmap_array you do not need to call this directly; the memory is
+   unmapped for you when the array goes out of scope.
+
+"),
+
 (E"Mathematical Functions",E"-",E"-
 
    Unary minus

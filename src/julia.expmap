@@ -194,6 +194,7 @@
     jl_signal_pending;
     jl_defer_signal;
     jl_register_toplevel_eh;
+    jl_dump_function;
   local:
     *;
 };

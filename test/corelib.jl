@@ -93,3 +93,6 @@ let
     end
     @assert get_KeyError
 end
+
+_d = {"a"=>0}
+@assert isa([k for k in filter(x->length(x)==1, keys(_d))], Vector{Any})

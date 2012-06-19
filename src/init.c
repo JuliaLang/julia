@@ -97,6 +97,17 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     }
 }
 #endif
+
+void jl_atexit_hook()
+{
+    if (jl_base_module) {
+        jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
+        if (f!=NULL && jl_is_function(f)) {
+            jl_apply((jl_function_t*)f, NULL, 0);
+        }
+    }
+}
+
 void jl_get_builtin_hooks(void);
 
 uv_lib_t *jl_dl_handle;
@@ -147,7 +158,6 @@ void julia_init(char *imageFile)
     }
 
 #ifndef __WIN32__
-	
     struct sigaction actf;
     memset(&actf, 0, sizeof(struct sigaction));
     sigemptyset(&actf.sa_mask);
@@ -177,6 +187,9 @@ void julia_init(char *imageFile)
         jl_exit(1);
     }
 #endif
+
+    atexit(jl_atexit_hook);
+
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif

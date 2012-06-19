@@ -502,7 +502,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
         if (!a->bound) return b;
     }
-    else if (var==invariant && !jl_has_typevars(b)) {
+    else if (var==invariant && !jl_has_typevars_(b,1)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
         return (jl_value_t*)jl_bottom_type;
@@ -514,7 +514,12 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
           tintersect(Type{Array{T,n}}, Type{typevar(:_,Vector)})
           should give Type{_<:Vector}
         */
-        if (!a->bound) return (jl_value_t*)a;
+        if (jl_is_typevar(b)) {
+            if (!((jl_tvar_t*)b)->bound) return (jl_value_t*)a;
+        }
+        else {
+            if (!a->bound) return (jl_value_t*)a;
+        }
     }
     else {
         return (jl_value_t*)jl_bottom_type;
@@ -1036,7 +1041,6 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                             jl_new_typevar(underscore_sym,
                                            (jl_value_t*)jl_bottom_type, v);
                     }
-                    ((jl_tvar_t*)v)->bound = 1; // ???
                 }
                 extend(T, v, soln);
             }
@@ -2468,6 +2472,7 @@ void jl_init_types(void)
     jl_function_type->fptr = jl_f_no_function;
 
     jl_tupleset(jl_method_type->types, 3, jl_function_type);
+    jl_tupleset(jl_lambda_info_type->types, 6, jl_function_type);
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, JL_NULL, NULL);
 

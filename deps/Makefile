@@ -9,7 +9,7 @@ OPENBLAS_VER = v0.1.1
 LAPACK_VER = 3.4.1
 ARPACK_VER = 3.1.1
 FFTW_VER = 3.3.2
-SUITESPARSE_VER = 3.7.0
+SUITESPARSE_VER = 4.0.0
 CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
@@ -21,13 +21,15 @@ GLPK_VER = 4.43
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-LIBS = uv fdlibm dsfmt rmath double-conversion amos suitesparse-wrapper gmp-wrapper
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
+STAGE2_DEPS = gmp-wrapper
+STAGE3_DEPS = suitesparse-wrapper
 
 ## WGET / CURL
 ifeq ($(OS), Linux)
 WGET = wget --no-check-certificate
 WGET_DASH_O = wget --no-check-certificate -O
-LIBS += unwind
+STAGE1_DEPS += unwind
 endif
 
 ifeq ($(OS), WINNT)
@@ -43,17 +45,17 @@ endif
 ifeq ($(OS), FreeBSD)
 WGET = curl -fLO
 WGET_DASH_O = curl -fLo
-LIBS += unwind
+STAGE1_DEPS += unwind
 endif
 
 ## USE_SYSTEM_LIBS options
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-LIBS += llvm
+STAGE1_DEPS += llvm
 endif
 
 ifneq ($(OS),WINNT)
-LIBS += lighttpd
+STAGE1_DEPS += lighttpd
 endif
 
 ifeq ($(OS),WINNT)
@@ -61,42 +63,44 @@ READLINE_VER = 5.0
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 0)
-LIBS += readline
+STAGE1_DEPS += readline
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
-LIBS += pcre
+STAGE1_DEPS += pcre
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-LIBS += openblas
+STAGE1_DEPS += openblas
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
-LIBS += fftw
+STAGE1_DEPS += fftw
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-LIBS += gmp
+STAGE1_DEPS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
-LIBS += arpack
+STAGE2_DEPS += arpack
 endif
 
 #ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-LIBS += suitesparse
+STAGE2_DEPS += suitesparse
 #endif
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
-LIBS += glpk
+STAGE1_DEPS += glpk
 endif
 
 #ifeq ($(USE_SYSTEM_LAPACK), 0)
-#LIBS += lapack
+#STAGE2_DEPS += lapack
 #endif
 
 ## Common build target prefixes
+
+LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
 default: $(USR) install
 compile: $(addprefix compile-, $(LIBS))
@@ -603,22 +607,22 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC=$(CC) CXX=$(CXX)
+	$(MAKE) CC=$(CC) CXX=$(CXX) BLAS=$(LIBBLAS) LAPACK=$(LIBLAPACK)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-$(SUITESPARSE_OBJ_TARGET): install-openblas $(SUITESPARSE_OBJ_SOURCE)
+$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
-	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a 2>/dev/null` . && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
 endif
 
@@ -634,7 +638,7 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
 else
-SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/UFconfig
+SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config
 SUITESPARSE_LIB = 
 endif
 

@@ -256,11 +256,7 @@ function idump(fn::Function, io::IOStream, x, n::Int, indent)
             for field in T.names
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
-                    try
-                        fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
-                    catch
-                        println(io)
-                    end
+                    fn(io, getfield(x, field), n - 1, strcat(indent, "  "))
                 end
             end
         end
@@ -277,10 +273,72 @@ function idump(fn::Function, io::IOStream, x::Array{Any}, n::Int, indent)
         end
     end
 end
-idump(fn::Function, io::IOStream, x::AbstractKind, n::Int, indent) = println(io, typeof(x), " ", x)
 idump(fn::Function, io::IOStream, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
 idump(fn::Function, io::IOStream, x::Function, n::Int, indent) = println(io, x)
 idump(fn::Function, io::IOStream, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x[1:min(4,length(x))])
+
+# Types
+idump(fn::Function, io::IOStream, x::UnionKind, n::Int, indent) = println(io, x)
+function idump(fn::Function, io::IOStream, x::CompositeKind, n::Int, indent)
+    println(io, x, "::", typeof(x), " ", " <: ", super(x))
+    if n > 0
+        for idx in 1:min(10,length(x.names))
+            if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
+                print(io, indent, "  ", x.names[idx], "::")
+                if isa(x.types[idx], CompositeKind) 
+                    idump(fn, io, x.types[idx], n - 1, strcat(indent, "  "))
+                else
+                    println(x.types[idx])
+                end
+            end
+        end
+    end
+end
+
+# _jl_dumptype is for displaying abstract type hierarchies like Jameson
+# Nash's wiki page: https://github.com/JuliaLang/julia/wiki/Types-Hierarchy
+
+function _jl_dumptype(io::IOStream, x::Type, n::Int, indent)
+    # based on Jameson Nash's examples/typetree.jl
+    println(io, x)
+    if n == 0   # too deeply nested
+        return  
+    end
+    typargs(t) = split(string(t), "{")[1]
+    # TODO: When namespaces are worked out, this probably needs fixing
+    # to allow different modules to be included or to look in the
+    # equivalent of R's search path.
+    for s in [names(Core), names(Base)]  
+        t = eval(s)
+        if isa(t, TypeConstructor)
+            if string(x.name) == typargs(t) ||
+               ("Union" == split(string(t), "(")[1] &&
+                  any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
+                targs = join(t.parameters, ",")
+                println(io, indent, "  ", s,
+                        length(t.parameters) > 0 ? "{$targs}" : "",
+                        " = ", t)
+            end
+        elseif isa(t, UnionKind)
+            if any(map(tt -> string(x.name) == typargs(tt), t.types))
+                println(io, indent, "  ", s, " = ", t)
+            end
+        elseif isa(t, Type) && super(t).name == x.name
+            if string(s) != string(t.name) # type aliases
+                println(io, indent, "  ", s, " = ", t.name)
+            elseif t != Any 
+                print(io, indent, "  ")
+                _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+            end
+        end
+    end
+end
+
+# For abstract types, use _dumptype only if it's a form that will be called
+# interactively.
+idump(fn::Function, io::IOStream, x::AbstractKind) = _jl_dumptype(io, x, 5, "")
+idump(fn::Function, io::IOStream, x::AbstractKind, n::Int) = _jl_dumptype(io, x, n, "")
+
 # defaults:
 idump(fn::Function, io::IOStream, x) = idump(idump, io, x, 5, "")  # default is 5 levels
 idump(fn::Function, io::IOStream, x, n::Int) = idump(idump, io, x, n, "")
@@ -288,12 +346,12 @@ idump(fn::Function, args...) = idump(fn, OUTPUT_STREAM::IOStream, args...)
 idump(io::IOStream, args...) = idump(idump, io, args...)
 idump(args...) = idump(idump, OUTPUT_STREAM::IOStream, args...)
 
+
 # Here are methods specifically for dump:
 dump(io::IOStream, x, n::Int) = dump(io, x, n, "")
 dump(io::IOStream, x) = dump(io, x, 5, "")  # default is 5 levels
 dump(args...) = dump(OUTPUT_STREAM::IOStream, args...)
 dump(io::IOStream, x::String, n::Int, indent) = println(io, typeof(x), " \"", x, "\"")
-dump(io::IOStream, x::Type, n::Int, indent) = println(io, typeof(x), " ", x)
 dump(io::IOStream, x, n::Int, indent) = idump(dump, io, x, n, indent)
 
 function dump(io::IOStream, x::Dict, n::Int, indent)
@@ -310,6 +368,14 @@ function dump(io::IOStream, x::Dict, n::Int, indent)
         end
     end
 end
+
+# More generic representation for common types:
+dump(io::IOStream, x::AbstractKind, n::Int, indent) = println(io, x.name)
+dump(io::IOStream, x::AbstractKind) = _jl_dumptype(io, x, 5, "")
+dump(io::IOStream, x::AbstractKind, n::Int) = _jl_dumptype(io, x, n, "")
+dump(io::IOStream, x::BitsKind, n::Int, indent) = println(io, x.name)
+dump(io::IOStream, x::TypeVar, n::Int, indent) = println(io, x.name)
+
 
 showall(x) = showall(OUTPUT_STREAM::IOStream, x)
 

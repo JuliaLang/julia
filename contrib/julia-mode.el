@@ -95,6 +95,9 @@
     (or (equal item (car lst))
 	(julia-member item (cdr lst)))))
 
+(if (not (fboundp 'evenp))
+    (defun evenp (x) (zerop (% x 2))))
+
 (defun julia-find-comment-open (p0)
   (if (< (point) p0)
       nil
@@ -134,11 +137,16 @@
        (not (julia-in-brackets))
        (julia-member (current-word t) kw-list)))
 
+;; if backward-sexp gives an error, move back 1 char to move over the '('
+(defun julia-safe-backward-sexp ()
+  (if (condition-case nil (backward-sexp) (error t))
+      (error2nil (backward-char))))
+
 ; get the position of the last open block
 (defun julia-last-open-block-pos (min)
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
-      (backward-sexp)
+      (julia-safe-backward-sexp)
       (setq count
 	    (cond ((julia-at-keyword julia-block-start-keywords)
 		   (+ count 1))
