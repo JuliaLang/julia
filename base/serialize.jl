@@ -10,7 +10,7 @@ const _jl_deser_tag = ObjectIdDict()
 let i = 2
     global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-             Int64, Uint64, Float32, Float64, Char, Ptr,
+             Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,

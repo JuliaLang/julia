@@ -8,12 +8,13 @@ namespace JL_I {
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
-        // comparison
+        // same-type comparisons
         eq_int,  ne_int,
         slt_int, ult_int,
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        // mixed-type comparisons
         eqfsi64, eqfui64,
         ltfsi64, ltfui64,
         lefsi64, lefui64,
@@ -25,7 +26,7 @@ namespace JL_I {
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
-        sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
+        sext16, zext16, sext32, zext32, sext64, zext64, sext_int, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
         fptoui32, fptosi32, fptoui64, fptosi64,
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
@@ -261,6 +262,19 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
+static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                      &jl_tupleref(ctx->sp,0),
+                                      jl_tuple_len(ctx->sp)/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("sext_int: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return builder.CreateSExt(JL_INT(auto_unbox(x,ctx)), to);
+}
+
 static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *bt =
@@ -317,6 +331,11 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=2)
             jl_error("trunc_int: wrong number of arguments");
         return generic_trunc(args[1], args[2], ctx);
+    }
+    if (f == sext_int) {
+        if (nargs!=2)
+            jl_error("sext_int: wrong number of arguments");
+        return generic_sext(args[1], args[2], ctx);
     }
     if (f == zext_int) {
         if (nargs!=2)
@@ -945,7 +964,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
-    ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
+    ADD_I(sext64); ADD_I(zext64); ADD_I(sext_int); ADD_I(zext_int);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
     ADD_I(trunc_int);
     ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);

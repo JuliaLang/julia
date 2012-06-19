@@ -12,16 +12,18 @@ show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
-show(io, n::Integer)  = print(io, dec(int64(n)))
+show(io, n::Integer)  = print(io, dec(n))
 
-function show_trailing_hex(io, n::Uint64, ndig::Integer)
+function show_trailing_hex(io, n::Unsigned, ndig::Integer)
     for s = ndig-1:-1:0
-        d = (n >> 4*s) & uint64(0xf)
+        d = (n >> 4*s) & 0xf
         print(io, "0123456789abcdef"[d+1])
     end
 end
-show(io, n::Unsigned) = (print(io, "0x");
-                       show_trailing_hex(io, uint64(n), sizeof(n)<<1))
+function show(io, n::Unsigned)
+    print(io, "0x")
+    show_trailing_hex(io, n, sizeof(n)<<1)
+end
 
 show{T}(io, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")

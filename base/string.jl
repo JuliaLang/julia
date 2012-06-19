@@ -1072,6 +1072,8 @@ int32   (s::String) = parse_int(Int32,s)
 uint32  (s::String) = parse_int(Uint32,s)
 int64   (s::String) = parse_int(Int64,s)
 uint64  (s::String) = parse_int(Uint64,s)
+int128  (s::String) = parse_int(Int128,s)
+uint128 (s::String) = parse_int(Uint128,s)
 
 ## integer to string functions ##
 
