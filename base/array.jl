@@ -910,6 +910,35 @@ function findfirst{T}(A::StridedArray{T}, testf::Function)
 end
 
 
+function find{T}(A::StridedArray{T}, v::T)
+    # use a dynamic-length array to store the indexes, then copy to a non-padded
+    # array for the return
+    tmpI = Array(Int, 0)
+    for i = 1:length(A)
+        if A[i] == v
+            push(tmpI, i)
+        end
+    end
+    I = Array(Int, length(tmpI))
+    copy_to(I, tmpI)
+    I
+end
+
+function find{T}(A::StridedArray{T}, testf::Function)
+    # use a dynamic-length array to store the indexes, then copy to a non-padded
+    # array for the return
+    tmpI = Array(Int, 0)
+    for i = 1:length(A)
+        if testf(A[i])
+            push(tmpI, i)
+        end
+    end
+    I = Array(Int, length(tmpI))
+    copy_to(I, tmpI)
+    I
+end
+
+
 function find(A::StridedArray)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
