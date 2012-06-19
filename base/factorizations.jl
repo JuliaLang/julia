@@ -137,34 +137,6 @@ end
 
 abstract  Factorization{T}
 
-type QR{T} <: Factorization{T}
-    householder::Matrix{T}
-    tau::Vector{T}
-    function QR(hh::Matrix{T}, tt::Vector{T})
-        numel(tt) == min(size(hh)) ? new(hh, tt) : error("QR: mismatched dimensions")
-    end
-end
-
-function QR(A::Matrix)
-    hh, tt = _jl_lapack_geqrf(copy(A))
-    QR{typeof(A[1])}(hh, tt)
-end
-
-type QRP{T} <: Factorization{T}
-    householder::Matrix{T}
-    tau::Vector{T}
-    jpvt::Vector{Int32}
-    function QRP(hh::Matrix{T}, tt::Vector{T}, jj::Vector{Int32})
-        m, n = size(hh)
-        numel(tt) == min(m,n) && numel(jj) == n ? new(hh,tt,jj) : error("QRP: mismatched dimensions")
-    end
-end
-
-function QRP(A::Matrix)
-    hh, tt, jj = _jl_lapack_geqp3(copy(A))
-    QRP{typeof(A[1])}(hh, tt, jj)
-end
-
 type Cholesky{T} <: Factorization{T}
     LR::Matrix{T}
     uplo::String
@@ -178,7 +150,9 @@ end
 
 Cholesky(A::Matrix) = Cholesky{typeof(A[1])}(A, "U")
 
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) = _jl_lapack_potrs(C.uplo, C.LR, copy(B))
+(\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
+    _jl_lapack_potrs(C.uplo, C.LR, copy(B))
+
 inv(C::Cholesky) = _jl_lapack_potri(C.uplo, copy(C.LR)) # should symmetrize the result
  
 type LU{T} <: Factorization{T}
@@ -195,5 +169,133 @@ function LU(A::Matrix)
     LU{typeof(A[1])}(lu, ipiv)
 end
  
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) = _jl_lapack_getrs("N", lu.lu, lu.ipiv, copy(B))
+(\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) =
+    _jl_lapack_getrs("N", lu.lu, lu.ipiv, copy(B))
 inv(lu::LU) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)
+
+## Multiplication by Q or Q' from a QR factorization
+for (orm2r, elty) in
+    (("dorm2r_",:Float64),
+     ("sorm2r_",:Float32),
+     ("zunm2r_",:Complex128),
+     ("cunm2r_",:Complex64))
+    @eval begin
+        #      SUBROUTINE DORM2R( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
+        #                         WORK, INFO )
+        #      .. Scalar Arguments ..
+        #      CHARACTER          SIDE, TRANS
+        #      INTEGER            INFO, K, LDA, LDC, M, N
+        #      .. Array Arguments ..
+        #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
+        function _jl_lapack_orm2r(side::String, trans::String, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+            if stride(A,1) != 1 || stride(C,1) != 1
+                error("_jl_lapack_orm2r: matrix columns must have contiguous elements");
+            end
+            m    = int32(size(C, 1))
+            n    = int32(isa(C, Vector) ? 1 : size(C, 2))
+            k    = int32(k)
+            if size(A, 1) != m error("_jl_lapack_orm2r: dimension mismatch") end
+            lda  = int32(stride(A, 2))
+            ldc  = int32(isa(C, Vector) ? m : stride(C, 2))
+            SIDE = uppercase(side)
+            work = Array($elty, SIDE[1] == 'L' ? n : m)
+            info = Array(Int32, 1)
+            ccall(dlsym(_jl_liblapack, $orm2r),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                  side, trans, &m, &n, &k, A, &lda, tau, C, &ldc, work, info)
+            if info[1] != 0 error("_jl_lapack_orm2r: error $(info[1])") end
+            C
+        end
+    end
+end
+
+type QR{T} <: Factorization{T}
+    hh::Matrix{T}                       # Householder transformations and R
+    tau::Vector{T}                      # Scalar factors of transformations
+    function QR(hh::Matrix{T}, tt::Vector{T})
+        numel(tt) == min(size(hh)) ? new(hh, tt) : error("QR: mismatched dimensions")
+    end
+end
+
+function QR(A::Matrix)
+    hh, tt = _jl_lapack_geqrf(copy(A))
+    QR{typeof(A[1])}(hh, tt)
+end
+
+size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T}) = size(A.hh)
+size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},n) = size(A.hh,n)
+
+## Multiplication by Q from the QR decomposition
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
+                                                             B::StridedVecOrMat{T})
+    _jl_lapack_orm2r("L", "N", A.hh, size(A, 2), A.tau, copy(B))
+end
+
+## Multiplication by Q' from the QR decomposition
+function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
+                                                                  B::StridedVecOrMat{T})
+    _jl_lapack_orm2r("L", iscomplex(A.tau) ? "C" : "T", A.hh, size(A, 2), A.tau, copy(B))
+end
+
+## Least squares solution.  Should be more careful about cases with m < n
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
+                                                             B::StridedVecOrMat{T})
+    n   = numel(A.tau)
+    qtb = isa(B, Vector) ? (A' * B)[1:n] : (A' * B)[1:n, :]
+    ## Not sure if this avoids copying A.hh[1:n,:] but at least it is not all of A.hh
+    _jl_lapack_trtrs("U", "N", "N", A.hh[1:n,:], qtb)
+end
+
+type QRP{T} <: Factorization{T}
+    hh::Matrix{T}
+    tau::Vector{T}
+    jpvt::Vector{Int32}
+    function QRP(hh::Matrix{T}, tt::Vector{T}, jj::Vector{Int32})
+        m, n = size(hh)
+        numel(tt) == min(m,n) && numel(jj) == n ? new(hh,tt,jj) : error("QRP: mismatched dimensions")
+    end
+end
+
+function QRP(A::Matrix)
+    hh, tt, jj = _jl_lapack_geqp3(copy(A))
+    QRP{typeof(A[1])}(hh, tt, jj)
+end
+
+## Not sure how to avoid cut-and-paste programming on these.
+## Create another abstract type with both QR{T} and QRP{T} as subtypes?
+size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T}) = size(A.hh)
+size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},n) = size(A.hh,n)
+
+function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+                                                             B::StridedVecOrMat{T})
+    _jl_lapack_orm2r("L", "N", A.hh, size(A, 2), A.tau, copy(B))
+end
+
+function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+                                                                  B::StridedVecOrMat{T})
+    _jl_lapack_orm2r("L", iscomplex(A.tau) ? "C" : "T", A.hh, size(A, 2), A.tau, copy(B))
+end
+
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+                                                             B::StridedVecOrMat{T})
+    n = numel(A.tau)
+    ## Replace this with a direct call to _jl_lapack_trtrs to save copying A.hh?
+    ## Actually would need to call the appropriate Lapack subroutine to save copying.
+    triu(A.hh[1:n,:]) \ (A' * B)[1:n]   
+end
+
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+                                                             B::StridedVecOrMat{T})
+    ## may be better to define one method for B::Vector{T} and another for StridedMatrix
+    BV  = isa(B, Vector)
+    n   = numel(A.tau)
+    qtb = BV ? (A' * B)[1:n] : (A' * B)[1:n, :]
+    ans = _jl_lapack_trtrs("U", "N", "N", A.hh[1:n,:], qtb)
+    BV ? ans[invperm(A.jpvt)] : ans[invperm(A.jpvt), :]
+end
+
+##ToDo:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
+##       Add rcond methods for Cholesky, LU, QR and QRP types
+## Lower priority: Add LQ, QL and RQ factorizations

@@ -8,13 +8,13 @@ begin
     n    = 10
     srand(1234321)
     sqd  = rand(n,n)
-    sqz  = reshape([complex128(x) for x in sqd], size(sqd))
+    sqz  = complex(sqd)
     mmd  = rand(3*n, n)
-    mmz  = reshape([complex128(x) for x in mmd], size(mmd))
+    mmz  = complex(mmd)
     symd = mmd' * mmd
-    herz = conj(mmz)' * mmz
+    herz = mmz' * mmz
     bd   = rand(n)
-    bz   = [complex128(x) for x in bd]
+    bz   = complex(bd)
                                         # Cholesky decomposition
     chd  = Cholesky(symd)
     chz  = Cholesky(herz)
@@ -33,4 +33,20 @@ begin
     invz = inv(luz)
     @assert norm(invd * sqd - eye(size(sqd, 1))) < Eps
     @assert norm(invz * sqz - eye(size(sqz, 1))) < Eps
+
+    qrd  = QR(mmd)                      # QR and QRP decompositions
+    qrz  = QR(mmz)
+    qrpd = QRP(mmd)
+    qrpz = QRP(mmz)
+    yyd  = randn(3*n)
+    yyz  = complex(yyd)
+    qyd  = qrd * yyd
+    qpyd = qrd' * yyd
+    @assert abs(norm(qyd) - norm(yyd)) < Eps # Q is orthogonal
+    @assert abs(norm(qpyd) - norm(yyd)) < Eps 
+    qyz  = qrz * yyz
+    qpyz = qrz' * yyz
+    @assert abs(norm(qyz) - norm(yyz)) < Eps # Q is unitary
+    @assert abs(norm(qpyz) - norm(yyz)) < Eps # Q is unitary
+    
 end
