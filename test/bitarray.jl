@@ -228,14 +228,14 @@ b2 = bitrand(TT, n1, n2)
 @check_bit_operation (&) BitArray{TT} (b1, b2)
 @check_bit_operation (|) BitArray{TT} (b1, b2)
 @check_bit_operation ($) BitArray{TT} (b1, b2)
-@check_bit_operation (-) Array{Uint} (b1, b2)
+@check_bit_operation (-) Array{TT} (b1, b2)
 @check_bit_operation (.*) BitArray{TT} (b1, b2)
 @check_bit_operation (./) Array{Float64} (b1, b2)
 @check_bit_operation (.^) Array{Float64} (b1, b2)
 
 b2 = bitones(TT, n1, n2)
-@check_bit_operation div Array{Uint} (b1, b2)
-@check_bit_operation mod Array{Uint} (b1, b2)
+@check_bit_operation div Array{TT} (b1, b2)
+@check_bit_operation mod Array{TT} (b1, b2)
 
 while true
     global b1
@@ -259,8 +259,8 @@ b2 = randi(10, n1, n2)
 @check_bit_operation (.*) Array{S} (b1, b2)
 @check_bit_operation (./) Array{Float64} (b1, b2)
 @check_bit_operation (.^) Array{Float64} (b1, b2)
-@check_bit_operation div Array{Uint} (b1, b2)
-@check_bit_operation mod Array{Int} (b1, b2)
+@check_bit_operation div Array{S} (b1, b2)
+@check_bit_operation mod Array{S} (b1, b2)
 
 while true
     global b1
