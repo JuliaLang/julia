@@ -19,6 +19,10 @@ function SparseMatrixCSC(Tv::Type, m::Int, n::Int, numnz::Integer)
     SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
 end
 
+function SparseMatrixCSC(m::Int32, n::Int32, colptr, rowval, nzval)
+    return SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
+end
+
 issparse(A::AbstractArray) = false
 issparse(S::SparseMatrixCSC) = true
 
@@ -140,21 +144,19 @@ full{T}(S::SparseMatrixCSC{T}) = convert(Matrix{T}, S)
 
 function sparse(A::Matrix)
     m, n = size(A)
-    I, J, V = findn_nzs(A)
-    _jl_sparse(int32(I), int32(J), V, m, n)
+    (I, J, V) = findn_nzs(A)
+    return _jl_sparse_sorted!(I,J,V,m,n,+)
 end
 
-# _jl_sparse_sortbased uses sort to rearrange the input and construct the sparse matrix
+# _jl_sparse_sort uses sort to rearrange the input and construct the sparse matrix
 
-_jl_sparse_sortbased(I,J,V) = _jl_sparse_sortbased(I, J, V, int(max(I)), int(max(J)), +)
+_jl_sparse_sort(I,J,V) = _jl_sparse_sort(I, J, V, int(max(I)), int(max(J)), +)
 
-_jl_sparse_sortbased(I,J,V,m,n) = _jl_sparse_sortbased(I, J, V, m, n, +)
+_jl_sparse_sort(I,J,V,m,n) = _jl_sparse_sort(I, J, V, m, n, +)
 
-_jl_sparse_sortbased(I,J,V,m,n,combine) = _jl_sparse_sortbased(I, J, V, m, n, combine)
-
-function _jl_sparse_sortbased{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                            V::Union(Number, AbstractVector),
-                                            m::Int, n::Int, combine::Function)
+function _jl_sparse_sort{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                                 V::Union(Number, AbstractVector),
+                                                 m::Int, n::Int, combine::Function)
 
     if length(I) == 0; return spzeros(eltype(V),m,n); end
 
@@ -183,6 +185,15 @@ function _jl_sparse_sortbased{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::
     end
 
     if isa(V, Number); V = fill(V, length(I)); end
+
+    return _jl_sparse_sorted!(I,J,V,m,n,combine)
+end
+
+_jl_sparse_sorted!(I,J,V,m,n) = _jl_sparse_sorted!(I,J,V,m,n,+)
+
+function _jl_sparse_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
+                                                    V::AbstractVector,
+                                                    m::Int, n::Int, combine::Function)
 
     cols = zeros(Ti, n+1)
     cols[1] = 1  # For cumsum purposes
@@ -330,8 +341,37 @@ function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVec
     return SparseMatrixCSC(nrow, ncol, RpT, RiT, RxT)
 end
 
+function find(S::SparseMatrixCSC)
+    sz = size(S)
+    I, J = findn(S)
+    return sub2ind(sz, I, J)
+end
 
-function find{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
+    numnz = nnz(S)
+    I = Array(Ti, numnz)
+    J = Array(Ti, numnz)
+
+    count = 1
+    for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
+        if S.nzval[k] != 0
+            I[count] = S.rowval[k]
+            J[count] = col
+            count += 1
+        else
+            println("Warning: sparse matrix contains explicit stored zeros.")
+        end
+    end
+
+    if numnz != count-1
+        I = I[1:count]
+        J = J[1:count]
+    end
+
+    return (I, J)
+end
+
+function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     numnz = nnz(S)
     I = Array(Ti, numnz)
     J = Array(Ti, numnz)
@@ -345,7 +385,7 @@ function find{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
             V[count] = S.nzval[k]
             count += 1
         else
-            println("Warning: sparse matrix has explicit stored zeros.")
+            println("Warning: sparse matrix contains explicit stored zeros.")
         end
     end
 
@@ -388,8 +428,8 @@ speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
     x = int32(min(m,n))
-    rowval = linspace(int32(1), x, x)
-    colptr = [rowval, int32(x+1)*ones(Int32, n+1-x)]
+    rowval = [int32(1):x]
+    colptr = [rowval, int32((x+1)*ones(Int32, n+1-x))]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end

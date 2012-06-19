@@ -653,13 +653,40 @@ end
 
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f)(x::Number, y::AbstractArray)
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
+        end
+        function ($f){T}(A::Number, B::AbstractArray{T})
+            F = similar(B, promote_type(typeof(A),T))
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
+        end
+        function ($f){T}(A::AbstractArray{T}, B::Number)
+            F = similar(A, promote_type(T,typeof(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
+        end
+    end
+end
+
+# functions that should give an Int result for Bool arrays
+for f in (:+, :-, :div)
+    @eval begin
+        function ($f)(x::Bool, y::Array{Bool})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f)(x::AbstractArray, y::Number)
+        function ($f)(x::Array{Bool}, y::Bool)
             reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
-        function ($f)(x::AbstractArray, y::AbstractArray)
+        function ($f)(x::Array{Bool}, y::Array{Bool})
             shp = promote_shape(size(x),size(y))
             reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end
