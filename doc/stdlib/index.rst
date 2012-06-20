@@ -24,5 +24,6 @@ Extras
 .. toctree::
    :maxdepth: 1
 
-   specfun
    profile
+   options
+   specfun
