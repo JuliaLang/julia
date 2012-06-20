@@ -2,7 +2,7 @@ load("../base/distributions.jl")
 
 # n probability points, i.e. the midpoints of the intervals [0, 1/n],...,[1-1/n, 1]
 probpts(n::Int) = ((1:n) - 0.5)/n  
-pp = float(probpts(1000))
+pp  = float(probpts(1000))              # convert from a Range{Float64}
 lpp = log(pp)
 
 tol = sqrt(eps())
@@ -42,3 +42,39 @@ for d in (Beta(), Cauchy(), Chisq(12), Exponential(), Exponential(23.1),
 #    if isfinite(std(d)) @assert reldiff(std(ss), std(d)) < 0.1 end
 end
 
+# Additional tests on the Multinomial and Dirichlet constructors
+d = Multinomial(1, [0.5, 0.4, 0.1])
+d = Multinomial(1, 3)
+d = Multinomial(3)
+d = Multinomial(1, [0.6; 0.4])
+d = Multinomial(1, [0.6; 0.4]')
+mean(d)
+var(d)
+insupport(d, [1, 0])
+insupport(d, [1, 1])
+insupport(d, [0, 1])
+pmf(d, [1, 0])
+pmf(d, [1, 1])
+pmf(d, [0, 1])
+logpmf(d, [1, 0])
+logpmf(d, [1, 1])
+logpmf(d, [0, 1])
+rand(d)
+A = zeros(Int, 10, 2)
+rand!(d, A)
+A
+
+d = Dirichlet([1.0, 2.0, 1.0])
+d = Dirichlet(3)
+d = Dirichlet([1.0; 2.0; 1.0])
+d = Dirichlet([1.0; 2.0; 1.0]')
+mean(d)
+var(d)
+insupport(d, [0.1, 0.8, 0.1])
+insupport(d, [0.1, 0.8, 0.2])
+insupport(d, [0.1, 0.8])
+pdf(d, [0.1, 0.8, 0.1])
+rand(d)
+A = zeros(Float64, 10, 3)
+rand!(d, A)
+A

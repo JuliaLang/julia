@@ -476,6 +476,7 @@ mean(d::logNormal) = exp(d.meanlog + d.sdlog^2/2)
 var(d::logNormal)  = (sigsq=d.sdlog^2; (exp(sigsq) - 1)*exp(2d.meanlog+sigsq))
 insupport(d::logNormal, x::Number) = real_valued(x) && isfinite(x) && 0 < x
 
+
 ## NegativeBinomial is the distribution of the number of failures
 ## before the size'th success in a sequence of Bernoulli trials.
 ## We do not enforce integer size, as the distribution is well defined
@@ -607,4 +608,127 @@ for f in (:pdf, :logpdf)
             reshape([($f)(d, e) for e in x], size(x))
         end
     end
+end
+
+## Distributions contributed by John Myles White.
+
+type Multinomial <: DiscreteDistribution
+    n::Int
+    prob::Vector{Float64}
+    function Multinomial(n::Integer, p::Vector{Float64})
+        if n <= 0 error("Multinomial: n must be positive") end
+        sump = 0.
+        for i in 1:numel(p)
+            if p[i] < 0. error("Multinomial: probabilities must be non-negative") end
+            sump += p[i]
+        end
+        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
+            error("Multinomial: probabilities must add to 1")
+        end
+        new(int(n), p ./ sump)
+    end      
+end
+
+function Multinomial(n::Integer, d::Integer)
+    if d <= 1  error("d must be greater than 1") end
+    Multinomial(n, ones(Float64, d)./float64(d))
+end
+
+Multinomial(d::Integer) = Multinomial(1, d)
+
+function Multinomial(n::Integer, p::Matrix{Float64})
+    if !(size(p, 1) == 1 || size(p, 2) == 1)
+        error("Probability matrix must be a single row or single column")
+    end
+    Multinomial(int(n), reshape(p, (numel(p),)))
+end
+
+mean(d::Multinomial) = d.n .* d.prob
+var(d::Multinomial)  = d.n .* d.prob .* (1 - d.prob)
+                                        # convenience methods for integer_valued
+integer_valued{T<:Integer}(x::AbstractArray{T}) = true
+function integer_valued{T<:Number}(x::AbstractArray{T})
+    for el in x if !integer_valued(el) return false end end
+    true
+end
+
+insupport{T <: Real}(d::Multinomial, x::Vector{T}) = integer_valued(x) && all(x .>= 0) && sum(x) == d.n && numel(d.prob) == numel(x)
+
+# log_factorial(n::Int64) = sum(log(1:n)) # lgamma(n + 1) is often much faster
+
+function logpmf{T <: Real}(d::Multinomial, x::Array{T, 1})
+  insupport(d, x) ? -Inf : lgamma(d.n + 1) - sum(lgamma(x + 1)) + sum(x .* log(d.prob))
+end
+
+pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
+
+function rand(d::Multinomial)
+  l = numel(d.prob)
+  s = zeros(Int, l)
+  r = rand()
+  for j = 1:l
+    r -= d.prob[j]
+    if r <= 0.0
+      s[j] = 1
+      break
+    end
+  end
+  s
+end
+
+function rand!(d::Multinomial, A::Matrix{Int})
+  n = size(A, 1)
+  for i = 1:n
+    A[i, :] = rand(d)'
+  end
+end
+
+type Dirichlet <: ContinuousDistribution
+    alpha::Vector{Float64}
+    function Dirichlet{T<:Real}(alpha::Vector{T})
+        for el in alpha
+            if el < 0 error("Dirichlet: elements of alpha must be non-negative") end
+        end
+        new(float64(alpha))
+    end
+end
+
+Dirichlet(dim::Int) = Dirichlet(ones(dim))
+
+function Dirichlet(alpha::Matrix{Float64})
+    if !(size(alpha, 1) == 1 || size(alpha, 2) == 1)
+        error("2D concentration parameters must come in a 1xN or Nx1 array")
+    end
+    Dirichlet(reshape(alpha, (numel(alpha),)))
+end
+
+mean(d::Dirichlet) = d.alpha ./ sum(d.alpha)
+function var(d::Dirichlet)
+    alpha0 = sum(d.alpha)
+    d.alpha .* (alpha0 - d.alpha) / (alpha0^2 * (alpha0 + 1))
+end
+
+                                        # perhaps allow a bit of fuzz on sum(x) == 1?
+insupport{T<:Real}(d::Dirichlet, x::Vector{T}) =
+    numel(d.alpha) == numel(x) && all(x .>= 0.) && sum(x) == 1.
+    # removed the redundant real_valued check
+
+function pdf{T <: Real}(d::Dirichlet, x::Array{T,1})
+  if !insupport(d, x)
+    error("x not in the support of Dirichlet distribution")
+  end
+  b = prod(gamma(d.alpha)) / gamma(sum(d.alpha))
+  (1 / b) * prod(x.^(d.alpha - 1))
+end
+
+# Idea adapted from R's MCMCpack Dirichlet sampler.
+function rand(d::Dirichlet)
+    x = [randg(el) for el in d.alpha]
+    x ./ sum(x)
+end
+
+function rand!(d::Dirichlet, A::Array{Float64,2})
+  for i in 1:size(A, 1)
+    A[i, :] = rand(d)'
+  end
 end
