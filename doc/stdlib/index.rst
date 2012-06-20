@@ -27,3 +27,11 @@ Extras
    profile
    options
    specfun
+
+************
+File Formats
+************
+
+.. toctree::
+   :maxdepth: 1
+   fitsio
