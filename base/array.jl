@@ -295,6 +295,7 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
+    if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
     for i in I
         A[i] = X[count]
@@ -311,6 +312,7 @@ function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+    if length(X) != length(J); error("argument dimensions must match"); end
     m = size(A, 1)
     count = 1
     for j in J
@@ -329,6 +331,7 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+    if length(X) != length(I); error("argument dimensions must match"); end
     m = size(A, 1)
     offset = (j-1)*m
     count = 1
@@ -350,6 +353,11 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVecto
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+    nel = length(I)*length(J)
+    if length(X) != nel ||
+        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+        error("argument dimensions must match")
+    end
     m = size(A, 1)
     count = 1
     for j in J
@@ -379,6 +387,23 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    nel = length(I0)
+    for idx in I
+        nel *= length(idx)
+    end
+    if length(X) != nel
+        error("argument dimensions must match")
+    end
+    if ndims(X) > 1
+        if size(X,1) != length(I0)
+            error("argument dimensions must match")
+        end
+        for i = 1:length(I)
+            if size(X,i+1) != length(I[i])
+                error("argument dimensions must match")
+            end
+        end
+    end
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
