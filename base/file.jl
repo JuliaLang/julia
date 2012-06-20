@@ -34,13 +34,6 @@ ls(args::Cmd) = run(`ls -l $args`)
 ls(args::String...) = run(`ls -l $args`)
 
 # hacks to implement R style file operations if UNIX shell commands are available
-function dir(directory_name::String)
-  map(chomp, readlines(`ls $directory_name`))
-end
-
-function dir()
-  dir(".")
-end
 
 function basename(path::String)
   os_separator = "/"
