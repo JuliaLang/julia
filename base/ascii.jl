@@ -76,5 +76,13 @@ write(io, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
+function convert(::Type{ASCIIString}, a::Array{Uint8,1})
+    i = findfirst(a .== 0)
+    if i == 0
+        s = ASCIIString(a)
+    else
+        s = ASCIIString(a[1:i-1])
+    end
+    return check_ascii(s)
+end
 convert(::Type{ASCIIString}, s::String) = ascii(cstring(s))
