@@ -608,3 +608,114 @@ for f in (:pdf, :logpdf)
         end
     end
 end
+
+# Idea adapted from Stefan's comment on Doug Bates' blog.
+type Multinomial <: DiscreteDistribution
+  size::Int64
+  prob::Array{Float64,1}
+  
+  function Multinomial(n, p)
+    if n <= 0
+      error("size must be positive")
+    else
+      if sum(p) == 1.0
+        if all(0.0 .<= p .<= 1.0)
+          new(int64(n), float64(p))
+        else
+          error("Each element of prob must be in [0,1]")
+        end
+      else
+        error("prob must sum to 1")
+      end
+    end
+  end
+end
+Multinomial(n::Int64, d::Int64) = d > 1 ? Multinomial(n, ones(d) ./ d) : error("d must be greater than 1")
+Multinomial(d::Int64) = Multinomial(1, ones(d) ./ d)
+function Multinomial(n::Int64, p::Array{Float64,2})
+  if !(size(p, 1) == 1 || size(p, 2) == 1)
+    error("2D probabilities must come in a 1xN or Nx1 array")
+  end
+  Multinomial(n, reshape(p, max(size(p, 1), size(p, 2))))
+end
+mean(d::Multinomial) = d.size .* d.prob
+var(d::Multinomial) = d.size .* d.prob .* (1 - d.prob)
+insupport{T <: Real}(d::Multinomial, x::Array{T,1}) = all(map(i -> integer_valued(i), x)) && sum(x) == d.size && size(d.prob) == size(x)
+
+function pmf{T <: Real}(d::Multinomial, x::Array{T,1})
+  if !insupport(d, x)
+    0.0
+  else
+    (factorial(d.size) / prod(map(x_i -> factorial(x_i), x))) * prod(d.prob .^ x)
+  end
+end
+function log_factorial(n::Int64)
+  sum(map(x -> log(x), [1:n]))
+end
+function logpmf{T <: Real}(d::Multinomial, x::Array{T, 1})
+  sum(x) != d.size ? -Inf : log_factorial(d.size) - sum(map(x_i -> log_factorial(x_i), x)) + sum(x .* log(d.prob))
+end
+
+function rand(d::Multinomial)
+  p = d.prob
+  l = size(p, 1)
+  s = zeros(Int, l)
+  r = rand()
+  for j = 1:l
+    r -= p[j]
+    if r <= 0.0
+      s[j] = s[j] + 1
+      break
+    end
+  end
+  s
+end
+
+function rand!(d::Multinomial, A::Array{Int64,2})
+  n = size(A, 1)
+  for i = 1:n
+    A[i, :] = rand(d)'
+  end
+end
+
+type Dirichlet <: ContinuousDistribution
+  alpha::Array{Float64,1}
+  Dirichlet{T <: Real}(alpha::Array{T,1}) = all(alpha .>= 0.0) ? new(convert(Array{Float64,1}, alpha)) : error("Each element of alpha must be positive")
+end
+Dirichlet(dim::Int64) = Dirichlet(ones(dim))
+function Dirichlet(alpha::Array{Float64,2})
+  if !(size(alpha, 1) == 1 || size(alpha, 2) == 1)
+    error("2D concentration parameters must come in a 1xN or Nx1 array")
+  end
+  Dirichlet(reshape(alpha, max(size(alpha, 1), size(alpha, 2))))
+end
+mean(d::Dirichlet) = d.alpha ./ sum(d.alpha)
+function var(d::Dirichlet)
+  alpha0 = sum(d.alpha)
+  (d.alpha .* (alpha0 - d.alpha)) / (alpha0^2 * (alpha0 + 1))
+end
+insupport{T <: Real}(d::Dirichlet, x::Array{T,1}) = all(map(x_i -> real_valued(x_i), x)) && sum(x) == 1.0 && size(d.alpha) == size(x)
+
+function pdf{T <: Real}(d::Dirichlet, x::Array{T,1})
+  if !insupport(d, x)
+    error("x not in the support of Dirichlet distribution")
+  end
+  b = prod(map(alpha_i -> gamma(alpha_i), d.alpha)) / gamma(sum(d.alpha))
+  (1 / b) * prod(x.^(d.alpha - 1))
+end
+
+# Idea adapted from R's MCMCpack Dirichlet sampler.
+function rand(d::Dirichlet)
+  l = size(d.alpha, 1)
+  x = zeros(l)
+  for i = 1:l
+    x[i] = randg(d.alpha[i])
+  end
+  x ./ sum(x)
+end
+
+function rand!(d::Dirichlet, A::Array{Float64,2})
+  for i in 1:size(A, 1)
+    A[i, :] = rand(d)'
+  end
+end
