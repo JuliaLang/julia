@@ -113,9 +113,9 @@ out = [myeps; time; iteration];
 disp('Epsilon-Time-Iteration tradeoff');
 disp(out);
 
-save outputallvar.mat
+%save outputallvar.mat
 %save outputdat.dat A -ASCII 
-xlswrite('outputxls.xls', out,'eps-time-iterations GK')
+%xlswrite('outputxls.xls', out,'eps-time-iterations GK')
 
 %{
 xlswrite('output.xls', p,'Probability p')
