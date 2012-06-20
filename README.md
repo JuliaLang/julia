@@ -229,4 +229,5 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 
 ### Try it Online
 
-Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com]
+Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
+
