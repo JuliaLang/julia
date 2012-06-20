@@ -1,6 +1,6 @@
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 2
-const MAX_TYPEUNION_DEPTH = 2
+const MAX_TYPE_DEPTH = 2
 const MAX_TUPLETYPE_LEN  = 8
 const MAX_TUPLE_DEPTH = 4
 
@@ -579,7 +579,8 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
         t = abstract_eval(e.args[1], vtypes, sv)
         # intersect with Any to remove Undef
         t = tintersect(t, Any)
-        if isleaftype(t)
+        if is(t,None)
+        elseif isleaftype(t)
             t = Type{t}
         elseif isleaftype(inference_stack.types)
             if isa(t,TypeVar)
@@ -732,13 +733,13 @@ function stchanged(new::Union(StateUpdate,VarTable), old, vars)
 end
 
 function type_too_complex(t::ANY, d)
-    if d > MAX_TYPEUNION_DEPTH
+    if d > MAX_TYPE_DEPTH
         return true
     end
     if isa(t,UnionKind)
         p = t.types
     elseif isa(t,CompositeKind) || isa(t,AbstractKind) || isa(t,BitsKind)
-        p = t.parameters
+        return false
     elseif isa(t,Tuple)
         p = t
     elseif isa(t,TypeVar)
@@ -746,7 +747,7 @@ function type_too_complex(t::ANY, d)
     else
         return false
     end
-    for x = (p::Tuple)
+    for x in (p::Tuple)
         if type_too_complex(x, d+1)
             return true
         end
@@ -1023,6 +1024,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                             add(W, l)
                             s[l] = stupdate(s[l], changes, vars)
                         end
+                    end
+                elseif is(hd,:type_goto)
+                    l = findlabel(body,stmt.args[1])
+                    if stchanged(changes, s[l], vars)
+                        add(W, l)
+                        s[l] = stupdate(s[l], changes, vars)
                     end
                 elseif is(hd,:return)
                     pc´ = n+1
