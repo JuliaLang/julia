@@ -31,16 +31,6 @@
 
     would add ``d`` to the set of parameters in ``opts``, or re-set its value if it was already supplied.
 
-    It is possible to have more than one Options parameter to a function, for example::
-
-      function twinopts(x,plotopts::Options,calcopts::Options)
-          @defaults plotopts linewidth=1
-          @defaults calcopts n_iter=100
-          # Do stuff
-          @check_used plotopts
-          @check_used calcopts
-      end
- 
 .. function:: defaults
 
     The ``@defaults`` macro is for writing functions that take optional parameters.  The typical syntax of such functions is::
@@ -60,6 +50,16 @@
 
     Note the function calls :func:`check_used` at the end.
 
+    It is possible to have more than one Options parameter to a function, for example::
+
+      function twinopts(x,plotopts::Options,calcopts::Options)
+          @defaults plotopts linewidth=1
+          @defaults calcopts n_iter=100
+          # Do stuff
+          @check_used plotopts
+          @check_used calcopts
+      end
+ 
 .. function:: check_used
 
     The ``@check_used`` macro tests whether user-supplied parameters were ever accessed by the ``@defaults`` macro. The test is performed at the end of the function body, so that subfunction handling parameters not used by the parent function may be "credited" for their usage. Each sub-function should also call ``@check_used``, for example::
