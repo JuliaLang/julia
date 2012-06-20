@@ -116,8 +116,8 @@ _jl_dsfmt_randui32() =
     ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
 
 _jl_dsfmt_randui64() =
-    boxui64(or_int(zext64(unbox32(_jl_dsfmt_randui32())),
-                          shl_int(zext64(unbox32(_jl_dsfmt_randui32())), 32)))
+    boxui64(or_int(zext64(unbox(Uint32,_jl_dsfmt_randui32())),
+                          shl_int(zext64(unbox(Uint32,_jl_dsfmt_randui32())), 32)))
 
 randi(::Type{Int32})  = int32(_jl_dsfmt_randui32()) & typemax(Int32)
 randi(::Type{Uint32}) = _jl_dsfmt_randui32()

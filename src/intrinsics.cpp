@@ -2,8 +2,7 @@ namespace JL_I {
     enum intrinsic {
         // wrap and unwrap
         boxui8=0, boxsi8, boxui16, boxsi16, boxui32, boxsi32, boxui64, boxsi64,
-        boxf32, boxf64, box,
-        unbox8, unbox16, unbox32, unbox64, unbox,
+        boxf32, boxf64, box, unbox,
         // arithmetic
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
@@ -341,17 +340,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=2)
             jl_error("zext_int: wrong number of arguments");
         return generic_zext(args[1], args[2], ctx);
-    }
-    switch (f) {
-        HANDLE(unbox8,1)
-            return emit_unbox(T_int8, T_pint8, emit_unboxed(args[1],ctx));
-        HANDLE(unbox16,1)
-            return emit_unbox(T_int16, T_pint16, emit_unboxed(args[1],ctx));
-        HANDLE(unbox32,1)
-            return emit_unbox(T_int32, T_pint32, emit_unboxed(args[1],ctx));
-        HANDLE(unbox64,1)
-            return emit_unbox(T_int64, T_pint64, emit_unboxed(args[1],ctx));
-    default: ;
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -942,7 +930,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
     ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
     ADD_I(boxf32); ADD_I(boxf64); ADD_I(box); ADD_I(unbox);
-    ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);

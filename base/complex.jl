@@ -43,8 +43,8 @@ bitstype 128 Complex128 <: Complex{Float64}
 
 function complex128(r::Float64, i::Float64)
     box(Complex128,
-        or_int(shl_int(zext_int(Complex128,unbox64(i)), 64),
-               zext_int(Complex128,unbox64(r))))
+        or_int(shl_int(zext_int(Complex128,unbox(Float64,i)), 64),
+               zext_int(Complex128,unbox(Float64,r))))
 end
 
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
@@ -80,8 +80,8 @@ bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
     box(Complex64,
-        or_int(shl_int(zext_int(Complex64,unbox32(i)), 32),
-               zext_int(Complex64,unbox32(r))))
+        or_int(shl_int(zext_int(Complex64,unbox(Float32,i)), 32),
+               zext_int(Complex64,unbox(Float32,r))))
 end
 
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))

@@ -138,8 +138,8 @@ function write(s, x::Integer)
 end
 
 write(s, x::Bool)    = write(s, uint8(x))
-write(s, x::Float32) = write(s, boxsi32(unbox32(x)))
-write(s, x::Float64) = write(s, boxsi64(unbox64(x)))
+write(s, x::Float32) = write(s, boxsi32(unbox(Float32,x)))
+write(s, x::Float64) = write(s, boxsi64(unbox(Float64,x)))
 
 function write(s, a::AbstractArray)
     for i = 1:numel(a)
@@ -158,8 +158,8 @@ function read{T <: Integer}(s, ::Type{T})
 end
 
 read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
-read(s, ::Type{Float32}) = boxf32(unbox32(read(s,Int32)))
-read(s, ::Type{Float64}) = boxf64(unbox64(read(s,Int64)))
+read(s, ::Type{Float32}) = boxf32(unbox(Float32,read(s,Int32)))
+read(s, ::Type{Float64}) = boxf64(unbox(Float64,read(s,Int64)))
 
 read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))

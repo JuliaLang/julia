@@ -1,7 +1,7 @@
 ## floating-point functions ##
 
-abs(x::Float64) = boxf64(abs_float(unbox64(x)))
-abs(x::Float32) = boxf32(abs_float(unbox32(x)))
+abs(x::Float64) = boxf64(abs_float(unbox(Float64,x)))
+abs(x::Float32) = boxf32(abs_float(unbox(Float32,x)))
 
 isnan(x::Float) = (x != x)
 isnan(x::Real) = isnan(float(x))
@@ -15,8 +15,8 @@ isfinite(x::Float) = (x-x == 0)
 isfinite(x::Real) = isfinite(float(x))
 isfinite(x::Integer) = true
 
-copysign(x::Float64, y::Float64) = boxf64(copysign_float(unbox64(x),unbox64(y)))
-copysign(x::Float32, y::Float32) = boxf32(copysign_float(unbox32(x),unbox32(y)))
+copysign(x::Float64, y::Float64) = boxf64(copysign_float(unbox(Float64,x),unbox(Float64,y)))
+copysign(x::Float32, y::Float32) = boxf32(copysign_float(unbox(Float32,x),unbox(Float32,y)))
 copysign(x::Float32, y::Real) = copysign(x, float32(y))
 copysign(x::Float64, y::Real) = copysign(x, float64(y))
 @vectorize_2arg Real copysign
@@ -35,14 +35,14 @@ sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))
 cos(x::Real) = cos(float(x))
 
-num2hex(x::Float32) = hex(boxui32(unbox32(x)),8)
-num2hex(x::Float64) = hex(boxui64(unbox64(x)),16)
+num2hex(x::Float32) = hex(boxui32(unbox(Float32,x)),8)
+num2hex(x::Float64) = hex(boxui64(unbox(Float64,x)),16)
 
 function hex2num(s::String)
     if length(s) <= 8
-        return boxf32(unbox32(parse_int(Int32, s, 16)))
+        return boxf32(unbox(Int32,parse_int(Int32, s, 16)))
     end
-    return boxf64(unbox64(parse_int(Int64, s, 16)))
+    return boxf64(unbox(Int64,parse_int(Int64, s, 16)))
 end
 
 @vectorize_1arg Real iround

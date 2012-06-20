@@ -13,8 +13,8 @@ signbit(x::Int32) = int(x>>>31)
 signbit(x::Int64) = int(x>>>63)
 signbit(x::Int128) = int(x>>>127)
 
-flipsign(x::Int32,  y::Int32)  = boxsi32(flipsign_int(unbox32(x),unbox32(y)))
-flipsign(x::Int64,  y::Int64)  = boxsi64(flipsign_int(unbox64(x),unbox64(y)))
+flipsign(x::Int32,  y::Int32)  = boxsi32(flipsign_int(unbox(Int32,x),unbox(Int32,y)))
+flipsign(x::Int64,  y::Int64)  = boxsi64(flipsign_int(unbox(Int64,x),unbox(Int64,y)))
 flipsign(x::Int128, y::Int128) = box(Int128,flipsign_int(unbox(Int128,x),unbox(Int128,y)))
 
 flipsign{T<:Signed}(x::T,y::T)  = flipsign(int(x),int(y))
