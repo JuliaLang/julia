@@ -429,7 +429,7 @@ in a certain directory:
 ::
 
     cd("data") do
-        open("outfile") do f
+        open("outfile", "w") do f
             write(f, data)
         end
     end
