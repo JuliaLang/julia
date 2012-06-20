@@ -50,8 +50,8 @@ end
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
 complex128(z) = complex128(real(z), imag(z))
 
-real(c::Complex128) = boxf64(trunc64(c))
-imag(c::Complex128) = boxf64(trunc64(ashr_int(c, 64)))
+real(c::Complex128) = box(Float64,trunc64(c))
+imag(c::Complex128) = box(Float64,trunc64(ashr_int(c, 64)))
 
 convert(::Type{Complex128}, x::Real) = complex128(x,0)
 convert(::Type{Complex128}, z::Complex128) = z
@@ -87,8 +87,8 @@ end
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-real(c::Complex64) = boxf32(trunc32(c))
-imag(c::Complex64) = boxf32(trunc32(ashr_int(c, 32)))
+real(c::Complex64) = box(Float32,trunc32(c))
+imag(c::Complex64) = box(Float32,trunc32(ashr_int(c, 32)))
 
 convert(::Type{Complex64}, x::Real) = complex64(x,0)
 convert(::Type{Complex64}, z::Complex64) = z
