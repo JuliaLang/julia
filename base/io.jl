@@ -158,8 +158,8 @@ function read{T <: Integer}(s, ::Type{T})
 end
 
 read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
-read(s, ::Type{Float32}) = box(Float32,unbox(Float32,read(s,Int32)))
-read(s, ::Type{Float64}) = box(Float64,unbox(Float64,read(s,Int64)))
+read(s, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
+read(s, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 
 read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
     read(s, t, tuple(d1,dims...))
