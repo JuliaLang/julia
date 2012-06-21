@@ -376,3 +376,7 @@ function help(x)
         println("  which has fields $(t.names)")
     end
 end
+
+# misc
+
+times(f::Function, n::Int) = for i=1:n f() end
