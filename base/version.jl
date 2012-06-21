@@ -14,7 +14,7 @@ type VersionNumber
         prerelease = Array(Union(Int,ASCIIString),length(pre))
         for i in 1:length(pre)
             ident = ascii(string(pre[i]))
-            if isempty(ident) && i < length(pre)
+            if isempty(ident) && !(length(pre)==1 && isempty(bld))
                 error("invalid pre-release identifier: empty string")
             end
             if !matches(r"^(?:[0-9a-z-]*)?$"i, ident)
@@ -68,13 +68,15 @@ const VERSION_REGEX = r"^
     (\d+)                                   # major         (required)
     (?:\.(\d+))?                            # minor         (optional)
     (?:\.(\d+))?                            # patch         (optional)
-    (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]*))?     # pre-release   (optional)
+    (?:-|
+    (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
+    )
 $"ix
 
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
-    if m == nothing; error("invalid version string: $v"); end
+    if m == nothing error("invalid version string: $v") end
     major, minor, patch, prerl, build = m.captures
     major = int(major)
     minor = minor == nothing ? 0 : int(minor)
