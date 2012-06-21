@@ -429,17 +429,17 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     }
 }
 
-//DLLEXPORT void gdb_print_function_info(size_t ip) {
-//    char *func_name;
-//    int line_num;
-//    const char *file_name;
-//    getFunctionInfo(&func_name, &line_num, &file_name, ip);
-//    if (func_name != NULL) {
-//        JL_PRINTF(JL_STDERR, "%% %s @ %s : %d\n", func_name, file_name, line_num);
-//  } else {
-//        JL_PRINTF(JL_STDERR, "ip unknown\n", func_name, file_name, line_num);
-//  }
-//}
+// DLLEXPORT void gdb_print_function_info(size_t ip) {
+   // char *func_name;
+   // int line_num;
+   // const char *file_name;
+   // getFunctionInfo(&func_name, &line_num, &file_name, ip);
+   // if (func_name != NULL) {
+       // JL_PRINTF(JL_STDERR, "%% %s @ %s : %d\n", func_name, file_name, line_num);
+ // } else {
+       // JL_PRINTF(JL_STDERR, "ip unknown\n", func_name, file_name, line_num);
+ // }
+// }
 
 #if defined(__APPLE__)
 // stacktrace using execinfo
@@ -468,7 +468,7 @@ static jl_value_t *build_backtrace(void)
 //    backtrace(array, 4095);
 //    p = (size_t*)array;
 //    while ((ip = *(p++)) != 0) {
-//        debug_print_function_info(ip);
+//        gdb_print_function_info(ip);
 //    }
 //}
 #elif defined(__WIN32__)
@@ -516,6 +516,45 @@ static jl_value_t *build_backtrace(void)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+// DLLEXPORT void gdb_backtrace(void)
+// {
+    // void *array[1024];
+    // size_t ip;
+    // size_t *p;
+    // unsigned short num;
+
+    // /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
+    // #if defined(__MINGW_H)
+    // HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
+
+    // if(kernel32 != NULL){
+        // typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
+        // CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+
+        // if(func==NULL){
+            // FreeLibrary(kernel32);
+            // kernel32 = NULL;
+            // func = NULL;
+			// JL_PUTS("Failed to find RtlCaptureStackBackTrace",JL_STDERR);
+			// return;
+        // }else
+        // {
+            // num = func( 0, 1023, array, NULL );
+        // }
+    // } else {
+        // JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
+        // return;
+    // }
+    // FreeLibrary(kernel32);
+    // #else
+    // num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+    // #endif
+
+    // p = (size_t*)array;
+    // while ((ip = *(p++)) != 0 && (num--)>0) {
+        // gdb_print_function_info(ip);
+    // }
+// }
 #else
 // stacktrace using libunwind
 static jl_value_t *build_backtrace(void)
@@ -546,7 +585,7 @@ static jl_value_t *build_backtrace(void)
 //    unw_init_local(&cursor, &uc);
 //    while (unw_step(&cursor) && n < 10000) { 
 //        unw_get_reg(&cursor, UNW_REG_IP, &ip);
-//        debug_print_function_info(ip);
+//        gdb_print_function_info(ip);
 //        n++;
 //    }
 //}
