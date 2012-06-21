@@ -21,7 +21,7 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[iround(x)]
+ref(s::String, x::Real) = s[to_index(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =

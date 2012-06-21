@@ -610,7 +610,11 @@ for a = -5:5, b = -5:5
     @assert a//b == a/b
     @assert a//b == a//b
     @assert a//b == rational(a/b)
-    @assert integer(a//b) == integer(a/b)
+    if b == 0
+        @assert_fails integer(a//b) == integer(a/b)
+    else
+        @assert integer(a//b) == integer(a/b)
+    end
     for c = -5:5
         @assert (a//b == c) == (a/b == c)
         @assert (a//b != c) == (a/b != c)

@@ -57,10 +57,6 @@ floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
 iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
-convert(::Type{Integer}, x::Float) = iround(x)
-convert(::Type{Int32}, x::Float) = int32(iround(x))
-convert(::Type{Int64}, x::Float) = int64(iround(x))
-
 ## floating point promotions ##
 
 promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
