@@ -159,21 +159,21 @@ convert(::Type{Unsigned}, x::Float64) = convert(Uint64,x)
 convert(::Type{Integer}, x::Float32) = convert(Int,x)
 convert(::Type{Integer}, x::Float64) = convert(Int64,x)
 
-int8(x) = convert(Int8,trunc(x))
-int16(x) = convert(Int16,trunc(x))
-int32(x) = convert(Int32,trunc(x))
-int64(x) = convert(Int64,trunc(x))
-int128(x) = convert(Int128,trunc(x))
+int8(x) = convert(Int8,x)
+int16(x) = convert(Int16,x)
+int32(x) = convert(Int32,x)
+int64(x) = convert(Int64,x)
+int128(x) = convert(Int128,x)
 
-uint8(x) = convert(Uint8,trunc(x))
-uint16(x) = convert(Uint16,trunc(x))
-uint32(x) = convert(Uint32,trunc(x))
-uint64(x) = convert(Uint64,trunc(x))
-uint128(x) = convert(Uint128,trunc(x))
+uint8(x) = convert(Uint8,x)
+uint16(x) = convert(Uint16,x)
+uint32(x) = convert(Uint32,x)
+uint64(x) = convert(Uint64,x)
+uint128(x) = convert(Uint128,x)
 
-signed(x) = convert(Signed,trunc(x))
-unsigned(x) = convert(Unsigned,trunc(x))
-integer(x) = convert(Integer,trunc(x))
+signed(x) = convert(Signed,x)
+unsigned(x) = convert(Unsigned,x)
+integer(x) = convert(Integer,x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x
@@ -562,3 +562,17 @@ sizeof(::Type{Int64})   = 8
 sizeof(::Type{Uint64})  = 8
 sizeof(::Type{Int128})  = 16
 sizeof(::Type{Uint128}) = 16
+
+## float to integer coercion ##
+
+# requires int arithmetic defined, for the loops to work
+
+for f in (:int, :int8, :int16, :int32, :int64, :signed, :integer)
+    @eval ($f)(x::Float) = ($f)(iround(x))
+end
+
+for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
+              (:uint64,:Uint64), (:uint128,:Uint128), (:int128,:Int128),
+              (:unsigned,:Unsigned), (:uint,:Uint))
+    @eval ($f)(x::Float) = convert($t,round(x))
+end
