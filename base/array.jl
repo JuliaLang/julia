@@ -207,10 +207,7 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    i = length(I)
-    while i > 0 && isa(I[i],Integer); i-=1; end
-    d = map(length, I)::Dims
-    X = similar(A, d[1:i])
+    X = similar(A, ref_shape(I...))
 
     if is(ref_cache,nothing)
         ref_cache = Dict()
