@@ -1634,7 +1634,13 @@ So far only the second case can actually occur.
 	 ; record. for non-symbols or globals, emit a type assertion.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
-	       (begin (vinfo:set-type! vi (caddr e))
+	       (begin (if (not (eq? (vinfo:type vi) 'Any))
+			  (error (string "multiple type declarations for "
+					 (cadr e))))
+		      (if (assq (cadr e) captvars)
+			  (error (string "type of " (cadr e)
+					 " declared in inner scope")))
+                      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
