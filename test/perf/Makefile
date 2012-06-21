@@ -6,6 +6,9 @@ default: benchmarks.html
 bin/perf%: perf.cpp
 	$(CXX) -O$* $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.1/libopenblas.a -lpthread
 
+bin/fperf%: perf.f90
+	$(FC) -static-libgfortran -O$* -fexternal-blas $< -o $@ $(JULIAHOME)/deps/openblas-v0.1.1/libopenblas.a -lpthread
+
 benchmarks/c.csv: \
 	benchmarks/c0.csv \
 	benchmarks/c1.csv \
@@ -13,7 +16,17 @@ benchmarks/c.csv: \
 	benchmarks/c3.csv
 	cat $^ > $@
 
+benchmarks/fortran.csv: \
+	benchmarks/fortran0.csv \
+	benchmarks/fortran1.csv \
+	benchmarks/fortran2.csv \
+	benchmarks/fortran3.csv
+	cat $^ > $@
+
 benchmarks/c%.csv: bin/perf%
+	for t in 1 2 3 4 5; do $<; done >$@
+
+benchmarks/fortran%.csv: bin/fperf%
 	for t in 1 2 3 4 5; do $<; done >$@
 
 benchmarks/julia.csv: perf.jl
@@ -36,6 +49,7 @@ benchmarks/javascript.csv: perf.js
 
 BENCHMARKS = \
 	benchmarks/c.csv \
+	benchmarks/fortran.csv \
 	benchmarks/julia.csv \
 	benchmarks/python.csv \
 	benchmarks/matlab.csv \
@@ -50,6 +64,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	$(QUIET_PERL) $^ >$@
 
 clean:
-	@rm -rf bin/perf* benchmarks/*.csv benchmarks.csv
+	@rm -rf bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv
 
 .PHONY: all perf clean

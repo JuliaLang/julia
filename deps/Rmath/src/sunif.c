@@ -1,6 +1,7 @@
 /*
  *  Mathlib : A C Library of Special Functions
  *  Copyright (C) 2000, 2003  The R Development Core Team
+ *  Copyright (C) 2012 Viral B. Shah (DSFMT)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -42,7 +43,7 @@ double unif_rand(void)
 }
 */
 
-#include "../../random/dsfmt-2.1/dSFMT.h"
+extern double dsfmt_gv_genrand_close_open();
 
 double unif_rand(void)
 {

@@ -3,6 +3,9 @@
 const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
 const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
 const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
+const stdin_stream  = STDIN
+const stdout_stream = STDOUT
+const stderr_stream = STDERR
 OUTPUT_STREAM = STDOUT
 
 # restore shared library handles
@@ -20,7 +23,7 @@ _jl_libm = dlopen("libopenlibm")
 _jl_libfdm = dlopen("libopenlibm")
 _jl_librandom = dlopen("librandom");
 @windows_only _jl_advapi32 = dlopen("Advapi32")
-_jl_librandom_init();
+_jl_librandom_init()
 
 # Optional libraries
 const _jl_libblas = dlopen(_jl_libblas_name)

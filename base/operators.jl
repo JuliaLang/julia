@@ -124,19 +124,22 @@ sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof{T}(x::T) = sizeof(T)
 
-foreach(f::Function, itr) = for x = itr; f(x); end
-
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function)) = x
 copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
 copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
 
-# function composition
+# function composition & pipelining
 one(f::Function) = identity
 one(::Type{Function}) = identity
 *(f::Function, g::Function) = x->f(g(x))
+|(x, f::Function) = f(x)
 
-# vectorization
+# currying of map, filter, etc.
+map(f::Function) = (x...)->map(f, x...)
+filter(f::Function) = (x...)->filter(f, x...)
+
+# array shape rules
 
 function promote_shape(a::(Int,), b::(Int,))
     if a[1] != b[1]
@@ -170,6 +173,39 @@ function promote_shape(a::Dims, b::Dims)
     end
     return a
 end
+
+# shape of array to create for ref() with indexes I
+function ref_shape(I...)
+    n = length(I)
+    while n > 0 && isa(I[n],Real); n-=1; end
+    ntuple(n, i->length(I[i]))
+end
+
+ref_shape(i::Real) = ()
+ref_shape(i)       = (length(i),)
+ref_shape(i::Real,j::Real) = ()
+ref_shape(i      ,j::Real) = (length(i),)
+ref_shape(i      ,j)       = (length(i),length(j))
+
+# check for valid sizes in A[I...] = x where x <: AbstractArray
+function assign_shape_check(x::AbstractArray, I...)
+    nel = 1
+    for idx in I
+        nel *= length(idx)
+    end
+    if length(X) != nel
+        error("argument dimensions must match")
+    end
+    if ndims(X) > 1
+        for i = 1:length(I)
+            if size(X,i) != length(I[i])
+                error("argument dimensions must match")
+            end
+        end
+    end
+end
+
+# vectorization
 
 macro vectorize_1arg(S,f)
     quote

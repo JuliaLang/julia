@@ -2,6 +2,7 @@
  *  Mathlib : A C Library of Special Functions
  *  Copyright (C) 1998   Ross Ihaka
  *  Copyright (C) 2000-9 The R Development Core Team
+ *  Copyright (C) 2012 Viral B. Shah (randmtzig)
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,6 +29,12 @@
  *
  * Is called from  rnorm(..), but also rt(), rf(), rgamma(), ...
  */
+
+extern double randmtzig_randn (void);
+
+double norm_rand(void) {
+    return randmtzig_randn();
+}
 
 #include <R_ext/Random.h>
 #include "nmath.h"
@@ -59,7 +66,7 @@ extern DL_FUNC  User_norm_fun; /* declared and set in ../main/RNG.c */
  *    The definitions of the constants a[k], d[k], t[k] and
  *    h[k] are according to the abovementioned article
  */
-double norm_rand(void)
+double norm_rand_rmath(void)
 {
 
     const static double a[32] =

@@ -406,7 +406,7 @@ extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
-extern jl_sym_t *compositetype_sym;
+extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 
 
 
@@ -830,7 +830,6 @@ DLLEXPORT void jl_processEvents();
 // compiler
 void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
-void jl_delete_function(jl_lambda_info_t *li);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 char *jl_find_file_in_path(const char *fname);

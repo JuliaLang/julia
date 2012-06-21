@@ -418,8 +418,8 @@ function project( self::RectilinearMap, x::Vector, y::Vector )
     return p, q
 end
 
-project{T1<:Real,T2<:Real}( self::RectilinearMap, x::AbstractArray{T1,1}, y::AbstractArray{T2,1} ) =
-    project(self, [x], [y])
+project( self::RectilinearMap, x::AbstractArray, y::AbstractArray ) =
+    project(self, reshape(x,length(x)), reshape(y,length(y)) )
 
 function compose( self::RectilinearMap, other::RectilinearMap )
     self.t = call( other.t[1], other.t[2] )
@@ -1556,7 +1556,7 @@ end
 
 function make( self::HalfAxis, context )
     if getattr(self, "draw_nothing")
-        return
+        return []
     end
 
     ticks = _ticks( self, context )
@@ -1883,7 +1883,7 @@ function _context2( self::FramedPlot, device, region )
 end
 
 function exterior( self::FramedPlot, device::Renderer, region::BoundingBox )
-    bb = BoundingBox()
+    bb = copy(region)
 
     context1 = _context1( self, device, region )
     bb1 = boundingbox(self.x1, context1)

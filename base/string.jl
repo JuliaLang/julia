@@ -463,11 +463,13 @@ function cstring(p::Ptr{Uint8})
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
 function cstring(p::Ptr{Uint8},len::Int)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), p, len)::ByteString
 end
+
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+convert(::Type{ByteString}, s::String) = cstring(s)
 
 ## string promotion rules ##
 
@@ -886,11 +888,11 @@ split(s::String, spl)             = split(s, spl, 0, true)
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 
-function replace(str::ByteString, splitter, repl::Function, limit::Integer)
+function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
-    j, k = search(str,splitter,i)
+    j, k = search(str,pattern,i)
     while j != 0
         if i == a || i < k
             rstr = RopeString(rstr,SubString(str,i,j-1))
@@ -898,16 +900,33 @@ function replace(str::ByteString, splitter, repl::Function, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,splitter,k)
+        j, k = search(str,pattern,k)
         if n == limit break end
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
     cstring(rstr)
 end
-replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
-replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
-replace(s::String, spl, r) = replace(s, spl, r, 0)
+replace(s::String, pat, f::Function, n::Integer) = replace(cstring(s), pat, f, n)
+replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
+replace(s::String, pat, r) = replace(s, pat, r, 0)
+
+function search_count(str::String, pattern, limit::Integer)
+    n = 0
+    i = a = start(str)
+    j, k = search(str,pattern,i)
+    while j != 0
+        if i == a || i < k
+            n += 1
+            if n == limit break end
+            i = k
+        end
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,pattern,k)
+    end
+    return n
+end
+search_count(s::String, pat) = search_count(s, pat, 0)
 
 function print_joined(io, strings, delim, last)
     i = start(strings)
@@ -1070,47 +1089,13 @@ int32   (s::String) = parse_int(Int32,s)
 uint32  (s::String) = parse_int(Uint32,s)
 int64   (s::String) = parse_int(Int64,s)
 uint64  (s::String) = parse_int(Uint64,s)
+int128  (s::String) = parse_int(Int128,s)
+uint128 (s::String) = parse_int(Uint128,s)
 
-## integer to string functions ##
+## stringifying integers more efficiently ##
 
-const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
-
-function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
-    if b < 2 || b > 36; error("int2str: invalid base ", b); end
-    neg = n < 0
-    n = unsigned(abs(n))
-    b = convert(typeof(n), b)
-    ndig = ndigits(n, b)
-    sz = max(convert(Int, ndig), l) + neg
-    data = Array(Uint8, sz)
-    i = sz
-    if ispow2(b)
-        digmask = b-1
-        shift = trailing_zeros(b)
-        while i > neg
-            ch = n & digmask
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n >>= shift
-            i -= 1
-        end
-    else
-        while i > neg
-            ch = n % b
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n = div(n,b)
-            i -= 1
-        end
-    end
-    if neg
-        data[1] = '-'
-    end
-    ASCIIString(data)
-end
-int2str(n::Integer, b::Integer)         = int2str(n, b, 0)
-int2str(n::Integer, b::Integer, l::Int) = int2str(int64(n), b, l)
-
-string(x::Signed) = dec(int64(x))
-cstring(x::Signed) = dec(int64(x))
+string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
+cstring(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 

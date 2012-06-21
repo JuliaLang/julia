@@ -43,17 +43,18 @@ bitstype 128 Complex128 <: Complex{Float64}
 
 function complex128(r::Float64, i::Float64)
     box(Complex128,
-        or_int(shl_int(zext_int(Complex128,unbox64(i)), 64),
-               zext_int(Complex128,unbox64(r))))
+        or_int(shl_int(zext_int(Complex128,unbox(Float64,i)), 64),
+               zext_int(Complex128,unbox(Float64,r))))
 end
 
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
 complex128(z) = complex128(real(z), imag(z))
 
-real(c::Complex128) = boxf64(trunc64(c))
-imag(c::Complex128) = boxf64(trunc64(ashr_int(c, 64)))
+real(c::Complex128) = box(Float64,trunc64(c))
+imag(c::Complex128) = box(Float64,trunc64(ashr_int(c, 64)))
 
 convert(::Type{Complex128}, x::Real) = complex128(x,0)
+convert(::Type{Complex128}, z::Complex128) = z
 convert(::Type{Complex128}, z::Complex) = complex128(real(z),imag(z))
 
 promote_rule(::Type{Complex128}, ::Type{Float64}) = Complex128
@@ -79,17 +80,18 @@ bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
     box(Complex64,
-        or_int(shl_int(zext_int(Complex64,unbox32(i)), 32),
-               zext_int(Complex64,unbox32(r))))
+        or_int(shl_int(zext_int(Complex64,unbox(Float32,i)), 32),
+               zext_int(Complex64,unbox(Float32,r))))
 end
 
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-real(c::Complex64) = boxf32(trunc32(c))
-imag(c::Complex64) = boxf32(trunc32(ashr_int(c, 32)))
+real(c::Complex64) = box(Float32,trunc32(c))
+imag(c::Complex64) = box(Float32,trunc32(ashr_int(c, 32)))
 
 convert(::Type{Complex64}, x::Real) = complex64(x,0)
+convert(::Type{Complex64}, z::Complex64) = z
 convert(::Type{Complex64}, z::Complex) = complex64(real(z),imag(z))
 
 promote_rule(::Type{Complex64}, ::Type{Float64}) = Complex128
@@ -135,6 +137,7 @@ imag(z::ComplexPair) = z.im
 
 convert{T<:Real}(::Type{ComplexPair{T}}, x::Real) =
     ComplexPair(convert(T,x), convert(T,0))
+convert{T<:Real}(::Type{ComplexPair{T}}, z::ComplexPair{T}) = z
 convert{T<:Real}(::Type{ComplexPair{T}}, z::Complex) =
     ComplexPair(convert(T,real(z)),convert(T,imag(z)))
 
@@ -221,11 +224,11 @@ function /(a::Complex, b::Complex)
     abi = abs(bim)
     if abr <= abi
         r = bre / bim
-        den = bim * (1 + r*r)
+        den = bim * (one(r) + r*r)
         complex((are*r + aim)/den, (aim*r - are)/den)
     else
         r = bim / bre
-        den = bre * (1 + r*r)
+        den = bre * (one(r) + r*r)
         complex((are + aim*r)/den, (aim - are*r)/den)
     end
 end
@@ -236,11 +239,11 @@ function /(a::Real, b::Complex)
     abi = abs(bim)
     if abr <= abi
         r = bre / bim
-        den = bim * (1 + r*r)
+        den = bim * (one(r) + r*r)
         complex(a*r/den, -a/den)
     else
         r = bim / bre
-        den = bre * (1 + r*r)
+        den = bre * (one(r) + r*r)
         complex(a/den, -a*r/den)
     end
 end

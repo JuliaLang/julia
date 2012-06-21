@@ -207,10 +207,7 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    i = length(I)
-    while i > 0 && isa(I[i],Integer); i-=1; end
-    d = map(length, I)::Dims
-    X = similar(A, d[1:i])
+    X = similar(A, ref_shape(I...))
 
     if is(ref_cache,nothing)
         ref_cache = Dict()
@@ -295,6 +292,7 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
+    if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
     for i in I
         A[i] = X[count]
@@ -311,6 +309,7 @@ function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+    if length(X) != length(J); error("argument dimensions must match"); end
     m = size(A, 1)
     count = 1
     for j in J
@@ -329,6 +328,7 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+    if length(X) != length(I); error("argument dimensions must match"); end
     m = size(A, 1)
     offset = (j-1)*m
     count = 1
@@ -350,6 +350,11 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVecto
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+    nel = length(I)*length(J)
+    if length(X) != nel ||
+        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+        error("argument dimensions must match")
+    end
     m = size(A, 1)
     count = 1
     for j in J
@@ -379,6 +384,23 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    nel = length(I0)
+    for idx in I
+        nel *= length(idx)
+    end
+    if length(X) != nel
+        error("argument dimensions must match")
+    end
+    if ndims(X) > 1
+        if size(X,1) != length(I0)
+            error("argument dimensions must match")
+        end
+        for i = 1:length(I)
+            if size(X,i+1) != length(I[i])
+                error("argument dimensions must match")
+            end
+        end
+    end
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
@@ -677,6 +699,22 @@ for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     end
 end
 
+# functions that should give an Int result for Bool arrays
+for f in (:+, :-, :div)
+    @eval begin
+        function ($f)(x::Bool, y::Array{Bool})
+            reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
+        end
+        function ($f)(x::Array{Bool}, y::Bool)
+            reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
+        end
+        function ($f)(x::Array{Bool}, y::Array{Bool})
+            shp = promote_shape(size(x),size(y))
+            reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
+        end
+    end
+end
+
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
@@ -878,13 +916,56 @@ function nnz(a::StridedArray)
     return n
 end
 
-function find{T}(A::StridedArray{T})
+# returns the index of the first non-zero element, or 0 if all zeros
+function findfirst(A::StridedArray)
+    for i = 1:length(A)
+        if A[i] != 0
+            return i
+        end
+    end
+    return 0
+end
+
+# returns the index of the first matching element
+function findfirst(A::StridedArray, v)
+    for i = 1:length(A)
+        if A[i] == v
+            return i
+        end
+    end
+    return 0
+end
+
+# returns the index of the first element for which the function returns true
+function findfirst(testf::Function, A::StridedArray)
+    for i = 1:length(A)
+        if testf(A[i])
+            return i
+        end
+    end
+    return 0
+end
+
+function find(testf::Function, A::StridedArray)
+    # use a dynamic-length array to store the indexes, then copy to a non-padded
+    # array for the return
+    tmpI = Array(Int, 0)
+    for i = 1:length(A)
+        if testf(A[i])
+            push(tmpI, i)
+        end
+    end
+    I = Array(Int, length(tmpI))
+    copy_to(I, tmpI)
+    I
+end
+
+function find(A::StridedArray)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
-    z = zero(T)
     count = 1
     for i=1:length(A)
-        if A[i] != z
+        if A[i] != 0
             I[count] = i
             count += 1
         end
@@ -894,14 +975,13 @@ end
 
 findn(A::StridedVector) = find(A)
 
-function findn{T}(A::StridedMatrix{T})
+function findn(A::StridedMatrix)
     nnzA = nnz(A)
     I = Array(Int, nnzA)
     J = Array(Int, nnzA)
-    z = zero(T)
     count = 1
     for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
+        if A[i,j] != 0
             I[count] = i
             J[count] = j
             count += 1
@@ -927,14 +1007,16 @@ function findn{T}(A::StridedArray{T})
     ndimsA = ndims(A)
     nnzA = nnz(A)
     I = ntuple(ndimsA, x->Array(Int, nnzA))
-    ranges = ntuple(ndims(A), d->(1:size(A,d)))
+    if nnzA > 0
+        ranges = ntuple(ndims(A), d->(1:size(A,d)))
 
-    if is(findn_cache,nothing)
-        findn_cache = Dict()
+        if is(findn_cache,nothing)
+            findn_cache = Dict()
+        end
+
+        gen_cartesian_map(findn_cache, findn_one, ranges,
+                          (:A, :I, :count, :z), A,I,1, zero(T))
     end
-
-    gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:A, :I, :count, :z), A,I,1, zero(T))
     return I
 end
 end
@@ -944,14 +1026,16 @@ function findn_nzs{T}(A::StridedMatrix{T})
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = zeros(T, nnzA)
-    z = zero(T)
     count = 1
-    for j=1:size(A,2), i=1:size(A,1)
-        if A[i,j] != z
-            I[count] = i
-            J[count] = j
-            NZs[count] = A[i,j]
-            count += 1
+    if nnzA > 0
+        for j=1:size(A,2), i=1:size(A,1)
+            Aij = A[i,j]
+            if Aij != 0
+                I[count] = i
+                J[count] = j
+                NZs[count] = Aij
+                count += 1
+            end
         end
     end
     return (I, J, NZs)
@@ -960,13 +1044,14 @@ end
 function nonzeros{T}(A::StridedArray{T})
     nnzA = nnz(A)
     V = Array(T, nnzA)
-    z = zero(T)
     count = 1
-    for i=1:length(A)
-        Ai = A[i]
-        if Ai != z
-            V[count] = Ai
-            count += 1
+    if nnzA > 0
+        for i=1:length(A)
+            Ai = A[i]
+            if Ai != 0
+                V[count] = Ai
+                count += 1
+            end
         end
     end
     return V

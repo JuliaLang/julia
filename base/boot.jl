@@ -135,25 +135,21 @@ bitstype 64 Float64 <: Float
 bitstype 8  Bool <: Integer
 bitstype 32 Char <: Integer
 
-bitstype 8  Int8   <: Signed
-bitstype 8  Uint8  <: Unsigned
-bitstype 16 Int16  <: Signed
-bitstype 16 Uint16 <: Unsigned
-bitstype 32 Int32  <: Signed
-bitstype 32 Uint32 <: Unsigned
-bitstype 64 Int64  <: Signed
-bitstype 64 Uint64 <: Unsigned
+bitstype 8   Int8    <: Signed
+bitstype 8   Uint8   <: Unsigned
+bitstype 16  Int16   <: Signed
+bitstype 16  Uint16  <: Unsigned
+bitstype 32  Int32   <: Signed
+bitstype 32  Uint32  <: Unsigned
+bitstype 64  Int64   <: Signed
+bitstype 64  Uint64  <: Unsigned
+bitstype 128 Int128  <: Signed
+bitstype 128 Uint128 <: Unsigned
 
 if is(Int,Int64)
     typealias Uint Uint64
-    const unboxwd = unbox64
-    const boxsint = boxsi64
-    const boxuint = boxui64
 else
     typealias Uint Uint32
-    const unboxwd = unbox32
-    const boxsint = boxsi32
-    const boxuint = boxui32
 end
 
 abstract Exception

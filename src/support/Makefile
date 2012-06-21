@@ -28,9 +28,11 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-%.o: %.c
+HEADERS = $(wildcard *.h) $(JULIAHOME)/deps/libuv/include/uv.h
+
+%.o: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(SHIPFLAGS) -c $< -o $@
-%.do: %.c
+%.do: %.c $(HEADERS)
 	$(QUIET_CC) $(CC) $(DEBUGFLAGS) -c $< -o $@
 
 release debug: libsupport.a

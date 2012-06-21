@@ -66,9 +66,7 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-#### Ubuntu
-
-You may also need to install the package `libncurses5-dev`.
+On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
 
 #### OS X
 
@@ -119,7 +117,6 @@ Building Julia requires that the following software be installed:
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
 - **[m4]**                      — needed to build GMP.
 
-With the exception of `gfortran`, these are standard on most Linux systems and on any OS X system with `Xcode` and Apple's Developer Tools installed.
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
@@ -135,9 +132,12 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]**                — Perl-compatible regular expressions library.
-- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support
+- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[D3]**                  — JavaScript visualization library.
 - **[double-conversion]**   — efficient number-to-text conversion.
+- **[GLPK]**		    - linear programming.
+- **[Rmath]**		    - basic RNGs and distributions.
+
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
@@ -162,6 +162,8 @@ Julia uses the following external libraries, which are automatically downloaded 
 [GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 [double-conversion]: http://double-conversion.googlecode.com/
+[GLPK]:		http://www.gnu.org/software/glpk/
+[Rmath]:	http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
 
 <a name="Directories"/>
 ## Directories
@@ -215,31 +217,17 @@ On Linux systems, the `Shift-Enter` binding can be set by placing the following 
 
     keysym Return = Return Linefeed
 
-<a name="Web-REPL-and-grahpics">
-## Web REPL and graphics
+<a name="Web-REPL">
+## Web REPL
 
-Julia has a web REPL with very preliminary graphics capabilities.
-Follow these instructions for setting up the web repl locally.
-In deps, doing `make install-lighttpd` will download and build lighttpd.
-Use the launch-webserver script to start the webserver and web-repl.
-Point your browser to `http://localhost:2000/`.
-Try `plot(cumsum(randn(1000)))`
+Julia has a web REPL with very preliminary graphics capabilities. The web REPL is currently a showcase to try out new ideas. The web REPL is social - multiple people signing in with a common session name can collaborate within a session.
+
+1. Do `make -C deps install-lighttpd` to download and build the webserver.
+2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
+3. Point your browser to `http://localhost:2000/`.
+4. Try `plot(cumsum(randn(1000)))` and other things.
 
 ### Try it Online
 
-Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
+Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
 
-### Pre-installed lighttpd
-
-If you want to use your own `lighttpd`, then the process is something like this:
-
-1. Install `lighttpd`
-2. Configure `lighttpd`:
-The config file is `/etc/lighttpd/lighttpd.conf`. Add `mod_scgi` to `server.modules`.
-Set `server.document-root` to point to `/path/to/julia/ui/website`.
-Add something like this to the bottom (you can use whatever port you want):
-`scgi.server = (".scgi" => (("host" => "127.0.0.1", "port" => 2001)))`.
-
-3. Start lighttpd: `sudo /etc/init.d/lighttpd start`.
-4. Start the julia server: `path/to/julia/julia-release-webserver -p 2001`.
-5. Point your browser to `http://localhost:2001`.

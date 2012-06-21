@@ -67,7 +67,7 @@ Julia's type system that should be mentioned up front are:
 Julia's type system is designed to be powerful and expressive, yet
 clear, intuitive and unobtrusive. Many Julia programmers may never feel
 the need to write code that explicitly uses types. Some kinds of
-programming, however, becomes clearer, simpler, faster and more robust
+programming, however, become clearer, simpler, faster and more robust
 with declared types.
 
 .. raw:: html
@@ -250,7 +250,7 @@ subtype of its right operand:
 Since abstract types have no instantiations and serve as no more than
 nodes in the type graph, there is not much more to say about them until
 we introduce parametric abstract types later on in `Parametric
-Types <#Parametric+Types>`_.
+Types <#man-parametric-types>`_.
 
 Bits Types
 ----------
@@ -416,7 +416,7 @@ The ``is`` function confirms that the "two" constructed instances of
 
 There is much more to say about how instances of composite types are
 created, but that discussion depends on both `Parametric
-Types <#Parametric+Types>`_ and on :ref:`man-methods`, and is
+Types <#man-parametric-types>`_ and on :ref:`man-methods`, and is
 sufficiently important to be addressed in its own section:
 :ref:`man-constructors`.
 
@@ -1068,7 +1068,7 @@ happens, are all composite values and thus all have a type of
     CompositeKind
 
 The reader may note that ``CompositeKind`` shares with the empty tuple
-(see `above <#Tuple+Types>`_), the distinction of being its own type
+(see `above <#tuple-types>`_), the distinction of being its own type
 (i.e. a fixed point of the ``typeof`` function). This leads any number
 of tuple types recursively built with ``()`` and ``CompositeKind`` as
 their only atomic values, which are their own type:

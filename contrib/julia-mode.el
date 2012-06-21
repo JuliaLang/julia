@@ -60,7 +60,7 @@
   "for +.*[^ 	].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-font-lock-keywords
-  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\)\\|Int\\(8\\|16\\|32\\|64\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexNum\\|Bool\\|Char\\|Number\\|Scalar\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Buffer\\|Size\\|Index\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|PtrInt\\|Long\\|Ulong\\)\\>" .
+  (list '("\\<\\(\\|Uint\\(8\\|16\\|32\\|64\\|128\\)\\|Int\\(8\\|16\\|32\\|64\\|128\\)\\|Integer\\|Float\\|Float32\\|Float64\\|Complex128\\|Complex64\\|ComplexPair\\|Bool\\|Char\\|Number\\|Real\\|Int\\|Uint\\|Array\\|DArray\\|AbstractArray\\|AbstractVector\\|AbstractMatrix\\|SubArray\\|StridedArray\\|StridedVector\\|StridedMatrix\\|VecOrMat\\|StridedVecOrMat\\|Range\\|Range1\\|SparseMatrixCSC\\|Tuple\\|NTuple\\|Symbol\\|Function\\|Vector\\|Matrix\\|Union\\|Type\\|Any\\|Complex\\|None\\|String\\|Ptr\\|Void\\|Exception\\|Task\\|Signed\\|Unsigned\\|Associative\\|Dict\\|IO\\|IOStream\\|Ranges\\|Rational\\|Regex\\|RegexMatch\\|Set\\|IntSet\\|ASCIIString\\|UTF8String\\|ByteString\\|Expr\\|WeakRef\\|Nothing\\|ObjectIdDict\\|SubString\\)\\>" .
       font-lock-type-face)
     (cons
      (concat "\\<\\("
@@ -72,7 +72,7 @@
 	    "module" "import" "export" "const" "let" "bitstype" "do")
           "\\|") "\\)\\>")
      'font-lock-keyword-face)
-    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\)\\>" . font-lock-constant-face)
+    '("\\<\\(true\\|false\\|C_NULL\\|Inf\\|NaN\\|Inf32\\|NaN32\\|nothing\\)\\>" . font-lock-constant-face)
     (list julia-unquote-regex 2 'font-lock-constant-face)
     (list julia-char-regex 2 'font-lock-string-face)
     (list julia-forloop-in-regex 1 'font-lock-keyword-face)
@@ -94,6 +94,9 @@
       nil
     (or (equal item (car lst))
 	(julia-member item (cdr lst)))))
+
+(if (not (fboundp 'evenp))
+    (defun evenp (x) (zerop (% x 2))))
 
 (defun julia-find-comment-open (p0)
   (if (< (point) p0)
@@ -134,11 +137,16 @@
        (not (julia-in-brackets))
        (julia-member (current-word t) kw-list)))
 
+;; if backward-sexp gives an error, move back 1 char to move over the '('
+(defun julia-safe-backward-sexp ()
+  (if (condition-case nil (backward-sexp) (error t))
+      (error2nil (backward-char))))
+
 ; get the position of the last open block
 (defun julia-last-open-block-pos (min)
   (let ((count 0))
     (while (not (or (> count 0) (<= (point) min)))
-      (backward-sexp)
+      (julia-safe-backward-sexp)
       (setq count
 	    (cond ((julia-at-keyword julia-block-start-keywords)
 		   (+ count 1))

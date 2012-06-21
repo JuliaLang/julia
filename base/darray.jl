@@ -798,12 +798,12 @@ end
 for f in (:+, :-, :.*, :./, :.^, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::SubOrDArray{T})
-            S = typeof(($f)(one(A),one(T)))
+            S = eltype(($f)([one(A)],[one(T)]))
             darray((T,lsz,da)->($f)(A, localize(B, da)),
                    S, size(B), distdim(B), procs(B))
         end
         function ($f){T}(A::SubOrDArray{T}, B::Number)
-            S = typeof(($f)(one(T),one(B)))
+            S = eltype(($f)([one(T)],[one(B)]))
             darray((T,lsz,da)->($f)(localize(A, da), B),
                    S, size(A), distdim(A), procs(A))
         end
@@ -811,7 +811,7 @@ for f in (:+, :-, :.*, :./, :.^, :&, :|, :$)
             if size(A) != size(B)
                 error("argument dimensions must match")
             end
-            R = typeof(($f)(one(T), one(S)))
+            R = eltype(($f)([one(T)],[one(S)]))
             darray((T,lsz,da)->($f)(localize(A, da), localize(B, da)),
                    R, size(A), distdim(A), procs(A))
         end

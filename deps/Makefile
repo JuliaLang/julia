@@ -23,13 +23,15 @@ GLPK_VER = 4.43
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-LIBS = uv fdlibm dsfmt rmath double-conversion amos suitesparse-wrapper gmp-wrapper openlibm
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
+STAGE2_DEPS = gmp-wrapper
+STAGE3_DEPS = suitesparse-wrapper
 
 ## WGET / CURL
 ifeq ($(OS), Linux)
 WGET = wget --no-check-certificate
 WGET_DASH_O = wget --no-check-certificate -O
-LIBS += unwind
+STAGE1_DEPS += unwind
 endif
 
 ifeq ($(OS), WINNT)
@@ -45,17 +47,17 @@ endif
 ifeq ($(OS), FreeBSD)
 WGET = curl -fLO
 WGET_DASH_O = curl -fLo
-LIBS += unwind
+STAGE1_DEPS += unwind
 endif
 
 ## USE_SYSTEM_LIBS options
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
-LIBS += llvm
+STAGE1_DEPS += llvm
 endif
 
 ifneq ($(OS),WINNT)
-LIBS += lighttpd
+STAGE1_DEPS += lighttpd
 endif
 
 ifeq ($(OS),WINNT)
@@ -63,42 +65,44 @@ READLINE_VER = 5.0
 endif
 
 ifeq ($(USE_SYSTEM_READLINE), 0)
-LIBS += readline
+STAGE1_DEPS += readline
 endif
 
 ifeq ($(USE_SYSTEM_PCRE), 0)
-LIBS += pcre
+STAGE1_DEPS += pcre
 endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
-LIBS += openblas
+STAGE1_DEPS += openblas
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
-LIBS += fftw
+STAGE1_DEPS += fftw
 endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
-LIBS += gmp
+STAGE1_DEPS += gmp
 endif
 
 ifeq ($(USE_SYSTEM_ARPACK), 0)
-LIBS += arpack
+STAGE2_DEPS += arpack
 endif
 
 #ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-LIBS += suitesparse
+STAGE2_DEPS += suitesparse
 #endif
 
 ifeq ($(USE_SYSTEM_GLPK), 0)
-LIBS += glpk
+STAGE1_DEPS += glpk
 endif
 
 #ifeq ($(USE_SYSTEM_LAPACK), 0)
-#LIBS += lapack
+#STAGE2_DEPS += lapack
 #endif
 
 ## Common build target prefixes
+
+LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
 default: $(USR) install
 compile: $(addprefix compile-, $(LIBS))
@@ -115,8 +119,6 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(USR): $(DIRS)
 
 ## LLVM ##
-
-LLVM_TARGETS = x86,x86_64
 
 LLVM_OBJ_TARGET = $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 ifeq ($(OS),WINNT)
@@ -158,20 +160,19 @@ $(LLVM_DIR)/configure: $(LLVM_TAR)
 llvm_python_workaround:
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	export PATH=$(abspath $(LLVM_DIR)/python2_path):$$PATH && \
-	test ! -e $(LLVM_DIR)/python2_path/python && \
-	mkdir -p $(LLVM_DIR)/python2_path && \
-	ln -s /usr/bin/python2 "$(LLVM_DIR)/python2_path/python"
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	test ! -e llvm-$(LLVM_VER)/python2_path/python && \
+	mkdir -p llvm-$(LLVM_VER)/python2_path && \
+	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
-ENABLE_WORKAROUND = export PATH=$(abspath $(LLVM_DIR)/python2_path):$$PATH &&
-	
-$(LLVM_DIR)/config.status: $(LLVM_DIR)/configure | llvm_python_workaround
-	cd $(LLVM_DIR) && \
-	$(ENABLE_WORKAROUND) ./configure $(LLVM_FLAGS)
-$(LLVM_OBJ_SOURCE): $(LLVM_DIR)/config.status | llvm_python_workaround
-	$(ENABLE_WORKAROUND) $(MAKE) -C $(LLVM_DIR)
+$(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
+	cd llvm-$(LLVM_VER) && \
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
+	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
-	$(ENABLE_WORKAROUND) $(MAKE) -C $(LLVM_DIR) install
+	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
+	$(MAKE) -C llvm-$(LLVM_VER) install
 	$(INSTALL_NAME_CMD)libLLVM-$(LLVM_VER).$(SHLIB_EXT) $(USRLIB)/libLLVM-$(LLVM_VER).$(SHLIB_EXT)
 	touch $@
 
@@ -431,6 +432,11 @@ distclean-amos: clean-amos
 DSFMT_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
 DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
+LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+ifeq ($(ARCH), x86_64)
+LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
+endif
+
 compile-dsfmt: $(DSFMT_OBJ_SOURCE)
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
@@ -445,7 +451,7 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	touch $@
 $(DSFMT_OBJ_SOURCE): random/jl_random.c
 	cd random && \
-	$(CC) $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES jl_random.c -o librandom.$(SHLIB_EXT) && \
+	$(CC) $(LIBRANDOM_CFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
 $(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
@@ -578,6 +584,8 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
+	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(USRLIB)/libfftw3f_threads.$(SHLIB_EXT)
+	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3f.3.dylib  @executable_path/../lib/libfftw3f.dylib $(USRLIB)/libfftw3f_threads.dylib
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
@@ -595,6 +603,9 @@ fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double install
+	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(USRLIB)/libfftw3.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(USRLIB)/libfftw3_threads.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3.3.dylib  @executable_path/../lib/libfftw3.dylib $(USRLIB)/libfftw3_threads.dylib
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
@@ -630,25 +641,22 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC=$(CC) CXX=$(CXX)
+	$(MAKE) CC=$(CC) CXX=$(CXX) BLAS=$(LIBBLAS) LAPACK=$(LIBLAPACK)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
-$(SUITESPARSE_OBJ_TARGET): install-openblas $(SUITESPARSE_OBJ_SOURCE)
-	echo $(LIBBLAS) && \
+$(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
 	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a 2>/dev/null` . && \
-	$(CC) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libsuitesparseconfig.$(SHLIB_EXT) && \
-	$(INSTALL_NAME_CMD)libsuitesparseconfig.$(SHLIB_EXT) $(USRLIB)/libsuitesparseconfig.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libcolamd.$(SHLIB_EXT) $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
-	$(CXX) -shared $(WHOLE_ARCHIVE) libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd  -lsuitesparseconfig $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
 endif
 

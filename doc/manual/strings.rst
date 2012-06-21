@@ -279,7 +279,7 @@ Unicode and UTF-8
 -----------------
 
 Julia fully supports Unicode characters and strings. As `discussed
-above <#Characters>`_, in character literals, Unicode code points can be
+above <#characters>`_, in character literals, Unicode code points can be
 represented using unicode ``\u`` and ``\U`` escape sequences, as well as
 all the standard C escape sequences. These can likewise be used to write
 string literals:
@@ -599,7 +599,7 @@ Byte Array Literals
 ~~~~~~~~~~~~~~~~~~~
 
 Some string literal forms don't create strings at all. In the `next
-section <#Regular+Expressions>`_, we will see that regular expressions
+section <#regular-expressions>`_, we will see that regular expressions
 are written as non-standard string literals. Another useful non-standard
 string literal, however, is the byte-array string literal: ``b"..."``.
 This form lets you use string notation to express literal byte arrays —
@@ -819,7 +819,7 @@ use tuple destructuring syntax to bind them to local variables:
     julia> first
     "a"
 
-You can modify the behavior regular expressions by some combination of
+You can modify the behavior of regular expressions by some combination of
 the flags ``i``, ``m``, ``s``, and ``x`` after the closing double quote
 mark. These flags have the same meaning as they do in Perl, as explained
 in this excerpt from the `perlre
@@ -870,4 +870,3 @@ For example, the following regex has all three flags turned on:
    <!-- ### Exercises
    - Given an ASCIIString `s`, print it in reverse order. [Answer](answer_reverse.md)
    - Write a function to generate a random string consisting of the letters A-Z, a-z, and the numbers 0-9. [Answer](answer_randstring.md) -->
-

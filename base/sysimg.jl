@@ -142,7 +142,7 @@ has(intset(),2)
 del_all(FDSet())
 start(Dict(0))
 done(Dict(0),0)
-get(Dict(0), 0, ())
+get(Dict(0),0,())
 add(FDSet(),int32(0))
 2==2.0
 2.0==2.0
@@ -241,6 +241,11 @@ compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
 compile_hint(ref, (Type{String}, ASCIIString, ASCIIString, ASCIIString))
+compile_hint(int, (Int,))
+compile_hint(uint, (Uint,))
+compile_hint(_atexit, ())
+compile_hint(read, (IOStream, Array{Uint32,1}))
+compile_hint(copy, (Type,))
 
 ccall(:jl_load_progress_setmax, Void, (Int,), 0);
 println()

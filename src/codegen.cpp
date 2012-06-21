@@ -18,6 +18,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Config/llvm-config.h"
 #include <setjmp.h>
 #include <string>
@@ -155,7 +156,8 @@ static Function *to_function(jl_lambda_info_t *li)
     Function *f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    li->name->name, jl_Module);
     assert(!li->inInference);
-    li->functionObject = (void*)f;
+    if (li->functionObject == NULL)
+        li->functionObject = (void*)f;
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
@@ -203,15 +205,38 @@ extern "C" void jl_compile(jl_function_t *f)
     }
 }
 
-extern "C" void jl_delete_function(jl_lambda_info_t *li)
+extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
 {
-    // NOTE: this is not safe; there might be closures using this code.
-    Function *llvmf = (Function*)li->functionObject;
-    if (llvmf) {
-        delete llvmf;
-        li->functionObject = NULL;
-        li->fptr = &jl_trampoline;
+    if (!jl_is_function(f) || !jl_is_gf(f))
+        return jl_cstr_to_string((char*)"");
+    jl_function_t *sf = jl_get_specialization(f, types);
+    if (sf == NULL || sf->linfo == NULL) {
+        sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0);
+        if (sf == jl_bottom_func)
+            return jl_cstr_to_string((char*)"");
+        ios_printf(ios_stderr,
+                   "Warning: Returned code may not match what actually runs.\n");
     }
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    Function *llvmf;
+    if (sf->linfo->functionObject == NULL) {
+        jl_compile(sf);
+        llvmf = (Function*)sf->linfo->functionObject;
+    }
+    else {
+        if (sf->fptr == &jl_trampoline) {
+            llvmf = (Function*)sf->linfo->functionObject;
+        }
+        else {
+            llvmf = to_function(sf->linfo);
+        }
+    }
+    llvmf->print(stream);
+    return jl_cstr_to_string((char*)stream.str().c_str());
 }
 
 // information about the context of a piece of code: its enclosing
@@ -502,8 +527,6 @@ static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n, jl_codectx_t *ctx
     JL_GC_POP();
     return t;
 }
-
-extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
@@ -1224,7 +1247,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         else if (jl_is_lambda_info(expr)) {
             return emit_lambda_closure(expr, ctx);
         }
-        else if (jl_is_tuple(expr)) {
+        else if (jl_is_tuple(expr) || jl_is_union_type(expr)) {
             needroot = 1;
         }
         if (needroot) {
@@ -1386,7 +1409,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (!strcmp(head->name, "$"))
             jl_error("syntax error: prefix $ outside of quote block");
         // some expression types are metadata and can be ignored
-        if (valuepos || !(head == line_sym || head == multivalue_sym)) {
+        if (valuepos || !(head == line_sym || head == multivalue_sym ||
+                          head == type_goto_sym)) {
             jl_errorf("unsupported or misplaced expression %s in function %s",
                       head->name, ctx->linfo->name->name);
         }

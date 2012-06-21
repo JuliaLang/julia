@@ -7,13 +7,15 @@ sign{T<:Integer}(x::T) = convert(T,(x>0)-(x<0))
 sign{T<:Unsigned}(x::T) = convert(T,(x>0))
 
 signbit(x::Unsigned) = 0
-signbit(x::Int8 ) = int(x>>>7)
+signbit(x::Int8) = int(x>>>7)
 signbit(x::Int16) = int(x>>>15)
 signbit(x::Int32) = int(x>>>31)
 signbit(x::Int64) = int(x>>>63)
+signbit(x::Int128) = int(x>>>127)
 
-flipsign(x::Int32, y::Int32) = boxsi32(flipsign_int32(unbox32(x),unbox32(y)))
-flipsign(x::Int64, y::Int64) = boxsi64(flipsign_int64(unbox64(x),unbox64(y)))
+flipsign(x::Int32,  y::Int32)  = box(Int32,flipsign_int(unbox(Int32,x),unbox(Int32,y)))
+flipsign(x::Int64,  y::Int64)  = box(Int64,flipsign_int(unbox(Int64,x),unbox(Int64,y)))
+flipsign(x::Int128, y::Int128) = box(Int128,flipsign_int(unbox(Int128,x),unbox(Int128,y)))
 
 flipsign{T<:Signed}(x::T,y::T)  = flipsign(int(x),int(y))
 flipsign(x::Signed, y::Signed)  = flipsign(promote(x,y)...)
@@ -166,10 +168,18 @@ global const _jl_powers_of_ten = [
     0x000000e8d4a51000, 0x000009184e72a000, 0x00005af3107a4000, 0x00038d7ea4c68000,
     0x002386f26fc10000, 0x016345785d8a0000, 0x0de0b6b3a7640000, 0x8ac7230489e80000,
 ]
-function ndigits0z(x::Unsigned)
+function ndigits0z(x::Union(Uint8,Uint16,Uint32,Uint64))
     lz = (sizeof(x)<<3)-leading_zeros(x)
     nd = (1233*lz)>>12+1
     nd -= x < _jl_powers_of_ten[nd]
+end
+function ndigits0z(x::Uint128)
+    n = 0
+    while x > 0x8ac7230489e80000
+        x = div(x,0x8ac7230489e80000)
+        n += 19
+    end
+    return n + ndigits0z(uint64(x))
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
@@ -207,14 +217,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-macro _jl_int_stringifier(sym)
-    quote
-        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
-        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
-        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
-        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
-    end
-end
+const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -244,7 +247,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,ndigits0z(x))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = '0'+mod(x,10)
+        a[i] = '0'+rem(x,10)
         x = div(x,10)
         i -= 1
     end
@@ -256,7 +259,7 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,(sizeof(x)<<1)-(leading_zeros(x)>>2))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = _jl_hex_symbols[(x&0xf)+1]
+        a[i] = _jl_dig_syms[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -264,15 +267,42 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
+function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
+    i = neg + max(pad,ndigits0z(x,b))
+    a = Array(Uint8,i)
+    while i > neg
+        a[i] = _jl_dig_syms[rem(x,b)+1]
+        x = div(x,b)
+        i -= 1
+    end
+    if neg; a[1]='-'; end
+    ASCIIString(a)
+end
+
+base(b::Int, x::Unsigned, p::Int) = base(b,x,p,false)
+base(b::Int, x::Unsigned)         = base(b,x,1,false)
+base(b::Int, x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
+base(b::Int, x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
+
+macro _jl_int_stringifier(sym)
+    quote
+        ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
+        ($sym)(x::Unsigned)         = ($sym)(x,1,false)
+        ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
+        ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
+    end
+end
+
 @_jl_int_stringifier bin
 @_jl_int_stringifier oct
 @_jl_int_stringifier dec
 @_jl_int_stringifier hex
 
-bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8 ,x),  8)
-bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x), 16)
-bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x), 32)
-bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x), 64)
+bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8,x),8)
+bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x),16)
+bits(x::Union(Char,Int32,Uint32,Float32)) = bin(reinterpret(Uint32,x),32)
+bits(x::Union(Int64,Uint64,Float64))      = bin(reinterpret(Uint64,x),64)
+bits(x::Union(Int128,Uint128))            = bin(reinterpret(Uint128,x),128)
 
 const PRIMES = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,

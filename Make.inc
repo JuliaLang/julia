@@ -176,6 +176,7 @@ endif
 
 ifeq ($(OS), Linux)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/../lib'
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN'
@@ -187,17 +188,19 @@ endif
 
 ifeq ($(OS), FreeBSD)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = so
 RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
-JLD_FLAGS = -Wl,-Bdynamic
+JLDFLAGS = -Wl,-Bdynamic
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
+INSTALL_NAME_CHANGE_CMD = install_name_tool -change
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -207,6 +210,7 @@ endif
 
 ifeq ($(OS), WINNT)
 INSTALL_NAME_CMD = true -ignore
+INSTALL_NAME_CHANGE_CMD = true -ignore
 SHLIB_EXT = dll
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
@@ -270,6 +274,9 @@ endif
 
 # Colors for make
 
+USE_QUIET = 1
+ifeq ($(USE_QUIET), 1)
+
 CCCOLOR="\033[34m"
 LINKCOLOR="\033[34;1m"
 PERLCOLOR="\033[35m"
@@ -288,3 +295,13 @@ QUIET_LINK = @printf '    %b %b\n' $(LINKCOLOR)LINK$(ENDCOLOR) $(BINCOLOR)$(GOAL
 QUIET_PERL = @printf '    %b %b\n' $(PERLCOLOR)PERL$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_FLISP = @printf '    %b %b\n' $(FLISPCOLOR)FLISP$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
 QUIET_JULIA = @printf '    %b %b\n' $(JULIACOLOR)JULIA$(ENDCOLOR) $(BINCOLOR)$(GOAL)$(ENDCOLOR);
+
+else
+
+QUIET_CC =
+QUIET_LINK =
+QUIET_PERL =
+QUIET_FLISP =
+QUIET_JULIA =
+
+endif

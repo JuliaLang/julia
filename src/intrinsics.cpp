@@ -1,19 +1,18 @@
 namespace JL_I {
     enum intrinsic {
         // wrap and unwrap
-        boxui8=0, boxsi8, boxui16, boxsi16, boxui32, boxsi32, boxui64, boxsi64,
-        boxf32, boxf64, box,
-        unbox8, unbox16, unbox32, unbox64, unbox,
+        box=0, unbox,
         // arithmetic
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
-        // comparison
+        // same-type comparisons
         eq_int,  ne_int,
         slt_int, ult_int,
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        // mixed-type comparisons
         eqfsi64, eqfui64,
         ltfsi64, ltfui64,
         lefsi64, lefui64,
@@ -25,16 +24,15 @@ namespace JL_I {
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
-        sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
+        sext16, zext16, sext32, zext32, sext64, zext64, sext_int, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
         fptoui32, fptosi32, fptoui64, fptosi64,
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
         uitofp32, sitofp32, uitofp64, sitofp64,
         fptrunc32, fpext64,
         // functions
-        abs_float32, abs_float64,
-        copysign_float32, copysign_float64,
-        flipsign_int32, flipsign_int64,
+        abs_float, copysign_float,
+        flipsign_int,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -262,6 +260,19 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
+static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                      &jl_tupleref(ctx->sp,0),
+                                      jl_tuple_len(ctx->sp)/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("sext_int: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return builder.CreateSExt(JL_INT(auto_unbox(x,ctx)), to);
+}
+
 static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *bt =
@@ -319,21 +330,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             jl_error("trunc_int: wrong number of arguments");
         return generic_trunc(args[1], args[2], ctx);
     }
+    if (f == sext_int) {
+        if (nargs!=2)
+            jl_error("sext_int: wrong number of arguments");
+        return generic_sext(args[1], args[2], ctx);
+    }
     if (f == zext_int) {
         if (nargs!=2)
             jl_error("zext_int: wrong number of arguments");
         return generic_zext(args[1], args[2], ctx);
-    }
-    switch (f) {
-        HANDLE(unbox8,1)
-            return emit_unbox(T_int8, T_pint8, emit_unboxed(args[1],ctx));
-        HANDLE(unbox16,1)
-            return emit_unbox(T_int16, T_pint16, emit_unboxed(args[1],ctx));
-        HANDLE(unbox32,1)
-            return emit_unbox(T_int32, T_pint32, emit_unboxed(args[1],ctx));
-        HANDLE(unbox64,1)
-            return emit_unbox(T_int64, T_pint64, emit_unboxed(args[1],ctx));
-    default: ;
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -345,37 +350,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *fy;
     Value *den;
     switch (f) {
-    HANDLE(boxui8,1)
-        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return mark_julia_type(x, jl_uint8_type);
-    HANDLE(boxsi8,1)
-        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return mark_julia_type(x, jl_int8_type);
-    HANDLE(boxui16,1)
-        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return mark_julia_type(x, jl_uint16_type);
-    HANDLE(boxsi16,1)
-        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return mark_julia_type(x, jl_int16_type);
-    HANDLE(boxui32,1)
-        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return mark_julia_type(x, jl_uint32_type);
-    HANDLE(boxsi32,1)
-        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return mark_julia_type(x, jl_int32_type);
-    HANDLE(boxui64,1)
-        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return mark_julia_type(x, jl_uint64_type);
-    HANDLE(boxsi64,1)
-        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return mark_julia_type(x, jl_int64_type);
-    HANDLE(boxf32,1)
-        if (t != T_float32) x = builder.CreateBitCast(x, T_float32);
-        return mark_julia_type(x, jl_float32_type);
-    HANDLE(boxf64,1)
-        if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
-        return mark_julia_type(x, jl_float64_type);
-
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -826,82 +800,52 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         return v;
     }
 
-    HANDLE(abs_float32,1)
+    HANDLE(abs_float,1)
     {
-        Value *bits = builder.CreateBitCast(FP(x), T_int32);
-        Value *absbits = builder.CreateAnd(bits,
-                                           ConstantInt::get(T_int32, ~BIT31));
-        return builder.CreateBitCast(absbits, T_float32);
+        x = FP(x);
+        Type *intt = JL_INTT(x->getType());
+        Value *bits = builder.CreateBitCast(FP(x), intt);
+        Value *absbits =
+            builder.CreateAnd(bits,
+                              ConstantInt::get(intt, APInt::getSignedMaxValue(((IntegerType*)intt)->getBitWidth())));
+        return builder.CreateBitCast(absbits, x->getType());
     }
-    HANDLE(abs_float64,1)
+    HANDLE(copysign_float,2)
     {
-        Value *bits = builder.CreateBitCast(FP(x), T_int64);
-        Value *absbits = builder.CreateAnd(bits,
-                                           ConstantInt::get(T_int64, ~BIT63));
-        return builder.CreateBitCast(absbits, T_float64);
-    }
-    HANDLE(copysign_float32,2)
-    {
+        x = FP(x);
         fy = FP(y);
-        Value *bits = builder.CreateBitCast(FP(x), T_int32);
-        Value *sbits = builder.CreateBitCast(fy, T_int32);
+        Type *intt = JL_INTT(x->getType());
+        Value *bits = builder.CreateBitCast(x, intt);
+        Value *sbits = builder.CreateBitCast(fy, intt);
+        unsigned nb = ((IntegerType*)intt)->getBitWidth();
+        APInt notsignbit = APInt::getSignedMaxValue(nb);
+        APInt signbit(nb, 0); signbit.setBit(nb-1);
         Value *rbits =
             builder.CreateOr(builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int32,
-                                                                ~BIT31)),
+                                               ConstantInt::get(intt,
+                                                                notsignbit)),
                              builder.CreateAnd(sbits,
-                                               ConstantInt::get(T_int32,
-                                                                BIT31)));
-        return builder.CreateBitCast(rbits, T_float32);
+                                               ConstantInt::get(intt,
+                                                                signbit)));
+        return builder.CreateBitCast(rbits, x->getType());
     }
-    HANDLE(copysign_float64,2)
-    {
-        fy = FP(y);
-        Value *bits = builder.CreateBitCast(FP(x), T_int64);
-        Value *sbits = builder.CreateBitCast(fy, T_int64);
-        Value *rbits =
-            builder.CreateOr(builder.CreateAnd(bits,
-                                               ConstantInt::get(T_int64,
-                                                                ~BIT63)),
-                             builder.CreateAnd(sbits,
-                                               ConstantInt::get(T_int64,
-                                                                BIT63)));
-        return builder.CreateBitCast(rbits, T_float64);
-    }
-    HANDLE(flipsign_int32,2)
+    HANDLE(flipsign_int,2)
     {
         x = JL_INT(x);
         fy = JL_INT(y);
+        Type *intt = x->getType();
         ConstantInt *cx = dyn_cast<ConstantInt>(x);
         ConstantInt *cy = dyn_cast<ConstantInt>(fy);
         if (cx && cy) {
-            int32_t ix = cx->getSExtValue();
-            int32_t iy = cy->getSExtValue();
-            return ConstantInt::get(T_int32, iy >= 0 ? ix : -ix);
+            APInt ix = cx->getValue();
+            APInt iy = cy->getValue();
+            return ConstantInt::get(intt, iy.isNonNegative() ? ix : -ix);
         }
         if (cy) {
-            int32_t iy = cy->getSExtValue();
-            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int32,0), x);
+            APInt iy = cy->getValue();
+            return iy.isNonNegative() ? x : builder.CreateSub(ConstantInt::get(intt,0), x);
         }
-        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int32,31));
-        return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
-    }
-    HANDLE(flipsign_int64,2)
-    {
-        x = JL_INT(x);
-        fy = JL_INT(y);
-        ConstantInt *cx = dyn_cast<ConstantInt>(x);
-        ConstantInt *cy = dyn_cast<ConstantInt>(fy);
-        if (cx && cy) {
-            int64_t ix = cx->getSExtValue();
-            int64_t iy = cy->getSExtValue();
-            return ConstantInt::get(T_int64, iy >= 0 ? ix : -ix);
-        }
-        if (cy) {
-            int64_t iy = cy->getSExtValue();
-            return iy >= 0 ? x : builder.CreateSub(ConstantInt::get(T_int64,0), x);
-        }
-        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(T_int64,63));
+        Value *tmp = builder.CreateAShr(fy, ConstantInt::get(intt,((IntegerType*)intt)->getBitWidth()-1));
         return builder.CreateXor(builder.CreateAdd(x,tmp),tmp);
     }
     default:
@@ -951,10 +895,7 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 
 extern "C" void jl_init_intrinsic_functions(void)
 {
-    ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
-    ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
-    ADD_I(boxf32); ADD_I(boxf64); ADD_I(box); ADD_I(unbox);
-    ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
+    ADD_I(box); ADD_I(unbox);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);
@@ -976,7 +917,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
-    ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
+    ADD_I(sext64); ADD_I(zext64); ADD_I(sext_int); ADD_I(zext_int);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
     ADD_I(trunc_int);
     ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);
@@ -984,9 +925,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fpuiround32); ADD_I(fpuiround64);
     ADD_I(uitofp32); ADD_I(sitofp32); ADD_I(uitofp64); ADD_I(sitofp64);
     ADD_I(fptrunc32); ADD_I(fpext64);
-    ADD_I(abs_float32); ADD_I(abs_float64);
-    ADD_I(copysign_float32); ADD_I(copysign_float64);
-    ADD_I(flipsign_int32); ADD_I(flipsign_int64);
+    ADD_I(abs_float); ADD_I(copysign_float);
+    ADD_I(flipsign_int);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);

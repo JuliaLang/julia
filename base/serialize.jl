@@ -10,11 +10,11 @@ const _jl_deser_tag = ObjectIdDict()
 let i = 2
     global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-             Int64, Uint64, Float32, Float64, Char, Ptr,
+             Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
-             QuoteNode, TopNode, TypeVar, Box,
+             QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :Box,
@@ -23,8 +23,8 @@ let i = 2
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              :add_int, :sub_int, :mul_int, :add_float, :sub_float,
-             :mul_float, :unbox, :unbox32, :unbox64, :box, :boxf32, :boxf64,
-             :boxsi32, :boxsi64, :eq_int, :slt_int, :sle_int, :ne_int,
+             :mul_float, :unbox, :box,
+             :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
@@ -149,12 +149,17 @@ function serialize(s, f::Function)
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
         write(s, uint8(1))
-        serialize(s, _jl_lambda_number(linfo))
-        serialize(s, linfo.ast)
-        serialize(s, linfo.sparams)
-        serialize(s, linfo.inferred)
         serialize(s, f.env)
+        serialize(s, linfo)
     end
+end
+
+function serialize(s, linfo::LambdaStaticData)
+    writetag(s, LambdaStaticData)
+    serialize(s, _jl_lambda_number(linfo))
+    serialize(s, linfo.ast)
+    serialize(s, linfo.sparams)
+    serialize(s, linfo.inferred)
 end
 
 function serialize_type_data(s, t)
@@ -272,26 +277,27 @@ function deserialize(s, ::Type{Function})
         name = deserialize(s)::Symbol
         return ()->eval(name)
     end
+    env = deserialize(s)
+    linfo = deserialize(s)
+    function ()
+        ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
+              C_NULL, force(env), linfo)::Function
+    end
+end
+
+function deserialize(s, ::Type{LambdaStaticData})
     lnumber = force(deserialize(s))
     ast = deserialize(s)
     sparams = deserialize(s)
     infr = force(deserialize(s))
-    env = deserialize(s)
     if has(_jl_known_lambda_data, lnumber)
-        linfo = _jl_known_lambda_data[lnumber]
-        function ()
-            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-                  C_NULL, force(env), linfo)::Function
-        end
+        return _jl_known_lambda_data[lnumber]
     else
-        function ()
-            linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
-                          force(ast), force(sparams))
-            linfo.inferred = infr
-            _jl_known_lambda_data[lnumber] = linfo
-            ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-                  C_NULL, force(env), linfo)::Function
-        end
+        linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
+                      force(ast), force(sparams))
+        linfo.inferred = infr
+        _jl_known_lambda_data[lnumber] = linfo
+        return linfo
     end
 end
 

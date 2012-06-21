@@ -28,9 +28,10 @@ our %systems = (
   "octave"     => ["Octave"      , "3.4"        ],
   "r"          => ["R"           , "2.14.2"     ],
   "javascript" => ["JavaScript"  , "V8 3.6.6.11"],
+  "fortran"    => ["Fortran"     , ""],
 );
 
-our @systems = qw(julia python matlab octave r javascript);
+our @systems = qw(julia python matlab octave r javascript fortran);
 
 print qq[<table class="benchmarks">\n];
 print qq[<colgroup>\n];

@@ -265,7 +265,7 @@ function profile_print(tc)
         counters = tc[i][2]
         for j = 1:length(counters)
             if counters[j] != 0
-                printf("%8d  %f  %s\n", counters[j], timers[j] - counters[j]*_PROFILE_CALIB, _PROFILE_TAGS[i][j])
+                printf("%8d  %f  % f %s\n", counters[j], timers[j], timers[j] - counters[j]*_PROFILE_CALIB, _PROFILE_TAGS[i][j])
             end
         end
     end

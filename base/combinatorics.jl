@@ -189,7 +189,7 @@ end
 
 # Algorithm H from TAoCP 7.2.1.4
 # Partition n into m parts
-function integer_partitions(n::Int64, m::Int64)
+function integer_partitions(n::Int64, m::Int64) # why only Int64?
   if n < m || m < 2
     throw("Assumed n >= m >= 2!")
   end

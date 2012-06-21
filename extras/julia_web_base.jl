@@ -257,12 +257,19 @@ function __eval_exprs(client,__parsed_exprs)
     end
 
     # send the result of the last expression
-    if ans == nothing
+    if isa(ans,Nothing)
         return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id,""}))
     else
         return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id,sprint(repl_show, ans)}))
     end
 end
+
+# print version info
+println("Julia ", _jl_version_string)
+println(_jl_commit_string, "\n")
+
+# work around bug displaying "\n "
+#print("  ",replace(_jl_banner_plain, "\n", "\n  "))
 
 ###########################################
 # wait forever while asynchronous processing happens

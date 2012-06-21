@@ -190,7 +190,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_GC_PUSH(&para, &super);
         jl_tag_type_t *tt=jl_new_tagtype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        b->value = (jl_value_t*)tt;
+        jl_checked_assignment(b, (jl_value_t*)tt);
         super = eval(args[2], locals, nl);
         jl_set_tag_type_super(tt, super);
         JL_GC_POP();
@@ -209,7 +209,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                       ((jl_sym_t*)name)->name);
         jl_bits_type_t *bt = jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        b->value = (jl_value_t*)bt;
+        jl_checked_assignment(b, (jl_value_t*)bt);
         super = eval(args[3], locals, nl);
         jl_set_tag_type_super((jl_tag_type_t*)bt, super);
         JL_GC_POP();
@@ -228,7 +228,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                                 (jl_tuple_t*)fnames, NULL);
         st->ctor_factory = eval(args[3], locals, nl);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
-        b->value = (jl_value_t*)st;
+        jl_checked_assignment(b, (jl_value_t*)st);
         st->types = (jl_tuple_t*)eval(args[5], locals, nl);
         jl_check_type_tuple(st->types, st->name->name, "type definition");
         super = eval(args[4], locals, nl);

@@ -84,7 +84,7 @@ clean: | $(CLEAN_TARGETS)
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/lib/julia
-	
+
 cleanall: clean
 	@$(MAKE) -sC src clean-flisp clean-support
 #	@$(MAKE) -sC deps clean-uv

@@ -70,7 +70,7 @@ and can be passed around like any value:
 
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
-Functions <#Operators+Are+Functions>`_ below), or with the ``apply``
+Functions <#operators-are-functions>`_ below), or with the ``apply``
 function:
 
 ::
@@ -379,6 +379,64 @@ function (although it often is):
 As you can see, if the wrong number of elements are in the spliced
 container, then the function call will fail, just as it would if too
 many arguments were given explicitly.
+
+Block Syntax for Function Arguments
+-----------------------------------
+
+Passing functions as arguments to other functions is a powerful technique,
+but the syntax for it is not always convenient. Such calls are especially
+awkward to write when the function argument requires multiple lines. As
+an example, consider calling ``map`` on a function with several cases:
+
+::
+
+    map(x->begin
+               if x < 0 && iseven(x)
+                   return 0
+               elseif x == 0
+                   return 1
+               else
+                   return x
+               end
+           end,
+        [A, B, C])
+
+Julia provides a reserved word ``do`` for rewriting this code more clearly:
+
+::
+
+    map([A, B, C]) do x
+        if x < 0 && iseven(x)
+            return 0
+        elseif x == 0
+            return 1
+        else
+            return x
+        end
+    end
+
+The ``do x`` syntax creates an anonymous function with argument ``x`` and
+passes it as the first argument to ``map``. This syntax makes it easier to
+use functions to effectively extend the language, since calls look like
+normal code blocks. There are many possible uses quite different from ``map``,
+such as managing system state. For example, the standard library provides
+a function ``cd`` for running code in a given directory, and switching back
+to the previous directory when the code finishes or aborts. There is also
+a definition of ``open`` that runs code ensuring that the opened file is
+eventually closed. We can combine these functions to safely write a file
+in a certain directory:
+
+::
+
+    cd("data") do
+        open("outfile", "w") do f
+            write(f, data)
+        end
+    end
+
+The function argument to ``cd`` takes no arguments; it is just a block of
+code. The function argument to ``open`` receives a handle to the opened
+file.
 
 Further Reading
 ---------------

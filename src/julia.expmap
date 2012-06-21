@@ -195,6 +195,7 @@
     jl_signal_pending;
     jl_defer_signal;
     jl_register_toplevel_eh;
+    jl_dump_function;
     jl_spawn;
     jl_run_event_loop;
     jl_process_events;
@@ -247,5 +248,6 @@
     jl_os_name;
     jl_test;
     jl_wrap_raw_dl_handle;
+  local:
     *;
 };

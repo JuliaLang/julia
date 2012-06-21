@@ -191,9 +191,7 @@ function ref(s::SubArray, I::Indices...)
         newindexes[i] = isa(t, Int) ? t : t[I[i]]
     end
 
-    L = length(I)
-    while L > 0 && isa(I[L],Integer); L-=1; end
-    reshape(ref(s.parent, newindexes...), map(length, I[1:L]))
+    reshape(ref(s.parent, newindexes...), ref_shape(I...))
 end
 
 assign(s::SubArray, v::AbstractArray, i::Integer) =

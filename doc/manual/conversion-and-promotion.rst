@@ -99,8 +99,8 @@ requested conversion:
     julia> convert(Float, "foo")
     no method convert(Type{Float},ASCIIString)
 
-Some languages consider parsing strings as a numbers or formatting
-numbers as a strings to be conversions (many dynamic languages will even
+Some languages consider parsing strings as numbers or formatting
+numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
@@ -371,7 +371,7 @@ dictates that promoting a rational with a float results in the same type
 as promoting the numerator/denominator type with the float.
 
 This small handful of promotion rules, together with the `conversion
-methods discussed above <#Case+Study:+Rational+Conversions>`_, are
+methods discussed above <#case-study-rational-conversions>`_, are
 sufficient to make rational numbers interoperate completely naturally
 with all of Julia's other numeric types — integers, floating-point
 numbers, and complex numbers. By providing appropriate conversion
