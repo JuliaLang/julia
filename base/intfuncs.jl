@@ -217,7 +217,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
+const _jl_dig_syms = uint8(['0':'9','a':'z','A':'Z'])
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -267,22 +267,24 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
-function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
+function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
+    if !(2 <= b <= length(symbols)) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = _jl_dig_syms[rem(x,b)+1]
+        a[i] = symbols[rem(x,b)+1]
         x = div(x,b)
         i -= 1
     end
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-
-base(b::Int, x::Unsigned, p::Int) = base(b,x,p,false)
-base(b::Int, x::Unsigned)         = base(b,x,1,false)
-base(b::Int, x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
-base(b::Int, x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
+base(b::Int, x::Unsigned, p::Int, n::Bool)            = base(_jl_dig_syms, b, x, p, n)
+base(s::Array{Uint8}, x::Unsigned, p::Int, n::Bool)   = base(s, length(s), x, p, n)
+base(b::Union(Int,Array{Uint8}), x::Unsigned, p::Int) = base(b,x,p,false)
+base(b::Union(Int,Array{Uint8}), x::Unsigned)         = base(b,x,1,false)
+base(b::Union(Int,Array{Uint8}), x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
+base(b::Union(Int,Array{Uint8}), x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
 
 macro _jl_int_stringifier(sym)
     quote
