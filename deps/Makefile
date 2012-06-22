@@ -1,6 +1,6 @@
 ## library versions ##
 
-LLVM_VER = 3.0
+LLVM_VER = 3.1
 LLVM_TYPE = release
 READLINE_VER = 6.2
 PCRE_VER = 8.30
