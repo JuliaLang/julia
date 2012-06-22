@@ -57,10 +57,6 @@ floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
 iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
-convert(::Type{Integer}, x::Float) = iround(x)
-convert(::Type{Int32}, x::Float) = int32(iround(x))
-convert(::Type{Int64}, x::Float) = int64(iround(x))
-
 ## floating point promotions ##
 
 promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
@@ -129,35 +125,35 @@ isequal(a::Float, b::Integer) = isequal(b, a)
 isless (a::Integer, b::Float) = (a<b) | isless(float(a),b)
 isless (a::Float, b::Integer) = (a<b) | isless(a,float(b))
 
-==(x::Float64, y::Int64  ) = eqfsi64(unbox(Int64,x),unbox(Int64,y))
-==(x::Float64, y::Uint64 ) = eqfui64(unbox(Uint64,x),unbox(Uint64,y))
-==(x::Int64  , y::Float64) = eqfsi64(unbox(Int64,y),unbox(Int64,x))
-==(x::Uint64 , y::Float64) = eqfui64(unbox(Uint64,y),unbox(Uint64,x))
+==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
+==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
+==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
+==(x::Uint64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(Uint64,x))
 
-==(x::Float32, y::Int64  ) = eqfsi64(unbox(Int64,float64(x)),unbox(Int64,y))
-==(x::Float32, y::Uint64 ) = eqfui64(unbox(Uint64,float64(x)),unbox(Uint64,y))
-==(x::Int64  , y::Float32) = eqfsi64(unbox(Int64,float64(y)),unbox(Int64,x))
-==(x::Uint64 , y::Float32) = eqfui64(unbox(Uint64,float64(y)),unbox(Uint64,x))
+==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
+==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float64,float64(x)),unbox(Uint64,y))
+==(x::Int64  , y::Float32) = eqfsi64(unbox(Float64,float64(y)),unbox(Int64,x))
+==(x::Uint64 , y::Float32) = eqfui64(unbox(Float64,float64(y)),unbox(Uint64,x))
 
-< (x::Float64, y::Int64  ) = ltfsi64(unbox(Int64,x),unbox(Int64,y))
-< (x::Float64, y::Uint64 ) = ltfui64(unbox(Uint64,x),unbox(Uint64,y))
-< (x::Int64  , y::Float64) = ltsif64(unbox(Int64,x),unbox(Int64,y))
-< (x::Uint64 , y::Float64) = ltuif64(unbox(Uint64,x),unbox(Uint64,y))
+< (x::Float64, y::Int64  ) = ltfsi64(unbox(Float64,x),unbox(Int64,y))
+< (x::Float64, y::Uint64 ) = ltfui64(unbox(Float64,x),unbox(Uint64,y))
+< (x::Int64  , y::Float64) = ltsif64(unbox(Int64,x),unbox(Float64,y))
+< (x::Uint64 , y::Float64) = ltuif64(unbox(Uint64,x),unbox(Float64,y))
 
-< (x::Float32, y::Int64  ) = ltfsi64(unbox(Int64,float64(x)),unbox(Int64,y))
-< (x::Float32, y::Uint64 ) = ltfui64(unbox(Uint64,float64(x)),unbox(Uint64,y))
-< (x::Int64  , y::Float32) = ltsif64(unbox(Int64,x),unbox(Int64,float64(y)))
-< (x::Uint64 , y::Float32) = ltuif64(unbox(Uint64,x),unbox(Uint64,float64(y)))
+< (x::Float32, y::Int64  ) = ltfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
+< (x::Float32, y::Uint64 ) = ltfui64(unbox(Float64,float64(x)),unbox(Uint64,y))
+< (x::Int64  , y::Float32) = ltsif64(unbox(Int64,x),unbox(Float64,float64(y)))
+< (x::Uint64 , y::Float32) = ltuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
-<=(x::Float64, y::Int64  ) = lefsi64(unbox(Int64,x),unbox(Int64,y))
-<=(x::Float64, y::Uint64 ) = lefui64(unbox(Uint64,x),unbox(Uint64,y))
-<=(x::Int64  , y::Float64) = lesif64(unbox(Int64,x),unbox(Int64,y))
-<=(x::Uint64 , y::Float64) = leuif64(unbox(Uint64,x),unbox(Uint64,y))
+<=(x::Float64, y::Int64  ) = lefsi64(unbox(Float64,x),unbox(Int64,y))
+<=(x::Float64, y::Uint64 ) = lefui64(unbox(Float64,x),unbox(Uint64,y))
+<=(x::Int64  , y::Float64) = lesif64(unbox(Int64,x),unbox(Float64,y))
+<=(x::Uint64 , y::Float64) = leuif64(unbox(Uint64,x),unbox(Float64,y))
 
-<=(x::Float32, y::Int64  ) = lefsi64(unbox(Int64,float64(x)),unbox(Int64,y))
-<=(x::Float32, y::Uint64 ) = lefui64(unbox(Uint64,float64(x)),unbox(Uint64,y))
-<=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Int64,float64(y)))
-<=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Uint64,float64(y)))
+<=(x::Float32, y::Int64  ) = lefsi64(unbox(Float64,float64(x)),unbox(Int64,y))
+<=(x::Float32, y::Uint64 ) = lefui64(unbox(Float64,float64(x)),unbox(Uint64,y))
+<=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
+<=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
 
 ## floating point traits ##
 

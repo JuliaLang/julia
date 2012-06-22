@@ -205,6 +205,9 @@ function assign_shape_check(x::AbstractArray, I...)
     end
 end
 
+# convert Real to integer index
+to_index(i::Real) = convert(Int, i)
+
 # vectorization
 
 macro vectorize_1arg(S,f)

@@ -21,7 +21,7 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[iround(x)]
+ref(s::String, x::Real) = s[to_index(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
@@ -888,11 +888,11 @@ split(s::String, spl)             = split(s, spl, 0, true)
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 
-function replace(str::ByteString, splitter, repl::Function, limit::Integer)
+function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
-    j, k = search(str,splitter,i)
+    j, k = search(str,pattern,i)
     while j != 0
         if i == a || i < k
             rstr = RopeString(rstr,SubString(str,i,j-1))
@@ -900,16 +900,33 @@ function replace(str::ByteString, splitter, repl::Function, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,splitter,k)
+        j, k = search(str,pattern,k)
         if n == limit break end
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
     cstring(rstr)
 end
-replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
-replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
-replace(s::String, spl, r) = replace(s, spl, r, 0)
+replace(s::String, pat, f::Function, n::Integer) = replace(cstring(s), pat, f, n)
+replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
+replace(s::String, pat, r) = replace(s, pat, r, 0)
+
+function search_count(str::String, pattern, limit::Integer)
+    n = 0
+    i = a = start(str)
+    j, k = search(str,pattern,i)
+    while j != 0
+        if i == a || i < k
+            n += 1
+            if n == limit break end
+            i = k
+        end
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,pattern,k)
+    end
+    return n
+end
+search_count(s::String, pat) = search_count(s, pat, 0)
 
 function print_joined(io, strings, delim, last)
     i = start(strings)
