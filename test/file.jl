@@ -26,7 +26,7 @@ run(`chmod -w $filename`)
 run(`chmod +w $filename`)
 @assert isexecutable(filename) == false
 @assert filesize(filename) == 0
-@assert filesize(dir_name)) > 0
+@assert filesize(dir_name) > 0
 @assert mtime(filename) >= mtime(dir_name)
 
 ############
