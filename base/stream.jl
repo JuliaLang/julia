@@ -240,7 +240,7 @@ end
 run_event_loop() = run_event_loop(localEventLoop())
 
 function break_one_loop(loop::Ptr{Void})
-    #ccall(:uv_break_one,Void,(Ptr{Void},),loop)
+    ccall(:uv_break_one,Void,(Ptr{Void},),loop)
 end
 
 function process_events(loop::Ptr{Void})
