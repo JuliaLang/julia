@@ -761,9 +761,9 @@ for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))
             end
             return F
         end
-        ($f)(A, B::AbstractArray) =
+        ($scalarf)(A, B::AbstractArray) =
             reshape([ ($scalarf)(A, B[i]) for i=1:length(B)], size(B))
-        ($f)(A::AbstractArray, B) =
+        ($scalarf)(A::AbstractArray, B) =
             reshape([ ($scalarf)(A[i], B) for i=1:length(A)], size(A))
     end
 end
