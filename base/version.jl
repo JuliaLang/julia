@@ -68,7 +68,7 @@ const VERSION_REGEX = r"^
     (\d+)                                   # major         (required)
     (?:\.(\d+))?                            # minor         (optional)
     (?:\.(\d+))?                            # patch         (optional)
-    (?:-|
+    (?:(-)|
     (?:-((?:[0-9a-z-]+\.)*[0-9a-z-]+))?     # pre-release   (optional)
     (?:\+((?:[0-9a-z-]+\.)*[0-9a-z-]+))?    # build         (optional)
     )
@@ -77,11 +77,11 @@ $"ix
 function convert(::Type{VersionNumber}, v::String)
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
-    major, minor, patch, prerl, build = m.captures
+    major, minor, patch, minus, prerl, build = m.captures
     major = int(major)
     minor = minor == nothing ? 0 : int(minor)
     patch = patch == nothing ? 0 : int(patch)
-    prerl = prerl == nothing ? [] : split(prerl,'.')
+    prerl = prerl == nothing ? (minus == nothing ? [] : [""]) : split(prerl,'.')
     build = build == nothing ? [] : split(build,'.')
     VersionNumber(major, minor, patch, prerl, build)
 end
