@@ -657,7 +657,7 @@ insupport{T <: Real}(d::Multinomial, x::Vector{T}) = integer_valued(x) && all(x 
 # log_factorial(n::Int64) = sum(log(1:n)) # lgamma(n + 1) is often much faster
 
 function logpmf{T <: Real}(d::Multinomial, x::Array{T, 1})
-  insupport(d, x) ? -Inf : lgamma(d.n + 1) - sum(lgamma(x + 1)) + sum(x .* log(d.prob))
+  !insupport(d, x) ? -Inf : lgamma(d.n + 1) - sum(lgamma(x + 1)) + sum(x .* log(d.prob))
 end
 
 pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
