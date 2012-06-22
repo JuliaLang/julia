@@ -19,6 +19,13 @@ b = a+a
 @assert isequal(1/[1,2,5], [1.0,0.5,0.2])
 @assert isequal([1,2,3]/5, [0.2,0.4,0.6])
 
+@assert isbool(isequal([1,2,3], [1,2,3]))
+@assert isbool(isless([1,2,3], [4,5,6]))
+@assert isa([1,2,3] .< [4,5,6], AbstractArray{Bool})
+@assert isa([1,2,3] .< 4, AbstractArray{Bool})
+@assert isa([1,2,3] < 4, AbstractArray{Bool})
+@assert isa([1,2,3] > 4, AbstractArray{Bool})
+
 a = ones(2,2)
 a[1,1] = 1
 a[1,2] = 2

@@ -18,8 +18,9 @@ system_error(p, b::Bool) = b ? throw(SystemError(cstring(p))) : nothing
 ## assertion functions and macros ##
 
 assert(x) = assert(x,'?')
+assert(x::AbstractArray,labl) = (map(x->assert(x,labl), x); nothing)
 assert(x,labl) = x ? nothing : error("assertion failed: ", labl)
 
 macro assert(ex)
-    :(($ex) ? nothing : error("assertion failed: ", $string(ex)))
+	:(assert(($ex), $string(ex)))
 end
