@@ -1162,3 +1162,13 @@ end
 
 memcat(s::ByteString) = memcat(s.data)
 memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)
+
+# return a random string (often useful for temporary filenames/dirnames)
+function randstring(len::Int)
+    const cset = char([0x30:0x39,0x41:0x5a,0x61:0x7a])
+    const strset = convert(ASCIIString,strcat(cset...))
+    index = int(ceil(strlen(strset)*rand(len)))
+    s = strset[index]
+    return s
+end
+

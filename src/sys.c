@@ -3,6 +3,7 @@
   I/O and operating system utility functions
 */
 #include "julia.h"
+#include "uv.h"
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -17,7 +18,6 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <pthread.h>
-
 
 #ifdef __SSE__
 #include <xmmintrin.h>
@@ -103,6 +103,125 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
     a->data = (void*)ios_stdout;
     return (jl_value_t*)a;
+}
+
+// --- stat ---
+DLLEXPORT int jl_sizeof_stat(void)
+{
+  struct stat buf;
+  return sizeof(buf);
+}
+
+DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
+{
+  uv_fs_t req;
+  int ret;
+
+  // Ideally one would use the statbuf for the storage in req, but
+  // it's not clear that this is possible using libuv
+  ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
+{
+  uv_fs_t req;
+  int ret;
+
+  ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
+{
+  uv_fs_t req;
+  int ret;
+
+  ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+  if (ret == 0)
+    memcpy(statbuf, req.ptr, sizeof(struct stat));
+  uv_fs_req_cleanup(&req);
+  return ret;
+}
+
+DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_dev;
+}
+
+DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_ino;
+}
+
+DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_mode;
+}
+
+DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_nlink;
+}
+
+DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_uid;
+}
+
+DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_gid;
+}
+
+DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_rdev;
+}
+
+DLLEXPORT off_t jl_stat_size(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_size;
+}
+
+DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_blksize;
+}
+
+DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
+{
+  return ((struct stat*) statbuf)->st_blocks;
+}
+
+/*
+// atime is stupid, let's not support it
+DLLEXPORT double jl_stat_atime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
+}
+*/
+
+DLLEXPORT double jl_stat_mtime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_mtim.tv_sec + (double)s->st_mtim.tv_nsec * 1e-9;
+}
+
+DLLEXPORT double jl_stat_ctime(char *statbuf)
+{
+  struct stat *s;
+  s = (struct stat*) statbuf;
+  return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
 }
 
 // --- buffer manipulation ---
