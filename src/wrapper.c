@@ -133,16 +133,13 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 
 DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only)
 {
-	int flags;
-	flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
-	if (!julia_only)
-		flags |= UV_PIPE_SPAWN_SAFE;
+    int flags;
+    flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
+    if (!julia_only)
+        flags |= UV_PIPE_SPAWN_SAFE;
     uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
     uv_pipe_init(jl_event_loop, pipe, flags);
     pipe->data = 0;//will be initilized on io
-#ifdef __WIN32__
-    pipe->handle=0;
-#endif
     return pipe;
 }
 
@@ -198,7 +195,7 @@ DLLEXPORT void jl_connectioncb(uv_stream_t *stream, int status)
 
 DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
 {
-	int err;
+    int err;
     jl_stream_opts_t *opts;
     err = uv_listen(stream,backlog,&jl_connectioncb);
     if(!err&&!stream->data) {
@@ -208,7 +205,7 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog, jl_function_t *cb)
         opts->connectcb=cb;
         stream->data=opts;
     }
-	return err;
+    return err;
 }
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
@@ -220,7 +217,7 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
     jl_proc_opts_t *jlopts=malloc(sizeof(jl_proc_opts_t));
     uv_process_t *proc = malloc(sizeof(uv_process_t));
     uv_process_options_t opts;
-	uv_stdio_container_t stdio[3];
+    uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
     opts.env = NULL;
@@ -228,9 +225,9 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
     opts.args = argv;
     opts.flags = 0;
     opts.stdio = stdio;
-	opts.stdio_count = 3;
+    opts.stdio_count = 3;
     stdio[0].type = UV_STREAM;
-	stdio[0].data.stream = (uv_stream_t*)(stdin_pipe);
+    stdio[0].data.stream = (uv_stream_t*)(stdin_pipe);
     stdio[1].type = UV_STREAM;
     stdio[1].data.stream = (uv_stream_t*)(stdout_pipe);
     stdio[2].type = UV_STREAM;
@@ -241,8 +238,8 @@ DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
     jlopts->closecb=closecb;
     error = uv_spawn(loop,proc,opts);
     if(error) {
-		free(proc);
-		free(jlopts);
+        free(proc);
+        free(jlopts);
         jl_errorf("Failed to create process %s: %d",name,error);
     }
     proc->data = jlopts;
