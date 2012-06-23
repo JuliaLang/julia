@@ -14,14 +14,20 @@
 
      myfunc(requiredarg1, requiredarg2, ..., opts)
 
-   Most functions written to use optional arguments will probably check to make sure that you are not supplying parameters that are not used by the function or its sub-functions. Typically, supplying unused parameters will result in an error. You can control the behavior this way::
+   Most functions written to use optional arguments will probably check to make sure that you are not supplying parameters that are never used by the function or its sub-functions. Typically, supplying unused parameters will result in an error. You can control the behavior this way::
 
      # throw an error if a or b is not used (the default)
      opts = @options CheckError a=5 b=2
      # issue a warning if a or b is not used
-     opts = @options CheckWarn a=5 b=2a+1
+     opts = @options CheckWarn a=5 b=2
      # don't check whether a and b are used
-     opts = @options CheckNone a=5 b=2a+1
+     opts = @options CheckNone a=5 b=2
+
+   As an alternative to the macro syntax, you can also say::
+
+     opts = Options(CheckWarn, :a, 5, :b, 2)
+
+   The check flag is optional.
 
 .. function:: set_options
 
@@ -52,7 +58,7 @@
 
     It is possible to have more than one Options parameter to a function, for example::
 
-      function twinopts(x,plotopts::Options,calcopts::Options)
+      function twinopts(x, plotopts::Options, calcopts::Options)
           @defaults plotopts linewidth=1
           @defaults calcopts n_iter=100
           # Do stuff
@@ -60,30 +66,55 @@
           @check_used calcopts
       end
  
+    Within a given scope, you should only have one call to ``@defaults`` per options variable.
+
 .. function:: check_used
 
     The ``@check_used`` macro tests whether user-supplied parameters were ever accessed by the ``@defaults`` macro. The test is performed at the end of the function body, so that subfunction handling parameters not used by the parent function may be "credited" for their usage. Each sub-function should also call ``@check_used``, for example::
 
-      function complexfun(x,opts::Options)
+      function complexfun(x, opts::Options)
           @defaults opts parent=3 both=7
           println(parent)
           println(both)
-          subfun1(x,opts)
-          subfun2(x,opts)
+          subfun1(x, opts)
+          subfun2(x, opts)
           @check_used opts
       end
       
-      function subfun1(x,opts::Options)
+      function subfun1(x, opts::Options)
           @defaults opts sub1="sub1 default" both=0
           println(sub1)
           println(both)
           @check_used opts
       end
       
-      function subfun2(x,opts::Options)
+      function subfun2(x, opts::Options)
           @defaults opts sub2="sub2 default" both=22
           println(sub2)
           println(both)
           @check_used opts
       end
 
+
+Advanced topics
+---------------
+
+.. class:: Options(OptionsChecking, param1, val1, param2, val2, ...)
+
+   ``Options`` is the central type used for handling optional arguments. Its fields are briefly described below.
+
+   .. attribute:: key2index
+
+      A ``Dict`` that looks up an integer index, given the symbol for a variable (e.g., ``key2index[:a]`` for the variable ``a``)
+
+   .. attribute:: vals
+
+      ``vals[key2index[:a]]`` is the value to be assigned to the variable ``a``
+
+   .. attribute:: used
+
+      A vector of booleans, one per variable, with ``used[key2index[:a]]`` representing the value for variable ``a``. These all start as ``false``, but access by a ``@defaults`` command sets the corresponding value to ``true``. This marks the variable as having been used in the function.
+
+   .. attribute:: check_lock
+
+      A vector of booleans, one per variable. This is a "lock" that prevents sub-functions from complaining that they did not access variables that were intended for the parent function. ``@defaults`` sets the lock to true for any options variables that have already been defined; new variables added through ``@set_options`` will start with the ``check_lock`` false, to be handled by a subfunction.
