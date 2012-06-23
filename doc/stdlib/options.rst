@@ -117,4 +117,4 @@ Advanced topics
 
    .. attribute:: check_lock
 
-      A vector of booleans, one per variable. This is a "lock" that prevents sub-functions from complaining that they did not access variables that were intended for the parent function. ``@defaults`` sets the lock to true for any options variables that have already been defined; new variables added through ``@set_options`` will start with the ``check_lock`` false, to be handled by a subfunction.
+      A vector of booleans, one per variable. This is a "lock" that prevents sub-functions from complaining that they did not access variables that were intended for the parent function. ``@defaults`` sets the lock to true for any options variables that have already been defined; new variables added through ``@set_options`` will start with their ``check_lock`` set to ``false``, to be handled by a subfunction.
