@@ -324,16 +324,20 @@ function spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closec
     pp = Process(C_NULL,in,out);
     loop = localEventLoop()
     if isa(in, NamedPipe)
-        in = in.read_handle
+        h_in = in.read_handle
+    elseif isa(in, Stream)
+        h_in = in.handle
     else
-        in = C_NULL
+        h_in = C_NULL
     end
     if isa(out, NamedPipe)
-        out = out.write_handle
+        h_out = out.write_handle
+    elseif isa(out, Stream)
+        h_out = out.handle
     else
-        out = C_NULL
+        h_out = C_NULL
     end
-    err = C_NULL
+    h_err = C_NULL
     ptrs = _jl_pre_exec(cmd.exec)
     if exitcb == false
         exitcb = make_callback((args...)->process_exited_chain(pp,args...))
@@ -341,7 +345,7 @@ function spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closec
     if closecb == false
         closecb = make_callback((args...)->process_closed_chain(pp))
     end
-    pp.handle=_jl_spawn(ptrs[1],convert(Ptr{Ptr{Uint8}},ptrs),loop,in,out,err,exitcb,closecb)
+    pp.handle=_jl_spawn(ptrs[1],convert(Ptr{Ptr{Uint8}},ptrs),loop,h_in,h_out,h_err,exitcb,closecb)
     pp
 end
 spawn(cmd::Cmd,in::StreamOrNot,out::StreamOrNot,exitcb::Callback) = spawn(cmd,in,out,exitcb,false)
@@ -355,48 +359,24 @@ function spawn_nostdin(cmd::Cmd,out::StreamOrNot)
     proc
 end
 
-#TODO: fix these exit chains
 function process_exited_chain(p::Process,h::Ptr,e::Int32,t::Int32)
-    p.exit_code=e
-    p.term_signal=t
+    p.exit_code = e
+    p.term_signal = t
     if p.breakEventLoop
         break_one_loop(localEventLoop())
     end
     true
 end
-function process_exited_chain(procs::AndProcesses,h::Ptr,e::Int32,t::Int32)
-    done=true
-    for p::Process in procs.siblings
-        if p.handle==h
-            p.exit_code=e
-            p.term_signal=t
-        end
-        if p.exit_code==-2
-            done=false
-        end
-    end
-    if done&&procs.breakEventLoop
-        break_one_loop(localEventLoop())
-    end
-    done
-end
 
 function process_closed_chain(p::Process)
     done = process_exited(p)
-    if done && p.out!=0
-        close(p.out)
-    end
-    done
-end
-function process_closed_chain(procs::AndProcesses)
-    done=true
-    for p in procs.siblings
-        if !process_exited(p)
-            done=false
+    if done
+        if p.out!=false && p.out != stdout_stream
+            close(p.out)
         end
-    end
-    if done && procs.out!=0
-        close(procs.out)
+        if p.in!=false && p.in != stdin_stream
+            close(p.in)
+        end
     end
     done
 end
@@ -413,12 +393,11 @@ spawn(cmds::OrCmds,in::StreamOrNot)=spawn(cmds,in,false)
 spawn(cmds::OrCmds,in::StreamOrNot,out::StreamOrNot)=spawn(cmds,in,out,false,false)
 
 function spawn(cmds::AndCmds,in::StreamOrNot,out::StreamOrNot,exitcb::Callback,closecb::Callback)
-    procs = AndProcesses()
-    exitcb2 = make_callback((args...)->(done=process_exited_chain(procs,args...); if (done && exitcb != false) exitcb(args...) end))
-    closecb2 = make_callback((args...)->(done=process_closed_chain(procs); if (done && closecb != false) closecb(args...) end))
+    #exitcb2 = make_callback((args...)->(done=process_exited_chain(procs,args...); if (done && exitcb != false) exitcb(args...) end))
+    #closecb2 = make_callback((args...)->(done=process_closed_chain(procs); if (done && closecb != false) closecb(args...) end))
     procs = AndProcesses(
-        spawn(cmd.a, in, out, exitcb2, closecb2),
-        spawn(cmd.b, in, out, exitcb2, closecb2))
+        spawn(cmds.a, in, out, exitcb, closecb),
+        spawn(cmds.b, in, out, exitcb, closecb))
     return procs
 end
 spawn(cmds::AndCmds)=spawn(cmds,false,false)
@@ -426,17 +405,11 @@ spawn(cmds::AndCmds,in::StreamOrNot)=spawn(cmds,in,false)
 spawn(cmds::AndCmds,in::StreamOrNot,out::StreamOrNot)=spawn(cmds,in,out,false,false)
 
 #returns a pipe to read from the last command in the pipelines
-read_from(cmds::AbstractCmd)=read_from(cmds,true)
-function read_from(cmds::AbstractCmd,passStdin::Bool)
-    out=make_pipe(false,false)
+read_from(cmds::AbstractCmd)=read_from(cmds,stdin_stream)
+function read_from(cmds::AbstractCmd,stdin::StreamOrNot)
+    out=make_pipe(true,false)
     _init_buf(out) #create buffer for reading
-    if(passStdin)
-        processes=spawn(cmds,false,out)
-    else
-        dummy=make_pipe(false,false)
-        processes=spawn(cmds,dummy,out)
-        close(dummy)
-    end
+    processes=spawn(cmds,stdin,out)
     ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),out.read_handle,out.buf.ios,C_NULL)
     (out,processes)
 end
@@ -445,30 +418,90 @@ function change_readcb(stream::AsyncStream,readcb::Function)
     ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),stream.handle,readcb)
 end
 
-function write_to(cmds::AbstractCmd)
-    in=make_pipe(false,false);
-    spawn(cmds,in)
-    in
+function write_to(cmds::AbstractCmd,stdout::StreamOrNot)
+    in = make_pipe(false,true)
+    ps = spawn(cmds,in,stdout)
+    (in, ps)
+end
+
+function readall(cmd::AbstractCmd)
+    (out,ps)=read_from(cmd)
+    if !wait(ps)
+        pipeline_error(ps)
+    end
+    return takebuf_string(out.buf)
+end
+
+function run(cmds::AbstractCmd,args...)
+    ps=spawn(cmds,args...)
+    success=wait(ps)
+    if success
+        return nothing
+    else
+        return pipeline_error(ps)
+    end
+end
+
+success(proc::Process) = proc.exit_code==0
+success(procs::AbstractProcess) = success(procs.a) && success(procs.b)
+success(cmd::AbstractCmd) = wait(spawn(cmd))
+
+pipeline_error(proc::Process) = error("failed process: ", proc)
+function pipeline_error(procs::AbstractProcess)
+    failed = Process[]
+    queue = AbstractProcess[procs]
+    while !isempty(queue)
+        p = pop(queue)
+        if isa(p, Process)
+            if !success(p)
+                push(failed, p)
+            end
+        else
+            push(queue, p.a)
+            push(queue, p.b)
+        end
+    end
+    if numel(failed) == 0
+        error("pipeline error but no processes failed!?")
+    end
+    if numel(failed) == 1
+        error("failed process: ", failed[1])
+    end
+    error("failed processes: ", join(failed, ", "))
+end
+
+function exec(thunk::Function)
+    try
+        thunk()
+    catch e
+        show(e)
+        exit(0xff)
+    end
+    exit(0)
+end
+
+function wait(procs::AbstractProcess)
+    try
+        run_event_loop(localEventLoop()) # wait(procs)
+    catch e
+        kill(procs)
+        run_event_loop(localEventLoop()) # join(procs)
+        throw(e)
+    end
+    return success(procs)
 end
 
 _jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
-_jl_kill(p::Process)=_jl_kill(p,int32(9))
-kill(p::Process) = _jl_kill(p)
-function kill(ps::AbstractProcess)
-    #TODO: kill stuff
-    ps.breakEventLoop=false
-    for p in ps.siblings
-        if p.pipeline != false then
-            kill(p)
-        end
-        if(p.exit_code==-2)
-            _jl_kill(p)
-        end
-    end
-    if ps.pipeline != false
-        kill(ps.pipeline)
+function kill(p::Process,signum::Int32)
+    if p.exit_code == -2
+        _jl_kill(p, int32(9))
     end
 end
+function kill(ps::AbstractProcess)
+    kill(ps.a)
+    kill(ps.b)
+end
+kill(p::Process) = kill(p,int32(9))
 
 function _contains_newline(bufptr::Ptr{Void},len::Int32)
     return (ccall(:memchr,Ptr{Uint8},(Ptr{Void},Int32,Uint),bufptr,'\n',len)!=C_NULL)
@@ -490,73 +523,6 @@ function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr,nread::PtrSi
     end
 end
 
-##TODO do properly
-function success(cmd::Cmd)
-    proc = spawn(cmd)
-    run_event_loop()
-    return (proc.exit_code==0)
-end
-function success(cmds::AbstractCmd)
-    procs = spawn(cmds)
-    run_event_loop()
-    #TODO: check recursively on all processess launched?
-    if (p.exit_code!=0)
-        return false
-    end
-    return true
-end
-function run(args...)
-    ps=spawn(args...)
-    #TODO: ?
-    while ps.pipeline != false
-        ps=ps.pipeline
-    end
-    ps.breakEventLoop=true
-    try
-        run_event_loop(localEventLoop())
-    catch e
-        ps.breakEventLoop=false
-        kill(ps)
-        throw(e)
-    end
-end
-function readall(cmds::OrCmds)
-    (out,ps)=read_from(cmds)
-    while isa(ps, OrProcesses)
-        ps = ps.b
-    end
-    ps.breakEventLoop=true
-    try
-        run_event_loop(localEventLoop())
-    catch e
-        ps.breakEventLoop=false
-        kill(ps)
-        throw(e)
-    end
-    return takebuf_string(out.buf)
-end
-function readall(cmd::Cmd)
-    (out,ps)=read_from(cmd)
-    ps.breakEventLoop=true
-    try
-        run_event_loop(localEventLoop())
-    catch e
-        ps.breakEventLoop=false
-        kill(ps)
-        throw(e)
-    end
-    return takebuf_string(out.buf)
-end
-
-function exec(thunk::Function)
-    try
-        thunk()
-    catch e
-        show(e)
-        exit(0xff)
-    end
-    exit(0)
-end
 
 ## process status ##
 
