@@ -27,7 +27,7 @@ function Options{T<:OptionsChecking}(::Type{T},args...)
     end
     n = div(length(args),2)
     keys, index, vals = if n > 0
-        (args[1:2:end], ntuple(n, identity), [args[2:2:end]...])
+        (args[1:2:end], ntuple(n, identity), Any[args[2:2:end]...])
     else
         ((), (), Array(Any, 0))
     end
