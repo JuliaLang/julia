@@ -26,6 +26,7 @@ Extras
 
    profile
    options
+   cpp
    specfun
 
 ************
