@@ -438,6 +438,13 @@ The function argument to ``cd`` takes no arguments; it is just a block of
 code. The function argument to ``open`` receives a handle to the opened
 file.
 
+
+Named function arguments (optional parameters)
+----------------------------------------------
+
+Some complex functions may depend on a large number of parameters. In such cases, it can be inconvenient to have to supply a long argument list in specified order. Such cases can be handled via the :mod:`options.jl` module.
+
+
 Further Reading
 ---------------
 
