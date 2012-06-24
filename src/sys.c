@@ -222,6 +222,55 @@ DLLEXPORT int jl_cpu_cores(void) {
 #endif
 }
 
+// -- high resolution timer --
+
+#ifndef __WIN32__
+// high-resolution timer not yet defined for Windows
+
+#ifdef __APPLE__   // OSX
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+DLLEXPORT int jl_sizeof_timespec(void)
+{
+  return sizeof(uint64_t);
+}
+DLLEXPORT int jl_clock_gettime(int clk_id, void *tsp)
+{
+  *(uint64_t *)tsp = mach_absolute_time();
+  return 0;
+}
+DLLEXPORT double jl_clock_gettime_diff(void *tstart, void *tend)
+{
+  uint64_t    elapsed;
+  Nanoseconds elapsedNano;
+  
+  elapsed = *(uint64_t *) tend - *(uint64_t *) tstart;
+  elapsedNano = AbsoluteToNanoseconds(*(AbsoluteTime *) &elapsed);
+  return 1.0e-9 * ((double) *(uint64_t*)&elapsedNano);
+}
+
+#else // POSIX/Linux
+
+DLLEXPORT int jl_sizeof_timespec(void)
+{
+  struct timespec ts;
+  return sizeof(ts);
+}
+DLLEXPORT int jl_clock_gettime(int clk_id, void *tsp)
+{
+  return clock_gettime(clk_id, (struct timespec *) tsp);
+}
+DLLEXPORT double jl_clock_gettime_diff(void *tstart, void *tend)
+{
+  struct timespec *tspstart, *tspend;
+  tspstart = (struct timespec *) tstart;
+  tspend = (struct timespec *) tend;
+  return (double) (tspend->tv_sec - tspstart->tv_sec) + 1.0e-9*((double)(tspend->tv_nsec - tspstart->tv_nsec));
+}
+#endif  // #ifdef __APPLE__
+
+#endif  // #ifndef __WIN32__
+
 // -- iterating the environment --
 
 #ifdef __APPLE__

@@ -25,6 +25,28 @@ function toc()
     return t
 end
 
+# high-resolution time
+function timehr_allocate()
+    return Array(Uint8, ccall(:jl_sizeof_timespec, Int, ()))
+end
+
+const CLOCK_REALTIME = 0
+const CLOCK_MONOTONIC = 1
+const CLOCK_MONOTONIC_RAW = 4
+const CLOCK_PROCESS_CPUTIME_ID = 2
+const CLOCK_THREAD_CPUTIME_ID = 3
+
+function timehr(clockid::Int, buf::Array{Uint8})
+    ret = ccall(:jl_clock_gettime, Int, (Int, Ptr{Uint8}), clockid, buf)
+    if ret < 0
+        error(strcat("Cannot call clock with clockid ", clockid))
+    end
+end
+
+function timehr_diff(bufstart::Array{Uint8}, bufend::Array{Uint8})
+    return ccall(:jl_clock_gettime_diff, Float64, (Ptr{Uint8}, Ptr{Uint8}), bufstart, bufend)
+end
+
 # print elapsed time, return expression value
 macro time(ex)
     @gensym t0 val t1

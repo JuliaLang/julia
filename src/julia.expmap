@@ -45,6 +45,9 @@
     jl_takebuf_string;
     jl_readuntil;
     jl_cpu_cores;
+    jl_sizeof_timespec;
+    jl_clock_gettime;
+    jl_clock_gettime_diff;
     jl_cstr_to_string;
     jl_array_to_string;
     jl_parse_string;
