@@ -225,7 +225,7 @@ function profile_parse(ex::Expr)
         push(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
         # Put all this inside a let block
         excore = expr(:block,coreargs)
-        exlet = expr(:let,{expr(:block,excore), :($timers = zeros($n_lines)), :($counters = zeros(Int,$n_lines))})
+        exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Int, $n_lines))})
         return exlet, tags, funcreport, funcclear
     else
         return ex ,{}, :funcnoop, :funcnoop
