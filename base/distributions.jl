@@ -768,7 +768,7 @@ function logpmf(d::Categorical, x::Int)
   !insupport(d, x) ? -Inf : log(d.prob[x])
 end
 
-pmf(d::Categorical, x::Int) = logpmf(d, x)
+pmf(d::Categorical, x::Int) = exp(logpmf(d, x))
 
 function rand(d::Categorical)
   l = numel(d.prob)
