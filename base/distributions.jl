@@ -732,3 +732,59 @@ function rand!(d::Dirichlet, A::Array{Float64,2})
     A[i, :] = rand(d)'
   end
 end
+
+# Categorical distribution
+type Categorical <: DiscreteDistribution
+    prob::Vector{Float64}
+    function Categorical(p::Vector{Float64})
+        if length(p) <= 1 error("Categorical: there must be at least two categories") end
+        sump = 0.
+        for i in 1:numel(p)
+            if p[i] < 0. error("Categorical: probabilities must be non-negative") end
+            sump += p[i]
+        end
+        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
+            error("Categorical: probabilities must add to 1")
+        end
+        new(p ./ sump)
+    end
+end
+
+function Categorical(d::Integer)
+    if d <= 1 error("d must be greater than 1") end
+    Categorical(ones(Float64, d) ./ float64(d))
+end
+
+function Categorical(p::Matrix{Float64})
+    if !(size(p, 1) == 1 || size(p, 2) == 1)
+        error("Probability matrix must be a single row or single column")
+    end
+    Categorical(int(n), reshape(p, (numel(p),)))
+end
+
+insupport(d::Categorical, x::Int) = 1 <= x <= length(d.prob) && d.prob[x] != 0.0
+
+function logpmf(d::Categorical, x::Int)
+  !insupport(d, x) ? -Inf : log(d.prob[x])
+end
+
+pmf(d::Categorical, x::Int) = logpmf(d, x)
+
+function rand(d::Categorical)
+  l = numel(d.prob)
+  r = rand()
+  for j = 1:l
+    r -= d.prob[j]
+    if r <= 0.0
+      return j
+    end
+  end
+  return l
+end
+
+function rand!(d::Categorical, A::Vector{Int})
+  n = size(A, 1)
+  for i = 1:n
+    A[i] = rand(d)
+  end
+end
