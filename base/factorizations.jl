@@ -143,7 +143,7 @@ type Cholesky{T} <: Factorization{T}
     function Cholesky(A::Matrix{T}, ul::String)
         UL = uppercase(ul)
         if UL[1] != 'U' && UL[1] != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
-        Acopy = ishermitian(A) ? copy(A) : error("Cholesky: Matrix is not Hermitian")
+        Acopy = copy(A)
         _jl_lapack_potrf(UL, Acopy) == 0 ? new(UL[1] == 'U' ? triu(Acopy) : tril(Acopy), UL) : error("Cholesky: Matrix is not positive-definite")
     end
 end
