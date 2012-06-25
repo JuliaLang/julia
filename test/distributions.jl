@@ -78,3 +78,28 @@ rand(d)
 A = zeros(Float64, 10, 3)
 rand!(d, A)
 A
+
+d = Categorical([0.25, 0.5, 0.25])
+d = Categorical(3)
+d = Categorical([0.25; 0.5; 0.25])
+
+@assert !insupport(d, 0)
+@assert insupport(d, 1)
+@assert insupport(d, 2)
+@assert insupport(d, 3)
+@assert !insupport(d, 4)
+
+@assert logpmf(d, 1) == log(0.25)
+@assert pmf(d, 1) == 0.25
+
+@assert logpmf(d, 2) == log(0.5)
+@assert pmf(d, 2) == 0.5
+
+@assert logpmf(d, 0) == -Inf
+@assert pmf(d, 0) == 0.0
+
+@assert 1.0 <= rand(d) <= 3.0
+
+A = zeros(Int, 10)
+rand!(d, A)
+@assert 1.0 <= mean(A) <= 3.0
