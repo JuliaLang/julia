@@ -25,6 +25,12 @@ function toc()
     return t
 end
 
+# high-resolution time
+# returns in nanoseconds
+function time_ns()
+    return ccall(:jl_hrtime, Uint64, ())
+end
+
 # print elapsed time, return expression value
 macro time(ex)
     @gensym t0 val t1

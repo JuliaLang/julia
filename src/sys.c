@@ -222,6 +222,13 @@ DLLEXPORT int jl_cpu_cores(void) {
 #endif
 }
 
+// -- high resolution timers --
+// Returns time in nanosec
+DLLEXPORT uint64_t jl_hrtime(void)
+{
+  return uv_hrtime();
+}
+
 // -- iterating the environment --
 
 #ifdef __APPLE__
