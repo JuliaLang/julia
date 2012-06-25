@@ -609,7 +609,7 @@ for (gesv, posv, gels, trtrs, elty) in
             end
             m, n    = map(int32, size(A))
             k       = size(B, 1)
-            if (m != n || k != m) error("_jl_lapack_gesv: dimension mismatch") end
+            if (m != n || k != m) error("_jl_lapack_posv: dimension mismatch") end
             nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
             lda     = int32(stride(A, 2))
             ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
@@ -635,7 +635,7 @@ for (gesv, posv, gels, trtrs, elty) in
             m, n    = map(int32, size(A))
             vecb    = isa(B, Vector)
             k       = size(B, 1)
-            if k != m error("_jl_lapack_gesv: dimension mismatch") end
+            if k != m error("_jl_lapack_gels: dimension mismatch") end
             nrhs    = int32(vecb ? 1 : size(B, 2))
             lda     = int32(stride(A, 2))
             ldb     = int32(vecb ? m : stride(B, 2))
@@ -674,7 +674,7 @@ for (gesv, posv, gels, trtrs, elty) in
             end
             m, n    = map(int32, size(A))
             k       = size(B, 1)
-            if (m != n || k != m) error("_jl_lapack_gesv: dimension mismatch") end
+            if (m != n || k != m) error("_jl_lapack_trtrs: dimension mismatch") end
             nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
             lda     = int32(stride(A, 2))
             ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
@@ -711,5 +711,5 @@ end
 
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
 
-(/){T1<:Real, T2<:Real}(A::StridedVecOrMat{T1}, B::StridedVecOrMat{T2}) = (B' \ A')'
-
+# TODO: use *gels transpose argument
+(/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
