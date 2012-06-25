@@ -110,78 +110,92 @@ end
 
 # File information
 function isfile(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return S_ISREG(stat_mode(buf))
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return S_ISREG(stat_mode(buf))
+    else
+        return false
+    end
 end
 
 function isdir(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return S_ISDIR(stat_mode(buf))
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return S_ISDIR(stat_mode(buf))
+    else
+        return false
+    end
 end
 
 function islink(filename::ASCIIString)
-    buf = allocate_statbuf()
-    lstat(filename, buf)
-    return S_ISLNK(stat_mode(buf))
+    buf = statbuf_allocate()
+    if lstat(filename, buf) == 0
+        return S_ISLNK(stat_mode(buf))
+    else
+        return false
+    end
 end
 
 function isreadable(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return stat_mode(buf) & S_IRUSR > 0
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return stat_mode(buf) & S_IRUSR > 0
+    else
+        error("Error accessing file ", filename)
+    end
 end
 
 function iswriteable(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return stat_mode(buf) & S_IWUSR > 0
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return stat_mode(buf) & S_IWUSR > 0
+    else
+        error("Error accessing file ", filename)
+    end
 end
 
 function isexecutable(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return stat_mode(buf) & S_IXUSR > 0
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return stat_mode(buf) & S_IXUSR > 0
+    else
+        error("Error accessing file ", filename)
+    end
 end
 
 function filesize(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return stat_size(buf)      # in bytes
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return stat_size(buf)      # in bytes
+    else
+        error("Error accessing file ", filename)
+    end
 end
 
 function mtime(filename::ASCIIString)
-    buf = allocate_statbuf()
-    stat(filename, buf)
-    return stat_mtime(buf)
+    buf = statbuf_allocate()
+    if stat(filename, buf) == 0
+        return stat_mtime(buf)
+        error("Error accessing file ", filename)
+    end
 end
 
 # Core functions: stat and friends
 # Allocate a buffer for storing the results
-function allocate_statbuf()
+function statbuf_allocate()
     return Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
 end
 
 function stat(pathname::ASCIIString, buf::Vector{Uint8})
-    ret = ccall(:jl_stat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
-    if ret < 0
-        error("Failed, does the pathname exist?")
-    end
+    return ccall(:jl_stat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
 end
 
 function lstat(pathname::ASCIIString, buf::Vector{Uint8})
-    ret = ccall(:jl_lstat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
-    if ret < 0
-        error("Failed, does the pathname exist?")
-    end
+    return ccall(:jl_lstat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
 end
 
 function fstat(fd::Integer, buf::Vector{Uint8})
-    ret = ccall(:jl_fstat, Int32, (Int, Ptr{Uint8}), fd, buf)
-    if ret < 0
-        error("Failed, does the file descriptor exist?")
-    end
+    return ccall(:jl_fstat, Int32, (Int, Ptr{Uint8}), fd, buf)
 end
 
 # Raw access functions
