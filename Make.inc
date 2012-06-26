@@ -38,6 +38,12 @@ JFFLAGS = -O2 $(fPIC)
 USEGCC = 1
 USECLANG = 0
 
+ifeq ($(OS), Darwin)
+USEGCC = 0
+USECLANG=1
+endif
+
+
 GCC = gcc
 GPLUSPLUS = g++
 
@@ -53,7 +59,7 @@ endif
 ifeq ($(USECLANG),1)
 CC = clang
 CXX = clang++
-JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing
+JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
