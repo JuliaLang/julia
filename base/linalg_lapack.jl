@@ -690,7 +690,6 @@ for (gesv, posv, gels, trtrs, elty) in
     end
 end
 
-
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)
     m, n  = size(Acopy)      
@@ -701,8 +700,11 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
         if istril(A) return _jl_lapack_trtrs("L", "N", "N", Acopy, X) end
                                         # Check for SPD matrix
         if ishermitian(Acopy) && all([ Acopy[i,i] > 0 for i=1:n ]) 
-            info = _jl_lapack_posv("U", Acopy, X)
-            if info == 0 return X end
+            try
+                return _jl_lapack_posv("U", Acopy, X)[2]
+            end
+            Acopy[:] = A
+            X[:] = B
         end
         return _jl_lapack_gesv(Acopy, X)[3]
     end
