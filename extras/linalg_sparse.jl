@@ -81,6 +81,9 @@ function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{Tv
         (rowval, nzval) = _jl_spa_store_reset(spa, y_col, colptr, rowval, nzval)
     end
 
+    rowval = rowval[1:(colptr[end]-1)]
+    nzval = nzval[1:(colptr[end]-1)]
+    
     SparseMatrixCSC(mX, nY, colptr, rowval, nzval)
 end
 
