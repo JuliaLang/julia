@@ -46,4 +46,6 @@ x = triu(a) \ b
 x = tril(a) \ b
 @assert norm(tril(a)*x - b) < Eps
 
+@assert norm(inv([6. 2; 2 1]) - [0.5 -1; -1 3]) < Eps
+
 end
