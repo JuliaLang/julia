@@ -200,13 +200,23 @@ DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
   return ((struct stat*) statbuf)->st_blocks;
 }
 
+#if defined(__APPLE__)
+#define st_ATIM st_atimespec
+#define st_MTIM st_mtimespec
+#define st_CTIM st_ctimespec
+#else
+#define st_ATIM st_atim
+#define st_MTIM st_mtim
+#define st_CTIM st_ctim
+#endif
+
 /*
 // atime is stupid, let's not support it
 DLLEXPORT double jl_stat_atime(char *statbuf)
 {
   struct stat *s;
   s = (struct stat*) statbuf;
-  return (double)s->st_atim.tv_sec + (double)s->st_atim.tv_nsec * 1e-9;
+  return (double)s->st_ATIM.tv_sec + (double)s->st_ATIM.tv_nsec * 1e-9;
 }
 */
 
@@ -214,14 +224,14 @@ DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
   struct stat *s;
   s = (struct stat*) statbuf;
-  return (double)s->st_mtim.tv_sec + (double)s->st_mtim.tv_nsec * 1e-9;
+  return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
 }
 
 DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
   struct stat *s;
   s = (struct stat*) statbuf;
-  return (double)s->st_ctim.tv_sec + (double)s->st_ctim.tv_nsec * 1e-9;
+  return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
 }
 
 // --- buffer manipulation ---
