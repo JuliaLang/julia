@@ -142,9 +142,9 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
                 error("_jl_lapack_gbtrf: matrix columns must have contiguous elements");
             end
             info = Array(Int32, 1)
-            m, n = map(int32, size(AB))
+            m, n = size(AB)
             mnmn = min(m, n)
-            ldab = int32(stride(AB, 2))
+            ldab = stride(AB, 2)
             ipiv = Array(Int32, mnmn)
             ccall(dlsym(_jl_liblapack, $string(gbtrf)),
                   Void,
@@ -174,9 +174,9 @@ for (orgqr, elty) in
                 error("_jl_lapack_orgqr: matrix columns must have contiguous elements");
             end
             info = Array(Int32, 1)
-            m, n = map(int32, size(A))
-            lda   = int32(stride(A, 2))
-            lwork = int32(-1)
+            m, n = size(A)
+            lda   = stride(A, 2)
+            lwork = -1
             work  = Array($elty, (1,))
             for i in 1:2
                 ccall(dlsym(_jl_liblapack, $string(orgqr)),
@@ -273,13 +273,13 @@ for (syev, geev, elty) in
             if stride(A,1) != 1
                 error("_jl_lapack_syev: matrix columns must have contiguous elements");
             end
-            m, n  = map(int32, size(A))
+            m, n  = size(A)
             if m != n
                 error("_jl_lapack_syev: symmetric or Hermitian matrices must be square")
             end
-            lda   = int32(stride(A, 2))
+            lda   = stride(A, 2)
             W     = Array($elty, n)
-            lwork = int32(-1)
+            lwork = -1
             work  = Array($elty, (1,))
             info  = Array(Int32, 1)
             Rtyp  = typeof(real(work[1]))
@@ -325,13 +325,13 @@ for (syev, geev, elty) in
             if m != n
                 error("_jl_lapack_geev: matrix for eigen-decomposition must be square")
             end
-            lda   = int32(stride(A, 2))
+            lda   = stride(A, 2)
             lvecs = uppercase(jobvl)[1] == 'V'
             rvecs = uppercase(jobvr)[1] == 'V'
             VL    = Array($elty, lvecs ? (n, n) : (n, 0))
             VR    = Array($elty, rvecs ? (n, n) : (n, 0))            
-            n     = int32(n)
-            lwork = int32(-1)
+            n     = n
+            lwork = -1
             work  = Array($elty, 1)
             info  = Array(Int32, 1)
             Rtyp  = typeof(real(work[1]))
@@ -446,10 +446,8 @@ for (gesvd, gesdd, elty) in
                 U  = Array($elty, (m, 1))
                 VT = Array($elty, (n, 1))
             end
-            m      = int32(m)
-            n      = int32(n)
-            lda    = int32(stride(A, 2))
-            lwork  = int32(-1)
+            lda    = stride(A, 2)
+            lwork  = -1
             work   = Array($elty, 1)
             iwork  = Array(Int32, 8minmn)
             info   = Array(Int32, 1)
@@ -504,10 +502,8 @@ for (gesvd, gesdd, elty) in
             U      = Array($elty, j1 == 'A'? (m, m):(j1 == 'S'? (m, minmn) : (m, 0)))
             j2     = uppercase(jobvt)[1]
             VT     = Array($elty, j2 == 'A'? (n, n):(j2 == 'S'? (n, minmn) : (n, 0)))
-            lda    = int32(stride(A, 2))
-            lwork  = int32(-1)
-            m      = int32(m)
-            n      = int32(n)
+            lda    = stride(A, 2)
+            lwork  = -1
             work   = Array($elty, 1)
             info   = Array(Int32, 1)
             Rtyp   = typeof(real(work[1]))
@@ -580,12 +576,12 @@ for (gesv, posv, gels, trtrs, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_gesv: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             k       = size(B, 1)
             if (m != n || k != m) error("_jl_lapack_gesv: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             ipiv    = Array(Int32, n)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $gesv),
@@ -607,12 +603,12 @@ for (gesv, posv, gels, trtrs, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_posv: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             k       = size(B, 1)
             if (m != n || k != m) error("_jl_lapack_posv: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $posv),
                   Void,
@@ -632,16 +628,16 @@ for (gesv, posv, gels, trtrs, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_gels: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             vecb    = isa(B, Vector)
             k       = size(B, 1)
             if k != m error("_jl_lapack_gels: dimension mismatch") end
-            nrhs    = int32(vecb ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(vecb ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = vecb ? m : stride(B, 2)
             info    = Array(Int32, 1)
             work    = Array($elty, 1)
-            lwork   = int32(-1)
+            lwork   = -1
             for i in 1:2
                 ccall(dlsym(_jl_liblapack, $gels),
                       Void,
@@ -672,12 +668,12 @@ for (gesv, posv, gels, trtrs, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_trtrs: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             k       = size(B, 1)
             if (m != n || k != m) error("_jl_lapack_trtrs: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $trtrs),
                   Void,
@@ -692,7 +688,7 @@ end
 
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)
-    m, n  = size(Acopy)      
+    m, n  = size(Acopy)
     X     = copy(B)
 
     if m == n # Square
