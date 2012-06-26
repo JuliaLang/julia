@@ -165,6 +165,22 @@ end
 
 methods(t::CompositeKind) = t.env
 
+
+# require
+# Store list of files and their load time
+global _jl_package_list = Dict{ByteString,Float64}()
+function require(name::ByteString)
+    if !has(_jl_package_list,name)
+        load(name)
+    else
+        # Determine whether the file has been modified since it was last loaded
+        path = find_in_path(name)
+        if mtime(path) > _jl_package_list[name]
+            load(name)
+        end
+    end
+end
+
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
@@ -208,6 +224,7 @@ load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load
         path = find_in_path(fname)
+        _jl_package_list[fname] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))

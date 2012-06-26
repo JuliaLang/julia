@@ -895,7 +895,8 @@ collection[key...] = value
    large to fit in the computer's memory.
 
    The type determines how the bytes of the array are interpreted (no
-   format conversions are possible), and dims the size of the array.
+   format conversions are possible), and dims is a tuple containing
+   the size of the array.
 
    The file is specified via the stream.  When you initialize the
    stream, use 'r' for a 'read-only' array, and 'w+' to create a new
@@ -1113,7 +1114,7 @@ collection[key...] = value
 
 "),
 
-(E"Data Formats",E"int2str",E"int2str(n, base[, pad])
+(E"Data Formats",E"base",E"base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to.
@@ -1700,6 +1701,25 @@ collection[key...] = value
 (E"Arrays",E"squeeze",E"squeeze(A)
 
    Remove singleton dimensions from the shape of array 'A'
+
+"),
+
+(E"Arrays",E"vec",E"vec(A)
+
+   Make a vector out of an array with only one non-singleton
+   dimension.
+
+"),
+
+(E"Arrays",E"rowvec",E"rowvec(A, i)
+
+   Return the ith row of matrix A as a vector.
+
+"),
+
+(E"Arrays",E"colvec",E"colvec(A, i)
+
+   Return the ith column of matrix A as a vector.
 
 "),
 
