@@ -1,3 +1,8 @@
+
+type LapackException <: Exception
+    info::Int32
+end
+
 # Decompositions
 for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
     ((:dgbtrf_,:dgeqrf_,:dgeqp3_,:dgetrf_,:dpotrf_,:Float64),
@@ -53,7 +58,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                   &m, &n, A, &lda, ipiv, info)
-            if info[1] != 0 error("_jl_lapack_getrf: error $(info[1])") end
+            if info[1] != 0 throw(LapackException(info[1])) end
             A, ipiv
         end
         # SUBROUTINE DGEQRF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
@@ -78,7 +83,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
                       (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
-                if info[1] != 0 error("_jl_lapack_getrf: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -123,7 +128,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
                            Ptr{Int32}),
                           &m, &n, A, &lda, jpvt, tau, work, &lwork, info)
                 end
-                if info[1] != 0 error("_jl_lapack_geqp3: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work  = Array($elty, lwork)
@@ -151,7 +156,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                   &m, &n, &kl, &ku, AB, &ldab, ipiv, info)
-            if info[1] != 0 error("_jl_lapack_gbtrf: error $(info[1])") end
+            if info[1] != 0 throw(LapackException(info[1])) end
             AB, ipiv
         end
     end
@@ -184,7 +189,7 @@ for (orgqr, elty) in
                       (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                        Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                       &m, &n, &n, A, &lda, tau, work, &lwork, info)
-                if info[1] != 0 error("_jl_lapack_orgqr: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0 
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -300,7 +305,7 @@ for (syev, geev, elty) in
                            Ptr{Int32}),
                           jobz, uplo, &n, A, &lda, W, work, &lwork, info)
                 end
-                if info[1] != 0 error("_jl_lapack_syev: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -363,7 +368,7 @@ for (syev, geev, elty) in
                           jobvl, jobvr, &n, A, &lda, WR, WI, VL, &n,
                           VR, &n, work, &lwork, info)
                 end
-                if info[1] != 0 error("_jl_lapack_geev: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -475,7 +480,7 @@ for (gesvd, gesdd, elty) in
                           jobz, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, iwork, info)
                 end
-                if info[1] != 0 error("_jl_lapack_gesdd: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -530,7 +535,7 @@ for (gesvd, gesdd, elty) in
                           jobu, jobvt, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, info)
                 end
-                if info[1] != 0 error("_jl_lapack_gesdd: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -589,7 +594,7 @@ for (gesv, posv, gels, trtrs, elty) in
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &n, &nrhs, A, &lda, ipiv, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_gesv: error $(info[1])") end
+            if info[1] != 0 throw(LapackException(info[1])) end
             A, ipiv, B
         end
 
@@ -615,7 +620,7 @@ for (gesv, posv, gels, trtrs, elty) in
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   uplo, &n, &nrhs, A, &lda, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_posv: error $(info[1])") end
+            if info[1] != 0 throw(LapackException(info[1])) end
             A, B
         end
 
@@ -645,7 +650,7 @@ for (gesv, posv, gels, trtrs, elty) in
                        Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                       trans, &m, &n, &nrhs, A, &lda, B, &ldb, work, &lwork, info)
-                if info[1] != 0 error("_jl_lapack_gels: error $(info[1])") end
+                if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
@@ -680,7 +685,7 @@ for (gesv, posv, gels, trtrs, elty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   uplo, trans, diag, &n, &nrhs, A, &lda, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_trtrs: error $(info[1])") end
+            if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
     end
@@ -697,10 +702,13 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
                                         # Check for SPD matrix
         if ishermitian(Acopy) && all([ Acopy[i,i] > 0 for i=1:n ]) 
             try
-                return _jl_lapack_posv("U", Acopy, X)[2]
+                _jl_lapack_posv("U", Acopy, X)
+                return X
+            catch e
+                if !isa(e, LapackException) throw(e) end
+                Acopy[:] = A
+                X[:] = B
             end
-            Acopy[:] = A
-            X[:] = B
         end
         return _jl_lapack_gesv(Acopy, X)[3]
     end
