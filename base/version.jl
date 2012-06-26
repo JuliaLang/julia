@@ -8,9 +8,9 @@ type VersionNumber
     build::Vector{Union(Int,ASCIIString)}
 
     function VersionNumber(major::Int, minor::Int, patch::Int, pre::Vector, bld::Vector)
-        if major < 0; error("invalid major version: $major"); end
-        if minor < 0; error("invalid minor version: $minor"); end
-        if patch < 0; error("invalid patch version: $patch"); end
+        if major < 0 error("invalid major version: $major") end
+        if minor < 0 error("invalid minor version: $minor") end
+        if patch < 0 error("invalid patch version: $patch") end
         prerelease = Array(Union(Int,ASCIIString),length(pre))
         for i in 1:length(pre)
             ident = ascii(string(pre[i]))
@@ -58,7 +58,7 @@ function print(io::IO, v::VersionNumber)
         print_joined(io, v.build,'.')
     end
 end
-show(io, v::VersionNumber) = print(io, "v\"",v,"\"")
+show(io, v::VersionNumber) = print(io, "v\"", v, "\"")
 
 convert(::Type{VersionNumber}, v::Integer) = VersionNumber(v)
 convert(::Type{VersionNumber}, v::Tuple) = VersionNumber(v...)
@@ -79,10 +79,10 @@ function convert(::Type{VersionNumber}, v::String)
     if m == nothing error("invalid version string: $v") end
     major, minor, patch, minus, prerl, build = m.captures
     major = int(major)
-    minor = minor == nothing ? 0 : int(minor)
-    patch = patch == nothing ? 0 : int(patch)
-    prerl = prerl == nothing ? (minus == nothing ? [] : [""]) : split(prerl,'.')
-    build = build == nothing ? [] : split(build,'.')
+    minor = minor != nothing ? int(minor) : 0
+    patch = patch != nothing ? int(patch) : 0
+    prerl = prerl != nothing ? split(prerl,'.') : minus != nothing ? [""] : []
+    build = build != nothing ? split(build,'.') : []
     VersionNumber(major, minor, patch, prerl, build)
 end
 
