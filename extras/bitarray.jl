@@ -1330,14 +1330,16 @@ function findn{T}(B::BitArray{T})
     ndimsB = ndims(B)
     nnzB = nnz(B)
     I = ntuple(ndimsB, x->Array(Int, nnzB))
-    ranges = ntuple(ndims(B), d->(1:size(B,d)))
+    if nnzB > 0
+        ranges = ntuple(ndims(B), d->(1:size(B,d)))
 
-    if is(findn_cache,nothing)
-        findn_cache = Dict()
+        if is(findn_cache,nothing)
+            findn_cache = Dict()
+        end
+
+        gen_cartesian_map(findn_cache, findn_one, ranges,
+                          (:B, :I, :count, :z), B, I, 1, zero(T))
     end
-
-    gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:B, :I, :count, :z), B, I, 1, zero(T))
     return I
 end
 end
