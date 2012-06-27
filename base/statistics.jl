@@ -5,7 +5,7 @@ weighted_mean(v::AbstractArray, w::AbstractArray) = sum(v.*w)/sum(w)
 function median(v::AbstractArray)
     n = numel(v)
     if isodd(n)
-        return select(v, div(n, 2))
+        return select(v, div(n+1, 2))
     else
         vs = sort(v)
         return (vs[div(n, 2)] + vs[div(n, 2) + 1]) / 2

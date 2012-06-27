@@ -5,7 +5,7 @@ default all extra unicode::
 	@$(MAKE) -sC unicode
 
 TESTS = default all extra \
-core numbers strings corelib hashing arrayops \
+core numbers strings corelib hashing arrayops statistics \
 glpk linprog sparse lapack fft arpack random unicode \
 special bigint bigfloat bitarray distributions factorizations
 
