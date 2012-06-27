@@ -107,150 +107,45 @@ function download_file(url::String)
 end
 
 
-
-# File information
-function isfile(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return S_ISREG(stat_mode(buf))
-    else
-        return false
-    end
-end
-
-function isdir(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return S_ISDIR(stat_mode(buf))
-    else
-        return false
-    end
-end
-
-function islink(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if lstat(filename, buf) == 0
-        return S_ISLNK(stat_mode(buf))
-    else
-        return false
-    end
-end
-
-function isreadable(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return stat_mode(buf) & S_IRUSR > 0
-    else
-        error("Error accessing file ", filename)
-    end
-end
-
-function iswriteable(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return stat_mode(buf) & S_IWUSR > 0
-    else
-        error("Error accessing file ", filename)
-    end
-end
-
-function isexecutable(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return stat_mode(buf) & S_IXUSR > 0
-    else
-        error("Error accessing file ", filename)
-    end
-end
-
-function filesize(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return stat_size(buf)      # in bytes
-    else
-        error("Error accessing file ", filename)
-    end
-end
-
-function mtime(filename::ASCIIString)
-    buf = statbuf_allocate()
-    if stat(filename, buf) == 0
-        return stat_mtime(buf)
-        error("Error accessing file ", filename)
-    end
-end
-
 # Core functions: stat and friends
-# Allocate a buffer for storing the results
-function statbuf_allocate()
-    return Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
+type Stat
+    dev::Int64
+    ino::Int64
+    mode::Int64
+    nlink::Int64
+    uid::Int64
+    gid::Int64
+    rdev::Int64
+    size::Int64
+    blksize::Int64
+    blocks::Int64
+    atime_sec::Int64
+    atime_nsec::Int64
+    mtime_sec::Int64
+    mtime_nsec::Int64
+    ctime_sec::Int64
+    ctime_nsec::Int64
 end
 
-function stat(pathname::ASCIIString, buf::Vector{Uint8})
-    return ccall(:jl_stat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
+stat_check(filename::ASCIIString) = stat_check(stat(filename), filename)
+stat_check(s::Stat, filename::ASCIIString) = s
+stat_check(s::Int64, filename::ASCIIString) = error("Error accessing file: ", filename)
+
+function stat(pathname::ASCIIString)
+    return ccall(:jl_stat, Union(Stat,Int64), (Ptr{Uint8},), pathname)
 end
 
-function lstat(pathname::ASCIIString, buf::Vector{Uint8})
-    return ccall(:jl_lstat, Int32, (Ptr{Uint8}, Ptr{Uint8}), pathname, buf)
+function lstat(pathname::ASCIIString)
+    return ccall(:jl_lstat, Union(Stat,Int64), (Ptr{Uint8},), pathname)
 end
 
-function fstat(fd::Integer, buf::Vector{Uint8})
-    return ccall(:jl_fstat, Int32, (Int, Ptr{Uint8}), fd, buf)
-end
-
-# Raw access functions
-# These access the individual elements of the stat buffer
-function stat_dev(buf::Vector{Uint8})
-    return ccall(:jl_stat_dev, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_ino(buf::Vector{Uint8})
-    return ccall(:jl_stat_ino, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_mode(buf::Vector{Uint8})
-    return ccall(:jl_stat_mode, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_nlink(buf::Vector{Uint8})
-    return ccall(:jl_stat_nlink, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_uid(buf::Vector{Uint8})
-    return ccall(:jl_stat_uid, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_gid(buf::Vector{Uint8})
-    return ccall(:jl_stat_gid, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_rdev(buf::Vector{Uint8})
-    return ccall(:jl_stat_rdev, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_size(buf::Vector{Uint8})
-    return ccall(:jl_stat_size, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_blksize(buf::Vector{Uint8})
-    return ccall(:jl_stat_blksize, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_blocks(buf::Vector{Uint8})
-    return ccall(:jl_stat_blocks, Uint, (Ptr{Uint8},), buf)
-end
-
-function stat_mtime(buf::Vector{Uint8})
-    return ccall(:jl_stat_mtime, Float64, (Ptr{Uint8},), buf)
-end
-
-function stat_ctime(buf::Vector{Uint8})
-    return ccall(:jl_stat_ctime, Float64, (Ptr{Uint8},), buf)
+function fstat(fd::Integer)
+    return ccall(:jl_fstat, Union(Stat,Int64), (Int,), fd)
 end
 
 ## Interpreting the meaning of the different fields
-S_IFMT(mode) = mode & 0xf000
-S_IMODE(mode) = mode & 0x0fff
+S_IFMT(s::Stat) = s.mode & 0xf000
+S_IMODE(s::Stat) = s.mode & 0x0fff
 # Type information
 const S_IFIFO = 0x1000
 const S_IFCHR = 0x2000
@@ -260,13 +155,13 @@ const S_IFREG = 0x8000
 const S_IFLNK = 0xa000
 const S_IFSOCK = 0xc000
 
-S_ISFIFO(mode) = S_IFMT(mode) == S_IFFIFO
-S_ISCHR(mode) = S_IFMT(mode) == S_IFCHR
-S_ISDIR(mode) = S_IFMT(mode) == S_IFDIR
-S_ISBLK(mode) = S_IFMT(mode) == S_IFBLK
-S_ISREG(mode) = S_IFMT(mode) == S_IFREG
-S_ISLNK(mode) = S_IFMT(mode) == S_IFLNK
-S_ISSOCK(mode) = S_IFMT(mode) == S_IFSOCK
+S_ISFIFO(s::Stat) = S_IFMT(s) == S_IFFIFO
+S_ISCHR(s::Stat) = S_IFMT(s) == S_IFCHR
+S_ISDIR(s::Stat) = S_IFMT(s) == S_IFDIR
+S_ISBLK(s::Stat) = S_IFMT(s) == S_IFBLK
+S_ISREG(s::Stat) = S_IFMT(s) == S_IFREG
+S_ISLNK(s::Stat) = S_IFMT(s) == S_IFLNK
+S_ISSOCK(s::Stat) = S_IFMT(s) == S_IFSOCK
 
 # Permission information
 const S_ISUID = 0x800
@@ -291,3 +186,36 @@ const S_IXOTH = 0x001
 const S_IREAD = S_IRUSR
 const S_IWRITE = S_IWUSR
 const S_IEXEC = S_IXUSR
+
+# File information
+isfile(filename::ASCIIString) = isfile(stat(filename))
+isfile(s::Int64) = false
+isfile(s::Stat) = S_ISREG(s)
+   
+isdir(filename::ASCIIString) = isdir(stat(filename))
+isdir(s::Int64) = false
+isdir(s::Stat) = S_ISDIR(s)
+
+islink(filename::ASCIIString) = islink(stat(filename))
+islink(s::Int64) = false
+islink(s::Stat) = S_ISLNK(s)
+
+isreadable(filename::ASCIIString) = isreadable(stat_check(filename))
+isreadable(s::Stat) = s.mode & S_IRUSR > 0
+
+iswriteable(filename::ASCIIString) = iswriteable(stat_check(filename))
+iswriteable(s::Stat) = s.mode & S_IWUSR > 0
+
+isexecutable(filename::ASCIIString) = isexecutable(stat_check(filename))
+isexecutable(s::Stat) = s.mode & S_IXUSR > 0
+
+filesize(filename::ASCIIString) = filesize(stat_check(filename))
+filesize(s::Stat) = s.size
+
+mtime(filename::ASCIIString) = mtime(stat_check(filename))
+mtime(s::Stat) = s.mtime_sec + s.mtime_nsec * 1e-9
+
+## ctime is a constant from version.jl
+#ctime(filename::ASCIIString) = ctime(stat_check(filename))
+#ctime(s::Stat) = s.ctime_sec + s.ctime_nsec * 1e-9
+

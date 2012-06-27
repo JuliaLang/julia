@@ -105,101 +105,7 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
     return (jl_value_t*)a;
 }
 
-// --- stat ---
-DLLEXPORT int jl_sizeof_stat(void)
-{
-  struct stat buf;
-  return sizeof(buf);
-}
-
-DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
-{
-  uv_fs_t req;
-  int ret;
-
-  // Ideally one would use the statbuf for the storage in req, but
-  // it's not clear that this is possible using libuv
-  ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
-  uv_fs_req_cleanup(&req);
-  return ret;
-}
-
-DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
-{
-  uv_fs_t req;
-  int ret;
-
-  ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
-  uv_fs_req_cleanup(&req);
-  return ret;
-}
-
-DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
-{
-  uv_fs_t req;
-  int ret;
-
-  ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
-  if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
-  uv_fs_req_cleanup(&req);
-  return ret;
-}
-
-DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_dev;
-}
-
-DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_ino;
-}
-
-DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_mode;
-}
-
-DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_nlink;
-}
-
-DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_uid;
-}
-
-DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_gid;
-}
-
-DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_rdev;
-}
-
-DLLEXPORT off_t jl_stat_size(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_size;
-}
-
-DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_blksize;
-}
-
-DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
-{
-  return ((struct stat*) statbuf)->st_blocks;
-}
-
+// --- stat --
 #if defined(__APPLE__)
 #define st_ATIM st_atimespec
 #define st_MTIM st_mtimespec
@@ -210,29 +116,77 @@ DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
 #define st_CTIM st_ctim
 #endif
 
-/*
-// atime is stupid, let's not support it
-DLLEXPORT double jl_stat_atime(char *statbuf)
+static jl_value_t* jl_realstat(int error, uv_fs_t *req)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
-  return (double)s->st_ATIM.tv_sec + (double)s->st_ATIM.tv_nsec * 1e-9;
+  if (error != 0) {
+	  uv_fs_req_cleanup(req);  
+	  return jl_box_int64(error);
+  }
+  
+  struct stat *buf = (struct stat*)req->ptr;
+  jl_struct_type_t *stat_t = NULL;
+  jl_value_t *a, *dev = NULL,
+			 *ino = NULL, *mode = NULL,
+			 *nlink = NULL, *uid = NULL,
+			 *gid = NULL, *rdev = NULL,
+			 *size = NULL, *blksize = NULL,
+			 *blocks = NULL,
+			 *atime_sec = NULL, *atime_nsec = NULL,
+			 *mtime_sec = NULL, *mtime_nsec = NULL,
+			 *ctime_sec = NULL, *ctime_nsec = NULL;
+  JL_GC_PUSH(&stat_t, &dev, &ino, &mode,
+	  &nlink, &uid, &gid, &rdev, &size, &blksize,
+	  &blocks, &atime_sec, &atime_nsec,
+	  &mtime_sec, &mtime_nsec, &ctime_sec, &ctime_nsec);
+  stat_t = (jl_struct_type_t*)jl_get_global( jl_base_module, jl_symbol("Stat") );
+  dev = jl_box_int64( buf->st_dev );
+  ino = jl_box_int64( buf->st_ino );
+  mode = jl_box_int64( buf->st_mode );
+  nlink = jl_box_int64( buf->st_nlink );
+  uid = jl_box_int64( buf->st_uid );
+  gid = jl_box_int64( buf->st_gid );
+  rdev = jl_box_int64( buf->st_rdev );
+  size = jl_box_int64( buf->st_size );
+  blksize = jl_box_int64( buf->st_blksize );
+  blocks = jl_box_int64( buf->st_blocks );
+  atime_sec = jl_box_int64(buf->st_ATIM.tv_sec);
+  atime_nsec = jl_box_int64(buf->st_ATIM.tv_nsec);
+  mtime_sec = jl_box_int64(buf->st_MTIM.tv_sec);
+  mtime_nsec = jl_box_int64(buf->st_MTIM.tv_nsec);
+  ctime_sec = jl_box_int64(buf->st_CTIM.tv_sec);
+  ctime_nsec = jl_box_int64(buf->st_CTIM.tv_nsec);
+  uv_fs_req_cleanup(req);
+  a = jl_new_struct(stat_t, dev, ino, mode, nlink, uid, gid, rdev, size, blksize, blocks,
+		  atime_sec, atime_nsec, mtime_sec, mtime_nsec, ctime_sec, ctime_nsec);
+  JL_GC_POP();
+  return a;
 }
-*/
 
-DLLEXPORT double jl_stat_mtime(char *statbuf)
+DLLEXPORT jl_value_t* jl_stat(const char* path)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
-  return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
+  uv_fs_t req;
+  int error;
+  error = uv_fs_stat(uv_default_loop(), &req, path, NULL);
+  return jl_realstat(error, &req);
 }
 
-DLLEXPORT double jl_stat_ctime(char *statbuf)
+
+DLLEXPORT jl_value_t* jl_lstat(const char* path)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
-  return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
+  uv_fs_t req;
+  int error;
+  error = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
+  return jl_realstat(error, &req);
 }
+
+DLLEXPORT jl_value_t* jl_fstat(int fd)
+{
+  uv_fs_t req;
+  int error;
+  error = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
+  return jl_realstat(error, &req);
+}
+
 
 // --- buffer manipulation ---
 
