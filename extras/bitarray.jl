@@ -361,15 +361,13 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
-        nI = 1 + length(I)
         # this will be uncommented when
         # the indexing behaviour is settled
-        #if ndims(B) != nI
+        #if ndims(B) != 1 + length(I)
             #error("wrong number of dimensions in ref")
         #end
-        while nI > 1 && isa(I[nI-1],Integer); nI-=1; end
-        d = tuple(length(I0), map(length, I[1:nI-1])...)::Dims
-        X = similar(B, d)
+        X = similar(B, ref_shape(I0, I...))
+        nI = ndims(X)
 
         I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
 
@@ -425,10 +423,7 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I::Indices...)
-        i = length(I)
-        while i > 0 && isa(I[i],Integer); i-=1; end
-        d = map(length, I[1:i])::Dims
-        X = similar(B, d)
+        X = similar(B, ref_shape(I...))
 
         if is(ref_cache,nothing)
             ref_cache = Dict()
