@@ -160,6 +160,54 @@ nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsig
 
 ispow2(x::Integer) = (x&(x-1))==0
 
+# Compute all products of powers of the specified factors, up to a limit
+function powers(b::Vector{Int}, nMax::Int)
+    # nextpow for each element of b
+    c = iceil(log(nMax) ./ log(b))
+    # Calculate products of all powers
+    nb = length(b)
+    n = cell(nb)
+    for i = 1:nb
+        n[i] = b[i].^(0:c[i])
+    end
+    np = prod(ntuple(nb, i->length(n[i])))
+    p = Array(Int, np)
+    indx = ones(Int, nb)
+    r = ntuple(nb, i->1:length(n[i]))
+    for i = 1:np
+        tmp = n[1][indx[1]]
+        for j = 2:nb
+            tmp *= n[j][indx[j]]
+        end
+        p[i] = tmp
+        inc_carry!(indx, r...)
+    end
+    # Keep entries up to the smallest greater than or equal to nMax
+    # (doing this now reduces the number we have to sort)
+    cutoff = typemax(Int)
+    for i = 1:np
+        if cutoff > p[i] >= nMax
+            cutoff = p[i]
+        end
+    end
+    pkeep = Array(Int,0)
+    for i = 1:np
+        if p[i] <= cutoff
+            push(pkeep, p[i])
+        end
+    end
+    # Sort them and keep unique entries
+    sort!(pkeep)
+    pret = Array(Int,0)
+    push(pret, pkeep[1])
+    for i = 2:length(pkeep)
+        if pkeep[i] > pkeep[i-1]
+            push(pret, pkeep[i])
+        end
+    end
+    return pret
+end
+
 # decimal digits in an unsigned integer
 global const _jl_powers_of_ten = [
     0x0000000000000001, 0x000000000000000a, 0x0000000000000064, 0x00000000000003e8,
