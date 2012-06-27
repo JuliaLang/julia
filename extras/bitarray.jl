@@ -744,6 +744,19 @@ append!{T<:Integer}(B::BitVector{T}, items::BitVector) = append!(B, reinterpret(
 append!{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append!(B, bitpack(items))
 append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(items))
 
+function append{T<:Integer}(B::BitVector{T}, items::BitVector{T})
+    n0 = length(B)
+    n1 = length(items)
+    r = BitArray(T, n0 + n1)
+    r[1:n0] = B
+    r[n0+1:n0+n1] = items
+    return r
+end
+
+append{T<:Integer}(B::BitVector{T}, items::BitVector) = append(B, reinterpret(T, items))
+append{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append(B, bitpack(items))
+append{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append(A, bitunpack(items))
+
 function grow(B::BitVector, n::Integer)
     n0 = length(B)
     if n < -n0

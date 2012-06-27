@@ -491,6 +491,18 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
+function append{T}(a::Array{T,1}, items::Array{T,1})
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+    end
+    n0 = length(a)
+    n1 = length(items)
+    r = Array(T, n0 + n1)
+    r[1:n0] = a
+    r[n0+1:n0+n1] = items
+    return r
+end
+
 function grow(a::Vector, n::Integer)
     if n < -length(a)
         throw(BoundsError())
