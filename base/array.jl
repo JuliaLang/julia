@@ -207,6 +207,7 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
+    I = indices(I...)
     X = similar(A, ref_shape(I...))
 
     if is(ref_cache,nothing)
@@ -370,6 +371,8 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
+    I0 = indices(I0)
+    I = indices(I...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
@@ -384,6 +387,8 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    I0 = indices(I0)
+    I = indices(I...)
     nel = length(I0)
     for idx in I
         nel *= length(idx)
