@@ -176,18 +176,29 @@ function powers(b::Vector{Int}, nMax::Int)
     bestyet = typemax(Int)
     while indx[end] <= last(r[end])
         tmp = n[1][indx[1]]
+        isgood = true
         for j = 2:nb
-            tmp *= n[j][indx[j]]
-        end
-        if tmp < bestyet
-            push(p, tmp)
-            if tmp > nMax
-                bestyet = tmp
+            if float64(tmp) * float64(n[j][indx[j]]) > typemax(Int)
+                isgood = false
+                break
+            else
+                tmp *= n[j][indx[j]]
             end
-        else
-            indx[1] = last(r[1])  # force termination & carry
         end
-        inc_carry!(indx, r...)
+        if !isgood
+            indx[1] = last(r[1])  # force termination & carry
+            inc_carry!(indx, r...)
+        else
+            if tmp < bestyet
+                push(p, tmp)
+                if tmp > nMax
+                    bestyet = tmp
+                end
+            else
+                indx[1] = last(r[1])  # force termination & carry
+            end
+            inc_carry!(indx, r...)
+        end
     end
     # Sort them
     sort!(p)
