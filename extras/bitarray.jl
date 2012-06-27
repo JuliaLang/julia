@@ -587,6 +587,7 @@ function assign{T<:Integer}(B::BitArray, x::Number, I::AbstractVector{T})
 end
 
 function assign{T<:Number,S<:Integer}(B::BitArray, X::AbstractArray{T}, I::AbstractVector{S})
+    if length(X) != length(I); error("argument dimensions must match"); end
     for i = 1:length(I)
         B[I[i]] = X[i]
     end
@@ -614,6 +615,23 @@ assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Integer) =
 let assign_cache = nothing
     global assign
     function assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Indices, I::Indices...)
+        nel = length(I0)
+        for idx in I
+            nel *= length(idx)
+        end
+        if length(X) != nel
+            error("argument dimensions must match")
+        end
+        if ndims(X) > 1
+            if size(X,1) != length(I0)
+                error("argument dimensions must match")
+            end
+            for i = 1:length(I)
+                if size(X,i+1) != length(I[i])
+                    error("argument dimensions must match")
+                end
+            end
+        end
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
