@@ -98,13 +98,16 @@ function fits_read_record(f::FITSFile, keynum::Int)
 end
 
 function fits_read_keyn(f::FITSFile, keynum::Int)
+    keyname = Array(Uint8, 9)
     value = Array(Uint8, 71)
     comment = Array(Uint8, 71)
     ccall(dlsym(_jl_libcfitsio,:ffgkyn), Int32,
-        (Ptr{Void},Int32,Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
-        f.ptr, keynum, value, comment, &f.status)
+        (Ptr{Void},Int32,Ptr{Uint8},Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
+        f.ptr, keynum, keyname, value, comment, &f.status)
     fits_assert_ok(f)
-    cstring(convert(Ptr{Uint8},value)), cstring(convert(Ptr{Uint8},comment))
+    cstring(convert(Ptr{Uint8},keyname)),
+    cstring(convert(Ptr{Uint8},value)),
+    cstring(convert(Ptr{Uint8},comment))
 end
 
 function fits_write_key(f::FITSFile, keyname::String, value, comment::String)
