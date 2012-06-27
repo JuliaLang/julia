@@ -465,6 +465,8 @@ ref{T<:Integer}(B::BitArray{T}, I::AbstractArray{Bool}) = _jl_ref_bool_1d(B, I)
 ref{T<:Integer}(B::BitMatrix{T}, I::Integer, J::AbstractVector{Bool}) = B[I, find(J)]
 ref{T<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::Integer) = B[find(I), J]
 ref{T<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = B[find(I), find(J)]
+ref{T<:Integer,S<:Integer}(B::BitMatrix{T}, I::AbstractVector{S}, J::AbstractVector{Bool}) = B[I, find(J)]
+ref{T<:Integer,S<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::AbstractVector{S}) = B[find(I), J]
 
 ## Indexing: assign ##
 
@@ -692,6 +694,17 @@ assign{T<:Integer,S<:Number}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVe
 assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
     (A[find(I),find(J)] = x)
 
+assign{T<:Integer,S<:Number,R<:Integer}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{R}, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
+
+assign{T<:Integer,R<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{R}, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
+
+assign{T<:Integer,S<:Number,R<:Integer}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{Bool}, J::AbstractVector{R}) =
+    (A[find(I),J] = x)
+
+assign{T<:Integer,R<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::AbstractVector{R}) =
+    (A[find(I),J] = x)
 
 ## Dequeue functionality ##
 
