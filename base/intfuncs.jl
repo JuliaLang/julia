@@ -170,42 +170,33 @@ function powers(b::Vector{Int}, nMax::Int)
     for i = 1:nb
         n[i] = b[i].^(0:c[i])
     end
-    np = prod(ntuple(nb, i->length(n[i])))
-    p = Array(Int, np)
     indx = ones(Int, nb)
     r = ntuple(nb, i->1:length(n[i]))
-    for i = 1:np
+    p = Array(Int, 0)
+    bestyet = typemax(Int)
+    while indx[end] <= last(r[end])
         tmp = n[1][indx[1]]
         for j = 2:nb
             tmp *= n[j][indx[j]]
         end
-        p[i] = tmp
+        if tmp < bestyet
+            push(p, tmp)
+            if tmp > nMax
+                bestyet = tmp
+            end
+        else
+            indx[1] = last(r[1])  # force termination & carry
+        end
         inc_carry!(indx, r...)
     end
-    # Keep entries up to the smallest greater than or equal to nMax
-    # (doing this now reduces the number we have to sort)
-    cutoff = typemax(Int)
-    for i = 1:np
-        if cutoff > p[i] >= nMax
-            cutoff = p[i]
-        end
+    # Sort them
+    sort!(p)
+    # Keep only one item bigger than nMax
+    i = length(p)
+    while i > 1 && p[i-1] >= nMax
+        i -= 1
     end
-    pkeep = Array(Int,0)
-    for i = 1:np
-        if p[i] <= cutoff
-            push(pkeep, p[i])
-        end
-    end
-    # Sort them and keep unique entries
-    sort!(pkeep)
-    pret = Array(Int,0)
-    push(pret, pkeep[1])
-    for i = 2:length(pkeep)
-        if pkeep[i] > pkeep[i-1]
-            push(pret, pkeep[i])
-        end
-    end
-    return pret
+    del(p,i+1:length(p))
 end
 
 # decimal digits in an unsigned integer
