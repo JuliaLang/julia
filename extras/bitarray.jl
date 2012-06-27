@@ -714,6 +714,12 @@ append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(it
 
 function grow(B::BitVector, n::Integer)
     n0 = length(B)
+    if n < -n0
+        throw(BoundsError())
+    end
+    if n < 0
+        return del(B, n0+n+1:n0)
+    end
     k0 = length(B.chunks)
     k1 = _jl_num_bit_chunks(n0 + int(n))
     if k1 > k0

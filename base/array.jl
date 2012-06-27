@@ -487,6 +487,9 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
 end
 
 function grow(a::Vector, n::Integer)
+    if n < -length(a)
+        throw(BoundsError())
+    end
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     return a
 end
