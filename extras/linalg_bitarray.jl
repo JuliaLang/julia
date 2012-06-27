@@ -60,14 +60,12 @@ function tril{T}(B::BitMatrix{T}, k::Int)
 end
 tril(B::BitMatrix, k::Integer) = tril(B, int(k))
 
-## Matrix multiplication
-
-(*){T<:Integer}(A::BitArray{T}, B::BitArray{T}) = bitunpack(A) * bitunpack(B)
+## Matrix multiplication and division
 
 #disambiguations
-(*){T<:Integer}(A::BitMatrix{T}, B::BitVector{T}) = bitunpack(A) * bitunpack(B)
-(*){T<:Integer}(A::BitVector{T}, B::BitMatrix{T}) = bitunpack(A) * bitunpack(B)
-(*){T<:Integer}(A::BitMatrix{T}, B::BitMatrix{T}) = bitunpack(A) * bitunpack(B)
+(*){T<:Integer,S<:Integer}(A::BitMatrix{T}, B::BitVector{S}) = bitunpack(A) * bitunpack(B)
+(*){T<:Integer,S<:Integer}(A::BitVector{T}, B::BitMatrix{S}) = bitunpack(A) * bitunpack(B)
+(*){T<:Integer,S<:Integer}(A::BitMatrix{T}, B::BitMatrix{S}) = bitunpack(A) * bitunpack(B)
 (*){T<:Integer}(A::BitMatrix{T}, B::AbstractVector) = (*)(bitunpack(A), B)
 (*){T<:Integer}(A::BitVector{T}, B::AbstractMatrix) = (*)(bitunpack(A), B)
 (*){T<:Integer}(A::BitMatrix{T}, B::AbstractMatrix) = (*)(bitunpack(A), B)
@@ -78,6 +76,7 @@ tril(B::BitMatrix, k::Integer) = tril(B, int(k))
 
 for f in (:/, :\, :*)
     @eval begin
+        ($f)(A::BitArray, B::BitArray) = ($f)(bitunpack(A), bitunpack(B))
         ($f)(A::BitArray, B::AbstractArray) = ($f)(bitunpack(A), B)
         ($f)(A::AbstractArray, B::BitArray) = ($f)(A, bitunpack(B))
     end
