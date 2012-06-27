@@ -692,7 +692,7 @@ function push{T<:Integer}(B::BitVector{T}, item)
     return B
 end
 
-function append!(B::BitVector, items::BitVector)
+function append!{T<:Integer}(B::BitVector{T}, items::BitVector{T})
     n0 = length(B)
     n1 = length(items)
     if n1 == 0
@@ -709,6 +709,7 @@ function append!(B::BitVector, items::BitVector)
     return B
 end
 
+append!{T<:Integer}(B::BitVector{T}, items::BitVector) = append!(B, reinterpret(T, items))
 append!{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append!(B, bitpack(items))
 append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(items))
 
