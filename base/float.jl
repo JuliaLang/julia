@@ -77,7 +77,7 @@ ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
 ## floating point promotions ##
 
-promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
@@ -108,21 +108,21 @@ morebits(::Type{Float32}) = Float64
 
 -(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
 -(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
-+(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x), unbox(Float32,y)))
-+(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x), unbox(Float64,y)))
--(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x), unbox(Float32,y)))
--(x::Float64, y::Float64) = box(Float64,sub_float(unbox(Float64,x), unbox(Float64,y)))
-*(x::Float32, y::Float32) = box(Float32,mul_float(unbox(Float32,x), unbox(Float32,y)))
-*(x::Float64, y::Float64) = box(Float64,mul_float(unbox(Float64,x), unbox(Float64,y)))
-/(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x), unbox(Float32,y)))
-/(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x), unbox(Float64,y)))
++(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x),unbox(Float32,y)))
++(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x),unbox(Float64,y)))
+-(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x),unbox(Float32,y)))
+-(x::Float64, y::Float64) = box(Float64,sub_float(unbox(Float64,x),unbox(Float64,y)))
+*(x::Float32, y::Float32) = box(Float32,mul_float(unbox(Float32,x),unbox(Float32,y)))
+*(x::Float64, y::Float64) = box(Float64,mul_float(unbox(Float64,x),unbox(Float64,y)))
+/(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x),unbox(Float32,y)))
+/(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x),unbox(Float64,y)))
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x), unbox(Float32,y)))
-rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x), unbox(Float64,y)))
+rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
+rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
 ## floating point comparisons ##
 
