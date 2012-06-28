@@ -593,14 +593,16 @@ function show_nd(io, a::AbstractArray)
     cartesian_map((idxs...)->print_slice(io,idxs...), tail)
 end
 
-function whos()
+function whos(pattern::Regex)
     global VARIABLES
-    for v = map(symbol,sort(map(string, VARIABLES)))
-        if isbound(v)
+    for s = sort(map(string, VARIABLES))
+        v = symbol(s)
+        if isbound(v) && matches(pattern, s)
             println(rpad(v, 30), summary(eval(v)))
         end
     end
 end
+whos() = whos(r"")
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")
