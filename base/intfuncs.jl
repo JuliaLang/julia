@@ -183,13 +183,19 @@ function ndigits0z(x::Uint128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
+if WORD_SIZE == 32
+const _jl_ndigits_max_mul = 69000000
+else
+const _jl_ndigits_max_mul = 290000000000000000
+end
+
 function ndigits0z(n::Unsigned, b::Integer)
     if b == 2  return (sizeof(n)<<3-leading_zeros(n)); end
     if b == 8  return div((sizeof(n)<<3)-leading_zeros(n)+2,3); end
     if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
     if b == 10 return ndigits0z(n); end
     nd = 1
-    if n <= 500000000000000000
+    if n <= _jl_ndigits_max_mul
         # multiplication method is faster, but doesn't work for extreme values
         d = b
         while n >= d
