@@ -514,14 +514,14 @@ function _jl_glpk__check_rows_ids(glp_prob::GLPProb, min_size::Integer, num_rows
     if num_rows == 0
         return true
     end
-    if length(row_ids) < num_rows
+    if length(rows_ids) < num_rows
         throw(GLPError("invalid vector size: declared>=$num_rows actual=$(length(rows_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, row_ids[1 : num_rows])
+    add_each(ind_set, rows_ids[1 : num_rows])
     if min(ind_set) < 1 || max(ind_set) > rows
         throw(GLPError("index out of bounds (min=1 max=$rows)"))
-    elseif length(ind_set) != length(row_ids)
+    elseif length(ind_set) != length(rows_ids)
         throw(GLPError("one or more duplicate index(es) found"))
     end
     return true
@@ -535,14 +535,14 @@ function _jl_glpk__check_cols_ids(glp_prob::GLPProb, min_size::Integer, num_cols
     if num_cols == 0
         return 0
     end
-    if length(col_ids) < num_cols
+    if length(cols_ids) < num_cols
         throw(GLPError("invalid vector size: declared>=$num_cols actual=$(length(cols_ids))"))
     end
     ind_set = IntSet()
-    add_each(ind_set, col_ids[1 : num_cols])
+    add_each(ind_set, cols_ids[1 : num_cols])
     if min(ind_set) < 1 || max(ind_set) > cols
         throw(GLPError("index out of bounds (min=1 max=$cols)"))
-    elseif length(ind_set) != length(col_ids)
+    elseif length(ind_set) != length(cols_ids)
         throw(GLPError("one or more duplicate index(es) found"))
     end
     return true
