@@ -314,7 +314,7 @@ function nextprod(a::Vector{Int}, x)
                 break
             end
         end
-        if tmp < x
+        if tmp <= x
             n = iceil(log(xf/int(tmp)) / logbs)  # fixme Int128->Float64
             tmp *= bpow[end][n+1]
             if tmp < bestyet
@@ -356,7 +356,7 @@ function prevprod(a::Vector{Int}, x)
                 break
             end
         end
-        if tmp < x
+        if tmp <= x
             n = ifloor(log(xf/int(tmp)) / logbs)  # fixme Int128->Float64
             tmp *= bpow[end][n+1]
             if tmp > bestyet
