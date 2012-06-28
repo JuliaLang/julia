@@ -361,15 +361,13 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
-        nI = 1 + length(I)
         # this will be uncommented when
         # the indexing behaviour is settled
-        #if ndims(B) != nI
+        #if ndims(B) != 1 + length(I)
             #error("wrong number of dimensions in ref")
         #end
-        while nI > 1 && isa(I[nI-1],Integer); nI-=1; end
-        d = tuple(length(I0), map(length, I[1:nI-1])...)::Dims
-        X = similar(B, d)
+        X = similar(B, ref_shape(I0, I...))
+        nI = ndims(X)
 
         I = map(x->(isa(x,Integer) ? (x:x) : x), I[1:nI-1])
 
@@ -425,10 +423,8 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I::Indices...)
-        i = length(I)
-        while i > 0 && isa(I[i],Integer); i-=1; end
-        d = map(length, I[1:i])::Dims
-        X = similar(B, d)
+        I = indices(I...)
+        X = similar(B, ref_shape(I...))
 
         if is(ref_cache,nothing)
             ref_cache = Dict()
@@ -465,6 +461,8 @@ ref{T<:Integer}(B::BitArray{T}, I::AbstractArray{Bool}) = _jl_ref_bool_1d(B, I)
 ref{T<:Integer}(B::BitMatrix{T}, I::Integer, J::AbstractVector{Bool}) = B[I, find(J)]
 ref{T<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::Integer) = B[find(I), J]
 ref{T<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = B[find(I), find(J)]
+ref{T<:Integer,S<:Integer}(B::BitMatrix{T}, I::AbstractVector{S}, J::AbstractVector{Bool}) = B[I, find(J)]
+ref{T<:Integer,S<:Integer}(B::BitMatrix{T}, I::AbstractVector{Bool}, J::AbstractVector{S}) = B[find(I), J]
 
 ## Indexing: assign ##
 
@@ -587,6 +585,7 @@ function assign{T<:Integer}(B::BitArray, x::Number, I::AbstractVector{T})
 end
 
 function assign{T<:Number,S<:Integer}(B::BitArray, X::AbstractArray{T}, I::AbstractVector{S})
+    if length(X) != length(I); error("argument dimensions must match"); end
     for i = 1:length(I)
         B[I[i]] = X[i]
     end
@@ -596,6 +595,8 @@ end
 let assign_cache = nothing
     global assign
     function assign(B::BitArray, x::Number, I0::Indices, I::Indices...)
+        I0 = indices(I0)
+        I = indices(I...)
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
@@ -614,6 +615,25 @@ assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Integer) =
 let assign_cache = nothing
     global assign
     function assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Indices, I::Indices...)
+        I0 = indices(I0)
+        I = indices(I...)
+        nel = length(I0)
+        for idx in I
+            nel *= length(idx)
+        end
+        if length(X) != nel
+            error("argument dimensions must match")
+        end
+        if ndims(X) > 1
+            if size(X,1) != length(I0)
+                error("argument dimensions must match")
+            end
+            for i = 1:length(I)
+                if size(X,i+1) != length(I[i])
+                    error("argument dimensions must match")
+                end
+            end
+        end
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
@@ -674,6 +694,17 @@ assign{T<:Integer,S<:Number}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVe
 assign{T<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::AbstractVector{Bool}) =
     (A[find(I),find(J)] = x)
 
+assign{T<:Integer,S<:Number,R<:Integer}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{R}, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
+
+assign{T<:Integer,R<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{R}, J::AbstractVector{Bool}) =
+    (A[I,find(J)] = x)
+
+assign{T<:Integer,S<:Number,R<:Integer}(A::BitMatrix{T}, x::AbstractArray{S}, I::AbstractVector{Bool}, J::AbstractVector{R}) =
+    (A[find(I),J] = x)
+
+assign{T<:Integer,R<:Integer}(A::BitMatrix{T}, x::Number, I::AbstractVector{Bool}, J::AbstractVector{R}) =
+    (A[find(I),J] = x)
 
 ## Dequeue functionality ##
 
@@ -692,7 +723,7 @@ function push{T<:Integer}(B::BitVector{T}, item)
     return B
 end
 
-function append!(B::BitVector, items::BitVector)
+function append!{T<:Integer}(B::BitVector{T}, items::BitVector{T})
     n0 = length(B)
     n1 = length(items)
     if n1 == 0
@@ -709,11 +740,31 @@ function append!(B::BitVector, items::BitVector)
     return B
 end
 
+append!{T<:Integer}(B::BitVector{T}, items::BitVector) = append!(B, reinterpret(T, items))
 append!{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append!(B, bitpack(items))
 append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(items))
 
+function append{T<:Integer}(B::BitVector{T}, items::BitVector{T})
+    n0 = length(B)
+    n1 = length(items)
+    r = BitArray(T, n0 + n1)
+    r[1:n0] = B
+    r[n0+1:n0+n1] = items
+    return r
+end
+
+append{T<:Integer}(B::BitVector{T}, items::BitVector) = append(B, reinterpret(T, items))
+append{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append(B, bitpack(items))
+append{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append(A, bitunpack(items))
+
 function grow(B::BitVector, n::Integer)
     n0 = length(B)
+    if n < -n0
+        throw(BoundsError())
+    end
+    if n < 0
+        return del(B, n0+n+1:n0)
+    end
     k0 = length(B.chunks)
     k1 = _jl_num_bit_chunks(n0 + int(n))
     if k1 > k0
@@ -1305,14 +1356,16 @@ function findn{T}(B::BitArray{T})
     ndimsB = ndims(B)
     nnzB = nnz(B)
     I = ntuple(ndimsB, x->Array(Int, nnzB))
-    ranges = ntuple(ndims(B), d->(1:size(B,d)))
+    if nnzB > 0
+        ranges = ntuple(ndims(B), d->(1:size(B,d)))
 
-    if is(findn_cache,nothing)
-        findn_cache = Dict()
+        if is(findn_cache,nothing)
+            findn_cache = Dict()
+        end
+
+        gen_cartesian_map(findn_cache, findn_one, ranges,
+                          (:B, :I, :count, :z), B, I, 1, zero(T))
     end
-
-    gen_cartesian_map(findn_cache, findn_one, ranges,
-                      (:B, :I, :count, :z), B, I, 1, zero(T))
     return I
 end
 end

@@ -113,6 +113,7 @@
 @assert base(12,typemin(Uint64)) == "0"
 @assert base(12,typemax(Uint64)) == "839365134a2a240713"
 
+if WORD_SIZE > 32
 @assert bin(typemin(Uint128)) == "0"
 @assert bin(typemax(Uint128)) == "1"^128
 @assert oct(typemin(Uint128)) == "0"
@@ -128,6 +129,7 @@
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
 @assert base(12,typemin(Uint128)) == "0"
 @assert base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
+end
 
 @assert bin(typemin(Int8)) == "-1"*"0"^7
 @assert bin(typemax(Int8)) == "1"^7
@@ -189,6 +191,7 @@
 @assert base(12,typemin(Int64)) == "-41a792678515120368"
 @assert base(12,typemax(Int64)) == "41a792678515120367"
 
+if WORD_SIZE > 32
 @assert bin(typemin(Int128)) == "-1"*"0"^127
 @assert bin(typemax(Int128)) == "1"^127
 @assert oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
@@ -205,6 +208,7 @@
     "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
 @assert base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
 @assert base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
+end
 
 # signs
 @assert sign(1) == 1
