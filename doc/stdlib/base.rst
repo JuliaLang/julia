@@ -6,9 +6,10 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
-.. function:: whos()
+.. function:: whos([pattern::Regex])
 
-   Print information about global user-defined variables.
+   Print information about global user-defined variables, optionally restricted
+   to those matching ``pattern``.
 
 .. function:: edit("file"[, line])
 
