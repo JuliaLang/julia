@@ -6,7 +6,7 @@ default all extra unicode::
 
 TESTS = default all extra \
 core numbers strings corelib hashing arrayops statistics \
-glpk linprog sparse lapack fft arpack random unicode \
+combinatorics glpk linprog sparse lapack fft arpack random unicode \
 special bigint bigfloat bitarray distributions factorizations
 
 $(TESTS) ::
