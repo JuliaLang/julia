@@ -154,61 +154,23 @@ function powermod(x::Integer, p::Integer, m::Integer)
     return r
 end
 
-# smallest power of 2 >= i
+# smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 ispow2(x::Integer) = (x&(x-1))==0
 
-# Compute all products of powers of the specified factors, up to a limit
-function powers(b::Vector{Int}, nMax::Int)
-    # nextpow for each element of b
-    c = iceil(log(nMax) ./ log(b))
-    # Calculate products of all powers
-    nb = length(b)
-    n = cell(nb)
-    for i = 1:nb
-        n[i] = b[i].^(0:c[i])
-    end
-    indx = ones(Int, nb)
-    r = ntuple(nb, i->1:length(n[i]))
-    p = Array(Int, 0)
-    bestyet = typemax(Int)
-    while indx[end] <= last(r[end])
-        tmp = n[1][indx[1]]
-        isgood = true
-        for j = 2:nb
-            if float64(tmp) * float64(n[j][indx[j]]) > typemax(Int)
-                isgood = false
-                break
-            else
-                tmp *= n[j][indx[j]]
-            end
-        end
-        if !isgood
-            indx[1] = last(r[1])  # force termination & carry
-            inc_carry!(indx, r...)
-        else
-            if tmp < bestyet
-                push(p, tmp)
-                if tmp > nMax
-                    bestyet = tmp
-                end
-            else
-                indx[1] = last(r[1])  # force termination & carry
-            end
-            inc_carry!(indx, r...)
-        end
-    end
-    # Sort them
-    sort!(p)
-    # Keep only one item bigger than nMax
-    i = length(p)
-    while i > 1 && p[i-1] >= nMax
-        i -= 1
-    end
-    del(p,i+1:length(p))
+# smallest integer n for which a^n >= x
+function nextpow(a, x)
+    n = iceil(log(x) ./ log(a))
+    return n - int(a.^(n-1) .>= x) # guard against roundoff error, e.g., with a=5 and x=125
 end
+# largest integer n for which a^n <= x
+function prevpow(a, x)
+    n = ifloor(log(x) ./ log(a))
+    return n + int(a.^(n+1) .<= x)
+end
+
 
 # decimal digits in an unsigned integer
 global const _jl_powers_of_ten = [

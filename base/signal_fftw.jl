@@ -327,19 +327,3 @@ for (libname, fname, celty) in ((:_jl_libfftw ,"fftw_plan_guru_dft",:Complex128)
         end
     end
 end
-
-# Given an integer and a sorted list, return the first item greater
-# than or equal to the integer
-function nextsize(x::Int, sz::Vector{Int})
-    if x > sz[end]
-        error("List does not reach a sufficiently-large value")
-    end
-    i = 1
-    while x > sz[i]
-        i += 1
-    end
-    return sz[i]
-end
-
-    
-

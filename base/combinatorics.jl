@@ -285,3 +285,87 @@ function partitions{T}(s::AbstractVector{T})
     a[n] = 0
   end
 end
+
+# For a list of integers i1, i2, i3, find the smallest 
+#     i1^n1 * i2^n2 * i3^n3 >= x
+# for integer n1, n2, n3
+function nextprod(a::Vector{Int}, x)
+    if x > typemax(Int)
+        error("Unsafe for x bigger than typemax(Int)")
+    end
+    b = sortr(a)    # the smallest will be calculated directly, so sort
+    bs = b[end]
+    xf = float64(x)
+    logbs = log(bs)
+    c = nextpow(b, x)
+    nloop = length(b)-1
+    bpow = cell(nloop+1)
+    for i = 1:nloop+1
+        bpow[i] = b[i].^(0:c[i])
+    end
+    indx = ones(Int, nloop)
+    r = ntuple(nloop, i->1:length(bpow[i]))
+    bestyet = typemax(Int)
+    while indx[end] <= last(r[end])
+        tmp = int128(bpow[1][indx[1]])  # avoid overflow
+        for j = 2:nloop
+            tmp *= bpow[j][indx[j]]
+            if tmp > bestyet
+                break
+            end
+        end
+        if tmp < x
+            n = iceil(log(xf/int(tmp)) / logbs)  # fixme Int128->Float64
+            tmp *= bpow[end][n+1]
+            if tmp < bestyet
+                bestyet = int(tmp)
+            end
+        else
+            indx[1] = last(r[1])  # force termination & carry
+        end
+        inc_carry!(indx, r...)
+    end
+    return bestyet
+end
+
+# For a list of integers i1, i2, i3, find the largest 
+#     i1^n1 * i2^n2 * i3^n3 <= x
+# for integer n1, n2, n3
+function prevprod(a::Vector{Int}, x)
+    if x > typemax(Int)
+        error("Unsafe for x bigger than typemax(Int)")
+    end
+    b = sortr(a)    # the smallest will be calculated directly, so sort
+    bs = b[end]
+    xf = float64(x)
+    logbs = log(bs)
+    c = prevpow(b, x)
+    nloop = length(b)-1
+    bpow = cell(nloop+1)
+    for i = 1:nloop+1
+        bpow[i] = b[i].^(0:c[i])
+    end
+    indx = ones(Int, nloop)
+    r = ntuple(nloop, i->1:length(bpow[i]))
+    bestyet = 0
+    while indx[end] <= last(r[end])
+        tmp = int128(bpow[1][indx[1]])  # avoid overflow
+        for j = 2:nloop
+            tmp *= bpow[j][indx[j]]
+            if tmp > x
+                break
+            end
+        end
+        if tmp < x
+            n = ifloor(log(xf/int(tmp)) / logbs)  # fixme Int128->Float64
+            tmp *= bpow[end][n+1]
+            if tmp > bestyet
+                bestyet = int(tmp)
+            end
+        else
+            indx[1] = last(r[1])  # force termination & carry
+        end
+        inc_carry!(indx, r...)
+    end
+    return bestyet
+end
