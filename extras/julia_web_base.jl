@@ -173,21 +173,32 @@ end
 # event handler for socket input
 add_fd_handler(__connectfd, __socket_callback)
 
+function __is_illegal_expr(exprAsString)
+        return matches(r"system", exprAsString) || matches(r"run", exprAsString) || matches(r"\`", exprAsString) || matches(r"ccall", exprAsString)
+end
+
 function __eval_exprs(__parsed_exprs)
     global ans
     user_id = ""
 
     # try to evaluate the expressions
     for i=1:length(__parsed_exprs)
-        # evaluate the expression and stop if any exceptions happen
         user_id = __parsed_exprs[i][1]
-        try
-            ans = eval(__parsed_exprs[i][2])
-        catch __error
-            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, sprint(show, __error)}))
+        exprAsString = strcat("", __parsed_exprs[i][2])
+
+        if !__is_illegal_expr(exprAsString)
+            # evaluate the expression and stop if any exceptions happen
+            try
+                ans = eval(__parsed_exprs[i][2])
+            catch __error
+                return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, sprint(show, __error)}))
+            end
+        else
+            return __write_message(__Message(__MSG_OUTPUT_EVAL_ERROR, {user_id, sprint(show, "Do not do that")}))
         end
+
     end
-    
+
     # send the result of the last expression
     if isa(ans,Nothing)
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, ""}))
@@ -195,6 +206,8 @@ function __eval_exprs(__parsed_exprs)
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)}))
     end
 end
+
+
 
 # print version info
 println("Julia ", _jl_version_string)
