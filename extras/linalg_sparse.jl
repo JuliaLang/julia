@@ -1,5 +1,7 @@
 ## linalg_sparse.jl: Basic Linear Algebra functions for sparse representations ##
 
+require("sparse.jl")
+
 #TODO? probably there's no use at all for these
 # dot(x::SparseAccumulator, y::SparseAccumulator)
 # cross(a::SparseAccumulator, b::SparseAccumulator) =
@@ -54,34 +56,58 @@ function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     return Y
 end
 
-# sparse matmul (sparse * sparse)
-function (*){TvX,TiX,TvY,TiY}(X::SparseMatrixCSC{TvX,TiX}, Y::SparseMatrixCSC{TvY,TiY})
-    mX, nX = size(X)
-    mY, nY = size(Y)
-    if nX != mY; error("error in *: mismatched dimensions"); end
+# Sparse matrix multiplication as described in [Gustavson, 1978]:
+# http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
+
+function (*){TvX,TiX,TvY,TiY}(A::SparseMatrixCSC{TvX,TiX}, B::SparseMatrixCSC{TvY,TiY})
+    mA, nA = size(A)
+    mB, nB = size(B)
+    if nA != mB; error("mismatched dimensions"); end
     Tv = promote_type(TvX, TvY)
     Ti = promote_type(TiX, TiY)
 
-    colptr = Array(Ti, nY+1)
-    colptr[1] = 1
-    nnz_res = nnz(X) + nnz(Y)
-    rowval = Array(Ti, nnz_res)  # TODO: Need better estimation of result space
-    nzval = Array(Tv, nnz_res)
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+    colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
+    # TODO: Need better estimation of result space
+    nnzC = min(mA*nB, length(nzvalA) + length(nzvalB))
+    colptrC = Array(Ti, nB+1)
+    rowvalC = Array(Ti, nnzC)
+    nzvalC = Array(Tv, nnzC)
 
-    colptrY = Y.colptr
-    rowvalY = Y.rowval
-    nzvalY = Y.nzval
-
-    spa = SparseAccumulator(Tv, Ti, mX);
-    for y_col = 1:nY
-        for y_elt = colptrY[y_col] : (colptrY[y_col+1]-1)
-            x_col = rowvalY[y_elt]
-            _jl_spa_axpy(spa, nzvalY[y_elt], X, x_col)
+    ip = 1
+    xb = zeros(Ti, mA)
+    x  = zeros(Tv, mA)
+    for i in 1:nB
+        if ip + mA > nnzC
+            rowvalC = grow(rowvalC, 2*nnzC)
+            nzvalC = grow(nzvalC, 2*nnzC)
         end
-        (rowval, nzval) = _jl_spa_store_reset(spa, y_col, colptr, rowval, nzval)
+        colptrC[i] = ip
+        for jp in colptrB[i]:(colptrB[i+1] - 1)
+            j = rowvalB[jp]
+            nzB = nzvalB[jp]
+            for kp in colptrA[j]:(colptrA[j+1] - 1)
+                k = rowvalA[kp]
+                nzA = nzvalA[kp]
+                if xb[k] != i
+                    rowvalC[ip] = k
+                    ip += 1
+                    xb[k] = i
+                    x[k] = nzA * nzB
+                else
+                    x[k] += nzA * nzB
+                end
+            end
+        end
+        for vp in colptrC[i]:(ip - 1)
+            nzvalC[vp] = x[rowvalC[vp]]
+        end
     end
+    colptrC[nB+1] = ip
 
-    SparseMatrixCSC(mX, nY, colptr, rowval, nzval)
+    rowvalC = del(rowvalC, colptrC[end]:length(rowvalC))
+    nzvalC = del(nzvalC, colptrC[end]:length(nzvalC))
+    return SparseMatrixCSC(mA,nB,colptrC,rowvalC,nzvalC)
 end
 
 ## triu, tril
