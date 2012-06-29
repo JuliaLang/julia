@@ -765,13 +765,13 @@ repmat(a::AbstractVector, m::Int, n::Int) = repmat(reshape(a, length(a), 1), m, 
 
 sub2ind(dims) = 1
 sub2ind(dims, i::Integer) = int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(int(i), int(j))
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, int(i), int(j))
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(int(i0),int(i1),int(i2))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, int(i0),int(i1),int(i2))
 sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(int(i0),int(i1),int(i2),int(i3))
+    sub2ind(dims, int(i0),int(i1),int(i2),int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
@@ -786,8 +786,8 @@ function sub2ind(dims, I::Integer...)
     return index
 end
 
-sub2ind(dims, I::AbstractVector...) =
-    [ sub2ind(dims, map(X->X[i], I)...) for i=1:length(I[1]) ]
+sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
+    [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
 ind2sub(dims::(), ind::Integer) = throw(BoundsError())
