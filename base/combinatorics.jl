@@ -285,3 +285,89 @@ function partitions{T}(s::AbstractVector{T})
     a[n] = 0
   end
 end
+
+# For a list of integers i1, i2, i3, find the smallest 
+#     i1^n1 * i2^n2 * i3^n3 >= x
+# for integer n1, n2, n3
+function nextprod(a::Vector{Int}, x)
+    if x > typemax(Int)
+        error("Unsafe for x bigger than typemax(Int)")
+    end
+    k = length(a)
+    v = ones(Int, k)            # current value of each counter
+    mx = int(a.^nextpow(a, x))  # maximum value of each counter
+    v[1] = mx[1]                # start at first case that is >= x
+    p::morebits(Int) = mx[1]    # initial value of product in this case
+    best = p
+    icarry = 1
+    
+    while v[end] < mx[end]
+        if p >= x
+            best = p < best ? p : best  # keep the best found yet
+            carrytest = true
+            while carrytest
+                p = div(p, v[icarry])
+                v[icarry] = 1
+                icarry += 1
+                p *= a[icarry]
+                v[icarry] *= a[icarry]
+                carrytest = v[icarry] > mx[icarry] && icarry < k
+            end
+            if p < x
+                icarry = 1
+            end
+        else
+            while p < x
+                p *= a[1]
+                v[1] *= a[1]
+            end
+        end
+    end
+    best = mx[end] < best ? mx[end] : best
+    if best < typemax(Int)
+        return int(best)
+    else
+        return best
+    end
+end
+
+# For a list of integers i1, i2, i3, find the largest 
+#     i1^n1 * i2^n2 * i3^n3 <= x
+# for integer n1, n2, n3
+function prevprod(a::Vector{Int}, x)
+    if x > typemax(Int)
+        error("Unsafe for x bigger than typemax(Int)")
+    end
+    k = length(a)
+    v = ones(Int, k)            # current value of each counter
+    mx = int(a.^nextpow(a, x))  # allow each counter to exceed p (sentinel)
+    first = int(a[1]^prevpow(a[1], x))  # start at best case in first factor 
+    v[1] = first
+    p::morebits(Int) = first
+    best = p
+    icarry = 1
+    
+    while v[end] < mx[end]
+        while p <= x
+            best = p > best ? p : best
+            p *= a[1]
+            v[1] *= a[1]
+        end
+        if p > x
+            carrytest = true
+            while carrytest
+                p = div(p, v[icarry])
+                v[icarry] = 1
+                icarry += 1
+                p *= a[icarry]
+                v[icarry] *= a[icarry]
+                carrytest = v[icarry] > mx[icarry] && icarry < k
+            end
+            if p <= x
+                icarry = 1
+            end
+        end
+    end
+    best = x >= p > best ? p : best
+    return int(best)
+end
