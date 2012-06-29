@@ -213,13 +213,14 @@ function ref(A::Array, I::Indices...)
     if is(ref_cache,nothing)
         ref_cache = Dict()
     end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)]
+    gen_array_index_map(ref_cache, refind -> quote
+            X[storeind] = A[$refind]
             storeind += 1
         end, I, (:A, :X, :storeind), A, X, 1)
     return X
 end
 end
+
 
 # logical indexing
 
