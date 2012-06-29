@@ -830,7 +830,7 @@ end
 
 indices(I::Indices) = I
 indices(I::AbstractVector{Bool}) = find(I)
-indices(I::Indices...) = map(indices, I)
+indices(I::(Indices...)) = map(indices, I)
 
 ## iteration utilities ##
 

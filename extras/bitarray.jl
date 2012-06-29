@@ -423,7 +423,7 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I::Indices...)
-        I = indices(I...)
+        I = indices(I)
         X = similar(B, ref_shape(I...))
 
         if is(ref_cache,nothing)
@@ -596,7 +596,7 @@ let assign_cache = nothing
     global assign
     function assign(B::BitArray, x::Number, I0::Indices, I::Indices...)
         I0 = indices(I0)
-        I = indices(I...)
+        I = indices(I)
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
@@ -616,7 +616,7 @@ let assign_cache = nothing
     global assign
     function assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Indices, I::Indices...)
         I0 = indices(I0)
-        I = indices(I...)
+        I = indices(I)
         nel = length(I0)
         for idx in I
             nel *= length(idx)

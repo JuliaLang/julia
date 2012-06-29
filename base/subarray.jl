@@ -279,7 +279,7 @@ end
 
 function assign(s::SubArray, v::AbstractArray, I0::Indices, I::Indices...)
     I0 = indices(I0)
-    I = indices(I...)
+    I = indices(I)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = cell(n)
