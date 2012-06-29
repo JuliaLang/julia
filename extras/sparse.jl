@@ -1015,36 +1015,6 @@ function _jl_spa_store_reset{T}(S::SparseAccumulator{T}, col, colptr, rowval, nz
     return (rowval, nzval)
 end
 
-# S = S + a*x, where x is col j of A
-function _jl_spa_axpy{T}(S::SparseAccumulator{T}, a, A::SparseMatrixCSC, j::Integer)
-    colptrA = A.colptr
-    rowvalA = A.rowval
-    nzvalA = A.nzval
-
-    vals = S.vals
-    flags = S.flags
-    indexes = S.indexes
-    nvals = S.nvals
-    z = zero(T)
-
-    for i = colptrA[j]:(colptrA[j+1]-1)
-        v = a * nzvalA[i]
-        r = rowvalA[i]
-
-        if flags[r] == true
-            vals[r] += v
-        else
-            if v == z; continue; end
-            flags[r] = true
-            vals[r] = v
-            nvals += 1
-            indexes[nvals] = r
-        end
-    end
-
-    S.nvals = nvals
-end
-
 # Set spa S to be the i'th column of A
 function _jl_spa_set{T}(S::SparseAccumulator{T}, A::SparseMatrixCSC{T}, i::Integer)
     m = A.m
