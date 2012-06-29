@@ -324,7 +324,11 @@ function nextprod(a::Vector{Int}, x)
         end
     end
     best = mx[end] < best ? mx[end] : best
-    return int(best)
+    if best < typemax(Int)
+        return int(best)
+    else
+        return best
+    end
 end
 
 # For a list of integers i1, i2, i3, find the largest 
@@ -334,37 +338,36 @@ function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
         error("Unsafe for x bigger than typemax(Int)")
     end
-    b = sortr(a)    # the smallest will be calculated directly, so sort
-    bs = b[end]
-    xf = float64(x)
-    logbs = log(bs)
-    c = prevpow(b, x)
-    nloop = length(b)-1
-    bpow = cell(nloop+1)
-    for i = 1:nloop+1
-        bpow[i] = b[i].^(0:c[i])
-    end
-    indx = ones(Int, nloop)
-    r = ntuple(nloop, i->1:length(bpow[i]))
-    bestyet = 0
-    while indx[end] <= last(r[end])
-        tmp = int128(bpow[1][indx[1]])  # avoid overflow
-        for j = 2:nloop
-            tmp *= bpow[j][indx[j]]
-            if tmp > x
-                break
+    k = length(a)
+    v = ones(Int, k)            # current value of each counter
+    mx = int(a.^nextpow(a, x))  # allow each counter to exceed p (sentinel)
+    first = int(a[1]^prevpow(a[1], x))  # start at best case in first factor 
+    v[1] = first
+    p::morebits(Int) = first
+    best = p
+    icarry = 1
+    
+    while v[end] < mx[end]
+        while p <= x
+            best = p > best ? p : best
+            p *= a[1]
+            v[1] *= a[1]
+        end
+        if p > x
+            carrytest = true
+            while carrytest
+                p = div(p, v[icarry])
+                v[icarry] = 1
+                icarry += 1
+                p *= a[icarry]
+                v[icarry] *= a[icarry]
+                carrytest = v[icarry] > mx[icarry] && icarry < k
+            end
+            if p <= x
+                icarry = 1
             end
         end
-        if tmp <= x
-            n = ifloor(log(xf/int(tmp)) / logbs)  # fixme Int128->Float64
-            tmp *= bpow[end][n+1]
-            if tmp > bestyet
-                bestyet = int(tmp)
-            end
-        else
-            indx[1] = last(r[1])  # force termination & carry
-        end
-        inc_carry!(indx, r...)
     end
-    return bestyet
+    best = x >= p > best ? p : best
+    return int(best)
 end
