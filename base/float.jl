@@ -102,7 +102,7 @@ promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64 # TODO: should be Float8
 promote_rule(::Type{Float32}, ::Type{Char}) = Float32
 promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 
-morebits(Float32) = Float64
+morebits(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##
 

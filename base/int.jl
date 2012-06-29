@@ -186,14 +186,14 @@ itrunc(x::Integer) = x
 ifloor(x::Integer) = x
  iceil(x::Integer) = x
 
-morebits(Int8) = Int16
-morebits(Int16) = Int32
-morebits(Int32) = Int64
-morebits(Int64) = Int128
-morebits(Uint8) = Uint16
-morebits(Uint16) = Uint32
-morebits(Uint32) = Uint64
-morebits(Uint64) = Uint128
+morebits(::Type{Int8}) = Int16
+morebits(::Type{Int16}) = Int32
+morebits(::Type{Int32}) = Int64
+morebits(::Type{Int64}) = Int128
+morebits(::Type{Uint8}) = Uint16
+morebits(::Type{Uint16}) = Uint32
+morebits(::Type{Uint32}) = Uint64
+morebits(::Type{Uint64}) = Uint128
 
 ## integer arithmetic ##
 
