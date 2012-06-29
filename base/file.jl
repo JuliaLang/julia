@@ -180,6 +180,10 @@ function mtime(filename::ASCIIString)
     end
 end
 
+function abs_path(fname::String)
+    readchomp(`readlink --canonicalize-missing $fname`)
+end
+
 # Core functions: stat and friends
 # Allocate a buffer for storing the results
 function statbuf_allocate()
