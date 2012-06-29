@@ -2,11 +2,6 @@
 
 require("sparse.jl")
 
-#TODO? probably there's no use at all for these
-# dot(x::SparseAccumulator, y::SparseAccumulator)
-# cross(a::SparseAccumulator, b::SparseAccumulator) =
-
-
 ## Matrix multiplication
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
