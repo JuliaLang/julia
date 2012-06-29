@@ -815,6 +815,19 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     return tuple(ind, sub...)
 end
 
+function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
+    n = length(dims)
+    l = length(ind)
+    t = ntuple(n, x->Array(Int, l))
+    for i = 1:l
+        s = ind2sub(dims, ind[i])
+        for j = 1:n
+            t[j][i] = s[j]
+        end
+    end
+    return t
+end
+
 indices(I::Indices) = I
 indices(I::AbstractVector{Bool}) = find(I)
 indices(I::Indices...) = map(indices, I)
