@@ -154,11 +154,23 @@ function powermod(x::Integer, p::Integer, m::Integer)
     return r
 end
 
-# smallest power of 2 >= i
+# smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 ispow2(x::Integer) = (x&(x-1))==0
+
+# smallest integer n for which a^n >= x
+function nextpow(a, x)
+    n = iceil(log(x) ./ log(a))
+    return n - int(a.^(n-1) .>= x) # guard against roundoff error, e.g., with a=5 and x=125
+end
+# largest integer n for which a^n <= x
+function prevpow(a, x)
+    n = ifloor(log(x) ./ log(a))
+    return n + int(a.^(n+1) .<= x)
+end
+
 
 # decimal digits in an unsigned integer
 global const _jl_powers_of_ten = [
