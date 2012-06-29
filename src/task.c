@@ -449,36 +449,36 @@ static jl_value_t *build_backtrace(void)
     size_t ip;
     size_t *p;
     jl_array_t *a;
-	unsigned short num;
+    unsigned short num;
     a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
 
-	/** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-	#if defined(__MINGW_H)
-	HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
+    /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
+#if defined(__MINGW_H)
+    HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
 
-	if(kernel32 != NULL){
-		typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-		CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+    if (kernel32 != NULL) {
+        typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
+        CaptureStackBackTraceType func = (CaptureStackBackTraceType)GetProcAddress(kernel32, "RtlCaptureStackBackTrace");
 
-		if(func==NULL){
-			FreeLibrary(kernel32);
-			kernel32 = NULL;
-			func = NULL;
-			return (jl_value_t*)a;
-		}else
-		{
-			num = func( 0, 1023, array, NULL );
-		}
-    }else
-    {
-        JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
+        if (func == NULL) {
+            FreeLibrary(kernel32);
+            kernel32 = NULL;
+            func = NULL;
+            return (jl_value_t*)a;
+        }
+        else {
+            num = func(0, 1023, array, NULL);
+        }
+    }
+    else {
+        JL_PUTS("Failed to load kernel32.dll", JL_STDERR);
         jl_exit(1);
     }
-	FreeLibrary(kernel32);
-	#else
-	num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
-	#endif
+    FreeLibrary(kernel32);
+#else
+    num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
+#endif
 
     p = (size_t*)array;
     while ((ip = *(p++)) != 0 && (num--)>0) {

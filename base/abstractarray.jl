@@ -112,18 +112,27 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 
 ## Conversions ##
 
-int     (x::AbstractArray) = copy_to(similar(x,Int)    , x)
-int8    (x::AbstractArray) = copy_to(similar(x,Int8)   , x)
-uint8   (x::AbstractArray) = copy_to(similar(x,Uint8)  , x)
-int16   (x::AbstractArray) = copy_to(similar(x,Int16)  , x)
-uint16  (x::AbstractArray) = copy_to(similar(x,Uint16) , x)
-int32   (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
-uint32  (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
-int64   (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
-uint64  (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
-integer (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
-unsigned(x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
+function iround_to{T}(dest::AbstractArray{T}, src)
+    i = 1
+    for x in src
+        dest[i] = iround(T,x)
+        i += 1
+    end
+    return dest
+end
+
+int     (x::AbstractArray) = iround_to(similar(x,Int)    , x)
+int8    (x::AbstractArray) = iround_to(similar(x,Int8)   , x)
+uint8   (x::AbstractArray) = iround_to(similar(x,Uint8)  , x)
+int16   (x::AbstractArray) = iround_to(similar(x,Int16)  , x)
+uint16  (x::AbstractArray) = iround_to(similar(x,Uint16) , x)
+int32   (x::AbstractArray) = iround_to(similar(x,Int32)  , x)
+uint32  (x::AbstractArray) = iround_to(similar(x,Uint32) , x)
+int64   (x::AbstractArray) = iround_to(similar(x,Int64)  , x)
+uint64  (x::AbstractArray) = iround_to(similar(x,Uint64) , x)
+integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
+unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
+char   (x::AbstractArray) = iround_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
@@ -805,6 +814,10 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     end
     return tuple(ind, sub...)
 end
+
+indices(I::Indices) = I
+indices(I::AbstractVector{Bool}) = find(I)
+indices(I::Indices...) = map(indices, I)
 
 ## iteration utilities ##
 

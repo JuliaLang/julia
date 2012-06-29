@@ -759,7 +759,7 @@ function Categorical(p::Matrix{Float64})
     if !(size(p, 1) == 1 || size(p, 2) == 1)
         error("Probability matrix must be a single row or single column")
     end
-    Categorical(int(n), reshape(p, (numel(p),)))
+    Categorical(reshape(p, (numel(p),)))
 end
 
 insupport(d::Categorical, x::Int) = 1 <= x <= length(d.prob) && d.prob[x] != 0.0

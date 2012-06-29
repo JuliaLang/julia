@@ -1,3 +1,5 @@
+require("linalg_sparse.jl")
+
 type MatrixIllConditionedException <: Exception end
 
 function _jl_cholmod_transpose{Tv<:Union(Float64,Complex128)}(S::SparseMatrixCSC{Tv})

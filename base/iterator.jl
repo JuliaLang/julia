@@ -93,3 +93,15 @@ done(r::Reverse, i) = i < 1
 
 # TODO: a more general "reversible" interface; this only
 # works for objects that are indexable from 1 to length(itr)
+
+
+# increment-with-carry: digit-counter with arbitrary base for each digit
+function inc_carry!(counter::Vector{Int}, r::Range1{Int}...)
+    counter[1] += 1
+    idim = 1
+    while idim < length(counter) && counter[idim] > last(r[idim])
+        counter[idim] = first(r[idim])
+        idim += 1
+        counter[idim] += 1
+    end
+end

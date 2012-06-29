@@ -188,7 +188,7 @@ ref_shape(i      ,j::Real) = (length(i),)
 ref_shape(i      ,j)       = (length(i),length(j))
 
 # check for valid sizes in A[I...] = x where x <: AbstractArray
-function assign_shape_check(x::AbstractArray, I...)
+function assign_shape_check(X::AbstractArray, I...)
     nel = 1
     for idx in I
         nel *= length(idx)

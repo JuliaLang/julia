@@ -9,9 +9,10 @@ function _jl_help_db() return [
 
 "),
 
-(E"Getting Around",E"whos",E"whos()
+(E"Getting Around",E"whos",E"whos([pattern::Regex])
 
-   Print information about global user-defined variables.
+   Print information about global user-defined variables, optionally
+   restricted to those matching 'pattern'.
 
 "),
 
