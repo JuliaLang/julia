@@ -28,7 +28,7 @@ if run_ref
         end
     end
     println("\n")
-    
+
     println("Slicing with contiguous blocks:")
     println("Small arrays:")
     for n_dims in 1:10
