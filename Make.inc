@@ -43,13 +43,9 @@ USEGCC = 0
 USECLANG=1
 endif
 
-
-GCC = gcc
-GPLUSPLUS = g++
-
 ifeq ($(USEGCC),1)
-CC = $(GCC)
-CXX = $(GPLUSPLUS)
+CC = gcc
+CXX = g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
@@ -63,6 +59,11 @@ JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
+ifeq ($(OS), Darwin)
+# use $(sw_vers -productVersion) instead of 10.5?
+CC += -mmacosx-version-min=10.5
+CXX += -mmacosx-version-min=10.5
+endif
 endif
 
 # if not absolute, then relative to JULIA_HOME

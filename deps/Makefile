@@ -153,7 +153,7 @@ llvm_python_workaround:
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC=$(CC) CXX=$(CXX) && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -195,7 +195,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(USR)) $(READLINE_OPTS) CC=$(CC) CXX=$(CXX) && \
+	./configure --prefix=$(abspath $(USR)) $(READLINE_OPTS) CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -221,7 +221,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-shared --enable-static --with-curses CC=$(CC) CXX=$(CXX) && \
+	./configure --prefix=$(abspath $(USR)) --enable-shared --enable-static --with-curses CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -278,7 +278,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit CC=$(CC) CXX=$(CXX)
+	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
 ifeq ($(OS),WINNT)
@@ -338,7 +338,7 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	$(MAKE) CC=$(CC) CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
+	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	cp $< $@
@@ -358,7 +358,7 @@ install-rmath: $(RMATH_OBJ_TARGET)
 
 $(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	cd Rmath/src && \
-	$(MAKE) CC=$(CC) && \
+	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	cp $< $@
@@ -443,7 +443,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=1 CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 $(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
@@ -504,7 +504,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 	touch $@
 $(ARPACK_OBJ_SOURCE): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE)
 	cd arpack-ng_$(ARPACK_VER) && \
-	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC) CC=$(CC) CXX=$(CXX)
+	./configure  --prefix=$(abspath $(USR)) --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared F77=$(FC) MPIF77=$(FC) CC="$(CC)" CXX="$(CXX)"
 	touch $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
@@ -545,7 +545,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC=$(CC) CXX=$(CXX) && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -564,7 +564,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) CC=$(CC) CXX=$(CXX) && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
@@ -607,7 +607,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC=$(CC) CXX=$(CXX) BLAS=$(LIBBLAS) LAPACK=$(LIBLAPACK)
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS=$(LIBBLAS) LAPACK=$(LIBLAPACK)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -666,7 +666,7 @@ clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	touch $@
 clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
-	./configure --prefix=$(abspath $(USR)) CC=$(CC) CXX=$(CXX)
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER) install
 	touch $@
@@ -694,7 +694,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)" --prefix=$(abspath $(USR)) CC=$(CC) CXX=$(CXX)
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)" --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -729,7 +729,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	touch $@
 lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(abspath $(USR)) --without-pcre --without-zlib --without-bzip2 CC=$(CC) CXX=$(CXX)
+	./configure --prefix=$(abspath $(USR)) --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
 	touch $@
@@ -758,7 +758,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(USR)) CC=$(CC) CXX=$(CXX)
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER)
 	$(MAKE) -C gmp-$(GMP_VER) check
@@ -807,7 +807,7 @@ glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
 	touch $@
 glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
-	./configure --prefix=$(abspath $(USR)) CC=$(CC) CXX=$(CXX)
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) install
 	touch $@
