@@ -1,34 +1,37 @@
 n_evals = 1e7
 run_ref = true
 run_assign = true
+colon_broken = true
+lensmall = 4
 
 if run_ref
     println("#### Ref ####")
-    println("Whole array operations:")
-    println("Small arrays:")
-    lensmall = 4
-    for n_dims in 1:10
-        sz = ntuple(n_dims,i->lensmall)
-        A = rand(sz)
-        n_r = iceil(n_evals/prod(sz))
-        print(n_dims, " dimensions (", n_r, " repeats): ")
-        @time for i = 1:n_r
-            B = A[:]
+    if !colon_broken
+        println("Whole array operations:")
+        println("Small arrays:")
+        for n_dims in 1:10
+            sz = ntuple(n_dims,i->lensmall)
+            A = rand(sz)
+            n_r = iceil(n_evals/prod(sz))
+            print(n_dims, " dimensions (", n_r, " repeats): ")
+            @time for i = 1:n_r
+                B = A[:]
+            end
         end
-    end
-    println("Big arrays:")
-    lenbig = [1000000,1000,100,32,16,10,10]
-    for n_dims in 1:length(lenbig)
-        sz = ntuple(n_dims,i->lenbig[n_dims])
-        A = rand(sz)
-        n_r = iceil(n_evals/prod(sz))
-        print(n_dims, " dimensions (", n_r, " repeats): ")
-        @time for i = 1:n_r
-            B = A[:]
+        println("Big arrays:")
+        lenbig = [1000000,1000,100,32,16,10,10]
+        for n_dims in 1:length(lenbig)
+            sz = ntuple(n_dims,i->lenbig[n_dims])
+            A = rand(sz)
+            n_r = iceil(n_evals/prod(sz))
+            print(n_dims, " dimensions (", n_r, " repeats): ")
+            @time for i = 1:n_r
+                B = A[:]
+            end
         end
+        println("\n")
     end
-    println("\n")
-    
+
     println("Slicing with contiguous blocks:")
     println("Small arrays:")
     for n_dims in 1:10
