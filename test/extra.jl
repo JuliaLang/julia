@@ -8,5 +8,3 @@ runtests("file")
 #runtests("Rmath") # disabled due to pipe bug
 
 runtests("perf")
-#runtests("perf_cat")
-#runtests("arrayperf")
