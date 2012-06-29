@@ -1,6 +1,6 @@
 n_evals = 1e7
 run_ref = true
-run_assign = false
+run_assign = true
 
 if run_ref
     println("#### Ref ####")

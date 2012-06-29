@@ -377,7 +377,10 @@ function assign(A::Array, x, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = x
+                          refind += 1
+                      end,
                       tuple(I0, I...),
                       (:A, :x),
                       A, x)
@@ -410,8 +413,10 @@ function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
-                                             refind += 1),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = X[refind]
+                          refind += 1
+                      end,
                       tuple(I0, I...),
                       (:A, :X, :refind),
                       A, X, 1)
