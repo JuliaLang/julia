@@ -1,4 +1,3 @@
-
 Getting Around
 --------------
 
@@ -430,11 +429,11 @@ Strings
 
    Return ``string`` with any trailing whitespace removed.
 
-.. function:: begins_with(string, prefix)
+.. function:: begins_with(prefix, string)
 
    Returns ``true`` if ``string`` starts with ``prefix``.
 
-.. function:: ends_with(string, suffix)
+.. function:: ends_with(suffix, string)
 
    Returns ``true`` if ``string`` ends with ``suffix``.
 
