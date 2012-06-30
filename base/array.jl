@@ -436,7 +436,6 @@ end
 # logical indexing
 
 function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
-    n = sum(I)
     for i = 1:numel(I)
         if I[i]
             A[i] = x
@@ -446,7 +445,6 @@ function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
 end
 
 function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    n = sum(I)
     c = 1
     for i = 1:numel(I)
         if I[i]
