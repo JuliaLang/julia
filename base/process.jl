@@ -507,11 +507,10 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 ## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = ByteString[x]
+arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
-    if isa(head,Cmd)
-        return head.exec
-    elseif applicable(start,head)
+    if applicable(start,head)
         vals = ByteString[]
         for x in head
             push(vals,cstring(x))
@@ -526,8 +525,8 @@ function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
     vals = ByteString[]
-    for h = head, t = tail
-        push(vals, cstring(strcat(h,t)))
+    for h in head, t in tail
+        push(vals,cstring(strcat(h,t)))
     end
     vals
 end
@@ -535,7 +534,7 @@ end
 function cmd_gen(parsed)
     args = ByteString[]
     for arg in parsed
-        append!(args, arg_gen(arg...))
+        append!(args,arg_gen(arg...))
     end
     Cmd(args)
 end
