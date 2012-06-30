@@ -466,6 +466,10 @@ Strings
 
    Convert a character index to a byte index
 
+.. function:: randstring(len)
+
+   Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
+
 I/O
 ---
 
