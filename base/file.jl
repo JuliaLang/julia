@@ -181,7 +181,29 @@ function mtime(filename::ASCIIString)
 end
 
 function abs_path(fname::String)
-    readchomp(`readlink --canonicalize-missing $fname`)
+    if fname[1] == '/'
+        comp = split(fname, '/')
+    else
+        comp = [split(cwd(), '/'), fname('/')]
+    end
+    @assert comp[1] == ""
+    i = 2
+    while i <= length(comp)
+        if comp[i] == "."
+            del(comp, i)
+            continue
+        elseif comp[i] == ".."
+            if i <= 2
+                error("invalid path")
+            end
+            i -= 1
+            del(comp, i)
+            del(comp, i)
+            continue
+        end
+        i += 1
+    end
+    return join(comp, '/')
 end
 
 # Core functions: stat and friends
