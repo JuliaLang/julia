@@ -135,7 +135,8 @@ LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
 endif
 
 $(LLVM_TAR):
-	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+	#$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+	$(WGET) http://d304tytmzqn1fl.cloudfront.net/$@
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) 
 	mkdir -p llvm-$(LLVM_VER) && \
 	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $<
