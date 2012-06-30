@@ -87,6 +87,23 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
                     float64_valued(x) ? hash(float64(x)) :
                     bitmix(hash(x.num),hash(x.den))
 
+
+
+## sizeof for Rational{T}, T in (Uint,Int)x(8,16,32,64,128) ##
+
+sizeof(::Type{Rational{Int8}})    =  2
+sizeof(::Type{Rational{Uint8}})   =  2
+sizeof(::Type{Rational{Int16}})   =  4
+sizeof(::Type{Rational{Uint16}})  =  4
+sizeof(::Type{Rational{Int32}})   =  8
+sizeof(::Type{Rational{Uint32}})  =  8
+sizeof(::Type{Rational{Int64}})   = 16
+sizeof(::Type{Rational{Uint64}})  = 16
+sizeof(::Type{Rational{Int128}})  = 32
+sizeof(::Type{Rational{Uint128}}) = 32
+
+
+
 -(x::Rational) = (-x.num) // x.den
 +(x::Rational, y::Rational) = (x.num*y.den + x.den*y.num) // (x.den*y.den)
 -(x::Rational, y::Rational) = (x.num*y.den - x.den*y.num) // (x.den*y.den)

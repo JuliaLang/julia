@@ -177,6 +177,24 @@ promote_rule(::Type{ImaginaryUnit}, ::Type{Float64}) = Complex128
 promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
 
+## sizeof for ComplexPair{T}, T in (Uint,Int)x(8,16,32,64,128) ##
+
+sizeof(::Type{ComplexPair{Int8}})    =  2
+sizeof(::Type{ComplexPair{Uint8}})   =  2
+sizeof(::Type{ComplexPair{Int16}})   =  4
+sizeof(::Type{ComplexPair{Uint16}})  =  4
+sizeof(::Type{ComplexPair{Int32}})   =  8
+sizeof(::Type{ComplexPair{Uint32}})  =  8
+sizeof(::Type{ComplexPair{Int64}})   = 16
+sizeof(::Type{ComplexPair{Uint64}})  = 16
+sizeof(::Type{ComplexPair{Int128}})  = 32
+sizeof(::Type{ComplexPair{Uint128}}) = 32
+
+## sizeof for ImaginaryUnit ##
+
+sizeof(::Type{ImaginaryUnit}) = 8     # subtype of Complex{Int32}
+
+
 ## generic functions of complex numbers ##
 
 convert(::Type{Complex}, z::Complex) = z
