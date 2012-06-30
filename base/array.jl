@@ -213,13 +213,14 @@ function ref(A::Array, I::Indices...)
     if is(ref_cache,nothing)
         ref_cache = Dict()
     end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)]
+    gen_array_index_map(ref_cache, refind -> quote
+            X[storeind] = A[$refind]
             storeind += 1
         end, I, (:A, :X, :storeind), A, X, 1)
     return X
 end
 end
+
 
 # logical indexing
 
@@ -376,7 +377,9 @@ function assign(A::Array, x, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = x
+                      end,
                       tuple(I0, I...),
                       (:A, :x),
                       A, x)
@@ -409,8 +412,10 @@ function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
-                                             refind += 1),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = X[refind]
+                          refind += 1
+                      end,
                       tuple(I0, I...),
                       (:A, :X, :refind),
                       A, X, 1)
