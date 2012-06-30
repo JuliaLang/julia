@@ -761,6 +761,22 @@ Mathematical Functions
 
    Next power of two not less than ``n``
 
+.. function:: nextpow(a, n)
+
+   Next power of ``a`` not less than ``n``
+
+.. function:: prevpow(a, n)
+
+   Previous power of ``a`` not greater than ``n``
+
+.. function:: nextprod([a,b,c], n)
+
+   Next integer not less than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+
+.. function:: prevprod([a,b,c], n)
+
+   Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+
 .. function:: powermod(x, p, m)
 
    Compute ``mod(x^p, m)``
@@ -1390,7 +1406,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: fft(A, dim)
 
-   One dimensional FFT if input is a ``Vector``. For n-d cases, compute fft of vectors along dimension ``dim``
+   One dimensional FFT if input is a ``Vector``. For n-d cases, compute fft of vectors along dimension ``dim``. Most efficient if ``size(A, dim)`` is a product of small primes; see :func:`nextprod`.
 
 .. function:: fft2
 
