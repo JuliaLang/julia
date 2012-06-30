@@ -379,7 +379,6 @@ function assign(A::Array, x, I0::Indices, I::Indices...)
     end
     gen_array_index_map(assign_cache, storeind -> quote
                           A[$storeind] = x
-                          refind += 1
                       end,
                       tuple(I0, I...),
                       (:A, :x),
