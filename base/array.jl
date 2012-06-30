@@ -204,6 +204,16 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I 
 ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 
+function ref{T<:Integer}(A::Array, I::AbstractVector{T})
+    X = similar(A, length(I))
+    ind = 1
+    for i in I
+        X[ind] = A[i]
+        ind += 1
+    end
+    return X
+end
+
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)

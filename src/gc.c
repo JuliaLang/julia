@@ -36,11 +36,11 @@
 #define GC_PAGE_SZ (1536*sizeof(void*)+8)//bytes
 
 typedef struct _gcpage_t {
+    char data[GC_PAGE_SZ - 8];
     union {
         struct _gcpage_t *next;
         char _pad[8];
     };
-    char data[GC_PAGE_SZ - 8];
 } gcpage_t;
 
 typedef struct _gcval_t {
@@ -469,11 +469,7 @@ static void gc_markval_(jl_value_t *v)
     else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         int ndims = jl_array_ndims(a);
-        int ndimwords = (ndims > 2 ? (ndims-2) : 0);
-#ifndef __LP64__
-        // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
-        ndimwords += (~ndimwords)&1;
-#endif
+        int ndimwords = jl_array_ndimwords(ndims);
         void *data_area = &a->_space[0] + ndimwords*sizeof(size_t);
         if (a->reshaped) {
             GC_Markval(*((jl_value_t**)data_area));
