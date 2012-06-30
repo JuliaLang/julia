@@ -91,16 +91,16 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 
 ## sizeof for Rational{T}, T in (Uint,Int)x(8,16,32,64,128) ##
 
-sizeof(::Type{Rational{Int8}})    =  2
-sizeof(::Type{Rational{Uint8}})   =  2
-sizeof(::Type{Rational{Int16}})   =  4
-sizeof(::Type{Rational{Uint16}})  =  4
-sizeof(::Type{Rational{Int32}})   =  8
-sizeof(::Type{Rational{Uint32}})  =  8
-sizeof(::Type{Rational{Int64}})   = 16
-sizeof(::Type{Rational{Uint64}})  = 16
-sizeof(::Type{Rational{Int128}})  = 32
-sizeof(::Type{Rational{Uint128}}) = 32
+sizeof(::Type{Rational{Uint8}})   = 2*sizeof(Uint8)
+sizeof(::Type{Rational{Int8}})    = 2*sizeof(Int8)
+sizeof(::Type{Rational{Uint16}})  = 2*sizeof(Uint16)
+sizeof(::Type{Rational{Int16}})   = 2*sizeof(Int16)
+sizeof(::Type{Rational{Uint32}})  = 2*sizeof(Uint32)
+sizeof(::Type{Rational{Int32}})   = 2*sizeof(Int32)
+sizeof(::Type{Rational{Uint64}})  = 2*sizeof(Uint64)
+sizeof(::Type{Rational{Int64}})   = 2*sizeof(Int64)
+sizeof(::Type{Rational{Uint128}}) = 2*sizeof(Uint128)
+sizeof(::Type{Rational{Int128}})  = 2*sizeof(Int128)
 
 
 

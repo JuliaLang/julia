@@ -179,20 +179,20 @@ promote_rule(::Type{ImaginaryUnit}, ::Type{Float32}) = Complex64
 
 ## sizeof for ComplexPair{T}, T in (Uint,Int)x(8,16,32,64,128) ##
 
-sizeof(::Type{ComplexPair{Int8}})    =  2
-sizeof(::Type{ComplexPair{Uint8}})   =  2
-sizeof(::Type{ComplexPair{Int16}})   =  4
-sizeof(::Type{ComplexPair{Uint16}})  =  4
-sizeof(::Type{ComplexPair{Int32}})   =  8
-sizeof(::Type{ComplexPair{Uint32}})  =  8
-sizeof(::Type{ComplexPair{Int64}})   = 16
-sizeof(::Type{ComplexPair{Uint64}})  = 16
-sizeof(::Type{ComplexPair{Int128}})  = 32
-sizeof(::Type{ComplexPair{Uint128}}) = 32
+sizeof(::Type{ComplexPair{Uint8}})   = 2*sizeof(Uint8)
+sizeof(::Type{ComplexPair{Int8}})    = 2*sizeof(Int8)
+sizeof(::Type{ComplexPair{Uint16}})  = 2*sizeof(Uint16)
+sizeof(::Type{ComplexPair{Int16}})   = 2*sizeof(Int16)
+sizeof(::Type{ComplexPair{Uint32}})  = 2*sizeof(Uint32)
+sizeof(::Type{ComplexPair{Int32}})   = 2*sizeof(Int32)
+sizeof(::Type{ComplexPair{Uint64}})  = 2*sizeof(Uint64)
+sizeof(::Type{ComplexPair{Int64}})   = 2*sizeof(Int64)
+sizeof(::Type{ComplexPair{Uint128}}) = 2*sizeof(Uint128)
+sizeof(::Type{ComplexPair{Int128}})  = 2*sizeof(Int128)
 
 ## sizeof for ImaginaryUnit ##
 
-sizeof(::Type{ImaginaryUnit}) = 8     # subtype of Complex{Int32}
+sizeof(::Type{ImaginaryUnit}) = 2*sizeof(Int32) # subtypes Complex{Int32}
 
 
 ## generic functions of complex numbers ##
