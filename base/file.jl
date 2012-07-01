@@ -180,27 +180,43 @@ function mtime(filename::ASCIIString)
     end
 end
 
+function real_path(fname::String)
+    sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
+    system_error(:real_path, sp == C_NULL)
+    s = string(sp)
+    ccall(:free, Void, (Ptr{Uint8},), sp)
+    return s
+end
+
 function abs_path(fname::String)
-    if fname[1] == '/'
+    if length(fname) > 0 && fname[1] == '/'
         comp = split(fname, '/')
     else
         comp = [split(cwd(), '/'), split(fname, '/')]
     end
-    i = 2
-    while i <= length(comp)
-        if comp[i] == "."
-            del(comp, i)
-            continue
+    n = length(comp)
+    pmask = trues(n)
+    last_is_dir = false
+    for i = 2:n
+        if comp[i] == "." || comp[i] == ""
+            pmask[i] = false
+            last_is_dir = true
         elseif comp[i] == ".."
-            if i <= 2
-                error("invalid path")
+            pmask[i] = false
+            last_is_dir = true
+            for j = i-1:-1:2
+                if pmask[j]
+                    pmask[j] = false
+                    break
+                end
             end
-            i -= 1
-            del(comp, i)
-            del(comp, i)
-            continue
+        else
+            last_is_dir = false
         end
-        i += 1
+    end
+    comp = comp[pmask]
+    if last_is_dir
+        push(comp, "")
     end
     return join(comp, '/')
 end
