@@ -1629,7 +1629,11 @@ System
 
 .. function:: time()
 
-   Get the time in seconds since the epoch, with fairly high resolution.
+   Get the time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+
+.. function:: time_ns()
+
+   Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 
 .. function:: tic()
 
