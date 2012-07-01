@@ -1,5 +1,7 @@
 ## linalg_bitarray.jl: Basic Linear Algebra functions for BitArrays ##
 
+require("bitarray.jl")
+
 function dot{T,S}(x::BitVector{T}, y::BitVector{S})
     # simplest way to mimic Array dot behavior
     s = zero(one(T) * one(S))

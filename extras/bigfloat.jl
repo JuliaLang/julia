@@ -1,6 +1,6 @@
 _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
-load("bigint.jl")
+require("bigint.jl")
 
 type BigFloat <: Float
 	mpf::Ptr{Void}

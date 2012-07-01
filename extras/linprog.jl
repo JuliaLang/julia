@@ -3,7 +3,7 @@
 ## for optimization and constraint satisfaction problems
 ##
 
-# note: be sure to load "sparse.jl" and "glpk.jl" before this file
+require("glpk.jl")
 
 # General notes: the interface is provided as a collection of
 # high-level functions which use the glpk library.
