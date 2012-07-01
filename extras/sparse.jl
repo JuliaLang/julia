@@ -148,47 +148,6 @@ function sparse(A::Matrix)
     return _jl_sparse_sorted!(I,J,V,m,n,+)
 end
 
-# _jl_sparse_sort uses sort to rearrange the input and construct the sparse matrix
-
-_jl_sparse_sort(I,J,V) = _jl_sparse_sort(I, J, V, int(max(I)), int(max(J)), +)
-
-_jl_sparse_sort(I,J,V,m,n) = _jl_sparse_sort(I, J, V, m, n, +)
-
-function _jl_sparse_sort{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
-                                                 V::Union(Number, AbstractVector),
-                                                 m::Int, n::Int, combine::Function)
-
-    if length(I) == 0; return spzeros(eltype(V),m,n); end
-
-    issortedI = issorted(I)
-    issortedJ = issorted(J)
-
-    if !issortedI
-        (I,p) = sortperm(I)
-        J = J[p]
-        if isa(V, AbstractVector); V = V[p]; end
-    else
-        if issortedJ; I = copy(I); end
-    end
-
-    if !issortedJ
-        (J,p) = sortperm(J)
-        I = I[p]
-        V = V[p]
-        if isa(V, AbstractVector); V = V[p]; end
-    else
-        if issortedI; J = copy(J); end
-    end
-
-    if issortedI && issortedJ
-        if isa(V, AbstractVector); V = copy(V); end
-    end
-
-    if isa(V, Number); V = fill(V, length(I)); end
-
-    return _jl_sparse_sorted!(I,J,V,m,n,combine)
-end
-
 _jl_sparse_sorted!(I,J,V,m,n) = _jl_sparse_sorted!(I,J,V,m,n,+)
 
 function _jl_sparse_sorted!{Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVector{Ti},

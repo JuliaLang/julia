@@ -103,3 +103,13 @@ d = Categorical([0.25; 0.5; 0.25])
 A = zeros(Int, 10)
 rand!(d, A)
 @assert 1.0 <= mean(A) <= 3.0
+
+# Examples of sample()
+a = [1, 6, 19]
+p = rand(Dirichlet(3))
+x = sample(a, p)
+@assert x == 1 || x == 6 || x == 19
+
+a = 19.0 * eye(2)
+x = sample(a)
+@assert x == 0.0 || x == 19.0

@@ -204,22 +204,33 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I 
 ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 
+function ref{T<:Integer}(A::Array, I::AbstractVector{T})
+    X = similar(A, length(I))
+    ind = 1
+    for i in I
+        X[ind] = A[i]
+        ind += 1
+    end
+    return X
+end
+
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    I = indices(I...)
+    I = indices(I)
     X = similar(A, ref_shape(I...))
 
     if is(ref_cache,nothing)
         ref_cache = Dict()
     end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)]
+    gen_array_index_map(ref_cache, refind -> quote
+            X[storeind] = A[$refind]
             storeind += 1
         end, I, (:A, :X, :storeind), A, X, 1)
     return X
 end
 end
+
 
 # logical indexing
 
@@ -372,11 +383,13 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
     I0 = indices(I0)
-    I = indices(I...)
+    I = indices(I)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = x
+                      end,
                       tuple(I0, I...),
                       (:A, :x),
                       A, x)
@@ -388,7 +401,7 @@ let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     I0 = indices(I0)
-    I = indices(I...)
+    I = indices(I)
     nel = length(I0)
     for idx in I
         nel *= length(idx)
@@ -409,8 +422,10 @@ function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
-                                             refind += 1),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = X[refind]
+                          refind += 1
+                      end,
                       tuple(I0, I...),
                       (:A, :X, :refind),
                       A, X, 1)
@@ -421,7 +436,6 @@ end
 # logical indexing
 
 function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
-    n = sum(I)
     for i = 1:numel(I)
         if I[i]
             A[i] = x
@@ -431,7 +445,6 @@ function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
 end
 
 function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    n = sum(I)
     c = 1
     for i = 1:numel(I)
         if I[i]

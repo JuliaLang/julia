@@ -361,11 +361,11 @@ end
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I0::Range1{Int}, I::Union(Integer, Range1{Int})...)
-        # this will be uncommented when
-        # the indexing behaviour is settled
-        #if ndims(B) != 1 + length(I)
-            #error("wrong number of dimensions in ref")
-        #end
+        # the < should become a != once
+        # the stricter indexing behaviour is enforced
+        if ndims(B) < 1 + length(I)
+            error("wrong number of dimensions in ref")
+        end
         X = similar(B, ref_shape(I0, I...))
         nI = ndims(X)
 
@@ -420,10 +420,22 @@ let ref_cache = nothing
     end
 end
 
+# note: the Range1{Int} case is still handled by the version above
+#       (which is fine)
+function ref{T<:Integer}(B::BitArray, I::AbstractVector{T})
+    X = similar(B, length(I))
+    ind = 1
+    for i in I
+        X[ind] = B[i]
+        ind += 1
+    end
+    return X
+end
+
 let ref_cache = nothing
     global ref
     function ref(B::BitArray, I::Indices...)
-        I = indices(I...)
+        I = indices(I)
         X = similar(B, ref_shape(I...))
 
         if is(ref_cache,nothing)
@@ -596,7 +608,7 @@ let assign_cache = nothing
     global assign
     function assign(B::BitArray, x::Number, I0::Indices, I::Indices...)
         I0 = indices(I0)
-        I = indices(I...)
+        I = indices(I)
         if is(assign_cache,nothing)
             assign_cache = Dict()
         end
@@ -616,7 +628,7 @@ let assign_cache = nothing
     global assign
     function assign{T<:Integer,S<:Number}(B::BitArray{T}, X::AbstractArray{S}, I0::Indices, I::Indices...)
         I0 = indices(I0)
-        I = indices(I...)
+        I = indices(I)
         nel = length(I0)
         for idx in I
             nel *= length(idx)

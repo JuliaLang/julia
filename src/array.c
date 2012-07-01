@@ -38,11 +38,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
         tot = sizeof(void*) * nel;
     }
 
-    int ndimwords = (ndims > 2 ? (ndims-2) : 0);
-#ifndef __LP64__
-    // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
-    ndimwords += (~ndimwords)&1;
-#endif
+    int ndimwords = jl_array_ndimwords(ndims);
     if (tot <= ARRAY_INLINE_NBYTES) {
         a = allocobj(sizeof(jl_array_t) + tot + (ndimwords-1)*sizeof(size_t));
         a->type = atype;
@@ -93,11 +89,7 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
     jl_array_t *a;
     size_t ndims = jl_tuple_len(dims);
 
-    int ndimwords = (ndims > 2 ? (ndims-2) : 0);
-#ifndef __LP64__
-    // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
-    ndimwords += (~ndimwords)&1;
-#endif
+    int ndimwords = jl_array_ndimwords(ndims);
     a = allocobj(sizeof(jl_array_t) + ndimwords*sizeof(size_t));
     a->type = atype;
     *((jl_array_t**)(&a->_space[0] + ndimwords*sizeof(size_t))) = data;
@@ -184,11 +176,7 @@ jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data, jl_tuple_t *dims,
     else
         elsz = sizeof(void*);
 
-    int ndimwords = (ndims > 2 ? (ndims-2) : 0);
-#ifndef __LP64__
-    // on 32-bit, ndimwords must be odd to preserve 8-byte alignment
-    ndimwords += (~ndimwords)&1;
-#endif
+    int ndimwords = jl_array_ndimwords(ndims);
     a = allocobj(sizeof(jl_array_t) + ndimwords*sizeof(size_t));
     a->type = atype;
     a->data = data;

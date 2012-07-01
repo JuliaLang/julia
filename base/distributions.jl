@@ -788,3 +788,14 @@ function rand!(d::Categorical, A::Vector{Int})
     A[i] = rand(d)
   end
 end
+
+function sample(a::Array, probs::Vector)
+  i = rand(Categorical(probs))
+  a[i]
+end
+
+function sample(a::Array)
+  n = numel(a)
+  probs = ones(n) ./ n
+  sample(a, probs)
+end

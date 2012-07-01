@@ -228,7 +228,7 @@ function begins_with(a::String, b::String)
         d, j = next(b,j)
         if c != d return false end
     end
-    done(a,i)
+    done(b,i)
 end
 begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
@@ -1181,11 +1181,9 @@ memcat(s::ByteString) = memcat(s.data)
 memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)
 
 # return a random string (often useful for temporary filenames/dirnames)
-function randstring(len::Int)
-    const cset = char([0x30:0x39,0x41:0x5a,0x61:0x7a])
-    const strset = convert(ASCIIString,strcat(cset...))
-    index = int(ceil(strlen(strset)*rand(len)))
-    s = strset[index]
-    return s
+let
+global randstring
+const randstring_chars = ASCIIString(uint8([0x30:0x39,0x41:0x5a,0x61:0x7a]))
+randstring(len::Int) =
+    randstring_chars[iceil(strlen(randstring_chars)*rand(len))]
 end
-
