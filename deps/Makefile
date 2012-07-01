@@ -214,8 +214,9 @@ $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
 	$(MAKE) -C readline-$(READLINE_VER) install
-	chmod +w $(USRLIB)/libreadline.*
+	chmod +w $(USRLIB)/libreadline.* $(USRLIB)/libhistory.*
 	$(INSTALL_NAME_CMD)libreadline.$(SHLIB_EXT) $(USRLIB)/libreadline.$(SHLIB_EXT) 
+	$(INSTALL_NAME_CMD)libhistory.dylib $(USRLIB)/libhistory.dylib
 	touch $@
 
 clean-readline:
@@ -269,6 +270,7 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
+	$(INSTALL_NAME_CMD)libpcre.dylib $@
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libpcre.dll
 	mv $(USRBIN)/libpcre-1.dll $(USRLIB)/libpcre.dll
@@ -284,7 +286,6 @@ distclean-pcre:
 ## Grisu floating-point printing library ##
 
 GRISU_OPTS = -O3 -fvisibility=hidden $(fPIC)
-
 
 compile-double-conversion: double-conversion-$(GRISU_VER)/src/libgrisu_.$(SHLIB_EXT)
 install-double-conversion: $(USRLIB)/libgrisu.$(SHLIB_EXT)
@@ -309,6 +310,7 @@ double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT): double-conversion-$(GR
 	$(CXX) $(GRISU_OPTS) src/*.o -shared -dead_strip -o src/libgrisu.$(SHLIB_EXT)
 $(USRLIB)/libgrisu.$(SHLIB_EXT): double-conversion-$(GRISU_VER)/src/libgrisu.$(SHLIB_EXT)
 	cp -f $< $@
+	$(INSTALL_NAME_CMD)libgrisu.dylib $@
 
 clean-double-conversion:
 	rm -f double-conversion-$(GRISU_VER)/src/*.o
@@ -330,6 +332,7 @@ $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	cp $< $@
+	$(INSTALL_NAME_CMD)libfdm.dylib $@
 
 clean-fdlibm:
 	cd fdlibm && $(MAKE) clean
@@ -364,13 +367,13 @@ AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
 compile-amos: $(AMOS_OBJ_SOURCE)
 install-amos: $(AMOS_OBJ_TARGET)
 
-
 $(AMOS_OBJ_SOURCE): amos/*.f
 	cd amos && \
 	$(MAKE) && \
 	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
 $(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
 	cp $< $@
+	$(INSTALL_NAME_CMD)libamos.dylib $@
 
 clean-amos:
 	cd amos && $(MAKE) clean
@@ -538,8 +541,9 @@ fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-single install
+	$(INSTALL_NAME_CMD)libfftw3f.dylib $(USRLIB)/libfftw3f.dylib
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(USRLIB)/libfftw3f_threads.$(SHLIB_EXT)
-	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3f.3.dylib  @executable_path/../lib/libfftw3f.dylib $(USRLIB)/libfftw3f_threads.dylib
+	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3f.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3f.dylib $(USRLIB)/libfftw3f_threads.dylib
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3f.dll
 	mv $(USRBIN)/libfftw3f-3.dll $(USRLIB)/libfftw3f.dll
@@ -559,7 +563,7 @@ $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
 	$(MAKE) -C fftw-$(FFTW_VER)-double install
 	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(USRLIB)/libfftw3.$(SHLIB_EXT) 
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(USRLIB)/libfftw3_threads.$(SHLIB_EXT) 
-	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3.3.dylib  @executable_path/../lib/libfftw3.dylib $(USRLIB)/libfftw3_threads.dylib
+	$(INSTALL_NAME_CHANGE_CMD) $(USRLIB)/libfftw3.3.dylib $(INSTALL_NAME_ID_DIR)libfftw3.dylib $(USRLIB)/libfftw3_threads.dylib
 ifeq ($(OS),WINNT)
 	-rm $(USRLIB)/libfftw3.dll
 	mv $(USRBIN)/libfftw3-3.dll $(USRLIB)/libfftw3.dll
@@ -632,6 +636,7 @@ endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-suitesparse-wrapper: $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
@@ -751,6 +756,7 @@ $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER)
 	$(MAKE) -C gmp-$(GMP_VER) check
 	$(MAKE) -C gmp-$(GMP_VER) install
+	$(INSTALL_NAME_CMD)libgmp.dylib $@
 	touch $@
 
 clean-gmp:
@@ -766,6 +772,7 @@ GMP_LIB = -L$(USRLIB)/ -lgmp
 
 $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
+	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)
 
@@ -783,7 +790,6 @@ GLPK_PREFIX = glpk-$(GLPK_VER)/
 GLPK_OBJ_TARGET = $(USRLIB)/libglpk.$(SHLIB_EXT)
 endif
 
-
 compile-glpk: install-glpk
 install-glpk: $(GLPK_OBJ_TARGET) $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT)
 
@@ -798,6 +804,7 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	./configure --prefix=$(abspath $(USR))
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) install
+	$(INSTALL_NAME_CMD)libglpk.dylib $@
 	touch $@
 
 clean-glpk:
@@ -821,6 +828,7 @@ endif
 $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT): glpk_wrapper.c $(GLPK_OBJ_TARGET)
 	mkdir -p $(USRLIB)
 	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GLPKW_INC) glpk_wrapper.c $(GLPKW_LIB) -o $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(INSTALL_NAME_CMD)libglpk_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 
