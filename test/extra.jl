@@ -1,5 +1,4 @@
 runtests("integers")
-runtests("sparse")
 runtests("glpk")
 runtests("linprog")
 runtests("bigfloat")

@@ -184,9 +184,8 @@ function abs_path(fname::String)
     if fname[1] == '/'
         comp = split(fname, '/')
     else
-        comp = [split(cwd(), '/'), fname('/')]
+        comp = [split(cwd(), '/'), split(fname, '/')]
     end
-    @assert comp[1] == ""
     i = 2
     while i <= length(comp)
         if comp[i] == "."
