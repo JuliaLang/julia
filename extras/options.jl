@@ -27,7 +27,7 @@ function Options{T<:OptionsChecking}(::Type{T},args...)
     end
     n = div(length(args),2)
     keys, index, vals = if n > 0
-        (args[1:2:end], ntuple(n, identity), [args[2:2:end]...])
+        (args[1:2:end], ntuple(n, identity), Any[args[2:2:end]...])
     else
         ((), (), Array(Any, 0))
     end
@@ -201,11 +201,20 @@ end
 #    opts = @options a=5 b=7
 #    opts = @options CheckWarn a=5 b=7
 macro options(ex...)
-    if isa(ex[1],Symbol)
-        :(Options(eval(($ex)[1]),(($ex)[2:end])...))
-    else
-        :(Options(($ex)...))
+    callargs = Any[:Options]
+    istart = 1
+    if isa(ex[1], Symbol)
+        push(callargs, ex[1])
+        istart = 2
     end
+    for indx = istart:length(ex)
+        if !isa(ex[indx], Expr)
+            error("Arguments to @options must be assignments, e.g., a=5")
+        end
+        push(callargs, expr(:quote, ex[indx].args[1]))
+        push(callargs, ex[indx].args[2])
+    end
+    expr(:call, callargs)
 end
 
 # Macro to reset or append additional options. Usage:

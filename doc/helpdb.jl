@@ -9,9 +9,10 @@ function _jl_help_db() return [
 
 "),
 
-(E"Getting Around",E"whos",E"whos()
+(E"Getting Around",E"whos",E"whos([pattern::Regex])
 
-   Print information about global user-defined variables.
+   Print information about global user-defined variables, optionally
+   restricted to those matching 'pattern'.
 
 "),
 
@@ -647,6 +648,13 @@ collection[key...] = value
 
 "),
 
+(E"Strings",E"randstring",E"randstring(len)
+
+   Create a random ASCII string of length 'len', consisting of upper-
+   and lower-case letters and the digits 0-9
+
+"),
+
 (E"I/O",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
@@ -895,7 +903,8 @@ collection[key...] = value
    large to fit in the computer's memory.
 
    The type determines how the bytes of the array are interpreted (no
-   format conversions are possible), and dims the size of the array.
+   format conversions are possible), and dims is a tuple containing
+   the size of the array.
 
    The file is specified via the stream.  When you initialize the
    stream, use 'r' for a 'read-only' array, and 'w+' to create a new
@@ -1079,6 +1088,32 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"nextpow",E"nextpow(a, n)
+
+   Next power of 'a' not less than 'n'
+
+"),
+
+(E"Mathematical Functions",E"prevpow",E"prevpow(a, n)
+
+   Previous power of 'a' not greater than 'n'
+
+"),
+
+(E"Mathematical Functions",E"nextprod",E"nextprod([a, b, c], n)
+
+   Next integer not less than 'n' that can be written 'a^i1 * b^i2 *
+   c^i3' for integers 'i1', 'i2', 'i3'.
+
+"),
+
+(E"Mathematical Functions",E"prevprod",E"prevprod([a, b, c], n)
+
+   Previous integer not greater than 'n' that can be written 'a^i1 *
+   b^i2 * c^i3' for integers 'i1', 'i2', 'i3'.
+
+"),
+
 (E"Mathematical Functions",E"powermod",E"powermod(x, p, m)
 
    Compute 'mod(x^p, m)'
@@ -1113,7 +1148,7 @@ collection[key...] = value
 
 "),
 
-(E"Data Formats",E"int2str",E"int2str(n, base[, pad])
+(E"Data Formats",E"base",E"base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to.
@@ -1703,6 +1738,25 @@ collection[key...] = value
 
 "),
 
+(E"Arrays",E"vec",E"vec(A)
+
+   Make a vector out of an array with only one non-singleton
+   dimension.
+
+"),
+
+(E"Arrays",E"rowvec",E"rowvec(A, i)
+
+   Return the ith row of matrix A as a vector.
+
+"),
+
+(E"Arrays",E"colvec",E"colvec(A, i)
+
+   Return the ith column of matrix A as a vector.
+
+"),
+
 (E"Linear Algebra",E"*",E"*
 
    Matrix multiplication
@@ -1993,7 +2047,8 @@ collection[key...] = value
 (E"Signal Processing",E"fft",E"fft(A, dim)
 
    One dimensional FFT if input is a 'Vector'. For n-d cases, compute
-   fft of vectors along dimension 'dim'
+   fft of vectors along dimension 'dim'. Most efficient if 'size(A,
+   dim)' is a product of small primes; see 'nextprod()'.
 
 "),
 

@@ -25,6 +25,12 @@ function toc()
     return t
 end
 
+# high-resolution time
+# returns in nanoseconds
+function time_ns()
+    return ccall(:jl_hrtime, Uint64, ())
+end
+
 # print elapsed time, return expression value
 macro time(ex)
     @gensym t0 val t1
@@ -159,6 +165,24 @@ end
 
 methods(t::CompositeKind) = t.env
 
+
+# require
+# Store list of files and their load time
+global _jl_package_list = Dict{ByteString,Float64}()
+require(fname::String) = require(cstring(fname))
+require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
+function require(name::ByteString)
+    path = find_in_path(name)
+    if !has(_jl_package_list,path)
+        load(name)
+    else
+        # Determine whether the file has been modified since it was last loaded
+        if mtime(path) > _jl_package_list[path]
+            load(name)
+        end
+    end
+end
+
 # remote/parallel load
 
 include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},), txt)
@@ -176,7 +200,7 @@ end
 
 function find_in_path(fname)
     if fname[1] == '/'
-        return fname
+        return real_path(fname)
     end
     for pfx in LOAD_PATH
         if pfx != "" && pfx[end] != '/'
@@ -185,10 +209,10 @@ function find_in_path(fname)
             pfxd = strcat(pfx,fname)
         end
         if is_file_readable(pfxd)
-            return pfxd
+            return real_path(pfxd)
         end
     end
-    return fname
+    return real_path(fname)
 end
 
 begin
@@ -202,6 +226,7 @@ load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load
         path = find_in_path(fname)
+        _jl_package_list[path] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))
@@ -376,3 +401,7 @@ function help(x)
         println("  which has fields $(t.names)")
     end
 end
+
+# misc
+
+times(f::Function, n::Int) = for i=1:n f() end

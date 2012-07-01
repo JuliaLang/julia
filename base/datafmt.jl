@@ -1,11 +1,17 @@
 ## file formats ##
 
+const _jl_invalid_dlm = char(0xfffffffe)
+
 function _jl_dlm_readrow(io::IO, dlm, eol::Char)
     row_string = readuntil(io, eol)
     while length(row_string)==1 && row_string[1] == eol
         row_string = readuntil(io, eol)
     end
-    row = split(row_string, dlm, true)
+    if dlm == _jl_invalid_dlm
+        row = split(row_string)
+    else
+        row = split(row_string, dlm, true)
+    end
     if ends_with(row[end], eol)
         row[end] = chop(row[end])
     end
@@ -126,9 +132,7 @@ function _jl_dlmread_setup(fname::String, dlm, eol)
     return (io, nr, nc, row)
 end
 
-const _jl_dlmread_default_delimiters = [' ', ',', ';', '\t', '\v']
-
-dlmread(fname::String, T::Type) = dlmread(fname, _jl_dlmread_default_delimiters, T, '\n')
+dlmread(fname::String, T::Type) = dlmread(fname, _jl_invalid_dlm, T, '\n')
 
 dlmread(fname::String, dlm, T::Type) = dlmread(fname, dlm, T, '\n')
 
@@ -140,7 +144,7 @@ function dlmread(fname::String, dlm, T::Type, eol::Char)
     return a
 end
 
-dlmread(fname::String) = dlmread(fname, _jl_dlmread_default_delimiters, '\n')
+dlmread(fname::String) = dlmread(fname, _jl_invalid_dlm, '\n')
 dlmread(fname::String, dlm) = dlmread(fname, dlm, '\n')
 
 function dlmread(fname::String, dlm, eol::Char)

@@ -75,11 +75,13 @@ typedef struct {
     JL_STRUCT_TYPE
     void *data;
     size_t length;
+
     unsigned short ndims:14;
     unsigned short reshaped:1;
     unsigned short ptrarray:1;  // representation is pointer array
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
+
     size_t nrows;
     union {
         // 1d
@@ -87,11 +89,25 @@ typedef struct {
         // Nd
         size_t ncols;
     };
+    // other dim sizes go here for ndims > 2
+
     union {
         char _space[1];
         void *_pad;
     };
 } jl_array_t;
+
+// compute # of extra words needed to store dimensions
+static inline int jl_array_ndimwords(uint32_t ndims)
+{
+#ifdef __LP64__
+    // on 64-bit, ndimwords must be even to give 16-byte alignment
+    return (ndims == 0 ? 0 : ((ndims-1) & -2));
+#else
+    // on 32-bit, ndimwords must = 4k+1 to give 16-byte alignment
+    return (ndims & -4) + 1;
+#endif
+}
 
 typedef struct _jl_type_t {
     JL_STRUCT_TYPE
@@ -390,7 +406,7 @@ extern jl_sym_t *static_typeof_sym;
 extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
-extern jl_sym_t *compositetype_sym;
+extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 
 #ifdef __LP64__
 #define NWORDS(sz) (((sz)+7)>>3)

@@ -183,6 +183,7 @@ function ref{T,S<:Integer}(s::SubArray{T,1}, I::AbstractVector{S})
 end
 
 function ref(s::SubArray, I::Indices...)
+    I = indices(I)
     n = ndims(s.parent)
     newindexes = Array(Indices, n)
     for i = 1:n
@@ -191,9 +192,7 @@ function ref(s::SubArray, I::Indices...)
         newindexes[i] = isa(t, Int) ? t : t[I[i]]
     end
 
-    L = length(I)
-    while L > 0 && isa(I[L],Integer); L-=1; end
-    reshape(ref(s.parent, newindexes...), map(length, I[1:L]))
+    reshape(ref(s.parent, newindexes...), ref_shape(I...))
 end
 
 assign(s::SubArray, v::AbstractArray, i::Integer) =
@@ -279,6 +278,8 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
 end
 
 function assign(s::SubArray, v::AbstractArray, I0::Indices, I::Indices...)
+    I0 = indices(I0)
+    I = indices(I)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = cell(n)
@@ -294,6 +295,7 @@ function assign(s::SubArray, v::AbstractArray, I0::Indices, I::Indices...)
 end
 
 function assign(s::SubArray, v, I::Indices...)
+    I = indices(I)
     j = 1 #the jth dimension in subarray
     n = ndims(s.parent)
     newindexes = cell(n)

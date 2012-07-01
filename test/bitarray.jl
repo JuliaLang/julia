@@ -1,6 +1,3 @@
-load("../extras/bitarray.jl")
-load("../extras/linalg_bitarray.jl")
-
 macro check_bit_operation(func, RetT, args)
     quote
         r1 = eval(($func)(($args)...))
@@ -20,6 +17,9 @@ macro timesofar(str)
         t0 = $t1
     end
 end
+
+cd("../extras") do
+require("linalg_bitarray.jl")
 
 TT = Uint8
 S = promote_type(TT, Int)
@@ -228,14 +228,14 @@ b2 = bitrand(TT, n1, n2)
 @check_bit_operation (&) BitArray{TT} (b1, b2)
 @check_bit_operation (|) BitArray{TT} (b1, b2)
 @check_bit_operation ($) BitArray{TT} (b1, b2)
-@check_bit_operation (-) Array{Uint} (b1, b2)
+@check_bit_operation (-) Array{TT} (b1, b2)
 @check_bit_operation (.*) BitArray{TT} (b1, b2)
 @check_bit_operation (./) Array{Float64} (b1, b2)
 @check_bit_operation (.^) Array{Float64} (b1, b2)
 
 b2 = bitones(TT, n1, n2)
-@check_bit_operation div Array{Uint} (b1, b2)
-@check_bit_operation mod Array{Uint} (b1, b2)
+@check_bit_operation div Array{TT} (b1, b2)
+@check_bit_operation mod Array{TT} (b1, b2)
 
 while true
     global b1
@@ -259,8 +259,8 @@ b2 = randi(10, n1, n2)
 @check_bit_operation (.*) Array{S} (b1, b2)
 @check_bit_operation (./) Array{Float64} (b1, b2)
 @check_bit_operation (.^) Array{Float64} (b1, b2)
-@check_bit_operation div Array{Uint} (b1, b2)
-@check_bit_operation mod Array{Int} (b1, b2)
+@check_bit_operation div Array{S} (b1, b2)
+@check_bit_operation mod Array{S} (b1, b2)
 
 while true
     global b1
@@ -280,7 +280,7 @@ b2 = bitrand(Bool, n1, n2)
 @check_bit_operation (|) BitArray{Bool} (b1, b2)
 @check_bit_operation ($) BitArray{Bool} (b1, b2)
 @check_bit_operation (.*) BitArray{Bool} (b1, b2)
-@check_bit_operation (*) BitArray{Bool} (b1, b1)
+@check_bit_operation (*) BitArray{Bool} (b1, b1')
 
 @timesofar "binary arithmetic"
 
@@ -438,4 +438,6 @@ end
 #b1 = bitrand(TT, n1, n2)
 #@check_bit_operation diff Array{S} (b1,)
 
-@ timesofar "linalg"
+@timesofar "linalg"
+
+end # do

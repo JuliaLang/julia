@@ -50,7 +50,13 @@ Building julia requires 1.5GiB of diskspace and approximately 700MiB of virtual 
 
 Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
 
-    export PATH="$(pwd)/julia:$PATH"
+In bash:
+
+    export PATH="$(pwd):$PATH"
+    
+In csh / tcsh:
+
+    set path= ( $path $cwd )
 
 Now you should be able to run julia like this:
 
@@ -226,4 +232,8 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 2. Start the web REPL service with `./usr/bin/launch-julia-webserver`.
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.
+
+### Try it Online
+
+Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
 

@@ -45,7 +45,7 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::Float, tol::Real)
     a = d = one(T)
     b = c = zero(T)
     while true
-        f = convert(T,y); y -= f
+        f = convert(T,trunc(y)); y -= f
         a, b, c, d = f*a+c, f*b+d, a, b
         if y == 0 || abs(a/b-x) <= tol
             return a//b
@@ -125,10 +125,12 @@ fld(x::Real    , y::Rational) = fld(x*y.den, y.num)
 itrunc(x::Rational) = div(x.num,x.den)
 ifloor(x::Rational) = fld(x.num,x.den)
 iceil (x::Rational) = -fld(-x.num,x.den)
+iround(x::Rational) = div(x.num*2 + copysign(x.den,x.num), x.den*2)
 
 trunc(x::Rational) = Rational(itrunc(x))
 floor(x::Rational) = Rational(ifloor(x))
 ceil (x::Rational) = Rational(iceil(x))
+round(x::Rational) = Rational(iround(x))
 
 rational(x::Real) = rational(x, 0)
 rational(x::Rational, tol::Real) = x
@@ -139,3 +141,11 @@ rational(x::Float64, tol::Real) = convert(Rational{Int64}, x, tol)
 rational(z::Complex) = complex(rational(real(z)), rational(imag(z)))
 rational(z::Complex, tol::Real) =
     (tol /= sqrt(2); complex(rational(real(z), tol), rational(imag(z), tol)))
+
+## rational to int coercion ##
+
+for f in (:int8, :int16, :int32, :int64, :int128,
+          :uint8, :uint16, :uint32, :uint64, :uint128,
+          :signed, :integer, :unsigned, :int, :uint)
+    @eval ($f)(x::Rational) = ($f)(iround(x))
+end

@@ -108,19 +108,19 @@ isempty(t::ObjectIdDict) = is(next(t,0),())
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =
     ccall(:int64to32hash, Uint32, (Uint64,),
-          or_int(shl_int(zext64(unbox32(a)), 32), zext64(unbox32(b))))
+          or_int(shl_int(zext64(unbox(Uint32,a)), 32), zext64(unbox(Uint32,b))))
 
 bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
     ccall(:int64hash, Uint64, (Uint64,),
-          xor_int(unbox64(a), or_int(lshr_int(unbox64(b), 32),
-                                     shl_int(unbox64(b), 32))))
+          xor_int(unbox(Uint64,a), or_int(lshr_int(unbox(Uint64,b), 32),
+                                           shl_int(unbox(Uint64,b), 32))))
 
 if WORD_SIZE == 64
     _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64hash, Uint64, (Uint64,), boxui64(unbox64(x)))
+        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Uint64,x)))
 else
     _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64to32hash, Uint32, (Uint64,), boxui64(unbox64(x)))
+        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Uint64,x)))
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))

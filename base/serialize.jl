@@ -10,7 +10,7 @@ const _jl_deser_tag = ObjectIdDict()
 let i = 2
     global _jl_ser_tag, _jl_deser_tag
     for t = {Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-             Int64, Uint64, Float32, Float64, Char, Ptr,
+             Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
              AbstractKind, UnionKind, BitsKind, CompositeKind, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
@@ -23,8 +23,8 @@ let i = 2
              :a, :b, :c, :d, :e, :f, :g, :h, :i, :j, :k, :l, :m, :n, :o,
              :p, :q, :r, :s, :t, :u, :v, :w, :x, :y, :z,
              :add_int, :sub_int, :mul_int, :add_float, :sub_float,
-             :mul_float, :unbox, :unbox32, :unbox64, :box, :boxf32, :boxf64,
-             :boxsi32, :boxsi64, :eq_int, :slt_int, :sle_int, :ne_int,
+             :mul_float, :unbox, :box,
+             :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,

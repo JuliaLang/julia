@@ -165,6 +165,9 @@ endif
 
 # OS specific stuff
 
+# must end with a / and have no trailing spaces
+INSTALL_NAME_ID_DIR = @executable_path/../lib/
+
 RPATH = 
 RPATH_ORIGIN = 
 
@@ -194,13 +197,14 @@ RPATH = -Wl,-rpath,'$$ORIGIN/../lib' -Wl,-z,origin
 RPATH_ORIGIN = -Wl,-rpath,'$$ORIGIN' -Wl,-z,origin
 WHOLE_ARCHIVE = -Wl,--whole-archive
 NO_WHOLE_ARCHIVE = -Wl,--no-whole-archive
-JLD_FLAGS = -Wl,-Bdynamic
+JLDFLAGS = -Wl,-Bdynamic
 OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap $(NO_WHOLE_ARCHIVE) $(LIBUNWIND)
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
+INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+RPATH = -Wl,-rpath,$(BUILD)/lib
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load

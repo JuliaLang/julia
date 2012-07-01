@@ -109,9 +109,9 @@ x = (2,3)
 
 # bits types
 if WORD_SIZE == 64
-    @assert isa((()->box(Ptr{Int8},unbox64(0)))(), Ptr{Int8})
+    @assert isa((()->box(Ptr{Int8},unbox(Int64,0)))(), Ptr{Int8})
 else
-    @assert isa((()->box(Ptr{Int8},unbox32(0)))(), Ptr{Int8})
+    @assert isa((()->box(Ptr{Int8},unbox(Int32,0)))(), Ptr{Int8})
 end
 @assert isa(convert(Char,65), Char)
 

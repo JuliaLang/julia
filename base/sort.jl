@@ -1,14 +1,14 @@
 ## standard sort comparisons ##
 
-_jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox32(x),unbox32(y))
-_jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox64(x),unbox64(y))
-_jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox32(x),unbox32(y))
-_jl_fp_pos_le(x::Float64, y::Float64) = sle_int(unbox64(x),unbox64(y))
+_jl_fp_pos_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,x),unbox(Float32,y))
+_jl_fp_pos_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,x),unbox(Float64,y))
+_jl_fp_pos_le(x::Float32, y::Float32) = sle_int(unbox(Float32,x),unbox(Float32,y))
+_jl_fp_pos_le(x::Float64, y::Float64) = sle_int(unbox(Float64,x),unbox(Float64,y))
 
-_jl_fp_neg_lt(x::Float32, y::Float32) = slt_int(unbox32(y),unbox32(x))
-_jl_fp_neg_lt(x::Float64, y::Float64) = slt_int(unbox64(y),unbox64(x))
-_jl_fp_neg_le(x::Float32, y::Float32) = sle_int(unbox32(y),unbox32(x))
-_jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox64(y),unbox64(x))
+_jl_fp_neg_lt(x::Float32, y::Float32) = slt_int(unbox(Float32,y),unbox(Float32,x))
+_jl_fp_neg_lt(x::Float64, y::Float64) = slt_int(unbox(Float64,y),unbox(Float64,x))
+_jl_fp_neg_le(x::Float32, y::Float32) = sle_int(unbox(Float32,y),unbox(Float32,x))
+_jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x))
 
 ## internal sorting functionality ##
 
@@ -16,6 +16,7 @@ macro _jl_sort_functions(suffix, lt, args...)
 insertionsort = symbol("_jl_insertionsort$suffix")
 quicksort = symbol("_jl_quicksort$suffix")
 mergesort = symbol("_jl_mergesort$suffix")
+pivot_middle = symbol("_jl_pivot_middle$suffix")
 lt = @eval (a,b)->$lt
 quote
 
@@ -63,7 +64,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
-_jl_pivot_middle(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
+($pivot_middle)(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)

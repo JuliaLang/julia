@@ -1035,23 +1035,9 @@
 	(lower-nd-comprehension expr ranges)
     (let ((result    (gensy))
 	  (ri        (gensy))
+	  (initlabl  (gensy))
 	  (oneresult (gensy))
 	  (rv        (map (lambda (x) (gensy)) ranges)))
-
-      ;; get the first value in a range
-      (define (first-val range)
-	`(call (top tupleref)
-	       (call (top next) ,range (call (top start) ,range)) 1))
-
-      ;; evaluate one expression to figure out type and size
-      (define (evaluate-one ranges)
-	`(block
-	  ,@(map (lambda (r)
-		   ;; r is (= var range)
-		   `(= ,(cadr r) ,(first-val (caddr r))))
-		 ranges)
-	  (= ,oneresult ,expr)
-	  ,oneresult))
 
       ;; compute the dimensions of the result
       (define (compute-dims ranges)
@@ -1061,7 +1047,9 @@
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
         (if (null? ranges)
-	    `(block (call (top assign) ,result ,expr ,ri)
+	    `(block (= ,oneresult ,expr)
+		    (type_goto ,initlabl)
+		    (call (top assign) ,result ,oneresult ,ri)
 		    (+= ,ri 1))
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
@@ -1081,8 +1069,7 @@
 	   ,@(map (lambda (r) `(local ,r))
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
-	   ;; the evaluate-one code is used by type inference but does not run
-	   (if (call (top !) true) ,(evaluate-one loopranges))
+	   (label ,initlabl)
 	   (= ,result (call (top Array)
 			    (static_typeof ,oneresult)
 			    ,@(compute-dims loopranges)))
@@ -1647,7 +1634,13 @@ So far only the second case can actually occur.
 	 ; record. for non-symbols or globals, emit a type assertion.
 	 (let ((vi (var-info-for (cadr e) env)))
 	   (if vi
-	       (begin (vinfo:set-type! vi (caddr e))
+	       (begin (if (not (eq? (vinfo:type vi) 'Any))
+			  (error (string "multiple type declarations for "
+					 (cadr e))))
+		      (if (assq (cadr e) captvars)
+			  (error (string "type of " (cadr e)
+					 " declared in inner scope")))
+                      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
@@ -1724,6 +1717,7 @@ So far only the second case can actually occur.
   (let ((code '())
 	(ip   0)
 	(label-counter 0)
+	(label-map '())
 	(handler-level 0))
     (define (emit c)
       (set! code (cons c code))
@@ -1790,6 +1784,19 @@ So far only the second case can actually occur.
 			(if (> handler-level 0)
 			    (emit `(leave ,handler-level)))
 			(emit (goto-form e))))
+	    ((label) (let ((m (assq (cadr e) label-map)))
+		       (if m
+			   (emit `(label ,(cdr m)))
+			   (let ((l (make&mark-label)))
+			     (set! label-map
+				   (cons (cons (cadr e) l) label-map))))))
+	    ((type_goto) (let ((m (assq (cadr e) label-map)))
+			   (if m
+			       (emit `(type_goto ,(cdr m)))
+			       (let ((l (make-label)))
+				 (set! label-map
+				       (cons (cons (cadr e) l) label-map))
+				 (emit `(type_goto ,l))))))
 	    ;; exception handlers are lowered using
 	    ;; (enter L) - push handler with catch block at label L
 	    ;; (leave n) - pop N exception handlers

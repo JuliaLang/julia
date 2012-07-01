@@ -12,16 +12,8 @@ show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
-show(io, n::Integer)  = print(io, dec(int64(n)))
-
-function show_trailing_hex(io, n::Uint64, ndig::Integer)
-    for s = ndig-1:-1:0
-        d = (n >> 4*s) & uint64(0xf)
-        print(io, "0123456789abcdef"[d+1])
-    end
-end
-show(io, n::Unsigned) = (print(io, "0x");
-                       show_trailing_hex(io, uint64(n), sizeof(n)<<1))
+show(io, n::Integer) = print(io, dec(n))
+show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 
 show{T}(io, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
@@ -601,15 +593,17 @@ function show_nd(io, a::AbstractArray)
     cartesian_map((idxs...)->print_slice(io,idxs...), tail)
 end
 
-whos() = whos(ccall(:jl_get_current_module, Module, ()))
-
-function whos(m::Module)
-    for v in map(symbol,sort(map(string, names(m))))
-        if isbound(m,v)
+function whos(m::Module, pattern::Regex)
+    for s in sort(map(string, names(m)))
+        v = symbol(s)
+        if isbound(v) && matches(pattern, s)
             println(rpad(v, 30), summary(eval(m,v)))
         end
     end
 end
+whos() = whos(r"")
+whos(m::Module) = whos(m, r"")
+whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")

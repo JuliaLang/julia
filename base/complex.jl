@@ -43,15 +43,15 @@ bitstype 128 Complex128 <: Complex{Float64}
 
 function complex128(r::Float64, i::Float64)
     box(Complex128,
-        or_int(shl_int(zext_int(Complex128,unbox64(i)), 64),
-               zext_int(Complex128,unbox64(r))))
+        or_int(shl_int(zext_int(Complex128,unbox(Float64,i)), 64),
+               zext_int(Complex128,unbox(Float64,r))))
 end
 
 complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
 complex128(z) = complex128(real(z), imag(z))
 
-real(c::Complex128) = boxf64(trunc64(c))
-imag(c::Complex128) = boxf64(trunc64(ashr_int(c, 64)))
+real(c::Complex128) = box(Float64,trunc64(c))
+imag(c::Complex128) = box(Float64,trunc64(ashr_int(c, 64)))
 
 convert(::Type{Complex128}, x::Real) = complex128(x,0)
 convert(::Type{Complex128}, z::Complex128) = z
@@ -80,15 +80,15 @@ bitstype 64 Complex64 <: Complex{Float32}
 
 function complex64(r::Float32, i::Float32)
     box(Complex64,
-        or_int(shl_int(zext_int(Complex64,unbox32(i)), 32),
-               zext_int(Complex64,unbox32(r))))
+        or_int(shl_int(zext_int(Complex64,unbox(Float32,i)), 32),
+               zext_int(Complex64,unbox(Float32,r))))
 end
 
 complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
 complex64(z) = complex64(real(z), imag(z))
 
-real(c::Complex64) = boxf32(trunc32(c))
-imag(c::Complex64) = boxf32(trunc32(ashr_int(c, 32)))
+real(c::Complex64) = box(Float32,trunc32(c))
+imag(c::Complex64) = box(Float32,trunc32(ashr_int(c, 32)))
 
 convert(::Type{Complex64}, x::Real) = complex64(x,0)
 convert(::Type{Complex64}, z::Complex64) = z

@@ -282,6 +282,7 @@ include("linalg.jl")
 include("linalg_dense.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
+include("factorizations.jl")
 
 # signal processing
 include("signal.jl")

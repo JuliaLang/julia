@@ -112,18 +112,27 @@ isempty(a::AbstractArray) = (numel(a) == 0)
 
 ## Conversions ##
 
-int     (x::AbstractArray) = copy_to(similar(x,Int)    , x)
-int8    (x::AbstractArray) = copy_to(similar(x,Int8)   , x)
-uint8   (x::AbstractArray) = copy_to(similar(x,Uint8)  , x)
-int16   (x::AbstractArray) = copy_to(similar(x,Int16)  , x)
-uint16  (x::AbstractArray) = copy_to(similar(x,Uint16) , x)
-int32   (x::AbstractArray) = copy_to(similar(x,Int32)  , x)
-uint32  (x::AbstractArray) = copy_to(similar(x,Uint32) , x)
-int64   (x::AbstractArray) = copy_to(similar(x,Int64)  , x)
-uint64  (x::AbstractArray) = copy_to(similar(x,Uint64) , x)
-integer (x::AbstractArray) = copy_to(similar(x,typeof(integer(one(eltype(x))))), x)
-unsigned(x::AbstractArray) = copy_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-char   (x::AbstractArray) = copy_to(similar(x,Char)   , x)
+function iround_to{T}(dest::AbstractArray{T}, src)
+    i = 1
+    for x in src
+        dest[i] = iround(T,x)
+        i += 1
+    end
+    return dest
+end
+
+int     (x::AbstractArray) = iround_to(similar(x,Int)    , x)
+int8    (x::AbstractArray) = iround_to(similar(x,Int8)   , x)
+uint8   (x::AbstractArray) = iround_to(similar(x,Uint8)  , x)
+int16   (x::AbstractArray) = iround_to(similar(x,Int16)  , x)
+uint16  (x::AbstractArray) = iround_to(similar(x,Uint16) , x)
+int32   (x::AbstractArray) = iround_to(similar(x,Int32)  , x)
+uint32  (x::AbstractArray) = iround_to(similar(x,Uint32) , x)
+int64   (x::AbstractArray) = iround_to(similar(x,Int64)  , x)
+uint64  (x::AbstractArray) = iround_to(similar(x,Uint64) , x)
+integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
+unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
+char   (x::AbstractArray) = iround_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
@@ -191,6 +200,7 @@ function make_loop_nest(vars, ranges, body, otherbodies)
     expr
 end
 
+
 ## genbodies() is a function that creates an array (potentially 2d),
 ## where the first element is inside the inner most array, and the last
 ## element is outside most loop, and all the other arguments are
@@ -244,13 +254,114 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     return f(ranges..., exargs...)
 end
 
+
+# Generate function bodies which look like this (example for a 3d array):
+#    offset3 = 0
+#    stride1 = 1
+#    stride2 = stride1 * size(A,1)
+#    stride3 = stride2 * size(A,2)
+#    for i3 = ind3
+#        offset2 = offset3 + (i3-1)*stride3
+#        for i2 = ind2
+#            offset1 = offset2 + (i2-1)*stride2
+#            for i1 = ind1
+#                linearind = offset1 + i1
+#                <A function, "body", of linearind>
+#            end
+#        end
+#    end
+function make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, ranges, body, arrayname)
+    # Initialize: calculate the strides
+    offset = offsetvars[end]
+    s = stridevars[1]
+    exinit = quote
+        $offset = 0
+        $s = 1
+    end
+    for i = 2:length(ranges)
+        sprev = s
+        s = stridevars[i]
+        exinit = quote
+            $exinit
+            $s = $sprev * size($arrayname, $i-1)
+        end
+    end
+    # Build the innermost loop (iterating over the first index)
+    v = loopvars[1]
+    r = ranges[1]
+    offset = offsetvars[1]
+    exloop = quote
+        for ($v) = ($r)
+            $linearind = $offset + $v
+            $body
+        end
+    end
+    # Build the remaining loops
+    for i = 2:length(ranges)
+        v = loopvars[i]
+        r = ranges[i]
+        offset = offsetvars[i-1]
+        offsetprev = offsetvars[i]
+        s = stridevars[i]
+        exloop = quote
+            for ($v) = ($r)
+                $offset = $offsetprev + ($v - 1) * $s
+                $exloop
+            end
+        end
+    end
+    # Return the combined result
+    return quote
+        $exinit
+        $exloop
+    end
+end
+
+# Like gen_cartesian_map, except it builds a function creating a
+# loop nest that computes a single linear index (instead of a
+# multidimensional index).
+# Important differences:
+#   - genbody is a scalar-valued function of a single scalar argument,
+#     the linear index. In gen_cartesian_map, this function can return
+#     an array to specify "pre-loop" and "post-loop" operations, but
+#     here those are handled explicitly in make_arrayind_loop_nest.
+#   - exargnames[1] must be the array for which the linear index is
+#     being created (it is used to calculate the strides, which in
+#     turn are used for computing the linear index)
+function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
+    N = length(ranges)
+    if !has(cache,N)
+        dimargnames = gensym(N)
+        loopvars = gensym(N)
+        offsetvars = gensym(N)
+        stridevars = gensym(N)
+        linearind = gensym()
+        body = genbody(linearind)
+        fexpr = quote
+            local _F_
+            function _F_($(dimargnames...), $(exargnames...))
+                $make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, dimargnames, body, exargnames[1])
+            end
+            return _F_
+        end
+        f = eval(fexpr)
+        cache[N] = f
+    else
+        f = cache[N]
+    end
+    return f(ranges..., exargs...)
+end
+
+
+
+
 ## Indexing: ref ##
 
 ref(t::AbstractArray, i::Integer) = error("indexing not defined for ", typeof(t))
-ref(t::AbstractArray, i::Real) = ref(t, iround(i))
-ref(t::AbstractArray, i::Real, j::Real) = ref(t, iround(i), iround(j))
-ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, iround(i), iround(j), iround(k))
-ref(t::AbstractArray, r::Real...) = ref(t,map(iround,r)...)
+ref(t::AbstractArray, i::Real) = ref(t, to_index(i))
+ref(t::AbstractArray, i::Real, j::Real) = ref(t, to_index(i), to_index(j))
+ref(t::AbstractArray, i::Real, j::Real, k::Real) = ref(t, to_index(i), to_index(j), to_index(k))
+ref(t::AbstractArray, r::Real...) = ref(t,map(to_index,r)...)
 
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
@@ -307,11 +418,11 @@ assign(t::AbstractArray, x, i::Integer) =
     error("assign not defined for ",typeof(t))
 assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
 
-assign(t::AbstractArray, x, i::Real)          = (t[iround(i)] = x)
-assign(t::AbstractArray, x, i::Real, j::Real) = (t[iround(i),iround(j)] = x)
+assign(t::AbstractArray, x, i::Real)          = (t[to_index(i)] = x)
+assign(t::AbstractArray, x, i::Real, j::Real) = (t[to_index(i),to_index(j)] = x)
 assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
-    (t[iround(i),iround(j),iround(k)] = x)
-assign(t::AbstractArray, x, r::Real...)       = (t[map(iround,r)...] = x)
+    (t[to_index(i),to_index(j),to_index(k)] = x)
+assign(t::AbstractArray, x, r::Real...)       = (t[map(to_index,r)...] = x)
 
 ## Concatenation ##
 
@@ -756,13 +867,13 @@ repmat(a::AbstractVector, m::Int, n::Int) = repmat(reshape(a, length(a), 1), m, 
 
 sub2ind(dims) = 1
 sub2ind(dims, i::Integer) = int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(int(i), int(j))
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, int(i), int(j))
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(int(i0),int(i1),int(i2))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, int(i0),int(i1),int(i2))
 sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(int(i0),int(i1),int(i2),int(i3))
+    sub2ind(dims, int(i0),int(i1),int(i2),int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
@@ -777,8 +888,8 @@ function sub2ind(dims, I::Integer...)
     return index
 end
 
-sub2ind(dims, I::AbstractVector...) =
-    [ sub2ind(dims, map(X->X[i], I)...) for i=1:length(I[1]) ]
+sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
+    [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
 ind2sub(dims::(), ind::Integer) = throw(BoundsError())
@@ -805,6 +916,23 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     end
     return tuple(ind, sub...)
 end
+
+function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
+    n = length(dims)
+    l = length(ind)
+    t = ntuple(n, x->Array(Int, l))
+    for i = 1:l
+        s = ind2sub(dims, ind[i])
+        for j = 1:n
+            t[j][i] = s[j]
+        end
+    end
+    return t
+end
+
+indices(I::Indices) = I
+indices(I::AbstractVector{Bool}) = find(I)
+indices(I::(Indices...)) = map(indices, I)
 
 ## iteration utilities ##
 

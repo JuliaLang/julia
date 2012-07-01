@@ -1,19 +1,18 @@
 namespace JL_I {
     enum intrinsic {
         // wrap and unwrap
-        boxui8=0, boxsi8, boxui16, boxsi16, boxui32, boxsi32, boxui64, boxsi64,
-        boxf32, boxf64, box,
-        unbox8, unbox16, unbox32, unbox64, unbox,
+        box=0, unbox,
         // arithmetic
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
-        // comparison
+        // same-type comparisons
         eq_int,  ne_int,
         slt_int, ult_int,
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        // mixed-type comparisons
         eqfsi64, eqfui64,
         ltfsi64, ltfui64,
         lefsi64, lefui64,
@@ -25,7 +24,7 @@ namespace JL_I {
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
         // conversion
-        sext16, zext16, sext32, zext32, sext64, zext64, zext_int,
+        sext16, zext16, sext32, zext32, sext64, zext64, sext_int, zext_int,
         trunc8, trunc16, trunc32, trunc64, trunc_int,
         fptoui32, fptosi32, fptoui64, fptosi64,
         fpsiround32, fpsiround64, fpuiround32, fpuiround64,
@@ -261,6 +260,19 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
+static Value *generic_sext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
+{
+    jl_value_t *bt =
+        jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                      &jl_tupleref(ctx->sp,0),
+                                      jl_tuple_len(ctx->sp)/2);
+    if (!jl_is_bits_type(bt))
+        jl_error("sext_int: expected bits type as first argument");
+    unsigned int nb = jl_bitstype_nbits(bt);
+    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    return builder.CreateSExt(JL_INT(auto_unbox(x,ctx)), to);
+}
+
 static Value *generic_zext(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
     jl_value_t *bt =
@@ -318,21 +330,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
             jl_error("trunc_int: wrong number of arguments");
         return generic_trunc(args[1], args[2], ctx);
     }
+    if (f == sext_int) {
+        if (nargs!=2)
+            jl_error("sext_int: wrong number of arguments");
+        return generic_sext(args[1], args[2], ctx);
+    }
     if (f == zext_int) {
         if (nargs!=2)
             jl_error("zext_int: wrong number of arguments");
         return generic_zext(args[1], args[2], ctx);
-    }
-    switch (f) {
-        HANDLE(unbox8,1)
-            return emit_unbox(T_int8, T_pint8, emit_unboxed(args[1],ctx));
-        HANDLE(unbox16,1)
-            return emit_unbox(T_int16, T_pint16, emit_unboxed(args[1],ctx));
-        HANDLE(unbox32,1)
-            return emit_unbox(T_int32, T_pint32, emit_unboxed(args[1],ctx));
-        HANDLE(unbox64,1)
-            return emit_unbox(T_int64, T_pint64, emit_unboxed(args[1],ctx));
-    default: ;
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -344,37 +350,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *fy;
     Value *den;
     switch (f) {
-    HANDLE(boxui8,1)
-        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return mark_julia_type(x, jl_uint8_type);
-    HANDLE(boxsi8,1)
-        if (t != T_int8) x = builder.CreateBitCast(x, T_int8);
-        return mark_julia_type(x, jl_int8_type);
-    HANDLE(boxui16,1)
-        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return mark_julia_type(x, jl_uint16_type);
-    HANDLE(boxsi16,1)
-        if (t != T_int16) x = builder.CreateBitCast(x, T_int16);
-        return mark_julia_type(x, jl_int16_type);
-    HANDLE(boxui32,1)
-        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return mark_julia_type(x, jl_uint32_type);
-    HANDLE(boxsi32,1)
-        if (t != T_int32) x = builder.CreateBitCast(x, T_int32);
-        return mark_julia_type(x, jl_int32_type);
-    HANDLE(boxui64,1)
-        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return mark_julia_type(x, jl_uint64_type);
-    HANDLE(boxsi64,1)
-        if (t != T_int64) x = builder.CreateBitCast(x, T_int64);
-        return mark_julia_type(x, jl_int64_type);
-    HANDLE(boxf32,1)
-        if (t != T_float32) x = builder.CreateBitCast(x, T_float32);
-        return mark_julia_type(x, jl_float32_type);
-    HANDLE(boxf64,1)
-        if (t != T_float64) x = builder.CreateBitCast(x, T_float64);
-        return mark_julia_type(x, jl_float64_type);
-
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -815,12 +790,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(checked_fptosi64,1) {
         x = FP(x);
         Value *v = builder.CreateFPToSI(x, T_int64);
+        if (x->getType() == T_float32)
+            x = builder.CreateFPExt(x, T_float64);
         raise_exception_unless(emit_eqfsi64(x, v), jlinexacterr_var, ctx);
         return v;
     }
     HANDLE(checked_fptoui64,1) {
         x = FP(x);
         Value *v = builder.CreateFPToUI(x, T_int64);
+        if (x->getType() == T_float32)
+            x = builder.CreateFPExt(x, T_float64);
         raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
         return v;
     }
@@ -920,10 +899,7 @@ static void add_intrinsic(const std::string &name, intrinsic f)
 
 extern "C" void jl_init_intrinsic_functions(void)
 {
-    ADD_I(boxui8); ADD_I(boxsi8); ADD_I(boxui16); ADD_I(boxsi16);
-    ADD_I(boxui32); ADD_I(boxsi32); ADD_I(boxui64); ADD_I(boxsi64);
-    ADD_I(boxf32); ADD_I(boxf64); ADD_I(box); ADD_I(unbox);
-    ADD_I(unbox8); ADD_I(unbox16); ADD_I(unbox32); ADD_I(unbox64);
+    ADD_I(box); ADD_I(unbox);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);
@@ -945,7 +921,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
     ADD_I(ctpop_int); ADD_I(ctlz_int); ADD_I(cttz_int);
     ADD_I(sext16); ADD_I(zext16); ADD_I(sext32); ADD_I(zext32);
-    ADD_I(sext64); ADD_I(zext64); ADD_I(zext_int);
+    ADD_I(sext64); ADD_I(zext64); ADD_I(sext_int); ADD_I(zext_int);
     ADD_I(trunc8); ADD_I(trunc16); ADD_I(trunc32); ADD_I(trunc64);
     ADD_I(trunc_int);
     ADD_I(fptoui32); ADD_I(fptosi32); ADD_I(fptoui64); ADD_I(fptosi64);

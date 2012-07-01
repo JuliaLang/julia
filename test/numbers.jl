@@ -52,6 +52,164 @@
 @assert 2. * 3. == 6.
 @assert min(1.0,1) == 1
 
+# definition and printing of extreme integers
+@assert bin(typemin(Uint8)) == "0"
+@assert bin(typemax(Uint8)) == "1"^8
+@assert oct(typemin(Uint8)) == "0"
+@assert oct(typemax(Uint8)) == "377"
+@assert dec(typemin(Uint8)) == "0"
+@assert dec(typemax(Uint8)) == "255"
+@assert hex(typemin(Uint8)) == "0"
+@assert hex(typemax(Uint8)) == "ff"
+@assert string(typemin(Uint8)) == "0x00"
+@assert string(typemax(Uint8)) == "0xff"
+@assert base(3,typemin(Uint8)) == "0"
+@assert base(3,typemax(Uint8)) == "100110"
+@assert base(12,typemin(Uint8)) == "0"
+@assert base(12,typemax(Uint8)) == "193"
+
+@assert bin(typemin(Uint16)) == "0"
+@assert bin(typemax(Uint16)) == "1"^16
+@assert oct(typemin(Uint16)) == "0"
+@assert oct(typemax(Uint16)) == "177777"
+@assert dec(typemin(Uint16)) == "0"
+@assert dec(typemax(Uint16)) == "65535"
+@assert hex(typemin(Uint16)) == "0"
+@assert hex(typemax(Uint16)) == "ffff"
+@assert string(typemin(Uint16)) == "0x0000"
+@assert string(typemax(Uint16)) == "0xffff"
+@assert base(3,typemin(Uint16)) == "0"
+@assert base(3,typemax(Uint16)) == "10022220020"
+@assert base(12,typemin(Uint16)) == "0"
+@assert base(12,typemax(Uint16)) == "31b13"
+
+@assert bin(typemin(Uint32)) == "0"
+@assert bin(typemax(Uint32)) == "1"^32
+@assert oct(typemin(Uint32)) == "0"
+@assert oct(typemax(Uint32)) == "37777777777"
+@assert dec(typemin(Uint32)) == "0"
+@assert dec(typemax(Uint32)) == "4294967295"
+@assert hex(typemin(Uint32)) == "0"
+@assert hex(typemax(Uint32)) == "ffffffff"
+@assert string(typemin(Uint32)) == "0x00000000"
+@assert string(typemax(Uint32)) == "0xffffffff"
+@assert base(3,typemin(Uint32)) == "0"
+@assert base(3,typemax(Uint32)) == "102002022201221111210"
+@assert base(12,typemin(Uint32)) == "0"
+@assert base(12,typemax(Uint32)) == "9ba461593"
+
+@assert bin(typemin(Uint64)) == "0"
+@assert bin(typemax(Uint64)) == "1"^64
+@assert oct(typemin(Uint64)) == "0"
+@assert oct(typemax(Uint64)) == "1777777777777777777777"
+@assert dec(typemin(Uint64)) == "0"
+@assert dec(typemax(Uint64)) == "18446744073709551615"
+@assert hex(typemin(Uint64)) == "0"
+@assert hex(typemax(Uint64)) == "ffffffffffffffff"
+@assert string(typemin(Uint64)) == "0x0000000000000000"
+@assert string(typemax(Uint64)) == "0xffffffffffffffff"
+@assert base(3,typemin(Uint64)) == "0"
+@assert base(3,typemax(Uint64)) == "11112220022122120101211020120210210211220"
+@assert base(12,typemin(Uint64)) == "0"
+@assert base(12,typemax(Uint64)) == "839365134a2a240713"
+
+if WORD_SIZE > 32
+@assert bin(typemin(Uint128)) == "0"
+@assert bin(typemax(Uint128)) == "1"^128
+@assert oct(typemin(Uint128)) == "0"
+@assert oct(typemax(Uint128)) == "3777777777777777777777777777777777777777777"
+@assert dec(typemin(Uint128)) == "0"
+@assert dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
+@assert hex(typemin(Uint128)) == "0"
+@assert hex(typemax(Uint128)) == "ffffffffffffffffffffffffffffffff"
+@assert string(typemin(Uint128)) == "0x00000000000000000000000000000000"
+@assert string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
+@assert base(3,typemin(Uint128)) == "0"
+@assert base(3,typemax(Uint128)) ==
+    "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
+@assert base(12,typemin(Uint128)) == "0"
+@assert base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
+end
+
+@assert bin(typemin(Int8)) == "-1"*"0"^7
+@assert bin(typemax(Int8)) == "1"^7
+@assert oct(typemin(Int8)) == "-200"
+@assert oct(typemax(Int8)) == "177"
+@assert dec(typemin(Int8)) == "-128"
+@assert dec(typemax(Int8)) == "127"
+@assert hex(typemin(Int8)) == "-80"
+@assert hex(typemax(Int8)) == "7f"
+@assert string(typemin(Int8)) == "-128"
+@assert string(typemax(Int8)) == "127"
+@assert base(3,typemin(Int8)) == "-11202"
+@assert base(3,typemax(Int8)) == "11201"
+@assert base(12,typemin(Int8)) == "-a8"
+@assert base(12,typemax(Int8)) == "a7"
+
+@assert bin(typemin(Int16)) == "-1"*"0"^15
+@assert bin(typemax(Int16)) == "1"^15
+@assert oct(typemin(Int16)) == "-100000"
+@assert oct(typemax(Int16)) == "77777"
+@assert dec(typemin(Int16)) == "-32768"
+@assert dec(typemax(Int16)) == "32767"
+@assert hex(typemin(Int16)) == "-8000"
+@assert hex(typemax(Int16)) == "7fff"
+@assert string(typemin(Int16)) == "-32768"
+@assert string(typemax(Int16)) == "32767"
+@assert base(3,typemin(Int16)) == "-1122221122"
+@assert base(3,typemax(Int16)) == "1122221121"
+@assert base(12,typemin(Int16)) == "-16b68"
+@assert base(12,typemax(Int16)) == "16b67"
+
+@assert bin(typemin(Int32)) == "-1"*"0"^31
+@assert bin(typemax(Int32)) == "1"^31
+@assert oct(typemin(Int32)) == "-20000000000"
+@assert oct(typemax(Int32)) == "17777777777"
+@assert dec(typemin(Int32)) == "-2147483648"
+@assert dec(typemax(Int32)) == "2147483647"
+@assert hex(typemin(Int32)) == "-80000000"
+@assert hex(typemax(Int32)) == "7fffffff"
+@assert string(typemin(Int32)) == "-2147483648"
+@assert string(typemax(Int32)) == "2147483647"
+@assert base(3,typemin(Int32)) == "-12112122212110202102"
+@assert base(3,typemax(Int32)) == "12112122212110202101"
+@assert base(12,typemin(Int32)) == "-4bb2308a8"
+@assert base(12,typemax(Int32)) == "4bb2308a7"
+
+@assert bin(typemin(Int64)) == "-1"*"0"^63
+@assert bin(typemax(Int64)) == "1"^63
+@assert oct(typemin(Int64)) == "-1000000000000000000000"
+@assert oct(typemax(Int64)) == "777777777777777777777"
+@assert dec(typemin(Int64)) == "-9223372036854775808"
+@assert dec(typemax(Int64)) == "9223372036854775807"
+@assert hex(typemin(Int64)) == "-8000000000000000"
+@assert hex(typemax(Int64)) == "7fffffffffffffff"
+@assert string(typemin(Int64)) == "-9223372036854775808"
+@assert string(typemax(Int64)) == "9223372036854775807"
+@assert base(3,typemin(Int64)) == "-2021110011022210012102010021220101220222"
+@assert base(3,typemax(Int64)) == "2021110011022210012102010021220101220221"
+@assert base(12,typemin(Int64)) == "-41a792678515120368"
+@assert base(12,typemax(Int64)) == "41a792678515120367"
+
+if WORD_SIZE > 32
+@assert bin(typemin(Int128)) == "-1"*"0"^127
+@assert bin(typemax(Int128)) == "1"^127
+@assert oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
+@assert oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
+@assert dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
+@assert dec(typemax(Int128)) == "170141183460469231731687303715884105727"
+@assert hex(typemin(Int128)) == "-80000000000000000000000000000000"
+@assert hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
+@assert string(typemin(Int128)) == "-170141183460469231731687303715884105728"
+@assert string(typemax(Int128)) == "170141183460469231731687303715884105727"
+@assert base(3,typemin(Int128)) ==
+    "-101100201022001010121000102002120122110122221010202000122201220121120010200022002"
+@assert base(3,typemax(Int128)) ==
+    "101100201022001010121000102002120122110122221010202000122201220121120010200022001"
+@assert base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
+@assert base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
+end
+
 # signs
 @assert sign(1) == 1
 @assert sign(-1) == -1
@@ -456,7 +614,11 @@ for a = -5:5, b = -5:5
     @assert a//b == a/b
     @assert a//b == a//b
     @assert a//b == rational(a/b)
-    @assert integer(a//b) == integer(a/b)
+    if b == 0
+        @assert_fails integer(a//b) == integer(a/b)
+    else
+        @assert integer(a//b) == integer(a/b)
+    end
     for c = -5:5
         @assert (a//b == c) == (a/b == c)
         @assert (a//b != c) == (a/b != c)
@@ -844,4 +1006,12 @@ for x = 2^24-10:2^24+10
     @assert iround(y)     == i
     @assert ifloor(y)     == i
     @assert iceil(y)      == i
+end
+
+for n = 1:100
+    m = 1
+    for (p,k) in factor(n)
+        m *= p^k
+    end
+    @assert n == m
 end

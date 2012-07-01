@@ -204,24 +204,33 @@ ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I 
 ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
 
+function ref{T<:Integer}(A::Array, I::AbstractVector{T})
+    X = similar(A, length(I))
+    ind = 1
+    for i in I
+        X[ind] = A[i]
+        ind += 1
+    end
+    return X
+end
+
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
-    i = length(I)
-    while i > 0 && isa(I[i],Integer); i-=1; end
-    d = map(length, I)::Dims
-    X = similar(A, d[1:i])
+    I = indices(I)
+    X = similar(A, ref_shape(I...))
 
     if is(ref_cache,nothing)
         ref_cache = Dict()
     end
-    gen_cartesian_map(ref_cache, ivars -> quote
-            X[storeind] = A[$(ivars...)]
+    gen_array_index_map(ref_cache, refind -> quote
+            X[storeind] = A[$refind]
             storeind += 1
         end, I, (:A, :X, :storeind), A, X, 1)
     return X
 end
 end
+
 
 # logical indexing
 
@@ -295,6 +304,7 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
 end
 
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
+    if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
     for i in I
         A[i] = X[count]
@@ -311,6 +321,7 @@ function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+    if length(X) != length(J); error("argument dimensions must match"); end
     m = size(A, 1)
     count = 1
     for j in J
@@ -329,6 +340,7 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+    if length(X) != length(I); error("argument dimensions must match"); end
     m = size(A, 1)
     offset = (j-1)*m
     count = 1
@@ -350,6 +362,11 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVecto
     return A
 end
 function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+    nel = length(I)*length(J)
+    if length(X) != nel ||
+        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+        error("argument dimensions must match")
+    end
     m = size(A, 1)
     count = 1
     for j in J
@@ -365,10 +382,14 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
+    I0 = indices(I0)
+    I = indices(I)
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = x),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = x
+                      end,
                       tuple(I0, I...),
                       (:A, :x),
                       A, x)
@@ -379,11 +400,32 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    I0 = indices(I0)
+    I = indices(I)
+    nel = length(I0)
+    for idx in I
+        nel *= length(idx)
+    end
+    if length(X) != nel
+        error("argument dimensions must match")
+    end
+    if ndims(X) > 1
+        if size(X,1) != length(I0)
+            error("argument dimensions must match")
+        end
+        for i = 1:length(I)
+            if size(X,i+1) != length(I[i])
+                error("argument dimensions must match")
+            end
+        end
+    end
     if is(assign_cache,nothing)
         assign_cache = Dict()
     end
-    gen_cartesian_map(assign_cache, ivars->:(A[$(ivars...)] = X[refind];
-                                             refind += 1),
+    gen_array_index_map(assign_cache, storeind -> quote
+                          A[$storeind] = X[refind]
+                          refind += 1
+                      end,
                       tuple(I0, I...),
                       (:A, :X, :refind),
                       A, X, 1)
@@ -394,7 +436,6 @@ end
 # logical indexing
 
 function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
-    n = sum(I)
     for i = 1:numel(I)
         if I[i]
             A[i] = x
@@ -404,7 +445,6 @@ function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
 end
 
 function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    n = sum(I)
     c = 1
     for i = 1:numel(I)
         if I[i]
@@ -464,7 +504,22 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
     return a
 end
 
+function append{T}(a::Array{T,1}, items::Array{T,1})
+    if is(T,None)
+        error("[] cannot grow. Instead, initialize the array with \"T[]\".")
+    end
+    n0 = length(a)
+    n1 = length(items)
+    r = Array(T, n0 + n1)
+    r[1:n0] = a
+    r[n0+1:n0+n1] = items
+    return r
+end
+
 function grow(a::Vector, n::Integer)
+    if n < -length(a)
+        throw(BoundsError())
+    end
     ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     return a
 end
@@ -653,13 +708,40 @@ end
 
 for f in (:+, :-, :.*, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f)(x::Number, y::AbstractArray)
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+            F = Array(promote_type(S,T), promote_shape(size(A),size(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B[i])
+            end
+            return F
+        end
+        function ($f){T}(A::Number, B::AbstractArray{T})
+            F = similar(B, promote_type(typeof(A),T))
+            for i=1:numel(B)
+                F[i] = ($f)(A, B[i])
+            end
+            return F
+        end
+        function ($f){T}(A::AbstractArray{T}, B::Number)
+            F = similar(A, promote_type(T,typeof(B)))
+            for i=1:numel(A)
+                F[i] = ($f)(A[i], B)
+            end
+            return F
+        end
+    end
+end
+
+# functions that should give an Int result for Bool arrays
+for f in (:+, :-, :div)
+    @eval begin
+        function ($f)(x::Bool, y::Array{Bool})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f)(x::AbstractArray, y::Number)
+        function ($f)(x::Array{Bool}, y::Bool)
             reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
-        function ($f)(x::AbstractArray, y::AbstractArray)
+        function ($f)(x::Array{Bool}, y::Array{Bool})
             shp = promote_shape(size(x),size(y))
             reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end
@@ -865,6 +947,50 @@ function nnz(a::StridedArray)
         n += bool(a[i]) ? 1 : 0
     end
     return n
+end
+
+# returns the index of the first non-zero element, or 0 if all zeros
+function findfirst(A::StridedArray)
+    for i = 1:length(A)
+        if A[i] != 0
+            return i
+        end
+    end
+    return 0
+end
+
+# returns the index of the first matching element
+function findfirst(A::StridedArray, v)
+    for i = 1:length(A)
+        if A[i] == v
+            return i
+        end
+    end
+    return 0
+end
+
+# returns the index of the first element for which the function returns true
+function findfirst(testf::Function, A::StridedArray)
+    for i = 1:length(A)
+        if testf(A[i])
+            return i
+        end
+    end
+    return 0
+end
+
+function find(testf::Function, A::StridedArray)
+    # use a dynamic-length array to store the indexes, then copy to a non-padded
+    # array for the return
+    tmpI = Array(Int, 0)
+    for i = 1:length(A)
+        if testf(A[i])
+            push(tmpI, i)
+        end
+    end
+    I = Array(Int, length(tmpI))
+    copy_to(I, tmpI)
+    I
 end
 
 function find(A::StridedArray)

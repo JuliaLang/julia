@@ -40,7 +40,7 @@ show(io, fd::FileDes) =
     fd == STDIN  ? print(io, "STDIN")  :
     fd == STDOUT ? print(io, "STDOUT") :
     fd == STDERR ? print(io, "STDERR") :
-    invoke(show, (Any,), fd)
+    invoke(show, (Any, Any), io, fd)
 
 type Pipe
     in::FileDes
@@ -379,7 +379,7 @@ function spawn(cmd::Cmd)
                 # dup2 manually inlined to avoid potential heap stomping
                 r = ccall(:dup2, Int32, (Int32, Int32), dup2_fds[i], dup2_fds[i+1])
                 if r == -1
-                    println(stderr, "dup2: ", strerror())
+                    println(stderr_stream, "dup2: ", strerror())
                     exit(0xff)
                 end
                 i += 2
@@ -390,14 +390,14 @@ function spawn(cmd::Cmd)
                 # close manually inlined to avoid potential heap stomping
                 r = ccall(:close, Int32, (Int32,), close_fds[i])
                 if r != 0
-                    println(stderr, "close: ", strerror())
+                    println(stderr_stream, "close: ", strerror())
                     exit(0xff)
                 end
                 i += 1
             end
             if !isequal(ptrs, nothing)
                 ccall(:execvp, Int32, (Ptr{Uint8}, Ptr{Ptr{Uint8}}), ptrs[1], ptrs)
-                println(stderr, "exec: ", strerror())
+                println(stderr_stream, "exec: ", strerror())
                 exit(0xff)
             end
             # other ways of execing (e.g. a julia function)
@@ -484,6 +484,7 @@ function _readall(ports::Ports, cmds::Cmds)
     if !wait(cmds)
         pipeline_error(cmds)
     end
+    close(r)
     return o
 end
 
@@ -506,11 +507,10 @@ cmd_stdout_stream(cmds::Cmds) = fdio(read_from(cmds).fd)
 ## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = ByteString[x]
+arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
-    if isa(head,Cmd)
-        return head.exec
-    elseif applicable(start,head)
+    if applicable(start,head)
         vals = ByteString[]
         for x in head
             push(vals,cstring(x))
@@ -525,8 +525,8 @@ function arg_gen(head, tail...)
     head = arg_gen(head)
     tail = arg_gen(tail...)
     vals = ByteString[]
-    for h = head, t = tail
-        push(vals, cstring(strcat(h,t)))
+    for h in head, t in tail
+        push(vals,cstring(strcat(h,t)))
     end
     vals
 end
@@ -534,7 +534,7 @@ end
 function cmd_gen(parsed)
     args = ByteString[]
     for arg in parsed
-        append!(args, arg_gen(arg...))
+        append!(args,arg_gen(arg...))
     end
     Cmd(args)
 end

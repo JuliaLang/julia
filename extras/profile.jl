@@ -16,20 +16,19 @@ _PROFILE_TAGS = {}     # line #s for all timing variables
 _PROFILE_CALIB = 0
 # Do it inside a let block, just like in real profiling, in case of
 # extra overhead
-let tlast = 0, tnow = 0
+let # tlast::Uint64 = 0x0, tnow::Uint64 = 0x0
 global profile_calib
 function profile_calib(n_iter)
-    ttotal = 0.0
+    trec = Array(Uint64, n_iter)
     for i = 1:n_iter
-        tlast = time()
-        tnow = time()
-        ttotal += tnow - tlast
+        tlast = time_ns()
+        tnow = time_ns()
+        trec[i] = tnow - tlast
     end
-    return ttotal/n_iter
+    return trec
 end
 end
-profile_calib(1)  # to force compile
-_PROFILE_CALIB = profile_calib(10000)
+_PROFILE_CALIB = min(profile_calib(100))
 
 # Utilities
 # Generic expression type testing
@@ -111,7 +110,13 @@ function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags,
             else
                 push(fblocknewargs, fblock.args[i])
             end
-            append!(fblocknewargs,{:($tnow = time()), :(($timers)[($indx)] += $tnow-$tlast), :(($counters)[($indx)] += 1), :($tlast = time())})
+            # This next line inserts timing statements between two
+            # lines of code, equivalent to:
+            #   timehr(_PROFILE_USE_CLOCK, tnow)  # end time of prev
+            #   timers[indx] += timehr_diff(tlast, tnow)
+            #   counters[indx] += 1
+            #   timehr(_PROFILE_USE_CLOCK, tlast) # start time for next
+            append!(fblocknewargs,{:($tnow = time_ns()), :(($timers)[($indx)] += $tnow - $tlast), :(($counters)[($indx)] += 1), :($tlast = time_ns())})
             indx += 1
             if saveret
                 push(fblocknewargs, :(return $retsym))
@@ -170,7 +175,7 @@ function insert_profile_function(ex::Expr, tlast, tnow, timers, counters, tags, 
     # Insert the profiling statements in the function
     fblocknewargs, indx = insert_profile_block(fblock, tlast, tnow, timers, counters, tags, indx, retsym, savefunc)
     # Prepend the initialization of tlast
-    fblocknewargs = vcat({:($tlast = time())}, fblocknewargs.args)
+    fblocknewargs = vcat({:($tlast = time_ns())}, fblocknewargs.args)
     return expr(:function,{funcsyntax(ex),expr(:block,fblocknewargs)}), indx
 end
 
@@ -220,7 +225,7 @@ function profile_parse(ex::Expr)
         push(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
         # Put all this inside a let block
         excore = expr(:block,coreargs)
-        exlet = expr(:let,{expr(:block,excore), :($timers = zeros($n_lines)), :($counters = zeros(Int,$n_lines))})
+        exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Int, $n_lines))})
         return exlet, tags, funcreport, funcclear
     else
         return ex ,{}, :funcnoop, :funcnoop
@@ -265,7 +270,7 @@ function profile_print(tc)
         counters = tc[i][2]
         for j = 1:length(counters)
             if counters[j] != 0
-                printf("%8d  %f  %s\n", counters[j], timers[j] - counters[j]*_PROFILE_CALIB, _PROFILE_TAGS[i][j])
+                printf("%8d  %f  % f %s\n", counters[j], convert(Float64, timers[j])*1e-9, convert(Float64, timers[j] - counters[j]*_PROFILE_CALIB)*1e-9, _PROFILE_TAGS[i][j])
             end
         end
     end

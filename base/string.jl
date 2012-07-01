@@ -21,7 +21,7 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[iround(x)]
+ref(s::String, x::Real) = s[to_index(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
@@ -228,7 +228,7 @@ function begins_with(a::String, b::String)
         d, j = next(b,j)
         if c != d return false end
     end
-    done(a,i)
+    done(b,i)
 end
 begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
@@ -888,11 +888,11 @@ split(s::String, spl)             = split(s, spl, 0, true)
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
 split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
 
-function replace(str::ByteString, splitter, repl::Function, limit::Integer)
+function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1
     rstr = ""
     i = a = start(str)
-    j, k = search(str,splitter,i)
+    j, k = search(str,pattern,i)
     while j != 0
         if i == a || i < k
             rstr = RopeString(rstr,SubString(str,i,j-1))
@@ -900,16 +900,33 @@ function replace(str::ByteString, splitter, repl::Function, limit::Integer)
             i = k
         end
         if k <= j; k = nextind(str,j) end
-        j, k = search(str,splitter,k)
+        j, k = search(str,pattern,k)
         if n == limit break end
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
     cstring(rstr)
 end
-replace(s::String, spl, f::Function, n::Integer) = replace(cstring(s), spl, f, n)
-replace(s::String, spl, r, n::Integer) = replace(s, spl, x->r, n)
-replace(s::String, spl, r) = replace(s, spl, r, 0)
+replace(s::String, pat, f::Function, n::Integer) = replace(cstring(s), pat, f, n)
+replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
+replace(s::String, pat, r) = replace(s, pat, r, 0)
+
+function search_count(str::String, pattern, limit::Integer)
+    n = 0
+    i = a = start(str)
+    j, k = search(str,pattern,i)
+    while j != 0
+        if i == a || i < k
+            n += 1
+            if n == limit break end
+            i = k
+        end
+        if k <= j; k = nextind(str,j) end
+        j, k = search(str,pattern,k)
+    end
+    return n
+end
+search_count(s::String, pat) = search_count(s, pat, 0)
 
 function print_joined(io, strings, delim, last)
     i = start(strings)
@@ -1072,47 +1089,13 @@ int32   (s::String) = parse_int(Int32,s)
 uint32  (s::String) = parse_int(Uint32,s)
 int64   (s::String) = parse_int(Int64,s)
 uint64  (s::String) = parse_int(Uint64,s)
+int128  (s::String) = parse_int(Int128,s)
+uint128 (s::String) = parse_int(Uint128,s)
 
-## integer to string functions ##
+## stringifying integers more efficiently ##
 
-const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
-
-function int2str(n::Union(Int64,Uint64), b::Integer, l::Int)
-    if b < 2 || b > 36; error("int2str: invalid base ", b); end
-    neg = n < 0
-    n = unsigned(abs(n))
-    b = convert(typeof(n), b)
-    ndig = ndigits(n, b)
-    sz = max(convert(Int, ndig), l) + neg
-    data = Array(Uint8, sz)
-    i = sz
-    if ispow2(b)
-        digmask = b-1
-        shift = trailing_zeros(b)
-        while i > neg
-            ch = n & digmask
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n >>= shift
-            i -= 1
-        end
-    else
-        while i > neg
-            ch = n % b
-            data[i] = _jl_dig_syms[int(ch)+1]
-            n = div(n,b)
-            i -= 1
-        end
-    end
-    if neg
-        data[1] = '-'
-    end
-    ASCIIString(data)
-end
-int2str(n::Integer, b::Integer)         = int2str(n, b, 0)
-int2str(n::Integer, b::Integer, l::Int) = int2str(int64(n), b, l)
-
-string(x::Signed) = dec(int64(x))
-cstring(x::Signed) = dec(int64(x))
+string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
+cstring(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 
@@ -1196,3 +1179,11 @@ end
 
 memcat(s::ByteString) = memcat(s.data)
 memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)
+
+# return a random string (often useful for temporary filenames/dirnames)
+let
+global randstring
+const randstring_chars = ASCIIString(uint8([0x30:0x39,0x41:0x5a,0x61:0x7a]))
+randstring(len::Int) =
+    randstring_chars[iceil(strlen(randstring_chars)*rand(len))]
+end
