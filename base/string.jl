@@ -228,7 +228,7 @@ function begins_with(a::String, b::String)
         d, j = next(b,j)
         if c != d return false end
     end
-    done(a,i)
+    done(b,i)
 end
 begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
