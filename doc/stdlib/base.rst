@@ -517,10 +517,6 @@ I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: with_output_stream(stream, f::Function, args...)
-
-   Call ``f(args...)`` with the current output stream set to the given object. This is typically used to redirect the output of ``print`` and ``show``.
-
 .. function:: write(stream, x)
 
    Write the canonical binary representation of a value to the given stream.
@@ -544,14 +540,6 @@ I/O
 .. function:: skip(s, offset)
 
    Seek a stream relative to the current position.
-
-.. function:: current_output_stream()
-
-   Obtain the current default output stream (used by ``print`` and other output functions).
-
-.. function:: set_current_output_stream(s)
-
-   Set the current output stream.
 
 
 Text I/O
