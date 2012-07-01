@@ -214,14 +214,10 @@ linprog_exact{T<:Real}(f::Vector{T}, A::MatOrNothing, b::VecOrNothing,
 #
 #  * if the col_kind vector is not provided, all variables default to integer
 #  * if the "presolve" options is set to GLP_OFF, then it uses linear programming
-#    for presolving:
-#    + if the presolve_params is not given, uses the simplex point method with
-#      default options
-#    + it the presolve_params is given, its type is used to determine which
-#      method to use (GLPSimplexParam -> simplex, GLPInteriorParam -> interior
-#      point)
+#    for presolving, via the simplex point method with parameters ps_param (if ps_param is nothing
+#    or not given, uses the defaults)
 
-function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPParam,Nothing)}(
+function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPSimplexParam,Nothing)}(
         f::Vector{T}, A::SparseOrFullMat{T}, b::Vector{T}, Aeq::SparseOrFullMat{T}, beq::Vector{T},
         lb::Vector{T}, ub::Vector{T}, col_kind::Vector{Ti}, params::P, params_presolve::Px)
 
@@ -229,16 +225,7 @@ function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Uni
     _jl_mixintprog_set_col_kind(lp, n, col_kind)
 
     if params == nothing || pointer(params) == C_NULL || params["presolve"] != GLP_ON
-        if params_presolve == nothing || isa(params_presolve, GLPSimplexParam)
-            ret_ps = glp_simplex(lp, params_presolve)
-        elseif  isa(params_presolve, GLPInteriorParam)
-            # TODO check whether this is possible at all
-            # or simplex is always strictly necessary
-            println("warning: this probably won't work")
-            ret_ps = glp_interior(lp, params_presolve)
-        else
-            error("wrong type for params_presolve")
-        end
+        ret_ps = glp_simplex(lp, params_presolve)
         if ret_ps != 0
             # throw exception here ?
             # XXX GLP_ESTOP ??
@@ -261,7 +248,7 @@ function mixintprog{T<:Real,Ti<:Integer,P<:Union(GLPIntoptParam,Nothing),Px<:Uni
         return (nothing, nothing, ret, ret_ps)
     end
 end
-function mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPParam,Nothing)}(
+function mixintprog{T<:Real,P<:Union(GLPIntoptParam,Nothing),Px<:Union(GLPSimplexParam,Nothing)}(
         f::Vector{T}, A::MatOrNothing, b::VecOrNothing, Aeq::MatOrNothing, beq::VecOrNothing,
         lb::VecOrNothing, ub::VecOrNothing, col_kind::VecOrNothing, params::P, params_presolve::Px)
 
