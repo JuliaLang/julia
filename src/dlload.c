@@ -14,7 +14,7 @@
 #endif
 
 #if defined(__APPLE__)
-static char *extensions[] = { "", ".dylib", ".bundle" };
+static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 3
 #elif defined(_WIN32)
 static char *extensions[] = { ".dll" };
