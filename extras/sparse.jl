@@ -461,7 +461,7 @@ end
 
 ## Binary operators
 
-macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
+macro _jl_binary_op_sparse(op)
     quote
 
         function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
@@ -482,13 +482,8 @@ macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
 
             zero = convert(TvS, 0)
 
-            colptrA = A.colptr
-            rowvalA = A.rowval
-            nzvalA = A.nzval
-
-            colptrB = B.colptr
-            rowvalB = B.rowval
-            nzvalB = B.nzval
+            colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
+            colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
 
             ptrS = 1
             colptrS[1] = 1
@@ -555,8 +550,9 @@ macro _jl_binary_op_A_sparse_B_sparse_res_sparse(op)
                 colptrS[col+1] = ptrS
             end
 
-            # Free up unused memory before returning?
-            SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
+            rowvalS = del(rowvalS, colptrS[end]:length(rowvalS))
+            nzvalCS = del(nzvalS, colptrS[end]:length(nzvalS))
+            return SparseMatrixCSC(m, n, colptrS, rowvalS, nzvalS)
         end
 
     end # quote
@@ -564,17 +560,17 @@ end # macro
 
 (+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
 (+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
-@_jl_binary_op_A_sparse_B_sparse_res_sparse (+)
+@_jl_binary_op_sparse (+)
 
 (-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
-@_jl_binary_op_A_sparse_B_sparse_res_sparse (-)
+@_jl_binary_op_sparse (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
-@_jl_binary_op_A_sparse_B_sparse_res_sparse (.*)
+@_jl_binary_op_sparse (.*)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
@@ -592,9 +588,16 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
-@_jl_binary_op_A_sparse_B_sparse_res_sparse (.^)
+@_jl_binary_op_sparse (.^)
 
-sum(A::SparseMatrixCSC) = sum(sub(A.nzval,1:nnz(A)))
+function sum(A::SparseMatrixCSC)
+    if length(A.nzval) == nnz(A)
+        return sum(A.nzval)
+    else
+        return sum(sub(A.nzval,1:nnz(A)))
+    end
+end
+
 function sum{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, dim::Int)
     if dim == 1
         S = Array(Tv, 1, A.n)
