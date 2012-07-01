@@ -200,7 +200,7 @@ end
 
 function find_in_path(fname)
     if fname[1] == '/'
-        return abs_path(fname)
+        return real_path(fname)
     end
     for pfx in LOAD_PATH
         if pfx != "" && pfx[end] != '/'
@@ -209,10 +209,10 @@ function find_in_path(fname)
             pfxd = strcat(pfx,fname)
         end
         if is_file_readable(pfxd)
-            return abs_path(pfxd)
+            return real_path(pfxd)
         end
     end
-    return abs_path(fname)
+    return real_path(fname)
 end
 
 begin
