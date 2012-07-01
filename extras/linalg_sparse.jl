@@ -54,12 +54,12 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
 
-function (*){TvX,TiX,TvY,TiY}(A::SparseMatrixCSC{TvX,TiX}, B::SparseMatrixCSC{TvY,TiY})
+function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
     mA, nA = size(A)
     mB, nB = size(B)
     if nA != mB; error("mismatched dimensions"); end
-    Tv = promote_type(TvX, TvY)
-    Ti = promote_type(TiX, TiY)
+    Tv = promote_type(TvA, TvB)
+    Ti = promote_type(TiA, TiB)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
