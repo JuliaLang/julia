@@ -134,8 +134,7 @@ function compile_hint(f, args::Tuple)
     end
 end
 
-# we share Array with Core so we can add definitions to it
-const Array = eval(Core, :Array)
+# NOTE: Base shares Array with Core so we can add definitions to it
 
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)

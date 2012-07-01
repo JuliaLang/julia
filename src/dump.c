@@ -731,9 +731,8 @@ void jl_save_system_image(char *fname, char *startscriptname)
         b->value = NULL; b->constp = 0;
 
         // step 3: current_module.Base = current_module
-        b = jl_get_binding_wr(jl_current_module, jl_symbol("Base"));
-        b->value = (jl_value_t*)jl_current_module;
-        assert(b->constp);
+        jl_set_const(jl_current_module, jl_symbol("Base"),
+                     (jl_value_t*)jl_current_module);
 
         // step 4: remove current_module.current_module
         b = jl_get_binding_wr(jl_current_module, jl_current_module->name);
@@ -955,7 +954,7 @@ void jl_init_serializer(void)
                      jl_symbol("mul_int"), 
                      jl_symbol("add_float"), jl_symbol("sub_float"),
                      jl_symbol("mul_float"),
-                     jl_symbol("box"),
+                     jl_symbol("box"), jl_symbol("unbox"),
                      jl_symbol("eq_int"), jl_symbol("slt_int"),
                      jl_symbol("sle_int"), jl_symbol("ne_int"),
                      jl_symbol("arrayset"), jl_symbol("arrayref"),

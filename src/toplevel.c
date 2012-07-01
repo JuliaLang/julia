@@ -389,7 +389,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     else {
         gf = *bp;
         if (!jl_is_gf(gf))
-            jl_error("in method definition: not a generic function");
+            jl_error("invalid method definition: not a generic function");
     }
     JL_GC_PUSH(&gf);
     assert(jl_is_function(f));

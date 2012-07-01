@@ -2524,6 +2524,7 @@ void jl_init_types(void)
     new_sym = jl_symbol("new");
     multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
+    global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
     anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");

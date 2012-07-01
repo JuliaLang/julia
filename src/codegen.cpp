@@ -1312,7 +1312,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
-        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, true, ctx);
+        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
         Value *a1 = emit_expr(args[1], ctx);
         make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx);

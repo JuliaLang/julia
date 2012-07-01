@@ -150,15 +150,18 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *fname = (jl_sym_t*)args[0];
         jl_value_t **bp=NULL;
         jl_binding_t *b=NULL;
-        size_t i;
-        for (i=0; i < nl; i++) {
+        for (size_t i=0; i < nl; i++) {
             if (locals[i*2] == (jl_value_t*)fname) {
                 bp = &locals[i*2+1];
                 break;
             }
         }
         if (bp == NULL) {
-            b = jl_get_binding_wr(jl_current_module, fname);
+            b = jl_get_binding(jl_current_module, fname);
+            if (b == NULL) {
+                // if no existing binding for this, make a new one
+                b = jl_get_binding_wr(jl_current_module, fname);
+            }
             bp = &b->value;
         }
         jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;
@@ -173,14 +176,20 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];
-        size_t i;
-        for (i=0; i < nl; i++) {
+        for (size_t i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
                 return (jl_value_t*)jl_nothing;
             }
         }
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
         jl_declare_constant(b);
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == global_sym) {
+        // create uninitialized mutable binding for "global x" decl
+        // TODO: handle type decls
+        assert(jl_is_symbol(args[0]));
+        jl_get_binding_wr(jl_current_module, (jl_sym_t*)args[0]);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == abstracttype_sym) {
