@@ -95,8 +95,8 @@ function git_merge_configs(Bc::Dict, Lc::Dict, Rc::Dict)
     # expunge removed submodules from left and right sides
     deleted = Set{ByteString}()
     for section in Bs - Ls & Rs
-        filter!((k,v)->!begins_with("$section.",k),Lc)
-        filter!((k,v)->!begins_with("$section.",k),Rc)
+        filter!((k,v)->!begins_with(k,"$section."),Lc)
+        filter!((k,v)->!begins_with(k,"$section."),Rc)
         add(deleted, section)
     end
     # merge the remaining config key-value pairs
@@ -357,7 +357,7 @@ function pkg_pull()
         end
         # remove submodules that were deleted
         for section in deleted
-            if !begins_with("submodule.",section) continue end
+            if !begins_with(section,"submodule.") continue end
             path = get(Lc,"$section.path",nothing)
             if path == nothing continue end
             run(`git rm -qrf --cached --ignore-unmatch -- $path`)

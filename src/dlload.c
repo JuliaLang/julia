@@ -14,7 +14,7 @@
 #endif
 
 #if defined(__APPLE__)
-static char *extensions[] = { "", ".dylib", ".bundle" };
+static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 3
 #elif defined(_WIN32)
 static char *extensions[] = { ".dll" };
@@ -59,7 +59,6 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         error = uv_dlopen(modname,handle);
         if (!error) goto done;
     }
-    char *cwd;
 
     for(i=0; i < N_EXTENSIONS; i++) {
         ext = extensions[i];
@@ -77,15 +76,6 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
                     //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
                     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
                 }
-            }
-            cwd = getcwd(path, PATHBUF);
-            if (cwd != NULL) {
-                /* next try load from current directory */
-                strncat(path, "/", PATHBUF-1-strlen(path));
-                strncat(path, modname, PATHBUF-1-strlen(path));
-                strncat(path, ext, PATHBUF-1-strlen(path));
-                error = uv_dlopen(path, handle);
-                if (!error) goto done;
             }
         }
         /* try loading from standard library path */

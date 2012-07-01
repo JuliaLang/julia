@@ -180,6 +180,31 @@ function mtime(filename::ASCIIString)
     end
 end
 
+function abs_path(fname::String)
+    if fname[1] == '/'
+        comp = split(fname, '/')
+    else
+        comp = [split(cwd(), '/'), split(fname, '/')]
+    end
+    i = 2
+    while i <= length(comp)
+        if comp[i] == "."
+            del(comp, i)
+            continue
+        elseif comp[i] == ".."
+            if i <= 2
+                error("invalid path")
+            end
+            i -= 1
+            del(comp, i)
+            del(comp, i)
+            continue
+        end
+        i += 1
+    end
+    return join(comp, '/')
+end
+
 # Core functions: stat and friends
 # Allocate a buffer for storing the results
 function statbuf_allocate()

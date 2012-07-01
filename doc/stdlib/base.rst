@@ -1,4 +1,3 @@
-
 Getting Around
 --------------
 

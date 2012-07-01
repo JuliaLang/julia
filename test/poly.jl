@@ -1,5 +1,6 @@
 # assert file to test polynomial
-load("extras/poly.jl")
+cd("../extras") do
+require("poly.jl")
 
 
 pNULL = Polynomial(Float32[])
@@ -51,3 +52,4 @@ a_roots = copy(pN.a)
 @assert p2 - 2 == -2 + p2 == Polynomial([1,-1])
 @assert 2 - p2 == Polynomial([-1,1])
 
+end # cd

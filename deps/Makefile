@@ -25,28 +25,16 @@ STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
-## WGET / CURL
 ifeq ($(OS), Linux)
-WGET = wget --no-check-certificate
-WGET_DASH_O = wget --no-check-certificate -O
 STAGE1_DEPS += unwind
-endif
-
-ifeq ($(OS), WINNT)
-WGET = wget --no-check-certificate
-WGET_DASH_O = wget --no-check-certificate -O
-endif
-
-ifeq ($(OS), Darwin)
-WGET = curl -fkLO
-WGET_DASH_O = curl -fkLo
 endif
 
 ifeq ($(OS), FreeBSD)
-WGET = curl -fLO
-WGET_DASH_O = curl -fLo
 STAGE1_DEPS += unwind
 endif
+
+WGET = $(abspath .)/jldownload
+WGET_DASH_O = $(WGET)
 
 ## USE_SYSTEM_LIBS options
 

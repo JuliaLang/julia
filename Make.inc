@@ -201,6 +201,7 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+RPATH = -Wl,-rpath,$(BUILD)/lib
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load

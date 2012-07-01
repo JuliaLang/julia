@@ -1,4 +1,5 @@
-load("../extras/arpack.jl")
+cd("../extras") do
+require("arpack.jl")
 
 # arpack
 begin
@@ -13,3 +14,5 @@ asym = a+a'+n*eye(n)
 (d,v) = eigs(a,3)
 @assert abs(sum(a*v[:,2]-d[2]*v[:,2])) < 1e-8
 end
+
+end # cd

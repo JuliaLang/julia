@@ -54,12 +54,12 @@ end
 # Sparse matrix multiplication as described in [Gustavson, 1978]:
 # http://www.cse.iitb.ac.in/graphics/~anand/website/include/papers/matrix/fast_matrix_mul.pdf
 
-function (*){TvX,TiX,TvY,TiY}(A::SparseMatrixCSC{TvX,TiX}, B::SparseMatrixCSC{TvY,TiY})
+function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
     mA, nA = size(A)
     mB, nB = size(B)
     if nA != mB; error("mismatched dimensions"); end
-    Tv = promote_type(TvX, TvY)
-    Ti = promote_type(TiX, TiY)
+    Tv = promote_type(TvA, TvB)
+    Ti = promote_type(TiA, TiB)
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -73,24 +73,25 @@ function (*){TvX,TiX,TvY,TiY}(A::SparseMatrixCSC{TvX,TiX}, B::SparseMatrixCSC{Tv
     xb = zeros(Ti, mA)
     x  = zeros(Tv, mA)
     for i in 1:nB
-        if ip + mA > nnzC
-            rowvalC = grow(rowvalC, 2*nnzC)
-            nzvalC = grow(nzvalC, 2*nnzC)
+        if ip + mA - 1 > nnzC
+            rowvalC = grow(rowvalC, max(nnzC,mA))
+            nzvalC = grow(nzvalC, max(nnzC,mA))
+            nnzC = length(nzvalC)
         end
         colptrC[i] = ip
         for jp in colptrB[i]:(colptrB[i+1] - 1)
-            j = rowvalB[jp]
             nzB = nzvalB[jp]
+            j = rowvalB[jp]
             for kp in colptrA[j]:(colptrA[j+1] - 1)
+                nzC = nzvalA[kp] * nzB
                 k = rowvalA[kp]
-                nzA = nzvalA[kp]
                 if xb[k] != i
                     rowvalC[ip] = k
                     ip += 1
                     xb[k] = i
-                    x[k] = nzA * nzB
+                    x[k] = nzC
                 else
-                    x[k] += nzA * nzB
+                    x[k] += nzC
                 end
             end
         end
@@ -102,7 +103,7 @@ function (*){TvX,TiX,TvY,TiY}(A::SparseMatrixCSC{TvX,TiX}, B::SparseMatrixCSC{Tv
 
     rowvalC = del(rowvalC, colptrC[end]:length(rowvalC))
     nzvalC = del(nzvalC, colptrC[end]:length(nzvalC))
-    return SparseMatrixCSC(mA,nB,colptrC,rowvalC,nzvalC)
+    return SparseMatrixCSC(mA, nB, colptrC, rowvalC, nzvalC)
 end
 
 ## triu, tril

@@ -648,6 +648,13 @@ collection[key...] = value
 
 "),
 
+(E"Strings",E"randstring",E"randstring(len)
+
+   Create a random ASCII string of length 'len', consisting of upper-
+   and lower-case letters and the digits 0-9
+
+"),
+
 (E"I/O",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
@@ -1078,6 +1085,32 @@ collection[key...] = value
 (E"Mathematical Functions",E"nextpow2",E"nextpow2(n)
 
    Next power of two not less than 'n'
+
+"),
+
+(E"Mathematical Functions",E"nextpow",E"nextpow(a, n)
+
+   Next power of 'a' not less than 'n'
+
+"),
+
+(E"Mathematical Functions",E"prevpow",E"prevpow(a, n)
+
+   Previous power of 'a' not greater than 'n'
+
+"),
+
+(E"Mathematical Functions",E"nextprod",E"nextprod([a, b, c], n)
+
+   Next integer not less than 'n' that can be written 'a^i1 * b^i2 *
+   c^i3' for integers 'i1', 'i2', 'i3'.
+
+"),
+
+(E"Mathematical Functions",E"prevprod",E"prevprod([a, b, c], n)
+
+   Previous integer not greater than 'n' that can be written 'a^i1 *
+   b^i2 * c^i3' for integers 'i1', 'i2', 'i3'.
 
 "),
 
@@ -2014,7 +2047,8 @@ collection[key...] = value
 (E"Signal Processing",E"fft",E"fft(A, dim)
 
    One dimensional FFT if input is a 'Vector'. For n-d cases, compute
-   fft of vectors along dimension 'dim'
+   fft of vectors along dimension 'dim'. Most efficient if 'size(A,
+   dim)' is a product of small primes; see 'nextprod()'.
 
 "),
 

@@ -169,13 +169,15 @@ methods(t::CompositeKind) = t.env
 # require
 # Store list of files and their load time
 global _jl_package_list = Dict{ByteString,Float64}()
+require(fname::String) = require(cstring(fname))
+require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
-    if !has(_jl_package_list,name)
+    path = find_in_path(name)
+    if !has(_jl_package_list,path)
         load(name)
     else
         # Determine whether the file has been modified since it was last loaded
-        path = find_in_path(name)
-        if mtime(path) > _jl_package_list[name]
+        if mtime(path) > _jl_package_list[path]
             load(name)
         end
     end
@@ -198,7 +200,7 @@ end
 
 function find_in_path(fname)
     if fname[1] == '/'
-        return fname
+        return abs_path(fname)
     end
     for pfx in LOAD_PATH
         if pfx != "" && pfx[end] != '/'
@@ -207,10 +209,10 @@ function find_in_path(fname)
             pfxd = strcat(pfx,fname)
         end
         if is_file_readable(pfxd)
-            return pfxd
+            return abs_path(pfxd)
         end
     end
-    return fname
+    return abs_path(fname)
 end
 
 begin
@@ -224,7 +226,7 @@ load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load
         path = find_in_path(fname)
-        _jl_package_list[fname] = time()
+        _jl_package_list[path] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))
