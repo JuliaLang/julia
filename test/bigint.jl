@@ -1,5 +1,6 @@
+cd("../extras") do
+require("bigint.jl")
 
-load ("../extras/bigint.jl")
 a=BigInt("123456789012345678901234567890")
 b=BigInt("123456789012345678901234567891")
 
@@ -44,3 +45,4 @@ ee = typemax(Int64)
 @assert a+int32(1) == b
 @assert a+int64(1) == b
 
+end # cd

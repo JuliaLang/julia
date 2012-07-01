@@ -2,7 +2,7 @@
 ### GLPK API Wrapper
 ###
 
-# note: be sure to load "sparse.jl" before this file
+require("sparse.jl")
 
 ## Shared library interface setup
 #{{{

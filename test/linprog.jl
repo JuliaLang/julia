@@ -1,8 +1,7 @@
 ### Linear programming
 
-load("../extras/sparse.jl")
-load("../extras/glpk.jl")
-load("../extras/linprog.jl")
+cd("../extras") do
+require("linprog.jl")
 
 ## Simplex method
 
@@ -92,3 +91,5 @@ colkind = int32([ GLP_BV for i = 1 : 9 ])
 @assert isequal(x, [ 0.; 0.; 1. ;
                      0.; 1.; 0. ;
                      1.; 0.; 0. ])
+
+end # cd
