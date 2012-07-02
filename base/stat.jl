@@ -67,7 +67,7 @@ isexecutable(mode::Unsigned) = (mode & 0x0049) > 0
 
 uperm(mode::Unsigned) = uint8(mode >> 6) & 0x7
 gperm(mode::Unsigned) = uint8(mode >> 3) & 0x7
-wperm(mode::Unsigned) = uint8(mode     ) & 0x7
+operm(mode::Unsigned) = uint8(mode     ) & 0x7
 
 # mode predicate methods for file names & stat objects
 
@@ -87,7 +87,7 @@ for f in {
     :isexecutable
     :uperm
     :gperm
-    :wperm
+    :operm
 }
     @eval ($f)(path::String) = ($f)(stat(path))
     @eval ($f)(st::Stat)     = ($f)(st.mode)
