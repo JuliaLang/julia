@@ -1,5 +1,6 @@
 #include "julia.h"
 #include "uv.h"
+#define USE_THREADS    // comment out if you want to disable threading
 
 const int sizeof_uv_thread_t = sizeof(uv_thread_t);
 
@@ -26,12 +27,13 @@ JL_CALLABLE(jl_f_thread_create)
   thread_data.nargs = nargs-1;
 
   jl_array_t *jl_threadid = jl_alloc_array_1d(jl_array_uint8_type, sizeof_uv_thread_t);
-  /*
+#ifdef USE_THREADS
   if (uv_thread_create((uv_thread_t *) jl_array_data(jl_threadid), _function_pack_apply, &thread_data) != 0)
     jl_error("thread_create: error launching thread");
-  */
+#else
   JL_PRINTF(JL_STDOUT, "You want a new thread, but I'm going to fake it.\n");
   _function_pack_apply((void*) &thread_data);
+#endif
 
   return (jl_value_t*)jl_threadid;
 }
@@ -41,11 +43,12 @@ JL_CALLABLE(jl_f_thread_join)
   JL_NARGS(thread_join, 1, 1);
   JL_TYPECHK(thread_join, array, args[0]);
 
-  /*
+#ifdef USE_THREADS
   if (uv_thread_join((uv_thread_t *) jl_array_data(args[0])) != 0)
     jl_error("thread_join: error joining thread");
-  */
+#else
   JL_PRINTF(JL_STDOUT, "I'd be happy to join that for you, if there were anything to join.\n");
+#endif
   
   return (jl_value_t*)jl_null;
 }
