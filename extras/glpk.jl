@@ -815,21 +815,21 @@ function _jl_glpk__check_init_env_succeeded(ret::Integer)
     return true
 end
 
-function _jl_glpk__check_term_out_flag(flag::Int)
+function _jl_glpk__check_term_out_flag(flag::Integer)
     if !(flag == GLP_ON || flag == GLP_OFF)
         throw(GLPError("invalid flag $flag (use GLP_ON or GLP_OFF)"))
     end
     return true
 end
 
-function _jl_glpk__check_open_tee_succeeded(ret::Int)
+function _jl_glpk__check_open_tee_succeeded(ret::Integer)
     if !(0 <= ret <= 1)
         throw(GLPError("glp_open_tee failed"))
     end
     return true
 end
 
-function _jl_glpk__check_alloc_size(n::Int)
+function _jl_glpk__check_alloc_size(n::Integer)
     if n <= 0
         throw(GLPError("invalid alloc size $n"))
     end
