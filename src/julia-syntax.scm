@@ -714,6 +714,7 @@
 		   (let* ((reuse (and (pair? a)
 				      (contains (lambda (x)
 						  (or (eq? x 'end)
+						      (eq? x ':)
 						      (and (pair? x)
 							   (eq? (car x) ':))))
 						idxs)))

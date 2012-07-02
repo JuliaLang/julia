@@ -33,10 +33,10 @@
 #define BVOFFS 2
 #endif
 
-#define GC_PAGE_SZ (1536*sizeof(void*)+8)//bytes
+#define GC_PAGE_SZ (1536*sizeof(void*))//bytes
 
 typedef struct _gcpage_t {
-    char data[GC_PAGE_SZ - 8];
+    char data[GC_PAGE_SZ];
     union {
         struct _gcpage_t *next;
         char _pad[8];
@@ -285,7 +285,7 @@ static void add_page(pool_t *p)
     if (pg == NULL)
         jl_raise(jl_memory_exception);
     gcval_t *v = (gcval_t*)&pg->data[0];
-    char *lim = (char*)pg + GC_PAGE_SZ - p->osize;
+    char *lim = (char*)v + GC_PAGE_SZ - p->osize;
     gcval_t *fl;
     gcval_t **pfl = &fl;
     while ((char*)v <= lim) {
@@ -328,8 +328,8 @@ static void sweep_pool(pool_t *p)
     size_t osize = p->osize;
 
     while (pg != NULL) {
-        char *lim = (char*)pg + GC_PAGE_SZ - osize;
         v = (gcval_t*)&pg->data[0];
+        char *lim = (char*)v + GC_PAGE_SZ - osize;
         //empty = 1;
         freedall = 1;
         prev_pfl = pfl;
@@ -775,8 +775,8 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
 
     while (pg != NULL) {
         npgs++;
-        char *lim = (char*)pg + GC_PAGE_SZ - osize;
         v = (gcval_t*)&pg->data[0];
+        char *lim = (char*)v + GC_PAGE_SZ - osize;
         while ((char*)v <= lim) {
             if (!v->marked) {
                 nfree++;
