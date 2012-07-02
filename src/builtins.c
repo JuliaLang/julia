@@ -844,6 +844,8 @@ void jl_init_primitives(void)
     add_builtin_func("eval", jl_f_top_eval);
     add_builtin_func("isbound", jl_f_isbound);
     add_builtin_func("yieldto", jl_f_yieldto);
+    add_builtin_func("thread_create", jl_f_thread_create);
+    add_builtin_func("thread_join", jl_f_thread_join);
     
     // functions for internal use
     add_builtin_func("convert_default", jl_f_convert_default);
