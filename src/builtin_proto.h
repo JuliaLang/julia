@@ -39,6 +39,8 @@ JL_CALLABLE(jl_apply_generic);
 JL_CALLABLE(jl_unprotect_stack);
 JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
+JL_CALLABLE(jl_f_thread_create);
+JL_CALLABLE(jl_f_thread_join);
 JL_CALLABLE(jl_f_ctor_trampoline);
 
 #endif
