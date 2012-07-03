@@ -41,6 +41,9 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 isconst(s::Symbol) =
     ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
+isconst(m::Module, s::Symbol) =
+    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
+
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
     isbound(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
