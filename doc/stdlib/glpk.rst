@@ -89,7 +89,7 @@ This is the table relating C structs with Julia types:
 | ``glp_data``  | ``GLPData``              |
 +---------------+--------------------------+
 
-Therefore, the original C glp API:
+Therefore, the original C GLPK API:
 
 .. code-block:: c
 
@@ -118,7 +118,7 @@ In Julia, objects are created by calling the object constructor (without paramet
     lp = GLPProb()
     param = GLPSimplexParam()
 
-and they are automatically destroyed by the grabage collector when no longer needed.
+and they are automatically destroyed by the garbage collector when no longer needed.
 
 
 2) setting the parameters to the solvers
@@ -289,11 +289,11 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
 .. function:: glp_set_prob_name(glp_prob, name)
 
-    Assigns a name to the problem object (or deletes it if ``name`` is empty).
+    Assigns a name to the problem object (or deletes it if ``name`` is empty or ``nothing``).
 
 .. function:: glp_set_obj_name(glp_prob, name)
 
-    Assigns a name to the objective function (or deletes it if ``name`` is empty).
+    Assigns a name to the objective function (or deletes it if ``name`` is empty or ``nothing``).
 
 .. function:: glp_set_obj_dir(glp_prob, dir)
 
@@ -311,25 +311,25 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
 .. function:: glp_set_row_name(glp_prob, row, name)
 
-    Assigns a name to the specified row (or deletes it if ``name`` is empty).
+    Assigns a name to the specified row (or deletes it if ``name`` is empty or ``nothing``).
 
 .. function:: glp_set_col_name(glp_prob, col, name)
 
-    Assigns a name to the specified column (or deletes it if ``name`` is empty).
+    Assigns a name to the specified column (or deletes it if ``name`` is empty or ``nothing``).
 
 .. function:: glp_set_row_bnds(glp_prob, row, bounds_type, lb, ub)
 
     Sets the type and bounds on a row. ``type`` must be one of ``GLP_FR`` (free), ``GLP_LO`` (lower bounded),
     ``GLP_UP`` (upper bounded), ``GLP_DB`` (double bounded), ``GLP_FX`` (fixed).
 
-    At the beginning each row is free.
+    At initialization, each row is free.
 
 .. function:: glp_set_col_bnds(glp_prob, col, bounds_type, lb, ub)
 
     Sets the type and bounds on a column. ``type`` must be one of ``GLP_FR`` (free), ``GLP_LO`` (lower bounded),
     ``GLP_UP`` (upper bounded), ``GLP_DB`` (double bounded), ``GLP_FX`` (fixed).
 
-    At the beginning each column is fixed at 0.
+    At initialization, each column is fixed at 0.
 
 .. function:: glp_set_obj_coef(glp_prob, col, coef)
 
@@ -339,27 +339,27 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
     Sets (replaces) the content of a row. The content is specified in sparse format: ``ind`` is a vector of indices,
     ``val`` is the vector of corresponding values. ``len`` is the number of vector elements which will be considered,
-    and can be less or equal to that of both ``ind`` and ``val``.  If ``len`` is 0, ``ind`` and/or ``val`` can be ``nothing``.
+    and must be less or equal to the length of both ``ind`` and ``val``.  If ``len`` is 0, ``ind`` and/or ``val`` can be ``nothing``.
 
     In Julia, ``len`` can be omitted, and then it is inferred from ``ind`` and ``val`` (which need to have the same length
-    in this case).
+    in such case).
 
 .. function:: glp_set_mat_col(glp_prob, col, [len,] ind, val)
 
     Sets (replaces) the content of a column. Everything else is like ``glp_set_mat_row``.
 
 .. function:: glp_load_matrix(glp_prob, [numel,] ia, ja, ar)
-.. function:: glp_load_matrix(glp_prob, A)
+              glp_load_matrix(glp_prob, A)
 
     Sets (replaces) the content matrix (i.e. sets all  rows/coluns at once). The matrix is passed in sparse
     format.
 
     In the first form (original C API), it's passed via 3 vectors: ``ia`` and ``ja`` are for rows/columns
-    indices, ``ar`` is vor values. ``numel`` is the number of elements which will be read and must be less or
-    equal the the length of any of the 3 vectors. If ``numel`` is 0, any of the vectors can be passed as ``nothing``.
+    indices, ``ar`` is for values. ``numel`` is the number of elements which will be read and must be less or
+    equal to the length of any of the 3 vectors. If ``numel`` is 0, any of the vectors can be passed as ``nothing``.
 
     In Julia, ``numel`` can be omitted, and then it is inferred from ``ia``, ``ja`` and ``ar`` (which need to have the same length
-    in this case).
+    in such case).
 
     Also, in Julia there's a second, simpler calling form, in which the matrix is passed as a ``SparseMatrixCSC`` object.
 
@@ -375,10 +375,11 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
 .. function:: glp_del_rows(glp_prob, [num_rows,] rows_ids)
 
-    Deletes rows from the problem object. Rows are specified in the ``rows_ids`` vector. In Julia, ``num_rows`` is optional (it's inferred
-    from ``rows_ids`` if not given).
+    Deletes rows from the problem object. Rows are specified in the ``rows_ids`` vector. ``num_rows`` is the number of elements
+    of ``rows_ids`` which will be considered, and must be less or equal to the length id ``rows_ids``. If ``num_rows`` is 0, ``rows_ids``
+    can be ``nothing``. In Julia, ``num_rows`` is optional (it's inferred from ``rows_ids`` if not given).
 
-.. function:: glp_del_cols{Ti<:Integer}(glp_prob, cols_ids::AbstractVector{Ti}) =
+.. function:: glp_del_cols(glp_prob, cols_ids) =
 
     Deletes columns from the problem object. See ``glp_del_rows``.
 
@@ -453,7 +454,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     Return the number of non-zero elements in the constraint matrix.
 
 .. function:: glp_get_mat_row(glp_prob, row, ind, val)
-.. function:: glp_get_mat_row(glp_prob, row)
+              glp_get_mat_row(glp_prob, row)
 
     Returns the contents of a row. In the first form (original C API), it fills the ``ind`` and ``val`` vectors provided,
     which must be of type ``Vector{Int32}`` and ``Vector{Float64}`` respectively, and have a sufficient length to hold the result
@@ -462,7 +463,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     In Julia, there's a second, simpler calling form which allocates and returns the two vectors as ``(ind, val)``.
 
 .. function:: glp_get_mat_col(glp_prob, col, ind, val)
-.. function:: glp_get_mat_col(glp_prob, col)
+              glp_get_mat_col(glp_prob, col)
 
     Returns the contents of a column. See ``glp_get_mat_row``.
 
@@ -915,7 +916,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     ``GLP_ECOND`` (ill-conditioned matrix).
 
 .. function:: glp_eval_tab_row(glp_prob, k, ind, val)
-.. function:: glp_eval_tab_row(glp_prob, k)
+              glp_eval_tab_row(glp_prob, k)
 
     Computes a row of the current simplex tableau which corresponds to some basic variable specified by the parameter ``k``.
     If 1 <= ``k`` <= rows, uses ``k``-th auxiliary variable; if rows+1 <= ``k`` <= rows+cols, uses (``k``-rows)-th structural
@@ -928,7 +929,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     In the second, simpler form, ``ind`` and ``val`` are returned in a tuple as the output of the function.
 
 .. function:: glp_eval_tab_col(glp_prob, k, ind, val)
-.. function:: glp_eval_tab_col(glp_prob, k)
+              glp_eval_tab_col(glp_prob, k)
 
     Computes a column of the current simplex tableau which corresponds to some non-basic variable specified by the parameter ``k``.
     See ``glp_eval_tab_row``.
@@ -953,7 +954,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     Performs the primal ratio test using an explicitly specified column of the simplex table.
     The current basic solution must be primal feasible.
     The column is specified in sparse format by ``len`` (length of the vector), ``ind`` and ``val`` (indices and values of
-    the vector). ``len`` is the number of elements which will be considered and must be smaller or equal the the length of
+    the vector). ``len`` is the number of elements which will be considered and must be smaller or equal to the length of
     both ``ind`` and ``val``; in Julia, it can be omitted (and then ``ind`` and ``val`` must have the same length).
     The indices in ``ind`` must be between 1 and rows+cols; they must correspond to basic variables.
     ``dir`` is a direction parameter which must be either +1 (increasing) or -1 (decreasing).
@@ -1037,7 +1038,6 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
     Deallocates a memory block previously allocated by ``glp_malloc`` or ``glp_calloc``.
 
-.. function:: glp_mem_usage(count, cpeak, total, tpeak)
 .. function:: glp_mem_usage()
 
     Reports some information about utilization of the memory by the routines ``glp_malloc``, ``glp_calloc``,
