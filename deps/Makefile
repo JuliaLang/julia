@@ -14,7 +14,7 @@ CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 GMP_VER=5.0.5
-GLPK_VER = 4.43
+GLPK_VER = 4.47
 
 ## high-level setup ##
 
