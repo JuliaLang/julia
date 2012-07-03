@@ -34,19 +34,6 @@ jl_cholmod_dense( void **cd,        /* Store return value in here */
 }
 
 extern void
-jl_cholmod_dense_out_size(cholmod_dense *cd,
-			  int *xtype,
-			  int *dtype,
-			  size_t *nrow,
-			  size_t *ncol)
-{
-    *xtype = cd->xtype;
-    *dtype = cd->dtype;
-    *nrow  = cd->nrow;
-    *ncol  = cd->ncol;
-}
-
-extern void
 jl_cholmod_dense_copy_out(cholmod_dense *cd,
                           void *p
                           )
