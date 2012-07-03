@@ -219,7 +219,7 @@ In general, all parts of the GLPK API which rely on callback functions are not a
 In particular, you should not set the callback fields (``cb_func`` and ``cb_info``) in the ``GLPIntoptParam``
 type, unless you *really* know what you're doing.
 
-There are 6 groups of functions which are not wrapped:
+There are 5 groups of functions which are not wrapped:
 
 1. The branch & cut API function for mixed integer programming, because they are supposed to be called from
    within a callback (see chapter 5 in the GLPK manual); they all start with this prefix:
@@ -228,15 +228,7 @@ There are 6 groups of functions which are not wrapped:
 
 2. All graph and network routines (anything involving ``glp_graph`` objects); these will be added in the future)
 
-3. All CNF-related routines; these will be added in the future:
-
-   * ``glp_read_cnfsat``
-   * ``glp_check_cnfsat``
-   * ``glp_write_cnfsat``
-   * ``glp_minisat1``
-   * ``glp_intfeas1``
-
-4. Some misc functions which either have a variable argument list or involve callbacks (see section 6.1 in the GLPK
+3. Some misc functions which either have a variable argument list or involve callbacks (see section 6.1 in the GLPK
    manual):
 
    * ``glp_printf``
@@ -246,14 +238,14 @@ There are 6 groups of functions which are not wrapped:
    * ``glp_assert``
    * ``glp_error_hook``
 
-5. Some plain data file reading routines which involve long jumps / varargs (see section 6.2 in the GLPK manual):
+4. Some plain data file reading routines which involve long jumps / varargs (see section 6.2 in the GLPK manual):
 
    * ``glp_sdf_set_jump``
    * ``glp_sdf_error``
    * ``glp_sdf_warning``
 
 
-6. One additional routine, which may be included in the future:
+5. One additional routine, which may be included in the future:
 
    * ``lpx_check_kkt``
 
@@ -1107,3 +1099,42 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 .. function:: glp_sdf_close_file(glp_data)
 
     Closes the file associated to ``glp_data`` and frees the resources.
+
+.. function:: glp_read_cnfsat(glp_prob, filename)
+
+    Reads the CNF-SAT problem data in DIMACS format from a text file.
+
+    Returns 0 upon success; throws an error in case of failure.
+
+.. function:: glp_check_cnfsat(glp_prob)
+
+    Checks if the problem object encodes a CNF-SAT problem instance, in which case it returns 0,
+    otherwise returns non-zero.
+
+.. function:: glp_write_cnfsat(glp_prob, filename)
+
+    Writes the CNF-SAT problem data in DIMACS format into a text file.
+
+    Returns 0 upon success; throws an error in case of failure.
+
+.. function:: glp_minisat1(glp_prob)
+
+    The routine `glp_minisat1` is a driver to MiniSat, a CNF-SAT solver developed by
+    Niklas Eén and Niklas Sörensson, Chalmers University of Technology, Sweden.
+
+    Returns 0 in case of success, or a non-zero flag specifying the reason for failure: ``GLP_EDATA``
+    (problem is not CNF-SAT), ``GLP_EFAIL`` (solver failure).
+
+.. function:: glp_intfeas1(glp_prob, use_bound, obj_bound)
+
+    The routine glp_intfeas1 is a tentative implementation of an integer feasibility solver
+    based on a CNF-SAT solver (currently MiniSat). ``use_bound`` is a flag: if zero, any feasible solution
+    is seeked, otherwise seraches for an integer feasible solution. ``obj_bound`` is used only if
+    ``use_bound`` is non-zero, and specifies an upper/lower bound (for maximization/minimazion respectively)
+    to the objective function.
+
+    All variables (columns) must either be binary or fixed. All constraint and objective coeffient
+    must be integer.
+
+    Returns 0 in case of success, or a non-zero flag specifying the reason for failure: ``GLP_EDATA``
+    (problem data is not valid), ``GLP_ERANGE`` (integer overflow occurred), ``GLP_EFAIL`` (solver failure).

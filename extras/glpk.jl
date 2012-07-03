@@ -2368,6 +2368,44 @@ function glp_sdf_close_file(glp_data::GLPData)
     @glpk_ccall sdf_close_file Void (Ptr{Void},) pointer(glp_data)
 end
 
+function glp_read_cnfsat(glp_prob::GLPProb, filename::String)
+    _jl_glpk__check_glp_prob(glp_prob)
+    _jl_glpk__check_file_is_readable(filename)
+    ret = @glpk_ccall read_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    if ret != 0
+        throw(GLPError("Error reading CNF file"))
+    end
+    return ret
+end
+
+function glp_check_cnfsat(glp_prob::GLPProb)
+    _jl_glpk__check_glp_prob(glp_prob)
+    @glpk_ccall check_cnfsat Int32 (Ptr{Void},) glp_prob.p
+end
+
+function glp_write_cnfsat(glp_prob::GLPProb, filename::String)
+    _jl_glpk__check_glp_prob(glp_prob)
+    _jl_glpk__check_file_is_writable(filename)
+    ret = @glpk_ccall write_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    if ret != 0
+        throw(GLPError("Error writing CNF file"))
+    end
+    return ret
+end
+
+function glp_minisat1(glp_prob::GLPProb)
+    _jl_glpk__check_glp_prob(glp_prob)
+    @glpk_ccall minisat1 Int32 (Ptr{Void},) glp_prob.p
+end
+
+function glp_intfeas1(glp_prob::GLPProb, use_bound::Integer, obj_bound::Integer)
+    _jl_glpk__check_glp_prob(glp_prob)
+    # TODO : more checks:
+    #   1) columns must be GLP_BV od GLP_FX
+    #   2) constraints and objj coeffs must be integer
+    @glpk_ccall intfeas1 Int32 (Ptr{Void}, Int32, Int32) glp_prob.p use_bound obj_bound
+end
+
 
 # FUNCTIONS NOT WRAPPED:
 #
