@@ -69,9 +69,9 @@ endif
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
 
-# If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
-# https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
-TARGET_OPENBLAS_ARCH=
+# OPENBLAS build options
+OPENBLAS_DYNAMIC_ARCH=1 
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 
