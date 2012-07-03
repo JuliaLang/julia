@@ -732,14 +732,6 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"with_output_stream",E"with_output_stream(stream, f::Function, args...)
-
-   Call 'f(args...)' with the current output stream set to the given
-   object. This is typically used to redirect the output of 'print'
-   and 'show'.
-
-"),
-
 (E"I/O",E"write",E"write(stream, x)
 
    Write the canonical binary representation of a value to the given
@@ -778,19 +770,6 @@ collection[key...] = value
 (E"I/O",E"skip",E"skip(s, offset)
 
    Seek a stream relative to the current position.
-
-"),
-
-(E"I/O",E"current_output_stream",E"current_output_stream()
-
-   Obtain the current default output stream (used by 'print' and other
-   output functions).
-
-"),
-
-(E"I/O",E"set_current_output_stream",E"set_current_output_stream(s)
-
-   Set the current output stream.
 
 "),
 
@@ -2398,7 +2377,14 @@ collection[key...] = value
 (E"System",E"time",E"time()
 
    Get the time in seconds since the epoch, with fairly high
-   resolution.
+   (typically, microsecond) resolution.
+
+"),
+
+(E"System",E"time_ns",E"time_ns()
+
+   Get the time in nanoseconds. The time corresponding to 0 is
+   undefined, and wraps every 5.8 years.
 
 "),
 
