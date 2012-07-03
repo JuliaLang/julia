@@ -219,7 +219,7 @@ In general, all parts of the GLPK API which rely on callback functions are not a
 In particular, you should not set the callback fields (``cb_func`` and ``cb_info``) in the ``GLPIntoptParam``
 type, unless you *really* know what you're doing.
 
-There are 4 groups of functions which are not wrapped:
+There are 6 groups of functions which are not wrapped:
 
 1. The branch & cut API function for mixed integer programming, because they are supposed to be called from
    within a callback (see chapter 5 in the GLPK manual); they all start with this prefix:
