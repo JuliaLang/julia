@@ -1,7 +1,5 @@
-include("../extras/sparse.jl")
-include("../extras/linalg_sparse.jl")
-include("../extras/linalg_suitesparse.jl")
-
+cd("../extras") do
+require("linalg_suitesparse.jl")
 
 # check matrix operations
 se33 = speye(3)
@@ -43,3 +41,5 @@ for i = 1 : 10
     a = sprand(5, 4, 0.5)
     @assert all([a[1:2,1:2] a[1:2,3:4]; a[3:5,1] [a[3:4,2:4]; a[5,2:4]]] == a)
 end
+
+end # cd

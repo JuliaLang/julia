@@ -1,6 +1,3 @@
-load("../extras/bitarray.jl")
-load("../extras/linalg_bitarray.jl")
-
 macro check_bit_operation(func, RetT, args)
     quote
         r1 = eval(($func)(($args)...))
@@ -20,6 +17,9 @@ macro timesofar(str)
         t0 = $t1
     end
 end
+
+cd("../extras") do
+require("linalg_bitarray.jl")
 
 TT = Uint8
 S = promote_type(TT, Int)
@@ -438,4 +438,6 @@ end
 #b1 = bitrand(TT, n1, n2)
 #@check_bit_operation diff Array{S} (b1,)
 
-@ timesofar "linalg"
+@timesofar "linalg"
+
+end # do

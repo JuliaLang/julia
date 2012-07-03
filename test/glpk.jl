@@ -1,6 +1,5 @@
-cd("../extras")
-load("sparse.jl")
-load("glpk.jl")
+cd("../extras") do
+require("glpk.jl")
 
 # Same example as in the GLPK manual
 
@@ -52,3 +51,5 @@ tol = 1e-10
 @assert abs(x1 - 100. / 3) < tol
 @assert abs(x2 - 200. / 3) < tol
 @assert abs(x3) < tol
+
+end # cd
