@@ -10,6 +10,8 @@ It is designed for making it easy to port C code to Julia, while at the same tim
 benefits of the higher level language features of Julia, like the automatic management of memory, the possibility
 of returning tuples/strings/vectors etc.
 
+It's currently based on GLPK version 4.47.
+
 .. contents::
    :local:
 
@@ -19,6 +21,8 @@ Preamble
 
 Almost all GLPK functions can be called in Julia with the same syntax as in the original C library,
 with some simple translation rules (with very :ref:`few exceptions <glpk-different-than-C>`).
+Some functionality is still missing (see :ref:`this list <glpk-not-available>`); most of it will be
+added in the future.
 
 Let's start with an example. This is an excerpt from the beginning of the :file:`sample.c` example program
 which ships with GLPK:
@@ -205,10 +209,11 @@ over to the library, so that all errors could be catched via a ``try ... catch``
 in practice, it is likely that some conditions exist which will leak to the C API and break Julia: this should be
 considered as a bug (and reported as such).
 
+.. _glpk-not-available:
 
------------------------------------------------
-GLPK functions which are not avaliable in Julia
------------------------------------------------
+---------------------------------------------------
+GLPK functions which are not avaliable yet in Julia
+---------------------------------------------------
 
 In general, all parts of the GLPK API which rely on callback functions are not avaliable in Julia.
 In particular, you should not set the callback fields (``cb_func`` and ``cb_info``) in the ``GLPIntoptParam``
@@ -221,7 +226,17 @@ There are 4 groups of functions which are not wrapped:
 
    * ``glp_ios_*``
 
-2. Some misc functions which either have a variable argument list or involve callbacks (see section 6.1 in the GLPK
+2. All graph and network routines (anything involving ``glp_graph`` objects); these will be added in the future)
+
+3. All CNF-related routines; these will be added in the future:
+
+   * ``glp_read_cnfsat``
+   * ``glp_check_cnfsat``
+   * ``glp_write_cnfsat``
+   * ``glp_minisat1``
+   * ``glp_intfeas1``
+
+4. Some misc functions which either have a variable argument list or involve callbacks (see section 6.1 in the GLPK
    manual):
 
    * ``glp_printf``
@@ -231,13 +246,14 @@ There are 4 groups of functions which are not wrapped:
    * ``glp_assert``
    * ``glp_error_hook``
 
-3. Some plain data file reading routines which involve long jumps / varargs (see section 6.2 in the GLPK manual):
+5. Some plain data file reading routines which involve long jumps / varargs (see section 6.2 in the GLPK manual):
 
    * ``glp_sdf_set_jump``
    * ``glp_sdf_error``
    * ``glp_sdf_warning``
 
-4. One additional routine, which may be included in the future:
+
+6. One additional routine, which may be included in the future:
 
    * ``lpx_check_kkt``
 
