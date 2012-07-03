@@ -47,6 +47,7 @@
     jl_cpu_cores;
     jl_hrtime;
     jl_cstr_to_string;
+    jl_pchar_to_string;
     jl_array_to_string;
     jl_parse_string;
     jl_parse_input_line;
