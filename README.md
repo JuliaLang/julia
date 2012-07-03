@@ -70,6 +70,8 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
+GCC version 4.6 is the minimum required to build julia. If using an older version, set the appropriate OPENBLAS flags in Make.inc.
+
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
 On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
@@ -79,6 +81,8 @@ On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
 You may need to install `gfortran`. Either download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), or [64-bit gfortran from gcc.gnu.org](http://gcc.gnu.org/wiki/GFortranBinaries).
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
+
+Clang is now used by default to build julia on OS X. Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
 
 #### FreeBSD
 
@@ -117,7 +121,9 @@ To rebuild a pre-built Julia source install with MKL support, delete from `deps/
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[gcc, g++][gcc]** 		— compiling and linking C, C++ (Need at least v4.6)
+- **[clang][clang]**            - clang can be used instead of gcc (Need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gfortran][gcc]**		- compiling and linking fortran libraries
 - **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
@@ -147,6 +153,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
+[clang]:	http://clang.llvm.org/
 [wget]:         http://www.gnu.org/software/wget/
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
