@@ -820,7 +820,7 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
-GLPKW_INC = -I glpk-$(GLPK_VER)/include/
+GLPKW_INC = -I $(abspath $(USR))/include/
 GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 
