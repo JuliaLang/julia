@@ -772,13 +772,19 @@
        (take-token s)
        (case nxt
 	 ((end)   (list 'try try-block #f '(block)))
-	 ((catch) (let* ((var
-			  (if (eqv? (peek-token s) #\newline)
-			      #f
-			      (parse-atom s)))
-			 (catch-block (parse-block s)))
-		    (expect-end s)
-		    (list 'try try-block var catch-block)))
+	 ((catch) (let ((nl (eqv? (peek-token s) #\newline)))
+		    (if (eq? (require-token s) 'end)
+			(begin (take-token s)
+			       (list 'try try-block #f '(block)))
+			(let* ((var (parse-eq* s))
+			       (var? (and (not nl) (symbol? var)))
+			       (catch-block (parse-block s)))
+			  (expect-end s)
+			  (list 'try try-block
+				(and var? var)
+				(if var?
+				    catch-block
+				    `(block ,var ,@(cdr catch-block))))))))
 	 (else    (error (string "unexpected " nxt))))))
     ((return)          (let ((t (peek-token s)))
 			 (if (or (eqv? t #\newline) (closing-token? t))

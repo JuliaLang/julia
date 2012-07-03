@@ -14,7 +14,7 @@ CLP_VER = 1.14.5
 UNWIND_VER = 1.0.1
 LIGHTTPD_VER = 1.4.29
 GMP_VER=5.0.5
-GLPK_VER = 4.43
+GLPK_VER = 4.47
 
 ## high-level setup ##
 
@@ -820,7 +820,7 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
-GLPKW_INC = -I glpk-$(GLPK_VER)/include/
+GLPKW_INC = -I $(abspath $(USR))/include/
 GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 

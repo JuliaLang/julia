@@ -28,6 +28,7 @@ Extras
    options
    cpp
    specfun
+   glpk
 
 ************
 File Formats

@@ -414,6 +414,14 @@ function _jl_glpk__check_glp_prob(glp_prob::GLPProb)
     return true
 end
 
+function _jl_glpk__check_string_length(s::String, minl::Integer, maxl::Integer)
+    l = length(s)
+    if !(minl <= l <= maxl)
+        throw(GLPError("Invalid string length $l (must be $minl <= length <= $maxl)"))
+    end
+    return true
+end
+
 function _jl_glpk__check_row_is_valid(glp_prob::GLPProb, row::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) glp_prob.p
     if (row < 1 || row > rows)
@@ -583,6 +591,14 @@ function _jl_glpk__check_list_ids(glp_prob::GLPProb, len::Integer, list_ids::Vec
     return true
 end
 
+function _jl_glpk__check_status_is_optimal(glp_prob::GLPProb)
+    ret = @glpk_ccall get_status Int32 (Ptr{Void},) glp_prob.p
+    if ret == GLP_OPT
+        throw(GLPError("current basic solution is not optimal"))
+    end
+    return true
+end
+
 function _jl_glpk__check_bf_exists(glp_prob::GLPProb)
     ret = @glpk_ccall bf_exists Int32 (Ptr{Void},) glp_prob.p
     if ret == 0
@@ -594,13 +610,13 @@ end
 function _jl_glpk__check_var_is_basic(glp_prob::GLPProb, ind::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) glp_prob.p
     if ind <= rows
-        j = @glpk_ccall get_row_bind Int32 (Ptr{Void}, Int32) glp_prob.p ind
-        if j == 0
+        j = @glpk_ccall get_row_stat Int32 (Ptr{Void}, Int32) glp_prob.p ind
+        if j != GLP_BS
             throw(GLPError("variable $ind is non-basic"))
         end
     else
-        j = @glpk_ccall get_col_bind Int32 (Ptr{Void}, Int32) glp_prob.p ind-rows
-        if j == 0
+        j = @glpk_ccall get_col_stat Int32 (Ptr{Void}, Int32) glp_prob.p ind-rows
+        if j != GLP_BS
             throw(GLPError("variable $ind is non-basic"))
         end
     end
@@ -609,13 +625,13 @@ end
 function _jl_glpk__check_var_is_non_basic(glp_prob::GLPProb, ind::Integer)
     rows = @glpk_ccall get_num_rows Int32 (Ptr{Void},) glp_prob.p
     if ind <= rows
-        j = @glpk_ccall get_row_bind Int32 (Ptr{Void}, Int32) glp_prob.p ind
-        if j != 0
+        j = @glpk_ccall get_row_stat Int32 (Ptr{Void}, Int32) glp_prob.p ind
+        if j == GLP_BS
             throw(GLPError("variable $ind is basic"))
         end
     else
-        j = @glpk_ccall get_col_bind Int32 (Ptr{Void}, Int32) glp_prob.p ind-rows
-        if j != 0
+        j = @glpk_ccall get_col_stat Int32 (Ptr{Void}, Int32) glp_prob.p ind-rows
+        if j == GLP_BS
             throw(GLPError("variable $ind is basic"))
         end
     end
@@ -874,25 +890,41 @@ end
 #  which returns a tuple of integers in the form (major, minor)
 #  rather than a string.
 
-function glp_set_prob_name(glp_prob::GLPProb, name::String)
+function glp_set_prob_name(glp_prob::GLPProb, name::Union(String,Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
+    if is(name, nothing)
+        name = ""
+    end
+    _jl_glpk__check_string_length(name, 0, 255)
     @glpk_ccall set_prob_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
 end
 
-function glp_set_obj_name(glp_prob::GLPProb, name::String)
+function glp_set_obj_name(glp_prob::GLPProb, name::Union(String,Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
+    if is(name, nothing)
+        name = ""
+    end
+    _jl_glpk__check_string_length(name, 0, 255)
     @glpk_ccall set_obj_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
 end
 
-function glp_set_row_name(glp_prob::GLPProb, row::Integer, name::String)
+function glp_set_row_name(glp_prob::GLPProb, row::Integer, name::Union(String,Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_row_is_valid(glp_prob, row)
+    if is(name, nothing)
+        name = ""
+    end
+    _jl_glpk__check_string_length(name, 0, 255)
     @glpk_ccall set_row_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p row cstring(name)
 end
 
-function glp_set_col_name(glp_prob::GLPProb, col::Integer, name::String)
+function glp_set_col_name(glp_prob::GLPProb, col::Integer, name::Union(String,Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_col_is_valid(glp_prob, col)
+    if is(name, nothing)
+        name = ""
+    end
+    _jl_glpk__check_string_length(name, 0, 255)
     @glpk_ccall set_col_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p col cstring(name)
 end
 
@@ -1104,7 +1136,7 @@ function glp_get_prob_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return string(name_cstr)
+        return cstring(name_cstr)
     end
 end
 
@@ -1114,7 +1146,7 @@ function glp_get_obj_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return string(name_cstr)
+        return cstring(name_cstr)
     end
 end
 
@@ -1140,7 +1172,7 @@ function glp_get_row_name(glp_prob::GLPProb, row::Integer)
     if name_cstr == C_NULL
         return ""
     else
-        return string(name_cstr)
+        return cstring(name_cstr)
     end
 end
 
@@ -1151,7 +1183,7 @@ function glp_get_col_name(glp_prob::GLPProb, col::Integer)
     if name_cstr == C_NULL
         return ""
     else
-        return string(name_cstr)
+        return cstring(name_cstr)
     end
 end
 
@@ -1816,6 +1848,7 @@ end
 function glp_print_ranges{Ti<:Integer}(glp_prob::GLPProb, len::Integer, list::Vector{Ti}, flags::Integer, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_vectors_size(len, list)
+    _jl_glpk__check_status_is_optimal(glp_prob)
     _jl_glpk__check_bf_exists(glp_prob)
     _jl_glpk__check_print_ranges_flags(flags)
     _jl_glpk__check_file_is_writable(filename)
@@ -1880,11 +1913,17 @@ function glp_get_bfcp(glp_prob::GLPProb, glp_param::GLPBasisFactParam)
     @glpk_ccall get_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_param)
 end
 
-function glp_set_bfcp(glp_prob::GLPProb, glp_param::GLPBasisFactParam)
+function glp_set_bfcp(glp_prob::GLPProb, glp_param::Union(GLPBasisFactParam,Nothing))
     _jl_glpk__check_glp_prob(glp_prob)
-    _jl_glpk__check_bfcp(glp_param)
-    @glpk_ccall set_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p pointer(glp_param)
+    if is(glp_param, nothing)
+        glp_param_p = C_NULL
+    else
+        _jl_glpk__check_bfcp(glp_param)
+        glp_param_p = pointer(glp_param)
+    end
+    @glpk_ccall set_bfcp Void (Ptr{Void}, Ptr{Void}) glp_prob.p glp_param_p
 end
+glp_set_bfcp(glp_prob::GLPProb) = glp_set_bfcp(glp_prob, nothing)
 
 function glp_get_bhead(glp_prob::GLPProb, k::Integer)
     _jl_glpk__check_glp_prob(glp_prob)
@@ -2171,7 +2210,7 @@ function glp_analyze_bound(glp_prob::GLPProb, k, limit1, var1, limit2, var2)
     error("Unsupported. Use glp_analyze_bound(glp_prob, k) instead.")
 end
 
-function glp_analyze_bound(glp_prob::GLPProb, k::Int)
+function glp_analyze_bound(glp_prob::GLPProb, k::Integer)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_bf_exists(glp_prob)
     _jl_glpk__check_rowcol_is_valid(glp_prob, k)
@@ -2191,7 +2230,7 @@ function glp_analyze_coef(glp_prob::GLPProb, k, coef1, var1, value1, coef2, var2
     error("Unsupported. Use glp_analyze_coef(glp_prob, k) instead.")
 end
 
-function glp_analyze_coef(glp_prob::GLPProb, k::Int)
+function glp_analyze_coef(glp_prob::GLPProb, k::Integer)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_bf_exists(glp_prob)
     _jl_glpk__check_rowcol_is_valid(glp_prob, k)
@@ -2234,12 +2273,12 @@ function glp_close_tee()
     @glpk_ccall close_tee Int32 ()
 end
 
-function glp_malloc(size::Int)
+function glp_malloc(size::Integer)
     _jl_glpk__check_alloc_size(size)
     @glpk_ccall malloc Ptr{Void} (Int32,) size
 end
 
-function glp_calloc(n::Int, size::Int)
+function glp_calloc(n::Integer, size::Integer)
     _jl_glpk__check_alloc_size(n)
     _jl_glpk__check_alloc_size(size)
     @glpk_ccall calloc Ptr{Void} (Int32, Int32) n size
@@ -2278,7 +2317,7 @@ function glp_mem_usage()
     return count, cpeak, total, tpeak
 end
 
-function glp_mem_limit(limit::Int)
+function glp_mem_limit(limit::Integer)
     @glpk_ccall mem_limit Void (Int32,) limit
 end
 
@@ -2310,13 +2349,13 @@ end
 function glp_sdf_read_item(glp_data::GLPData)
     _jl_glpk__check_data(glp_data)
     item_cstr = @glpk_ccall sdf_read_item Ptr{Uint8} (Ptr{Void},) pointer(glp_data)
-    return string(item_cstr)
+    return cstring(item_cstr)
 end
 
 function glp_sdf_read_text(glp_data::GLPData)
     _jl_glpk__check_data(glp_data)
     text_cstr = @glpk_ccall sdf_read_text Ptr{Uint8} (Ptr{Void},) pointer(glp_data)
-    return string(text_cstr)
+    return cstring(text_cstr)
 end
 
 function glp_sdf_line(glp_data::GLPData)
