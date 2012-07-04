@@ -121,7 +121,7 @@ READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
-READLINE += -lncurses -lcurses
+READLINE += -lncurses
 else
 READLINE += $(USR)/lib/libhistory.a
 endif
