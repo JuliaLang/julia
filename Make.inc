@@ -102,6 +102,10 @@ endif
 #USE_SYSTEM_LAPACK=1
 #endif
 
+-include $(JULIAHOME)/Make.user
+
+# ===========================================================================
+
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
