@@ -1888,3 +1888,17 @@ function cumprod{T}(v::BitVector{T})
     end
     return c
 end
+
+function write(s, B::BitArray)
+    for i = 1:length(B.chunks)
+        write(s, B.chunks[i])
+    end
+end
+
+
+function read(s, B::BitArray)
+    for i = 1:length(B.chunks)
+        B.chunks[i] = read(s, Uint64)
+    end
+    return B
+end
