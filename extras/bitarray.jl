@@ -1889,16 +1889,32 @@ function cumprod{T}(v::BitVector{T})
     return c
 end
 
-function write(s, B::BitArray)
-    for i = 1:length(B.chunks)
-        write(s, B.chunks[i])
-    end
-end
+write(s, B::BitArray) = write(s, B.chunks)
 
+read(s, B::BitArray) = read(s, B.chunks)
 
-function read(s, B::BitArray)
-    for i = 1:length(B.chunks)
-        B.chunks[i] = read(s, Uint64)
+function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
+    prot, flags, iswrite = mmap_stream_settings(s)
+    if length(dims) == 0
+        dims = 0
     end
+    n = prod(dims)
+    nc = _jl_num_bit_chunks(n)
+    B = BitArray{T,N}()
+    chunks = mmap_array(Uint64, (nc,), s, offset)
+    if iswrite
+        chunks[end] &= @_msk_end n
+    else
+        if chunks[end] != chunks[end] & @_msk_end n
+            error("The given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with r+ to override)")
+        end
+    end
+    dims = [i::Int for i in dims]
+    B.chunks = chunks
+    B.dims = dims
     return B
 end
+mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_bitarray(T, dims, s, position(s))
+
+msync{T}(B::BitArray{T}, flags::Integer) = msync(pointer(B.chunks), flags)
+msync{T}(B::BitArray{T}) = msync(B.chunks,MS_SYNC)
