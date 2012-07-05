@@ -456,7 +456,7 @@ end
 
 # report what went wrong with a pipeline
 
-pipeline_error(cmd::Cmd) = error("failed process: ", cmd)
+pipeline_error(cmd::Cmd) = error("failed process: ",cmd," [",cmd.status,"]")
 function pipeline_error(cmds::Cmds)
     failed = Cmd[]
     for cmd in cmds
@@ -464,13 +464,13 @@ function pipeline_error(cmds::Cmds)
             push(failed, cmd)
         end
     end
-    if numel(failed) == 0
-        error("pipeline error but no processes failed!?")
+    if numel(failed)==0 error("WTF: pipeline error but no processes failed!?") end
+    if numel(failed)==1 pipeline_error(failed[1]) end
+    msg = "failed processes:"
+    for cmd in failed
+        msg = string(msg,"\n  ",cmd," [",cmd.status,"]")
     end
-    if numel(failed) == 1
-        error("failed process: ", failed[1])
-    end
-    error("failed processes: ", join(failed, ", "))
+    error(msg)
 end
 
 # spawn and wait for a set of commands
