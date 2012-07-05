@@ -328,7 +328,7 @@ void jl_load(const char *fname)
         JL_PRINTF(JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
         //jl_flush(jl_stdout);
     }
-    JL_PRINTF(JL_STDOUT, "%s\n", fname);
+    //JL_PRINTF(JL_STDOUT, "%s\n", fname);
     char *fpath = jl_find_file_in_path(fname);
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);

@@ -460,7 +460,7 @@ success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
 success(procs::ProcessChain) = all(map(success, procs.processes))
 success(cmd::AbstractCmd) = wait(spawn(cmd))
 
-pipeline_error(proc::Process) = error("failed process: ", proc)
+pipeline_error(proc::Process) = error("failed process: ",proc," [",proc.exit_code,"]")
 function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
@@ -468,13 +468,13 @@ function pipeline_error(procs::ProcessChain)
             push(failed, p)
         end
     end
-    if numel(failed) == 0
-        error("pipeline error but no processes failed!?")
+    if numel(failed)==0 error("pipeline error but no processes failed!?") end
+    if numel(failed)==1 pipeline_error(failed[1]) end
+    msg = "failed processes:"
+    for proc in failed
+        msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
     end
-    if numel(failed) == 1
-        error("failed process: ", failed[1])
-    end
-    error("failed processes: ", join(failed, ", "))
+    error(msg)
 end
 
 function exec(thunk::Function)
@@ -551,6 +551,7 @@ end
 ## implementation of `cmd` syntax ##
 
 arg_gen(x::String) = ByteString[x]
+arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)
     if applicable(start,head)
@@ -569,7 +570,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push(vals, cstring(strcat(h,t)))
+        push(vals,cstring(strcat(h,t)))
     end
     vals
 end
@@ -577,7 +578,7 @@ end
 function cmd_gen(parsed)
     args = ByteString[]
     for arg in parsed
-        append!(args, arg_gen(arg...))
+        append!(args,arg_gen(arg...))
     end
     Cmd(args)
 end
