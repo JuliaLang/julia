@@ -354,6 +354,7 @@ extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
 extern DLLEXPORT jl_struct_type_t *jl_expr_type;
 extern jl_struct_type_t *jl_symbolnode_type;
+extern jl_struct_type_t *jl_getfieldnode_type;
 extern jl_struct_type_t *jl_linenumbernode_type;
 extern jl_struct_type_t *jl_labelnode_type;
 extern jl_struct_type_t *jl_gotonode_type;
@@ -440,6 +441,9 @@ void *allocobj(size_t sz);
 #define jl_linenode_line(x) jl_unbox_long(jl_fieldref(x,0))
 #define jl_labelnode_label(x) jl_unbox_long(jl_fieldref(x,0))
 #define jl_gotonode_label(x) jl_unbox_long(jl_fieldref(x,0))
+#define jl_getfieldnode_val(s) (jl_fieldref(s,0))
+#define jl_getfieldnode_name(s) ((jl_sym_t*)jl_fieldref(s,1))
+#define jl_getfieldnode_type(s) (jl_fieldref(s,2))
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 1)
@@ -469,6 +473,7 @@ void *allocobj(size_t sz);
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
+#define jl_is_getfieldnode(v)  jl_typeis(v,jl_getfieldnode_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)

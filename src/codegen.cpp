@@ -113,6 +113,7 @@ static Function *jldeclareconst_func;
 static Function *jltuple_func;
 static Function *jlntuple_func;
 static Function *jlapplygeneric_func;
+static Function *jlgetfield_func;
 static Function *jlbox_func;
 static Function *jlclosure_func;
 static Function *jlmethod_func;
@@ -531,6 +532,34 @@ static jl_tuple_t *call_arg_types(jl_value_t **args, size_t n, jl_codectx_t *ctx
     return t;
 }
 
+static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
+{
+    if (jl_is_quotenode(expr) && jl_is_module(jl_fieldref(expr,0)))
+        expr = jl_fieldref(expr,0);
+
+    if (jl_is_module(expr)) {
+        Value *bp =
+            global_binding_pointer((jl_module_t*)expr, name, NULL, false);
+        // todo: use type info to avoid undef check
+        return emit_checked_var(bp, name->name, ctx);
+    }
+
+    jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(expr, ctx);
+    JL_GC_PUSH(&sty);
+    if (jl_is_struct_type(sty)) {
+        size_t offs = jl_field_offset(sty, name);
+        if (offs != (size_t)-1) {
+            Value *strct = emit_expr(expr, ctx);
+            Value *fld = emit_nthptr(strct, offs+1);
+            null_pointer_check(fld, ctx);
+            JL_GC_POP();
+            return fld;
+        }
+    }
+    ////// todo
+
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, Value **theF,
@@ -900,19 +929,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_get_field && nargs==2) {
-        jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(args[1], ctx);
-        rt1 = (jl_value_t*)sty;
-        if (jl_is_struct_type(sty) && jl_is_quotenode(args[2]) &&
-            jl_is_symbol(jl_fieldref(args[2],0))) {
-            size_t offs = jl_field_offset(sty,
-                                          (jl_sym_t*)jl_fieldref(args[2],0));
-            if (offs != (size_t)-1) {
-                Value *strct = emit_expr(args[1], ctx);
-                Value *fld = emit_nthptr(strct, offs+1);
-                null_pointer_check(fld, ctx);
-                JL_GC_POP();
-                return fld;
-            }
+        if (jl_is_quotenode(args[2]) && jl_is_symbol(jl_fieldref(args[2],0))) {
+            Value *fld = emit_getfield(args[1],
+                                       (jl_sym_t*)jl_fieldref(args[2],0), ctx);
+            JL_GC_POP();
+            return fld;
         }
     }
     else if (f->fptr == &jl_f_set_field && nargs==3) {
@@ -1057,6 +1078,20 @@ static bool isBoxed(char *varname, jl_codectx_t *ctx)
     return (*ctx->isAssigned)[varname] && (*ctx->isCaptured)[varname];
 }
 
+static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
+                                     jl_binding_t **pbnd, bool assign)
+{
+    jl_binding_t *b=NULL;
+    if (!assign)
+        b = jl_get_binding(m, s);
+    // if b is NULL, this might be a global that is not set yet but will be,
+    // so get a pointer for writing even when not assigning.
+    if (assign || b==NULL)
+        b = jl_get_binding_wr(m, s);
+    if (pbnd) *pbnd = b;
+    return literal_pointer_val(&b->value, jl_ppvalue_llvmt);
+}
+
 // yields a jl_value_t** giving the binding location of a variable
 static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
                                   bool assign, jl_codectx_t *ctx)
@@ -1079,15 +1114,7 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         }
         return l;
     }
-    jl_binding_t *b=NULL;
-    if (!assign)
-        b = jl_get_binding(ctx->module, s);
-    // if b is NULL, this might be a global that is not set yet but will be,
-    // so get a pointer for writing even when not assigning.
-    if (assign || b==NULL)
-        b = jl_get_binding_wr(ctx->module, s);
-    if (pbnd) *pbnd = b;
-    return literal_pointer_val(&b->value, jl_ppvalue_llvmt);
+    return global_binding_pointer(ctx->module, s, pbnd, assign);
 }
 
 static int is_var_closed(jl_sym_t *s, jl_codectx_t *ctx)
@@ -1223,6 +1250,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             builder.SetInsertPoint(after);
         }
         return NULL;
+    }
+    else if (jl_is_getfieldnode(expr)) {
+        return emit_getfield(jl_fieldref(expr,0),
+                             (jl_sym_t*)jl_fieldref(expr,1), ctx);
     }
     else if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
@@ -2038,9 +2069,10 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jldeclareconst_func,
                                          (void*)&jl_declare_constant);
 
-    jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)*jl_f_tuple);
+    jltuple_func = jlfunc_to_llvm("jl_f_tuple", (void*)&jl_f_tuple);
     jlapplygeneric_func =
-        jlfunc_to_llvm("jl_apply_generic", (void*)*jl_apply_generic);
+        jlfunc_to_llvm("jl_apply_generic", (void*)&jl_apply_generic);
+    jlgetfield_func = jlfunc_to_llvm("jl_f_get_field", (void*)&jl_f_get_field);
 
     std::vector<Type*> args3(0);
     args3.push_back(jl_pvalue_llvmt);
@@ -2219,13 +2251,13 @@ extern "C" void jl_init_codegen(void)
     BOX_F(char,char);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
-                              "jl_box8", (void*)*jl_box8);
+                              "jl_box8", (void*)&jl_box8);
     box16_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int16),
-                              "jl_box16", (void*)*jl_box16);
+                              "jl_box16", (void*)&jl_box16);
     box32_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int32),
-                              "jl_box32", (void*)*jl_box32);
+                              "jl_box32", (void*)&jl_box32);
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
-                              "jl_box64", (void*)*jl_box64);
+                              "jl_box64", (void*)&jl_box64);
 
     std::vector<Type*> toptrargs(0);
     toptrargs.push_back(jl_pvalue_llvmt);

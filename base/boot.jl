@@ -216,6 +216,12 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
+type GetfieldNode
+    value
+    name::Symbol
+    typ
+end
+
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)

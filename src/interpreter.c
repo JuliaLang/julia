@@ -98,6 +98,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return v;
     }
     if (!jl_is_expr(e)) {
+        if (jl_is_getfieldnode(e)) {
+            jl_value_t *v = eval(jl_getfieldnode_val(e), locals, nl);
+            jl_value_t *gfargs[2] = {v, (jl_value_t*)jl_getfieldnode_name(e)};
+            return jl_f_get_field(NULL, gfargs, 2);
+        }
         if (jl_is_lambda_info(e)) {
             return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
                                                (jl_lambda_info_t*)e);

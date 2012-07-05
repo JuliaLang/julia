@@ -305,6 +305,7 @@ void jl_get_builtin_hooks(void)
     jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
     jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
+    jl_getfieldnode_type = (jl_struct_type_t*)core("GetfieldNode");
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
