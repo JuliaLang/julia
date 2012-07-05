@@ -120,8 +120,9 @@ Building Julia requires that the following software be installed:
 - **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
 - **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
+- **[wget]**, **[curl]**, or **fetch** — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
+- **patch**                     — for modifying source code.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -233,7 +234,8 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 3. Point your browser to `http://localhost:2000/`.
 4. Try `plot(cumsum(randn(1000)))` and other things.
 
+<!---
 ### Try it Online
 
 Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
-
+-->
