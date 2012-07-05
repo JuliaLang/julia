@@ -1,4 +1,3 @@
-
 Getting Around
 --------------
 
@@ -6,9 +5,10 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
-.. function:: whos()
+.. function:: whos([pattern::Regex])
 
-   Print information about global user-defined variables.
+   Print information about global user-defined variables, optionally restricted
+   to those matching ``pattern``.
 
 .. function:: edit("file"[, line])
 
@@ -465,6 +465,10 @@ Strings
 
    Convert a character index to a byte index
 
+.. function:: randstring(len)
+
+   Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
+
 I/O
 ---
 
@@ -513,10 +517,6 @@ I/O
 
    Close an I/O stream. Performs a ``flush`` first.
 
-.. function:: with_output_stream(stream, f::Function, args...)
-
-   Call ``f(args...)`` with the current output stream set to the given object. This is typically used to redirect the output of ``print`` and ``show``.
-
 .. function:: write(stream, x)
 
    Write the canonical binary representation of a value to the given stream.
@@ -540,14 +540,6 @@ I/O
 .. function:: skip(s, offset)
 
    Seek a stream relative to the current position.
-
-.. function:: current_output_stream()
-
-   Obtain the current default output stream (used by ``print`` and other output functions).
-
-.. function:: set_current_output_stream(s)
-
-   Set the current output stream.
 
 
 Text I/O
@@ -759,6 +751,22 @@ Mathematical Functions
 .. function:: nextpow2(n)
 
    Next power of two not less than ``n``
+
+.. function:: nextpow(a, n)
+
+   Next power of ``a`` not less than ``n``
+
+.. function:: prevpow(a, n)
+
+   Previous power of ``a`` not greater than ``n``
+
+.. function:: nextprod([a,b,c], n)
+
+   Next integer not less than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
+
+.. function:: prevprod([a,b,c], n)
+
+   Previous integer not greater than ``n`` that can be written ``a^i1 * b^i2 * c^i3`` for integers ``i1``, ``i2``, ``i3``.
 
 .. function:: powermod(x, p, m)
 
@@ -1389,7 +1397,7 @@ FFT functions in Julia are largely implemented by calling functions from `FFTW <
 
 .. function:: fft(A, dim)
 
-   One dimensional FFT if input is a ``Vector``. For n-d cases, compute fft of vectors along dimension ``dim``
+   One dimensional FFT if input is a ``Vector``. For n-d cases, compute fft of vectors along dimension ``dim``. Most efficient if ``size(A, dim)`` is a product of small primes; see :func:`nextprod`.
 
 .. function:: fft2
 
@@ -1608,7 +1616,11 @@ System
 
 .. function:: time()
 
-   Get the time in seconds since the epoch, with fairly high resolution.
+   Get the time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
+
+.. function:: time_ns()
+
+   Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
 
 .. function:: tic()
 

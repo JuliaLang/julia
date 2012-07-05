@@ -1,4 +1,5 @@
-load("../extras/specfun.jl")
+cd("../extras") do
+require("specfun.jl")
 
 # airy
 @assert_approx_eq airy(1.8) 0.0470362
@@ -77,3 +78,5 @@ y33 = bessely(3,3.)
 @assert_approx_eq zeta(0) -0.5
 @assert_approx_eq zeta(2) pi^2/6
 @assert_approx_eq zeta(4) pi^4/90
+
+end # cd

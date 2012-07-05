@@ -14,7 +14,7 @@
 # list for O(1) operations when reordering on access and eviction. The Julia
 # implementation instead backs the table with a Vector. For moderately-sized
 # collections, the difference in performance is small, and this implmentation
-# be simpler and easier to understand.
+# is simpler and easier to understand.
 
 abstract LRU{K,V} <: Associative{K,V}
 
@@ -27,10 +27,10 @@ type CacheItem{K,V}
 end
 
 type UnboundedLRU{K,V} <: LRU{K,V}
-    ht::Dict{K,CacheItem{K,V}}
-    q::Vector{CacheItem{K,V}}
+    ht::Dict
+    q::Vector{CacheItem}
 
-    UnboundedLRU() = new(Dict{K,CacheItem{K,V}}(), similar(Array(CacheItem{K,V},1), 0))
+    UnboundedLRU() = new(Dict(), similar(Array(CacheItem,1), 0))
 end
 UnboundedLRU() = UnboundedLRU{Any, Any}()
 

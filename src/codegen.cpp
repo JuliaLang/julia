@@ -16,6 +16,9 @@
 #include "llvm/Target/TargetData.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/Transforms/Scalar.h"
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+#include "llvm/Transforms/Vectorize.h"
+#endif
 #include "llvm/Support/IRBuilder.h"
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/raw_ostream.h"
@@ -2142,7 +2145,12 @@ static void init_julia_llvm_env(Module *m)
     
     //FPM->add(createCFGSimplificationPass());    // Merge & remove BBs
     FPM->add(createReassociatePass());          // Reassociate expressions
-    //FPM->add(createEarlyCSEPass()); //// ****
+
+#if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+    FPM->add(createBBVectorizePass());
+#endif
+    FPM->add(createEarlyCSEPass()); //// ****
+
     //FPM->add(createLoopIdiomPass()); //// ****
     FPM->add(createLoopRotatePass());           // Rotate loops.
     FPM->add(createLICMPass());                 // Hoist loop invariants
@@ -2165,6 +2173,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createInstructionCombiningPass());
     FPM->add(createJumpThreadingPass());         // Thread jumps
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
+
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
     FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
 

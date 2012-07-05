@@ -250,7 +250,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_set_expander(jl_current_module, nm, f);
         return (jl_value_t*)jl_nothing;
     }
-    else if (ex->head == error_sym) {
+    else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         jl_errorf("syntax error: %s", jl_string_data(args[0]));
     }
     else if (ex->head == line_sym) {

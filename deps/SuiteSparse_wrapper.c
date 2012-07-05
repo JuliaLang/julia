@@ -31,7 +31,6 @@ jl_cholmod_dense( void **cd,        /* Store return value in here */
     mat->dtype = dtype;
 
     *cd = mat;
-    return;
 }
 
 extern void
@@ -39,14 +38,8 @@ jl_cholmod_dense_copy_out(cholmod_dense *cd,
                           void *p
                           )
 {
-    int elsize = sizeof(double);
-    if (cd->dtype == CHOLMOD_DOUBLE) {
-        if (cd->xtype == CHOLMOD_REAL) { elsize = sizeof(double); }
-        else if (cd->xtype == CHOLMOD_COMPLEX) { elsize = 2*sizeof(double); }
-    } else if (cd->xtype == CHOLMOD_SINGLE) {
-                if (cd->xtype == CHOLMOD_REAL) { elsize = sizeof(float); }
-        else if (cd->xtype == CHOLMOD_COMPLEX) { elsize = 2*sizeof(float); }
-    }
+    size_t elsize = (cd->xtype == CHOLMOD_COMPLEX ? 2 : 1) *
+	(cd->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
 
     memcpy(p, cd->x, cd->nzmax*elsize);
 }

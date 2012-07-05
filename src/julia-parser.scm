@@ -350,7 +350,7 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch))))
+      (memv tok '(#\) #\] #\} else elseif catch =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -665,11 +665,15 @@
 
 (define (expect-end- s word)
   (let ((t (peek-token s)))
-    (if (eq? t 'end)
-	(take-token s)
-	(error (string "incomplete: " word " at "
-		       current-filename ":" expect-end-current-line
-		       " requires end")))))
+    (cond ((eq? t 'end) (take-token s))
+	  ((eof-object? t)
+	   (error (string "incomplete: " word " at "
+			  current-filename ":" expect-end-current-line
+			  " requires end")))
+	  (else
+	   (error (string word " at "
+			  current-filename ":" expect-end-current-line
+			  " expected end, got " t))))))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -768,13 +772,19 @@
        (take-token s)
        (case nxt
 	 ((end)   (list 'try try-block #f '(block)))
-	 ((catch) (let* ((var
-			  (if (eqv? (peek-token s) #\newline)
-			      #f
-			      (parse-atom s)))
-			 (catch-block (parse-block s)))
-		    (expect-end s)
-		    (list 'try try-block var catch-block)))
+	 ((catch) (let ((nl (eqv? (peek-token s) #\newline)))
+		    (if (eq? (require-token s) 'end)
+			(begin (take-token s)
+			       (list 'try try-block #f '(block)))
+			(let* ((var (parse-eq* s))
+			       (var? (and (not nl) (symbol? var)))
+			       (catch-block (parse-block s)))
+			  (expect-end s)
+			  (list 'try try-block
+				(and var? var)
+				(if var?
+				    catch-block
+				    `(block ,var ,@(cdr catch-block))))))))
 	 (else    (error (string "unexpected " nxt))))))
     ((return)          (let ((t (peek-token s)))
 			 (if (or (eqv? t #\newline) (closing-token? t))
@@ -1124,6 +1134,9 @@
 	       (let ((ex (parse-atom s)))
 		 (list 'quote ex))))
 
+	  ;; misplaced =
+	  ((eq? t '=) (error "unexpected ="))
+
 	  ;; identifier
 	  ((symbol? t) (take-token s))
 
@@ -1135,37 +1148,44 @@
 	   (if (eqv? (require-token s) #\) )
 	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
-	       ;; here we parse the first subexpression separately, so
-	       ;; we can look for a comma to see if it's a tuple. this lets us
-	       ;; distinguish (x) from (x,)
-	       (let* ((ex (parse-eq* s))
-		      (t (require-token s)))
-		 (cond ((eqv? t #\) )
-			(take-token s)
-			;; value in parentheses (x)
-			(if (and (pair? ex) (eq? (car ex) '...))
-			    `(tuple ,ex)
-			    ex))
-		       ((eqv? t #\, )
-			;; tuple (x,) (x,y) (x...) etc.
-			(parse-tuple s ex))
-		       ((eqv? t #\;)
-			;; parenthesized block (a;b;c)
-			(take-token s)
-			(let* ((blk (parse-stmts-within-expr s))
-			       (tok (require-token s)))
-			  (if (eqv? tok #\,)
-			      (error "unexpected comma in statement block"))
-			  (if (not (eqv? tok #\)))
-			      (error "missing separator in statement block"))
-			  (take-token s)
-			  `(block ,ex ,blk)))
-		       #;((eqv? t #\newline)
-			(error "unexpected line break in tuple"))
-		       ((memv t '(#\] #\}))
-			(error (string "unexpected " t " in tuple")))
-		       (else
-			(error "missing separator in tuple"))))))))
+	       (if (eq? (peek-token s) '=)
+		   ;; allow (=)
+		   (begin (take-token s)
+			  (if (not (eqv? (require-token s) #\) ))
+			      (error "invalid tuple")
+			      (take-token s))
+			  '=)
+		   ;; here we parse the first subexpression separately, so
+		   ;; we can look for a comma to see if it's a tuple.
+		   ;; this lets us distinguish (x) from (x,)
+		   (let* ((ex (parse-eq* s))
+			  (t (require-token s)))
+		     (cond ((eqv? t #\) )
+			    (take-token s)
+			    ;; value in parentheses (x)
+			    (if (and (pair? ex) (eq? (car ex) '...))
+				`(tuple ,ex)
+				ex))
+			   ((eqv? t #\, )
+			    ;; tuple (x,) (x,y) (x...) etc.
+			    (parse-tuple s ex))
+			   ((eqv? t #\;)
+			    ;; parenthesized block (a;b;c)
+			    (take-token s)
+			    (let* ((blk (parse-stmts-within-expr s))
+				   (tok (require-token s)))
+			      (if (eqv? tok #\,)
+				  (error "unexpected comma in statement block"))
+			      (if (not (eqv? tok #\)))
+				  (error "missing separator in statement block"))
+			      (take-token s)
+			      `(block ,ex ,blk)))
+			   #;((eqv? t #\newline)
+			   (error "unexpected line break in tuple"))
+			   ((memv t '(#\] #\}))
+			    (error (string "unexpected " t " in tuple")))
+			   (else
+			    (error "missing separator in tuple")))))))))
 
 	  ;; cell expression
 	  ((eqv? t #\{ )

@@ -312,12 +312,12 @@ and the point specified by its arguments, interpreted as *x* and *y*
 coordinates.
 
 For notational convenience, there are equivalent operator forms for the
-``mod`` and ``pow`` functions:
+``rem`` and ``pow`` functions:
 
--  ``x % y`` is equivalent to ``mod(x,y)``.
+-  ``x % y`` is equivalent to ``rem(x,y)``.
 -  ``x ^ y`` is equivalent to ``pow(x,y)``.
 
-In the former case, the spelled-out ``mod`` operator is the "canonical"
+In the former case, the spelled-out ``rem`` operator is the "canonical"
 form, and the ``%`` operator form is retained for compatibility with
 other systems, whereas in the latter case, the ``^`` operator form is
 canonical and the spelled-out ``pow`` form is retained for

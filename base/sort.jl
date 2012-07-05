@@ -16,6 +16,7 @@ macro _jl_sort_functions(suffix, lt, args...)
 insertionsort = symbol("_jl_insertionsort$suffix")
 quicksort = symbol("_jl_quicksort$suffix")
 mergesort = symbol("_jl_mergesort$suffix")
+pivot_middle = symbol("_jl_pivot_middle$suffix")
 lt = @eval (a,b)->$lt
 quote
 
@@ -63,7 +64,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
-_jl_pivot_middle(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
+($pivot_middle)(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)

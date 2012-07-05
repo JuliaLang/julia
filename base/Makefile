@@ -13,7 +13,7 @@ errno_h.jl:
 
 os_detect.jl: ../src/os_detect.h
 	$(QUIET_PERL) ${CC} -E -P -DJULIA ../src/os_detect.h | perl -p -e 's/\\n/\n/g' > $@
-	
+
 clean:
 	rm -f *# *~
 	rm -f pcre_h.jl

@@ -454,3 +454,15 @@ end
 @assert replace("abcd", r"b+", "^") == "a^cd"
 @assert replace("abcd", r"b?c?", "^") == "^a^d^"
 @assert replace("abcd", r"[bc]?", "^") == "^a^^d^"
+
+# {begins,ends}_with
+@assert begins_with("abcd", 'a')
+@assert begins_with("abcd", "a")
+@assert begins_with("abcd", "ab")
+@assert !begins_with("ab", "abcd")
+@assert !begins_with("abcd", "bc")
+@assert ends_with("abcd", 'd')
+@assert ends_with("abcd", "d")
+@assert ends_with("abcd", "cd")
+@assert !ends_with("abcd", "dc")
+@assert !ends_with("cd", "abcd")

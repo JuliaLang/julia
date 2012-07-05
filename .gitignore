@@ -4,18 +4,9 @@
 
 /*.tar.gz
 /tmp
+/dist
 
 /julia
-/julia-debug-*
-/julia-release-*
-/libjulia-debug.so
-/libjulia-debug.dylib
-/libjulia-release.so
-/libjulia-release.dylib
-
-/boot.j.inc
-/sys.ji
-/sys0.ji
 /h2j
 
 *.exe
@@ -31,8 +22,5 @@
 *.creator
 *.user
 *.orig
-
-include
-lib
 
 /usr

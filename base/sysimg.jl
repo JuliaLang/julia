@@ -95,6 +95,7 @@ include("libc.jl")
 include("env.jl")
 include("errno_h.jl")
 include("file.jl")
+include("stat.jl")
 
 # front end
 include("client.jl")
@@ -129,6 +130,7 @@ include("linalg.jl")
 include("linalg_dense.jl")
 include("linalg_blas.jl")
 include("linalg_lapack.jl")
+include("factorizations.jl")
 
 # signal processing
 include("signal.jl")

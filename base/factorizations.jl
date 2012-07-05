@@ -17,11 +17,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_getrs: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             if m != n || size(B, 1) != m error("_jl_lapack_getrs: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $getrs),
                   Void,
@@ -41,11 +41,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_potrs: matrix columns must have contiguous elements")
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             if m != n || size(B,1) != m error("_jl_lapack_potrs: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $potrs),
                   Void,
@@ -66,11 +66,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_trtrs: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             if m != n || size(B, 1) != m error("_jl_lapack_trtrs: dimension mismatch") end
-            nrhs    = int32(isa(B, Vector) ? 1 : size(B, 2))
-            lda     = int32(stride(A, 2))
-            ldb     = int32(isa(B, Vector) ? m : stride(B, 2))
+            nrhs    = size(B, 2)
+            lda     = stride(A, 2)
+            ldb     = isa(B, Vector) ? m : stride(B, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $trtrs),
                   Void,
@@ -90,11 +90,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
             if stride(A,1) != 1
                 error("_jl_lapack_getri: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             if m != n || n != numel(ipiv) error("_jl_lapack_getri: dimension mismatch") end
-            lda     = int32(stride(A, 2))
+            lda     = stride(A, 2)
             info    = Array(Int32, 1)
-            lwork   = int32(-1)
+            lwork   = -1
             work    = Array($elty, 1)
             for i in 1:2
                 ccall(dlsym(_jl_liblapack, $getri),
@@ -120,9 +120,9 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
             if stride(A,1) != 1
                 error("_jl_lapack_trtri: matrix columns must have contiguous elements");
             end
-            m, n    = map(int32, size(A))
+            m, n    = size(A)
             if m != n error("_jl_lapack_trtri: dimension mismatch") end
-            lda     = int32(stride(A, 2))
+            lda     = stride(A, 2)
             info    = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $trtri),
                   Void,
@@ -143,7 +143,7 @@ type Cholesky{T} <: Factorization{T}
     function Cholesky(A::Matrix{T}, ul::String)
         UL = uppercase(ul)
         if UL[1] != 'U' && UL[1] != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
-        Acopy = ishermitian(A) ? copy(A) : error("Cholesky: Matrix is not Hermitian")
+        Acopy = copy(A)
         _jl_lapack_potrf(UL, Acopy) == 0 ? new(UL[1] == 'U' ? triu(Acopy) : tril(Acopy), UL) : error("Cholesky: Matrix is not positive-definite")
     end
 end
@@ -191,12 +191,11 @@ for (orm2r, elty) in
             if stride(A,1) != 1 || stride(C,1) != 1
                 error("_jl_lapack_orm2r: matrix columns must have contiguous elements");
             end
-            m    = int32(size(C, 1))
-            n    = int32(isa(C, Vector) ? 1 : size(C, 2))
-            k    = int32(k)
+            m    = size(C, 1)
+            n    = size(C, 2)
             if size(A, 1) != m error("_jl_lapack_orm2r: dimension mismatch") end
-            lda  = int32(stride(A, 2))
-            ldc  = int32(isa(C, Vector) ? m : stride(C, 2))
+            lda  = stride(A, 2)
+            ldc  = isa(C, Vector) ? m : stride(C, 2)
             SIDE = uppercase(side)
             work = Array($elty, SIDE[1] == 'L' ? n : m)
             info = Array(Int32, 1)

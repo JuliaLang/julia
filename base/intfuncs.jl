@@ -154,11 +154,23 @@ function powermod(x::Integer, p::Integer, m::Integer)
     return r
 end
 
-# smallest power of 2 >= i
+# smallest power of 2 >= x
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
 ispow2(x::Integer) = (x&(x-1))==0
+
+# smallest integer n for which a^n >= x
+function nextpow(a, x)
+    n = iceil(log(x) ./ log(a))
+    return n - int(a.^(n-1) .>= x) # guard against roundoff error, e.g., with a=5 and x=125
+end
+# largest integer n for which a^n <= x
+function prevpow(a, x)
+    n = ifloor(log(x) ./ log(a))
+    return n + int(a.^(n+1) .<= x)
+end
+
 
 # decimal digits in an unsigned integer
 global const _jl_powers_of_ten = [
@@ -183,13 +195,19 @@ function ndigits0z(x::Uint128)
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
+if WORD_SIZE == 32
+const _jl_ndigits_max_mul = 69000000
+else
+const _jl_ndigits_max_mul = 290000000000000000
+end
+
 function ndigits0z(n::Unsigned, b::Integer)
     if b == 2  return (sizeof(n)<<3-leading_zeros(n)); end
     if b == 8  return div((sizeof(n)<<3)-leading_zeros(n)+2,3); end
     if b == 16 return (sizeof(n)<<1)-(leading_zeros(n)>>2); end
     if b == 10 return ndigits0z(n); end
     nd = 1
-    if n <= 500000000000000000
+    if n <= _jl_ndigits_max_mul
         # multiplication method is faster, but doesn't work for extreme values
         d = b
         while n >= d
@@ -217,7 +235,7 @@ ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
 
-const _jl_dig_syms = "0123456789abcdefghijklmnopqrstuvwxyz".data
+const _jl_dig_syms = uint8(['0':'9','a':'z','A':'Z'])
 
 function bin(x::Unsigned, pad::Int, neg::Bool)
     i = neg + max(pad,sizeof(x)<<3-leading_zeros(x))
@@ -267,22 +285,24 @@ function hex(x::Unsigned, pad::Int, neg::Bool)
     ASCIIString(a)
 end
 
-function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
+function base(symbols::Array{Uint8}, b::Int, x::Unsigned, pad::Int, neg::Bool)
+    if !(2 <= b <= length(symbols)) error("invalid base: $b") end
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(Uint8,i)
     while i > neg
-        a[i] = _jl_dig_syms[rem(x,b)+1]
+        a[i] = symbols[rem(x,b)+1]
         x = div(x,b)
         i -= 1
     end
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-
-base(b::Int, x::Unsigned, p::Int) = base(b,x,p,false)
-base(b::Int, x::Unsigned)         = base(b,x,1,false)
-base(b::Int, x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
-base(b::Int, x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
+base(b::Int, x::Unsigned, p::Int, n::Bool)            = base(_jl_dig_syms, b, x, p, n)
+base(s::Array{Uint8}, x::Unsigned, p::Int, n::Bool)   = base(s, length(s), x, p, n)
+base(b::Union(Int,Array{Uint8}), x::Unsigned, p::Int) = base(b,x,p,false)
+base(b::Union(Int,Array{Uint8}), x::Unsigned)         = base(b,x,1,false)
+base(b::Union(Int,Array{Uint8}), x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
+base(b::Union(Int,Array{Uint8}), x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
 
 macro _jl_int_stringifier(sym)
     quote

@@ -45,6 +45,7 @@
     jl_takebuf_string;
     jl_readuntil;
     jl_cpu_cores;
+    jl_hrtime;
     jl_cstr_to_string;
     jl_pchar_to_string;
     jl_array_to_string;
@@ -67,6 +68,22 @@
     jl_array_ptr;
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
+    jl_sizeof_stat;
+    jl_stat;
+    jl_lstat;
+    jl_fstat;
+    jl_stat_dev;
+    jl_stat_ino;
+    jl_stat_mode;
+    jl_stat_nlink;
+    jl_stat_uid;
+    jl_stat_gid;
+    jl_stat_rdev;
+    jl_stat_size;
+    jl_stat_blksize;
+    jl_stat_blocks;
+    jl_stat_mtime;
+    jl_stat_ctime;
     jl_stdout_obj;
     jl_stderr_obj;
     ios_fd;
@@ -81,7 +98,6 @@
     ios_getc;
     ios_getutf8;
     jl_getutf8;
-    jl_getenv;
     u8_isvalid;
     u8_strwidth;
     u8_strlen;
@@ -248,6 +264,6 @@
     jl_wrap_raw_dl_handle;
     uv_*;
     asprintf;
-local:
+  local:
     *;
 };

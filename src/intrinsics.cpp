@@ -790,12 +790,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(checked_fptosi64,1) {
         x = FP(x);
         Value *v = builder.CreateFPToSI(x, T_int64);
+        if (x->getType() == T_float32)
+            x = builder.CreateFPExt(x, T_float64);
         raise_exception_unless(emit_eqfsi64(x, v), jlinexacterr_var, ctx);
         return v;
     }
     HANDLE(checked_fptoui64,1) {
         x = FP(x);
         Value *v = builder.CreateFPToUI(x, T_int64);
+        if (x->getType() == T_float32)
+            x = builder.CreateFPExt(x, T_float64);
         raise_exception_unless(emit_eqfui64(x, v), jlinexacterr_var, ctx);
         return v;
     }

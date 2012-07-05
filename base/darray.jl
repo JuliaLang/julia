@@ -625,8 +625,8 @@ function assign(d::DArray, v, I::Range1{Int}...)
 end
 
 # Nd assign, array copy case, with Range1 indexes
-#TODO: check for same size
 function assign(d::DArray, v::AbstractArray, I::Range1{Int}...)
+    assign_shape_check(v, I...)
     (pmap, dist) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1
@@ -676,8 +676,8 @@ function assign(d::DArray, v, I::AbstractVector{Int}...)
 end
 
 # Nd assign, array copy case, vector indexes
-#TODO: check for same size
 function assign(d::DArray, v::AbstractArray, I::AbstractVector{Int}...)
+    assign_shape_check(v, I...)
     (pmap, dist, perm) = locate(d, I[d.distdim])
     if length(pmap) == 1 && pmap[1] == d.localpiece
         offs = d.dist[pmap[1]]-1

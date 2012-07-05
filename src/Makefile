@@ -13,7 +13,7 @@ FLAGS = \
 	-Wall -Wno-strict-aliasing -fno-omit-frame-pointer \
 	-Iflisp -Isupport -fvisibility=hidden -fno-common \
 	-I$(shell $(LLVM_CONFIG) --includedir) \
-	-I$(JULIAHOME)/deps/libuv/include
+	-I$(JULIAHOME)/deps/libuv/include -I$(JULIAHOME)/usr/include
 
 ifneq ($(MAKECMDGOALS),debug)
 TARGET =

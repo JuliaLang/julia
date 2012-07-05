@@ -11,8 +11,8 @@ convert(::Type{Int8}, x::Int64  ) = box(Int8,trunc8(unbox(Int64,x)))
 convert(::Type{Int8}, x::Uint64 ) = box(Int8,trunc8(unbox(Uint64,x)))
 convert(::Type{Int8}, x::Int128 ) = box(Int8,trunc8(unbox(Int128,x)))
 convert(::Type{Int8}, x::Uint128) = box(Int8,trunc8(unbox(Uint128,x)))
-convert(::Type{Int8}, x::Float32) = box(Int8,trunc8(fpsiround32(unbox(Float32,x))))
-convert(::Type{Int8}, x::Float64) = box(Int8,trunc8(fpsiround64(unbox(Float64,x))))
+convert(::Type{Int8}, x::Float32) = box(Int8,trunc8(checked_fptosi32(unbox(Float32,x))))
+convert(::Type{Int8}, x::Float64) = box(Int8,trunc8(checked_fptosi64(unbox(Float64,x))))
 
 convert(::Type{Uint8}, x::Bool   ) = box(Uint8,unbox(Bool,x))
 convert(::Type{Uint8}, x::Int8   ) = box(Uint8,unbox(Uint8,x))
@@ -25,8 +25,8 @@ convert(::Type{Uint8}, x::Int64  ) = box(Uint8,trunc8(unbox(Int64,x)))
 convert(::Type{Uint8}, x::Uint64 ) = box(Uint8,trunc8(unbox(Uint64,x)))
 convert(::Type{Uint8}, x::Int128 ) = box(Uint8,trunc8(unbox(Int128,x)))
 convert(::Type{Uint8}, x::Uint128) = box(Uint8,trunc8(unbox(Uint128,x)))
-convert(::Type{Uint8}, x::Float32) = box(Uint8,trunc8(fpuiround32(unbox(Float32,x))))
-convert(::Type{Uint8}, x::Float64) = box(Uint8,trunc8(fpuiround64(unbox(Float64,x))))
+convert(::Type{Uint8}, x::Float32) = box(Uint8,trunc8(checked_fptoui32(unbox(Float32,x))))
+convert(::Type{Uint8}, x::Float64) = box(Uint8,trunc8(checked_fptoui64(unbox(Float64,x))))
 
 convert(::Type{Int16}, x::Bool   ) = box(Int16,zext16(unbox(Bool,x)))
 convert(::Type{Int16}, x::Int8   ) = box(Int16,sext16(unbox(Int8,x)))
@@ -39,8 +39,8 @@ convert(::Type{Int16}, x::Int64  ) = box(Int16,trunc16(unbox(Int64,x)))
 convert(::Type{Int16}, x::Uint64 ) = box(Int16,trunc16(unbox(Uint64,x)))
 convert(::Type{Int16}, x::Int128 ) = box(Int16,trunc16(unbox(Int128,x)))
 convert(::Type{Int16}, x::Uint128) = box(Int16,trunc16(unbox(Uint128,x)))
-convert(::Type{Int16}, x::Float32) = box(Int16,trunc16(fpsiround32(unbox(Float32,x))))
-convert(::Type{Int16}, x::Float64) = box(Int16,trunc16(fpsiround64(unbox(Float64,x))))
+convert(::Type{Int16}, x::Float32) = box(Int16,trunc16(checked_fptosi32(unbox(Float32,x))))
+convert(::Type{Int16}, x::Float64) = box(Int16,trunc16(checked_fptosi64(unbox(Float64,x))))
 
 convert(::Type{Uint16}, x::Bool   ) = box(Uint16,zext16(unbox(Bool,x)))
 convert(::Type{Uint16}, x::Int8   ) = box(Uint16,sext16(unbox(Int8,x)))
@@ -53,8 +53,8 @@ convert(::Type{Uint16}, x::Int64  ) = box(Uint16,trunc16(unbox(Int64,x)))
 convert(::Type{Uint16}, x::Uint64 ) = box(Uint16,trunc16(unbox(Uint64,x)))
 convert(::Type{Uint16}, x::Int128 ) = box(Uint16,trunc16(unbox(Int128,x)))
 convert(::Type{Uint16}, x::Uint128) = box(Uint16,trunc16(unbox(Uint128,x)))
-convert(::Type{Uint16}, x::Float32) = box(Uint16,trunc16(fpuiround32(unbox(Float32,x))))
-convert(::Type{Uint16}, x::Float64) = box(Uint16,trunc16(fpuiround64(unbox(Float64,x))))
+convert(::Type{Uint16}, x::Float32) = box(Uint16,trunc16(checked_fptoui32(unbox(Float32,x))))
+convert(::Type{Uint16}, x::Float64) = box(Uint16,trunc16(checked_fptoui64(unbox(Float64,x))))
 
 convert(::Type{Int32}, x::Bool   ) = box(Int32,zext32(unbox(Bool,x)))
 convert(::Type{Int32}, x::Int8   ) = box(Int32,sext32(unbox(Int8,x)))
@@ -67,8 +67,8 @@ convert(::Type{Int32}, x::Int64  ) = box(Int32,trunc32(unbox(Int64,x)))
 convert(::Type{Int32}, x::Uint64 ) = box(Int32,trunc32(unbox(Uint64,x)))
 convert(::Type{Int32}, x::Int128 ) = box(Int32,trunc32(unbox(Int128,x)))
 convert(::Type{Int32}, x::Uint128) = box(Int32,trunc32(unbox(Uint128,x)))
-convert(::Type{Int32}, x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
-convert(::Type{Int32}, x::Float64) = box(Int32,trunc32(fpsiround64(unbox(Float64,x))))
+convert(::Type{Int32}, x::Float32) = box(Int32,checked_fptosi32(unbox(Float32,x)))
+convert(::Type{Int32}, x::Float64) = box(Int32,trunc32(checked_fptosi64(unbox(Float64,x))))
 
 convert(::Type{Uint32}, x::Bool   ) = box(Uint32,zext32(unbox(Bool,x)))
 convert(::Type{Uint32}, x::Int8   ) = box(Uint32,sext32(unbox(Int8,x)))
@@ -81,8 +81,8 @@ convert(::Type{Uint32}, x::Int64  ) = box(Uint32,trunc32(unbox(Int64,x)))
 convert(::Type{Uint32}, x::Uint64 ) = box(Uint32,trunc32(unbox(Uint64,x)))
 convert(::Type{Uint32}, x::Int128 ) = box(Uint32,trunc32(unbox(Int128,x)))
 convert(::Type{Uint32}, x::Uint128) = box(Uint32,trunc32(unbox(Uint128,x)))
-convert(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround32(unbox(Float32,x)))
-convert(::Type{Uint32}, x::Float64) = box(Uint32,trunc32(fpuiround64(unbox(Float64,x))))
+convert(::Type{Uint32}, x::Float32) = box(Uint32,checked_fptoui32(unbox(Float32,x)))
+convert(::Type{Uint32}, x::Float64) = box(Uint32,trunc32(checked_fptoui64(unbox(Float64,x))))
 
 convert(::Type{Int64}, x::Bool   ) = box(Int64,zext64(unbox(Bool,x)))
 convert(::Type{Int64}, x::Int8   ) = box(Int64,sext64(unbox(Int8,x)))
@@ -95,8 +95,8 @@ convert(::Type{Int64}, x::Uint32 ) = box(Int64,zext64(unbox(Uint32,x)))
 convert(::Type{Int64}, x::Uint64 ) = box(Int64,unbox(Uint64,x))
 convert(::Type{Int64}, x::Int128 ) = box(Int64,trunc64(unbox(Int128,x)))
 convert(::Type{Int64}, x::Uint128) = box(Int64,trunc64(unbox(Uint128,x)))
-convert(::Type{Int64}, x::Float32) = box(Int64,fpsiround64(fpext64(unbox(Float32,x))))
-convert(::Type{Int64}, x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
+convert(::Type{Int64}, x::Float32) = box(Int64,checked_fptosi64(fpext64(unbox(Float32,x))))
+convert(::Type{Int64}, x::Float64) = box(Int64,checked_fptosi64(unbox(Float64,x)))
 
 convert(::Type{Uint64}, x::Bool   ) = box(Uint64,zext64(unbox(Bool,x)))
 convert(::Type{Uint64}, x::Int8   ) = box(Uint64,sext64(unbox(Int8,x)))
@@ -109,8 +109,8 @@ convert(::Type{Uint64}, x::Uint32 ) = box(Uint64,zext64(unbox(Uint32,x)))
 convert(::Type{Uint64}, x::Int64  ) = box(Uint64,unbox(Int64,x))
 convert(::Type{Uint64}, x::Int128 ) = box(Uint64,trunc64(unbox(Int128,x)))
 convert(::Type{Uint64}, x::Uint128) = box(Uint64,trunc64(unbox(Uint128,x)))
-convert(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround64(fpext64(unbox(Float32,x))))
-convert(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
+convert(::Type{Uint64}, x::Float32) = box(Uint64,checked_fptoui64(fpext64(unbox(Float32,x))))
+convert(::Type{Uint64}, x::Float64) = box(Uint64,checked_fptoui64(unbox(Float64,x)))
 
 convert(::Type{Int128}, x::Bool   ) = box(Int128,zext_int(Int128,unbox(Bool,x)))
 convert(::Type{Int128}, x::Int8   ) = box(Int128,sext_int(Int128,unbox(Int8,x)))
@@ -181,9 +181,19 @@ floor(x::Integer) = x
  ceil(x::Integer) = x
 
 iround(x::Integer) = x
+iround{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
 itrunc(x::Integer) = x
 ifloor(x::Integer) = x
  iceil(x::Integer) = x
+
+morebits(::Type{Int8}) = Int16
+morebits(::Type{Int16}) = Int32
+morebits(::Type{Int32}) = Int64
+morebits(::Type{Int64}) = Int128
+morebits(::Type{Uint8}) = Uint16
+morebits(::Type{Uint16}) = Uint32
+morebits(::Type{Uint32}) = Uint64
+morebits(::Type{Uint64}) = Uint128
 
 ## integer arithmetic ##
 
@@ -562,3 +572,18 @@ sizeof(::Type{Int64})   = 8
 sizeof(::Type{Uint64})  = 8
 sizeof(::Type{Int128})  = 16
 sizeof(::Type{Uint128}) = 16
+
+## float to integer coercion ##
+
+# requires int arithmetic defined, for the loops to work
+
+for f in (:int, :int8, :int16, :int32, :signed, :integer)
+    @eval ($f)(x::Float) = ($f)(iround(x))
+end
+
+for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
+              (:int64,:Int64), (:uint64,:Uint64),
+              (:int128,:Int128), (:uint128,:Uint128),
+              (:unsigned,:Uint), (:uint,:Uint))
+    @eval ($f)(x::Float) = iround($t,x)
+end

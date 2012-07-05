@@ -51,19 +51,33 @@ end
 iround(x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
 itrunc(x::Float64) = box(Int64,fptosi64(unbox(Float64,x)))
 
+iround(::Type{Int8}, x::Float32) = box(Int8,trunc8(fpsiround32(unbox(Float32,x))))
+iround(::Type{Int8}, x::Float64) = box(Int8,trunc8(fpsiround64(unbox(Float64,x))))
+iround(::Type{Uint8}, x::Float32) = box(Uint8,trunc8(fpuiround32(unbox(Float32,x))))
+iround(::Type{Uint8}, x::Float64) = box(Uint8,trunc8(fpuiround64(unbox(Float64,x))))
+iround(::Type{Int16}, x::Float32) = box(Int16,trunc16(fpsiround32(unbox(Float32,x))))
+iround(::Type{Int16}, x::Float64) = box(Int16,trunc16(fpsiround64(unbox(Float64,x))))
+iround(::Type{Uint16}, x::Float32) = box(Uint16,trunc16(fpuiround32(unbox(Float32,x))))
+iround(::Type{Uint16}, x::Float64) = box(Uint16,trunc16(fpuiround64(unbox(Float64,x))))
+iround(::Type{Int32}, x::Float32) = box(Int32,fpsiround32(unbox(Float32,x)))
+iround(::Type{Int32}, x::Float64) = box(Int32,trunc32(fpsiround64(unbox(Float64,x))))
+iround(::Type{Uint32}, x::Float32) = box(Uint32,fpuiround32(unbox(Float32,x)))
+iround(::Type{Uint32}, x::Float64) = box(Uint32,trunc32(fpuiround64(unbox(Float64,x))))
+iround(::Type{Int64}, x::Float32) = box(Int64,fpsiround64(fpext64(unbox(Float32,x))))
+iround(::Type{Int64}, x::Float64) = box(Int64,fpsiround64(unbox(Float64,x)))
+iround(::Type{Uint64}, x::Float32) = box(Uint64,fpuiround64(fpext64(unbox(Float32,x))))
+iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
+# TODO: Int128
+
 # this is needed very early because it is used by Range and colon
 floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
 
 iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
 ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
-convert(::Type{Integer}, x::Float) = iround(x)
-convert(::Type{Int32}, x::Float) = int32(iround(x))
-convert(::Type{Int64}, x::Float) = int64(iround(x))
-
 ## floating point promotions ##
 
-promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
+promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
 
 promote_rule(::Type{Float32}, ::Type{Int8} ) = Float32
 promote_rule(::Type{Float32}, ::Type{Int16}) = Float32
@@ -88,25 +102,27 @@ promote_rule(::Type{Float64}, ::Type{Uint64}) = Float64 # TODO: should be Float8
 promote_rule(::Type{Float32}, ::Type{Char}) = Float32
 promote_rule(::Type{Float64}, ::Type{Char}) = Float64
 
+morebits(::Type{Float32}) = Float64
+
 ## floating point arithmetic ##
 
 -(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
 -(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
-+(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x), unbox(Float32,y)))
-+(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x), unbox(Float64,y)))
--(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x), unbox(Float32,y)))
--(x::Float64, y::Float64) = box(Float64,sub_float(unbox(Float64,x), unbox(Float64,y)))
-*(x::Float32, y::Float32) = box(Float32,mul_float(unbox(Float32,x), unbox(Float32,y)))
-*(x::Float64, y::Float64) = box(Float64,mul_float(unbox(Float64,x), unbox(Float64,y)))
-/(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x), unbox(Float32,y)))
-/(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x), unbox(Float64,y)))
++(x::Float32, y::Float32) = box(Float32,add_float(unbox(Float32,x),unbox(Float32,y)))
++(x::Float64, y::Float64) = box(Float64,add_float(unbox(Float64,x),unbox(Float64,y)))
+-(x::Float32, y::Float32) = box(Float32,sub_float(unbox(Float32,x),unbox(Float32,y)))
+-(x::Float64, y::Float64) = box(Float64,sub_float(unbox(Float64,x),unbox(Float64,y)))
+*(x::Float32, y::Float32) = box(Float32,mul_float(unbox(Float32,x),unbox(Float32,y)))
+*(x::Float64, y::Float64) = box(Float64,mul_float(unbox(Float64,x),unbox(Float64,y)))
+/(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x),unbox(Float32,y)))
+/(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x),unbox(Float64,y)))
 
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
 
-rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x), unbox(Float32,y)))
-rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x), unbox(Float64,y)))
+rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
+rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
 ## floating point comparisons ##
 

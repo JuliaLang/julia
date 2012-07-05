@@ -483,31 +483,31 @@ static jl_value_t *build_backtrace(void)
     JL_GC_PUSH(&a);
 
     /** MINGW does not have the necessary declarations for linking CaptureStackBackTrace*/
-    #if defined(__MINGW_H)
+#if defined(__MINGW_H)
     HINSTANCE kernel32 = LoadLibrary("Kernel32.dll");
 
-    if(kernel32 != NULL){
+    if (kernel32 != NULL) {
         typedef USHORT (*CaptureStackBackTraceType)(ULONG FramesToSkip, ULONG FramesToCapture, void* BackTrace, ULONG* BackTraceHash);
-        CaptureStackBackTraceType func = (CaptureStackBackTraceType) GetProcAddress( kernel32, "RtlCaptureStackBackTrace" );
+        CaptureStackBackTraceType func = (CaptureStackBackTraceType)GetProcAddress(kernel32, "RtlCaptureStackBackTrace");
 
-        if(func==NULL){
+        if (func == NULL) {
             FreeLibrary(kernel32);
             kernel32 = NULL;
             func = NULL;
             return (jl_value_t*)a;
-        }else
-        {
-            num = func( 0, 1023, array, NULL );
         }
-    }else
-    {
-        JL_PUTS("Failed to load kernel32.dll",JL_STDERR);
+        else {
+            num = func(0, 1023, array, NULL);
+        }
+    }
+    else {
+        JL_PUTS("Failed to load kernel32.dll", JL_STDERR);
         jl_exit(1);
     }
     FreeLibrary(kernel32);
-    #else
+#else
     num = RtlCaptureStackBackTrace(0, 1023, array, NULL);
-    #endif
+#endif
 
     p = (size_t*)array;
     while ((ip = *(p++)) != 0 && (num--)>0) {
@@ -766,7 +766,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->state.eh_task = jl_current_task;
     jl_current_task->state.eh_ctx = NULL;
     jl_current_task->state.ostream_obj = (jl_value_t*)jl_null;
-    //jl_current_task->state.current_output_stream = ios_stdout;
     jl_current_task->state.prev = NULL;
 #ifdef JL_GC_MARKSWEEP
     jl_current_task->state.gcstack = NULL;

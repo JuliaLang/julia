@@ -75,6 +75,7 @@ those available for the ``perl`` and ``ruby`` programs:
 ::
 
     julia [options] [program] [args...]
+     -v --version             Display version information
      -q --quiet               Quiet startup without banner
      -H --home=<dir>          Load files relative to <dir>
      -T --tab=<size>          Set REPL tab width to <size>

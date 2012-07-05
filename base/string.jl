@@ -14,6 +14,36 @@ next(s::String, i::Int) = error("you must implement next(", typeof(s), ",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)
 next(s::String, i::Integer) = next(s,int(i))
 
+## conversion of general objects to strings ##
+
+function print_to_string(xs...)
+    s = memio(isa(xs[1],String) ? length(xs[1]) : 0, false)
+    for x in xs
+        print(s, x)
+    end
+    takebuf_string(s)
+end
+
+string() = ""
+string(s::String) = s
+string(xs...) = print_to_string(xs...)
+
+cstring() = ""
+cstring(xs...) = print_to_string(xs...)
+
+function cstring(p::Ptr{Uint8})
+    p == C_NULL ? error("cannot convert NULL to string") :
+    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
+end
+
+function cstring(p::Ptr{Uint8},len::Int)
+    p == C_NULL ? error("cannot convert NULL to string") :
+    ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
+end
+
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
+convert(::Type{ByteString}, s::String) = cstring(s)
+
 ## generic supplied functions ##
 
 start(s::String) = 1
@@ -21,15 +51,13 @@ done(s::String,i) = (i > length(s))
 isempty(s::String) = done(s,start(s))
 ref(s::String, i::Int) = next(s,i)[1]
 ref(s::String, i::Integer) = s[int(i)]
-ref(s::String, x::Real) = s[iround(x)]
+ref(s::String, x::Real) = s[to_index(x)]
 ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 ref(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
 
 symbol(s::String) = symbol(cstring(s))
-string() = ""
-string(s::String) = s
 
 print(io::IO, s::String) = for c in s write(io, c) end
 show(io::IO, s::String) = print_quoted(io, s)
@@ -228,7 +256,7 @@ function begins_with(a::String, b::String)
         d, j = next(b,j)
         if c != d return false end
     end
-    done(a,i)
+    done(b,i)
 end
 begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
@@ -443,33 +471,6 @@ function map(f::Function, s::String)
     end
     takebuf_string(out)
 end
-
-## conversion of general objects to strings ##
-
-cstring() = ""
-
-function cstring(xs...)
-    s = memio(isa(xs[1],String) ? length(xs[1]) : 0, false)
-    for x in xs
-        print(s, x)
-    end
-    takebuf_string(s)
-end
-
-string(xs...) = cstring(xs...)
-
-function cstring(p::Ptr{Uint8})
-    p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
-end
-
-function cstring(p::Ptr{Uint8},len::Int)
-    p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_pchar_to_string, Any, (Ptr{Uint8},Int), p, len)::ByteString
-end
-
-convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
-convert(::Type{ByteString}, s::String) = cstring(s)
 
 ## string promotion rules ##
 
@@ -1179,3 +1180,11 @@ end
 
 memcat(s::ByteString) = memcat(s.data)
 memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)
+
+# return a random string (often useful for temporary filenames/dirnames)
+let
+global randstring
+const randstring_chars = ASCIIString(uint8([0x30:0x39,0x41:0x5a,0x61:0x7a]))
+randstring(len::Int) =
+    randstring_chars[iceil(strlen(randstring_chars)*rand(len))]
+end

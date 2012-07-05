@@ -102,6 +102,10 @@ endif
 #USE_SYSTEM_LAPACK=1
 #endif
 
+-include $(JULIAHOME)/Make.user
+
+# ===========================================================================
+
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
@@ -121,7 +125,7 @@ READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
-READLINE += -lncurses -lcurses
+READLINE += -lncurses
 else
 READLINE += $(USR)/lib/libhistory.a
 endif
@@ -160,6 +164,9 @@ endif
 
 # OS specific stuff
 
+# must end with a / and have no trailing spaces
+INSTALL_NAME_ID_DIR = @executable_path/../lib/
+
 RPATH = 
 RPATH_ORIGIN = 
 
@@ -194,8 +201,9 @@ OSLIBS += -lkvm -lrt -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/
 endif
 
 ifeq ($(OS), Darwin)
-INSTALL_NAME_CMD = install_name_tool -id @executable_path/../lib/
+INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
+RPATH = -Wl,-rpath,$(BUILD)/lib
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load

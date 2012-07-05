@@ -79,6 +79,10 @@ function dir_create(directory_name::String)
   run(`mkdir $directory_name`)
 end
 
+function dir_remove(directory_name::String)
+  run(`rmdir $directory_name`)
+end
+
 function file_exists(filename::String)
   if length(readlines(`ls $filename`)) != 0
     true
@@ -101,4 +105,45 @@ function download_file(url::String)
   new_filename = strcat(filename, ".tar.gz")
   path_rename(filename, new_filename)
   new_filename
+end
+
+function real_path(fname::String)
+    sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
+    system_error(:real_path, sp == C_NULL)
+    s = cstring(sp)
+    ccall(:free, Void, (Ptr{Uint8},), sp)
+    return s
+end
+
+function abs_path(fname::String)
+    if length(fname) > 0 && fname[1] == '/'
+        comp = split(fname, '/')
+    else
+        comp = [split(cwd(), '/'), split(fname, '/')]
+    end
+    n = length(comp)
+    pmask = trues(n)
+    last_is_dir = false
+    for i = 2:n
+        if comp[i] == "." || comp[i] == ""
+            pmask[i] = false
+            last_is_dir = true
+        elseif comp[i] == ".."
+            pmask[i] = false
+            last_is_dir = true
+            for j = i-1:-1:2
+                if pmask[j]
+                    pmask[j] = false
+                    break
+                end
+            end
+        else
+            last_is_dir = false
+        end
+    end
+    comp = comp[pmask]
+    if last_is_dir
+        push(comp, "")
+    end
+    return join(comp, '/')
 end

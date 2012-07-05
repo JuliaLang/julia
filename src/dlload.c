@@ -14,7 +14,7 @@
 #endif
 
 #if defined(__APPLE__)
-static char *extensions[] = { "", ".dylib", ".bundle" };
+static char *extensions[] = { "", ".dylib" };
 #define N_EXTENSIONS 3
 #elif defined(_WIN32)
 static char *extensions[] = { ".dll" };
@@ -30,6 +30,23 @@ static char *extensions[] = { ".so", "" };
 #define PATHBUF 512
 
 extern char *julia_home;
+
+int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
+{
+#ifdef RTLD_DEEPBIND
+    dlerror(); /* Reset error status. */
+    lib->handle = dlopen(filename, RTLD_LAZY|RTLD_DEEPBIND);
+    if (lib->handle) {
+        lib->errmsg = NULL;
+        return 0;
+    } else {
+        lib->errmsg = strdup(dlerror());
+        return -1;
+    }
+#else
+    return uv_dlopen(filename, lib);
+#endif
+}
 
 uv_lib_t *jl_load_dynamic_library(char *modname)
 {
@@ -56,10 +73,9 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
 #else
     else if (modname[0] == '/') {
 #endif
-        error = uv_dlopen(modname,handle);
+        error = jl_uv_dlopen(modname,handle);
         if (!error) goto done;
     }
-    char *cwd;
 
     for(i=0; i < N_EXTENSIONS; i++) {
         ext = extensions[i];
@@ -69,7 +85,7 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
             if (julia_home) {
                 /* try julia_home/../lib */
                 snprintf(path, PATHBUF, "%s/../lib/%s%s", julia_home, modname, ext);
-                error = uv_dlopen(path, handle);
+                error = jl_uv_dlopen(path, handle);
                 if (!error) goto done;
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
@@ -78,19 +94,10 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
                     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
                 }
             }
-            cwd = getcwd(path, PATHBUF);
-            if (cwd != NULL) {
-                /* next try load from current directory */
-                strncat(path, "/", PATHBUF-1-strlen(path));
-                strncat(path, modname, PATHBUF-1-strlen(path));
-                strncat(path, ext, PATHBUF-1-strlen(path));
-                error = uv_dlopen(path, handle);
-                if (!error) goto done;
-            }
         }
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
-        error = uv_dlopen(path, handle);
+        error = jl_uv_dlopen(path, handle);
         if (!error) goto done;
     }
 

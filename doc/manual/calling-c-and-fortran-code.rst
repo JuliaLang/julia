@@ -278,3 +278,8 @@ can be called via the following Julia code:
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
 
+
+C++
+---
+
+Limited support for C++ is provided by the :mod:`cpp.jl` module.
