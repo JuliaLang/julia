@@ -15,20 +15,25 @@
 #include <fcntl.h>
 #define fileno _fileno
 #else
+
+#endif
+
 #include <unistd.h>
 #include <sys/time.h>
-#include <sys/select.h>
+//#include <sys/select.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <fcntl.h>
-#endif
+
+#define fileno_fileno
 
 #include "utils.h"
 #include "utf8.h"
 #include "ios.h"
 #include "timefuncs.h"
 
-//#define MEMDEBUG
-//#define MEMPROFILE
+/*#define MEMBEBUG
+#define MEMPROFILE*/
 
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
@@ -99,8 +104,7 @@ static int _fd_available(long fd)
 
 static int _enonfatal(int err)
 {
-    return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
-            err == EWOULDBLOCK);
+    return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/);
 }
 
 #define SLEEP_TIME 5//ms
@@ -223,6 +227,14 @@ static char *_buf_realloc(ios_t *s, size_t sz)
     s->buf = temp;
     s->maxsize = sz;
     return s->buf;
+}
+
+void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos)
+{
+    size_t offset = splitpos-from->buf;
+    ios_write(to,from->buf,offset);
+    memmove(from->buf,splitpos,from->size-offset);
+    from->size=from->size-offset;
 }
 
 // write a block of data into the buffer at the current position, resizing
@@ -370,6 +382,21 @@ size_t ios_readprep(ios_t *s, size_t n)
     s->size += got;
     return s->size - s->bpos;
 }
+
+size_t ios_fillprep(ios_t *s, size_t n)
+{
+    size_t space = s->size - s->bpos;
+    if (space >= n)
+        return space;
+    if (s->maxsize < s->bpos+n) {
+        if (_buf_realloc(s, s->bpos + n)==NULL)
+            return space;
+    }
+    return n;
+}
+
+
+
 
 static void _write_update_pos(ios_t *s)
 {
@@ -618,6 +645,8 @@ int ios_flush(ios_t *s)
     return 0;
 }
 
+
+
 void ios_close(ios_t *s)
 {
     ios_flush(s);
@@ -789,6 +818,7 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     return total;
 }
 
+
 static void _ios_init(ios_t *s)
 {
     // put all fields in a sane initial state
@@ -823,7 +853,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
+    fd = open(fname, flags, S_IRUSR|S_IWUSR/*|S_IRGRP|S_IROTH644*/);
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);

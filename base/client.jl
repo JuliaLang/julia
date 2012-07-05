@@ -2,7 +2,7 @@
 ##             and REPL
 
 @unix_only _jl_repl = _jl_lib
-@windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
+@windows_only _jl_repl = ccall(:jl_wrap_raw_dl_handle,Ptr{Void},(Ptr{Void},),ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL))
 
 const _jl_color_normal = "\033[0m"
 
@@ -15,15 +15,28 @@ function _jl_answer_color()
            c == "magenta" ? "\033[1m\033[35m" :
            c == "cyan"    ? "\033[1m\033[36m" :
            c == "white"   ? "\033[1m\033[37m" :
+           c == "normal"  ? _jl_color_normal  :
            "\033[1m\033[34m"
 end
 
+
 _jl_banner() = print(_jl_have_color ? _jl_banner_color : _jl_banner_plain)
+
+
+exit(n) = ccall(:jl_exit, Void, (Int32,), n)
+exit() = exit(0)
+quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    del_fd_handler(STDIN.fd)
-    put(_jl_repl_channel, (ast, show_value))
+    del_io_handler(STDIN)
+    if show_value == -1
+        print('\n');
+        exit(0)
+    end
+    _jl_eval_user_input(ast, show_value!=0)
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
+    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
 end
 
 # called to show a REPL result
@@ -50,6 +63,7 @@ function _jl_eval_user_input(ast::ANY, show_value)
     while true
         try
             ccall(:jl_register_toplevel_eh, Void, ())
+            ccall(:restore_signals, Void, ())
             if _jl_have_color
                 print(_jl_color_normal)
             end
@@ -70,17 +84,24 @@ function _jl_eval_user_input(ast::ANY, show_value)
             end
             break
         catch e
+            if iserr
+                println("SYSTEM ERROR: show(lasterr) caused an error")
+            end
             iserr, lasterr = true, e
         end
     end
     println()
 end
 
+function readBuffer(handle::Ptr,nread::PtrSize,base::Ptr,len::Int32)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
+end
+
 function run_repl()
     global const _jl_repl_channel = RemoteRef()
 
     if _jl_have_color
-        ccall(:jl_enable_color, Void, ())
+        ccall(dlsym(_jl_repl,:jl_enable_color), Void, ())
     end
     atexit() do
         if _jl_have_color
@@ -92,16 +113,33 @@ function run_repl()
     # ctrl-C interrupt for interactive use
     ccall(:jl_install_sigint_handler, Void, ())
 
-    while true
-        ccall(:repl_callback_enable, Void, ())
-        add_fd_handler(STDIN.fd, fd->ccall(:jl_stdin_callback, Void, ()))
-        (ast, show_value) = take(_jl_repl_channel)
-        if show_value == -1
-            # exit flag
-            break
+    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
+    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
+
+    cont = true
+    lasterr = ()
+    iserr = false
+    while cont
+        cont = false
+        try
+            run_event_loop(globalEventLoop());
+        catch e
+            if isa(e, InterruptException)
+                println("^C")
+                show(e)
+                ccall(dlsym(_jl_repl,:jl_clear_input), Void, ());
+                cont = true
+            else
+                iserr = true
+                lasterr = e
+            end
         end
-        _jl_eval_user_input(ast, show_value!=0)
     end
+
+    if iserr
+        throw(lasterr)
+    end
+    println()
 end
 
 function parse_input_line(s::String)
@@ -186,16 +224,16 @@ _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
 function _start()
-    atexit(()->flush(stdout_stream))
+    #atexit(()->flush(stdout_stream))
     try
         ccall(:jl_register_toplevel_eh, Void, ())
-        ccall(:jl_start_io_thread, Void, ())
+        #ccall(:jl_start_io_thread, Void, ())
         global const Workqueue = WorkItem[]
         global const Waiting = Dict(64)
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
-            global const Scheduler = Task(()->event_loop(true), 1024*1024)
+            global const Scheduler = Task(make_callback(()->event_loop(true)), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
             # make scheduler aware of current (root) task
             enq_work(_jl_roottask_wi)
@@ -213,7 +251,7 @@ function _start()
 
         (quiet,repl) = process_options(ARGS)
         if repl
-            global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
+            global _jl_have_color = true || success(`tput setaf 0`) || has(ENV, "TERM") && matches(r"^xterm", ENV["TERM"])
             global _jl_is_interactive = true
             if !quiet
                 _jl_banner()

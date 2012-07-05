@@ -566,6 +566,7 @@ jl_value_t *pfx##_##typ(c_type x)               \
     return v;                                   \
 }
 BOX_FUNC(float32, float,  jl_box, 2)
+BOX_FUNC(pointer, void*,  jl_box, 2) //2 pointers == two words on all platforms
 #ifdef __LP64__
 BOX_FUNC(float64, double, jl_box, 2)
 #else

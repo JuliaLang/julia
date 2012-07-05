@@ -1,7 +1,8 @@
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
+@unix_only sleep(s::Real) = ccall(:usleep, Void, (Uint32,), uint32(iround(s*1e6)))
+@windows_only sleep(s::Real) = ccall(:Sleep, stdcall, Void, (Uint32,), uint32(iround(s*1e3)))
 
 strftime(t) = strftime("%c", t)
 function strftime(fmt::ByteString, t)
@@ -29,8 +30,8 @@ end
 
 ## process-related functions ##
 
-getpid() = int(ccall(:getpid, Int32, ()))
-system(cmd::String) = int(ccall(:system, Int32, (Ptr{Uint8},), cmd))
+getpid() = ccall(:jl_getpid, Uint32, ())
+system(cmd::String) = ccall(:system, Int32, (Ptr{Uint8},), cmd)
 
 ## network functions ##
 
@@ -42,7 +43,7 @@ end
 
 function getipaddr()
     ip = Array(Uint8, 128)
-    ccall(:getlocalip, Void, (Ptr{Uint8}, Uint), ip, length(ip))
+    #ccall(:getlocalip, Void, (Ptr{Uint8}, Uint), ip, length(ip))
     cstring(convert(Ptr{Uint8},ip))
 end
 

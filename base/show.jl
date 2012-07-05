@@ -1,14 +1,13 @@
 # formerly built-in methods. can be replaced any time.
 
-show(x) = show(OUTPUT_STREAM::IOStream, x)
+show(x) = show(OUTPUT_STREAM::Stream, x)
 
-print(io::IOStream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
+show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
 show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
 
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
-show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")

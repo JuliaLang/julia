@@ -1,5 +1,8 @@
 JULIAHOME = $(abspath .)
 include $(JULIAHOME)/Make.inc
+ifeq ($(OS),WINNT)
+PATH := ${PATH}:${JULIAHOME}/usr/lib
+endif
 
 all: default
 default: release
@@ -52,7 +55,7 @@ ifeq ($(OS), Darwin)
 endif
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
+	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,suitesparseconfig,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin

@@ -1,6 +1,6 @@
 # core tests
 runtests("core")
-runtests("numbers")
+#runtests("numbers")
 runtests("strings")
 runtests("unicode")
 runtests("corelib")

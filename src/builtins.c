@@ -521,12 +521,16 @@ DLLEXPORT int jl_strtof(char *str, float *out)
 
 jl_value_t *jl_stdout_obj()
 {
-    return jl_get_global(jl_base_module, jl_symbol("stdout_stream"));
+    jl_value_t *stdout_obj = jl_get_global(jl_base_module, jl_symbol("STDOUT"));
+    if (stdout_obj != NULL) return stdout_obj;
+    return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
 jl_value_t *jl_stderr_obj()
 {
-    return jl_get_global(jl_base_module, jl_symbol("stderr_stream"));
+    jl_value_t *stderr_obj = jl_get_global(jl_base_module, jl_symbol("STDERR"));
+    if (stderr_obj != NULL) return stderr_obj;
+    return jl_get_global(jl_base_module, jl_symbol("OUTPUT_STREAM"));
 }
 
 static jl_function_t *jl_show_gf=NULL;
@@ -545,7 +549,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 // comma_one prints a comma for 1 element, e.g. "(x,)"
 void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_one)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
+    JL_STREAM *s = (JL_STREAM*)jl_iostr_data(st);
     JL_PUTC(opn, s);
     size_t i, n=jl_tuple_len(t);
     for(i=0; i < n; i++) {
@@ -568,7 +572,7 @@ static void show_function(JL_STREAM *s, jl_value_t *v)
 
 static void show_type(jl_value_t *st, jl_value_t *t)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(st);
+    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(st);
     if (jl_is_union_type(t)) {
         if (t == (jl_value_t*)jl_bottom_type) {
             JL_WRITE(s, "None", 4);
@@ -600,7 +604,7 @@ static void show_type(jl_value_t *st, jl_value_t *t)
 
 DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 {
-    ios_t *s = (ios_t*)jl_iostr_data(str);
+    uv_stream_t *s = (uv_stream_t*)jl_iostr_data(str);
     // fallback for printing some other builtin types
     if (jl_is_tuple(v)) {
         jl_show_tuple(str, (jl_tuple_t*)v, '(', ')', 1);
@@ -862,6 +866,9 @@ void jl_init_primitives(void)
     add_builtin_func("apply_type", jl_f_instantiate_type);
     add_builtin_func("typevar", jl_f_typevar);
     add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
+
+    // add builtin func
+    add_builtin_func("make_callback",jl_f_make_callback);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

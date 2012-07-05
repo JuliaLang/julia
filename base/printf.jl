@@ -1,7 +1,7 @@
 ### printf formatter generation ###
 
 function _jl_printf_gen(s::String)
-    args = {:(out::IOStream)}
+    args = {:(out::Stream)}
     blk = expr(:block, :(local neg, pt, len, exp))
     for x in _jl_printf_parse(s)
         if isa(x,String)
@@ -766,7 +766,7 @@ macro printf(f, exps...)
     blk
 end
 
-fprintf(s::IOStream, f::Function, args...) = f(s, args...)
-fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
+fprintf(s::Stream, f::Function, args...) = f(s, args...)
+fprintf(s::Stream, fmt::String, args...) = fprintf(s, eval(f_str_f(fmt)), args...)
 printf(f::Union(Function,String), args...) = fprintf(OUTPUT_STREAM, f, args...)
 sprintf(f::Union(Function,String), args...) = sprint(fprintf, f, args...)

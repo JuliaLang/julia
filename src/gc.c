@@ -615,7 +615,7 @@ static void gc_mark(void)
     }
 }
 
-static int is_gc_enabled = 0;
+static int is_gc_enabled = 1;
 DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
 DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
