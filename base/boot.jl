@@ -129,6 +129,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     Symbol, SymbolNode, Task, Top, TopNode, Tuple, Type, TypeConstructor,
     TypeName, TypeVar, UTF8String, Uint, Uint8, Uint16, Uint32, Uint64, Uint128,
     Undef, UndefRefError, Union, UnionKind, Unsigned, Void, WeakRef,
+    GetfieldNode,
     # functions
     _setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
     arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,

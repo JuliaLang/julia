@@ -280,6 +280,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
 static void make_gcroot(Value *v, jl_codectx_t *ctx);
+static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
+                                     jl_binding_t **pbnd, bool assign);
+static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
 
 // --- utilities ---
 
@@ -426,6 +429,9 @@ static void max_arg_depth(jl_value_t *expr, int32_t *max, int32_t *sp,
     else if (jl_is_symbolnode(expr)) {
         expr = (jl_value_t*)jl_symbolnode_sym(expr);
     }
+    else if (jl_is_getfieldnode(expr)) {
+        if (2 > *max) *max = 2;
+    }
     if (jl_is_symbol(expr)) {
         char *vname = ((jl_sym_t*)expr)->name;
         if (ctx->escapes->find(vname) != ctx->escapes->end()) {
@@ -556,8 +562,19 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
             return fld;
         }
     }
-    ////// todo
+    JL_GC_POP();
 
+    int argStart = ctx->argDepth;
+    Value *arg1 = emit_expr(expr, ctx);
+    make_gcroot(boxed(arg1), ctx);
+    Value *arg2 = literal_pointer_val(name);
+    make_gcroot(arg2, ctx);
+    Value *myargs = builder.CreateGEP(ctx->argTemp,
+                                      ConstantInt::get(T_int32, argStart));
+    Value *result = builder.CreateCall3(jlgetfield_func, V_null, myargs,
+                                        ConstantInt::get(T_int32,2));
+    ctx->argDepth = argStart;
+    return result;
 }
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
@@ -2217,7 +2234,6 @@ extern "C" void jl_init_codegen(void)
     
     InitializeNativeTarget();
     jl_Module = new Module("julia", jl_LLVMContext);
-
 
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT).create();

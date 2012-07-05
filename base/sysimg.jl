@@ -178,7 +178,9 @@ export
     union!,unique_name,unsetenv,unshift,unsigned,uppercase,utf8,values,var,vcat,
     vec,wait,wait_nohang,weighted_mean,which,whicht,whos,with_output_to_string,
     write,write_to,xcorr,xor!,yield,zero,zeros,zip,
-    nextprod, prevprod, base,
+    nextprod, prevprod, base, findfirst, qrp, sdd, require,
+    Factorization, Cholesky, LU, QR, QRP,
+    ref_shape, assign_shape_check, to_index, indices, append_any,
     # TODO: used by macros, should be removed (use hygiene instead)
     cmd_gen,
     # Macros

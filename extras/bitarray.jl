@@ -311,10 +311,10 @@ function bitrand!(B::BitArray)
         return B
     end
     for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = _jl_dsfmt_randui64()
+        B.chunks[i] = randi(Uint64)
     end
     msk = @_msk_end length(B)
-    B.chunks[end] = msk & _jl_dsfmt_randui64()
+    B.chunks[end] = msk & randi(Uint64)
     return B
 end
 

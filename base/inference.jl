@@ -1215,12 +1215,10 @@ function type_annotate(ast::Expr, states::Array{Any,1},
 end
 
 function sym_replace(e::Expr, from, to)
-    head = e.head
-    if is(head,:line)
-        return e
-    end
-    for i=1:length(e.args)
-        e.args[i] = sym_replace(e.args[i], from, to)
+    if !is(e.head,:line)
+        for i=1:length(e.args)
+            e.args[i] = sym_replace(e.args[i], from, to)
+        end
     end
     e
 end
@@ -1245,6 +1243,42 @@ function sym_replace(s::Symbol, from, to)
 end
 
 sym_replace(x, from, to) = x
+
+# see if a symbol resolves the same in two modules
+function resolves_same(sym, from, to)
+    if is(from,to)
+        return true
+    end
+    # todo: better
+    return (isconst(from,sym) && isconst(to,sym) && isbound(from,sym) &&
+            isbound(to,sym) && is(eval(from,sym),eval(to,sym)))
+end
+
+# annotate symbols with their original module for inlining
+function resolve_globals(e::Expr, from, to, env)
+    if !is(e.head,:line)
+        for i=1:length(e.args)
+            e.args[i] = resolve_globals(e.args[i], from, to, env)
+        end
+    end
+    e
+end
+
+function resolve_globals(s::Symbol, from, to, env)
+    if contains_is(env, s)
+        return s
+    end
+    resolves_same(s, from, to) ? s : GetfieldNode(from, s, Any)
+end
+
+function resolve_globals(s::SymbolNode, from, to, env)
+    if contains_is(env, s.name)
+        return s
+    end
+    resolves_same(s.name, from, to) ? s : GetfieldNode(from, s.name, s.typ)
+end
+
+resolve_globals(x, from, to, env) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
@@ -1403,8 +1437,13 @@ function inlineable(f, e::Expr, vars)
     end
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
-    return sym_replace(copy(expr), append(args,spnames),
-                       append(argexprs,spvals))
+    expr = copy(expr)
+    mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
+    srcenv = append(args,spnames)
+    if !is(mfrom, mto)
+        expr = resolve_globals(expr, mfrom, mto, srcenv)
+    end
+    return sym_replace(expr, srcenv, append(argexprs,spvals))
 end
 
 _jl_tn(sym::Symbol) =
