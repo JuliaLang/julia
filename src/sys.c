@@ -4,10 +4,16 @@
 */
 #include "julia.h"
 #include "uv.h"
+#include <sys/stat.h>
+//these will be defined in future versions of libuv:
+#if defined(__WIN32__)
+typedef struct _stati64 uv_statbuf_t;
+#else
+typedef struct stat uv_statbuf_t;
+#endif
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include <sys/stat.h>
 #ifndef __WIN32__
 #include <sys/sysctl.h>
 #include <sys/wait.h>
@@ -96,8 +102,7 @@ DLLEXPORT int jl_ios_eof(ios_t *s)
 // --- stat ---
 DLLEXPORT int jl_sizeof_stat(void)
 {
-  struct stat buf;
-  return sizeof(buf);
+  return sizeof(uv_statbuf_t);
 }
 
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
@@ -109,7 +114,7 @@ DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
   // it's not clear that this is possible using libuv
   ret = uv_fs_stat(uv_default_loop(), &req, path, NULL);
   if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
+    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
   uv_fs_req_cleanup(&req);
   return ret;
 }
@@ -121,7 +126,7 @@ DLLEXPORT int32_t jl_lstat(const char* path, char* statbuf)
 
   ret = uv_fs_lstat(uv_default_loop(), &req, path, NULL);
   if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
+    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
   uv_fs_req_cleanup(&req);
   return ret;
 }
@@ -133,59 +138,67 @@ DLLEXPORT int32_t jl_fstat(int fd, char *statbuf)
 
   ret = uv_fs_fstat(uv_default_loop(), &req, fd, NULL);
   if (ret == 0)
-    memcpy(statbuf, req.ptr, sizeof(struct stat));
+    memcpy(statbuf, req.ptr, sizeof(uv_statbuf_t));
   uv_fs_req_cleanup(&req);
   return ret;
 }
 
 DLLEXPORT unsigned int jl_stat_dev(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_dev;
+  return ((uv_statbuf_t*) statbuf)->st_dev;
 }
 
 DLLEXPORT unsigned int jl_stat_ino(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_ino;
+  return ((uv_statbuf_t*) statbuf)->st_ino;
 }
 
 DLLEXPORT unsigned int jl_stat_mode(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_mode;
+  return ((uv_statbuf_t*) statbuf)->st_mode;
 }
 
 DLLEXPORT unsigned int jl_stat_nlink(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_nlink;
+  return ((uv_statbuf_t*) statbuf)->st_nlink;
 }
 
 DLLEXPORT unsigned int jl_stat_uid(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_uid;
+  return ((uv_statbuf_t*) statbuf)->st_uid;
 }
 
 DLLEXPORT unsigned int jl_stat_gid(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_gid;
+  return ((uv_statbuf_t*) statbuf)->st_gid;
 }
 
 DLLEXPORT unsigned int jl_stat_rdev(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_rdev;
+  return ((uv_statbuf_t*) statbuf)->st_rdev;
 }
 
 DLLEXPORT off_t jl_stat_size(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_size;
+  return ((uv_statbuf_t*) statbuf)->st_size;
 }
 
 DLLEXPORT unsigned int jl_stat_blksize(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_blksize;
+#if defined(__WIN32__)
+  return 0;
+#else
+  return ((uv_statbuf_t*) statbuf)->st_blksize;
+#endif
 }
 
 DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
 {
-  return ((struct stat*) statbuf)->st_blocks;
+#if defined(__WIN32__)
+  return 0;
+#else
+  return ((uv_statbuf_t*) statbuf)->st_blocks;
+#endif
 }
 
 #if defined(__APPLE__)
@@ -202,24 +215,36 @@ DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
 // atime is stupid, let's not support it
 DLLEXPORT double jl_stat_atime(char *statbuf)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
+  uv_statbuf_t *s;
+  s = (uv_statbuf_t*) statbuf;
+#if defined(__WIN32__)
+  return (double)s->st_atime;
+#else
   return (double)s->st_ATIM.tv_sec + (double)s->st_ATIM.tv_nsec * 1e-9;
+#endif
 }
 */
 
 DLLEXPORT double jl_stat_mtime(char *statbuf)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
+  uv_statbuf_t *s;
+  s = (uv_statbuf_t*) statbuf;
+#if defined(__WIN32__)
+  return (double)s->st_mtime;
+#else
   return (double)s->st_MTIM.tv_sec + (double)s->st_MTIM.tv_nsec * 1e-9;
+#endif
 }
 
 DLLEXPORT double jl_stat_ctime(char *statbuf)
 {
-  struct stat *s;
-  s = (struct stat*) statbuf;
+  uv_statbuf_t *s;
+  s = (uv_statbuf_t*) statbuf;
+#if defined(__WIN32__)
+  return (double)s->st_ctime;
+#else
   return (double)s->st_CTIM.tv_sec + (double)s->st_CTIM.tv_nsec * 1e-9;
+#endif
 }
 
 // --- buffer manipulation ---
