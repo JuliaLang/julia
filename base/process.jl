@@ -178,14 +178,20 @@ type Cmd
                    Set{Cmd}(),
                    0,
                    ProcessNotRun(),
-                   status->status==0)
+                   default_success)
         add(this.pipeline, this)
         this
     end
 end
 
+default_success(status::ProcessStatus) = false
+default_success(status::ProcessExited) = status.status==0
+
+ignore_success(status::ProcessStatus) = true
+ignore_success(status::ProcessExited) = status.status!=0xff
+
 setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
-ignorestatus(cmd::Cmd) = setsuccess(cmd, status->status!=0xff)
+ignorestatus(cmd::Cmd) = setsuccess(cmd, ignore_success)
 
 function show(io, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
@@ -432,14 +438,11 @@ end
 
 # wait for a single command process to finish
 
-successful(cmd::Cmd) = isa(cmd.status, ProcessRunning) ||
-                       isa(cmd.status, ProcessExited) &&
-                       cmd.successful(cmd.status.status)
+successful(cmd::Cmd) =
+    isa(cmd.status,ProcessRunning) || cmd.successful(cmd.status)
 
-function wait(cmd::Cmd, nohang::Bool)
-    cmd.status = process_status(wait(cmd.pid,nohang))
-    successful(cmd)
-end
+wait(cmd::Cmd, nohang::Bool) =
+    (cmd.status = process_status(wait(cmd.pid,nohang)); successful(cmd))
 
 # wait for a set of command processes to finish
 
