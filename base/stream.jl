@@ -1,12 +1,14 @@
 #TODO: allocate unused (spawn-only) streams on the stack if possible & safe
 #TODO: function readline(???)
 #TODO: function writeall(Cmd, String)
+#TODO: function ignorestatus(Cmd|Process)
 #TODO: stop leaking all the handles (process, closure, I/O)
 #TODO: cleanup methods duplicated with io.jl
 #TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
 #TODO: remove ProcessStatus if not used
 #TODO: allow waiting on handles other than processes
 #TODO: don't allow waiting on close'd handles
+#TODO: libuv process_events w/o blocking
 
 
 typealias PtrSize Int
