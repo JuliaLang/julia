@@ -1185,6 +1185,27 @@ function sum{T}(A::StridedArray{T})
     v
 end
 
+function sum{T<:Float}(A::StridedArray{T})
+    n = length(A)
+    if (n == 0)
+        return zero(T)
+    end
+    s = A[1]
+    c = zero(T)
+    for i in 2:n
+        Ai = A[i]
+        t = s + Ai
+        if abs(s) >= abs(Ai)
+            c += ((s-t) + Ai)
+        else
+            c += ((Ai-t) + s)
+        end
+        s = t
+    end
+
+    s + c
+end
+
 function prod{T}(A::StridedArray{T})
     if isempty(A)
         return one(T)
