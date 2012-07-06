@@ -21,6 +21,9 @@ GLPK_VER = 4.47
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
+# prevent installing libs into usr/lib64 on opensuse
+unexport CONFIG_SITE
+
 STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
