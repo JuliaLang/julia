@@ -1,30 +1,31 @@
 # test suite functions and macros
 
-# tests
-# TODO: re-enable when filesystem tests become available!
-# function tests(onestr::String, outputter::Function) 
-#     # if onestr is an existing file, pass it to the primary testing function 
-#     stat = strip(readall(`stat -f "%HT" $onestr`))
-#     if (stat == "Regular File")
-#         tests([onestr], outputter)
-#     elseif (stat == "Directory")
-#         # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
-#         # that list
-#         files_str = strip(readall(`find $onestr -name test_*.jl -print`))
-#         if (length(files_str) > 0)
-#             tests(split(files_str, "\n"), outputter)
-#         else
-#             # otherwise, throw an error
-#             error("no test_*.jl files in directory: $onestr")
-#         end
-#     end
-# end
-# tests(onestr::String) = tests(onestr, test_printer_raw)
-# tests(fn::Function) = tests(".", fn)
-# tests() = tests(".")
+# tests -- takes either a vector of strings, which is interpreted as filenames,
+# or a single string, which can be a either a filename or a directory. If it's
+# a directory, it's explored for files matching the usual pattern, and recursed.
+function tests(onestr::String, outputter::Function) 
+    # if onestr is an existing file, pass it to the primary testing function 
+    stat = strip(readall(`stat -f "%HT" $onestr`))
+    if (stat == "Regular File")
+        tests([onestr], outputter)
+    elseif (stat == "Directory")
+        # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
+        # that list
+        files_str = strip(readall(`find $onestr -name test_*.jl -print`))
+        if (length(files_str) > 0)
+            tests(split(files_str, "\n"), outputter)
+        else
+            # otherwise, throw an error
+            error("no test_*.jl files in directory: $onestr")
+        end
+    end
+end
+tests(onestr::String) = tests(onestr, test_printer_raw)
+tests(fn::Function) = tests(".", fn)
+tests() = tests(".")
 
-tests(onestr::String, outputter::Function) = tests([onestr], outputter)
-tests(onestr::String) = tests([onestr], test_printer_raw)
+# tests(onestr::String, outputter::Function) = tests([onestr], outputter)
+# tests(onestr::String) = tests([onestr], test_printer_raw)
     
 function tests(filenames, outputter::Function)
     # run these files as a task
