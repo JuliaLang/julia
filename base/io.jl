@@ -127,6 +127,24 @@ function with_output_to_string(thunk)
 end
 
 nthbyte(x::Integer, n::Integer) = (n > sizeof(x) ? uint8(0) : uint8((x>>>((n-1)<<3))))
+nthbyte(x::Array{Uint8}, n::Integer) = (n > length(a) ? uint8(0) : x[n])
+nthbyte(x::ByteString, n::Integer) = (n > length(s) ? uint8(0) : uint8(x[n]))
+
+nbytes{T <: Union(Integer, Float)}(x::T) = sizeof(x)
+nbytes(x::Array{Uint8}) = length(x)
+nbytes(x::ByteString) = length(x)
+nbytes{T}(x::Array{T}) = length(x)*sizeof(T)
+
+tobytes(x::Integer) = x
+tobytes(x::Float32) = box(Int32,unbox(Float32,x))
+tobytes(x::Float64) = box(Int64,unbox(Float64,x))
+tobytes(x::Array{Uint8}) = x
+frombytes{T <: Integer}(x::T, ::Type{T}) = x
+frombytes(x::Int32, ::Type{Float32}) = box(Float32,unbox(Int32,x))
+frombytes(x::Int64, ::Type{Float64}) = box(Float64,unbox(Int64,x))
+# Are the previous endian-robust, and the following endian-fragile??
+tobytes{T <: Union(Integer,Float)}(x::Array{T}) = reinterpret(Uint8, x, (sizeof(T)*numel(x),))
+frombytes{T <: Union(Integer,Float)}(x::Array{Uint8}, ::Type{T}) = reinterpret(T, x, (div(numel(x),sizeof(T)),))
 
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
