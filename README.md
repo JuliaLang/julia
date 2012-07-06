@@ -36,7 +36,6 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
 
-
 First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
@@ -86,24 +85,11 @@ Clang is now used by default to build julia on OS X. Make sure to update to at l
 
 #### FreeBSD
 
-The prerequisites can be installed from ports like this:
+*Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile julia with the command:
 
-    cd /usr/ports/devel/gmake
-    make install
+    $ gmake FC=gfortran46
 
-    cd /usr/ports/ftp/curl
-    make install
- 
-    cd /usr/ports/devel/libunwind
-    make install
-
-    cd /usr/ports/lang/gcc45
-    make install
-    ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
-
-Other versions of gcc are also exist but currently gfortran45 is the one used by all the ports that depend on Fortran.
-
-**Use the gmake command on FreeBSD instead of make**
+You must use the gmake command on FreeBSD instead of make.
 
 #### MKL
 
