@@ -396,4 +396,40 @@ function searchsorted(a, x)
     return isless(a[lo],x) ? hi : lo
 end
 
+function searchsortedlast(a::Vector, x)
+    ## Index of the last value of vector a that is less than or equal to x.
+    ## Returns 0 if x is less than all values of a.
+    ## 
+    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
+    lo = 0
+    hi = length(a) + 1
+    while lo < hi-1
+        i = (lo+hi)>>>1
+        if isless(x,a[i])
+            hi = i
+        else
+            lo = i
+        end
+    end
+    lo
+end
+
+function searchsortedfirst(a::Vector, x)
+    ## Index of the first value of vector a that is greater than or equal to x.
+    ## Returns length(a) + 1 if x is greater than all values in a.
+    ## 
+    ## Good reference: http://www.tbray.org/ongoing/When/200x/2003/03/22/Binary 
+    lo = 0
+    hi = length(a) + 1
+    while lo < hi-1
+        i = (lo+hi)>>>1
+        if isless(a[i],x)
+            lo = i
+        else
+            hi = i
+        end
+    end
+    hi
+end
+
 order(a::AbstractVector) = sortperm(a)[2]
