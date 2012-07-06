@@ -379,7 +379,7 @@ end
 select(a::AbstractArray, k::Int) = _jl_quickselect(copy(a), k, 1, length(a))
 select!(a::AbstractArray, k::Int) = _jl_quickselect(a, k, 1, length(a))
 
-function searchsorted(a, x)
+function search_sorted(a, x)
     hi = length(a)
     if isless(a[hi], x)
         return hi+1
@@ -396,7 +396,7 @@ function searchsorted(a, x)
     return isless(a[lo],x) ? hi : lo
 end
 
-function searchsortedlast(a::Vector, x)
+function search_sorted_last(a::Vector, x)
     ## Index of the last value of vector a that is less than or equal to x.
     ## Returns 0 if x is less than all values of a.
     ## 
@@ -414,7 +414,7 @@ function searchsortedlast(a::Vector, x)
     lo
 end
 
-function searchsortedfirst(a::Vector, x)
+function search_sorted_first(a::Vector, x)
     ## Index of the first value of vector a that is greater than or equal to x.
     ## Returns length(a) + 1 if x is greater than all values in a.
     ## 
