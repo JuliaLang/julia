@@ -15,6 +15,7 @@ export
     RevString,Reverse,RopeString,Set,StridedArray,StridedMatrix,StridedVecOrMat,
     StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TransformedString,
     UniqueNames,VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
+    Stat, Factorization, Cholesky, LU, QR, QRP,
     # Exceptions
     ArgumentError,BackTrace,DisconnectException,ErrorException,KeyError,
     LoadError,MethodError,ParseError,SystemError,TypeError,
@@ -179,15 +180,22 @@ export
     vec,wait,wait_nohang,weighted_mean,which,whicht,whos,with_output_to_string,
     write,write_to,xcorr,xor!,yield,zero,zeros,zip,
     nextprod, prevprod, base, findfirst, qrp, sdd, require,
-    Factorization, Cholesky, LU, QR, QRP,
     ref_shape, assign_shape_check, to_index, indices, append_any,
+    make_loop_nest, randstring,
+    basename, dirname, file_path, path_expand, file_copy, file_remove,
+    file_create, path_rename, dir_create, dir_remove, file_exists,
+    tempdir, tempfile, download_file, real_path, abs_path, filemode,
+    filesize, mtime, ctime, stat, lstat, isfifo, ischardev, isdir,
+    isblockdev, isfile, islink, issocket, issetuid, issetgid, issticky,
+    isreadable, iswriteable, isexecutable, uperm, gperm, operm,
     # TODO: used by macros, should be removed (use hygiene instead)
     cmd_gen,
     # Macros
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
-    @gensym, @eval, @task, @f_str, @thunk, @L_str
+    @gensym, @eval, @task, @f_str, @thunk, @L_str, @vectorize_1arg,
+    @vectorize_2arg, @printf
 
 ## Load essential files and libraries
 
