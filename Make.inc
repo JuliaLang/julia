@@ -109,6 +109,10 @@ endif
 #USE_SYSTEM_LAPACK=1
 #endif
 
+-include $(JULIAHOME)/Make.user
+
+# ===========================================================================
+
 ifeq ($(USE_SYSTEM_LIBUNWIND), 1)
 LIBUNWIND=-lunwind-generic -lunwind
 else
@@ -128,7 +132,7 @@ READLINE = $(USR)/lib/libreadline.a
 endif
 
 ifneq ($(OS),WINNT)
-READLINE += -lncurses -lcurses
+READLINE += -lncurses
 else
 READLINE += $(USR)/lib/libhistory.a
 endif
