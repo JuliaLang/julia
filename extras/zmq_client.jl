@@ -1,5 +1,5 @@
 require("zmq.jl")
-# If you want to overload/extend the serializer, load your new
+# If you want to override/extend the serializer, load your new
 # serializer file(s) here
 
 function launch_client(endpoint::ASCIIString)
@@ -34,7 +34,7 @@ end
 #    str = "x = randn(7); sort(x)"
 #    y = zmqparse(requester, str)
 # Within Julia it's presumably better to use a quote block, but this
-# simulates the "easy way" from other languages
+# simulates what will surely be the "easy way" from other languages
 function zmqparse(requester::ZMQSocket, str::ASCIIString)
     zmsg = ZMQMessage("ToParse")
     send(requester, zmsg, ZMQ_SNDMORE)
