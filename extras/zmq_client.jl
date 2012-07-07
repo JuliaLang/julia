@@ -11,18 +11,7 @@ function launch_client(endpoint::ASCIIString)
 end
 launch_client() = launch_client("tcp://localhost:5555")
 
-function zmqcall(requester::ZMQSocket, func::Symbol, args...)
-    flag = ZMQ_SNDMORE
-    if isempty(args)
-        flag = 0
-    end
-    zmq_serialize(requester, func, flag)
-    for i = 1:length(args)
-        if i == length(args)
-            flag = 0
-        end
-        zmq_serialize(requester, args[i], flag)
-    end
+function _zmq_return_values(requester::ZMQSocket)
     ret, ismulti = zmq_deserialize(requester)
     if ismulti
         # Convert to tuple
@@ -30,4 +19,26 @@ function zmqcall(requester::ZMQSocket, func::Symbol, args...)
     else
         return ret
     end
+end
+
+# Run svd remotely:
+#   A = randn(3,5)
+#   U, S, V = zmqcall(requester, :svd, A)
+function zmqcall(requester::ZMQSocket, func::Symbol, args...)
+    ex = expr(:call, {func, args...})
+    zmq_serialize(requester, ex, 0)
+    _zmq_return_values(requester)
+end
+
+# Remotely parse a string and execute it, e.g., 
+#    str = "x = randn(7); sort(x)"
+#    y = zmqparse(requester, str)
+# Within Julia it's presumably better to use a quote block, but this
+# simulates the "easy way" from other languages
+function zmqparse(requester::ZMQSocket, str::ASCIIString)
+    zmsg = ZMQMessage("ToParse")
+    send(requester, zmsg, ZMQ_SNDMORE)
+    zmsg = ZMQMessage(str)
+    send(requester, zmsg, 0)
+    _zmq_return_values(requester)
 end

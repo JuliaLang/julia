@@ -9,12 +9,9 @@ function run_server(endpoint::ASCIIString)
 
     while true
         # Get the next command
-        args, ismulti = zmq_deserialize(responder)
-        if !ismulti
-            args = {args}
-        end
+        ex, ismulti = zmq_deserialize(responder)
         # Execute the command
-        ret = eval(expr(:call, args))
+        ret = eval(ex)
         # Send the results back
         if isa(ret, Tuple)
             flag = ZMQ_SNDMORE
