@@ -11,22 +11,17 @@ function launch_client(endpoint::ASCIIString)
 end
 launch_client() = launch_client("tcp://localhost:5555")
 
-function zmq_spawn(requester, ex)
-    if !isa(requester, ZMQSocket)
-        error("Must use a ZMQSocket")
-    end
-    if !isa(ex, Expr)
-        error("Must send an expression")
-    end
-    if ex.head != :call
-        error("The expression must be a function call, with no return values")
-    end
+function zmqcall(requester::ZMQSocket, func::Symbol, args...)
     flag = ZMQ_SNDMORE
-    for i = 1:length(ex.args)
-        if i == length(ex.args)
+    if isempty(args)
+        flag = 0
+    end
+    zmq_serialize(requester, func, flag)
+    for i = 1:length(args)
+        if i == length(args)
             flag = 0
         end
-        zmq_serialize(requester, ex.args[i], flag)
+        zmq_serialize(requester, args[i], flag)
     end
     ret, ismulti = zmq_deserialize(requester)
     if ismulti
