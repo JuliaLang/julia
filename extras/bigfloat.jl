@@ -13,14 +13,6 @@ type BigFloat <: Float
 		b
 	end
 
-	function BigFloat(x::Float64) 
-		z = _jl_BigFloat_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_d), Void, (Ptr{Void}, Float64), z, x)
-		b = new(z)
-		finalizer(b, _jl_BigFloat_clear)
-		b
-	end
-	
 	function BigFloat(x::Uint) 
 		z = _jl_BigFloat_init()
 		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_ui), Void, (Ptr{Void}, Uint), z, x)
@@ -51,6 +43,7 @@ type BigFloat <: Float
 		b
 	end
 end
+BigFloat(x::Float64) = BigFloat(string(x))
 
 convert(::Type{BigFloat}, x::Int8)   = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int16)  = BigFloat(int(x))
