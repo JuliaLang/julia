@@ -5,7 +5,7 @@ READLINE_VER = 6.2
 PCRE_VER = 8.30
 GRISU_VER = 1.1
 DSFMT_VER = 2.1
-OPENBLAS_VER = v0.2.1
+OPENBLAS_VER = v0.2.2
 LAPACK_VER = 3.4.1
 ARPACK_VER = 3.1.1
 FFTW_VER = 3.3.2
@@ -426,6 +426,11 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
+OPENBLAS_BUILD_OPTS =
+ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
+OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
+endif
+
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
@@ -437,7 +442,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" DYNAMIC_ARCH=$(OPENBLAS_DYNAMIC_ARCH) USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH) $(OPENBLAS_BUILD_OPTS)
 $(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
