@@ -83,11 +83,7 @@ function dir_remove(directory_name::String)
 end
 
 function file_exists(filename::String)
-  if length(readlines(`ls $filename`)) != 0
-    true
-  else
-    false
-  end
+  exists(stat(filename))
 end
 
 function tempdir()
