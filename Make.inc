@@ -70,7 +70,7 @@ endif
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
+OPENBLAS_DYNAMIC_ARCH=0
 OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
