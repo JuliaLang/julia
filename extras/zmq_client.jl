@@ -33,12 +33,25 @@ end
 # Remotely parse a string and execute it, e.g., 
 #    str = "x = randn(7); sort(x)"
 #    y = zmqparse(requester, str)
-# Within Julia it's presumably better to use a quote block, but this
-# simulates what will surely be the "easy way" from other languages
+# Within Julia it may be better to use a quote block, but this will
+# surely be the easy way from other languages
 function zmqparse(requester::ZMQSocket, str::ASCIIString)
     zmsg = ZMQMessage("ToParse")
     send(requester, zmsg, ZMQ_SNDMORE)
     zmsg = ZMQMessage(str)
     send(requester, zmsg, 0)
+    _zmq_return_values(requester)
+end
+
+# Set a variable in the remote session
+function zmqsetvar(requester::ZMQSocket, var::Symbol, val)
+    ex = expr(:(=), {var, val})
+    zmq_serialize(requester, ex, 0)
+    _zmq_return_values(requester)
+end
+
+# Get a variable in the remote session
+function zmqgetvar(requester::ZMQSocket, var::Symbol)
+    zmq_serialize(requester, var, 0)
     _zmq_return_values(requester)
 end
