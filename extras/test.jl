@@ -4,11 +4,14 @@
 # or a single string, which can be a either a filename or a directory. If it's
 # a directory, it's explored for files matching the usual pattern, and recursed.
 function tests(onestr::String, outputter::Function) 
-    # if onestr is an existing file, pass it to the primary testing function 
-    stat = strip(readall(`stat -f "%HT" $onestr`))
-    if (stat == "Regular File")
+    filestat = stat(onestr)
+    if !exists(filestat)
+        error("Can't test unknown file or directory: $onestr")
+    end
+    
+    if isfile(filestat)
         tests([onestr], outputter)
-    elseif (stat == "Directory")
+    elseif isdir(filestat)
         # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
         # that list
         files_str = strip(readall(`find $onestr -name test_*.jl -print`))
@@ -18,6 +21,8 @@ function tests(onestr::String, outputter::Function)
             # otherwise, throw an error
             error("no test_*.jl files in directory: $onestr")
         end
+    else
+        error("Can't test non-file non-directory: $onestr") # FIFO? who knows
     end
 end
 tests(onestr::String) = tests(onestr, test_printer_raw)
