@@ -102,4 +102,4 @@ filesize(path::String) = stat(path).size
    mtime(path::String) = stat(path).mtime
    ctime(path::String) = stat(path).ctime
 
-exists(st::Stat) = st.inode != 0
+ispath(st::Stat) = st.mode != 0
