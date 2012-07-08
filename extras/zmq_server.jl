@@ -1,4 +1,4 @@
-require("zmq.jl")
+require("zmq_serialize.jl")
 # If you want to overload/extend the serializer, load your new
 # serializer file(s) here
 

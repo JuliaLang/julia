@@ -1,4 +1,4 @@
-require("zmq.jl")
+require("zmq_serialize.jl")
 # If you want to override/extend the serializer, load your new
 # serializer file(s) here
 
@@ -6,7 +6,6 @@ function launch_client(endpoint::ASCIIString)
     zctx = ZMQContext()
     requester = ZMQSocket(zctx, ZMQ_REQ)
     zmq_connect(requester, endpoint)
-
     return zctx, requester
 end
 launch_client() = launch_client("tcp://localhost:5555")
