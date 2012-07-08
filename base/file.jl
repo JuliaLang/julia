@@ -8,11 +8,12 @@ function cwd()
     cstring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
+cd(dir::String) = system_error("chdir", ccall(:uv_chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
 
+@unix_only begin
 function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     system_error("open", fd == -1)
@@ -26,15 +27,39 @@ function cd(f::Function, dir::String)
         throw(err)
     end
 end
+end
+
+@windows_only begin
+function cd(f::Function, dir::String)
+    old = cwd()
+    try
+        cd(dir)
+        retval = f()
+        cd(old)
+        retval
+    catch err
+        cd(old)
+        throw(err)
+    end
+end
+end
+
 cd(f::Function) = cd(f, ENV["HOME"])
 
 # list the contents of a directory
 
+@unix_only begin
 ls() = run(`ls -l`)
 ls(args::Cmd) = run(`ls -l $args`)
 ls(args::String...) = run(`ls -l $args`)
+end
+
+@windows_only begin
+ls() = run(`dir /Q /S`)
+end
 
 # hacks to implement R style file operations if UNIX shell commands are available
+
 
 function basename(path::String)
   os_separator = "/"
@@ -107,12 +132,34 @@ function download_file(url::String)
   new_filename
 end
 
+@unix_only begin
 function real_path(fname::String)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     system_error(:real_path, sp == C_NULL)
     s = cstring(sp)
     ccall(:free, Void, (Ptr{Uint8},), sp)
     return s
+end
+end
+
+@windows_only begin
+const PATH_MAX=4096
+function real_path(fname::String)
+    path = Array(Uint8,PATH_MAX)
+    size = ccall(:GetFullPathNameA,stdcall,Uint32,(Ptr{Uint8},Int32,Ptr{Uint8},Ptr{Uint8}),fname,PATH_MAX,path,0)
+    if(size == 0)
+        error("real_path: Failed to get real path") #TODO: better, unified (with unix) error reporting
+    elseif(size < PATH_MAX)
+        return convert(ASCIIString,grow(path,size-PATH_MAX)) #Shrink buffer to needed space and convert to ASCIIString
+    else
+        grow(path,size-PATH_MAX)
+        size = ccall(:GetFullPathNameA,stdcall,Uint32,(Ptr{Uint8},Int32,Ptr{Uint8},Ptr{Uint8}),fname,PATH_MAX,path,0)
+        if(size == 0)
+            error("real_path: Failed to get real path (long path)")
+        end
+        return convert(ASCIIString,path)
+    end
+end
 end
 
 function abs_path(fname::String)
