@@ -263,7 +263,9 @@
     jl_test;
     jl_wrap_raw_dl_handle;
     uv_*;
+    jl_uv_*;
     asprintf;
+    ev_break;
   local:
     *;
 };
