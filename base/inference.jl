@@ -120,7 +120,11 @@ t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
-        return tintersect(from,to)
+        if subtype(from, to)
+            return from
+        end
+        t = tintersect(from,to)
+        return is(t,None) ? to : t
     end
     if is(to,Tuple)
         return from
@@ -142,13 +146,13 @@ function static_convert(to::ANY, from::ANY)
         end
         # tuple conversion calls convert recursively
         if isseqtype(ce)
-            #R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
-            R = static_convert(pe, ce.parameters[1])
+            R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
+            #R = static_convert(pe, ce.parameters[1])
             isType(R) && (R = R.parameters[1])
             result[i] = ...{R}
         else
-            #R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
-            R = static_convert(pe, ce)
+            R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
+            #R = static_convert(pe, ce)
             isType(R) && (R = R.parameters[1])
             result[i] = R
         end
