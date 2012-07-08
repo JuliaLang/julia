@@ -82,8 +82,8 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-function file_exists(filename::String)
-  exists(stat(filename))
+function ispath(filename::String)
+  ispath(stat(filename))
 end
 
 function tempdir()
