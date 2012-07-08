@@ -193,8 +193,10 @@ fd(sink::FileSink) = fd(sink.s)
 
 type Cmd
     exec::Executable
+    name::String
     pipes::Dict{FileDes,PipeEnd}
     sinks::Dict{FileDes,FileSink}
+    closed_fds::Vector{FileDes}
     pipeline::Set{Cmd}
     pid::Int32
     status::ProcessStatus
@@ -205,8 +207,10 @@ type Cmd
             error("Cmd: too few words to exec")
         end
         this = new(exec,
+                   "",
                    Dict{FileDes,PipeEnd}(),
                    Dict{FileDes,FileSink}(),
+                   FileDes[],
                    Set{Cmd}(),
                    0,
                    ProcessNotRun(),
@@ -226,7 +230,9 @@ setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
 ignorestatus(cmd::Cmd) = setsuccess(cmd, ignore_success)
 
 function show(io, cmd::Cmd)
-    if isa(cmd.exec,Vector{ByteString})
+    if cmd.name != ""
+        show(io, cmd.name)
+    elseif isa(cmd.exec,Vector{ByteString})
         esc = shell_escape(cmd.exec...)
         print(io, '`')
         for c in esc
@@ -237,7 +243,7 @@ function show(io, cmd::Cmd)
         end
         print(io, '`')
     else
-        invoke(show, (Any,), cmd.exec)
+        invoke(show, (Any, Any,), io, cmd.exec)
     end
 end
 
@@ -257,7 +263,7 @@ type Port
 end
 
 function fd(cmd::Cmd, f::FileDes)
-    if !has(cmd.pipes, f) && !has(cmd.sinks, f)
+    if !has(cmd.pipes, f) && !has(cmd.sinks, f) && !contains(cmd.closed_fds, f)
         return Port(cmd,f)
     end
     error("no ", f, " available in ", cmd)
@@ -266,12 +272,12 @@ end
 function fd(cmds::Set{Cmd}, f::FileDes)
     set = Set{Port}()
     for cmd in cmds
-        if !has(cmd.pipes, f) && !has(cmd.sinks, f)
+        if !has(cmd.pipes, f) && !has(cmd.sinks, f) && !contains(cmd.closed_fds, f)
             add(set, fd(cmd,f))
         end
     end
     if isempty(set)
-        error("no ", f, " available: ", cmds)
+        error("no ", f, " available in ", cmds)
     end
     set
 end
@@ -320,6 +326,9 @@ end
 output(cmds::Cmds) = stdout(cmds) & stderr(cmds)
 
 function connect(port::Port, pend::PipeEnd)
+    if contains(port.cmd.closed_fds, port.fd)
+        error(port.cmd, " port ", port.fd, " is closed")
+    end
     if !has(port.cmd.pipes, port.fd) && !has(port.cmd.sinks, port.fd)
         port.cmd.pipes[port.fd] = pend
     elseif has(port.cmd.pipes, port.fd) && port.cmd.pipes[port.fd] != pend
@@ -392,6 +401,7 @@ function redir(ports::Ports, sink::FileSink)
     end
 end
 
+# redirect stdout
 function (>)(src::String, dst::Cmds)
     redir(stdin(dst), FileSink(src, "r"))
     return dst
@@ -426,6 +436,7 @@ end
 
 (<)(dst::IOStream, src::Cmds) = (>)(src, dst)
 
+# redirect stderr
 function (.>)(src::Cmds, dst::String)
     redir(stderr(src), FileSink(dst, "w"))
     return src
@@ -446,15 +457,37 @@ end
 
 (.<)(dst::IOStream, src::Cmds) = (.>)(src, dst)
 
-#TODO: here-strings
-#function (>>>)(src::String, dst::Cmds)
-    #redir(stdin(dst), FileSink(src, "r"))
-    #return dst
-#end
-#
-#(<<<)(dst::Cmds, src::String) = (>>>)(src, dst)
+# redirect both stdout and stderr
+function (&>)(src::Cmds, dst::String)
+    redir(output(src), FileSink(dst, "w"))
+    return src
+end
 
+function (&>>)(src::Cmds, dst::String)
+    redir(output(src), FileSink(dst, "a"))
+    return src
+end
 
+(&<)(dst::String, src::Cmds) = (&>)(src, dst)
+(&<<)(dst::String, src::Cmds) = (&>>)(src, dst)
+
+function (&>)(src::Cmds, dst::IOStream)
+    redir(output(src), FileSink(dst))
+    return src
+end
+
+(&<)(dst::IOStream, src::Cmds) = (&>)(src, dst)
+
+# here-strings:
+function (>>>)(src::String, dst::Cmds)
+    hscmd = Cmd(()->print(src))
+    push(hscmd.closed_fds, STDIN)
+    push(hscmd.closed_fds, STDERR)
+    hscmd.name = "here-string<" * src * ">"
+    return hscmd | dst
+end
+
+(<<<)(dst::Cmds, src::String) = (>>>)(src, dst)
 
 
 # spawn(cmd) starts all processes connected to cmd
@@ -508,7 +541,7 @@ function spawn(cmd::Cmd)
             println(stderr_stream, "dup: ", strerror())
             exit(0x7f)
         end
-        bk_stderr_stream = fdio(bk_stderr_fd, true)
+        bk_stderr_stream = fdio(bk_stderr_fd)
 
         # now actually do the fork and exec without writes
         pid = fork()
