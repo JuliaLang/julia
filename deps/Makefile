@@ -23,7 +23,7 @@ GLPK_VER = 4.47
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
-STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos openlibm
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
