@@ -255,34 +255,24 @@ JL_CALLABLE(jl_f_apply)
 
 JL_CALLABLE(jl_f_top_eval)
 {
+    if (nargs == 1) {
+        jl_expr_t *ex = (jl_expr_t*)args[0];
+        if (jl_is_expr(ex) && (ex->head == export_sym ||
+                               ex->head == import_sym ||
+                               ex->head == importall_sym)) {
+            jl_errorf("unsupported or misplaced expression %s", ex->head->name);
+        }
+        return jl_toplevel_eval((jl_value_t*)ex);
+    }
     if (nargs != 2) {
         JL_NARGS(eval, 1, 1);
-    }
-    jl_expr_t *ex = (jl_expr_t*)args[nargs-1];
-    if (jl_is_expr(ex) && (ex->head == export_sym ||
-                           ex->head == import_sym ||
-                           ex->head == importall_sym)) {
-        jl_errorf("unsupported or misplaced expression %s", ex->head->name);
-    }
-    if (nargs == 1) {
-        return jl_toplevel_eval((jl_value_t*)ex);
     }
     JL_TYPECHK(eval, module, args[0]);
     jl_module_t *m = (jl_module_t*)args[0];
     if (jl_is_symbol(args[1])) {
         return jl_eval_global_var(m, (jl_sym_t*)args[1]);
     }
-    jl_value_t *v = NULL;
-    jl_module_t *last_m = jl_current_module;
-    JL_TRY {
-        jl_current_module = m;
-        v = jl_toplevel_eval((jl_value_t*)ex);
-    }
-    JL_CATCH {
-        jl_current_module = last_m;
-        jl_raise(jl_exception_in_transit);
-    }
-    return v;
+    return jl_interpret_toplevel_expr_in(m, args[1], NULL, 0);
 }
 
 JL_CALLABLE(jl_f_isbound)
