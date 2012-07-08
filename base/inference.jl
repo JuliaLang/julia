@@ -1258,15 +1258,6 @@ end
 occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
-function contains_is(arr, item::ANY)
-    for i = 1:length(arr)
-        if is(arr[i],item)
-            return true
-        end
-    end
-    return false
-end
-
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.typ
