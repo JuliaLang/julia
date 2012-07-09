@@ -354,7 +354,7 @@ function quantile(x, qs)
         lo = int(floor(index))
         hi = int(ceil(index))
         sortedX = sort(x)
-        i = index > lo
+        i = index .> lo
         ret = sortedX[lo]
         i = [1:length(i)][i]
         h = (index - lo)[i]
