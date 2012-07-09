@@ -210,9 +210,9 @@ for ``Float32``, but you can convert values to ``Float32`` easily:
 There are three specified standard floating-point values that do not
 correspond to a point on the real number line:
 
--  ``Inf`` — positive infinity — a value larger than all finite
+-  ``Inf`` — positive infinity — a value greater than all finite
    floating-point values
--  ``-Inf`` — negative infinity — a value smaller than all finite
+-  ``-Inf`` — negative infinity — a value less than all finite
    floating-point values
 -  ``NaN`` — not a number — a value incomparable to all floating-point
    values (including itself).
