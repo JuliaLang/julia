@@ -98,8 +98,8 @@ read_handle(s::AsyncStream) = s.handle
 write_handle(s::AsyncStream) = s.handle
 read_handle(s::NamedPipe) = s.read_handle
 write_handle(s::NamedPipe) = s.write_handle
-read_handle(s::Bool) = s ? error("cannot get read handle of true") : C_NULL
-write_handle(s::Bool) = s ? error("cannot get write handle of false") : C_NULL
+read_handle(s::Bool) = s ? STDIN.handle : C_NULL
+write_handle(s::Bool) = s ? STDOUT.handle : C_NULL
 
 make_stdout_stream() = TTY(ccall(:jl_stdout_stream, Ptr{Void}, ()),memio(),false)
 
@@ -401,16 +401,31 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     pc
 end
 
-spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,stdios::StdIOSet,exitcb::Callback) = spawn(pc,cmds,stdios,exitcb,false)
-spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,stdios::StdIOSet) = spawn(pc,cmds,stdios,false,false)
-spawn(pc::ProcessChainOrNot,cmds::AbstractCmd) = spawn(pc,cmds,(false,false,false),false,false)
-spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,in::StreamOrNot) = spawn(pc,cmds,(in,false,false),false,false)
-spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,in::StreamOrNot,out::StreamOrNot) = spawn(pc,cmds,(in,out,false),false,false)
-spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::StreamOrNot) = spawn(pc,cmd,(false,out,false),false,false)
+# INTERNAL
+# returns a touple of function arguments to spawn:
+# (stdios, exitcb, closecb)
+# |       |        \ The function to be called once the uv handle is closed
+# |       \ The function to be called once the process exits
+# \ A set of up to 256 stdio instructions, where each entry can be either:
+#   | - An AsyncStream to be passed to the child
+#   | - true: This will let the child inherit the parents' io (only valid for 0-2)
+#   \ - false: None (for 3-255) or /dev/null (for 0-2)
 
-spawn(cmds::AbstractCmd) = spawn(false,cmds,(false,false,false),false,false)
-spawn(cmds::AbstractCmd,in::StreamOrNot) = spawn(false,cmds,(in,false,false),false,false)
-spawn(cmds::AbstractCmd,in::StreamOrNot,out::StreamOrNot) = spawn(false,cmds,(in,out,false),false,false)
+for (sym, default) in [(:spawn_opts_inherit, true),(:spawn_opts_swallow, false)]
+@eval begin
+ ($sym)(stdios::StdIOSet,exitcb::Callback,closecb::Callback) = (stdios,exitcb,closecb)
+ ($sym)(stdios::StdIOSet,exitcb::Callback) = (stdios,exitcb,false)
+ ($sym)(stdios::StdIOSet) = (stdios,false,false)
+ ($sym)() = (($default,$default,$default),false,false)
+ ($sym)(in::StreamOrNot) = ((in,$default,$default),false,false)
+ ($sym)(in::StreamOrNot,out::StreamOrNot) = ((in,out,$default),false,false)
+end
+end
+
+#spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
+spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
+
+spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::StreamOrNot) = spawn(pc,cmd,(false,out,false),false,false)
 spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,false),false,false)
 
 #returns a pipe to read from the last command in the pipelines
@@ -440,7 +455,7 @@ function readall(cmd::AbstractCmd,stdin::StreamOrNot)
 end
 
 function run(cmds::AbstractCmd,args...)
-    ps = spawn(cmds,args...)
+    ps = spawn(cmds,spawn_opts_inherit(args...)...)
     success = wait(ps)
     if success
         return nothing
