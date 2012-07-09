@@ -959,7 +959,7 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
-    worker_sockets = HashTable()
+    worker_sockets = Dict()
     (actual_port,sock) = open_any_tcp_port(default_port,make_callback((handle::Ptr,status::Int32)->accept_handler(handle,status,false)))
 
     write(out, "julia_worker:")  # print header
@@ -968,7 +968,7 @@ function start_worker(out::Stream)
     write(out, '\n')
 
     # close stdin; workers will not use it
-    close(STDIN)
+    #close(STDIN)
 
     global const Scheduler = current_task()
 
@@ -1019,11 +1019,11 @@ function start_remote_workers(machines, cmds)
     w = cell(n)
     todo = [int32(n)]
     for i=1:n
-        let r = read_from(cmds[i],false)
-            stream,ps=r
-            # redirect console output from workers to the client's stdout
-            add_io_handler(stream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),stream,args...)))
-        end
+        istream = make_pipe(false,false)
+        ostream,ps = read_from(cmds[i],istream)
+        close(istream)
+        # redirect console output from workers to the client's stdout
+        add_io_handler(ostream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),ostream,args...)))
     end
     run_event_loop(localEventLoop())
     w
@@ -1071,7 +1071,7 @@ function start_sge_workers(n)
     end
     id = split(readline(out),'.')[1]
     println("job id is $id")
-    print("waiting for job to start"); flush(OUTPUT_STREAM)
+    print("waiting for job to start");
     workers = cell(n)
     for i=1:n
         # wait for each output stream file to get created
@@ -1090,7 +1090,7 @@ function start_sge_workers(n)
                 end
                 fexists = true
             catch
-                print("."); flush(OUTPUT_STREAM)
+                print(".");
                 sleep(0.5)
             end
         end
@@ -1572,17 +1572,9 @@ end
 
 yield() = yieldto(Scheduler)
 
-function add_io_handler(io::AsyncStream, H::Function)
-    ccall(:jl_start_reading,Bool,(Ptr{Int32},Ptr{Void},Function),io.handle,isa(io.buf,IOStream)?io.buf.ios:C_NULL,make_callback(H))
-end
-
-function change_io_handler(io::AsyncStream, H::Function)
-    change_readcb(io,H)
-end
-
-function del_io_handler(io::AsyncStream)
-    ccall(:jl_stop_reading,Bool,(Ptr{Int32},),io.handle)
-end
+add_io_handler(io::AsyncStream, H::Function) = start_reading(io, H)
+change_io_handler(io::AsyncStream, H::Function) = change_readcb(io,H)
+del_io_handler(io::AsyncStream) = stop_reading(io)
 
 #add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
 #del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)

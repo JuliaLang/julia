@@ -297,14 +297,11 @@ end
 
 ##stream functions
 
-function start_reading(stream::AsyncStream,cb::Function)
-    ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Function),stream.handle,stream.buf.ios,cb!=0?cb:C_NULL)
-end
-start_reading(stream::AsyncStream) = start_reading(stream,0)
-
-function stop_reading(stream::AsyncStream)
-    ccall(:jl_stop_reading,Bool,(Ptr{Void},),stream.handle)
-end
+start_reading(stream::AsyncStream,cb::Function) = ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Function),read_handle(stream),isa(stream.buf,IOStream)?stream.buf.ios:C_NULL,cb)
+start_reading(stream::AsyncStream,cb::Bool) = ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),read_handle(stream),isa(stream.buf,IOStream)?stream.buf.ios:C_NULL,C_NULL)
+start_reading(stream::AsyncStream) = start_reading(stream,false)
+stop_reading(stream::AsyncStream) = ccall(:jl_stop_reading,Bool,(Ptr{Void},),read_handle(stream))
+change_readcb(stream::AsyncStream,readcb::Function) = ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),read_handle(stream),readcb)
 
 function readall(stream::AsyncStream)
     start_reading(stream)
@@ -422,12 +419,8 @@ function read_from(cmds::AbstractCmd, stdin::StreamOrNot)
     out=make_pipe(true,false)
     _init_buf(out) #create buffer for reading
     processes = spawn(false, cmds, (stdin,out,false))
-    ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),read_handle(out),out.buf.ios,C_NULL)
+    start_reading(out)
     (out, processes)
-end
-
-function change_readcb(stream::AsyncStream,readcb::Function)
-    ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),stream.handle,readcb)
 end
 
 write_to(cmds::AbstractCmd) = write_to(cmds, false)
@@ -530,6 +523,9 @@ function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr,nread::PtrSi
             ccall(:ios_splitbuf,Void,(Ptr{Void},Ptr{Void},Ptr{Uint8}),to.ios,stream.buf.ios,pd)
             cb(stream,takebuf_string(to))
         end
+    else
+        cb(stream,takebuf_string(stream.buf))
+        close(stream)
     end
 end
 
