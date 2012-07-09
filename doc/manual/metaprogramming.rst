@@ -307,7 +307,7 @@ with the ``macro`` keyword:
 
 Here, for example, is very nearly the definition of Julia's ``@assert``
 macro (see
-```error.jl`` <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
+`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
 for the actual definition, which allows ``@assert`` to work on booleans
 arrays as well):
 
@@ -562,7 +562,7 @@ is, well, invaluable.
 
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
-it, but also the command literal syntax (```echo "Hello, $person"```)
+it, but also the command literal syntax (``\`echo "Hello, $person"\```)
 and regular string interpolation are implemented using it. These two
 powerful facilities are implemented with the following innocuous-looking
 pair of macros:
