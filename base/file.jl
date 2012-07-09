@@ -82,10 +82,6 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-function ispath(filename::String)
-  ispath(stat(filename))
-end
-
 function tempdir()
   chomp(readall(`mktemp -d -t tmp`))
 end

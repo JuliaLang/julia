@@ -306,7 +306,7 @@ All the standard trigonometric functions are also defined:
     acoth  asech  acsch  sinc   cosc   atan2
 
 These are all single-argument functions, with the exception of
-```atan2`` <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
+`atan2 <http://en.wikipedia.org/wiki/Atan2>`_, which gives the angle
 in `radians <http://en.wikipedia.org/wiki/Radian>`_ between the *x*-axis
 and the point specified by its arguments, interpreted as *x* and *y*
 coordinates.
