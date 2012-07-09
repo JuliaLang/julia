@@ -1,4 +1,4 @@
-require("zmq_serialize_julia.jl")
+require("zmq/zmq_serialize_julia.jl")
 
 function zmq_respond_error(responder::ZMQSocket, thiserr::Exception)
     if isa(thiserr, ZMQStateError)
