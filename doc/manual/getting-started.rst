@@ -6,7 +6,7 @@
 
 The latest version of Julia can be downloaded and installed by following
 the instructions on the `main GitHub
-page <http://github.com/JuliaLang/julia#readme>`_. The easiest way to
+page <https://github.com/JuliaLang/julia#readme>`_. The easiest way to
 learn and experiment with Julia is by starting an interactive session
 (also known as a read-eval-print loop or "repl"):
 
