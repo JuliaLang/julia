@@ -1177,7 +1177,7 @@ end
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
     decls = ObjectIdDict()
-    closures = LambdaStaticData[]
+    closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
@@ -1192,7 +1192,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         end
     end
 
-    for li in closures
+    for (li::LambdaStaticData) in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
