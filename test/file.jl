@@ -1,10 +1,9 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-# This first section may not run for non-UNIX people.
-# If so, create the directories and files manually, and comment out this section
-# (Or fix up the code to support such operations on Windows!)
-dir_name = strcat("/tmp/testdir", randstring(6))
+# This code assumes the availability of POSIX tools in the current PATH
+# TODO: remove this dependency
+dir_name = strcat("$(systmpdir())/testdir", randstring(6))
 dir_create(dir_name)
 filename = strcat(dir_name, "/afile.txt")
 file_create(filename)
@@ -26,7 +25,14 @@ run(`chmod -w $filename`)
 run(`chmod +w $filename`)
 @assert isexecutable(filename) == false
 @assert filesize(filename) == 0
-@assert filesize(dir_name) > 0
+# On windows the filesize of a folder is the accumulation of all the contained 
+# files ans is thus zero in this case. 
+@windows_only begin
+	@assert filesize(dir_name) == 0
+end
+@unix_only begin
+	@assert filesize(dir_name) > 0
+end
 @assert mtime(filename) >= mtime(dir_name)
 
 ############

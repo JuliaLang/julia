@@ -1,3 +1,14 @@
+# Even though we provide the PATH_SEPARATOR constant, we encourage the usage of '/' as
+# a path seperator on all plaform (The windows api sees '\\' and '/' as equivalent
+@unix_only 		const PATH_SEPARATOR = '/'
+@windows_only	const PATH_SEPARATOR = '\\'
+
+# returns the path to the system temp directory
+function systmpdir()
+	@unix_only return "/tmp"
+	@windows_only return ENV["TEMP"]
+end
+
 # get and set current directory
 
 function cwd()
