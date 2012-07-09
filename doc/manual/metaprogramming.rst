@@ -562,7 +562,7 @@ is, well, invaluable.
 
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
-it, but also the command literal syntax (``\`echo "Hello, $person"\```)
+it, but also the command literal syntax (```echo "Hello, $person"```)
 and regular string interpolation are implemented using it. These two
 powerful facilities are implemented with the following innocuous-looking
 pair of macros:
