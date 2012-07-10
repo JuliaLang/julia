@@ -53,8 +53,8 @@ plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number)
 
 function plot(x::Array, y::Array, xmin::Number, xmax::Number, ymin::Number, ymax::Number, plottype::String)
     # make sure we have arrays of numbers
-    x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
-    y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
+    x_safe = try convert(Array{Float64, 1}, x[:]) catch error("x coordinates must be convertable to float64") end
+    y_safe = try convert(Array{Float64, 1}, y[:]) catch error("y coordinates must be convertable to float64") end
 
     # make sure there are the same number of x and y coordinates
     if length(x_safe) != length(y_safe) return error("size of x and y arrays must be equal") end
@@ -100,8 +100,8 @@ plot(x::Array, y::Array) = plot(x, y, "line")
 
 function plot(x::Array, y::Array, plottype::String)
     # make sure we have arrays of numbers
-    x_safe = try convert(Array{Float64, 1}, x[:]) catch return error("x coordinates must be convertable to float64") end
-    y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
+    x_safe = try convert(Array{Float64, 1}, x[:]) catch error("x coordinates must be convertable to float64") end
+    y_safe = try convert(Array{Float64, 1}, y[:]) catch error("y coordinates must be convertable to float64") end
 
     # make sure there are the same number of x and y coordinates
     if length(x_safe) != length(y_safe) return error("size of x and y arrays must be equal") end
@@ -153,7 +153,7 @@ plot(y::Array) = plot(y, "line")
 
 function plot(y::Array, plottype)
     # make sure we have an array of numbers
-    y_safe = try convert(Array{Float64, 1}, y[:]) catch return error("y coordinates must be convertable to float64") end
+    y_safe = try convert(Array{Float64, 1}, y[:]) catch error("y coordinates must be convertable to float64") end
 
     # make sure there are enough data to plot
     if length(y_safe) < 1 return error("at least two data points required for line plot") end

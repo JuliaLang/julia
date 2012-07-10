@@ -469,7 +469,7 @@ Case Study: Rational
 Perhaps the best way to tie all these pieces together is to present a
 real world example of a parametric composite type and its constructor
 methods. To that end, here is beginning of
-```rational.jl`` <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
+`rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
 which implements Julia's :ref:`man-rational-numbers`:
 
 ::
@@ -563,6 +563,6 @@ Thus, although the ``//`` operator usually returns an instance of
 ``Rational``, if either of its arguments are complex integers, it will
 return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
-```rational.jl`` <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
+`rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
 it is short, self-contained, and implements an entire basic Julia type
 in just a little over a hundred lines of code.
