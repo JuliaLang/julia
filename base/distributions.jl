@@ -46,6 +46,7 @@ macro _jl_dist_1p(T, b)
     Ty = eval(T)
     pf = Ty <: DiscreteDistribution ? :pmf : :pdf
     lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    rand_type = Ty <: DiscreteDistribution ? :int : ""
     pn = Ty.names                       # parameter names
     p  = expr(:quote,pn[1])
     quote
@@ -100,8 +101,8 @@ macro _jl_dist_1p(T, b)
                   lp, d.($p), 0, 1)
         end
         function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64,), d.($p))
+            ($rand_type)(ccall(dlsym(_jl_libRmath,  $rr),
+                               Float64, (Float64,), d.($p)))
         end
     end
 end
@@ -114,6 +115,7 @@ macro _jl_dist_2p(T, b)
     Ty = eval(T)
     pf = Ty <: DiscreteDistribution ? :pmf : :pdf
     lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    rand_type = Ty <: DiscreteDistribution ? :int : ""
     pn = Ty.names                       # parameter names
     p1 = expr(:quote,pn[1])
     p2 = expr(:quote,pn[2])    
@@ -174,8 +176,8 @@ macro _jl_dist_2p(T, b)
                   lp, d.($p1), d.($p2), 0, 1)
         end
         function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64, Float64), d.($p1), d.($p2))
+            ($rand_type)(ccall(dlsym(_jl_libRmath,  $rr),
+                               Float64, (Float64, Float64), d.($p1), d.($p2)))
         end
     end
 end
@@ -188,6 +190,7 @@ macro _jl_dist_3p(T, b)
     Ty = eval(T)
     pf = Ty <: DiscreteDistribution ? :pmf : :pdf
     lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    rand_type = Ty <: DiscreteDistribution ? :int : ""
     pn = Ty.names                       # parameter names
     p1 = expr(:quote,pn[1])
     p2 = expr(:quote,pn[2])    
@@ -244,8 +247,8 @@ macro _jl_dist_3p(T, b)
                   lp, d.($p1), d.($p2), d.($p3), 0, 1)
         end
         function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64, Float64, Float64), d.($p1), d.($p2), d.($p3))
+            ($rand_type)(ccall(dlsym(_jl_libRmath,  $rr),
+                               Float64, (Float64, Float64, Float64), d.($p1), d.($p2), d.($p3)))
         end
     end
 end
