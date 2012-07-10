@@ -237,7 +237,7 @@ function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
 end
 
 ref{T<:Integer}(A::Array, I::AbstractVector{T}, j::Integer) = [ A[i + (j-1)*size(A,1)] for i=I ]
-ref{T<:Integer}(A::Array, i::Integer, J::AbstractVector{T}) = [ A[i,j] for j=J ]
+ref{T<:Integer}(A::Array, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I,j=J ]
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
 function ref{T<:Integer}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
