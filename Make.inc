@@ -14,7 +14,7 @@ OS = $(shell uname)
 ARCH = $(shell uname -m)
 
 USE_MKL = 0
-MKLLIB = /path/to/mkl/lib/intel64
+MKLLIB = /path/to/mkl/lib/intel64/
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
@@ -239,8 +239,8 @@ USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
 LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
-LIBBLASNAME = libmkl_rt
-LIBLAPACKNAME = libmkl_rt
+LIBBLASNAME = $(MKLLIB)libmkl_rt
+LIBLAPACKNAME = $(MKLLIB)libmkl_rt
 endif
 
 # Libraries to link
