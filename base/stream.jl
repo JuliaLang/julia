@@ -1,7 +1,6 @@
 #TODO: allocate unused (spawn-only) streams on the stack if possible & safe
 #TODO: function readline(???)
 #TODO: function writeall(Cmd, String)
-#TODO: function ignorestatus(Cmd|Process)
 #TODO: stop leaking all the handles (process, closure, I/O)
 #TODO: cleanup methods duplicated with io.jl
 #TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
@@ -30,7 +29,8 @@ abstract AbstractCmd
 
 type Cmd <: AbstractCmd
     exec::Executable
-    Cmd(exec::Executable) = new(exec)
+    ignorestatus::Bool
+    Cmd(exec::Executable) = new(exec,false)
 end
 
 type OrCmds <: AbstractCmd
@@ -44,6 +44,9 @@ type AndCmds <: AbstractCmd
     b::AbstractCmd
     AndCmds(a::AbstractCmd, b::AbstractCmd) = new(a,b)
 end
+
+ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
+ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 
 #typealias StreamHandle Union(PtrSize,AsyncStream)
 
@@ -422,7 +425,7 @@ for (sym, default) in [(:spawn_opts_inherit, true),(:spawn_opts_swallow, false)]
 end
 end
 
-#spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
+spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
 
 spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::StreamOrNot) = spawn(pc,cmd,(false,out,false),false,false)
@@ -458,7 +461,7 @@ function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
     success = wait(ps)
     if success
-        return nothing
+        return true
     else
         return pipeline_error(ps)
     end
@@ -468,21 +471,27 @@ success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
 success(procs::ProcessChain) = all(map(success, procs.processes))
 success(cmd::AbstractCmd) = wait(spawn(cmd))
 
-pipeline_error(proc::Process) = error("failed process: ",proc," [",proc.exit_code,"]")
+function pipeline_error(proc::Process)
+    if !proc.cmd.ignorestatus
+        error("failed process: ",proc," [",proc.exit_code,"]")
+    end
+    true
+end
 function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
-        if !success(p)
+        if !success(p) && !p.cmd.ignorestatus
             push(failed, p)
         end
     end
-    if numel(failed)==0 error("pipeline error but no processes failed!?") end
+    if numel(failed)==0 return true end
     if numel(failed)==1 pipeline_error(failed[1]) end
     msg = "failed processes:"
     for proc in failed
         msg = string(msg,"\n  ",proc," [",proc.exit_code,"]")
     end
     error(msg)
+    return false
 end
 
 function exec(thunk::Function)
