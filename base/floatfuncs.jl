@@ -53,3 +53,7 @@ end
 @vectorize_1arg Number abs
 @vectorize_1arg Number abs2
 @vectorize_1arg Number angle
+
+@vectorize_1arg Real isnan
+@vectorize_1arg Real isinf
+@vectorize_1arg Real isfinite
