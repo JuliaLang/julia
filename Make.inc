@@ -241,6 +241,11 @@ LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
+ifneq ($(strip $(MKLLIB)),)
+  ifeq ($(OS), Linux)
+    RPATH += -Wl,-rpath,$(MKLLIB)
+  endif
+endif
 endif
 
 # Libraries to link

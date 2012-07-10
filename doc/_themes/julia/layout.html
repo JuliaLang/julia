@@ -1,15 +1,13 @@
 {% extends "basic/layout.html" %}
 
 {# Silence the sidebar's, relbar's #}
-{% block header %}{% endblock %}
-{% block footer %}{% endblock %}
 {% block sidebar1 %}{% endblock %}
 {% block sidebar2 %}{% endblock %}
 {% block relbar1 %}{% endblock %}
 {% block relbar2 %}{% endblock %}
 
-{%- block content %}
-<div id="site">
+{% block header %}
+<div id="header">
 <div class="title">Julia Documentation</div>
 <div class="links">
   <p> <a href="http://julialang.org/">julia</a>
@@ -20,7 +18,24 @@
     | <a href="http://feeds.feedburner.com/JuliaLang">rss</a>
   </p>
 </div>
-
-{% block body %} {% endblock %}
 </div>
+{% endblock %}
+
+{%- block content %}
+{% block body %} {% endblock %}
 {%- endblock %}
+
+{% block footer %}
+<div id="footer">
+  {% if prev %}
+  <div class="prevlink">
+    <a href="{{ prev.link }}">&laquo; {{ prev.title }}</a>
+  </div>
+  {% endif %}
+  {% if next %}
+  <div class="nextlink">
+    <a href="{{ next.link }}">{{ next.title }} &raquo;</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
