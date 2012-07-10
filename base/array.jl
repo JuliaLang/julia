@@ -196,24 +196,63 @@ function ref(A::Array, I::Integer...)
     return A[index]
 end
 
-# note: this is also useful for Ranges
-ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] for i=I ]
-ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] for i=I ]
-
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I ]
-ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
-
-function ref{T<:Integer}(A::Array, I::AbstractVector{T})
+# Fast copy using copy_to for Range1
+function ref(A::Array, I::Range1{Int})
     X = similar(A, length(I))
-    ind = 1
-    for i in I
-        X[ind] = A[i]
-        ind += 1
+    copy_to(X, 1, A, first(I), length(I))
+    return X
+end
+
+# note: this is also useful for Ranges
+ref{T<:Integer}(A::Array, I::AbstractVector{T}) = [ A[i] for i=I ]
+ref{T<:Integer}(A::AbstractArray, I::AbstractVector{T}) = [ A[i] for i=I ]
+
+# 2d indexing
+function ref(A::Array, I::Range1{Int}, j::Int)
+    X = similar(A,length(I))
+    copy_to(X, 1, A, (j-1)*size(A,1) + 1, length(I))
+    return X
+end
+function ref(A::Array, I::Range1{Int}, J::Range1{Int})
+    X = similar(A, ref_shape(I, J))
+    if length(I) == size(A,1)
+        copy_to(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
+    else
+        storeoffset = 1
+        for j = J
+            copy_to(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+            storeoffset += length(I)
+        end
+    end
+    return X
+end
+function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
+    X = similar(A, ref_shape(I, J))
+    storeoffset = 1
+    for j = J
+        copy_to(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+        storeoffset += length(I)
     end
     return X
 end
 
+ref{T<:Integer}(A::Array, I::AbstractVector{T}, j::Integer) = [ A[i + (j-1)*size(A,1)] for i=I ]
+ref{T<:Integer}(A::Array, i::Integer, J::AbstractVector{T}) = [ A[i,j] for j=J ]
+# This next is a 2d specialization of the algorithm used for general
+# multidimensional indexing
+function ref{T<:Integer}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
+    X = similar(A, ref_shape(I, J))
+    storeind = 1
+    for j = J
+        offset = (j-1)*size(A,1)
+        for i = I
+            X[storeind] = A[i+offset]
+            storeind += 1
+        end
+    end
+    return X
+end
+# Multidimensional indexing
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
@@ -255,8 +294,8 @@ ref(A::Array, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
 ref(A::Matrix, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 ref(A::Matrix, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = [ A[i,j] for i=I, j=find(J) ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = [ A[i,j] for i=find(I), j=J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## Indexing: assign ##
 
@@ -303,6 +342,12 @@ function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
     return A
 end
 
+function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
+    if length(X) != length(I); error("argument dimensions must match"); end
+    copy_to(A, first(I), X, 1, length(I))
+    return A
+end
+
 function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
     if length(X) != length(I); error("argument dimensions must match"); end
     count = 1
@@ -313,14 +358,14 @@ function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
+function assign{T<:Integer}(A::Array, x, i::Integer, J::AbstractVector{T})
     m = size(A, 1)
     for j in J
         A[(j-1)*m + i] = x
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+function assign{T<:Integer}(A::Array, X::AbstractArray, i::Integer, J::AbstractVector{T})
     if length(X) != length(J); error("argument dimensions must match"); end
     m = size(A, 1)
     count = 1
@@ -331,7 +376,7 @@ function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::Abstract
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
+function assign{T<:Integer}(A::Array, x, I::AbstractVector{T}, j::Integer)
     m = size(A, 1)
     offset = (j-1)*m
     for i in I
@@ -339,7 +384,14 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+
+function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Integer)
+    if length(X) != length(I); error("argument dimensions must match"); end
+    copy_to(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
+    return A
+end
+
+function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T}, j::Integer)
     if length(X) != length(I); error("argument dimensions must match"); end
     m = size(A, 1)
     offset = (j-1)*m
@@ -351,7 +403,49 @@ function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{T})
+# These have to be specialized because the Bool operations below are
+# written in terms of Matrix
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T}(A::($TA){T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            if length(I) == size(A,1)
+                copy_to(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
+            else
+                refoffset = 1
+                for j = J
+                    copy_to(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+                    refoffset += length(I)
+                end
+            end
+            return A
+        end
+    end
+end
+
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T}(A::($TA){T}, X::Array{T}, I::Range1{Int}, J::AbstractVector{Int})
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            refoffset = 1
+            for j = J
+                copy_to(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+                refoffset += length(I)
+            end
+            return A
+        end
+    end
+end
+
+function assign{T<:Integer}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{T})
     m = size(A, 1)
     for j in J
         offset = (j-1)*m
@@ -361,22 +455,27 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVecto
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
-    nel = length(I)*length(J)
-    if length(X) != nel ||
-        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
-    end
-    m = size(A, 1)
-    count = 1
-    for j in J
-        offset = (j-1)*m
-        for i in I
-            A[offset + i] = X[count]
-            count += 1
+
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T<:Integer}(A::($TA), X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            m = size(A, 1)
+            count = 1
+            for j in J
+                offset = (j-1)*m
+                for i in I
+                    A[offset + i] = X[count]
+                    count += 1
+                end
+            end
+            return A
         end
     end
-    return A
 end
 
 let assign_cache = nothing
