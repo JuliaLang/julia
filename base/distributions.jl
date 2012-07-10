@@ -743,9 +743,9 @@ type Categorical <: DiscreteDistribution
             if p[i] < 0. error("Categorical: probabilities must be non-negative") end
             sump += p[i]
         end
-        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
-            error("Categorical: probabilities must add to 1")
-        end
+#        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
+#            error("Categorical: probabilities must add to 1")
+#        end
         new(p ./ sump)
     end
 end
