@@ -71,6 +71,10 @@ b = x[1,:]
 b = x[:,1]
 @assert isequal(size(b), (2,))
 
+x = rand(5,5)
+b = x[2:3,2]
+@assert b[1] == x[2,2] && b[2] == x[3,2]
+
 B = zeros(4,5)
 B[:,3] = 1:4
 @assert B == [0 0 1 0 0; 0 0 2 0 0; 0 0 3 0 0; 0 0 4 0 0]
