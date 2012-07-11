@@ -87,3 +87,23 @@ jl_cholmod_sparse( void **cs,    /* Store return value in here */
     *cs = s;
     return;
 }
+
+extern int
+jl_cholmod_sparse_copy_out(cholmod_sparse *cs, 
+			   void *cp,  /* column pointers */
+			   void *ri,  /* row indices */
+			   void *nzp) /* non-zero values */
+{
+				/* error return if cs is not packed, sorted and consistent itype */
+    if (!cs->packed) return 1;
+    if (!cs->sorted) return 2;
+    if (!cs->itype == CHOLMOD_INTLONG) return 3;
+
+    size_t elsize = (cs->xtype == CHOLMOD_COMPLEX ? 2 : 1) *
+	(cs->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
+    size_t isize = cs->itype == CHOLMOD_INT ? sizeof(int) : sizeof(SuiteSparse_long);
+    memcpy(cp, cs->p, (cs->ncol + 1) * isize);
+    memcpy(ri, cs->i, cs->nzmax * isize);
+    memcpy(nzp, cs->x, cs->nzmax * elsize);
+    return 0;
+}
