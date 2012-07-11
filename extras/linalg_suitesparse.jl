@@ -33,7 +33,7 @@ type CholmodPtr{Tv<:CHMVTypes,Ti<:CHMITypes}
     val::Vector{Ptr{Void}} 
 end
 
-function cholmodcommonfinalizer(x::Vector{Ptr{Void}})
+function _jl_cholmod_common_finalizer(x::Vector{Ptr{Void}})
     ccall(dlsym(_jl_libcholmod, :cholmod_l_finish), Int32, (Ptr{Void},), x[1])
     _c_free(x[1])
 end
@@ -50,7 +50,7 @@ type CholmodCommon
                        (Ptr{Void}, ),
                        pt[1]);
         if status != 1 error("Error calling cholmod_l_start") end
-        finalizer(pt, cholmodcommonfinalizer)
+        finalizer(pt, _jl_cholmod_common_finalizer)
         new(pt)
     end
 end
@@ -139,7 +139,7 @@ type CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes} <: Factorization{Tv}
     cs::CholmodSparse{Tv,Ti}
     function CholmodFactor(pt::CholmodPtr{Tv,Ti}, cs::CholmodSparse{Tv,Ti})
         ff = new(pt, cs)
-        finalizer(ff, cholmodfactorfinalizer)
+        finalizer(ff, _jl_cholmod_factor_finalizer)
         ff
     end
 end
@@ -154,7 +154,7 @@ function CholmodFactor{Tv<:CHMVTypes,Ti<:CHMITypes}(cs::CholmodSparse{Tv,Ti})
     CholmodFactor{Tv,Ti}(pt, cs)
 end
 
-function cholmodfactorfinalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(x::CholmodFactor{Tv,Ti})
+function _jl_cholmod_factor_finalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(x::CholmodFactor{Tv,Ti})
     st = ccall(dlsym(_jl_libcholmod, :cholmod_l_free_factor), Int32,
                (Ptr{Void}, Ptr{Void}), x.pt.val, x.cs.cs.cm[1])
     if st != 1 error("CHOLMOD error in cholmod_l_free_factor") end
@@ -204,12 +204,12 @@ type CholmodDenseOut{Tv<:CHMVTypes,Ti<:CHMITypes}
     cm::CholmodCommon
     function CholmodDenseOut(pt::CholmodPtr{Tv,Ti}, m::Int, n::Int, cm::CholmodCommon)
         dd = new(pt, m, n, cm)
-        finalizer(dd, cholmoddenseoutfinalizer)
+        finalizer(dd, _jl_cholmod_denseout_finalizer)
         dd
     end
 end
 
-function cholmoddenseoutfinalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(cd::CholmodDenseOut{Tv,Ti})
+function _jl_cholmod_denseout_finalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(cd::CholmodDenseOut{Tv,Ti})
     st = ccall(dlsym(_jl_libcholmod, :cholmod_l_free_dense), Int32,
                (Ptr{Void}, Ptr{Void}), cd.pt.val, cd.cm.pt[1])
     if st != 1 error("Error in cholmod_l_free_dense") end
@@ -250,12 +250,12 @@ type CholmodSparseOut{Tv<:CHMVTypes,Ti<:CHMITypes}
     cm::CholmodCommon
     function CholmodSparseOut(pt::CholmodPtr{Tv,Ti}, m::Int, n::Int, cm::CholmodCommon)
         cso = new(pt, m, n, cm)
-        finalizer(cso, cholmodsparseoutfinalizer)
+        finalizer(cso, _jl_cholmod_sparseout_finalizer)
         cso
     end
 end
 
-function cholmodsparseoutfinalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(cso::CholmodSparseOut{Tv,Ti})
+function _jl_cholmod_sparseout_finalizer{Tv<:CHMVTypes,Ti<:CHMITypes}(cso::CholmodSparseOut{Tv,Ti})
     st = ccall(dlsym(_jl_libcholmod, :cholmod_l_free_sparse), Int32,
                (Ptr{Void}, Ptr{Void}), cso.pt.val, cso.cm.pt[1])
     if st != 1 error("Error in cholmod_l_free_sparse") end
@@ -285,7 +285,24 @@ function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{CholmodSparseOut{Tv,Ti}}, c
     CholmodSparseOut{Tv,Ti}(cso, n, n, cf.cs.cm)
 end
 
-## Call wrapper function to create cholmod_sparse objects
+function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{SparseMatrixCSC{Tv,Ti}}, cso::CholmodSparseOut{Tv,Ti})
+    nz = nnz(cso)
+    sp = SparseMatrixCSC{Tv,Ti}(cso.m, cso.n, Array(Ti, cso.n + 1), Array(Ti, nz), Array(Tv, nz))
+    err = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_copy_out), Int32,
+                (Ptr{Void}, Ptr{Ti}, Ptr{Ti}, Ptr{Tv}),
+                cso.pt.val[1], sp.colptr, sp.rowval, sp.nzval)
+    if err == 1 error("CholmodSparseOut object is not packed") end
+    if err == 2 error("CholmodSparseOut object is not sorted") end # maybe do double transpose here?
+    if err == 3 error("CholmodSparseOut object has INTLONG itype") end
+    _jl_convert_to_1_based_indexing!(sp)
+end
+
+function show{Tv<:CHMVTypes,Ti<:CHMITypes}(io, cso::CholmodSparseOut{Tv,Ti})
+    ccall(dlsym(_jl_libcholmod, :cholmod_l_print_sparse),
+          Int32, (Ptr{Void}, Ptr{Uint8},Ptr{Void}), cso.pt.val[1], "", cso.cm.pt[1])
+end
+
+## call wrapper function to create cholmod_sparse objects
 _jl_cholmod_sparse(S) = _jl_cholmod_sparse(S, 0)
 
 function _jl_cholmod_sparse{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, stype::Int)
