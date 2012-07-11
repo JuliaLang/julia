@@ -188,8 +188,15 @@ function check_bounds(sz::Int, I::AbstractVector{Bool})
     return nothing
 end
 
-function check_bounds(sz::Int, I::Union(Range1{Int}, Range{Int}))
+function check_bounds(sz::Int, I::Range1{Int})
     if first(I) < 1 || last(I) > sz
+        throw(BoundsError())
+    end
+    return nothing
+end
+
+function check_bounds(sz::Int, I::Range{Int})
+    if min(I) < 1 || max(I) > sz
         throw(BoundsError())
     end
     return nothing
