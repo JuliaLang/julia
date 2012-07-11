@@ -663,24 +663,30 @@ end
 pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
 
 function rand(d::Multinomial)
-  l = numel(d.prob)
-  s = zeros(Int, l)
-  r = rand()
-  for j = 1:l
-    r -= d.prob[j]
-    if r <= 0.0
-      s[j] = 1
+  n = d.n
+  len = numel(d.prob)
+  psum = 1.0
+  s = Array(Int, len)
+  for j = 1:len-1
+    s[j] = int(ccall(dlsym(_jl_libRmath, "rbinom"),
+                     Float64, (Float64, Float64), n, d.prob[j]/psum))
+    n -= s[j]
+    if n == 0
       break
     end
+    psum -= d.prob[j]
   end
+  s[end] = n
   s
 end
 
+rand(d::Multinomial, count::Int) = rand(d, (numel(d.prob), count))
 function rand!(d::Multinomial, A::Matrix{Int})
-  n = size(A, 1)
+  n = size(A, 2)
   for i = 1:n
-    A[i, :] = rand(d)'
+    A[:, i] = rand(d)
   end
+  A
 end
 
 type Dirichlet <: ContinuousDistribution
