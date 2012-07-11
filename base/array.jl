@@ -182,7 +182,7 @@ function check_bounds(sz::Int, I::Integer)
 end
 
 function check_bounds(sz::Int, I::AbstractVector{Bool})
-    if length(I) != sz
+    if length(I) > sz
         throw(BoundsError())
     end
     return nothing
