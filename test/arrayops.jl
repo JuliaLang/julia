@@ -65,6 +65,12 @@ tmp = zeros(Int,map(max,rng)...)
 tmp[rng...] = A[rng...]
 @assert  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
+x = rand(2,2)
+b = x[1,:]
+@assert isequal(size(b), (1, 2))
+b = x[:,1]
+@assert isequal(size(b), (2,))
+
 B = zeros(4,5)
 B[:,3] = 1:4
 @assert B == [0 0 1 0 0; 0 0 2 0 0; 0 0 3 0 0; 0 0 4 0 0]
