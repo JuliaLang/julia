@@ -103,21 +103,6 @@ include("signal_fftw.jl")
 
 
 # prime method cache with some things we know we'll need right after startup
-length(1:2:3)
-(Dict(0)[1])=()->()
-numel(intset())
-has(intset(),2)
-del_all(FDSet())
-start(Dict(0))
-done(Dict(0),0)
-get(Dict(0),0,())
-add(FDSet(),int32(0))
-2==2.0
-2.0==2.0
-has(FDSet(),0)
-isequal(int32(2),int32(2))
-isequal(int64(2),int64(2))
-
 compile_hint(cwd, ())
 compile_hint(fdio, (Int32,))
 compile_hint(ProcessGroup, (Int, Array{Any,1}, Array{Any,1}))
@@ -224,3 +209,6 @@ compile_hint(start, (Range1{Int},))
 compile_hint(done, (Range1{Int},Int))
 compile_hint(next, (Range1{Int},Int))
 compile_hint(IOStream, (ASCIIString, Array{Uint8,1}))
+compile_hint(_jl_mk_tupleref, (SymbolNode, Int))
+compile_hint(_jl_abstract_interpret, (Bool, ObjectIdDict, StaticVarInfo))
+compile_hint(eval_annotate, (LambdaStaticData, ObjectIdDict, StaticVarInfo, ObjectIdDict, Array{Any,1}))
