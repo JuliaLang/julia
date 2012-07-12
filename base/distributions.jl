@@ -666,7 +666,7 @@ function rand(d::Multinomial)
   n = d.n
   len = numel(d.prob)
   psum = 1.0
-  s = Array(Int, len)
+  s = zeros(Int, len)
   for j = 1:len-1
     s[j] = int(ccall(dlsym(_jl_libRmath, "rbinom"),
                      Float64, (Float64, Float64), n, d.prob[j]/psum))
