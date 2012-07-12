@@ -122,7 +122,7 @@ one(x)  = oftype(x,1)
 
 sizeof(T::Type) = error(string("size of type ",T," unknown"))
 sizeof(T::BitsKind) = div(T.nbits,8)
-sizeof{T}(x::T) = sizeof(T)
+sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
 copy(x::Union(Symbol,Number,String,Function)) = x
@@ -186,6 +186,10 @@ ref_shape(i)       = (length(i),)
 ref_shape(i::Real,j::Real) = ()
 ref_shape(i      ,j::Real) = (length(i),)
 ref_shape(i      ,j)       = (length(i),length(j))
+ref_shape(i::Real,j::Real,k::Real) = ()
+ref_shape(i      ,j::Real,k::Real) = (length(i),)
+ref_shape(i      ,j      ,k::Real) = (length(i),length(j))
+ref_shape(i      ,j      ,k      ) = (length(i),length(j),length(k))
 
 # check for valid sizes in A[I...] = X where X <: AbstractArray
 function assign_shape_check(X::AbstractArray, I...)

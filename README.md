@@ -36,7 +36,6 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
 
-
 First, acquire the source code by cloning the git repository:
 
     git clone git://github.com/JuliaLang/julia.git
@@ -70,6 +69,8 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
+GCC version 4.6 is the minimum required to build julia. If using an older version, set the appropriate OPENBLAS flags in Make.inc.
+
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
 On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
@@ -80,26 +81,15 @@ You may need to install `gfortran`. Either download and install [gfortran from h
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
+Clang is now used by default to build julia on OS X. Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
+
 #### FreeBSD
 
-The prerequisites can be installed from ports like this:
+*Release 9.0:* install the gcc46, git, and gmake packages/ports, and compile julia with the command:
 
-    cd /usr/ports/devel/gmake
-    make install
+    $ gmake FC=gfortran46
 
-    cd /usr/ports/ftp/curl
-    make install
- 
-    cd /usr/ports/devel/libunwind
-    make install
-
-    cd /usr/ports/lang/gcc45
-    make install
-    ln -s /usr/local/bin/gfortran45 /usr/local/bin/gfortran
-
-Other versions of gcc are also exist but currently gfortran45 is the one used by all the ports that depend on Fortran.
-
-**Use the gmake command on FreeBSD instead of make**
+You must use the gmake command on FreeBSD instead of make.
 
 #### MKL
 
@@ -117,11 +107,14 @@ To rebuild a pre-built Julia source install with MKL support, delete from `deps/
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++, gfortran][gcc]** — compiling and linking C, C++ and Fortran code.
+- **[gcc, g++][gcc]** 		— compiling and linking C, C++ (Need at least v4.6)
+- **[clang][clang]**            - clang can be used instead of gcc (Need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gfortran][gcc]**		- compiling and linking fortran libraries
 - **[git]**    			— contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]** or **[curl]**      — to automatically download external libraries (Linux defaults to `wget`, OS X and FreeBSD to `curl`).
+- **[wget]**, **[curl]**, or **fetch** — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
+- **patch**                     — for modifying source code.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -147,6 +140,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 [GNU make]:     http://www.gnu.org/software/make/
 [gcc]:          http://gcc.gnu.org/
+[clang]:	http://clang.llvm.org/
 [wget]:         http://www.gnu.org/software/wget/
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
@@ -236,4 +230,3 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 ### Try it Online
 
 Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
-

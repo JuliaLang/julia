@@ -104,6 +104,14 @@ next(t::ObjectIdDict, i) = ccall(:jl_eqtable_next, Any, (Any, Uint32), t.ht, i)
 
 isempty(t::ObjectIdDict) = is(next(t,0),())
 
+function length(d::ObjectIdDict)
+    n = 0
+    for pair in d
+        n+=1
+    end
+    n
+end
+
 # hashing
 
 bitmix(a::Union(Int32,Uint32), b::Union(Int32,Uint32)) =

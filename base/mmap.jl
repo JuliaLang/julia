@@ -1,6 +1,6 @@
 # Low-level routines
 # These are needed for things like MAP_ANONYMOUS
-function mmap(len::Int, prot::Int, flags::Int, fd::Int, offset::FileOffset)
+function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
     const pagesize::Int = 4096
     # Check that none of the computations will overflow
     if len > typemax(Int)-pagesize
@@ -10,7 +10,7 @@ function mmap(len::Int, prot::Int, flags::Int, fd::Int, offset::FileOffset)
     offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
-    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Int, Int, Int, Int, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Int, Int32, Int32, Int32, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
     if convert(Int,p) < 1
         error("Memory mapping failed", strerror())
     end
@@ -23,31 +23,31 @@ end
 #
 # Note: a few mappable streams do not support lseek. When Julia
 # supports structures in ccall, switch to fstat.
-function mmap_grow(len::Int, prot::Int, flags::Int, fd::Int, offset::FileOffset)
-    const SEEK_SET::Int = 0
-    const SEEK_CUR::Int = 1
-    const SEEK_END::Int = 2
+function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::FileOffset)
+    const SEEK_SET::Int32 = 0
+    const SEEK_CUR::Int32 = 1
+    const SEEK_END::Int32 = 2
     # Save current file position so we can restore it later
-    cpos = ccall(:lseek, FileOffset, (Int, FileOffset, Int), fd, 0, SEEK_CUR)
+    cpos = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, 0, SEEK_CUR)
     if cpos < 0
         error(strerror())
     end
-    filelen = ccall(:lseek, FileOffset, (Int, FileOffset, Int), fd, 0, SEEK_END)
+    filelen = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, 0, SEEK_END)
     if filelen < 0
         error(strerror())
     end
     if (filelen < offset + len)
-        n = ccall(:pwrite, Int, (Int, Ptr{Void}, Int, FileOffset), fd, int8([0]), 1, offset + len - 1)
+        n = ccall(:pwrite, Int, (Int32, Ptr{Void}, Int, FileOffset), fd, int8([0]), 1, offset + len - 1)
         if (n < 1)
             error(strerror())
         end
     end
-    cpos = ccall(:lseek, FileOffset, (Int, FileOffset, Int), fd, cpos, SEEK_SET)
+    cpos = ccall(:lseek, FileOffset, (Int32, FileOffset, Int32), fd, cpos, SEEK_SET)
     return mmap(len, prot, flags, fd, offset)
 end
 
-function munmap(p::Ptr,len::Int)
-    ret = ccall(:munmap,Int,(Ptr{Void},Int),p,len)
+function munmap(p::Ptr,len::Integer)
+    ret = ccall(:munmap,Int32,(Ptr{Void},Int),p,len)
     if ret != 0
         error(strerror())
     end
@@ -56,8 +56,8 @@ end
 const MS_ASYNC = 1
 const MS_INVALIDATE = 2
 const MS_SYNC = 4
-function msync(p::Ptr, len::Int, flags::Int)
-    ret = ccall(:msync, Int, (Ptr{Void}, Int, Int), p, len, flags)
+function msync(p::Ptr, len::Integer, flags::Integer)
+    ret = ccall(:msync, Int32, (Ptr{Void}, Int, Int32), p, len, flags)
     if ret != 0
         error(strerror())
     end
@@ -67,11 +67,11 @@ end
 # Determine a stream's read/write mode, and return prot & flags
 # appropriate for mmap
 function mmap_stream_settings(s::IOStream)
-    const PROT_READ::Int = 1
-    const PROT_WRITE::Int = 2
-    const MAP_SHARED::Int = 1
-    const F_GETFL::Int = 3
-    mode = ccall(:fcntl,Int,(Int,Int),fd(s),F_GETFL)
+    const PROT_READ::Int32 = 1
+    const PROT_WRITE::Int32 = 2
+    const MAP_SHARED::Int32 = 1
+    const F_GETFL::Int32 = 3
+    mode = ccall(:fcntl,Int32,(Int32,Int32),fd(s),F_GETFL)
     mode = mode & 3
     if mode == 0
         prot = PROT_READ

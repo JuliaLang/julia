@@ -111,7 +111,7 @@ function histc(v::StridedVector, edg)
     last = edg[n]
     for x in v
         if !isless(last, x) && !isless(x, first)
-            i = searchsorted(edg, x)
+            i = search_sorted(edg, x)
             while isless(x, edg[i])
                 i -= 1
             end
@@ -354,7 +354,7 @@ function quantile(x, qs)
         lo = int(floor(index))
         hi = int(ceil(index))
         sortedX = sort(x)
-        i = index > lo
+        i = index .> lo
         ret = sortedX[lo]
         i = [1:length(i)][i]
         h = (index - lo)[i]

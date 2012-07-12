@@ -120,7 +120,11 @@ t_func[arraysize] = (1, 2, _jl_arraysize_tfunc)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
-        return tintersect(from,to)
+        if subtype(from, to)
+            return from
+        end
+        t = tintersect(from,to)
+        return is(t,None) ? to : t
     end
     if is(to,Tuple)
         return from
@@ -142,13 +146,13 @@ function static_convert(to::ANY, from::ANY)
         end
         # tuple conversion calls convert recursively
         if isseqtype(ce)
-            #R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
-            R = static_convert(pe, ce.parameters[1])
+            R = abstract_call_gf(convert, (), (Type{pe}, ce.parameters[1]), ())
+            #R = static_convert(pe, ce.parameters[1])
             isType(R) && (R = R.parameters[1])
             result[i] = ...{R}
         else
-            #R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
-            R = static_convert(pe, ce)
+            R = abstract_call_gf(convert, (), (Type{pe}, ce), ())
+            #R = static_convert(pe, ce)
             isType(R) && (R = R.parameters[1])
             result[i] = R
         end
@@ -1173,7 +1177,7 @@ end
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
     decls = ObjectIdDict()
-    closures = LambdaStaticData[]
+    closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
@@ -1188,7 +1192,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         end
     end
 
-    for li in closures
+    for (li::LambdaStaticData) in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
@@ -1253,15 +1257,6 @@ end
 
 occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
-
-function contains_is(arr, item::ANY)
-    for i = 1:length(arr)
-        if is(arr[i],item)
-            return true
-        end
-    end
-    return false
-end
 
 function exprtype(x::ANY)
     if isa(x,Expr)

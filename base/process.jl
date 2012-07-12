@@ -178,14 +178,20 @@ type Cmd
                    Set{Cmd}(),
                    0,
                    ProcessNotRun(),
-                   status->status==0)
+                   default_success)
         add(this.pipeline, this)
         this
     end
 end
 
+default_success(status::ProcessStatus) = false
+default_success(status::ProcessExited) = status.status==0
+
+ignore_success(status::ProcessStatus) = true
+ignore_success(status::ProcessExited) = status.status!=0xff
+
 setsuccess(cmd::Cmd, f::Function) = (cmd.successful=f; cmd)
-ignorestatus(cmd::Cmd) = setsuccess(cmd, status->status!=0xff)
+ignorestatus(cmd::Cmd) = setsuccess(cmd, ignore_success)
 
 function show(io, cmd::Cmd)
     if isa(cmd.exec,Vector{ByteString})
@@ -432,14 +438,11 @@ end
 
 # wait for a single command process to finish
 
-successful(cmd::Cmd) = isa(cmd.status, ProcessRunning) ||
-                       isa(cmd.status, ProcessExited) &&
-                       cmd.successful(cmd.status.status)
+successful(cmd::Cmd) =
+    isa(cmd.status,ProcessRunning) || cmd.successful(cmd.status)
 
-function wait(cmd::Cmd, nohang::Bool)
-    cmd.status = process_status(wait(cmd.pid,nohang))
-    successful(cmd)
-end
+wait(cmd::Cmd, nohang::Bool) =
+    (cmd.status = process_status(wait(cmd.pid,nohang)); successful(cmd))
 
 # wait for a set of command processes to finish
 
@@ -453,7 +456,7 @@ end
 
 # report what went wrong with a pipeline
 
-pipeline_error(cmd::Cmd) = error("failed process: ", cmd)
+pipeline_error(cmd::Cmd) = error("failed process: ",cmd," [",cmd.status,"]")
 function pipeline_error(cmds::Cmds)
     failed = Cmd[]
     for cmd in cmds
@@ -461,13 +464,13 @@ function pipeline_error(cmds::Cmds)
             push(failed, cmd)
         end
     end
-    if numel(failed) == 0
-        error("pipeline error but no processes failed!?")
+    if numel(failed)==0 error("WTF: pipeline error but no processes failed!?") end
+    if numel(failed)==1 pipeline_error(failed[1]) end
+    msg = "failed processes:"
+    for cmd in failed
+        msg = string(msg,"\n  ",cmd," [",cmd.status,"]")
     end
-    if numel(failed) == 1
-        error("failed process: ", failed[1])
-    end
-    error("failed processes: ", join(failed, ", "))
+    error(msg)
 end
 
 # spawn and wait for a set of commands
@@ -480,8 +483,9 @@ run(cmds::Cmds) = success(cmds) ? nothing : pipeline_error(cmds)
 function _readall(ports::Ports, cmds::Cmds)
     r = read_from(ports)
     spawn(cmds)
-    o = readall(fdio(r.fd, true))
+    o = readall(fdio(r.fd, false))
     if !wait(cmds)
+        close(r)
         pipeline_error(cmds)
     end
     close(r)
