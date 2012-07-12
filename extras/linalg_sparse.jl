@@ -6,6 +6,7 @@ require("sparse.jl")
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Vector{T2})
+    if A.n != length(X); error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.m)
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
         Y[A.rowval[k]] += A.nzval[k] * X[col]
@@ -16,6 +17,7 @@ end
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
 function (*){T1,T2}(X::Vector{T1}, A::SparseMatrixCSC{T2})
+    if A.m != length(X); error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.n)
     for col = 1 : A.n, k = A.colptr[col] : (A.colptr[col+1]-1)
         Y[col] += X[A.rowval[k]] * A.nzval[k]
@@ -25,7 +27,7 @@ end
 
 function (*){T1,T2}(A::SparseMatrixCSC{T1}, X::Matrix{T2})
     mX, nX = size(X)
-    if A.n != mX; error("error in *: mismatched dimensions"); end
+    if A.n != mX; error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), A.m, nX)
     for multivec_col = 1:nX
         for col = 1 : A.n
@@ -39,7 +41,7 @@ end
 
 function (*){T1,T2}(X::Matrix{T1}, A::SparseMatrixCSC{T2})
     mX, nX = size(X)
-    if nX != A.m; error("error in *: mismatched dimensions"); end
+    if nX != A.m; error("mismatched dimensions"); end
     Y = zeros(promote_type(T1,T2), mX, A.n)
     for multivec_row = 1:mX
         for col = 1 : A.n
