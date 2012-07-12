@@ -635,6 +635,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 // internal functions ---------------------------------------------------------
 
 extern int jl_in_inference;
+int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
 
 JL_CALLABLE(jl_trampoline)
 {
@@ -644,7 +645,12 @@ JL_CALLABLE(jl_trampoline)
     // to run inference on all thunks. slows down loading files.
     if (f->linfo->inferred == jl_false) {
         if (!jl_in_inference) {
-            jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            if (jl_is_tuple(f->linfo->ast)) {
+                f->linfo->ast = jl_uncompress_ast((jl_tuple_t*)f->linfo->ast);
+            }
+            if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
+                jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            }
         }
     }
     jl_compile(f);
