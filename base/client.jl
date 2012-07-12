@@ -36,7 +36,7 @@ function repl_callback(ast::ANY, show_value)
     end
     _jl_eval_user_input(ast, show_value!=0)
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
+    add_io_handler(STDIN,(args...)->readBuffer(args...))
 end
 
 # called to show a REPL result
@@ -93,8 +93,9 @@ function _jl_eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(handle::Ptr,nread::PtrSize,base::Ptr,len::Int32)
-    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle,nread,base,len)
+function readBuffer(handle::TTY,nread::PtrSize,base::Ptr,len::Int32)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle.handle,nread,base,len)
+    handle.buffer.ptr = 1 #reuse buffer
 end
 
 function run_repl()
@@ -114,7 +115,7 @@ function run_repl()
     ccall(:jl_install_sigint_handler, Void, ())
 
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    add_io_handler(STDIN,make_callback((args...)->readBuffer(args...)))
+    add_io_handler(STDIN,(args...)->readBuffer(args...))
 
     cont = true
     lasterr = ()
@@ -233,7 +234,7 @@ function _start()
 
         if !anyp(a->(a=="--worker"), ARGS)
             # start in "head node" mode
-            global const Scheduler = Task(make_callback(()->event_loop(true)), 1024*1024)
+            global const Scheduler = Task(()->event_loop(true), 1024*1024)
             global PGRP = ProcessGroup(1, {LocalProcess()}, {Location("",0)})
             # make scheduler aware of current (root) task
             enq_work(_jl_roottask_wi)

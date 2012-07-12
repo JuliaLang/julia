@@ -668,6 +668,7 @@ int64_t jl_unbox_int64(jl_value_t *v);
 uint64_t jl_unbox_uint64(jl_value_t *v);
 float jl_unbox_float32(jl_value_t *v);
 double jl_unbox_float64(jl_value_t *v);
+void *jl_unbox_pointer(jl_value_t *v);
 
 #ifdef __LP64__
 #define jl_box_long(x)   jl_box_int64(x)
@@ -721,28 +722,27 @@ DLLEXPORT jl_value_t *jl_env_done(char *pos);
 #endif
 
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                                 jl_value_t *julia_struct,
                                  uv_pipe_t *stdin_pipe,
                                  uv_pipe_t *stdout_pipe,
-                                 uv_pipe_t *stderr_pipe,
-                                 void *exitcb, void *closecb);
+                                 uv_pipe_t *stderr_pipe);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
 
 DLLEXPORT uv_loop_t *jl_global_event_loop();
 DLLEXPORT uv_loop_t *jl_local_event_loop();
 
-DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only);
+DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);
 
-DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle, ios_t *iohandle,jl_function_t *callback);
+DLLEXPORT int16_t jl_start_reading(uv_stream_t *handle);
 
 DLLEXPORT void jl_callback(void *callback);
-void jl_callback_call(jl_function_t *f,int count,...);
 
-DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_function_t *cb);
+DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT void jl_async_send(uv_async_t *handle);
-DLLEXPORT uv_idle_t * jl_idle_init(uv_loop_t *loop);
-DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
+DLLEXPORT uv_idle_t * jl_make_idle(uv_loop_t *loop, jl_value_t *julia_struct);
+DLLEXPORT int jl_idle_start(uv_idle_t *idle);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
 DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream);
@@ -752,8 +752,7 @@ int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
-DLLEXPORT uv_timer_t *jl_timer_init(uv_loop_t *loop);
-DLLEXPORT int jl_idle_start(uv_idle_t *idle, void *cb);
+DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT int jl_timer_stop(uv_timer_t* timer);
 
 DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t *loop);
@@ -1043,6 +1042,8 @@ typedef union jl_any_stream {
     ios_t ios;
     uv_stream_t stream;
 } jl_any_stream;
+
+DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data);
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;

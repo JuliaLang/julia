@@ -867,9 +867,6 @@ void jl_init_primitives(void)
     add_builtin_func("typevar", jl_f_typevar);
     add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
 
-    // add builtin func
-    add_builtin_func("make_callback",jl_f_make_callback);
-
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
     add_builtin("None", (jl_value_t*)jl_bottom_type);

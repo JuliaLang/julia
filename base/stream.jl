@@ -1,13 +1,13 @@
 #TODO: allocate unused (spawn-only) streams on the stack if possible & safe
 #TODO: function readline(???)
 #TODO: function writeall(Cmd, String)
-#TODO: stop leaking all the handles (process, closure, I/O)
 #TODO: cleanup methods duplicated with io.jl
 #TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
 #TODO: remove ProcessStatus if not used
 #TODO: allow waiting on handles other than processes
 #TODO: don't allow waiting on close'd handles
 #TODO: libuv process_events w/o blocking
+#TODO: implement various buffer modes and helper function (minor)
 
 
 typealias PtrSize Int
@@ -83,16 +83,20 @@ _jl_wait_for_(pc::ProcessChain) = map(_jl_wait_for_, pc.processes)
 type NamedPipe <: AsyncStream
     read_handle::Ptr{Void}
     write_handle::Ptr{Void}
-    buf::BufOrNot
+    buffer::Buffer
     closed::Bool
-    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void},buf::IOStream) = new(read_handle,write_handle,buf,false)
-    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void}) = new(read_handle,write_handle,false,false)
+    readcb::Callback
+    NamedPipe() = new(C_NULL,C_NULL,Buffer(),false,false)
+    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void},buf::IOStream) = new(read_handle,write_handle,buf,false,false)
+    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void}) = new(read_handle,write_handle,Buffer(),false,false)
 end
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
-    buf::BufOrNot
     closed::Bool
+    buffer::Buffer
+    readcb::Callback
+    TTY(handle,closed)=new(handle,closed,Buffer(),false)
 end
 
 
@@ -104,10 +108,12 @@ write_handle(s::NamedPipe) = s.write_handle
 read_handle(s::Bool) = s ? STDIN.handle : C_NULL
 write_handle(s::Bool) = s ? STDOUT.handle : C_NULL
 
-make_stdout_stream() = TTY(ccall(:jl_stdout_stream, Ptr{Void}, ()),memio(),false)
+make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
 function _uv_tty2tty(handle::Ptr{Void})
-    TTY(handle,memio(),false)
+    tty = TTY(handle,false)
+    ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),handle,tty)
+    tty
 end
 
 OUTPUT_STREAM = make_stdout_stream()
@@ -120,6 +126,7 @@ type TcpSocket <: Socket
     handle::Ptr{Void}
     buf::BufOrNot
     open::Bool
+    cb::Function
     TcpSocket(handle::Ptr{Void})=new(handle,false,false)
 end
 
@@ -127,6 +134,7 @@ type UdpSocket <: Socket
     handle::Ptr{Void}
     buf::BufOrNot
     open::Bool
+    cb::Function
     UdpSocket(handle::Ptr{Void})=new(handle,false,false)
 end
 
@@ -153,7 +161,12 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-_jl_listen(sock::AsyncStream,backlog::Int32,cb::Function) = ccall(:jl_listen,Int32,(Ptr{Void},Int32,Function),sock.handle,backlog,make_callback(cb))
+_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = sock.cb(status)
+
+function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
+    ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
+    sock.cb = cb
+end
 
 _jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
 _jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,hton(addr.port))
@@ -179,44 +192,77 @@ function open_any_tcp_port(preferred_port::Uint16,cb::Function)
 end
 open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16(preferred_port),cb)
 
+## BUFFER ##
+## Allocate a simple buffer
+function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
+    if(length(stream.buffer.data)-stream.buffer.ptr<recommended_size)
+        grow(stream.buffer, recommended_size-length(stream.buffer.data)+stream.buffer.ptr)
+    end
+    return (pointer(stream.buffer.data)+stream.buffer.ptr-1, recommended_size)
+end
+
+function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
+    stream.buffer.ptr+=nread
+    if(isa(stream.readcb,Function))
+        stream.readcb(stream,nread,base,len)
+    end
+end
+##########################################
+# Async Workers
+##########################################
+
 abstract AsyncWork
 
 type SingleAsyncWork <: AsyncWork
+    cb::Function
     handle::Ptr{Void}
-    SingleAsyncWork(handle::Ptr{Void})=new(handle)
+    function SingleAsyncWork(loop::Ptr{Void},cb::Function)
+        if(loop == C_NULL)
+            return new(cb,C_NULL)
+        end
+        this=new(cb)
+        this.handle=ccall(:jl_make_async,Ptr{Void},(Ptr{Void},SingleAsyncWork),loop,this)
+        this
+    end
 end
 
 type IdleAsyncWork <: AsyncWork
+    cb::Function
     handle::Ptr{Void}
+    function IdleAsyncWork(loop::Ptr{Void},cb::Function)
+        this=new(cb)
+        this.handle=ccall(:jl_make_idle,Ptr{Void},(Ptr{Void},IdleAsyncWork),loop,this)
+        this
+    end
 end
 
 type TimeoutAsyncWork <: AsyncWork
+    cb::Function
     handle::Ptr{Void}
+    function TimeoutAsyncWork(loop::Ptr{Void},cb::Function)
+        this=new(cb)
+        this.handle=ccall(:jl_make_timer,Ptr{Void},(Ptr{Void},TimeoutAsyncWork),loop,this)
+        this
+    end
 end
 
-const dummySingleAsync = SingleAsyncWork(C_NULL)
+const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
 
-function createSingleAsyncWork(loop::Ptr{Void},cb::Function)
-    return SingleAsyncWork(ccall(:jl_make_async,Ptr{Void},(Ptr{Void},Function),loop,cb))
-end
+_uv_hook_close(uv::AsyncStream) = nothing
+_uv_hook_close(uv::AsyncWork) = nothing
 
-function initIdleAsync(loop::Ptr{Void})
-    IdleAsyncWork(ccall(:jl_idle_init,Ptr{Void},(Ptr{Void},),int(loop)))
-end
+# This serves as a common callback for all async classes
+_uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
 
-function initTimeoutAsync(loop::Ptr{Void})
-    TimeoutAsyncWork(ccall(:jl_timer_init,Ptr{Void},(Ptr{Void},),loop))
-end
-
-function startTimer(timer::TimeoutAsyncWork,cb::Function,timeout::Int64,repeat::Int64)
-    ccall(:jl_timer_start,Int32,(Ptr{Void},Function,Int64,Int64),timer.handle,cb,timeout,repeat)
+function startTimer(timer::TimeoutAsyncWork,timeout::Int64,repeat::Int64)
+    ccall(:jl_timer_start,Int32,(Ptr{Void},Int64,Int64),timer.handle,timeout,repeat)
 end
 
 function stopTimer(timer::TimeoutAsyncWork)
     ccall(:jl_timer_stop,Int32,(Ptr{Void},),timer.handle)
 end
 
-assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,Ptr{Void},(Ptr{Void},Function),work.handle,cb)
+assignIdleAsyncWork(work::IdleAsyncWork,cb::Function) = ccall(:jl_idle_start,Ptr{Void},(Ptr{Void},),work.handle)
 
 function add_idle_cb(loop::Ptr{Void},cb::Function)
     work = initIdleAsyncWork(loop)
@@ -273,9 +319,9 @@ process_events() = process_events(localEventLoop())
 
 function make_pipe(readable_julia_only::Bool, writeable_julia_only::Bool)
     #make the pipe an unbuffered stream for now
-    pipe = NamedPipe(
-        ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 0, readable_julia_only),
-        ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool), 1, writeable_julia_only))
+    pipe = NamedPipe()
+    pipe.read_handle  = ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool,NamedPipe), 0, readable_julia_only, pipe)
+    pipe.write_handle = ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool,NamedPipe), 1, writeable_julia_only, pipe)
     error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_handle(pipe), write_handle(pipe))
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
@@ -300,10 +346,11 @@ end
 
 ##stream functions
 
-start_reading(stream::AsyncStream,cb::Function) = ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Function),read_handle(stream),isa(stream.buf,IOStream)?stream.buf.ios:C_NULL,cb)
-start_reading(stream::AsyncStream,cb::Bool) = ccall(:jl_start_reading,Bool,(Ptr{Void},Ptr{Void},Ptr{Void}),read_handle(stream),isa(stream.buf,IOStream)?stream.buf.ios:C_NULL,C_NULL)
-start_reading(stream::AsyncStream) = start_reading(stream,false)
-stop_reading(stream::AsyncStream) = ccall(:jl_stop_reading,Bool,(Ptr{Void},),read_handle(stream))
+start_reading(stream::AsyncStream) = ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream))
+start_reading(stream::AsyncStream,cb::Function) = (start_reading(stream);stream.readcb=cb)
+start_reading(stream::AsyncStream,cb::Bool) = ccall(:jl_start_reading,Bool,(Ptr{Void},),read_handle(stream))
+
+stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),read_handle(stream))
 change_readcb(stream::AsyncStream,readcb::Function) = ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),read_handle(stream),readcb)
 
 function readall(stream::AsyncStream)
@@ -327,16 +374,24 @@ function end_process(p::Process,h::Ptr{Void},e::Int32, t::Int32)
     p.term_signal=t
 end
 
-function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void},
-        in::Ptr{Void}, out::Ptr{Void}, err::Ptr{Void},
-        exitcb::Callback, closecb::Callback)
+function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
+        in::Ptr{Void}, out::Ptr{Void}, err::Ptr{Void})
     return ccall(:jl_spawn, PtrSize,
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void},
-            Union(Function, Ptr{Void}),  Union(Function, Ptr{Void})),
-         cmd,        argv,            loop,      in,        out,       err,
-            exitcb==false?C_NULL:exitcb, closecb==false?C_NULL:closecb)
+        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+         cmd,        argv,            loop,      pp,       in,        out,       err)
 end
 
+function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
+    if proc.exitcb == false || !isa(proc.exitcb(proc,exit_status,term_signal), Nothing)
+        process_exited_chain(proc,exit_status,term_signal)
+    end
+end
+
+function _uv_hook_close(proc::Process)
+    if proc.closecb == false || !isa(proc.exitcb(pp,args...), Nothing)
+        process_closed_chain(proc)
+    end
+end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
     loop = localEventLoop()
@@ -347,32 +402,21 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
-    exitcb2 = make_callback( function(args...)
-        if pp.exitcb == false || !isa(pp.exitcb(pp,args...), Nothing)
-            process_exited_chain(pp,args...)
-        end
-    end)
-    closecb2 = make_callback( function(args...)
-        if pp.closecb == false || !isa(pp.exitcb(pp,args...), Nothing)
-            process_closed_chain(pp,args...)
-        end
-    end)
-    pp.handle=_jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop,
-        read_handle(in), write_handle(out), write_handle(err),
-        exitcb2, closecb2)
+    pp.handle=_jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
+        read_handle(in), write_handle(out), write_handle(err))
     if pc != false
         push(pc.processes, pp)
     end
     pp
 end
 
-function process_exited_chain(p::Process,h::Ptr,e::Int32,t::Int32)
+function process_exited_chain(p::Process,e::Int32,t::Int32)
     p.exit_code = e
     p.term_signal = t
     true
 end
 
-function process_closed_chain(p::Process,h::Ptr)
+function process_closed_chain(p::Process)
     done = process_exited(p)
     i = findfirst(_jl_wait_for, p)
     if i > 0
@@ -435,7 +479,6 @@ spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,fa
 read_from(cmds::AbstractCmd)=read_from(cmds, false)
 function read_from(cmds::AbstractCmd, stdin::StreamOrNot)
     out=make_pipe(true,false)
-    _init_buf(out) #create buffer for reading
     processes = spawn(false, cmds, (stdin,out,false))
     start_reading(out)
     (out, processes)
@@ -454,7 +497,7 @@ function readall(cmd::AbstractCmd,stdin::StreamOrNot)
     if !wait(pc)
         pipeline_error(pc)
     end
-    return takebuf_string(out.buf)
+    return takebuf_string(out.buffer)
 end
 
 function run(cmds::AbstractCmd,args...)

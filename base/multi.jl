@@ -201,7 +201,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
         d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        add_io_handler(w[i].socket,make_callback((args...)->message_handler(d,args...)))
+        add_io_handler(w[i].socket,(args...)->message_handler(d,args...))
     end
     PGRP.locs = newlocs
     PGRP.np += n
@@ -1023,7 +1023,7 @@ function start_remote_workers(machines, cmds)
         ostream,ps = read_from(cmds[i],istream)
         close(istream)
         # redirect console output from workers to the client's stdout
-        add_io_handler(ostream,make_callback((args...)->linebuffer_cb(make_callback((stream,string)->_parse_conninfo(w,i,todo,stream,string)),ostream,args...)))
+        add_io_handler(ostream,(args...)->linebuffer_cb((stream,string)->_parse_conninfo(w,i,todo,stream,string),ostream,args...))
     end
     run_event_loop(localEventLoop())
     w
@@ -1593,10 +1593,10 @@ function event_loop(isclient)
     global _jl_work_cb_handle, fgcm
     fdset = FDSet()
     iserr, lasterr = false, ()
-    _jl_work_cb_handle = createSingleAsyncWork(globalEventLoop(),make_callback(_jl_work_cb))
-    fgcm = createSingleAsyncWork(globalEventLoop(),make_callback((args...)->flush_gc_msgs()));
-    timer = initTimeoutAsync(globalEventLoop())
-    startTimer(timer,make_callback((args...)->queueAsync(_jl_work_cb_handle)),int64(1),int64(10000)) #do work every 10s
+    _jl_work_cb_handle = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
+    fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
+    timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(_jl_work_cb_handle))
+    startTimer(timer,int64(1),int64(10000)) #do work every 10s
     while true
         try
             if iserr

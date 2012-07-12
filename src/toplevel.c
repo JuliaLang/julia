@@ -325,8 +325,9 @@ void jl_load(const char *fname)
 {
     if (jl_load_progress_max > 0) {
         jl_load_progress_i++;
-        JL_PRINTF(JL_STDOUT, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
-        //jl_flush(jl_stdout);
+        //This deliberatly uses ios, because stdio initialization has been moved to Julia
+        ios_printf(ios_stdout, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+        ios_flush(ios_stdout);
     }
     //JL_PRINTF(JL_STDOUT, "%s\n", fname);
     char *fpath = jl_find_file_in_path(fname);

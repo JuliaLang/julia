@@ -556,6 +556,7 @@ UNBOX_FUNC(uint64, uint64_t)
 UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
+UNBOX_FUNC(pointer, void*)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)             \
 jl_value_t *pfx##_##typ(c_type x)               \

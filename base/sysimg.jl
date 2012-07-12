@@ -63,6 +63,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
+include("buffer.jl")
 include("stream.jl")
 include("char.jl")
 include("string.jl")
