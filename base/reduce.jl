@@ -200,6 +200,15 @@ function contains(itr, x)
     return false
 end
 
+function contains_is(itr, x::ANY)
+    for y in itr
+        if is(y,x)
+            return true
+        end
+    end
+    return false
+end
+
 ## Scans ##
 
 scan(op::Function, x::()) = ()
