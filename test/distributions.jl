@@ -59,8 +59,9 @@ pmf(d, [0, 1])
 logpmf(d, [1, 0])
 logpmf(d, [1, 1])
 logpmf(d, [0, 1])
+d.n = 10
 rand(d)
-A = zeros(Int, 10, 2)
+A = zeros(Int, 2, 10)
 rand!(d, A)
 A
 
