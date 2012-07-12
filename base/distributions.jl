@@ -687,21 +687,23 @@ pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
 function rand(d::Multinomial)
   l = numel(d.prob)
   s = zeros(Int, l)
-  r = rand()
-  for j = 1:l
-    r -= d.prob[j]
-    if r <= 0.0
-      s[j] = 1
-      break
+  for i = 1:d.n
+    r = rand()
+    for j = 1:l
+      r -= d.prob[j]
+      if r <= 0.0
+        s[j] += 1
+        break
+      end
     end
   end
   s
 end
 
 function rand!(d::Multinomial, A::Matrix{Int})
-  n = size(A, 1)
+  n = size(A, 2)
   for i = 1:n
-    A[i, :] = rand(d)'
+    A[:, i] = rand(d)
   end
 end
 
