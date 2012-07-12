@@ -295,16 +295,13 @@ Constructing infinite rational values is acceptable:
 ::
 
     julia> 5//0
-    1//0
-
-    julia> float(ans)
     Inf
 
     julia> -3//0
-    -1//0
-
-    julia> float(ans)
     -Inf
+
+    julia> typeof(ans)
+    Rational{Int64}
 
 Trying to construct a NaN rational value, however, is not:
 
