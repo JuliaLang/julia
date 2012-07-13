@@ -50,6 +50,8 @@ function fits_create_file(filename::String)
     FITSFile(ptr[1], status[1])
 end
 
+fits_clobber_file(filename::String) = fits_create_file("!"*filename)
+
 function fits_open_file(filename::String)
     ptr = Array(Ptr{Void}, 1)
     mode = int32(0) # readonly
