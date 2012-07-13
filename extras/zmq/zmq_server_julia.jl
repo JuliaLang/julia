@@ -1,5 +1,7 @@
 require("zmq/zmq_serialize_julia.jl")
 
+global _responder   # since eval works in global scope, can't use a closure for zmqquit
+
 function zmq_respond_error(responder::ZMQSocket, thiserr::Exception)
     if isa(thiserr, ZMQStateError)
         # ZMQ state is corrupted, so we can't reliably report to the
@@ -20,19 +22,26 @@ function zmq_parse_eval(str::ASCIIString)
     eval(p)
 end
 
+function zmqquit()
+    println("About to quit")
+    zmq_serialize(_responder, nothing)
+    exit()
+end
+
 function run_server(endpoint::ASCIIString)
+    global _responder
     zctx = ZMQContext()
-    responder = ZMQSocket(zctx, ZMQ_REP)
-    zmq_bind(responder, endpoint)
+    _responder = ZMQSocket(zctx, ZMQ_REP)
+    zmq_bind(_responder, endpoint)
 
     while true
         # Get the next command
         local ex
         local ismulti
         try
-            ex = zmq_deserialize(responder)
+            ex = zmq_deserialize(_responder)
         catch thiserr
-            zmq_respond_error(responder, thiserr)
+            zmq_respond_error(_responder, thiserr)
             continue
         end
         # Execute the command
@@ -40,14 +49,14 @@ function run_server(endpoint::ASCIIString)
         try
             ret = eval(ex)
         catch thiserr
-            zmq_respond_error(responder, thiserr)
+            zmq_respond_error(_responder, thiserr)
             continue
         end
         # Send the results back
         try
-            zmq_serialize(responder, ret)
+            zmq_serialize(_responder, ret)
         catch thiserr
-            zmq_respond_error(responder, thiserr)
+            zmq_respond_error(_responder, thiserr)
         end
     end
 end
