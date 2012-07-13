@@ -360,6 +360,13 @@ multiplication. This makes writing polynomial expressions much cleaner:
     julia> 1.5x^2 - .5x + 1
     13.0
 
+It also makes writing exponential functions more elegant:
+
+::
+
+    julia> 2^2x
+    64
+
 You can also use numeric literals as coefficients to parenthesized
 expressions:
 
