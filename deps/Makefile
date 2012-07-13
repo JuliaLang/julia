@@ -643,7 +643,7 @@ SUITESPARSE_LIB =
 endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) $(SUITESPARSE_LIB) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-suitesparse-wrapper: $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
