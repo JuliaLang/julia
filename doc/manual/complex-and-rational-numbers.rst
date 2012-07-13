@@ -97,8 +97,8 @@ different types just work:
     julia> 2im^2
     -2 + 0im
 
-Note that ``3/4im == 3/(4*im) == -(3/4*im)``, since a a literal
-coefficient binds more tightly than multiplication and division.
+Note that ``3/4im == 3/(4*im) == -(3/4*im)``, since a literal
+coefficient binds more tightly than division.
 
 Standard functions to manipulate complex values are provided:
 
