@@ -92,12 +92,13 @@ different types just work:
     -0.5 - 1.0im
 
     julia> 1 + 3/4im
-    1.0 + 0.75im
+    1.0 - 0.75im
 
-Note that ``3/4im`` parses as ``3/4*im``, which, since division and
-multiplication have equal precedence and are left-associative, is
-equivalent to ``(3/4)*im`` rather than the quite different value,
-``3/(4*im) == -(3/4)*im``.
+    julia> 2im^2
+    -2 + 0im
+
+Note that ``3/4im == 3/(4*im) == -(3/4*im)``, since a literal
+coefficient binds more tightly than division.
 
 Standard functions to manipulate complex values are provided:
 
