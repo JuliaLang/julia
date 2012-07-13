@@ -700,11 +700,14 @@ function rand(d::Multinomial)
   s
 end
 
+rand(d::Multinomial, count::Int) = rand(d, (numel(d.prob), count))
+
 function rand!(d::Multinomial, A::Matrix{Int})
   n = size(A, 2)
   for i = 1:n
     A[:, i] = rand(d)
   end
+  A
 end
 
 type Dirichlet <: ContinuousDistribution
