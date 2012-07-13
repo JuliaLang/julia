@@ -92,17 +92,35 @@ extern int
 jl_cholmod_sparse_copy_out(cholmod_sparse *cs, 
 			   void *cp,  /* column pointers */
 			   void *ri,  /* row indices */
-			   void *nzp) /* non-zero values */
+			   void *nzp,
+			   cholmod_common *cm) /* non-zero values */
 {
-				/* error return if cs is not packed, sorted and consistent itype */
-    if (!cs->packed) return 1;
-    if (!cs->sorted) return 2;
-    if (!cs->itype == CHOLMOD_INTLONG) return 3;
+				/* error return if cs is not packed */
+    if (!cs->packed) return 1;	/* FIXME: If non-packed becomes a problem, write code to do packing */
+    if (!cs->sorted)		/* sort it */
+	if (!cholmod_sort(cs, cm)) return 2;
 
+    size_t isize;
+    switch(cs->itype) {
+    case CHOLMOD_INT:
+    case CHOLMOD_INTLONG:
+	isize = sizeof(int); break;
+    case CHOLMOD_LONG:
+	isize =  sizeof(SuiteSparse_long); break;
+    default:
+	return 3;
+    }
     size_t elsize = (cs->xtype == CHOLMOD_COMPLEX ? 2 : 1) *
 	(cs->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
-    size_t isize = cs->itype == CHOLMOD_INT ? sizeof(int) : sizeof(SuiteSparse_long);
-    memcpy(cp, cs->p, (cs->ncol + 1) * isize);
+
+    if (cs->itype == CHOLMOD_INTLONG) {
+	int *dpt = (int *) cp;
+	SuiteSparse_long *spt = (SuiteSparse_long *) cs->p;
+	for (int i = 0; i <= cs->ncol; ++i) dpt[i] = spt[i];
+    } else {
+	memcpy(cp, cs->p, (cs->ncol + 1) * isize);
+    }
+
     memcpy(ri, cs->i, cs->nzmax * isize);
     memcpy(nzp, cs->x, cs->nzmax * elsize);
     return 0;
