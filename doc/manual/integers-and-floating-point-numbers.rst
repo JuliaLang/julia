@@ -17,14 +17,14 @@ them. The following are Julia's primitive numeric types:
 
 -  **Integer types:**
 
-   -  ``Int8`` — signed 8-bit integers ranging from –27 to 27 – 1.
-   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 28 – 1.
-   -  ``Int16`` — signed 16-bit integers ranging from –215 to 215 – 1.
-   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 216 – 1.
-   -  ``Int32`` — signed 32-bit integers ranging from –231 to 231 – 1.
-   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 232 – 1.
-   -  ``Int64`` — signed 64-bit integers ranging from –263 to 263 – 1.
-   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 264 – 1.
+   -  ``Int8`` — signed 8-bit integers ranging from −2^7 to 2^7 − 1.
+   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 2^8 − 1.
+   -  ``Int16`` — signed 16-bit integers ranging from −2^15 to 2^15 − 1.
+   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 2^16 − 1.
+   -  ``Int32`` — signed 32-bit integers ranging from −2^31 to 2^31 − 1.
+   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 − 1.
+   -  ``Int64`` — signed 64-bit integers ranging from −2^63 to 2^63 − 1.
+   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 − 1.
    -  ``Bool`` — either ``true`` or ``false``, which correspond
       numerically to 1 and 0.
    -  ``Char`` — a 32-bit numeric type representing a `Unicode
