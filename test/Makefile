@@ -8,7 +8,7 @@ TESTS = default all extra \
 core numbers strings unicode corelib hashing \
 arrayops lapack factorizations fft sparse arpack bitarray \
 random special functional bigint distributions combinatorics statistics \
-integers glpk linprog sparse bigfloat poly file Rmath
+glpk linprog sparse bigfloat poly file Rmath
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@
