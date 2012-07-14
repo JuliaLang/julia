@@ -426,8 +426,8 @@ function write_bitmap_data(s, img)
     elseif eltype(img) <: Float
         # prevent overflow
         a = copy(img)
-        a[img > 1] = 1
-        a[img < 0] = 0
+        a[img .> 1] = 1
+        a[img .< 0] = 0
         if ndims(a) == 3 && size(a,3) == 3
             for i=1:n, j=1:m, k=1:3
                 write(s, uint8(255*a[i,j,k]))
@@ -507,8 +507,8 @@ function imadjustintensity{T}(img::Array{T,2}, range)
         error("incorrect range")
     end
     tmp = (img - range[1])/(range[2] - range[1])
-    tmp[tmp > 1] = 1
-    tmp[tmp < 0] = 0
+    tmp[tmp .> 1] = 1
+    tmp[tmp .< 0] = 0
     out = tmp
 end
 
@@ -825,9 +825,9 @@ function hsi2rgb{T}(img::Array{T})
     R = zeros(T, size(img,1), size(img,2))
     G = zeros(T, size(img,1), size(img,2))
     B = zeros(T, size(img,1), size(img,2))
-    RG = 0 <= H < 2*pi/3
-    GB = 2*pi/3 <= H < 4*pi/3
-    BR = 4*pi/3 <= H < 2*pi
+    RG = 0 .<= H .< 2*pi/3
+    GB = 2*pi/3 .<= H .< 4*pi/3
+    BR = 4*pi/3 .<= H .< 2*pi
     # RG sector
     B[RG] = I[RG].*(1 - S[RG])
     R[RG] = I[RG].*(1 + (S[RG].*cos(H[RG]))./cos(pi/3 - H[RG]))

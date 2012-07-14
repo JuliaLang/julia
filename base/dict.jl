@@ -355,14 +355,19 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     return -1
 end
 
-function get(h::Dict, key, deflt)
+function ref{K,V}(h::Dict{K,V}, key)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt : h.vals[index]
+    return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
-function key(h::Dict, key, deflt)
+function get{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
-    return (index<0) ? deflt : h.keys[index]
+    return (index<0) ? deflt : h.vals[index]::V
+end
+
+function key{K,V}(h::Dict{K,V}, key, deflt)
+    index = ht_keyindex(h, key)
+    return (index<0) ? deflt : h.keys[index]::K
 end
 
 function del(h::Dict, key)
