@@ -324,11 +324,7 @@ function nextprod(a::Vector{Int}, x)
         end
     end
     best = mx[end] < best ? mx[end] : best
-    if best < typemax(Int)
-        return int(best)
-    else
-        return best
-    end
+    return int(best)  # could overflow, but best to have predictable return type
 end
 
 # For a list of integers i1, i2, i3, find the largest 
