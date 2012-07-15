@@ -238,9 +238,8 @@
     jl_stdin_callback;
     jl_readBuffer;
     jl_exit;
+    jl_make_timer;
     jl_timer_start;
-    jl_timer_stop;
-    jl_timer_init;
     jl_cwd;
     jl_getpid;
     ios_splitbuf;
@@ -266,6 +265,7 @@
     jl_uv_*;
     asprintf;
     ev_break;
+    jl_clear_input;
   local:
     *;
 };

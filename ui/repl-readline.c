@@ -637,7 +637,7 @@ void restart(void)
     rl_on_new_line();
 }
 
-void jl_clear_input(void) {
+DLLEXPORT void jl_clear_input(void) {
     //todo: how to do this better / the correct way / ???
     //move the cursor to a clean line:
     char *p = rl_line_buffer;
