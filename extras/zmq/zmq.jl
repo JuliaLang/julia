@@ -76,13 +76,12 @@ function close(ctx::ZMQContext)
     end
 end 
 
-
 # Sockets
 type ZMQSocket
     data::Ptr{Void}
 
     function ZMQSocket(ctx::ZMQContext, typ::Integer)
-        p = ccall(_jl_zmq_socket, Ptr{Void},  (Ptr{Void}, Int), ctx.data, int(typ))
+        p = ccall(_jl_zmq_socket, Ptr{Void},  (Ptr{Void}, Int32), ctx.data, typ)
         if p == C_NULL
 	    throw(ZMQStateError(jl_zmq_error_str()))
         end
@@ -92,44 +91,74 @@ type ZMQSocket
     end
 end
 function close(socket::ZMQSocket)
-    rc = ccall(_jl_zmq_close, Int,  (Ptr{Void},), socket.data)
+    rc = ccall(_jl_zmq_close, Int32,  (Ptr{Void},), socket.data)
     if rc != 0
 	throw(ZMQStateError(jl_zmq_error_str()))
     end
 end
 
 # Missing from below:
-#   rcvtimeo
-#   sndtimeo
-#   fd
+#   fd --- removed in 3.x (no reason to start supporting it now)
 
 # Getting and setting socket options
 # Socket options of integer type
-let u64p = zeros(Uint64, 1), i64p = zeros(Int64, 1), ip = zeros(Int, 1), u32p = zeros(Uint32, 1), sz = zeros(Uint, 1)
-for (fset, fget, k, p) in {
+let u64p = zeros(Uint64, 1), i64p = zeros(Int64, 1), ip = zeros(Int32, 1), u32p = zeros(Uint32, 1), sz = zeros(Uint, 1)
+opslist = {
+    (:zmq_setsockopt_affinity,     :zmq_getsockopt_affinity,      4, u64p)
+    (nothing,                      :zmq_getsockopt_fd,           14,   ip)
+    (:zmq_setsockopt_type,         :zmq_getsockopt_type,         16,   ip)
+    (:zmq_setsockopt_linger,       :zmq_getsockopt_linger,       17,   ip)
+    (:zmq_setsockopt_reconnect_ivl,:zmq_getsockopt_reconnect_ivl,18,   ip)
+    (:zmq_setsockopt_backlog,      :zmq_getsockopt_backlog,      19,   ip)
+    (:zmq_setsockopt_reconnect_ivl_max,:zmq_getsockopt_reconnect_ivl_max,21,ip)
+  }
+major, minor, patch = zmq_version()
+if major == 2
+    opslist = vcat(opslist, {
     (:zmq_setsockopt_hwm,          :zmq_getsockopt_hwm,           1, u64p)
     (:zmq_setsockopt_swap,         :zmq_getsockopt_swap,          3, i64p)
-    (:zmq_setsockopt_affinity,     :zmq_getsockopt_affinity,      4, u64p)
     (:zmq_setsockopt_rate,         :zmq_getsockopt_rate,          8, i64p)
     (:zmq_setsockopt_recovery_ivl, :zmq_getsockopt_recovery_ivl,  9, i64p)
     (:_zmq_setsockopt_mcast_loop,  :_zmq_getsockopt_mcast_loop,  10, i64p)
     (:zmq_setsockopt_sndbuf,       :zmq_getsockopt_sndbuf,       11, u64p)
     (:zmq_setsockopt_rcvbuf,       :zmq_getsockopt_rcvbuf,       12, u64p)
-    (:_zmq_setsockopt_rcvmore,     :_zmq_getsockopt_rcvmore,     13, i64p)
-    (:zmq_setsockopt_events,       :zmq_getsockopt_events,       15, u32p)
-    (:zmq_setsockopt_type,         :zmq_getsockopt_type,         16,   ip)
-    (:zmq_setsockopt_linger,       :zmq_getsockopt_linger,       17,   ip)
-    (:zmq_setsockopt_reconnect_ivl,:zmq_getsockopt_reconnect_ivl,18,   ip)
-    (:zmq_setsockopt_backlog,      :zmq_getsockopt_backlog,      19,   ip)
+    (nothing,                      :_zmq_getsockopt_rcvmore,     13, i64p)
+    (nothing,                      :zmq_getsockopt_events,       15, u32p)
     (:zmq_setsockopt_recovery_ivl_msec,:zmq_getsockopt_recovery_ivl_msec,20,i64p)
-    (:zmq_setsockopt_reconnect_ivl_max,:zmq_getsockopt_reconnect_ivl_max,21,ip)
-  }
+    })
+elseif major == 3
+    opslist = vcat(opslist, {
+    (:zmq_setsockopt_rate,         :zmq_getsockopt_rate,          8,   ip)
+    (:zmq_setsockopt_recovery_ivl, :zmq_getsockopt_recovery_ivl,  9,   ip)
+    (:zmq_setsockopt_sndbuf,       :zmq_getsockopt_sndbuf,       11,   ip)
+    (:zmq_setsockopt_rcvbuf,       :zmq_getsockopt_rcvbuf,       12,   ip)
+    (nothing,                      :_zmq_getsockopt_rcvmore,     13,   ip)
+    (nothing,                      :zmq_getsockopt_events,       15,   ip)
+    (:zmq_setsockopt_maxmsgsize,   :zmq_getsockopt_maxmsgsize,   22,   ip)
+    (:zmq_setsockopt_sndhwm,       :zmq_getsockopt_sndhwm,       23,   ip)
+    (:zmq_setsockopt_rcvhwm,       :zmq_getsockopt_rcvhwm,       24,   ip)
+    (:zmq_setsockopt_multicast_hops,:zmq_getsockopt_multicast_hops,25, ip)
+    (:zmq_setsockopt_ipv4only,     :zmq_getsockopt_ipv4only,     31,   ip)
+    (:zmq_setsockopt_tcp_keepalive,:zmq_getsockopt_tcp_keepalive,34,   ip)
+    (:zmq_setsockopt_tcp_keepalive_idle,:zmq_getsockopt_tcp_keepalive_idle,35,ip)
+    (:zmq_setsockopt_tcp_keepalive_cnt,:zmq_getsockopt_tcp_keepalive_cnt,36,ip)
+    (:zmq_setsockopt_tcp_keepalive_intvl,:zmq_getsockopt_tcp_keepalive_intvl,37,ip)
+    })
+end
+if major > 2 || (major == 2 && minor > 1)
+    opslist = vcat(opslist, {
+    (:zmq_setsockopt_rcvtimeo,     :zmq_getsockopt_rcvtimeo,     27,   ip)
+    (:zmq_setsockopt_sndtimeo,     :zmq_getsockopt_sndtimeo,     28,   ip)
+    })
+end
+    
+for (fset, fget, k, p) in opslist
     if fset != nothing
         @eval global ($fset)
         @eval function ($fset)(socket::ZMQSocket, option_val::Integer)
             ($p)[1] = option_val
-            rc = ccall(_jl_zmq_setsockopt, Int,
-                       (Ptr{Void}, Int, Ptr{Void}, Uint),
+            rc = ccall(_jl_zmq_setsockopt, Int32,
+                       (Ptr{Void}, Int32, Ptr{Void}, Uint),
                        socket.data, $k, $p, sizeof(eltype($p)))
             if rc != 0
                 throw(ZMQStateError(jl_zmq_error_str()))
@@ -140,8 +169,8 @@ for (fset, fget, k, p) in {
         @eval global($fget)
         @eval function ($fget)(socket::ZMQSocket)
             ($sz)[1] = sizeof(eltype($p))
-            rc = ccall(_jl_zmq_getsockopt, Int,
-                       (Ptr{Void}, Int, Ptr{Void}, Ptr{Uint}),
+            rc = ccall(_jl_zmq_getsockopt, Int32,
+                       (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint}),
                        socket.data, $k, $p, $sz)
             if rc != 0
                 throw(ZMQStateError(jl_zmq_error_str()))
@@ -150,24 +179,36 @@ for (fset, fget, k, p) in {
         end
     end        
 end
-end  # let
-# For some functions, the publicly-visible verions should require &
+# For some functions, the publicly-visible versions should require &
 # return boolean
-zmq_setsockopt_mcast_loop(socket::ZMQSocket, val::Bool) = _zmq_setsockopt_mcast_loop(socket, val)
-zmq_getsockopt_mcast_loop(socket::ZMQSocket) = bool(_zmq_getsockopt_mcast_loop(socket))
-zmq_setsockopt_rcvmore(socket::ZMQSocket, val::Bool) = _zmq_setsockopt_rcvmore(socket, val)
+if major == 2
+    global zmq_setsockopt_mcast_loop
+    zmq_setsockopt_mcast_loop(socket::ZMQSocket, val::Bool) = _zmq_setsockopt_mcast_loop(socket, val)
+    global zmq_getsockopt_mcast_loop
+    zmq_getsockopt_mcast_loop(socket::ZMQSocket) = bool(_zmq_getsockopt_mcast_loop(socket))
+end
+end  # let
+# More functions with boolean prototypes
 zmq_getsockopt_rcvmore(socket::ZMQSocket) = bool(_zmq_getsockopt_rcvmore(socket))
-# And now a convenience function
+# And a convenience function
 ismore(socket::ZMQSocket) = zmq_getsockopt_rcvmore(socket)
 
 
 # Socket options of string type
 let u8ap = zeros(Uint8, 255), sz = zeros(Uint, 1)
-for (fset, fget, k) in {
+major, minor, patch = zmq_version()
+opslist = {
     (:zmq_setsockopt_identity,     :zmq_getsockopt_identity,      5)
     (:zmq_setsockopt_subscribe,    nothing,                       6)
     (:zmq_setsockopt_unsubscribe,  nothing,                       7)
-  }
+    }
+if major == 3
+    opslist = vcat(opslist, {
+    (nothing,         :zmq_getsockopt_last_endpoint,             32)
+    (:zmq_setsockopt_tcp_accept_filter, nothing,                 38)
+    })
+end
+for (fset, fget, k) in opslist
     if fset != nothing
         @eval global ($fset)
         @eval function ($fset)(socket::ZMQSocket, option_val::ByteString)
@@ -198,6 +239,8 @@ for (fset, fget, k) in {
 end
 end  # let
     
+
+
 function zmq_bind(socket::ZMQSocket, endpoint::String)
     rc = ccall(_jl_zmq_bind, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
     if rc != 0
@@ -289,7 +332,7 @@ msg_size(zmsg::ZMQMessage) = ccall(_jl_zmq_msg_size, Int, (Ptr{Uint8},) , zmsg.o
 # of bytes. You send these with the following:
 #   send(socket, zmsg)
 #   zmsg = recv(socket)
-send(socket::ZMQSocket, zmsg::ZMQMessage) = send(socket, zmsg, 0)
+send(socket::ZMQSocket, zmsg::ZMQMessage) = send(socket, zmsg, int32(0))
 function send(socket::ZMQSocket, zmsg::ZMQMessage, noblock::Bool, sndmore::Bool)
 
     flag::Int32 = 0;
@@ -297,20 +340,20 @@ function send(socket::ZMQSocket, zmsg::ZMQMessage, noblock::Bool, sndmore::Bool)
     if (sndmore) flag = flag | ZMQ_SNDMORE ; end
     send(socket, zmsg, flag)
 end
-function send(socket::ZMQSocket, zmsg::ZMQMessage, flag::Int32)
+function send(socket::ZMQSocket, zmsg::ZMQMessage, flag::Integer)
     rc = ccall(_jl_zmq_send, Int32, (Ptr{Void}, Ptr{Uint8}, Int32),
                socket.data, zmsg.obj, flag)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
 end
-recv(socket::ZMQSocket) = recv(socket, 0)
+recv(socket::ZMQSocket) = recv(socket, int32(0))
 function recv(socket::ZMQSocket, noblock::Bool)
     flag::Int32 = 0;
     if (noblock) flag = flag | ZMQ_NOBLOCK ; end
     recv(socket, flag)
 end
-function recv(socket::ZMQSocket, flag::Int32)
+function recv(socket::ZMQSocket, flag::Integer)
     zmsg = ZMQMessage()
     rc = ccall(_jl_zmq_recv, Int32, (Ptr{Void}, Ptr{Void}, Int32),
                socket.data, zmsg.obj, flag)
