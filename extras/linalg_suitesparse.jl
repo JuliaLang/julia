@@ -45,10 +45,8 @@ type CholmodCommon
         ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_common), Void,
               (Ptr{Void},),
               pt)
-        status = ccall(dlsym(_jl_libcholmod, :cholmod_start),
-                       Int,
-                       (Ptr{Void}, ),
-                       pt[1]);
+        status = ccall(dlsym(_jl_libcholmod, :cholmod_start), Int,
+                       (Ptr{Void}, ), pt[1])
         if status != 1 error("Error calling cholmod_start") end
         finalizer(pt, _jl_cholmod_common_finalizer)
         new(pt)
@@ -106,8 +104,7 @@ size{Tv<:CHMVTypes,Ti<:CHMITypes}(cs::CholmodSparse{Tv,Ti}) = size(cs.cp)
 
 nnz{Tv<:CHMVTypes,Ti<:CHMITypes}(cs::CholmodSparse{Tv,Ti}) = nnz(cs.cp) + 1
 
-function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{SparseMatrixCSC{Tv,Ti}},
-                                              cs::CholmodSparse{Tv,Ti})
+function SparseMatrixCSC{Tv<:CHMVTypes,Ti<:CHMITypes}(cs::CholmodSparse{Tv,Ti})
     _jl_convert_to_1_based_indexing(cs.cp)
 end
 
@@ -235,13 +232,6 @@ solve{Tv<:CHMVTypes,Ti<:CHMITypes}(cf::CholmodFactor{Tv,Ti}, B::CholmodDense{Tv}
 
 (\){Tv<:CHMVTypes,Ti<:CHMITypes}(cf::CholmodFactor{Tv,Ti}, b::VecOrMat{Tv}) = convert(Matrix{Tv}, solve(cf, CholmodDense(b, cf.cs.cm)))
 
-function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{Array{Tv,2}}, cdo::CholmodDenseOut{Tv,Ti})
-    mm = Array(Tv, (cdo.m, cdo.n))
-    ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense_copy_out), Void,
-          (Ptr{Void}, Ptr{Tv}), cdo.pt.val[1], mm)
-    mm
-end
-
 type CholmodSparseOut{Tv<:CHMVTypes,Ti<:CHMITypes}
     pt::CholmodPtr{Tv,Ti}
     m::Int
@@ -275,7 +265,7 @@ function solve{Tv<:CHMVTypes,Ti<:CHMITypes}(cf::CholmodFactor{Tv,Ti}, B::Cholmod
     CholmodSparseOut{Tv,Ti}(cso, m, n, cf.cs.cm)
 end
 
-function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{CholmodSparseOut{Tv,Ti}}, cf::CholmodFactor{Tv,Ti})
+function CholmodSparseOut{Tv<:CHMVTypes,Ti<:CHMITypes}(cf::CholmodFactor{Tv,Ti})
     n = size(cf.cs)[1]
     cso = CholmodPtr{Tv,Ti}(Array(Ptr{Void},1))
     cso.val[1] = ccall(dlsym(_jl_libcholmod, :cholmod_factor_to_sparse), Ptr{Void},
@@ -284,7 +274,7 @@ function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{CholmodSparseOut{Tv,Ti}}, c
     CholmodSparseOut{Tv,Ti}(cso, n, n, cf.cs.cm)
 end
 
-function convert{Tv<:CHMVTypes,Ti<:CHMITypes}(::Type{SparseMatrixCSC{Tv,Ti}}, cso::CholmodSparseOut{Tv,Ti})
+function SparseMatrixCSC{Tv<:CHMVTypes,Ti<:CHMITypes}(cso::CholmodSparseOut{Tv,Ti})
     nz = nnz(cso)
     sp = SparseMatrixCSC{Tv,Ti}(cso.m, cso.n, Array(Ti, cso.n + 1), Array(Ti, nz), Array(Tv, nz))
     err = ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_sparse_copy_out), Int32,
