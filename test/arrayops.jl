@@ -85,6 +85,7 @@ B[[3,1],[2,4]] = [21 22; 23 24]
 B[4,[2,3]] = 7
 @assert B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
 
+@assert isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
 ## arrays as dequeues
 l = {1,2,3}
@@ -219,4 +220,19 @@ begin
     @assert isequal(cumsum(A,1),A1)
     @assert isequal(cumsum(A,2),A2)
     @assert isequal(cumsum(A,3),A3)
+
+    A = rand(4,4)
+    for s in {A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)}
+        c = cumsum(s, 1)
+        @assert c[1,1] == A[1,1]
+        @assert c[2,1] == A[1,1]+A[3,1]
+        @assert c[1,2] == A[1,3]
+        @assert c[2,2] == A[1,3]+A[3,3]
+
+        c = cumsum(s, 2)
+        @assert c[1,1] == A[1,1]
+        @assert c[2,1] == A[3,1]
+        @assert c[1,2] == A[1,1]+A[1,3]
+        @assert c[2,2] == A[3,1]+A[3,3]
+    end
 end
