@@ -1,4 +1,3 @@
-runtests("integers")
 runtests("glpk")
 runtests("linprog")
 runtests("bigfloat")

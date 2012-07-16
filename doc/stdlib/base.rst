@@ -1537,27 +1537,27 @@ Distributed Arrays
 
 .. function:: dzeros([type, ]dims, ...)
 
-   Construct a distrbuted array of zeros. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dones([type, ]dims, ...)
 
-   Construct a distrbuted array of ones. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dfill(x, dims, ...)
 
-   Construct a distrbuted array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: drand(dims, ...)
 
-   Construct a distrbuted uniform random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: drandn(dims, ...)
 
-   Construct a distrbuted normal random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dcell(dims, ...)
 
-   Construct a distrbuted cell array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed cell array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: distribute(a[, distdim])
 
