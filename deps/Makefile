@@ -269,7 +269,7 @@ distclean-openlibm: clean-openlibm
 ifeq ($(OS), WINNT) 
 UV_CFLAGS=
 else
-UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
+UV_CFLAGS = CFLAGS="-g -DEV_SIGNAL_ENABLE=0 -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a

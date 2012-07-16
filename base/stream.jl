@@ -23,7 +23,7 @@ typealias Callback Union(Function,Bool)
 abstract AsyncStream <: Stream
 typealias StreamOrNot Union(Bool,AsyncStream)
 typealias BufOrNot Union(Bool,IOStream)
-typealias StdIOSet (StreamOrNot, StreamOrNot, StreamOrNot)
+typealias StdIOSet (AsyncStream, AsyncStream, AsyncStream)
 
 abstract AbstractCmd
 
@@ -99,14 +99,26 @@ type TTY <: AsyncStream
     TTY(handle,closed)=new(handle,closed,Buffer(),false)
 end
 
+copy(s::TTY) = TTY(s.handle,s.closed)
+
+#SpawnNullStream is Singleton
+type SpawnNullStream <: AsyncStream
+end
+
+const null_handle = SpawnNullStream()
+SpawnNullStream() = null_handle
+
+copy(s::SpawnNullStream) = s
 
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 read_handle(s::AsyncStream) = s.handle
 write_handle(s::AsyncStream) = s.handle
 read_handle(s::NamedPipe) = s.read_handle
 write_handle(s::NamedPipe) = s.write_handle
-read_handle(s::Bool) = s ? STDIN.handle : C_NULL
-write_handle(s::Bool) = s ? STDOUT.handle : C_NULL
+read_handle(s::Bool) = s ? error("read_handle: invalid value") : C_NULL
+write_handle(s::Bool) = s ? error("write_handle: invalid value") : C_NULL
+read_handle(::SpawnNullStream) = C_NULL
+write_handle(::SpawnNullStream) = C_NULL
 
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
@@ -116,7 +128,19 @@ function _uv_tty2tty(handle::Ptr{Void})
     tty
 end
 
-OUTPUT_STREAM = make_stdout_stream()
+#macro init_stdio()
+#begin
+    const STDIN  = _uv_tty2tty(ccall(:jl_stdin_stream ,Ptr{Void},()))
+    const STDOUT = _uv_tty2tty(ccall(:jl_stdout_stream,Ptr{Void},()))
+    const STDERR = _uv_tty2tty(ccall(:jl_stderr_stream,Ptr{Void},()))
+    const stdin_stream  = STDIN
+    const stdout_stream = STDOUT
+    const stderr_stream = STDERR
+    OUTPUT_STREAM = STDOUT
+#end
+#end
+
+#@init_stdio
 
 ## SOCKETS ##
 
@@ -448,6 +472,18 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     pc
 end
 
+function reinit_stdio()
+    STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
+    STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
+    STDERR.handle = ccall(:jl_stderr_stream,Ptr{Void},())
+    STDIN.buffer = Buffer()
+    STDOUT.buffer = Buffer()
+    STDERR.buffer = Buffer()
+    for stream in (STDIN,STDOUT,STDERR)
+        ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),stream.handle,stream)
+    end
+end
+
 # INTERNAL
 # returns a touple of function arguments to spawn:
 # (stdios, exitcb, closecb)
@@ -458,14 +494,16 @@ end
 #   | - true: This will let the child inherit the parents' io (only valid for 0-2)
 #   \ - false: None (for 3-255) or /dev/null (for 0-2)
 
-for (sym, default) in [(:spawn_opts_inherit, true),(:spawn_opts_swallow, false)]
+
+for (sym, stdin, stdout, stderr) in {(:spawn_opts_inherit, STDIN,STDOUT,STDERR),
+                       (:spawn_opts_swallow, null_handle,null_handle,null_handle)}
 @eval begin
  ($sym)(stdios::StdIOSet,exitcb::Callback,closecb::Callback) = (stdios,exitcb,closecb)
  ($sym)(stdios::StdIOSet,exitcb::Callback) = (stdios,exitcb,false)
  ($sym)(stdios::StdIOSet) = (stdios,false,false)
- ($sym)() = (($default,$default,$default),false,false)
- ($sym)(in::StreamOrNot) = ((in,$default,$default),false,false)
- ($sym)(in::StreamOrNot,out::StreamOrNot) = ((in,out,$default),false,false)
+ ($sym)() = (($stdin,$stdout,$stderr),false,false)
+ ($sym)(in::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),false,false)
+ ($sym)(in::StreamOrNot,out::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),false,false)
 end
 end
 
@@ -477,9 +515,9 @@ spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,fa
 
 #returns a pipe to read from the last command in the pipelines
 read_from(cmds::AbstractCmd)=read_from(cmds, false)
-function read_from(cmds::AbstractCmd, stdin::StreamOrNot)
+function read_from(cmds::AbstractCmd, stdin::AsyncStream)
     out=make_pipe(true,false)
-    processes = spawn(false, cmds, (stdin,out,false))
+    processes = spawn(false, cmds, (stdin,out,null_handle))
     start_reading(out)
     (out, processes)
 end
@@ -491,8 +529,8 @@ function write_to(cmds::AbstractCmd, stdout::StreamOrNot)
     (in, processes)
 end
 
-readall(cmd::AbstractCmd) = readall(cmd, false)
-function readall(cmd::AbstractCmd,stdin::StreamOrNot)
+readall(cmd::AbstractCmd) = readall(cmd, null_handle)
+function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc)=read_from(cmd, stdin)
     if !wait(pc)
         pipeline_error(pc)

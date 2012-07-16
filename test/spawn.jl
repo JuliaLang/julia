@@ -19,6 +19,9 @@ out = readall(`echo hello` & `echo world`)
 @assert search(out,"hello") != (0,0)
 @assert readall((`echo hello` & `echo world`)|`sort`)=="hello\nworld\n"
 
+## THIS requires visual inspection
+@assert run(`echo stdio passthrough OK`)
+
 prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
 @assert run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` | prefixer("A",2) & prefixer("B",2))
 
