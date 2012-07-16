@@ -1833,6 +1833,8 @@ So far only the second case can actually occur.
 (define (to-goto-form e)
   (goto-form e))
 
+;; macro expander
+
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
@@ -1872,9 +1874,88 @@ So far only the second case can actually occur.
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (equal? form '(error))
 	       (error (string "error expanding macro " (cadr e))))
-	   (julia-expand-macros form)))
+	   (let ((form (car form))
+		 (m    (cdr form)))
+	     ;; m is the macro's def module, or #f if def env === use env
+	     (julia-expand-macros
+	      (resolve-expansion-vars form m)))))
 	(else
 	 (map julia-expand-macros e))))
+
+(define (resolve-expansion-vars- e env m)
+  (cond ((or (eq? e 'true) (eq? e 'false))
+	 e)
+	((symbol? e)
+	 (let ((a (assq e env)))
+	   (if a (cdr a)
+	       (if m `(|.| ,m (quote ,e))
+		   e))))
+	((or (not (pair? e)) (quoted? e))
+	 e)
+	(else
+	 (case (car e)
+	   ((escape) (cadr e))
+	   ((lambda)
+	    (let ((newenv (append (env-for-expansion (caddr e))
+				  (map (lambda (x) (cons x (gensy)))
+				       (llist-vars (cadr e)))
+				  env)))
+	      `(lambda ,(map (lambda (x)
+			       (resolve-expansion-vars- x newenv m))
+			     (cadr e))
+		 ,(resolve-expansion-vars- (caddr e) newenv m))))
+	   ((macrocall)
+	    `(macrocall ,(cadr e) ,(resolve-expansion-vars-
+				    (caddr e) env m)))
+	   ;; todo: for, trycatch
+	   ;; todo: tuple as assignment LHS
+	   (else
+	    (cons (car e)
+		  (map (lambda (x)
+			 (resolve-expansion-vars- x env m))
+		       (cdr e))))))))
+
+(define (find-declared-vars-in-expansion e decl)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'escape))
+	     '())
+	    ((eq? (car e) decl)
+	     (list (decl-var (cadr e))))
+	    (else
+	     (apply append! (map (lambda (x)
+				   (find-declared-vars-in-expansion x decl))
+				 e))))))
+
+(define (find-assigned-vars-in-expansion e)
+  (if (or (not (pair? e)) (quoted? e))
+      '()
+      (case (car e)
+	((lambda escape)  '())
+	((= method)
+	 (let ((v (decl-var (cadr e))))
+	   (list v)))
+	(else
+	 (apply append! (map find-assigned-vars-in-expansion e))))))
+
+(define (env-for-expansion e)
+  (let ((v (diff (delete-duplicates
+		  (append! (find-declared-vars-in-expansion e 'local)
+			   (find-assigned-vars-in-expansion e)
+			   (if (and (pair? e) (eq? (car e) 'lambda))
+			       (llist-vars (cadr e))
+			       '())))
+		 (find-declared-vars-in-expansion e 'global))))
+    (map (lambda (x) (cons x (gensy))) v)))
+
+(define (resolve-expansion-vars e m)
+  ;; expand binding form patterns
+  ;; keep track of environment, rename locals to gensyms
+  ;; and wrap globals in (getfield module var) for macro's home module
+  (let ((e (pattern-expand binding-form-patterns e)))
+    (resolve-expansion-vars- e (env-for-expansion e) m)))
+
+;; expander entry point
 
 (define (julia-expand1 ex)
   (to-goto-form
