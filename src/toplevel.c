@@ -61,7 +61,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
                     *plineno = jl_linenode_line(form);
             }
             else {
-                (void)jl_toplevel_eval_flex(form, 0, plineno);
+                (void)jl_toplevel_eval_flex(form, 1, plineno);
             }
         }
     }
@@ -283,7 +283,7 @@ void jl_parse_eval_all(char *fname)
                     jl_interpret_toplevel_expr(form);
                 }
             }
-            (void)jl_toplevel_eval_flex(form, 0, &lineno);
+            (void)jl_toplevel_eval_flex(form, 1, &lineno);
         }
     }
     JL_CATCH {
