@@ -5,6 +5,7 @@ abstract LongSymbol
 abstract LongTuple
 abstract LongExpr
 
+const _jl_ser_version = 1 # do not make changes without bumping the version #!
 const _jl_ser_tag = ObjectIdDict()
 const _jl_deser_tag = ObjectIdDict()
 let i = 2
@@ -15,6 +16,9 @@ let i = 2
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
+             :reserved1, :reserved2, :reserved3, :reserved4,
+             :reserved5, :reserved6, :reserved7, :reserved8,
+             :reserved9, :reserved10, :reserved11, :reserved12,
              
              (), Bool, Any, :Any, None, Top, Undef, Type,
              :Array, :TypeVar, :Box,
@@ -26,6 +30,8 @@ let i = 2
              :mul_float, :unbox, :box,
              :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
+             :reserved13, :reserved14, :reserved15, :reserved16,
+             :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
              28, 29, 30, 31, 32}
@@ -200,6 +206,7 @@ function serialize(s, x)
         write(s, x)
     elseif isa(t,CompositeKind)
         serialize_type(s, t)
+        serialize(s, length(t.names))
         for n = t.names
             serialize(s, getfield(x, n))
         end
@@ -341,6 +348,7 @@ deserialize(s, t::BitsKind) = read(s, t)
 
 # default structure deserializer
 function deserialize(s, t::CompositeKind)
+    nf_expected = deserialize(s)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
