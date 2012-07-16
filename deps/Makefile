@@ -24,7 +24,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -80,10 +80,6 @@ endif
 #ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 #endif
-
-ifeq ($(USE_SYSTEM_GLPK), 0)
-STAGE1_DEPS += glpk
-endif
 
 #ifeq ($(USE_SYSTEM_LAPACK), 0)
 #STAGE2_DEPS += lapack
@@ -796,10 +792,8 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 ## GLPK ##
 
 ifeq ($(USE_SYSTEM_GLPK), 1)
-GLPK_PREFIX = /usr/
 GLPK_OBJ_TARGET =
 else
-GLPK_PREFIX = glpk-$(GLPK_VER)/
 GLPK_OBJ_TARGET = $(USRLIB)/libglpk.$(SHLIB_EXT)
 endif
 

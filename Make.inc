@@ -63,6 +63,7 @@ ifeq ($(OS), Darwin)
 # use $(sw_vers -productVersion) instead of 10.5?
 CC += -mmacosx-version-min=10.5
 CXX += -mmacosx-version-min=10.5
+JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
