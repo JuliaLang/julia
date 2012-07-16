@@ -1,8 +1,8 @@
 JULIAHOME = ../..
 include ../../Make.inc
 
-PRIMARY = UTF-32BE
-ENCODINGS = UTF-32BE UTF-32LE UTF-16BE UTF-16LE UTF-8
+PRIMARY = UTF-32LE
+ENCODINGS = UTF-32LE UTF-16BE UTF-16LE UTF-8
 
 DERIVED = $(filter-out $(PRIMARY),$(ENCODINGS))
 DERIVED_FILES = $(addsuffix .txt,$(DERIVED))
@@ -10,8 +10,8 @@ CHECKS = $(addprefix check-,$(DERIVED_FILES))
 
 all: $(DERIVED_FILES)
 
-UTF-32BE.txt:
-	$(QUIET_PERL) perl -e 'print pack "N*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' >$@
+UTF-32LE.txt:
+	$(QUIET_PERL) perl -e 'print pack "V*", 0xfeff, 0..0xd7ff, 0xe000..0x10ffff' >$@
 
 $(DERIVED_FILES): %.txt: $(PRIMARY).txt
 	$(QUIET_PERL) iconv -f $(PRIMARY) -t $* <$< >$@
