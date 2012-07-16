@@ -149,14 +149,21 @@ end
 
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
-    a = Array(typeof(start), int(n))
+    T = typeof(start)
+    a = Array(T, int(n))
     if n == 1
         a[1] = start
         return a
     end
     step = (stop-start)/(n-1)
-    for i=1:n
-        a[i] = start+(i-1)*step
+    if isa(start,Integer)
+        for i=1:n
+            a[i] = iround(T,start+(i-1)*step)
+        end
+    else
+        for i=1:n
+            a[i] = start+(i-1)*step
+        end
     end
     a
 end
