@@ -36,8 +36,8 @@ show(io, thiserr::ZMQStateError) = print(io, "ZMQ: ", thiserr.msg)
 
 # Basic functions
 function jl_zmq_error_str()
-    errno = ccall(_jl_zmq_errno, Int, ())
-    c_strerror = ccall (_jl_zmq_strerror, Ptr{Uint8}, (Int,), errno)
+    errno = ccall(_jl_zmq_errno, Int32, ())
+    c_strerror = ccall (_jl_zmq_strerror, Ptr{Uint8}, (Int32,), errno)
     if c_strerror != C_NULL
         strerror = cstring(c_strerror)
         return strerror
@@ -46,10 +46,10 @@ function jl_zmq_error_str()
     end
 end
 
-let major = zeros(Int, 1), minor = zeros(Int, 1), patch = zeros(Int, 1)
+let major = zeros(Int32, 1), minor = zeros(Int32, 1), patch = zeros(Int32, 1)
 global zmq_version
 function zmq_version()
-    ccall(_jl_zmq_version, Void, (Ptr{Int}, Ptr{Int}, Ptr{Int}), major, minor, patch)
+    ccall(_jl_zmq_version, Void, (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}), major, minor, patch)
     return (major[1], minor[1], patch[1])
 end
 end
@@ -59,7 +59,7 @@ type ZMQContext
     data::Ptr{Void}
 
     function ZMQContext(n::Integer)
-        p = ccall(_jl_zmq_init, Ptr{Void},  (Int,), int(n))
+        p = ccall(_jl_zmq_init, Ptr{Void},  (Int32,), n)
         if p == C_NULL
 	    throw(ZMQStateError(jl_zmq_error_str()))
         end
@@ -70,7 +70,7 @@ type ZMQContext
 end
 ZMQContext() = ZMQContext(1)
 function close(ctx::ZMQContext)
-    rc = ccall(_jl_zmq_term, Int,  (Ptr{Void},), ctx.data)
+    rc = ccall(_jl_zmq_term, Int32,  (Ptr{Void},), ctx.data)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
@@ -174,8 +174,8 @@ for (fset, fget, k) in {
             if length(option_val) > 255
                 throw(ZMQStateError("option value too large"))
             end
-            rc = ccall(_jl_zmq_setsockopt, Int,
-                       (Ptr{Void}, Int, Ptr{Uint8}, Uint),
+            rc = ccall(_jl_zmq_setsockopt, Int32,
+                       (Ptr{Void}, Int32, Ptr{Uint8}, Uint),
                        socket.data, $k, option_val, length(option_val))
             if rc != 0
                 throw(ZMQStateError(jl_zmq_error_str()))
@@ -186,8 +186,8 @@ for (fset, fget, k) in {
         @eval global ($fget)
         @eval function ($fget)(socket::ZMQSocket)
             ($sz)[1] = length($u8ap)
-            rc = ccall(_jl_zmq_getsockopt, Int,
-                       (Ptr{Void}, Int, Ptr{Uint8}, Ptr{Uint}),
+            rc = ccall(_jl_zmq_getsockopt, Int32,
+                       (Ptr{Void}, Int32, Ptr{Uint8}, Ptr{Uint}),
                        socket.data, $k, $u8ap, $sz)
             if rc != 0
                 throw(ZMQStateError(jl_zmq_error_str()))
@@ -199,14 +199,14 @@ end
 end  # let
     
 function zmq_bind(socket::ZMQSocket, endpoint::String)
-    rc = ccall(_jl_zmq_bind, Int, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
+    rc = ccall(_jl_zmq_bind, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
 end
 
 function zmq_connect(socket::ZMQSocket, endpoint::String)
-    rc=ccall(_jl_zmq_connect, Int, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
+    rc=ccall(_jl_zmq_connect, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
@@ -221,7 +221,7 @@ type ZMQMessage
     # Create an empty message (for receive)
     function ZMQMessage()
         obj = Array(Uint8, _jl_zmq_msg_t_size)
-        rc = ccall(_jl_zmq_msg_init, Int, (Ptr{Void},), obj)
+        rc = ccall(_jl_zmq_msg_init, Int32, (Ptr{Void},), obj)
         if rc != 0
             throw(ZMQStateError(jl_zmq_error_str()))
         end
@@ -232,7 +232,7 @@ type ZMQMessage
     # Create a message with a given buffer size (for send)
     function ZMQMessage(len::Integer)
         obj = Array(Uint8, _jl_zmq_msg_t_size)
-        rc = ccall(_jl_zmq_msg_init_size, Int, (Ptr{Void}, Uint), obj, uint(len))
+        rc = ccall(_jl_zmq_msg_init_size, Int32, (Ptr{Void}, Uint), obj, uint(len))
         if rc != 0
             throw(ZMQStateError(jl_zmq_error_str()))
         end
@@ -271,7 +271,7 @@ ref(::Type{ASCIIString}, zmsg::ZMQMessage) = cstring(msg_data(zmsg), msg_size(zm
 # Close a message. You should not need to call this manually (let the
 # finalizer do it).
 function close(zmsg::ZMQMessage)
-    rc = ccall(_jl_zmq_msg_close, Int, (Ptr{Uint8},), zmsg.obj)
+    rc = ccall(_jl_zmq_msg_close, Int32, (Ptr{Uint8},), zmsg.obj)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
@@ -292,13 +292,13 @@ msg_size(zmsg::ZMQMessage) = ccall(_jl_zmq_msg_size, Int, (Ptr{Uint8},) , zmsg.o
 send(socket::ZMQSocket, zmsg::ZMQMessage) = send(socket, zmsg, 0)
 function send(socket::ZMQSocket, zmsg::ZMQMessage, noblock::Bool, sndmore::Bool)
 
-    flag::Int = 0;
+    flag::Int32 = 0;
     if (noblock) flag = flag | ZMQ_NOBLOCK ; end
     if (sndmore) flag = flag | ZMQ_SNDMORE ; end
     send(socket, zmsg, flag)
 end
-function send(socket::ZMQSocket, zmsg::ZMQMessage, flag::Int)
-    rc = ccall(_jl_zmq_send, Int, (Ptr{Void}, Ptr{Uint8}, Int),
+function send(socket::ZMQSocket, zmsg::ZMQMessage, flag::Int32)
+    rc = ccall(_jl_zmq_send, Int32, (Ptr{Void}, Ptr{Uint8}, Int32),
                socket.data, zmsg.obj, flag)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
@@ -306,13 +306,13 @@ function send(socket::ZMQSocket, zmsg::ZMQMessage, flag::Int)
 end
 recv(socket::ZMQSocket) = recv(socket, 0)
 function recv(socket::ZMQSocket, noblock::Bool)
-    flag::Int = 0;
+    flag::Int32 = 0;
     if (noblock) flag = flag | ZMQ_NOBLOCK ; end
     recv(socket, flag)
 end
-function recv(socket::ZMQSocket, flag::Int)
+function recv(socket::ZMQSocket, flag::Int32)
     zmsg = ZMQMessage()
-    rc = ccall(_jl_zmq_recv, Int, (Ptr{Void}, Ptr{Void}, Int32),
+    rc = ccall(_jl_zmq_recv, Int32, (Ptr{Void}, Ptr{Void}, Int32),
                socket.data, zmsg.obj, flag)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
