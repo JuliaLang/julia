@@ -4,7 +4,7 @@ include ../../Make.inc
 PRIMARY = UTF-32BE
 ENCODINGS = UTF-32BE UTF-32LE UTF-16BE UTF-16LE UTF-8
 
-EXT = .txt
+EXT = .unicode
 DERIVED = $(filter-out $(PRIMARY),$(ENCODINGS))
 DERIVED_FILES = $(addsuffix $(EXT),$(DERIVED))
 CHECKS = $(addprefix check-,$(DERIVED_FILES))
