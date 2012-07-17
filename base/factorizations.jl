@@ -148,7 +148,7 @@ type Cholesky{T} <: Factorization{T}
     end
 end
 
-Cholesky(A::Matrix) = Cholesky{typeof(A[1])}(A, "U")
+Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, "U")
 
 (\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_potrs(C.uplo, C.LR, copy(B))

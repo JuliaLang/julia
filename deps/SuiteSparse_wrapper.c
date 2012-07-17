@@ -39,7 +39,7 @@ jl_cholmod_dense_copy_out(cholmod_dense *cd,
                           )
 {
     size_t elsize = (cd->xtype == CHOLMOD_COMPLEX ? 2 : 1) *
-	(cd->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
+        (cd->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
 
     memcpy(p, cd->x, cd->nzmax*elsize);
 }
@@ -48,7 +48,7 @@ extern void
 jl_cholmod_sparse( void **cs,    /* Store return value in here */
                    size_t nrow,  /* # of rows of A */
                    size_t ncol,  /* # of columns of A */
-                   size_t nzmax, /* max # of nonzeros of A */ 
+                   size_t nzmax, /* max # of nonzeros of A */
                    void *p,      /* p [0..ncol], the column pointers */
                    void *i,      /* i [0..nzmax-1], the row indices */
                    void *nz,     /* nz [0..ncol-1], the # of nonzeros in each col if unpacked */
@@ -86,4 +86,42 @@ jl_cholmod_sparse( void **cs,    /* Store return value in here */
 
     *cs = s;
     return;
+}
+
+extern int
+jl_cholmod_sparse_copy_out(cholmod_sparse *cs,
+                           void *cp,  /* column pointers */
+                           void *ri,  /* row indices */
+                           void *nzp,
+                           cholmod_common *cm) /* non-zero values */
+{
+                                /* error return if cs is not packed */
+    if (!cs->packed) return 1;  /* FIXME: If non-packed becomes a problem, write code to do packing */
+    if (!cs->sorted)            /* sort it */
+        if (!cholmod_sort(cs, cm)) return 2;
+
+    size_t isize;
+    switch(cs->itype) {
+    case CHOLMOD_INT:
+    case CHOLMOD_INTLONG:
+        isize = sizeof(int); break;
+    case CHOLMOD_LONG:
+        isize =  sizeof(SuiteSparse_long); break;
+    default:
+        return 3;
+    }
+    size_t elsize = (cs->xtype == CHOLMOD_COMPLEX ? 2 : 1) *
+        (cs->dtype == CHOLMOD_DOUBLE ? sizeof(double) : sizeof(float));
+
+    if (cs->itype == CHOLMOD_INTLONG) {
+        int i, *dpt = (int *) cp;
+        SuiteSparse_long *spt = (SuiteSparse_long *) cs->p;
+        for (i = 0; i <= cs->ncol; ++i) dpt[i] = spt[i];
+    } else {
+        memcpy(cp, cs->p, (cs->ncol + 1) * isize);
+    }
+
+    memcpy(ri, cs->i, cs->nzmax * isize);
+    memcpy(nzp, cs->x, cs->nzmax * elsize);
+    return 0;
 }

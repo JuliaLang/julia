@@ -61,7 +61,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
                     *plineno = jl_linenode_line(form);
             }
             else {
-                (void)jl_toplevel_eval_flex(form, 0, plineno);
+                (void)jl_toplevel_eval_flex(form, 1, plineno);
             }
         }
     }
@@ -102,7 +102,7 @@ static int has_intrinsics(jl_expr_t *e)
 
 // heuristic for whether a top-level input should be evaluated with
 // the compiler or the interpreter.
-static int eval_with_compiler_p(jl_expr_t *expr, int compileloops)
+int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops)
 {
     assert(jl_is_expr(expr));
     if (expr->head==body_sym && compileloops) {
@@ -218,7 +218,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
     if (jl_is_expr(ex) && ex->head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
-        ewc = eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
+        ewc = jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)thk->ast), fast);
         if (!ewc) {
             jl_array_t *vinfos = jl_lam_vinfo((jl_expr_t*)thk->ast);
             int i;
@@ -232,7 +232,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
         }
     }
     else {
-        if (jl_is_expr(ex) && eval_with_compiler_p((jl_expr_t*)ex, fast)) {
+        if (jl_is_expr(ex) && jl_eval_with_compiler_p((jl_expr_t*)ex, fast)) {
             thk = jl_wrap_expr((jl_value_t*)ex);
             ewc = 1;
         }
@@ -283,7 +283,7 @@ void jl_parse_eval_all(char *fname)
                     jl_interpret_toplevel_expr(form);
                 }
             }
-            (void)jl_toplevel_eval_flex(form, 0, &lineno);
+            (void)jl_toplevel_eval_flex(form, 1, &lineno);
         }
     }
     JL_CATCH {

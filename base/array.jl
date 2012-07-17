@@ -22,6 +22,10 @@ function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if so+N-1 > numel(src) || dsto+N-1 > numel(dest) || dsto < 1 || so < 1
         throw(BoundsError())
     end
+    copy_to_unsafe(dest, dsto, src, so, N)
+end
+# @Jeff: is this split needed?
+function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if isa(T, BitsKind)
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
               pointer(dest, dsto), pointer(src, so), N*sizeof(T))
@@ -145,14 +149,21 @@ end
 
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
-    a = Array(typeof(start), int(n))
+    T = typeof(start)
+    a = Array(T, int(n))
     if n == 1
         a[1] = start
         return a
     end
     step = (stop-start)/(n-1)
-    for i=1:n
-        a[i] = start+(i-1)*step
+    if isa(start,Integer)
+        for i=1:n
+            a[i] = iround(T,start+(i-1)*step)
+        end
+    else
+        for i=1:n
+            a[i] = start+(i-1)*step
+        end
     end
     a
 end
@@ -169,6 +180,69 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy_to(similar(x,T), x)
 
+## Bounds checking ##
+function check_bounds(sz::Int, I::Integer)
+    if I < 1 || I > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds(sz::Int, I::AbstractVector{Bool})
+    if length(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T<:Integer}(sz::Int, I::Ranges{T})
+    if min(I) < 1 || max(I) > sz
+        throw(BoundsError())
+    end
+end
+
+function check_bounds{T <: Integer}(sz::Int, I::AbstractVector{T})
+    for i in I
+        if i < 1 || i > sz
+            throw(BoundsError())
+        end
+    end
+end
+
+function check_bounds(A::Array, I::Array{Bool})
+    if !isequal(size(A), size(I))
+        throw(BoundsError())
+    end
+end
+
+check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
+
+function check_bounds(A::Matrix, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    check_bounds(size(A,2), J)
+end
+
+function check_bounds(A::Array, I::Indices, J::Indices)
+    check_bounds(size(A,1), I)
+    sz = size(A,2)
+    for i = 3:ndims(A)
+        sz *= size(A, i) # TODO: sync. with decision on issue #1030
+    end
+    check_bounds(sz, J)
+end
+
+function check_bounds(A::Array, I::Indices...)
+    n = length(I)
+    if n > 0
+        for dim = 1:(n-1)
+            check_bounds(size(A,dim), I[dim])
+        end
+        sz = size(A,n)
+        for i = n+1:ndims(A)
+            sz *= size(A,i)     # TODO: sync. with decision on issue #1030
+        end
+        check_bounds(sz, I[n])
+    end
+end
+
 ## Indexing: ref ##
 
 ref(a::Array, i::Int) = arrayref(a,i)
@@ -179,6 +253,7 @@ ref{T}(a::Array{T,1}, i::Integer) = arrayref(a,int(i))
 ref(a::Array{Any,1}, i::Int) = arrayref(a,i)
 ref(a::Array{Any,1}, i::Integer) = arrayref(a,int(i))
 
+# @Jeff: begin fixme issue #996
 ref(A::Array, i0::Integer, i1::Integer) = A[i0 + size(A,1)*(i1-1)]
 ref(A::Array, i0::Integer, i1::Integer, i2::Integer) =
     A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))]
@@ -195,28 +270,80 @@ function ref(A::Array, I::Integer...)
     end
     return A[index]
 end
+# end fixme issue #996
+
+# Fast copy using copy_to for Range1
+function ref(A::Array, I::Range1{Int})
+    X = similar(A, length(I))
+    copy_to(X, 1, A, first(I), length(I))
+    return X
+end
 
 # note: this is also useful for Ranges
-ref{T<:Integer}(A::Vector, I::AbstractVector{T}) = [ A[i] for i=I ]
-ref{T<:Integer}(A::AbstractVector, I::AbstractVector{T}) = [ A[i] for i=I ]
-
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I ]
-ref{T<:Integer}(A::Matrix, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{T}) = [ A[i,j] for i=I, j=J ]
-
 function ref{T<:Integer}(A::Array, I::AbstractVector{T})
-    X = similar(A, length(I))
-    ind = 1
-    for i in I
-        X[ind] = A[i]
-        ind += 1
+    check_bounds(A, I)
+    return [ A[i] for i=I ]
+end
+function ref{T<:Integer}(A::AbstractArray, I::AbstractVector{T})
+    check_bounds(A, I)
+    return [ A[i] for i=I ]
+end
+
+# 2d indexing
+function ref(A::Array, I::Range1{Int}, j::Int)
+    check_bounds(A, I, j)
+    X = similar(A,length(I))
+    copy_to_unsafe(X, 1, A, (j-1)*size(A,1) + first(I), length(I))
+    return X
+end
+function ref(A::Array, I::Range1{Int}, J::Range1{Int})
+    check_bounds(A, I, J)
+    X = similar(A, ref_shape(I, J))
+    if length(I) == size(A,1)
+        copy_to_unsafe(X, 1, A, (first(J)-1)*size(A,1) + 1, size(A,1)*length(J))
+    else
+        storeoffset = 1
+        for j = J
+            copy_to_unsafe(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+            storeoffset += length(I)
+        end
+    end
+    return X
+end
+function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
+    check_bounds(A, I, J)
+    X = similar(A, ref_shape(I, J))
+    storeoffset = 1
+    for j = J
+        copy_to_unsafe(X, storeoffset, A, (j-1)*size(A,1) + first(I), length(I))
+        storeoffset += length(I)
     end
     return X
 end
 
+ref{T<:Integer}(A::Array, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I ]
+ref{T<:Integer}(A::Array, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I,j=J ]
+
+# This next is a 2d specialization of the algorithm used for general
+# multidimensional indexing
+function ref{T<:Integer}(A::Array, I::AbstractVector{T}, J::AbstractVector{T})
+    check_bounds(A, I, J)
+    X = similar(A, ref_shape(I, J))
+    storeind = 1
+    for j = J
+        offset = (j-1)*size(A,1)
+        for i = I
+            X[storeind] = A[i+offset]
+            storeind += 1
+        end
+    end
+    return X
+end
+# Multidimensional indexing
 let ref_cache = nothing
 global ref
 function ref(A::Array, I::Indices...)
+    check_bounds(A, I...)
     I = indices(I)
     X = similar(A, ref_shape(I...))
 
@@ -235,6 +362,7 @@ end
 # logical indexing
 
 function _jl_ref_bool_1d(A::Array, I::AbstractArray{Bool})
+    check_bounds(A, I)
     n = sum(I)
     out = similar(A, n)
     c = 1
@@ -252,14 +380,16 @@ ref(A::Vector, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
 ref(A::Array, I::AbstractVector{Bool}) = _jl_ref_bool_1d(A, I)
 ref(A::Array, I::AbstractArray{Bool}) = _jl_ref_bool_1d(A, I)
 
+# @Jeff: more efficient is to check the bool vector, and then do
+# indexing without checking. Turn off checking for the second stage?
 ref(A::Matrix, I::Integer, J::AbstractVector{Bool}) = A[I,find(J)]
 ref(A::Matrix, I::AbstractVector{Bool}, J::Integer) = A[find(I),J]
 ref(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = A[find(I),find(J)]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = [ A[i,j] for i=I, j=find(J) ]
-ref{T<:Integer}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = [ A[i,j] for i=find(I), j=J ]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{T}, J::AbstractVector{Bool}) = A[I,find(J)]
+ref{T<:Integer}(A::Matrix, I::AbstractVector{Bool}, J::AbstractVector{T}) = A[find(I),J]
 
 ## Indexing: assign ##
-
+# Jeff: begin fixme #996
 assign(A::Array{Any}, x::AbstractArray, i::Integer) = arrayset(A,int(i),x)
 assign(A::Array{Any}, x::ANY, i::Integer) = arrayset(A,int(i),x)
 assign{T}(A::Array{T}, x::AbstractArray, i::Integer) = arrayset(A,int(i),convert(T, x))
@@ -295,11 +425,18 @@ function assign_scalarND(A, x, I0::Integer, I::Integer...)
     A[index] = x
     return A
 end
+# end fixme 996
 
 function assign{T<:Integer}(A::Array, x, I::AbstractVector{T})
     for i in I
         A[i] = x
     end
+    return A
+end
+
+function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int})
+    if length(X) != length(I); error("argument dimensions must match"); end
+    copy_to(A, first(I), X, 1, length(I))
     return A
 end
 
@@ -313,14 +450,16 @@ function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T})
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, i::Integer, J::AbstractVector{T})
+function assign{T<:Integer}(A::Array, x, i::Integer, J::AbstractVector{T})
+    check_bounds(A, i, J)
     m = size(A, 1)
     for j in J
         A[(j-1)*m + i] = x
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::AbstractVector{T})
+function assign{T<:Integer}(A::Array, X::AbstractArray, i::Integer, J::AbstractVector{T})
+    check_bounds(A, i, J)
     if length(X) != length(J); error("argument dimensions must match"); end
     m = size(A, 1)
     count = 1
@@ -331,7 +470,8 @@ function assign{T<:Integer}(A::Matrix, X::AbstractArray, i::Integer, J::Abstract
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
+function assign{T<:Integer}(A::Array, x, I::AbstractVector{T}, j::Integer)
+    check_bounds(A, I, j)
     m = size(A, 1)
     offset = (j-1)*m
     for i in I
@@ -339,7 +479,16 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, j::Integer)
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+
+function assign{T}(A::Array{T}, X::Array{T}, I::Range1{Int}, j::Integer)
+    check_bounds(A, I, j)
+    if length(X) != length(I); error("argument dimensions must match"); end
+    copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, 1, length(I))
+    return A
+end
+
+function assign{T<:Integer}(A::Array, X::AbstractArray, I::AbstractVector{T}, j::Integer)
+    check_bounds(A, I, j)
     if length(X) != length(I); error("argument dimensions must match"); end
     m = size(A, 1)
     offset = (j-1)*m
@@ -351,7 +500,52 @@ function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, j
     return A
 end
 
-function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{T})
+# These have to be specialized because the Bool operations below are
+# written in terms of Matrix
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T}(A::($TA){T}, X::Array{T}, I::Range1{Int}, J::Range1{Int})
+            check_bounds(A, I, J)
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            if length(I) == size(A,1)
+                copy_to_unsafe(A, first(I) + (first(J)-1)*size(A,1), X, 1, size(A,1)*length(J))
+            else
+                refoffset = 1
+                for j = J
+                    copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+                    refoffset += length(I)
+                end
+            end
+            return A
+        end
+    end
+end
+
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T}(A::($TA){T}, X::Array{T}, I::Range1{Int}, J::AbstractVector{Int})
+            check_bounds(A, I, J)
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            refoffset = 1
+            for j = J
+                copy_to_unsafe(A, first(I) + (j-1)*size(A,1), X, refoffset, length(I))
+                refoffset += length(I)
+            end
+            return A
+        end
+    end
+end
+
+function assign{T<:Integer}(A::Array, x, I::AbstractVector{T}, J::AbstractVector{T})
+    check_bounds(A, I, J)
     m = size(A, 1)
     for j in J
         offset = (j-1)*m
@@ -361,27 +555,34 @@ function assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVecto
     end
     return A
 end
-function assign{T<:Integer}(A::Matrix, X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
-    nel = length(I)*length(J)
-    if length(X) != nel ||
-        (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
-        error("argument dimensions must match")
-    end
-    m = size(A, 1)
-    count = 1
-    for j in J
-        offset = (j-1)*m
-        for i in I
-            A[offset + i] = X[count]
-            count += 1
+
+for TA in (Matrix, Array)
+    @eval begin
+        function assign{T<:Integer}(A::($TA), X::AbstractArray, I::AbstractVector{T}, J::AbstractVector{T})
+            check_bounds(A, I, J)
+            nel = length(I)*length(J)
+            if length(X) != nel ||
+                (ndims(X) > 1 && (size(X,1)!=length(I) || size(X,2)!=length(J)))
+                error("argument dimensions must match")
+            end
+            m = size(A, 1)
+            count = 1
+            for j in J
+                offset = (j-1)*m
+                for i in I
+                    A[offset + i] = X[count]
+                    count += 1
+                end
+            end
+            return A
         end
     end
-    return A
 end
 
 let assign_cache = nothing
 global assign
 function assign(A::Array, x, I0::Indices, I::Indices...)
+    check_bounds(A, I0, I...)
     I0 = indices(I0)
     I = indices(I)
     if is(assign_cache,nothing)
@@ -400,6 +601,7 @@ end
 let assign_cache = nothing
 global assign
 function assign(A::Array, X::AbstractArray, I0::Indices, I::Indices...)
+    check_bounds(A, I0, I...)
     I0 = indices(I0)
     I = indices(I)
     nel = length(I0)
@@ -436,6 +638,7 @@ end
 # logical indexing
 
 function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
+    check_bounds(A, I)
     for i = 1:numel(I)
         if I[i]
             A[i] = x
@@ -445,6 +648,7 @@ function _jl_assign_bool_scalar_1d(A::Array, x, I::AbstractArray{Bool})
 end
 
 function _jl_assign_bool_vector_1d(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+    check_bounds(A, I)
     c = 1
     for i = 1:numel(I)
         if I[i]

@@ -44,8 +44,9 @@ macro _jl_dist_1p(T, b)
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
     Ty = eval(T)
-    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
-    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    dc = Ty <: DiscreteDistribution
+    pf = dc ? :pmf : :pdf
+    lf = dc ? :logpmf : :logpdf
     pn = Ty.names                       # parameter names
     p  = expr(:quote,pn[1])
     quote
@@ -99,9 +100,14 @@ macro _jl_dist_1p(T, b)
                   Float64, (Float64, Float64, Int32, Int32),
                   lp, d.($p), 0, 1)
         end
-        function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64,), d.($p))
+        if $dc
+            function rand(d::($T))
+                int(ccall(dlsym(_jl_libRmath,  $rr), Float64, (Float64,), d.($p)))
+            end
+        else
+            function rand(d::($T))
+                ccall(dlsym(_jl_libRmath,  $rr), Float64, (Float64,), d.($p))
+            end
         end
     end
 end
@@ -112,8 +118,9 @@ macro _jl_dist_2p(T, b)
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
     Ty = eval(T)
-    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
-    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    dc = Ty <: DiscreteDistribution
+    pf = dc ? :pmf : :pdf
+    lf = dc ? :logpmf : :logpdf
     pn = Ty.names                       # parameter names
     p1 = expr(:quote,pn[1])
     p2 = expr(:quote,pn[2])    
@@ -169,13 +176,20 @@ macro _jl_dist_2p(T, b)
                   lp, d.($p1), d.($p2), 1, 1)
         end
         function invlogccdf(d::($T), lp::Real)
-            ccall(dlsym(_jl_libRmath,  $qq),
+            ccall(dlsym(_jl_libRmath, $qq),
                   Float64, (Float64, Float64, Float64, Int32, Int32),
                   lp, d.($p1), d.($p2), 0, 1)
         end
-        function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64, Float64), d.($p1), d.($p2))
+        if $dc
+            function rand(d::($T))
+                int(ccall(dlsym(_jl_libRmath,  $rr), Float64,
+                          (Float64,Float64), d.($p1), d.($p2)))
+            end
+        else
+            function rand(d::($T))
+                ccall(dlsym(_jl_libRmath,  $rr), Float64,
+                      (Float64,Float64), d.($p1), d.($p2))
+            end
         end
     end
 end
@@ -186,8 +200,9 @@ macro _jl_dist_3p(T, b)
     qq = expr(:quote,strcat("q",b))     # C name for quantile
     rr = expr(:quote,strcat("r",b))     # C name for random sampler
     Ty = eval(T)
-    pf = Ty <: DiscreteDistribution ? :pmf : :pdf
-    lf = Ty <: DiscreteDistribution ? :logpmf : :logpdf
+    dc = Ty <: DiscreteDistribution
+    pf = dc ? :pmf : :pdf
+    lf = dc ? :logpmf : :logpdf
     pn = Ty.names                       # parameter names
     p1 = expr(:quote,pn[1])
     p2 = expr(:quote,pn[2])    
@@ -243,9 +258,16 @@ macro _jl_dist_3p(T, b)
                   Float64, (Float64, Float64, Float64, Float64, Int32, Int32),
                   lp, d.($p1), d.($p2), d.($p3), 0, 1)
         end
-        function rand(d::($T))
-            ccall(dlsym(_jl_libRmath,  $rr),
-                  Float64, (Float64, Float64, Float64), d.($p1), d.($p2), d.($p3))
+        if $dc
+            function rand(d::($T))
+                int(ccall(dlsym(_jl_libRmath,  $rr), Float64,
+                          (Float64,Float64,Float64), d.($p1), d.($p2), d.($p3)))
+            end
+        else
+            function rand(d::($T))
+                ccall(dlsym(_jl_libRmath,  $rr), Float64,
+                      (Float64,Float64,Float64), d.($p1), d.($p2), d.($p3))
+            end
         end
     end
 end
@@ -622,9 +644,9 @@ type Multinomial <: DiscreteDistribution
             if p[i] < 0. error("Multinomial: probabilities must be non-negative") end
             sump += p[i]
         end
-        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
-            error("Multinomial: probabilities must add to 1")
-        end
+        ## if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
+        ##     error("Multinomial: probabilities must add to 1")
+        ## end
         new(int(n), p ./ sump)
     end      
 end
@@ -665,22 +687,27 @@ pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
 function rand(d::Multinomial)
   l = numel(d.prob)
   s = zeros(Int, l)
-  r = rand()
-  for j = 1:l
-    r -= d.prob[j]
-    if r <= 0.0
-      s[j] = 1
-      break
+  for i = 1:d.n
+    r = rand()
+    for j = 1:l
+      r -= d.prob[j]
+      if r <= 0.0
+        s[j] += 1
+        break
+      end
     end
   end
   s
 end
 
+rand(d::Multinomial, count::Int) = rand(d, (numel(d.prob), count))
+
 function rand!(d::Multinomial, A::Matrix{Int})
-  n = size(A, 1)
+  n = size(A, 2)
   for i = 1:n
-    A[i, :] = rand(d)'
+    A[:, i] = rand(d)
   end
+  A
 end
 
 type Dirichlet <: ContinuousDistribution
@@ -743,9 +770,9 @@ type Categorical <: DiscreteDistribution
             if p[i] < 0. error("Categorical: probabilities must be non-negative") end
             sump += p[i]
         end
-        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
-            error("Categorical: probabilities must add to 1")
-        end
+#        if abs(sump - 1.) > sqrt(eps())   # allow a bit of slack
+#            error("Categorical: probabilities must add to 1")
+#        end
         new(p ./ sump)
     end
 end
@@ -782,14 +809,14 @@ function rand(d::Categorical)
   return l
 end
 
-function rand!(d::Categorical, A::Vector{Int})
-  n = size(A, 1)
-  for i = 1:n
-    A[i] = rand(d)
-  end
-end
+## Why is this needed?  There is already such a method for DiscreteDistribution
+## function rand!{T<:Integer}(d::Categorical, A::Vector{T})
+##   for i = 1:length(A)
+##     A[i] = rand(d)
+##   end
+## end
 
-function sample(a::Array, probs::Vector)
+function sample{T<:Real}(a::AbstractVector, probs::Vector{T})
   i = rand(Categorical(probs))
   a[i]
 end

@@ -208,7 +208,7 @@ function sparse{Tv,Ti<:Union(Int32,Int64)}(I::AbstractVector{Ti}, J::AbstractVec
                                            V::AbstractVector{Tv},
                                            nrow::Int, ncol::Int, combine::Function)
 
-    if length(I) == 0; return spzeros(eltype(V),m,n); end
+    if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)

@@ -40,7 +40,7 @@ USECLANG = 0
 
 #ifeq ($(OS), Darwin)
 #USEGCC = 0
-#USECLANG=1
+#USECLANG = 1
 #endif
 
 ifeq ($(USEGCC),1)
@@ -63,6 +63,7 @@ ifeq ($(OS), Darwin)
 # use $(sw_vers -productVersion) instead of 10.5?
 CC += -mmacosx-version-min=10.5
 CXX += -mmacosx-version-min=10.5
+JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
 
@@ -70,7 +71,7 @@ endif
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1 
+OPENBLAS_DYNAMIC_ARCH=0
 OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
@@ -153,8 +154,8 @@ LIBBLASNAME = libblas
 endif
 else
 ifeq ($(OS), WINNT)
-LIBBLAS = $(USRLIB)/libopenblas-r0.1.1.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
-LIBBLASNAME = libopenblas-r0.1.1
+LIBBLAS = $(USRLIB)/libopenblas-r0.2.2.$(SHLIB_EXT) #necessary due to some stupid Windows behavoir - will try yto fix soon
+LIBBLASNAME = libopenblas-r0.2.2
 else
 LIBBLAS = -L$(USRLIB) -lopenblas
 LIBBLASNAME = libopenblas
@@ -241,6 +242,11 @@ LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
+ifneq ($(strip $(MKLLIB)),)
+  ifeq ($(OS), Linux)
+    RPATH += -Wl,-rpath,$(MKLLIB)
+  endif
+endif
 endif
 
 # Libraries to link

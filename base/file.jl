@@ -82,10 +82,6 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-function file_exists(filename::String)
-  exists(stat(filename))
-end
-
 function tempdir()
   chomp(readall(`mktemp -d -t tmp`))
 end
