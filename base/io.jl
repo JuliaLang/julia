@@ -106,13 +106,14 @@ function open(f::Function, args...)
     return x
 end
 
-function memio(x::Integer, finalize::Bool)
+function memio(x::Integer, finalize::Bool, julia_malloc::Bool)
     s = IOStream("<memio>", finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
+    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint, Int32), s.ios, x, julia_malloc)
     return s
 end
-memio(x::Integer) = memio(x, true)
-memio() = memio(0, true)
+memio(x::Integer, finalize::Bool) = memio(x, finalize, true)
+memio(x::Integer) = memio(x, true, true)
+memio() = memio(0, true, true)
 
 ## byte-order mark, ntoh & hton ##
 
@@ -133,7 +134,6 @@ else
 end
 
 ## binary I/O ##
-
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
@@ -251,6 +251,15 @@ read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
 takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
+
+takebuf_array(s::IOStream) =
+    ccall(:jl_takebuf_array, ByteString, (Ptr{Void},), s.ios)
+
+function takebuf_raw(s::IOStream)
+    sz = position(s)
+    buf = ccall(:jl_takebuf_raw, Ptr{Uint8}, (Ptr{Void},), s.ios)
+    return buf, sz
+end
 
 function sprint(size::Integer, f::Function, args...)
     s = memio(size, false)

@@ -43,7 +43,10 @@
     jl_enable_color;
     jl_takebuf_array;
     jl_takebuf_string;
+    jl_takebuf_raw;
     jl_readuntil;
+    jl_free1;
+    jl_free2;
     jl_cpu_cores;
     jl_hrtime;
     jl_cstr_to_string;
