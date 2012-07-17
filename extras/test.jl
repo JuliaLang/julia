@@ -1,11 +1,29 @@
 # test suite functions and macros
 
+# data structures
+type NoException <: Exception
+end
+
+type TestResult
+    context
+    group
+    expr_str::String
+    succeed::Bool # good outcome == true
+    elapsed::Float
+    exception_thrown::Exception
+    operation
+    arg1
+    arg2
+    arg3
+end
+TestResult() = TestResult("no context", "no group", "nothing", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
+
 # tests -- takes either a vector of strings, which is interpreted as filenames,
 # or a single string, which can be a either a filename or a directory. If it's
 # a directory, it's explored for files matching the usual pattern, and recursed.
 function tests(onestr::String, outputter::Function) 
     filestat = stat(onestr)
-    if !exists(filestat)
+    if !ispath(filestat)
         error("Can't test unknown file or directory: $onestr")
     end
     
@@ -52,16 +70,20 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            println("In $(t.context) / $(t.group)")
-            println("$(t.expr_str) FAILED")
-            println("$(t.operation) with args:")
-            println("1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
-            println("Exception: $(t.exception_thrown)")
-            println(sprintf("%0.3f seconds\n", t.elapsed))
+            dump(t)
             println("")
         end
     end
     println("")
+end
+
+function dump(io::IOStream, t::TestResult)
+    println(io, "In $(t.context) / $(t.group)")
+    println(io, strcat(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
+    println(io, "$(t.operation) with args:")
+    println(io, "1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
+    println(io, "Exception: $(t.exception_thrown)")
+    println(io, sprintf("%0.3f seconds\n", t.elapsed))
 end
 
 # things to set state
@@ -72,23 +94,6 @@ function test_group(group::String)
     tls(:group, group)
 end
 
-# data structures
-type NoException <: Exception
-end
-
-type TestResult
-    context
-    group
-    expr_str::String
-    succeed::Bool # good outcome == true
-    elapsed::Float
-    exception_thrown::Exception
-    operation
-    arg1
-    arg2
-    arg3
-end
-TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
 
 # the macro just wraps the expression in a couple layers of quotes, then passes it to a function
 # that does the real work
@@ -106,8 +111,12 @@ end
 
 function _test(ex::Expr, expect_succeed::Bool)
     local tr = TestResult()
-    tr.context = tls(:context)
-    tr.group = tls(:group)
+    try
+        tr.context = tls(:context)
+        tr.group = tls(:group)
+    catch x
+        # not running in a context -- oh well!
+    end
     
     # unwrap once
     ex = eval(ex)
@@ -162,7 +171,12 @@ function _test(ex::Expr, expect_succeed::Bool)
         tr.succeed = !tr.succeed
     end
     
-    produce(tr)
+    try
+        produce(tr)
+    catch x
+        
+    end
+    return(sprint(dump, tr))
 end
 
 # helpful utility tests, supported by the macro
