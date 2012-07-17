@@ -3,7 +3,7 @@ require("zmq/zmq_serialize_julia.jl")
 function launch_client(endpoint::ASCIIString)
     zctx = ZMQContext()
     requester = ZMQSocket(zctx, ZMQ_REQ)
-    zmq_connect(requester, endpoint)
+    connect(requester, endpoint)
     return zctx, requester
 end
 launch_client() = launch_client("tcp://localhost:5555")
@@ -23,7 +23,7 @@ end
 # Within Julia it may be better to use a quote block, but this will
 # surely be the easy way from other languages
 function zmqparse(requester::ZMQSocket, str::ASCIIString)
-    ex = :(zmq_parse_eval($str))
+    ex = :(parse_eval($str))
     zmq_serialize(requester, ex)
     zmq_deserialize(requester)
 end

@@ -29,9 +29,6 @@ function zmq_deserialize(socket::ZMQSocket)
     end
     # Exceptions should be thrown to support transmission of errors
     # across the socket
-    # The utility of the error message would be higher if the server
-    # attaches extra information. See the non-Julia version in
-    # zmq_server.jl.
     if isa(x, Exception)
         throw(x)
     elseif isa(x, Tuple)

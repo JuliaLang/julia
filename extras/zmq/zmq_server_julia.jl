@@ -2,7 +2,7 @@ require("zmq/zmq_serialize_julia.jl")
 
 global _responder   # since eval works in global scope, can't use a closure for zmqquit
 
-function zmq_respond_error(responder::ZMQSocket, thiserr::Exception)
+function respond_error(responder::ZMQSocket, thiserr::Exception)
     if isa(thiserr, ZMQStateError)
         # ZMQ state is corrupted, so we can't reliably report to the
         # client. Report this error on the server.
@@ -14,7 +14,7 @@ function zmq_respond_error(responder::ZMQSocket, thiserr::Exception)
     end
 end
 
-function zmq_parse_eval(str::ASCIIString)
+function parse_eval(str::ASCIIString)
     p, indx = parse(str)
     if indx < length(str)
         error("Could not completely parse string", str)
@@ -32,7 +32,7 @@ function run_server(endpoint::ASCIIString)
     global _responder
     zctx = ZMQContext()
     _responder = ZMQSocket(zctx, ZMQ_REP)
-    zmq_bind(_responder, endpoint)
+    bind(_responder, endpoint)
 
     while true
         # Get the next command
@@ -41,7 +41,7 @@ function run_server(endpoint::ASCIIString)
         try
             ex = zmq_deserialize(_responder)
         catch thiserr
-            zmq_respond_error(_responder, thiserr)
+            respond_error(_responder, thiserr)
             continue
         end
         # Execute the command
@@ -49,14 +49,14 @@ function run_server(endpoint::ASCIIString)
         try
             ret = eval(ex)
         catch thiserr
-            zmq_respond_error(_responder, thiserr)
+            respond_error(_responder, thiserr)
             continue
         end
         # Send the results back
         try
             zmq_serialize(_responder, ret)
         catch thiserr
-            zmq_respond_error(_responder, thiserr)
+            respond_error(_responder, thiserr)
         end
     end
 end
