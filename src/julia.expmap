@@ -263,9 +263,11 @@
     jl_wrap_raw_dl_handle;
     uv_*;
     jl_uv_*;
+    jl_sizeof_*;
     asprintf;
     ev_break;
     jl_clear_input;
+    jl_init_pipe;
   local:
     *;
 };

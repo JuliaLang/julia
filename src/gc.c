@@ -563,6 +563,20 @@ extern jl_value_t * volatile jl_task_arg_in_transit;
 double clock_now(void);
 #endif
 
+#include "julia.h"
+
+static void gc_mark_uv_handle(uv_handle_t *handle, void *arg)
+{
+    if(handle->data) {
+        GC_Markval((jl_value_t*)(handle->data));
+    }
+}
+
+static void gc_mark_uv_state(uv_loop_t *loop)
+{
+    uv_walk(loop,gc_mark_uv_handle,0);
+}
+
 static void gc_mark(void)
 {
     // mark all roots
@@ -587,6 +601,10 @@ static void gc_mark(void)
     GC_Markval(jl_null);
     GC_Markval(jl_true);
     GC_Markval(jl_false);
+
+    // libuv loops
+    gc_mark_uv_state(jl_global_event_loop());
+    gc_mark_uv_state(jl_local_event_loop());
 
     jl_mark_box_caches();
 

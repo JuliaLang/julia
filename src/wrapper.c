@@ -159,18 +159,16 @@ DLLEXPORT void jl_process_events(uv_loop_t *loop)
     if(loop) uv_run_once(loop);
 }
 
-DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct)
+DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only, jl_value_t *julia_struct)
 {
-    int flags;
-    flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
-    if (!julia_only)
-        flags |= UV_PIPE_SPAWN_SAFE;
-    uv_pipe_t *pipe = malloc(sizeof(uv_pipe_t));
-    uv_pipe_init(jl_event_loop, pipe, flags);
-    pipe->data = julia_struct;//will be initilized on io
-    return pipe;
+     int flags;
+     flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
+     if (!julia_only)
+         flags |= UV_PIPE_SPAWN_SAFE;
+     uv_pipe_init(jl_event_loop, pipe, flags);
+     pipe->data = julia_struct;//will be initilized on io
+     return pipe;
 }
-
 
 DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
@@ -385,7 +383,12 @@ char *jl_bufptr(ios_t *s)
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t()
 {
-    return sizeof(uv_stream_t*);
+    return sizeof(uv_stream_t);
+}
+
+DLLEXPORT size_t jl_sizeof_uv_pipe_t()
+{
+    return sizeof(uv_pipe_t);
 }
 
 DLLEXPORT void jl_exit(int exitcode)

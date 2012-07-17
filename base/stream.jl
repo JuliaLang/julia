@@ -1,4 +1,3 @@
-#TODO: allocate unused (spawn-only) streams on the stack if possible & safe
 #TODO: function readline(???)
 #TODO: function writeall(Cmd, String)
 #TODO: cleanup methods duplicated with io.jl
@@ -11,7 +10,6 @@
 
 
 typealias PtrSize Int
-const UVHandle = Ptr{Void}
 const IOStreamHandle = Ptr{Void}
 localEventLoop() = ccall(:jl_local_event_loop,Ptr{Void},())
 globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
@@ -23,7 +21,11 @@ typealias Callback Union(Function,Bool)
 abstract AsyncStream <: Stream
 typealias StreamOrNot Union(Bool,AsyncStream)
 typealias BufOrNot Union(Bool,IOStream)
-typealias StdIOSet (AsyncStream, AsyncStream, AsyncStream)
+typealias UVHandle Ptr{Void}
+typealias RawOrBoxedHandle Union(UVHandle,AsyncStream)
+typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
+
+const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
 
 abstract AbstractCmd
 
@@ -53,14 +55,25 @@ ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cm
 type Process
     cmd::Cmd
     handle::Ptr{Void}
-    in::StreamOrNot
-    out::StreamOrNot
-    err::StreamOrNot
+    in::AsyncStream
+    out::AsyncStream
+    err::AsyncStream
     exit_code::Int32
     term_signal::Int32
     exitcb::Callback
     closecb::Callback
-    Process(cmd::Cmd,handle::Ptr{Void},in::StreamOrNot,out::StreamOrNot,err::StreamOrNot)=new(cmd,handle,in,out,err,-2,-2,false,false)
+    function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
+    if(!isa(in,AsyncStream))
+        in=null_handle
+    end
+    if(!isa(out,AsyncStream))
+        out=null_handle
+    end
+    if(!isa(err,AsyncStream))
+        err=null_handle
+    end
+    new(cmd,handle,in,out,err,-2,-2,false,false)
+    end
 end
 
 type ProcessChain
@@ -81,14 +94,11 @@ end
 _jl_wait_for_(pc::ProcessChain) = map(_jl_wait_for_, pc.processes)
 
 type NamedPipe <: AsyncStream
-    read_handle::Ptr{Void}
-    write_handle::Ptr{Void}
+    handle::Ptr{Void}
     buffer::Buffer
     closed::Bool
     readcb::Callback
-    NamedPipe() = new(C_NULL,C_NULL,Buffer(),false,false)
-    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void},buf::IOStream) = new(read_handle,write_handle,buf,false,false)
-    NamedPipe(read_handle::Ptr{Void},write_handle::Ptr{Void}) = new(read_handle,write_handle,Buffer(),false,false)
+    NamedPipe() = new(C_NULL,Buffer(),false,false)
 end
 
 type TTY <: AsyncStream
@@ -113,12 +123,12 @@ copy(s::SpawnNullStream) = s
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 read_handle(s::AsyncStream) = s.handle
 write_handle(s::AsyncStream) = s.handle
-read_handle(s::NamedPipe) = s.read_handle
-write_handle(s::NamedPipe) = s.write_handle
 read_handle(s::Bool) = s ? error("read_handle: invalid value") : C_NULL
 write_handle(s::Bool) = s ? error("write_handle: invalid value") : C_NULL
 read_handle(::SpawnNullStream) = C_NULL
 write_handle(::SpawnNullStream) = C_NULL
+read_handle(s::Ptr{Void}) = s
+write_handle(s::Ptr{Void}) = s
 
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
@@ -226,7 +236,13 @@ function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
 end
 
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
-    stream.buffer.ptr+=nread
+    if(nread == -1)
+        if(_uv_lasterror(localEventLoop()) != 1) #UV_EOF == 1
+            error("Failed to start reading: ",_uv_lasterror(localEventLoop()))
+        end
+    else
+        stream.buffer.ptr+=nread
+    end
     if(isa(stream.readcb,Function))
         stream.readcb(stream,nread,base,len)
     end
@@ -340,18 +356,30 @@ end
 process_events() = process_events(localEventLoop())
 
 ##pipe functions
-
-function make_pipe(readable_julia_only::Bool, writeable_julia_only::Bool)
+malloc_pipe() = _c_malloc(_sizeof_uv_pipe)
+function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
-    pipe = NamedPipe()
-    pipe.read_handle  = ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool,NamedPipe), 0, readable_julia_only, pipe)
-    pipe.write_handle = ccall(:jl_make_pipe, Ptr{Void}, (Bool,Bool,NamedPipe), 1, writeable_julia_only, pipe)
-    error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_handle(pipe), write_handle(pipe))
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), read_end, 0, readable_julia_only, pipe)
+    ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), write_end, 1, readable_julia_only, pipe)
+    error = ccall(:uv_pipe_link, Int, (Ptr{Void}, Ptr{Void}), read_end, write_end)
     if error != 0 # don't use assert here as $string isn't be defined yet
         error("uv_pipe_link failed")
     end
-    pipe
 end
+
+function link_pipe(read_end2::NamedPipe,readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool)
+    if(read_end2.handle == C_NULL)
+        read_end2.handle = malloc_pipe()
+    end
+    link_pipe(read_end2.handle,readable_julia_only,write_end,writeable_julia_only,read_end2)
+end
+function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::NamedPipe,writeable_julia_only::Bool)
+    if(write_end.handle == C_NULL)
+        write_end.handle = malloc_pipe()
+    end
+    link_pipe(read_end,readable_julia_only,write_end.handle,writeable_julia_only,write_end)
+end
+close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
 function close(stream::AsyncStream)
     if(!stream.closed)
@@ -419,17 +447,51 @@ end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
     loop = localEventLoop()
-    in = stdios[1]
-    out = stdios[2]
-    err = stdios[3]
-    pp = Process(cmd,C_NULL,in,out,err);
+    close_in,close_out,close_err = false,false,false
+    if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
+        in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #in = _c_malloc(_sizeof_uv_pipe)
+        link_pipe(in,false,stdios[1],true)
+        close_in = true
+    else
+        in = read_handle(stdios[1])
+    end
+    if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
+        out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #out = _c_malloc(_sizeof_uv_pipe)
+        link_pipe(stdios[2],false,out,true)
+        close_out = true
+    else
+        out = write_handle(stdios[2])
+    end
+    if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
+        err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #err = _c_malloc(_sizof_uv_pipe)
+        link_pipe(stdios[3],false,err,true)
+        close_err = true
+    else
+        err = write_handle(stdios[3])
+    end
+    pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
     ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
     pp.handle=_jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
-        read_handle(in), write_handle(out), write_handle(err))
+        in,out,err)
     if pc != false
         push(pc.processes, pp)
+    end
+    if(close_in)
+        close_pipe_sync(in)
+        #_c_free(in)
+    end
+    if(close_out)
+        close_pipe_sync(out)
+        #_c_free(out)
+    end
+    if(close_err)
+        close_pipe_sync(err)
+        #_c_free(err)
     end
     pp
 end
@@ -453,13 +515,24 @@ function process_closed_chain(p::Process)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-    n = make_pipe(false,false)
+    out_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+    in_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+    #out_pipe = _c_malloc(_sizeof_uv_pipe)
+    #in_pipe = _c_malloc(_sizeof_uv_pipe)
+    link_pipe(in_pipe,false,out_pipe,false,null_handle)
     if pc == false
         pc = ProcessChain(stdios)
     end
-    spawn(pc, cmds.a, (stdios[1], n, stdios[3]), exitcb, closecb)
-    spawn(pc, cmds.b, (n, stdios[2], stdios[3]), exitcb, closecb)
-    close(n)
+    try
+        spawn(pc, cmds.a, (stdios[1], out_pipe, stdios[3]), exitcb, closecb)
+        spawn(pc, cmds.b, (in_pipe, stdios[2], stdios[3]), exitcb, closecb)
+    catch e
+        close_pipe_sync(out_pipe)
+        close_pipe_sync(in_pipe)
+        throw(e)
+    end
+    close_pipe_sync(out_pipe)
+    close_pipe_sync(in_pipe)
     pc
 end
 
@@ -467,8 +540,46 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     if pc == false
         pc = ProcessChain(stdios)
     end
-    spawn(pc, cmds.a, stdios, exitcb, closecb)
-    spawn(pc, cmds.b, stdios, exitcb, closecb)
+    close_in,close_out,close_err = false,false,false
+    if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
+        in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #in = _c_malloc(_sizeof_uv_pipe)
+        link_pipe(in,false,stdios[1],true)
+        close_in = true
+    else
+        in = read_handle(stdios[1])
+    end
+    if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
+        out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #out = _c_malloc(_sizeof_uv_pipe)
+        link_pipe(stdios[2],false,out,true)
+        close_out = true
+    else
+        out = write_handle(stdios[2])
+    end
+    if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
+        err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
+        #err = _c_malloc(_sizof_uv_pipe)
+        link_pipe(stdios[3],false,err,true)
+        close_err = true
+    else
+        err = write_handle(stdios[3])
+    end
+    spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
+    spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
+    if(close_in)
+        close_pipe_sync(in)
+        #_c_free(in)
+    end
+    if(close_out)
+        close_pipe_sync(out)
+        #_c_free(out)
+    end
+    if(close_err)
+        close_pipe_sync(err)
+        #_c_free(err)
+    end
+    pp
     pc
 end
 
@@ -516,7 +627,7 @@ spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,fa
 #returns a pipe to read from the last command in the pipelines
 read_from(cmds::AbstractCmd)=read_from(cmds, false)
 function read_from(cmds::AbstractCmd, stdin::AsyncStream)
-    out=make_pipe(true,false)
+    out = NamedPipe()
     processes = spawn(false, cmds, (stdin,out,null_handle))
     start_reading(out)
     (out, processes)
@@ -524,7 +635,7 @@ end
 
 write_to(cmds::AbstractCmd) = write_to(cmds, false)
 function write_to(cmds::AbstractCmd, stdout::StreamOrNot)
-    in = make_pipe(false,true)
+    in = NamedPipe()
     processes = spawn(false, cmds, (in,stdout,false))
     (in, processes)
 end

@@ -54,3 +54,4 @@ tmpnam() = cstring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
 ## Memory related ##
 
 _c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+_c_malloc(size::Int32) = ccall(:malloc, Ptr{Void}, (Int32,), size)

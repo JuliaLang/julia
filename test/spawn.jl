@@ -12,6 +12,7 @@
 
 #### Examples used in the manual ####
 
+show(readall(`echo hello | sort`))
 @assert readall(`echo hello | sort`) == "hello | sort\n"
 @assert readall(`echo hello`|`sort`) == "hello\n"
 out = readall(`echo hello` & `echo world`)

@@ -761,6 +761,7 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host);
 DLLEXPORT void NORETURN jl_exit(int status);
 
 DLLEXPORT size_t jl_sizeof_uv_stream_t();
+DLLEXPORT size_t jl_sizeof_uv_pipe_t();
 DLLEXPORT int jl_sizeof_ios_t();
 
 #ifdef __WIN32__
