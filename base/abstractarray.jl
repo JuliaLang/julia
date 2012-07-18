@@ -47,6 +47,15 @@ iscomplex(::AbstractArray) = false
 isbool(::AbstractArray{Bool}) = true
 isbool(::AbstractArray) = false
 
+# used to compute "end" for last index
+function trailingsize(A, n)
+    s = 1
+    for i=n:ndims(A)
+        s *= size(A,i)
+    end
+    return s
+end
+
 ## Constructors ##
 
 # default arguments to similar()
@@ -75,7 +84,7 @@ colvec{T}(a::AbstractArray{T,2}, i::Int) = vec(a[:,i])
 
 function squeeze(A::AbstractArray)
     d = ()
-    for i = size(A)
+    for i in size(A)
         if i != 1
             d = tuple(d..., i)
         end
@@ -804,7 +813,10 @@ for (f, op) = ((:cumsum, :+), (:cumprod, :*) )
         dimsA = size(A)
         ndimsA = ndims(A)
         axis_size = dimsA[axis]
-        axis_stride = stride(A, axis)
+        axis_stride = 1
+        for i = 1:(axis-1)
+            axis_stride *= size(A,i)
+        end
 
         if axis_size <= 1
             return A

@@ -3,7 +3,7 @@
 LLVM_VER = 3.1
 READLINE_VER = 6.2
 PCRE_VER = 8.30
-GRISU_VER = 1.1
+GRISU_VER = 1.1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = v0.2.2
 LAPACK_VER = 3.4.1
@@ -24,7 +24,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -80,10 +80,6 @@ endif
 #ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 #endif
-
-ifeq ($(USE_SYSTEM_GLPK), 0)
-STAGE1_DEPS += glpk
-endif
 
 #ifeq ($(USE_SYSTEM_LAPACK), 0)
 #STAGE2_DEPS += lapack
@@ -638,12 +634,12 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
 else
-SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config
-SUITESPARSE_LIB = 
+SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -L$(USRLIB)
+SUITESPARSE_LIB = -lcholmod
 endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT) $(SUITESPARSE_LIB)
 	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-suitesparse-wrapper: $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -688,6 +684,11 @@ LIBUNWIND_TARGET_OBJ =
 LIBUNWIND_TARGET_SOURCE = 
 endif
 
+LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
+ifeq ($(ARCH), ppc64)
+LIBUNWIND_CFLAGS += -m64
+endif
+
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
@@ -695,7 +696,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)" --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(LIBUNWIND_CFLAGS)" --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -791,10 +792,8 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 ## GLPK ##
 
 ifeq ($(USE_SYSTEM_GLPK), 1)
-GLPK_PREFIX = /usr/
 GLPK_OBJ_TARGET =
 else
-GLPK_PREFIX = glpk-$(GLPK_VER)/
 GLPK_OBJ_TARGET = $(USRLIB)/libglpk.$(SHLIB_EXT)
 endif
 

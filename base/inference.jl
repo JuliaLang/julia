@@ -1291,7 +1291,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, vars)
-    if !(isa(f,Function)||isa(f,CompositeKind))
+    if !(isa(f,Function)||isa(f,CompositeKind)||isa(f,IntrinsicFunction))
         return NF
     end
     argexprs = a2t_butfirst(e.args)
@@ -1309,8 +1309,11 @@ function inlineable(f, e::Expr, vars)
         isType(e.typ) && isleaftype(e.typ.parameters[1])
         return e.typ.parameters[1]
     end
-    if length(atypes)==1 && isa(atypes[1],BitsKind) && is(f,unbox)
-        return e.args[2]
+    if length(atypes)==2 && isa(atypes[2],BitsKind) && is(f,unbox)
+        return e.args[3]
+    end
+    if isa(f,IntrinsicFunction)
+        return NF
     end
 
     meth = getmethods(f, atypes)

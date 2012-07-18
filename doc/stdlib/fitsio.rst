@@ -15,6 +15,10 @@ File Access Routines
 
    Create and open a new empty output FITS file.
 
+.. function:: fits_clobber_file(filename::String)
+
+   Like fits_create_file, but overwrites ``filename`` if it exists.
+
 .. function:: fits_open_file(filename::String)
 
    Open an existing data file.
