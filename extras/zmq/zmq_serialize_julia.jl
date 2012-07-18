@@ -1,10 +1,9 @@
 # Using Julia's built-in serializer as the ZMQ protocol
 
-require("zmq.jl")
-require("iostring.jl")
+require("zmq/zmq.jl")
 
 function zmq_serialize(socket::ZMQSocket, x, flag::Integer)
-    s = IOString()
+    s = memio()
     serialize(s, x)
     # Having built s, we'd like to avoid a second copy operation when
     # we create the ZMQMessage. This is possible using the ZMQ library
@@ -14,13 +13,15 @@ function zmq_serialize(socket::ZMQSocket, x, flag::Integer)
     # until the callback is called. So the C wrapper should increase
     # the reference count on s, and the callback should decrease it.
     # Here, for simplicity we just make another copy.
-    zmsg = ZMQMessage(s.data)
+    zmsg = ZMQMessage(takebuf_string(s))
     send(socket, zmsg, flag)
 end
 zmq_serialize(socket::ZMQSocket, x) = zmq_serialize(socket, x, 0)
 
 function zmq_deserialize(socket::ZMQSocket)
-    s = IOString(ASCIIString[recv(socket)])
+    zmsg = recv(socket)
+    s = convert(IOStream, zmsg)
+    seek(s, 0)  # rewind to beginning
     xf = deserialize(s)
     if isa(xf, Function)
         x = xf()  # deserializer returns a thunk

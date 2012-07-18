@@ -351,6 +351,8 @@ type ZMQMessage
     end
 end
 # Construct a message from a string (including copying the string)
+# In many cases it's more efficient to allocate the zmsg first and
+# then build the data in-place, but this is here for convenience
 function ZMQMessage(data::ByteArray)
     len = length(data)
     zmsg = ZMQMessage(len)
@@ -359,8 +361,6 @@ function ZMQMessage(data::ByteArray)
     return zmsg
 end
 # Construct a message from a Array{Uint8} (including copying the data)
-# In many cases it's more efficient to allocate the zmsg first and
-# then build the data in-place, but this is here for convenience
 function ZMQMessage(data::Array{Uint8, 1})
     len = length(data)
     zmsg = ZMQMessage(len)
@@ -368,6 +368,8 @@ function ZMQMessage(data::Array{Uint8, 1})
           msg_data(zmsg), data, len)
     return zmsg
 end
+# Convert message to array of Uint8 with Uint8[zmsg]
+# Copies the data
 function ref(::Type{Uint8}, zmsg::ZMQMessage)
     len = msg_size(zmsg)
     data = Array(Uint8, len)
@@ -376,7 +378,17 @@ function ref(::Type{Uint8}, zmsg::ZMQMessage)
     return data
 end
 # Convert message to string with ASCIIString[zmsg]
+# Copies the data
 ref(::Type{ASCIIString}, zmsg::ZMQMessage) = cstring(msg_data(zmsg), msg_size(zmsg))
+# Build an IOStream from a message
+# Copies the data
+function convert(::Type{IOStream}, zmsg::ZMQMessage)
+    len = msg_size(zmsg)
+    a = pointer_to_array(msg_data(zmsg), (len,))
+    s = memio()
+    write(s, a)
+    return s
+end
 # Close a message. You should not need to call this manually (let the
 # finalizer do it).
 function close(zmsg::ZMQMessage)
