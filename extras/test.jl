@@ -1,30 +1,54 @@
 # test suite functions and macros
 
-# tests
-# TODO: re-enable when filesystem tests become available!
-# function tests(onestr::String, outputter::Function) 
-#     # if onestr is an existing file, pass it to the primary testing function 
-#     stat = strip(readall(`stat -f "%HT" $onestr`))
-#     if (stat == "Regular File")
-#         tests([onestr], outputter)
-#     elseif (stat == "Directory")
-#         # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
-#         # that list
-#         files_str = strip(readall(`find $onestr -name test_*.jl -print`))
-#         if (length(files_str) > 0)
-#             tests(split(files_str, "\n"), outputter)
-#         else
-#             # otherwise, throw an error
-#             error("no test_*.jl files in directory: $onestr")
-#         end
-#     end
-# end
-# tests(onestr::String) = tests(onestr, test_printer_raw)
-# tests(fn::Function) = tests(".", fn)
-# tests() = tests(".")
+# data structures
+type NoException <: Exception
+end
 
-tests(onestr::String, outputter::Function) = tests([onestr], outputter)
-tests(onestr::String) = tests([onestr], test_printer_raw)
+type TestResult
+    context
+    group
+    expr_str::String
+    succeed::Bool # good outcome == true
+    elapsed::Float
+    exception_thrown::Exception
+    operation
+    arg1
+    arg2
+    arg3
+end
+TestResult() = TestResult("no context", "no group", "nothing", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
+
+# tests -- takes either a vector of strings, which is interpreted as filenames,
+# or a single string, which can be a either a filename or a directory. If it's
+# a directory, it's explored for files matching the usual pattern, and recursed.
+function tests(onestr::String, outputter::Function) 
+    filestat = stat(onestr)
+    if !ispath(filestat)
+        error("Can't test unknown file or directory: $onestr")
+    end
+    
+    if isfile(filestat)
+        tests([onestr], outputter)
+    elseif isdir(filestat)
+        # if it's a directory name, find all test_*.jl in that and subdirectories, and pass
+        # that list
+        files_str = strip(readall(`find $onestr -name test_*.jl -print`))
+        if (length(files_str) > 0)
+            tests(split(files_str, "\n"), outputter)
+        else
+            # otherwise, throw an error
+            error("no test_*.jl files in directory: $onestr")
+        end
+    else
+        error("Can't test non-file non-directory: $onestr") # FIFO? who knows
+    end
+end
+tests(onestr::String) = tests(onestr, test_printer_raw)
+tests(fn::Function) = tests(".", fn)
+tests() = tests(".")
+
+# tests(onestr::String, outputter::Function) = tests([onestr], outputter)
+# tests(onestr::String) = tests([onestr], test_printer_raw)
     
 function tests(filenames, outputter::Function)
     # run these files as a task
@@ -46,16 +70,20 @@ function test_printer_raw(hdl::Task)
             print(".")
         else
             println("")
-            println("In $(t.context) / $(t.group)")
-            println("$(t.expr_str) FAILED")
-            println("$(t.operation) with args:")
-            println("1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
-            println("Exception: $(t.exception_thrown)")
-            println(sprintf("%0.3f seconds\n", t.elapsed))
+            dump(t)
             println("")
         end
     end
     println("")
+end
+
+function dump(io::IOStream, t::TestResult)
+    println(io, "In $(t.context) / $(t.group)")
+    println(io, strcat(t.expr_str, " ", t.succeed ? "succeeded" : "FAILED"))
+    println(io, "$(t.operation) with args:")
+    println(io, "1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
+    println(io, "Exception: $(t.exception_thrown)")
+    println(io, sprintf("%0.3f seconds\n", t.elapsed))
 end
 
 # things to set state
@@ -66,23 +94,6 @@ function test_group(group::String)
     tls(:group, group)
 end
 
-# data structures
-type NoException <: Exception
-end
-
-type TestResult
-    context
-    group
-    expr_str::String
-    succeed::Bool # good outcome == true
-    elapsed::Float
-    exception_thrown::Exception
-    operation
-    arg1
-    arg2
-    arg3
-end
-TestResult() = TestResult("", "", "", false, NaN, NoException(), Nothing, Nothing, Nothing, Nothing)
 
 # the macro just wraps the expression in a couple layers of quotes, then passes it to a function
 # that does the real work
@@ -100,8 +111,12 @@ end
 
 function _test(ex::Expr, expect_succeed::Bool)
     local tr = TestResult()
-    tr.context = tls(:context)
-    tr.group = tls(:group)
+    try
+        tr.context = tls(:context)
+        tr.group = tls(:group)
+    catch x
+        # not running in a context -- oh well!
+    end
     
     # unwrap once
     ex = eval(ex)
@@ -156,7 +171,12 @@ function _test(ex::Expr, expect_succeed::Bool)
         tr.succeed = !tr.succeed
     end
     
-    produce(tr)
+    try
+        produce(tr)
+    catch x
+        
+    end
+    return(sprint(dump, tr))
 end
 
 # helpful utility tests, supported by the macro
