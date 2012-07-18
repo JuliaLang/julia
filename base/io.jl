@@ -133,7 +133,6 @@ else
 end
 
 ## binary I/O ##
-
 write(x) = write(OUTPUT_STREAM::IOStream, x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
