@@ -33,6 +33,11 @@ begin
     @assert norm(invd * sqd - eye(size(sqd, 1))) < Eps
     @assert norm(invz * sqz - eye(size(sqz, 1))) < Eps
 
+    @assert_approx_eq det(sqd) prod(eig(sqd)[1]) # determinant
+    @assert_approx_eq det(sqz) prod(eig(sqz)[1])
+    @assert_approx_eq det(symd) prod(eig(symd)[1])
+#    @assert_approx_eq det(herz) prod(eig(herz)[1])
+
     qrd  = QR(mmd)                      # QR and QRP decompositions
     qrz  = QR(mmz)
     qrpd = QRP(mmd)
