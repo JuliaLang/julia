@@ -1,3 +1,6 @@
+# Support for physical units: I/O and conversion
+# Timothy E. Holy, 2012
+
 abstract SIPrefix
 type Yocto <: SIPrefix end
 type Zepto <: SIPrefix end
@@ -82,52 +85,53 @@ lshow(io, ::Type{SINone}) = nothing
 fshow(io, ::Type{SINone}) = nothing
 
 # Units
-abstract Unit
-type SIUnit{TP<:SIPrefix, TU<:Unit} end
-SIUnit{TP<:SIPrefix, TU<:Unit}(tp::Type{TP}, tu::Type{TU}) = SIUnit{tp, tu}
-SIUnit{TU<:Unit}(tu::Type{TU}) = SIUnit{SINone, tu}
-function show{TP<:SIPrefix, TU<:Unit}(io, tu::SIUnit{TP, TU})
+abstract UnitBase
+type Unit{TP<:SIPrefix, TU<:UnitBase} end
+Unit{TP<:SIPrefix, TU<:UnitBase}(tp::Type{TP}, tu::Type{TU}) = Unit{tp, tu}
+Unit{TU<:UnitBase}(tu::Type{TU}) = Unit{SINone, tu}
+function show{TP<:SIPrefix, TU<:UnitBase}(io, tu::Unit{TP, TU})
     print(io, TP)
     print(io, TU)
 end
 
 # Values with units
-type SIValue{TP<:SIPrefix, TU<:Unit, Tdata}
+type Quantity{TP<:SIPrefix, TU<:UnitBase, Tdata}
     value::Tdata
 end
-SIValue{TP<:SIPrefix, TU<:Unit, Tdata}(tp::Type{TP}, tu::Type{TU}, val::Tdata) = SIValue{tp, tu, Tdata}(val)
-SIValue{TU<:Unit, Tdata}(tu::Type{TU}, val::Tdata) = SIValue{SINone, tu, Tdata}(val)
-prefix{TP<:SIPrefix, TU<:Unit, Tdata}(v::SIValue{TP, TU, Tdata}) = TP
-unit{TP<:SIPrefix, TU<:Unit, Tdata}(v::SIValue{TP, TU, Tdata}) = TU
+Quantity{TP<:SIPrefix, TU<:UnitBase, Tdata}(tp::Type{TP}, tu::Type{TU}, val::Tdata) = Quantity{tp, tu, Tdata}(val)
+Quantity{TU<:UnitBase, Tdata}(tu::Type{TU}, val::Tdata) = Quantity{SINone, tu, Tdata}(val)
+prefix{TP<:SIPrefix, TU<:UnitBase, Tdata}(q::Quantity{TP, TU, Tdata}) = TP
+base{TP<:SIPrefix, TU<:UnitBase, Tdata}(q::Quantity{TP, TU, Tdata}) = TU
 
-function show{TP<:SIPrefix, TU<:Unit}(io, v::SIValue{TP, TU})
-    print(io, v.value, " ")
+function show{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
+    print(io, q.value, " ")
     show(io, TP)
     show(io, TU)
 end
-function pshow{TP<:SIPrefix, TU<:Unit}(io, v::SIValue{TP, TU})
-    print(io, v.value, " ")
+function pshow{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
+    print(io, q.value, " ")
     pshow(io, TP)
     pshow(io, TU)
 end
-function lshow{TP<:SIPrefix, TU<:Unit}(io, v::SIValue{TP, TU})
-    print(io, v.value, " ")
+function lshow{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
+    print(io, q.value, " ")
     lshow(io, TP)
     lshow(io, TU)
 end
-function fshow{TP<:SIPrefix, TU<:Unit}(io, v::SIValue{TP, TU})
-    print(io, v.value, " ")
+function fshow{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
+    print(io, q.value, " ")
     fshow(io, TP)
     fshow(io, TU)
 end
 
-# Functions and parsing dictionaries
+# Functions and dictionaries for parsing
 _unit_string_dict = Dict{ASCIIString, Tuple}()
 
-function _unit_gen_func(table)
+function _unit_gen_func_multiplicative(table)
     for (t, r, to_r, s, ps, ls, fs) in table
         @eval reference(::Type{$t}) = $r
-        @eval to_reference(::Type{$t}) = $to_r
+        @eval to_reference(::Type{$t}) = x->x*$to_r
+        @eval from_reference(::Type{$t}) = x->x/$to_r
         @eval show(io, ::Type{$t}) = print(io, $s)
         @eval pshow(io, ::Type{$t}) = print(io, $ps)
         @eval lshow(io, ::Type{$t}) = print(io, $ls)
@@ -135,7 +139,20 @@ function _unit_gen_func(table)
     end
 end
 
-function _unit_gen_product_dict(table)
+function _unit_gen_func(table)
+    for (t, r, to_func, from_func, s, ps, ls, fs) in table
+        @eval reference(::Type{$t}) = $r
+        @eval to_reference(::Type{$t}) = $to_func
+        @eval from_reference(::Type{$t}) = $from_func
+        @eval show(io, ::Type{$t}) = print(io, $s)
+        @eval pshow(io, ::Type{$t}) = print(io, $ps)
+        @eval lshow(io, ::Type{$t}) = print(io, $ls)
+        @eval fshow(io, ::Type{$t}) = print(io, $fs)
+    end
+end
+
+
+function _unit_gen_dict_with_prefix(table)
     for (u, rest) in table
         for p in _unit_si_prefixes
             key = string(p)*string(u)
@@ -145,7 +162,7 @@ function _unit_gen_product_dict(table)
     end
 end
 
-function _unit_gen_noprefix_dict(table)
+function _unit_gen_dict(table)
     for (u, rest) in table
         key = string(u)
 #        println(key, ": ", u) 
@@ -155,26 +172,41 @@ end
 
 
 # Length units
-type Meter <: Unit end
-type Inch <: Unit end
+type Meter <: UnitBase end
+type Angstrom <: UnitBase end
+type Inch <: UnitBase end
+type Foot <: UnitBase end
+type Yard <: UnitBase end
+type Mile <: UnitBase end
+type LightYear <: UnitBase end
+type Parsec <: UnitBase end
+type AstronomicalUnit <: UnitBase end
 let
-  # Unit    RefUnit     ToRef            show      pshow     lshow   fshow
+  # Unit     RefUnit    ToRef            show      pshow     lshow   fshow
 const utable = {
-  (Meter,   Meter,      1,               "m",      "m",      "m",    "meter")
-  (Inch,    Meter,      25.4/1000,       "in",     "in",     "in",   "inch")
+  (Meter,    Meter,    1,                "m",      "m",      "m",    "meter")
+  (Angstrom, Meter,    1e-10,            "A",      "\u212b",L"$\AA$","angstrom")
+  (Inch,     Meter,    25.4/1000,        "in",     "in",     "in",   "inch")
+  (Foot,     Meter,    12*25.4/1000,     "ft",     "ft",     "ft",   "foot")
+  (Yard,     Meter,    36*25.4/1000,     "yd",     "yd",     "yd",   "yard")
+  (Mile,     Meter,    5280*12*25.4/1000,"mi",     "mi",     "mi",   "mile")
+  (LightYear,Meter,    9.4605284e15,     "ly",     "ly",     "ly",   "lightyear")
+  (Parsec,   Meter,    3.08568025e16,    "pc",     "pc",     "pc",   "parsec")
+  (AstronomicalUnit, Meter, 149_597_870_700, "AU", "AU",     "AU",   "astronomical unit")
 }
-_unit_gen_func(utable)
-_unit_gen_product_dict({utable[1]})  # parse prefixes only for Meter
-_unit_gen_noprefix_dict(utable[2:end])  # parse prefixes only for Meter
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix({utable[1]})  # parse prefixes only for Meter
+_unit_gen_dict(utable[2:end])
 end
 
 # Time units
-type Second <: Unit end
-type Minute <: Unit end
-type Hour <: Unit end
-type Day <: Unit end
-type Week <: Unit end
-type JulianYear <: Unit end
+type Second <: UnitBase end
+type Minute <: UnitBase end
+type Hour <: UnitBase end
+type Day <: UnitBase end
+type Week <: UnitBase end
+type YearJulian <: UnitBase end
+type PlanckTime <: UnitBase end
 let
   # Unit       RefUnit     ToRef            show      pshow     lshow  fshow
 const utable = {
@@ -182,39 +214,113 @@ const utable = {
   (Minute,     Second,      60,            "min",    "min",    "min",  "minute")
   (Hour,       Second,      3600,          "hr",     "hr",     "hr",   "hour")
   (Day,        Second,      86400,         "d",      "d",      "d",    "day")
-  (JulianYear, Second,      365.25*86400,  "yr",     "yr",     "yr",   "year")
+  (YearJulian, Second,      365.25*86400,  "yr",     "yr",     "yr",   "year")
+  (PlanckTime, Second,      5.3910632e-44, "tP",     "tP",    L"$t_P$","Planck time")
 }
-_unit_gen_func(utable)
-_unit_gen_product_dict({utable[1]})   # prefixes are only common for seconds
-_unit_gen_noprefix_dict(utable[2:end])
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix({utable[1]})   # prefixes are only common for seconds
+_unit_gen_dict(utable[2:end])
 end
 
 # Rate units
-type Herz <: Unit end
+type Herz <: UnitBase end
 let
   # Unit       RefUnit     ToRef        show      pshow     lshow   fshow
 const utable = {
   (Herz,       Herz,        1,          "Hz",     "Hz",     "Hz",   "Herz")
 }
-_unit_gen_func(utable)
-_unit_gen_product_dict(utable)
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix(utable)
 end
 
-# Parsing strings to extract SIValues
-function parse_sivalue(s::String)
+# Mass units
+# (note English units like pounds are technically weight, not mass)
+type Gram <: UnitBase end
+type AtomicMassUnit <: UnitBase end
+type PlanckMass <: UnitBase end
+let
+  # Unit       RefUnit     ToRef            show      pshow     lshow  fshow
+const utable = {
+  (Gram,       Gram,        1,             "g",      "g",      "g",    "gram")
+  (AtomicMassUnit, Gram,    1.66053892173e-24, "amu","amu",    "amu",  "atomic mass unit")
+  (PlanckMass, Gram,        2.1765113e-5,  "mp",     "mp",    L"$m_P$","Planck mass")
+}
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix({utable[1]})
+_unit_gen_dict(utable[2:end])
+end
+
+# Electric current units
+type Ampere <: UnitBase end
+let
+  # Unit       RefUnit     ToRef        show      pshow     lshow   fshow
+const utable = {
+  (Ampere,     Ampere,     1,           "A",      "A",      "A",   "ampere")
+}
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix(utable)
+end
+
+
+# Temperature units
+# The conversions for these are not just a product
+type Kelvin <: UnitBase end
+type Celsius <: UnitBase end
+type Fahrenheit <: UnitBase end
+let
+  # Unit       RefUnit  ToRef              FromRef     show    pshow  lshow  fshow
+const utable = {
+  (Kelvin,     Kelvin,  x->x,              x->x,       "K",    "K",   "K",   "Kelvin")
+  (Celsius,    Kelvin,  x->x+273.15,       x->x-273.15,"C",    "C",   "C",   "Celsius")
+  (Fahrenheit, Kelvin,  x->(x+459.67)*5/9, x->x*9/5-459.67,"F","F",   "F",   "Fahrenheit")
+}
+_unit_gen_func(utable)
+_unit_gen_dict_with_prefix({utable[1]})   # prefixes are only common for Kelvin
+_unit_gen_dict(utable[2:end])
+end
+
+# Luminosity units
+type Candela <: UnitBase end
+let
+  # Unit       RefUnit     ToRef        show      pshow     lshow   fshow
+const utable = {
+  (Candela,    Candela,    1,           "cd",     "cd",     "cd",   "candela")
+}
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix(utable)
+end
+
+
+# Amount units
+type Mole <: UnitBase end
+type Entities <: UnitBase end
+let
+  # Unit       RefUnit     ToRef        show      pshow     lshow   fshow
+const utable = {
+  (Mole,       Mole,       1,           "mol",    "mol",    "mol",  "mole")
+  (Entities,   Mole,       1/6.0221417930e23, "", "",       "",     "entities")
+}
+_unit_gen_func_multiplicative(utable)
+_unit_gen_dict_with_prefix(utable)
+end
+
+
+# Parsing string to extract Quantity
+function parse_quantity(s::String)
     m = match(r"[a-zA-Z]", s)
     if m.offset < 1
         error("String does not have a 'value unit' structure")
     end
     val = parse_float(Float64, strip(s[1:m.offset-1]))
     (prefix, unit) = _unit_string_dict[strip(s[m.offset:end])]
-    return SIValue(prefix, unit, val)
+    return Quantity(prefix, unit, val)
 end
 
+
 # Conversion between units
-function convert{Uin<:Unit, Uout<:Unit, Pin<:SIPrefix, Pout<:SIPrefix, T}(::Type{SIUnit{Pout, Uout}}, u::SIValue{Pin, Uin, T})
+function convert{Uin<:UnitBase, Uout<:UnitBase, Pin<:SIPrefix, Pout<:SIPrefix, T}(::Type{Unit{Pout, Uout}}, q::Quantity{Pin, Uin, T})
     if reference(Uin) != reference(Uout)
         error("Not convertable")
     end
-    return SIValue(Pout, Uout, u.value * to_reference(Uin) * to_reference(Pin) / to_reference(Uout) / to_reference(Pout))
+    return Quantity(Pout, Uout, from_reference(Uout)(to_reference(Uin)(q.value*to_reference(Pin))) / to_reference(Pout))
 end
