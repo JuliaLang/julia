@@ -88,6 +88,13 @@ endif
 #STAGE2_DEPS += lapack
 #endif
 
+#Platform specific flags
+
+ifeq ($(OS), WINNT)
+LIBTOOL_CCLD = CCLD="gcc -no-undefined -avoid-version"
+AUTOTOOLS_PATH_CORRECT = -cp -f $(USRBIN)/$(@F) $(USRLIB)/$(@F)
+endif
+
 ## Common build target prefixes
 
 LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
@@ -306,12 +313,9 @@ pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
 	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
-	$(MAKE) -C pcre-$(PCRE_VER) install
+	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
-ifeq ($(OS),WINNT)
-	-rm $(USRLIB)/libpcre.dll
-	mv $(USRBIN)/libpcre-1.dll $(USRLIB)/libpcre.dll
-endif
+	$(AUTOTOOLS_PATH_CORRECT)
 	touch $@
 
 clean-pcre:
@@ -461,6 +465,12 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
+OPENBLAS_FLAGS = DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+
+ifeq ($(OS), WINNT)
+OPENBLAS_FLAGS += REVISION=
+endif
+
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
 
@@ -472,7 +482,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_FLAGS)
 $(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
@@ -817,10 +827,11 @@ gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
 	./configure --prefix=$(abspath $(USR)) 
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
-	$(MAKE) -C gmp-$(GMP_VER)
-	$(MAKE) -C gmp-$(GMP_VER) check
-	$(MAKE) -C gmp-$(GMP_VER) install
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
+	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libgmp.dylib $@
+	$(AUTOTOOLS_PATH_CORRECT)
 	touch $@
 
 clean-gmp:
@@ -867,8 +878,9 @@ glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
 	./configure --prefix=$(abspath $(USR))
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
-	$(MAKE) -C glpk-$(GLPK_VER) install
-	$(INSTALL_NAME_CMD)libglpk.dylib $@
+	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install 
+	$(INSTALL_NAME_CMD)libglpk.$(SHLIB_EXT) $@
+	$(AUTOTOOLS_PATH_CORRECT)
 	touch $@
 
 clean-glpk:
@@ -885,7 +897,7 @@ GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
 GLPKW_INC = -I $(abspath $(USR))/include/
-GLPKW_LIB = -L$(USRLIB)/ -lglpk
+GLPKW_LIB = -L$(USRLIB) -lglpk
 endif
 
 
