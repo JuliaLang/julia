@@ -263,6 +263,17 @@ jl_value_t *jl_takebuf_string(ios_t *s)
     return str;
 }
 
+// You can manually circumvent the garbage collector by using
+// jl_ios_mem (i.e., memio) with julia_malloc = false; in that case, the
+// returned buffer must be manually freed. To determine the size,
+// call position(s) before using this function.
+void *jl_takebuf_raw(ios_t *s)
+{
+    size_t sz;
+    void *buf = ios_takebuf(s, &sz);
+    return buf;
+}
+
 jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
 {
     jl_array_t *a;
@@ -277,7 +288,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     else {
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
-        jl_ios_mem(&dest, 0);
+        jl_ios_mem(&dest, 0, 1);
         ios_setbuf(&dest, a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
@@ -297,6 +308,11 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     jl_fieldref(str,0) = (jl_value_t*)a;
     JL_GC_POP();
     return str;
+}
+
+void jl_free2(void *p, void *hint)
+{
+    free(p);
 }
 
 // -- syscall utilities --

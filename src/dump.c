@@ -873,7 +873,7 @@ DLLEXPORT
 jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
 {
     ios_t dest;
-    jl_ios_mem(&dest, 0);
+    jl_ios_mem(&dest, 0, 1);
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 
@@ -905,7 +905,7 @@ jl_value_t *jl_uncompress_ast(jl_tuple_t *data)
     jl_array_t *bytes = (jl_array_t*)jl_tupleref(data, 0);
     tree_literal_values = (jl_array_t*)jl_tupleref(data, 1);
     ios_t src;
-    jl_ios_mem(&src, 0);
+    jl_ios_mem(&src, 0, 1);
     ios_setbuf(&src, bytes->data, jl_array_len(bytes), 0);
     src.size = jl_array_len(bytes);
     int en = jl_gc_is_enabled();

@@ -843,11 +843,11 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
     return s;
 }
 
-ios_t *jl_ios_mem(ios_t *s, size_t initsize)
+ios_t *jl_ios_mem(ios_t *s, size_t initsize, int julia_mallocated)
 {
     _ios_init(s);
     s->bm = bm_mem;
-    s->julia_alloc = 1;
+    s->julia_alloc = julia_mallocated;
     _buf_realloc(s, initsize);
     return s;
 }
