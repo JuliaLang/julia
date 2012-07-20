@@ -45,7 +45,6 @@
     jl_takebuf_string;
     jl_takebuf_raw;
     jl_readuntil;
-    jl_free1;
     jl_free2;
     jl_cpu_cores;
     jl_hrtime;

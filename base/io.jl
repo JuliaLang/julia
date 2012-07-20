@@ -253,7 +253,7 @@ takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
 takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, ByteString, (Ptr{Void},), s.ios)
+    ccall(:jl_takebuf_array, Vector{Uint8}, (Ptr{Void},), s.ios)
 
 function takebuf_raw(s::IOStream)
     sz = position(s)

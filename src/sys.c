@@ -310,11 +310,6 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     return str;
 }
 
-void jl_free1(void *p)
-{
-    free(p);
-}
-
 void jl_free2(void *p, void *hint)
 {
     free(p);
