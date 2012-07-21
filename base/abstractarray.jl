@@ -427,11 +427,11 @@ assign(t::AbstractArray, x, i::Integer) =
     error("assign not defined for ",typeof(t))
 assign(t::AbstractArray, x) = throw(MethodError(assign, (t, x)))
 
-assign(t::AbstractArray, x, i::Real)          = (t[to_index(i)] = x)
-assign(t::AbstractArray, x, i::Real, j::Real) = (t[to_index(i),to_index(j)] = x)
+assign(t::AbstractArray, x, i::Real)          = assign(t, x, to_index(i))
+assign(t::AbstractArray, x, i::Real, j::Real) = assign(t, x, to_index(i),to_index(j))
 assign(t::AbstractArray, x, i::Real, j::Real, k::Real) =
-    (t[to_index(i),to_index(j),to_index(k)] = x)
-assign(t::AbstractArray, x, r::Real...)       = (t[map(to_index,r)...] = x)
+    assign(t, x, to_index(i),to_index(j),to_index(k))
+assign(t::AbstractArray, x, r::Real...)       = assign(t, x, map(to_index,r)...)
 
 ## Concatenation ##
 
