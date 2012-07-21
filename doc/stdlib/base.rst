@@ -53,9 +53,9 @@ All Objects
 
    Create a tuple of length ``n``, computing each element as ``f(i)``, where ``i`` is the index of the element.
 
-.. function:: uid(x)
+.. function:: object_id(x)
 
-   Get a unique integer id for ``x``. ``uid(x)==uid(y)`` if and only if ``is(x,y)``.
+   Get a unique integer id for ``x``. ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``.
 
 .. function:: hash(x)
 
