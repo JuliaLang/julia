@@ -193,19 +193,28 @@ DLLEXPORT int jl_listen(uv_stream_t* stream, int backlog)
 {
     return uv_listen(stream,backlog,&jl_connectioncb);
 }
-
+#ifdef __APPLE__
+#include <crt_externs.h>
+#endif
 DLLEXPORT uv_process_t *jl_spawn(char *name, char **argv, uv_loop_t *loop,
                                  jl_value_t *julia_struct,
                                  uv_pipe_t *stdin_pipe,
                                  uv_pipe_t *stdout_pipe,
                                  uv_pipe_t *stderr_pipe)
 {
+#ifdef __APPLE__
+    char **environ = *_NSGetEnviron();
+#endif
     uv_process_t *proc = malloc(sizeof(uv_process_t));
     uv_process_options_t opts;
     uv_stdio_container_t stdio[3];
     int error;
     opts.file = name;
+#ifndef __WIN32__
+    opts.env = environ;
+#else
     opts.env = NULL;
+#endif
     opts.cwd = NULL;
     opts.args = argv;
     opts.flags = 0;
