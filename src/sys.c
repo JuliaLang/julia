@@ -334,7 +334,8 @@ typedef DWORD (WINAPI *GAPC)(WORD);
 #endif
 #endif
 
-DLLEXPORT int jl_cpu_cores(void) {
+DLLEXPORT int jl_cpu_cores(void)
+{
 #if defined(HW_AVAILCPU) && defined(HW_NCPU)
     size_t len = 4;
     int32_t count;
