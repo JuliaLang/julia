@@ -24,6 +24,11 @@
 # include <windows.h>
 #endif
 
+#if defined(__linux__)
+//#define _GNU_SOURCE
+#include <sched.h>   // for setting CPU affinity
+#endif
+
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -122,6 +127,19 @@ void julia_init(char *imageFile)
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
+
+#if defined(__linux__)
+    int ncores = jl_cpu_cores();
+    if (ncores > 1) {
+        cpu_set_t cpumask;
+        CPU_ZERO(&cpumask);
+        for(int i=0; i < ncores; i++) {
+            CPU_SET(i, &cpumask);
+        }
+        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
+    }
+#endif
+
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

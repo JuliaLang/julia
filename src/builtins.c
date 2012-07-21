@@ -786,7 +786,7 @@ JL_CALLABLE(jl_f_invoke)
 #define hash64(a)   int64to32hash(a)
 #endif
 
-DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
+DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
 {
     if (jl_is_symbol(v))
         return ((jl_sym_t*)v)->hash;
@@ -817,7 +817,7 @@ DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
     uptrint_t h = 0;
     size_t l = jl_tuple_len(v);
     for(size_t i = 0; i < l; i++) {
-        uptrint_t u = jl_uid(jl_tupleref(v,i));
+        uptrint_t u = jl_object_id(jl_tupleref(v,i));
         h = bitmix(h, u);
     }
     return h;

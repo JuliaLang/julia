@@ -148,7 +148,7 @@ type Cholesky{T} <: Factorization{T}
     end
 end
 
-Cholesky(A::Matrix) = Cholesky{typeof(A[1])}(A, "U")
+Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, "U")
 
 (\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_potrs(C.uplo, C.LR, copy(B))
@@ -164,11 +164,21 @@ type LU{T} <: Factorization{T}
     end
 end
 
-function LU(A::Matrix)
+function LU{T<:Union(Float64,Float32,Complex64,Complex128)}(A::Matrix{T})
     lu, ipiv = _jl_lapack_getrf(copy(A))
-    LU{typeof(A[1])}(lu, ipiv)
+    LU{T}(lu, ipiv)
 end
- 
+
+LU{T<:Number}(A::Matrix{T}) = LU(float64(A))
+
+function det(lu::LU)
+    m, n = size(lu.lu)
+    if m != n error("det only defined for square matrices") end
+    prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
+end
+
+det(A::Matrix) = det(LU(A))
+
 (\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_getrs("N", lu.lu, lu.ipiv, copy(B))
 inv(lu::LU) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)

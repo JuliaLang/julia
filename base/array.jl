@@ -145,14 +145,21 @@ end
 
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
-    a = Array(typeof(start), int(n))
+    T = typeof(start)
+    a = Array(T, int(n))
     if n == 1
         a[1] = start
         return a
     end
     step = (stop-start)/(n-1)
-    for i=1:n
-        a[i] = start+(i-1)*step
+    if isa(start,Integer)
+        for i=1:n
+            a[i] = iround(T,start+(i-1)*step)
+        end
+    else
+        for i=1:n
+            a[i] = start+(i-1)*step
+        end
     end
     a
 end
@@ -386,19 +393,19 @@ assign{T}(A::Array{T}, x, i::Integer) = arrayset(A,int(i),convert(T, x))
 assign{T}(A::Array{T,0}, x) = arrayset(A,1,convert(T, x))
 
 assign(A::Array, x, i0::Integer, i1::Integer) =
-    A[i0 + size(A,1)*(i1-1)] = x
+    assign(A, x, i0 + size(A,1)*(i1-1))
 assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer) =
-    A[i0 + size(A,1)*(i1-1)] = x
+    assign(A, x, i0 + size(A,1)*(i1-1))
 
 assign(A::Array, x, i0::Integer, i1::Integer, i2::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+    assign(A, x, i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1)))
 assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1))] = x
+    assign(A, x, i0 + size(A,1)*((i1-1) + size(A,2)*(i2-1)))
 
 assign(A::Array, x, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+    assign(A, x, i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1))))
 assign(A::Array, x::AbstractArray, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    A[i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1)))] = x
+    assign(A, x, i0 + size(A,1)*((i1-1) + size(A,2)*((i2-1) + size(A,3)*(i3-1))))
 
 assign(A::Array, x, I0::Integer, I::Integer...) = assign_scalarND(A,x,I0,I...)
 assign(A::Array, x::AbstractArray, I0::Integer, I::Integer...) =
@@ -653,20 +660,20 @@ assign(A::Array, X::AbstractArray, I::AbstractArray{Bool}) = _jl_assign_bool_vec
 assign(A::Array, x, I::AbstractVector{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
 assign(A::Array, x, I::AbstractArray{Bool}) = _jl_assign_bool_scalar_1d(A, x, I)
 
-assign(A::Matrix, x::AbstractArray, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
-assign(A::Matrix, x, I::Integer, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+assign(A::Matrix, x::AbstractArray, I::Integer, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
+assign(A::Matrix, x, I::Integer, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
 
-assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
-assign(A::Matrix, x, I::AbstractVector{Bool}, J::Integer) = (A[find(I),J]=x)
+assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::Integer) = assign(A, x, find(I),J)
+assign(A::Matrix, x, I::AbstractVector{Bool}, J::Integer) = assign(A,x,find(I),J)
 
-assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
-assign(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = (A[find(I),find(J)]=x)
+assign(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = assign(A, x, find(I),find(J))
+assign(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{Bool}) = assign(A, x, find(I),find(J))
 
-assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
-assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = (A[I,find(J)]=x)
+assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{T}, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
+assign{T<:Integer}(A::Matrix, x, I::AbstractVector{T}, J::AbstractVector{Bool}) = assign(A, x, I,find(J))
 
-assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J]=x)
-assign{T<:Integer}(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = (A[find(I),J]=x)
+assign{T<:Integer}(A::Matrix, x::AbstractArray, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
+assign{T<:Integer}(A::Matrix, x, I::AbstractVector{Bool}, J::AbstractVector{T}) = assign(A, x, find(I),J)
 
 ## Dequeue functionality ##
 

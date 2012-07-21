@@ -16,6 +16,8 @@ L64 = linspace(int64(1), int64(4), 4)
 @assert L32[2] == 2 && L64[2] == 2
 @assert L32[3] == 3 && L64[3] == 3
 @assert L32[4] == 4 && L64[4] == 4
+lsp = linspace(1, 10, 6)
+@assert isequal(lsp,[1,3,5,6,8,10])
 
 r = [5:-1:1]
 @assert r[1]==5

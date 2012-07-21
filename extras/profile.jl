@@ -270,7 +270,7 @@ function profile_print(tc)
         counters = tc[i][2]
         for j = 1:length(counters)
             if counters[j] != 0
-                printf("%8d  %f  % f %s\n", counters[j], convert(Float64, timers[j])*1e-9, convert(Float64, timers[j] - counters[j]*_PROFILE_CALIB)*1e-9, _PROFILE_TAGS[i][j])
+                printf("%8d  %f  % f %s\n", counters[j], convert(Float64, timers[j])*1e-9, (convert(Float64, timers[j]) - convert(Float64, counters[j])*_PROFILE_CALIB)*1e-9, _PROFILE_TAGS[i][j])
             end
         end
     end

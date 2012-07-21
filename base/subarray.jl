@@ -227,27 +227,27 @@ function assign(s::SubArray, v, is::Integer...)
 end
 
 assign{T}(s::SubArray{T,0,AbstractArray{T,0}}, v::AbstractArray) =
-    (s.parent[]=v; s)
+    assign(s.parent, v)
 
-assign{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = (s.parent[]=v; s)
+assign{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = assign(s.parent, v)
 
 assign{T}(s::SubArray{T,0}, v::AbstractArray) =
-    (s.parent[s.first_index]=v; s)
+    assign(s.parent, v, s.first_index)
 
-assign{T}(s::SubArray{T,0}, v) = (s.parent[s.first_index]=v; s)
+assign{T}(s::SubArray{T,0}, v) = assign(s.parent, v, s.first_index)
 
 
 assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Integer) =
-    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+    assign(s.parent, v, s.first_index + (i-1)*s.strides[1])
 
 assign{T}(s::SubArray{T,1}, v, i::Integer) =
-    (s.parent[s.first_index + (i-1)*s.strides[1]] = v; s)
+    assign(s.parent, v, s.first_index + (i-1)*s.strides[1])
 
 assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Integer, j::Integer) =
-    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+    assign(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
 assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
-    (s.parent[s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2]] = v; s)
+    assign(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
 assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Int}) =
     assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))

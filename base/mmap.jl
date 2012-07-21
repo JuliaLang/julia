@@ -103,3 +103,10 @@ end
 mmap_array{T,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream) = mmap_array(T, dims, s, position(s))
 msync{T}(A::Array{T}, flags::Int) = msync(pointer(A), prod(size(A))*sizeof(T), flags)
 msync{T}(A::Array{T}) = msync(A,MS_SYNC)
+
+# For storing information about a mmapped-array
+type MmapArrayInfo
+    pathname::ByteString
+    eltype::Type
+    dims::Dims
+end

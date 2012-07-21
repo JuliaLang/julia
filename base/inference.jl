@@ -869,7 +869,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     ast0 = def.ast
 
     #if dbg
-    #    print("typeinf ", linfo.name, " ", uid(ast0), "\n")
+    #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
     # if isbound(:stdout_stream)
