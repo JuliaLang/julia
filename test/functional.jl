@@ -3,6 +3,9 @@
 # map -- array.jl
 @assert isequal(map((x)->"$x"[end:end], [9:11]), ["9", "0", "1"])
 # TODO: @assert map_to()
+# map -- ranges.jl
+@assert isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
+@assert isequal(map(i->sqrt(i), 2:6), [sqrt(i) for i in 2:6])
 
 # maps of tuples (formerly in test/core.jl) -- tuple.jl
 @assert map((x,y)->x+y,(1,2,3),(4,5,6)) == (5,7,9)
