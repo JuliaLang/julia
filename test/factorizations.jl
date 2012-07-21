@@ -54,3 +54,29 @@ begin
     @assert abs(norm(qpyz) - norm(yyz)) < Eps # Q is unitary
     
 end
+
+# Test det(A::Matrix)
+# In the long run, these tests should step through Strang's
+#  axiomatic definition of determinants.
+# If all axioms are satisfied and all the composition rules work,
+#  all determinants will be correct except for floating point errors.
+
+# The determinant of the identity matrix should always be 1.
+for n = 1:10
+  A = eye(n)
+  @assert abs(det(A) - 1.0) < Eps
+end
+
+# The determinant of a Householder reflection matrix should always be -1.
+for i = 1:10
+  A = eye(10)
+  A[i, i] = -1.0
+  @assert abs(det(A) - (-1.0)) < Eps
+end
+
+# The determinant of a rotation matrix should always be 1.
+for theta = pi ./ [1:4]
+  R = [cos(theta) -sin(theta);
+       sin(theta) cos(theta)]
+  @assert abs(det(R) - 1.0) < Eps
+end
