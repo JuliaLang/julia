@@ -24,12 +24,27 @@ type Exa <: SIPrefix end
 type Zetta <: SIPrefix end
 type Yotta <: SIPrefix end
 
-# PrettyShow
+# PrettyShow and PrettyString
 pshow(x) = pshow(OUTPUT_STREAM::IOStream, x)
-# LatexShow
+function pstring(x)
+    s = memio(0, false)
+    pshow(s, x)
+    takebuf_string(s)
+end
+# LatexShow and LatexString
 lshow(x) = lshow(OUTPUT_STREAM::IOStream, x)
-# FullShow
+function lstring(x)
+    s = memio(0, false)
+    lshow(s, x)
+    takebuf_string(s)
+end
+# FullShow and FullString
 fshow(x) = fshow(OUTPUT_STREAM::IOStream, x)
+function fstring(x)
+    s = memio(0, false)
+    fshow(s, x)
+    takebuf_string(s)
+end
 
 let
 #  Prefix        ToSINone      Show          PrettyShow   LatexShow  Full
@@ -125,7 +140,7 @@ function fshow{TP<:SIPrefix, TU<:UnitBase}(io, q::Quantity{TP, TU})
 end
 
 # Functions and dictionaries for parsing
-_unit_string_dict = Dict{ASCIIString, Tuple}()
+_unit_string_dict = Dict{String, Tuple}()
 
 function _unit_gen_func_multiplicative(table)
     for (t, r, to_r, s, ps, ls, fs) in table
@@ -154,10 +169,18 @@ end
 
 function _unit_gen_dict_with_prefix(table)
     for (u, rest) in table
+        ustr = string(u)
+        upstr = pstring(u)
         for p in _unit_si_prefixes
-            key = string(p)*string(u)
+            pstr = string(p)
+            key = pstr*ustr
 #            println(key, ": ", p, ", ", u) 
             _unit_string_dict[key] = (p, u)
+            # Add "pretty" variants, too
+            ppstr = pstring(p)
+            _unit_string_dict[pstr*upstr] = (p, u)
+            _unit_string_dict[ppstr*ustr] = (p, u)
+            _unit_string_dict[ppstr*upstr] = (p, u)
         end
     end
 end
@@ -167,9 +190,15 @@ function _unit_gen_dict(table)
         key = string(u)
 #        println(key, ": ", u) 
         _unit_string_dict[key] = (SINone, u)
+        upstr = pstring(u)
+        if key != upstr
+            _unit_string_dict[upstr] = (SINone, u)
+        end
     end
 end
 
+# Unknown unit
+type Unknown <: UnitBase end
 
 # Length units
 type Meter <: UnitBase end
@@ -308,15 +337,25 @@ end
 
 
 # Parsing string to extract Quantity
-function parse_quantity(s::String)
-    m = match(r"[a-zA-Z]", s)
-    if m.offset < 1
+function parse_quantity(s::String, strict::Bool)
+    # Find the last character of the numeric component
+    m = match(r"[0-9\.\+-](?![0-9\.\+-])", s)
+    if m == nothing
         error("String does not have a 'value unit' structure")
     end
-    val = parse_float(Float64, strip(s[1:m.offset-1]))
-    (prefix, unit) = _unit_string_dict[strip(s[m.offset:end])]
+    val = float64(s[1:m.offset])
+    ustr = strip(s[m.offset+1:end])
+    if isempty(ustr)
+        if strict
+            error("String does not have a 'value unit' structure")
+        else
+            return Quantity(SINone, Unknown, val)
+        end
+    end
+    (prefix, unit) = _unit_string_dict[ustr]
     return Quantity(prefix, unit, val)
 end
+parse_quantity(s::String) = parse_quantity(s, true)
 
 
 # Conversion between units
