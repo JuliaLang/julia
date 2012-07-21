@@ -755,7 +755,7 @@ void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_
 DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
-DLLEXPORT uptrint_t jl_uid(jl_value_t *v);
+DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_core_module;

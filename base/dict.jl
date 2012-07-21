@@ -166,7 +166,7 @@ function hash(a::Array)
     return uint(h)
 end
 
-hash(x::ANY) = uid(x)
+hash(x::ANY) = object_id(x)
 
 if WORD_SIZE == 64
     hash(s::ByteString) =

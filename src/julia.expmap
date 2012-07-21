@@ -7,7 +7,7 @@
     memhash32;
     memhash32_seed;
     jl_symbol_name;
-    jl_uid;
+    jl_object_id;
     jl_strtod;
     jl_strtof;
     clock_now;

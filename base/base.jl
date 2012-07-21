@@ -95,8 +95,8 @@ istaskdone(t::Task) = t.done
 
 cstring(str::ByteString) = str
 
-# return an integer such that uid(x)==uid(y) if is(x,y)
-uid(x::ANY) = ccall(:jl_uid, Uint, (Any,), x)
+# return an integer such that object_id(x)==object_id(y) if is(x,y)
+object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
 
 dlsym(hnd, s::String) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)

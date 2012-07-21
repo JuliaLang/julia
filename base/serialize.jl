@@ -132,7 +132,7 @@ end
 function _jl_lambda_number(l::LambdaStaticData)
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    hash(uint64(uid(l))+(uint64(myid())<<44))
+    hash(uint64(object_id(l))+(uint64(myid())<<44))
 end
 
 function serialize(s, f::Function)
