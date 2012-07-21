@@ -237,13 +237,15 @@ end
 # (note English units like pounds are technically weight, not mass)
 type Gram <: UnitBase end
 type AtomicMassUnit <: UnitBase end
+type Dalton <: UnitBase end
 type PlanckMass <: UnitBase end
 let
-  # Unit       RefUnit     ToRef            show      pshow     lshow  fshow
+  # Unit       RefUnit     ToRef           show      pshow     lshow  fshow
 const utable = {
-  (Gram,       Gram,        1,             "g",      "g",      "g",    "gram")
-  (AtomicMassUnit, Gram,    1.66053892173e-24, "amu","amu",    "amu",  "atomic mass unit")
-  (PlanckMass, Gram,        2.1765113e-5,  "mp",     "mp",    L"$m_P$","Planck mass")
+  (Gram,       Gram,        1,             "g",      "g",      "g",   "gram")
+  (AtomicMassUnit, Gram,    1.66053892173e-24, "amu","amu",    "amu", "atomic mass unit")
+  (Dalton,     Gram,        1.66053892173e-24, "Da", "Da",     "Da",  "Dalton")
+  (PlanckMass, Gram,        2.1765113e-5,  "mP",     "mP",    L"$m_P$","Planck mass")
 }
 _unit_gen_func_multiplicative(utable)
 _unit_gen_dict_with_prefix({utable[1]})
@@ -301,7 +303,7 @@ const utable = {
   (Entities,   Mole,       1/6.0221417930e23, "", "",       "",     "entities")
 }
 _unit_gen_func_multiplicative(utable)
-_unit_gen_dict_with_prefix(utable)
+_unit_gen_dict_with_prefix({utable[1]})
 end
 
 
