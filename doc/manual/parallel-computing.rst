@@ -334,7 +334,7 @@ is distributed. There are many possible ways to distribute data among
 processors, but at this time Julia keeps things simple and only allows
 distributing along a single dimension. For example, if a 2-d ``DArray``
 is distributed in dimension 1, it means each processor holds a certain
-range of rows. If it is distrbuted in dimension 2, each processor holds
+range of rows. If it is distributed in dimension 2, each processor holds
 a certain range of columns.
 
 Common kinds of arrays can be constructed with functions beginning with
