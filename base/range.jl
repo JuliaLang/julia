@@ -228,3 +228,14 @@ function sum(r::Ranges)
     l = length(r)
     return l * first(r) + step(r) * div(l * (l - 1), 2)
 end
+
+function map_to(dest::StridedArray, f, r::Ranges)
+    for i in 1:length(r) dest[i] = f(r[i]) end
+    dest
+end
+
+function map(f, r::Ranges)
+    if isempty(r) return r end
+    first = f(r.start)
+    map_to(similar(r, typeof(first)), f, r)
+end
