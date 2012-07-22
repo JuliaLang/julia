@@ -55,7 +55,17 @@ type BackTrace <: Exception
     trace::Array{Any,1}
 end
 
+type ShowError <: Exception
+    val
+    err::Exception
+end
+
 show(io, bt::BackTrace) = show(io,bt.e)
+
+function show(io, se::ShowError)
+    println("Error showing value of type ", typeof(se.val), ":")
+    show(io, se.err)
+end
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
