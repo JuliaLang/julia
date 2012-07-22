@@ -29,6 +29,9 @@ issparse(S::SparseMatrixCSC) = true
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = S.colptr[end]-1
 
+eltype{T}(S::SparseMatrixCSC{T}) = T
+indtype{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}) = Ti
+
 function show(io, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
 
