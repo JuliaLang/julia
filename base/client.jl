@@ -64,13 +64,16 @@ function _jl_eval_user_input(ast::ANY, show_value)
                     if _jl_have_color
                         print(_jl_answer_color())
                     end
-                    repl_show(value)
+                    try repl_show(value)
+                    catch err
+                        throw(ShowError(value,err))
+                    end
                     println()
                 end
             end
             break
-        catch e
-            iserr, lasterr = true, e
+        catch err
+            iserr, lasterr = true, err
         end
     end
     println()

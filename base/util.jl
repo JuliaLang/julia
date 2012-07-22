@@ -152,9 +152,8 @@ edit(f::Function, t) = edit(function_loc(f,t)...)
 less(f::Function)    = less(function_loc(f)...)
 less(f::Function, t) = less(function_loc(f,t)...)
 
-function disassemble(f::Function, types)
-    ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString
-end
+disassemble(f::Function, types::Tuple) =
+    print(ccall(:jl_dump_function, Any, (Any,Any), f, types)::ByteString)
 
 function methods(f::Function)
     if !isgeneric(f)
