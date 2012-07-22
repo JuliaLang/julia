@@ -276,6 +276,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
+    //ios_printf(ios_stderr, "***** loading %s\n", fname);
     int lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
     JL_GC_PUSH(&fn, &ln, &form);

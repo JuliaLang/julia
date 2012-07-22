@@ -41,6 +41,8 @@ macro gensym(names...)
     return blk
 end
 
+syntax_escape(e) = expr(:escape, {e})
+
 ## expressions ##
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
