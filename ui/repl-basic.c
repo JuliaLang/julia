@@ -75,7 +75,7 @@ void basic_stdin_callback(void)
     jl_input_line_callback(stdin_buf);
 }
 
-void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen)
+void jl_readBuffer(char* base, ssize_t nread)
 {
     char *start = base;
     int esc = 0;

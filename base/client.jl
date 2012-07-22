@@ -36,7 +36,8 @@ function repl_callback(ast::ANY, show_value)
     end
     _jl_eval_user_input(ast, show_value!=0)
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    add_io_handler(STDIN,(args...)->readBuffer(args...))
+    STDIN.readcb = readBuffer
+    add_io_handler(STDIN)
 end
 
 # called to show a REPL result
@@ -93,9 +94,10 @@ function _jl_eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(handle::TTY,nread::PtrSize,base::Ptr,len::Int32)
-    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(PtrSize,PtrSize,PtrSize,Int32),handle.handle,nread,base,len)
-    handle.buffer.ptr = 1 #reuse buffer
+function readBuffer(stream::TTY)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),stream.buffer.data,stream.buffer.ptr-1)
+    stream.buffer.ptr = 1 #reuse buffer
+    true
 end
 
 function run_repl()
@@ -115,7 +117,8 @@ function run_repl()
     ccall(:jl_install_sigint_handler, Void, ())
 
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    add_io_handler(STDIN,(args...)->readBuffer(args...))
+    STDIN.readcb = readBuffer
+    add_io_handler(STDIN)
 
     cont = true
     lasterr = ()

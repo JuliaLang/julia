@@ -621,7 +621,7 @@ void repl_callback_enable()
 
 #include "uv.h"
 
-void jl_readBuffer(uv_stream_t* stream, ssize_t nread, char *base, int buflen)
+void jl_readBuffer(char *base, ssize_t nread)
 {
     char *start = base;
     while(*start != 0 && nread > 0) {

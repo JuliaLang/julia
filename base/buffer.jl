@@ -1,14 +1,32 @@
 ## work with Vector{Uint8} via I/O primitives ##
 
-# Stateful string
-type Buffer <: IO
+abstract Buffer <: IO
+
+type DynamicBuffer <: Buffer
     data::Vector{Uint8}
     ptr::Int
     
-    Buffer(data::Vector{Uint8}) = new(data, 1)
-    # TODO: should be copy on write if given a string
-    Buffer(str::String) = Buffer(str.data)
-    Buffer() = Buffer(Uint8[])
+    DynamicBuffer(data::Vector{Uint8}) = new(data, 1)
+    DynamicBuffer(str::String) = DynamicBuffer(str.data)
+    DynamicBuffer() = DynamicBuffer(Uint8[])
+end
+
+type FixedBuffer <: Buffer
+    data::Vector{Uint8}
+    ptr::Int
+
+    FixedBuffer(data::Vector{Uint8}) = new(data, 1)
+    FixedBuffer(str::String) = FixedBuffer(str.data)
+    FixedBuffer() = FixedBuffer(Uint8[])
+end
+
+type LineBuffer <: Buffer
+    data::Vector{Uint8}
+    ptr::Int
+
+    LineBuffer(data::Vector{Uint8}) = new(data, 1)
+    LineBuffer(str::String) = LineBuffer(str.data)
+    LineBuffer() = LineBuffer(Uint8[])
 end
 
 function read{T}(from::Buffer, a::Array{T})
@@ -69,4 +87,10 @@ function write(to::Buffer, a::Uint8)
     end
     to.ptr += 1
     sizeof(Uint8)
+end
+
+function take_line(buffer::LineBuffer)
+    ret = Array(Uint8,buffer.nlpos)
+    ret[1:buffer.nlpos] = buffer.data[1:buffer.nlpos]
+    ret
 end

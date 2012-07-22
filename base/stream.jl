@@ -98,7 +98,7 @@ type NamedPipe <: AsyncStream
     buffer::Buffer
     closed::Bool
     readcb::Callback
-    NamedPipe() = new(C_NULL,Buffer(),false,false)
+    NamedPipe() = new(C_NULL,DynamicBuffer(),false,false)
 end
 
 type TTY <: AsyncStream
@@ -106,7 +106,7 @@ type TTY <: AsyncStream
     closed::Bool
     buffer::Buffer
     readcb::Callback
-    TTY(handle,closed)=new(handle,closed,Buffer(),false)
+    TTY(handle,closed)=new(handle,closed,DynamicBuffer(),false)
 end
 
 copy(s::TTY) = TTY(s.handle,s.closed)
@@ -228,11 +228,53 @@ open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
-    if(length(stream.buffer.data)-stream.buffer.ptr<recommended_size)
-        grow(stream.buffer, recommended_size-length(stream.buffer.data)+stream.buffer.ptr)
+function alloc_request(buffer::DynamicBuffer, recommended_size)
+    if(length(buffer.data)-buffer.ptr<recommended_size)
+        grow(buffer, recommended_size-length(buffer.data)+buffer.ptr)
     end
-    return (pointer(stream.buffer.data)+stream.buffer.ptr-1, recommended_size)
+    return (pointer(buffer.data)+buffer.ptr-1, recommended_size)
+end
+
+function alloc_request(buffer::LineBuffer, recommended_size)
+    if(length(buffer.data)-buffer.ptr<recommended_size)
+        grow(buffer, recommended_size-length(buffer.data)+buffer.ptr)
+    end
+    return (pointer(buffer.data)+buffer.ptr-1, recommended_size)
+end
+
+function alloc_request(buffer::FixedBuffer, recommended_size)
+    return (pointer(buffer.data)+buffer.ptr-1, length(buffer.data)-buffer.ptr)
+end
+
+_uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32) = alloc_request(stream.buffer,recommended_size)
+
+
+function notify_filled(buffer::DynamicBuffer, nread::Int, base::Ptr, len::Int32)
+    buffer.ptr+=nread
+    true
+end
+function notify_filled(buffer::FixedBuffer, nread::Int, base::Ptr, len::Int32)
+    buffer.ptr+=nread
+    true
+end
+function notify_filled(buffer::LineBuffer, nread::Int, base::Ptr, len::Int32)
+    pos = memchr(buffer.data,'\n',buffer.ptr)
+    if(pos == 0)
+        return false
+    end
+    buffer.nlpos = pos
+    buffer.ptr+=nread
+    true
+end
+notify_content_accepted(buffer::DynamicBuffer) = nothing #Buffer conent management is left to the user
+notify_content_accepted(buffer::FixedBuffer) = nothing #Buffer conent management is left to the user
+function notify_content_accepted(buffer::LineBuffer)
+    len = buffer.ptr - buffer.nlpos
+    if(len > 0)
+        copy_to(buffer.data,1,buffer.data,buffer.nlpos,len)
+    end
+    buffer.ptr = len+1
+    buffer.nlpos = 0
 end
 
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
@@ -240,11 +282,13 @@ function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
         if(_uv_lasterror(localEventLoop()) != 1) #UV_EOF == 1
             error("Failed to start reading: ",_uv_lasterror(localEventLoop()))
         end
+        #EOF
     else
-        stream.buffer.ptr+=nread
-    end
-    if(isa(stream.readcb,Function))
-        stream.readcb(stream,nread,base,len)
+        if(notify_filled(stream.buffer,nread,base,len) && isa(stream.readcb,Function))
+            if(stream.readcb(stream))
+                notify_content_accepted(stream.buffer)#,nread,base,len)
+            end
+        end
     end
 end
 ##########################################
@@ -587,9 +631,9 @@ function reinit_stdio()
     STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
     STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
     STDERR.handle = ccall(:jl_stderr_stream,Ptr{Void},())
-    STDIN.buffer = Buffer()
-    STDOUT.buffer = Buffer()
-    STDERR.buffer = Buffer()
+    STDIN.buffer = DynamicBuffer()
+    STDOUT.buffer = DynamicBuffer()
+    STDERR.buffer = DynamicBuffer()
     for stream in (STDIN,STDOUT,STDERR)
         ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),stream.handle,stream)
     end
@@ -625,7 +669,7 @@ spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::StreamOrNot) = spawn(p
 spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,false),false,false)
 
 #returns a pipe to read from the last command in the pipelines
-read_from(cmds::AbstractCmd)=read_from(cmds, false)
+read_from(cmds::AbstractCmd)=read_from(cmds, null_handle)
 function read_from(cmds::AbstractCmd, stdin::AsyncStream)
     out = NamedPipe()
     processes = spawn(false, cmds, (stdin,out,null_handle))
@@ -633,7 +677,7 @@ function read_from(cmds::AbstractCmd, stdin::AsyncStream)
     (out, processes)
 end
 
-write_to(cmds::AbstractCmd) = write_to(cmds, false)
+write_to(cmds::AbstractCmd) = write_to(cmds, null_handle)
 function write_to(cmds::AbstractCmd, stdout::StreamOrNot)
     in = NamedPipe()
     processes = spawn(false, cmds, (in,stdout,false))
@@ -725,26 +769,6 @@ kill(p::Process) = kill(p,int32(9))
 function _contains_newline(bufptr::Ptr{Void},len::Int32)
     return (ccall(:memchr,Ptr{Uint8},(Ptr{Void},Int32,Uint),bufptr,'\n',len)!=C_NULL)
 end
-
-function linebuffer_cb(cb::Function,stream::AsyncStream,handle::Ptr,nread::PtrSize,base::Ptr,buflen::Int32)
-    if(!isa(stream.buf,IOStream))
-        error("Linebuffering only supported on membuffered ASyncStreams")
-    end
-    if(nread>0)
-        #search for newline
-        pd::Ptr{Uint8} = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,PtrSize),box(Ptr{Uint8},unbox(Int,base)),'\n',nread)
-        if(pd!=C_NULL)
-            #newline found - split buffer
-            to=memio()
-            ccall(:ios_splitbuf,Void,(Ptr{Void},Ptr{Void},Ptr{Uint8}),to.ios,stream.buf.ios,pd)
-            cb(stream,takebuf_string(to))
-        end
-    else
-        cb(stream,takebuf_string(stream.buf))
-        close(stream)
-    end
-end
-
 
 ## process status ##
 

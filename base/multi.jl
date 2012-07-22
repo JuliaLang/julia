@@ -1000,17 +1000,22 @@ function writeback(handle,nread,base,buflen)
 end
 
 function _parse_conninfo(w,i::Int,todo,stream::AsyncStream,conninfo::String)
-    m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
+    m = match(r"^julia_worker:(\d+)#(.*)", take_line(stream.buffer)) #TODO: do without a temporary array
     if m != nothing
         port = parse_int(Uint16, m.captures[1])
         hostname::ByteString = m.captures[2]
         w[i] = Worker(hostname, port)
-        change_io_handler(stream,make_callback(writeback))
+        notify_content_accepted(stream.buffer)
+        old_buffer = stream.buffer
+        stream.buffer = DynamicBuffer()
+        stream.buffer.data = old_buffer.data
+        stream.buffer.ptr = old_buffer.ptr
         todo[1]-=1
         if(todo[1]<=0)
             break_one_loop(localEventLoop())
         end
     end
+    false
 end
 
 function start_remote_workers(machines, cmds)
@@ -1019,11 +1024,11 @@ function start_remote_workers(machines, cmds)
     w = cell(n)
     todo = [int32(n)]
     for i=1:n
-        istream = make_pipe(false,false)
-        ostream,ps = read_from(cmds[i],istream)
-        close(istream)
+        ostream,ps = read_from(cmds[i])
+        ostream.readcb = (stream)->(_parse_conninfo(i,w,todo,stream);true)
+        ostream.buffer = LineBuffer()
         # redirect console output from workers to the client's stdout
-        add_io_handler(ostream,(args...)->linebuffer_cb((stream,string)->_parse_conninfo(w,i,todo,stream,string),ostream,args...))
+        add_io_handler(ostream)
     end
     run_event_loop(localEventLoop())
     w
@@ -1572,7 +1577,7 @@ end
 
 yield() = yieldto(Scheduler)
 
-add_io_handler(io::AsyncStream, H::Function) = start_reading(io, H)
+add_io_handler(io::AsyncStream) = start_reading(io)
 change_io_handler(io::AsyncStream, H::Function) = change_readcb(io,H)
 del_io_handler(io::AsyncStream) = stop_reading(io)
 
