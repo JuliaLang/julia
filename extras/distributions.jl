@@ -588,7 +588,7 @@ insupport(d::TDist, x::Number) = real_valued(x) && isfinite(x)
 type Uniform <: ContinuousDistribution
     a::Float64
     b::Float64
-    Uniform(a, b) = a < b ? new(float64(aa), float64(bb)) : error("a < b required for range [a, b]")
+    Uniform(a, b) = a < b ? new(float64(a), float64(b)) : error("a < b required for range [a, b]")
 end
 Uniform() = Uniform(0, 1)
 @_jl_dist_2p Uniform unif
