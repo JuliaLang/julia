@@ -1,6 +1,5 @@
 # File and path name manipulation
 # These do not examine the filesystem at all, they just work on strings
-let  # keep the constants local
 @unix_only begin
     const os_separator = "/"
     const os_separator_match = "/"
@@ -26,10 +25,8 @@ const plain_tilde = Regex(strcat("^~", os_separator_match))
 # Match ~user/filename
 const user_tilde = r"^~\w"
 
-global filesep
 filesep() = os_separator
 
-global basename
 function basename(path::String)
     m = match(last_separator, path)
     if m == nothing
@@ -39,7 +36,6 @@ function basename(path::String)
     end
 end
 
-global dirname
 function dirname(path::String)
     m = match(last_separator, path)
     if m == nothing
@@ -49,7 +45,6 @@ function dirname(path::String)
     end
 end
 
-global dirname_basename
 function dirname_basename(path::String)
     m = match(last_separator, path)
     if m == nothing
@@ -59,7 +54,6 @@ function dirname_basename(path::String)
     end
 end
 
-global split_extension
 function split_extension(path::String)
     m = match(extension_separator_match, path)
     if m == nothing
@@ -69,17 +63,14 @@ function split_extension(path::String)
     end
 end
 
-global split_path
 split_path(path::String) = split(path, os_separator_match)
 
-global fileparts
 function fileparts(filename::String)
     pathname, filestr = dirname_basename(filename)
     filebase, ext = split_extension(filestr)
     return pathname, filebase, ext
 end
 
-global file_path
 function file_path(components...)
     # Check for components that are nothing, and delete them
     strs = Array(String, 0)
@@ -90,12 +81,14 @@ function file_path(components...)
     end
     join(strs, os_separator)
 end
-global fullfile
-fullfile(components...) = file_path(components...)  # Matlab compatible
+fullfile(pathname::String, basename::String, ext::String) = pathname * os_separator * basename * ext
+fullfile(n::Nothing, basename::String, ext::String) = basename * ext
+fullfile(pathname::String, basename::String, n::Nothing) = pathname * os_separator * basename
+fullfile(np::Nothing, basename::String, ne::Nothing) = basename
 
-global isrooted
+# Test for an absolute path
 function isrooted(path::String)
-    # See if it begins with the os_separator. On Windows, matches
+    # Check whether it begins with the os_separator. On Windows, matches
     # \\servername syntax, so this is a relevant check for everyone
     m = match(Regex(strcat("^", os_separator_match)), path)
     if m != nothing
@@ -128,7 +121,7 @@ end
 
 # Get the absolute path to a file. Uses file system for cwd() when
 # needed, the rest is all string manipulation. In particular, it
-# doesn't check to see whether the file exists.
+# doesn't check whether the file exists.
 function abs_path_split(fname::String)
     fname = tilde_expand(fname)
     if isrooted(fname)
@@ -166,7 +159,7 @@ function abs_path(fname::String)
     comp = abs_path_split(fname)
     return join(comp, os_separator)
 end
-end   # let block
+
 
 # The remaining commands use the file system in some way
 
