@@ -324,6 +324,13 @@ bitrand{T}(::Type{T}, dims::Int...) = bitrand(T, dims)
 bitrand(dims::Dims) = bitrand!(BitArray(dims))
 bitrand(dims::Int...) = bitrand(dims)
 
+## Bounds checking ##
+
+# @carlo: fixme
+function check_bounds(A::Array, B::BitArray)
+    return nothing
+end
+
 ## Indexing: ref ##
 
 function ref{T<:Integer}(B::BitArray{T}, i::Integer)

@@ -38,12 +38,14 @@ JFFLAGS = -O2 $(fPIC)
 USEGCC = 1
 USECLANG = 0
 
-GCC = gcc
-GPLUSPLUS = g++
+#ifeq ($(OS), Darwin)
+#USEGCC = 0
+#USECLANG = 1
+#endif
 
 ifeq ($(USEGCC),1)
-CC = $(GCC)
-CXX = $(GPLUSPLUS)
+CC = gcc
+CXX = g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
@@ -53,18 +55,24 @@ endif
 ifeq ($(USECLANG),1)
 CC = clang
 CXX = clang++
-JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing
+JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
+ifeq ($(OS), Darwin)
+# use $(sw_vers -productVersion) instead of 10.5?
+CC += -mmacosx-version-min=10.5
+CXX += -mmacosx-version-min=10.5
+JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
+endif
 endif
 
 # if not absolute, then relative to JULIA_HOME
 JCFLAGS += '-DJL_SYSTEM_IMAGE_PATH="../lib/julia/sys.ji"'
 
-# If OpenBLAS doesn't build, find your architechure at the following URL and enter it below
-# https://github.com/xianyi/OpenBLAS/blob/master/GotoBLAS_01Readme.txt
-TARGET_OPENBLAS_ARCH=
+# OPENBLAS build options
+OPENBLAS_DYNAMIC_ARCH=0
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 
@@ -97,10 +105,10 @@ USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
 endif
 
-#ifeq ($(OS), Darwin)
-#USE_SYSTEM_BLAS=1
-#USE_SYSTEM_LAPACK=1
-#endif
+ifeq ($(OS), Darwin)
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+endif
 
 -include $(JULIAHOME)/Make.user
 
@@ -229,6 +237,11 @@ LIBBLAS   = -L$(MKLLIB) -lmkl_rt
 LIBLAPACK = -L$(MKLLIB) -lmkl_rt
 LIBBLASNAME = libmkl_rt
 LIBLAPACKNAME = libmkl_rt
+ifneq ($(strip $(MKLLIB)),)
+  ifeq ($(OS), Linux)
+    RPATH += -Wl,-rpath,$(MKLLIB)
+  endif
+endif
 endif
 
 # Libraries to link

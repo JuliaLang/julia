@@ -14,7 +14,7 @@ CPP=/usr/bin/llvm-cpp-4.2
 FC=${PREFIX}/bin/gfortran-mp-4.5
 USE_GCC=1
 USE_CLANG=0
-SUITESPARSE_VER_MAJOR=3
+SUITESPARSE_VER_MAJOR=4
 
 all: default
 default test:

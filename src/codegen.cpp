@@ -2147,7 +2147,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createReassociatePass());          // Reassociate expressions
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-    FPM->add(createBBVectorizePass());
+    //FPM->add(createBBVectorizePass());
 #endif
     FPM->add(createEarlyCSEPass()); //// ****
 

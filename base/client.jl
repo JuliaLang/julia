@@ -79,7 +79,10 @@ function _jl_eval_user_input(ast::ANY, show_value)
                     if _jl_have_color
                         print(_jl_answer_color())
                     end
-                    repl_show(value)
+                    try repl_show(value)
+                    catch err
+                        throw(ShowError(value,err))
+                    end
                     println()
                 end
             end
@@ -247,7 +250,7 @@ function _start()
         end
 
         global const VARIABLES = {}
-        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/"]
+        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/", "$JULIA_HOME/../lib/julia/ui/"]
 
         # Load customized startup
         try include(strcat(cwd(),"/startup.jl")) end

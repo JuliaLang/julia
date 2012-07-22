@@ -4,7 +4,7 @@ LLVM_VER = 3.1
 LLVM_TYPE = release
 READLINE_VER = 6.2
 PCRE_VER = 8.30
-GRISU_VER = 1.1
+GRISU_VER = 1.1.1
 DSFMT_VER = 2.1
 OPENBLAS_VER = develop
 LAPACK_VER = 3.4.1
@@ -23,6 +23,8 @@ GLPK_VER = 4.47
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
 
+# prevent installing libs into usr/lib64 on opensuse
+unexport CONFIG_SITE
 STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos openlibm
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
@@ -79,10 +81,6 @@ endif
 #ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 STAGE2_DEPS += suitesparse
 #endif
-
-ifeq ($(USE_SYSTEM_GLPK), 0)
-STAGE1_DEPS += glpk
-endif
 
 #ifeq ($(USE_SYSTEM_LAPACK), 0)
 #STAGE2_DEPS += lapack
@@ -163,7 +161,7 @@ llvm_python_workaround:
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC=$(GCC) CXX=$(GPLUSPLUS) && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -205,7 +203,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(USR)) $(READLINE_OPTS)  && \
+	./configure --prefix=$(abspath $(USR)) $(READLINE_OPTS) CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) $(READLINE_CFLAGS)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -231,7 +229,7 @@ readline-$(READLINE_VER)/configure: readline-$(READLINE_VER).tar.gz
 	touch $@
 $(READLINE_OBJ_SOURCE): readline-$(READLINE_VER)/configure
 	cd readline-$(READLINE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-shared --enable-static --with-curses && \
+	./configure --prefix=$(abspath $(USR)) --enable-shared --enable-static --with-curses CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE)
 	touch $@
 $(READLINE_OBJ_TARGET): $(READLINE_OBJ_SOURCE)
@@ -311,7 +309,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit
+	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
@@ -370,7 +368,7 @@ install-fdlibm: $(FDLIBM_OBJ_TARGET)
 
 $(FDLIBM_OBJ_SOURCE): fdlibm/*.c
 	cd fdlibm && \
-	$(MAKE) CC=$(CC) CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
+	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
 	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
 $(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
 	cp $< $@
@@ -391,7 +389,7 @@ install-rmath: $(RMATH_OBJ_TARGET)
 
 $(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
 	cd Rmath/src && \
-	$(MAKE) CC=$(CC) && \
+	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
 $(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE)
 	cp $< $@
@@ -470,6 +468,9 @@ OPENBLAS_FLAGS = DYNAMIC_ARCH=1 USE_THREAD=0 CC=$(CC) FC=$(FC)  FFLAGS="$(FFLAGS
 ifeq ($(OS), WINNT)
 OPENBLAS_FLAGS += REVISION=
 endif
+ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
+OPENBLAS_FLAGS += DYNAMIC_ARCH=1
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
@@ -513,7 +514,7 @@ lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
 lapack-$(LAPACK_VER)/INSTALL/dlamch.o: lapack-$(LAPACK_VER)/Makefile $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
 	cp INSTALL/make.inc.gfortran ./make.inc && \
-	$(MAKE) lapacklib NOOPT="-O0 $(fPIC)" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN=$(FC) LOADER=$(FC)
+	$(MAKE) lapacklib NOOPT="-O0 $(fPIC)" OPTS="$(FFLAGS) $(JFFLAGS)" FORTRAN="$(FC)" LOADER="$(FC)"
 	touch $@
 $(LAPACK_OBJ_SOURCE): lapack-$(LAPACK_VER)/INSTALL/dlamch.o $(OPENBLAS_OBJ_SOURCE)
 	cd lapack-$(LAPACK_VER) && \
@@ -547,6 +548,7 @@ $(ARPACK_OBJ_TARGET): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE) |
 	$(FC) -shared $(FFLAGS) $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
 	cp libarpack.$(SHLIB_EXT) $(USRLIB)
 	touch $@
+
 clean-arpack:
 	$(MAKE) -C arpack-ng_$(ARPACK_VER) clean
 	rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
@@ -580,7 +582,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -600,7 +602,7 @@ fftw-$(FFTW_VER)-double/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-double/config.status: fftw-$(FFTW_VER)-double/configure
 	cd fftw-$(FFTW_VER)-double && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_DOUBLE_OBJ_TARGET): fftw-$(FFTW_VER)-double/config.status
@@ -643,7 +645,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC=$(CC) CXX=$(CXX) BLAS=$(LIBBLAS) LAPACK=$(LIBLAPACK)
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -674,12 +676,12 @@ ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
 SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
 else
-SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config
-SUITESPARSE_LIB = 
+SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -L$(USRLIB)
+SUITESPARSE_LIB = -lcholmod
 endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(SUITESPARSE_INC) SuiteSparse_wrapper.c -o $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT) $(SUITESPARSE_LIB)
 	$(INSTALL_NAME_CMD)libsuitesparse_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-suitesparse-wrapper: $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
@@ -703,7 +705,7 @@ clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	touch $@
 clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
-	./configure --prefix=$(abspath $(USR))
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER) install
 	touch $@
@@ -724,6 +726,11 @@ LIBUNWIND_TARGET_OBJ =
 LIBUNWIND_TARGET_SOURCE = 
 endif
 
+LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
+ifeq ($(ARCH), ppc64)
+LIBUNWIND_CFLAGS += -m64
+endif
+
 compile-unwind: $(LIBUNWIND_TARGET_SOURCE)
 install-unwind: $(LIBUNWIND_TARGET_OBJ)
 
@@ -731,7 +738,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)" --prefix=$(abspath $(USR))
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(LIBUNWIND_CFLAGS)" --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -766,7 +773,7 @@ lighttpd-$(LIGHTTPD_VER)/configure: lighttpd-$(LIGHTTPD_VER).tar.gz
 	touch $@
 lighttpd-$(LIGHTTPD_VER)/config.status: lighttpd-$(LIGHTTPD_VER)/configure
 	cd lighttpd-$(LIGHTTPD_VER) && \
-	./configure --prefix=$(abspath $(USR)) --without-pcre --without-zlib --without-bzip2
+	./configure --prefix=$(abspath $(USR)) --without-pcre --without-zlib --without-bzip2 CC="$(CC)" CXX="$(CXX)"
 $(LIGHTTPD_OBJ_TARGET): lighttpd-$(LIGHTTPD_VER)/config.status
 	$(MAKE) -C lighttpd-$(LIGHTTPD_VER) install
 	touch $@
@@ -825,7 +832,7 @@ gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
 	touch $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure --prefix=$(abspath $(USR)) 
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(GMP_OBJ_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD) check
@@ -858,10 +865,8 @@ distclean-gmp-wrapper: clean-gmp-wrapper
 ## GLPK ##
 
 ifeq ($(USE_SYSTEM_GLPK), 1)
-GLPK_PREFIX = /usr/
 GLPK_OBJ_TARGET =
 else
-GLPK_PREFIX = glpk-$(GLPK_VER)/
 GLPK_OBJ_TARGET = $(USRLIB)/libglpk.$(SHLIB_EXT)
 endif
 
@@ -876,7 +881,7 @@ glpk-$(GLPK_VER)/configure: glpk-$(GLPK_VER).tar.gz
 	touch $@
 glpk-$(GLPK_VER)/config.status: glpk-$(GLPK_VER)/configure
 	cd glpk-$(GLPK_VER) && \
-	./configure --prefix=$(abspath $(USR))
+	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
 $(GLPK_OBJ_TARGET): glpk-$(GLPK_VER)/config.status
 	$(MAKE) -C glpk-$(GLPK_VER) $(LIBTOOL_CCLD) install 
 	$(INSTALL_NAME_CMD)libglpk.$(SHLIB_EXT) $@

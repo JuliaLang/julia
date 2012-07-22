@@ -10,9 +10,9 @@ default: release
 DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
+$(foreach link,extras base ui,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
 
-debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base
+debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui
 	@$(MAKE) -s julia-$@
 	@$(MAKE) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) -s $(BUILD)/lib/julia/sys.ji
 
@@ -67,9 +67,10 @@ ifeq ($(shell uname),MINGW32_NT-6.1)
 endif
 endif
 
-dist: release
+dist: cleanall
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
-	$(MAKE) install
+	$(MAKE) -C deps clean-openblas
+	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
 

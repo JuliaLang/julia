@@ -33,6 +33,11 @@ begin
     @assert norm(invd * sqd - eye(size(sqd, 1))) < Eps
     @assert norm(invz * sqz - eye(size(sqz, 1))) < Eps
 
+    @assert_approx_eq det(sqd) prod(eig(sqd)[1]) # determinant
+    @assert_approx_eq det(sqz) prod(eig(sqz)[1])
+    @assert_approx_eq det(symd) prod(eig(symd)[1])
+#    @assert_approx_eq det(herz) prod(eig(herz)[1])
+
     qrd  = QR(mmd)                      # QR and QRP decompositions
     qrz  = QR(mmz)
     qrpd = QRP(mmd)
@@ -48,4 +53,30 @@ begin
     @assert abs(norm(qyz) - norm(yyz)) < Eps # Q is unitary
     @assert abs(norm(qpyz) - norm(yyz)) < Eps # Q is unitary
     
+end
+
+# Test det(A::Matrix)
+# In the long run, these tests should step through Strang's
+#  axiomatic definition of determinants.
+# If all axioms are satisfied and all the composition rules work,
+#  all determinants will be correct except for floating point errors.
+
+# The determinant of the identity matrix should always be 1.
+for n = 1:10
+  A = eye(n)
+  @assert abs(det(A) - 1.0) < Eps
+end
+
+# The determinant of a Householder reflection matrix should always be -1.
+for i = 1:10
+  A = eye(10)
+  A[i, i] = -1.0
+  @assert abs(det(A) - (-1.0)) < Eps
+end
+
+# The determinant of a rotation matrix should always be 1.
+for theta = pi ./ [1:4]
+  R = [cos(theta) -sin(theta);
+       sin(theta) cos(theta)]
+  @assert abs(det(R) - 1.0) < Eps
 end

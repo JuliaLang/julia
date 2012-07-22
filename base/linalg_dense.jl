@@ -234,8 +234,6 @@ function kron{T,S}(a::Matrix{T}, b::Matrix{S})
     R
 end
 
-det(a::Matrix) = prod(diag(qr(a)[2]))
-
 function randsym(n)
     a = randn(n,n)
     for j=1:n-1, i=j+1:n

@@ -141,9 +141,7 @@ function string(x::BigFloat)
 	ret
 end
 
-function show(x::BigFloat) 
-	print (string(x))
-end	
+show(io, b::BigFloat) = print(io, string(b))
 
 function _jl_BigFloat_clear(x::BigFloat) 
 	ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_clear), Void, (Ptr{Void},), x.mpf)

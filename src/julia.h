@@ -810,7 +810,7 @@ void jl_show_tuple(jl_value_t *st, jl_tuple_t *t, char opn, char cls, int comma_
 DLLEXPORT jl_value_t *jl_stdout_obj();
 DLLEXPORT jl_value_t *jl_stderr_obj();
 DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
-DLLEXPORT uptrint_t jl_uid(jl_value_t *v);
+DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 
 // modules
 extern DLLEXPORT jl_module_t *jl_core_module;
@@ -1058,7 +1058,9 @@ DLLEXPORT void jl_register_toplevel_eh(void);
 
 DLLEXPORT jl_array_t *jl_takebuf_array(ios_t *s);
 DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
+DLLEXPORT void *jl_takebuf_raw(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
+DLLEXPORT void jl_free2(void *p, void *hint);
 
 DLLEXPORT int jl_cpu_cores(void);
 

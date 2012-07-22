@@ -103,7 +103,7 @@ DLLEXPORT void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos);
 DLLEXPORT
 ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc);
 DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
-DLLEXPORT ios_t *jl_ios_mem(ios_t *s, size_t initsize);
+DLLEXPORT ios_t *jl_ios_mem(ios_t *s, size_t initsize, int julia_mallocated);
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);

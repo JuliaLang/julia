@@ -52,6 +52,8 @@ a = reshape(b, (2, 2, 2, 2, 2))
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
+tmp = A[2:6]
+@assert tmp == [2:6]
 tmp = A[1:3,2,2:4]
 @assert tmp == cat(3,46:48,86:88,126:128)
 tmp = A[:,7:-3:1,5]
@@ -62,6 +64,28 @@ rng = (2,2:3,2:2:5)
 tmp = zeros(Int,map(max,rng)...)
 tmp[rng...] = A[rng...]
 @assert  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
+
+x = rand(2,2)
+b = x[1,:]
+@assert isequal(size(b), (1, 2))
+b = x[:,1]
+@assert isequal(size(b), (2,))
+
+x = rand(5,5)
+b = x[2:3,2]
+@assert b[1] == x[2,2] && b[2] == x[3,2]
+
+B = zeros(4,5)
+B[:,3] = 1:4
+@assert B == [0 0 1 0 0; 0 0 2 0 0; 0 0 3 0 0; 0 0 4 0 0]
+B[2,:] = 11:15
+@assert B == [0 0 1 0 0; 11 12 13 14 15; 0 0 3 0 0; 0 0 4 0 0]
+B[[3,1],[2,4]] = [21 22; 23 24]
+@assert B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 0 4 0 0]
+B[4,[2,3]] = 7
+@assert B == [0 23 1 24 0; 11 12 13 14 15; 0 21 3 22 0; 0 7 7 0 0]
+
+@assert isequal(reshape(1:27, 3, 3, 3)[1,:], [1  4  7  10  13  16  19  22  25])
 
 ## arrays as dequeues
 l = {1,2,3}
@@ -196,4 +220,19 @@ begin
     @assert isequal(cumsum(A,1),A1)
     @assert isequal(cumsum(A,2),A2)
     @assert isequal(cumsum(A,3),A3)
+
+    A = rand(4,4)
+    for s in {A[1:2:4, 1:2:4], sub(A, 1:2:4, 1:2:4)}
+        c = cumsum(s, 1)
+        @assert c[1,1] == A[1,1]
+        @assert c[2,1] == A[1,1]+A[3,1]
+        @assert c[1,2] == A[1,3]
+        @assert c[2,2] == A[1,3]+A[3,3]
+
+        c = cumsum(s, 2)
+        @assert c[1,1] == A[1,1]
+        @assert c[2,1] == A[3,1]
+        @assert c[1,2] == A[1,1]+A[1,3]
+        @assert c[2,2] == A[3,1]+A[3,3]
+    end
 end

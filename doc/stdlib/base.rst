@@ -53,9 +53,9 @@ All Objects
 
    Create a tuple of length ``n``, computing each element as ``f(i)``, where ``i`` is the index of the element.
 
-.. function:: uid(x)
+.. function:: object_id(x)
 
-   Get a unique integer id for ``x``. ``uid(x)==uid(y)`` if and only if ``is(x,y)``.
+   Get a unique integer id for ``x``. ``object_id(x)==object_id(y)`` if and only if ``is(x,y)``.
 
 .. function:: hash(x)
 
@@ -1537,27 +1537,27 @@ Distributed Arrays
 
 .. function:: dzeros([type, ]dims, ...)
 
-   Construct a distrbuted array of zeros. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dones([type, ]dims, ...)
 
-   Construct a distrbuted array of ones. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array of ones. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dfill(x, dims, ...)
 
-   Construct a distrbuted array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: drand(dims, ...)
 
-   Construct a distrbuted uniform random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: drandn(dims, ...)
 
-   Construct a distrbuted normal random array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed normal random array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: dcell(dims, ...)
 
-   Construct a distrbuted cell array. Trailing arguments are the same as those accepted by ``darray``.
+   Construct a distributed cell array. Trailing arguments are the same as those accepted by ``darray``.
 
 .. function:: distribute(a[, distdim])
 

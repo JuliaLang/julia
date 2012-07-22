@@ -866,7 +866,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     ast0 = def.ast
 
     #if dbg
-    #    print("typeinf ", linfo.name, " ", uid(ast0), "\n")
+    #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
     # if isbound(:stdout_stream)
@@ -1177,7 +1177,7 @@ end
 function type_annotate(ast::Expr, states::Array{Any,1},
                        sv::ANY, rettype::ANY, vnames::ANY)
     decls = ObjectIdDict()
-    closures = LambdaStaticData[]
+    closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
         body[i] = eval_annotate(body[i], states[i], sv, decls, closures)
@@ -1192,7 +1192,7 @@ function type_annotate(ast::Expr, states::Array{Any,1},
         end
     end
 
-    for li in closures
+    for (li::LambdaStaticData) in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
@@ -1258,15 +1258,6 @@ end
 occurs_more(e::SymbolNode, pred, n) = occurs_more(e.name, pred, n)
 occurs_more(e, pred, n) = pred(e) ? 1 : 0
 
-function contains_is(arr, item::ANY)
-    for i = 1:length(arr)
-        if is(arr[i],item)
-            return true
-        end
-    end
-    return false
-end
-
 function exprtype(x::ANY)
     if isa(x,Expr)
         return x.typ
@@ -1300,7 +1291,7 @@ end
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
 function inlineable(f, e::Expr, vars)
-    if !(isa(f,Function)||isa(f,CompositeKind))
+    if !(isa(f,Function)||isa(f,CompositeKind)||isa(f,IntrinsicFunction))
         return NF
     end
     argexprs = a2t_butfirst(e.args)
@@ -1318,8 +1309,11 @@ function inlineable(f, e::Expr, vars)
         isType(e.typ) && isleaftype(e.typ.parameters[1])
         return e.typ.parameters[1]
     end
-    if length(atypes)==1 && isa(atypes[1],BitsKind) && is(f,unbox)
-        return e.args[2]
+    if length(atypes)==2 && isa(atypes[2],BitsKind) && is(f,unbox)
+        return e.args[3]
+    end
+    if isa(f,IntrinsicFunction)
+        return NF
     end
 
     meth = getmethods(f, atypes)

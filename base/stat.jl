@@ -33,20 +33,26 @@ show(io::IO, st::Stat) = printf(f"Stat(mode=%06o,size=%i)\n", st.mode, st.size)
 # stat & lstat functions
 
 const _jl_stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int, ()))
-macro _jl_stat_call(sym)
+macro _jl_stat_call(sym,arg)
     quote
-    fill!(_jl_stat_buf,0)
-    ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8}, Ptr{Uint8}), path, _jl_stat_buf)
-    Stat(_jl_stat_buf)
+        fill!(_jl_stat_buf,0)
+        r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, _jl_stat_buf)
+        system_error("stat", r!=0 && errno()!=ENOENT)
+        st = Stat(_jl_stat_buf)
+        if ispath(st) != (r==0)
+            error("WTF: stat returned zero type for a valid path!?")
+        end
+        st
     end
 end
 
-stat(path::String)  = @_jl_stat_call jl_stat
-stat(fd::Integer)   = @_jl_stat_call jl_fstat
-lstat(path::String) = @_jl_stat_call jl_lstat
+stat(path::String)  = @_jl_stat_call jl_stat  path
+stat(fd::Integer)   = @_jl_stat_call jl_fstat fd
+lstat(path::String) = @_jl_stat_call jl_lstat path
 
 # mode type predicates
 
+    ispath(mode::Unsigned) = mode & 0xf000 != 0x0000
     isfifo(mode::Unsigned) = mode & 0xf000 == 0x1000
  ischardev(mode::Unsigned) = mode & 0xf000 == 0x2000
      isdir(mode::Unsigned) = mode & 0xf000 == 0x4000
@@ -61,9 +67,9 @@ issetuid(mode::Unsigned) = (mode & 0x800) > 0
 issetgid(mode::Unsigned) = (mode & 0x400) > 0
 issticky(mode::Unsigned) = (mode & 0x200) > 0
 
-  isreadable(mode::Unsigned) = (mode & 0x0124) > 0
- iswriteable(mode::Unsigned) = (mode & 0x0092) > 0
-isexecutable(mode::Unsigned) = (mode & 0x0049) > 0
+  isreadable(mode::Unsigned) = (mode & 0x124) > 0
+ iswriteable(mode::Unsigned) = (mode & 0x092) > 0
+isexecutable(mode::Unsigned) = (mode & 0x049) > 0
 
 uperm(mode::Unsigned) = uint8(mode >> 6) & 0x7
 gperm(mode::Unsigned) = uint8(mode >> 3) & 0x7
@@ -72,6 +78,7 @@ operm(mode::Unsigned) = uint8(mode     ) & 0x7
 # mode predicate methods for file names & stat objects
 
 for f in {
+    :ispath
     :isfifo
     :ischardev
     :isdir
@@ -89,8 +96,8 @@ for f in {
     :gperm
     :operm
 }
-    @eval ($f)(path::String) = ($f)(stat(path))
     @eval ($f)(st::Stat)     = ($f)(st.mode)
+    @eval ($f)(path::String) = ($f)(stat(path))
 end
 
 islink(path::String) = islink(lstat(path))

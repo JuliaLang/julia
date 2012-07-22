@@ -307,7 +307,7 @@ with the ``macro`` keyword:
 
 Here, for example, is very nearly the definition of Julia's ``@assert``
 macro (see
-```error.jl`` <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
+`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
 for the actual definition, which allows ``@assert`` to work on booleans
 arrays as well):
 

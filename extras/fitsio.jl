@@ -26,12 +26,14 @@ _cfitsio_bitpix{T<:Float}(::Type{T}) = int32(-8*sizeof(T))
 
 _cfitsio_datatype(::Type{Uint8})      = int32(11)
 _cfitsio_datatype(::Type{Int8})       = int32(12)
-_cfitsio_datatype(::Type{String})     = int32(16)
+_cfitsio_datatype(::Type{Bool})       = int32(14)
+_cfitsio_datatype{T<:String}(::Type{T}) = int32(16)
 _cfitsio_datatype(::Type{Uint16})     = int32(20)
 _cfitsio_datatype(::Type{Int16})      = int32(21)
-_cfitsio_datatype(::Type{Uint32})     = int32(40)
-_cfitsio_datatype(::Type{Int32})      = int32(41)
+_cfitsio_datatype(::Type{Uint32})     = int32(30)
+_cfitsio_datatype(::Type{Int32})      = int32(31)
 _cfitsio_datatype(::Type{Float32})    = int32(42)
+_cfitsio_datatype(::Type{Int64})      = int32(81)
 _cfitsio_datatype(::Type{Float64})    = int32(82)
 _cfitsio_datatype(::Type{Complex64})  = int32(83)
 _cfitsio_datatype(::Type{Complex128}) = int32(163)
@@ -47,6 +49,8 @@ function fits_create_file(filename::String)
     fits_assert_ok(status[1])
     FITSFile(ptr[1], status[1])
 end
+
+fits_clobber_file(filename::String) = fits_create_file("!"*filename)
 
 function fits_open_file(filename::String)
     ptr = Array(Ptr{Void}, 1)
@@ -110,10 +114,11 @@ function fits_read_keyn(f::FITSFile, keynum::Int)
     cstring(convert(Ptr{Uint8},comment))
 end
 
-function fits_write_key(f::FITSFile, keyname::String, value, comment::String)
-    cvalue = isa(value,String) ? cstring(value) : [value]
+function fits_write_key(f::FITSFile, keyname::String, value::Union(Number,String), comment::String)
+    cvalue = isa(value,String) ?  cstring(value) :
+             isa(value,Bool) ? [int32(value)] : [value]
     ccall(dlsym(_jl_libcfitsio,:ffpky), Int32,
-        (Ptr{Void},Int32,Ptr{Uint8},Ptr{Void},Ptr{Uint8},Ptr{Int32}),
+        (Ptr{Void},Int32,Ptr{Uint8},Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
         f.ptr, _cfitsio_datatype(typeof(value)), cstring(keyname),
         cvalue, cstring(comment), &f.status)
     fits_assert_ok(f)

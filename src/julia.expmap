@@ -7,7 +7,7 @@
     memhash32;
     memhash32_seed;
     jl_symbol_name;
-    jl_uid;
+    jl_object_id;
     jl_strtod;
     jl_strtof;
     clock_now;
@@ -43,7 +43,9 @@
     jl_enable_color;
     jl_takebuf_array;
     jl_takebuf_string;
+    jl_takebuf_raw;
     jl_readuntil;
+    jl_free2;
     jl_cpu_cores;
     jl_hrtime;
     jl_cstr_to_string;

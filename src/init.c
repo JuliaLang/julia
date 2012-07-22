@@ -23,6 +23,11 @@
 # define WIN32_LEAN_AND_MEAN
 # include <windows.h>
 #endif
+#if defined(__linux__)
+//#define _GNU_SOURCE
+#include <sched.h>   // for setting CPU affinity
+#endif
+
 int jl_boot_file_loaded = 0;
 
 char *jl_stack_lo;
@@ -250,6 +255,19 @@ void julia_init(char *imageFile)
     jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
     //init io
     init_stdio();
+
+#if defined(__linux__)
+    int ncores = jl_cpu_cores();
+    if (ncores > 1) {
+        cpu_set_t cpumask;
+        CPU_ZERO(&cpumask);
+        for(int i=0; i < ncores; i++) {
+            CPU_SET(i, &cpumask);
+        }
+        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
+    }
+#endif
+
 #ifdef JL_GC_MARKSWEEP
     jl_gc_init();
     jl_gc_disable();

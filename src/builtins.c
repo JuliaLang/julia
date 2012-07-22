@@ -638,20 +638,29 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
 
 // internal functions ---------------------------------------------------------
 
+extern int jl_in_inference;
+int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
+
 JL_CALLABLE(jl_trampoline)
 {
     assert(jl_is_func(F));
-    assert(((jl_function_t*)F)->linfo != NULL);
-    /* // to run inference on all thunks. slows down loading files.
-    if (F->linfo->inferred == jl_false) {
+    jl_function_t *f = (jl_function_t*)F;
+    assert(f->linfo != NULL);
+    // to run inference on all thunks. slows down loading files.
+    if (f->linfo->inferred == jl_false) {
         if (!jl_in_inference) {
-            jl_type_infer(F->linfo, jl_tuple_type, F->linfo);
+            if (jl_is_tuple(f->linfo->ast)) {
+                f->linfo->ast = jl_uncompress_ast((jl_tuple_t*)f->linfo->ast);
+            }
+            if (jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
+                jl_type_infer(f->linfo, jl_tuple_type, f->linfo);
+            }
         }
-    }*/
-    jl_compile((jl_function_t*)F);
-    assert(((jl_function_t*)F)->fptr == &jl_trampoline);
-    jl_generate_fptr((jl_function_t*)F);
-    return jl_apply((jl_function_t*)F, args, nargs);
+    }
+    jl_compile(f);
+    assert(f->fptr == &jl_trampoline);
+    jl_generate_fptr(f);
+    return jl_apply(f, args, nargs);
 }
 
 JL_CALLABLE(jl_f_instantiate_type)
@@ -781,7 +790,7 @@ JL_CALLABLE(jl_f_invoke)
 #define hash64(a)   int64to32hash(a)
 #endif
 
-DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
+DLLEXPORT uptrint_t jl_object_id(jl_value_t *v)
 {
     if (jl_is_symbol(v))
         return ((jl_sym_t*)v)->hash;
@@ -812,7 +821,7 @@ DLLEXPORT uptrint_t jl_uid(jl_value_t *v)
     uptrint_t h = 0;
     size_t l = jl_tuple_len(v);
     for(size_t i = 0; i < l; i++) {
-        uptrint_t u = jl_uid(jl_tupleref(v,i));
+        uptrint_t u = jl_object_id(jl_tupleref(v,i));
         h = bitmix(h, u);
     }
     return h;

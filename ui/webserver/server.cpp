@@ -227,8 +227,11 @@ void abort_request(uv_stream_t *stream)
 
 void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-    if(nread<0)
+    if(nread<0) {
         abort_request(stream);
+        return;
+    }
+
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->isComma) {
         buf.base=buf.base+2;
@@ -500,8 +503,11 @@ void read_body(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 
 void read_header(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 {
-    if(nread<0)
+    if(nread<0) {
         abort_request(stream);
+        return;
+    }
+
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->bufBase==0)p->bufBase=buf.base;
@@ -576,8 +582,11 @@ void read_header_length(uv_stream_t* stream, ssize_t nread, uv_buf_t buf)
 #ifdef DEBUG_TRACE
     cout << "Header Length!\n";
 #endif
-    if(nread<0)
+    if(nread<0) {
         abort_request(stream);
+        return;
+    }
+
     const char *pos = buf.base;
     reading_in_progress *p = (reading_in_progress*)(stream->data);
     if(p->bufBase==0) p->bufBase=buf.base;
