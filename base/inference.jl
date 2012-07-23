@@ -248,6 +248,10 @@ getfield_tfunc = function (A, s, name)
     end
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
+        A1 = A[1]
+        if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
+            return abstract_eval_constant(eval(A1,fld))
+        end
         for i=1:length(s.names)
             if is(s.names[i],fld)
                 return s.types[i]
@@ -368,11 +372,23 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
         return _iisconst(f.name) && f.name
     end
+    if isa(f,GetfieldNode) && isa(f.value,Module)
+        M = f.value; s = f.name
+        return isbound(M,s) && isconst(M,s) && f
+    end
+    if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
+        if length(f.args) == 3 && isa(f.args[1], TopNode) &&
+            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode) &&
+            isa(f.args[2],Module)
+            M = f.args[2]; s = f.args[3].value
+            return isbound(M,s) && isconst(M,s) && f
+        end
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
     return isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
-           _iisconst(f) && f
+            _iisconst(f) && _iisbound(f) && f
 end
 
 isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
@@ -487,7 +503,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && _iisbound(af)
+            if !is(af,false)
                 aargtypes = argtypes[2:]
                 if allp(x->isa(x,Tuple), aargtypes) &&
                    !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
@@ -502,7 +518,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         end
         if is(f,invoke) && length(fargs)>1
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && _iisbound(af) && (af=_ieval(af);isgeneric(af))
+            if !is(af,false) && (af=_ieval(af);isgeneric(af))
                 sig = argtypes[2]
                 if isa(sig,Tuple) && allp(isType, sig)
                     sig = map(t->t.parameters[1], sig)
@@ -545,10 +561,6 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         return Any
     end
     #print("call ", e.args[1], argtypes, " ")
-    if !_iisbound(func)
-        #print("=> ", Any, "\n")
-        return Any
-    end
     f = _ieval(func)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
