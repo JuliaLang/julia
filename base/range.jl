@@ -235,8 +235,4 @@ function map_to(dest, f, r::Ranges)
     dest
 end
 
-function map(f, r::Ranges)
-    if isempty(r) return similar(r) end
-    first = f(r.start)
-    map_to(similar(r, typeof(first)), f, r)
-end
+map(f, r::Ranges) = [ f(x) for x in r ]
