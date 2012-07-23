@@ -14,7 +14,7 @@ export
     Rational,Regex,RegexMatch,RegexMatchIterator,Region,RemoteRef,RepString,
     RevString,Reverse,RopeString,Set,StridedArray,StridedMatrix,StridedVecOrMat,
     StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TransformedString,
-    UniqueNames,VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
+    VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
     Stat, Factorization, Cholesky, LU, QR, QRP,
     # Exceptions
     ArgumentError,BackTrace,DisconnectException,ErrorException,KeyError,

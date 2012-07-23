@@ -135,7 +135,7 @@ end
 
 append(xs...) = append_any(xs...)
 
-macro thunk(ex); :(()->$ex); end
+macro thunk(ex); :(()->$esc(ex)); end
 macro L_str(s); s; end
 
 function compile_hint(f, args::Tuple)

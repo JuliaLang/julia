@@ -129,6 +129,8 @@ static int exec_program(void)
     JL_TRY {
         jl_register_toplevel_eh();
         if (err) {
+            //jl_lisp_prompt();
+            //return 1;
             jl_show(jl_stderr_obj(), jl_exception_in_transit);
             ios_printf(ios_stderr, "\n");
             JL_EH_POP();

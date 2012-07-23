@@ -215,6 +215,7 @@ to_index(i::Real) = convert(Int, i)
 # vectorization
 
 macro vectorize_1arg(S,f)
+    S = esc(S); f = esc(f)
     quote
         function ($f){T<:$S}(x::AbstractArray{T,1})
             [ ($f)(x[i]) for i=1:length(x) ]
@@ -229,6 +230,7 @@ macro vectorize_1arg(S,f)
 end
 
 macro vectorize_2arg(S,f)
+    S = esc(S); f = esc(f)
     quote
         function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))

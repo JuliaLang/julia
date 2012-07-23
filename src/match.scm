@@ -164,7 +164,7 @@
       expr
       (let ((enew (apply-patterns plist expr)))
 	(if (eq? enew expr)
-            ; expr didn't change; move to subexpressions
+            ;; expr didn't change; move to subexpressions
 	    (let ((sub (lambda (subex)
 			 (if (not (pair? subex))
 			     subex
@@ -174,7 +174,17 @@
 			 (map sub (cadr expr))
 			 (map sub (cddr expr)))
 		  (map sub expr)))
-	    ; expr changed; iterate
+	    ;; expr changed; iterate
+	    (pattern-expand plist enew)))))
+
+;; expand only outermost
+(define (pattern-expand1 plist expr)
+  (if (or (not (pair? expr)) (eq? (car expr) 'quote))
+      expr
+      (let ((enew (apply-patterns plist expr)))
+	(if (eq? enew expr)
+	    expr
+	    ;; expr changed; iterate
 	    (pattern-expand plist enew)))))
 
 ;; finds and replaces pattern matches with their expansions

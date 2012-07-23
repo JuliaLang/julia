@@ -33,24 +33,21 @@ end
 
 # print elapsed time, return expression value
 macro time(ex)
-    @gensym t0 val t1
     quote
-        local $t0 = time()
-        local $val = $ex
-        local $t1 = time()
-        println("elapsed time: ", $t1-$t0, " seconds")
-        $val
+        local t0 = time()
+        local val = $esc(ex)
+        local t1 = time()
+        println("elapsed time: ", t1-t0, " seconds")
+        val
     end
 end
 
 # print nothing, return elapsed time
 macro elapsed(ex)
-    @gensym t0 val t1
     quote
-        local $t0 = time()
-        local $val = $ex
-        local $t1 = time()
-        $t1-$t0
+        local t0 = time()
+        local val = $esc(ex)
+        time()-t0
     end
 end
 

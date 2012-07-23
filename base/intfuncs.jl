@@ -286,19 +286,14 @@ base(b::Union(Int,Array{Uint8}), x::Unsigned)         = base(b,x,1,false)
 base(b::Union(Int,Array{Uint8}), x::Integer, p::Int)  = base(b,unsigned(abs(x)),p,x<0)
 base(b::Union(Int,Array{Uint8}), x::Integer)          = base(b,unsigned(abs(x)),1,x<0)
 
-macro _jl_int_stringifier(sym)
-    quote
+for sym in (:bin, :oct, :dec, :hex)
+    @eval begin
         ($sym)(x::Unsigned, p::Int) = ($sym)(x,p,false)
         ($sym)(x::Unsigned)         = ($sym)(x,1,false)
         ($sym)(x::Integer, p::Int)  = ($sym)(unsigned(abs(x)),p,x<0)
         ($sym)(x::Integer)          = ($sym)(unsigned(abs(x)),1,x<0)
     end
 end
-
-@_jl_int_stringifier bin
-@_jl_int_stringifier oct
-@_jl_int_stringifier dec
-@_jl_int_stringifier hex
 
 bits(x::Union(Bool,Int8,Uint8))           = bin(reinterpret(Uint8,x),8)
 bits(x::Union(Int16,Uint16))              = bin(reinterpret(Uint16,x),16)

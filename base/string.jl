@@ -626,7 +626,7 @@ function _jl_interp_parse(s::String, unescape::Function, printer::Function)
             if isa(ex,Expr) && is(ex.head,:continue)
                 throw(ParseError("incomplete expression"))
             end
-            push(sx, ex)
+            push(sx, esc(ex))
             i = j
         elseif c == '\\' && !done(s,k)
             if s[k] == '$'
@@ -710,7 +710,7 @@ function _jl_shell_parse(s::String, interp::Bool)
                 error("space not allowed right after \$")
             end
             ex, j = parseatom(s,j)
-            update_arg(ex); i = j
+            update_arg(esc(ex)); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes

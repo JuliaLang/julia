@@ -2,7 +2,7 @@ include("os_detect.jl")
 
 macro windows_only(ex)
     if(CURRENT_OS == :Windows)
-        return ex
+        return esc(ex)
     else
         return :nothing
     end
@@ -10,7 +10,7 @@ end
 
 macro unix_only(ex)
     if(_jl_is_unix(CURRENT_OS))
-        return ex
+        return esc(ex)
     else
         return :nothing
     end

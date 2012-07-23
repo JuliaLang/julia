@@ -14,34 +14,16 @@ gensym(a::Array{Uint8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
 gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
 
-type UniqueNames
-    names::Array{Any,1}
-    UniqueNames() = new({})
-end
-
-let _names = {}
-global gensym
-function gensym(u::UniqueNames)
-    nu = length(u.names)
-    if nu >= length(_names)
-        push(_names, gensym())
-    end
-    s = _names[nu+1]
-    push(u.names, s)
-    return s
-end
-end
-
 macro gensym(names...)
     blk = expr(:block)
     for name in names
-        push(blk.args, :($name = gensym($(string(name)))))
+        push(blk.args, :($esc(name) = gensym($(string(name)))))
     end
     push(blk.args, :nothing)
     return blk
 end
 
-syntax_escape(e) = expr(:escape, {e})
+esc(e::ANY) = expr(:escape, {e})
 
 ## expressions ##
 
@@ -75,5 +57,5 @@ macro eval(x)
 end
 
 macro task(ex)
-    :(Task(()->$ex))
+    :(Task(()->$esc(ex)))
 end

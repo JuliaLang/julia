@@ -555,6 +555,79 @@
 
    )) ; binding-form-patterns
 
+;; a copy of the above patterns, but returning the names of vars
+;; introduced by the forms, instead of their transformations.
+(define vars-introduced-by-patterns
+  (pattern-set
+   ;; function with static parameters
+   (pattern-lambda (function (call (curly name . sparams) . argl) body)
+		   (cons 'varlist (llist-vars (fix-arglist argl))))
+
+   ;; function definition
+   (pattern-lambda (function (call name . argl) body)
+		   (cons 'varlist (llist-vars (fix-arglist argl))))
+
+   (pattern-lambda (function (tuple . args) body)
+		   `(-> (tuple ,@args) ,body))
+
+   ;; expression form function definition
+   (pattern-lambda (= (call (curly name . sparams) . argl) body)
+		   `(function (call (curly ,name . ,sparams) . ,argl) ,body))
+   (pattern-lambda (= (call name . argl) body)
+		   `(function (call ,name ,@argl) ,body))
+
+   ;; anonymous function
+   (pattern-lambda (-> a b)
+		   (let ((a (if (and (pair? a)
+				     (eq? (car a) 'tuple))
+				(cdr a)
+				(list a))))
+		     (cons 'varlist (llist-vars (fix-arglist a)))))
+
+   ;; let
+   (pattern-lambda (let ex . binds)
+		   (let loop ((binds binds)
+			      (args  ())
+			      (inits ())
+			      (locls ())
+			      (stmts ()))
+		     (if (null? binds)
+			 (cons 'varlist
+			       (append! (llist-vars (fix-arglist args))
+					locls))
+			 (cond
+			  ((or (symbol? (car binds)) (decl? (car binds)))
+			   ;; just symbol -> add local
+			   (loop (cdr binds) args inits
+				 (cons (car binds) locls)
+				 stmts))
+			  ((and (length= (car binds) 3)
+				(eq? (caar binds) '=))
+			   ;; some kind of assignment
+			   (cond
+			    ((or (symbol? (cadar binds))
+				 (decl?   (cadar binds)))
+			     ;; a=b -> add argument
+			     (loop (cdr binds)
+				   (cons (cadar binds) args)
+				   (cons (caddar binds) inits)
+				   locls stmts))
+			    ((and (pair? (cadar binds))
+				  (eq? (caadar binds) 'call))
+			     ;; f()=c
+			     (let ((asgn (cadr (julia-expand0 (car binds)))))
+			       (loop (cdr binds) args inits
+				     (cons (cadr asgn) locls)
+				     (cons asgn stmts))))
+			    (else '())))
+			  (else '())))))
+
+   ;; macro definition
+   (pattern-lambda (macro (call name . argl) body)
+		   `(-> (tuple ,@argl) ,body))
+
+   )) ; vars-introduced-by-patterns
+
 ; local x, y=2, z => local x;local y;local z;y = 2
 (define (expand-decls what binds)
   (if (not (list? binds))
@@ -1902,24 +1975,20 @@ So far only the second case can actually occur.
 	(else
 	 (case (car e)
 	   ((escape) (cadr e))
-	   ((lambda)
-	    (let ((newenv (append (env-for-expansion (caddr e))
-				  (map (lambda (x) (cons x (gensy)))
-				       (llist-vars (cadr e)))
-				  env)))
-	      `(lambda ,(map (lambda (x)
-			       (resolve-expansion-vars- x newenv m))
-			     (cadr e))
-		 ,(resolve-expansion-vars- (caddr e) newenv m))))
 	   ((macrocall)
-	    `(macrocall ,(cadr e) ,(resolve-expansion-vars-
-				    (caddr e) env m)))
+	    `(macrocall ,(cadr e)
+			,@(map (lambda (x)
+				 (resolve-expansion-vars- x env m))
+			       (cddr e))))
 	   ;; todo: for, trycatch
 	   ;; todo: tuple as assignment LHS
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)
-			 (resolve-expansion-vars- x env m))
+			 (resolve-expansion-vars-
+			  x
+			  (append! (env-for-expansion x) env)
+			  m))
 		       (cdr e))))))))
 
 (define (find-declared-vars-in-expansion e decl)
@@ -1945,13 +2014,17 @@ So far only the second case can actually occur.
 	(else
 	 (apply append! (map find-assigned-vars-in-expansion e))))))
 
+(define (vars-introduced-by e)
+  (let ((v (pattern-expand1 vars-introduced-by-patterns e)))
+    (if (and (pair? v) (eq? (car v) 'varlist))
+	(cdr v)
+	'())))
+
 (define (env-for-expansion e)
   (let ((v (diff (delete-duplicates
 		  (append! (find-declared-vars-in-expansion e 'local)
 			   (find-assigned-vars-in-expansion e)
-			   (if (and (pair? e) (eq? (car e) 'lambda))
-			       (llist-vars (cadr e))
-			       '())))
+			   (vars-introduced-by e)))
 		 (find-declared-vars-in-expansion e 'global))))
     (map (lambda (x) (cons x (gensy))) v)))
 
@@ -1959,8 +2032,7 @@ So far only the second case can actually occur.
   ;; expand binding form patterns
   ;; keep track of environment, rename locals to gensyms
   ;; and wrap globals in (getfield module var) for macro's home module
-  (let ((e (pattern-expand binding-form-patterns e)))
-    (resolve-expansion-vars- e (env-for-expansion e) m)))
+  (resolve-expansion-vars- e (env-for-expansion e) m))
 
 ;; expander entry point
 

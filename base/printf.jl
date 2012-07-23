@@ -495,7 +495,7 @@ end
 
 macro handle_zero()
     quote
-        if x == 0
+        if $esc(:x) == 0
             _jl_point[1] = 1
             _jl_digits[1] = '0'
             return
@@ -574,9 +574,9 @@ _jl_int_HEX(x::Unsigned) = (_jl_neg[1]=false; _jl_decode_HEX(x))
 
 macro handle_negative()
     quote
-        if x < 0
+        if $esc(:x) < 0
             _jl_neg[1] = true
-            x = -x
+            $esc(:x) = -($esc(:x))
         else
             _jl_neg[1] = false
         end
@@ -761,7 +761,7 @@ macro printf(f, exps...)
     end
     for i = length(args):-1:1
         arg = args[i].args[1]
-        unshift(blk.args, :($arg = $(exps[i])))
+        unshift(blk.args, :($arg = $esc(exps[i])))
     end
     blk
 end
