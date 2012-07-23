@@ -220,12 +220,11 @@
 	((symbol? (car sparams))
 	 (sparam-name-bounds (cdr sparams) (cons (car sparams) names)
 			     (cons '(top Any) bounds)))
-	((and (length= (car sparams) 4)
-	      (eq? (caar sparams) 'comparison)
-	      (eq? (caddar sparams) '|<:|)
+	((and (length= (car sparams) 3)
+	      (eq? (caar sparams) '|<:|)
 	      (symbol? (cadar sparams)))
 	 (sparam-name-bounds (cdr sparams) (cons (cadr (car sparams)) names)
-			     (cons (cadddr (car sparams)) bounds)))
+			     (cons (caddr (car sparams)) bounds)))
 	(else
 	 (error "malformed type parameter list"))))
 
@@ -257,7 +256,7 @@
 
 (define (default-outer-ctor name field-names field-types params bounds)
   `(function (call (curly ,name
-			  ,@(map (lambda (p b) `(comparison ,p <: ,b))
+			  ,@(map (lambda (p b) `(<: ,p ,b))
 				 params bounds))
 		   ,@(map make-decl field-names field-types))
 	     (block
@@ -396,10 +395,9 @@
 		       (values name '() 'Any)) ex)
       ((pattern-lambda (curly (-- name (-s)) . params)
 		       (values name params 'Any)) ex)
-      ((pattern-lambda (comparison (-- name (-s)) (-/ |<:|) super)
+      ((pattern-lambda (|<:| (-- name (-s)) super)
 		       (values name '() super)) ex)
-      ((pattern-lambda (comparison (curly (-- name (-s)) . params)
-				   (-/ |<:|) super)
+      ((pattern-lambda (|<:| (curly (-- name (-s)) . params) super)
 		       (values name params super)) ex)
       (error "invalid type signature")))
 
@@ -454,7 +452,7 @@
 	  (loop (if isseq F (cdr F)) (cdr A) stmts
 		(list* rt (ccall-conversion ty ca) C))))))
 
-; patterns that introduce lambdas
+;; patterns that introduce lambdas
 (define binding-form-patterns
   (pattern-set
    ;; function with static parameters
@@ -1981,13 +1979,16 @@ So far only the second case can actually occur.
 				 (resolve-expansion-vars- x env m))
 			       (cddr e))))
 	   ;; todo: for, trycatch
-	   ;; todo: tuple as assignment LHS
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)
 			 (resolve-expansion-vars-
 			  x
-			  (append! (env-for-expansion x) env)
+			  (append!
+			   (filter (lambda (x)
+				     (not (assq (car x) env)))
+				   (env-for-expansion x))
+			   env)
 			  m))
 		       (cdr e))))))))
 
@@ -1997,7 +1998,7 @@ So far only the second case can actually occur.
       (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'escape))
 	     '())
 	    ((eq? (car e) decl)
-	     (list (decl-var (cadr e))))
+	     (map decl-var (cdr e)))
 	    (else
 	     (apply append! (map (lambda (x)
 				   (find-declared-vars-in-expansion x decl))
@@ -2009,8 +2010,9 @@ So far only the second case can actually occur.
       (case (car e)
 	((lambda escape)  '())
 	((= method)
-	 (let ((v (decl-var (cadr e))))
-	   (list v)))
+	 (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
+	     (map decl-var (cdr (cadr e)))
+	     (list (decl-var (cadr e)))))
 	(else
 	 (apply append! (map find-assigned-vars-in-expansion e))))))
 

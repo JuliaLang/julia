@@ -112,7 +112,7 @@ export
     drand,drandn,dump,dup2,dzeros,each_col,each_col!,each_line,each_match,
     each_row,each_row!,each_search,each_vec,each_vec!,edit,eig,elements,eltype,
     ends_with,enq_work,enqueue,enumerate,eof,eps,erf,erfc,errno,error,
-    escape_string,exec,exit,exp,exp2,expm1,expr,exprnd,eye,
+    esc,escape_string,exec,exit,exp,exp2,expm1,expr,exprnd,eye,
     factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,fft_num_threads,
     fftn,fftshift,fftw_forget_wisdom,fftwd_import_wisdom_from_filename,
     fftwf_import_wisdom_from_filename,fill,fill!,filt,filter,filter!,finalizer,
@@ -188,6 +188,7 @@ export
     filesize, mtime, ctime, stat, lstat, isfifo, ischardev, isdir,
     isblockdev, isfile, islink, issocket, issetuid, issetgid, issticky,
     isreadable, iswriteable, isexecutable, uperm, gperm, operm,
+    trailingsize, check_bounds, search_sorted_last, search_sorted_first,
     # TODO: used by macros, should be removed (use hygiene instead)
     cmd_gen,
     # Macros

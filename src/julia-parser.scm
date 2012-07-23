@@ -607,6 +607,13 @@
 	(else
 	 ex)))))
 
+;; convert (comparison a <: b) to (<: a b)
+(define (subtype-syntax e)
+  (if (and (pair? e) (eq? (car e) 'comparison)
+	   (length= e 4) (eq? (caddr e) '|<:|))
+      `(<: ,(cadr e) ,(cadddr e))
+      e))
+
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
 (define (parse-call s)
@@ -643,7 +650,8 @@
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
-		   (loop (list* 'curly ex (parse-arglist s #\} ))))
+		   (loop (list* 'curly ex
+				(map subtype-syntax (parse-arglist s #\} )))))
 		  ((#\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
@@ -674,6 +682,9 @@
 	   (error (string word " at "
 			  current-filename ":" expect-end-current-line
 			  " expected end, got " t))))))
+
+(define (parse-subtype-spec s)
+  (subtype-syntax (parse-ineq s)))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -751,13 +762,13 @@
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((abstract)
-     (list 'abstract (parse-ineq s)))
+     (list 'abstract (parse-subtype-spec s)))
     ((type)
-     (let ((sig (parse-ineq s)))
+     (let ((sig (parse-subtype-spec s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((bitstype)
-     (list 'bitstype (parse-atom s) (parse-ineq s)))
+     (list 'bitstype (parse-atom s) (parse-subtype-spec s)))
     ((typealias)
      (let ((lhs (parse-call s)))
        (if (and (pair? lhs) (eq? (car lhs) 'call))
