@@ -59,8 +59,10 @@
 	     ;; special top-level expressions left alone
 	     (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
 	 e)
-	((and (pair? e) (eq? (car e) 'global))
-	 (julia-expand0 e))
+	((and (pair? e) (memq (car e) '(import importall export)))
+	 e)
+	((and (pair? e) (eq? (car e) 'global) (symbol? (cadr e)))
+	 e)
 	(else
 	 (let* ((ex (julia-expand0 e))
 		(gv (toplevel-expr-globals ex))

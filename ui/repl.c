@@ -131,7 +131,13 @@ static int exec_program(void)
         if (err) {
             //jl_lisp_prompt();
             //return 1;
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            jl_value_t *errs = jl_stderr_obj();
+            if (errs != NULL) {
+                jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            }
+            else {
+                ios_printf(ios_stderr, "error during bootstrap\n");
+            }
             ios_printf(ios_stderr, "\n");
             JL_EH_POP();
             return 1;

@@ -445,7 +445,7 @@ jl_value_t *jl_parse_next(int *plineno)
         value_t a = car_(c);
         if (isfixnum(a)) {
             *plineno = numval(a);
-            //ios_printf(ios_stderr, "  line %d\n", *plineno);
+            //ios_printf(ios_stderr, "  on line %d\n", *plineno);
             return scm_to_julia(cdr_(c));
         }
     }

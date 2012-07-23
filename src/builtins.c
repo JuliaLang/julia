@@ -257,11 +257,13 @@ JL_CALLABLE(jl_f_top_eval)
 {
     if (nargs == 1) {
         jl_expr_t *ex = (jl_expr_t*)args[0];
+        /*
         if (jl_is_expr(ex) && (ex->head == export_sym ||
                                ex->head == import_sym ||
                                ex->head == importall_sym)) {
             jl_errorf("unsupported or misplaced expression %s", ex->head->name);
         }
+        */
         return jl_toplevel_eval((jl_value_t*)ex);
     }
     if (nargs != 2) {

@@ -1978,7 +1978,7 @@ So far only the second case can actually occur.
 			,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
 			       (cddr e))))
-	   ;; todo: for, trycatch
+	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
 		  (map (lambda (x)

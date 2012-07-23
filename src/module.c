@@ -55,6 +55,9 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
+    if (m == jl_root_module) {
+        b->exportp = 1;  // export everything from Root
+    }
     return *bp;
 }
 
