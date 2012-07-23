@@ -163,7 +163,7 @@ end
 macro defaults(opts,ex...)
     # Create a new variable storing the checkflag
     varname = strcat("_",string(opts),"_checkflag")
-    exret = :($symbol(varname) = ischeck($opts))
+    exret = :($esc(symbol(varname)) = ischeck($esc(opts)))
     # Check each argument in the assignment list
     htindex = gensym()
     for i = 1:length(ex)
@@ -174,13 +174,13 @@ macro defaults(opts,ex...)
         thissym = thisex.args[1]
         exret = quote
             $exret
-            $htindex = ht_keyindex(($opts).key2index,$expr(:quote,thissym))
+            $htindex = ht_keyindex($esc(opts).key2index,$expr(:quote,thissym))
             if $htindex > 0
-                $htindex = ($opts).key2index.vals[$htindex]
-                $thissym = ($opts).vals[$htindex]
-                ($opts).used[$htindex] = true
+                $htindex = $esc(opts).key2index.vals[$htindex]
+                $esc(thissym) = $esc(opts).vals[$htindex]
+                $esc(opts).used[$htindex] = true
             else
-                $thisex
+                $esc(thisex)
             end
         end
     end
@@ -192,9 +192,8 @@ end
 # Usage:
 #    @check_used opts
 macro check_used(opts)
-    varname = gensym()
     varname = strcat("_",string(opts),"_checkflag")
-    :(docheck($opts,$symbol(varname)))
+    :(docheck($esc(opts),$esc(symbol(varname))))
 end
 
 # Macro for setting options. Usage:
@@ -204,7 +203,7 @@ macro options(ex...)
     callargs = Any[:Options]
     istart = 1
     if isa(ex[1], Symbol)
-        push(callargs, ex[1])
+        push(callargs, esc(ex[1]))
         istart = 2
     end
     for indx = istart:length(ex)
@@ -212,7 +211,7 @@ macro options(ex...)
             error("Arguments to @options must be assignments, e.g., a=5")
         end
         push(callargs, expr(:quote, ex[indx].args[1]))
-        push(callargs, ex[indx].args[2])
+        push(callargs, esc(ex[indx].args[2]))
     end
     expr(:call, callargs)
 end
@@ -231,7 +230,7 @@ macro set_options(opts,ex...)
         thisval = thisex.args[2]
         exret = quote
             $exret
-            ($opts)[$expr(:quote,thissym)] = $thisval
+            $esc(opts)[$expr(:quote,thissym)] = $esc(thisval)
         end
     end
     exret
