@@ -274,7 +274,19 @@ JL_CALLABLE(jl_f_top_eval)
     if (jl_is_symbol(args[1])) {
         return jl_eval_global_var(m, (jl_sym_t*)args[1]);
     }
-    return jl_interpret_toplevel_expr_in(m, args[1], NULL, 0);
+    jl_value_t *v=NULL;
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = m;
+        v = jl_toplevel_eval(args[1]);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
+    assert(v);
+    return v;
 }
 
 JL_CALLABLE(jl_f_isbound)

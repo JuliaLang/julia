@@ -297,30 +297,33 @@ function _jl_dumptype(io::IOStream, x::Type, n::Int, indent)
         return  
     end
     typargs(t) = split(string(t), "{")[1]
-    # TODO: When namespaces are worked out, this probably needs fixing
-    # to allow different modules to be included or to look in the
-    # equivalent of R's search path.
-    for s in [names(Core), names(Base)]  
-        t = eval(s)
-        if isa(t, TypeConstructor)
-            if string(x.name) == typargs(t) ||
-               ("Union" == split(string(t), "(")[1] &&
-                  any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
-                targs = join(t.parameters, ",")
-                println(io, indent, "  ", s,
-                        length(t.parameters) > 0 ? "{$targs}" : "",
-                        " = ", t)
-            end
-        elseif isa(t, UnionKind)
-            if any(map(tt -> string(x.name) == typargs(tt), t.types))
-                println(io, indent, "  ", s, " = ", t)
-            end
-        elseif isa(t, Type) && super(t).name == x.name
-            if string(s) != string(t.name) # type aliases
-                println(io, indent, "  ", s, " = ", t.name)
-            elseif t != Any 
-                print(io, indent, "  ")
-                _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+    # todo: include current module?
+    for m in (Core, Base)
+        for s in names(m)
+            if isbound(m,s)
+                t = eval(m,s)
+                if isa(t, TypeConstructor)
+                    if string(x.name) == typargs(t) ||
+                        ("Union" == split(string(t), "(")[1] &&
+                         any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
+                        targs = join(t.parameters, ",")
+                        println(io, indent, "  ", s,
+                                length(t.parameters) > 0 ? "{$targs}" : "",
+                                " = ", t)
+                    end
+                elseif isa(t, UnionKind)
+                    if any(map(tt -> string(x.name) == typargs(tt), t.types))
+                        println(io, indent, "  ", s, " = ", t)
+                    end
+                elseif isa(t, Type) && super(t).name == x.name
+                    # type aliases
+                    if string(s) != string(t.name)
+                        println(io, indent, "  ", s, " = ", t.name)
+                    elseif t != Any 
+                        print(io, indent, "  ")
+                        _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+                    end
+                end
             end
         end
     end
