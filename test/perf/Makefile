@@ -64,6 +64,6 @@ benchmarks.html: bin/table.pl benchmarks.csv
 	$(QUIET_PERL) $^ >$@
 
 clean:
-	@rm -rf bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv
+	@rm -rf bin/perf* bin/fperf* benchmarks/*.csv benchmarks.csv *.mod
 
 .PHONY: all perf clean
