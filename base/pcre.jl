@@ -69,7 +69,7 @@ function pcre_compile(pattern::String, options::Integer)
                         (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
                         pattern, options, errstr, erroff, C_NULL))()
     if re_ptr == C_NULL
-        error("pcre_compile: $(errstr[1])",
+        error("pcre_compile: $(cstring(errstr[1]))",
               " at position $(erroff[1]+1)",
               " in $(quote_string(pattern))")
     end

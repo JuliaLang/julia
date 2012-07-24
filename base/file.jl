@@ -7,7 +7,7 @@
 end
 @windows_only begin
     const os_separator = "\\"
-    const os_separator_match = "[/\\]" # permit either slash type on Windows
+    const os_separator_match = "[/\\\\]" # permit either slash type on Windows
     const os_separator_match_chars = "/\\" # to permit further concatenation
 end
 # Match only the final separator
@@ -26,6 +26,12 @@ const plain_tilde = Regex(strcat("^~", os_separator_match))
 const user_tilde = r"^~\w"
 
 filesep() = os_separator
+
+# returns the path to the system temp directory
+function systmpdir()
+        @unix_only return "/tmp"
+        @windows_only return ENV["TEMP"]
+end
 
 function basename(path::String)
     m = match(last_separator, path)
@@ -165,27 +171,82 @@ end
 
 # Get the full, real path to a file, including dereferencing
 # symlinks.
+@unix_only begin
 function real_path(fname::String)
-    fname = tilde_expand(fname)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     system_error(:real_path, sp == C_NULL)
     s = cstring(sp)
     ccall(:free, Void, (Ptr{Uint8},), sp)
     return s
 end
+end
 
-
+@windows_only begin
+const PATH_MAX=4096
+function real_path(fname::String)
+    path = Array(Uint8,PATH_MAX)
+    size = ccall(:GetFullPathNameA,stdcall,Uint32,(Ptr{Uint8},Int32,Ptr{Uint8},Ptr{Uint8}),fname,PATH_MAX,path,0)
+    if(size == 0)
+        error("real_path: Failed to get real path") #TODO: better, unified (with unix) error reporting
+    elseif(size < PATH_MAX)
+        return convert(ASCIIString,grow(path,size-PATH_MAX)) #Shrink buffer to needed space and convert to ASCIIString
+    else
+        grow(path,size-PATH_MAX)
+        size = ccall(:GetFullPathNameA,stdcall,Uint32,(Ptr{Uint8},Int32,Ptr{Uint8},Ptr{Uint8}),fname,PATH_MAX,path,0)
+        if(size == 0)
+            error("real_path: Failed to get real path (long path)")
+        end
+        return convert(ASCIIString,path)
+    end
+end
+end
 # get and set current directory
 
 function cwd()
     b = Array(Uint8,1024)
-    p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
-    system_error("getcwd", p == C_NULL)
+    @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
+    system_error("cwd", p==C_NULL)
     cstring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),real_path(dir)) == -1)
+cd(dir::String) = system_error("chdir", ccall(:uv_chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
+
+# do stuff in a directory, then return to current directory
+
+@unix_only begin
+function cd(f::Function, dir::String)
+    fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
+    system_error("open", fd == -1)
+    try
+        cd(dir)
+        retval = f()
+        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        retval
+    catch err
+        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
+        throw(err)
+    end
+end
+end
+
+@windows_only begin
+function cd(f::Function, dir::String)
+    old = cwd()
+    try
+        cd(dir)
+        retval = f()
+        cd(old)
+        retval
+    catch err
+        cd(old)
+        throw(err)
+    end
+end
+end
+
+cd(f::Function) = cd(f, ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
 
