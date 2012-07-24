@@ -381,8 +381,8 @@ do i = 1, 5
     call cpu_time(t2)
     if (t2-t1 < tmin) tmin = t2-t1
 end do
-call assert(s1 > 0.5_dp .and. s1 < 1)
-call assert(s2 > 0.5_dp .and. s2 < 1)
+! call assert(s1 > 0.5_dp .and. s1 < 1)
+! call assert(s2 > 0.5_dp .and. s2 < 1)
 print "('fortran,rand_mat_stat,',f0.6)", tmin*1000
 
 tmin = 1e9_dp
