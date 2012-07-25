@@ -1474,7 +1474,7 @@ function make_preduce_body(reducer, var, body)
             $esc(var) = lo
             ac = $esc(body)
             for $esc(var) = (lo+1):hi
-                ac = $esc(reducer)(ac, $esc(body))
+                ac = ($esc(reducer))(ac, $esc(body))
             end
             ac
         end
