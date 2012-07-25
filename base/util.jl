@@ -268,6 +268,8 @@ function remote_load(dict)
 end
 end
 
+evalfile(fname::String) = eval(parse(readall(fname))[1])
+
 # help
 
 _jl_help_category_list = nothing
@@ -278,11 +280,11 @@ function _jl_init_help()
     global _jl_help_category_list, _jl_help_category_dict, _jl_help_function_dict
     if _jl_help_category_dict == nothing
         println("Loading help data...")
-        load("$JULIA_HOME/../lib/julia/helpdb.jl")
+        helpdb = evalfile("$JULIA_HOME/../lib/julia/helpdb.jl")
         _jl_help_category_list = {}
         _jl_help_category_dict = Dict()
         _jl_help_function_dict = Dict()
-        for (cat,func,desc) in _jl_help_db()
+        for (cat,func,desc) in helpdb
             if !has(_jl_help_category_dict, cat)
                 push(_jl_help_category_list, cat)
                 _jl_help_category_dict[cat] = {}
