@@ -748,9 +748,10 @@ void jl_save_system_image(char *fname, char *startscriptname)
         b = jl_get_binding_wr(jl_root_module, jl_symbol("Main"));
         b->value = NULL; b->constp = 0;
     }
-    else {
-        // delete cached slow ASCIIString constructor
-        jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
+
+    // delete cached slow ASCIIString constructor
+    jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
+    if (mt->defs->func->linfo->inferred == jl_false) {
         mt->cache = JL_NULL;
         mt->cache_arg1 = JL_NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
@@ -1037,7 +1038,7 @@ void jl_init_serializer(void)
                      jl_gotonode_type->name, jl_quotenode_type->name,
                      jl_topnode_type->name,
 
-                     jl_root_task,
+                     jl_root_task, jl_bottom_func,
 
                      NULL };
     ptrint_t i=2;
