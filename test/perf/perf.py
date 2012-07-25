@@ -57,9 +57,9 @@ def randmatstat(t):
 ## randmatmul ##
 
 def randmatmul(n):
-    A = matrix(numpy.random.rand(n,n))
-    B = matrix(numpy.random.rand(n,n))
-    return A*B
+    A = numpy.random.rand(n,n)
+    B = numpy.random.rand(n,n)
+    return numpy.dot(A,B)
 
 ## mandelbrot ##
 
