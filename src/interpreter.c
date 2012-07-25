@@ -193,8 +193,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == global_sym) {
         // create uninitialized mutable binding for "global x" decl
         // TODO: handle type decls
-        assert(jl_is_symbol(args[0]));
-        jl_get_binding_wr(jl_current_module, (jl_sym_t*)args[0]);
+        for (size_t i=0; i < ex->args->length; i++) {
+            assert(jl_is_symbol(args[i]));
+            jl_get_binding_wr(jl_current_module, (jl_sym_t*)args[i]);
+        }
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == abstracttype_sym) {

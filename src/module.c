@@ -249,7 +249,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value != NULL || b->exportp || b->constp)
+            if (b->exportp)
                 jl_cell_1d_push(a, (jl_value_t*)b->name);
         }
     }

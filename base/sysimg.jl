@@ -189,8 +189,6 @@ export
     issetgid, issticky, isreadable, iswriteable, isexecutable, uperm,
     gperm, operm, trailingsize, check_bounds, search_sorted_last,
     search_sorted_first,
-    # TODO: used by macros, should be removed (use hygiene instead)
-    cmd_gen,
     # Macros
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,

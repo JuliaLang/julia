@@ -61,7 +61,7 @@
 	 e)
 	((and (pair? e) (memq (car e) '(import importall export)))
 	 e)
-	((and (pair? e) (eq? (car e) 'global) (symbol? (cadr e)))
+	((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
 	 e)
 	(else
 	 (let* ((ex (julia-expand0 e))
