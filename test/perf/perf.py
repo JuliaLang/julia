@@ -87,12 +87,10 @@ def mandelperf():
     return M
 
 def pisum():
-    sum = 0.0
-    for j in range(1, 500):
-        sum = 0.0
-        for k in range(1, 10000):
-            sum += 1.0/(k*k)
-    return sum
+    for j in range(500):
+        k = numpy.arange(10000) + 1
+        total = numpy.sum(1. / (k * k))
+    return total
 
 def print_perf(name, time):
     print("python," + name + "," + str(time*1000))
