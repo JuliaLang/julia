@@ -364,6 +364,7 @@ size_t ios_readprep(ios_t *s, size_t n)
         }
     }
     size_t got;
+    s->fpos = -1;
     int result = _os_read(s->fd, s->buf+s->size, s->maxsize - s->size, &got);
     if (result)
         return space;
