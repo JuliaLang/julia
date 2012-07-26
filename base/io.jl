@@ -404,3 +404,24 @@ begin
               readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
     end
 end
+
+## Character streams ##
+_wstmp = Array(Char, 1)
+function eatwspace(s::IOStream)
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && iswspace(_wstmp[1])
+        c = read(s, Char)  # advance one character
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    end
+end
+
+function eatwspace_comment(s::IOStream, cmt::Char)
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
+        if _wstmp[1] == cmt
+            readline(s)
+        end
+        c = read(s, Char)  # advance one character
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    end
+end

@@ -99,6 +99,7 @@
     ios_pututf8;
     ios_getc;
     ios_getutf8;
+    ios_peekutf8;
     jl_getutf8;
     u8_isvalid;
     u8_strwidth;

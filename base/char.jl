@@ -86,32 +86,3 @@ for f = (:iswalnum, :iswalpha, :iswblank, :iswcntrl, :iswdigit,
          )
     @eval ($f)(c::Char) = bool(ccall($expr(:quote,f), Int32, (Char,), c))
 end
-
-## IOStream character manipulation ##
-
-function eatwspace(s::IOStream)
-    p = position(s)
-    c = read(s, Char)
-    while iswspace(c) && !eof(s)
-        p = position(s)
-        c = read(s, Char)
-    end
-    if !iswspace(c)
-        seek(s, p)
-    end
-end
-
-function eatwspace_comment(s::IOStream, cmt::Char)
-    p = position(s)
-    c = read(s, Char)
-    while (iswspace(c) || c == cmt) && !eof(s)
-        if c == cmt
-            readline(s)
-        end
-        p = position(s)
-        c = read(s, Char)
-    end
-    if !(iswspace(c) || c == cmt)
-        seek(s, p)
-    end
-end
