@@ -261,8 +261,8 @@ end
 begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
 
 # TODO: better ends_with
-ends_with(a::String, b::String) = begins_with(reverse(a),reverse(b))
-ends_with(a::String, c::Char) = length(a) > 0 && a[end] == c
+ends_with(s::String, z::String) = (strlen(s) >= strlen(z)) && (z == s[(thisind(s,end)-strlen(z)+1):])
+ends_with(s::String, c::Char)   = (length(s) > 0) && (c == s[thisind(s,end)])
 
 # faster comparisons for byte strings
 
