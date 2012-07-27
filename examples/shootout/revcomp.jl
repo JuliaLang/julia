@@ -26,29 +26,31 @@ const revcomp = {
 }
 
 function print_buff(b)
-    br = join(reverse(b))
-    for i = 1:60:length(br)
-        if i+59 > length(br)
-            println(br[i:end])
+    br = reverse(b)
+    l = length(br)
+    for i = 1:60:l
+        if i+59 > l
+            write(br[i:end]); println()
         else
-            println(br[i:i+59])
+            write(br[i:i+59]); println()
         end
     end
 end
 
 function main()
-    buff = Array(Char, 0)
+    buff = Uint8[]
     while true
-        line = readline(stdin_stream)
-        if line == ""
+        line = readline(stdin_stream).data
+        if isempty(line)
             print_buff(buff)
             return
         elseif line[1] == '>'
             print_buff(buff)
-            buff = Array(Char, 0)
-            print(line)
+            buff = Uint8[]
+            write(line)
         else
-            buff = append(buff, [revcomp[x] for x in line[1:end-1]])
+            l = length(line)-1
+            append!(buff, [uint8(revcomp[line[i]]) for i=1:l])
         end
     end
 end

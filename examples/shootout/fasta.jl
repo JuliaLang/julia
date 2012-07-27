@@ -77,7 +77,7 @@ function random_fasta(symb, pr, n)
         for i = 1:m
             line[i] = symb[choose_char(cs)]
         end
-        println(line[1:m])
+        write(line[1:m]); println()
         k -= line_width
     end
 end
@@ -94,5 +94,4 @@ random_fasta(iub[1], iub[2], 3n)
 
 println(">THREE Homo sapiens frequency")
 random_fasta(homosapiens[1], homosapiens[2], 5n)
-
 
