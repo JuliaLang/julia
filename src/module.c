@@ -61,40 +61,30 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     return *bp;
 }
 
-typedef struct _mod_stack_t {
-    jl_module_t *m;
-    struct _mod_stack_t *prev;
-} mod_stack_t;
-
 // get binding for reading. might return NULL for unbound.
-static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var, mod_stack_t *p)
+static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var)
 {
-    if (m == NULL) return NULL;
-    mod_stack_t *pp = p;
-    // handle mutual importing
-    while (pp != NULL) {
-        if (pp->m == m)
-            return NULL;
-        pp = pp->prev;
-    }
-    mod_stack_t top = { m, p };
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
         for(size_t i=0; i < m->imports.len; i++) {
-            b = get_binding_((jl_module_t*)m->imports.items[i], var, &top);
-            if (b != NULL && b->exportp)
+            jl_module_t *imp = (jl_module_t*)m->imports.items[i];
+            b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+            if (b != HT_NOTFOUND && b->exportp) {
+                if (b->owner != imp)
+                    return get_binding_(b->owner, var);
                 return b;
+            }
         }
         return NULL;
     }
     if (b->owner != m)
-        return get_binding_(b->owner, var, &top);
+        return get_binding_(b->owner, var);
     return b;
 }
 
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
-    return get_binding_(m, var, NULL);
+    return get_binding_(m, var);
 }
 
 void jl_module_importall(jl_module_t *to, jl_module_t *from)
