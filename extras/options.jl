@@ -239,7 +239,7 @@ macro set_options(opts,ex...)
         thisval = thisex.args[2]
         exret = quote
             $exret
-            $esc(opts)[$expr(:quote,thissym)] = $esc(thisval)
+            ($esc(opts))[$expr(:quote,thissym)] = $esc(thisval)
         end
     end
     exret
