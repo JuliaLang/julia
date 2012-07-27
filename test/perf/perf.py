@@ -18,26 +18,7 @@ def fib(n):
 ## quicksort ##
 
 def qsort_kernel(a, lo, hi):
-    i = lo
-    j = hi
-    while i < hi:
-        pivot = a[int((lo+hi)/2)]
-        while i <= j:
-            while a[i] < pivot:
-                i = i+1
-            while a[j] > pivot:
-                j = j-1
-            if i <= j:
-                t = a[i]
-                a[i] = a[j]
-                a[j] = t
-                i = i+1
-                j = j-1
-        if lo < j:
-            qsort_kernel(a, lo, j)
-        lo = i
-        j = hi
-    return a
+    return numpy.sort(a[lo:hi], kind="quicksort")
 
 ## randmatstat ##
 
@@ -59,40 +40,31 @@ def randmatstat(t):
 ## randmatmul ##
 
 def randmatmul(n):
-    A = matrix(numpy.random.rand(n,n))
-    B = matrix(numpy.random.rand(n,n))
-    return A*B
+    A = numpy.random.rand(n,n)
+    B = numpy.random.rand(n,n)
+    return numpy.dot(A,B)
 
 ## mandelbrot ##
 
 def mandel(z):
-    n = 0
     c = z
     for n in range(0,79):
         if abs(z) > 2:
             n -= 1
             break
-        z = z**2 + c
+        z = z*z + c
     return n + 1
 
 def mandelperf():
     r1 = numpy.arange(-2.0, 0.5, 0.1)
     r2 = numpy.arange(-1.0, 1.0, 0.1)
-    M = numpy.zeros((len(r1)*len(r2)))
-    count = 0
-    for r in r1:
-        for i in r2:
-            M[count] = mandel(complex(r,i))
-            count += 1
-    return M
+    return [mandel(complex(r, i)) for r in r1 for i in r2]
 
 def pisum():
-    sum = 0.0
-    for j in range(1, 500):
-        sum = 0.0
-        for k in range(1, 10000):
-            sum += 1.0/(k*k)
-    return sum
+    for j in range(500):
+        k = numpy.arange(10000) + 1
+        total = numpy.sum(1. / (k * k))
+    return total
 
 def print_perf(name, time):
     print("python," + name + "," + str(time*1000))
