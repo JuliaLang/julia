@@ -1,62 +1,70 @@
 test_context("Options for functions")
 
+require("options.jl")
+import OptionsMod.*
+
 test_group("basic functionality")
-oo = options(:a, true, :b, 7)
-@test length(oo.keys) == 2
+oo = Options(:a, true, :b, 7)
+@test length(oo.key2index) == 2
 @test oo[:a] == true
 @test oo[:b] > 6
 @test oo[:c] == nothing
-@test sprint(show, oo) == "a = true, b = 7"
+@test sprint(show, oo) == "a = true, b = 7 (CheckError)"
 
-test_group("adding defaults")
-uu = add_defaults!(oo, :a, false, :b, 0, :c, "cat")
-@test oo[:a] == true
-@test oo[:b] == 7
-@test oo[:c] == "cat"
-@test length(uu.keys) == 0
-uu2 = add_defaults!(oo, :a, false, :c, "cat", :etc)
-@test length(uu2.keys) == 1
-@test uu2[:b] == 7
-# TODO: when test.jl allows for catching exceptions, add one for the above w/out :etc
+test_group("other constructors")
+oo2 = Options(CheckWarn, :(a=true), :(b=7))
+@test oo2[:a] == true
+oo3 = @options a=true b=7
+@test oo3[:b] == 7
+
+
+test_group("changing options")
+oo2[:b] = 6
+oo2[:c] = "cat"
+@test oo2[:b] < 7
+@test oo2[:c] == "cat"
 
 test_group("simple example")
 function f1(a, b, o::Options)
-    add_defaults!(o, :op, "plus")
-    let op = o[:op]
-        if op == "plus"
-            return a + b
-        else
-            return a - b
-        end
+	@defaults o op="plus"
+    if op == "plus"
+        return a + b
+    else
+        return a - b
     end
+	@check_used o
 end
-f1(a, b) = f1(a, b, options())
+f1(a, b) = f1(a, b, Options())
 @test f1(3, 2) == 5
-@test f1(3, 2, options(:op, "plus")) == 5
-@test f1(3, 2, options(:op, "other")) == 1
+@test f1(3, 2, Options(:op, "plus")) == 5
+@test f1(3, 2, Options(:op, "other")) == 1
 
-test_group("example with etc")
-function f2(a, b, o::Options)
-    etc = add_defaults!(o, :op, "plus", :etc)
-    let op = o[:op]
-        if op == "plus"
-            return a + f2b(b, etc)
-        else
-            return a - f2b(b, etc)
-        end
-    end
+test_group("complex example")
+function complexfun(x, opts::Options)
+    @defaults opts parent=3 both=7
+    sub1, both1 = subfun1(x, opts)
+    sub2, both2 = subfun2(x, opts)
+    @check_used opts
+    return parent, both, sub1, both1, sub2, both2
 end
-f2(a, b) = f2(a, b, options())
-function f2b(x, o::Options)
-    add_defaults!(o, :double, false)
-    let double = o[:double]
-        return double ? x*2 : x
-    end
+complexfun(x) = complexfun(x, Options())
+
+function subfun1(x, opts::Options)
+    @defaults opts sub1="sub1 default" both=0
+    @check_used opts
+    return sub1, both
 end
-@test f2(3, 2) == 5
-@test f2(3, 2, options(:op, "plus")) == 5
-@test f2(3, 2, options(:op, "plus", :double, false)) == 5
-@test f2(3, 2, options(:op, "plus", :double, true)) == 7
 
-    
+function subfun2(x, opts::Options)
+    @defaults opts sub2="sub2 default" both=22
+    @check_used opts
+    return sub2, both
+end
 
+@test complexfun(5) == (3,7,"sub1 default", 0, "sub2 default", 22)
+opts = @options sub2=15
+@test complexfun(5, opts) == (3,7,"sub1 default", 0, 15, 22)
+@set_options opts both=8
+@test complexfun(5, opts) == (3,8,"sub1 default", 8, 15, 8)
+@set_options opts sub1a=5
+@testfails complexfun(5, opts)
