@@ -167,7 +167,7 @@ export
     rotl90,rotr90,round,rpad,rr2id,rref,rstrip,run,safe_char,scan,search,
     searchsorted,sec,secd,sech,seek,select,select!,select_read,serialize,
     setenv,setfield,setsuccess,shift,show,showall,showcompact,shuffle,shuffle!,
-    sign,signbit,signed,similar,sin,sinc,sind,sinh,size,sizeof,skip,
+    sign,signbit,signed,significand,similar,sin,sinc,sind,sinh,size,sizeof,skip,
     sleep,slice,slicedim,sort,sort!,sort_by,sort_by!,sortperm,sortr,sortr!,
     spawn,spawnat,spawnlocal,split,sprint,sprintf,sqrt,square,squeeze,srand,
     sshow,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
