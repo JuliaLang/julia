@@ -567,7 +567,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
     int argStart = ctx->argDepth;
     Value *arg1 = emit_expr(expr, ctx);
     make_gcroot(boxed(arg1), ctx);
-    Value *arg2 = literal_pointer_val(name);
+    Value *arg2 = literal_pointer_val((jl_value_t*)name);
     make_gcroot(arg2, ctx);
     Value *myargs = builder.CreateGEP(ctx->argTemp,
                                       ConstantInt::get(T_int32, argStart));
