@@ -50,6 +50,8 @@ function show(io, tv::TypeVar)
     end
 end
 
+expand(x) = ccall(:jl_expand, Any, (Any,), x)
+
 ## misc syntax ##
 
 macro eval(x)

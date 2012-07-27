@@ -129,8 +129,6 @@ function serialize(s, e::Expr)
     end
 end
 
-full_name(m::Module) = m===Root ? () : tuple(full_name(m.parent)...,m.name)
-
 function serialize(s, m::Module)
     writetag(s, Module)
     serialize(s, full_name(m))

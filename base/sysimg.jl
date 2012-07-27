@@ -114,7 +114,7 @@ export
     eatwspace,eatwspace_comment,
     edit,eig,elements,eltype,
     ends_with,enq_work,enqueue,enumerate,eof,eps,erf,erfc,errno,error,
-    esc,escape_string,exec,exit,exp,exp2,expm1,expr,exprnd,eye,
+    esc,escape_string,exec,exit,exp,exp2,expand,expm1,expr,exprnd,eye,
     factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,fft_num_threads,
     fftn,fftshift,fftw_forget_wisdom,fftwd_import_wisdom_from_filename,
     fftwf_import_wisdom_from_filename,fill,fill!,filt,filter,filter!,finalizer,
