@@ -786,7 +786,7 @@ void jl_restore_system_image(char *fname)
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_root_module,
                                                  jl_symbol("Base"));
-    jl_current_module = jl_base_module;
+    jl_current_module = jl_base_module; // run start_image in Base
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash ObjectIdDicts

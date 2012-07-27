@@ -189,6 +189,17 @@ _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
 function _start()
+    # set up standard streams
+    global const stdout_stream = make_stdout_stream()
+    global const stdin_stream = make_stdin_stream()
+    global const stderr_stream = make_stderr_stream()
+    global OUTPUT_STREAM = stdout_stream
+
+    # set CPU core count
+    global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
+
+    _jl_librandom_init()
+
     atexit(()->flush(stdout_stream))
     try
         ccall(:jl_register_toplevel_eh, Void, ())
