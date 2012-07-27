@@ -138,15 +138,18 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
-    jl_binding_t *b = jl_get_binding(from, s);
-    if (b == NULL) {
-        b = jl_get_binding_wr(from, s);
-    }
-    if (b->owner != from) {
-        // create an explicit import so we can mark as re-exported
-        jl_module_import(from, b->owner, s);
-    }
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+    if (*bp == HT_NOTFOUND) {
+        jl_binding_t *b = jl_get_binding(from, s);
+        if (b == NULL) {
+            b = jl_get_binding_wr(from, s);
+        }
+        if (b->owner != from) {
+            // create an explicit import so we can mark as re-exported
+            jl_module_import(from, b->owner, s);
+        }
+        bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+    }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
 }

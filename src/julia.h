@@ -242,6 +242,7 @@ typedef struct {
 typedef struct _jl_module_t {
     JL_STRUCT_TYPE
     jl_sym_t *name;
+    jl_value_t *parent;
     htable_t bindings;
     arraylist_t imports;  // modules with all bindings imported
 } jl_module_t;

@@ -117,9 +117,11 @@
 #     done::Bool
 # end
 
+import Root
+
 export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
-    Core, DirectIndexString, DivideByZeroError, DomainError, EOFError,
+    Core, Root, DirectIndexString, DivideByZeroError, DomainError, EOFError,
     Exception, Expr, Float, Float32, Float64, Function, GotoNode, IOError,
     InexactError, Integer, Int, Int8, Int16, Int32, Int64, Int128,
     InterruptException,

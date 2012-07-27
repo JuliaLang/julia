@@ -154,7 +154,10 @@ void julia_init(char *imageFile)
 
     if (!imageFile) {
         jl_root_module = jl_new_module(jl_symbol("Root"));
+        jl_root_module->parent = (jl_value_t*)jl_root_module;
+        jl_module_export(jl_root_module, jl_symbol("Root"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = (jl_value_t*)jl_root_module;
         jl_set_const(jl_root_module, jl_symbol("Core"),
                      (jl_value_t*)jl_core_module);
         jl_current_module = jl_core_module;
@@ -183,6 +186,7 @@ void julia_init(char *imageFile)
         // current module for bare (non-module-wrapped) toplevel expressions.
         // it does import Base.* if Base is available.
         jl_main_module = jl_new_module(jl_symbol("Main"));
+        jl_main_module->parent = (jl_value_t*)jl_root_module;
         if (jl_base_module != NULL)
             jl_module_importall(jl_main_module, jl_base_module);
         jl_set_const(jl_root_module, jl_symbol("Main"),

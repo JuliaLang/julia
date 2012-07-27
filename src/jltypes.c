@@ -2421,8 +2421,8 @@ void jl_init_types(void)
 
     jl_module_type =
         jl_new_struct_type(jl_symbol("Module"), jl_any_type, jl_null,
-                           jl_tuple(1, jl_symbol("name")),
-                           jl_tuple(1, jl_sym_type));
+                           jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
+                           jl_tuple(2, jl_sym_type, jl_any_type));
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
