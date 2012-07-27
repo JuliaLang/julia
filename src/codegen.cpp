@@ -1187,11 +1187,15 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
         // use the original value.
         return arg;
     }
-    Value *bp = var_binding_pointer(sym, NULL, false, ctx);
-    // arguments are always defined
-    if (arg != NULL ||
+    jl_binding_t *jbp;
+    Value *bp = var_binding_pointer(sym, &jbp, false, ctx);
+    if (arg != NULL ||    // arguments are always defined
         (!is_var_closed(sym, ctx) &&
-         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))) {
+         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0) &&
+         // double-check that a global variable is actually defined. this
+         // can be a problem in parallel when a definition is missing on
+         // one machine.
+         (!isglobal || jbp->value!=NULL))) {
         return tpropagate(bp, builder.CreateLoad(bp, false));
     }
     return emit_checked_var(bp, sym->name, ctx);
