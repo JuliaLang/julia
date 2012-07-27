@@ -716,42 +716,18 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_t f;
     ios_file(&f, fname, 1, 1, 1, 1);
 
-    if (jl_current_module != jl_base_module &&
-        jl_current_module != jl_main_module) {
-        // set up for stage 1 bootstrap, where the Base module is already
-        // loaded and we are loading an updated copy in a separate module.
+    // orphan old Base module if present
+    jl_base_module = (jl_module_t*)jl_get_global(jl_root_module, jl_symbol("Base"));
 
-        // step 1: set Root.Base = current_module
-        jl_binding_t *b = jl_get_binding_wr(jl_root_module, jl_symbol("Base"));
-        b->value = (jl_value_t*)jl_current_module;
-        assert(b->constp);
+    // remove Main module
+    jl_binding_t *b = jl_get_binding_wr(jl_root_module, jl_symbol("Main"));
+    b->value = NULL; b->constp = 0;
 
-        // step 2: remove Root.current_module
-        b = jl_get_binding_wr(jl_root_module, jl_current_module->name);
-        b->value = NULL; b->constp = 0;
-
-        // step 3: current_module.Base = current_module
-        jl_set_const(jl_current_module, jl_symbol("Base"),
-                     (jl_value_t*)jl_current_module);
-
-        // step 4: remove current_module.current_module
-        b = jl_get_binding_wr(jl_current_module, jl_current_module->name);
-        b->value = NULL; b->constp = 0;
-
-        // step 5: rename current_module to Base
-        jl_current_module->name = jl_symbol("Base");
-
-        // step 6: orphan old Base module
-        jl_base_module = jl_current_module;
-
-        // step 7: remove Main module
-        b = jl_get_binding_wr(jl_root_module, jl_symbol("Main"));
-        b->value = NULL; b->constp = 0;
-    }
-
-    // delete cached slow ASCIIString constructor
+    // delete cached slow ASCIIString constructor if present
     jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
-    if (mt->defs->func->linfo->inferred == jl_false) {
+    jl_array_t *spec = mt->defs->func->linfo->specializations;
+    if (spec->length > 0 &&
+        ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == jl_false) {
         mt->cache = JL_NULL;
         mt->cache_arg1 = JL_NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;
@@ -764,7 +740,6 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_serialize_value(&f, jl_array_type->env);
 
     jl_serialize_value(&f, jl_root_module);
-    jl_serialize_value(&f, jl_current_module);
 
     jl_serialize_value(&f, idtable_list);
 
@@ -792,7 +767,7 @@ DLLEXPORT
 void jl_restore_system_image(char *fname)
 {
     ios_t f;
-    char *fpath = jl_find_file_in_path(fname);
+    char *fpath = fname;
     if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
         JL_PRINTF(JL_STDERR, "system image file not found\n");
         jl_exit(1);
@@ -807,13 +782,11 @@ void jl_restore_system_image(char *fname)
     jl_array_type->env = jl_deserialize_value(&f);
     
     jl_root_module = (jl_module_t*)jl_deserialize_value(&f);
-    jl_current_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_core_module = (jl_module_t*)jl_get_global(jl_root_module,
                                                  jl_symbol("Core"));
     jl_base_module = (jl_module_t*)jl_get_global(jl_root_module,
                                                  jl_symbol("Base"));
-    jl_main_module = (jl_module_t*)jl_get_global(jl_root_module,
-                                                 jl_symbol("Main"));
+    jl_current_module = jl_base_module;
 
     jl_array_t *idtl = (jl_array_t*)jl_deserialize_value(&f);
     // rehash ObjectIdDicts

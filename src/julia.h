@@ -700,6 +700,7 @@ void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 // system information
 DLLEXPORT int jl_errno(void);
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
+DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -795,7 +796,6 @@ void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-char *jl_find_file_in_path(const char *fname);
 DLLEXPORT void jl_load(const char *fname);
 void jl_parse_eval_all(char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);

@@ -42,16 +42,14 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        JL_PRINTF(JL_STDERR, "Warning: redefinition of module %s ignored\n",
-                   name->name);
-        return jl_nothing;
+        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
     b->value = (jl_value_t*)newm;
-    if (parent_module == jl_root_module && name == jl_symbol("Base")) {
-        // pick up Base module during bootstrap, and stay within it
-        // after loading.
-        jl_base_module = last_module = newm;
+    if (parent_module == jl_root_module && name == jl_symbol("Base") &&
+        jl_base_module == NULL) {
+        // pick up Base module during bootstrap
+        jl_base_module = newm;
     }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
@@ -77,6 +75,17 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     }
     JL_GC_POP();
     jl_current_module = last_module;
+
+    // remove non-exported macros
+    size_t i;
+    void **table = newm->bindings.table;
+    for(i=1; i < newm->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->name->name[0]=='@' && !b->exportp)
+                b->value = NULL;
+        }
+    }
     return jl_nothing;
 }
 
@@ -311,28 +320,13 @@ void jl_parse_eval_all(char *fname)
 
 int asprintf(char **strp, const char *fmt, ...);
 
-// fpath needs to be freed if != fname
-char *jl_find_file_in_path(const char *fname)
-{
-    char *fpath = (char*)fname;
-    int fid = open (fpath, O_RDONLY);
-    // try adding julia home
-    if (fid == -1 && julia_home && fname[0] != '/') {
-        if (-1 != asprintf(&fpath, "%s/../lib/julia/%s", julia_home, fname))
-            fid = open (fpath, O_RDONLY);
-    }
-    if (fid == -1) {
-        if (fpath != fname) free(fpath);
-        jl_errorf("could not open file %s", fname);
-    }
-    close(fid);
-
-    return fpath;
-}
-
 void jl_load(const char *fname)
 {
-    char *fpath = jl_find_file_in_path(fname);
+    char *fpath = (char*)fname;
+    struct stat stbuf;
+    if (jl_stat(fpath, (char*)&stbuf) != 0) {
+        jl_errorf("could not open file %s", fpath);
+    }
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);

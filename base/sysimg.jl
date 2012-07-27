@@ -1,4 +1,4 @@
-## Base module exports
+module Base
 
 export
     # Module
@@ -199,6 +199,38 @@ export
     @gensym, @eval, @task, @f_str, @thunk, @L_str, @vectorize_1arg,
     @vectorize_2arg, @printf
 
+if false
+    # simple print definitions for debugging. enable these if something
+    # goes wrong during bootstrap before printing code is available.
+    length(a::Array) = arraylen(a)
+    print(x) = print(stdout_stream, x)
+    show(x) = show(stdout_stream, x)
+    write(io, a::Array{Uint8,1}) =
+        ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+              io.ios, a, length(a))
+    print(io, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void},Any,),
+                                 io.ios, s)
+    print(io, s::ASCIIString) = (write(io, s.data);nothing)
+    print(io, x) = show(io, x)
+    println(io, x) = (print(io, x); print(io, "\n"))
+    show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
+    show(io, s::ASCIIString) = (write(io, s.data);nothing)
+    show(io, s::Symbol) = print(io, s)
+    show(io, b::Bool) = print(io, b ? "true" : "false")
+    show(io, n::Int64) = ccall(:jl_print_int64, Void, (Ptr{Void}, Int64,), io, n)
+    show(io, n::Integer)  = show(io, int64(n))
+    print(io, a...) = for x=a; print(io, x); end
+    function show(io, e::Expr)
+        print(io, e.head)
+        print(io, "(")
+        for i=1:arraylen(e.args)
+            show(io, arrayref(e.args,i))
+            print(io, ", ")
+        end
+        print(io, ")\n")
+    end
+end
+
 ## Load essential files and libraries
 
 include("base.jl")
@@ -396,7 +428,7 @@ compile_hint(_jl_eval_user_input, (Expr, Bool))
 compile_hint(print, (Float64,))
 compile_hint(a2t, (Array{Any,1},))
 compile_hint(flush, (IOStream,))
-compile_hint(ref, (Type{String}, ASCIIString, ASCIIString))
+compile_hint(ref, (Type{String}, ASCIIString, ASCIIString, ASCIIString))
 compile_hint(int, (Int,))
 compile_hint(uint, (Uint,))
 compile_hint(_atexit, ())
@@ -413,3 +445,19 @@ compile_hint(IOStream, (ASCIIString, Array{Uint8,1}))
 compile_hint(_jl_mk_tupleref, (SymbolNode, Int))
 compile_hint(_jl_abstract_interpret, (Bool, ObjectIdDict, StaticVarInfo))
 compile_hint(eval_annotate, (LambdaStaticData, ObjectIdDict, StaticVarInfo, ObjectIdDict, Array{Any,1}))
+
+# invoke type inference, running the existing inference code on the new
+# inference code to cache an optimized version of it.
+begin
+    local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
+    local minf = getmethods(typeinf, atypes)
+    typeinf_ext(minf[1][3], atypes, (), minf[1][3])
+end
+
+end # module Base
+
+import Base.*
+
+# create system image file
+ccall(:jl_save_system_image, Void, (Ptr{Uint8},Ptr{Uint8}),
+      "$JULIA_HOME/../lib/julia/sys.ji", "start_image.jl")

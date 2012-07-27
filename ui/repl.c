@@ -98,17 +98,32 @@ void parse_opts(int *argcp, char ***argvp) {
             program = (*argvp)[0];
         }
     }
+    if (image_file) {
+        int build_time_path = 0;
 #ifdef JL_SYSTEM_IMAGE_PATH
-    if (image_file && !imagepathspecified) {
-        image_file = JL_SYSTEM_IMAGE_PATH;
+        if (!imagepathspecified) {
+            image_file = JL_SYSTEM_IMAGE_PATH;
+            build_time_path = 1;
+        }
+#endif
         if (image_file[0] != PATHSEP) {
+            struct stat stbuf;
             char path[512];
-            snprintf(path, sizeof(path), "%s%s%s",
-                     julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
-            image_file = strdup(path);
+            if (build_time_path) {
+                // build time path relative to JULIA_HOME
+                snprintf(path, sizeof(path), "%s%s%s",
+                         julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+                image_file = strdup(path);
+            }
+            else if (jl_stat(image_file, (char*)&stbuf) != 0) {
+                // otherwise try julia_home/../lib/julia/%s
+                snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
+                         julia_home, PATHSEPSTRING, PATHSEPSTRING,
+                         PATHSEPSTRING, PATHSEPSTRING, image_file);
+                image_file = strdup(path);
+            }
         }
     }
-#endif
 }
 
 int ends_with_semicolon(const char *input)
