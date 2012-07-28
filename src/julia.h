@@ -910,6 +910,7 @@ void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+DLLEXPORT void jl_gc_remove_finalizer(jl_value_t *v);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 #define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
 void jl_gc_acquire_buffer(void *b);
