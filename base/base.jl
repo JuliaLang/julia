@@ -95,6 +95,7 @@ isequal(w::WeakRef, v) = isequal(w.value, v)
 isequal(w, v::WeakRef) = isequal(w, v.value)
 
 finalizer(o, f::Function) = ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
+finalizer_del(o) = ccall(:jl_gc_remove_finalizer, Void, (Any,), o)
 
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())

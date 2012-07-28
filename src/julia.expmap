@@ -141,6 +141,7 @@
     jl_nb_available;
     jl_ios_eof;
     jl_gc_add_finalizer;
+    jl_gc_remove_finalizer;
     jl_gc_collect;
     jl_gc_lookfor;
     jl_gc_enable;

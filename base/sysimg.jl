@@ -75,6 +75,7 @@ export
     factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,fft_num_threads,
     fftn,fftshift,fftw_forget_wisdom,fftwd_import_wisdom_from_filename,
     fftwf_import_wisdom_from_filename,fill,fill!,filt,filter,filter!,finalizer,
+    finalizer_del,
     find,find_in_path,findmax,findmin,findn,findn_nzs,finfer,first,
     first_utf8_byte,fld,flipdim,fliplr,flipsign,flipud,float,float32,
     float32_isvalid,float64,float64_isvalid,float64_valued,floor,flush,

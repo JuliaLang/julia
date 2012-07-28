@@ -196,6 +196,13 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     }
 }
 
+void jl_gc_remove_finalizer(jl_value_t *v)
+{
+    jl_value_t **bp = (jl_value_t**)ptrhash_bp(&finalizer_table, v);
+    if (*bp != HT_NOTFOUND)
+        ptrhash_remove(&finalizer_table, v);
+}
+
 htable_t *jl_gc_get_finalizer_table(void)
 {
     return &finalizer_table;
