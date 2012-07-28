@@ -6,7 +6,7 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 @windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 
 # Essential libraries
-_jl_libpcre = dlopen("libpcre")
+libpcre = dlopen("libpcre")
 _jl_libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")

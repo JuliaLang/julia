@@ -359,7 +359,7 @@ end
 function apropos(txt::String)
     _jl_init_help()
     n = 0
-    r = Regex("\\Q$txt", PCRE_CASELESS)
+    r = Regex("\\Q$txt", PCRE.CASELESS)
     first = true
     for (cat, _) in _jl_help_category_dict
         if matches(r, cat)
