@@ -366,21 +366,6 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
 }
 
-htable_t *jl_gc_get_finalizer_table();
-/*
-static void jl_serialize_finalizers(ios_t *s)
-{
-    htable_t *finalizer_table = jl_gc_get_finalizer_table();
-    int i;
-    for(i=0; i < finalizer_table->size; i+=2) {
-        if (finalizer_table->table[i+1] != HT_NOTFOUND) {
-            jl_serialize_value(s, finalizer_table->table[i]);
-            jl_serialize_value(s, finalizer_table->table[i+1]);
-        }
-    }
-    jl_serialize_value(s, NULL);
-}
-*/
 // --- deserialize ---
 
 static jl_value_t *jl_deserialize_value(ios_t *s);
@@ -692,19 +677,6 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
     return NULL;
 }
 
-/*
-static void jl_deserialize_finalizers(ios_t *s)
-{
-    htable_t *finalizer_table = jl_gc_get_finalizer_table();
-    while (1) {
-        jl_value_t *v = jl_deserialize_value(s);
-        if (v == NULL)
-            break;
-        void **bp = ptrhash_bp(finalizer_table, v);
-        *bp = jl_deserialize_value(s);
-    }
-}
-*/
 // --- entry points ---
 
 DLLEXPORT
@@ -745,7 +717,6 @@ void jl_save_system_image(char *fname, char *startscriptname)
 
     jl_serialize_value(&f, idtable_list);
 
-    //jl_serialize_finalizers(&f);
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
     htable_reset(&backref_table, 0);
@@ -820,7 +791,6 @@ void jl_restore_system_image(char *fname)
                                                     jl_symbol("typeinf_ext"));
     jl_init_box_caches();
 
-    //jl_deserialize_finalizers(&f);
     jl_set_t_uid_ctr(read_int32(&f));
     jl_set_gs_ctr(read_int32(&f));
     htable_reset(&backref_table, 0);

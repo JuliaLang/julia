@@ -196,11 +196,6 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     }
 }
 
-htable_t *jl_gc_get_finalizer_table(void)
-{
-    return &finalizer_table;
-}
-
 static int szclass(size_t sz)
 {
 #ifndef __LP64__
