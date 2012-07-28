@@ -1,6 +1,6 @@
-include("pcre.jl")
-
 ## object-oriented Regex interface ##
+
+include("pcre.jl")
 
 type Regex
     pattern::ByteString
@@ -10,11 +10,11 @@ type Regex
 
     function Regex(pat::String, opts::Integer, study::Bool)
         pat = cstring(pat); opts = int32(opts)
-        if (opts & ~PCRE_OPTIONS_MASK) != 0
+        if (opts & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
-        re = pcre_compile(pat, opts & PCRE_COMPILE_MASK)
-        ex = study ? pcre_study(re) : C_NULL
+        re = PCRE.compile(pat, opts & PCRE.COMPILE_MASK)
+        ex = study ? PCRE.study(re) : C_NULL
         new(pat, opts, re, ex)
     end
 end
@@ -29,26 +29,26 @@ copy(r::Regex) = r
 # constructs are correctly handled.
 
 macro r_str(pattern, flags...)
-    options = PCRE_UTF8
+    options = PCRE.UTF8
     for fx in flags, f in fx
-        options |= f=='i' ? PCRE_CASELESS  :
-                   f=='m' ? PCRE_MULTILINE :
-                   f=='s' ? PCRE_DOTALL    :
-                   f=='x' ? PCRE_EXTENDED  :
+        options |= f=='i' ? PCRE.CASELESS  :
+                   f=='m' ? PCRE.MULTILINE :
+                   f=='s' ? PCRE.DOTALL    :
+                   f=='x' ? PCRE.EXTENDED  :
                    error("unknown regex flag: $f")
     end
     Regex(pattern, options)
 end
 
 function show(io, re::Regex)
-    imsx = PCRE_CASELESS|PCRE_MULTILINE|PCRE_DOTALL|PCRE_EXTENDED
-    if (re.options & ~imsx) == PCRE_UTF8
+    imsx = PCRE.CASELESS|PCRE.MULTILINE|PCRE.DOTALL|PCRE.EXTENDED
+    if (re.options & ~imsx) == PCRE.UTF8
         print(io, 'r')
         print_quoted_literal(io, re.pattern)
-        if (re.options & PCRE_CASELESS ) != 0; print(io, 'i'); end
-        if (re.options & PCRE_MULTILINE) != 0; print(io, 'm'); end
-        if (re.options & PCRE_DOTALL   ) != 0; print(io, 's'); end
-        if (re.options & PCRE_EXTENDED ) != 0; print(io, 'x'); end
+        if (re.options & PCRE.CASELESS ) != 0; print(io, 'i'); end
+        if (re.options & PCRE.MULTILINE) != 0; print(io, 'm'); end
+        if (re.options & PCRE.DOTALL   ) != 0; print(io, 's'); end
+        if (re.options & PCRE.EXTENDED ) != 0; print(io, 'x'); end
     else
         print(io, "Regex(")
         show(io, re.pattern)
@@ -85,14 +85,14 @@ function show(io, m::RegexMatch)
 end
 
 matches(r::Regex, s::String, o::Integer) =
-    pcre_exec(r.regex, r.extra, cstring(s), 0, o, false)
-matches(r::Regex, s::String) = matches(r, s, r.options & PCRE_EXECUTE_MASK)
+    PCRE.exec(r.regex, r.extra, cstring(s), 0, o, false)
+matches(r::Regex, s::String) = matches(r, s, r.options & PCRE.EXECUTE_MASK)
 
 contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
 contains(s::String, r::Regex)                = matches(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
-    m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
+    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
     if isempty(m); return nothing; end
     mat = str[m[1]+1:m[2]]
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]]))
@@ -100,7 +100,7 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     RegexMatch(mat, cap, m[1]+1, off)
 end
 match(r::Regex, s::String, i::Integer, o::Integer) = match(r, cstring(s), i, o)
-match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE_EXECUTE_MASK)
+match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 
 function search(str::ByteString, re::Regex, idx::Integer)
@@ -108,8 +108,8 @@ function search(str::ByteString, re::Regex, idx::Integer)
     if idx >= len+2
         return idx == len+2 ? (0,0) : error("index out of range")
     end
-    opts = re.options & PCRE_EXECUTE_MASK
-    m, n = pcre_exec(re.regex, re.extra, str, idx-1, opts, true)
+    opts = re.options & PCRE.EXECUTE_MASK
+    m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
     isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
 end
 search(s::ByteString, r::Regex) = search(s,r,start(s))
