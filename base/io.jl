@@ -87,12 +87,12 @@ end
 open(fname::String) = open(fname, true, false, false, false, false)
 
 function open(fname::String, mode::String)
-    mode == "r"  ? open(fname, true,  false, false, false, false) :
-    mode == "r+" ? open(fname, true,  true , false, false, false) :
+    mode == "r"  ? open(fname, true , false, false, false, false) :
+    mode == "r+" ? open(fname, true , true , false, false, false) :
     mode == "w"  ? open(fname, false, true , true , true , false) :
-    mode == "w+" ? open(fname, true,  true , true , true , false) :
+    mode == "w+" ? open(fname, true , true , true , true , false) :
     mode == "a"  ? open(fname, false, true , true , false, true ) :
-    mode == "a+" ? open(fname, true,  true , true , false, true ) :
+    mode == "a+" ? open(fname, true , true , true , false, true ) :
     error("invalid open mode: ", mode)
 end
 

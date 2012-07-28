@@ -167,16 +167,16 @@ static void save_stack(jl_task_t *t)
 void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char *p)
 {
     char* _x = (char*)(t->stackbase-t->ssize);
-	if (!p) {
-		p = _x;
-	   	if ((char*)&_x > _x) {
-			p = alloca((char*)&_x - _x);
+    if (!p) {
+        p = _x;
+        if ((char*)&_x > _x) {
+            p = alloca((char*)&_x - _x);
     	}
-		restore_stack(t, where, p);
-	}
+        restore_stack(t, where, p);
+    }
     jl_jmp_target = where;
 
-	if (t->stkbuf != NULL) {
+    if (t->stkbuf != NULL) {
         memcpy(_x, t->stkbuf, t->ssize);
     }
     longjmp(*jl_jmp_target, 1);
