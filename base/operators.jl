@@ -125,9 +125,9 @@ sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String,Function)) = x
-copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
-copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
+copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
+              TopNode,QuoteNode,BitsKind,CompositeKind,AbstractKind,
+              UnionKind)) = x
 
 # function composition & pipelining
 one(f::Function) = identity

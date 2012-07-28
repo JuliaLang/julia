@@ -80,10 +80,14 @@ function toggle_each(s::IntSet, ns)
    return s
 end
 
-function copy_to!(to::IntSet, from::IntSet)
+function copy_to(to::IntSet, from::IntSet)
     del_all(to)
     or!(to, from)
 end
+
+similar(s::IntSet) = IntSet()
+
+copy(s::IntSet) = or!(IntSet(), s)
 
 function has(s::IntSet, n::Integer)
     if n >= s.limit

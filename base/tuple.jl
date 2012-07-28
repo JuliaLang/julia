@@ -79,8 +79,6 @@ end
 
 ## functions ##
 
-copy(x::Tuple) = map(copy, x)
-
 function append(t1::Tuple, ts::Tuple...)
     if length(ts)==0
         return t1

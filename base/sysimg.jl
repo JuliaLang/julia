@@ -102,7 +102,7 @@ export
     circshift,cis,clamp,close,cmd_stdin_stream,cmd_stdout_stream,cmds,cmp,
     colon,combinations,compile_hint,complement,complement!,complex,complex128,
     complex64,cond,conj,conj!,connect,consume,contains,contains_is,conv,conv2,
-    convert,copy,copy_to,copy_to!,copysign,cor,cor_pearson,cor_spearman,cos,
+    convert,copy,copy_to,copysign,cor,cor_pearson,cor_spearman,cos,
     cosc,cosd,cosh,cot,cotd,coth,count,count_ones,count_zeros,countlines,countp,
     cov,cov_pearson,cov_spearman,cross,csc,cscd,csch,cstring,csvread,csvwrite,
     ctranspose,cumprod,cumsum,current_task,cwd,darray,dcell,dec,decile,deconv,
