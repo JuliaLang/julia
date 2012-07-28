@@ -161,28 +161,22 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
-void __attribute__((noinline)) replace_stack(void *destination, const void *source, size_t num)
-{
-	if (source != NULL) {
-        memcpy(destination, source, num);
-    }
-    longjmp(*jl_jmp_target, 1);
-}
-
-char* __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where)
+void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char *p)
 {
     char* _x = (char*)(t->stackbase-t->ssize);
-	char* p = NULL;
-   	if ((char*)&_x > _x) {
-		p = alloca((char*)&_x - _x);
-    }
+	if (!p) {
+		p = _x;
+	   	if ((char*)&_x > _x) {
+			p = alloca((char*)&_x - _x);
+    	}
+		restore_stack(t, where, p);
+	}
     jl_jmp_target = where;
-    // separating this next function helps ensure the compiler doesn't
-    // use the stack after the memcpy (oddly, llvm-gcc -O0 decides
-    // to save the result of computing the subtraction just before
-    // calling longjmp)
-    replace_stack(_x, t->stkbuf, t->ssize);
-	return p;
+
+	if (t->stkbuf != NULL) {
+        memcpy(_x, t->stkbuf, t->ssize);
+    }
+    longjmp(*jl_jmp_target, 1);
 }
 
 static void switch_stack(jl_task_t *t, jmp_buf *where)
@@ -193,7 +187,7 @@ static void switch_stack(jl_task_t *t, jmp_buf *where)
         // doesn't return
     }
     else {
-        restore_stack(t, where);
+        restore_stack(t, where, NULL);
     }
 }
 
