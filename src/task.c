@@ -164,16 +164,20 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
-static void restore_stack(jl_task_t *t, jmp_buf *where)
+void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char *p)
 {
-    volatile int _x[64];
-
-    if ((char*)&_x[0] > (char*)(t->stackbase-t->ssize)) {
-        restore_stack(t, where);
-    }
+    char* _x = (char*)(t->stackbase-t->ssize);
+	if (!p) {
+		p = _x;
+	   	if ((char*)&_x > _x) {
+			p = alloca((char*)&_x - _x);
+    	}
+		restore_stack(t, where, p);
+	}
     jl_jmp_target = where;
-    if (t->stkbuf != NULL) {
-        memcpy(t->stackbase-t->ssize, t->stkbuf, t->ssize);
+
+	if (t->stkbuf != NULL) {
+        memcpy(_x, t->stkbuf, t->ssize);
     }
     longjmp(*jl_jmp_target, 1);
 }
@@ -186,7 +190,7 @@ static void switch_stack(jl_task_t *t, jmp_buf *where)
         // doesn't return
     }
     else {
-        restore_stack(t, where);
+        restore_stack(t, where, NULL);
     }
 }
 
