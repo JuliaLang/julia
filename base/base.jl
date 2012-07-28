@@ -133,8 +133,6 @@ function append_any(xs...)
     out
 end
 
-append(xs...) = append_any(xs...)
-
 macro thunk(ex); :(()->$esc(ex)); end
 macro L_str(s); s; end
 

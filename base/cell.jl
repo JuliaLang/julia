@@ -1,23 +1,3 @@
-# these are used by the front end to implement {} and backquote
-function append(a1::Array{Any,1}, as::Array{Any,1}...)
-    n = arraylen(a1)
-    for i = 1:length(as)
-        n += arraylen(as[i])
-    end
-    a = Array(Any,n)
-    for i = 1:arraylen(a1)
-        arrayset(a,i,arrayref(a1,i))
-    end
-    i = arraylen(a1)+1
-    for x in as
-        for j = 1:length(x)
-            arrayset(a,i,x[j])
-            i += 1
-        end
-    end
-    a
-end
-
 function cell_1d(xs::ANY...)
     n = length(xs)
     a = Array(Any,n)

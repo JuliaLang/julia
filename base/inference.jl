@@ -1541,7 +1541,7 @@ function inlining_pass(e::Expr, vars)
                     return e
                 end
             end
-            e.args = append({e.args[2]}, newargs...)
+            e.args = [{e.args[2]}, newargs...]
 
             # now try to inline the simplified call
             body = inlineable(_ieval(e.args[1]), e, vars)
