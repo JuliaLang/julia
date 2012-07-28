@@ -1485,35 +1485,35 @@ max{T}(B::BitArray{T}) = length(B) > 0 ? (nnz(B) > 0 ? one(T) : zero(T)) : typem
 
 ## map over bitarrays ##
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray))
     for i=1:numel(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
     for i=1:numel(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray), B::Number)
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray), B::Number)
     for i=1:numel(A)
         dest[i] = f(A[i], B)
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Number, B::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Number, B::Union(StridedArray,BitArray))
     for i=1:numel(B)
         dest[i] = f(A, B[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, As::Union(StridedArray,BitArray)...)
+function map_to(f, dest::BitArray, As::Union(StridedArray,BitArray)...)
     n = numel(As[1])
     i = 1
     ith = a->a[i]

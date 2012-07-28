@@ -1480,13 +1480,13 @@ end
 
 
 ## 1 argument
-function map_to(dest::StridedArray, f, A::StridedArray)
+function map_to(f, dest::StridedArray, A::StridedArray)
     for i=1:numel(A)
         dest[i] = f(A[i])
     end
     return dest
 end
-function map_to2(first, dest::StridedArray, f, A::StridedArray)
+function map_to2(f, first, dest::StridedArray, A::StridedArray)
     dest[1] = first
     for i=2:numel(A)
         dest[i] = f(A[i])
@@ -1498,17 +1498,17 @@ function map(f, A::StridedArray)
     if isempty(A); return A; end
     first = f(A[1])
     dest = similar(A, typeof(first))
-    return map_to2(first, dest, f, A)
+    return map_to2(f, first, dest, A)
 end
 
 ## 2 argument
-function map_to(dest::StridedArray, f, A::StridedArray, B::StridedArray)
+function map_to(f, dest::StridedArray, A::StridedArray, B::StridedArray)
     for i=1:numel(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
-function map_to2(first, dest::StridedArray, f,
+function map_to2(f, first, dest::StridedArray,
                  A::StridedArray, B::StridedArray)
     dest[1] = first
     for i=2:numel(A)
@@ -1524,16 +1524,16 @@ function map(f, A::StridedArray, B::StridedArray)
     end
     first = f(A[1], B[1])
     dest = similar(A, typeof(first), shp)
-    return map_to2(first, dest, f, A, B)
+    return map_to2(f, first, dest, A, B)
 end
 
-function map_to(dest::StridedArray, f, A::StridedArray, B::Number)
+function map_to(f, dest::StridedArray, A::StridedArray, B::Number)
     for i=1:numel(A)
         dest[i] = f(A[i], B)
     end
     return dest
 end
-function map_to2(first, dest::StridedArray, f, A::StridedArray, B::Number)
+function map_to2(f, first, dest::StridedArray, A::StridedArray, B::Number)
     dest[1] = first
     for i=2:numel(A)
         dest[i] = f(A[i], B)
@@ -1545,16 +1545,16 @@ function map(f, A::StridedArray, B::Number)
     if isempty(A); return A; end
     first = f(A[1], B)
     dest = similar(A, typeof(first))
-    return map_to2(first, dest, f, A, B)
+    return map_to2(f, first, dest, A, B)
 end
 
-function map_to(dest::StridedArray, f, A::Number, B::StridedArray)
+function map_to(f, dest::StridedArray, A::Number, B::StridedArray)
     for i=1:numel(B)
         dest[i] = f(A, B[i])
     end
     return dest
 end
-function map_to2(first, dest::StridedArray, f, A::Number, B::StridedArray)
+function map_to2(f, first, dest::StridedArray, A::Number, B::StridedArray)
     dest[1] = first
     for i=2:numel(B)
         dest[i] = f(A, B[i])
@@ -1566,11 +1566,11 @@ function map(f, A::Number, B::StridedArray)
     if isempty(A); return A; end
     first = f(A, B[1])
     dest = similar(B, typeof(first))
-    return map_to2(first, dest, f, A, B)
+    return map_to2(f, first, dest, A, B)
 end
 
 ## N argument
-function map_to(dest::StridedArray, f, As::StridedArray...)
+function map_to(f, dest::StridedArray, As::StridedArray...)
     n = numel(As[1])
     i = 1
     ith = a->a[i]
@@ -1579,7 +1579,7 @@ function map_to(dest::StridedArray, f, As::StridedArray...)
     end
     return dest
 end
-function map_to2(first, dest::StridedArray, f, As::StridedArray...)
+function map_to2(f, first, dest::StridedArray, As::StridedArray...)
     n = numel(As[1])
     i = 1
     ith = a->a[i]
@@ -1597,7 +1597,7 @@ function map(f, As::StridedArray...)
     end
     first = f(map(a->a[1], As)...)
     dest = similar(As[1], typeof(first), shape)
-    return map_to2(first, dest, f, As...)
+    return map_to2(f, first, dest, As...)
 end
 
 ## Filter ##
