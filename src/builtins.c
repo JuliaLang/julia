@@ -257,11 +257,13 @@ JL_CALLABLE(jl_f_top_eval)
 {
     if (nargs == 1) {
         jl_expr_t *ex = (jl_expr_t*)args[0];
+        /*
         if (jl_is_expr(ex) && (ex->head == export_sym ||
                                ex->head == import_sym ||
                                ex->head == importall_sym)) {
             jl_errorf("unsupported or misplaced expression %s", ex->head->name);
         }
+        */
         return jl_toplevel_eval((jl_value_t*)ex);
     }
     if (nargs != 2) {
@@ -272,7 +274,19 @@ JL_CALLABLE(jl_f_top_eval)
     if (jl_is_symbol(args[1])) {
         return jl_eval_global_var(m, (jl_sym_t*)args[1]);
     }
-    return jl_interpret_toplevel_expr_in(m, args[1], NULL, 0);
+    jl_value_t *v=NULL;
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = m;
+        v = jl_toplevel_eval(args[1]);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
+    assert(v);
+    return v;
 }
 
 JL_CALLABLE(jl_f_isbound)
@@ -689,7 +703,7 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
         jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
-        ios_printf(ios_stderr, "Warning: type parameter name %s shadows an identifier\n", ((jl_sym_t*)args[0])->name);
+        ios_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
     }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;

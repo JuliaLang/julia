@@ -99,6 +99,7 @@
     ios_pututf8;
     ios_getc;
     ios_getutf8;
+    ios_peekutf8;
     jl_getutf8;
     u8_isvalid;
     u8_strwidth;
@@ -160,6 +161,7 @@
     jl_load;
     jl_load_;
     jl_load_file_string;
+    jl_expand;
     jl_dlsym;
     jl_load_dynamic_library;
     jl_stdin_callback;
@@ -187,7 +189,9 @@
     jl_symbol;
     jl_core_module;
     jl_base_module;
+    jl_main_module;
     jl_current_module;
+    jl_module_export;
     jl_get_global;
     jl_set_global;
     jl_set_const;

@@ -125,9 +125,9 @@ sizeof(T::BitsKind) = div(T.nbits,8)
 sizeof(x) = sizeof(typeof(x))
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String,Function)) = x
-copy(x::Union(LambdaStaticData,TopNode,QuoteNode)) = x
-copy(x::Union(BitsKind,CompositeKind,AbstractKind,UnionKind)) = x
+copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
+              TopNode,QuoteNode,BitsKind,CompositeKind,AbstractKind,
+              UnionKind)) = x
 
 # function composition & pipelining
 one(f::Function) = identity
@@ -215,29 +215,31 @@ to_index(i::Real) = convert(Int, i)
 # vectorization
 
 macro vectorize_1arg(S,f)
+    S = esc(S); f = esc(f); T = esc(:T)
     quote
-        function ($f){T<:$S}(x::AbstractArray{T,1})
+        function ($f){$T<:$S}(x::AbstractArray{$T,1})
             [ ($f)(x[i]) for i=1:length(x) ]
         end
-        function ($f){T<:$S}(x::AbstractArray{T,2})
+        function ($f){$T<:$S}(x::AbstractArray{$T,2})
             [ ($f)(x[i,j]) for i=1:size(x,1), j=1:size(x,2) ]
         end
-        function ($f){T<:$S}(x::AbstractArray{T})
+        function ($f){$T<:$S}(x::AbstractArray{$T})
             reshape([ ($f)(x[i]) for i=1:numel(x) ], size(x))
         end
     end
 end
 
 macro vectorize_2arg(S,f)
+    S = esc(S); f = esc(f); T1 = esc(:T1); T2 = esc(:T2)
     quote
-        function ($f){T1<:$S, T2<:$S}(x::T1, y::AbstractArray{T2})
+        function ($f){$T1<:$S, $T2<:$S}(x::($T1), y::AbstractArray{$T2})
             reshape([ ($f)(x, y[i]) for i=1:numel(y) ], size(y))
         end
-        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::T2)
+        function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::($T2))
             reshape([ ($f)(x[i], y) for i=1:numel(x) ], size(x))
         end
 
-        function ($f){T1<:$S, T2<:$S}(x::AbstractArray{T1}, y::AbstractArray{T2})
+        function ($f){$T1<:$S, $T2<:$S}(x::AbstractArray{$T1}, y::AbstractArray{$T2})
             shp = promote_shape(size(x),size(y))
             reshape([ ($f)(x[i], y[i]) for i=1:numel(x) ], shp)
         end

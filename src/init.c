@@ -281,7 +281,13 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
+        jl_root_module = jl_new_module(jl_symbol("Root"));
+        jl_root_module->parent = (jl_value_t*)jl_root_module;
+        jl_module_export(jl_root_module, jl_symbol("Root"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
+        jl_core_module->parent = (jl_value_t*)jl_root_module;
+        jl_set_const(jl_root_module, jl_symbol("Core"),
+                     (jl_value_t*)jl_core_module);
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -301,6 +307,19 @@ void julia_init(char *imageFile)
             JL_PRINTF(JL_STDOUT, "\n");
             jl_exit(1);
         }
+    }
+
+    if (jl_main_module == NULL) {
+        // the Main module is the one which is always open, and set as the
+        // current module for bare (non-module-wrapped) toplevel expressions.
+        // it does import Base.* if Base is available.
+        jl_main_module = jl_new_module(jl_symbol("Main"));
+        jl_main_module->parent = (jl_value_t*)jl_root_module;
+        if (jl_base_module != NULL)
+            jl_module_importall(jl_main_module, jl_base_module);
+        jl_set_const(jl_root_module, jl_symbol("Main"),
+                     (jl_value_t*)jl_main_module);
+        jl_current_module = jl_main_module;
     }
 
 #ifndef __WIN32__
@@ -436,6 +455,7 @@ void jl_get_builtin_hooks(void)
     jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
     jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
+    jl_getfieldnode_type = (jl_struct_type_t*)core("GetfieldNode");
 
     jl_array_uint8_type =
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,

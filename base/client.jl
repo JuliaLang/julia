@@ -231,6 +231,14 @@ _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
 function _start()
+    # set up standard streams
+    reinit_stdio()
+
+    # set CPU core count
+    global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
+
+    _jl_librandom_init()
+
     #atexit(()->flush(stdout_stream))
     try
         ccall(:jl_register_toplevel_eh, Void, ())
@@ -249,7 +257,6 @@ function _start()
             global PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const VARIABLES = {}
         global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/", "$JULIA_HOME/../lib/julia/ui/"]
 
         # Load customized startup

@@ -41,6 +41,9 @@ isleaftype(t) = ccall(:jl_is_leaf_type, Int32, (Any,), t) != 0
 isconst(s::Symbol) =
     ccall(:jl_is_const, Int32, (Ptr{Void}, Any), C_NULL, s) != 0
 
+isconst(m::Module, s::Symbol) =
+    ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
+
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
     isbound(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
@@ -245,6 +248,10 @@ getfield_tfunc = function (A, s, name)
     end
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
+        A1 = A[1]
+        if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
+            return abstract_eval_constant(eval(A1,fld))
+        end
         for i=1:length(s.names)
             if is(s.names[i],fld)
                 return s.types[i]
@@ -365,11 +372,23 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
     if isa(f,TopNode)
         return _iisconst(f.name) && f.name
     end
+    if isa(f,GetfieldNode) && isa(f.value,Module)
+        M = f.value; s = f.name
+        return isbound(M,s) && isconst(M,s) && f
+    end
+    if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
+        if length(f.args) == 3 && isa(f.args[1], TopNode) &&
+            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode) &&
+            isa(f.args[2],Module)
+            M = f.args[2]; s = f.args[3].value
+            return isbound(M,s) && isconst(M,s) && f
+        end
+    end
     if isa(f,SymbolNode)
         f = f.name
     end
     return isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
-           _iisconst(f) && f
+            _iisconst(f) && _iisbound(f) && f
 end
 
 isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
@@ -484,7 +503,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if isbuiltin(f)
         if is(f,apply) && length(fargs)>0
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && _iisbound(af)
+            if !is(af,false)
                 aargtypes = argtypes[2:]
                 if allp(x->isa(x,Tuple), aargtypes) &&
                    !anyp(isvatuple, aargtypes[1:(length(aargtypes)-1)])
@@ -499,7 +518,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         end
         if is(f,invoke) && length(fargs)>1
             af = isconstantfunc(fargs[1], vtypes, sv)
-            if !is(af,false) && _iisbound(af) && (af=_ieval(af);isgeneric(af))
+            if !is(af,false) && (af=_ieval(af);isgeneric(af))
                 sig = argtypes[2]
                 if isa(sig,Tuple) && allp(isType, sig)
                     sig = map(t->t.parameters[1], sig)
@@ -542,10 +561,6 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
         return Any
     end
     #print("call ", e.args[1], argtypes, " ")
-    if !_iisbound(func)
-        #print("=> ", Any, "\n")
-        return Any
-    end
     f = _ieval(func)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
@@ -1212,12 +1227,10 @@ function type_annotate(ast::Expr, states::Array{Any,1},
 end
 
 function sym_replace(e::Expr, from, to)
-    head = e.head
-    if is(head,:line)
-        return e
-    end
-    for i=1:length(e.args)
-        e.args[i] = sym_replace(e.args[i], from, to)
+    if !is(e.head,:line)
+        for i=1:length(e.args)
+            e.args[i] = sym_replace(e.args[i], from, to)
+        end
     end
     e
 end
@@ -1242,6 +1255,42 @@ function sym_replace(s::Symbol, from, to)
 end
 
 sym_replace(x, from, to) = x
+
+# see if a symbol resolves the same in two modules
+function resolves_same(sym, from, to)
+    if is(from,to)
+        return true
+    end
+    # todo: better
+    return (isconst(from,sym) && isconst(to,sym) && isbound(from,sym) &&
+            isbound(to,sym) && is(eval(from,sym),eval(to,sym)))
+end
+
+# annotate symbols with their original module for inlining
+function resolve_globals(e::Expr, from, to, env)
+    if !is(e.head,:line)
+        for i=1:length(e.args)
+            e.args[i] = resolve_globals(e.args[i], from, to, env)
+        end
+    end
+    e
+end
+
+function resolve_globals(s::Symbol, from, to, env)
+    if contains_is(env, s)
+        return s
+    end
+    resolves_same(s, from, to) ? s : GetfieldNode(from, s, Any)
+end
+
+function resolve_globals(s::SymbolNode, from, to, env)
+    if contains_is(env, s.name)
+        return s
+    end
+    resolves_same(s.name, from, to) ? s : GetfieldNode(from, s.name, s.typ)
+end
+
+resolve_globals(x, from, to, env) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
@@ -1394,8 +1443,13 @@ function inlineable(f, e::Expr, vars)
     end
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
-    return sym_replace(copy(expr), append(args,spnames),
-                       append(argexprs,spvals))
+    expr = copy(expr)
+    mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
+    srcenv = append(args,spnames)
+    if !is(mfrom, mto)
+        expr = resolve_globals(expr, mfrom, mto, srcenv)
+    end
+    return sym_replace(expr, srcenv, append(argexprs,spvals))
 end
 
 _jl_tn(sym::Symbol) =
@@ -1487,7 +1541,7 @@ function inlining_pass(e::Expr, vars)
                     return e
                 end
             end
-            e.args = append({e.args[2]}, newargs...)
+            e.args = [{e.args[2]}, newargs...]
 
             # now try to inline the simplified call
             body = inlineable(_ieval(e.args[1]), e, vars)

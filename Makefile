@@ -31,13 +31,10 @@ base/build_h.jl: Make.inc
 $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 	@cp $< $@
 
-$(BUILD)/lib/julia/sys0.ji: base/boot.jl src/dump.c base/stage0.jl base/build_h.jl
-	$(QUIET_JULIA) cd base && $(JULIA_EXECUTABLE) -b stage0.jl
-	@rm -f $(BUILD)/lib/julia/sys.ji
-
-# if sys.ji exists, use it to rebuild, otherwise use sys0.ji
-$(BUILD)/lib/julia/sys.ji: VERSION $(BUILD)/lib/julia/sys0.ji base/*.jl $(BUILD)/lib/julia/helpdb.jl
-	$(QUIET_JULIA) cd base && $(JULIA_EXECUTABLE) `test -f $(BUILD)/lib/julia/sys.ji && echo stage1.jl || echo -J $(BUILD)/lib/julia/sys0.ji stage1.jl`
+# use sys.ji if it exists, otherwise run two stages
+$(BUILD)/lib/julia/sys.ji: VERSION base/*.jl $(BUILD)/lib/julia/helpdb.jl
+	$(QUIET_JULIA) cd base && \
+	(test -f $(BUILD)/lib/julia/sys.ji || $(JULIA_EXECUTABLE) -b sysimg.jl) && $(JULIA_EXECUTABLE) sysimg.jl
 
 ifeq ($(OS), WINNT)
 OPENBLASNAME=openblas-r0.1.1

@@ -17,7 +17,8 @@ convert{T}(::Type{Quaternion{T}}, z::Quaternion) =
 
 promote_rule{T,S}(::Type{Complex{T}}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
-promote_rule{T,S}(::Type{Real{T}}, ::Type{Quaternion{S}}) =
+promote_rule{S}(::Type{Bool}, ::Type{Quaternion{S}}) = Quaternion{S}
+promote_rule{T<:Real,S}(::Type{T}, ::Type{Quaternion{S}}) =
     Quaternion{promote_type(T,S)}
 
 function show(z::Quaternion)

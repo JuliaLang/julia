@@ -1,10 +1,10 @@
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) quote _msk64 >>> (64-$l) end end
-macro _div64(l) quote $l >>> 6 end end
-macro _mod64(l) quote $l & 63 end end
-macro _msk_end(l) quote @_mskr @_mod64 $l end end
+macro _mskr(l) quote _msk64 >>> (64-$esc(l)) end end
+macro _div64(l) quote $esc(l) >>> 6 end end
+macro _mod64(l) quote $esc(l) & 63 end end
+macro _msk_end(l) quote @_mskr @_mod64 $esc(l) end end
 _jl_num_bit_chunks(n::Int) = @_div64 (n+63)
 function _jl_check_is_valid_bit{T}(x::T)
     if !(isequal(x, zero(T)) || isequal(x, one(T)))
@@ -311,10 +311,10 @@ function bitrand!(B::BitArray)
         return B
     end
     for i = 1 : length(B.chunks) - 1
-        B.chunks[i] = _jl_dsfmt_randui64()
+        B.chunks[i] = randi(Uint64)
     end
     msk = @_msk_end length(B)
-    B.chunks[end] = msk & _jl_dsfmt_randui64()
+    B.chunks[end] = msk & randi(Uint64)
     return B
 end
 
@@ -1222,15 +1222,14 @@ end
 
 # implemented as a macro to improve performance
 macro _jl_reverse_bits(dest, src)
-    z = gensym()
     quote
-        $z    = $src
-        $z    = (($z >>>  1) & 0x5555555555555555) | (($z <<  1) & 0xaaaaaaaaaaaaaaaa)
-        $z    = (($z >>>  2) & 0x3333333333333333) | (($z <<  2) & 0xcccccccccccccccc)
-        $z    = (($z >>>  4) & 0x0f0f0f0f0f0f0f0f) | (($z <<  4) & 0xf0f0f0f0f0f0f0f0)
-        $z    = (($z >>>  8) & 0x00ff00ff00ff00ff) | (($z <<  8) & 0xff00ff00ff00ff00)
-        $z    = (($z >>> 16) & 0x0000ffff0000ffff) | (($z << 16) & 0xffff0000ffff0000)
-        $dest = (($z >>> 32) & 0x00000000ffffffff) | (($z << 32) & 0xffffffff00000000)
+        z    = $esc(src)
+        z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
+        z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
+        z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
+        z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
+        z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
+        $esc(dest) = ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
     end
 end
 
@@ -1486,35 +1485,35 @@ max{T}(B::BitArray{T}) = length(B) > 0 ? (nnz(B) > 0 ? one(T) : zero(T)) : typem
 
 ## map over bitarrays ##
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray))
     for i=1:numel(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
     for i=1:numel(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Union(StridedArray,BitArray), B::Number)
+function map_to(f, dest::BitArray, A::Union(StridedArray,BitArray), B::Number)
     for i=1:numel(A)
         dest[i] = f(A[i], B)
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, A::Number, B::Union(StridedArray,BitArray))
+function map_to(f, dest::BitArray, A::Number, B::Union(StridedArray,BitArray))
     for i=1:numel(B)
         dest[i] = f(A, B[i])
     end
     return dest
 end
 
-function map_to(dest::BitArray, f, As::Union(StridedArray,BitArray)...)
+function map_to(f, dest::BitArray, As::Union(StridedArray,BitArray)...)
     n = numel(As[1])
     i = 1
     ith = a->a[i]
@@ -1539,15 +1538,14 @@ transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 # http://www.hackersdelight.org/HDcode/transpose8.c.txt
 # implemented as a macro to improve performance
 macro _jl_transpose8x8(x)
-    t,y = gensym(2)
     quote
-        $y = $x
-        $t = ($y $ ($y >>> 7)) & 0x00aa00aa00aa00aa;
-        $y = $y $ $t $ ($t << 7)
-        $t = ($y $ ($y >>> 14)) & 0x0000cccc0000cccc
-        $y = $y $ $t $ ($t << 14)
-        $t = ($y $ ($y >>> 28)) & 0x00000000f0f0f0f0
-        $x = $y $ $t $ ($t << 28)
+        y = $esc(x)
+        t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa;
+        y = y $ t $ (t << 7)
+        t = (y $ (y >>> 14)) & 0x0000cccc0000cccc
+        y = y $ t $ (t << 14)
+        t = (y $ (y >>> 28)) & 0x00000000f0f0f0f0
+        $esc(x) = y $ t $ (t << 28)
     end
 end
 

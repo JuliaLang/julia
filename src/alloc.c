@@ -33,6 +33,7 @@ jl_struct_type_t *jl_ascii_string_type;
 jl_struct_type_t *jl_utf8_string_type;
 jl_struct_type_t *jl_expr_type;
 jl_struct_type_t *jl_symbolnode_type;
+jl_struct_type_t *jl_getfieldnode_type;
 jl_struct_type_t *jl_linenumbernode_type;
 jl_struct_type_t *jl_labelnode_type;
 jl_struct_type_t *jl_gotonode_type;
@@ -79,6 +80,7 @@ jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
+jl_sym_t *global_sym;
 
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {

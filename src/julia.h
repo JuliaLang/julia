@@ -248,8 +248,8 @@ typedef struct _jl_callback_t {
 typedef struct _jl_module_t {
     JL_STRUCT_TYPE
     jl_sym_t *name;
+    jl_value_t *parent;
     htable_t bindings;
-    htable_t macros;
     arraylist_t imports;  // modules with all bindings imported
 } jl_module_t;
 
@@ -368,6 +368,7 @@ extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
 extern DLLEXPORT jl_struct_type_t *jl_expr_type;
 extern jl_struct_type_t *jl_symbolnode_type;
+extern jl_struct_type_t *jl_getfieldnode_type;
 extern jl_struct_type_t *jl_linenumbernode_type;
 extern jl_struct_type_t *jl_labelnode_type;
 extern jl_struct_type_t *jl_gotonode_type;
@@ -423,6 +424,7 @@ extern jl_sym_t *const_sym;   extern jl_sym_t *thunk_sym;
 extern jl_sym_t *anonymous_sym;  extern jl_sym_t *underscore_sym;
 extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
+extern jl_sym_t *global_sym;
 
 
 
@@ -457,6 +459,9 @@ void *allocobj(size_t sz);
 #define jl_linenode_line(x) jl_unbox_long(jl_fieldref(x,0))
 #define jl_labelnode_label(x) jl_unbox_long(jl_fieldref(x,0))
 #define jl_gotonode_label(x) jl_unbox_long(jl_fieldref(x,0))
+#define jl_getfieldnode_val(s) (jl_fieldref(s,0))
+#define jl_getfieldnode_name(s) ((jl_sym_t*)jl_fieldref(s,1))
+#define jl_getfieldnode_type(s) (jl_fieldref(s,2))
 
 #define jl_tparam0(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_tag_type_t*)(t))->parameters, 1)
@@ -486,6 +491,7 @@ void *allocobj(size_t sz);
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
+#define jl_is_getfieldnode(v)  jl_typeis(v,jl_getfieldnode_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)
@@ -714,6 +720,7 @@ void jl_cell_1d_push(jl_array_t *a, jl_value_t *item);
 // system information
 DLLEXPORT int jl_errno(void);
 DLLEXPORT jl_value_t *jl_strerror(int errnum);
+DLLEXPORT int32_t jl_stat(const char* path, char* statbuf);
 
 // environment entries
 DLLEXPORT jl_value_t *jl_environ(int i);
@@ -801,7 +808,7 @@ void jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
 jl_value_t *jl_parse_next(int *plineno);
 DLLEXPORT void jl_load_file_string(const char *text);
-jl_value_t *jl_expand(jl_value_t *expr);
+DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
 
 // some useful functions
@@ -813,8 +820,10 @@ DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 
 // modules
+extern DLLEXPORT jl_module_t *jl_root_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
+extern DLLEXPORT jl_module_t *jl_main_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading
@@ -830,6 +839,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
 void jl_module_importall(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
+DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
@@ -848,7 +858,6 @@ void jl_compile(jl_function_t *f);
 void jl_generate_fptr(jl_function_t *f);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
-char *jl_find_file_in_path(const char *fname);
 DLLEXPORT void jl_load(const char *fname);
 void jl_parse_eval_all(char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);

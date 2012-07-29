@@ -257,6 +257,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         else
             return (jl_value_t*)jl_any_type;
     }
+    if (jl_is_getfieldnode(e))
+        return jl_getfieldnode_type(e);
     if (jl_is_some_tag_type(e))
         return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);

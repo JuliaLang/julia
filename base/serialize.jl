@@ -16,7 +16,7 @@ let i = 2
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
-             :reserved1, :reserved2, :reserved3, :reserved4,
+             Module, :reserved2, :reserved3, :reserved4,
              :reserved5, :reserved6, :reserved7, :reserved8,
              :reserved9, :reserved10, :reserved11, :reserved12,
              
@@ -129,6 +129,11 @@ function serialize(s, e::Expr)
     end
 end
 
+function serialize(s, m::Module)
+    writetag(s, Module)
+    serialize(s, full_name(m))
+end
+
 function _jl_lambda_number(l::LambdaStaticData)
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
@@ -144,13 +149,22 @@ function serialize(s, f::Function)
         name = f.env
     end
     if isa(name,Symbol)
-        if isbound(name) && is(f,eval(name))
-            # toplevel named func
+        if isbound(Base,name) && is(f,eval(Base,name))
             write(s, uint8(0))
             serialize(s, name)
-        else
-            error(f," is not serializable")
+            return
         end
+        if !is(f.env.defs, ())
+            mod = f.env.defs.func.code.module
+            if isbound(mod,name) && is(f,eval(mod,name))
+                # toplevel named func
+                write(s, uint8(2))
+                serialize(s, mod)
+                serialize(s, name)
+                return
+            end
+        end
+        error(f," is not serializable")
     else
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
@@ -171,6 +185,7 @@ end
 function serialize_type_data(s, t)
     tname = t.name.name
     serialize(s, tname)
+    # TODO: use full name
     if isbound(tname) && is(t,eval(tname))
         serialize(s, ())
     else
@@ -276,13 +291,26 @@ deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
 deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
+function deserialize(s, ::Type{Module})
+    path = force(deserialize(s))
+    m = Root
+    for mname in path
+        m = eval(m,mname)
+    end
+    m
+end
+
 const _jl_known_lambda_data = Dict()
 
 function deserialize(s, ::Type{Function})
     b = read(s, Uint8)
     if b==0
         name = deserialize(s)::Symbol
-        return ()->eval(name)
+        return ()->eval(Base,name)
+    elseif b==2
+        mod = deserialize(s)::Module
+        name = deserialize(s)::Symbol
+        return ()->eval(mod,name)
     end
     env = deserialize(s)
     linfo = deserialize(s)
@@ -342,6 +370,7 @@ function deserialize_expr(s, len)
 end
 
 function deserialize(s, ::Type{TypeVar})
+    nf_expected = deserialize(s)
     name = force(deserialize(s))
     lb = force(deserialize(s))
     ub = force(deserialize(s))
@@ -349,6 +378,7 @@ function deserialize(s, ::Type{TypeVar})
 end
 
 function deserialize(s, ::Type{UnionKind})
+    nf_expected = deserialize(s)
     types = deserialize(s)
     ()->Union(force(types)...)
 end

@@ -124,7 +124,7 @@ DLLEXPORT int ios_vprintf(ios_t *s, const char *format, va_list args);
 /* high-level stream functions - input */
 int ios_getnum(ios_t *s, char *data, uint32_t type);
 DLLEXPORT int ios_getutf8(ios_t *s, uint32_t *pwc);
-int ios_peekutf8(ios_t *s, uint32_t *pwc);
+DLLEXPORT int ios_peekutf8(ios_t *s, uint32_t *pwc);
 int ios_ungetutf8(ios_t *s, uint32_t wc);
 //int ios_getstringz(ios_t *dest, ios_t *src);
 //int ios_getstringn(ios_t *dest, ios_t *src, size_t nchars);

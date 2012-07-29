@@ -685,18 +685,19 @@ end
 pmf{T <: Real}(d::Multinomial, x::Vector{T}) = exp(logpmf(d, x))
 
 function rand(d::Multinomial)
+  n = d.n
   l = numel(d.prob)
   s = zeros(Int, l)
-  for i = 1:d.n
-    r = rand()
-    for j = 1:l
-      r -= d.prob[j]
-      if r <= 0.0
-        s[j] += 1
-        break
-      end
+  psum = 1.0
+  for j = 1:(l - 1)
+    s[j] = int(ccall(dlsym(_jl_libRmath, "rbinom"), Float64, (Float64, Float64), n, d.prob[j] / psum))
+    n -= s[j]
+    if n == 0
+      break
     end
+    psum -= d.prob[j]
   end
+  s[end] = n
   s
 end
 

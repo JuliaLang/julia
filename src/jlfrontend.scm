@@ -55,20 +55,26 @@
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
 (define (expand-toplevel-expr- e)
-  (if (or (boolean? e) (eof-object? e)
-	  (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
-      e
-      (let* ((ex (julia-expand0 e))
-	     (gv (toplevel-expr-globals ex))
-	     (th (julia-expand1
-		  `(lambda ()
-		     (scope-block
-		      (block ,@(map (lambda (v) `(global ,v)) gv)
-			     ,ex))))))
-	(if (null? (car (caddr th)))
-	    ;; if no locals, return just body of function
-	    (cadddr th)
-	    `(thunk ,th)))))
+  (cond ((or (boolean? e) (eof-object? e)
+	     ;; special top-level expressions left alone
+	     (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
+	 e)
+	((and (pair? e) (memq (car e) '(import importall export)))
+	 e)
+	((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
+	 e)
+	(else
+	 (let* ((ex (julia-expand0 e))
+		(gv (toplevel-expr-globals ex))
+		(th (julia-expand1
+		     `(lambda ()
+			(scope-block
+			 (block ,@(map (lambda (v) `(global ,v)) gv)
+				,ex))))))
+	   (if (null? (car (caddr th)))
+	       ;; if no locals, return just body of function
+	       (cadddr th)
+	       `(thunk ,th))))))
 
 ;; (body (= v _) (return v)) => (= v _)
 (define (simple-assignment? e)

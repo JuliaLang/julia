@@ -229,14 +229,10 @@ function sum(r::Ranges)
     return l * first(r) + step(r) * div(l * (l - 1), 2)
 end
 
-function map_to(dest, f, r::Ranges)
+function map_to(f, dest, r::Ranges)
     i = 1
     for ri in r dest[i] = f(ri); i+=1; end
     dest
 end
 
-function map(f, r::Ranges)
-    if isempty(r) return similar(r) end
-    first = f(r.start)
-    map_to(similar(r, typeof(first)), f, r)
-end
+map(f, r::Ranges) = [ f(x) for x in r ]

@@ -117,6 +117,48 @@
 #     done::Bool
 # end
 
+import Root
+
+export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
+    BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
+    Core, Root, DirectIndexString, DivideByZeroError, DomainError, EOFError,
+    Exception, Expr, Float, Float32, Float64, Function, GotoNode, IOError,
+    InexactError, Integer, Int, Int8, Int16, Int32, Int64, Int128,
+    InterruptException,
+    IntrinsicFunction, LabelNode, LambdaStaticData, LineNumberNode,
+    MemoryError, Method, MethodTable, Module, NTuple, None, Nothing, Number,
+    OverflowError, Ptr, QuoteNode, Real, Signed, StackOverflowError, String,
+    Symbol, SymbolNode, Task, Top, TopNode, Tuple, Type, TypeConstructor,
+    TypeName, TypeVar, UTF8String, Uint, Uint8, Uint16, Uint32, Uint64, Uint128,
+    Undef, UndefRefError, Union, UnionKind, Unsigned, Void, WeakRef,
+    GetfieldNode,
+    # functions
+    _setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
+    arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,
+    include, invoke, is, ===, isa, isbound, method_exists,
+    new_type_constructor, subtype, throw, tuple, tuplelen, tupleref,
+    typeassert, typeof, typevar, yieldto,
+    # constants
+    JULIA_HOME, nothing,
+    # intrinsic functions
+    ccall, abs_float, add_float, add_int, and_int, ashr_int,
+    box, bswap_int, checked_fptosi32,
+    checked_fptosi64, checked_fptoui32, checked_fptoui64, checked_sadd,
+    checked_smul, checked_ssub, checked_uadd, checked_umul, checked_usub,
+    copysign_float, ctlz_int, ctpop_int, cttz_int,
+    div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int,
+    fpext64, fpiseq32, fpiseq64, fpislt32, fpislt64,
+    fpsiround32, fpsiround64, fptosi32, fptosi64, fptoui32, fptoui64,
+    fptrunc32, fpuiround32, fpuiround64, le_float, lefsi64, lefui64, lesif64,
+    leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
+    mul_int, ne_float, ne_int, neg_float, neg_int, not_int, or_int, rem_float,
+    sdiv_int, sext16, sext32, sext64, shl_int, sitofp32, sitofp64, sle_int,
+    slt_int, smod_int, srem_int, sub_float, sub_int, trunc16, trunc32,
+    trunc64, trunc8, trunc_int, udiv_int, uitofp32, uitofp64, ule_int, ult_int,
+    unbox, urem_int, xor_int, zext16, zext32, zext64, sext_int, zext_int,
+    jl_alloca
+
+
 type Nothing; end
 const nothing = Nothing()
 
@@ -176,6 +218,12 @@ type SymbolNode
     name::Symbol
     typ
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
+end
+
+type GetfieldNode
+    value
+    name::Symbol
+    typ
 end
 
 type WeakRef

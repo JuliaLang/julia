@@ -1109,7 +1109,6 @@ function start_sge_workers(n)
 end
 
 addprocs_sge(n) = add_workers(PGRP, start_sge_workers(n))
-SGE(n) = addprocs_sge(n)
 
 #include("vcloud.jl")
 
@@ -1299,12 +1298,11 @@ function sync_end()
 end
 
 macro sync(block)
-    @gensym v
     quote
         sync_begin()
-        $v = $block
+        v = $esc(block)
         sync_end()
-        $v
+        v
     end
 end
 
@@ -1370,7 +1368,7 @@ end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawn($expr))
+    :(spawn($esc(expr)))
 end
 
 function spawnlocal(thunk)
@@ -1391,12 +1389,12 @@ end
 
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnlocal($expr))
+    :(spawnlocal($esc(expr)))
 end
 
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat($p, $expr))
+    :(spawnat($p, $esc(expr)))
 end
 
 function at_each(f, args...)
@@ -1493,28 +1491,26 @@ function pfor(f, r::Range1{Int})
 end
 
 function make_preduce_body(reducer, var, body)
-    @gensym ac lo hi
     localize_vars(
     quote
-        function (($lo)::Int, ($hi)::Int)
-            ($var) = ($lo)
-            ($ac) = $body
-            for ($var) = (($lo)+1):($hi)
-                ($ac) = ($reducer)($ac, $body)
+        function (lo::Int, hi::Int)
+            $esc(var) = lo
+            ac = $esc(body)
+            for $esc(var) = (lo+1):hi
+                ac = ($esc(reducer))(ac, $esc(body))
             end
-            $ac
+            ac
         end
     end
                   )
 end
 
 function make_pfor_body(var, body)
-    @gensym lo hi
     localize_vars(
     quote
-        function (($lo)::Int, ($hi)::Int)
-            for ($var) = ($lo):($hi)
-                $body
+        function (lo::Int, hi::Int)
+            for $esc(var) = lo:hi
+                $esc(body)
             end
         end
     end
@@ -1539,11 +1535,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($make_pfor_body(var, body), $r)
+            pfor($make_pfor_body(var, body), $esc(r))
         end
     else
         quote
-            preduce($reducer, $make_preduce_body(reducer, var, body), $r)
+            preduce($esc(reducer),
+                    $make_preduce_body(reducer, var, body), $esc(r))
         end
     end
 end

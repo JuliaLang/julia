@@ -1,5 +1,4 @@
-cd("../extras") do
-require("Rmath.jl")
+require("../extras/Rmath.jl")
 
 function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Float64)
     @assert numel(target) == numel(current)
@@ -194,5 +193,3 @@ allEq(Rt2,	  qt	   (log(1- Pt2), 1.01, false, true), 1e-2)
 allEq(Runif,	  qunif	   (log(1- Punif), .2, 2, false, true))
 allEq(Rweibull,   qweibull (log(1- Pweibull), 3, 2, false, true))
 #allEq(Rwilcox,	  qwilcox  (log(1- Pwilcox), 13, 17, false, true))
-
-end # cd

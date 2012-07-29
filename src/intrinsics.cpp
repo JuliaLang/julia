@@ -193,7 +193,9 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             if (bt == NULL || !jl_is_bits_type(bt)) {
                 jl_error("auto_unbox: unable to determine argument type");
             }
-        }
+        } else {
+			jl_error("auto_unbox: something went horribly wrong");
+		}
     }
     unsigned int nb = jl_bitstype_nbits(bt);
     Type *to = IntegerType::get(jl_LLVMContext, nb);

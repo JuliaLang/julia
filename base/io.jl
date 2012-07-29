@@ -89,12 +89,12 @@ end
 open(fname::String) = open(fname, true, false, false, false, false)
 
 function open(fname::String, mode::String)
-    mode == "r"  ? open(fname, true,  false, false, false, false) :
-    mode == "r+" ? open(fname, true,  true , false, false, false) :
+    mode == "r"  ? open(fname, true , false, false, false, false) :
+    mode == "r+" ? open(fname, true , true , false, false, false) :
     mode == "w"  ? open(fname, false, true , true , true , false) :
-    mode == "w+" ? open(fname, true,  true , true , true , false) :
+    mode == "w+" ? open(fname, true , true , true , true , false) :
     mode == "a"  ? open(fname, false, true , true , false, true ) :
-    mode == "a+" ? open(fname, true,  true , true , false, true ) :
+    mode == "a+" ? open(fname, true , true , true , false, true ) :
     error("invalid open mode: ", mode)
 end
 
@@ -417,5 +417,26 @@ begin
         ccall(:select, Int32,
               (Int32, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
               readfds.nfds, readfds.data, C_NULL, C_NULL, tout)
+    end
+end
+
+## Character streams ##
+_wstmp = Array(Char, 1)
+function eatwspace(s::IOStream)
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && iswspace(_wstmp[1])
+        c = read(s, Char)  # advance one character
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    end
+end
+
+function eatwspace_comment(s::IOStream, cmt::Char)
+    status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
+    while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
+        if _wstmp[1] == cmt
+            readline(s)
+        end
+        c = read(s, Char)  # advance one character
+        status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end

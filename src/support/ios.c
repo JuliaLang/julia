@@ -376,6 +376,7 @@ size_t ios_readprep(ios_t *s, size_t n)
         }
     }
     size_t got;
+    s->fpos = -1;
     int result = _os_read(s->fd, s->buf+s->size, s->maxsize - s->size, &got);
     if (result)
         return space;
@@ -485,6 +486,7 @@ off_t ios_seek(ios_t *s, off_t pos)
         off_t fdpos = lseek(s->fd, pos, SEEK_SET);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;

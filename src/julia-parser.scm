@@ -607,6 +607,13 @@
 	(else
 	 ex)))))
 
+;; convert (comparison a <: b) to (<: a b)
+(define (subtype-syntax e)
+  (if (and (pair? e) (eq? (car e) 'comparison)
+	   (length= e 4) (eq? (caddr e) '|<:|))
+      `(<: ,(cadr e) ,(cadddr e))
+      e))
+
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
 (define (parse-call s)
@@ -643,7 +650,8 @@
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
-		   (loop (list* 'curly ex (parse-arglist s #\} ))))
+		   (loop (list* 'curly ex
+				(map subtype-syntax (parse-arglist s #\} )))))
 		  ((#\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
@@ -674,6 +682,9 @@
 	   (error (string word " at "
 			  current-filename ":" expect-end-current-line
 			  " expected end, got " t))))))
+
+(define (parse-subtype-spec s)
+  (subtype-syntax (parse-ineq s)))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)
@@ -751,13 +762,13 @@
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((abstract)
-     (list 'abstract (parse-ineq s)))
+     (list 'abstract (parse-subtype-spec s)))
     ((type)
-     (let ((sig (parse-ineq s)))
+     (let ((sig (parse-subtype-spec s)))
        (begin0 (list word sig (parse-block s))
 	       (expect-end s))))
     ((bitstype)
-     (list 'bitstype (parse-atom s) (parse-ineq s)))
+     (list 'bitstype (parse-atom s) (parse-subtype-spec s)))
     ((typealias)
      (let ((lhs (parse-call s)))
        (if (and (pair? lhs) (eq? (car lhs) 'call))
@@ -804,12 +815,13 @@
        (begin0 (list word name (parse-block s))
 	       (expect-end s))))
     ((export)
-     (let ((es (parse-comma-separated-assignments s)))
+     (let ((es (map macrocall-to-atsym
+		    (parse-comma-separated-assignments s))))
        (if (not (every symbol? es))
 	   (error "invalid export statement"))
        `(export ,@es)))
     ((import)
-     (let ((ns (parse-atom s)))
+     (let ((ns (macrocall-to-atsym (parse-atom s))))
        (let loop ((path (list ns)))
 	 (if (not (symbol? (car path)))
 	     (error "invalid import statement: expected identifier"))
@@ -818,7 +830,7 @@
 		`(importall ,@(reverse path)))
 	       ((eq? (peek-token s) '|.|)
 		(take-token s)
-		(loop (cons (parse-atom s) path)))
+		(loop (cons (macrocall-to-atsym (parse-atom s)) path)))
 	       ((or (eqv? (peek-token s) #\newline)
 		    (eof-object? (peek-token s)))
 		`(import ,@(reverse path)))
@@ -826,14 +838,15 @@
 		(error "invalid import statement"))))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
-	 (error "expected ( after ccall"))
-     (take-token s)
-     (let ((al (parse-arglist s #\))))
-       (if (and (length> al 1)
-                (memq (cadr al) '(cdecl stdcall fastcall thiscall)))
-	   ;; place (callingconv) at end of arglist
-	   `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
-	   `(ccall ,.al))))
+	 'ccall
+	 (begin
+	   (take-token s)
+	   (let ((al (parse-arglist s #\))))
+	     (if (and (length> al 1)
+		      (memq (cadr al) '(cdecl stdcall fastcall thiscall)))
+		 ;; place (callingconv) at end of arglist
+		 `(ccall ,(car al) ,@(cddr al) (,(cadr al)))
+		 `(ccall ,.al))))))
     ((do)
      (error "invalid do syntax"))
     (else (error "unhandled reserved word"))))))
@@ -846,6 +859,11 @@
     `(-> (tuple ,@doargs)
 	 ,(begin0 (parse-block s)
 		  (expect-end- s 'do)))))
+
+(define (macrocall-to-atsym e)
+  (if (and (pair? e) (eq? (car e) 'macrocall))
+      (symbol (string #\@ (cadr e)))
+      e))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated-assignments s)

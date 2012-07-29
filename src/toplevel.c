@@ -31,22 +31,26 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    if (name == jl_current_module->name) {
-        jl_errorf("module name %s conflicts with enclosing module", name->name);
+    jl_module_t *parent_module;
+    if (jl_current_module == jl_core_module ||
+        jl_current_module == jl_main_module) {
+        parent_module = jl_root_module;
     }
-    jl_binding_t *b = jl_get_binding_wr(jl_current_module, name);
+    else {
+        parent_module = jl_current_module;
+    }
+    jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        JL_PRINTF(JL_STDERR, "Warning: redefinition of module %s ignored\n",
-                   name->name);
-        return jl_nothing;
+        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
+    newm->parent = (jl_value_t*)parent_module;
     b->value = (jl_value_t*)newm;
-    if (jl_current_module == jl_core_module && name == jl_symbol("Base")) {
-        // pick up Base module during bootstrap, and stay within it
-        // after loading.
-        jl_base_module = last_module = newm;
+    if (parent_module == jl_root_module && name == jl_symbol("Base") &&
+        jl_base_module == NULL) {
+        // pick up Base module during bootstrap
+        jl_base_module = newm;
     }
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
@@ -72,6 +76,17 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     }
     JL_GC_POP();
     jl_current_module = last_module;
+
+    // remove non-exported macros
+    size_t i;
+    void **table = newm->bindings.table;
+    for(i=1; i < newm->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->name->name[0]=='@' && !b->exportp)
+                b->value = NULL;
+        }
+    }
     return jl_nothing;
 }
 
@@ -154,7 +169,7 @@ extern int jl_in_inference;
 
 static jl_module_t *eval_import_path(jl_array_t *args)
 {
-    jl_module_t *m = jl_current_module;
+    jl_module_t *m = jl_root_module;
     for(size_t i=0; i < args->length-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
@@ -202,7 +217,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
         return jl_nothing;
     }
 
-    // TODO: export
+    if (ex->head == export_sym) {
+        for(size_t i=0; i < ex->args->length; i++) {
+            jl_module_export(jl_current_module,
+                             (jl_sym_t*)jl_cellref(ex->args, i));
+        }
+        return jl_nothing;
+    }
 
     jl_value_t *thunk=NULL;
     jl_value_t *result;
@@ -265,6 +286,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
+    //ios_printf(ios_stderr, "***** loading %s\n", fname);
     int lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
     JL_GC_PUSH(&fn, &ln, &form);
@@ -299,25 +321,6 @@ void jl_parse_eval_all(char *fname)
 
 int asprintf(char **strp, const char *fmt, ...);
 
-// fpath needs to be freed if != fname
-char *jl_find_file_in_path(const char *fname)
-{
-    char *fpath = (char*)fname;
-    int fid = open (fpath, O_RDONLY);
-    // try adding julia home
-    if (fid == -1 && julia_home && fname[0] != '/') {
-        if (-1 != asprintf(&fpath, "%s/../lib/julia/%s", julia_home, fname))
-            fid = open (fpath, O_RDONLY);
-    }
-    if (fid == -1) {
-        if (fpath != fname) free(fpath);
-        jl_errorf("could not open file %s", fname);
-    }
-    close(fid);
-
-    return fpath;
-}
-
 static int jl_load_progress_max = 0;
 static int jl_load_progress_i = 0;
 DLLEXPORT void jl_load_progress_setmax(int max) { jl_load_progress_max = max; jl_load_progress_i = 0; }
@@ -326,11 +329,14 @@ void jl_load(const char *fname)
     if (jl_load_progress_max > 0) {
         jl_load_progress_i++;
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        ios_printf(ios_stdout, "\r%0.1f%%", (double)jl_load_progress_i / jl_load_progress_max * 100);
+        ios_printf(ios_stdout, "\r%0.1f%% %s\n", (double)jl_load_progress_i / jl_load_progress_max * 100, fname);
         ios_flush(ios_stdout);
     }
-    //JL_PRINTF(JL_STDOUT, "%s\n", fname);
-    char *fpath = jl_find_file_in_path(fname);
+    char *fpath = (char*)fname;
+    struct stat stbuf;
+    if (jl_stat(fpath, (char*)&stbuf) != 0) {
+        jl_errorf("could not open file %s", fpath);
+    }
     jl_start_parsing_file(fpath);
     jl_parse_eval_all(fpath);
     if (fpath != fname) free(fpath);
@@ -388,7 +394,7 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     else {
         gf = *bp;
         if (!jl_is_gf(gf))
-            jl_error("in method definition: not a generic function");
+            jl_error("invalid method definition: not a generic function");
     }
     JL_GC_PUSH(&gf);
     assert(jl_is_function(f));

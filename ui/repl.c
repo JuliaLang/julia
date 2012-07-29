@@ -101,17 +101,32 @@ void parse_opts(int *argcp, char ***argvp) {
             program = (*argvp)[0];
         }
     }
+    if (image_file) {
+        int build_time_path = 0;
 #ifdef JL_SYSTEM_IMAGE_PATH
-    if (image_file && !imagepathspecified) {
-        image_file = JL_SYSTEM_IMAGE_PATH;
+        if (!imagepathspecified) {
+            image_file = JL_SYSTEM_IMAGE_PATH;
+            build_time_path = 1;
+        }
+#endif
         if (image_file[0] != PATHSEP) {
+            struct stat stbuf;
             char path[512];
-            snprintf(path, sizeof(path), "%s%s%s",
-                     julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
-            image_file = strdup(path);
+            if (build_time_path) {
+                // build time path relative to JULIA_HOME
+                snprintf(path, sizeof(path), "%s%s%s",
+                         julia_home, PATHSEPSTRING, JL_SYSTEM_IMAGE_PATH);
+                image_file = strdup(path);
+            }
+            else if (jl_stat(image_file, (char*)&stbuf) != 0) {
+                // otherwise try julia_home/../lib/julia/%s
+                snprintf(path, sizeof(path), "%s%s..%slib%sjulia%s%s",
+                         julia_home, PATHSEPSTRING, PATHSEPSTRING,
+                         PATHSEPSTRING, PATHSEPSTRING, image_file);
+                image_file = strdup(path);
+            }
         }
     }
-#endif
 }
 
 int ends_with_semicolon(const char *input)
@@ -132,7 +147,15 @@ static int exec_program(void)
     JL_TRY {
         jl_register_toplevel_eh();
         if (err) {
-            jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            //jl_lisp_prompt();
+            //return 1;
+            jl_value_t *errs = jl_stderr_obj();
+            if (errs != NULL) {
+                jl_show(jl_stderr_obj(), jl_exception_in_transit);
+            }
+            else {
+                ios_printf(ios_stderr, "error during bootstrap\n");
+            }
             ios_printf(ios_stderr, "\n");
             JL_EH_POP();
             return 1;
@@ -192,9 +215,9 @@ uv_buf_t *jl_alloc_read_buffer(uv_handle_t* handle, size_t suggested_size)
 
 int true_main(int argc, char *argv[])
 {
-    if (jl_current_module == jl_base_module) {
+    if (jl_base_module != NULL) {
         jl_array_t *args = jl_alloc_cell_1d(argc);
-        jl_set_global(jl_current_module, jl_symbol("ARGS"), (jl_value_t*)args);
+        jl_set_global(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
         int i;
         for (i=0; i < argc; i++) {
             jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_string(argv[i]));
@@ -202,6 +225,7 @@ int true_main(int argc, char *argv[])
     }
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
                  jl_cstr_to_string(julia_home));
+    jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
 
     // run program if specified, otherwise enter REPL
     if (program) {

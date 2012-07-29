@@ -3,7 +3,16 @@
 
 # Harlan Harris & Timothy E. Holy, with contributions from Stefan
 # Karpinski, Patrick O'Leary, and Jeff Bezanson
+module OptionsMod
+import Base.*
+# can't get Base.ht_keyindex from dict.jl -- will pull it manually
 
+export Options,
+	CheckNone, CheckWarn, CheckError,
+	add_defaults!, show, ref, assign,
+	ischeck, docheck, clearcheck,
+	@options, @defaults, @check_used, @set_options
+	
 #### Options type ####
 abstract OptionsChecking
 type CheckNone <: OptionsChecking
@@ -66,26 +75,26 @@ end
 function convert{Tnew<:OptionsChecking,Told<:OptionsChecking}(::Type{Tnew},o::Options{Told})
     Options{Tnew}(o.key2index,o.vals,o.used,o.check_lock)
 end
-function show{T<:OptionsChecking}(o::Options{T})
+function show{T<:OptionsChecking}(io, o::Options{T})
     # Put them in the same order specified by the user
     key = Array(ASCIIString,length(o.vals))
     for (k, v) = o.key2index
         key[v] = string(k)
     end
     for i = 1:length(key)
-        print("$(key[i]) = $(o.vals[i])")
+        print(io, "$(key[i]) = $(o.vals[i])")
         if i < length(key)
-            print(", ")
+            print(io, ", ")
         end
     end
-    print(" ($T)")
+    print(io, " ($T)")
 end
 
 
 #### Functions ####
 # Return an options setting
 function ref(o::Options,s::Symbol)
-    index = ht_keyindex(o.key2index,s)
+    index = Base.ht_keyindex(o.key2index,s)
     if index > 0
         index = o.key2index.vals[index]
         return o.vals[index]
@@ -95,7 +104,7 @@ function ref(o::Options,s::Symbol)
 end
 # Re-set an options setting, or add a new one
 function assign(o::Options,v,s::Symbol)
-    index = ht_keyindex(o.key2index,s)
+    index = Base.ht_keyindex(o.key2index,s)
     if index > 0
         index = o.key2index.vals[index]
         o.vals[index] = v
@@ -163,9 +172,9 @@ end
 macro defaults(opts,ex...)
     # Create a new variable storing the checkflag
     varname = strcat("_",string(opts),"_checkflag")
-    exret = :($symbol(varname) = ischeck($opts))
+    exret = :($esc(symbol(varname)) = ischeck($esc(opts)))
     # Check each argument in the assignment list
-    htindex = gensym()
+    #htindex = gensym()
     for i = 1:length(ex)
         thisex = ex[i]
         if !isa(thisex,Expr) || thisex.head != :(=)
@@ -174,13 +183,13 @@ macro defaults(opts,ex...)
         thissym = thisex.args[1]
         exret = quote
             $exret
-            $htindex = ht_keyindex(($opts).key2index,$expr(:quote,thissym))
-            if $htindex > 0
-                $htindex = ($opts).key2index.vals[$htindex]
-                $thissym = ($opts).vals[$htindex]
-                ($opts).used[$htindex] = true
+            htindex = Base.ht_keyindex(($esc(opts)).key2index,$expr(:quote,thissym))
+            if htindex > 0
+                htindex = ($esc(opts)).key2index.vals[htindex]
+                ($esc(thissym)) = ($esc(opts)).vals[htindex]
+                ($esc(opts)).used[htindex] = true
             else
-                $thisex
+                ($esc(thisex))
             end
         end
     end
@@ -192,9 +201,8 @@ end
 # Usage:
 #    @check_used opts
 macro check_used(opts)
-    varname = gensym()
     varname = strcat("_",string(opts),"_checkflag")
-    :(docheck($opts,$symbol(varname)))
+    :(docheck($esc(opts),$esc(symbol(varname))))
 end
 
 # Macro for setting options. Usage:
@@ -204,7 +212,7 @@ macro options(ex...)
     callargs = Any[:Options]
     istart = 1
     if isa(ex[1], Symbol)
-        push(callargs, ex[1])
+        push(callargs, esc(ex[1]))
         istart = 2
     end
     for indx = istart:length(ex)
@@ -212,7 +220,7 @@ macro options(ex...)
             error("Arguments to @options must be assignments, e.g., a=5")
         end
         push(callargs, expr(:quote, ex[indx].args[1]))
-        push(callargs, ex[indx].args[2])
+        push(callargs, esc(ex[indx].args[2]))
     end
     expr(:call, callargs)
 end
@@ -231,8 +239,10 @@ macro set_options(opts,ex...)
         thisval = thisex.args[2]
         exret = quote
             $exret
-            ($opts)[$expr(:quote,thissym)] = $thisval
+            ($esc(opts))[$expr(:quote,thissym)] = $esc(thisval)
         end
     end
     exret
 end
+
+end # module

@@ -70,7 +70,21 @@ end
 
 #@_jl_libmfunc_1arg_int Real lrint
 #@_jl_libmfunc_1arg_int Real lround iround
-@_jl_libmfunc_1arg_int Real ilogb
+function ilogb(x::Float64)
+    if x==0 || isnan(x)
+        throw(DomainError())
+    end
+    ccall(dlsym(_jl_libm,:ilogb), Int32, (Float64,), x)
+end
+function ilogb(x::Float32)
+    if x==0 || isnan(x)
+        throw(DomainError())
+    end
+    ccall(dlsym(_jl_libm,:ilogbf), Int32, (Float32,), x)
+end
+@vectorize_1arg Real ilogb
+
+@_jl_libmfunc_1arg_float Real significand
 
 @_jl_libfdmfunc_2arg Number atan2
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))

@@ -17,6 +17,16 @@ show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 show{T}(io, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
+full_name(m::Module) = m===Root ? () : tuple(full_name(m.parent)...,m.name)
+
+function show(io, m::Module)
+    if is(m,Root)
+        print(io, "Root")
+    else
+        print(io, join(full_name(m),"."))
+    end
+end
+
 function show(io, l::LambdaStaticData)
     print(io, "AST(")
     show(io, l.ast)
@@ -296,30 +306,33 @@ function _jl_dumptype(io::Stream, x::Type, n::Int, indent)
         return  
     end
     typargs(t) = split(string(t), "{")[1]
-    # TODO: When namespaces are worked out, this probably needs fixing
-    # to allow different modules to be included or to look in the
-    # equivalent of R's search path.
-    for s in [names(Core), names(Base)]  
-        t = eval(s)
-        if isa(t, TypeConstructor)
-            if string(x.name) == typargs(t) ||
-               ("Union" == split(string(t), "(")[1] &&
-                  any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
-                targs = join(t.parameters, ",")
-                println(io, indent, "  ", s,
-                        length(t.parameters) > 0 ? "{$targs}" : "",
-                        " = ", t)
-            end
-        elseif isa(t, UnionKind)
-            if any(map(tt -> string(x.name) == typargs(tt), t.types))
-                println(io, indent, "  ", s, " = ", t)
-            end
-        elseif isa(t, Type) && super(t).name == x.name
-            if string(s) != string(t.name) # type aliases
-                println(io, indent, "  ", s, " = ", t.name)
-            elseif t != Any 
-                print(io, indent, "  ")
-                _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+    # todo: include current module?
+    for m in (Core, Base)
+        for s in names(m)
+            if isbound(m,s)
+                t = eval(m,s)
+                if isa(t, TypeConstructor)
+                    if string(x.name) == typargs(t) ||
+                        ("Union" == split(string(t), "(")[1] &&
+                         any(map(tt -> string(x.name) == typargs(tt), t.body.types)))
+                        targs = join(t.parameters, ",")
+                        println(io, indent, "  ", s,
+                                length(t.parameters) > 0 ? "{$targs}" : "",
+                                " = ", t)
+                    end
+                elseif isa(t, UnionKind)
+                    if any(map(tt -> string(x.name) == typargs(tt), t.types))
+                        println(io, indent, "  ", s, " = ", t)
+                    end
+                elseif isa(t, Type) && super(t).name == x.name
+                    # type aliases
+                    if string(s) != string(t.name)
+                        println(io, indent, "  ", s, " = ", t.name)
+                    elseif t != Any 
+                        print(io, indent, "  ")
+                        _jl_dumptype(io, t, n - 1, strcat(indent, "  "))
+                    end
+                end
             end
         end
     end
@@ -592,16 +605,17 @@ function show_nd(io, a::AbstractArray)
     cartesian_map((idxs...)->print_slice(io,idxs...), tail)
 end
 
-function whos(pattern::Regex)
-    global VARIABLES
-    for s = sort(map(string, VARIABLES))
+function whos(m::Module, pattern::Regex)
+    for s in sort(map(string, names(m)))
         v = symbol(s)
         if isbound(v) && matches(pattern, s)
-            println(rpad(v, 30), summary(eval(v)))
+            println(rpad(v, 30), summary(eval(m,v)))
         end
     end
 end
 whos() = whos(r"")
+whos(m::Module) = whos(m, r"")
+whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")

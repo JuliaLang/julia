@@ -45,9 +45,9 @@ class JuliaHelpWriter(TextWriter):
         visitor = JuliaHelpTranslator(self.document, self.builder)
         self.document.walkabout(visitor)
         self.output = '# automatically generated -- do not edit\n\n' \
-            + 'function _jl_help_db() return [\n\n' \
+            + '[\n\n' \
             + visitor.body \
-            + '\n] end\n'
+            + '\n]\n'
 
 class JuliaHelpBuilder(TextBuilder):
     name = "jlhelp"

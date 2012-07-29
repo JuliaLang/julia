@@ -196,11 +196,6 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     }
 }
 
-htable_t *jl_gc_get_finalizer_table(void)
-{
-    return &finalizer_table;
-}
-
 static int szclass(size_t sz)
 {
 #ifndef __LP64__
@@ -423,12 +418,6 @@ static void gc_mark_module(jl_module_t *m)
             GC_Markval(b->type);
         }
     }
-    table = m->macros.table;
-    for(i=1; i < m->macros.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            GC_Markval((jl_value_t*)table[i]);
-        }
-    }
 }
 
 #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
@@ -586,7 +575,7 @@ static void gc_mark(void)
     GC_Markval(jl_current_task);
 
     // modules
-    GC_Markval(jl_core_module);
+    GC_Markval(jl_root_module);
     GC_Markval(jl_current_module);
 
     // invisible builtin values

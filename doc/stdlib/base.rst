@@ -67,7 +67,7 @@ All Objects
 
 .. function:: copy(x)
 
-   Create a deep copy of ``x``: i.e. ``copy`` is called recursively on all constituent parts of ``x``. If a user-defined type should be recursively copied, a ``copy`` method should be defined for it which implements deep copying of an instance.
+   Create a shallow copy of ``x``: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
 
 .. function:: convert(type, x)
 

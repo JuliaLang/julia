@@ -17,6 +17,7 @@ static char flisp_system_image[] = {
 };
 
 extern fltype_t *iostreamtype;
+static fltype_t *jvtype;
 
 static jl_value_t *scm_to_julia(value_t e);
 static value_t julia_to_scm(jl_value_t *v);
@@ -71,8 +72,21 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     // so the preserved value stack is popped there.
     jl_gc_preserve(result);
     value_t scm = julia_to_scm(result);
+    fl_gc_handle(&scm);
+    value_t scmresult;
+    jl_module_t *defmod = f->linfo->module;
+    if (defmod == jl_current_module) {
+        scmresult = fl_cons(scm, FL_F);
+    }
+    else {
+        value_t opaque = cvalue(jvtype, sizeof(void*));
+        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = (jl_value_t*)defmod;
+        scmresult = fl_cons(scm, opaque);
+    }
+    fl_free_gc_handles(1);
+
     JL_GC_POP();
-    return scm;
+    return scmresult;
 }
 
 static builtinspec_t julia_flisp_ast_ext[] = {
@@ -80,8 +94,6 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { "invoke-julia-macro", fl_invoke_julia_macro },
     { NULL, NULL }
 };
-
-static fltype_t *jvtype;
 
 DLLEXPORT void jl_init_frontend(void)
 {
@@ -433,6 +445,7 @@ jl_value_t *jl_parse_next(int *plineno)
         value_t a = car_(c);
         if (isfixnum(a)) {
             *plineno = numval(a);
+            //ios_printf(ios_stderr, "  on line %d\n", *plineno);
             return scm_to_julia(cdr_(c));
         }
     }

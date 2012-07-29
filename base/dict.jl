@@ -54,6 +54,34 @@ function pairs(T::Union(Type,(Type,Type)), a::Associative)
 end
 pairs{K,V}(a::Associative{K,V}) = pairs((K,V),a)
 
+function copy(a::Associative)
+    b = similar(a)
+    for (k,v) in a
+        b[k] = v
+    end
+    return b
+end
+
+function merge!(d::Associative, others::Associative...)
+    for other in others
+        for (k,v) in other
+            d[k] = v
+        end
+    end
+    return d
+end
+merge(d::Associative, others::Associative...) = merge!(copy(d), others...)
+
+function filter!(f::Function, d::Associative)
+    for (k,v) in d
+        if !f(k,v)
+            del(d,k)
+        end
+    end
+    return d
+end
+filter(f::Function, d::Associative) = filter!(f,copy(d))
+
 # some support functions
 
 function _tablesz(i::Integer)
@@ -85,8 +113,10 @@ type ObjectIdDict <: Associative{Any,Any}
     ObjectIdDict() = ObjectIdDict(0)
 end
 
+similar(d::ObjectIdDict) = ObjectIdDict()
+
 function assign(t::ObjectIdDict, v::ANY, k::ANY)
-    t.ht = ccall(:jl_eqtable_put, Any, (Any, Any, Any), t.ht, k, v)::Array{Any,1}
+    t.ht = ccall(:jl_eqtable_put, Array{Any,1}, (Any, Any, Any), t.ht, k, v)
     return t
 end
 
@@ -211,6 +241,8 @@ type Dict{K,V} <: Associative{K,V}
 end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
+
+similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -399,26 +431,6 @@ function length(t::Dict)
     end
     return n
 end
-
-function merge!(d::Dict, others::Dict...)
-    for other in others
-        for (k,v) in other
-            d[k] = v
-        end
-    end
-    return d
-end
-merge(d::Dict, others::Dict...) = merge!(copy(d), others...)
-
-function filter!(f::Function, d::Dict)
-    for (k,v) in d
-        if !f(k,v)
-            del(d,k)
-        end
-    end
-    return d
-end
-filter(f::Function, d::Dict) = filter!(f,copy(d))
 
 # weak key dictionaries
 

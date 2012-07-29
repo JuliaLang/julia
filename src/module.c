@@ -4,11 +4,11 @@
 #include <assert.h>
 #include "julia.h"
 
+jl_module_t *jl_root_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
+jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_current_module=NULL;
-
-static jl_binding_t *varlist_binding=NULL;
 
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
@@ -16,10 +16,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->type = (jl_type_t*)jl_module_type;
     m->name = name;
     htable_new(&m->bindings, 0);
-    htable_new(&m->macros, 0);
     jl_set_const(m, name, (jl_value_t*)m);
-    if (jl_current_module)
-        jl_set_const(m, jl_current_module->name, (jl_value_t*)jl_current_module);
     arraylist_new(&m->imports, 0);
     if (jl_core_module) {
         jl_module_importall(m, jl_core_module);
@@ -48,7 +45,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     if (*bp != HT_NOTFOUND) {
         if ((*bp)->owner != m) {
             ios_printf(JL_STDERR,
-                       "Warning: imported binding for %s overwritten in module %s", var->name, m->name->name);
+                       "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
         else {
             return *bp;
@@ -58,56 +55,36 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
-
-    // keep track of all variables added after the VARIABLES array
-    // is defined
-    if (jl_base_module) {
-        if (varlist_binding == NULL) {
-            varlist_binding = jl_get_binding(jl_base_module, jl_symbol("VARIABLES"));
-        }
-        if (varlist_binding && varlist_binding->value != NULL &&
-            jl_typeis(varlist_binding->value, jl_array_any_type)) {
-            jl_array_t *a = (jl_array_t*)varlist_binding->value;
-            jl_cell_1d_push(a, (jl_value_t*)var);
-        }
+    if (m == jl_root_module) {
+        b->exportp = 1;  // export everything from Root
     }
     return *bp;
 }
 
-typedef struct _mod_stack_t {
-    jl_module_t *m;
-    struct _mod_stack_t *prev;
-} mod_stack_t;
-
 // get binding for reading. might return NULL for unbound.
-static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var, mod_stack_t *p)
+static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var)
 {
-    if (m == NULL) return NULL;
-    mod_stack_t *pp = p;
-    // handle mutual importing
-    while (pp != NULL) {
-        if (pp->m == m)
-            return NULL;
-        pp = pp->prev;
-    }
-    mod_stack_t top = { m, p };
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
         for(size_t i=0; i < m->imports.len; i++) {
-            b = get_binding_((jl_module_t*)m->imports.items[i], var, &top);
-            if (b != NULL)
+            jl_module_t *imp = (jl_module_t*)m->imports.items[i];
+            b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
+            if (b != HT_NOTFOUND && b->exportp) {
+                if (b->owner != imp)
+                    return get_binding_(b->owner, var);
                 return b;
+            }
         }
         return NULL;
     }
     if (b->owner != m)
-        return get_binding_(b->owner, var, &top);
+        return get_binding_(b->owner, var);
     return b;
 }
 
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
-    return get_binding_(m, var, NULL);
+    return get_binding_(m, var);
 }
 
 void jl_module_importall(jl_module_t *to, jl_module_t *from)
@@ -126,9 +103,9 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     if (to == from)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
-    if (b == NULL) {
+    if (b == NULL || !b->exportp) {
         ios_printf(JL_STDERR,
-                   "Warning: could not import %s.%s into %s",
+                   "Warning: could not import %s.%s into %s\n",
                    from->name->name, s->name, to->name->name);
     }
     else {
@@ -136,12 +113,12 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
         if (*bp != HT_NOTFOUND) {
             if ((*bp)->owner != to) {
                 ios_printf(JL_STDERR,
-                           "Warning: ignoring conflicting import of %s into %s",
+                           "Warning: ignoring conflicting import of %s into %s\n",
                            s->name, to->name->name);
             }
             else if ((*bp)->constp || (*bp)->value) {
                 ios_printf(JL_STDERR,
-                           "Warning: import of %s into %s conflicts with an existing identifier; ignored",
+                           "Warning: import of %s into %s conflicts with an existing identifier; ignored.\n",
                            s->name, to->name->name);
             }
             else if (*bp == b) {
@@ -157,6 +134,24 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
             *bp = nb;
         }
     }
+}
+
+void jl_module_export(jl_module_t *from, jl_sym_t *s)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+    if (*bp == HT_NOTFOUND) {
+        jl_binding_t *b = jl_get_binding(from, s);
+        if (b == NULL) {
+            b = jl_get_binding_wr(from, s);
+        }
+        if (b->owner != from) {
+            // create an explicit import so we can mark as re-exported
+            jl_module_import(from, b->owner, s);
+        }
+        bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+    }
+    assert(*bp != HT_NOTFOUND);
+    (*bp)->exportp = 1;
 }
 
 int jl_boundp(jl_module_t *m, jl_sym_t *var)
@@ -200,7 +195,7 @@ void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
 {
     if (b->constp && b->value != NULL) {
         //jl_errorf("cannot redefine constant %s", b->name->name);
-        ios_printf(ios_stderr, "Warning: redefinition of constant %s ignored\n",
+        JL_PRINTF(JL_STDERR, "Warning: redefinition of constant %s ignored.\n",
                    b->name->name);
     }
     else {
@@ -219,16 +214,12 @@ void jl_declare_constant(jl_binding_t *b)
 
 jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname)
 {
-    jl_function_t *f = (jl_function_t*)ptrhash_get(&m->macros, macroname);
-    if (f == HT_NOTFOUND)
-        return NULL;
-    return f;
+    return (jl_function_t*)jl_get_global(m, macroname);
 }
 
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
 {
-    jl_function_t **bp = (jl_function_t**)ptrhash_bp(&m->macros, macroname);
-    *bp = f;
+    jl_set_const(m, macroname, (jl_value_t*)f);
 }
 
 DLLEXPORT jl_value_t *jl_get_current_module()
@@ -251,7 +242,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->value != NULL || b->exportp || b->constp)
+            if (b->exportp || m == jl_main_module)
                 jl_cell_1d_push(a, (jl_value_t*)b->name);
         }
     }

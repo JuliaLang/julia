@@ -1,5 +1,4 @@
 # set up non-serializable state
-reinit_stdio()
 
 # restore shared library handles
 _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
@@ -10,13 +9,12 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 @windows_only setenv("JL_ANSWER_COLOR","normal",false)
 
 # Essential libraries
-_jl_libpcre = dlopen("libpcre")
+libpcre = dlopen("libpcre")
 _jl_libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libopenlibm")
 _jl_libfdm = dlopen("libopenlibm")
 _jl_librandom = dlopen("librandom");
 @windows_only _jl_advapi32 = dlopen("Advapi32")
-_jl_librandom_init()
 
 # Optional libraries
 const _jl_libblas = dlopen(_jl_libblas_name)
@@ -32,6 +30,3 @@ end
 
 ##_jl_libglpk = dlopen("libglpk")
 ##_jl_libglpk = dlopen("libglpk_wrapper")
-
-# set CPU core count
-const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())

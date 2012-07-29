@@ -258,11 +258,23 @@ function begins_with(a::String, b::String)
     end
     done(b,i)
 end
-begins_with(a::String, c::Char) = length(a) > 0 && a[1] == c
+begins_with(a::String, c::Char) = length(a) > 0 && a[start(a)] == c
 
-# TODO: better ends_with
-ends_with(a::String, b::String) = begins_with(reverse(a),reverse(b))
-ends_with(a::String, c::Char) = length(a) > 0 && a[end] == c
+function ends_with(a::String, b::String)
+    i = thisind(a,length(a))
+    j = thisind(b,length(b))
+    a1 = start(a)
+    b1 = start(b)
+    while a1 <= i && b1 <= j
+        c = a[i]
+        d = b[j]
+        if c != d return false end
+        i = prevind(a,i)
+        j = prevind(b,j)
+    end
+    j < b1
+end
+ends_with(a::String, c::Char) = length(a) > 0 && a[thisind(a,end)] == c
 
 # faster comparisons for byte strings
 
@@ -626,7 +638,7 @@ function _jl_interp_parse(s::String, unescape::Function, printer::Function)
             if isa(ex,Expr) && is(ex.head,:continue)
                 throw(ParseError("incomplete expression"))
             end
-            push(sx, ex)
+            push(sx, esc(ex))
             i = j
         elseif c == '\\' && !done(s,k)
             if s[k] == '$'
@@ -710,7 +722,7 @@ function _jl_shell_parse(s::String, interp::Bool)
                 error("space not allowed right after \$")
             end
             ex, j = parseatom(s,j)
-            update_arg(ex); i = j
+            update_arg(esc(ex)); i = j
         else
             if !in_double_quotes && c == '\''
                 in_single_quotes = !in_single_quotes

@@ -2419,8 +2419,8 @@ void jl_init_types(void)
 
     jl_module_type =
         jl_new_struct_type(jl_symbol("Module"), jl_any_type, jl_null,
-                           jl_tuple(1, jl_symbol("name")),
-                           jl_tuple(1, jl_sym_type));
+                           jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
+                           jl_tuple(2, jl_sym_type, jl_any_type));
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
@@ -2522,6 +2522,7 @@ void jl_init_types(void)
     new_sym = jl_symbol("new");
     multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
+    global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
     anonymous_sym = jl_symbol("anonymous");
     underscore_sym = jl_symbol("_");

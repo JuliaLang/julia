@@ -45,7 +45,7 @@ end
 function dirname(path::String)
     m = match(last_separator, path)
     if m == nothing
-        return nothing
+        return ""
     else
         return path[1:m.offset-1]
     end
@@ -54,7 +54,7 @@ end
 function dirname_basename(path::String)
     m = match(last_separator, path)
     if m == nothing
-        return nothing, path
+        return "", path
     else
         return path[1:m.offset-1], path[m.offset+1:end]
     end
@@ -63,7 +63,7 @@ end
 function split_extension(path::String)
     m = match(extension_separator_match, path)
     if m == nothing
-        return path, nothing
+        return path, ""
     else
         return path[1:m.offset-1], path[m.offset:end]
     end
@@ -78,19 +78,16 @@ function fileparts(filename::String)
 end
 
 function file_path(components...)
-    # Check for components that are nothing, and delete them
-    strs = Array(String, 0)
-    for i = 1:length(components)
-        if !is(components[i], nothing)
-            push(strs, components[i])
-        end
-    end
-    join(strs, os_separator)
+    join(components, os_separator)
 end
-fullfile(pathname::String, basename::String, ext::String) = pathname * os_separator * basename * ext
-fullfile(n::Nothing, basename::String, ext::String) = basename * ext
-fullfile(pathname::String, basename::String, n::Nothing) = pathname * os_separator * basename
-fullfile(np::Nothing, basename::String, ne::Nothing) = basename
+
+function fullfile(pathname::String, basename::String, ext::String)
+    if isempty(pathname)
+        return basename * ext
+    else
+        return pathname * os_separator * basename * ext
+    end
+end
 
 # Test for an absolute path
 function isrooted(path::String)

@@ -834,7 +834,7 @@ end # for
 
 function map(f, A::SubOrDArray)
     T = typeof(f(A[1]))
-    darray((T,lsz,da)->map_to(Array(T,lsz), f, localize(A, da)),
+    darray((T,lsz,da)->map_to(f, Array(T,lsz), localize(A, da)),
            T, size(A), distdim(A), procs(A))
 end
 

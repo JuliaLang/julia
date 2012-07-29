@@ -16,7 +16,7 @@ end
 
 macro assert_approx_eq(a, b)
     quote
-        check_approx_eq($a, $b, $string(a), $string(b))
+        check_approx_eq($esc(a), $esc(b), $string(a), $string(b))
     end
 end
 
@@ -24,22 +24,21 @@ macro timeit(ex,name)
     quote
         t = Inf
         for i=1:5
-            t = min(t, @elapsed $ex)
+            t = min(t, @elapsed $esc(ex))
         end
         println(rpad(strcat($name,":"), 20), t)
     end
 end
 
 macro assert_fails(expr)
-    ok = gensym()
     quote
-        $ok = false
+        ok = false
         try
-            $expr
+            $esc(expr)
         catch
-            $ok = true
+            ok = true
         end
-        if !($ok)
+        if !ok
             error(strcat("assertion failed: expected ",$string(expr)," to fail"))
         end
     end
