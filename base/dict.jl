@@ -24,7 +24,7 @@ function show(io, t::Associative)
     end
 end
 
-function keys(T::Type, a::Associative)
+function keys(T, a::Associative)
     i = 0
     keyz = Array(T,length(a))
     for (k,v) in a
@@ -34,7 +34,7 @@ function keys(T::Type, a::Associative)
 end
 keys{K,V}(a::Associative{K,V}) = keys(K,a)
 
-function values(T::Type, a::Associative)
+function values(T, a::Associative)
     i = 0
     vals = Array(T,length(a))
     for (k,v) in a
@@ -44,7 +44,7 @@ function values(T::Type, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
-function pairs(T::Union(Type,(Type,Type)), a::Associative)
+function pairs(T::(Union(Type,Tuple),Union(Type,Tuple)), a::Associative)
     i = 0
     pairz = Array(T,length(a))
     for (k,v) in a
