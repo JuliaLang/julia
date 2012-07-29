@@ -252,7 +252,7 @@ static jl_sym_t *mk_symbol(const char *str)
     jl_sym_t *sym;
     size_t len = strlen(str);
 
-    sym = (jl_sym_t*)malloc(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
+    sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)-sizeof(void*)+len+1+7)&-8);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
 #ifdef __LP64__

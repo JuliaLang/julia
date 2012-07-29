@@ -125,7 +125,7 @@ randi(::Type{Uint128}) = uint128(randi(Uint64))<<64 | randi(Uint64)
 
 randi(::Type{Int32})   = int32(randi(Uint32)) & typemax(Int32)
 randi(::Type{Int64})   = int64(randi(Uint64)) & typemax(Int64)
-randi(::Type{Int128})  = int128(randi(Uint128)) & typemax(Uint128)
+randi(::Type{Int128})  = int128(randi(Uint128)) & typemax(Int128)
 
 randi() = randi(Int)
 
