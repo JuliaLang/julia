@@ -17,6 +17,13 @@
 #include <ctype.h>
 #include <math.h>
 #include "julia.h"
+#include <sys/stat.h>
+//these will be defined in future versions of libuv:
+#if defined(__WIN32__)
+typedef struct _stati64 uv_statbuf_t;
+#else
+typedef struct stat uv_statbuf_t;
+#endif
 #include "builtin_proto.h"
 
 DLLEXPORT char *julia_home = NULL;
@@ -333,7 +340,7 @@ void jl_load(const char *fname)
         ios_flush(ios_stdout);
     }
     char *fpath = (char*)fname;
-    struct stat stbuf;
+    uv_statbuf_t stbuf;
     if (jl_stat(fpath, (char*)&stbuf) != 0) {
         jl_errorf("could not open file %s", fpath);
     }

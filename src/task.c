@@ -17,6 +17,7 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
+#include <malloc.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
