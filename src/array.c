@@ -156,7 +156,7 @@ jl_array_t *jl_ptr_to_array_1d(jl_type_t *atype, void *data, size_t nel,
     else
         elsz = sizeof(void*);
 
-    a = allocobj((sizeof(jl_array_t)+15)&-16);
+    a = allocobj((sizeof(jl_array_t)+jl_array_ndimwords(1)*sizeof(size_t)+15)&-16);
     a->type = atype;
     a->data = data;
     a->length = nel;
