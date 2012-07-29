@@ -24,17 +24,19 @@ extern "C" {
 /** libuv callbacks */
 
 #define DEFINE_JULIA_HOOK(hook) static jl_function_t *jl_uvhook_##hook = 0;
-#define JULIA_HOOK(hook)\
-jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = ((jl_function_t*) jl_get_global(jl_base_module,jl_symbol("_uv_hook_" #hook))))
-
+#define JULIA_HOOK(hook) \
+    (jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = ((jl_function_t*) jl_get_global(jl_base_module,jl_symbol("_uv_hook_" #hook)))))
 
 jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {
     jl_value_t **argv = alloca((count+1)*sizeof(jl_value_t*));
+    memset(argv+1, 0, count);
     va_list argp;
     va_start(argp,count);
-    jl_value_t *v=0;    int i;
+    jl_value_t *v=0;
+    int i;
     argv[0]=val;
+    JL_GC_PUSHARGS(argv,count+1);
     for(i=1; i<(count+1); ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
@@ -52,7 +54,6 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
         }
         argv[i]=v;
     }
-    JL_GC_PUSHARGS(argv,count+1);
     v = jl_apply(f,(jl_value_t**)argv,count+1);
     JL_GC_POP();
     return v;
