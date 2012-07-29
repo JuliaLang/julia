@@ -27,42 +27,6 @@
 #include "ios.h"
 #include "timefuncs.h"
 
-//#define MEMDEBUG
-//#define MEMPROFILE
-
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
-
-// allocate a buffer that can be used as a bigval_t in julia's GC
-void *julia_malloc(size_t n)
-{
-    void *b = LLT_ALLOC(n+sizeof(void*)*BVOFFS);
-    if (b == NULL)
-        return b;
-    return (void*)(((void**)b)+BVOFFS);
-}
-
-void julia_free(void *b)
-{
-    LLT_FREE((void*)(((void**)b)-BVOFFS));
-}
-
-void *julia_realloc(void *b, size_t n)
-{
-    void *p = (b==NULL ? NULL : (void*)(((void**)b)-BVOFFS));
-    p = LLT_REALLOC(p, n + sizeof(void*)*BVOFFS);
-    if (p == NULL)
-        return p;
-    return (void*)(((void**)p)+BVOFFS);
-}
-
 #define MOST_OF(x) ((x) - ((x)>>4))
 
 /* OS-level primitive wrappers */
@@ -201,18 +165,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         // if we own the buffer we're free to resize it
         // always allocate 1 bigger in case user wants to add a NUL
         // terminator after taking over the buffer
-        if (s->julia_alloc)
-            temp = julia_realloc(s->buf, sz+1);
-        else
-            temp = LLT_REALLOC(s->buf, sz+1);
+        temp = LLT_REALLOC(s->buf, sz+1);
         if (temp == NULL)
             return NULL;
     }
     else {
-        if (s->julia_alloc)
-            temp = julia_malloc(sz+1);
-        else
-            temp = LLT_ALLOC(sz+1);
+        temp = LLT_ALLOC(sz+1);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -627,10 +585,7 @@ void ios_close(ios_t *s)
         close(s->fd);
     s->fd = -1;
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = NULL;
     s->size = s->maxsize = s->bpos = 0;
@@ -657,10 +612,7 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        if (s->julia_alloc)
-            buf = julia_malloc(s->size+1);
-        else
-            buf = LLT_ALLOC(s->size+1);
+        buf = LLT_ALLOC(s->size+1);
         if (buf == NULL)
             return NULL;
         if (s->size)
@@ -694,10 +646,7 @@ int ios_setbuf(ios_t *s, char *buf, size_t size, int own)
     s->size = nvalid;
 
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = buf;
     s->maxsize = size;
@@ -810,7 +759,6 @@ static void _ios_init(ios_t *s)
     s->_eof = 0;
     s->rereadable = 0;
     s->readonly = 0;
-    s->julia_alloc = 0;
     s->mutex_initialized = 0;
 }
 
@@ -841,15 +789,6 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
-    _buf_realloc(s, initsize);
-    return s;
-}
-
-ios_t *jl_ios_mem(ios_t *s, size_t initsize, int julia_mallocated)
-{
-    _ios_init(s);
-    s->bm = bm_mem;
-    s->julia_alloc = julia_mallocated;
     _buf_realloc(s, initsize);
     return s;
 }
@@ -890,14 +829,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = julia_malloc(sizeof(ios_t));
+    ios_stdin = malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = julia_malloc(sizeof(ios_t));
+    ios_stdout = malloc(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = julia_malloc(sizeof(ios_t));
+    ios_stderr = malloc(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }

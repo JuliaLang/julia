@@ -37,7 +37,7 @@ static void *alloc_temp_arg_space(uint32_t sz)
         p = malloc(sz);
         temp_arg_blocks[arg_block_n++] = p;
 #else
-        p = allocb(sz);
+#error "fixme"
 #endif
     }
     else {

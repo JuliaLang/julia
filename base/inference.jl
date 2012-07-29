@@ -1358,7 +1358,7 @@ function inlineable(f, e::Expr, vars)
         isType(e.typ) && isleaftype(e.typ.parameters[1])
         return e.typ.parameters[1]
     end
-    if length(atypes)==2 && isa(atypes[2],BitsKind) && is(f,unbox)
+    if length(atypes)==2 && is(f,unbox) && isa(atypes[2],BitsKind)
         return e.args[3]
     end
     if isa(f,IntrinsicFunction)

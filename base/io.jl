@@ -106,14 +106,13 @@ function open(f::Function, args...)
     return x
 end
 
-function memio(x::Integer, finalize::Bool, julia_malloc::Bool)
+function memio(x::Integer, finalize::Bool)
     s = IOStream("<memio>", finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint, Int32), s.ios, x, julia_malloc)
+    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
     return s
 end
-memio(x::Integer, finalize::Bool) = memio(x, finalize, true)
-memio(x::Integer) = memio(x, true, true)
-memio() = memio(0, true, true)
+memio(x::Integer) = memio(x, true)
+memio() = memio(0, true)
 
 ## byte-order mark, ntoh & hton ##
 

@@ -3,7 +3,7 @@
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert(::Type{Uint}, x::Ptr) = box(Uint, x)
+convert(::Type{Uint}, x::Ptr) = box(Uint, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
@@ -11,7 +11,7 @@ convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,uint(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
-convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, p)
+convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
 # object to pointer
 convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
@@ -27,10 +27,9 @@ pointer{T}(x::AbstractArray{T}, i::Int) = convert(Ptr{T},x) + (i-1)*sizeof(T)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, dims) = pointer_to_array(p, dims, false)
-function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int},
-                               julia_malloc::Bool)
+function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
-          Array{T,N}, p, dims, julia_malloc)
+          Array{T,N}, p, dims, own)
 end
 
 integer(x::Ptr) = convert(Uint, x)

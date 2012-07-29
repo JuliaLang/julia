@@ -58,8 +58,6 @@ typedef struct {
     // request durable writes (fsync)
     // unsigned char durable:1;
 
-    // use julia-compatible buffer allocator
-    unsigned char julia_alloc:1;
     unsigned char mutex_initialized:1;
 
     int64_t userdata;
@@ -82,7 +80,6 @@ DLLEXPORT int ios_eof(ios_t *s);
 DLLEXPORT int ios_flush(ios_t *s);
 DLLEXPORT void ios_close(ios_t *s);
 DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
-DLLEXPORT void julia_free(void *b);
 // set buffer space to use
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
 DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
@@ -100,7 +97,6 @@ DLLEXPORT size_t ios_readprep(ios_t *from, size_t n);
 DLLEXPORT
 ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc);
 DLLEXPORT ios_t *ios_mem(ios_t *s, size_t initsize);
-DLLEXPORT ios_t *jl_ios_mem(ios_t *s, size_t initsize, int julia_mallocated);
 ios_t *ios_str(ios_t *s, char *str);
 ios_t *ios_static_buffer(ios_t *s, char *buf, size_t sz);
 DLLEXPORT ios_t *ios_fd(ios_t *s, long fd, int isfile, int own);

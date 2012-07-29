@@ -90,7 +90,6 @@
     jl_stderr_obj;
     ios_fd;
     ios_mem;
-    jl_ios_mem;
     jl_boundp;
     jl_get_root_symbol;
     julia_free;

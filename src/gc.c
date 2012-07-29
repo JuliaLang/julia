@@ -25,12 +25,16 @@
 
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
 # ifdef __LP64__
-#  define BVOFFS 3
+#  define BVOFFS 4
 # else
 #  define BVOFFS 4
 # endif
 #else
-#define BVOFFS 2
+# ifdef __LP64__
+#  define BVOFFS 2
+# else
+#  define BVOFFS 4
+# endif
 #endif
 
 #define GC_PAGE_SZ (1536*sizeof(void*))//bytes
@@ -63,26 +67,35 @@ typedef struct _bigval_t {
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
     union {
         size_t sz;
-        char _pad[8];
+#ifdef __LP64__
+        char _pad[16];
+#endif
     };
 #endif
+#ifndef __LP64__
+# if defined(MEMDEBUG) || defined(MEMPROFILE)
+    char _pad2[4];
+# else
+    char _pad2[8];
+# endif
+#endif
+    uptrint_t _pad3;
     union {
         uptrint_t flags;
-        struct {
-            uptrint_t marked:1;
-            uptrint_t isobj:1;
-        };
+        uptrint_t marked:1;
+        char _data[1];
     };
-    char _data[1];
 } bigval_t;
 
-#define gc_val(o)     ((gcval_t*)(((void**)(o))-1))
-#define gc_marked(o)  (gc_val(o)->marked)
-#define gc_setmark(o) (gc_val(o)->marked=1)
-#define gc_marked_obj(o)  (((gcval_t*)(o))->marked)
-#define gc_setmark_obj(o) (((gcval_t*)(o))->marked=1)
+#define gc_marked(o)  (((gcval_t*)(o))->marked)
+#define gc_setmark(o) (((gcval_t*)(o))->marked=1)
+#define gc_val_buf(o) ((gcval_t*)(((void**)(o))-1))
+#define gc_setmark_buf(o) gc_setmark(gc_val_buf(o))
 
 static bigval_t *big_objects = NULL;
+
+static jl_mallocptr_t *malloc_ptrs = NULL;
+static jl_mallocptr_t *malloc_ptrs_freelist = NULL;
 
 #define N_POOLS 42
 static pool_t norm_pools[N_POOLS];
@@ -138,9 +151,9 @@ static void sweep_weak_refs(void)
         return;
     do {
         wr = (jl_weakref_t*)lst[n];
-        if (gc_marked_obj(wr)) {
+        if (gc_marked(wr)) {
             // weakref itself is alive
-            if (!gc_marked_obj(wr->value))
+            if (!gc_marked(wr->value))
                 wr->value = (jl_value_t*)jl_nothing;
             n++;
         }
@@ -212,7 +225,7 @@ static int szclass(size_t sz)
     return 41;
 }
 
-static void *alloc_big(size_t sz, int isobj)
+static void *alloc_big(size_t sz)
 {
     if (allocd_bytes > collect_interval) {
         jl_gc_collect();
@@ -228,26 +241,11 @@ static void *alloc_big(size_t sz, int isobj)
 #if defined(MEMDEBUG) || defined(MEMPROFILE)
     v->sz = sz;
 #endif
-    v->next = big_objects;
     v->flags = 0;
-    v->isobj = isobj;
+    v->next = big_objects;
     big_objects = v;
     return &v->_data[0];
 }
-
-void jl_gc_acquire_buffer(void *b)
-{
-    bigval_t *v = (bigval_t*)(((void**)b)-BVOFFS);
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-    v->sz = 0;  // ???
-#endif
-    v->next = big_objects;
-    v->flags = 0;
-    v->isobj = 0;
-    big_objects = v;
-}
-
-#define bigval_word0(v) (((uptrint_t*)(&((bigval_t*)(v))->_data[0]))[0])
 
 static void sweep_big(void)
 {
@@ -255,11 +253,7 @@ static void sweep_big(void)
     bigval_t **pv = &big_objects;
     while (v != NULL) {
         bigval_t *nxt = v->next;
-        if (v->isobj && (bigval_word0(v)&1)) {
-            pv = &v->next;
-            bigval_word0(v) &= ~1UL;
-        }
-        else if (!v->isobj && v->marked) {
+        if (v->marked) {
             pv = &v->next;
             v->marked = 0;
         }
@@ -271,6 +265,57 @@ static void sweep_big(void)
             free(v);
         }
         v = nxt;
+    }
+}
+
+jl_mallocptr_t *jl_gc_acquire_buffer(void *b)
+{
+    jl_mallocptr_t *mp;
+    if (malloc_ptrs_freelist == NULL) {
+        mp = malloc(sizeof(jl_mallocptr_t));
+    }
+    else {
+        mp = malloc_ptrs_freelist;
+        malloc_ptrs_freelist = malloc_ptrs_freelist->next;
+    }
+    mp->type = NULL;
+    mp->ptr = b;
+    mp->next = malloc_ptrs;
+    malloc_ptrs = mp;
+    return mp;
+}
+
+jl_mallocptr_t *jl_gc_managed_malloc(size_t sz)
+{
+    if (allocd_bytes > collect_interval) {
+        jl_gc_collect();
+    }
+    sz = (sz+3) & -4;
+    void *b = malloc(sz);
+    if (b == NULL)
+        jl_raise(jl_memory_exception);
+    allocd_bytes += sz;
+    return jl_gc_acquire_buffer(b);
+}
+
+static void sweep_malloc_ptrs(void)
+{
+    jl_mallocptr_t *mp = malloc_ptrs;
+    jl_mallocptr_t **pmp = &malloc_ptrs;
+    while (mp != NULL) {
+        jl_mallocptr_t *nxt = mp->next;
+        if (((gcval_t*)mp)->marked) {
+            pmp = &mp->next;
+            ((gcval_t*)mp)->marked = 0;
+        }
+        else {
+            *pmp = nxt;
+            if (mp->ptr)
+                free(mp->ptr);
+            mp->next = malloc_ptrs_freelist;
+            malloc_ptrs_freelist = mp;
+        }
+        mp = nxt;
     }
 }
 
@@ -364,6 +409,7 @@ extern void jl_unmark_symbols(void);
 static void gc_sweep(void)
 {
     sweep_big();
+    sweep_malloc_ptrs();
     int i;
     for(i=0; i < N_POOLS; i++) {
         sweep_pool(&norm_pools[i]);
@@ -412,7 +458,7 @@ static void gc_mark_module(jl_module_t *m)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            gc_setmark(b);
+            gc_setmark_buf(b);
             if (b->value != NULL)
                 GC_Markval(b->value);
             GC_Markval(b->type);
@@ -433,7 +479,7 @@ static void gc_markval_(jl_value_t *v)
  gc_markval_top:
     assert(v != NULL);
     //assert(v != lookforme);
-    if (gc_marked_obj(v)) return;
+    if (gc_marked(v)) return;
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
 #ifdef OBJPROFILE
     void **bp = ptrhash_bp(&obj_counts, vt);
@@ -442,42 +488,50 @@ static void gc_markval_(jl_value_t *v)
     else
         (*((ptrint_t*)bp))++;
 #endif
-    gc_setmark_obj(v);
+    gc_setmark(v);
 
     if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind) return;
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
         size_t l = jl_tuple_len(v);
+        jl_value_t **data = ((jl_tuple_t*)v)->data;
         for(size_t i=0; i < l; i++) {
-            jl_value_t *elt = ((jl_tuple_t*)v)->data[i];
+            jl_value_t *elt = data[i];
             if (elt != NULL)
                 GC_Markval(elt);
         }
     }
     else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
+        char *data = a->data;
+        if (data == NULL) return;
         int ndims = jl_array_ndims(a);
-        int ndimwords = jl_array_ndimwords(ndims);
-        void *data_area = &a->_space[0] + ndimwords*sizeof(size_t);
-        if (a->reshaped) {
-            GC_Markval(*((jl_value_t**)data_area));
-        }
-        else if (a->data) {
-            char *data = a->data;
-            if (ndims == 1) data -= a->offset*a->elsize;
-            if (data != data_area) {
-                gc_setmark(data);
+        void *data_area = jl_array_inline_data_area(a);
+        char *data0 = data;
+        if (ndims == 1) data0 -= a->offset*a->elsize;
+        if (data0 != data_area) {
+            jl_value_t *owner = *(jl_value_t**)data_area;
+            if (gc_typeof(owner) == 0) {
+                // jl_mallocptr_t
+                if (gc_marked(owner))
+                    return;
+                gc_setmark(owner);
+            }
+            else {
+                // an array
+                v = owner;
+                if (v != (jl_value_t*)a) goto gc_markval_top;
             }
         }
         if (a->ptrarray) {
             size_t l = a->length;
             if (l > 0) {
                 for(size_t i=0; i < l-1; i++) {
-                    jl_value_t *elt = ((jl_value_t**)a->data)[i];
+                    jl_value_t *elt = ((jl_value_t**)data)[i];
                     if (elt != NULL) GC_Markval(elt);
                 }
-                v = ((jl_value_t**)a->data)[l-1];
+                v = ((jl_value_t**)data)[l-1];
                 if (v != NULL) goto gc_markval_top;
             }
         }
@@ -495,7 +549,7 @@ static void gc_markval_(jl_value_t *v)
             GC_Markval(ta->result);
         GC_Markval(ta->state.eh_task);
         if (ta->stkbuf != NULL)
-            gc_setmark(ta->stkbuf);
+            gc_setmark_buf(ta->stkbuf);
 #ifdef COPY_STACKS
         ptrint_t offset;
         if (ta == jl_current_task) {
@@ -595,7 +649,7 @@ static void gc_mark(void)
     for(i=0; i < finalizer_table.size; i+=2) {
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             jl_value_t *v = finalizer_table.table[i];
-            if (!gc_marked_obj(v)) {
+            if (!gc_marked(v)) {
                 GC_Markval(v);
                 schedule_finalization(v);
             }
@@ -666,24 +720,29 @@ void jl_gc_collect(void)
 
 void *allocb(size_t sz)
 {
-#ifdef MEMDEBUG
-    return alloc_big(sz, 0);
-#endif
-    if (sz > 2048-sizeof(void*))
-        return alloc_big(sz, 0);
+    void *b;
     sz += sizeof(void*);
-    allocd_bytes += sz;
-    void *b = pool_alloc(&pools[szclass(sz)]);
+#ifdef MEMDEBUG
+    b = alloc_big(sz);
+#else
+    if (sz > 2048) {
+        b = alloc_big(sz);
+    }
+    else {
+        allocd_bytes += sz;
+        b = pool_alloc(&pools[szclass(sz)]);
+    }
+#endif
     return (void*)((void**)b + 1);
 }
 
 void *allocobj(size_t sz)
 {
 #ifdef MEMDEBUG
-    return alloc_big(sz, 1);
+    return alloc_big(sz);
 #endif
     if (sz > 2048)
-        return alloc_big(sz, 1);
+        return alloc_big(sz);
     allocd_bytes += sz;
     return pool_alloc(&pools[szclass(sz)]);
 }
@@ -691,7 +750,7 @@ void *allocobj(size_t sz)
 void *alloc_2w(void)
 {
 #ifdef MEMDEBUG
-    return alloc_big(2*sizeof(void*), 1);
+    return alloc_big(2*sizeof(void*));
 #endif
     allocd_bytes += (2*sizeof(void*));
 #ifdef __LP64__
@@ -704,7 +763,7 @@ void *alloc_2w(void)
 void *alloc_3w(void)
 {
 #ifdef MEMDEBUG
-    return alloc_big(3*sizeof(void*), 1);
+    return alloc_big(3*sizeof(void*));
 #endif
     allocd_bytes += (3*sizeof(void*));
 #ifdef __LP64__
@@ -717,7 +776,7 @@ void *alloc_3w(void)
 void *alloc_4w(void)
 {
 #ifdef MEMDEBUG
-    return alloc_big(4*sizeof(void*), 1);
+    return alloc_big(4*sizeof(void*));
 #endif
     allocd_bytes += (4*sizeof(void*));
 #ifdef __LP64__
@@ -821,11 +880,7 @@ static void big_obj_stats(void)
     bigval_t *v = big_objects;
     size_t nused=0, nbytes=0;
     while (v != NULL) {
-        if (v->isobj && (bigval_word0(v)&1)) {
-            nused++;
-            nbytes += v->sz;
-        }
-        else if (!v->isobj && v->marked) {
+        if (v->marked) {
             nused++;
             nbytes += v->sz;
         }

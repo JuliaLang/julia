@@ -102,15 +102,12 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_uint8_type, sizeof(ios_t));
     a->data = (void*)ios_stdout;
+    jl_array_data_owner(a) = (jl_value_t*)a;
     return (jl_value_t*)a;
 }
 
 // --- stat ---
-DLLEXPORT int jl_sizeof_stat(void)
-{
-  struct stat buf;
-  return sizeof(buf);
-}
+DLLEXPORT int jl_sizeof_stat(void) { return sizeof(struct stat); }
 
 DLLEXPORT int32_t jl_stat(const char* path, char* statbuf)
 {
@@ -247,7 +244,6 @@ jl_array_t *jl_takebuf_array(ios_t *s)
         ios_trunc(s, 0);
     }
     else {
-        assert(s->julia_alloc);
         char *b = ios_takebuf(s, &n);
         a = jl_ptr_to_array_1d(jl_array_uint8_type, b, n-1, 1);
     }
@@ -263,9 +259,7 @@ jl_value_t *jl_takebuf_string(ios_t *s)
     return str;
 }
 
-// You can manually circumvent the garbage collector by using
-// jl_ios_mem (i.e., memio) with julia_malloc = false; in that case, the
-// returned buffer must be manually freed. To determine the size,
+// the returned buffer must be manually freed. To determine the size,
 // call position(s) before using this function.
 void *jl_takebuf_raw(ios_t *s)
 {
@@ -288,7 +282,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
     else {
         a = jl_alloc_array_1d(jl_array_uint8_type, 80);
         ios_t dest;
-        jl_ios_mem(&dest, 0, 1);
+        ios_mem(&dest, 0);
         ios_setbuf(&dest, a->data, 80, 0);
         size_t n = ios_copyuntil(&dest, s, delim);
         if (dest.buf != a->data) {
@@ -483,7 +477,7 @@ static void *run_io_thr(void *arg)
 
         size_t nw;
         _os_write_all(r->fd, buf, n, &nw);
-        julia_free(buf);
+        free(buf);
 
         pthread_mutex_lock(&q_mut);
         r->next = ioq_freelist;
