@@ -182,7 +182,7 @@ typeof_tfunc = function (t)
         if isleaftype(t)
             Type{t}
         else
-            Type{typevar(:_,t)}
+            Type{TypeVar(:_,t)}
         end
     elseif isa(t,UnionKind)
         Union(map(typeof_tfunc, t.types)...)
@@ -309,7 +309,7 @@ apply_type_tfunc = function (A, args...)
         appl = args[1]
         uncertain = true
     end
-    uncertain ? Type{typevar(:_,appl)} : Type{appl}
+    uncertain ? Type{TypeVar(:_,appl)} : Type{appl}
 end
 t_func[apply_type] = (1, Inf, apply_type_tfunc)
 
@@ -607,7 +607,7 @@ function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
             if isa(t,TypeVar)
                 t = Type{t}
             else
-                t = Type{typevar(:_,t)}
+                t = Type{TypeVar(:_,t)}
             end
         end
     else

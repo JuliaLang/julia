@@ -2298,7 +2298,7 @@ void jl_init_types(void)
                                                jl_symbol("ub")),
                                       jl_tuple(3, jl_sym_type, jl_type_type,
                                                jl_type_type));
-    jl_tvar_type->fptr = jl_f_no_function;
+    jl_tvar_type->fptr = jl_f_typevar;
 
     jl_undef_type = jl_new_tagtype((jl_value_t*)jl_symbol("Undef"),
                                    jl_any_type, jl_null);
@@ -2462,6 +2462,7 @@ void jl_init_types(void)
                            jl_tuple(2, jl_symbol("parameters"),
                                     jl_symbol("body")),
                            jl_tuple(2, jl_tuple_type, jl_any_type));
+    jl_typector_type->fptr = jl_f_new_type_constructor;
 
     jl_function_type =
         jl_new_struct_type(jl_symbol("Function"), jl_any_type, jl_null,

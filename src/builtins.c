@@ -883,8 +883,6 @@ void jl_init_primitives(void)
     add_builtin_func("arraysize", jl_f_arraysize);
 
     add_builtin_func("apply_type", jl_f_instantiate_type);
-    add_builtin_func("typevar", jl_f_typevar);
-    add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
