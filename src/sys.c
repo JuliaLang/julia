@@ -559,7 +559,10 @@ DLLEXPORT void jl_start_io_thread(void)
     pthread_mutex_init(&q_mut, NULL);
     pthread_mutex_init(&wake_mut, NULL);
     pthread_cond_init(&wake_cond, NULL);
-    pthread_create(&io_thread, NULL, run_io_thr, NULL);
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, 262144);
+    pthread_create(&io_thread, &attr, run_io_thr, NULL);
 }
 
 DLLEXPORT uint8_t jl_zero_denormals(uint8_t isZero)

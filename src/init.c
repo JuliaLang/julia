@@ -213,7 +213,7 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaltstack: %s\n", strerror(errno));
         jl_exit(1);
     }
-	
+
     struct sigaction act;
     memset(&act, 0, sizeof(struct sigaction));
     sigemptyset(&act.sa_mask);
@@ -230,7 +230,6 @@ void julia_init(char *imageFile)
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();
 #endif
-
 }
 
 DLLEXPORT void jl_install_sigint_handler()
@@ -252,7 +251,6 @@ DLLEXPORT void jl_install_sigint_handler()
     }
 #endif
     //printf("sigint installed\n");
-
 }
 
 DLLEXPORT
