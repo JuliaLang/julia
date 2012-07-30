@@ -181,6 +181,9 @@
     jl_get_current_task;
     jl_enter_handler;
     jl_exception_in_transit;
+    jl_errorexception_type;
+    jl_loaderror_type;
+    jl_backtrace_type;
     jl_show;
     jl_show_any;
     jl_print_symbol;
