@@ -540,7 +540,7 @@ void jl_raise(jl_value_t *e)
     else {
         if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
-            ios_printf(ios_stderr, "warning: exception handler exited\n");
+            JL_PRINTF(JL_STDERR, "warning: exception handler exited\n");
             eh = jl_root_task;
         }
         // for now, exit the task

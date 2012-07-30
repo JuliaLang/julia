@@ -221,8 +221,8 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0);
         if (sf == jl_bottom_func)
             return jl_cstr_to_string((char*)"");
-        ios_printf(ios_stderr,
-                   "Warning: Returned code may not match what actually runs.\n");
+        JL_PRINTF(JL_STDERR,
+                  "Warning: Returned code may not match what actually runs.\n");
     }
     std::string code;
     llvm::raw_string_ostream stream(code);
