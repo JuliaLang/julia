@@ -617,12 +617,14 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes);
-jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
-                                jl_tuple_t *parameters, size_t nbits);
+jl_bits_type_t *jl_new_bits_type(jl_value_t *name, jl_tag_type_t *super,
+                                 jl_tuple_t *parameters, size_t nbits);
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super);
 
 // constructors
+jl_value_t *jl_new_bits(jl_bits_type_t *bt, void *data);
+void jl_assign_bits(void *dest, jl_value_t *bits);
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type);
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t);

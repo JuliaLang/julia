@@ -2328,19 +2328,19 @@ void jl_init_types(void)
 
     // non-primitive definitions follow
     jl_int32_type = NULL;
-    jl_int32_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int32"),
-                                    jl_any_type, jl_null, 32);
+    jl_int32_type = jl_new_bits_type((jl_value_t*)jl_symbol("Int32"),
+                                     jl_any_type, jl_null, 32);
     jl_int64_type = NULL;
-    jl_int64_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int64"),
-                                    jl_any_type, jl_null, 64);
+    jl_int64_type = jl_new_bits_type((jl_value_t*)jl_symbol("Int64"),
+                                     jl_any_type, jl_null, 64);
     jl_init_int32_int64_cache();
     jl_int32_type->bnbits = jl_box_int32(32);
     jl_int64_type->bnbits = jl_box_int32(64);
     jl_tupleset(jl_bits_kind->types, 3, (jl_value_t*)jl_int32_type);
 
     jl_bool_type = NULL;
-    jl_bool_type = jl_new_bitstype((jl_value_t*)jl_symbol("Bool"),
-                                   jl_any_type, jl_null, 8);
+    jl_bool_type = jl_new_bits_type((jl_value_t*)jl_symbol("Bool"),
+                                    jl_any_type, jl_null, 8);
     jl_false = jl_box8(jl_bool_type, 0);
     jl_true  = jl_box8(jl_bool_type, 1);
 
@@ -2477,13 +2477,13 @@ void jl_init_types(void)
 
     jl_bottom_func = jl_new_closure(jl_f_no_function, JL_NULL, NULL);
 
-    jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
-                                        jl_any_type, jl_null, 32);
+    jl_intrinsic_type = jl_new_bits_type((jl_value_t*)jl_symbol("IntrinsicFunction"),
+                                         jl_any_type, jl_null, 32);
 
     tv = jl_tuple1(tvar("T"));
     jl_pointer_type =
-        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
-                        sizeof(void*)*8);
+        jl_new_bits_type((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
+                         sizeof(void*)*8);
 
     // Type{T}
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),

@@ -223,7 +223,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       ((jl_sym_t*)name)->name);
-        jl_bits_type_t *bt = jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
+        jl_bits_type_t *bt = jl_new_bits_type(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         jl_checked_assignment(b, (jl_value_t*)bt);
         super = eval(args[3], locals, nl);

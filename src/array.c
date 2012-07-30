@@ -331,47 +331,13 @@ JL_CALLABLE(jl_f_arraysize)
     return (jl_value_t*)d;
 }
 
-static jl_value_t *new_scalar(jl_bits_type_t *bt)
-{
-    size_t nb = jl_bitstype_nbits(bt)/8;
-    jl_value_t *v = 
-        (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                              sizeof(void*));
-    v->type = (jl_type_t*)bt;
-    return v;
-}
-
-typedef struct {
-    int64_t a;
-    int64_t b;
-} bits128_t;
-
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 {
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(a));
     jl_value_t *elt;
     if (jl_is_bits_type(el_type)) {
-        if (el_type == (jl_type_t*)jl_bool_type) {
-            if (((int8_t*)a->data)[i] != 0)
-                return jl_true;
-            return jl_false;
-        }
-        elt = new_scalar((jl_bits_type_t*)el_type);
-        size_t nb = a->elsize;
-        switch (nb) {
-        case 1:
-            *(int8_t*)jl_bits_data(elt)  = ((int8_t*)a->data)[i];  break;
-        case 2:
-            *(int16_t*)jl_bits_data(elt) = ((int16_t*)a->data)[i]; break;
-        case 4:
-            *(int32_t*)jl_bits_data(elt) = ((int32_t*)a->data)[i]; break;
-        case 8:
-            *(int64_t*)jl_bits_data(elt) = ((int64_t*)a->data)[i]; break;
-        case 16:
-            *(bits128_t*)jl_bits_data(elt) = ((bits128_t*)a->data)[i]; break;
-        default:
-            memcpy(jl_bits_data(elt), &((char*)a->data)[i*nb], nb);
-        }
+        elt = jl_new_bits((jl_bits_type_t*)el_type,
+                          &((char*)a->data)[i*a->elsize]);
     }
     else {
         elt = ((jl_value_t**)a->data)[i];
@@ -403,21 +369,7 @@ void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)
             jl_type_error("arrayset", el_type, rhs);
     }
     if (jl_is_bits_type(el_type)) {
-        size_t nb = a->elsize;
-        switch (nb) {
-        case 1:
-            ((int8_t*)a->data)[i]  = *(int8_t*)jl_bits_data(rhs);  break;
-        case 2:
-            ((int16_t*)a->data)[i] = *(int16_t*)jl_bits_data(rhs); break;
-        case 4:
-            ((int32_t*)a->data)[i] = *(int32_t*)jl_bits_data(rhs); break;
-        case 8:
-            ((int64_t*)a->data)[i] = *(int64_t*)jl_bits_data(rhs); break;
-        case 16:
-            ((bits128_t*)a->data)[i] = *(bits128_t*)jl_bits_data(rhs); break;
-        default:
-            memcpy(&((char*)a->data)[i*nb], jl_bits_data(rhs), nb);
-        }
+        jl_assign_bits(&((char*)a->data)[i*a->elsize], rhs);
     }
     else {
         ((jl_value_t**)a->data)[i] = rhs;
