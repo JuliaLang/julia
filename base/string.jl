@@ -278,7 +278,7 @@ ends_with(a::String, c::Char) = length(a) > 0 && a[thisind(a,end)] == c
 
 # faster comparisons for byte strings
 
-cmp(a::ByteString, b::ByteString)     = lexcmp(a.data, b.data)
+cmp(a::ByteString, b::ByteString)     = cmp(a.data, b.data)
 isequal(a::ByteString, b::ByteString) = length(a)==length(b) && cmp(a,b)==0
 
 # TODO: fast begins_with and ends_with
@@ -402,17 +402,17 @@ type RopeString <: String
     length::Int
 
     RopeString(h::RopeString, t::RopeString) =
-        depth(h.tail) + depth(t) < depth(h.head) ?
+        strdepth(h.tail) + strdepth(t) < strdepth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
             new(h, t, max(h.depth,t.depth)+1, length(h)+length(t))
 
     RopeString(h::RopeString, t::String) =
-        depth(h.tail) < depth(h.head) ?
+        strdepth(h.tail) < strdepth(h.head) ?
             RopeString(h.head, RopeString(h.tail, t)) :
             new(h, t, h.depth+1, length(h)+length(t))
 
     RopeString(h::String, t::RopeString) =
-        depth(t.head) < depth(t.tail) ?
+        strdepth(t.head) < strdepth(t.tail) ?
             RopeString(RopeString(h, t.head), t.tail) :
             new(h, t, t.depth+1, length(h)+length(t))
 
@@ -421,8 +421,8 @@ type RopeString <: String
 end
 RopeString(s::String) = RopeString(s,"")
 
-depth(s::String) = 0
-depth(s::RopeString) = s.depth
+strdepth(s::String) = 0
+strdepth(s::RopeString) = s.depth
 
 function next(s::RopeString, i::Int)
     if i <= length(s.head)
@@ -1145,14 +1145,6 @@ for conv in (:float, :float32, :float64,
              :int, :int8, :int16, :int32, :int64,
              :uint, :uint8, :uint16, :uint32, :uint64)
     @eval ($conv){S<:String}(a::AbstractArray{S}) = map($conv, a)
-end
-
-# lexicographically compare byte arrays (used by Latin-1 and UTF-8)
-
-function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              a, b, min(length(a),length(b)))
-    c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
 
 # find the index of the first occurrence of a value in a byte array
