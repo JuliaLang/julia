@@ -21,10 +21,6 @@ julia-debug julia-release:
 	@$(MAKE) -sC ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
-base/build_h.jl: Make.inc
-	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
-	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
-
 $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 	@cp $< $@
 
