@@ -157,7 +157,7 @@ export
     sshow,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
     stdout_stream,step,strcat,strchr,strerror,strftime,stride,strides,string,
     strip,strlen,strptime,strwidth,sub,sub2ind,success,successful,sum,summary,
-    super,svd,svdvals,symbol,system,system_error,take,takebuf_string,tan,tand,
+    super,svd,svdvals,symbol,system,system_error,systmpdir,take,takebuf_string,tan,tand,
     tanh,thisind,tic,tiedrank,time,times,time_ns,tintersect,tls,tmpnam,toc,toggle,
     toggle_each,toq,trace,trailing_ones,trailing_zeros,transform_to_utf8,transpose,trideig,
     tril,triu,trues,trunc,truncate,tty_cols,tty_rows,typemax,typemin,uc,ucfirst,

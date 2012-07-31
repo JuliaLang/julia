@@ -25,7 +25,7 @@ include $(JULIAHOME)/Make.inc
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
-STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos openlibm
+STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos openlibm glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
