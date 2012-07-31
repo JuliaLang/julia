@@ -5,7 +5,9 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifndef __WIN32__
+#ifdef __WIN32__
+#include <malloc.h>
+#else
 #include "errno.h"
 #include <sys/socket.h>
 #endif

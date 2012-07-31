@@ -245,24 +245,6 @@ end
 
 cd(f::Function) = cd(f, ENV["HOME"])
 
-# do stuff in a directory, then return to current directory
-
-function cd(f::Function, dir::String)
-    fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
-    system_error("open", fd == -1)
-    try
-        cd(dir)
-        retval = f()
-        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        retval
-    catch err
-        system_error("fchdir", ccall(:fchdir,Int32,(Int32,),fd) != 0)
-        throw(err)
-    end
-end
-cd(f::Function) = cd(f, ENV["HOME"])
-
-
 # The following use Unix command line facilites
 
 # list the contents of a directory
