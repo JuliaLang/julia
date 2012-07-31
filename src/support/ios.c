@@ -63,8 +63,7 @@ static int _fd_available(long fd)
 
 static int _enonfatal(int err)
 {
-    return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
-            err == EWOULDBLOCK);
+    return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/); //jwn
 }
 
 #define SLEEP_TIME 5//ms
@@ -773,7 +772,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
+    fd = open(fname, flags, S_IRUSR|S_IWUSR/*|S_IRGRP|S_IROTH/*644*/); //jwn
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);

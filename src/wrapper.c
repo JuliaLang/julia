@@ -92,7 +92,7 @@ void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
     uv_buf_t buf;
     jl_value_t *val = jl_callback_call(JULIA_HOOK(alloc_buf),handle->data,1,CB_INT32,suggested_size);
-    if(!jl_is_tuple(val))
+    if(!jl_is_tuple(val) || !jl_is_pointer(jl_t0(val)) || !jl_is_int32(jl_t1(val)))
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
     buf.base = jl_unbox_pointer(jl_t0(val));
     buf.len = jl_unbox_int32(jl_t1(val));
