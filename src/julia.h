@@ -67,17 +67,30 @@ typedef struct {
     jl_value_t *data[2];
 } jl_tuple2_t;
 
+// pseudo-object to track managed malloc pointers
+// currently only referenced from an array's data owner field
+typedef struct _jl_mallocptr_t {
+    JL_STRUCT_TYPE
+    struct _jl_mallocptr_t *next;
+    void *ptr;
+} jl_mallocptr_t;
+
 // how much space we're willing to waste if an array outgrows its
 // original object
-#define ARRAY_INLINE_NBYTES (1024*sizeof(void*))
+#define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
+/*
+  array data is allocated in two ways: either inline in the array object,
+  (in _space), or with malloc with data owner pointing to a jl_mallocptr_t.
+  data owner can also point to another array, if the original data was
+  allocated inline.
+*/
 typedef struct {
     JL_STRUCT_TYPE
     void *data;
     size_t length;
 
-    unsigned short ndims:14;
-    unsigned short reshaped:1;
+    unsigned short ndims:15;
     unsigned short ptrarray:1;  // representation is pointer array
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
@@ -97,6 +110,12 @@ typedef struct {
     };
 } jl_array_t;
 
+#define jl_array_len(a)   (((jl_array_t*)(a))->length)
+#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
+#define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
+#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
+#define jl_array_data_owner(a) (*((jl_value_t**)jl_array_inline_data_area(a)))
+
 // compute # of extra words needed to store dimensions
 static inline int jl_array_ndimwords(uint32_t ndims)
 {
@@ -107,6 +126,11 @@ static inline int jl_array_ndimwords(uint32_t ndims)
     // on 32-bit, ndimwords must = 4k+1 to give 16-byte alignment
     return (ndims & -4) + 1;
 #endif
+}
+
+static inline void *jl_array_inline_data_area(jl_array_t *a)
+{
+    return &a->_space[0] + jl_array_ndimwords(jl_array_ndims(a))*sizeof(size_t);
 }
 
 typedef struct _jl_type_t {
@@ -331,10 +355,10 @@ extern jl_typename_t *jl_array_typename;
 extern jl_struct_type_t *jl_weakref_type;
 extern jl_struct_type_t *jl_ascii_string_type;
 extern jl_struct_type_t *jl_utf8_string_type;
-extern jl_struct_type_t *jl_errorexception_type;
+extern DLLEXPORT jl_struct_type_t *jl_errorexception_type;
 extern jl_struct_type_t *jl_typeerror_type;
-extern jl_struct_type_t *jl_loaderror_type;
-extern jl_struct_type_t *jl_backtrace_type;
+extern DLLEXPORT jl_struct_type_t *jl_loaderror_type;
+extern DLLEXPORT jl_struct_type_t *jl_backtrace_type;
 extern jl_value_t *jl_stackovf_exception;
 extern jl_value_t *jl_memory_exception;
 extern jl_value_t *jl_divbyzero_exception;
@@ -512,10 +536,6 @@ void *allocobj(size_t sz);
 
 #define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
-#define jl_array_len(a)   (((jl_array_t*)(a))->length)
-#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
-#define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
-#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
 #define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
 #define jl_iostr_data(s)  ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
@@ -614,12 +634,14 @@ jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes);
-jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
-                                jl_tuple_t *parameters, size_t nbits);
+jl_bits_type_t *jl_new_bits_type(jl_value_t *name, jl_tag_type_t *super,
+                                 jl_tuple_t *parameters, size_t nbits);
 jl_tag_type_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
 void jl_set_tag_type_super(jl_tag_type_t *tt, jl_value_t *super);
 
 // constructors
+jl_value_t *jl_new_bits(jl_bits_type_t *bt, void *data);
+void jl_assign_bits(void *dest, jl_value_t *bits);
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...);
 DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type);
 DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t);
@@ -695,9 +717,9 @@ jl_array_t *jl_new_array_(jl_type_t *atype, uint32_t ndims, size_t *dims);
 DLLEXPORT jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
                                        jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_ptr_to_array_1d(jl_type_t *atype, void *data,
-                                         size_t nel, int julia_mallocated);
+                                         size_t nel, int own_buffer);
 DLLEXPORT jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data,
-                                      jl_tuple_t *dims, int julia_mallocated);
+                                      jl_tuple_t *dims, int own_buffer);
 
 DLLEXPORT jl_array_t *jl_alloc_array_1d(jl_type_t *atype, size_t nr);
 DLLEXPORT jl_array_t *jl_alloc_array_2d(jl_type_t *atype, size_t nr, size_t nc);
@@ -972,8 +994,8 @@ void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-#define jl_gc_setmark(v) (((uptrint_t*)(v))[-1]|=1)
-void jl_gc_acquire_buffer(void *b);
+jl_mallocptr_t *jl_gc_acquire_buffer(void *b);
+jl_mallocptr_t *jl_gc_managed_malloc(size_t sz);
 void *alloc_2w(void);
 void *alloc_3w(void);
 void *alloc_4w(void);

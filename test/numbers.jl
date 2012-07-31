@@ -113,17 +113,18 @@
 @assert base(12,typemin(Uint64)) == "0"
 @assert base(12,typemax(Uint64)) == "839365134a2a240713"
 
-if WORD_SIZE > 32
 @assert bin(typemin(Uint128)) == "0"
 @assert bin(typemax(Uint128)) == "1"^128
 @assert oct(typemin(Uint128)) == "0"
 @assert oct(typemax(Uint128)) == "3777777777777777777777777777777777777777777"
-@assert dec(typemin(Uint128)) == "0"
-@assert dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
 @assert hex(typemin(Uint128)) == "0"
 @assert hex(typemax(Uint128)) == "ffffffffffffffffffffffffffffffff"
 @assert string(typemin(Uint128)) == "0x00000000000000000000000000000000"
 @assert string(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
+
+if WORD_SIZE > 32
+@assert dec(typemin(Uint128)) == "0"
+@assert dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
 @assert base(3,typemin(Uint128)) == "0"
 @assert base(3,typemax(Uint128)) ==
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
@@ -191,15 +192,16 @@ end
 @assert base(12,typemin(Int64)) == "-41a792678515120368"
 @assert base(12,typemax(Int64)) == "41a792678515120367"
 
-if WORD_SIZE > 32
 @assert bin(typemin(Int128)) == "-1"*"0"^127
 @assert bin(typemax(Int128)) == "1"^127
 @assert oct(typemin(Int128)) == "-2000000000000000000000000000000000000000000"
 @assert oct(typemax(Int128)) == "1777777777777777777777777777777777777777777"
-@assert dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
-@assert dec(typemax(Int128)) == "170141183460469231731687303715884105727"
 @assert hex(typemin(Int128)) == "-80000000000000000000000000000000"
 @assert hex(typemax(Int128)) == "7fffffffffffffffffffffffffffffff"
+
+if WORD_SIZE > 32
+@assert dec(typemin(Int128)) == "-170141183460469231731687303715884105728"
+@assert dec(typemax(Int128)) == "170141183460469231731687303715884105727"
 @assert string(typemin(Int128)) == "-170141183460469231731687303715884105728"
 @assert string(typemax(Int128)) == "170141183460469231731687303715884105727"
 @assert base(3,typemin(Int128)) ==

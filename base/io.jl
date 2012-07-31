@@ -29,7 +29,6 @@ type IOStream <: Stream
         return x
     end
     IOStream(name::String) = IOStream(name, true)
-    make_stdout_stream() = new(ccall(:jl_stdout_stream, Any, ()), "<stdout>")
 end
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
@@ -70,10 +69,6 @@ fdio(name::String, fd::Integer) = fdio(name, fd, false)
 fdio(fd::Integer, own::Bool) = fdio(string("<fd ",fd,">"), fd, own)
 fdio(fd::Integer) = fdio(fd, false)
 
-make_stdin_stream() = fdio("<stdin>", ccall(:jl_stdin, Int32, ()))
-make_stderr_stream() = fdio("<stderr>", ccall(:jl_stderr, Int32, ()))
-make_stdout_stream() = IOStream("<stdout>", ccall(:jl_stdout_stream, Any, ()))
-
 function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(strcat("<file ",fname,">"))
     if ccall(:ios_file, Ptr{Void},
@@ -108,14 +103,13 @@ function open(f::Function, args...)
     return x
 end
 
-function memio(x::Integer, finalize::Bool, julia_malloc::Bool)
+function memio(x::Integer, finalize::Bool)
     s = IOStream("<memio>", finalize)
-    ccall(:jl_ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint, Int32), s.ios, x, julia_malloc)
+    ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
     return s
 end
-memio(x::Integer, finalize::Bool) = memio(x, finalize, true)
-memio(x::Integer) = memio(x, true, true)
-memio() = memio(0, true, true)
+memio(x::Integer) = memio(x, true)
+memio() = memio(0, true)
 
 ## byte-order mark, ntoh & hton ##
 takebuf_array(s::IOStream) =

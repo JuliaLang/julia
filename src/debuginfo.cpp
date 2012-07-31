@@ -21,7 +21,7 @@ public:
         info[(size_t)(Code)] = tmp;
     }
     
-    std::map<size_t, FuncInfo> getMap()
+    std::map<size_t, FuncInfo>& getMap()
     {
         return info;
     }
@@ -33,7 +33,7 @@ extern "C" void getFunctionInfo(const char **name, int *line, const char **filen
 
 void getFunctionInfo(const char **name, int *line, const char **filename, size_t pointer)
 {
-    std::map<size_t, FuncInfo> info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo> &info = jl_jit_events->getMap();
     *name = NULL;
     *line = -1;
     *filename = "no file";

@@ -15,58 +15,17 @@
 #include <fcntl.h>
 #define fileno _fileno
 #else
-
-#endif
-
 #include <unistd.h>
 #include <sys/time.h>
-//#include <sys/select.h>
+#include <sys/select.h>
 #include <sys/stat.h>
-#include <sys/types.h>
 #include <fcntl.h>
-
-#define fileno_fileno
+#endif
 
 #include "utils.h"
 #include "utf8.h"
 #include "ios.h"
 #include "timefuncs.h"
-
-/*#define MEMBEBUG
-#define MEMPROFILE*/
-
-#if defined(MEMDEBUG) || defined(MEMPROFILE)
-# ifdef __LP64__
-#  define BVOFFS 3
-# else
-#  define BVOFFS 4
-# endif
-#else
-#define BVOFFS 2
-#endif
-
-// allocate a buffer that can be used as a bigval_t in julia's GC
-void *julia_malloc(size_t n)
-{
-    void *b = LLT_ALLOC(n+sizeof(void*)*BVOFFS);
-    if (b == NULL)
-        return b;
-    return (void*)(((void**)b)+BVOFFS);
-}
-
-void julia_free(void *b)
-{
-    LLT_FREE((void*)(((void**)b)-BVOFFS));
-}
-
-void *julia_realloc(void *b, size_t n)
-{
-    void *p = (b==NULL ? NULL : (void*)(((void**)b)-BVOFFS));
-    p = LLT_REALLOC(p, n + sizeof(void*)*BVOFFS);
-    if (p == NULL)
-        return p;
-    return (void*)(((void**)p)+BVOFFS);
-}
 
 #define MOST_OF(x) ((x) - ((x)>>4))
 
@@ -104,7 +63,8 @@ static int _fd_available(long fd)
 
 static int _enonfatal(int err)
 {
-    return (err == EAGAIN ||/* err == EINPROGRESS ||*/ err == EINTR /*|| err == EWOULDBLOCK*/);
+    return (err == EAGAIN || err == EINPROGRESS || err == EINTR ||
+            err == EWOULDBLOCK);
 }
 
 #define SLEEP_TIME 5//ms
@@ -205,18 +165,12 @@ static char *_buf_realloc(ios_t *s, size_t sz)
         // if we own the buffer we're free to resize it
         // always allocate 1 bigger in case user wants to add a NUL
         // terminator after taking over the buffer
-        if (s->julia_alloc)
-            temp = julia_realloc(s->buf, sz+1);
-        else
-            temp = LLT_REALLOC(s->buf, sz+1);
+        temp = LLT_REALLOC(s->buf, sz+1);
         if (temp == NULL)
             return NULL;
     }
     else {
-        if (s->julia_alloc)
-            temp = julia_malloc(sz+1);
-        else
-            temp = LLT_ALLOC(sz+1);
+        temp = LLT_ALLOC(sz+1);
         if (temp == NULL)
             return NULL;
         s->ownbuf = 1;
@@ -227,14 +181,6 @@ static char *_buf_realloc(ios_t *s, size_t sz)
     s->buf = temp;
     s->maxsize = sz;
     return s->buf;
-}
-
-void ios_splitbuf(ios_t *to, ios_t *from, char* splitpos)
-{
-    size_t offset = splitpos-from->buf;
-    ios_write(to,from->buf,offset);
-    memmove(from->buf,splitpos,from->size-offset);
-    from->size=from->size-offset;
 }
 
 // write a block of data into the buffer at the current position, resizing
@@ -383,21 +329,6 @@ size_t ios_readprep(ios_t *s, size_t n)
     s->size += got;
     return s->size - s->bpos;
 }
-
-size_t ios_fillprep(ios_t *s, size_t n)
-{
-    size_t space = s->size - s->bpos;
-    if (space >= n)
-        return space;
-    if (s->maxsize < s->bpos+n) {
-        if (_buf_realloc(s, s->bpos + n)==NULL)
-            return space;
-    }
-    return n;
-}
-
-
-
 
 static void _write_update_pos(ios_t *s)
 {
@@ -647,8 +578,6 @@ int ios_flush(ios_t *s)
     return 0;
 }
 
-
-
 void ios_close(ios_t *s)
 {
     ios_flush(s);
@@ -656,10 +585,7 @@ void ios_close(ios_t *s)
         close(s->fd);
     s->fd = -1;
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = NULL;
     s->size = s->maxsize = s->bpos = 0;
@@ -686,10 +612,7 @@ char *ios_takebuf(ios_t *s, size_t *psize)
     ios_flush(s);
 
     if (s->buf == &s->local[0]) {
-        if (s->julia_alloc)
-            buf = julia_malloc(s->size+1);
-        else
-            buf = LLT_ALLOC(s->size+1);
+        buf = LLT_ALLOC(s->size+1);
         if (buf == NULL)
             return NULL;
         if (s->size)
@@ -723,10 +646,7 @@ int ios_setbuf(ios_t *s, char *buf, size_t size, int own)
     s->size = nvalid;
 
     if (s->buf!=NULL && s->ownbuf && s->buf!=&s->local[0]) {
-        if (s->julia_alloc)
-            julia_free(s->buf);
-        else
-            LLT_FREE(s->buf);
+        LLT_FREE(s->buf);
     }
     s->buf = buf;
     s->maxsize = size;
@@ -820,7 +740,6 @@ size_t ios_copyuntil(ios_t *to, ios_t *from, char delim)
     return total;
 }
 
-
 static void _ios_init(ios_t *s)
 {
     // put all fields in a sane initial state
@@ -840,7 +759,6 @@ static void _ios_init(ios_t *s)
     s->_eof = 0;
     s->rereadable = 0;
     s->readonly = 0;
-    s->julia_alloc = 0;
     s->mutex_initialized = 0;
 }
 
@@ -855,7 +773,7 @@ ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
     int flags = wr ? (rd ? O_RDWR : O_WRONLY) : O_RDONLY;
     if (create) flags |= O_CREAT;
     if (trunc)  flags |= O_TRUNC;
-    fd = open(fname, flags, S_IRUSR|S_IWUSR/*|S_IRGRP|S_IROTH644*/);
+    fd = open(fname, flags, S_IRUSR|S_IWUSR|S_IRGRP|S_IROTH/*644*/);
     if (fd == -1)
         goto open_file_err;
     s = ios_fd(s, fd, 1, 1);
@@ -871,15 +789,6 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
-    _buf_realloc(s, initsize);
-    return s;
-}
-
-ios_t *jl_ios_mem(ios_t *s, size_t initsize, int julia_mallocated)
-{
-    _ios_init(s);
-    s->bm = bm_mem;
-    s->julia_alloc = julia_mallocated;
     _buf_realloc(s, initsize);
     return s;
 }
@@ -920,14 +829,14 @@ ios_t *ios_stderr = NULL;
 
 void ios_init_stdstreams(void)
 {
-    ios_stdin = julia_malloc(sizeof(ios_t));
+    ios_stdin = malloc(sizeof(ios_t));
     ios_fd(ios_stdin, STDIN_FILENO, 0, 0);
 
-    ios_stdout = julia_malloc(sizeof(ios_t));
+    ios_stdout = malloc(sizeof(ios_t));
     ios_fd(ios_stdout, STDOUT_FILENO, 0, 0);
     ios_stdout->bm = bm_line;
 
-    ios_stderr = julia_malloc(sizeof(ios_t));
+    ios_stderr = malloc(sizeof(ios_t));
     ios_fd(ios_stderr, STDERR_FILENO, 0, 0);
     ios_stderr->bm = bm_none;
 }

@@ -195,6 +195,10 @@ morebits(::Type{Uint16}) = Uint32
 morebits(::Type{Uint32}) = Uint64
 morebits(::Type{Uint64}) = Uint128
 
+## system word size ##
+
+const WORD_SIZE = int(Int.nbits)
+
 ## integer arithmetic ##
 
 -(x::Signed) = -int(x)
@@ -233,8 +237,6 @@ morebits(::Type{Uint64}) = Uint128
 *(x::Uint,    y::Uint)    = box(Uint,mul_int(unbox(Uint,x),unbox(Uint,y)))
 *(x::Int64,   y::Int64)   = box(Int64,mul_int(unbox(Int64,x),unbox(Int64,y)))
 *(x::Uint64,  y::Uint64)  = box(Uint64,mul_int(unbox(Uint64,x),unbox(Uint64,y)))
-*(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
-*(x::Uint128, y::Uint128) = box(Uint128,mul_int(unbox(Uint128,x),unbox(Uint128,y)))
 
 /(x::Integer, y::Integer) = float64(x)/float64(y)
 inv(x::Integer) = 1.0/float64(x)
@@ -263,22 +265,17 @@ div(x::Int,     y::Int)     = box(Int,sdiv_int(unbox(Int,x),unbox(Int,y)))
 div(x::Uint,    y::Uint)    = box(Uint,udiv_int(unbox(Uint,x),unbox(Uint,y)))
 div(x::Int64,   y::Int64)   = box(Int64,sdiv_int(unbox(Int64,x),unbox(Int64,y)))
 div(x::Uint64,  y::Uint64)  = box(Uint64,udiv_int(unbox(Uint64,x),unbox(Uint64,y)))
-div(x::Int128,  y::Int128)  = box(Int128,sdiv_int(unbox(Int128,x),unbox(Int128,y)))
-div(x::Uint128, y::Uint128) = box(Uint128,udiv_int(unbox(Uint128,x),unbox(Uint128,y)))
 
 rem(x::Int,     y::Int)     = box(Int,srem_int(unbox(Int,x),unbox(Int,y)))
 rem(x::Uint,    y::Uint)    = box(Uint,urem_int(unbox(Uint,x),unbox(Uint,y)))
 rem(x::Int64,   y::Int64)   = box(Int64,srem_int(unbox(Int64,x),unbox(Int64,y)))
 rem(x::Uint64,  y::Uint64)  = box(Uint64,urem_int(unbox(Uint64,x),unbox(Uint64,y)))
-rem(x::Int128,  y::Int128)  = box(Int128,srem_int(unbox(Int128,x),unbox(Int128,y)))
-rem(x::Uint128, y::Uint128) = box(Uint128,urem_int(unbox(Uint128,x),unbox(Uint128,y)))
 
 fld{T<:Unsigned}(x::T, y::T) = div(x,y)
 fld{T<:Integer }(x::T, y::T) = div(x,y)-(signbit(x$y)&(rem(x,y)!=0))
 
 mod(x::Int,    y::Int)    = box(Int,smod_int(unbox(Int,x),unbox(Int,y)))
 mod(x::Int64,  y::Int64)  = box(Int64,smod_int(unbox(Int64,x),unbox(Int64,y)))
-mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
 
 ## integer bitwise operations ##
 
@@ -473,10 +470,6 @@ trailing_ones(x::Integer) = trailing_zeros(~x)
 <=(x::Signed,   y::Unsigned) = (x <= 0) | (unsigned(x) <= y)
 <=(x::Unsigned, y::Signed  ) = (y >= 0) & (x <= unsigned(y))
 
-## system word size ##
-
-const WORD_SIZE = int(Int.nbits)
-
 ## integer promotions ##
 
 promote_rule(::Type{Int16},  ::Type{Int8} ) = Int
@@ -586,4 +579,79 @@ for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
               (:int128,:Int128), (:uint128,:Uint128),
               (:unsigned,:Uint), (:uint,:Uint))
     @eval ($f)(x::Float) = iround($t,x)
+end
+
+## wide multiplication, Int128 multiply and divide ##
+
+widemul(x::Int32, y::Int32) = int64(x)*int64(y)
+widemul(x::Uint32, y::Uint32) = uint64(x)*uint64(y)
+
+if WORD_SIZE==32
+    function widemul(u::Int64, v::Int64)
+        local u0::Uint64, v0::Uint64, w0::Uint64
+        local u1::Int64, v1::Int64, w1::Int64, w2::Int64, t::Int64
+
+        u0 = u&0xffffffff; u1 = u>>32
+        v0 = v&0xffffffff; v1 = v>>32
+        w0 = u0*v0
+        t = u1*v0 + (w0>>>32)
+        w2 = t>>32
+        w1 = u0*v1 + (t&0xffffffff)
+        high = u1*v1 + w2 + (w1 >> 32)
+        lo = w0&0xffffffff + (w1 << 32)
+        int128(high)<<64 + int128(uint128(lo))
+    end
+
+    function widemul(u::Uint64, v::Uint64)
+        local u0::Uint64, v0::Uint64, w0::Uint64
+        local u1::Uint64, v1::Uint64, w1::Uint64, w2::Uint64, t::Uint64
+
+        u0 = u&0xffffffff; u1 = u>>>32
+        v0 = v&0xffffffff; v1 = v>>>32
+        w0 = u0*v0
+        t = u1*v0 + (w0>>>32)
+        w2 = t>>>32
+        w1 = u0*v1 + (t&0xffffffff)
+        high = u1*v1 + w2 + (w1 >>> 32)
+        lo = w0&0xffffffff + (w1 << 32)
+        int128(high)<<64 + int128(uint128(lo))
+    end
+
+    function *(u::Int128, v::Int128)
+        u0 = uint64(u); u1 = int64(u>>64)
+        v0 = uint64(v); v1 = int64(v>>64)
+        lolo = widemul(u0, v0)
+        lohi = widemul(int64(u0), v1)
+        hilo = widemul(u1, int64(v0))
+        t = hilo + (lolo>>>64)
+        w2 = t>>64
+        w1 = lohi + (t&0xffffffffffffffff)
+        (lolo&0xffffffffffffffff) + int128(w1)<<64
+    end
+
+    function *(u::Uint128, v::Uint128)
+        u0 = uint64(u); u1 = uint64(u>>>64)
+        v0 = uint64(v); v1 = uint64(v>>>64)
+        lolo = widemul(u0, v0)
+        lohi = widemul(u0, v1)
+        hilo = widemul(u1, v0)
+        t = hilo + (lolo>>>64)
+        w2 = t>>>64
+        w1 = lohi + (t&0xffffffffffffffff)
+        (lolo&0xffffffffffffffff) + uint128(w1)<<64
+    end
+else
+    widemul(u::Int64, v::Int64) = int128(u)*int128(v)
+    widemul(u::Uint64, v::Uint64) = uint128(u)*uint128(v)
+
+    *(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
+    *(x::Uint128, y::Uint128) = box(Uint128,mul_int(unbox(Uint128,x),unbox(Uint128,y)))
+
+    div(x::Int128,  y::Int128)  = box(Int128,sdiv_int(unbox(Int128,x),unbox(Int128,y)))
+    div(x::Uint128, y::Uint128) = box(Uint128,udiv_int(unbox(Uint128,x),unbox(Uint128,y)))
+
+    rem(x::Int128,  y::Int128)  = box(Int128,srem_int(unbox(Int128,x),unbox(Int128,y)))
+    rem(x::Uint128, y::Uint128) = box(Uint128,urem_int(unbox(Uint128,x),unbox(Uint128,y)))
+
+    mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
 end

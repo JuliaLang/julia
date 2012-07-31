@@ -1001,6 +1001,13 @@ for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))
     end
 end
 
+# use memcmp for cmp on byte arrays
+function cmp(a::Array{Uint8,1}, b::Array{Uint8,1})
+    c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
+              a, b, min(length(a),length(b)))
+    c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
+end
+
 ## data movement ##
 
 function slicedim(A::Array, d::Integer, i::Integer)

@@ -26,7 +26,7 @@
 @assert isa(ComplexPair,Type{ComplexPair})
 @assert !subtype(Type{Ptr{None}},Type{Ptr})
 @assert !subtype(Type{Rational{Int}}, Type{Rational})
-let T = typevar(:T,true)
+let T = TypeVar(:T,true)
     @assert !is(None, tintersect(Array{None},AbstractArray{T}))
     @assert  is(None, tintersect((Type{Ptr{Uint8}},Ptr{None}),
                                  (Type{Ptr{T}},Ptr{T})))
@@ -47,7 +47,7 @@ let T = typevar(:T,true)
     @assert is(None, tintersect((Vector{Vector{Int}},Vector{Vector}),
                                 (Vector{Vector{T}},Vector{Vector{T}})))
 end
-let N = typevar(:N,true)
+let N = TypeVar(:N,true)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
                                ((Integer,Integer), (Integer...))),
                     ((Integer,Integer), (Integer,Integer)))
@@ -56,27 +56,27 @@ let N = typevar(:N,true)
                     ((Integer,Integer), (Integer,Integer)))
 end
 @assert is(None, tintersect(Type{Any},Type{ComplexPair}))
-@assert is(None, tintersect(Type{Any},Type{typevar(:T,Real)}))
+@assert is(None, tintersect(Type{Any},Type{TypeVar(:T,Real)}))
 @assert !subtype(Type{Array{Integer}},Type{AbstractArray{Integer}})
-@assert !subtype(Type{Array{Integer}},Type{Array{typevar(:T,Integer)}})
+@assert !subtype(Type{Array{Integer}},Type{Array{TypeVar(:T,Integer)}})
 @assert is(None, tintersect(Type{Function},BitsKind))
 @assert is(Type{Int32}, tintersect(Type{Int32},BitsKind))
 @assert !subtype(Type,TypeVar)
 @assert !is(None, tintersect(BitsKind, Type))
 @assert !is(None, tintersect(BitsKind, Type{Int}))
 @assert is(None, tintersect(BitsKind, Type{Integer}))
-@assert !is(None, tintersect(BitsKind, Type{typevar(:T,Int)}))
-@assert !is(None, tintersect(BitsKind, Type{typevar(:T,Integer)}))
+@assert !is(None, tintersect(BitsKind, Type{TypeVar(:T,Int)}))
+@assert !is(None, tintersect(BitsKind, Type{TypeVar(:T,Integer)}))
 
 # ntuples
 nttest1{n}(x::NTuple{n,Int}) = n
 @assert nttest1(()) == 0
 @assert nttest1((1,2)) == 2
 @assert NTuple <: Tuple
-@assert NTuple{typevar(:T),Int32} <: (Int32...)
-@assert !(NTuple{typevar(:T),Int32} <: (Int32,Int32...))
-@assert (Int32...) <: NTuple{typevar(:T),Int32}
-@assert (Int32,Int32...) <: NTuple{typevar(:T),Int32}
+@assert NTuple{TypeVar(:T),Int32} <: (Int32...)
+@assert !(NTuple{TypeVar(:T),Int32} <: (Int32,Int32...))
+@assert (Int32...) <: NTuple{TypeVar(:T),Int32}
+@assert (Int32,Int32...) <: NTuple{TypeVar(:T),Int32}
 
 # type declarations
 

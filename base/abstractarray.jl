@@ -754,16 +754,18 @@ function isequal(A::AbstractArray, B::AbstractArray)
     return true
 end
 
-function isless(A::AbstractArray, B::AbstractArray)
+function cmp(A::AbstractArray, B::AbstractArray)
     nA, nB = numel(A), numel(B)
     for i = 1:min(nA, nB)
         a, b = A[i], B[i]
         if !isequal(a, b)
-            return isless(a, b)
+            return isless(a, b) ? -1 : +1
         end
     end
-    return nA < nB
+    return cmp(nA, nB)
 end
+
+isless(A::AbstractArray, B::AbstractArray) = cmp(A,B)<0
 
 function (==)(A::AbstractArray, B::AbstractArray)
     if size(A) != size(B)

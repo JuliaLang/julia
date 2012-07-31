@@ -555,6 +555,12 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
         if (jl_show_gf == NULL) {
             jl_show_gf = (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("show"));
         }
+        if (jl_show_gf==NULL || stream==NULL) {
+            JL_PRINTF(JL_STDERR, "could not show value of type %s",
+                      jl_is_tuple(v) ? "Tuple" : 
+                      ((jl_tag_type_t*)jl_typeof(v))->name->name->name);
+            return;
+        }
         jl_value_t *args[2] = {stream,v};
         jl_apply(jl_show_gf, args, 2);
     }
@@ -887,8 +893,6 @@ void jl_init_primitives(void)
     add_builtin_func("arraysize", jl_f_arraysize);
 
     add_builtin_func("apply_type", jl_f_instantiate_type);
-    add_builtin_func("typevar", jl_f_typevar);
-    add_builtin_func("new_type_constructor", jl_f_new_type_constructor);
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);

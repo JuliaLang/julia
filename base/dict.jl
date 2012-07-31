@@ -24,7 +24,7 @@ function show(io, t::Associative)
     end
 end
 
-function keys(T::Type, a::Associative)
+function keys(T, a::Associative)
     i = 0
     keyz = Array(T,length(a))
     for (k,v) in a
@@ -34,7 +34,7 @@ function keys(T::Type, a::Associative)
 end
 keys{K,V}(a::Associative{K,V}) = keys(K,a)
 
-function values(T::Type, a::Associative)
+function values(T, a::Associative)
     i = 0
     vals = Array(T,length(a))
     for (k,v) in a
@@ -44,7 +44,7 @@ function values(T::Type, a::Associative)
 end
 values{K,V}(a::Associative{K,V}) = values(V,a)
 
-function pairs(T::Union(Type,(Type,Type)), a::Associative)
+function pairs(T::(Union(Type,Tuple),Union(Type,Tuple)), a::Associative)
     i = 0
     pairz = Array(T,length(a))
     for (k,v) in a
@@ -237,7 +237,7 @@ type Dict{K,V} <: Associative{K,V}
         return h
     end
     global copy
-    copy(d::Dict{K,V}) = new(copy(d.keys),copy(d.vals),d.ndel,d.deleter)
+    copy(d::Dict{K,V}) = new(copy(d.keys),copy(d.vals),d.ndel,identity)
 end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
@@ -439,6 +439,9 @@ function add_weak_key(t::Dict, k, v)
         t.deleter = x->del(t, x)
     end
     t[WeakRef(k)] = v
+    # TODO: it might be better to avoid the finalizer, allow
+    # wiped WeakRefs to remain in the table, and delete them as
+    # they are discovered by ref and assign.
     finalizer(k, t.deleter)
     return t
 end
@@ -450,29 +453,33 @@ function add_weak_value(t::Dict, k, v)
 end
 
 type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{K,V}
+    ht::Dict{Any,V}
 
-    WeakKeyDict() = new(Dict{K,V}())
+    WeakKeyDict() = new(Dict{Any,V}())
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
-assign(wkh::WeakKeyDict, v, key) = add_weak_key(wkh.ht, key, v)
+assign{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
-function key(wkh::WeakKeyDict, kk, deflt)
-    k = key(wkh.ht, kk, _jl_secret_table_token)
+function key{K}(wkh::WeakKeyDict{K}, kk, deflt)
+    k = key(wkh.ht, convert(K,kk), _jl_secret_table_token)
     if is(k, _jl_secret_table_token)
         return deflt
     end
-    return k.value
+    return k.value::K
 end
 
-get(wkh::WeakKeyDict, key, deflt) = get(wkh.ht, key, deflt)
-del(wkh::WeakKeyDict, key) = del(wkh.ht, key)
+get{K}(wkh::WeakKeyDict{K}, key, deflt) = get(wkh.ht, convert(K,key), deflt)
+del{K}(wkh::WeakKeyDict{K}, key) = del(wkh.ht, convert(K,key))
 del_all(wkh::WeakKeyDict)  = (del_all(wkh.ht); wkh)
-has(wkh::WeakKeyDict, key) = has(wkh.ht, key)
-ref(wkh::WeakKeyDict, key) = ref(wkh.ht, key)
+has{K}(wkh::WeakKeyDict{K}, key) = has(wkh.ht, convert(K,key))
+ref{K}(wkh::WeakKeyDict{K}, key) = ref(wkh.ht, convert(K,key))
 isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 
 start(t::WeakKeyDict) = start(t.ht)
 done(t::WeakKeyDict, i) = done(t.ht, i)
-next(t::WeakKeyDict, i) = next(t.ht, i)
+function next{K}(t::WeakKeyDict{K}, i)
+    kv, i = next(t.ht, i)
+    ((kv[1].value::K,kv[2]), i)
+end
+length(t::WeakKeyDict) = length(t.ht)

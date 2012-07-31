@@ -374,7 +374,7 @@ function deserialize(s, ::Type{TypeVar})
     name = force(deserialize(s))
     lb = force(deserialize(s))
     ub = force(deserialize(s))
-    typevar(name, lb, ub)
+    TypeVar(name, lb, ub)
 end
 
 function deserialize(s, ::Type{UnionKind})

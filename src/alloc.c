@@ -82,6 +82,48 @@ jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
 jl_sym_t *compositetype_sym; jl_sym_t *type_goto_sym;
 jl_sym_t *global_sym;
 
+typedef struct {
+    int64_t a;
+    int64_t b;
+} bits128_t;
+
+jl_value_t *jl_new_bits(jl_bits_type_t *bt, void *data)
+{
+    if (bt == jl_uint8_type)        return jl_box_uint8(*(uint8_t*)data);
+    else if (bt == jl_int64_type)   return jl_box_int64(*(int64_t*)data);
+    else if (bt == jl_bool_type)    return (*(int8_t*)data) ? jl_true:jl_false;
+    else if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
+    else if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
+    
+    size_t nb = jl_bitstype_nbits(bt)/8;
+    jl_value_t *v = 
+        (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
+                              sizeof(void*));
+    v->type = (jl_type_t*)bt;
+    switch (nb) {
+    case  1: *(int8_t*)   jl_bits_data(v) = *(int8_t*)data;    break;
+    case  2: *(int16_t*)  jl_bits_data(v) = *(int16_t*)data;   break;
+    case  4: *(int32_t*)  jl_bits_data(v) = *(int32_t*)data;   break;
+    case  8: *(int64_t*)  jl_bits_data(v) = *(int64_t*)data;   break;
+    case 16: *(bits128_t*)jl_bits_data(v) = *(bits128_t*)data; break;
+    default: memcpy(jl_bits_data(v), data, nb);
+    }
+    return v;
+}
+
+void jl_assign_bits(void *dest, jl_value_t *bits)
+{
+    size_t nb = jl_bitstype_nbits(jl_typeof(bits))/8;
+    switch (nb) {
+    case  1: *(int8_t*)dest    = *(int8_t*)jl_bits_data(bits);    break;
+    case  2: *(int16_t*)dest   = *(int16_t*)jl_bits_data(bits);   break;
+    case  4: *(int32_t*)dest   = *(int32_t*)jl_bits_data(bits);   break;
+    case  8: *(int64_t*)dest   = *(int64_t*)jl_bits_data(bits);   break;
+    case 16: *(bits128_t*)dest = *(bits128_t*)jl_bits_data(bits); break;
+    default: memcpy(dest, jl_bits_data(bits), nb);
+    }
+}
+
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     if (type->instance != NULL) return type->instance;
@@ -252,7 +294,7 @@ static jl_sym_t *mk_symbol(const char *str)
     jl_sym_t *sym;
     size_t len = strlen(str);
 
-    sym = (jl_sym_t*)malloc(sizeof(jl_sym_t)-sizeof(void*) + len + 1);
+    sym = (jl_sym_t*)malloc((sizeof(jl_sym_t)-sizeof(void*)+len+1+7)&-8);
     sym->type = (jl_type_t*)jl_sym_type;
     sym->left = sym->right = NULL;
 #ifdef __LP64__
@@ -454,8 +496,8 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
 
 extern int jl_boot_file_loaded;
 
-jl_bits_type_t *jl_new_bitstype(jl_value_t *name, jl_tag_type_t *super,
-                                jl_tuple_t *parameters, size_t nbits)
+jl_bits_type_t *jl_new_bits_type(jl_value_t *name, jl_tag_type_t *super,
+                                 jl_tuple_t *parameters, size_t nbits)
 {
     jl_bits_type_t *t=NULL;
     jl_typename_t *tn=NULL;

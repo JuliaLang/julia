@@ -150,11 +150,28 @@ static int exec_program(void)
             //jl_lisp_prompt();
             //return 1;
             jl_value_t *errs = jl_stderr_obj();
+            jl_value_t *e = jl_exception_in_transit;
             if (errs != NULL) {
-                jl_show(jl_stderr_obj(), jl_exception_in_transit);
+                jl_show(jl_stderr_obj(), e);
             }
             else {
-                ios_printf(ios_stderr, "error during bootstrap\n");
+                while (1) {
+                    if (jl_typeof(e) == (jl_type_t*)jl_loaderror_type) {
+                        e = jl_fieldref(e, 2);
+                        // TODO: show file and line
+                    }
+                    else if (jl_typeof(e) == (jl_type_t*)jl_backtrace_type) {
+                        e = jl_fieldref(e, 0);
+                    }
+                    else break;
+                }
+                if (jl_typeof(e) == (jl_type_t*)jl_errorexception_type) {
+                    ios_printf(ios_stderr, "error during bootstrap: %s\n",
+                               jl_string_data(jl_fieldref(e,0)));
+                }
+                else {
+                    ios_printf(ios_stderr, "error during bootstrap\n");
+                }
             }
             ios_printf(ios_stderr, "\n");
             JL_EH_POP();

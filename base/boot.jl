@@ -136,8 +136,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     _setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
     arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,
     include, invoke, is, ===, isa, isbound, method_exists,
-    new_type_constructor, subtype, throw, tuple, tuplelen, tupleref,
-    typeassert, typeof, typevar, yieldto,
+    subtype, throw, tuple, tuplelen, tupleref, typeassert, typeof, yieldto,
     # constants
     JULIA_HOME, nothing,
     # intrinsic functions

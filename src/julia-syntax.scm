@@ -211,8 +211,8 @@
 (define (symbols->typevars sl upperbounds bnd)
   (let ((bnd (if bnd '(true) '())))
     (if (null? upperbounds)
-	(map (lambda (x)    `(call (top typevar) ',x ,@bnd)) sl)
-	(map (lambda (x ub) `(call (top typevar) ',x ,ub ,@bnd)) sl upperbounds))))
+	(map (lambda (x)    `(call (top TypeVar) ',x ,@bnd)) sl)
+	(map (lambda (x ub) `(call (top TypeVar) ',x ,ub ,@bnd)) sl upperbounds))))
 
 (define (sparam-name-bounds sparams names bounds)
   (cond ((null? sparams)
@@ -731,7 +731,7 @@
 		    (sparam-name-bounds params '() '())
 		    `(call (lambda ,params
 			     (const
-			      (= ,name (call (top new_type_constructor)
+			      (= ,name (call (top TypeConstructor)
 					     (tuple ,@params) ,type-ex))))
 			   ,@(symbols->typevars params bounds #f))))
 

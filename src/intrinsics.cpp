@@ -190,12 +190,13 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     if (!jl_is_bits_type(bt)) {
         if (jl_is_symbol(x)) {
             bt = (*ctx->declTypes)[((jl_sym_t*)x)->name];
-            if (bt == NULL || !jl_is_bits_type(bt)) {
-                jl_error("auto_unbox: unable to determine argument type");
-            }
-        } else {
-			jl_error("auto_unbox: something went horribly wrong");
-		}
+        }
+        if (bt == NULL || !jl_is_bits_type(bt)) {
+            // TODO: make sure this code is valid; hopefully it is
+            // unreachable but it should still be well-formed.
+            emit_error("auto_unbox: unable to determine argument type", ctx);
+            return ConstantInt::get(T_size, 0);
+        }
     }
     unsigned int nb = jl_bitstype_nbits(bt);
     Type *to = IntegerType::get(jl_LLVMContext, nb);
