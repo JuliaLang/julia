@@ -40,13 +40,13 @@ const pieces = (
     (E,  NW, NW, NW)
 )
 
-solutions = Any[]
-masks = zeros(Uint64, 10)
-masksAtCell = Array(Any, width*height, height)
+const solutions = Any[]
+const masks = zeros(Uint64, 10)
+const masksAtCell = Array(Any, width*height, height)
 
 valid(x, y) = (0 <= x < width) && (0 <= y < height)
 legal(mask::Uint64, board::Uint64) = (mask & board) == 0
-zerocount(mask::Uint64) = sum([((uint64(1) << x) & mask) == 0 for x in 0:49])
+zerocount(mask::Uint64) = 50 - count_ones(mask)
 
 function findFreeCell(board::Uint64)
     for y in 0:height-1
@@ -115,9 +115,9 @@ end
 function allBitmasks(piece, color)
     bitmasks = Uint64[]
     for orientations in 0:1
-        for rotations in 0:(6 - 3*(color == 4)) - 1
-            for y in 0:height - 1
-                for x in 0:width - 1
+        for rotations in 0:(6 - 3*(color == 4))-1
+            for y in 0:height-1
+                for x in 0:width-1
                     isValid, mask = getBitmask(x, y, piece)
                     if isValid && noIslands(uint64(mask))
                         push(bitmasks, mask)
@@ -203,14 +203,14 @@ end
 function stringOfMasks(masks)
     s = ""
     mask::Uint64 = 1
-    for y in 0:height - 1
-        for x in 0:width - 1
+    for y in 0:height-1
+        for x in 0:width-1
             for color in 0:9
-                if (masks[color + 1] & mask) != 0
+                if (masks[color+1] & mask) != 0
                     s = strcat(s, color)
                     break
                 elseif color == 9
-                    s += "."
+                    s *= "."
                 end
             end
             mask <<= 1
@@ -220,11 +220,11 @@ function stringOfMasks(masks)
 end
 
 function printSolution(s)
-    for y in 0:height - 1
+    for y in 0:height-1
         if y%2 == 1
             print(" ")
         end
-        for x in 0:width - 1
+        for x in 0:width-1
             print("$(s[x + y*width + 1]) ")
         end
         println()
