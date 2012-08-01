@@ -1,6 +1,6 @@
 # automatically generated -- do not edit
 
-function _jl_help_db() return [
+[
 
 (E"Getting Around",E"exit",E"exit([code])
 
@@ -86,10 +86,10 @@ function _jl_help_db() return [
 
 "),
 
-(E"All Objects",E"uid",E"uid(x)
+(E"All Objects",E"object_id",E"object_id(x)
 
-   Get a unique integer id for 'x'. 'uid(x)==uid(y)' if and only if
-   'is(x,y)'.
+   Get a unique integer id for 'x'. 'object_id(x)==object_id(y)' if
+   and only if 'is(x,y)'.
 
 "),
 
@@ -110,10 +110,9 @@ function _jl_help_db() return [
 
 (E"All Objects",E"copy",E"copy(x)
 
-   Create a deep copy of 'x': i.e. 'copy' is called recursively on all
-   constituent parts of 'x'. If a user-defined type should be
-   recursively copied, a 'copy' method should be defined for it which
-   implements deep copying of an instance.
+   Create a shallow copy of 'x': the outer structure is copied, but
+   not all internal values. For example, copying an array produces a
+   new array with identically-same elements as the original.
 
 "),
 
@@ -2253,42 +2252,42 @@ collection[key...] = value
 
 (E"Distributed Arrays",E"dzeros",E"dzeros([type], dims, ...)
 
-   Construct a distrbuted array of zeros. Trailing arguments are the
+   Construct a distributed array of zeros. Trailing arguments are the
    same as those accepted by 'darray'.
 
 "),
 
 (E"Distributed Arrays",E"dones",E"dones([type], dims, ...)
 
-   Construct a distrbuted array of ones. Trailing arguments are the
+   Construct a distributed array of ones. Trailing arguments are the
    same as those accepted by 'darray'.
 
 "),
 
 (E"Distributed Arrays",E"dfill",E"dfill(x, dims, ...)
 
-   Construct a distrbuted array filled with value 'x'. Trailing
+   Construct a distributed array filled with value 'x'. Trailing
    arguments are the same as those accepted by 'darray'.
 
 "),
 
 (E"Distributed Arrays",E"drand",E"drand(dims, ...)
 
-   Construct a distrbuted uniform random array. Trailing arguments are
-   the same as those accepted by 'darray'.
+   Construct a distributed uniform random array. Trailing arguments
+   are the same as those accepted by 'darray'.
 
 "),
 
 (E"Distributed Arrays",E"drandn",E"drandn(dims, ...)
 
-   Construct a distrbuted normal random array. Trailing arguments are
+   Construct a distributed normal random array. Trailing arguments are
    the same as those accepted by 'darray'.
 
 "),
 
 (E"Distributed Arrays",E"dcell",E"dcell(dims, ...)
 
-   Construct a distrbuted cell array. Trailing arguments are the same
+   Construct a distributed cell array. Trailing arguments are the same
    as those accepted by 'darray'.
 
 "),
@@ -2525,4 +2524,4 @@ collection[key...] = value
 
 "),
 
-] end
+]
