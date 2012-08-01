@@ -1260,7 +1260,11 @@
 	   (let ((head (parse-atom s)))
 	     (if (not (symbol? head))
 		 (error (string "invalid macro use @" head)))
-	     `(macrocall ,head ,@(parse-space-separated-exprs s))))
+	     (let ((args (if (and (eqv? (peek-token s) #\( )
+				  (not (ts:space? s)))
+			     (list (parse-atom s))
+			     (parse-space-separated-exprs s))))
+	       `(macrocall ,head ,@args))))
 
 	  ;; command syntax
 	  ((eqv? t #\`)
