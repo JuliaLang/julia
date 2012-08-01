@@ -3,7 +3,7 @@
 show(x) = show(OUTPUT_STREAM::IOStream, x)
 
 print(io::IOStream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io, x)
+show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
 
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
@@ -12,7 +12,7 @@ show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
-show(io, n::Integer) = print(io, dec(n))
+show(io, n::Integer) = (write(io, dec(n));nothing)
 show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 
 show{T}(io, p::Ptr{T}) =
