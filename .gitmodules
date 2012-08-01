@@ -1,3 +1,3 @@
 [submodule "deps/libuv"]
 	path = deps/libuv
-	url = http://github.com/JuliaLang/libuv.git
+	url = git://github.com/JuliaLang/libuv.git
