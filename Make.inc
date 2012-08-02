@@ -58,7 +58,10 @@ CXX = g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
+endif
 endif
 
 ifeq ($(USECLANG),1)

@@ -164,10 +164,15 @@ llvm_python_workaround:
 	mkdir -p llvm-$(LLVM_VER)/python2_path && \
 	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
+LLVM_CXX = $(CXX)
+ifeq ($(ARCH), ppc64)
+  LLVM_CXX += -mminimal-toc
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)" && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -553,7 +558,10 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
+ifneq ($(ARCH), ppc64)
+  FFTW_CONFIG += --enable-sse2
+endif
 ifeq ($(OS),WINNT)
 	FFTW_CONFIG += --with-our-malloc --with-combined-threads
 endif
@@ -567,7 +575,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
