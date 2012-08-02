@@ -2309,11 +2309,10 @@ static void lisp_init(size_t initial_heapsize)
 
     cvalues_init();
 
-    char buf[1024];
-    char *exename = get_exename(buf, sizeof(buf));
-    if (exename != NULL) {
-        exename = dirname(exename);
-        setc(symbol("*install-dir*"), cvalue_static_cstring(strdup(exename)));
+    char exename[1024];
+    size_t exe_size = sizeof(exename) / sizeof(exename[0]);
+    if ( uv_exepath(exename, &exe_size) == 0 ) {
+        setc(symbol("*install-dir*"), cvalue_static_cstring(strdup(dirname(exename))));
     }
 
     memory_exception_value = fl_list2(MemoryError,
