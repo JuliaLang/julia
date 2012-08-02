@@ -62,8 +62,6 @@ endif
 
 dist: cleanall
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
-	$(MAKE) -C deps clean-openblas
-	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
 

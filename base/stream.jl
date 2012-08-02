@@ -11,7 +11,6 @@
 
 typealias PtrSize Int
 const IOStreamHandle = Ptr{Void}
-localEventLoop() = ccall(:jl_local_event_loop,Ptr{Void},())
 globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
 mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},())
 
@@ -98,7 +97,8 @@ type NamedPipe <: AsyncStream
     buffer::Buffer
     closed::Bool
     readcb::Callback
-    NamedPipe() = new(C_NULL,DynamicBuffer(),false,false)
+	closecb::Callback
+    NamedPipe() = new(C_NULL,DynamicBuffer(),false,false,false)
 end
 
 type TTY <: AsyncStream
@@ -106,7 +106,43 @@ type TTY <: AsyncStream
     closed::Bool
     buffer::Buffer
     readcb::Callback
-    TTY(handle,closed)=new(handle,closed,DynamicBuffer(),false)
+	closecb::Callback
+    TTY(handle,closed)=new(handle,closed,DynamicBuffer(),false,false)
+end
+
+abstract Socket <: AsyncStream
+
+type TcpSocket <: Socket
+    handle::Ptr{Void}
+	closed::Bool
+    buffer::Buffer
+    readcb::Callback
+	ccb::Callback
+	closecb::Callback
+    TcpSocket(handle,closed)=new(handle,closed,DynamicBuffer(),false,false,false)
+	function TcpSocket()
+		this = TcpSocket(C_NULL,false)
+		this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
+		if(this.handle == C_NULL)
+			error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
+		end
+		this
+	end
+end
+
+type UdpSocket <: Socket
+    handle::Ptr{Void}
+	closed::Bool
+    buffer::Buffer
+    readcb::Callback
+	ccb::Callback
+	closecb::Callback
+    UdpSocket(handle,closed)=new(handle,closed,DynamicBuffer(),false)
+	function UdpSocket()
+		this = UdpSocket(C_NULL,false)
+		this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
+		this
+	end
 end
 
 copy(s::TTY) = TTY(s.handle,s.closed)
@@ -154,24 +190,6 @@ end
 
 ## SOCKETS ##
 
-abstract Socket <: AsyncStream
-
-type TcpSocket <: Socket
-    handle::Ptr{Void}
-    buf::BufOrNot
-    open::Bool
-    cb::Function
-    TcpSocket(handle::Ptr{Void})=new(handle,false,false)
-end
-
-type UdpSocket <: Socket
-    handle::Ptr{Void}
-    buf::BufOrNot
-    open::Bool
-    cb::Function
-    UdpSocket(handle::Ptr{Void})=new(handle,false,false)
-end
-
 function _init_buf(stream::AsyncStream)
     if(!isa(stream.buf,IOStream))
         stream.buf=memio()
@@ -195,29 +213,27 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = sock.cb(status)
+_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = sock.ccb(sock,status)
 
 function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
-    ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
-    sock.cb = cb
+    sock.ccb = cb
+	ccall(:jl_listen,Int32,(Ptr{Void},Int32),sock.handle,backlog)
 end
 
 _jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
 _jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,hton(addr.port))
 _jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
-_jl_tcp_accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
+accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
+
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Function)
-    socket = TcpSocket(_jl_tcp_init(globalEventLoop()));
-    if(socket.handle==0)
-        error("open_any_tcp_port: could not create socket")
-    end
+    socket = TcpSocket();
     addr = Ip4Addr(preferred_port,uint32(0)) #bind prefereed port on all adresses
 	while true
 		if _jl_tcp_bind(socket,addr)!=0
 		    error("open_any_tcp_port: could not bind to socket")
 		end
-		if(_jl_listen(socket,int32(4),cb) == 0)
+		if((_jl_listen(socket,int32(4),cb)) == 0)
 			break
 		end
 		addr.port+=1;
@@ -279,8 +295,12 @@ end
 
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
     if(nread == -1)
-        if(_uv_lasterror(localEventLoop()) != 1) #UV_EOF == 1
-            error("Failed to start reading: ",_uv_lasterror(localEventLoop()))
+		close(stream)
+		if(isa(stream.closecb,Function))
+			stream.closecb()
+		end
+        if(_uv_lasterror(globalEventLoop()) != 1) #UV_EOF == 1
+            error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
         end
         #EOF
     else
@@ -387,17 +407,17 @@ end
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
-run_event_loop() = run_event_loop(localEventLoop())
+run_event_loop() = run_event_loop(globalEventLoop())
 
 function break_one_loop(loop::Ptr{Void})
     ccall(:uv_break_one,Void,(Ptr{Void},),loop)
 end
-break_one_loop() = break_one_loop(localEventLoop())
+break_one_loop() = break_one_loop(globalEventLoop())
 
 function process_events(loop::Ptr{Void})
     ccall(:jl_process_events,Void,(Ptr{Void},),loop)
 end
-process_events() = process_events(localEventLoop())
+process_events() = process_events(globalEventLoop())
 
 ##pipe functions
 malloc_pipe() = _c_malloc(_sizeof_uv_pipe)
@@ -490,7 +510,7 @@ function _uv_hook_close(proc::Process)
 end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
-    loop = localEventLoop()
+    loop = globalEventLoop()
     close_in,close_out,close_err = false,false,false
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
         in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))

@@ -31,10 +31,10 @@ julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
 release debug:
 	$(MAKE) julia-$@
 
-$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS)
+$(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS) server.h
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(SHIPFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 
-$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS)
+$(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS) server.h
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
 	
 $(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)

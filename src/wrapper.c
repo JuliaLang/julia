@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <malloc.h>
 
 #ifdef __WIN32__
 #include <malloc.h>
@@ -101,9 +102,9 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
     return buf;
 }
 
-void jl_connectcb(uv_stream_t *stream, int status)
+void jl_connectcb(uv_connect_t *connect, int status)
 {
-    jl_callback_call(JULIA_HOOK(connectcb),stream->data,1,CB_INT32,status);
+    jl_callback_call(JULIA_HOOK(connectcb),connect->handle->data,1,CB_INT32,status);
 }
 
 void jl_connectioncb(uv_stream_t *stream, int status)
@@ -122,7 +123,10 @@ DLLEXPORT uv_async_t *jl_make_async(uv_loop_t *loop,jl_value_t *julia_struct)
     if(!loop)
         return 0;
     uv_async_t *async = malloc(sizeof(uv_async_t));
-    uv_async_init(loop,async,(uv_async_cb)&jl_asynccb);
+    if(uv_async_init(loop,async,(uv_async_cb)&jl_asynccb)) {
+        free(async);
+        return 0;
+    }
     async->data=julia_struct;
     return async;
 }
@@ -132,7 +136,10 @@ DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct)
     if(!loop)
         return 0;
     uv_timer_t *timer = malloc(sizeof(uv_timer_t));
-    uv_timer_init(loop,timer);
+    if(uv_timer_init(loop,timer)) {
+        free(timer);
+        return 0;
+    }
     timer->data=julia_struct;
     return timer;
 }
@@ -142,11 +149,26 @@ DLLEXPORT uv_idle_t *jl_idle_init(uv_loop_t *loop, jl_value_t *julia_struct)
     if(!loop)
         return 0;
     uv_idle_t *idle = malloc(sizeof(uv_idle_t));
-    uv_idle_init(loop,idle);
+    if(uv_idle_init(loop,idle)) {
+        free(idle);
+        return 0;
+    }
     idle->data = julia_struct;
     return idle;
 }
 
+DLLEXPORT uv_tcp_t *jl_make_tcp(uv_loop_t* loop, jl_value_t *julia_struct)
+{
+    if(!loop)
+        return 0;
+    uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
+    if(uv_tcp_init(loop,tcp)) {
+        free(tcp);
+        return 0;
+    }
+    tcp->data=julia_struct;
+    return tcp;
+}
 
 /** This file contains wrappers for most of libuv's stream functionailty. Once we can allocate structs in Julia, this file will be removed */
 
@@ -424,16 +446,6 @@ DLLEXPORT int jl_getpid()
 #else
     return getpid();
 #endif
-}
-
-DLLEXPORT uv_tcp_t *jl_tcp_init(uv_loop_t* loop)
-{
-    if(!loop)
-        return NULL;
-    uv_tcp_t *tcp = malloc(sizeof(uv_tcp_t));
-    uv_tcp_init(loop,tcp);
-    tcp->data=0;
-    return tcp;
 }
 
 //NOTE: This function expects port/host to be in network byte-order (Big Endian)

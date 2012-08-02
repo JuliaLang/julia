@@ -1,3 +1,5 @@
+import Base.*
+
 ##########################################
 # protocol
 ###########################################
@@ -18,37 +20,38 @@
 # import the message types
 load("julia_message_types_h.jl")
 
-macro debug_only(x); x; end
-#macro debug_only(x); end
+#macro debug_only(x); x; end
+macro debug_only(x); end
 
 ###########################################
 # set up the socket connection
 ###########################################
 
 # open a socket on any port
-function connect_cb(accept_fd::Ptr,status::Int32)
+function connect_cb(server::AsyncStream,status::Int32)
     @debug_only println(STDERR,"Julia: Client instance connected")
     global __client
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client = TcpSocket(_jl_tcp_init(globalEventLoop()))
+    client = TcpSocket()
     __client = client
-    err = _jl_tcp_accept(box(Ptr{Void},unbox(Int,accept_fd)),client.handle)
+    err = accept(server,client)
     if err!=0
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
         p=__PartialMessageBuffer()
-        add_io_handler(client,make_callback((args...)->__socket_callback(client,p,args...)))
+		client.readcb = (args...)->__socket_callback(client,p,args...)
+        start_reading(client)
     end
 end
 
-(port,sock) = open_any_tcp_port(4444,make_callback(connect_cb))
-
-@debug_only println(STDERR,"Julia Instance Started")
+(port,sock) = open_any_tcp_port(4444,connect_cb)
 
 # print the socket number so the server knows what it is
 println(STDOUT,int16(port))
+
+@debug_only println(STDERR,"Julia Instance Started")
 
 ###########################################
 # protocol implementation
@@ -59,7 +62,7 @@ type __Message
     msg_type::Uint8
     args::Array{Any, 1}
     __Message(msg_type::Uint8,args::Array{Any,1})=new(msg_type,args)
-    __Message() = new(-1,cell(0))
+    __Message() = new(255,cell(0))
 end
 
 type __PartialMessageBuffer
@@ -110,19 +113,21 @@ ans = nothing
 
 
 # callback for that event handler
-function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::Ptr,nread::Int,base::Ptr,len::Int32)
-    if(nread <= 0)
-        return
-    end
-    arr = ccall(:jl_pchar_to_array,Any,(Ptr,Int),base,nread)::Array{Uint8}
+function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,stream::TcpSocket)
+    @debug_only println(STDERR,"received")
+    arr = stream.buffer.data
     @debug_only println(STDERR,"Callback: ",arr)
     pos = 0
+	nread = stream.buffer.ptr-1
     while(pos<nread)
         pos+=1
-        @debug_only println(STDERR,"loop at pos ",pos," of ",length(arr))
+        @debug_only println(STDERR,"loop at pos ",pos," of ",length(arr)," with message type ",p.current.msg_type)
         b=arr[pos]
         if(p.current.msg_type == 255)
             p.current.msg_type = b
+			if(b==255)
+                error("Message type must not exceed 254")
+            end
             @debug_only println(STDERR,"Message type: ",b)
             continue
         elseif(p.num_args == 255)
@@ -206,7 +211,9 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
                     if __expr_multitoken && __expr.head == :error
                         # send everyone the input
                         __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
-                        return __write_message(client,__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
+                        __write_message(client,__Message(__MSG_OUTPUT_EVAL_ERROR, {__user_id, __expr.args[1]}))
+						stream.buffer.ptr = 1
+						return true
                     end
 
                     # if the expression was incomplete, just keep going
@@ -223,12 +230,16 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
                 if __all_nothing
                         # send everyone the input
                     __write_message(client,__Message(__MSG_OUTPUT_EVAL_INPUT, {__user_id, __user_name, __input}))
-                    return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {__user_id, ""}))
+                    __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {__user_id, ""}))
+					stream.buffer.ptr = 1
+					return true
                 end
 
                 # tell the browser if we didn't get a complete expression
                 if length(__parsed_exprs) == 0
-                    return __write_message(client,__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {__user_id}))
+                    __write_message(client,__Message(__MSG_OUTPUT_EVAL_INCOMPLETE, {__user_id}))
+					stream.buffer.ptr = 1
+					return true
                 end
 
                 # send everyone the input
@@ -238,6 +249,8 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,handle::P
             end
         end
     end
+	stream.buffer.ptr=1
+	return true
 end
 
 
@@ -265,11 +278,11 @@ function __eval_exprs(client,__parsed_exprs)
 end
 
 # print version info
-println("Julia ", _jl_version_string)
-println(_jl_commit_string, "\n")
+println("Julia ", Base._jl_version_string)
+println(Base._jl_commit_string, "\n")
 
 # work around bug displaying "\n "
-#print("  ",replace(_jl_banner_plain, "\n", "\n  "))
+#print("  ",replace(Base._jl_banner_plain, "\n", "\n  "))
 
 ###########################################
 # wait forever while asynchronous processing happens

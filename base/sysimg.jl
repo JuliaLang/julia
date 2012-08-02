@@ -30,7 +30,7 @@ export
     # Module
     Base, PCRE,
     # Types
-    AbstractMatrix,AbstractVector,Array,Associative,CharString,Chars,Cmd,Cmds,
+    AbstractMatrix,AbstractVector,AsyncStream,Array,Associative,CharString,Chars,Cmd,Cmds,
     Colon,Complex,Complex128,Complex64,ComplexPair,DArray,Dict,Dims,EachLine,
     EachSearch,Enumerate,EnvHash,Executable,FDSet,FileDes,FileOffset,Filter,
     GORef,GenericString,GlobalObject,IO,IOStream,IOTally,ImaginaryUnit,Indices,
@@ -39,8 +39,8 @@ export
     ProcessSignaled,ProcessStatus,ProcessStopped,Range,Range1,RangeIndex,Ranges,
     Rational,Regex,RegexMatch,RegexMatchIterator,Region,RemoteRef,RepString,
     RevString,Reverse,RopeString,Set,StridedArray,StridedMatrix,StridedVecOrMat,
-    StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TransformedString,
-    VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
+    StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TcpSocket,
+	TransformedString,TTY,VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
     Stat, Factorization, Cholesky, LU, QR, QRP,
     # Exceptions
     ArgumentError,BackTrace,DisconnectException,ErrorException,KeyError,
@@ -129,7 +129,7 @@ export
     myid,myindexes,nCr,nPr,names,nan,nb_available,ndigits,ndigits0z,ndims,next,
     nextfloat,nextind,nextpow2,nnz,nonzeros,norm,not!,nprocs,nthbyte,nthperm,
     nthperm!,ntoh,ntuple,num,num2hex,numel,object_id,oct,oftype,one,ones,open,
-    or!,order,
+	open_any_tcp_port,or!,order,
     other,out,output,owner,pairs,parse,parse_bin,parse_float,parse_hex,
     parse_input_line,parse_int,parse_oct,parseatom,partitions,pascal,
     peakflops,permute,pfor,pieceindex,pieceindexes,pipeline_error,pmap,
@@ -177,6 +177,7 @@ export
     issetgid, issticky, isreadable, iswriteable, isexecutable, uperm,
     gperm, operm, trailingsize, check_bounds, search_sorted_last,
     search_sorted_first,
+	run_event_loop, globalEventLoop, accept, add_io_handler, start_reading,
     # Macros
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
