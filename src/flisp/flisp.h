@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include "libsupport.h"
 #include <stdint.h>
+#include "../../deps/libuv/include/uv.h"
 
 typedef uptrint_t value_t;
 typedef int_t fixnum_t;
