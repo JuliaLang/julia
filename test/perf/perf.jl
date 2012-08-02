@@ -137,7 +137,7 @@ function printfd(n)
     for i = 1:n
         # fprintf(f, f"%d %d\n", i, i)
         # f"%d %d\n"(f,i,i)
-        @printf "%d %d\n" f i i
+        # @printf "%d %d\n" f i i
     end
     close(f)
 end

@@ -28,7 +28,7 @@ Stat(buf::Vector{Uint8}) = Stat(
     ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
 )
 
-show(io::IO, st::Stat) = printf(f"Stat(mode=%06o,size=%i)\n", st.mode, st.size)
+show(io::IO, st::Stat) = println("Stat(mode=$(oct(st.mode,6)), size=$(st.size))")
 
 # stat & lstat functions
 

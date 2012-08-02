@@ -7,7 +7,7 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 
 # Essential libraries
 libpcre = dlopen("libpcre")
-_jl_libgrisu = dlopen("libgrisu")
+libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
 _jl_librandom = dlopen("librandom");
