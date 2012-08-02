@@ -333,7 +333,8 @@ function _jl_printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if precision > 0
         push(blk.args, :(_jl_print_fixed(out,$precision)))
     else
-        push(blk.args, :(write(out, pointer(_jl_digits), pt)))
+        push(blk.args, :(write(out, pointer(_jl_digits), len)))
+        push(blk.args, :(while pt >= (len+=1) write(out,'0') end))
         contains(flags,'#') && push(blk.args, :(write(out, '.')))
     end
     # print space padding
