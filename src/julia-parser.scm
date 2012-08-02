@@ -659,11 +659,13 @@
 		       (let ((str (begin (take-token s)
 					 (parse-string-literal s)))
 			     (macname (symbol (string ex '_str))))
-			 (if (and (symbol? (peek-token s)) (not (ts:space? s)))
-			     ;; string literal suffix, "s"x
-			     (loop `(macrocall ,macname ,(car str)
-					       ,(string (take-token s))))
-			     (loop `(macrocall ,macname ,(car str)))))
+			 (let ((nxt (peek-token s)))
+			   (if (and (symbol? nxt) (not (operator? nxt))
+				    (not (ts:space? s)))
+			       ;; string literal suffix, "s"x
+			       (loop `(macrocall ,macname ,(car str)
+						 ,(string (take-token s))))
+			       (loop `(macrocall ,macname ,(car str))))))
 		       ex))
 		  (else ex))))))))
 
