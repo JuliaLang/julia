@@ -352,7 +352,7 @@ end
 
 const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
 
-_uv_hook_close(uv::AsyncStream) = nothing
+_uv_hook_close(uv::AsyncStream) = uv.closed = true
 _uv_hook_close(uv::AsyncWork) = nothing
 
 # This serves as a common callback for all async classes
@@ -448,14 +448,6 @@ close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),h
 function close(stream::AsyncStream)
     if(!stream.closed)
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
-        stream.closed=true
-    end
-end
-
-function close(stream::NamedPipe)
-    if(!stream.closed)
-        ccall(:jl_close_uv,Void,(Ptr{Void},),read_handle(stream))
-        ccall(:jl_close_uv,Void,(Ptr{Void},),write_handle(stream))
         stream.closed=true
     end
 end

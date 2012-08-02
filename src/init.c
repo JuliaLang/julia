@@ -251,8 +251,8 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
 #endif
-    jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
-    jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
+    //jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
+    jl_io_loop = jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
     //init io
     init_stdio();
 

@@ -13,6 +13,10 @@ ifeq ($(OS),WINNT)
 LIBS += -lWs2_32 -lIphlpapi -lpsapi
 endif
 
+ifeq ($(OS),Darwin)
+LIBS += -framework CoreServices
+endif
+
 WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 
 %.o: %.c
