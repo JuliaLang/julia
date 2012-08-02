@@ -36,7 +36,7 @@ function show(io, S::SparseMatrixCSC)
     println(io, S.m, "x", S.n, " sparse matrix with ", nnz(S), " nonzeros:")
 
     half_screen_rows = div(tty_rows() - 8, 2)
-    pad = alignment(max(S.m,S.n))[1]
+    pad = ndigits(max(S.m,S.n))
     k = 0
     for col = 1:S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
         if k < half_screen_rows || k > nnz(S)-half_screen_rows
