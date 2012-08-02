@@ -1,8 +1,8 @@
 module Base
 
 export
-    # Module
-    Base, PCRE,
+    # Modules
+    Base,Grisu,Printf,PCRE,
     # Types
     AbstractMatrix,AbstractVector,Array,Associative,CharString,Chars,Cmd,Cmds,
     Colon,Complex,Complex128,Complex64,ComplexPair,DArray,Dict,Dims,EachLine,
