@@ -948,9 +948,9 @@ function start_worker(wrfd)
         error("could not bind socket")
     end
     io = fdio(wrfd)
-    write(io, "julia_worker:")  # print header
-    fprintf(io, "%d#", port[1]) # print port
-    write(io, getipaddr())      # print hostname
+    write(io, "julia_worker:")    # print header
+    write(io, "$(dec(port[1]))#") # print port
+    write(io, getipaddr())        # print hostname
     write(io, '\n')
     flush(io)
     # close stdin; workers will not use it
