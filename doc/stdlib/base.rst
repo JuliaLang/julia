@@ -1602,11 +1602,11 @@ System
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: getcwd()
+.. function:: cwd()
 
    Get the current working directory.
 
-.. function:: setcwd("dir")
+.. function:: cd("dir")
 
    Set the current working directory. Returns the new current directory.
 

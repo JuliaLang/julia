@@ -1,7 +1,7 @@
 Julia is licensed under the MIT License:
 
 > Copyright (c) 2009-2012: Jeff Bezanson, Stefan Karpinski, Viral B. Shah, 
-> Stephan Boyer, George Xing, and other contributors:
+> and other contributors:
 > 
 > https://github.com/JuliaLang/julia/contributors
 > 

@@ -195,7 +195,7 @@ function process_options(args::Array{Any,1})
             eval(parse_input_line(args[i]))
         elseif args[i]=="-L"
             i+=1
-            include(args[i])
+            load(args[i])
         elseif args[i]=="-p"
             i+=1
             np = int32(args[i])
@@ -214,7 +214,7 @@ function process_options(args::Array{Any,1})
             repl = false
             # remove julia's arguments
             ARGS = args[i+1:end]
-            include(args[i])
+            load(args[i])
             break
         else
             error("unknown option: ", args[i])

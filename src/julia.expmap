@@ -221,6 +221,7 @@
     jl_register_toplevel_eh;
     jl_dump_function;
     jl_spawn;
+    uv_exepath;
     jl_run_event_loop;
     jl_process_events;
     jl_make_pipe;

@@ -107,20 +107,20 @@ To rebuild a pre-built Julia source install with MKL support, delete from `deps/
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++][gcc]** 		— compiling and linking C, C++ (Need at least v4.6)
-- **[clang][clang]**            - clang can be used instead of gcc (Need at least v3.1, Xcode 4.3.3 on OS X)
-- **[gfortran][gcc]**		- compiling and linking fortran libraries
-- **[git]**    			— contributions and version control.
+- **[gcc, g++][gcc]**           — compiling and linking C, C++ (Need at least v4.6)
+- **[clang][clang]**            — clang can be used instead of gcc (Need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gfortran][gcc]**           — compiling and linking fortran libraries
+- **[git]**                     — contributions and version control.
 - **[perl]**                    — preprocessing of header files of libraries.
-- **[wget]**, **[curl]**, or **fetch** — to automatically download external libraries.
+- **[wget]**, **[curl]**, or **fetch** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
-- **patch**                     — for modifying source code.
+- **[patch]**                   — for modifying source code.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.0.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
-- **[GNU readline]**        — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+- **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
 - **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/).
@@ -134,18 +134,19 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[D3]**                  — JavaScript visualization library.
 - **[double-conversion]**   — efficient number-to-text conversion.
-- **[GLPK]**		    - linear programming.
-- **[Rmath]**		    - basic RNGs and distributions.
+- **[GLPK]**                — linear programming.
+- **[Rmath]**               — basic RNGs and distributions.
 
 
 [GNU make]:     http://www.gnu.org/software/make/
-[gcc]:          http://gcc.gnu.org/
-[clang]:	http://clang.llvm.org/
+[patch]:        http://www.gnu.org/software/patch/
 [wget]:         http://www.gnu.org/software/wget/
+[m4]:           http://www.gnu.org/software/m4/
+[gcc]:          http://gcc.gnu.org/
+[clang]:        http://clang.llvm.org/
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
-[m4]:           https://www.gnu.org/software/m4/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
 [MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
@@ -158,12 +159,16 @@ Julia uses the following external libraries, which are automatically downloaded 
 [PCRE]:         http://www.pcre.org/
 [LLVM]:         http://www.llvm.org/
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GNU readline]: http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
+[readline]:     http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html
 [GMP]:          http://gmplib.org/
 [D3]:           http://mbostock.github.com/d3/
 [double-conversion]: http://double-conversion.googlecode.com/
-[GLPK]:		http://www.gnu.org/software/glpk/
-[Rmath]:	http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
+[GLPK]:         http://www.gnu.org/software/glpk/
+[Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
+
+If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc (or pass `USE_DEBIAN=1` to make if you have all build dependencies and want the minimal Julia build). Please be aware that this proceedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
+
+SuiteSparse is a special case, since it is typically only installed as a static library, while `USE_SYSTEM_SUITESPARSE=1` requires that it is a shared library. Running the script `contrib/repackage_system_suitesparse4.make` will copy your static system SuiteSparse installation into the shared library format required by Julia.
 
 <a name="Directories"/>
 ## Directories
@@ -229,4 +234,5 @@ Julia has a web REPL with very preliminary graphics capabilities. The web REPL i
 
 ### Try it Online
 
-Forio.com is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com)
+[Forio.com](http://forio.com/) is generously hosting and maintaining an instance of Julia's web REPL here: [julia.forio.com](http://julia.forio.com).
+This service is best-effort and may not always be up or stable. Be nice!

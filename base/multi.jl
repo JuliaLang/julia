@@ -961,12 +961,10 @@ function start_worker(out::Stream)
     default_port = uint16(9009)
     worker_sockets = Dict()
     (actual_port,sock) = open_any_tcp_port(default_port,make_callback((handle::Ptr,status::Int32)->accept_handler(handle,status,false)))
-
     write(out, "julia_worker:")  # print header
-    fprintf(out, "%d#", actual_port) # print port
+    write(io, "$(dec(port[1]))#") # print port
     write(out, getipaddr())      # print hostname
     write(out, '\n')
-
     # close stdin; workers will not use it
     #close(STDIN)
 

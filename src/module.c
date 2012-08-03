@@ -62,7 +62,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 }
 
 // get binding for reading. might return NULL for unbound.
-static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var)
+jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
     if (b == HT_NOTFOUND) {
@@ -71,31 +71,19 @@ static jl_binding_t *get_binding_(jl_module_t *m, jl_sym_t *var)
             b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
             if (b != HT_NOTFOUND && b->exportp) {
                 if (b->owner != imp)
-                    return get_binding_(b->owner, var);
-                return b;
+                    return jl_get_binding(b->owner, var);
+                // only import if the source module has resolved the binding;
+                // otherwise it might just be marked for re-export.
+                if (b->constp || b->value) {
+                    return b;
+                }
             }
         }
         return NULL;
     }
     if (b->owner != m)
-        return get_binding_(b->owner, var);
+        return jl_get_binding(b->owner, var);
     return b;
-}
-
-jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
-{
-    return get_binding_(m, var);
-}
-
-void jl_module_importall(jl_module_t *to, jl_module_t *from)
-{
-    if (to == from)
-        return;
-    for(size_t i=0; i < to->imports.len; i++) {
-        if (from == to->imports.items[i])
-            return;
-    }
-    arraylist_push(&to->imports, from);
 }
 
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
@@ -113,16 +101,21 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
         if (*bp != HT_NOTFOUND) {
             if ((*bp)->owner != to) {
                 ios_printf(JL_STDERR,
-                           "Warning: ignoring conflicting import of %s into %s\n",
-                           s->name, to->name->name);
-            }
-            else if ((*bp)->constp || (*bp)->value) {
-                ios_printf(JL_STDERR,
-                           "Warning: import of %s into %s conflicts with an existing identifier; ignored.\n",
-                           s->name, to->name->name);
+                           "Warning: ignoring conflicting import of %s.%s into %s\n",
+                           from->name->name, s->name, to->name->name);
             }
             else if (*bp == b) {
                 // importing a binding on top of itself. harmless.
+            }
+            else if ((*bp)->constp || (*bp)->value) {
+                if ((*bp)->constp && (*bp)->value && b->constp &&
+                    b->value == (*bp)->value) {
+                    // import of equivalent binding
+                    return;
+                }
+                ios_printf(JL_STDERR,
+                           "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
+                           from->name->name, s->name, to->name->name);
             }
             else {
                 (*bp)->owner = b->owner;
@@ -132,6 +125,34 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
             jl_binding_t *nb = new_binding(s);
             nb->owner = b->owner;
             *bp = nb;
+        }
+    }
+}
+
+void jl_module_importall(jl_module_t *to, jl_module_t *from)
+{
+    if (to == from)
+        return;
+    for(size_t i=0; i < to->imports.len; i++) {
+        if (from == to->imports.items[i])
+            return;
+    }
+    arraylist_push(&to->imports, from);
+    // go though all "from" module's exports to check for conflicts, and
+    // re-resolve symbols if it's not too late.
+    // mostly, we want to handle "export x" occurring before the "import M.*"
+    // statement that actually provides x.
+    void **table = from->bindings.table;
+    for(size_t i=1; i < from->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->exportp) {
+                jl_binding_t **bp =
+                    (jl_binding_t**)ptrhash_bp(&to->bindings, b->name);
+                if (*bp != HT_NOTFOUND) {
+                    jl_module_import(to, from, b->name);
+                }
+            }
         }
     }
 }

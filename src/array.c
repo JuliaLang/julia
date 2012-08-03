@@ -92,6 +92,7 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
 
     int ndimwords = jl_array_ndimwords(ndims);
     a = allocobj((sizeof(jl_array_t) + ndimwords*sizeof(size_t) + 15)&-16);
+    a->type = atype;
     a->ndims = ndims;
     a->data = NULL;
     JL_GC_PUSH(&a);
@@ -100,14 +101,19 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
     if (data->ndims == 1) d -= data->offset*data->elsize;
     if (d == jl_array_inline_data_area(data)) {
         if (data->ndims == 1) {
-            // data might resize, so switch it to shared representation
+            // data might resize, so switch it to shared representation.
+            // problem: we'd like to do that, but it might not be valid,
+            // since the buffer might be used from C in a way that it's
+            // assumed not to move. for now, just copy the data (note this
+            // case only happens for sizes <= ARRAY_INLINE_NBYTES)
             jl_mallocptr_t *mp = array_new_buffer(data, data->length);
             memcpy(mp->ptr, data->data, data->length * data->elsize);
-            data->data = mp->ptr;
-            data->offset = 0;
-            data->maxsize = data->length;
-            jl_array_data_owner(data) = (jl_value_t*)mp;
+            a->data = mp->ptr;
             jl_array_data_owner(a) = (jl_value_t*)mp;
+            //data->data = mp->ptr;
+            //data->offset = 0;
+            //data->maxsize = data->length;
+            //jl_array_data_owner(data) = (jl_value_t*)mp;
         }
         else {
             jl_array_data_owner(a) = (jl_value_t*)data;
@@ -117,10 +123,16 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
         jl_array_data_owner(a) = jl_array_data_owner(data);
     }
 
-    a->type = atype;
-    a->data = data->data;
-    a->elsize = data->elsize;
-    a->ptrarray = data->ptrarray;
+    if (a->data == NULL) a->data = data->data;
+    jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
+    if (jl_is_bits_type(el_type)) {
+        a->elsize = jl_bitstype_nbits(el_type)/8;
+        a->ptrarray = 0;
+    }
+    else {
+        a->elsize = sizeof(void*);
+        a->ptrarray = 1;
+    }
 
     if (ndims == 1) {
         a->length = jl_unbox_long(jl_tupleref(dims,0));

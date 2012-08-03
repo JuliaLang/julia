@@ -89,7 +89,8 @@ void parse_opts(int *argcp, char ***argvp) {
             julia_home = strdup(julia_home);
         } else {
             char *julia_path = (char*)malloc(PATH_MAX);
-            get_exename(julia_path, PATH_MAX);
+            size_t path_size = PATH_MAX;
+            uv_exepath(julia_path, &path_size);
             julia_home = strdup(dirname(julia_path));
             free(julia_path);
         }

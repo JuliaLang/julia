@@ -10,11 +10,9 @@
 
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed.
-// NOTE: needs to be defined in ios.c too, due to GC/IObuffer interaction
 //#define MEMDEBUG
 
 // MEMPROFILE prints pool summary statistics after every GC
-// NOTE: define in ios.c too
 //#define MEMPROFILE
 
 // GCTIME prints time taken by each phase of GC
