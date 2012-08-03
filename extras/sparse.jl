@@ -1060,9 +1060,9 @@ function Tridiagonal{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
         error("All three vectors must have the same length")
     end
     M = Tridiagonal{T}(N)
-    M.a = a
-    M.b = b
-    M.c = c
+    M.a = copy(a)
+    M.b = copy(b)
+    M.c = copy(c)
     return M
 end
 size(M::Tridiagonal) = (length(M.b), length(M.b))
