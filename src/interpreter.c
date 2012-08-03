@@ -214,11 +214,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
-        jl_value_t *para = eval(args[1], locals, nl);
-        jl_value_t *vnb = args[2];
-        assert(jl_is_long(vnb));
-        jl_value_t *super = NULL;
-        JL_GC_PUSH(&para, &super);
+        jl_value_t *super = NULL, *para = NULL, *vnb = NULL;
+        JL_GC_PUSH(&para, &super, &vnb);
+        para = eval(args[1], locals, nl);
+        vnb  = eval(args[2], locals, nl);
+        if (!jl_is_long(vnb))
+            jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
         int32_t nb = jl_unbox_long(vnb);
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
