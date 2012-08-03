@@ -491,14 +491,33 @@ static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
 
 // --- boxing ---
 
-static Value *init_bits_value(Value *newv, jl_value_t *jt, Type *t, Value *v)
+static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 {
-    builder.CreateStore(literal_pointer_val(jt),
-                        builder.CreateBitCast(newv, jl_ppvalue_llvmt));
-    builder.CreateStore(v,
-                        builder.CreateBitCast(bitstype_pointer(newv),
-                                              PointerType::get(t,0)));
+    builder.CreateStore(jt, builder.CreateBitCast(newv, jl_ppvalue_llvmt));
+    builder.CreateStore(v , builder.CreateBitCast(bitstype_pointer(newv),
+                                                  PointerType::get(t,0)));
     return newv;
+}
+
+// allocate a box where the type might not be known at compile time
+static Value *allocate_box_dynamic(Value *jlty, int nb, Value *v)
+{
+    if (v->getType()->isPointerTy()) {
+        v = builder.CreatePtrToInt(v, T_size);
+    }
+    if (nb == 8)
+        return builder.CreateCall2(box8_func,  jlty, v);
+    if (nb == 16)
+        return builder.CreateCall2(box16_func, jlty, v);
+    if (nb == 32)
+        return builder.CreateCall2(box32_func, jlty, v);
+    if (nb == 64)
+        return builder.CreateCall2(box64_func, jlty, v);
+    size_t sz = sizeof(void*) + (nb+7)/8;
+    Value *newv = builder.CreateCall(jlallocobj_func,
+                                     ConstantInt::get(T_size, sz));
+    // TODO: make sure this is rooted. I think it is.
+    return init_bits_value(newv, jlty, v->getType(), v);
 }
 
 // this is used to wrap values for generic contexts, where a
@@ -529,7 +548,7 @@ static Value *boxed(Value *v)
 #else
         Value *newv = builder.CreateCall(jlalloc3w_func);
 #endif
-        return init_bits_value(newv, jt, t, v);
+        return init_bits_value(newv, literal_pointer_val(jt), t, v);
     }
     if (jb == jl_uint8_type)
         return builder.CreateCall(box_uint8_func,
@@ -539,25 +558,10 @@ static Value *boxed(Value *v)
     if (jb == jl_uint64_type) return builder.CreateCall(box_uint64_func, v);
     if (jb == jl_char_type)   return builder.CreateCall(box_char_func, v);
     // TODO: skip the call for constant arguments
-    if (jl_is_bits_type(jt)) {
-        if (v->getType()->isPointerTy()) {
-            v = builder.CreatePtrToInt(v, T_size);
-        }
-        int nb = jl_bitstype_nbits(jt);
-        if (nb == 8)
-            return builder.CreateCall2(box8_func,  literal_pointer_val(jt), v);
-        if (nb == 16)
-            return builder.CreateCall2(box16_func, literal_pointer_val(jt), v);
-        if (nb == 32)
-            return builder.CreateCall2(box32_func, literal_pointer_val(jt), v);
-        if (nb == 64)
-            return builder.CreateCall2(box64_func, literal_pointer_val(jt), v);
-        size_t sz = sizeof(void*) + (nb+7)/8;
-        Value *newv = builder.CreateCall(jlallocobj_func,
-                                         ConstantInt::get(T_size, sz));
-        // TODO: make sure this is rooted. I think it is.
-        return init_bits_value(newv, jt, t, v);
+    if (!jl_is_bits_type(jt)) {
+        assert("Don't know how to box this type" && false);
+        return NULL;
     }
-    assert("Don't know how to box this type" && false);
-    return NULL;
+    int nb = jl_bitstype_nbits(jt);
+    return allocate_box_dynamic(literal_pointer_val(jt), nb, v);
 }
