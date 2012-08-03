@@ -13,7 +13,7 @@ for (getrs, potrs, getri, potri, trtri, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_getrs(trans::Uint8, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
+        function _jl_lapack_getrs(trans::LapackChar, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_getrs: matrix columns must have contiguous elements")
             end
@@ -31,15 +31,13 @@ for (getrs, potrs, getri, potri, trtri, elty) in
             if info[1] != 0 error("_jl_lapack_getrs: error $(info[1])") end
             B
         end
-        _jl_lapack_getrs(trans::Char, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty}) =
-            _jl_lapack_getrs(uint8(trans), A, ipiv, B)
         #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          UPLO
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_potrs(uplo::Uint8, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        function _jl_lapack_potrs(uplo::LapackChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_potrs: matrix columns must have contiguous elements")
             end
@@ -57,7 +55,6 @@ for (getrs, potrs, getri, potri, trtri, elty) in
             if info[1] != 0 error("_jl_lapack_potrs: error $(info[1])") end
             B
         end
-        _jl_lapack_potrs(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = _jl_lapack_potrs(uint8(uplo),A,B)
         #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
         #*     .. Scalar Arguments ..
         #      INTEGER            INFO, LDA, LWORK, N
@@ -94,7 +91,7 @@ for (getrs, potrs, getri, potri, trtri, elty) in
         #      INTEGER            INFO, LDA, N
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * )
-        function _jl_lapack_trtri(uplo::Uint8, diag::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_trtri(uplo::LapackChar, diag::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_trtri: matrix columns must have contiguous elements");
             end
@@ -110,7 +107,6 @@ for (getrs, potrs, getri, potri, trtri, elty) in
             if info[1] != 0 error("_jl_lapack_trtri: error $(info[1])") end
             A
         end
-        _jl_lapack_trtri(uplo::Char, diag::Char, A::StridedMatrix{$elty}) = _jl_lapack_trtri(uint8(uplo),uint8(diag),A)
     end
 end
 
@@ -118,13 +114,12 @@ abstract  Factorization{T}
 
 type Cholesky{T} <: Factorization{T}
     LR::Matrix{T}
-    uplo::Uint8
-    function Cholesky(A::Matrix{T}, ul::Uint8)
-        if ul != uint8('U') && ul != uint8('L') error("Cholesky: uplo must be 'U' or 'L'") end
+    uplo::LapackChar
+    function Cholesky(A::Matrix{T}, ul::LapackChar)
+        if ul != 'U' && ul != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
         Acopy = copy(A)
         _jl_lapack_potrf(ul, Acopy) == 0 ? new(ul == 'U' ? triu(Acopy) : tril(Acopy), ul) : error("Cholesky: Matrix is not positive-definite")
     end
-    Cholesky(A::Matrix{T}, ul::Char) = Cholesky{T}(A,uint8(uppercase(ul)))
 end
 
 Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, 'U')
@@ -176,7 +171,7 @@ for (orm2r, elty) in
         #      INTEGER            INFO, K, LDA, LDC, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function _jl_lapack_orm2r(side::Uint8, trans::Uint8, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+        function _jl_lapack_orm2r(side::LapackChar, trans::LapackChar, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(C,1) != 1
                 error("_jl_lapack_orm2r: matrix columns must have contiguous elements");
             end
@@ -185,7 +180,6 @@ for (orm2r, elty) in
             if size(A, 1) != m error("_jl_lapack_orm2r: dimension mismatch") end
             lda  = stride(A, 2)
             ldc  = isa(C, Vector) ? m : stride(C, 2)
-            SIDE = uppercase(side)
             work = Array($elty, side == 'L' ? n : m)
             info = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $orm2r),
@@ -196,8 +190,6 @@ for (orm2r, elty) in
             if info[1] != 0 error("_jl_lapack_orm2r: error $(info[1])") end
             C
         end
-        _jl_lapack_orm2r(side::Char, trans::Char, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty}) =
-            _jl_lapack_orm2r(uint8(side),uint8(trans),A,k,tau,C)
     end
 end
 

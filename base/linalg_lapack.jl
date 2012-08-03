@@ -1,3 +1,4 @@
+typealias LapackChar Char
 
 type LapackException <: Exception
     info::Int32
@@ -16,7 +17,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
         #       INTEGER            INFO, LDA, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * )
-        function _jl_lapack_potrf(uplo::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_potrf(uplo::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_potrf: matrix columns must have contiguous elements");
             end
@@ -38,7 +39,6 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
 ## could be wrapped in a try/catch block
             return info[1]
         end
-        _jl_lapack_potrf(uplo::Char, A::StridedMatrix{$elty}) = _jl_lapack_potrf(uint8(uplo),A)
         # SUBROUTINE DGETRF( M, N, A, LDA, IPIV, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, M, N
@@ -212,10 +212,10 @@ end
 ## chol! overwrites A with either the upper or lower triangular
 ## Cholesky factor (default is upper)
 chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = chol!(A, 'U')
-function chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}, uplo::Char)
+function chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}, uplo::LapackChar)
     info = _jl_lapack_potrf(uplo, A)
     if info != 0 error("chol: matrix is not positive definite, error $info") end
-    uppercase(uplo) == 'U' ? triu(A) : tril(A)
+    uplo == 'U' ? triu(A) : tril(A)
 end
 
 
@@ -275,7 +275,7 @@ for (syev, geev, elty) in
         #       INTEGER            INFO, LDA, LWORK, N
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * )
-        function _jl_lapack_syev(jobz::Uint8, uplo::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_syev(jobz::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_syev: matrix columns must have contiguous elements");
             end
@@ -312,9 +312,8 @@ for (syev, geev, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            uppercase(jobz) == 'V' ? (W, A) : W
+            jobz == 'V' ? (W, A) : W
         end
-        _jl_lapack_syev(jobz::Char, uplo::Char, A::StridedMatrix{$elty}) = _jl_lapack_syev(uint8(jobz),uint8(uplo),A)
         
         #      SUBROUTINE DGEEV( JOBVL, JOBVR, N, A, LDA, WR, WI, VL, LDVL, VR,
         #      $                  LDVR, WORK, LWORK, INFO )
@@ -324,7 +323,7 @@ for (syev, geev, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), VL( LDVL, * ), VR( LDVR, * ),
         #      $                   WI( * ), WORK( * ), WR( * )
-        function _jl_lapack_geev(jobvl::Uint8, jobvr::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_geev(jobvl::LapackChar, jobvr::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_geev: matrix columns must have contiguous elements");
             end
@@ -333,8 +332,8 @@ for (syev, geev, elty) in
                 error("_jl_lapack_geev: matrix for eigen-decomposition must be square")
             end
             lda   = stride(A, 2)
-            lvecs = uppercase(jobvl) == 'V'
-            rvecs = uppercase(jobvr) == 'V'
+            lvecs = jobvl == 'V'
+            rvecs = jobvr == 'V'
             VL    = Array($elty, lvecs ? (n, n) : (n, 0))
             VR    = Array($elty, rvecs ? (n, n) : (n, 0))            
             n     = n
@@ -378,7 +377,6 @@ for (syev, geev, elty) in
             end
             cmplx ? (VL, W, VR) : (VL, WR, WI, VR)
         end
-        _jl_lapack_geev(jobvl::Char, jobvr::Char, A::StridedMatrix{$elty}) = _jl_lapack_geev(uint8(jobvl),uint8(jobvr), A)
     end
 end
 
@@ -434,13 +432,12 @@ for (gesvd, gesdd, elty) in
         #      INTEGER            IWORK( * )
         #      DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
         #                        VT( LDVT, * ), WORK( * )
-        function _jl_lapack_gesdd(jobz::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_gesdd(job::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_gesdd: matrix columns must have contiguous elements");
             end
             m, n   = size(A)
             minmn  = min(m, n)
-            job    = uppercase(jobz)
             if job == 'A'
                 U  = Array($elty, (m, m))
                 VT = Array($elty, (n, n))
@@ -471,7 +468,7 @@ for (gesvd, gesdd, elty) in
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Rtyp}, Ptr{Int32}, Ptr{Int32}),
-                          &jobz, &m, &n, A, &lda, S, U, &m, VT, &n,
+                          &job, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, rwork, iwork, info)
                 else
                     ccall(dlsym(_jl_liblapack, $string(gesdd)),
@@ -480,7 +477,7 @@ for (gesvd, gesdd, elty) in
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Int32}, Ptr{Int32}),
-                          &jobz, &m, &n, A, &lda, S, U, &m, VT, &n,
+                          &job, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, iwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -492,8 +489,6 @@ for (gesvd, gesdd, elty) in
             if job == 'O' if m >= n return (A, S, VT) else return (U, S, A) end end
             return (U, S, VT)
         end
-        _jl_lapack_gesdd(jobz::Char, A::StridedMatrix{$elty}) = _jl_lapack_gesvd(uint8(jobz), A)
-
 
         # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -502,16 +497,14 @@ for (gesvd, gesdd, elty) in
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), S( * ), U( LDU, * ),
         #      $                   VT( LDVT, * ), WORK( * )
-        function _jl_lapack_gesvd(jobu::Uint8, jobvt::Uint8, A::StridedMatrix{$elty})
+        function _jl_lapack_gesvd(jobu::LapackChar, jobvt::LapackChar, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_gesvd: matrix columns must have contiguous elements");
             end
             m, n   = size(A)
             minmn  = min(m, n)          # can't map to int32 b/c of U and VT
-            j1     = uppercase(jobu)
-            U      = Array($elty, j1 == 'A'? (m, m):(j1 == 'S'? (m, minmn) : (m, 0)))
-            j2     = uppercase(jobvt)
-            VT     = Array($elty, j2 == 'A'? (n, n):(j2 == 'S'? (n, minmn) : (n, 0)))
+            U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
+            VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (n, minmn) : (n, 0)))
             lda    = stride(A, 2)
             lwork  = -1
             work   = Array($elty, 1)
@@ -546,19 +539,17 @@ for (gesvd, gesdd, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            if j1 == 'O' return A, S, VT end
-            if j2 == 'O' return U, S, A end
+            if jobu  == 'O' return A, S, VT end
+            if jobvt == 'O' return U, S, A end
             U, S, VT
         end
-        _jl_lapack_gesvd(jobu::Char, jobvt::Char, A::StridedMatrix{$elty}) = _jl_lapack_gesvd(uint8(jobu), uint8(jobvt), A)
     end
 end
 
-function sdd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},vecs::Uint8)
+function sdd{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},vecs)
     _jl_lapack_gesdd(vecs, copy(A))
 end
-sdd{T<:Integer}(x::StridedMatrix{T},vecs::Uint8) = sdd(float64(x),vecs)
-sdd(A,vecs::Char)=sdd(A,uint8(vecs))
+sdd{T<:Integer}(x::StridedMatrix{T},vecs) = sdd(float64(x),vecs)
 sdd(A) = sdd(A, 'A')
 
 svd(A) = svd(A,true)
@@ -611,7 +602,7 @@ for (gesv, posv, gels, trtrs, elty) in
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_posv(uplo::Uint8, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        function _jl_lapack_posv(uplo::LapackChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_posv: matrix columns must have contiguous elements");
             end
@@ -630,14 +621,12 @@ for (gesv, posv, gels, trtrs, elty) in
             if info[1] != 0 throw(LapackException(info[1])) end
             A, B
         end
-        _jl_lapack_posv(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) =
-            _jl_lapack_posv(uint8(uplo), A,B)
 
         #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK, INFO)
         # *     .. Scalar Arguments ..
         #       CHARACTER          TRANS
         #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS
-        function _jl_lapack_gels(trans::Uint8, A::StridedMatrix{$elty},
+        function _jl_lapack_gels(trans::LapackChar, A::StridedMatrix{$elty},
                                  B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_gels: matrix columns must have contiguous elements");
@@ -670,10 +659,6 @@ for (gesv, posv, gels, trtrs, elty) in
             RSS     = vecb ? sum(B[(n+1):m].^2) : [sum(B[(n+1):m, i].^2) for i=1:n]
             R, X, RSS
         end
-        _jl_lapack_gels(trans::Char, A::StridedMatrix{$elty},
-                                 B::StridedVecOrMat{$elty}) =
-            _jl_lapack_gels(uint8(trans), A,B)
-
 
         #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
         # *     .. Scalar Arguments ..
@@ -681,7 +666,7 @@ for (gesv, posv, gels, trtrs, elty) in
         #       INTEGER            INFO, LDA, LDB, N, NRHS
         # *     .. Array Arguments ..
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_trtrs(uplo::Uint8, trans::Uint8, diag::Uint8,
+        function _jl_lapack_trtrs(uplo::LapackChar, trans::LapackChar, diag::LapackChar,
                                   A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_trtrs: matrix columns must have contiguous elements");
@@ -701,9 +686,6 @@ for (gesv, posv, gels, trtrs, elty) in
             if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
-        _jl_lapack_trtrs(uplo::Char, trans::Char, diag::Char,
-                         A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) =
-            _jl_lapack_trtrs(uint8(uplo),uint8(trans),uint8(diag),A,B)
     end
 end
 
