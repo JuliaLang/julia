@@ -465,6 +465,9 @@ end
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 
+uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
+lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
+
 uppercase(s::String) = TransformedString((c,i)->uppercase(c), s)
 lowercase(s::String) = TransformedString((c,i)->lowercase(c), s)
 

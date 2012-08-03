@@ -10,7 +10,7 @@ b = rand(n)
 r = chol(asym)                          # Cholesky decomposition
 @assert norm(r'*r - asym) < Eps
 
-l = chol!(copy(asym), "L")              # lower-triangular Cholesky decomposition
+l = chol!(copy(asym), 'L')              # lower-triangular Cholesky decomposition
 @assert norm(l*l' - asym) < Eps
 
 (l,u,p) = lu(a)                         # LU decomposition

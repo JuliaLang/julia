@@ -1,9 +1,9 @@
 ## solvers and inverses using factorizations
-for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
-    (("dgetrs_","dpotrs_","dtrtrs_","dgetri_","dpotri_","dtrtri_",:Float64),
-     ("sgetrs_","spotrs_","strtrs_","sgetri_","spotri_","strtri_",:Float32),
-     ("zgetrs_","zpotrs_","ztrtrs_","zgetri_","zpotri_","ztrtri_",:Complex128),
-     ("cgetrs_","cpotrs_","ctrtrs_","cgetri_","cpotri_","ctrtri_",:Complex64))
+for (getrs, potrs, getri, potri, trtri, elty) in
+    (("dgetrs_","dpotrs_","dgetri_","dpotri_","dtrtri_",:Float64),
+     ("sgetrs_","spotrs_","sgetri_","spotri_","strtri_",:Float32),
+     ("zgetrs_","zpotrs_","zgetri_","zpotri_","ztrtri_",:Complex128),
+     ("cgetrs_","cpotrs_","cgetri_","cpotri_","ctrtri_",:Complex64))
     
     @eval begin
         #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
@@ -13,9 +13,9 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
         #     .. Array Arguments ..
         #      INTEGER            IPIV( * )
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_getrs(trans::String, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
+        function _jl_lapack_getrs(trans::Uint8, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
-                error("_jl_lapack_getrs: matrix columns must have contiguous elements");
+                error("_jl_lapack_getrs: matrix columns must have contiguous elements")
             end
             m, n    = size(A)
             if m != n || size(B, 1) != m error("_jl_lapack_getrs: dimension mismatch") end
@@ -27,17 +27,19 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  trans, &n, &nrhs, A, &lda, ipiv, B, &ldb, info)
+                  &trans, &n, &nrhs, A, &lda, ipiv, B, &ldb, info)
             if info[1] != 0 error("_jl_lapack_getrs: error $(info[1])") end
             B
         end
+        _jl_lapack_getrs(trans::Char, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty}) =
+            _jl_lapack_getrs(uint8(trans), A, ipiv, B)
         #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
         #*     .. Scalar Arguments ..
         #      CHARACTER          UPLO
         #      INTEGER            INFO, LDA, LDB, N, NRHS
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_potrs(uplo::String, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        function _jl_lapack_potrs(uplo::Uint8, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(B,1) != 1
                 error("_jl_lapack_potrs: matrix columns must have contiguous elements")
             end
@@ -51,35 +53,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, &n, &nrhs, A, &lda, B, &ldb, info)
+                  &uplo, &n, &nrhs, A, &lda, B, &ldb, info)
             if info[1] != 0 error("_jl_lapack_potrs: error $(info[1])") end
             B
         end
-        #       SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB,
-        #                          INFO )
-        #       .. Scalar Arguments ..
-        #       CHARACTER          DIAG, TRANS, UPLO
-        #       INTEGER            INFO, LDA, LDB, N, NRHS
-        #       .. Array Arguments ..
-        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_trtrs(uplo::String, trans::String, diag::String, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-            if stride(A,1) != 1 || stride(B,1) != 1
-                error("_jl_lapack_trtrs: matrix columns must have contiguous elements");
-            end
-            m, n    = size(A)
-            if m != n || size(B, 1) != m error("_jl_lapack_trtrs: dimension mismatch") end
-            nrhs    = size(B, 2)
-            lda     = stride(A, 2)
-            ldb     = isa(B, Vector) ? m : stride(B, 2)
-            info    = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $trtrs),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
-                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  uplo, trans, diag, &n, &nrhs, A, &lda, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_potrs: error $(info[1])") end
-            B
-        end
+        _jl_lapack_potrs(uplo::Char, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = _jl_lapack_potrs(uint8(uplo),A,B)
         #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
         #*     .. Scalar Arguments ..
         #      INTEGER            INFO, LDA, LWORK, N
@@ -116,7 +94,7 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
         #      INTEGER            INFO, LDA, N
         #     .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * )
-        function _jl_lapack_trtri(uplo::String, diag::String, A::StridedMatrix{$elty})
+        function _jl_lapack_trtri(uplo::Uint8, diag::Uint8, A::StridedMatrix{$elty})
             if stride(A,1) != 1
                 error("_jl_lapack_trtri: matrix columns must have contiguous elements");
             end
@@ -128,10 +106,11 @@ for (getrs, potrs, trtrs, getri, potri, trtri, elty) in
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{Int32}),
-                  uplo, diag, &n, A, &lda, info)
+                  &uplo, &diag, &n, A, &lda, info)
             if info[1] != 0 error("_jl_lapack_trtri: error $(info[1])") end
             A
         end
+        _jl_lapack_trtri(uplo::Char, diag::Char, A::StridedMatrix{$elty}) = _jl_lapack_trtri(uint8(uplo),uint8(diag),A)
     end
 end
 
@@ -139,16 +118,16 @@ abstract  Factorization{T}
 
 type Cholesky{T} <: Factorization{T}
     LR::Matrix{T}
-    uplo::String
-    function Cholesky(A::Matrix{T}, ul::String)
-        UL = uppercase(ul)
-        if UL[1] != 'U' && UL[1] != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
+    uplo::Uint8
+    function Cholesky(A::Matrix{T}, ul::Uint8)
+        if ul != uint8('U') && ul != uint8('L') error("Cholesky: uplo must be 'U' or 'L'") end
         Acopy = copy(A)
-        _jl_lapack_potrf(UL, Acopy) == 0 ? new(UL[1] == 'U' ? triu(Acopy) : tril(Acopy), UL) : error("Cholesky: Matrix is not positive-definite")
+        _jl_lapack_potrf(ul, Acopy) == 0 ? new(ul == 'U' ? triu(Acopy) : tril(Acopy), ul) : error("Cholesky: Matrix is not positive-definite")
     end
+    Cholesky(A::Matrix{T}, ul::Char) = Cholesky{T}(A,uint8(uppercase(ul)))
 end
 
-Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, "U")
+Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, 'U')
 
 (\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_potrs(C.uplo, C.LR, copy(B))
@@ -180,7 +159,7 @@ end
 det(A::Matrix) = det(LU(A))
 
 (\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) =
-    _jl_lapack_getrs("N", lu.lu, lu.ipiv, copy(B))
+    _jl_lapack_getrs('N', lu.lu, lu.ipiv, copy(B))
 inv(lu::LU) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)
 
 ## Multiplication by Q or Q' from a QR factorization
@@ -197,7 +176,7 @@ for (orm2r, elty) in
         #      INTEGER            INFO, K, LDA, LDC, M, N
         #      .. Array Arguments ..
         #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function _jl_lapack_orm2r(side::String, trans::String, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
+        function _jl_lapack_orm2r(side::Uint8, trans::Uint8, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
             if stride(A,1) != 1 || stride(C,1) != 1
                 error("_jl_lapack_orm2r: matrix columns must have contiguous elements");
             end
@@ -207,16 +186,18 @@ for (orm2r, elty) in
             lda  = stride(A, 2)
             ldc  = isa(C, Vector) ? m : stride(C, 2)
             SIDE = uppercase(side)
-            work = Array($elty, SIDE[1] == 'L' ? n : m)
+            work = Array($elty, side == 'L' ? n : m)
             info = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $orm2r),
                   Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  side, trans, &m, &n, &k, A, &lda, tau, C, &ldc, work, info)
+                  &side, &trans, &m, &n, &k, A, &lda, tau, C, &ldc, work, info)
             if info[1] != 0 error("_jl_lapack_orm2r: error $(info[1])") end
             C
         end
+        _jl_lapack_orm2r(side::Char, trans::Char, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty}) =
+            _jl_lapack_orm2r(uint8(side),uint8(trans),A,k,tau,C)
     end
 end
 
@@ -239,13 +220,13 @@ size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},n) = size(A.hh,n)
 ## Multiplication by Q from the QR decomposition
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
                                                              B::StridedVecOrMat{T})
-    _jl_lapack_orm2r("L", "N", A.hh, size(A, 2), A.tau, copy(B))
+    _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
 end
 
 ## Multiplication by Q' from the QR decomposition
 function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
                                                                   B::StridedVecOrMat{T})
-    _jl_lapack_orm2r("L", iscomplex(A.tau) ? "C" : "T", A.hh, size(A, 2), A.tau, copy(B))
+    _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
 end
 
 ## Least squares solution.  Should be more careful about cases with m < n
@@ -254,7 +235,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
     n   = numel(A.tau)
     qtb = isa(B, Vector) ? (A' * B)[1:n] : (A' * B)[1:n, :]
     ## Not sure if this avoids copying A.hh[1:n,:] but at least it is not all of A.hh
-    _jl_lapack_trtrs("U", "N", "N", A.hh[1:n,:], qtb)
+    _jl_lapack_trtrs('U','N','N', A.hh[1:n,:], qtb)
 end
 
 type QRP{T} <: Factorization{T}
@@ -279,12 +260,12 @@ size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},n) = size(A.hh,n)
 
 function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
                                                              B::StridedVecOrMat{T})
-    _jl_lapack_orm2r("L", "N", A.hh, size(A, 2), A.tau, copy(B))
+    _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
 end
 
 function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
                                                                   B::StridedVecOrMat{T})
-    _jl_lapack_orm2r("L", iscomplex(A.tau) ? "C" : "T", A.hh, size(A, 2), A.tau, copy(B))
+    _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
 end
 
 function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
@@ -301,7 +282,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
     BV  = isa(B, Vector)
     n   = numel(A.tau)
     qtb = BV ? (A' * B)[1:n] : (A' * B)[1:n, :]
-    ans = _jl_lapack_trtrs("U", "N", "N", A.hh[1:n,:], qtb)
+    ans = _jl_lapack_trtrs('U', 'N', 'N', A.hh[1:n,:], qtb)
     BV ? ans[invperm(A.jpvt)] : ans[invperm(A.jpvt), :]
 end
 
