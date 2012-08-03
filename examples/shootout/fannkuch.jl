@@ -70,4 +70,4 @@ if length(ARGS) >= 1
 else
     N = 7
 end
-printf("Pfannkuchen(%i) = %i\n", N, fannkuch(N))
+@printf("Pfannkuchen(%i) = %i\n", N, fannkuch(N))

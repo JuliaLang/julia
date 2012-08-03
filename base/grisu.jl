@@ -15,7 +15,7 @@ macro grisu_ccall(value, mode, ndigits)
         ccall(dlsym(Base.libgrisu, :grisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
-              $value, $mode, $ndigits,
+              $esc(value), $esc(mode), $esc(ndigits),
               _digits, _buflen, _neg, _len, _point)
     end
 end

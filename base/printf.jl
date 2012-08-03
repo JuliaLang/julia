@@ -752,30 +752,33 @@ end
 
 ### external printf interface ###
 
-function f_str_f(f)
-    args, blk = printf_gen(f)
-    :(($expr(:tuple, args))->($blk))
-end
-
-macro f_str(f); f_str_f(f); end
-
-macro printf(f, exps...)
-    args, blk = printf_gen(f)
-    if length(args) != length(exps)
-        error("printf: wrong number of arguments")
+macro printf(args...)
+    local io, fmt
+    if isa(args[1],String)
+        io = :(Base.OUTPUT_STREAM)
+        fmt = args[1]
+        args = args[2:]
+    else
+        io = args[1]
+        fmt = args[2]
+        args = args[3:]
+    end
+    args = {io,args...}
+    sym_args, blk = printf_gen(fmt)
+    if length(sym_args) != length(args)
+        error("@printf: wrong number of arguments")
     end
     for i = length(args):-1:1
-        arg = args[i].args[1]
-        unshift(blk.args, :($arg = $esc(exps[i])))
+        var = sym_args[i].args[1]
+        unshift(blk.args, :($var = $esc(args[i])))
     end
     blk
 end
 
-fprintf(s::IOStream, f::Function, args...) = f(s, args...)
-fprintf(s::IOStream, fmt::String, args...) = fprintf(s, eval(Base,f_str_f(fmt)), args...)
-printf(f::Union(Function,String), args...) = fprintf(OUTPUT_STREAM, f, args...)
-sprintf(f::Union(Function,String), args...) = sprint(fprintf, f, args...)
+macro sprintf(args...)
+    :(sprint(io->@printf(io,$(map(esc,args)...))))
+end
 
-export @f_str, @printf, fprintf, printf, sprintf
+export @printf, @sprintf
 end # module
 import Base.Printf.*

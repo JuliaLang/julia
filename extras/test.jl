@@ -83,7 +83,7 @@ function dump(io::IOStream, t::TestResult)
     println(io, "$(t.operation) with args:")
     println(io, "1: $(t.arg1)\n2: $(t.arg2)\n3: $(t.arg3)")
     println(io, "Exception: $(t.exception_thrown)")
-    println(io, sprintf("%0.3f seconds\n", t.elapsed))
+    println(io, @sprintf("%0.3f seconds\n", t.elapsed))
 end
 
 # things to set state

@@ -410,7 +410,7 @@ type UmfpackLU{Tv<:Union(Float64,Complex128),Ti<:CHMITypes} <: Factorization{Tv}
 end
 
 function show(io, f::UmfpackLU)
-    printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
+    @printf("UMFPACK LU Factorization of a %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
     _jl_umfpack_report(f)
@@ -422,7 +422,7 @@ type UmfpackLUTrans{Tv<:Union(Float64,Complex128),Ti<:CHMITypes} <: Factorizatio
 end
 
 function show(io, f::UmfpackLUTrans)
-    printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
+    @printf("UMFPACK LU Factorization of a transposed %d-by-%d sparse matrix\n",
            size(f.mat,1), size(f.mat,2))
     println(f.numeric)
     _jl_umfpack_report(f)
