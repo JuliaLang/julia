@@ -16,6 +16,11 @@ ARCH = $(shell uname -m)
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
+# ATLAS must have been previously built with "make -C deps build-atlas",
+# or installed to usr/lib/libatlas from some another source (built as
+# a shared library, for your platform, single threaded)
+USE_ATLAS = 0
+
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
@@ -243,6 +248,15 @@ ifneq ($(strip $(MKLLIB)),)
     RPATH += -Wl,-rpath,$(MKLLIB)
   endif
 endif
+endif
+
+ifeq ($(USE_ATLAS), 1)
+USE_SYSTEM_BLAS=1
+USE_SYSTEM_LAPACK=1
+LIBBLAS = -lsatlas
+LIBLAPACK = -lsatlas
+LIBBLASNAME = libsatlas
+LIBLAPACKNAME = libsatlas
 endif
 
 # Libraries to link
