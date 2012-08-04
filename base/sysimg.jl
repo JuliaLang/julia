@@ -38,8 +38,7 @@ export
     PipeOut,Port,Ports,ProcessExited,ProcessGroup,ProcessNotRun,ProcessRunning,
     ProcessSignaled,ProcessStatus,ProcessStopped,Range,Range1,RangeIndex,Ranges,
     Rational,Regex,RegexMatch,RegexMatchIterator,Region,RemoteRef,RepString,
-    RevString,Reverse,RopeString,Set,StridedArray,StridedMatrix,StridedVecOrMat,
-    StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TcpSocket,
+    RevString,Reverse,RopeString,Set,Stream,StridedArray,StridedMatrix,StridedVecOrMat, StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TcpSocket,
 	TransformedString,TTY,VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
     Stat, Factorization, Cholesky, LU, QR, QRP,
     # Exceptions

@@ -459,23 +459,26 @@ DLLEXPORT int jl_tcp_bind(uv_tcp_t* handle, uint16_t port, uint32_t host)
     return err;
 }
 
-#ifndef __WIN32__
-#include <sys/types.h>
-#include <ifaddrs.h>
 DLLEXPORT
 void getlocalip(char *buf, size_t len)
 {
-    struct ifaddrs * ifAddrStruct=NULL;
-    struct ifaddrs * ifa=NULL;
+    uv_err_t err;
+    uv_interface_address_t * ifAddrStruct=NULL;
+    struct sockaddr_in ifa;
     void * tmpAddrPtr=NULL;
-    buf[0] = '\0';
+    int count=0;
 
-    getifaddrs(&ifAddrStruct);
+    err = uv_interface_addresses(&ifAddrStruct,&count);
+    if(err.code!=0)
+        if(ifAddrStruct!=NULL)
+            uv_free_interface_addresses(ifAddrStruct,count);
 
-    for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr && ifa->ifa_addr->sa_family==AF_INET) { // check it is IP4
+
+    for (int i = 0; i < count; i++) {
+        ifa = (ifAddrStruct+i)->address.address4;
+        if (ifa.sin_family==AF_INET) { // check it is IP4
             // is a valid IP4 Address
-            tmpAddrPtr=&((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+            tmpAddrPtr=&(ifa.sin_addr);
             inet_ntop(AF_INET, tmpAddrPtr, buf, len);
             if (strcmp(buf,"127.0.0.1"))
                 break;
@@ -491,9 +494,8 @@ void getlocalip(char *buf, size_t len)
         }
         */
     }
-    if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
+    if (ifAddrStruct!=NULL) uv_free_interface_addresses(ifAddrStruct,count);
 }
-#endif
 
 /*
 void jl_addinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res)

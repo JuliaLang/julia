@@ -3,7 +3,7 @@
 show(x) = show(OUTPUT_STREAM::Stream, x)
 
 show(io::Stream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
+show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::Stream, x)
 
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::Stream, x)

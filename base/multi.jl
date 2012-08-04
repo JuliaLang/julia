@@ -68,7 +68,7 @@ _jl_work_cb_handle = dummySingleAsync
 
 ## workers and message i/o ##
 
-function send_msg_unknown(s::IOStream, kind, args)
+function send_msg_unknown(s::Stream, kind, args)
     error("attempt to send to unknown socket")
 end
 
@@ -92,7 +92,7 @@ type Worker
     host::String
     port::Uint16
     socket::TcpSocket
-    sendbuf::IOStream
+    sendbuf::Buffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     id::Int
@@ -101,7 +101,7 @@ type Worker
     Worker(host::String,port::Integer)=Worker(cstring(host),uint16(port))
     Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
 
-    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, memio(),
+    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, DynamicBuffer(),
                                        {}, {}, id, false)
     Worker(host::String,port::Integer,sock::TcpSocket,id)=Worker(host,uint16(port),sock,id)
     Worker(host,port,sock) = Worker(host,port,sock,0)
@@ -132,7 +132,7 @@ function flush_gc_msgs(w::Worker)
 end
 
 #TODO: Move to different Thread
-function enq_send_req(sock::TcpSocket,buf::IOStream,now::Bool)
+function enq_send_req(sock::TcpSocket,buf,now::Bool)
     len=position(buf)
     write(sock,pointer(takebuf_array(buf)),len)
     #TODO implement "now"
@@ -217,7 +217,7 @@ function _jl_join_pgroup(myid, locs)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
         d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        add_io_handler(w[i].socket,make_callback((args...)->message_handler(d,args...)))
+        add_io_handler(w[i].socket,(args...)->message_handler(d,args...))
         send_msg_now(w[i], :identify_socket, myid)
     end
     for i = (myid+1):np
@@ -858,7 +858,7 @@ function accept_handler(accept_fd::Ptr,status::Int32,isclient)
     else
         first = true# isempty(sockets)
         d=Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
-        add_io_handler(client,make_callback((args...)->message_handler(d,args...)))
+        add_io_handler(client,(args...)->message_handler(d,args...))
     end
 end
 
@@ -960,9 +960,9 @@ start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
     worker_sockets = Dict()
-    (actual_port,sock) = open_any_tcp_port(default_port,make_callback((handle::Ptr,status::Int32)->accept_handler(handle,status,false)))
+    (actual_port,sock) = open_any_tcp_port(default_port,(handle::Ptr,status::Int32)->accept_handler(handle,status,false))
     write(out, "julia_worker:")  # print header
-    write(io, "$(dec(port[1]))#") # print port
+    write(out, "$(dec(actual_port))#") # print port
     write(out, getipaddr())      # print hostname
     write(out, '\n')
     # close stdin; workers will not use it
@@ -997,7 +997,8 @@ function writeback(handle,nread,base,buflen)
     end
 end
 
-function _parse_conninfo(w,i::Int,todo,stream::AsyncStream,conninfo::String)
+function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream,conninfo::String)
+    println("readcb")
     m = match(r"^julia_worker:(\d+)#(.*)", take_line(stream.buffer)) #TODO: do without a temporary array
     if m != nothing
         port = parse_int(Uint16, m.captures[1])
@@ -1010,7 +1011,7 @@ function _parse_conninfo(w,i::Int,todo,stream::AsyncStream,conninfo::String)
         stream.buffer.ptr = old_buffer.ptr
         todo[1]-=1
         if(todo[1]<=0)
-            break_one_loop(localEventLoop())
+            done_waiting_for(ps)
         end
     end
     false
@@ -1023,12 +1024,14 @@ function start_remote_workers(machines, cmds)
     todo = [int32(n)]
     for i=1:n
         ostream,ps = read_from(cmds[i])
-        ostream.readcb = (stream)->(_parse_conninfo(i,w,todo,stream);true)
+        ostream.readcb = (stream)->(_parse_conninfo(ps,i,w,todo,stream);true)
         ostream.buffer = LineBuffer()
         # redirect console output from workers to the client's stdout
         add_io_handler(ostream)
+        _jl_wait_for_(ps)
     end
-    run_event_loop(localEventLoop())
+    print(length(_jl_wait_for))
+    wait()
     w
 end
 

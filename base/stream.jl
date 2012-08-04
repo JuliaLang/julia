@@ -10,7 +10,6 @@
 
 
 typealias PtrSize Int
-const IOStreamHandle = Ptr{Void}
 globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
 mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},())
 
@@ -19,7 +18,6 @@ typealias Callback Union(Function,Bool)
 
 abstract AsyncStream <: Stream
 typealias StreamOrNot Union(Bool,AsyncStream)
-typealias BufOrNot Union(Bool,IOStream)
 typealias UVHandle Ptr{Void}
 typealias RawOrBoxedHandle Union(UVHandle,AsyncStream)
 typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
@@ -558,8 +556,7 @@ function process_exited_chain(p::Process,e::Int32,t::Int32)
     true
 end
 
-function process_closed_chain(p::Process)
-    done = process_exited(p)
+function done_waiting_for(p::Process)
     i = findfirst(_jl_wait_for, p)
     if i > 0
         del(_jl_wait_for, i)
@@ -567,6 +564,12 @@ function process_closed_chain(p::Process)
             break_one_loop()
         end
     end
+end
+
+function process_closed_chain(p::Process)
+    println("Process Exited")
+    done = process_exited(p)
+    done_waiting_for(p)
     done
 end
 
@@ -684,7 +687,7 @@ spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,fa
 read_from(cmds::AbstractCmd)=read_from(cmds, null_handle)
 function read_from(cmds::AbstractCmd, stdin::AsyncStream)
     out = NamedPipe()
-    processes = spawn(false, cmds, (stdin,out,null_handle))
+    processes = spawn(false, cmds, (stdin,out,STDERR))
     start_reading(out)
     (out, processes)
 end
@@ -755,18 +758,25 @@ end
 function wait(procs::Union(Process,ProcessChain))
     assert(length(_jl_wait_for) == 0)
     _jl_wait_for_(procs)
+    try
+        wait()
+    catch e
+        kill(procs)
+        throw(e)
+    end
+    return success(procs)
+end
+function wait()
     if length(_jl_wait_for) > 0
         try
             run_event_loop() #wait(procs)
         catch e
-            kill(procs)
             del_all(_jl_wait_for)
             process_events() #join(procs)
             throw(e)
         end
         assert(length(_jl_wait_for) == 0)
     end
-    return success(procs)
 end
 
 _jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
