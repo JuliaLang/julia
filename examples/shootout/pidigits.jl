@@ -44,7 +44,7 @@ function pidigits(N::Int, printOut::Bool)
                 if mod(i,10) == 0
                     if printOut
                         show(ns)
-                        printf("\t:%d\n", i)
+                        @printf("\t:%d\n", i)
                     end
                     if i >= N
                         return ns

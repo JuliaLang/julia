@@ -42,7 +42,7 @@ function main()
         for m in each_match(Regex(v), seq)
             k += 1
         end
-        printf(f"%s %d\n", v, k)
+        @printf("%s %d\n", v, k)
     end
 
     for (u, v) in subs

@@ -155,8 +155,8 @@ export
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
-    @gensym, @eval, @task, @f_str, @thunk, @L_str, @vectorize_1arg,
-    @vectorize_2arg, @printf
+    @gensym, @eval, @task, @thunk, @L_str, @vectorize_1arg,
+    @vectorize_2arg, @printf, @sprintf
 
 if false
     # simple print definitions for debugging. enable these if something

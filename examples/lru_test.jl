@@ -23,7 +23,7 @@ for lru in (
             )
     for n in nmax
         del_all(lru)
-        printf("  %s, %d items\n", lru, n)
+        @printf("  %s, %d items\n", lru, n)
         print("    Simple eviction: ")
         for i in 1:n
             str = get_str(i)
