@@ -237,6 +237,12 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     _jl_gemm('N', 'N', A, B)
 end
 
+function A_mul_B_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
+                                                                         A::StridedMatrix{T},
+                                                                         B::StridedMatrix{T})
+    _jl_gemm_prealloc(C, 'N', 'N', A, B)
+end
+
 function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
@@ -244,6 +250,13 @@ function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatr
     else
         _jl_gemm('T', 'N', A, B)
     end
+end
+
+function At_mul_B_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
+                                                                          A::StridedMatrix{T},
+                                                                          B::StridedMatrix{T})
+    # TODO: syrk
+    _jl_gemm_prealloc(C, 'T', 'N', A, B)
 end
 
 function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
@@ -255,9 +268,22 @@ function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatr
     end
 end
 
+function A_mul_Bt_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
+                                                                          A::StridedMatrix{T},
+                                                                          B::StridedMatrix{T})
+    _jl_gemm_prealloc(C, 'N', 'T', A, B)
+end
+
+
 function At_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
                                                               B::StridedMatrix{T})
     _jl_gemm('T', 'T', A, B)
+end
+
+function At_mul_Bt_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
+                                                                           A::StridedMatrix{T},
+                                                                           B::StridedMatrix{T})
+    _jl_gemm_prealloc(C, 'T', 'T', A, B)
 end
 
 Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
@@ -408,6 +434,40 @@ function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
     return C
 end
 
+function _jl_gemm_prealloc{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
+                                                                           tA,
+                                                                           tB,
+                                                                           A::StridedMatrix{T},
+                                                                           B::StridedMatrix{T})
+    if tA != 'N'
+        (nA, mA) = size(A)
+    else
+        (mA, nA) = size(A)
+    end
+    if tB != 'N'
+        (nB, mB) = size(B)
+    else
+        (mB, nB) = size(B)
+    end
+
+    if nA != mB; error("*: argument shapes do not match"); end
+    if mA != size(C,1) || nB != size(C, 2); error("*: output size is incorrect"); end
+
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(C,tA,tB,A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(C,tA,tB,A,B); end
+
+    # TODO: permit different strides
+    if stride(A, 1) != 1 || stride(B, 1) != 1 || stride(C, 1) != 1
+        error("strides along first dimension must be 1")
+    end
+
+    _jl_blas_gemm(tA, tB, mA, nB, nA,
+                  one(T), A, stride(A, 2),
+                  B, stride(B, 2),
+                  zero(T), C, mA)
+    return C
+end
+
 #SUBROUTINE DGEMV(TRANS,M,N,ALPHA,A,LDA,X,INCX,BETA,Y,INCY)
 #*     .. Scalar Arguments ..
 #      DOUBLE PRECISION ALPHA,BETA
@@ -458,4 +518,41 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
                  X, stride(X, 1),
                  zero(T), Y, 1)
     return Y
+end
+
+function A_mul_x_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
+                                                                         A::StridedMatrix{T},
+                                                                         x::StridedVector{T})
+    _jl_gemv_prealloc(y, "N", A, x)
+end
+    
+function At_mul_x_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
+                                                                          A::StridedMatrix{T},
+                                                                         x::StridedVector{T})
+    _jl_gemv_prealloc(y, "T", A, x)
+end
+    
+function _jl_gemv_prealloc{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
+                                                                           tA,
+                                                                           A::StridedMatrix{T},
+                                                                           x::StridedVector{T})
+    if tA != "N"
+        (nA, mA) = size(A)
+    else
+        (mA, nA) = size(A)
+    end
+
+    if nA != length(x); error("*: argument shapes do not match"); end
+    if mA != length(y); error("*: output size is incorrect"); end
+
+    # TODO: permit different stride
+    if stride(A, 1) != 1
+        error("stride along first dimension must be 1")
+    end
+
+    _jl_blas_gemv(tA, size(A, 1), size(A, 2),
+                  one(T), A, stride(A, 2),
+                  x, stride(x, 1),
+                  zero(T), y, stride(y, 1))
+    return y
 end

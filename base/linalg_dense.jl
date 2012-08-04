@@ -84,7 +84,10 @@ end
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
+    matmul2x2(C, tA, tB, A, B)
+end
 
+function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A21 = A[1,2]; A22 = A[2,2]
     elseif tA == 'C'
@@ -111,7 +114,10 @@ end
 function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
+    matmul3x3(C, tA, tB, A, B)
+end
 
+function matmul3x3{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A13 = A[3,1];
         A21 = A[1,2]; A22 = A[2,2]; A23 = A[3,2];
