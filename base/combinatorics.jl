@@ -116,23 +116,27 @@ function nthperm!(a::AbstractVector, k::Integer)
 end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
-# todo: should be O(n)
-isperm(a::AbstractVector) = isequal([1:length(a)], sort(a))
-
-# inverse permutation
+# invert a permutation
 function invperm(a::AbstractVector)
     b = zero(a) # similar vector of zeros
-    try
-        for i = 1:length(a)
-            if b[a[i]] != 0 error() end
-            b[a[i]] = i
+    n = length(a)
+    for i = 1:n
+        j = a[i]
+        if !(1 <= j <= n) || b[j] != 0
+            error("invperm: input is not a permutation")
         end
-    catch
-        # TODO: should catch more selectively, but at
-        # the moment, this is just an ExceptionError.
-        error("invperm: input must be a permutation")
+        b[j] = i
     end
     return b
+end
+
+function isperm(a::AbstractVector)
+    try
+        invperm(a)
+        true
+    catch
+        false
+    end
 end
 
 # Algorithm T from TAoCP 7.2.1.3
