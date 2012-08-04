@@ -525,7 +525,7 @@
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0 (car binds)))))
+			     (let ((asgn (cadr (julia-expand0- (car binds)))))
 			       (loop (cdr binds) args inits
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
@@ -613,7 +613,7 @@
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0 (car binds)))))
+			     (let ((asgn (cadr (julia-expand0- (car binds)))))
 			       (loop (cdr binds) args inits
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
@@ -2044,8 +2044,18 @@ So far only the second case can actually occur.
     (flatten-scopes
      (identify-locals ex)))))
 
+(define *in-expand0* #f)
+
 (define (julia-expand0 ex)
-  (reset-gensyms)
+  (let ((last *in-expand0*))
+    (if (not last)
+	(begin (reset-gensyms)
+	       (set! *in-expand0* #t)))
+    (let ((e (julia-expand0- ex)))
+      (set! *in-expand0* last)
+      e)))
+
+(define (julia-expand0- ex)
   (to-LFF
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
