@@ -77,7 +77,7 @@ On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
 
 #### OS X
 
-If you do not have `gfortran` installe, download and install [gfortran from hpc.sf.net](http://hpc.sf.net/).
+Download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), if necessary.
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
