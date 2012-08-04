@@ -494,27 +494,31 @@ distclean-openblas:
 	rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
 
 ## ATLAS (currently 3.10.0) ##
-# 32 bit, no threading, with full lapack, shared library
+# no threading, with full lapack, shared library
 # should always be compiled with (a real) gcc, it's
 # configure script will search for the best match
 # (gcc 4.7, gcc, clang,ICC/microsoft/others)
-ATLAS_OBJ_SOURCE = atlas/libatlas.$(SHLIB_EXT)
-ATLAS_FLAGS = --shared --prefix=$(USR) --cc=gcc -b 32 -t 0 \
+ATLAS_OBJ_SOURCE = atlas/build/lib/libsatlas.$(SHLIB_EXT)
+ATLAS_FLAGS = --shared --prefix=$(USR) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
+ifeq ($(OS), WINNT)
+ATLAS_FLAGS += -b 32 
+endif
 
 #force backwards compatibility (pick any 1)
-#ATLAS_FLAGS += -b 32 -V 192 -A 13  # requires SSE2 (P4 & later)
-#ATLAS_FLAGS += -b 32 -V 128 -A 12 # requires SSE1 (P3 & later)
-#ATLAS_FLAGS += -b 32 -V -1 -A 11 # any x87 (PentiumPro or Athlon & later)
-ATLAS_FLAGS += -b 32 -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
+#ATLAS_FLAGS += -V 192 -A 13  # requires SSE2 (P4 & later)
+#ATLAS_FLAGS += -V 128 -A 12 # requires SSE1 (P3 & later)
+#ATLAS_FLAGS += -V -1 -A 11 # any x87 (PentiumPro or Athlon & later)
+ATLAS_FLAGS += -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
+
 
 build-atlas: $(ATLAS_OBJ_SOURCE)
-install-atlas: $(USRLIB)/libatlas.$(SHLIB_EXT)
+install-atlas: $(USRLIB)/libsatlas.$(SHLIB_EXT)
 
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
-ifeq ($(MAKECMDGOALS) build-atlas)
-ifeq ($(MAKECMDGOALS) install-atlas)
+ifeq "$(MAKECMDGOALS)" "build-atlas"
+ifeq "$(MAKECMDGOALS)" "install-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
 atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
@@ -525,9 +529,9 @@ $(ATLAS_OBJ_SOURCE): atlas/build/Make.top
 	$(MAKE) -C atlas/build -j1
 endif
 endif
-$(USRLIB)/libatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE) | $(USRLIB)
+$(USRLIB)/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(USRLIB)
-	$(INSTALL_NAME_CMD)libatlas.$(SHLIB_EXT) $(USRLIB)/libatlas.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libsatlas.$(SHLIB_EXT) $(USRLIB)/libsatlas.$(SHLIB_EXT)
 
 clean-atlas:
 	rm -rf atlas/build
