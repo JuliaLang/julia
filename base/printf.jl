@@ -162,9 +162,9 @@ function printf_pad(m::Int, n, c::Char)
 end
 
 function print_fixed(out, precision)
-    pdigits = pointer(_digits)
-    ndigits = _len[1]
-    pt = _point[1]
+    pdigits = pointer(DIGITS)
+    ndigits = LEN[1]
+    pt = POINT[1]
     if pt <= 0
         # 0.0dddd0
         write(out, '0')
@@ -237,8 +237,8 @@ function printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     else
         push(blk.args, :(int_dec($x)))
     end
-    push(blk.args, :(neg = _neg[1]))
-    push(blk.args, :(pt  = _point[1]))
+    push(blk.args, :(neg = NEG[1]))
+    push(blk.args, :(pt  = POINT[1]))
     # calculate padding
     width -= strlen(prefix)
     space_pad = width > max(1,precision) && contains(flags,'-') ||
@@ -279,7 +279,7 @@ function printf_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, printf_pad(width-1, zeros, '0'))
     end
     # print integer
-    push(blk.args, :(write(out, pointer(_digits), pt)))
+    push(blk.args, :(write(out, pointer(DIGITS), pt)))
     # print padding
     if padding != nothing && contains(flags,'-')
         push(blk.args, printf_pad(width-precision, padding, ' '))
@@ -303,9 +303,9 @@ function printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     if precision < 0; precision = 6; end
     push(blk.args, :(fix_dec($x,$precision)))
-    push(blk.args, :(neg = _neg[1]))
-    push(blk.args, :(pt  = _point[1]))
-    push(blk.args, :(len = _len[1]))
+    push(blk.args, :(neg = NEG[1]))
+    push(blk.args, :(pt  = POINT[1]))
+    push(blk.args, :(len = LEN[1]))
     # calculate padding
     padding = nothing
     if precision > 0 || contains(flags,'#')
@@ -337,7 +337,7 @@ function printf_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if precision > 0
         push(blk.args, :(print_fixed(out,$precision)))
     else
-        push(blk.args, :(write(out, pointer(_digits), len)))
+        push(blk.args, :(write(out, pointer(DIGITS), len)))
         push(blk.args, :(while pt >= (len+=1) write(out,'0') end))
         contains(flags,'#') && push(blk.args, :(write(out, '.')))
     end
@@ -364,10 +364,10 @@ function printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     # interpret the number
     if precision < 0; precision = 6; end
-    ndigits = min(precision+1,_buflen-1)
+    ndigits = min(precision+1,BUFLEN-1)
     push(blk.args, :(ini_dec($x,$ndigits)))
-    push(blk.args, :(neg = _neg[1]))
-    push(blk.args, :(exp = _point[1]-1))
+    push(blk.args, :(neg = NEG[1]))
+    push(blk.args, :(exp = POINT[1]-1))
     expmark = c=='E' ? "E" : "e"
     if precision==0 && contains(flags,'#')
         expmark = strcat(".",expmark)
@@ -399,10 +399,10 @@ function printf_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
         push(blk.args, printf_pad(width, padding, '0'))
     end
     # print digits
-    push(blk.args, :(write(out, _digits[1])))
+    push(blk.args, :(write(out, DIGITS[1])))
     if precision > 0
         push(blk.args, :(write(out, '.')))
-        push(blk.args, :(write(out, pointer(_digits)+1, $(ndigits-1))))
+        push(blk.args, :(write(out, pointer(DIGITS)+1, $(ndigits-1))))
         if ndigits < precision+1
             n = precision+1-ndigits
             push(blk.args, printf_pad(n, n, '0'))
@@ -501,8 +501,8 @@ end
 macro handle_zero()
     quote
         if $esc(:x) == 0
-            _point[1] = 1
-            _digits[1] = '0'
+            POINT[1] = 1
+            DIGITS[1] = '0'
             return
         end
     end
@@ -510,18 +510,18 @@ end
 
 function decode_oct(x::Unsigned)
     @handle_zero
-    _point[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
+    POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+2,3)
     while i > 0
-        _digits[i] = '0'+(x&0x7)
+        DIGITS[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
 end
 
 function decode_0ct(x::Unsigned)
-    _point[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
+    POINT[1] = i = div((sizeof(x)<<3)-leading_zeros(x)+5,3)
     while i > 0
-        _digits[i] = '0'+(x&0x7)
+        DIGITS[i] = '0'+(x&0x7)
         x >>= 3
         i -= 1
     end
@@ -529,9 +529,9 @@ end
 
 function decode_dec(x::Unsigned)
     @handle_zero
-    _point[1] = i = ndigits0z(x)
+    POINT[1] = i = ndigits0z(x)
     while i > 0
-        _digits[i] = '0'+rem(x,10)
+        DIGITS[i] = '0'+rem(x,10)
         x = div(x,10)
         i -= 1
     end
@@ -539,9 +539,9 @@ end
 
 function decode_hex(x::Unsigned, symbols::Array{Uint8,1})
     @handle_zero
-    _point[1] = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
+    POINT[1] = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
     while i > 0
-        _digits[i] = symbols[(x&0xf)+1]
+        DIGITS[i] = symbols[(x&0xf)+1]
         x >>= 4
         i -= 1
     end
@@ -571,19 +571,19 @@ decode_HEX(x::Unsigned) = decode_hex(x,HEX_symbols)
 # - implies len[1] = point[1]
 #
 
-int_oct(x::Unsigned) = (_neg[1]=false; decode_oct(x))
-int_0ct(x::Unsigned) = (_neg[1]=false; decode_0ct(x))
-int_dec(x::Unsigned) = (_neg[1]=false; decode_dec(x))
-int_hex(x::Unsigned) = (_neg[1]=false; decode_hex(x))
-int_HEX(x::Unsigned) = (_neg[1]=false; decode_HEX(x))
+int_oct(x::Unsigned) = (NEG[1]=false; decode_oct(x))
+int_0ct(x::Unsigned) = (NEG[1]=false; decode_0ct(x))
+int_dec(x::Unsigned) = (NEG[1]=false; decode_dec(x))
+int_hex(x::Unsigned) = (NEG[1]=false; decode_hex(x))
+int_HEX(x::Unsigned) = (NEG[1]=false; decode_HEX(x))
 
 macro handle_negative()
     quote
         if $esc(:x) < 0
-            _neg[1] = true
+            NEG[1] = true
             $esc(:x) = -($esc(:x))
         else
-            _neg[1] = false
+            NEG[1] = false
         end
     end
 end
@@ -602,19 +602,19 @@ int_HEX(x::Real) = int_HEX(integer(x)) # TODO: real float decoding.
 
 function int_dec(x::Float)
     if x == 0.0
-        _neg[1] = false
-        _point[1] = 1
-        _digits[1] = '0'
+        NEG[1] = false
+        POINT[1] = 1
+        DIGITS[1] = '0'
         return
     end
     @grisu_ccall x Grisu.FIXED 0
-    if _len[1] == 0
-        _neg[1] = false
-        _point[1] = 1
-        _digits[1] = '0'
+    if LEN[1] == 0
+        NEG[1] = false
+        POINT[1] = 1
+        DIGITS[1] = '0'
     else
-        for i = _len[1]+1:_point[1]
-            _digits[i] = '0'
+        for i = LEN[1]+1:POINT[1]
+            DIGITS[i] = '0'
         end
     end
 end
@@ -626,16 +626,16 @@ end
 # - sets len[1]; if less than point[1], trailing zeros implied
 #
 
-fix_dec(x::Integer, n::Int) = (int_dec(x); _len[1]=_point[1])
+fix_dec(x::Integer, n::Int) = (int_dec(x); LEN[1]=POINT[1])
 fix_dec(x::Real, n::Int) = fix_dec(float(x),n)
 
 function fix_dec(x::Float, n::Int)
-    if n > _buflen-1; n = _buflen-1; end
+    if n > BUFLEN-1; n = BUFLEN-1; end
     @grisu_ccall x Grisu.FIXED n
-    if _len[1] == 0
-        _neg[1] = false
-        _point[1] = 1
-        _digits[1] = '0'
+    if LEN[1] == 0
+        NEG[1] = false
+        POINT[1] = 1
+        DIGITS[1] = '0'
     end
 end
 
@@ -649,13 +649,13 @@ end
 function ini_dec(x::Unsigned, n::Int)
     k = ndigits(x)
     if k <= n
-        _point[1] = k
+        POINT[1] = k
         for i = k:-1:1
-            _digits[i] = '0'+rem(x,10)
+            DIGITS[i] = '0'+rem(x,10)
             x = div(x,10)
         end
         for i = k+1:n
-            _digits[i] = '0'
+            DIGITS[i] = '0'
         end
     else
         p = powers_of_ten[k-n+1]
@@ -667,10 +667,10 @@ function ini_dec(x::Unsigned, n::Int)
                 k += 1
             end
         end
-        _point[1] = k
+        POINT[1] = k
         x = div(x,p)
         for i = n:-1:1
-            _digits[i] = '0'+rem(x,10)
+            DIGITS[i] = '0'+rem(x,10)
             x = div(x,10)
         end
     end
@@ -681,9 +681,9 @@ ini_dec(x::Real, n::Int) = ini_dec(float(x),n)
 
 function ini_dec(x::Float, n::Int)
     if x == 0.0
-        _point[1] = 1
-        _neg[1] = signbit(x)
-        ccall(:memset, Void, (Ptr{Uint8}, Int32, Int), _digits, '0', n)
+        POINT[1] = 1
+        NEG[1] = signbit(x)
+        ccall(:memset, Void, (Ptr{Uint8}, Int32, Int), DIGITS, '0', n)
     else
         @grisu_ccall x Grisu.PRECISION n
     end
@@ -698,23 +698,23 @@ end
 
 function sig_dec(x::Unsigned, n::Int)
     if x == 0
-        _neg[1] = false
-        _point[1] = 1
-        _len[1] = 1
-        _digits[1] = '0'
+        NEG[1] = false
+        POINT[1] = 1
+        LEN[1] = 1
+        DIGITS[1] = '0'
         return
     end
     k = ndigits0z(x)
     if k <= n
-        _point[1] = k
+        POINT[1] = k
         for i = k:-1:1
-            _digits[i] = '0'+rem(x,10)
+            DIGITS[i] = '0'+rem(x,10)
             x = div(x,10)
         end
-        while _digits[k] == '0'
+        while DIGITS[k] == '0'
             k -= 1
         end
-        _len[1] = k
+        LEN[1] = k
     else
         p = powers_of_ten[k-n+1]
         r = rem(x,p)
@@ -725,16 +725,16 @@ function sig_dec(x::Unsigned, n::Int)
                 k += 1
             end
         end
-        _point[1] = k
+        POINT[1] = k
         x = div(x,p)
         for i = n:-1:1
-            _digits[i] = '0'+rem(x,10)
+            DIGITS[i] = '0'+rem(x,10)
             x = div(x,10)
         end
-        while _digits[n] == '0'
+        while DIGITS[n] == '0'
             n -= 1
         end
-        _len[1] = n
+        LEN[1] = n
     end
 end
 
@@ -744,10 +744,10 @@ sig_dec(x::Real, n::Int) = sig_dec(float(x),n)
 function sig_dec(x::Float, n::Int)
     @grisu_ccall x Grisu.PRECISION n
     if x == 0.0; return; end
-    while _digits[n] == '0'
+    while DIGITS[n] == '0'
         n -= 1
     end
-    _len[1] = n
+    LEN[1] = n
 end
 
 ### external printf interface ###
