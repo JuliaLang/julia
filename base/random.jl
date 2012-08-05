@@ -30,7 +30,8 @@ end
 # macros to generate random arrays
 
 macro _jl_rand_matrix_builder(T, f)
-    f! = symbol("$(f)!")
+    f! = esc(symbol("$(f)!"))
+    f = esc(f)
     quote
         function ($f!)(A::Array{$T})
             for i = 1:numel(A)
@@ -44,7 +45,8 @@ macro _jl_rand_matrix_builder(T, f)
 end
 
 macro _jl_rand_matrix_builder_1arg(T, f)
-    f! = symbol("$(f)!")
+    f! = esc(symbol("$(f)!"))
+    f = esc(f)
     quote
         function ($f!)(arg, A::Array{$T})
             for i = 1:numel(A)

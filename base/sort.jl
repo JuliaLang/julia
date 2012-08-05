@@ -13,10 +13,10 @@ _jl_fp_neg_le(x::Float64, y::Float64) = sle_int(unbox(Float64,y),unbox(Float64,x
 ## internal sorting functionality ##
 
 macro _jl_sort_functions(suffix, lt, args...)
-insertionsort = symbol("_jl_insertionsort$suffix")
-quicksort = symbol("_jl_quicksort$suffix")
-mergesort = symbol("_jl_mergesort$suffix")
-pivot_middle = symbol("_jl_pivot_middle$suffix")
+insertionsort = esc(symbol("_jl_insertionsort$suffix"))
+quicksort = esc(symbol("_jl_quicksort$suffix"))
+mergesort = esc(symbol("_jl_mergesort$suffix"))
+pivot_middle = esc(symbol("_jl_pivot_middle$suffix"))
 lt = @eval (a,b)->$lt
 quote
 
@@ -283,7 +283,8 @@ each_vec(f::Function, a::AbstractMatrix, d::Integer) = each_vec!(f,copy(a),d)
 ## other sorting functions defined in terms of sort! ##
 
 macro in_place_matrix_op(out_of_place, args...)
-    in_place = symbol("$(out_of_place)!")
+    in_place = esc(symbol("$(out_of_place)!"))
+    out_of_place = esc(out_of_place)
     quote
         function ($in_place)(($args...), a::AbstractMatrix, dim::Int)
             m = size(a,1)

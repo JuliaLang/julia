@@ -1960,6 +1960,9 @@ So far only the second case can actually occur.
 	(else
 	 (map julia-expand-macros e))))
 
+(define (pair-with-gensyms v)
+  (map (lambda (s) (cons s (gensy))) v))
+
 (define (resolve-expansion-vars- e env m)
   (cond ((or (eq? e 'true) (eq? e 'false))
 	 e)
@@ -1974,7 +1977,7 @@ So far only the second case can actually occur.
 	 (case (car e)
 	   ((escape) (cadr e))
 	   ((macrocall)
-	    `(macrocall ,(cadr e)
+	    `(macrocall ,(cadr e) ;; TODO: might need to be resolved
 			,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
 			       (cddr e))))
@@ -1987,18 +1990,25 @@ So far only the second case can actually occur.
 			  (append!
 			   (filter (lambda (x)
 				     (not (assq (car x) env)))
-				   (env-for-expansion x))
+				   (pair-with-gensyms (vars-introduced-by x)))
 			   env)
 			  m))
 		       (cdr e))))))))
 
+;; decl-var that also identifies f in f()=...
+(define (decl-var* e)
+  (cond ((not (pair? e))       e)
+	((eq? (car e) 'escape) '())
+	((eq? (car e) 'call)   (decl-var* (cadr e)))
+	((eq? (car e) '=)      (decl-var* (cadr e)))
+	((eq? (car e) 'curly)  (decl-var* (cadr e)))
+	(else                  (decl-var e))))
+
 (define (find-declared-vars-in-expansion e decl)
   (if (or (not (pair? e)) (quoted? e))
       '()
-      (cond ((or (eq? (car e) 'lambda) (eq? (car e) 'escape))
-	     '())
-	    ((eq? (car e) decl)
-	     (map decl-var (cdr e)))
+      (cond ((eq? (car e) 'escape)  '())
+	    ((eq? (car e) decl)     (map decl-var* (cdr e)))
 	    (else
 	     (apply append! (map (lambda (x)
 				   (find-declared-vars-in-expansion x decl))
@@ -2008,11 +2018,14 @@ So far only the second case can actually occur.
   (if (or (not (pair? e)) (quoted? e))
       '()
       (case (car e)
-	((lambda escape)  '())
-	((= method)
-	 (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
-	     (map decl-var (cdr (cadr e)))
-	     (list (decl-var (cadr e)))))
+	((escape)  '())
+	((= function)
+	 (append! (filter
+		   symbol?
+		   (if (and (pair? (cadr e)) (eq? (car (cadr e)) 'tuple))
+		       (map decl-var* (cdr (cadr e)))
+		       (list (decl-var* (cadr e)))))
+		  (find-assigned-vars-in-expansion (caddr e))))
 	(else
 	 (apply append! (map find-assigned-vars-in-expansion e))))))
 
@@ -2028,7 +2041,7 @@ So far only the second case can actually occur.
 			   (find-assigned-vars-in-expansion e)
 			   (vars-introduced-by e)))
 		 (find-declared-vars-in-expansion e 'global))))
-    (map (lambda (x) (cons x (gensy))) v)))
+    (pair-with-gensyms v)))
 
 (define (resolve-expansion-vars e m)
   ;; expand binding form patterns

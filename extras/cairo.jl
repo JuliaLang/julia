@@ -100,7 +100,7 @@ end
 
 macro _CTX_FUNC_V(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext) =
+        ($esc(NAME))(ctx::CairoContext) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)),
                 Void, (Ptr{Void},), ctx.ptr)
     end
@@ -123,7 +123,7 @@ end
 
 macro _CTX_FUNC_I(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, i0::Integer) =
+        ($esc(NAME))(ctx::CairoContext, i0::Integer) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)),
                 Void, (Ptr{Void},Int32), ctx.ptr, i0)
     end
@@ -133,7 +133,7 @@ end
 
 macro _CTX_FUNC_D(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, d0::Real) =
+        ($esc(NAME))(ctx::CairoContext, d0::Real) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)),
                 Void, (Ptr{Void},Float64), ctx.ptr, d0)
     end
@@ -144,7 +144,7 @@ end
 
 macro _CTX_FUNC_DD(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, d0::Real, d1::Real) =
+        ($esc(NAME))(ctx::CairoContext, d0::Real, d1::Real) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)),
                 Void, (Ptr{Void},Float64,Float64), ctx.ptr, d0, d1)
     end
@@ -162,7 +162,7 @@ rel_move_to(ctx::CairoContext, x, y) = _rel_move_to(ctx, x, -y)
 
 macro _CTX_FUNC_DDD(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, d0::Real, d1::Real, d2::Real) =
+        ($esc(NAME))(ctx::CairoContext, d0::Real, d1::Real, d2::Real) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)),
                 Void, (Ptr{Void},Float64,Float64,Float64), ctx.ptr, d0, d1, d2)
     end
@@ -172,7 +172,7 @@ end
 
 macro _CTX_FUNC_DDDD(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, d0::Real, d1::Real, d2::Real, d3::Real) =
+        ($esc(NAME))(ctx::CairoContext, d0::Real, d1::Real, d2::Real, d3::Real) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)), Void,
                 (Ptr{Void},Float64,Float64,Float64,Float64),
                 ctx.ptr, d0, d1, d2, d3)
@@ -187,7 +187,7 @@ rectangle(ctx::CairoContext, x::Real, y::Real, w::Real, h::Real) =
 
 macro _CTX_FUNC_DDDDD(NAME, FUNCTION)
     quote
-        ($NAME)(ctx::CairoContext, d0::Real, d1::Real, d2::Real, d3::Real, d4::Real) =
+        ($esc(NAME))(ctx::CairoContext, d0::Real, d1::Real, d2::Real, d3::Real, d4::Real) =
             ccall(dlsym(_jl_libcairo,$string(FUNCTION)), Void,
                 (Ptr{Void},Float64,Float64,Float64,Float64,Float64),
                 ctx.ptr, d0, d1, d2, d3, d4)

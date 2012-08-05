@@ -466,7 +466,7 @@ end
 
 macro _jl_binary_op_sparse(op)
     quote
-
+        global $op
         function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
                 error("Incompatible sizes")
