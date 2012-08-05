@@ -518,7 +518,6 @@ install-atlas: $(USRLIB)/libsatlas.$(SHLIB_EXT)
 atlas/configure:
 	git clone git://github.com/vtjnash/atlas-3.10.0.git atlas
 ifeq "$(MAKECMDGOALS)" "build-atlas"
-ifeq "$(MAKECMDGOALS)" "install-atlas"
 # only allow building atlas as the sole target (without -jN)
 # since it internally handles parallelism, for tuning timing accuracy
 atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
@@ -527,7 +526,6 @@ atlas/build/Make.top: atlas/configure lapack-$(LAPACK_VER).tgz
 	../configure $(ATLAS_FLAGS)
 $(ATLAS_OBJ_SOURCE): atlas/build/Make.top
 	$(MAKE) -C atlas/build -j1
-endif
 endif
 $(USRLIB)/libsatlas.$(SHLIB_EXT): $(ATLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f atlas/build/lib/libsatlas.$(SHLIB_EXT) $(USRLIB)

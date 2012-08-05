@@ -7,6 +7,7 @@
 #TODO: don't allow waiting on close'd handles
 #TODO: libuv process_events w/o blocking
 #TODO: implement various buffer modes and helper function (minor)
+#TODO: Move stdio detection from C to Julia (might require some Clang magic)
 
 
 typealias PtrSize Int
@@ -302,7 +303,7 @@ function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
         end
         #EOF
     else
-        if(notify_filled(stream.buffer,nread,base,len) && isa(stream.readcb,Function))
+        if(notify_filled(stream.buffer,nread,base,len) && nread != 0 && isa(stream.readcb,Function))
             if(stream.readcb(stream))
                 notify_content_accepted(stream.buffer)#,nread,base,len)
             end
@@ -452,9 +453,9 @@ end
 
 ##stream functions
 
-start_reading(stream::AsyncStream) = ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream))
+start_reading(stream::AsyncStream) = stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream)) : 0
 start_reading(stream::AsyncStream,cb::Function) = (start_reading(stream);stream.readcb=cb)
-start_reading(stream::AsyncStream,cb::Bool) = ccall(:jl_start_reading,Bool,(Ptr{Void},),read_handle(stream))
+start_reading(stream::AsyncStream,cb::Bool) = start_reading(stream)
 
 stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),read_handle(stream))
 change_readcb(stream::AsyncStream,readcb::Function) = ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),read_handle(stream),readcb)
@@ -674,6 +675,7 @@ for (sym, stdin, stdout, stderr) in {(:spawn_opts_inherit, STDIN,STDOUT,STDERR),
  ($sym)() = (($stdin,$stdout,$stderr),false,false)
  ($sym)(in::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),false,false)
  ($sym)(in::StreamOrNot,out::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),false,false)
+ ($sym)(in::StreamOrNot,out::StreamOrNot,err::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,isa(err,AsyncStream)?err:$stderr),false,false)
 end
 end
 

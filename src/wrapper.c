@@ -6,6 +6,12 @@
 #include <unistd.h>
 
 #ifdef __WIN32__
+#include <w32api.h>
+
+#define WINVER                  WindowsVista
+#define _WIN32_WINDOWS          WindowsVista
+#define _WIN32_WINNT            WindowsVista
+#include <Ws2tcpip.h>
 #include <malloc.h>
 #else
 #include "errno.h"
@@ -368,6 +374,9 @@ DLLEXPORT int jl_putc(unsigned char c, uv_stream_t *stream)
 
 DLLEXPORT int jl_write(uv_stream_t *stream,char *str,size_t n)
 {
+//TODO: BAD!! Needed because Julia can't yet detect null stdio
+    if(stream == 0)
+        return 0;
     if(stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
         uv_write_t *uvw = malloc(sizeof(uv_write_t));
         uv_buf_t buf[]  = {{.base = str,.len=n}};
@@ -478,8 +487,14 @@ void getlocalip(char *buf, size_t len)
         ifa = (ifAddrStruct+i)->address.address4;
         if (ifa.sin_family==AF_INET) { // check it is IP4
             // is a valid IP4 Address
+#ifndef __WIN32__
             tmpAddrPtr=&(ifa.sin_addr);
-            inet_ntop(AF_INET, tmpAddrPtr, buf, len);
+            inet_ntop(AF_INET, tmpAddrPtr, buf, len); #Not available on WinXP
+#else
+			strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
+			buf[len]=0;
+#endif
+
             if (strcmp(buf,"127.0.0.1"))
                 break;
             //printf("%s IP Address %s\n", ifa->ifa_name, addressBuffer);

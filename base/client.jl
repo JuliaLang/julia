@@ -98,8 +98,11 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(stream::TTY)
-    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),stream.buffer.data,stream.buffer.ptr-1)
-    stream.buffer.ptr = 1 #reuse buffer
+	# This is bit tricky as :jl_readBuffer can trigger any behavior at any time (including running the event loop).
+	# For now just reset the buffer before the call to it, though this may also have other unintended consequences.
+	nread = stream.buffer.ptr-1
+	stream.buffer.ptr = 1 #reuse buffer
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),stream.buffer.data,nread)
     true
 end
 

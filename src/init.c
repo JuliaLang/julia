@@ -217,8 +217,8 @@ void *init_stdio_handle(uv_file fd,int readable)
             break;
         case UV_FILE:
             if(readable)
-                jl_error("stdin readine from files is not yet supported");
-            if(fd == 1)
+                jl_printf(JL_STDERR,"Reading from files as STDIN is not yet supported. Proceed with caution!");
+            else if(fd == 1)
                 handle=ios_stdout;
             else if(fd == 2)
                 handle=ios_stderr;
@@ -235,9 +235,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {
-    JL_STDIN = init_stdio_handle(0,1);
-    JL_STDOUT = init_stdio_handle(1,0);
     JL_STDERR = init_stdio_handle(2,0);
+    JL_STDOUT = init_stdio_handle(1,0);
+    JL_STDIN = init_stdio_handle(0,1);
 }
 
 void julia_init(char *imageFile)
