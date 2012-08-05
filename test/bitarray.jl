@@ -20,6 +20,7 @@ end
 
 cd("../extras") do
 require("linalg_bitarray.jl")
+end # do
 
 TT = Uint8
 S = promote_type(TT, Int)
@@ -439,5 +440,3 @@ end
 #@check_bit_operation diff Array{S} (b1,)
 
 @timesofar "linalg"
-
-end # do
