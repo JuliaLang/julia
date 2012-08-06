@@ -613,7 +613,7 @@ install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads LIBS=-lpthread
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads --with-incoming-stack-boundary=2 LIBS=-lpthread
 endif
 
 fftw-$(FFTW_VER).tar.gz:
