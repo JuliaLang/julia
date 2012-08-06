@@ -1,3 +1,4 @@
+typealias LapackScalar Union(Float64,Float32,Complex128,Complex64)
 
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
@@ -13,7 +14,7 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
     end
 end
 
-function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
+function copy_to{T<:LapackScalar}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
@@ -22,21 +23,34 @@ function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Ptr{T}, s
     return dest
 end
 
-function copy_to{T<:Union(Float64,Float32,Complex128,Complex64)}(dest::Array{T}, src::Array{T})
+function copy_to{T<:LapackScalar}(dest::Array{T}, src::Array{T})
     n = numel(src)
+    if n > numel(dest)
+        throw(BoundsError())
+    end
     if n < 200
         _jl_blas_copy(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
+    return dest
+end
+
+function copy_to{T<:LapackScalar,TI<:Integer}(dest::Array{T}, rdest::Union(Range1{TI},Range{TI}), src::Array{T}, rsrc::Union(Range1{TI},Range{TI}))
+    if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
+        throw(BoundsError())
+    end
+    if length(rdest) != length(rsrc)
+        error("Ranges must be of the same length")
+    end
+    _jl_blas_copy(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc), pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end
 
 # DOUBLE PRECISION FUNCTION DDOT(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
     @eval begin
-        function _jl_blas_dot(n::Integer, DX::Array{$elty}, incx::Integer,
-                              DY::Array{$elty}, incy::Integer)
+        function _jl_blas_dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
             ccall(dlsym(_jl_libblas, $string(fname)),
                   $elty,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
@@ -49,6 +63,13 @@ function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
     _jl_blas_dot(length(x), x, 1, y, 1)
 end
+function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+    length(rx) != length(ry) ? error("Ranges should be of same length") : true
+    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
+        throw(BoundsError())
+    end
+    _jl_blas_dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+end
 
 # ccall is unable to return complex values (Issue #85)
 #@blas_dot :zdotc_ Complex128
@@ -60,7 +81,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:dznrm2_,:Complex128,:Float64),
                                 (:scnrm2_,:Complex64,:Float32))
     @eval begin
-        function _jl_blas_nrm2(n::Integer, X::Array{$elty}, incx::Integer)
+        function _jl_blas_nrm2(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
             ccall(dlsym(_jl_libblas, $string(fname)),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
@@ -69,11 +90,16 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
     end
 end
 
-norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
-    _jl_blas_nrm2(length(x), x, 1)
-
+norm2{T<:LapackScalar}(x::Vector{T}) = _jl_blas_nrm2(length(x), x, 1)
+function norm2{T<:LapackScalar, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
+    if min(rx) < 1 || max(rx) > length(x)
+        throw(BoundsError())
+    end
+    _jl_blas_nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+end
 
 # SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
+# DY <- DA*DX + DY
 #*     .. Scalar Arguments ..
 #      DOUBLE PRECISION DA
 #      INTEGER INCX,INCY,N
@@ -82,14 +108,33 @@ norm{T<:Union(Float64,Float32,Complex128,Complex64)}(x::Vector{T}) =
 for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
                       (:zaxpy_,:Complex128), (:caxpy_,:Complex64))
     @eval begin
-        function _jl_blas_axpy(n::Integer, x::($elty), 
-                               DA::Array{$elty}, incx::Integer, DY::Array{$elty}, incy::Integer)
+        function _jl_blas_axpy(n::Integer, a::($elty), 
+                               DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
             ccall(dlsym(_jl_libblas, $string(fname)),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  &n, x, DA, &incx, DY, &incy)            
+                  &n, &a, DX, &incx, DY, &incy)            
         end
     end
+end
+
+function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Vector{T}, y::Vector{T})
+    if length(x) != length(y)
+        error("Inputs should be of the same length")
+    end
+    _jl_blas_axpy(length(x), convert(T, alpha), x, 1, y, 1)
+    return y
+end
+
+function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+    if length(rx) != length(ry)
+        error("Ranges should be of the same length")
+    end
+    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
+        throw(BoundsError())
+    end
+    _jl_blas_axpy(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    return y
 end
 
 # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
@@ -232,19 +277,19 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
    end
 end
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
+function (*){T<:LapackScalar}(A::StridedMatrix{T},
                                                              B::StridedMatrix{T})
     _jl_gemm('N', 'N', A, B)
 end
 
-function A_mul_B_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
-                                                                         A::StridedMatrix{T},
-                                                                         B::StridedMatrix{T})
+function A_mul_B_noalias{T<:LapackScalar}(C::StridedMatrix{T},
+                                          A::StridedMatrix{T},
+                                          B::StridedMatrix{T})
     _jl_gemm_prealloc(C, 'N', 'N', A, B)
 end
 
-function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                             B::StridedMatrix{T})
+function At_mul_B{T<:LapackScalar}(A::StridedMatrix{T},
+                                   B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_syrk('T', A)
     else
@@ -252,15 +297,15 @@ function At_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatr
     end
 end
 
-function At_mul_B_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
-                                                                          A::StridedMatrix{T},
-                                                                          B::StridedMatrix{T})
+function At_mul_B_noalias{T<:LapackScalar}(C::StridedMatrix{T},
+                                           A::StridedMatrix{T},
+                                           B::StridedMatrix{T})
     # TODO: syrk
     _jl_gemm_prealloc(C, 'T', 'N', A, B)
 end
 
-function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                             B::StridedMatrix{T})
+function A_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T},
+                                   B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_syrk('N', A)
     else
@@ -268,27 +313,27 @@ function A_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatr
     end
 end
 
-function A_mul_Bt_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
-                                                                          A::StridedMatrix{T},
-                                                                          B::StridedMatrix{T})
+function A_mul_Bt_noalias{T<:LapackScalar}(C::StridedMatrix{T},
+                                           A::StridedMatrix{T},
+                                           B::StridedMatrix{T})
     _jl_gemm_prealloc(C, 'N', 'T', A, B)
 end
 
 
-function At_mul_Bt{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                              B::StridedMatrix{T})
+function At_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T},
+                                    B::StridedMatrix{T})
     _jl_gemm('T', 'T', A, B)
 end
 
-function At_mul_Bt_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
-                                                                           A::StridedMatrix{T},
-                                                                           B::StridedMatrix{T})
+function At_mul_Bt_noalias{T<:LapackScalar}(C::StridedMatrix{T},
+                                            A::StridedMatrix{T},
+                                            B::StridedMatrix{T})
     _jl_gemm_prealloc(C, 'T', 'T', A, B)
 end
 
 Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
-                                             B::StridedMatrix{T})
+                                                  B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
         _jl_herk('C', A)
     else
@@ -298,7 +343,7 @@ end
 
 A_mul_Bc{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(A, B)
 function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
-                                             B::StridedMatrix{T})
+                                                  B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
         _jl_herk('N', A)
     else
@@ -306,8 +351,8 @@ function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
     end
 end
 
-function Ac_mul_Bc{T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                              B::StridedMatrix{T})
+function Ac_mul_Bc{T<:LapackScalar}(A::StridedMatrix{T},
+                                    B::StridedMatrix{T})
     _jl_gemm('C', 'C', A, B)
 end
 
@@ -320,8 +365,7 @@ function _jl_copy_upper_to_lower(A::StridedMatrix)
     end
 end
 
-function _jl_syrk{T<:Union(Float64,Float32,Complex128,Complex64)}(tA,
-                                                                  A::StridedMatrix{T})
+function _jl_syrk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     if tA == 'T'
         (nA, mA) = size(A)
         tAt = 'N'
@@ -360,8 +404,7 @@ function _jl_copy_upper_to_lower_conj(A::StridedMatrix)
     end
 end
 
-function _jl_herk{T<:Union(Float64,Float32,Complex128,Complex64)}(tA,
-                                                                  A::StridedMatrix{T})
+function _jl_herk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     if tA == 'C'
         (nA, mA) = size(A)
         tAt = 'N'
@@ -391,9 +434,9 @@ function _jl_herk{T<:Union(Float64,Float32,Complex128,Complex64)}(tA,
     return C
 end
 
-function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
-                                                                  A::StridedMatrix{T},
-                                                                  B::StridedMatrix{T})
+function _jl_gemm{T<:LapackScalar}(tA, tB,
+                                   A::StridedMatrix{T},
+                                   B::StridedMatrix{T})
     if tA != 'N'
         (nA, mA) = size(A)
     else
@@ -434,11 +477,11 @@ function _jl_gemm{T<:Union(Float64,Float32,Complex128,Complex64)}(tA, tB,
     return C
 end
 
-function _jl_gemm_prealloc{T<:Union(Float64,Float32,Complex128,Complex64)}(C::StridedMatrix{T},
-                                                                           tA,
-                                                                           tB,
-                                                                           A::StridedMatrix{T},
-                                                                           B::StridedMatrix{T})
+function _jl_gemm_prealloc{T<:LapackScalar}(C::StridedMatrix{T},
+                                            tA,
+                                            tB,
+                                            A::StridedMatrix{T},
+                                            B::StridedMatrix{T})
     if tA != 'N'
         (nA, mA) = size(A)
     else
@@ -499,8 +542,8 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
 end
 
 # TODO: support transposed arguments
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T},
-                                                             X::StridedVector{T})
+function (*){T<:LapackScalar}(A::StridedMatrix{T},
+                              X::StridedVector{T})
     (mA, nA) = size(A)
     mX = size(X, 1)
 
@@ -520,22 +563,22 @@ function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::StridedMatrix{T}
     return Y
 end
 
-function A_mul_x_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
-                                                                         A::StridedMatrix{T},
-                                                                         x::StridedVector{T})
+function A_mul_x_noalias{T<:LapackScalar}(y::StridedVector{T},
+                                          A::StridedMatrix{T},
+                                          x::StridedVector{T})
     _jl_gemv_prealloc(y, "N", A, x)
 end
     
-function At_mul_x_noalias{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
-                                                                          A::StridedMatrix{T},
-                                                                         x::StridedVector{T})
+function At_mul_x_noalias{T<:LapackScalar}(y::StridedVector{T},
+                                           A::StridedMatrix{T},
+                                           x::StridedVector{T})
     _jl_gemv_prealloc(y, "T", A, x)
 end
     
-function _jl_gemv_prealloc{T<:Union(Float64,Float32,Complex128,Complex64)}(y::StridedVector{T},
-                                                                           tA,
-                                                                           A::StridedMatrix{T},
-                                                                           x::StridedVector{T})
+function _jl_gemv_prealloc{T<:LapackScalar}(y::StridedVector{T},
+                                            tA,
+                                            A::StridedMatrix{T},
+                                            x::StridedVector{T})
     if tA != "N"
         (nA, mA) = size(A)
     else
