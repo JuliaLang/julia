@@ -51,7 +51,7 @@ Once it is built, you can either run the `julia` executable using its full path 
 
 In bash:
 
-    export PATH="$(pwd):$PATH"
+    echo "export PATH='$(pwd):$PATH'" >> ~/.bashrc
     
 In csh / tcsh:
 
@@ -195,7 +195,7 @@ For example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
 
-    export PATH="$(pwd)/julia:$PATH"
+    echo "export PATH='$(pwd):$PATH'" >> ~/.bashrc
 
 Now you should be able to run julia like this:
 
