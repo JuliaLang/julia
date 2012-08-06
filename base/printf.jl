@@ -5,7 +5,7 @@ import Base.Grisu.*
 ### printf formatter generation ###
 
 function _gen(s::String)
-    args = {:(out::IOStream)}
+    args = {:(out::IO)}
     blk = expr(:block, :(local neg, pt, len, exp))
     for x in _parse(s)
         if isa(x,String)
@@ -37,7 +37,7 @@ function _parse(s::String)
     while !done(s,j)
         c, k = next(s,j)
         if c == '%'
-            isempty(s[i:j-1]) || push(list, utf8(unescape_string(s[i:j-1])))
+            isempty(s[i:j-1]) || push(list, s[i:j-1])
             flags, width, precision, conversion, k = _parse1(s,k)
             contains(flags,'\'') && error("printf format flag ' not yet supported")
             conversion == 'a'    && error("printf feature %a not yet supported")
@@ -48,7 +48,7 @@ function _parse(s::String)
             j = k
         end
     end
-    isempty(s[i:]) || push(list, utf8(unescape_string(s[i:])))
+    isempty(s[i:]) || push(list, s[i:])
     # coalesce adjacent strings
     i = 1
     while i < length(list)
