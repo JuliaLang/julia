@@ -45,7 +45,7 @@ function norm(x::AbstractVector, p::Number)
     end
 end
 
-norm(x::AbstractVector) = sqrt(norm2(x))
+norm(x::AbstractVector) = sqrt(real(dot(x,x)))
 
 function norm(A::AbstractMatrix, p)
     if size(A,1) == 1 || size(A,2) == 1
