@@ -152,7 +152,7 @@ clean-llvm:
 	$(MAKE) -C llvm-$(LLVM_VER) clean
 	rm -f $(USRBIN)/llvm-config
 distclean-llvm:
-	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
+	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
 ## GNU readline ##
 
