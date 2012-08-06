@@ -153,7 +153,7 @@ end
 const null_handle = SpawnNullStream()
 SpawnNullStream() = null_handle
 
-copy(s::SpawnNullStream) = s
+copy(::SpawnNullStream) = null_handle
 
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 read_handle(s::AsyncStream) = s.handle
@@ -568,7 +568,6 @@ function done_waiting_for(p::Process)
 end
 
 function process_closed_chain(p::Process)
-    println("Process Exited")
     done = process_exited(p)
     done_waiting_for(p)
     done

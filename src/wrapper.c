@@ -33,7 +33,7 @@ extern "C" {
 
 #define DEFINE_JULIA_HOOK(hook) static jl_function_t *jl_uvhook_##hook = 0;
 #define JULIA_HOOK(hook) \
-    (jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = ((jl_function_t*) jl_get_global(jl_base_module,jl_symbol("_uv_hook_" #hook)))))
+    (jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = ((jl_function_t*) jl_get_global(jl_get_global(jl_root_module,jl_symbol("Base")),jl_symbol("_uv_hook_" #hook)))))
 
 jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {

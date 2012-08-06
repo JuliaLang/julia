@@ -147,7 +147,11 @@ try
         push(VERSION.build, ctim - 1250998746)
         push(VERSION.build, "r$(commit[1:4])")
     end
-    clean = success(`git diff --quiet HEAD`)
+    # This should be a call to `success`, which for unknown reasons fails
+    # because it can't find copy(SpawnNullStream) during inlining even though
+    # that function is defined in stream.jl. This has therefore been manually 
+    # inline, but should be replace with `success` if possible.
+    clean = wait(spawn(`git diff --quiet HEAD`,(null_handle,null_handle,null_handle)))
     if !clean; push(VERSION.build, "dirty"); end
     clean = clean ? "" : "*"
     isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
