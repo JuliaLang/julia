@@ -52,7 +52,7 @@ export
     addprocs_local,addprocs_sge,addprocs_ssh,all,allp,
     amap,and!,angle,ans,any,anyp,append,append!,apropos,areduce,
     ascii,asec,asecd,asech,asin,asind,asinh,assert,assign,at_each,atan,atan2,
-    atand,atanh,basename,begins_with,betarnd,bfft,bfftn,bin,binomial,bitmix,bits,bool,
+    atand,atanh,axpy,basename,begins_with,betarnd,bfft,bfftn,bin,binomial,bitmix,bits,bool,
     brfft,brfftn,broadcast,bswap,bsxfun,byte_string_classify,cartesian_map,cat,
     cbrt,cd,ceil,cell,cell_1d,cell_2d,changedist,char,chars,charwidth,
     check_ascii,check_utf8,chi2rnd,chol,chol!,chomp,choose,chop,chr2ind,
