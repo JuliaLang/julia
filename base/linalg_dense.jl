@@ -28,10 +28,13 @@ cross(a::Vector, b::Vector) =
 #       in libalg_blas.jl
 (*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = _jl_generic_matvecmul(A, B)
 function _jl_generic_matvecmul{T,S}(A::StridedMatrix{T}, B::StridedVector{S})
+    C = zeros(promote_type(T,S), size(A, 1))
+    _jl_generic_matvecmul(C, A, B)
+end
+function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, A::StridedMatrix{T}, B::StridedVector{S})
     mA = size(A, 1)
     mB = size(B, 1)
     if size(A, 2) != mB; error("*: argument shapes do not match"); end
-    C = zeros(promote_type(T,S), mA)
     for k = 1:mB
         b = B[k]
         for i = 1:mA
