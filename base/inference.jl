@@ -1096,7 +1096,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         rec = false
     end
     
-    fulltree = type_annotate(ast, s, sv, frame.result, vars)
+    fulltree = type_annotate(ast, s, sv, frame.result, vars, args)
     
     if !rec
         fulltree.args[3] = inlining_pass(fulltree.args[3], vars)
@@ -1190,8 +1190,12 @@ end
 
 # annotate types of all symbols in AST
 function type_annotate(ast::Expr, states::Array{Any,1},
-                       sv::ANY, rettype::ANY, vnames::ANY)
+                       sv::ANY, rettype::ANY, vnames::ANY, args)
     decls = ObjectIdDict()
+    # initialize decls with argument types
+    for arg in args
+        decls[arg] = states[1][arg]
+    end
     closures = {}
     body = ast.args[3].args::Array{Any,1}
     for i=1:length(body)
@@ -1199,23 +1203,20 @@ function type_annotate(ast::Expr, states::Array{Any,1},
     end
     ast.args[3].typ = rettype
 
-    vinf = append(ast.args[2][2], ast.args[2][3])::Array{Any,1}
     # add declarations for variables that are always the same type
-    for vi in vinf
-        if has(decls,vi[1])
-            vi[2] = decls[vi[1]]
-        end
+    for vi in ast.args[2][2]::Array{Any,1}
+        vi[2] = get(decls, vi[1], vi[2])
+    end
+    for vi in ast.args[2][3]::Array{Any,1}
+        vi[2] = get(decls, vi[1], vi[2])
     end
 
     for (li::LambdaStaticData) in closures
         if !li.inferred
             a = li.ast
             # pass on declarations of captured vars
-            vinf = a.args[2][3]::Array{Any,1}
-            for vi in vinf
-                if has(decls,vi[1])
-                    vi[2] = decls[vi[1]]
-                end
+            for vi in a.args[2][3]::Array{Any,1}
+                vi[2] = get(decls, vi[1], vi[2])
             end
             na = length(a.args[1])
             typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
