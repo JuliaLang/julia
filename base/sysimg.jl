@@ -128,7 +128,7 @@ export
     sign,signbit,signed,significand,similar,sin,sinc,sind,sinh,size,sizeof,skip,
     sleep,slice,slicedim,sort,sort!,sort_by,sort_by!,sortperm,sortr,sortr!,
     spawn,spawnat,spawnlocal,split,sprint,sprintf,sqrt,square,squeeze,srand,
-    sshow,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
+    repr,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
     stdout_stream,step,strcat,strchr,strerror,strftime,stride,strides,string,
     strip,strlen,strptime,strwidth,sub,sub2ind,success,successful,sum,summary,
     super,svd,svdvals,symbol,system,system_error,take,takebuf_string,tan,tand,
