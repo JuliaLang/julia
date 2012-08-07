@@ -533,54 +533,53 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
-                 trans, &m, &n,
+                 &trans, &m, &n,
                  &alpha, A, &lda,
                  X, &incx,
                  &beta, Y, &incy)
        end
-
    end
 end
 
-# TODO: support transposed arguments
 function (*){T<:LapackScalar}(A::StridedMatrix{T},
                               X::StridedVector{T})
-    (mA, nA) = size(A)
-    mX = size(X, 1)
+    Y = similar(A, size(A,1))
+    _jl_gemv(Y, 'N', A, X)
+end
 
-    if nA != mX; error("*: argument shapes do not match"); end
-
+function A_mul_x{T<:LapackScalar}(y::StridedVector{T},
+                                  A::StridedMatrix{T},
+                                  x::StridedVector{T})
+    _jl_gemv(y, 'N', A, x)
+end
+    
+function A_mul_x(y::StridedVector,
+                 A::StridedMatrix,
+                 x::StridedVector)
+    _jl_generic_matvecmul(y, 'N', A, x)
+end
+    
+function At_mul_x{T<:LapackScalar}(y::StridedVector{T},
+                                   A::StridedMatrix{T},
+                                   x::StridedVector{T})
+    _jl_gemv(y, 'T', A, x)
+end
+    
+function At_mul_x(y::StridedVector,
+                 A::StridedMatrix,
+                 x::StridedVector)
+    _jl_generic_matvecmul(y, 'T', A, x)
+end
+    
+function _jl_gemv{T<:LapackScalar}(y::StridedVector{T},
+                                   tA,
+                                   A::StridedMatrix{T},
+                                   x::StridedVector{T})
     if stride(A, 1) != 1
-        return _jl_generic_matvecmul(A, X)
+        return _jl_generic_matvecmul(y, tA, A, x)
     end
 
-    # Result array does not need to be initialized as long as beta==0
-    Y = Array(T, mA)
-
-    _jl_blas_gemv("N", mA, nA,
-                 one(T), A, stride(A, 2),
-                 X, stride(X, 1),
-                 zero(T), Y, 1)
-    return Y
-end
-
-function A_mul_x_noalias{T<:LapackScalar}(y::StridedVector{T},
-                                          A::StridedMatrix{T},
-                                          x::StridedVector{T})
-    _jl_gemv_prealloc(y, "N", A, x)
-end
-    
-function At_mul_x_noalias{T<:LapackScalar}(y::StridedVector{T},
-                                           A::StridedMatrix{T},
-                                           x::StridedVector{T})
-    _jl_gemv_prealloc(y, "T", A, x)
-end
-    
-function _jl_gemv_prealloc{T<:LapackScalar}(y::StridedVector{T},
-                                            tA,
-                                            A::StridedMatrix{T},
-                                            x::StridedVector{T})
-    if tA != "N"
+    if tA != 'N'
         (nA, mA) = size(A)
     else
         (mA, nA) = size(A)
@@ -588,11 +587,6 @@ function _jl_gemv_prealloc{T<:LapackScalar}(y::StridedVector{T},
 
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
-
-    # TODO: permit different stride
-    if stride(A, 1) != 1
-        error("stride along first dimension must be 1")
-    end
 
     _jl_blas_gemv(tA, size(A, 1), size(A, 2),
                   one(T), A, stride(A, 2),
