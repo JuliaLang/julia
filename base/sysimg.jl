@@ -43,9 +43,9 @@ export
     # Operators
     !,!=,$,%,&,*,+,-,.!=,.*,./,.<,.<=,.==,.>,.>=,.\,.^,/,//,:,<,<:,<<,<=,==,
     >,>=,>>,>>>,\,^,|,~,
-    A_ldiv_Bc,A_ldiv_Bt,A_mul_Bc,A_mul_Bt,A_rdiv_Bc,A_rdiv_Bt,Ac_ldiv_B,
+    A_ldiv_Bc,A_ldiv_Bt,A_mul_B,A_mul_Bc,A_mul_Bt,A_rdiv_Bc,A_rdiv_Bt,Ac_ldiv_B,
     Ac_ldiv_Bc,Ac_mul_B,Ac_mul_Bc,Ac_rdiv_B,Ac_rdiv_Bc,At_ldiv_B,At_ldiv_Bt,
-    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,A_mul_B_noalias,At_mul_B_noalias,A_mul_Bt_noalias,At_mul_Bt_noalias,A_mul_x,At_mul_x,
+    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,A_mul_B_noalias,At_mul_B_noalias,A_mul_Bt_noalias,At_mul_Bt_noalias,
     # Functions
     c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
     add_each,add_fd_handler,add_weak_key,add_weak_value,
