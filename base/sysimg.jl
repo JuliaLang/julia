@@ -81,7 +81,7 @@ export
     gc_disable,gc_enable,gcd,gcdx,gen_cartesian_map,gensym,get,getenv,
     gethostname,getipaddr,getmethods,getpid,gradient,
     grow,has,hasenv,hash,hcat,help,hex,hex2num,hist,histc,
-    htol,hton,hvcat,hypot,iceil,identity,ifft,ifft2,ifft3,ifftn,ifftshift,
+    htol,hton,hvcat,hypot,iceil,identity,idump,ifft,ifft2,ifft3,ifftn,ifftshift,
     ifloor,ignorestatus,ilogb,imag,in,include_string,ind2chr,ind2sub,inf,
     insert,int,int128,int16,int2str,int32,int64,int8,integer,integer_partitions,
     integer_valued,inter,intersect,intersection,intersection!,intset,inv,invmod,
