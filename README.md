@@ -47,7 +47,7 @@ Building julia requires 1.5GiB of diskspace and approximately 700MiB of virtual 
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
-Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
+Once it is built, you can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
 In bash:
 
@@ -193,9 +193,9 @@ For example, if you are on an OS X (Darwin) x86/64 system, do the following:
     wget https://github.com/downloads/JuliaLang/julia/julia-c4865bd18d-Darwin-i386.tar.gz
     tar zxvf julia-c4865bd18d-Darwin-i386.tar.gz
 
-You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere:
+You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
-    export PATH="$(pwd)/julia:$PATH"
+    export PATH="$(pwd):$PATH"
 
 Now you should be able to run julia like this:
 
