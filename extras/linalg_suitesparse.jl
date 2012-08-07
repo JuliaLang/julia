@@ -69,7 +69,7 @@ indtype{Tv,Ti}(P::CholmodPtr{Tv,Ti}) = Ti
 function _jl_cholmod_common_finalizer(x::Vector{Ptr{Void}})
     st = ccall(dlsym(_jl_libcholmod, :cholmod_finish), Int32, (Ptr{Void},), x[1])
     if st != _jl_CHOLMOD_TRUE error("Error calling cholmod_finish") end
-    _c_free(x[1])
+    c_free(x[1])
 end
 
 type CholmodCommon
@@ -107,7 +107,7 @@ type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
               pt.val, S.m, S.n, nnz(S), cp.colptr, cp.rowval, C_NULL,
               cp.nzval, C_NULL, stype, chm_itype(S), chm_xtype(S), chm_dtype(S),
               _jl_CHOLMOD_TRUE, _jl_CHOLMOD_TRUE)
-        finalizer(pt, x->_c_free(x.val[1]))
+        finalizer(pt, x->c_free(x.val[1]))
         new(pt, cp, int(stype), cm)
     end
 end
@@ -213,7 +213,7 @@ function CholmodDense{T<:CHMVTypes}(b::VecOrMat{T}, cm::CholmodCommon)
     ccall(dlsym(_jl_libsuitesparse_wrapper, :jl_cholmod_dense), Void,
           (Ptr{Void}, Uint, Uint, Uint, Uint, Ptr{Void}, Ptr{Void}, Int32, Int32),
           pt, m, n, length(b), m, b, C_NULL, xtype, dtype)
-    finalizer(pt, x->_c_free(pt[1]))
+    finalizer(pt, x->c_free(pt[1]))
     CholmodDense{T}(pt, m, n, copy(b), cm)
 end
 
@@ -420,8 +420,8 @@ function _jl_cholmod_transpose_unsym{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, cm::Array
                    cs[1], int32(1), C_NULL, C_NULL, int32(-1), cs_t[1], cm[1]);
 
     # Deallocate space for cholmod_sparse objects
-    _c_free(cs[1])
-    _c_free(cs_t[1])
+    c_free(cs[1])
+    c_free(cs_t[1])
 
     return S_t
 end

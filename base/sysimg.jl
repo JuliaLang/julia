@@ -47,7 +47,7 @@ export
     Ac_ldiv_Bc,Ac_mul_B,Ac_mul_Bc,Ac_rdiv_B,Ac_rdiv_Bc,At_ldiv_B,At_ldiv_Bt,
     At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,A_mul_B_noalias,At_mul_B_noalias,A_mul_Bt_noalias,At_mul_Bt_noalias,A_mul_x,At_mul_x,
     # Functions
-    _c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
+    c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
     add_each,add_fd_handler,add_weak_key,add_weak_value,
     addprocs_local,addprocs_sge,addprocs_ssh,all,allp,
     amap,and!,angle,ans,any,anyp,append,append!,apropos,areduce,
