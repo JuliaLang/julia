@@ -752,8 +752,18 @@ end
 
 ### external printf interface ###
 
+_is_str_expr(ex) =
+    isa(ex,Expr) && ex.head==:macrocall && isa(ex.args[1],Symbol) &&
+    (ex.args[1] == :str || ends_with(string(ex.args[1]),"_str"))
+
 macro printf(args...)
     local io, fmt
+    if !(isa(args[1],String) || isa(args[2],String))
+        if _is_str_expr(args[1]) || _is_str_expr(args[2])
+           error("format must be a plain static string (no interpolation or prefix)")
+        end
+        error("first or second argument must be a format string")
+    end
     if isa(args[1],String)
         io = :(Base.OUTPUT_STREAM)
         fmt = args[1]
