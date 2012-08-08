@@ -736,7 +736,7 @@
        (if const
 	   `(const ,expr)
 	   expr)))
-    ((function)
+    ((function macro)
      (let* ((paren (eqv? (require-token s) #\())
 	    (sig   (parse-call s))
 	    (def   (if (symbol? sig)
@@ -744,11 +744,11 @@
 			   ;; in "function (x)" the (x) is a tuple
 			   `(tuple ,sig)
 			   ;; function foo  =>  syntax error
-			   (error "expected ( in function definition"))
+			   (error (string "expected ( in " word " definition")))
 		       (if (not (and (pair? sig)
 				     (or (eq? (car sig) 'call)
 					 (eq? (car sig) 'tuple))))
-			   (error "expected ( in function definition")
+			   (error (string "expected ( in " word " definition"))
 			   sig)))
 	    (loc   (begin (skip-ws-and-comments (ts:port s))
 			  (line-number-filename-node s)))
@@ -759,10 +759,6 @@
 		(eq? (caadr body) 'line))
 	   (set-car! (cdr body) loc))
        (list word def body)))
-    ((macro)
-     (let ((sig (parse-call s)))
-       (begin0 (list word sig (parse-block s))
-	       (expect-end s))))
     ((abstract)
      (list 'abstract (parse-subtype-spec s)))
     ((type)
