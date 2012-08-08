@@ -547,29 +547,18 @@ function (*){T<:LapackScalar}(A::StridedMatrix{T},
     _jl_gemv(Y, 'N', A, X)
 end
 
-function A_mul_x{T<:LapackScalar}(y::StridedVector{T},
-                                  A::StridedMatrix{T},
-                                  x::StridedVector{T})
-    _jl_gemv(y, 'N', A, x)
-end
+A_mul_B{T<:LapackScalar}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = _jl_gemv(y, 'N', A, x)
     
-function A_mul_x(y::StridedVector,
-                 A::StridedMatrix,
-                 x::StridedVector)
-    _jl_generic_matvecmul(y, 'N', A, x)
-end
+A_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = _jl_generic_matvecmul(y, 'N', A, x)
     
-function At_mul_x{T<:LapackScalar}(y::StridedVector{T},
-                                   A::StridedMatrix{T},
-                                   x::StridedVector{T})
+function At_mul_B{T<:LapackScalar}(A::StridedMatrix{T}, x::StridedVector{T})
+    y = similar(A, size(A, 2))
     _jl_gemv(y, 'T', A, x)
 end
+
+At_mul_B{T<:LapackScalar}(y::StridedVector{T}, A::StridedMatrix{T}, x::StridedVector{T}) = _jl_gemv(y, 'T', A, x)
     
-function At_mul_x(y::StridedVector,
-                 A::StridedMatrix,
-                 x::StridedVector)
-    _jl_generic_matvecmul(y, 'T', A, x)
-end
+At_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = _jl_generic_matvecmul(y, 'T', A, x)
     
 function _jl_gemv{T<:LapackScalar}(y::StridedVector{T},
                                    tA,

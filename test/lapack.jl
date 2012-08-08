@@ -62,16 +62,16 @@ b = [1.2,-2.5]
 b = float64([1:4])
 v = zeros(4)
 vt = zeros(4)
-A_mul_x(v, A, b)
-At_mul_x(vt, A', b)
+A_mul_B(v, A, b)
+At_mul_B(vt, A', b)
 @assert v == vt
 
 A = reshape(1:16, 4, 4)  # Int bypasses lapack, test fallback
 b = [1:4]
 v = zeros(Int,4)
 vt = zeros(Int,4)
-A_mul_x(v, A, b)
-At_mul_x(vt, A', b)
+A_mul_B(v, A, b)
+At_mul_B(vt, A', b)
 @assert v == vt
 
 

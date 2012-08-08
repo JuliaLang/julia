@@ -1,6 +1,7 @@
 module Printf
 import Base.*
 import Base.Grisu.*
+export @printf, @sprintf
 
 ### printf formatter generation ###
 
@@ -792,6 +793,5 @@ macro sprintf(args...)
     :(sprint(io->@printf(io,$(map(esc,args)...))))
 end
 
-export @printf, @sprintf
 end # module
 import Base.Printf.*

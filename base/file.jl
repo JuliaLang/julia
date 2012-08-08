@@ -20,10 +20,6 @@ const last_separator = Regex(strcat(os_separator_match, "(?!.*", os_separator_ma
 #     an os_separator (handles cases like .bashrc or /home/fred/.juliarc)
 const extension_separator_match = Regex(strcat("(?<!^)(?<!",
     os_separator_match, ")\\.(?!.*[", os_separator_match_chars, "\.])"))
-# Match ~/filename
-const plain_tilde = Regex(strcat("^~", os_separator_match))
-# Match ~user/filename
-const user_tilde = r"^~\w"
 
 filesep() = os_separator
 
@@ -100,20 +96,15 @@ function isrooted(path::String)
     false
 end
 
-global tilde_expand
-function tilde_expand(path::String)
-    @windows_only return path  # on windows, ~ means "temporary file"
-    @unix_only begin
-        m = match(user_tilde, path)
-        if m != nothing
-            return "/home/"*path[2:end]
-        end
-    end
-    m = match(plain_tilde, path)
-    if m != nothing
-        return ENV["HOME"]*path[2:end]
-    end
-    path
+@windows_only tilde_expand(path::String) = path # on windows, ~ means "temporary file"
+@unix_only function tilde_expand(path::String)
+    i = start(path)
+    c, i = next(path,i)
+    if c != '~' return path end
+    if done(path,i) return ENV["HOME"] end
+    c, j = next(path,i)
+    if c == '/' return ENV["HOME"]*path[i:end] end
+    error("~user tilde expansion not yet implemented")
 end
 
 # Get the absolute path to a file. Uses file system for cwd() when
@@ -158,8 +149,6 @@ function abs_path(fname::String)
 end
 
 
-# The remaining commands use the file system in some way
-
 # Get the full, real path to a file, including dereferencing
 # symlinks.
 function real_path(fname::String)
@@ -171,7 +160,6 @@ function real_path(fname::String)
     return s
 end
 
-
 # get and set current directory
 
 function cwd()
@@ -181,11 +169,10 @@ function cwd()
     cstring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),real_path(dir)) == -1)
+cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
-
 function cd(f::Function, dir::String)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     system_error("open", fd == -1)

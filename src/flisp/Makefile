@@ -43,7 +43,7 @@ flmain.o:  flmain.c flisp.h
 flmain.do: flmain.c flisp.h
 
 $(LLT): $(LLTDIR)/*.h $(LLTDIR)/*.c
-	cd $(LLTDIR) && make
+	cd $(LLTDIR) && $(MAKE)
 
 $(LIBTARGET)-debug.a: $(DOBJS)
 	rm -rf $@
