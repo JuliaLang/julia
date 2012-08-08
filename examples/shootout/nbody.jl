@@ -123,11 +123,11 @@ end
 
 function nbody(N::Int)
     init_sun(bodies)
-    printf("%.9f\n", energy(bodies))
+    @printf("%.9f\n", energy(bodies))
     for i = 1:N
         advance(bodies, 0.01)
     end
-    printf("%.9f\n", energy(bodies))
+    @printf("%.9f\n", energy(bodies))
 end
 
 # main

@@ -203,36 +203,87 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
     return emit_unbox(to, PointerType::get(to, 0), v);
 }
 
+// figure out how many bits a bitstype has at compile time, or -1
+static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
+{
+    jl_value_t *et = expr_type(targ, ctx);
+    if (jl_is_type_type(et)) {
+        jl_value_t *p = jl_tparam0(et);
+        if (jl_is_bits_type(p))
+            return jl_bitstype_nbits(p);
+        if (jl_is_typevar(p)) {
+            jl_value_t *ub = ((jl_tvar_t*)p)->ub;
+            if (jl_is_bits_type(ub))
+                return jl_bitstype_nbits(ub);
+        }
+    }
+    return -1;
+}
+
 // unbox using user-specified type
 static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
-    jl_value_t *bt =
-        jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
-                                      jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bits_type(bt))
-        jl_error("unbox: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
+    int nb = try_to_determine_bitstype_nbits(targ, ctx);
+    if (nb == -1) {
+        jl_value_t *bt=NULL;
+        JL_TRY {
+            bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+        }
+        if (bt == NULL || !jl_is_bits_type(bt))
+            jl_error("unbox: could not determine argument size");
+        nb = jl_bitstype_nbits(bt);
+    }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
 }
 
 static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
-    jl_value_t *bt =
-        jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
-                                      jl_tuple_len(ctx->sp)/2);
-    if (!jl_is_bits_type(bt))
-        jl_error("box: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
-    Value *vx = auto_unbox(x, ctx);
-    if (vx->getType()->getPrimitiveSizeInBits() != nb)
-        jl_errorf("box: expected argument with %d bits", nb);
-    Type *llvmt = julia_type_to_llvm(bt, ctx);
-    if (llvmt == NULL) {
-        return literal_pointer_val(jl_nothing);
+    int nb = try_to_determine_bitstype_nbits(targ, ctx);
+
+    Type *llvmt = NULL;
+    jl_value_t *bt = NULL;
+    jl_value_t *et = expr_type(targ, ctx);
+    if (jl_is_type_type(et) && jl_is_leaf_type(jl_tparam0(et)) &&
+        jl_is_bits_type(jl_tparam0(et))) {
+        bt = jl_tparam0(et);
     }
+    else {
+        JL_TRY {
+            bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
+                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_len(ctx->sp)/2);
+        }
+        JL_CATCH {
+        }
+    }
+
+    if (bt == NULL) {
+    }
+    else if (!jl_is_bits_type(bt)) {
+        jl_error("box: expected bits type as first argument");
+    }
+    else {
+        llvmt = julia_type_to_llvm(bt, ctx);
+        int btnb = jl_bitstype_nbits(bt);
+        assert(nb==-1 || nb==btnb);
+        nb = btnb;
+    }
+
+    if (nb == -1)
+        jl_error("box: could not determine argument size");
+
+    if (llvmt == NULL)
+        llvmt = IntegerType::get(jl_LLVMContext, nb);
+
+    Value *vx = auto_unbox(x, ctx);
+    if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
+        jl_errorf("box: expected argument with %d bits", nb);
+
     if (vx->getType() != llvmt) {
         if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
             vx = builder.CreatePtrToInt(vx, llvmt);
@@ -247,7 +298,13 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                 vx = builder.CreateBitCast(vx, llvmt);
         }
     }
-    return mark_julia_type(vx, bt);
+
+    if (bt != NULL) {
+        return mark_julia_type(vx, bt);
+    }
+
+    // dynamically-determined type; evaluate.
+    return allocate_box_dynamic(emit_expr(targ, ctx), nb, vx);
 }
 
 static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)

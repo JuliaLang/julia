@@ -51,4 +51,28 @@ x = tril(a) \ b
 # symmetric, negative definite
 @assert norm(inv([1. 2; 2 1]) - [-1. 2; 2 -1]/3) < Eps
 
+## matrix algebra with subarrays (tests lapack vs. julia fallback) ##
+A = reshape(float64(1:16),4,4)
+Aref = A[1:2:end,1:2:end]
+Asub = sub(A, 1:2:4, 1:2:4)
+b = [1.2,-2.5]
+@assert (Aref*b) == (Asub*b)
+
+## transpose-multiply ##
+b = float64([1:4])
+v = zeros(4)
+vt = zeros(4)
+A_mul_B(v, A, b)
+At_mul_B(vt, A', b)
+@assert v == vt
+
+A = reshape(1:16, 4, 4)  # Int bypasses lapack, test fallback
+b = [1:4]
+v = zeros(Int,4)
+vt = zeros(Int,4)
+A_mul_B(v, A, b)
+At_mul_B(vt, A', b)
+@assert v == vt
+
+
 end

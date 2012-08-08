@@ -55,17 +55,13 @@ end
 convert(::Type{BigFloat}, x::Int8)   = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int16)  = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Int)  = BigFloat(x)
-macro define_bigfloat_convert ()
-	if WORD_SIZE == 64
-		:(convert(::Type{BigFloat}, x::Int32) = BigFloat(int(x)))
-		:(convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x)))
-
-	else
-		:(convert(::Type{BigFloat}, x::Int64) = BigFloat(string(x)))
-		:(convert(::Type{BigFloat}, x::Uint64) = BigFloat(string(x)))
-	end
+if WORD_SIZE == 64
+    convert(::Type{BigFloat}, x::Int32) = BigFloat(int(x))
+    convert(::Type{BigFloat}, x::Uint32) = BigFloat(int(x))
+else
+    convert(::Type{BigFloat}, x::Int64) = BigFloat(string(x))
+    convert(::Type{BigFloat}, x::Uint64) = BigFloat(string(x))
 end
-@define_bigfloat_convert
 convert(::Type{BigFloat}, x::Uint8)  = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Uint16) = BigFloat(int(x))
 convert(::Type{BigFloat}, x::Float64) = BigFloat(x)
@@ -137,7 +133,7 @@ end
 function string(x::BigFloat) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
 	ret = cstring(s) #This copies s. 
-	_c_free(s)
+	c_free(s)
 	ret
 end
 

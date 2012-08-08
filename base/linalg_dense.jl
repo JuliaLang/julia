@@ -23,19 +23,52 @@ cross(a::Vector, b::Vector) =
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
 
-# TODO: support transposed arguments
-# NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
-#       in libalg_blas.jl
-(*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = _jl_generic_matvecmul(A, B)
-function _jl_generic_matvecmul{T,S}(A::StridedMatrix{T}, B::StridedVector{S})
-    mA = size(A, 1)
+# NOTE: the _jl_generic version is also called as fallback for
+#       strides != 1 cases in libalg_blas.jl
+(*){T,S}(A::StridedMatrix{T}, B::StridedVector{S}) = _jl_generic_matvecmul('N', A, B)
+function _jl_generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S})
+    if tA == 'N'
+        C = Array(promote_type(T,S), size(A, 1))
+    else
+        C = Array(promote_type(T,S), size(A, 2))
+    end
+    _jl_generic_matvecmul(C, tA, A, B)
+end
+function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{T}, B::StridedVector{S})
     mB = size(B, 1)
-    if size(A, 2) != mB; error("*: argument shapes do not match"); end
-    C = zeros(promote_type(T,S), mA)
-    for k = 1:mB
-        b = B[k]
-        for i = 1:mA
-            C[i] += A[i, k] * b
+    if tA == 'N'
+        mA = size(A, 1)
+        nA = size(A, 2)
+    else
+        mA = size(A, 2)
+        nA = size(A, 1)
+    end
+    if nA != mB; error("*: argument shapes do not match"); end
+    if length(C) != mA; error("*: output size does not match"); end
+    z = zero(R)
+    fill!(C, z)
+    if tA == 'N'
+        for k = 1:mB
+            b = B[k]
+            for i = 1:mA
+                C[i] += A[i, k] * b
+            end
+        end
+    elseif tA == 'T'
+        for k = 1:mA
+            s = z
+            for i = 1:nA
+                s += A[i, k] * B[i]
+            end
+            C[k] = s
+        end
+    else  # 'C'
+        for k = 1:mA
+            s = z
+            for i = 1:nA
+                s += conj(A[i, k]) * B[i]
+            end
+            C[k] = s
         end
     end
     return C
@@ -84,7 +117,10 @@ end
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 2, 2)
+    matmul2x2(C, tA, tB, A, B)
+end
 
+function matmul2x2{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A21 = A[1,2]; A22 = A[2,2]
     elseif tA == 'C'
@@ -111,7 +147,10 @@ end
 function matmul3x3{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     R = promote_type(T,S)
     C = Array(R, 3, 3)
+    matmul3x3(C, tA, tB, A, B)
+end
 
+function matmul3x3{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     if tA == 'T'
         A11 = A[1,1]; A12 = A[2,1]; A13 = A[3,1];
         A21 = A[1,2]; A22 = A[2,2]; A23 = A[3,2];

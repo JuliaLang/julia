@@ -50,6 +50,7 @@ macro _jl_dist_1p(T, b)
     pn = Ty.names                       # parameter names
     p  = expr(:quote,pn[1])
     quote
+        global $pf,$lf,cdf,logcdf,ccdf,logccdf,quantile,cquantile,invlogcdf,invlogccdf,rand
         function ($pf)(d::($T), x::Real)
             ccall(dlsym(_jl_libRmath, $dd),
                   Float64, (Float64, Float64, Int32),
@@ -130,6 +131,7 @@ macro _jl_dist_2p(T, b)
         qq = expr(:quote, :qnorm5)
     end
     quote
+        global $pf,$lf,cdf,logcdf,ccdf,logccdf,quantile,cquantile,invlogcdf,invlogccdf,rand
         function ($pf)(d::($T), x::Real)
             ccall(dlsym(_jl_libRmath, $dd),
                   Float64, (Float64, Float64, Float64, Int32),
@@ -208,6 +210,7 @@ macro _jl_dist_3p(T, b)
     p2 = expr(:quote,pn[2])    
     p3 = expr(:quote,pn[3])
     quote
+        global $pf,$lf,cdf,logcdf,ccdf,logccdf,quantile,cquantile,invlogcdf,invlogccdf,rand
         function ($pf)(d::($T), x::Real)
             ccall(dlsym(_jl_libRmath, $dd),
                   Float64, (Float64, Float64, Float64, Float64, Int32),

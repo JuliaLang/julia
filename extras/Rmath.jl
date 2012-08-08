@@ -3,6 +3,7 @@ _jl_libRmath = dlopen("libRmath")
 
 macro _jl_libRmath_vectorize_3arg(f)
     quote
+        global $f
         ($f){T1<:Number, T2<:Number, T3<:Number}(x::AbstractArray{T1}, y::T2, z::T3) =
             reshape([ ($f)(x[i], y, z) for i=1:numel(x) ], size(x))
         ($f){T1<:Number, T2<:Number, T3<:Number}(x::T1, y::AbstractArray{T2}, z::T3) =
@@ -49,6 +50,7 @@ rwilcox(nn::Integer, p1::Number, p2::Number) =
 ## Vectorize over four numeric arguments
 macro _jl_libRmath_vectorize_4arg(f)
     quote
+        global $f
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::AbstractArray{T1}, a2::T2, a3::T3, a4::T4) =
             reshape([ ($f)(a1[i], a2, a3, a4) for i=1:numel(a1) ], size(a1))
         ($f){T1<:Number, T2<:Number, T3<:Number, T4<:Number}(a1::T1, a2::AbstractArray{T2}, a3::T3, a4::T4) =
@@ -111,6 +113,7 @@ macro _jl_libRmath_1par_0d(base)
     qq = symbol(strcat("q", string(base)))
     rr = symbol(strcat("r", string(base)))   
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
@@ -153,6 +156,7 @@ macro _jl_libRmath_1par_1d(base, d1)
     qq = symbol(strcat("q", string(base)))
     rr = symbol(strcat("r", string(base)))   
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
@@ -210,6 +214,7 @@ macro _jl_libRmath_2par_0d(base)
     qq = symbol(strcat("q", string(base)))
     rr = symbol(strcat("r", string(base)))    
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
@@ -256,6 +261,7 @@ macro _jl_libRmath_2par_1d(base, d2)
     qq = symbol(strcat("q", string(base)))
     rr = symbol(strcat("r", string(base)))    
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
@@ -318,6 +324,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         qqsym = :qnorm5
     end
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(ddsym)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
@@ -396,6 +403,7 @@ macro _jl_libRmath_3par_0d(base)
     qq = symbol(strcat("q", string(base)))
     rr = symbol(strcat("r", string(base)))    
     quote
+        global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number, give_log::Bool) =
             ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Float64,Int32), x, p1, p2, p3, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, p3::Number, give_log::Bool) =

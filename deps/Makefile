@@ -18,6 +18,10 @@ NGINX_VER = 1.3.0
 GMP_VER=5.0.5
 GLPK_VER = 4.47
 
+## optional packages ##
+# set to 1 to get clang and compiler-rt
+BUILD_LLVM_CLANG = 0
+
 ## high-level setup ##
 
 JULIAHOME = $(abspath ..)
@@ -141,12 +145,46 @@ endif
 else
 LLVM_FLAGS += --disable-assertions --enable-optimized
 endif
+ifneq ($(BUILD_LLVM_CLANG), 1)
+LLVM_CLANG_TAR=
+LLVM_COMPILER_RT_TAR=
+else
+
+ifeq ($(LLVM_VER), 3.0)
+LLVM_CLANG_TAR=clang-$(LLVM_VER).tar.gz
+LLVM_COMPILER_RT_TAR=
+else
+LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
+LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
+endif
+
+endif
+
+ifneq ($(LLVM_CLANG_TAR),)
+$(LLVM_CLANG_TAR):
+	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+endif
+
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+$(LLVM_COMPILER_RT_TAR):
+	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
+endif
+
 
 $(LLVM_TAR):
 	$(WGET) http://llvm.org/releases/$(LLVM_VER)/$@
-$(LLVM_DIR)/configure: $(LLVM_TAR) 
-	mkdir -p $(LLVM_DIR) && \
-	tar -C $(LLVM_DIR) --strip-components 1 -xf $<
+
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR)
+	mkdir -p llvm-$(LLVM_VER) && \
+	tar -C llvm-$(LLVM_VER) --strip-components 1 -xf $(LLVM_TAR)
+ifneq ($(LLVM_CLANG_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/tools/clang && \
+	tar -C llvm-$(LLVM_VER)/tools/clang --strip-components 1 -xf $(LLVM_CLANG_TAR)
+endif
+ifneq ($(LLVM_COMPILER_RT_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
+	tar -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
+endif
 	touch $@
 
 ## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
@@ -170,10 +208,10 @@ $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	touch $@
 
 clean-llvm:
-	$(MAKE) -C $(LLVM_DIR) clean
+	$(MAKE) -C llvm-$(LLVM_VER) clean
 	rm -f $(USRBIN)/llvm-config
 distclean-llvm:
-	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER)
+	rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
 ## GNU readline ##
 

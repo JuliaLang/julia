@@ -480,11 +480,11 @@ function show_struct_layout(s::Struct, strategy::DataAlign, width, bytesize)
         for i in 1:prod(dims)
             tstr = string(typ)
             tstr = tstr[1:min(sizeof(typ)*bytesize-2, length(tstr))]
-            str = sprintf("[%s%s]", tstr, "-"^(bytesize*sizeof(typ)-2-length(tstr)))
+            str = @sprintf("[%s%s]", tstr, "-"^(bytesize*sizeof(typ)-2-length(tstr)))
             typsize = sizeof(typ)
             while !isempty(str)
                 if offset % width == 0
-                    printf("0x%04X ", offset)
+                    @printf("0x%04X ", offset)
                 end
                 len_prn = min(width - (offset % width), typsize)
                 nprint = bytesize*len_prn

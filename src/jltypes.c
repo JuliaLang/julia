@@ -1170,8 +1170,13 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
 
     if (env0 > 0) {
-        ti = (jl_value_t*)
-            jl_instantiate_type_with((jl_type_t*)ti, &jl_t0(*penv), eqc.n/2);
+        JL_TRY {
+            ti = (jl_value_t*)jl_instantiate_type_with((jl_type_t*)ti,
+                                                       &jl_t0(*penv), eqc.n/2);
+        }
+        JL_CATCH {
+            ti = (jl_value_t*)jl_bottom_type;
+        }
     }
 
     JL_GC_POP(); JL_GC_POP(); JL_GC_POP();

@@ -214,11 +214,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
-        jl_value_t *para = eval(args[1], locals, nl);
-        jl_value_t *vnb = args[2];
-        assert(jl_is_long(vnb));
-        jl_value_t *super = NULL;
-        JL_GC_PUSH(&para, &super);
+        jl_value_t *super = NULL, *para = NULL, *vnb = NULL;
+        JL_GC_PUSH(&para, &super, &vnb);
+        para = eval(args[1], locals, nl);
+        vnb  = eval(args[2], locals, nl);
+        if (!jl_is_long(vnb))
+            jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
         int32_t nb = jl_unbox_long(vnb);
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
@@ -262,12 +263,15 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
             jl_lambda_info_t *li = f->linfo;
             li->ast = jl_compress_ast(li, li->ast);
+            li->name = nm;
         }
         jl_set_expander(jl_current_module, nm, f);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
-        jl_errorf("syntax error: %s", jl_string_data(args[0]));
+        if (jl_is_byte_string(args[0]))
+            jl_errorf("syntax error: %s", jl_string_data(args[0]));
+        jl_raise(args[0]);
     }
     else if (ex->head == line_sym) {
         return (jl_value_t*)jl_nothing;

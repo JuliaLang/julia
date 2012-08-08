@@ -1020,7 +1020,7 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
     while true
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sshow(s) ,")"
+                "premature end of integer (in ", repr(s) ,")"
             )))
         end
         c,i = next(s,i)
@@ -1033,14 +1033,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         sgn = -sgn
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sshow(s), ")"
+                "premature end of integer (in ", repr(s), ")"
             )))
         end
         c,i = next(s,i)
     elseif c == '+'
         if done(s,i)
             throw(ArgumentError(strcat(
-                "premature end of integer (in ", sshow(s), ")"
+                "premature end of integer (in ", repr(s), ")"
             )))
         end
         c,i = next(s,i)
@@ -1054,14 +1054,14 @@ function parse_int{T<:Integer}(::Type{T}, s::String, base::Integer)
         if d >= base
             if !iswspace(c)
                 throw(ArgumentError(strcat(
-                    sshow(c)," is not a valid digit (in ", sshow(s), ")"
+                    repr(c)," is not a valid digit (in ", repr(s), ")"
                 )))
             end
             while !done(s,i)
                 c,i = next(s,i)
                 if !iswspace(c)
                     throw(ArgumentError(strcat(
-                        "extra characters after whitespace (in ", sshow(s), ")"
+                        "extra characters after whitespace (in ", repr(s), ")"
                     )))
                 end
             end

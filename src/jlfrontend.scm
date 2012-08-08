@@ -12,11 +12,11 @@
      (if (and (pair? e) (eq? (car e) 'error))
 	 (let ((msg (cadr e))
 	       (pfx "incomplete:"))
-	   (if (and (>= (string-length msg) (string-length pfx))
+	   (if (and (string? msg) (>= (string-length msg) (string-length pfx))
 		    (equal? pfx
 			    (substring msg 0 (string-length pfx))))
 	       `(continue ,msg)
-	       `(error ,msg)))
+	       e))
 	 (begin
 	   (newline)
 	   (display "unexpected error: ")
@@ -140,25 +140,19 @@
   (set! *ts-stack* (cdr *ts-stack*)))
 
 (define (jl-parser-next)
-  (parser-wrap
-   (lambda ()
-     (with-exception-catcher
-      (lambda (e)
-	(if (and (pair? e) (eq? (car e) 'error))
-	    (let ((msg (cadr e)))
-	      (raise `(error ,(string msg " at " current-filename ":" 
-				      (input-port-line
-				       (ts:port current-token-stream))))))
-	    (raise e)))
-      (lambda ()
-	(skip-ws-and-comments (ts:port current-token-stream))
-	(let ((ln (input-port-line (ts:port current-token-stream))))
-	  (let ((e (if #f #;(eq? (peek-token current-token-stream) 'end)
-		       (take-token current-token-stream)
-		       (julia-parse current-token-stream))))
-	    (if (eof-object? e)
-		#f
-		(cons ln (expand-toplevel-expr e))))))))))
+  (skip-ws-and-comments (ts:port current-token-stream))
+  (let ((ln (input-port-line (ts:port current-token-stream))))
+    (let ((e (parser-wrap (lambda ()
+			    (julia-parse current-token-stream)))))
+      (if (eof-object? e)
+	  #f
+	  (cons ln
+		(parser-wrap
+		 (lambda ()
+		   (if (and (pair? e) (or (eq? (car e) 'error)
+					  (eq? (car e) 'continue)))
+		       e
+		       (expand-toplevel-expr e)))))))))
 
 ; expand a piece of raw surface syntax to an executable thunk
 (define (jl-expand-to-thunk expr)

@@ -268,7 +268,7 @@ end
 
 sprint(f::Function, args...) = sprint(0, f, args...)
 
-function sshow(x)
+function repr(x)
     s = memio(0, false)
     show(s, x)
     takebuf_string(s)

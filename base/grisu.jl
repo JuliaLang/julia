@@ -2,21 +2,22 @@ libgrisu = dlopen("libgrisu")
 
 module Grisu
 import Base.*
-export @grisu_ccall, _neg, _digits, _buflen, _len, _point
+export print_shortest
+export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
 
-const _neg    = Array(Bool,1)
-const _digits = Array(Uint8,309+17)
-const _buflen = int32(length(_digits)+1)
-const _len    = Array(Int32,1)
-const _point  = Array(Int32,1)
+const NEG    = Array(Bool,1)
+const DIGITS = Array(Uint8,309+17)
+const BUFLEN = int32(length(DIGITS)+1)
+const LEN    = Array(Int32,1)
+const POINT  = Array(Int32,1)
 
 macro grisu_ccall(value, mode, ndigits)
     quote
         ccall(dlsym(Base.libgrisu, :grisu), Void,
               (Float64, Int32, Int32, Ptr{Uint8}, Int32,
                Ptr{Bool}, Ptr{Int32}, Ptr{Int32}),
-              $value, $mode, $ndigits,
-              _digits, _buflen, _neg, _len, _point)
+              $esc(value), $esc(mode), $esc(ndigits),
+              DIGITS, BUFLEN, NEG, LEN, POINT)
     end
 end
 
@@ -31,7 +32,7 @@ function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
     @grisu_ccall x mode ndigits
-    _neg[1], _digits[1:_len[1]], _point[1]
+    NEG[1], DIGITS[1:LEN[1]], POINT[1]
 end
 
 grisu(x::Float64) = grisu(x, SHORTEST, int32(0))
@@ -51,12 +52,12 @@ function _show(io, x::Float, mode::Int32, n::Int)
     if isnan(x); return write(io, "NaN"); end
     if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode n
-    pdigits = pointer(_digits)
-    neg = _neg[1]
-    len = _len[1]
-    pt  = _point[1]
+    pdigits = pointer(DIGITS)
+    neg = NEG[1]
+    len = LEN[1]
+    pt  = POINT[1]
     if mode == PRECISION
-        while len > 1 && _digits[len] == '0'
+        while len > 1 && DIGITS[len] == '0'
             len -= 1
         end
     end
@@ -115,10 +116,10 @@ function _print_shortest(io, x::Float, dot::Bool, mode::Int32)
     if isnan(x); return write(io, "NaN"); end
     if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode 0
-    pdigits = pointer(_digits)
-    neg = _neg[1]
-    len = _len[1]
-    pt  = _point[1]
+    pdigits = pointer(DIGITS)
+    neg = NEG[1]
+    len = LEN[1]
+    pt  = POINT[1]
     if neg
         write(io, '-')
     end
@@ -160,3 +161,4 @@ print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST
 print_shortest(io, x::Union(Float,Integer)) = print_shortest(io, float(x), false)
 
 end # module
+import Base.Grisu.print_shortest

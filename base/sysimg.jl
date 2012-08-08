@@ -68,16 +68,16 @@ export
     # Operators
     !,!=,$,%,&,*,+,-,.!=,.*,./,.<,.<=,.==,.>,.>=,.\,.^,/,//,:,<,<:,<<,<=,==,
     >,>=,>>,>>>,\,^,|,~,
-    A_ldiv_Bc,A_ldiv_Bt,A_mul_Bc,A_mul_Bt,A_rdiv_Bc,A_rdiv_Bt,Ac_ldiv_B,
+    A_ldiv_Bc,A_ldiv_Bt,A_mul_B,A_mul_Bc,A_mul_Bt,A_rdiv_Bc,A_rdiv_Bt,Ac_ldiv_B,
     Ac_ldiv_Bc,Ac_mul_B,Ac_mul_Bc,Ac_rdiv_B,Ac_rdiv_Bc,At_ldiv_B,At_ldiv_Bt,
-    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,
+    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,A_mul_B_noalias,At_mul_B_noalias,A_mul_Bt_noalias,At_mul_Bt_noalias,
     # Functions
-    _c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
+    c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
     add_each,add_fd_handler,add_weak_key,add_weak_value,
     addprocs_local,addprocs_sge,addprocs_ssh,all,allp,
     amap,and!,angle,ans,any,anyp,append,append!,apropos,areduce,
     ascii,asec,asecd,asech,asin,asind,asinh,assert,assign,at_each,atan,atan2,
-    atand,atanh,basename,begins_with,betarnd,bfft,bfftn,bin,binomial,bitmix,bits,bool,
+    atand,atanh,axpy,basename,begins_with,betarnd,bfft,bfftn,bin,binomial,bitmix,bits,bool,
     brfft,brfftn,broadcast,bswap,bsxfun,byte_string_classify,cartesian_map,cat,
     cbrt,cd,ceil,cell,cell_1d,cell_2d,changedist,char,chars,charwidth,
     check_ascii,check_utf8,chi2rnd,chol,chol!,chomp,choose,chop,chr2ind,
@@ -106,7 +106,7 @@ export
     gc_disable,gc_enable,gcd,gcdx,gen_cartesian_map,gensym,get,getenv,
     gethostname,getipaddr,getmethods,getpid,gradient,
     grow,has,hasenv,hash,hcat,help,hex,hex2num,hist,histc,
-    htol,hton,hvcat,hypot,iceil,identity,ifft,ifft2,ifft3,ifftn,ifftshift,
+    htol,hton,hvcat,hypot,iceil,identity,idump,ifft,ifft2,ifft3,ifftn,ifftshift,
     ifloor,ignorestatus,ilogb,imag,in,include_string,ind2chr,ind2sub,inf,
     insert,int,int128,int16,int2str,int32,int64,int8,integer,integer_partitions,
     integer_valued,inter,intersect,intersection,intersection!,intset,inv,invmod,
@@ -148,12 +148,12 @@ export
     remote_call,remote_call_fetch,remote_call_wait,remote_do,repeat,
     repl_show,replace,repmat,reshape,reverse,reverse!,rfft,rfftn,rot180,rot90,
     rotl90,rotr90,round,rpad,rr2id,rref,rstrip,run,safe_char,scan,search,
-    searchsorted,sec,secd,sech,seek,select,select!,select_read,serialize,
+    search_sorted,sec,secd,sech,seek,select,select!,select_read,serialize,
     setenv,setfield,setsuccess,shift,show,showall,showcompact,shuffle,shuffle!,
     sign,signbit,signed,significand,similar,sin,sinc,sind,sinh,size,sizeof,skip,
     sleep,slice,slicedim,sort,sort!,sort_by,sort_by!,sortperm,sortr,sortr!,
     spawn,spawnat,spawnlocal,split,sprint,sprintf,sqrt,square,squeeze,srand,
-    sshow,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
+    repr,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
     stdout_stream,step,strcat,strchr,strerror,strftime,stride,strides,string,
     strip,strlen,strptime,strwidth,sub,sub2ind,success,successful,sum,summary,
     super,svd,svdvals,symbol,system,system_error,systmpdir,take,takebuf_string,tan,tand,
@@ -181,8 +181,8 @@ export
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
-    @gensym, @eval, @task, @f_str, @thunk, @L_str, @vectorize_1arg,
-    @vectorize_2arg, @printf
+    @gensym, @eval, @task, @thunk, @L_str, @vectorize_1arg,
+    @vectorize_2arg, @printf, @sprintf
 
 if false
     # simple print definitions for debugging. enable these if something

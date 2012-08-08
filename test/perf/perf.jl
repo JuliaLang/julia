@@ -133,13 +133,11 @@ end
 
 @unix_only begin
 function printfd(n)
-    f = open("/dev/null","w")
-    for i = 1:n
-        # fprintf(f, f"%d %d\n", i, i)
-        # f"%d %d\n"(f,i,i)
-        @printf "%d %d\n" f i i
+    open("/dev/null","w") do io
+        for i = 1:n
+            @printf(io,"%d %d\n",i,i+1)
+        end
     end
-    close(f)
 end
 
 printfd(1)

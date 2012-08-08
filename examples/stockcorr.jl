@@ -7,7 +7,7 @@ function stockcorr()
     CurrentPrice = [78. 102.]     # Initial Prices of the two stocks
     Corr = [1. 0.4; 0.4 1.]       # Correlation Matrix
     T = 500                       # Number of days to simulate = 2years = 500days
-    n = 100000                    # Number of simulations
+    n = 3000                      # Number of simulations
     dt = 1/250                    # Time step (1year = 250days)
     Div=[0.01 0.01]               # Dividend
     Vol=[0.2 0.3]                 # Volatility

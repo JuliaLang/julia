@@ -43,7 +43,7 @@ function approximate(N)
 end
 
 function spectralnorm(N)
-    printf("%.09f\n", approximate(N))
+    @printf("%.09f\n", approximate(N))
 end
 
 if length(ARGS) >= 1

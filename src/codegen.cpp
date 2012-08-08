@@ -295,7 +295,8 @@ static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
 
 // --- constant determination ---
 
-static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
+// try to statically evaluate, NULL if not possible
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
 {
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
@@ -307,26 +308,63 @@ static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
                 for(i=0; i < jl_tuple_len(ctx->sp); i+=2) {
                     if (sym == (jl_sym_t*)jl_tupleref(ctx->sp, i)) {
                         // static parameter
-                        return true;
+                        return jl_tupleref(ctx->sp, i+1);
                     }
                 }
             }
             if (jl_is_const(ctx->module, sym))
-                return true;
+                return jl_get_global(ctx->module, sym);
         }
-        return false;
+        return NULL;
     }
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(ctx->module,
                                          (jl_sym_t*)jl_fieldref(ex,0));
-        if (b && b->constp && b->value)
-            return true;
+        if (b && b->constp)
+            return b->value;
     }
     if (jl_is_quotenode(ex))
-        return true;
-    if (!jl_is_expr(ex) && !jl_is_lambda_info(ex))
-        return true;
-    return false;
+        return jl_fieldref(ex,0);
+    if (jl_is_lambda_info(ex))
+        return NULL;
+    jl_module_t *m = NULL;
+    jl_sym_t *s = NULL;
+    if (jl_is_getfieldnode(ex)) {
+        m = (jl_module_t*)static_eval(jl_fieldref(ex,0),ctx,sparams);
+        s = (jl_sym_t*)jl_fieldref(ex,1);
+        if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
+            jl_binding_t *b = jl_get_binding(m, s);
+            if (b && b->constp)
+                return b->value;
+        }
+        return NULL;
+    }
+    if (jl_is_expr(ex)) {
+        jl_expr_t *e = (jl_expr_t*)ex;
+        if (e->head == call_sym || e->head == call1_sym) {
+            if (e->args->length == 3) {
+                jl_value_t *f = static_eval(jl_exprarg(e,0),ctx,sparams);
+                if (f && jl_is_function(f)) {
+                    if (((jl_function_t*)f)->fptr == &jl_f_get_field) {
+                        m = (jl_module_t*)static_eval(jl_exprarg(e,1),ctx,sparams);
+                        s = (jl_sym_t*)static_eval(jl_exprarg(e,2),ctx,sparams);
+                        if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
+                            jl_binding_t *b = jl_get_binding(m, s);
+                            if (b && b->constp)
+                                return b->value;
+                        }
+                    }
+                }
+            }
+        }
+        return NULL;
+    }
+    return ex;
+}
+
+static bool is_constant(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
+{
+    return static_eval(ex,ctx,sparams) != NULL;
 }
 
 static bool symbol_eq(jl_value_t *e, jl_sym_t *sym)
@@ -1002,43 +1040,19 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
 {
     size_t nargs = arglen-1;
     Value *theFptr=NULL, *theF=NULL;
-    jl_binding_t *b=NULL;
     jl_value_t *a0 = args[0];
-    jl_value_t *a00 = args[0];
     jl_value_t *hdtype;
     bool headIsGlobal = false;
 
-    if (jl_is_symbolnode(a0)) {
-        a0 = (jl_value_t*)jl_symbolnode_sym(a0);
-    }
-    if (jl_is_symbol(a0) && is_global((jl_sym_t*)a0, ctx) &&
-        jl_boundp(ctx->module, (jl_sym_t*)a0)) {
-        b = jl_get_binding(ctx->module, (jl_sym_t*)a0);
-        if (!b || !b->constp)
-            b = NULL;
-    }
-    if (jl_is_topnode(a0)) {
-        headIsGlobal = true;
-        // (top x) is also global
-        b = jl_get_binding(ctx->module, (jl_sym_t*)jl_fieldref(a0,0));
-        if (!b || b->value==NULL || !b->constp)
-            b = NULL;
-    }
-    jl_value_t *f = NULL;
-    if (b != NULL) {
-        // head is a constant global
-        f = b->value;
-    }
-    else if (jl_is_func(a0)) {
-        f = a0;
-    }
+    jl_value_t *f = static_eval(a0, ctx, true);
     if (f != NULL) {
+        headIsGlobal = true;
         Value *result = emit_known_call(f, args, nargs, ctx, &theFptr, &theF,
                                         expr);
         if (result != NULL) return result;
     }
     int last_depth = ctx->argDepth;
-    hdtype = expr_type(a00, ctx);
+    hdtype = expr_type(a0, ctx);
     if (theFptr == NULL) {
         Value *theFunc = emit_expr(args[0], ctx);
         if (theFunc->getType() != jl_pvalue_llvmt || jl_is_tuple(hdtype)) {
@@ -2248,13 +2262,18 @@ extern "C" void jl_init_codegen(void)
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-    EngineBuilder builder = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT);
-    jl_ExecutionEngine = builder.create(jl_TargetMachine=builder.selectTarget());
+    EngineBuilder builder = EngineBuilder(jl_Module);
+    builder.setEngineKind(EngineKind::JIT);
+    jl_TargetMachine = builder.selectTarget();
+
+    //jl_TargetMachine->Options.PrintMachineCode = true; //Print machine code produced during JIT compiling
 #ifdef DEBUG
     jl_TargetMachine->Options.JITEmitDebugInfo = true;
 #endif 
     jl_TargetMachine->Options.NoFramePointerElim = true;
     jl_TargetMachine->Options.NoFramePointerElimNonLeaf = true;
+
+    jl_ExecutionEngine = builder.create(jl_TargetMachine);
 #endif
     
     dbuilder = new DIBuilder(*jl_Module);

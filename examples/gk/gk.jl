@@ -8,7 +8,7 @@
 function myunifskew(n)
     A = zeros(n, n)
 
-    print("A[i,j] initialized with zeros \n");
+    #print("A[i,j] initialized with zeros \n");
 
     for i=1:n
     	for j=1:i-1
@@ -28,8 +28,8 @@ function myunifskew(n)
             
     	end
     	if rem(i,1000) == 0
-	    print(i)
-	    print("\n")
+	    #print(i)
+	    #print("\n")
     	end
     end
 
@@ -64,15 +64,15 @@ function gk(n, myeps)
 	
 	csum = zeros(n)
 
-	tic()
+#	tic()
 	while(stop != 1)
      	    t=t+1
      	    iter=t
      	    #iteration number
   	    
      	    if rem(iter, 100) == 0
-         	print(iter)
-		print("\n")
+         	#print(iter)
+		#print("\n")
      	    end
 	    
 	    for i=1:n
@@ -114,7 +114,7 @@ function gk(n, myeps)
 
 	end
 	    
-	times[KK] = toc()
+	times[KK] = 0#toc()
 	iteration[KK] = iter
 	    
 	x = X/t
@@ -133,7 +133,7 @@ function gk(n, myeps)
     	end
 	    
 	if Axepse==n
-	    print(" \n Ax <= eps*e  \n")
+	    #print(" \n Ax <= eps*e  \n")
 	end
 
 	#if A*x <= eps*e
@@ -148,38 +148,38 @@ function gk(n, myeps)
 	end
 	    
         if errorlmt ==n
-    	    print("Assertion condition is satisfied i.e. AX-U<10^-8 \n")
+    	    #print("Assertion condition is satisfied i.e. AX-U<10^-8 \n")
 	else
     	    print("Error:  AX-U<10^-8 not satisfied \n")
 	end
 
 	#print("welcome")	
 	    
-	print("Time for \n")
-	print(eps)
-	print("\n")
-	print("is  \n")
-	print(times[KK])
-	print("\n")
-	print("Number of iteration is \n")
-	print(iteration[KK])
-	print("\n")
+	# print("Time for \n")
+	# print(eps)
+	# print("\n")
+	# print("is  \n")
+	# print(times[KK])
+	# print("\n")
+	# print("Number of iteration is \n")
+	# print(iteration[KK])
+	# print("\n")
     end
 
-    print("Epsilon vector is \n")
-    print(myeps)
-    print("\n")
-    print("time vector is \n ")
-    print(times)
-    print("\n")
-    print("Iteration Vector is \n")
-    print(iteration)
-    print("\n \n")
+    # print("Epsilon vector is \n")
+    # print(myeps)
+    # print("\n")
+    # print("time vector is \n ")
+    # print(times)
+    # print("\n")
+    # print("Iteration Vector is \n")
+    # print(iteration)
+    # print("\n \n")
 
     #out = [myeps, time, iteration]
     #print("Epsilon-Time-Iteration tradeoff \n")
     #print(out)
-    print("\n \n")
+    #print("\n \n")
 
 end
 #end # @profile begin

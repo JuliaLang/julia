@@ -43,10 +43,10 @@ JFFLAGS = -O2 $(fPIC)
 USEGCC = 1
 USECLANG = 0
 
-#ifeq ($(OS), Darwin)
-#USEGCC = 0
-#USECLANG = 1
-#endif
+ifeq ($(OS), Darwin)
+USEGCC = 0
+USECLANG = 1
+endif
 
 ifeq ($(USEGCC),1)
 CC = gcc

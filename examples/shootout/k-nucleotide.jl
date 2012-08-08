@@ -51,7 +51,7 @@ function print_knucs(a::Array{KNuc, 1})
         sum += kn.count
     end
     for kn in a
-        printf(f"%s %.3f\n", kn.name, 100.0kn.count/sum)
+        @printf("%s %.3f\n", kn.name, 100.0kn.count/sum)
     end
     println()
 end
@@ -82,7 +82,7 @@ function main()
     print_knucs(arr1)
     print_knucs(arr2)
     for s in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]
-        printf(f"%d\t%s\n", count_one(str, s), s)
+        @printf("%d\t%s\n", count_one(str, s), s)
     end
 end
 
