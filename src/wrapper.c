@@ -489,7 +489,7 @@ void getlocalip(char *buf, size_t len)
             // is a valid IP4 Address
 #ifndef __WIN32__
             tmpAddrPtr=&(ifa.sin_addr);
-            inet_ntop(AF_INET, tmpAddrPtr, buf, len); #Not available on WinXP
+            inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
 #else
 			strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
 			buf[len]=0;

@@ -463,10 +463,10 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
-OPENBLAS_FLAGS = USE_THREAD=0 CC=$(CC) FC=$(FC) COMMON_OPT="-mpreferred-stack-boundary=2" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+OPENBLAS_FLAGS = USE_THREAD=0 CC=$(CC) FC=$(FC) FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 
 ifeq ($(OS), WINNT)
-OPENBLAS_FLAGS += REVISION=
+OPENBLAS_FLAGS += REVISION= COMMON_OPT="-mpreferred-stack-boundary=2"
 endif
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_FLAGS += DYNAMIC_ARCH=1
@@ -576,6 +576,11 @@ distclean-lapack:
 ARPACK_OBJ_TARGET = $(USRLIB)/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
+ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
+ifeq ($(OS),WINNT)
+ARPACK_OPS += -mpreferred-stack-boundary=2
+endif
+
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
 
@@ -588,7 +593,7 @@ arpack-ng_$(ARPACK_VER)/configure: arpack-ng_$(ARPACK_VER).tar.gz
 $(ARPACK_OBJ_TARGET): arpack-ng_$(ARPACK_VER)/configure $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cd arpack-ng_$(ARPACK_VER) && \
 	rm -f UTIL/second_NONE.f && \
-	$(FC) -shared $(FFLAGS) -mpreferred-stack-boundary=2 $(JFFLAGS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
+	$(FC) -shared $(ARPACK_OPTS) SRC/*.f UTIL/*.f $(LIBLAPACK) $(LIBBLAS) -o libarpack.$(SHLIB_EXT) && \
 	cp libarpack.$(SHLIB_EXT) $(USRLIB)
 	touch $@
 
