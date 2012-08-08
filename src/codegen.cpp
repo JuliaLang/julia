@@ -2261,13 +2261,18 @@ extern "C" void jl_init_codegen(void)
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
 #elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-    EngineBuilder builder = EngineBuilder(jl_Module).setEngineKind(EngineKind::JIT);
-    jl_ExecutionEngine = builder.create(jl_TargetMachine=builder.selectTarget());
+    EngineBuilder builder = EngineBuilder(jl_Module);
+    builder.setEngineKind(EngineKind::JIT);
+    jl_TargetMachine = builder.selectTarget();
+
+    //jl_TargetMachine->Options.PrintMachineCode = true; //Print machine code produced during JIT compiling
 #ifdef DEBUG
     jl_TargetMachine->Options.JITEmitDebugInfo = true;
 #endif 
     jl_TargetMachine->Options.NoFramePointerElim = true;
     jl_TargetMachine->Options.NoFramePointerElimNonLeaf = true;
+
+    jl_ExecutionEngine = builder.create(jl_TargetMachine);
 #endif
     
     dbuilder = new DIBuilder(*jl_Module);
