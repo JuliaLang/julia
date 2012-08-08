@@ -1,5 +1,7 @@
 /root
 /llvm-*
+/clang-*
+/compiler-rt-*
 /readline-*
 !readline-win.h
 /pcre-*
