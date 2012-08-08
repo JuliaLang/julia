@@ -419,7 +419,7 @@ end
 process_events() = process_events(globalEventLoop())
 
 ##pipe functions
-malloc_pipe() = _c_malloc(_sizeof_uv_pipe)
+malloc_pipe() = c_malloc(_sizeof_uv_pipe)
 function link_pipe(read_end::Ptr{Void},readable_julia_only::Bool,write_end::Ptr{Void},writeable_julia_only::Bool,pipe::AsyncStream)
     #make the pipe an unbuffered stream for now
     ccall(:jl_init_pipe, Ptr{Void}, (Ptr{Void},Bool,Bool,AsyncStream), read_end, 0, readable_julia_only, pipe)
@@ -505,7 +505,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     close_in,close_out,close_err = false,false,false
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
         in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #in = _c_malloc(_sizeof_uv_pipe)
+        #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
     else
@@ -513,7 +513,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #out = _c_malloc(_sizeof_uv_pipe)
+        #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
     else
@@ -521,7 +521,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #err = _c_malloc(_sizof_uv_pipe)
+        #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
     else
@@ -538,15 +538,15 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
     end
     if(close_in)
         close_pipe_sync(in)
-        #_c_free(in)
+        #c_free(in)
     end
     if(close_out)
         close_pipe_sync(out)
-        #_c_free(out)
+        #c_free(out)
     end
     if(close_err)
         close_pipe_sync(err)
-        #_c_free(err)
+        #c_free(err)
     end
     pp
 end
@@ -576,8 +576,8 @@ end
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
     out_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
     in_pipe = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-    #out_pipe = _c_malloc(_sizeof_uv_pipe)
-    #in_pipe = _c_malloc(_sizeof_uv_pipe)
+    #out_pipe = c_malloc(_sizeof_uv_pipe)
+    #in_pipe = c_malloc(_sizeof_uv_pipe)
     link_pipe(in_pipe,false,out_pipe,false,null_handle)
     if pc == false
         pc = ProcessChain(stdios)
@@ -602,7 +602,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     close_in,close_out,close_err = false,false,false
     if(isa(stdios[1],NamedPipe)&&stdios[1].handle==C_NULL)
         in = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #in = _c_malloc(_sizeof_uv_pipe)
+        #in = c_malloc(_sizeof_uv_pipe)
         link_pipe(in,false,stdios[1],true)
         close_in = true
     else
@@ -610,7 +610,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #out = _c_malloc(_sizeof_uv_pipe)
+        #out = c_malloc(_sizeof_uv_pipe)
         link_pipe(stdios[2],false,out,true)
         close_out = true
     else
@@ -618,7 +618,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
-        #err = _c_malloc(_sizof_uv_pipe)
+        #err = c_malloc(_sizof_uv_pipe)
         link_pipe(stdios[3],false,err,true)
         close_err = true
     else
@@ -628,15 +628,15 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
     spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
     if(close_in)
         close_pipe_sync(in)
-        #_c_free(in)
+        #c_free(in)
     end
     if(close_out)
         close_pipe_sync(out)
-        #_c_free(out)
+        #c_free(out)
     end
     if(close_err)
         close_pipe_sync(err)
-        #_c_free(err)
+        #c_free(err)
     end
     pp
     pc
