@@ -113,6 +113,9 @@ function tilde_expand(path::String)
     if m != nothing
         return ENV["HOME"]*path[2:end]
     end
+    if path == "~"
+        return ENV["HOME"]
+    end
     path
 end
 
@@ -181,7 +184,7 @@ function cwd()
     cstring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),real_path(dir)) == -1)
+cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),tilde_expand(dir)) == -1)
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
