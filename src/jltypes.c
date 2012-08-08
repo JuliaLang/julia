@@ -1553,8 +1553,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_struct_type_t *st = (jl_struct_type_t*)t;
             // create and initialize new struct type
             jl_struct_type_t *nst =
-                (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                          STRUCT_TYPE_NW);
+                jl_new_uninitialized_struct_type(st->names->length);
             *rt2 = (jl_value_t*)nst;
             // associate these parameters with the new struct type on
             // the stack, in case one of its field types references it.
@@ -2193,10 +2192,10 @@ extern void jl_init_int32_int64_cache(void);
 void jl_init_types(void)
 {
     // create base objects
-    jl_struct_kind = (jl_struct_type_t*)newobj(NULL, STRUCT_TYPE_NW);
+    jl_struct_kind = jl_new_uninitialized_struct_type(10);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
-    jl_typename_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
-    jl_sym_type = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind, STRUCT_TYPE_NW);
+    jl_typename_type = jl_new_uninitialized_struct_type(3);
+    jl_sym_type = jl_new_uninitialized_struct_type(0);
     jl_symbol_type = jl_sym_type;
 
     jl_tuple_type = jl_alloc_tuple(1);

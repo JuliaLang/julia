@@ -467,14 +467,56 @@ JL_CALLABLE(jl_f_ctor_trampoline)
     return jl_apply((jl_function_t*)F, args, nargs);
 }
 
+jl_struct_type_t *jl_new_uninitialized_struct_type(size_t nfields)
+{
+    return (jl_struct_type_t*)
+        newobj((jl_type_t*)jl_struct_kind,
+               STRUCT_TYPE_NW + NWORDS(nfields*sizeof(jl_fielddesc_t)));
+}
+
+void jl_compute_struct_offsets(jl_struct_type_t *st)
+{
+    size_t sz = 0, nptrs = 0, alignm = 0;
+
+    for(size_t i=0; i < st->types->length; i++) {
+        jl_value_t *ty = jl_tupleref(st->types, i);
+        if (jl_is_bits_type(ty)) {
+            size_t fsz = jl_bitstype_nbits(ty)/8;
+            size_t al = fsz;   // alignment == size for bits types
+            sz = LLT_ALIGN(sz, al);
+            if (al > alignm)
+                alignm = al;
+            st->fields[i].offset = sz;
+            st->fields[i].size = fsz;
+            sz += fsz;
+        }
+    }
+    for(size_t i=0; i < st->types->length; i++) {
+        jl_value_t *ty = jl_tupleref(st->types, i);
+        if (!jl_is_bits_type(ty)) {
+            size_t fsz = sizeof(void*);
+            size_t al = fsz;
+            sz = LLT_ALIGN(sz, al);
+            if (al > alignm)
+                alignm = al;
+            st->fields[i].offset = sz;
+            st->fields[i].size = fsz;
+            sz += fsz;
+            nptrs++;
+        }
+    }
+    st->alignment = alignm;
+    st->size = LLT_ALIGN(sz, alignm);
+    st->nptrs = nptrs;
+}
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
 {
     jl_typename_t *tn = jl_new_typename(name);
     JL_GC_PUSH(&tn);
-    jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                                    STRUCT_TYPE_NW);
+    jl_struct_type_t *t = jl_new_uninitialized_struct_type(fnames->length);
     t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;

@@ -214,9 +214,8 @@ typedef struct _jl_tag_type_t {
 } jl_tag_type_t;
 
 typedef struct {
-    unsigned short offset;
-    unsigned short size:15;
-    unsigned short isptr:1;
+    uint16_t offset;
+    uint16_t size;
 } jl_fielddesc_t;
 
 typedef struct {
@@ -232,9 +231,10 @@ typedef struct {
     jl_value_t *instance;  // for singletons
     // hidden fields:
     uptrint_t uid;
-    //int32_t size;
-    //int32_t alignment;  // strictest alignment over all fields
-    //jl_fielddesc_t fields[1];
+    uint32_t size;
+    uint16_t alignment;  // strictest alignment over all fields
+    uint16_t nptrs;      // # of pointer fields (flush at end of object)
+    jl_fielddesc_t fields[1];
 } jl_struct_type_t;
 
 typedef struct {
@@ -623,6 +623,7 @@ jl_type_t *jl_instantiate_type_with(jl_type_t *t, jl_value_t **env, size_t n);
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types);
 jl_tag_type_t *jl_new_tagtype(jl_value_t *name, jl_tag_type_t *super,
                               jl_tuple_t *parameters);
+jl_struct_type_t *jl_new_uninitialized_struct_type(size_t nfields);
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes);

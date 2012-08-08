@@ -105,6 +105,7 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
     if (jl_is_struct_type(v)) {
         writetag(s, (jl_value_t*)jl_struct_kind);
         jl_serialize_value(s, jl_struct_kind);
+        write_uint16(s, ((jl_struct_type_t*)v)->names->length);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->name);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->parameters);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->super);
@@ -115,6 +116,8 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_struct_type_t*)v)->linfo);
         jl_serialize_fptr(s, ((jl_struct_type_t*)v)->fptr);
         write_int32(s, ((jl_struct_type_t*)v)->uid);
+        size_t nf = ((jl_struct_type_t*)v)->names->length;
+        ios_write(s, (char*)&((jl_struct_type_t*)v)->fields[0], nf*sizeof(jl_fielddesc_t));
     }
     else if (jl_is_bits_type(v)) {
         writetag(s, jl_struct_kind);
@@ -384,9 +387,8 @@ static jl_fptr_t jl_deserialize_fptr(ios_t *s)
 static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
 {
     if (kind == jl_struct_kind) {
-        jl_struct_type_t *st =
-            (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                      STRUCT_TYPE_NW);
+        uint16_t nf = read_uint16(s);
+        jl_struct_type_t *st = jl_new_uninitialized_struct_type(nf);
         st->instance = NULL;
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, st);
         st->name = (jl_typename_t*)jl_deserialize_value(s);
@@ -398,7 +400,8 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         st->env = jl_deserialize_value(s);
         st->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         st->fptr = jl_deserialize_fptr(s);
-        st->uid = read_int32(s);;
+        st->uid = read_int32(s);
+        ios_read(s, (char*)&st->fields[0], nf*sizeof(jl_fielddesc_t));
         if (st->name == jl_array_type->name) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
