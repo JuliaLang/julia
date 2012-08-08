@@ -79,7 +79,7 @@ end
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
 _next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
-    error("invalid printf format string: ", sshow(s))
+    error("invalid printf format string: ", repr(s))
 
 function _parse1(s::String, k::Integer)
     j = k
@@ -123,7 +123,7 @@ function _parse1(s::String, k::Integer)
     end
     # validate conversion
     if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
-        error("invalid printf format string: ", sshow(s))
+        error("invalid printf format string: ", repr(s))
     end
     # TODO: warn about silly flag/conversion combinations
     flags, width, precision, c, k
@@ -455,7 +455,7 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         if !contains(flags,'#')
             push(blk.args, :($x = string($x)))
         else
-            push(blk.args, :($x = sshow($x)))
+            push(blk.args, :($x = repr($x)))
         end
         if !contains(flags,'-')
             push(blk.args, _pad(width, :($width-strwidth($x)), ' '))
