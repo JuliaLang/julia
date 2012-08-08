@@ -169,7 +169,7 @@ function cwd()
     cstring(p)
 end
 
-cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),tilde_expand(dir)) == -1)
+cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
 cd() = cd(ENV["HOME"])
 
 # do stuff in a directory, then return to current directory
