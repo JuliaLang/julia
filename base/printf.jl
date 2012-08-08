@@ -79,7 +79,7 @@ end
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
 _next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
-    error("invalid printf format string: ", sshow(s))
+    error("invalid printf format string: ", repr(s))
 
 function _parse1(s::String, k::Integer)
     j = k
@@ -123,7 +123,7 @@ function _parse1(s::String, k::Integer)
     end
     # validate conversion
     if !contains("diouxXDOUeEfFgGaAcCsSpn", c)
-        error("invalid printf format string: ", sshow(s))
+        error("invalid printf format string: ", repr(s))
     end
     # TODO: warn about silly flag/conversion combinations
     flags, width, precision, c, k
@@ -455,7 +455,7 @@ function _gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
         if !contains(flags,'#')
             push(blk.args, :($x = string($x)))
         else
-            push(blk.args, :($x = sshow($x)))
+            push(blk.args, :($x = repr($x)))
         end
         if !contains(flags,'-')
             push(blk.args, _pad(width, :($width-strwidth($x)), ' '))
@@ -757,13 +757,16 @@ _is_str_expr(ex) =
     (ex.args[1] == :str || ends_with(string(ex.args[1]),"_str"))
 
 macro printf(args...)
-    local io, fmt
-    if !(isa(args[1],String) || isa(args[2],String))
-        if _is_str_expr(args[1]) || _is_str_expr(args[2])
+    if length(args) == 0
+        error("@printf: called with zero arguments")
+    end
+    if !isa(args[1],String) && !(length(args) > 1 && isa(args[2],String))
+        if _is_str_expr(args[1]) || length(args) > 1 && _is_str_expr(args[2])
            error("format must be a plain static string (no interpolation or prefix)")
         end
         error("first or second argument must be a format string")
     end
+    local io, fmt
     if isa(args[1],String)
         io = :(Base.OUTPUT_STREAM)
         fmt = args[1]

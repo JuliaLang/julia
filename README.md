@@ -195,7 +195,7 @@ For example, if you are on an OS X (Darwin) x86/64 system, do the following:
 
 You can either run the `julia` executable using its full path in the directory created above, or add that directory to your executable path so that you can run the julia program from anywhere (in the current shell session):
 
-    export PATH="$(pwd):$PATH"
+    export PATH="$(pwd)/julia:$PATH"
 
 Now you should be able to run julia like this:
 
