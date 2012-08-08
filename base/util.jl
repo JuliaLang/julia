@@ -119,7 +119,7 @@ function edit(file::String, line::Int)
         elseif editor == "subl"
             run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(sshow(editor))")
+            error("Invalid JULIA_EDITOR value: $(repr(editor))")
         end
     else
         if editor == "emacs"
@@ -131,7 +131,7 @@ function edit(file::String, line::Int)
         elseif editor == "subl"
             run(`subl $file:$line`)
         else
-            error("Invalid JULIA_EDITOR value: $(sshow(editor))")
+            error("Invalid JULIA_EDITOR value: $(repr(editor))")
         end
     end
     nothing
@@ -168,7 +168,7 @@ global _jl_package_list = Dict{ByteString,Float64}()
 require(fname::String) = require(cstring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
-    path = real_path(find_in_path(name))
+    path = find_in_path(name)
     if !has(_jl_package_list,path)
         load(name)
     else
@@ -221,7 +221,7 @@ load(fname::String) = load(cstring(fname))
 load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load
-        path = real_path(find_in_path(fname))
+        path = find_in_path(fname)
         _jl_package_list[path] = time()
         push(load_dict, fname)
         f = open(path)

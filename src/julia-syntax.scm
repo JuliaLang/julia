@@ -1950,8 +1950,8 @@ So far only the second case can actually occur.
 		       (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
-	   (if (equal? form '(error))
-	       (error (string "error expanding macro " (cadr e))))
+	   (if (and (pair? form) (eq? (car form) 'error))
+	       (error (cadr form)))
 	   (let ((form (car form))
 		 (m    (cdr form)))
 	     ;; m is the macro's def module, or #f if def env === use env

@@ -57,13 +57,14 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
     jl_value_t *result;
 
     JL_TRY {
+        jl_register_toplevel_eh();
         result = jl_apply(f, margs, na);
     }
     JL_CATCH {
         JL_GC_POP();
-        jl_show(jl_stderr_obj(), jl_exception_in_transit);
-        JL_PUTC('\n', JL_STDERR);
-        return fl_cons(symbol("error"), FL_NIL);
+        value_t opaque = cvalue(jvtype, sizeof(void*));
+        *(jl_value_t**)cv_data((cvalue_t*)ptr(opaque)) = jl_exception_in_transit;
+        return fl_list2(symbol("error"), opaque);
     }
     // protect result from GC, otherwise it could be freed during future
     // macro expansions, since it will be referenced only from scheme and

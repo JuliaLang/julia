@@ -263,12 +263,15 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
             jl_lambda_info_t *li = f->linfo;
             li->ast = jl_compress_ast(li, li->ast);
+            li->name = nm;
         }
         jl_set_expander(jl_current_module, nm, f);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
-        jl_errorf("syntax error: %s", jl_string_data(args[0]));
+        if (jl_is_byte_string(args[0]))
+            jl_errorf("syntax error: %s", jl_string_data(args[0]));
+        jl_raise(args[0]);
     }
     else if (ex->head == line_sym) {
         return (jl_value_t*)jl_nothing;
