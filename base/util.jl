@@ -84,7 +84,7 @@ function whicht(f, types)
             while !is(d,())
                 if is(d.func.code, lsd)
                     print(stdout_stream, f.env.name)
-                    show(stdout_stream, d); println(stdout_stream)
+                    rshow(stdout_stream, d); println(stdout_stream)
                     return
                 end
                 d = d.next

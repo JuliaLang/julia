@@ -51,9 +51,9 @@ function show(io, re::Regex)
         if (re.options & PCRE.EXTENDED ) != 0; print(io, 'x'); end
     else
         print(io, "Regex(")
-        show(io, re.pattern)
+        rshow(io, re.pattern)
         print(io, ',')
-        show(io, re.options)
+        rshow(io, re.options)
         print(io, ')')
     end
 end
@@ -70,12 +70,12 @@ end
 
 function show(io, m::RegexMatch)
     print(io, "RegexMatch(")
-    show(io, m.match)
+    rshow(io, m.match)
     if !isempty(m.captures)
         print(io, ", ")
         for i = 1:length(m.captures)
             print(io, i, "=")
-            show(io, m.captures[i])
+            rshow(io, m.captures[i])
             if i < length(m.captures)
                 print(io, ", ")
             end

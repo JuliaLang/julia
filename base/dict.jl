@@ -16,9 +16,9 @@ function show(io, t::Associative)
         for (k, v) = t
             first || print(io, ',')
             first = false
-            show(io, k)
+            rshow(io, k)
             print(io, "=>")
-            show(io, v)
+            rshow(io, v)
         end
         print(io, "}")
     end

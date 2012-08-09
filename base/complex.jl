@@ -17,14 +17,14 @@ reim(z) = (real(z), imag(z))
 function _jl_show(io, z::Complex, compact::Bool)
     r, i = reim(z)
     if isnan(r) || isfinite(i)
-        compact ? showcompact(io,r) : show(io,r)
+        compact ? showcompact(io,r) : rshow(io,r)
         if signbit(i)==1 && !isnan(i)
             i = -i
             print(io, compact ? "-" : " - ")
         else
             print(io, compact ? "+" : " + ")
         end
-        compact ? showcompact(io, i) : show(io, i)
+        compact ? showcompact(io, i) : rshow(io, i)
         if !(isa(i,Integer) || isa(i,Rational) ||
              isa(i,Float) && isfinite(i))
             print(io, "*")

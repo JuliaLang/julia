@@ -31,7 +31,7 @@ function show(io, x::Rational)
     if isinf(x)
         print(io, x.num > 0 ? "Inf" : "-Inf")
     else
-        show(io, num(x)); print(io, "//"); show(io, den(x))
+        rshow(io, num(x)); print(io, "//"); rshow(io, den(x))
     end
 end
 
