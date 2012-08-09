@@ -1606,7 +1606,10 @@ jl_tag_type_t *jl_wrap_Type(jl_value_t *t)
 {
     jl_value_t *env[2];
     env[0] = jl_tparam0(jl_type_type);
-    env[1] = t;
+    if (jl_is_typector(t))
+        env[1] = (jl_value_t*)((jl_typector_t*)t)->body;
+    else
+        env[1] = t;
     return (jl_tag_type_t*)
         jl_instantiate_type_with((jl_type_t*)jl_type_type, env, 1);
 }

@@ -300,3 +300,12 @@ begin
     @assert my_func(c,c)==0
     @assert_fails my_func(a,c)
 end
+
+# issue #1131
+begin
+    local baar
+    baar(x) = 0
+    baar(x::UnionKind) = 1
+    @assert baar(StridedArray) == 1
+    @assert baar(StridedArray.body) == 1
+end
