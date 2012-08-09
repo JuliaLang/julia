@@ -3,7 +3,34 @@
 show(x) = show(OUTPUT_STREAM::IOStream, x)
 
 print(io::IOStream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
+
+function show(io, x)
+    if isa(io, IOStream) ccall(:jl_show_any, Void, (Any, Any,), io, x)
+    else                 default_show(io, x)
+    end
+end
+
+default_show(io::IO, x::Union(Type, Function)) = print(io, repr(x))
+function default_show(io::IO, x) 
+    isa(typeof(x), CompositeKind) ? show_composite(io, x) : print(io, repr(x))
+end
+
+function show_composite(io, x)
+    T::CompositeKind = typeof(x)
+    names = filter(name->(name!=symbol("")), [T.names...])
+    values = {}
+    for name in names
+        try        push(values, getfield(x, name))
+        catch err; error("default_show: Error accessing field \"$name\" in $T")
+        end
+    end
+    print(io, T.name, '('); show_comma_list(io, values...); print(io, ')')
+end
+show_comma_list(io::IO) = nothing
+function show_comma_list(io::IO, arg, args...)    
+    rshow(io, arg)
+    for arg in args print(io, ", "); rshow(io, arg) end
+end
 
 showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
