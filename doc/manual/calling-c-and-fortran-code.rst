@@ -240,9 +240,9 @@ translated to Julia types as follows.
 -  ``short`` ⟺ ``Int16``
 -  ``unsigned short`` ⟺ ``Uint16``
 -  ``int`` ⟺ ``Int32``
--  ``usigned int`` ⟺ ``Uint32``
+-  ``unsigned int`` ⟺ ``Uint32``
 -  ``long long`` ⟺ ``Int64``
--  ``usigned long long`` ⟺ ``Uint64``
+-  ``unsigned long long`` ⟺ ``Uint64``
 -  ``float`` ⟺ ``Float32``
 -  ``double`` ⟺ ``Float64``
 
@@ -251,7 +251,7 @@ wide. In C, however, ``int`` is often used for boolean values. Since
 ``int`` is 32-bits wide (on all supported systems), there is some
 potential for confusion here.
 
-A C function declared to return ``Void`` will give ``nothing`` in Julia.
+A C function declared to return ``void`` will give ``nothing`` in Julia.
 
 **System-dependent:**
 
