@@ -1,6 +1,6 @@
 ## core text I/O ##
 
-print(io::IO, x) = show(io, x)
+print(io::IO, x) = rshow(io, x)
 print(io::IO, xs...) = for x in xs print(io, x) end
 println(io::IO, xs...) = print(io, xs..., '\n')
 

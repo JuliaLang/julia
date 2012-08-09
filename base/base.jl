@@ -60,6 +60,9 @@ type ShowError <: Exception
     err::Exception
 end
 
+export rshow
+rshow(io, x) = show(io, x)  # hook to allow showing of self-referential data
+
 show(io, bt::BackTrace) = show(io,bt.e)
 
 function show(io, se::ShowError)
