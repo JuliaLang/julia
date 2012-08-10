@@ -166,7 +166,7 @@ The ``2x + y`` definition is only used in the first case, while the
 conversion of function arguments is ever performed: all conversion in
 Julia is non-magical and completely explicit. :ref:`man-conversion-and-promotion`, however, shows how clever
 application of sufficiently advanced technology can be indistinguishable
-from magic.
+from magic. [#]_
 
 For non-numeric values, and for fewer or more than two arguments, the
 function ``f`` remains undefined, and applying it will still result in a
@@ -419,3 +419,5 @@ can also constrain type parameters of methods:
 
 The ``same_type_numeric`` function behaves much like the ``same_type``
 function defined above, but is only defined for pairs of numbers.
+
+.. [#] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
