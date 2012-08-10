@@ -47,9 +47,6 @@ static IRBuilder<> builder(getGlobalContext());
 static bool nested_compile=false;
 static Module *jl_Module;
 static ExecutionEngine *jl_ExecutionEngine;
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-static TargetMachine *jl_TargetMachine;
-#endif
 static DIBuilder *dbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
@@ -1595,7 +1592,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             filename = ((jl_sym_t*)jl_exprarg(stmt, 1))->name;
         }
     }
-	
+    
     // TODO: Fix when moving to new LLVM version
     dbuilder->createCompileUnit(0x01, filename, ".", "julia", true, "", 0); 
     llvm::DIArray EltTypeArray = dbuilder->getOrCreateArray(ArrayRef<Value*>());
@@ -2260,20 +2257,25 @@ extern "C" void jl_init_codegen(void)
 #endif
     llvm::NoFramePointerElim = true;
     llvm::NoFramePointerElimNonLeaf = true;
-#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
-    EngineBuilder builder = EngineBuilder(jl_Module);
-    builder.setEngineKind(EngineKind::JIT);
-    jl_TargetMachine = builder.selectTarget();
-
-    //jl_TargetMachine->Options.PrintMachineCode = true; //Print machine code produced during JIT compiling
-#ifdef DEBUG
-    jl_TargetMachine->Options.JITEmitDebugInfo = true;
-#endif 
-    jl_TargetMachine->Options.NoFramePointerElim = true;
-    jl_TargetMachine->Options.NoFramePointerElimNonLeaf = true;
-
-    jl_ExecutionEngine = builder.create(jl_TargetMachine);
+#ifdef __MINGW32__
+#error "only maintaining support for LLVM 3.1 on Windows"
 #endif
+#elif LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 1
+    TargetOptions options = TargetOptions();
+    //options.PrintMachineCode = true; //Print machine code produced during JIT compiling
+#ifdef DEBUG
+    options.JITEmitDebugInfo = true;
+#endif 
+    options.NoFramePointerElim = true;
+    options.NoFramePointerElimNonLeaf = true;
+#ifdef __MINGW32__
+    options.StackAlignmentOverride = 16;
+#endif
+    jl_ExecutionEngine = EngineBuilder(jl_Module)
+        .setEngineKind(EngineKind::JIT)
+        .setTargetOptions(options)
+        .create();
+#endif // LLVM VERSION
     
     dbuilder = new DIBuilder(*jl_Module);
 
