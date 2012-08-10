@@ -709,7 +709,7 @@
 		     `(block
 		       ,@(if (eq? aa a) '() `((= ,aa ,a)))
 		       ,@(if (eq? bb b) '() `((= ,bb ,b)))
-		       (call (top _setfield) ,aa ,bb
+		       (call (top setfield) ,aa ,bb
 			     (call (top convert)
 				   (call (top fieldtype) ,aa ,bb)
 				   ,rhs)))))

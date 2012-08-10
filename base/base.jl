@@ -77,9 +77,6 @@ int(x::Int) = x
 uint(x) = convert(Uint, x)
 uint(x::Uint) = x
 
-# function version of field assignment
-setfield(s, f, v) = (s.(f) = v)
-
 # reflection
 
 names(m::Module) = ccall(:jl_module_names, Any, (Any,), m)::Array{Any,1}

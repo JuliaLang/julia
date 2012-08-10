@@ -1009,11 +1009,11 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
         elseif ai == 1
             xa = true
             shp[i] = bi
-            range = append(range,(bi,))
+            range = tuple(range..., bi)
         elseif bi == 1
             xb = true
             shp[i] = ai
-            range = append(range,(ai,))
+            range = tuple(range..., ai)
         else
             error("argument dimensions do not match")
         end

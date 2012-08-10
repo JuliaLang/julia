@@ -191,7 +191,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     locs = map(x->Location(x.host,x.port), w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
-    newlocs = append(PGRP.locs, locs)
+    newlocs = [PGRP.locs, locs]
     sockets = Dict()
     handler = fd->message_handler(fd, sockets)
     for i=1:n

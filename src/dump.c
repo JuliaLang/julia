@@ -907,7 +907,7 @@ void jl_init_serializer(void)
                      jl_symbol("arrayset"), jl_symbol("arrayref"),
                      jl_symbol("arraylen"),
                      jl_symbol("convert"), jl_symbol("typeassert"),
-                     jl_symbol("getfield"), jl_symbol("_setfield"),
+                     jl_symbol("getfield"), jl_symbol("setfield"),
                      jl_symbol("tupleref"), jl_symbol("tuplelen"),
                      jl_symbol("apply_type"), jl_symbol("tuple"),
 

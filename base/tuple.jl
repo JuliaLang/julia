@@ -79,8 +79,6 @@ end
 
 ## functions ##
 
-append(ts::Tuple...) = apply(tuple, ts...)
-
 isempty(x::()) = true
 isempty(x::Tuple) = false
 

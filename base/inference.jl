@@ -263,7 +263,7 @@ getfield_tfunc = function (A, s, name)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
-t_func[_setfield] = (3, 3, (o, f, v)->v)
+t_func[setfield] = (3, 3, (o, f, v)->v)
 fieldtype_tfunc = function (A, s, name)
     if !isa(s,CompositeKind)
         return Type
@@ -498,7 +498,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     # apply with known func with known tuple types
                     # can be collapsed to a call to the applied func
                     at = length(aargtypes) > 0 ?
-                         limit_tuple_type(append(aargtypes...)) : ()
+                         limit_tuple_type(apply(tuple,aargtypes...)) : ()
                     return abstract_call(_ieval(af), (), at, vtypes, sv, ())
                 end
             end
@@ -901,7 +901,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #print("typeinf ", linfo.name, " ", atypes, "\n")
 
     if cop
-        sparams = append(sparams, linfo.sparams)
+        sparams = tuple(sparams..., linfo.sparams...)
         ast = ccall(:jl_prepare_ast, Any, (Any,Any), linfo, sparams)::Expr
     else
         ast = linfo.ast
@@ -911,7 +911,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     la = length(args)
     assert(is(ast.head,:lambda), "inference.jl:745")
     locals = (ast.args[2][1])::Array{Any,1}
-    vars = append(args, locals)
+    vars = [args, locals]
     body = (ast.args[3].args)::Array{Any,1}
     n = length(body)
 
