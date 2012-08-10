@@ -1444,7 +1444,7 @@ function inlineable(f, e::Expr, vars)
     end
     # ok, substitute argument expressions for argument names in the body
     spnames = { sp[i].name for i=1:2:length(sp) }
-    expr = copy(expr)
+    expr = astcopy(expr)
     mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
     srcenv = append(args,spnames)
     if !is(mfrom, mto)
