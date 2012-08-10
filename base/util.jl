@@ -362,13 +362,13 @@ function apropos(txt::String)
     r = Regex("\\Q$txt", PCRE.CASELESS)
     first = true
     for (cat, _) in _jl_help_category_dict
-        if matches(r, cat)
+        if ismatch(r, cat)
             println("Category: \"$cat\"")
             first = false
         end
     end
     for (func, entries) in _jl_help_function_dict
-        if matches(r, func) || anyp(e->matches(r,e), entries)
+        if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
             if !first
                 println()
             end

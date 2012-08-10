@@ -84,12 +84,12 @@ function show(io, m::RegexMatch)
     print(io, ")")
 end
 
-matches(r::Regex, s::String, o::Integer) =
+ismatch(r::Regex, s::String, o::Integer) =
     PCRE.exec(r.regex, r.extra, bytestring(s), 0, o, false)
-matches(r::Regex, s::String) = matches(r, s, r.options & PCRE.EXECUTE_MASK)
+ismatch(r::Regex, s::String) = ismatch(r, s, r.options & PCRE.EXECUTE_MASK)
 
-contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
-contains(s::String, r::Regex)                = matches(r,s)
+contains(s::String, r::Regex, opts::Integer) = ismatch(r,s,opts)
+contains(s::String, r::Regex)                = ismatch(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
@@ -130,5 +130,5 @@ each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
 
 # miscellaneous methods that depend on Regex being defined
 
-filter!(r::Regex, d::Dict) = filter!((k,v)->matches(r,k),d)
+filter!(r::Regex, d::Dict) = filter!((k,v)->ismatch(r,k),d)
 filter(r::Regex,  d::Dict) = filter!(r,copy(d))

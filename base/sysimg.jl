@@ -97,7 +97,7 @@ export
     leading_zeros,length,less,lfact,lgamma,linreg,linspace,load,localize,
     localize_copy,locate,log,log10,log1p,log2,logb,logspace,lowercase,lpad,ls,
     lstrip,ltoh,lu,lu!,mad,make_pipe,make_scheduled,map,map_to,map_to2,
-    map_vectorized,mapreduce,match,matches,matmul2x2,matmul3x3,max,maxdim,
+    map_vectorized,mapreduce,match,ismatch,matmul2x2,matmul3x3,max,maxdim,
     maxintfloat,mean,median,memcat,memchr,memio,merge,merge!,method_missing,min,
     mmap,mmap_array,mmap_grow,mmap_stream_settings,mod,mod1,modf,msync,munmap,
     myid,myindexes,nCr,nPr,names,nan,nb_available,ndigits,ndigits0z,ndims,next,
