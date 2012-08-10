@@ -62,7 +62,3 @@ expand(x) = ccall(:jl_expand, Any, (Any,), x)
 macro eval(x)
     :(eval($expr(:quote,x)))
 end
-
-macro task(ex)
-    :(Task(()->$esc(ex)))
-end
