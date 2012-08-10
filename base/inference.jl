@@ -291,12 +291,12 @@ apply_type_tfunc = function (A, args...)
     uncertain = false
     for i=2:length(A)
         if isType(args[i])
-            tparams = append(tparams, (args[i].parameters[1],))
+            tparams = tuple(tparams..., args[i].parameters[1])
         elseif isa(A[i],Int)
-            tparams = append(tparams, (A[i],))
+            tparams = tuple(tparams..., A[i])
         else
             uncertain = true
-            tparams = append(tparams, (headtype.parameters[i-1],))
+            tparams = tuple(tparams..., headtype.parameters[i-1])
         end
     end
     local appl
@@ -353,19 +353,6 @@ function a2t(a::AbstractVector)
     if n==3 return (a[1],a[2],a[3]) end
     if n==0 return () end
     return tuple(a...)
-end
-
-function a2t_butfirst(a::AbstractVector)
-    n = length(a)
-    if n==2 return (a[2],) end
-    if n<=1 return () end
-    if n==3 return (a[2],a[3]) end
-    t = (a[2],a[3],a[4])
-    if n==4 return t end
-    for i=5:n
-        t = tuple(t..., a[i])
-    end
-    t
 end
 
 function isconstantfunc(f, vtypes, sv::StaticVarInfo)
@@ -541,8 +528,8 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
 end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
-    fargs = a2t_butfirst(e.args)
-    argtypes = map(x->abstract_eval(x,vtypes,sv), fargs)
+    fargs = e.args[2:]
+    argtypes = ntuple(length(fargs), i->abstract_eval(fargs[i],vtypes,sv))
     if anyp(x->is(x,None), argtypes)
         return None
     end
@@ -814,7 +801,7 @@ end
 f_argnames(ast) =
     map(x->(isa(x,Expr) ? x.args[1] : x), ast.args[1]::Array{Any,1})
 
-is_rest_arg(arg) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
+is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
 # function typeinf_task(caller)
 #     result = ()
@@ -836,7 +823,7 @@ is_rest_arg(arg) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
     #return yieldto(Inference_Task, C, args)
 #end
 
-function typeinf_ext(linfo, atypes, sparams, def)
+function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
@@ -845,8 +832,8 @@ function typeinf_ext(linfo, atypes, sparams, def)
     return result
 end
 
-typeinf(linfo,atypes,sparams) = typeinf(linfo,atypes,sparams,linfo,true)
-typeinf(linfo,atypes,sparams,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
+typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true)
+typeinf(linfo,atypes::ANY,sparams::ANY,linfo) = typeinf(linfo,atypes,sparams,linfo,true)
 
 ast_rettype(ast) = ast.args[3].typ
 
@@ -1227,35 +1214,38 @@ function type_annotate(ast::Expr, states::Array{Any,1},
     ast
 end
 
-function sym_replace(e::Expr, from, to)
+function sym_replace(e::Expr, from1, from2, to1, to2)
     if !is(e.head,:line)
         for i=1:length(e.args)
-            e.args[i] = sym_replace(e.args[i], from, to)
+            e.args[i] = sym_replace(e.args[i], from1, from2, to1, to2)
         end
     end
     e
 end
 
-function sym_replace(e::SymbolNode, from, to)
-    s = e.name
-    for i=1:length(from)
-        if is(from[i],s)
-            return to[i]
+function _sym_repl(s::Symbol, from1, from2, to1, to2, deflt)
+    for i=1:length(from1)
+        if is(from1[i],s)
+            return to1[i]
         end
     end
-    return e
-end
-
-function sym_replace(s::Symbol, from, to)
-    for i=1:length(from)
-        if is(from[i],s)
-            return to[i]
+    for i=1:length(from2)
+        if is(from2[i],s)
+            return to2[i]
         end
     end
-    s
+    return deflt
 end
 
-sym_replace(x, from, to) = x
+function sym_replace(e::SymbolNode, from1, from2, to1, to2)
+    return _sym_repl(e.name, from1, from2, to1, to2, e)
+end
+
+function sym_replace(s::Symbol, from1, from2, to1, to2)
+    return _sym_repl(s, from1, from2, to1, to2, s)
+end
+
+sym_replace(x, from1, from2, to1, to2) = x
 
 # see if a symbol resolves the same in two modules
 function resolves_same(sym, from, to)
@@ -1268,30 +1258,30 @@ function resolves_same(sym, from, to)
 end
 
 # annotate symbols with their original module for inlining
-function resolve_globals(e::Expr, from, to, env)
+function resolve_globals(e::Expr, from, to, env1, env2)
     if !is(e.head,:line)
         for i=1:length(e.args)
-            e.args[i] = resolve_globals(e.args[i], from, to, env)
+            e.args[i] = resolve_globals(e.args[i], from, to, env1, env2)
         end
     end
     e
 end
 
-function resolve_globals(s::Symbol, from, to, env)
-    if contains_is(env, s)
+function resolve_globals(s::Symbol, from, to, env1, env2)
+    if contains_is(env1, s) || contains_is(env2, s)
         return s
     end
     resolves_same(s, from, to) ? s : GetfieldNode(from, s, Any)
 end
 
-function resolve_globals(s::SymbolNode, from, to, env)
-    if contains_is(env, s.name)
+function resolve_globals(s::SymbolNode, from, to, env1, env2)
+    if contains_is(env1, s.name) || contains_is(env2, s.name)
         return s
     end
     resolves_same(s.name, from, to) ? s : GetfieldNode(from, s.name, s.typ)
 end
 
-resolve_globals(x, from, to, env) = x
+resolve_globals(x, from, to, env1, env2) = x
 
 # count occurrences up to n+1
 function occurs_more(e::Expr, pred, n)
@@ -1344,8 +1334,8 @@ function inlineable(f, e::Expr, vars)
     if !(isa(f,Function)||isa(f,CompositeKind)||isa(f,IntrinsicFunction))
         return NF
     end
-    argexprs = a2t_butfirst(e.args)
-    atypes = limit_tuple_type(map(exprtype, argexprs))
+    argexprs = e.args[2:]
+    atypes = limit_tuple_type(ntuple(length(argexprs), i->exprtype(argexprs[i])))
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -1381,7 +1371,7 @@ function inlineable(f, e::Expr, vars)
         return NF
     end
     sp = meth[2]::Tuple
-    spvals = sp[2:2:]
+    spvals = { sp[i] for i in 2:2:length(sp) }
     for i=1:length(spvals)
         if isa(spvals[i],TypeVar)
             return NF
@@ -1446,11 +1436,10 @@ function inlineable(f, e::Expr, vars)
     spnames = { sp[i].name for i=1:2:length(sp) }
     expr = astcopy(expr)
     mfrom = meth[3].module; mto = (inference_stack::CallStack).mod
-    srcenv = append(args,spnames)
     if !is(mfrom, mto)
-        expr = resolve_globals(expr, mfrom, mto, srcenv)
+        expr = resolve_globals(expr, mfrom, mto, args, spnames)
     end
-    return sym_replace(expr, srcenv, append(argexprs,spvals))
+    return sym_replace(expr, args, spnames, argexprs, spvals)
 end
 
 _jl_tn(sym::Symbol) =

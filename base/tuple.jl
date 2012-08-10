@@ -79,12 +79,7 @@ end
 
 ## functions ##
 
-function append(t1::Tuple, ts::Tuple...)
-    if length(ts)==0
-        return t1
-    end
-    return tuple(t1..., append(ts...)...)
-end
+append(ts::Tuple...) = apply(tuple, ts...)
 
 isempty(x::()) = true
 isempty(x::Tuple) = false

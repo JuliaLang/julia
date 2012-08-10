@@ -33,6 +33,7 @@ copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : astcopy(e.args), e.typ)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
 
+# copy parts of an AST that the compiler mutates
 astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
 astcopy(x::Array{Any,1}) = map(astcopy, x)
 astcopy(x) = x

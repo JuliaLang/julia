@@ -338,8 +338,6 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
     return jl_method_list_insert(pml, type, method, jl_null, 0)->func;
 }
 
-extern jl_function_t *jl_typeinf_func;
-
 #if defined(JL_TRACE) || defined(TRACE_INFERENCE)
 static char *type_summary(jl_value_t *t)
 {
@@ -373,30 +371,7 @@ static void print_sig(jl_tuple_t *type)
 }
 #endif
 
-static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
-{
-    size_t len = jl_tuple_len(sig);
-    if (len == 0)
-        return NULL;
-    if (i < len-1)
-        return jl_tupleref(sig, i);
-    if (jl_is_seq_type(jl_tupleref(sig,len-1))) {
-        return jl_tparam0(jl_tupleref(sig,len-1));
-    }
-    if (i == len-1)
-        return jl_tupleref(sig, i);
-    return NULL;
-}
-
-static int very_general_type(jl_value_t *t)
-{
-    return (t && (t==(jl_value_t*)jl_any_type ||
-                  (jl_is_typevar(t) &&
-                   ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
-}
-
-static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
-                              jl_sym_t *name, int lim);
+extern jl_function_t *jl_typeinf_func;
 
 /*
   run type inference on lambda "li" in-place, for given argument types.
@@ -435,22 +410,46 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
     jl_in_inference = last_ii;
 }
 
+static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
+{
+    size_t len = jl_tuple_len(sig);
+    if (len == 0)
+        return NULL;
+    if (i < len-1)
+        return jl_tupleref(sig, i);
+    if (jl_is_seq_type(jl_tupleref(sig,len-1))) {
+        return jl_tparam0(jl_tupleref(sig,len-1));
+    }
+    if (i == len-1)
+        return jl_tupleref(sig, i);
+    return NULL;
+}
+
+static int very_general_type(jl_value_t *t)
+{
+    return (t && (t==(jl_value_t*)jl_any_type ||
+                  (jl_is_typevar(t) &&
+                   ((jl_tvar_t*)t)->ub==(jl_value_t*)jl_any_type)));
+}
+
 static int tuple_all_Any(jl_tuple_t *t)
 {
-    int i;
-    for(i=0; i < jl_tuple_len(t); i++) {
+    for(int i=0; i < jl_tuple_len(t); i++) {
         if (jl_tupleref(t,i) != (jl_value_t*)jl_any_type)
             return 0;
     }
     return 1;
 }
 
+static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
+                              jl_sym_t *name, int lim);
+
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
                                    jl_tuple_t *sparams)
 {
     size_t i;
-    int need_dummy_entries = 0;
+    int need_guard_entries = 0;
     jl_value_t *temp=NULL;
     jl_function_t *newmeth=NULL;
     JL_GC_PUSH(&type, &temp, &newmeth);
@@ -492,7 +491,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               a tuple, unless the declaration asks for something more
               specific. determined with a type intersection.
             */
-            int might_need_dummy=0;
+            int might_need_guard=0;
             temp = jl_tupleref(type, i);
             if (i < jl_tuple_len(decl)) {
                 jl_value_t *declt = jl_tupleref(decl,i);
@@ -503,7 +502,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     jl_subtype((jl_value_t*)jl_tuple_type, declt, 0)) {
                     // don't specialize args that matched (Any...) or Any
                     jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
-                    might_need_dummy = 1;
+                    might_need_guard = 1;
                 }
                 else {
                     declt = jl_type_intersection(declt,
@@ -511,16 +510,16 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     if (jl_tuple_len(elt) > 3 ||
                         tuple_all_Any((jl_tuple_t*)declt)) {
                         jl_tupleset(type, i, declt);
-                        might_need_dummy = 1;
+                        might_need_guard = 1;
                     }
                 }
             }
             else {
                 jl_tupleset(type, i, (jl_value_t*)jl_tuple_type);
-                might_need_dummy = 1;
+                might_need_guard = 1;
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
-            if (might_need_dummy) {
+            if (might_need_guard) {
                 jl_methlist_t *curr = mt->defs;
                 // can't generalize type if there's an overlapping definition
                 // with typevars.
@@ -533,19 +532,19 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                              (jl_value_t*)type) !=
                         (jl_value_t*)jl_bottom_type) {
                         jl_tupleset(type, i, temp);
-                        might_need_dummy = 0;
+                        might_need_guard = 0;
                         break;
                     }
                     curr = curr->next;
                 }
             }
-            if (might_need_dummy) {
+            if (might_need_guard) {
                 jl_methlist_t *curr = mt->defs;
                 while (curr != JL_NULL && curr->func!=method) {
                     jl_tuple_t *sig = curr->sig;
                     if (jl_tuple_len(sig) > i &&
                         jl_is_tuple(jl_tupleref(sig,i))) {
-                        need_dummy_entries = 1;
+                        need_guard_entries = 1;
                         break;
                     }
                     curr = curr->next;
@@ -653,14 +652,14 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         // now there is a problem: the computed signature is more
         // general than just the given arguments, so it might conflict
         // with another definition that doesn't have cache instances yet.
-        // to fix this, we insert dummy cache entries for all intersections
-        // of this signature and definitions. those dummy entries will
+        // to fix this, we insert guard cache entries for all intersections
+        // of this signature and definitions. those guard entries will
         // supersede this one in conflicted cases, alerting us that there
         // should actually be a cache miss.
-        need_dummy_entries = 1;
+        need_guard_entries = 1;
     }
 
-    if (need_dummy_entries) {
+    if (need_guard_entries) {
         temp = ml_matches(mt->defs, (jl_value_t*)type, lambda_sym, -1);
         for(i=0; i < jl_array_len(temp); i++) {
             jl_value_t *m = jl_cellref(temp, i);
@@ -1351,7 +1350,7 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
         }
         jl_show(outstr, (jl_value_t*)ml->sig);
         if (ml->func == jl_bottom_func)  {
-            // mark dummy cache entries
+            // mark guard cache entries
             JL_PRINTF(s, " *");
         }
         else {
