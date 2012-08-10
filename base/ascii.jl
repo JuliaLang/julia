@@ -77,4 +77,4 @@ ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
-convert(::Type{ASCIIString}, s::String) = ascii(cstring(s))
+convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))

@@ -165,7 +165,7 @@ methods(t::CompositeKind) = t.env
 # require
 # Store list of files and their load time
 global _jl_package_list = Dict{ByteString,Float64}()
-require(fname::String) = require(cstring(fname))
+require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
     path = find_in_path(name)
@@ -186,7 +186,7 @@ include_string(txt::ByteString) = ccall(:jl_load_file_string, Void, (Ptr{Uint8},
 function is_file_readable(path)
     local f
     try
-        f = open(cstring(path))
+        f = open(bytestring(path))
     catch
         return false
     end
@@ -217,7 +217,7 @@ local in_remote_load = false
 local load_dict = {}
 global load, remote_load
 
-load(fname::String) = load(cstring(fname))
+load(fname::String) = load(bytestring(fname))
 load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
 function load(fname::ByteString)
     if in_load

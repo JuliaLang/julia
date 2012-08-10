@@ -896,7 +896,7 @@ function glp_set_prob_name(glp_prob::GLPProb, name::Union(String,Nothing))
         name = ""
     end
     _jl_glpk__check_string_length(name, 0, 255)
-    @glpk_ccall set_prob_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
+    @glpk_ccall set_prob_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(name)
 end
 
 function glp_set_obj_name(glp_prob::GLPProb, name::Union(String,Nothing))
@@ -905,7 +905,7 @@ function glp_set_obj_name(glp_prob::GLPProb, name::Union(String,Nothing))
         name = ""
     end
     _jl_glpk__check_string_length(name, 0, 255)
-    @glpk_ccall set_obj_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
+    @glpk_ccall set_obj_name Void (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(name)
 end
 
 function glp_set_row_name(glp_prob::GLPProb, row::Integer, name::Union(String,Nothing))
@@ -915,7 +915,7 @@ function glp_set_row_name(glp_prob::GLPProb, row::Integer, name::Union(String,No
         name = ""
     end
     _jl_glpk__check_string_length(name, 0, 255)
-    @glpk_ccall set_row_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p row cstring(name)
+    @glpk_ccall set_row_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p row bytestring(name)
 end
 
 function glp_set_col_name(glp_prob::GLPProb, col::Integer, name::Union(String,Nothing))
@@ -925,7 +925,7 @@ function glp_set_col_name(glp_prob::GLPProb, col::Integer, name::Union(String,No
         name = ""
     end
     _jl_glpk__check_string_length(name, 0, 255)
-    @glpk_ccall set_col_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p col cstring(name)
+    @glpk_ccall set_col_name Void (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p col bytestring(name)
 end
 
 function glp_set_obj_dir(glp_prob::GLPProb, dir::Integer)
@@ -1136,7 +1136,7 @@ function glp_get_prob_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return bytestring(name_cstr)
     end
 end
 
@@ -1146,7 +1146,7 @@ function glp_get_obj_name(glp_prob::GLPProb)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return bytestring(name_cstr)
     end
 end
 
@@ -1172,7 +1172,7 @@ function glp_get_row_name(glp_prob::GLPProb, row::Integer)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return bytestring(name_cstr)
     end
 end
 
@@ -1183,7 +1183,7 @@ function glp_get_col_name(glp_prob::GLPProb, col::Integer)
     if name_cstr == C_NULL
         return ""
     else
-        return cstring(name_cstr)
+        return bytestring(name_cstr)
     end
 end
 
@@ -1325,12 +1325,12 @@ end
 
 function glp_find_row(glp_prob::GLPProb, name::String)
     _jl_glpk__check_glp_prob(glp_prob)
-    @glpk_ccall find_row Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
+    @glpk_ccall find_row Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(name)
 end
 
 function glp_find_col(glp_prob::GLPProb, name::String)
     _jl_glpk__check_glp_prob(glp_prob)
-    @glpk_ccall find_col Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(name)
+    @glpk_ccall find_col Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(name)
 end
 
 function glp_delete_index(glp_prob::GLPProb)
@@ -1622,7 +1622,7 @@ function glp_read_mps(glp_prob::GLPProb, format::Integer, param, filename::Strin
     end
 
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param cstring(filename)
+    ret = @glpk_ccall read_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading MPS file"))
     end
@@ -1641,7 +1641,7 @@ function glp_write_mps(glp_prob::GLPProb, format::Integer, param, filename::Stri
         _jl_glpk__check_mps_param(param)
     end
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param cstring(filename)
+    ret = @glpk_ccall write_mps Int32 (Ptr{Void}, Int32, Ptr{Void}, Ptr{Uint8}) glp_prob.p format param bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing MPS file"))
     end
@@ -1655,7 +1655,7 @@ function glp_read_lp(glp_prob::GLPProb, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_lp_param(param)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param cstring(filename)
+    ret = @glpk_ccall read_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading LP file"))
     end
@@ -1669,7 +1669,7 @@ function glp_write_lp(glp_prob::GLPProb, param, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_lp_param(param)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param cstring(filename)
+    ret = @glpk_ccall write_lp Int32 (Ptr{Void}, Ptr{Void}, Ptr{Uint8}) glp_prob.p param bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing LP file"))
     end
@@ -1683,7 +1683,7 @@ function glp_read_prob(glp_prob::GLPProb, flags::Integer, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_read_prob_flags(flags)
     _jl_glpk__check_file_is_readable(filename)
-    @glpk_ccall read_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p flags cstring(filename)
+    @glpk_ccall read_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p flags bytestring(filename)
 end
 
 glp_read_prob(glp_prob::GLPProb, filename::String) =
@@ -1693,7 +1693,7 @@ function glp_write_prob(glp_prob::GLPProb, flags::Integer, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_write_prob_flags(flags)
     _jl_glpk__check_file_is_writable(filename)
-    @glpk_ccall write_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p flags cstring(filename)
+    @glpk_ccall write_prob Int32 (Ptr{Void}, Int32, Ptr{Uint8}) glp_prob.p flags bytestring(filename)
 end
 
 glp_write_prob(glp_prob::GLPProb, filename::String) =
@@ -1702,7 +1702,7 @@ glp_write_prob(glp_prob::GLPProb, filename::String) =
 function glp_mpl_read_model(glp_tran::GLPMathProgWorkspace, filename::String, skip::Integer)
     _jl_glpk__check_mpl_workspace(glp_tran)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall mpl_read_model Int32 (Ptr{Void}, Ptr{Uint8}, Int32) glp_tran.p cstring(filename) skip
+    ret = @glpk_ccall mpl_read_model Int32 (Ptr{Void}, Ptr{Uint8}, Int32) glp_tran.p bytestring(filename) skip
     if ret != 0
         throw(GLPError("Error reading MathProg file"))
     end
@@ -1712,7 +1712,7 @@ end
 function glp_mpl_read_data(glp_tran::GLPMathProgWorkspace, filename::String)
     _jl_glpk__check_mpl_workspace(glp_tran)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall mpl_read_data Int32 (Ptr{Void}, Ptr{Uint8}) glp_tran.p cstring(filename)
+    ret = @glpk_ccall mpl_read_data Int32 (Ptr{Void}, Ptr{Uint8}) glp_tran.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading MathProg data file"))
     end
@@ -1725,7 +1725,7 @@ function glp_mpl_generate(glp_tran::GLPMathProgWorkspace, filename::Union(String
         cfilename = C_NULL
     else
         _jl_glpk__check_file_is_writable(filename)
-        cfilename = cstring(filename)
+        cfilename = bytestring(filename)
     end
     ret = @glpk_ccall mpl_generate Int32 (Ptr{Void}, Ptr{Uint8}) glp_tran.p cfilename
     if ret != 0
@@ -1758,7 +1758,7 @@ end
 function glp_print_sol(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall print_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall print_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error printing solution"))
     end
@@ -1768,7 +1768,7 @@ end
 function glp_read_sol(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall read_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading solution"))
     end
@@ -1778,7 +1778,7 @@ end
 function glp_write_sol(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall write_sol Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing solution"))
     end
@@ -1788,7 +1788,7 @@ end
 function glp_print_ipt(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall print_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall print_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error printing interior point solution"))
     end
@@ -1798,7 +1798,7 @@ end
 function glp_read_ipt(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall read_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading interior point solution"))
     end
@@ -1808,7 +1808,7 @@ end
 function glp_write_ipt(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall write_ipt Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing interior point solution"))
     end
@@ -1818,7 +1818,7 @@ end
 function glp_print_mip(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall print_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall print_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error printing mixed integer programming solution"))
     end
@@ -1828,7 +1828,7 @@ end
 function glp_read_mip(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall read_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading mixed integer programming solution"))
     end
@@ -1838,7 +1838,7 @@ end
 function glp_write_mip(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall write_mip Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing mixed integer programming solution"))
     end
@@ -1863,7 +1863,7 @@ function glp_print_ranges{Ti<:Integer}(glp_prob::GLPProb, len::Integer, list::Ve
         list32p = C_NULL
     end
 
-    @glpk_ccall print_ranges Int32 (Ptr{Void}, Int32, Ptr{Int32}, Int32, Ptr{Uint8}) glp_prob.p len list32p flags cstring(filename)
+    @glpk_ccall print_ranges Int32 (Ptr{Void}, Int32, Ptr{Int32}, Int32, Ptr{Uint8}) glp_prob.p len list32p flags bytestring(filename)
 end
 
 glp_print_ranges{Ti<:Integer}(glp_prob::GLPProb, list::Vector{Ti}, flags::Integer, filename::String) =
@@ -2264,7 +2264,7 @@ function glp_term_out(flag::Integer)
 end
 
 function glp_open_tee(filename::String)
-    ret = @glpk_ccall open_tee Int32 (Ptr{Uint8},) cstring(filename)
+    ret = @glpk_ccall open_tee Int32 (Ptr{Uint8},) bytestring(filename)
     _jl_glpk__check_open_tee_succeeded(ret)
     return ret
 end
@@ -2331,7 +2331,7 @@ end
 
 function glp_sdf_open_file(filename::String)
     _jl_glpk__check_file_is_readable(filename)
-    data_p = @glpk_ccall sdf_open_file Ptr{Void} (Ptr{Uint8},) cstring(filename)
+    data_p = @glpk_ccall sdf_open_file Ptr{Void} (Ptr{Uint8},) bytestring(filename)
     _jl_glpk__check_sdf_file_opened(data_p)
     return GLPData(data_p)
 end
@@ -2349,13 +2349,13 @@ end
 function glp_sdf_read_item(glp_data::GLPData)
     _jl_glpk__check_data(glp_data)
     item_cstr = @glpk_ccall sdf_read_item Ptr{Uint8} (Ptr{Void},) pointer(glp_data)
-    return cstring(item_cstr)
+    return bytestring(item_cstr)
 end
 
 function glp_sdf_read_text(glp_data::GLPData)
     _jl_glpk__check_data(glp_data)
     text_cstr = @glpk_ccall sdf_read_text Ptr{Uint8} (Ptr{Void},) pointer(glp_data)
-    return cstring(text_cstr)
+    return bytestring(text_cstr)
 end
 
 function glp_sdf_line(glp_data::GLPData)
@@ -2371,7 +2371,7 @@ end
 function glp_read_cnfsat(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_readable(filename)
-    ret = @glpk_ccall read_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall read_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error reading CNF file"))
     end
@@ -2386,7 +2386,7 @@ end
 function glp_write_cnfsat(glp_prob::GLPProb, filename::String)
     _jl_glpk__check_glp_prob(glp_prob)
     _jl_glpk__check_file_is_writable(filename)
-    ret = @glpk_ccall write_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p cstring(filename)
+    ret = @glpk_ccall write_cnfsat Int32 (Ptr{Void}, Ptr{Uint8}) glp_prob.p bytestring(filename)
     if ret != 0
         throw(GLPError("Error writing CNF file"))
     end

@@ -8,7 +8,7 @@ global info, compile, study, exec
 
 include("pcre_h.jl")
 
-const VERSION = cstring(ccall(dlsym(Base.libpcre, :pcre_version), Ptr{Uint8}, ()))
+const VERSION = bytestring(ccall(dlsym(Base.libpcre, :pcre_version), Ptr{Uint8}, ()))
 
 # supported options for different use cases
 

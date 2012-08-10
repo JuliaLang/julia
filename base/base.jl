@@ -100,7 +100,7 @@ gc_disable() = ccall(:jl_gc_disable, Void, ())
 current_task() = ccall(:jl_get_current_task, Task, ())
 istaskdone(t::Task) = t.done
 
-cstring(str::ByteString) = str
+bytestring(str::ByteString) = str
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)

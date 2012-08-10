@@ -9,7 +9,7 @@ type Regex
     extra::Ptr{Void}
 
     function Regex(pat::String, opts::Integer, study::Bool)
-        pat = cstring(pat); opts = int32(opts)
+        pat = bytestring(pat); opts = int32(opts)
         if (opts & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
@@ -85,7 +85,7 @@ function show(io, m::RegexMatch)
 end
 
 matches(r::Regex, s::String, o::Integer) =
-    PCRE.exec(r.regex, r.extra, cstring(s), 0, o, false)
+    PCRE.exec(r.regex, r.extra, bytestring(s), 0, o, false)
 matches(r::Regex, s::String) = matches(r, s, r.options & PCRE.EXECUTE_MASK)
 
 contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
@@ -99,7 +99,7 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     off = map(i->m[2i+1]+1, [1:n])
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, i::Integer, o::Integer) = match(r, cstring(s), i, o)
+match(r::Regex, s::String, i::Integer, o::Integer) = match(r, bytestring(s), i, o)
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 

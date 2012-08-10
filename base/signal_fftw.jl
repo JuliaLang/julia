@@ -36,7 +36,7 @@ const _jl_FFTW_RODFT11 = int32(10)
 
 function fftwd_import_wisdom_from_filename(filename::String)
     stat = ccall(dlsym(_jl_libfftw,:fftw_import_wisdom_from_filename),
-        Int32, (Ptr{Uint8},), cstring(filename))
+        Int32, (Ptr{Uint8},), bytestring(filename))
     if stat == 0
         error("failed to import wisdom from $filename")
     end
@@ -44,7 +44,7 @@ end
 
 function fftwf_import_wisdom_from_filename(filename::String)
     stat = ccall(dlsym(_jl_libfftwf,:fftwf_import_wisdom_from_filename),
-        Int32, (Ptr{Uint8},), cstring(filename))
+        Int32, (Ptr{Uint8},), bytestring(filename))
     if stat == 0
         error("failed to import wisdom from $filename")
     end

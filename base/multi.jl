@@ -1078,7 +1078,7 @@ function start_sge_workers(n)
                 sleep(0.5)
             end
         end
-        hostname = cstring(readline(fl)[1:end-1])
+        hostname = bytestring(readline(fl)[1:end-1])
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
         close(fl)

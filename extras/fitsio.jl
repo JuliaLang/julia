@@ -9,7 +9,7 @@ end
 function fits_get_errstatus(status::Int32)
     msg = Array(Uint8, 31)
     ccall(dlsym(_jl_libcfitsio,:ffgerr), Void, (Int32,Ptr{Uint8}), status, msg)
-    cstring(convert(Ptr{Uint8},msg))
+    bytestring(convert(Ptr{Uint8},msg))
 end
 
 function fits_assert_ok(status::Int32)
@@ -45,7 +45,7 @@ function fits_create_file(filename::String)
     status = Int32[0]
     ccall(dlsym(_jl_libcfitsio,:ffinit),
         Int32, (Ptr{Ptr{Void}},Ptr{Uint8},Ptr{Int32}),
-        ptr, cstring(filename), status)
+        ptr, bytestring(filename), status)
     fits_assert_ok(status[1])
     FITSFile(ptr[1], status[1])
 end
@@ -58,7 +58,7 @@ function fits_open_file(filename::String)
     status = Int32[0]
     ccall(dlsym(_jl_libcfitsio,:ffopen),
         Int32, (Ptr{Ptr{Void}},Ptr{Uint8},Int32,Ptr{Int32}),
-        ptr, cstring(filename), mode, status)
+        ptr, bytestring(filename), mode, status)
     fits_assert_ok(status[1])
     FITSFile(ptr[1], status[1])
 end
@@ -87,9 +87,9 @@ function fits_read_keyword(f::FITSFile, keyname::String)
     comment = Array(Uint8, 71)
     ccall(dlsym(_jl_libcfitsio,:ffgkey), Int32,
         (Ptr{Void},Ptr{Uint8},Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
-        f.ptr, cstring(keyname), value, comment, &f.status)
+        f.ptr, bytestring(keyname), value, comment, &f.status)
     fits_assert_ok(f)
-    cstring(convert(Ptr{Uint8},value)), cstring(convert(Ptr{Uint8},comment))
+    bytestring(convert(Ptr{Uint8},value)), bytestring(convert(Ptr{Uint8},comment))
 end
 
 function fits_read_record(f::FITSFile, keynum::Int)
@@ -98,7 +98,7 @@ function fits_read_record(f::FITSFile, keynum::Int)
         (Ptr{Void},Int32,Ptr{Uint8},Ptr{Int32}),
         f.ptr, keynum, card, &f.status)
     fits_assert_ok(f)
-    cstring(convert(Ptr{Uint8},card))
+    bytestring(convert(Ptr{Uint8},card))
 end
 
 function fits_read_keyn(f::FITSFile, keynum::Int)
@@ -109,25 +109,25 @@ function fits_read_keyn(f::FITSFile, keynum::Int)
         (Ptr{Void},Int32,Ptr{Uint8},Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
         f.ptr, keynum, keyname, value, comment, &f.status)
     fits_assert_ok(f)
-    cstring(convert(Ptr{Uint8},keyname)),
-    cstring(convert(Ptr{Uint8},value)),
-    cstring(convert(Ptr{Uint8},comment))
+    bytestring(convert(Ptr{Uint8},keyname)),
+    bytestring(convert(Ptr{Uint8},value)),
+    bytestring(convert(Ptr{Uint8},comment))
 end
 
 function fits_write_key(f::FITSFile, keyname::String, value::Union(Number,String), comment::String)
-    cvalue = isa(value,String) ?  cstring(value) :
+    cvalue = isa(value,String) ?  bytestring(value) :
              isa(value,Bool) ? [int32(value)] : [value]
     ccall(dlsym(_jl_libcfitsio,:ffpky), Int32,
         (Ptr{Void},Int32,Ptr{Uint8},Ptr{Uint8},Ptr{Uint8},Ptr{Int32}),
-        f.ptr, _cfitsio_datatype(typeof(value)), cstring(keyname),
-        cvalue, cstring(comment), &f.status)
+        f.ptr, _cfitsio_datatype(typeof(value)), bytestring(keyname),
+        cvalue, bytestring(comment), &f.status)
     fits_assert_ok(f)
 end
 
 function fits_write_record(f::FITSFile, card::String)
     ccall(dlsym(_jl_libcfitsio,:ffprec), Int32,
         (Ptr{Void},Ptr{Uint8},Ptr{Int32}),
-        f.ptr, cstring(card), &f.status)
+        f.ptr, bytestring(card), &f.status)
     fits_assert_ok(f)
 end
 
@@ -141,7 +141,7 @@ end
 function fits_delete_key(f::FITSFile, keyname::String)
     ccall(dlsym(_jl_libcfitsio,:ffdkey), Int32,
         (Ptr{Void},Ptr{Uint8},Ptr{Int32}),
-        f.ptr, cstring(keyname), &f.status)
+        f.ptr, bytestring(keyname), &f.status)
     fits_assert_ok(f)
 end
 

@@ -7,7 +7,7 @@ function getenv(var::String)
     if val == C_NULL
         error("getenv: undefined variable: ", var)
     end
-    cstring(val)
+    bytestring(val)
 end
 
 function setenv(var::String, val::String, overwrite::Bool)
@@ -45,7 +45,7 @@ function ref(::EnvHash, k::String)
     if val == C_NULL
         throw(KeyError(k))
     end
-    cstring(val)
+    bytestring(val)
 end
 
 function get(::EnvHash, k::String, deflt)
@@ -53,7 +53,7 @@ function get(::EnvHash, k::String, deflt)
     if val == C_NULL
         return deflt
     end
-    cstring(val)
+    bytestring(val)
 end
 
 has(::EnvHash, k::String) = hasenv(k)
