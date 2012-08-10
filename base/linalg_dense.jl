@@ -97,8 +97,8 @@ end
 function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3('N','N',A,B); end
+    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(tA,tB,A,B); end
+    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(tA,tB,A,B); end
     if nA != mB; error("*: argument shapes do not match"); end
     if size(C,1) != mA || size(C,2) != nB; error("*: output size is incorrect"); end
     z = zero(R)
