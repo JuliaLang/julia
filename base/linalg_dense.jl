@@ -20,6 +20,15 @@ cross(a::Vector, b::Vector) =
 # linalg_blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
+lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
+function lapack_conj(t::Char, M::StridedVecOrMat)
+    if t == 'C' && ~isreal(M)
+        for i = 1:numel(M)
+            M[i] = conj(M[i])
+        end
+    end
+end
+
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
 
@@ -35,40 +44,39 @@ function _jl_generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S}
     _jl_generic_matvecmul(C, tA, A, B)
 end
 function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{T}, B::StridedVector{S})
-    mB = size(B, 1)
-    if tA == 'N'
-        mA = size(A, 1)
-        nA = size(A, 2)
-    else
-        mA = size(A, 2)
-        nA = size(A, 1)
-    end
+    mB = length(B)
+    mA, nA = lapack_size(tA, A)
     if nA != mB; error("*: argument shapes do not match"); end
     if length(C) != mA; error("*: output size does not match"); end
     z = zero(R)
     fill!(C, z)
-    if tA == 'N'
+
+    Astride = size(A, 1)
+
+    if tA == 'T'  # fastest case
+        for k = 1:mA
+            aoffs = (k-1)*Astride
+            s = z
+            for i = 1:nA
+                s += A[aoffs+i] * B[i]
+            end
+            C[k] = s
+        end
+    elseif tA == 'C'
+        for k = 1:mA
+            aoffs = (k-1)*Astride
+            s = z
+            for i = 1:nA
+                s += conj(A[aoffs+i]) * B[i]
+            end
+            C[k] = s
+        end
+    else # tA == 'N'
         for k = 1:mB
             b = B[k]
             for i = 1:mA
                 C[i] += A[i, k] * b
             end
-        end
-    elseif tA == 'T'
-        for k = 1:mA
-            s = z
-            for i = 1:nA
-                s += A[i, k] * B[i]
-            end
-            C[k] = s
-        end
-    else  # 'C'
-        for k = 1:mA
-            s = z
-            for i = 1:nA
-                s += conj(A[i, k]) * B[i]
-            end
-            C[k] = s
         end
     end
     return C
@@ -79,36 +87,103 @@ end
 # TODO: support transposed arguments
 # NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
-(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(A, B)
-function _jl_generic_matmatmul{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
-    (mA, nA) = size(A)
-    (mB, nB) = size(B)
+(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'N', A, B)
+function _jl_generic_matmatmul{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+    C = Array(promote_type(T,S), mA, nB)
+    _jl_generic_matmatmul(C, tA, tB, A, B)
+end
+function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3('N','N',A,B); end
     if nA != mB; error("*: argument shapes do not match"); end
-    C = zeros(promote_type(T,S), mA, nB)
-    z = zero(eltype(C))
+    if size(C,1) != mA || size(C,2) != nB; error("*: output size is incorrect"); end
+    z = zero(R)
+    fill!(C, z)
 
-    for jb = 1:50:nB
-        jlim = min(jb+50-1,nB)
-        for ib = 1:50:mA
-            ilim = min(ib+50-1,mA)
-            for kb = 1:50:mB
-                klim = min(kb+50-1,mB)
-                for j=jb:jlim
-                    boffs = (j-1)*mB
-                    coffs = (j-1)*mA
-                    for i=ib:ilim
-                        s = z
-                        for k=kb:klim
-                            s += A[i,k] * B[boffs+k]
+    lapack_conj(tA, A)
+    lapack_conj(tB, B)
+
+    Astride = size(A, 1)
+    Bstride = size(B, 1)
+    Cstride = size(C, 1)
+    tilesz = ifloor(sqrt(10800/sizeof(R)))  # assumes L1 cache is >=32k
+
+    if tB == 'N'
+        if tA == 'N'
+            # Tiled multiplication
+            for jb = 1:tilesz:nB
+                jlim = min(jb+tilesz-1,nB)
+                for ib = 1:tilesz:mA
+                    ilim = min(ib+tilesz-1,mA)
+                    for kb = 1:tilesz:nA
+                        klim = min(kb+tilesz-1,mB)
+                        for j=jb:jlim
+                            boffs = (j-1)*Bstride
+                            coffs = (j-1)*Cstride
+                            for i=ib:ilim
+                                s = z
+                                for k=kb:klim
+                                    s += A[i,k] * B[boffs+k]
+                                end
+                                C[coffs+i] += s
+                            end
                         end
-                        C[coffs+i] += s
                     end
+                end
+            end
+        else
+            # tA = 'T'/'C', tB = 'N'.
+            # This is the fastest case. In contrast to the case above,
+            # I haven't yet seen evidence that tiling helps here. So
+            # this is a simple untiled algorithm.
+            for j = 1:nB
+                boffs = (j-1)*Bstride
+                coffs = (j-1)*Cstride
+                for i = 1:mA
+                    aoffs = (i-1)*Astride
+                    s = z
+                    for k = 1:nA
+                        s += A[aoffs+k] * B[boffs+k]
+                    end
+                    C[coffs+i] = s
+                end
+            end
+        end
+    else
+        if tA == 'N'
+            # tA = 'N', tB = 'T'/'C'
+            for k = 1:nA
+                aoffs = (k-1)*Astride
+                for j = 1:nB
+                    coffs = (j-1)*Cstride
+                    b = B[j,k]
+                    for i = 1:mA
+                        C[coffs+i] += A[aoffs+i]*b
+                    end
+                end
+            end
+        else
+            # tA = 'T'/'C', tB = 'T'/'C'
+            for j = 1:nB
+                coffs = (j-1)*Cstride
+                for i = 1:mA
+                    aoffs = (i-1)*Astride
+                    s = z
+                    for k = 1:nA
+                        s += A[aoffs+k] * B[j,k]
+                    end
+                    C[coffs+i] = s
                 end
             end
         end
     end
+
+    lapack_conj(tA, A)
+    lapack_conj(tB, B)
 
     return C
 end
