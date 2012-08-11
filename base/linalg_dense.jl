@@ -78,6 +78,25 @@ end
 
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
+abstract LapackFlag
+type LapackNormal <: LapackFlag end
+type LapackTranspose <: LapackFlag end
+type LapackConjugate <: LapackFlag end
+value(f::Union(Type{LapackNormal},Type{LapackTranspose}), v::Number) = v
+value(f::Type{LapackConjugate}, v::Number) = conj(v)
+function lapack_flag(c::Char)
+    uc = uppercase(c)
+    if uc == 'N'
+        return LapackNormal
+    elseif uc == 'T'
+        return LapackTranspose
+    elseif uc == 'C'
+        return LapackConjugate
+    else
+        error("Lapack char ", c, " not recognized")
+    end
+end
+
 # NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
 (*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'N', A, B)
@@ -97,13 +116,12 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     z = zero(R)
     fill!(C, z)
 
-    if tA=='C' conj!(A) end
-    if tB=='C' conj!(B) end
-
     Astride = size(A, 1)
     Bstride = size(B, 1)
     Cstride = size(C, 1)
     tilesz = ifloor(sqrt(10800/sizeof(R)))  # assumes L1 cache is >=32k
+    fA = lapack_flag(tA)
+    fB = lapack_flag(tB)
 
     if tB == 'N'
         if tA == 'N'
@@ -140,7 +158,7 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
                     aoffs = (i-1)*Astride
                     s = z
                     for k = 1:nA
-                        s += A[aoffs+k] * B[boffs+k]
+                        s += value(fA, A[aoffs+k]) * B[boffs+k]
                     end
                     C[coffs+i] = s
                 end
@@ -153,7 +171,7 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
                 aoffs = (k-1)*Astride
                 for j = 1:nB
                     coffs = (j-1)*Cstride
-                    b = B[j,k]
+                    b = value(fB, B[j,k])
                     for i = 1:mA
                         C[coffs+i] += A[aoffs+i]*b
                     end
@@ -167,16 +185,13 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
                     aoffs = (i-1)*Astride
                     s = z
                     for k = 1:nA
-                        s += A[aoffs+k] * B[j,k]
+                        s += value(fA, A[aoffs+k]) * value(fB, B[j,k])
                     end
                     C[coffs+i] = s
                 end
             end
         end
     end
-
-    if tA=='C' conj!(A) end
-    if tB=='C' conj!(B) end
 
     return C
 end
