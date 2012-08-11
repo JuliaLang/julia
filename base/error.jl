@@ -13,7 +13,7 @@ end
 errno() = ccall(:jl_errno, Int32, ())
 strerror(e::Integer) = ccall(:jl_strerror, Any, (Int32,), e)::ByteString
 strerror() = strerror(errno())
-system_error(p, b::Bool) = b ? throw(SystemError(bytestring(p))) : nothing
+system_error(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
