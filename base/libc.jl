@@ -13,7 +13,7 @@ function strftime(fmt::ByteString, t)
     if n == 0
         return ""
     end
-    cstring(convert(Ptr{Uint8},timestr))
+    bytestring(convert(Ptr{Uint8},timestr))
 end
 
 strptime(timestr::ByteString) = strptime("%c", timestr)
@@ -37,18 +37,18 @@ system(cmd::String) = int(ccall(:system, Int32, (Ptr{Uint8},), cmd))
 function gethostname()
     hn = Array(Uint8, 128)
     ccall(:gethostname, Int32, (Ptr{Uint8}, Uint), hn, length(hn))
-    cstring(convert(Ptr{Uint8},hn))
+    bytestring(convert(Ptr{Uint8},hn))
 end
 
 function getipaddr()
     ip = Array(Uint8, 128)
     ccall(:getlocalip, Void, (Ptr{Uint8}, Uint), ip, length(ip))
-    cstring(convert(Ptr{Uint8},ip))
+    bytestring(convert(Ptr{Uint8},ip))
 end
 
 ## get a temporary file name ##
 
-tmpnam() = cstring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
+tmpnam() = bytestring(ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8},), C_NULL))
 
 ## Memory related ##
 

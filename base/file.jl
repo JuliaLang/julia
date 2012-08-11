@@ -155,7 +155,7 @@ function real_path(fname::String)
     fname = tilde_expand(fname)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     system_error(:real_path, sp == C_NULL)
-    s = cstring(sp)
+    s = bytestring(sp)
     ccall(:free, Void, (Ptr{Uint8},), sp)
     return s
 end
@@ -166,7 +166,7 @@ function cwd()
     b = Array(Uint8,1024)
     p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     system_error("getcwd", p == C_NULL)
-    cstring(p)
+    bytestring(p)
 end
 
 cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)

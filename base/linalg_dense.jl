@@ -21,13 +21,6 @@ cross(a::Vector, b::Vector) =
 # cases are handled here
 
 lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
-function lapack_conj(t::Char, M::StridedVecOrMat)
-    if t == 'C' && ~isreal(M)
-        for i = 1:numel(M)
-            M[i] = conj(M[i])
-        end
-    end
-end
 
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
@@ -49,7 +42,6 @@ function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{
     if nA != mB; error("*: argument shapes do not match"); end
     if length(C) != mA; error("*: output size does not match"); end
     z = zero(R)
-    fill!(C, z)
 
     Astride = size(A, 1)
 
@@ -72,10 +64,12 @@ function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{
             C[k] = s
         end
     else # tA == 'N'
+        fill!(C, z)
         for k = 1:mB
+            aoffs = (k-1)*Astride
             b = B[k]
             for i = 1:mA
-                C[i] += A[i, k] * b
+                C[i] += A[aoffs+i] * b
             end
         end
     end
@@ -84,7 +78,6 @@ end
 
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
-# TODO: support transposed arguments
 # NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
 (*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'N', A, B)
@@ -104,8 +97,8 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     z = zero(R)
     fill!(C, z)
 
-    lapack_conj(tA, A)
-    lapack_conj(tB, B)
+    if tA=='C' conj!(A) end
+    if tB=='C' conj!(B) end
 
     Astride = size(A, 1)
     Bstride = size(B, 1)
@@ -182,8 +175,8 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
         end
     end
 
-    lapack_conj(tA, A)
-    lapack_conj(tB, B)
+    if tA=='C' conj!(A) end
+    if tB=='C' conj!(B) end
 
     return C
 end

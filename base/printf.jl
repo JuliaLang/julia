@@ -139,9 +139,9 @@ function _special_handler(flags::ASCIIString, width::Int)
     pos = contains(flags,'+') ? "+" :
           contains(flags,' ') ? " " : ""
     abn = quote
-        isnan($x) ? $(cstring(pad("NaN", width))) :
-         $x < 0   ? $(cstring(pad("-Inf", width))) :
-                    $(cstring(pad("$(pos)Inf", width)))
+        isnan($x) ? $(bytestring(pad("NaN", width))) :
+         $x < 0   ? $(bytestring(pad("-Inf", width))) :
+                    $(bytestring(pad("$(pos)Inf", width)))
     end
     ex = :(isfinite($x) ? $blk : write(out, $abn))
     x, ex, blk
@@ -490,7 +490,7 @@ function _gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     end
     push(blk.args, :(write(out, '0')))
     push(blk.args, :(write(out, 'x')))
-    push(blk.args, :(write(out, cstring(hex(unsigned($x), $ptrwidth)))))
+    push(blk.args, :(write(out, bytestring(hex(unsigned($x), $ptrwidth)))))
     if width > 0 && contains(flags,'-')
         push(blk.args, _pad(width, width, ' '))
     end

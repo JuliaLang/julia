@@ -108,7 +108,7 @@ function run_repl()
 end
 
 function parse_input_line(s::String)
-    # s = cstring(s)
+    # s = bytestring(s)
     # (expr, pos) = parse(s, 1, true)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{Uint8},Int32,Int32),

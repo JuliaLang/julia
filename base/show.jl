@@ -620,7 +620,7 @@ end
 function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
-        if isbound(v) && matches(pattern, s)
+        if isbound(v) && ismatch(pattern, s)
             println(rpad(v, 30), summary(eval(m,v)))
         end
     end

@@ -115,7 +115,7 @@ end
 function exec(args::String...)
     arr = Array(ByteString, length(args))
     for i = 1:length(args)
-        arr[i] = cstring(args[i])
+        arr[i] = bytestring(args[i])
     end
     exec(arr)
 end
@@ -517,11 +517,11 @@ function arg_gen(head)
     if applicable(start,head)
         vals = ByteString[]
         for x in head
-            push(vals,cstring(x))
+            push(vals,bytestring(x))
         end
         return vals
     else
-        return ByteString[cstring(head)]
+        return ByteString[bytestring(head)]
     end
 end
 
@@ -530,7 +530,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h in head, t in tail
-        push(vals,cstring(strcat(h,t)))
+        push(vals,bytestring(strcat(h,t)))
     end
     vals
 end

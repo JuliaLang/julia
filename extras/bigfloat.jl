@@ -7,7 +7,7 @@ type BigFloat <: Float
 
 	function BigFloat(x::String) 
 		z = _jl_BigFloat_init()
-		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_string), Void, (Ptr{Void}, Ptr{Uint8}), z, cstring(x))
+		ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_set_string), Void, (Ptr{Void}, Ptr{Uint8}), z, bytestring(x))
 		b = new(z)
 		finalizer(b, _jl_BigFloat_clear)
 		b
@@ -132,7 +132,7 @@ end
 
 function string(x::BigFloat) 
 	s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
-	ret = cstring(s) #This copies s. 
+	ret = bytestring(s) #This copies s. 
 	c_free(s)
 	ret
 end

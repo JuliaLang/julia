@@ -28,21 +28,22 @@ string() = ""
 string(s::String) = s
 string(xs...) = print_to_string(xs...)
 
-cstring() = ""
-cstring(xs...) = print_to_string(xs...)
+bytestring() = ""
+bytestring(s::Array{Uint8,1}) = utf8(s)
+bytestring(s::String) = print_to_string(s)
 
-function cstring(p::Ptr{Uint8})
+function bytestring(p::Ptr{Uint8})
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
 end
 
-function cstring(p::Ptr{Uint8},len::Int)
+function bytestring(p::Ptr{Uint8},len::Int)
     p == C_NULL ? error("cannot convert NULL to string") :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
 
-convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, cstring(s))
-convert(::Type{ByteString}, s::String) = cstring(s)
+convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, bytestring(s))
+convert(::Type{ByteString}, s::String) = bytestring(s)
 
 ## generic supplied functions ##
 
@@ -57,7 +58,7 @@ ref{T<:Integer}(s::String, r::Range1{T}) = s[int(first(r)):int(last(r))]
 ref(s::String, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
 
-symbol(s::String) = symbol(cstring(s))
+symbol(s::String) = symbol(bytestring(s))
 
 print(io::IO, s::String) = for c in s write(io, c) end
 show(io::IO, s::String) = print_quoted(io, s)
@@ -244,7 +245,7 @@ end
 isequal(a::String, b::String) = cmp(a,b) == 0
 isless(a::String, b::String)  = cmp(a,b) <  0
 
-hash(s::String) = hash(cstring(s))
+hash(s::String) = hash(bytestring(s))
 
 # begins with and ends with predicates
 
@@ -853,7 +854,7 @@ function lpad(s::String, n::Integer, p::String)
     end
     q = div(m,l)
     r = m - q*l
-    cstring(p^q*p[1:chr2ind(p,r)]*s)
+    bytestring(p^q*p[1:chr2ind(p,r)]*s)
 end
 
 function rpad(s::String, n::Integer, p::String)
@@ -865,7 +866,7 @@ function rpad(s::String, n::Integer, p::String)
     end
     q = div(m,l)
     r = m - q*l
-    cstring(s*p^q*p[1:chr2ind(p,r)])
+    bytestring(s*p^q*p[1:chr2ind(p,r)])
 end
 
 lpad(s, n::Integer, p) = lpad(string(s), n, string(p))
@@ -921,9 +922,9 @@ function replace(str::ByteString, pattern, repl::Function, limit::Integer)
         n += 1
     end
     rstr = RopeString(rstr,SubString(str,i))
-    cstring(rstr)
+    bytestring(rstr)
 end
-replace(s::String, pat, f::Function, n::Integer) = replace(cstring(s), pat, f, n)
+replace(s::String, pat, f::Function, n::Integer) = replace(bytestring(s), pat, f, n)
 replace(s::String, pat, r, n::Integer) = replace(s, pat, x->r, n)
 replace(s::String, pat, r) = replace(s, pat, r, 0)
 
@@ -1111,7 +1112,6 @@ uint128 (s::String) = parse_int(Uint128,s)
 ## stringifying integers more efficiently ##
 
 string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
-cstring(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 

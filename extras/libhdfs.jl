@@ -134,12 +134,12 @@ hdfs_get_working_directory(fs::HdfsFS, buffer, bufferSize)=ccall(_hdfsGetWorking
 function hdfs_get_working_directory(fs::HdfsFS,bufferSize)
   buffer = Array(Uint8, bufferSize)
   path = ccall(_hdfsGetWorkingDirectory, Ptr{Uint8}, (Ptr{Void}, Ptr{Uint8}, Int32), fs.ptr, buffer, bufferSize)
-  return cstring(path)
+  return bytestring(path)
 end
 function hdfs_get_working_directory(fs::HdfsFS)
   buffer = Array(Uint8, 128)
   path = ccall(_hdfsGetWorkingDirectory, Ptr{Uint8}, (Ptr{Void}, Ptr{Uint8}, Int32), fs.ptr, buffer, 128)
-  return cstring(path)
+  return bytestring(path)
 end
 
 hdfs_set_working_directory(fs::HdfsFS, path)=ccall(_hdfsSetWorkingDirectory, Int32, (Ptr{Void}, Ptr{Uint8}), fs.ptr, path)

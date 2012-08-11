@@ -17,10 +17,10 @@ type VersionNumber
             if isempty(ident) && !(length(pre)==1 && isempty(bld))
                 error("invalid pre-release identifier: empty string")
             end
-            if !matches(r"^(?:[0-9a-z-]*)?$"i, ident)
+            if !ismatch(r"^(?:[0-9a-z-]*)?$"i, ident)
                 error("invalid pre-release identifier: $ident")
             end
-            if matches(r"^\d+$", ident)
+            if ismatch(r"^\d+$", ident)
                 ident = parse_int(ident)
             end
             prerelease[i] = ident
@@ -28,10 +28,10 @@ type VersionNumber
         build = Array(Union(Int,ASCIIString),length(bld))
         for i in 1:length(bld)
             ident = ascii(string(bld[i]))
-            if !matches(r"^(?:[0-9a-z-]+)?$"i, ident)
+            if !ismatch(r"^(?:[0-9a-z-]+)?$"i, ident)
                 error("invalid build identifier: $ident")
             end
-            if matches(r"^\d+$", ident)
+            if ismatch(r"^\d+$", ident)
                 ident = parse_int(ident)
             end
             build[i] = ident
