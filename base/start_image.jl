@@ -16,8 +16,8 @@ _jl_librandom = dlopen("librandom");
 # Optional libraries
 const _jl_libblas = dlopen(_jl_libblas_name)
 const _jl_liblapack = (_jl_libblas_name == _jl_liblapack_name) ? _jl_libblas : dlopen(_jl_liblapack_name)
-const _jl_libfftw = dlopen("libfftw3_threads")
-const _jl_libfftwf = dlopen("libfftw3f_threads")
+const libfftw = dlopen("libfftw3_threads")
+const libfftwf = dlopen("libfftw3f_threads")
 
 ##_jl_libglpk = dlopen("libglpk")
 ##_jl_libglpk = dlopen("libglpk_wrapper")

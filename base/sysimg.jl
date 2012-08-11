@@ -2,7 +2,7 @@ module Base
 
 export
     # Modules
-    Base,Grisu,Printf,PCRE,
+    Base,Grisu,Printf,PCRE,FFTW,FFT,
     # Types
     AbstractMatrix,AbstractVector,Array,Associative,CharString,Chars,Cmd,Cmds,
     Colon,Complex,Complex128,Complex64,ComplexPair,DArray,Dict,Dims,EachLine,
@@ -71,9 +71,8 @@ export
     eatwspace,eatwspace_comment,edit,eig,elements,eltype,
     ends_with,enq_work,enqueue,enumerate,eof,eps,erf,erfc,errno,error,
     esc,escape_string,evalfile,exec,exit,exp,exp2,expand,expm1,expr,exprnd,eye,
-    factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,fft_num_threads,
-    fftn,fftshift,fftw_forget_wisdom,fftwd_import_wisdom_from_filename,
-    fftwf_import_wisdom_from_filename,fill,fill!,filt,filter,filter!,finalizer,
+    factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,
+    fftn,fftshift,fill,fill!,filt,filter,filter!,finalizer,
     find,find_in_path,findmax,findmin,findn,findn_nzs,finfer,first,
     first_utf8_byte,fld,flipdim,fliplr,flipsign,flipud,float,float32,
     float32_isvalid,float64,float64_isvalid,float64_valued,floor,flush,
@@ -290,9 +289,10 @@ include("linalg_lapack.jl")
 include("factorizations.jl")
 
 # signal processing
-include("signal.jl")
 include("signal_fftw.jl")
-
+include("signal.jl")
+import Base.FFT
+import Base.FFT.*
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(cwd, ())
