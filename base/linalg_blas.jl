@@ -403,7 +403,7 @@ function _jl_herk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
 
     if stride(A, 1) != 1
-        return _jl_generic_matmatmul(tA, tAt, A, A')
+        return _jl_generic_matmatmul(tA, tAt, A, A)
     end
 
     # Result array does not need to be initialized as long as beta==0
