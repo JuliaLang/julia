@@ -165,7 +165,7 @@ function dlmwrite(io, a::Matrix, dlm::Char)
         for j = 1:nc
             elt = a[i,j]
             if isa(elt,Float)
-                print_shortest(io, elt)
+                Grisu.print_shortest(io, elt)
             else
                 print(io, elt)
             end
