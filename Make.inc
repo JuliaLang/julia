@@ -106,10 +106,10 @@ USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
 endif
 
-ifeq ($(OS), Darwin)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-endif
+# ifeq ($(OS), Darwin)
+# USE_SYSTEM_BLAS=1
+# USE_SYSTEM_LAPACK=1
+# endif
 
 -include $(JULIAHOME)/Make.user
 

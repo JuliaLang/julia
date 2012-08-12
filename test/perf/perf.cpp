@@ -7,10 +7,8 @@
 #include <complex>
 #include <algorithm>
 
-#include "../../deps/openblas-v0.2.2/cblas.h"
-
 #define DSFMT_MEXP 19937
-#include "../../deps/random/dsfmt-2.1/dSFMT.c"
+#include "perf.h"
 #include "../../deps/random/randmtzig.c"
 
 using namespace std;
