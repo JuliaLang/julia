@@ -63,7 +63,7 @@ end
 # source files, editing, function reflection
 
 function function_loc(f::Function, types)
-    for m = getmethods(f, types)
+    for m = methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
@@ -77,7 +77,7 @@ end
 function_loc(f::Function) = function_loc(f, (Any...))
 
 function whicht(f, types)
-    for m = getmethods(f, types)
+    for m = methods(f, types)
         if isa(m[3],LambdaStaticData)
             lsd = m[3]::LambdaStaticData
             d = f.env.defs

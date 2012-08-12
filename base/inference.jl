@@ -29,8 +29,8 @@ inference_stack = EmptyCallStack()
 tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
 tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
-getmethods(f,t) = getmethods(f,t,-1)::Array{Any,1}
-getmethods(f,t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
+methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
+methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)
 
 typeseq(a,b) = subtype(a,b)&&subtype(b,a)
 
@@ -420,7 +420,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     # function, so we can still know that error() is always None.
     # here I picked 4.
     argtypes = limit_tuple_type(argtypes)
-    applicable = getmethods(f, argtypes, 4)
+    applicable = methods(f, argtypes, 4)
     rettype = None
     if is(applicable,false)
         # this means too many methods matched
@@ -470,7 +470,7 @@ function _jl_invoke_tfunc(f, types, argtypes)
     if is(argtypes,None)
         return None
     end
-    applicable = getmethods(f, types)
+    applicable = methods(f, types)
     if isempty(applicable)
         return Any
     end
@@ -1369,7 +1369,7 @@ function inlineable(f, e::Expr, vars, enclosing_ast)
         return NF
     end
 
-    meth = getmethods(f, atypes)
+    meth = methods(f, atypes)
     if length(meth) != 1
         return NF
     end
@@ -1688,7 +1688,7 @@ function tuple_elim_pass(ast::Expr)
 end
 
 function finfer(f, types)
-    x = getmethods(f,types)[1]
+    x = methods(f,types)[1]
     (tree, ty) = typeinf(x[3], x[1], x[2])
     if isa(tree,Tuple)
         return ccall(:jl_uncompress_ast, Any, (Any,), tree)
@@ -1696,6 +1696,6 @@ function finfer(f, types)
     tree
 end
 
-#tfunc(f,t) = (getmethods(f,t)[1][3]).tfunc
+#tfunc(f,t) = (methods(f,t)[1][3]).tfunc
 
 ccall(:jl_enable_inference, Void, ())

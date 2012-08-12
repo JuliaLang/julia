@@ -137,7 +137,7 @@ export
     # syntax
     expand,esc,expr,gensym,parse,parse_input_line,parseatom,symbol,
     # help and reflection
-    ans,apropos,function_loc,edit,getmethods,help,less,names,which,whicht,whos,
+    ans,apropos,function_loc,edit,methods,help,less,names,which,whicht,whos,
     # loading source files
     evalfile,find_in_path,include_string,load,require,
     # RTS internals
@@ -444,7 +444,7 @@ compile_hint(eval_annotate, (LambdaStaticData, ObjectIdDict, StaticVarInfo, Obje
 # inference code to cache an optimized version of it.
 begin
     local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = getmethods(typeinf, atypes)
+    local minf = methods(typeinf, atypes)
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
 
