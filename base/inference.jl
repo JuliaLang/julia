@@ -1603,8 +1603,15 @@ function add_variable(ast, name, typ)
     push(vinflist, vinf)
 end
 
+const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6}
+
 function unique_name(ast)
     locllist = ast.args[2][1]::Array{Any,1}
+    for g in some_names
+        if !contains_is(locllist, g)
+            return g
+        end
+    end
     g = gensym()
     while contains_is(locllist, g)
         g = gensym()
@@ -1636,10 +1643,11 @@ function tuple_elim_pass(ast::Expr)
                     if nv > 0
                         del(body, i)  # remove (multiple_value)
                         del(body, i)  # remove tuple allocation
-                        vals = { unique_name(ast) for j=1:nv }
                         # convert tuple allocation to a series of assignments
                         # to local variables
+                        vals = cell(nv)
                         for j=1:nv
+                            vals[j] = unique_name(ast)
                             tupelt = tup[j+1]
                             tmp = Expr(:(=), {vals[j],tupelt}, Any)
                             add_variable(ast, vals[j], exprtype(tupelt))

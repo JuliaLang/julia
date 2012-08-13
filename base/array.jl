@@ -1298,11 +1298,11 @@ areduce{T}(f::Function, A::StridedArray{T}, region::Region, v0) =
 let areduce_cache = nothing
 # generate the body of the N-d loop to compute a reduction
 function gen_areduce_func(n, f)
-    ivars = { gensym() for i=1:n }
+    ivars = { symbol(string("i",i)) for i=1:n }
     # limits and vars for reduction loop
-    lo    = { gensym() for i=1:n }
-    hi    = { gensym() for i=1:n }
-    rvars = { gensym() for i=1:n }
+    lo    = { symbol(string("lo",i)) for i=1:n }
+    hi    = { symbol(string("hi",i)) for i=1:n }
+    rvars = { symbol(string("r",i)) for i=1:n }
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
@@ -1649,7 +1649,7 @@ function permute(A::StridedArray, perm)
 
     function permute_one(ivars)
         len = length(ivars)
-        counts = { gensym() for i=1:len}
+        counts = { symbol(string("count",i)) for i=1:len}
         toReturn = cell(len+1,2)
         for i = 1:numel(toReturn)
             toReturn[i] = nothing
