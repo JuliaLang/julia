@@ -99,25 +99,6 @@ end
 
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
-abstract LapackFlag
-type LapackNormal <: LapackFlag end
-type LapackTranspose <: LapackFlag end
-type LapackConjugate <: LapackFlag end
-value(f::Union(Type{LapackNormal},Type{LapackTranspose}), v::Number) = v
-value(f::Type{LapackConjugate}, v::Number) = conj(v)
-function lapack_flag(c::Char)
-    uc = uppercase(c)
-    if uc == 'N'
-        return LapackNormal
-    elseif uc == 'T'
-        return LapackTranspose
-    elseif uc == 'C'
-        return LapackConjugate
-    else
-        error("Lapack char ", c, " not recognized")
-    end
-end
-
 # NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
 (*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'N', A, B)
@@ -128,10 +109,10 @@ function _jl_generic_matmatmul{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatri
     _jl_generic_matmatmul(C, tA, tB, A, B)
 end
 
-tilebufsize = 10800  # Approximately 32k/3
-Abuf = Array(Uint8, tilebufsize)
-Bbuf = Array(Uint8, tilebufsize)
-Cbuf = Array(Uint8, tilebufsize)
+const tilebufsize = 10800  # Approximately 32k/3
+const Abuf = Array(Uint8, tilebufsize)
+const Bbuf = Array(Uint8, tilebufsize)
+const Cbuf = Array(Uint8, tilebufsize)
 
 function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
@@ -144,15 +125,6 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
     Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
 
-    # Call in a separate function for reasons of type inference (makes
-    # a huge performance difference)
-    _jl_generic_matmatmul(C, tA, tB, A, B, Atile, Btile, Ctile)
-end
-
-function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S}, Atile::Matrix{R}, Btile::Matrix{R}, Ctile::Matrix{R})
-    mA, nA = lapack_size(tA, A)
-    mB, nB = lapack_size(tB, B)
-    tile_size = size(Atile, 1)
     z = zero(R)
 
     for jb = 1:tile_size:nB
