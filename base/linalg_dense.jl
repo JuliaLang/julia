@@ -21,6 +21,27 @@ cross(a::Vector, b::Vector) =
 # cases are handled here
 
 lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
+function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if tM == 'N'
+        copy_to(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    else
+        copy_to_transpose(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        if tM == 'C'
+            conj!(B)
+        end
+    end
+end
+function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if tM == 'N'
+        copy_to_transpose(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    else
+        copy_to(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        if tM == 'C'
+            conj!(B)
+        end
+    end
+end
+
 
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
@@ -106,95 +127,64 @@ function _jl_generic_matmatmul{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatri
     C = Array(promote_type(T,S), mA, nB)
     _jl_generic_matmatmul(C, tA, tB, A, B)
 end
+
+tilebufsize = 10800  # Approximately 32k/3
+Abuf = Array(Uint8, tilebufsize)
+Bbuf = Array(Uint8, tilebufsize)
+Cbuf = Array(Uint8, tilebufsize)
+
 function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(tA,tB,A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(tA,tB,A,B); end
     if nA != mB; error("*: argument shapes do not match"); end
     if size(C,1) != mA || size(C,2) != nB; error("*: output size is incorrect"); end
+    tile_size = ifloor(sqrt(tilebufsize/sizeof(R)))
+    sz = (tile_size, tile_size)
+    Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
+    Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
+    Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
+
+    # Call in a separate function for reasons of type inference (makes
+    # a huge performance difference)
+    _jl_generic_matmatmul(C, tA, tB, A, B, Atile, Btile, Ctile)
+end
+
+function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S}, Atile::Matrix{R}, Btile::Matrix{R}, Ctile::Matrix{R})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+    tile_size = size(Atile, 1)
     z = zero(R)
-    fill!(C, z)
 
-    Astride = size(A, 1)
-    Bstride = size(B, 1)
-    Cstride = size(C, 1)
-    tilesz = ifloor(sqrt(10800/sizeof(R)))  # assumes L1 cache is >=32k
-    fA = lapack_flag(tA)
-    fB = lapack_flag(tB)
-
-    if tB == 'N'
-        if tA == 'N'
-            # Tiled multiplication
-            for jb = 1:tilesz:nB
-                jlim = min(jb+tilesz-1,nB)
-                for ib = 1:tilesz:mA
-                    ilim = min(ib+tilesz-1,mA)
-                    for kb = 1:tilesz:nA
-                        klim = min(kb+tilesz-1,mB)
-                        for j=jb:jlim
-                            boffs = (j-1)*Bstride
-                            coffs = (j-1)*Cstride
-                            for i=ib:ilim
-                                s = z
-                                for k=kb:klim
-                                    s += A[i,k] * B[boffs+k]
-                                end
-                                C[coffs+i] += s
-                            end
+    for jb = 1:tile_size:nB
+        jlim = min(jb+tile_size-1,nB)
+        jlen = jlim-jb+1
+        for ib = 1:tile_size:mA
+            ilim = min(ib+tile_size-1,mA)
+            ilen = ilim-ib+1
+            fill!(Ctile, z)
+            for kb = 1:tile_size:nA
+                klim = min(kb+tile_size-1,mB)
+                klen = klim-kb+1
+                copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                for j=1:jlen
+                    bcoff = (j-1)*tile_size
+                    for i = 1:ilen
+                        aoff = (i-1)*tile_size
+                        s = z
+                        for k = 1:klen
+                            s += Atile[aoff+k] * Btile[bcoff+k]
                         end
+                        Ctile[bcoff+i] += s
                     end
                 end
             end
-        else
-            # tA = 'T'/'C', tB = 'N'.
-            # This is the fastest case. In contrast to the case above,
-            # I haven't yet seen evidence that tiling helps here. So
-            # this is a simple untiled algorithm.
-            for j = 1:nB
-                boffs = (j-1)*Bstride
-                coffs = (j-1)*Cstride
-                for i = 1:mA
-                    aoffs = (i-1)*Astride
-                    s = z
-                    for k = 1:nA
-                        s += value(fA, A[aoffs+k]) * B[boffs+k]
-                    end
-                    C[coffs+i] = s
-                end
-            end
-        end
-    else
-        if tA == 'N'
-            # tA = 'N', tB = 'T'/'C'
-            for k = 1:nA
-                aoffs = (k-1)*Astride
-                for j = 1:nB
-                    coffs = (j-1)*Cstride
-                    b = value(fB, B[j,k])
-                    for i = 1:mA
-                        C[coffs+i] += A[aoffs+i]*b
-                    end
-                end
-            end
-        else
-            # tA = 'T'/'C', tB = 'T'/'C'
-            for j = 1:nB
-                coffs = (j-1)*Cstride
-                for i = 1:mA
-                    aoffs = (i-1)*Astride
-                    s = z
-                    for k = 1:nA
-                        s += value(fA, A[aoffs+k]) * value(fB, B[j,k])
-                    end
-                    C[coffs+i] = s
-                end
-            end
+            copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
         end
     end
-
     return C
 end
+
 
 # multiply 2x2 matrices
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
