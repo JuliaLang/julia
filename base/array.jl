@@ -24,7 +24,7 @@ function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     end
     copy_to_unsafe(dest, dsto, src, so, N)
 end
-# @Jeff: is this split needed?
+
 function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
     if isa(T, BitsKind)
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
@@ -38,6 +38,52 @@ function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
 end
 
 copy_to{T}(dest::Array{T}, src::Array{T}) = copy_to(dest, 1, src, 1, numel(src))
+
+function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
+        error("copy_to: size mismatch")
+    end
+    check_bounds(B, ir_dest, jr_dest)
+    check_bounds(A, ir_src, jr_src)
+    jdest = first(jr_dest)
+    Askip = size(A, 1)
+    Bskip = size(B, 1)
+    if stride(A, 1) == 1 && R == S
+        for jsrc in jr_src
+            copy_to(B, (jdest-1)*Bskip+first(ir_dest), A, (jsrc-1)*Askip+first(ir_src), length(ir_src))
+            jdest += 1
+        end
+    else
+        for jsrc in jr_src
+            aoffset = (jsrc-1)*Askip
+            boffset = (jdest-1)*Bskip
+            idest = first(ir_dest)
+            for isrc in ir_src
+                B[boffset+idest] = A[aoffset+isrc]
+                idest += 1
+            end
+            jdest += 1
+        end
+    end
+end
+function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, A::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
+        error("copy_to: size mismatch")
+    end
+    check_bounds(B, ir_dest, jr_dest)
+    check_bounds(A, ir_src, jr_src)
+    idest = first(ir_dest)
+    Askip = size(A, 1)
+    for jsrc in jr_src
+        offset = (jsrc-1)*Askip
+        jdest = first(jr_dest)
+        for isrc in ir_src
+            B[idest,jdest] = A[offset+isrc]
+            jdest += 1
+        end
+        idest += 1
+    end
+end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
     nel = int(div(numel(a)*sizeof(S),sizeof(T)))
@@ -211,12 +257,12 @@ end
 
 check_bounds(A::AbstractVector, I::Indices) = check_bounds(length(A), I)
 
-function check_bounds(A::Matrix, I::Indices, J::Indices)
+function check_bounds(A::AbstractMatrix, I::Indices, J::Indices)
     check_bounds(size(A,1), I)
     check_bounds(size(A,2), J)
 end
 
-function check_bounds(A::Array, I::Indices, J::Indices)
+function check_bounds(A::AbstractArray, I::Indices, J::Indices)
     check_bounds(size(A,1), I)
     sz = size(A,2)
     for i = 3:ndims(A)
@@ -225,7 +271,7 @@ function check_bounds(A::Array, I::Indices, J::Indices)
     check_bounds(sz, J)
 end
 
-function check_bounds(A::Array, I::Indices...)
+function check_bounds(A::AbstractArray, I::Indices...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
