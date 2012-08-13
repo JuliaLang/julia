@@ -119,6 +119,10 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     mB, nB = lapack_size(tB, B)
     if nA != mB; error("*: argument shapes do not match"); end
     if size(C,1) != mA || size(C,2) != nB; error("*: output size is incorrect"); end
+
+    if mA == nA == nB == 2; return matmul2x2(C, tA, tB, A, B); end
+    if mA == nA == nB == 3; return matmul3x3(C, tA, tB, A, B); end
+
     tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
     sz = (tile_size, tile_size)
     Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
