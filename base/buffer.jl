@@ -23,6 +23,7 @@ end
 type LineBuffer <: Buffer
     data::Vector{Uint8}
     ptr::Int
+    nlpos::Int
 
     LineBuffer(data::Vector{Uint8}) = new(data, 1)
     LineBuffer(str::String) = LineBuffer(str.data)
@@ -94,3 +95,13 @@ function take_line(buffer::LineBuffer)
     ret[1:buffer.nlpos] = buffer.data[1:buffer.nlpos]
     ret
 end
+
+function takebuf_array(b::Buffer)
+    d = b.data
+    b.data = Uint8[]
+    grow(d,b.ptr-length(d))
+    b.ptr = 1
+    d
+end
+
+position(b::Buffer) = b.ptr

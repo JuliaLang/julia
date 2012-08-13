@@ -29,7 +29,7 @@ quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    del_io_handler(STDIN)
+    stop_reading(STDIN)
     if show_value == -1
         print('\n');
         exit(0)
@@ -37,7 +37,7 @@ function repl_callback(ast::ANY, show_value)
     _jl_eval_user_input(ast, show_value!=0)
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     STDIN.readcb = readBuffer
-    add_io_handler(STDIN)
+    start_reading(STDIN)
 end
 
 # called to show a REPL result
@@ -124,7 +124,7 @@ function run_repl()
 
     ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
     STDIN.readcb = readBuffer
-    add_io_handler(STDIN)
+    start_reading(STDIN)
 
     cont = true
     lasterr = ()

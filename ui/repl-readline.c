@@ -554,8 +554,8 @@ void jl_prep_terminal (int meta_flag)
     struct termios beforeRl_out = ((uv_tty_t*)jl_uv_stdout)->orig_termios;
 #endif
     //terminal is prepped by libuv
-    _rl_echoing_p=1;
     rl_prep_terminal(1);
+    _rl_echoing_p=1;
     uv_tty_set_mode((uv_tty_t*)jl_uv_stdin,1);
     uv_tty_set_mode((uv_tty_t*)jl_uv_stdout,1);
 #ifndef __WIN32__

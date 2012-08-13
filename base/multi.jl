@@ -140,12 +140,12 @@ end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
     buf = w.sendbuf
-    ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
+    #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
     for arg in args
         serialize(buf, arg)
     end
-    ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
+    #ccall(:jl_buf_mutex_unlock, Void, (Ptr{Void},), buf.ios)
 
     if !now && w.gcflag
         flush_gc_msgs(w)
@@ -201,7 +201,8 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
         d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        add_io_handler(w[i].socket,(args...)->message_handler(d,args...))
+        w[i].socket.readcb = (args...)->message_handler(d,args...)
+        start_reading(w[i].socket)
     end
     PGRP.locs = newlocs
     PGRP.np += n
@@ -217,7 +218,8 @@ function _jl_join_pgroup(myid, locs)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
         d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        add_io_handler(w[i].socket,(args...)->message_handler(d,args...))
+        w[i].socket.readcb = (args...)->message_handler(d,args...)
+        start_reading(w[i].socket)
         send_msg_now(w[i], :identify_socket, myid)
     end
     for i = (myid+1):np
@@ -847,18 +849,19 @@ end
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(accept_fd::Ptr,status::Int32,isclient)
+function accept_handler(server::TcpSocket,status::Int32,isclient)
     if(status == -1)
         error("An error occured during the creation of the server")
     end
-    client = TcpSocket(_jl_tcp_init(globalEventLoop()))
-    err = _jl_tcp_accept(box(Ptr{Void},unbox(Int,accept_fd)),client.handle)
+    client = TcpSocket()
+    err = accept(server,client)
     if err!=0
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
         first = true# isempty(sockets)
         d=Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
-        add_io_handler(client,(args...)->message_handler(d,args...))
+        client.readcb = (args...)->message_handler(d,args...)
+        start_reading(client)
     end
 end
 
@@ -876,7 +879,9 @@ function message_handler_loop(isclient,this::Deserializer)
             locs = force(deserialize(this))
             print("\nLocation: ",locs,"\nId:",_myid,"\n")
             PGRP = _jl_join_pgroup(_myid, locs)
+            println("tt1")
             PGRP.workers[1] = Worker("", 0, this.stream, 1)
+            println("tt2")
             first=false
 	else
 	try
@@ -926,7 +931,7 @@ function message_handler_loop(isclient,this::Deserializer)
         catch e
             if isa(e,EOFError)
                 #print("eof. $(myid()) exiting\n")
-                del_io_handler(this.stream)
+                stop_reading(this.stream)
                 # TODO: remove machine from group
                 throw(DisconnectException())
             else
@@ -942,14 +947,13 @@ function message_handler_loop(isclient,this::Deserializer)
 end
 
 # activity on message socket
-function message_handler(ds::Deserializer,handle::Ptr,nread::Int,base::Ptr,len::Int32)
-    if(nread>0)
-        ds.buf          =   ccall(:jl_pchar_to_array,Any,(Ptr,Int),base,nread)::Array{Uint8}
-        ds.buflen       =   nread
-        ds.pos          =   1
-        ds.returntask   =   current_task()
-        yieldto(ds.task)
-    end
+function message_handler(ds::Deserializer,handle::TcpSocket)
+    ds.buf          =   handle.buffer.data
+    ds.buflen       =   handle.buffer.ptr
+    ds.pos          =   1
+    ds.returntask   =   current_task()
+    yieldto(ds.task)
+    handle.buffer.ptr = 1 #reuse buffer
 end
 
 ## worker creation and setup ##
@@ -960,10 +964,10 @@ start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
     worker_sockets = Dict()
-    (actual_port,sock) = open_any_tcp_port(default_port,(handle::Ptr,status::Int32)->accept_handler(handle,status,false))
+    (actual_port,sock) = open_any_tcp_port(default_port,(handle,status)->accept_handler(handle,status,false))
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
-    write(out, getipaddr())      # print hostname
+    write(out, "localhost")      #TODO: print hostname
     write(out, '\n')
     # close stdin; workers will not use it
     #close(STDIN)
@@ -997,41 +1001,50 @@ function writeback(handle,nread,base,buflen)
     end
 end
 
-function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream,conninfo::String)
+function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream)
     println("readcb")
-    m = match(r"^julia_worker:(\d+)#(.*)", take_line(stream.buffer)) #TODO: do without a temporary array
+    m = match(r"^julia_worker:(\d+)#(.*)", ascii(take_line(stream.buffer)))
+    println(m)
     if m != nothing
+        println("ok")
         port = parse_int(Uint16, m.captures[1])
+        println("trace")
         hostname::ByteString = m.captures[2]
+        println("trace2")
         w[i] = Worker(hostname, port)
-        notify_content_accepted(stream.buffer)
+        sock = w[i].socket
+        println("trace3")
+        notify_content_accepted(stream.buffer,false)
         old_buffer = stream.buffer
         stream.buffer = DynamicBuffer()
         stream.buffer.data = old_buffer.data
         stream.buffer.ptr = old_buffer.ptr
+        stream.readcb = x->(println(ascii(stream.buffer.data[1:stream.buffer.ptr]));stream.buffer.ptr=1)
         todo[1]-=1
+        println(todo[1])
         if(todo[1]<=0)
-            done_waiting_for(ps)
+            ps.exit_code=0
         end
     end
-    false
+    true
 end
 
 function start_remote_workers(machines, cmds)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
+    pps = Array(Process,n)
     todo = [int32(n)]
     for i=1:n
         ostream,ps = read_from(cmds[i])
-        ostream.readcb = (stream)->(_parse_conninfo(ps,i,w,todo,stream);true)
+        ostream.readcb = (stream)->(_parse_conninfo(ps,w,i,todo,stream);true)
         ostream.buffer = LineBuffer()
         # redirect console output from workers to the client's stdout
-        add_io_handler(ostream)
-        _jl_wait_for_(ps)
+        start_reading(ostream)
+        pps[i] = ps
     end
     print(length(_jl_wait_for))
-    wait()
+    wait(pps)
     w
 end
 
@@ -1574,14 +1587,6 @@ function make_scheduled(t::Task)
 end
 
 yield() = yieldto(Scheduler)
-
-add_io_handler(io::AsyncStream) = start_reading(io)
-change_io_handler(io::AsyncStream, H::Function) = change_readcb(io,H)
-del_io_handler(io::AsyncStream) = stop_reading(io)
-
-#add_fd_handler(fd::Int32, H) = (_jl_fd_handlers[fd]=H)
-#del_fd_handler(fd::Int32) = del(_jl_fd_handlers, fd)
-
 
 function _jl_work_cb()
     if !isempty(Workqueue)

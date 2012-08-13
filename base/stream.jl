@@ -83,68 +83,71 @@ type ProcessChain
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
-const _jl_wait_for = Union(Process,)[]
+typealias Waitable Union(Process,AsyncStream)
+
+const _jl_wait_for = Union(Process,AsyncStream)[]
 function _jl_wait_for_(p::Process)
     if !process_exited(p)
         push(_jl_wait_for, p)
     end
 end
+_jl_wait_for_(p::AsyncStream) = push(_jl_wait_for, p)
 _jl_wait_for_(pc::ProcessChain) = map(_jl_wait_for_, pc.processes)
 
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
     buffer::Buffer
-    closed::Bool
+    open::Bool
     readcb::Callback
-	closecb::Callback
+    closecb::Callback
     NamedPipe() = new(C_NULL,DynamicBuffer(),false,false,false)
 end
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
-    closed::Bool
+    open::Bool
     buffer::Buffer
     readcb::Callback
-	closecb::Callback
-    TTY(handle,closed)=new(handle,closed,DynamicBuffer(),false,false)
+    closecb::Callback
+    TTY(handle,open)=new(handle,open,DynamicBuffer(),false,false)
 end
 
 abstract Socket <: AsyncStream
 
 type TcpSocket <: Socket
     handle::Ptr{Void}
-	closed::Bool
+    open::Bool
     buffer::Buffer
     readcb::Callback
-	ccb::Callback
-	closecb::Callback
-    TcpSocket(handle,closed)=new(handle,closed,DynamicBuffer(),false,false,false)
-	function TcpSocket()
-		this = TcpSocket(C_NULL,false)
-		this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
-		if(this.handle == C_NULL)
-			error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
-		end
-		this
-	end
+    ccb::Callback
+    closecb::Callback
+    TcpSocket(handle,open)=new(handle,open,DynamicBuffer(),false,false,false)
+    function TcpSocket()
+        this = TcpSocket(C_NULL,false)
+        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
+        if(this.handle == C_NULL)
+            error("Failed to start reading: ",_uv_lasterror(globalEventLoop()))
+        end
+        this
+    end
 end
 
 type UdpSocket <: Socket
     handle::Ptr{Void}
-	closed::Bool
+    open::Bool
     buffer::Buffer
     readcb::Callback
-	ccb::Callback
-	closecb::Callback
-    UdpSocket(handle,closed)=new(handle,closed,DynamicBuffer(),false)
-	function UdpSocket()
-		this = UdpSocket(C_NULL,false)
-		this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
-		this
-	end
+    ccb::Callback
+    closecb::Callback
+    UdpSocket(handle,open)=new(handle,open,DynamicBuffer(),false)
+    function UdpSocket()
+        this = UdpSocket(C_NULL,false)
+        this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
+        this
+    end
 end
 
-copy(s::TTY) = TTY(s.handle,s.closed)
+copy(s::TTY) = TTY(s.handle,s.open)
 
 #SpawnNullStream is Singleton
 type SpawnNullStream <: AsyncStream
@@ -168,7 +171,7 @@ write_handle(s::Ptr{Void}) = s
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
 function _uv_tty2tty(handle::Ptr{Void})
-    tty = TTY(handle,false)
+    tty = TTY(handle,true)
     ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),handle,tty)
     tty
 end
@@ -212,7 +215,10 @@ type Ip6Addr <: IpAddr
     scope::Uint32
 end
 
-_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = sock.ccb(sock,status)
+#from `connect`
+_uv_hook_connectcb(sock::AsyncStream, status::Int32) = if(isa(sock.ccb,Function)); sock.ccb(sock,status); end
+#from `listen`
+_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = if(isa(sock.ccb,Function)); sock.ccb(sock,status); end
 
 function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
     sock.ccb = cb
@@ -220,10 +226,9 @@ function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
 end
 
 _jl_tcp_bind(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_bind,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,hton(addr.port),addr.host)
-_jl_tcp_connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp_connect,Int32,(Ptr{Void},Uint32,Uint16,Function),sock.handle,addr.host,hton(addr.port))
 _jl_tcp_accept(server::Ptr,client::Ptr) = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server,client)
 accept(server::TcpSocket,client::TcpSocket) = _jl_tcp_accept(server.handle,client.handle)
-
+connect(sock::TcpSocket,addr::Ip4Addr) = ccall(:jl_tcp4_connect,Int32,(Ptr{Void},Uint32,Uint16),sock.handle,addr.host,hton(addr.port))
 
 function open_any_tcp_port(preferred_port::Uint16,cb::Function)
     socket = TcpSocket();
@@ -273,23 +278,32 @@ function notify_filled(buffer::FixedBuffer, nread::Int, base::Ptr, len::Int32)
     true
 end
 function notify_filled(buffer::LineBuffer, nread::Int, base::Ptr, len::Int32)
-    pos = memchr(buffer.data,'\n',buffer.ptr)
+    buffer.ptr+=nread
+    notify_filled(buffer)
+end
+function notify_filled(buffer::LineBuffer)
+    p = pointer(buffer.data)
+    q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,'\n',buffer.ptr)
+    pos = (q == C_NULL) ? 0 : q-p
+    show(ascii(buffer.data[1:buffer.ptr]))
+    println()
+    println("LineBuffer: ",pos)
     if(pos == 0)
         return false
     end
     buffer.nlpos = pos
-    buffer.ptr+=nread
     true
 end
-notify_content_accepted(buffer::DynamicBuffer) = nothing #Buffer conent management is left to the user
-notify_content_accepted(buffer::FixedBuffer) = nothing #Buffer conent management is left to the user
-function notify_content_accepted(buffer::LineBuffer)
+notify_content_accepted(buffer::DynamicBuffer,accepted) = false #Buffer conent management is left to the user
+notify_content_accepted(buffer::FixedBuffer,accepted) = false #Buffer conent management is left to the user
+function notify_content_accepted(buffer::LineBuffer,accepted)
     len = buffer.ptr - buffer.nlpos
     if(len > 0)
         copy_to(buffer.data,1,buffer.data,buffer.nlpos,len)
     end
     buffer.ptr = len+1
     buffer.nlpos = 0
+    !accepted || notify_filled(buffer)
 end
 
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
@@ -304,10 +318,14 @@ function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
         #EOF
     else
         if(notify_filled(stream.buffer,nread,base,len) && nread != 0 && isa(stream.readcb,Function))
-            if(stream.readcb(stream))
-                notify_content_accepted(stream.buffer)#,nread,base,len)
-            end
+            dispatch_readcb(stream)
         end
+    end
+end
+
+function dispatch_readcb(stream::AsyncStream)
+    if(notify_content_accepted(stream.buffer,stream.readcb(stream)))
+        dispatch_readcb(stream)
     end
 end
 ##########################################
@@ -351,7 +369,7 @@ end
 
 const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
 
-_uv_hook_close(uv::AsyncStream) = uv.closed = true
+_uv_hook_close(uv::AsyncStream) = uv.open = false
 _uv_hook_close(uv::AsyncWork) = nothing
 
 # This serves as a common callback for all async classes
@@ -386,6 +404,7 @@ type ProcessSignaled <: ProcessStatus; signal::PtrSize; end
 type ProcessStopped  <: ProcessStatus; signal::PtrSize; end
 
 process_exited  (s::Process) = (s.exit_code != -2)
+process_exited  (s::Vector{Process}) =all(map(process_exited,s))
 process_signaled(s::Process) = (s.term_signal > 0)
 process_stopped (s::Process) = 0 #not supported by libuv. Do we need this?
 
@@ -445,9 +464,9 @@ end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
 function close(stream::AsyncStream)
-    if(!stream.closed)
+    if(stream.open)
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
-        stream.closed=true
+        stream.open=false
     end
 end
 
@@ -557,7 +576,7 @@ function process_exited_chain(p::Process,e::Int32,t::Int32)
     true
 end
 
-function done_waiting_for(p::Process)
+function done_waiting_for(p::Waitable)
     i = findfirst(_jl_wait_for, p)
     if i > 0
         del(_jl_wait_for, i)
@@ -567,10 +586,8 @@ function done_waiting_for(p::Process)
     end
 end
 
-function process_closed_chain(p::Process)
-    done = process_exited(p)
-    done_waiting_for(p)
-    done
+function process_closed_chain(p::Waitable)
+    process_exited(p)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -720,7 +737,8 @@ function run(cmds::AbstractCmd,args...)
 end
 
 success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
-success(procs::ProcessChain) = all(map(success, procs.processes))
+success(procs::Vector{Process}) = all(map(success, procs))
+success(procs::ProcessChain) = success(procs.processes)
 success(cmd::AbstractCmd) = wait(spawn(cmd))
 
 function pipeline_error(proc::Process)
@@ -756,16 +774,33 @@ function exec(thunk::Function)
     exit(0)
 end
 
-function wait(procs::Union(Process,ProcessChain))
-    assert(length(_jl_wait_for) == 0)
-    _jl_wait_for_(procs)
+
+function wait(procs::Union(Process,Vector{Process}))
     try
-        wait()
+        while(!process_exited(procs))
+            process_events(globalEventLoop())
+        end
     catch e
         kill(procs)
+        println(e)
         throw(e)
     end
     return success(procs)
+end
+wait(procs::ProcessChain) = wait(procs.processes)
+function wait(w::AsyncStream,condition::Function)
+    while(condition(w))
+        process_events(globalEventLoop())
+    end
+    return true
+end
+function wait(w::AsyncStream)
+    state::Bool = w.open
+    println("State: ",state)
+    while(state==w.open)
+        process_events(globalEventLoop())
+    end
+    return true
 end
 function wait()
     if length(_jl_wait_for) > 0
@@ -786,6 +821,7 @@ function kill(p::Process,signum::Int32)
         _jl_kill(p, int32(9))
     end
 end
+kill(ps::Vector{Process}) = map(kill, ps)
 kill(ps::ProcessChain) = map(kill, ps.processes)
 kill(p::Process) = kill(p,int32(9))
 
@@ -913,29 +949,30 @@ function show(io, cmds::AndCmds)
     end
 end
 
-_jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void},cb::Function) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void},Function),sock.handle,sockaddr,cb)
+_jl_connect_raw(sock::TcpSocket,sockaddr::Ptr{Void}) = ccall(:jl_connect_raw,Int32,(Ptr{Void},Ptr{Void}),sock.handle,sockaddr)
 _jl_getaddrinfo(loop::Ptr,host::ByteString,service::Ptr,cb::Function) = ccall(:jl_getaddrinfo,Int32,(Ptr{Void},Ptr{Uint8},Ptr{Uint8},Function),loop,host,service,cb)
 _jl_sockaddr_from_addrinfo(addrinfo::Ptr) = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr,),addrinfo)
 _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port,Void,(Ptr{Void},Uint16),ptr,port)
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 
-function connect_callback(sock::TcpSocket,status::Int32,breakLoop::Bool)
+function connect_callback(sock::TcpSocket,status::Int32)
+    println("connect_callback")
     if(status==-1)
         error("Socket connection failed: ",_uv_lasterror(globalEventLoop()))
     end
     sock.open=true;
-    if(breakLoop)
-        break_one_loop(globalEventLoop())
-    end
 end
 
-function getaddrinfo_callback(breakLoop::Bool,sock::TcpSocket,status::Int32,port::Uint16,addrinfo_list::Ptr)
+
+function getaddrinfo_callback(sock::TcpSocket,status::Int32,port::Uint16,addrinfo_list::Ptr)
+    println("getaddrinfo_callback")
     if(status==-1)
         error("Name lookup failed")
     end
     sockaddr = _jl_sockaddr_from_addrinfo(addrinfo_list) #only use first entry of the list for now
     _jl_sockaddr_set_port(sockaddr,hton(port))
-    err = _jl_connect_raw(sock,sockaddr,(req::Ptr,status::Int32)->connect_callback(sock,status,breakLoop))
+    sock.ccb = connect_callback
+    err = _jl_connect_raw(sock,sockaddr)
     if(err != 0)
         error("Failed to connect to host")
     end
@@ -954,11 +991,12 @@ function readall(s::IOStream)
 end
 
 function connect_to_host(host::ByteString,port::Uint16)
-    sock = TcpSocket(_jl_tcp_init(globalEventLoop()))
-    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addrinfo::Ptr,status::Int32)->getaddrinfo_callback(true,sock,status,port,addrinfo))
+    sock = TcpSocket()
+    err = _jl_getaddrinfo(globalEventLoop(),host,C_NULL,(addrinfo::Ptr,status::Int32)->getaddrinfo_callback(sock,status,port,addrinfo))
     if(err!=0)
         error("Failed to  initilize request to resolve hostname: ",host)
     end
-    run_event_loop(globalEventLoop())
+    wait(sock)
+    println("done")
     return sock
 end

@@ -33,19 +33,25 @@ extern "C" {
 
 #define DEFINE_JULIA_HOOK(hook) static jl_function_t *jl_uvhook_##hook = 0;
 #define JULIA_HOOK(hook) \
-    (jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = ((jl_function_t*) jl_get_global(jl_get_global(jl_root_module,jl_symbol("Base")),jl_symbol("_uv_hook_" #hook)))))
+(jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = (\
+    (jl_function_t*)jl_get_global(                          \
+        (jl_module_t*)jl_get_global(                        \
+            jl_root_module,jl_symbol("Base")),              \
+        jl_symbol("_uv_hook_" #hook)))))                    \
 
 jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {
-    jl_value_t **argv = alloca((count+1)*sizeof(jl_value_t*));
-    memset(argv+1, 0, count);
+    if(val != 0)
+        count += 1;
+    jl_value_t **argv = alloca((count)*sizeof(jl_value_t*));
+    memset(argv, 0, count);
     va_list argp;
     va_start(argp,count);
     jl_value_t *v=0;
     int i;
     argv[0]=val;
-    JL_GC_PUSHARGS(argv,count+1);
-    for(i=1; i<(count+1); ++i) {
+    JL_GC_PUSHARGS(argv,count);
+    for(i=((val==0)?0:1); i<count; ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
             v = jl_box_pointer(va_arg(argp,void*));
@@ -62,7 +68,7 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
         }
         argv[i]=v;
     }
-    v = jl_apply(f,(jl_value_t**)argv,count+1);
+    v = jl_apply(f,(jl_value_t**)argv,count);
     JL_GC_POP();
     return v;
 }
@@ -512,14 +518,11 @@ void getlocalip(char *buf, size_t len)
     if (ifAddrStruct!=NULL) uv_free_interface_addresses(ifAddrStruct,count);
 }
 
-/*
 void jl_addinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res)
 {
     if(handle->data)
     {
-        jl_callback_call(((jl_handle_opts_t*)handle->data)->cb,2,CB_PTR,res,CB_INT32,status);
-        free(handle->data);
-
+        jl_callback_call(((jl_function_t*)handle->data),0,2,CB_PTR,res,CB_INT32,status);
     }
     free(handle);
     uv_freeaddrinfo(res);
@@ -528,7 +531,6 @@ void jl_addinfo_cb(uv_getaddrinfo_t* handle, int status, struct addrinfo* res)
 DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *service, jl_function_t *cb)
 {
     uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
-    jl_handle_opts_t *opts = malloc(sizeof(jl_handle_opts_t));
     struct addrinfo hints;
 
     memset (&hints, 0, sizeof (hints));
@@ -536,12 +538,10 @@ DLLEXPORT int jl_getaddrinfo(uv_loop_t *loop, const char *host, const char *serv
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags |= AI_CANONNAME;
 
-    opts->cb = cb;
-
-    req->data = opts;
+    req->data = cb;
 
     return uv_getaddrinfo(loop,req,jl_addinfo_cb,host,service,&hints);
-}*/
+}
 
 DLLEXPORT struct sockaddr *jl_sockaddr_from_addrinfo(struct addrinfo *addrinfo)
 {
@@ -560,9 +560,19 @@ DLLEXPORT void jl_sockaddr_set_port(struct sockaddr *addr,uint16_t port)
     }
 }
 
+DLLEXPORT int jl_tcp4_connect(uv_tcp_t *handle,uint32_t host, uint16_t port)
+{
+    struct sockaddr_in addr;
+    uv_connect_t *req = malloc(sizeof(uv_connect_t));
+    memset(&addr, 0, sizeof(struct sockaddr_in));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = host;
+    addr.sin_port = port;
+    return uv_tcp_connect(req,handle,addr,&jl_connectcb);
+}
 
 
-DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr,jl_function_t *connectcb)
+DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr)
 {
     uv_connect_t *req = malloc(sizeof(uv_connect_t));
     if(addr->sa_family==AF_INET)
@@ -571,6 +581,7 @@ DLLEXPORT int jl_connect_raw(uv_tcp_t *handle,struct sockaddr *addr,jl_function_
     } else {
         return uv_tcp_connect6(req,handle,*((struct sockaddr_in6*)addr),&jl_connectcb);
     }
+    free(req);
     return -2; //error! Only IPv4 and IPv6 are implemented atm
 }
 
