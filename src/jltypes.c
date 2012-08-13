@@ -1293,6 +1293,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     size_t i;
     char *tname;
     jl_tuple_t *tp;
+    jl_struct_type_t *stprimary = NULL;
     if (jl_is_typector(tc)) {
         tp = ((jl_typector_t*)tc)->parameters;
         tname = "alias";
@@ -1301,6 +1302,8 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         assert(jl_is_some_tag_type(tc));
         tp = ((jl_tag_type_t*)tc)->parameters;
         tname = ((jl_tag_type_t*)tc)->name->name->name;
+        if (jl_is_struct_type(tc))
+            stprimary = (jl_struct_type_t*)((jl_tag_type_t*)tc)->name->primary;
     }
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
@@ -1315,17 +1318,29 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         return (jl_value_t*)jl_tuple_fill(nt, (n==2) ? params[1] :
                                           (jl_value_t*)jl_any_type);
     }
-    if (n > jl_tuple_len(tp))
+    size_t ntp = jl_tuple_len(tp);
+    if (n > ntp)
         jl_errorf("too many parameters for type %s", tname);
-    jl_value_t **env = alloca(2 * jl_tuple_len(tp) * sizeof(jl_value_t*));
+    jl_value_t **env = alloca(2 * ntp * sizeof(jl_value_t*));
+    memset(env, 0, 2 * ntp * sizeof(jl_value_t*));
+    JL_GC_PUSHARGS(env, 2*ntp);
     size_t ne = 0;
-    for(i=0; i < jl_tuple_len(tp); i++) {
+    for(i=0; i < ntp; i++) {
         jl_tvar_t *tv = (jl_tvar_t*)jl_tupleref(tp,i);
         if (!jl_is_typevar(tv))
             continue;
         env[ne*2+0] = (jl_value_t*)tv;
         if (i >= n) {
-            env[ne*2+1] = (jl_value_t*)tv;
+            if (stprimary && stprimary->types == NULL) {
+                // during creation of type Foo{A,B}, fill in missing
+                // trailing parameters with copies for recursive
+                // instantiations, so that in the future Foo{A} as a field
+                // type will only be instantiated with the first parameter.
+                env[ne*2+1] = (jl_value_t*)jl_new_typevar(tv->name, tv->lb, tv->ub);
+            }
+            else {
+                env[ne*2+1] = (jl_value_t*)tv;
+            }
         }
         else {
             // NOTE: type checking deferred to inst_type_w_ to make sure
@@ -1338,7 +1353,9 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         ne++;
     }
     if (jl_is_typector(tc)) tc = (jl_value_t*)((jl_typector_t*)tc)->body;
-    return (jl_value_t*)jl_instantiate_type_with((jl_type_t*)tc, env, ne);
+    jl_type_t *result = jl_instantiate_type_with((jl_type_t*)tc, env, ne);
+    JL_GC_POP();
+    return (jl_value_t*)result;
 }
 
 jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
@@ -1447,6 +1464,9 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             return (jl_type_t*)t;
         jl_typename_t *tn = tt->name;
         jl_value_t *tc = tn->primary;
+        // don't instantiate "Foo" without parameters inside Foo
+        if (t == tc && stack!=jl_null)
+            return (jl_type_t*)t;
         jl_type_t *result;
         size_t ntp = jl_tuple_len(tp);
         assert(ntp == jl_tuple_len(((jl_tag_type_t*)tc)->parameters));
@@ -1487,12 +1507,16 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         // up the stack, return it. this computes a fixed point for
         // recursive types.
         jl_type_t *lkup = lookup_type(stack, tn, iparams, ntp);
-        if (lkup != NULL) { result = lkup; goto done_inst_tt; }
+        if (lkup != NULL && lkup != (jl_type_t*)tc) {
+            result = lkup; goto done_inst_tt;
+        }
 
         // check type cache
         if (cacheable) {
             lkup = lookup_type(tn->cache, tn, iparams, ntp);
-            if (lkup != NULL) { result = lkup; goto done_inst_tt; }
+            if (lkup != NULL) {
+                result = lkup; goto done_inst_tt;
+            }
         }
 
         // always use original type constructor
@@ -1579,13 +1603,7 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             jl_tuple_t *ftypes = st->types;
             if (ftypes != NULL) {
                 // recursively instantiate the types of the fields
-                jl_tuple_t *nftypes = jl_alloc_tuple(jl_tuple_len(ftypes));
-                nst->types = nftypes;
-                for(i=0; i < jl_tuple_len(ftypes); i++) {
-                    jl_tupleset(nftypes, i,
-                                (jl_value_t*)inst_type_w_(jl_tupleref(ftypes,i),
-                                                          env,n,stack));
-                }
+                nst->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
             }
             if (cacheable) cache_type_((jl_type_t*)nst);
             result = (jl_type_t*)nst;

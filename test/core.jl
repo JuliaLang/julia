@@ -100,9 +100,25 @@ type Foo_{T} x::Foo_{Int} end
 @assert is(Foo_.types[1].types[1], Foo_{Int})
 
 type Circ_{T} x::Circ_{T} end
-# this does not necessarily have to be true, but it's nice
-# TODO: it shouldn't be true!! (issue #786)
-@assert is(Circ_, Circ_.types[1])
+@assert is(Circ_{Int}, Circ_{Int}.types[1])
+
+# issue #786
+type Node{T}
+    v::Vector{Node}
+end
+
+@assert is(Node{Int}.types[1].parameters[1], Node)
+
+type Node2{T}
+    v::Vector{Node2{T}}
+end
+
+@assert is(Node2{Int}.types[1].parameters[1], Node2{Int})
+
+type FooFoo{A,B} y::FooFoo{A} end
+
+@assert FooFoo{Int} <: FooFoo{Int,String}.types[1]
+
 
 x = (2,3)
 @assert +(x...) == 5
