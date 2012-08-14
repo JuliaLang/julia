@@ -235,7 +235,5 @@ end
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)
-  new_filename = strcat(filename, ".tar.gz")
-  path_rename(filename, new_filename)
-  new_filename
+  filename
 end
