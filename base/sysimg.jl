@@ -190,7 +190,7 @@ export
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
     @gensym, @eval, @task, @thunk, @L_str, @vectorize_1arg,
-    @vectorize_2arg, @printf, @sprintf
+    @vectorize_2arg, @printf, @sprintf, @memoize
 
 if false
     # simple print definitions for debugging. enable these if something
