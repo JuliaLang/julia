@@ -229,7 +229,7 @@ function profile_parse(ex::Expr)
         push(coreargs, expr(:function, {expr(:call, {funcclear}), expr(:block,{:(fill!($timers,0)), :(fill!($counters,0))})}))
         # Put all this inside a let block
         excore = expr(:block,coreargs)
-        exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Int, $n_lines))})
+        exlet = expr(:let,{expr(:block,excore), :($timers = zeros(Uint64, $n_lines)), :($counters = zeros(Uint64, $n_lines))})
         return exlet, tags, funcreport, funcclear
     else
         return ex ,{}, :funcnoop, :funcnoop
@@ -271,10 +271,16 @@ end
 function profile_print(tc)
     for i = 1:length(tc)
         timers = tc[i][1]
+        ttotal = sum(float64(timers))
         counters = tc[i][2]
+        ctotal = sum(float64(counters))
+        println("   count  count(%)  time(%)")
         for j = 1:length(counters)
             if counters[j] != 0
-                @printf("%8d  %f  % f %s\n", counters[j], convert(Float64, timers[j])*1e-9, (convert(Float64, timers[j]) - convert(Float64, counters[j])*_PROFILE_CALIB)*1e-9, _PROFILE_TAGS[i][j])
+                @printf("%8d  %7.4f  %7.4f %s\n", counters[j],
+                        100*(counters[j]/ctotal),
+                        100*((timers[j] - counters[j]*_PROFILE_CALIB)/ttotal),
+                        _PROFILE_TAGS[i][j])
             end
         end
     end
