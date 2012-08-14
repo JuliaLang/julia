@@ -127,35 +127,51 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     sz = (tile_size, tile_size)
     Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
     Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
-    Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
 
     z = zero(R)
 
-    for jb = 1:tile_size:nB
-        jlim = min(jb+tile_size-1,nB)
-        jlen = jlim-jb+1
-        for ib = 1:tile_size:mA
-            ilim = min(ib+tile_size-1,mA)
-            ilen = ilim-ib+1
-            fill!(Ctile, z)
-            for kb = 1:tile_size:nA
-                klim = min(kb+tile_size-1,mB)
-                klen = klim-kb+1
-                copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
-                copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
-                for j=1:jlen
-                    bcoff = (j-1)*tile_size
-                    for i = 1:ilen
-                        aoff = (i-1)*tile_size
-                        s = z
-                        for k = 1:klen
-                            s += Atile[aoff+k] * Btile[bcoff+k]
+    if mA < tile_size && nA < tile_size && nB < tile_size
+        copy_to_transpose(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
+        copy_to(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
+        for j = 1:nB
+            boff = (j-1)*tile_size
+            for i = 1:mA
+                aoff = (i-1)*tile_size
+                s = z
+                for k = 1:nA
+                    s += Atile[aoff+k] * Btile[boff+k]
+                end
+                C[i,j] = s
+            end
+        end
+    else
+        Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
+        for jb = 1:tile_size:nB
+            jlim = min(jb+tile_size-1,nB)
+            jlen = jlim-jb+1
+            for ib = 1:tile_size:mA
+                ilim = min(ib+tile_size-1,mA)
+                ilen = ilim-ib+1
+                fill!(Ctile, z)
+                for kb = 1:tile_size:nA
+                    klim = min(kb+tile_size-1,mB)
+                    klen = klim-kb+1
+                    copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                    copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                    for j=1:jlen
+                        bcoff = (j-1)*tile_size
+                        for i = 1:ilen
+                            aoff = (i-1)*tile_size
+                            s = z
+                            for k = 1:klen
+                                s += Atile[aoff+k] * Btile[bcoff+k]
+                            end
+                            Ctile[bcoff+i] += s
                         end
-                        Ctile[bcoff+i] += s
                     end
                 end
+                copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
             end
-            copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
         end
     end
     return C
