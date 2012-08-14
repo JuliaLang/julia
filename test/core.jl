@@ -54,6 +54,13 @@ let N = TypeVar(:N,true)
     @assert isequal(tintersect((NTuple{N,Integer},NTuple{N,Integer}),
                                ((Integer...), (Integer,Integer))),
                     ((Integer,Integer), (Integer,Integer)))
+    local A = tintersect((NTuple{N,Any},Array{Int,N}),
+                         ((Int,Int...),Array))
+    local B = ((Int,Int...),Array{Int,N})
+    @assert A<:B && B<:A
+    @assert isequal(tintersect((NTuple{N,Any},Array{Int,N}),
+                               ((Int,Int...),Array{Int,2})),
+                    ((Int,Int), Array{Int,2}))
 end
 @assert is(None, tintersect(Type{Any},Type{ComplexPair}))
 @assert is(None, tintersect(Type{Any},Type{TypeVar(:T,Real)}))
@@ -324,4 +331,19 @@ begin
     baar(x::UnionKind) = 1
     @assert baar(StridedArray) == 1
     @assert baar(StridedArray.body) == 1
+end
+
+# issue #1153
+type SI{m, s, kg}
+    value::Float
+end
+
+*{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
+
+begin
+    local a,b
+    a = SI{0,0,1}(1.0) * SI{1,2,0}(2.0)
+    b = SI{0,0,1}(1.0) * SI{1,-2,0}(2.0)
+    @assert typeof(a) === SI{1,2,1}
+    @assert typeof(b) === SI{1,-2,1}
 end
