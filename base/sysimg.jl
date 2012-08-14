@@ -138,6 +138,7 @@ export
     expand,esc,expr,gensym,parse,parse_input_line,parseatom,symbol,
     # help and reflection
     ans,apropos,function_loc,edit,methods,help,less,names,which,whicht,whos,
+    isinteractive,
     # loading source files
     evalfile,find_in_path,include_string,load,require,
     # RTS internals
