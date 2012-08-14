@@ -83,12 +83,15 @@ A = [1 2 3; 4 5 6] - 3
 B = [2 -2; 3 -5; -4 7]
 @assert A*B == [-7 9; -4 9]
 @assert At_mul_Bt(A, B) == [-6 -11 15; -6 -13 18; -6 -15 21]
+A = ones(Int, 2, 100)
+B = ones(Int, 100, 3)
+@assert A*B == [100 100 100; 100 100 100]
 A = randi(20, 5, 5) - 10
 B = randi(20, 5, 5) - 10
 @assert At_mul_B(A, B) == A'*B
 @assert A_mul_Bt(A, B) == A*B'
 # Preallocated
-C = Array(Int, 5, 5)
+C = Array(Int, size(A, 1), size(B, 2))
 @assert A_mul_B(C, A, B) == A*B
 @assert At_mul_B(C, A, B) == A'*B
 @assert A_mul_Bt(C, A, B) == A*B'
