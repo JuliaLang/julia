@@ -86,6 +86,7 @@ void closeHandle(uv_handle_t* handle)
 #ifndef __WIN32__
     ev_invoke_pending(handle->loop->ev);
 #endif
+    handle->loop->block = 0;
     jl_callback_call(JULIA_HOOK(close),handle->data,0);
     //TODO: maybe notify Julia handle to close itself
     free(handle);
@@ -95,11 +96,13 @@ void closeHandle(uv_handle_t* handle)
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
     jl_callback_call(JULIA_HOOK(return_spawn),p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     uv_close((uv_handle_t*)p,&closeHandle);
+    p->loop->block = 0;
 }
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
     jl_callback_call(JULIA_HOOK(readcb),handle->data,3,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
+    handle->loop->block = 0;
 }
 
 uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
@@ -115,16 +118,19 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
 void jl_connectcb(uv_connect_t *connect, int status)
 {
     jl_callback_call(JULIA_HOOK(connectcb),connect->handle->data,1,CB_INT32,status);
+    connect->handle->loop->block = 0;
 }
 
 void jl_connectioncb(uv_stream_t *stream, int status)
 {
     jl_callback_call(JULIA_HOOK(connectioncb),stream->data,1,CB_INT32,status);
+    stream->loop->block = 0;
 }
 
 void jl_asynccb(uv_handle_t *handle, int status)
 {
     jl_callback_call(JULIA_HOOK(asynccb),handle->data,1,CB_INT32,status);
+    handle->loop->block = 0;
 }
 
 /** libuv constructors */
