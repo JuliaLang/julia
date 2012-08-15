@@ -517,11 +517,11 @@ function arg_gen(head)
     if applicable(start,head)
         vals = ByteString[]
         for x in head
-            push(vals,bytestring(x))
+            push(vals,string(x))
         end
         return vals
     else
-        return ByteString[bytestring(head)]
+        return ByteString[string(head)]
     end
 end
 
