@@ -1075,10 +1075,6 @@ Constructors
 
    Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments.
 
-.. function:: empty(A)
-
-   Construct an empty 1-d array similar to the given array
-
 .. function:: reinterpret(type, A)
 
    Construct an array with the same binary data as the given array, but with the specified element type
