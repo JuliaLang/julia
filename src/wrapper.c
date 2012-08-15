@@ -44,29 +44,28 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
     if(val != 0)
         count += 1;
     jl_value_t **argv = alloca((count)*sizeof(jl_value_t*));
-    memset(argv, 0, count);
+    jl_value_t *v;
+    memset(argv, 0, count*sizeof(jl_value_t*));
     va_list argp;
     va_start(argp,count);
-    jl_value_t *v=0;
     int i;
     argv[0]=val;
     JL_GC_PUSHARGS(argv,count);
     for(i=((val==0)?0:1); i<count; ++i) {
         switch(va_arg(argp,int)) {
         case CB_PTR:
-            v = jl_box_pointer(va_arg(argp,void*));
+            argv[i] = jl_box_pointer(va_arg(argp,void*));
             break;
         case CB_INT32:
-            v = jl_box_int32(va_arg(argp,int32_t));
+            argv[i] = jl_box_int32(va_arg(argp,int32_t));
             break;
         case CB_INT64:
-            v = jl_box_int64(va_arg(argp,int64_t));
+            argv[i] = jl_box_int64(va_arg(argp,int64_t));
             break;
         default: jl_error("callback: only Ints and Pointers are supported at this time");
             //excecution never reaches here
             break;
         }
-        argv[i]=v;
     }
     v = jl_apply(f,(jl_value_t**)argv,count);
     JL_GC_POP();
