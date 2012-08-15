@@ -268,7 +268,8 @@ function _start()
 
         (quiet,repl) = process_options(ARGS)
         if repl
-            global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && begins_with(get(ENV,"TERM",""),"xterm")
+            @unix_only global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && begins_with(get(ENV,"TERM",""),"xterm")
+            @windows_only global _jl_have_color = true
             global _jl_is_interactive = true
             if !quiet
                 _jl_banner()
