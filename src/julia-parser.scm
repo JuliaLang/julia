@@ -718,7 +718,11 @@
        (take-token s)
        (case nxt
 	 ((end)     (list 'if test then))
-	 ((elseif)  (list 'if test then (parse-resword s 'if)))
+	 ((elseif)
+	  `(if ,test ,then
+	       ;; line number for elseif condition
+	       (block ,(line-number-node s)
+		      ,(parse-resword s 'if))))
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected " nxt))))))
     ((let)
