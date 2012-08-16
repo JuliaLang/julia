@@ -70,3 +70,16 @@ c = randn(len)
 d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectoriz"
+
+function parse()
+    file = EachLine(open("random.csv"))
+    for line in file
+        line = split(line, ',')
+    end
+end
+
+@timeit parse() "splitline"
+
+load("actor_centrality.jl")
+
+println("actorgraph", "\t", (@elapsed actor_centrality())*1000)
