@@ -314,16 +314,17 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
+    keys = h.keys; vals = h.vals
 
     while true
-        hk = h.keys[index]
+        hk = keys[index]
         if is(hk,_jl_secret_table_token)
             if avail<0
-                h.keys[index] = key
-                h.vals[index] = v
+                keys[index] = key
+                vals[index] = v
             else
-                h.keys[avail] = key
-                h.vals[avail] = v
+                keys[avail] = key
+                vals[avail] = v
             end
             h.count += 1
             return h
@@ -336,7 +337,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
                 avail = index
             end
         elseif isequal(key, hk::K)
-            h.vals[index] = v
+            vals[index] = v
             return h
         end
 
@@ -348,8 +349,8 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     end
 
     if avail>0
-        h.keys[avail] = key
-        h.vals[avail] = v
+        keys[avail] = key
+        vals[avail] = v
         h.count += 1
         return h
     end
@@ -368,9 +369,10 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     maxprobe = sz>>3
     index = hashindex(key, sz)
     orig = index
+    keys = h.keys
 
     while true
-        hk = h.keys[index]
+        hk = keys[index]
         if is(hk,_jl_secret_table_token)
             break
         end
@@ -397,6 +399,8 @@ function get{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
     return (index<0) ? deflt : h.vals[index]::V
 end
+
+has(h::Dict, key) = (ht_keyindex(h, key) >= 0)
 
 function key{K,V}(h::Dict{K,V}, key, deflt)
     index = ht_keyindex(h, key)
