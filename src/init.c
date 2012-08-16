@@ -126,7 +126,9 @@ void julia_init(char *imageFile)
 {
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
-    jl_dl_handle = jl_load_dynamic_library(NULL);
+	
+    jl_dl_handle = malloc(sizeof(uv_lib_t));
+	jl_uv_dlopen(NULL, jl_dl_handle);
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
