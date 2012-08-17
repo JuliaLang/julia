@@ -49,6 +49,10 @@ load("$JULIA_HOME/../../examples/stockcorr.jl")
 load("actor_centrality.jl")
 @timeit actor_centrality() "actorgraph"
 
+# issue #1168
+load("laplace.jl")
+@timeit laplace_vec() "laplace_vec"
+@timeit laplace_devec() "laplace_devec"
 
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
