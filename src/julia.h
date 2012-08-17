@@ -921,7 +921,7 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
 void jl_gc_init(void);
-void jl_gc_markval(jl_value_t *v);
+void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
 DLLEXPORT void jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
