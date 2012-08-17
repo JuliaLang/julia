@@ -6,7 +6,7 @@ double D_NNAN;
 double D_PINF;
 double D_NINF;
 
-int locale_is_utf8;
+DLLEXPORT int locale_is_utf8;
 static int isInitialized = 0;
 
 void libsupport_init(void)

@@ -103,6 +103,7 @@
     u8_isvalid;
     u8_strwidth;
     u8_strlen;
+    locale_is_utf8;
     ios_close;
     ios_flush;
     ios_read;
