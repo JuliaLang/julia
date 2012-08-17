@@ -307,9 +307,13 @@ Set-Like Collections
 
    Add an element to a set-like collection.
 
+.. function:: Set(x...)
+
+   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets.
+
 .. function:: IntSet(i...)
 
-   Construct an ``IntSet`` of the given integers.
+   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
 
 .. function:: choose(s)
 
