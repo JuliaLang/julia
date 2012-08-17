@@ -8,6 +8,16 @@ macro timeit(ex,name)
     end
 end
 
+macro timeit1(ex,name)
+    quote
+        t = Inf
+        for i=1:1
+            t = min(t, @elapsed $ex)
+        end
+        println($name, "\t", t*1000)
+    end
+end
+
 srand(1776)  # get more consistent times
 
 require("$JULIA_HOME/../../examples/list.jl")
@@ -47,17 +57,16 @@ load("stockcorr.jl")
 
 # issue #1163
 load("actor_centrality.jl")
-println("actorgraph", "\t", (@elapsed actor_centrality())*1000)
-#@timeit actor_centrality() "actorgraph"
+@timeit1 actor_centrality() "actorgraph"
 
 # issue #1168
 load("laplace.jl")
-@timeit laplace_vec() "laplace_vec"
+@timeit1 laplace_vec() "laplace_vec"
 @timeit laplace_devec() "laplace_devec"
 
 # issue #1169
 load("go_benchmark.jl")
-@timeit benchmark(10) "go_benchmark"
+@timeit1 benchmark(10) "go_benchmark"
 
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
