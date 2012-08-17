@@ -252,9 +252,6 @@ ifneq ($(strip $(MKLLIB)),)
 endif
 endif
 
-# Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
-
 # Make tricks
 
 define dir_target
