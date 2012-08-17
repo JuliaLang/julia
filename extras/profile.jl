@@ -271,15 +271,15 @@ end
 function profile_print(tc)
     for i = 1:length(tc)
         timers = tc[i][1]
-        ttotal = sum(float64(timers))
+        ttotal = float64(sum(timers))
         counters = tc[i][2]
-        ctotal = sum(float64(counters))
-        println("   count  count(%)  time(%)")
+        println("   count  time(%)  time(s)")
         for j = 1:length(counters)
             if counters[j] != 0
-                @printf("%8d  %7.4f  %7.4f %s\n", counters[j],
-                        100*(counters[j]/ctotal),
-                        100*((timers[j] - counters[j]*_PROFILE_CALIB)/ttotal),
+                calib_time = timers[j] - counters[j]*_PROFILE_CALIB
+                @printf("%8d    %5.2f  %f %s\n", counters[j],
+                        100*(calib_time/ttotal),
+                        calib_time*1e-9,
                         _PROFILE_TAGS[i][j])
             end
         end
