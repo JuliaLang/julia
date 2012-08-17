@@ -177,7 +177,7 @@ export
     gperm, operm, 
     # external processes
     cmd_stdin_stream,cmd_stdout_stream,cmds,connect,dup2,exec,fork,getpid,
-    ignorestatus,in,make_pipe,other,out,output,pipeline_error,
+    ignorestatus,make_pipe,other,output,pipeline_error,
     process_exit_status,process_exited,process_options,process_running,
     process_signaled,process_status,process_stop_signal,process_stopped,
     process_term_signal,read_from,run,setsuccess,success,successful,system,
