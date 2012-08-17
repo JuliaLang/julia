@@ -271,7 +271,7 @@ function element(st, evr, dcm)
     sz = read(st,lentype)
     
     data =
-    vr=="ST" || vr=="LT" || vr=="UT" ? cstring(read(st, Uint8, sz)) :
+    vr=="ST" || vr=="LT" || vr=="UT" ? bytestring(read(st, Uint8, sz)) :
     
     sz==0 || vr=="XX" ? {} :
     

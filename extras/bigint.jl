@@ -5,7 +5,7 @@ type BigInt <: Integer
 
     function BigInt(x::String)
         z = _jl_bigint_init()
-        ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_set_string), Void, (Ptr{Void}, Ptr{Uint8}),z,cstring(x))
+        ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_set_string), Void, (Ptr{Void}, Ptr{Uint8}),z,bytestring(x))
         b = new(z)
         finalizer(b, _jl_bigint_clear)
         b
@@ -118,7 +118,7 @@ end
 
 function string(x::BigInt)
     s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_printf), Ptr{Uint8}, (Ptr{Void},),x.mpz)
-    ret = cstring(s) #This copies s.
+    ret = bytestring(s) #This copies s.
     ccall(dlsym(_jl_libgmp_wrapper,:_jl_gmp_free), Void, (Ptr{Void},), s)
     ret
 end

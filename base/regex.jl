@@ -9,7 +9,7 @@ type Regex
     extra::Ptr{Void}
 
     function Regex(pat::String, opts::Integer, study::Bool)
-        pat = cstring(pat); opts = int32(opts)
+        pat = bytestring(pat); opts = int32(opts)
         if (opts & ~PCRE.OPTIONS_MASK) != 0
             error("invalid regex option(s)")
         end
@@ -84,12 +84,12 @@ function show(io, m::RegexMatch)
     print(io, ")")
 end
 
-matches(r::Regex, s::String, o::Integer) =
-    PCRE.exec(r.regex, r.extra, cstring(s), 0, o, false)
-matches(r::Regex, s::String) = matches(r, s, r.options & PCRE.EXECUTE_MASK)
+ismatch(r::Regex, s::String, o::Integer) =
+    PCRE.exec(r.regex, r.extra, bytestring(s), 0, o, false)
+ismatch(r::Regex, s::String) = ismatch(r, s, r.options & PCRE.EXECUTE_MASK)
 
-contains(s::String, r::Regex, opts::Integer) = matches(r,s,opts)
-contains(s::String, r::Regex)                = matches(r,s)
+contains(s::String, r::Regex, opts::Integer) = ismatch(r,s,opts)
+contains(s::String, r::Regex)                = ismatch(r,s)
 
 function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
@@ -99,7 +99,7 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     off = map(i->m[2i+1]+1, [1:n])
     RegexMatch(mat, cap, m[1]+1, off)
 end
-match(r::Regex, s::String, i::Integer, o::Integer) = match(r, cstring(s), i, o)
+match(r::Regex, s::String, i::Integer, o::Integer) = match(r, bytestring(s), i, o)
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 
@@ -130,5 +130,5 @@ each_match(re::Regex, str::String)            = RegexMatchIterator(re,str,false)
 
 # miscellaneous methods that depend on Regex being defined
 
-filter!(r::Regex, d::Dict) = filter!((k,v)->matches(r,k),d)
+filter!(r::Regex, d::Dict) = filter!((k,v)->ismatch(r,k),d)
 filter(r::Regex,  d::Dict) = filter!(r,copy(d))

@@ -6,7 +6,6 @@ symbol(a::Array{Uint8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{Uint8}, Int32), a, length(a))::Symbol
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
-gensym(n::Integer) = ntuple(n, i->gensym())
 
 gensym(s::ASCIIString) = gensym(s.data)
 gensym(s::UTF8String) = gensym(s.data)
@@ -29,9 +28,14 @@ esc(e::ANY) = expr(:escape, {e})
 
 expr(hd::Symbol, args::ANY...) = Expr(hd, {args...}, Any)
 expr(hd::Symbol, args::Array{Any,1}) = Expr(hd, args, Any)
-copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : map(copy,e.args), e.typ)
+copy(e::Expr) = Expr(e.head, isempty(e.args) ? e.args : astcopy(e.args), e.typ)
 copy(s::SymbolNode) = SymbolNode(s.name, s.typ)
 copy(n::GetfieldNode) = GetfieldNode(n.value, n.name, n.typ)
+
+# copy parts of an AST that the compiler mutates
+astcopy(x::Union(SymbolNode,GetfieldNode,Expr)) = copy(x)
+astcopy(x::Array{Any,1}) = map(astcopy, x)
+astcopy(x) = x
 
 isequal(x::Expr, y::Expr) = (is(x.head,y.head) && isequal(x.args,y.args))
 isequal(x::SymbolNode, y::SymbolNode) = is(x.name,y.name)
@@ -56,8 +60,4 @@ expand(x) = ccall(:jl_expand, Any, (Any,), x)
 
 macro eval(x)
     :(eval($expr(:quote,x)))
-end
-
-macro task(ex)
-    :(Task(()->$esc(ex)))
 end

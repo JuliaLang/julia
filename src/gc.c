@@ -416,12 +416,43 @@ static void gc_sweep(void)
     jl_unmark_symbols();
 }
 
-#define GC_Markval(v) gc_markval_((jl_value_t*)(v))
-static void gc_markval_(jl_value_t *v);
+static jl_value_t **mark_stack = NULL;
+static size_t mark_stack_size = 0;
+static size_t mark_sp = 0;
 
-void jl_gc_markval(jl_value_t *v)
+#define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
+
+static void push_root(jl_value_t *v)
 {
-    gc_markval_(v);
+    assert(v != NULL);
+    if (gc_marked(v)) return;
+    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+#ifdef OBJPROFILE
+    void **bp = ptrhash_bp(&obj_counts, vt);
+    if (*bp == HT_NOTFOUND)
+        *bp = (void*)2;
+    else
+        (*((ptrint_t*)bp))++;
+#endif
+    gc_setmark(v);
+    if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind ||
+        vt == (jl_value_t*)jl_weakref_type) {
+        return;
+    }
+    if (mark_sp >= mark_stack_size) {
+        size_t newsz = mark_stack_size>0 ? mark_stack_size*2 : 32000;
+        mark_stack = (jl_value_t**)realloc(mark_stack,newsz*sizeof(void*));
+        if (mark_stack == NULL) exit(1);
+        mark_stack_size = newsz;
+    }
+    mark_stack[mark_sp++] = v;
+}
+
+#define gc_push_root(v) push_root((jl_value_t*)(v))
+
+void jl_gc_setmark(jl_value_t *v)
+{
+    gc_setmark(v);
 }
 
 static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
@@ -435,14 +466,14 @@ static void gc_mark_stack(jl_gcframe_t *s, ptrint_t offset)
             for(i=0; i < nr; i++) {
                 jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
                 if (*ptr != NULL)
-                    GC_Markval(*ptr);
+                    gc_push_root(*ptr);
             }
         }
         else {
             size_t nr = s->nroots;
             for(i=0; i < nr; i++) {
                 if (rts[i] != NULL)
-                    GC_Markval(rts[i]);
+                    gc_push_root(rts[i]);
             }
         }
         s = s->prev;
@@ -458,13 +489,11 @@ static void gc_mark_module(jl_module_t *m)
             jl_binding_t *b = (jl_binding_t*)table[i];
             gc_setmark_buf(b);
             if (b->value != NULL)
-                GC_Markval(b->value);
-            GC_Markval(b->type);
+                gc_push_root(b->value);
+            gc_push_root(b->type);
         }
     }
 }
-
-#define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
 
 // for chasing down unwanted references
 /*
@@ -472,23 +501,11 @@ static jl_value_t *lookforme = NULL;
 DLLEXPORT void jl_gc_lookfor(jl_value_t *v) { lookforme = v; }
 */
 
-static void gc_markval_(jl_value_t *v)
+static void gc_mark_all()
 {
- gc_markval_top:
-    assert(v != NULL);
-    //assert(v != lookforme);
-    if (gc_marked(v)) return;
-    jl_value_t *vt = (jl_value_t*)jl_typeof(v);
-#ifdef OBJPROFILE
-    void **bp = ptrhash_bp(&obj_counts, vt);
-    if (*bp == HT_NOTFOUND)
-        *bp = (void*)2;
-    else
-        (*((ptrint_t*)bp))++;
-#endif
-    gc_setmark(v);
-
-    if (gc_typeof(vt) == (jl_value_t*)jl_bits_kind) return;
+    while (mark_sp > 0) {
+    jl_value_t *v = mark_stack[--mark_sp];
+    jl_value_t *vt = (jl_value_t*)gc_typeof(v);
 
     // some values have special representations
     if (vt == (jl_value_t*)jl_tuple_type) {
@@ -497,13 +514,13 @@ static void gc_markval_(jl_value_t *v)
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];
             if (elt != NULL)
-                GC_Markval(elt);
+                gc_push_root(elt);
         }
     }
     else if (((jl_struct_type_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         char *data = a->data;
-        if (data == NULL) return;
+        if (data == NULL) continue;
         int ndims = jl_array_ndims(a);
         void *data_area = jl_array_inline_data_area(a);
         char *data0 = data;
@@ -513,24 +530,25 @@ static void gc_markval_(jl_value_t *v)
             if (gc_typeof(owner) == 0) {
                 // jl_mallocptr_t
                 if (gc_marked(owner))
-                    return;
+                    continue;
                 gc_setmark(owner);
             }
             else {
                 // an array
                 v = owner;
-                if (v != (jl_value_t*)a) goto gc_markval_top;
+                if (v != (jl_value_t*)a) {
+                    gc_push_root(v);
+                    continue;
+                }
             }
         }
         if (a->ptrarray) {
             size_t l = a->length;
             if (l > 0) {
-                for(size_t i=0; i < l-1; i++) {
+                for(size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
-                    if (elt != NULL) GC_Markval(elt);
+                    if (elt != NULL) gc_push_root(elt);
                 }
-                v = ((jl_value_t**)data)[l-1];
-                if (v != NULL) goto gc_markval_top;
             }
         }
     }
@@ -539,13 +557,13 @@ static void gc_markval_(jl_value_t *v)
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;
-        GC_Markval(ta->on_exit);
-        GC_Markval(ta->tls);
+        gc_push_root(ta->on_exit);
+        gc_push_root(ta->tls);
         if (ta->start)
-            GC_Markval(ta->start);
+            gc_push_root(ta->start);
         if (ta->result)
-            GC_Markval(ta->result);
-        GC_Markval(ta->state.eh_task);
+            gc_push_root(ta->result);
+        gc_push_root(ta->state.eh_task);
         if (ta->stkbuf != NULL)
             gc_setmark_buf(ta->stkbuf);
 #ifdef COPY_STACKS
@@ -560,7 +578,7 @@ static void gc_markval_(jl_value_t *v)
         }
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
-            GC_Markval(ss->ostream_obj);
+            gc_push_root(ss->ostream_obj);
             ss = ss->prev;
             if (ss != NULL)
                 ss = (jl_savestate_t*)((char*)ss + offset);
@@ -569,13 +587,10 @@ static void gc_markval_(jl_value_t *v)
         gc_mark_stack(ta->state.gcstack, 0);
         jl_savestate_t *ss = &ta->state;
         while (ss != NULL) {
-            GC_Markval(ss->ostream_obj);
+            gc_push_root(ss->ostream_obj);
             ss = ss->prev;
         }
 #endif
-    }
-    else if (vt == (jl_value_t*)jl_weakref_type) {
-        // don't mark contents
     }
     else {
         int nf = (int)jl_tuple_len(((jl_struct_type_t*)vt)->names);
@@ -585,15 +600,13 @@ static void gc_markval_(jl_value_t *v)
                 vt == (jl_value_t*)jl_function_type) {
                 i++;  // skip fptr field
             }
-            for(; i < nf-1; i++) {
+            for(; i < nf; i++) {
                 jl_value_t *fld = ((jl_value_t**)v)[i+1];
                 if (fld)
-                    GC_Markval(fld);
+                    gc_push_root(fld);
             }
-            v = ((jl_value_t**)v)[i+1];
-            if (v)
-                goto gc_markval_top;
         }
+    }
     }
 }
 
@@ -609,25 +622,25 @@ static void gc_mark(void)
     // mark all roots
 
     // active tasks
-    GC_Markval(jl_root_task);
-    GC_Markval(jl_current_task);
+    gc_push_root(jl_root_task);
+    gc_push_root(jl_current_task);
 
     // modules
-    GC_Markval(jl_root_module);
-    GC_Markval(jl_current_module);
+    gc_push_root(jl_root_module);
+    gc_push_root(jl_current_module);
 
     // invisible builtin values
-    if (jl_an_empty_cell) GC_Markval(jl_an_empty_cell);
-    GC_Markval(jl_exception_in_transit);
-    GC_Markval(jl_task_arg_in_transit);
-    GC_Markval(jl_unprotect_stack_func);
-    GC_Markval(jl_bottom_func);
-    GC_Markval(jl_typetype_type);
+    if (jl_an_empty_cell) gc_push_root(jl_an_empty_cell);
+    gc_push_root(jl_exception_in_transit);
+    gc_push_root(jl_task_arg_in_transit);
+    gc_push_root(jl_unprotect_stack_func);
+    gc_push_root(jl_bottom_func);
+    gc_push_root(jl_typetype_type);
 
     // constants
-    GC_Markval(jl_null);
-    GC_Markval(jl_true);
-    GC_Markval(jl_false);
+    gc_push_root(jl_null);
+    gc_push_root(jl_true);
+    gc_push_root(jl_false);
 
     jl_mark_box_caches();
 
@@ -635,25 +648,30 @@ static void gc_mark(void)
 
     // stuff randomly preserved
     for(i=0; i < preserved_values.len; i++) {
-        GC_Markval((jl_value_t*)preserved_values.items[i]);
+        gc_push_root((jl_value_t*)preserved_values.items[i]);
     }
 
     // objects currently being finalized
     for(i=0; i < to_finalize.len; i++) {
-        GC_Markval(to_finalize.items[i]);
+        gc_push_root(to_finalize.items[i]);
     }
+
+    gc_mark_all();
+    
     // find unmarked objects that need to be finalized.
     // this must happen last.
     for(i=0; i < finalizer_table.size; i+=2) {
         if (finalizer_table.table[i+1] != HT_NOTFOUND) {
             jl_value_t *v = finalizer_table.table[i];
             if (!gc_marked(v)) {
-                GC_Markval(v);
+                gc_push_root(v);
                 schedule_finalization(v);
             }
-            GC_Markval(finalizer_table.table[i+1]);
+            gc_push_root(finalizer_table.table[i+1]);
         }
     }
+
+    gc_mark_all();
 }
 
 static int is_gc_enabled = 0;

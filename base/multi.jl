@@ -191,7 +191,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     locs = map(x->Location(x.host,x.port), w)
     # NOTE: currently only node 1 can add new nodes, since nobody else
     # has the full list of address:port
-    newlocs = append(PGRP.locs, locs)
+    newlocs = [PGRP.locs, locs]
     sockets = Dict()
     handler = fd->message_handler(fd, sockets)
     for i=1:n
@@ -1078,7 +1078,7 @@ function start_sge_workers(n)
                 sleep(0.5)
             end
         end
-        hostname = cstring(readline(fl)[1:end-1])
+        hostname = bytestring(readline(fl)[1:end-1])
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
         close(fl)

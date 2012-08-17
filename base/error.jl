@@ -2,7 +2,7 @@
 
 error(e::Exception) = throw(e)
 error{E<:Exception}(::Type{E}) = throw(E())
-error(s...) = throw(ErrorException(cstring(s...)))
+error(s...) = throw(ErrorException(string(s...)))
 
 macro unexpected()
     :(error("unexpected branch reached"))
@@ -13,7 +13,7 @@ end
 errno() = ccall(:jl_errno, Int32, ())
 strerror(e::Integer) = ccall(:jl_strerror, Any, (Int32,), e)::ByteString
 strerror() = strerror(errno())
-system_error(p, b::Bool) = b ? throw(SystemError(cstring(p))) : nothing
+system_error(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 

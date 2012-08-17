@@ -7,10 +7,8 @@
 #include <complex>
 #include <algorithm>
 
-#include "../../deps/openblas-v0.2.0/cblas.h"
-
 #define DSFMT_MEXP 19937
-#include "../../deps/random/dsfmt-2.1/dSFMT.c"
+#include "perf.h"
 #include "../../deps/random/randmtzig.c"
 
 using namespace std;
@@ -137,18 +135,18 @@ struct double_pair { double s1, s2; };
 struct double_pair randmatstat(int t) {
     int n = 5;
     struct double_pair r;
-    double *v = (double*)calloc(t, sizeof(double));
-    double *w = (double*)calloc(t, sizeof(double));
-    double *a = (double*)malloc(n*n*sizeof(double));
-    double *b = (double*)malloc(n*n*sizeof(double));
-    double *c = (double*)malloc(n*n*sizeof(double));
-    double *d = (double*)malloc(n*n*sizeof(double));
-    double *P = (double*)malloc(4*n*n*sizeof(double));
-    double *Q = (double*)malloc(4*n*n*sizeof(double));
-    double *PtP1 = (double*)malloc(n*n*sizeof(double));
-    double *PtP2 = (double*)malloc(n*n*sizeof(double));
-    double *QtQ1 = (double*)malloc(4*n*n*sizeof(double));
-    double *QtQ2 = (double*)malloc(4*n*n*sizeof(double));
+    double *v = (double*)calloc(t,sizeof(double));
+    double *w = (double*)calloc(t,sizeof(double));
+    double *a = (double*)malloc((n)*(n)*sizeof(double));
+    double *b = (double*)malloc((n)*(n)*sizeof(double));
+    double *c = (double*)malloc((n)*(n)*sizeof(double));
+    double *d = (double*)malloc((n)*(n)*sizeof(double));
+    double *P = (double*)malloc((n)*(4*n)*sizeof(double));
+    double *Q = (double*)malloc((2*n)*(2*n)*sizeof(double));
+    double *PtP1 = (double*)malloc((4*n)*(4*n)*sizeof(double));
+    double *PtP2 = (double*)malloc((4*n)*(4*n)*sizeof(double));
+    double *QtQ1 = (double*)malloc((2*n)*(2*n)*sizeof(double));
+    double *QtQ2 = (double*)malloc((2*n)*(2*n)*sizeof(double));
     for (int i=0; i < t; i++) {
         randmtzig_fill_randn(a, n*n);
         randmtzig_fill_randn(b, n*n);
@@ -167,21 +165,23 @@ struct double_pair randmatstat(int t) {
             }
         }
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
-                    n, n, 4*n, 1.0, P, 4*n, P, 4*n, 0.0, PtP1, n);
+                    n, n, 4*n, 1.0, P, 4*n, P, 4*n, 0.0, PtP1, 4*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                    n, n, n, 1.0, PtP1, n, PtP1, n, 0.0, PtP2, n);
+                    4*n, 4*n, 4*n, 1.0, PtP1, 4*n, PtP1, 4*n, 0.0, PtP2, 4*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
-                    n, n, n, 1.0, PtP2, n, PtP2, n, 0.0, PtP1, n);
-        for (int j=0; j < n; j++)
+                    4*n, 4*n, 4*n, 1.0, PtP2, 4*n, PtP2, 4*n, 0.0, PtP1, 4*n);
+        for (int j=0; j < n; j++) {
             v[i] += PtP1[(n+1)*j];
+        }
         cblas_dgemm(CblasColMajor, CblasTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, Q, 2*n, Q, 2*n, 0.0, QtQ1, 2*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, QtQ1, 2*n, QtQ1, 2*n, 0.0, QtQ2, 2*n);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans,
                     2*n, 2*n, 2*n, 1.0, QtQ2, 2*n, QtQ2, 2*n, 0.0, QtQ1, 2*n);
-        for (int j=0; j < 2*n; j++)
+        for (int j=0; j < 2*n; j++) {
             w[i] += QtQ1[(2*n+1)*j];
+        }
     }
     free(PtP1);
     free(PtP2);
@@ -332,8 +332,6 @@ int main() {
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
-    // printf("s1=%f\n", r.s1);
-    // printf("s2=%f\n", r.s2);
     // assert(0.5 < r.s1 && r.s1 < 1.0 && 0.5 < r.s2 && r.s2 < 1.0);
     print_perf("rand_mat_stat", tmin);
 

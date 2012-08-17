@@ -405,11 +405,11 @@ begin
 end
 
 ## Character streams ##
-_wstmp = Array(Char, 1)
+const _wstmp = Array(Char, 1)
 function eatwspace(s::IOStream)
     status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     while status > 0 && iswspace(_wstmp[1])
-        c = read(s, Char)  # advance one character
+        read(s, Char)  # advance one character
         status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end
@@ -419,8 +419,9 @@ function eatwspace_comment(s::IOStream, cmt::Char)
     while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
         if _wstmp[1] == cmt
             readline(s)
+        else
+            read(s, Char)  # advance one character
         end
-        c = read(s, Char)  # advance one character
         status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     end
 end

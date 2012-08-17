@@ -37,3 +37,7 @@ end
 start(t::Task) = consume(t)
 done(t::Task, val) = istaskdone(t)
 next(t::Task, val) = (val, consume(t))
+
+macro task(ex)
+    :(Task(()->$esc(ex)))
+end

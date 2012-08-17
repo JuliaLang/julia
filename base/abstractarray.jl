@@ -216,8 +216,8 @@ end
 function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
-        dimargnames = { gensym() for i=1:N }
-        ivars = { gensym() for i=1:N }
+        dimargnames = { symbol(string("_d",i)) for i=1:N }
+        ivars = { symbol(string("_i",i)) for i=1:N }
         bodies = genbodies(ivars)
 
         ## creating a 2d array, to pass as bodies
@@ -337,11 +337,11 @@ end
 function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
     N = length(ranges)
     if !has(cache,N)
-        dimargnames = gensym(N)
-        loopvars = gensym(N)
-        offsetvars = gensym(N)
-        stridevars = gensym(N)
-        linearind = gensym()
+        dimargnames = { symbol(string("_d",i)) for i=1:N }
+        loopvars = { symbol(string("_l",i)) for i=1:N }
+        offsetvars = { symbol(string("_offs",i)) for i=1:N }
+        stridevars = { symbol(string("_stri",i)) for i=1:N }
+        linearind = :_li
         body = genbody(linearind)
         fexpr = quote
             local _F_
@@ -1009,11 +1009,11 @@ function bsxfun(f, a::AbstractArray, b::AbstractArray)
         elseif ai == 1
             xa = true
             shp[i] = bi
-            range = append(range,(bi,))
+            range = tuple(range..., bi)
         elseif bi == 1
             xb = true
             shp[i] = ai
-            range = append(range,(ai,))
+            range = tuple(range..., ai)
         else
             error("argument dimensions do not match")
         end

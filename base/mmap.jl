@@ -11,7 +11,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd::Integer, offset::
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
     p = ccall(:mmap, Ptr{Void}, (Ptr{Void}, Int, Int32, Int32, Int32, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    if convert(Int,p) < 1
+    if convert(Int,p) == -1
         error("Memory mapping failed", strerror())
     end
     # Also return a pointer that compensates for any adjustment in the offset

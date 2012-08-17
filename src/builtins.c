@@ -880,7 +880,7 @@ void jl_init_primitives(void)
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
     add_builtin_func("getfield",  jl_f_get_field);
-    add_builtin_func("_setfield",  jl_f_set_field);
+    add_builtin_func("setfield",  jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
 
     add_builtin_func("arraylen", jl_f_arraylen);

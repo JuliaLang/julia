@@ -133,7 +133,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     Undef, UndefRefError, Union, UnionKind, Unsigned, Void, WeakRef,
     GetfieldNode,
     # functions
-    _setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
+    setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
     arraysize, convert_default, convert_tuple, eval, fieldtype, getfield,
     include, invoke, is, ===, isa, isbound, method_exists,
     subtype, throw, tuple, tuplelen, tupleref, typeassert, typeof, yieldto,

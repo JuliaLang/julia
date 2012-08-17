@@ -269,15 +269,22 @@ end
 function idump(fn::Function, io::IOStream, x::Array{Any}, n::Int, indent)
     println("Array($(eltype(x)),$(size(x)))")
     if n > 0
-        for i in 1:min(10, length(x))
+        for i in 1:(length(x) <= 10 ? length(x) : 5)
             print(io, indent, "  ", i, ": ")
             fn(io, x[i], n - 1, strcat(indent, "  "))
+        end
+        if length(x) > 10
+            println(io, indent, "  ...")
+            for i in length(x)-4:length(x)
+                print(io, indent, "  ", i, ": ")
+                fn(io, x[i], n - 1, strcat(indent, "  "))
+            end
         end
     end
 end
 idump(fn::Function, io::IOStream, x::Symbol, n::Int, indent) = println(io, typeof(x), " ", x)
 idump(fn::Function, io::IOStream, x::Function, n::Int, indent) = println(io, x)
-idump(fn::Function, io::IOStream, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x[1:min(4,length(x))])
+idump(fn::Function, io::IOStream, x::Array, n::Int, indent) = println(io, "Array($(eltype(x)),$(size(x)))", " ", x)
 
 # Types
 idump(fn::Function, io::IOStream, x::UnionKind, n::Int, indent) = println(io, x)
@@ -293,6 +300,9 @@ function idump(fn::Function, io::IOStream, x::CompositeKind, n::Int, indent)
                     println(x.types[idx])
                 end
             end
+        end
+        if length(x.names) > 10
+            println(io, indent, "  ...")
         end
     end
 end
@@ -367,6 +377,7 @@ function dump(io::IOStream, x::Dict, n::Int, indent)
             print(io, indent, "  ", k, ": ")
             dump(io, v, n - 1, strcat(indent, "  "))
             if i > 10
+                println(io, indent, "  ...")
                 break
             end
             i += 1
@@ -609,7 +620,7 @@ end
 function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
-        if isbound(v) && matches(pattern, s)
+        if isbound(v) && ismatch(pattern, s)
             println(rpad(v, 30), summary(eval(m,v)))
         end
     end

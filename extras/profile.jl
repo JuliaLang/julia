@@ -182,14 +182,18 @@ end
 function profile_parse(ex::Expr)
     if _PROFILE_STATE & _PROFILE_LINES > 0
         # Create the "let" variables for timing and counting
-        tlast, tnow, timers, counters = gensym(4)
+        tlast = gensym()
+        tnow = gensym()
+        timers = gensym()
+        counters = gensym()
         # Keep track of line numbers
         tags = {}
         # Preserve return values
         retsym = gensym()
         # Create the symbols used for reporting and clearing the data
         # for this block
-        funcreport, funcclear = gensym(2)
+        funcreport = gensym()
+        funcclear = gensym()
         # Parse the block and insert instructions
         indx = 1
         coreargs = {}
