@@ -25,7 +25,7 @@ gc()
 
 
 # issue #950
-load("$JULIA_HOME/../../examples/gk/gk.jl")
+load("gk.jl")
 @timeit gk(350,[0.1]) "gk      "
 
 # issue #942
@@ -42,7 +42,7 @@ x = 1:600000;
 @timeit sparse(x,x,x) "sparserang"
 
 # issue #445
-load("$JULIA_HOME/../../examples/stockcorr.jl")
+load("stockcorr.jl")
 @timeit stockcorr() "stockcorr"
 
 # issue #1163
