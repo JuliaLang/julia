@@ -800,7 +800,7 @@ function LineTextObject( p, q, str, offset, args... )
     else
         kw["textvalign"] = "top"
     end
-    extended_args = append(args, (kw,))
+    extended_args = append_any(args, (kw,))
     TextObject( pos, str, extended_args...)
 end
 
