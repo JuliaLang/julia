@@ -544,11 +544,9 @@ static void gc_mark_all()
         }
         if (a->ptrarray) {
             size_t l = a->length;
-            if (l > 0) {
-                for(size_t i=0; i < l; i++) {
-                    jl_value_t *elt = ((jl_value_t**)data)[i];
-                    if (elt != NULL) gc_push_root(elt);
-                }
+            for(size_t i=0; i < l; i++) {
+                jl_value_t *elt = ((jl_value_t**)data)[i];
+                if (elt != NULL) gc_push_root(elt);
             }
         }
     }
@@ -576,20 +574,8 @@ static void gc_mark_all()
             offset = ta->stkbuf - (ta->stackbase-ta->ssize);
             gc_mark_stack(ta->state.gcstack, offset);
         }
-        jl_savestate_t *ss = &ta->state;
-        while (ss != NULL) {
-            gc_push_root(ss->ostream_obj);
-            ss = ss->prev;
-            if (ss != NULL)
-                ss = (jl_savestate_t*)((char*)ss + offset);
-        }
 #else
         gc_mark_stack(ta->state.gcstack, 0);
-        jl_savestate_t *ss = &ta->state;
-        while (ss != NULL) {
-            gc_push_root(ss->ostream_obj);
-            ss = ss->prev;
-        }
 #endif
     }
     else {

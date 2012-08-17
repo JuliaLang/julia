@@ -208,29 +208,3 @@ function contains_is(itr, x::ANY)
     end
     return false
 end
-
-## Scans ##
-
-scan(op::Function, x::()) = ()
-function scan(op::Function, x::Tuple)
-    n = length(x)
-    s = (x[1],)
-    for i=2:n
-        s = tuple(s..., op(s[i-1], x[i]))
-    end
-    return s
-end
-
-cumsum(itr...) = cumsum(itr)
-cumsum(x::NTuple{1,Number}) = (x[1],)
-cumsum(x::NTuple{2,Number}) = (x[1], x[1]+x[2])
-cumsum(x::NTuple{3,Number}) = (x[1], x[1]+x[2], x[1]+x[2]+x[3])
-cumsum(x::NTuple{4,Number}) = (x[1], x[1]+x[2], x[1]+x[2]+x[3], x[1]+x[2]+x[3]+x[4])
-cumsum(itr::Tuple) = scan(+, itr)
-
-cumprod(itr...) = cumprod(itr)
-cumprod(x::NTuple{1,Number}) = (x[1],)
-cumprod(x::NTuple{2,Number}) = (x[1], x[1]*x[2])
-cumprod(x::NTuple{3,Number}) = (x[1], x[1]*x[2], x[1]*x[2]*x[3])
-cumprod(x::NTuple{4,Number}) = (x[1], x[1]*x[2], x[1]*x[2]*x[3], x[1]*x[2]*x[3]*x[4])
-cumprod(itr::Tuple) = scan(*, itr)
