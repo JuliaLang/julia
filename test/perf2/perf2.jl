@@ -10,11 +10,7 @@ end
 
 macro timeit1(ex,name)
     quote
-        t = Inf
-        for i=1:1
-            t = min(t, @elapsed $ex)
-        end
-        println($name, "\t", t*1000)
+        println($name, "\t", (@elapsed $ex)*1000)
     end
 end
 

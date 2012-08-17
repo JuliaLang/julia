@@ -307,13 +307,9 @@ Set-Like Collections
 
    Add an element to a set-like collection.
 
-.. function:: intset(i...)
+.. function:: IntSet(i...)
 
    Construct an ``IntSet`` of the given integers.
-
-.. function:: IntSet(n)
-
-   Construct a set for holding integers up to ``n`` (larger integers may also be added later).
 
 .. function:: choose(s)
 

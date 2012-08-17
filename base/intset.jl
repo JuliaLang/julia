@@ -3,17 +3,14 @@ type IntSet
     limit::Int
     fill1s::Bool
 
-    IntSet() = IntSet(1024)
-    IntSet(top::Integer) = (lim = (top+31) & -32;
-                            new(zeros(Uint32,lim>>>5), top, false))
+    IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
-function IntSet(s::IntSet)
-    s2::IntSet = IntSet(s.limit)
-    s2.fill1s = s.fill1s
-    or!(s2, s)
-    s2
-end
-intset(args...) = add_each(IntSet(), args)
+
+IntSet(args...) = (s=IntSet(); for a in args; add(s,a); end; s)
+
+similar(s::IntSet) = IntSet()
+
+copy(s::IntSet) = or!(IntSet(), s)
 
 function grow(s::IntSet, top::Integer)
     if top >= s.limit
@@ -85,10 +82,6 @@ function copy_to(to::IntSet, from::IntSet)
     or!(to, from)
 end
 
-similar(s::IntSet) = IntSet()
-
-copy(s::IntSet) = or!(IntSet(), s)
-
 function has(s::IntSet, n::Integer)
     if n >= s.limit
         false
@@ -125,7 +118,7 @@ length(s::IntSet) =
     int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit))
 
 function show(io, s::IntSet)
-    print(io, "intset(")
+    print(io, "IntSet(")
     first = true
     for n in s
         if !first
@@ -204,10 +197,10 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
-~(s::IntSet) = not!(IntSet(s))
-|(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(IntSet(s1), s2) : or!(IntSet(s2), s1))
-(&)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
-($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(IntSet(s1), s2) : xor!(IntSet(s2), s1))
+~(s::IntSet) = not!(copy(s))
+|(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(copy(s1), s2) : or!(copy(s2), s1))
+(&)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(copy(s1), s2) : and!(copy(s2), s1))
+($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(copy(s1), s2) : xor!(copy(s2), s1))
 
 union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
 union(s1::IntSet, s2::IntSet) = s1 | s2

@@ -31,7 +31,9 @@ function copy_to_unsafe{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
               pointer(dest, dsto), pointer(src, so), N*sizeof(T))
     else
         for i=0:N-1
-            dest[i+dsto] = src[i+so]
+            # NOTE: this works around the performance problem caused by all
+            # the doubled definitions of assign()
+            arrayset(dest, i+dsto, src[i+so])
         end
     end
     return dest

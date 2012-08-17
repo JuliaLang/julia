@@ -689,8 +689,8 @@ type WorkItem
     argument  # value to pass task next time it is restarted
     clientset::IntSet
 
-    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet(64))
-    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet(64))
+    WorkItem(thunk::Function) = new(thunk, (), false, (), (), (), IntSet())
+    WorkItem(task::Task) = new(()->(), task, false, (), (), (), IntSet())
 end
 
 function work_result(w::WorkItem)

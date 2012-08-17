@@ -88,7 +88,7 @@ export
     add,add_each,add_weak_key,add_weak_value,all,allp,any,anyp,
     assign,choose,complement,complement!,contains,contains_is,count,countp,
     del,del_all,del_each,dict,elements,eltype,enqueue,get,has,hash,
-    inter,intersect,intersection,intersection!,intset,isempty,key,keys,length,
+    inter,intersect,intersection,intersection!,isempty,key,keys,length,
     map,map_to,map_to2,mapreduce,merge,merge!,numel,pairs,reduce,ref,
     similar,toggle,toggle_each,union,union!,values,
     # strings and text output

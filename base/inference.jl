@@ -922,8 +922,8 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     rec = false
 
     s = { () for i=1:n }
-    recpts = IntSet(n+1)  # statements that depend recursively on our value
-    W = IntSet(n+1)
+    recpts = IntSet()  # statements that depend recursively on our value
+    W = IntSet()
     # initial set of pc
     add(W,1)
     # initial types
