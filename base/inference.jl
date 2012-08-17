@@ -27,7 +27,6 @@ end
 inference_stack = EmptyCallStack()
 
 tintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b)
-tmatch(a::ANY,b::ANY) = ccall(:jl_type_match, Any, (Any,Any), a, b)
 
 methods(f::Union(Function,CompositeKind),t) = methods(f,t,-1)::Array{Any,1}
 methods(f::Union(Function,CompositeKind),t,lim) = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, t, lim)

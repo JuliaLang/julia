@@ -69,34 +69,11 @@ end
 @_jl_libmfunc_1arg_float Real   trunc
 @_jl_libmfunc_1arg_float Real   round
 
-#@_jl_libmfunc_1arg_int Real lrint
-#@_jl_libmfunc_1arg_int Real lround iround
-function ilogb(x::Float64)
-    if x==0 || isnan(x)
-        throw(DomainError())
-    end
-    ccall(dlsym(_jl_libm,:ilogb), Int32, (Float64,), x)
-end
-function ilogb(x::Float32)
-    if x==0 || isnan(x)
-        throw(DomainError())
-    end
-    ccall(dlsym(_jl_libm,:ilogbf), Int32, (Float32,), x)
-end
-@vectorize_1arg Real ilogb
-
-@_jl_libmfunc_1arg_float Real significand
-
 @_jl_libfdmfunc_2arg Number atan2
 atan2(x::Real, y::Real) = atan2(float64(x), float64(y))
 @_jl_libfdmfunc_2arg Number hypot
 hypot(x::Float32, y::Float64) = hypot(float64(x), y)
 hypot(x::Float64, y::Float32) = hypot(x, float64(y))
-
-ipart(x) = trunc(x)
-fpart(x) = x - trunc(x)
-@vectorize_1arg Real ipart
-@vectorize_1arg Real fpart
 
 gamma(x::Float64) = ccall(dlsym(_jl_libfdm, :tgamma),  Float64, (Float64,), x)
 gamma(x::Float32) = float32(gamma(float64(x)))
@@ -113,6 +90,24 @@ max(x::Float32, y::Float32) = ccall(dlsym(_jl_libm, :fmaxf), Float32, (Float32,F
 min(x::Float64, y::Float64) = ccall(dlsym(_jl_libm, :fmin),  Float64, (Float64,Float64), x, y)
 min(x::Float32, y::Float32) = ccall(dlsym(_jl_libm, :fminf), Float32, (Float32,Float32), x, y)
 @vectorize_2arg Real min
+
+#@_jl_libmfunc_1arg_int Real lrint
+#@_jl_libmfunc_1arg_int Real lround iround
+function ilogb(x::Float64)
+    if x==0 || isnan(x)
+        throw(DomainError())
+    end
+    int(ccall(dlsym(_jl_libm,:ilogb), Int32, (Float64,), x))
+end
+function ilogb(x::Float32)
+    if x==0 || isnan(x)
+        throw(DomainError())
+    end
+    int(ccall(dlsym(_jl_libm,:ilogbf), Int32, (Float32,), x))
+end
+@vectorize_1arg Real ilogb
+
+@_jl_libmfunc_1arg_float Real significand
 
 ldexp(x::Float64,e::Int) = ccall(dlsym(_jl_libfdm, :ldexp),  Float64, (Float64,Int32), x, int32(e))
 ldexp(x::Float32,e::Int) = ccall(dlsym(_jl_libfdm, :ldexpf), Float32, (Float32,Int32), x, int32(e))
@@ -157,6 +152,3 @@ modf(x) = rem(x,one(x)), trunc(x)
 
 ^(x::Float64, y::Integer) = x^float64(y)
 ^(x::Float32, y::Integer) = x^float32(y)
-
-# alias
-const pow = ^
