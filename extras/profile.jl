@@ -108,7 +108,7 @@ function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags,
                     push(fblocknewargs, :($retsym = $fblock.args[i]))
                 end
             else
-                push(fblocknewargs, fblock.args[i])
+                push(fblocknewargs, esc(fblock.args[i]))
             end
             # This next line inserts timing statements between two
             # lines of code, equivalent to:
