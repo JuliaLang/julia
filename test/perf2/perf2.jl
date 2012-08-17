@@ -25,7 +25,7 @@ gc()
 
 
 # issue #950
-load("$JULIA_HOME/../../examples/gk/gk.jl")
+load("gk.jl")
 @timeit gk(350,[0.1]) "gk      "
 
 # issue #942
@@ -42,9 +42,17 @@ x = 1:600000;
 @timeit sparse(x,x,x) "sparserang"
 
 # issue #445
-load("$JULIA_HOME/../../examples/stockcorr.jl")
+load("stockcorr.jl")
 @timeit stockcorr() "stockcorr"
 
+# issue #1163
+load("actor_centrality.jl")
+@timeit actor_centrality() "actorgraph"
+
+# issue #1168
+load("laplace.jl")
+@timeit laplace_vec() "laplace_vec"
+@timeit laplace_devec() "laplace_devec"
 
 function cmp_with_func(x::Vector, f::Function)
     count::Int = 0
@@ -71,6 +79,7 @@ d = randn(len)
 
 @timeit (for n in 1:10; a = arith_vectorized(b,c,d); end) "vectoriz"
 
+
 function parse()
     file = EachLine(open("random.csv"))
     for line in file
@@ -80,6 +89,3 @@ end
 
 @timeit parse() "splitline"
 
-load("actor_centrality.jl")
-
-println("actorgraph", "\t", (@elapsed actor_centrality())*1000)
