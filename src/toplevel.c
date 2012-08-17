@@ -77,14 +77,20 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
     JL_GC_POP();
     jl_current_module = last_module;
 
-    // remove non-exported macros
     size_t i;
     void **table = newm->bindings.table;
     for(i=1; i < newm->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
+            // remove non-exported macros
             if (b->name->name[0]=='@' && !b->exportp)
                 b->value = NULL;
+            // error for unassigned exports
+            /*
+            if (b->exportp && b->owner==newm && b->value==NULL)
+                jl_errorf("identifier %s exported from %s is not initialized",
+                          b->name->name, newm->name->name);
+            */
         }
     }
     return jl_nothing;
