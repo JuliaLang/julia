@@ -1162,32 +1162,6 @@ function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
 end
 memchr(a::Array{Uint8,1}, b::Integer) = memchr(a,b,1)
 
-# concatenate byte arrays into a single array
-
-memcat() = Array(Uint8,0)
-memcat(a::Array{Uint8,1}) = copy(a)
-
-function memcat(arrays::Array{Uint8,1}...)
-    n = 0
-    for a in arrays
-        n += length(a)
-    end
-    arr = Array(Uint8, n)
-    ptr = pointer(arr)
-    offset = 0
-    for a in arrays
-        ccall(:memcpy, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}, Uint),
-              ptr+offset, a, length(a))
-        offset += length(a)
-    end
-    return arr
-end
-
-# concatenate the data fields of byte strings
-
-memcat(s::ByteString) = memcat(s.data)
-memcat(sx::ByteString...) = memcat(map(s->s.data, sx)...)
-
 # return a random string (often useful for temporary filenames/dirnames)
 let
 global randstring

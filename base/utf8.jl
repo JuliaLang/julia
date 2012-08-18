@@ -78,8 +78,9 @@ function strchr(s::UTF8String, c::Char, i::Integer)
     end
 end
 
-strcat(a::ByteString, b::ByteString, c::ByteString...) = UTF8String(memcat(a,b,c...))
+strcat(a::ByteString, b::ByteString, c::ByteString...) =
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
+    UTF8String([a.data,b.data,map(s->s.data,c)...])
 
 transform_to_utf8(s::String, f::Function) =
     sprint(length(s), io->for c in s; write(io,f(c)::Char); end)

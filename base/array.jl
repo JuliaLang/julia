@@ -1182,6 +1182,28 @@ function reverse!(v::StridedVector)
     v
 end
 
+function vcat{T}(arrays::Array{T,1}...)
+    n = 0
+    for a in arrays
+        n += length(a)
+    end
+    arr = Array(T, n)
+    ptr = pointer(arr)
+    offset = 0
+    if isa(T,BitsKind)
+        elsz = div(T.nbits,8)
+    else
+        elsz = div(WORD_SIZE,8)
+    end
+    for a in arrays
+        nba = length(a)*elsz
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+              ptr+offset, a, nba)
+        offset += nba
+    end
+    return arr
+end
+
 ## find ##
 
 function nnz(a::StridedArray)
@@ -1337,7 +1359,7 @@ end
 
 contains(s::Number, n::Number) = (s == n)
 
-areduce{T}(f::Function, A::StridedArray{T}, region::Region, v0) =
+areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =
     areduce(f,A,region,v0,T)
 
 # TODO:
@@ -1381,7 +1403,7 @@ function gen_areduce_func(n, f)
 end
 
 global areduce
-function areduce(f::Function, A::StridedArray, region::Region, v0, RType::Type)
+function areduce(f::Function, A::StridedArray, region::Dimspec, v0, RType::Type)
     dimsA = size(A)
     ndimsA = ndims(A)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
@@ -1482,18 +1504,18 @@ function max{T<:Integer}(A::StridedArray{T})
     v
 end
 
-max{T}(A::StridedArray{T}, b::(), region::Region) = areduce(max,A,region,typemin(T),T)
-min{T}(A::StridedArray{T}, b::(), region::Region) = areduce(min,A,region,typemax(T),T)
-sum{T}(A::StridedArray{T}, region::Region)  = areduce(+,A,region,zero(T))
-prod{T}(A::StridedArray{T}, region::Region) = areduce(*,A,region,one(T))
+max{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T),T)
+min{T}(A::StridedArray{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T),T)
+sum{T}(A::StridedArray{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+prod{T}(A::StridedArray{T}, region::Dimspec) = areduce(*,A,region,one(T))
 
-all(A::StridedArray{Bool}, region::Region) = areduce(all,A,region,true)
-any(A::StridedArray{Bool}, region::Region) = areduce(any,A,region,false)
-sum(A::StridedArray{Bool}, region::Region) = areduce(+,A,region,0,Int)
+all(A::StridedArray{Bool}, region::Dimspec) = areduce(all,A,region,true)
+any(A::StridedArray{Bool}, region::Dimspec) = areduce(any,A,region,false)
+sum(A::StridedArray{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
 sum(A::StridedArray{Bool}) = count(A)
 prod(A::StridedArray{Bool}) =
     error("use all() instead of prod() for boolean arrays")
-prod(A::StridedArray{Bool}, region::Region) =
+prod(A::StridedArray{Bool}, region::Dimspec) =
     error("use all() instead of prod() for boolean arrays")
 
 ## map over arrays ##

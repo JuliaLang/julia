@@ -687,9 +687,9 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     end
     if separable
         # conv2 isn't suitable for this (kernel center should be the actual center of the kernel)
-        #C = conv2(squeeze(U[:,1]*sqrt(S[1])), squeeze(V[1,:]*sqrt(S[1])), A)
-        x = squeeze(U[:,1]*sqrt(S[1]))
-        y = squeeze(V[1,:]*sqrt(S[1]))
+        #C = conv2(U[:,1]*sqrt(S[1]), vec(V[1,:])*sqrt(S[1]), A)
+        x = U[:,1]*sqrt(S[1])
+        y = vec(V[1,:])*sqrt(S[1])
         sa = size(A)
         m = length(y)+sa[1]
         n = length(x)+sa[2]
@@ -722,7 +722,7 @@ function imfilter{T}(img::Array{T,3}, filter::Matrix{T}, border::String, value)
     x, y, c = size(img)
     out = zeros(T, x, y, c)
     for i = 1:c
-        out[:,:,i] = imfilter(squeeze(img[:,:,i]), filter, border, value)
+        out[:,:,i] = imfilter(img[:,:,i], filter, border, value)
     end
     out
 end
@@ -765,7 +765,7 @@ function rgb2ntsc{T}(img::Array{T})
     trans = [0.299 0.587 0.114; 0.596 -0.274 -0.322; 0.211 -0.523 0.312]
     out = zeros(T, size(img))
     for i = 1:size(img,1), j = 1:size(img,2)
-        out[i,j,:] = trans * squeeze(img[i,j,:])
+        out[i,j,:] = trans * vec(img[i,j,:])
     end
     return out
 end
@@ -774,7 +774,7 @@ function ntsc2rgb{T}(img::Array{T})
     trans = [1 0.956 0.621; 1 -0.272 -0.647; 1 -1.106 1.703]
     out = zeros(T, size(img))
     for i = 1:size(img,1), j = 1:size(img,2)
-        out[i,j,:] = trans * squeeze(img[i,j,:])
+        out[i,j,:] = trans * vec(img[i,j,:])
     end
     return out
 end
@@ -784,7 +784,7 @@ function rgb2ycbcr{T}(img::Array{T})
     offset = [16.0; 128.0; 128.0]
     out = zeros(T, size(img))
     for i = 1:size(img,1), j = 1:size(img,2)
-        out[i,j,:] = offset + trans * squeeze(img[i,j,:])
+        out[i,j,:] = offset + trans * vec(img[i,j,:])
     end
     return out
 end
@@ -794,7 +794,7 @@ function ycbcr2rgb{T}(img::Array{T})
     offset = [16.0; 128.0; 128.0]
     out = zeros(T, size(img))
     for i = 1:size(img,1), j = 1:size(img,2)
-        out[i,j,:] = trans * (squeeze(img[i,j,:]) - offset)
+        out[i,j,:] = trans * (vec(img[i,j,:]) - offset)
     end
     return out
 end
@@ -883,7 +883,7 @@ function imROF{T}(img::Array{T,2}, lambda::Number, iterations::Integer)
     div_p = zeros(T, s1, s2)
     dt = lambda/4
     for i = 1:iterations
-        div_p = backdiffx(squeeze(p[:,:,1])) + backdiffy(squeeze(p[:,:,2]))
+        div_p = backdiffx(p[:,:,1]) + backdiffy(p[:,:,2])
         u = img + div_p/lambda
         grad_u = cat(3, forwarddiffx(u), forwarddiffy(u))
         grad_u_mag = sqrt(grad_u[:,:,1].^2 + grad_u[:,:,2].^2)
@@ -897,7 +897,7 @@ end
 function imROF{T}(img::Array{T,3}, lambda::Number, iterations::Integer)
     out = zeros(T, size(img))
     for i = 1:size(img, 3)
-        out[:,:,i] = imROF(squeeze(img[:,:,i]), lambda, iterations)
+        out[:,:,i] = imROF(img[:,:,i], lambda, iterations)
     end
     return out
 end
