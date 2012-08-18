@@ -39,8 +39,14 @@ USEGCC = 1
 USECLANG = 0
 
 ifeq ($(OS), Darwin)
+OSVER = $(shell uname -r | cut -b 1-2)
+ifeq ($(OSVER), 10)
+USEGCC = 1
+USECLANG = 0
+else
 USEGCC = 0
 USECLANG = 1
+endif
 endif
 
 ifeq ($(USEGCC),1)
@@ -60,9 +66,8 @@ JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 ifeq ($(OS), Darwin)
-# use $(sw_vers -productVersion) instead of 10.5?
-CC += -mmacosx-version-min=10.5
-CXX += -mmacosx-version-min=10.5
+CC += -mmacosx-version-min=10.6
+CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
