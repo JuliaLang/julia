@@ -106,6 +106,22 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
     return (jl_value_t*)a;
 }
 
+// --- dir/file stuff ---
+
+DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req) {
+  uv_fs_req_cleanup(req);
+}
+
+DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
+{
+  // Note that the flags field is mostly ignored by libuv
+  return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
+}
+
+DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
+DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return req->ptr + offset; }
+
 // --- stat ---
 DLLEXPORT int jl_sizeof_stat(void) { return sizeof(struct stat); }
 

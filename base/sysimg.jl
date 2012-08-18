@@ -174,7 +174,7 @@ export
     split_path, tilde_expand, mtime, ctime, stat, lstat, isfifo, ispath,
     ischardev, isdir, isblockdev, isfile, islink, issocket, issetuid,
     issetgid, issticky, isreadable, iswriteable, isexecutable, uperm,
-    gperm, operm, 
+    gperm, operm, readdir,
     # external processes
     cmd_stdin_stream,cmd_stdout_stream,cmds,connect,dup2,exec,fork,getpid,
     ignorestatus,make_pipe,other,output,pipeline_error,
