@@ -28,8 +28,12 @@ end
 
 function add(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = int(n + div(n,2))
-        grow(s, lim)
+        if s.fill1s
+            return s
+        else
+            lim = int(n + div(n,2))
+            grow(s, lim)
+        end
     end
     s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
     return s
@@ -43,9 +47,15 @@ function add_each(s::IntSet, ns)
 end
 
 function del(s::IntSet, n::Integer)
-    if n < s.limit
-        s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
+    if n >= s.limit
+        if s.fill1s
+            lim = int(n + div(n,2))
+            grow(s, lim)
+        else
+            return s
+        end
     end
+    s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
     return s
 end
 
@@ -86,21 +96,25 @@ end
 
 function has(s::IntSet, n::Integer)
     if n >= s.limit
-        false
+        s.fill1s
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
 end
 
 start(s::IntSet) = int64(0)
-done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
+done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit)
 function next(s::IntSet, i)
-    n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+    if i >= s.limit
+        n = i
+    else
+        n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+    end
     (n, n+1)
 end
 
 isempty(s::IntSet) =
-    ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
+    !s.fill1s && ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
 
 function choose(s::IntSet)
     n = next(s,0)[1]
@@ -117,12 +131,15 @@ function pop(s::IntSet)
 end
 
 length(s::IntSet) =
-    int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit))
+    (s.fill1s ? Inf : int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)))
 
 function show(io, s::IntSet)
     print(io, "IntSet(")
     first = true
     for n in s
+        if n > s.limit
+            break
+        end
         if !first
             print(io, ", ")
         end
@@ -167,7 +184,7 @@ function intersect!(s::IntSet, s2::IntSet)
     for n = 1:lim
         s.bits[n] &= s2.bits[n]
     end
-    if ~s2.fill1s   
+    if !s2.fill1s   
         for n=lim+1:length(s.bits)
             s.bits[n] = uint32(0)
         end
@@ -182,7 +199,7 @@ function complement!(s::IntSet)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
-    s.fill1s = ~s.fill1s
+    s.fill1s = !s.fill1s
     s
 end
 
