@@ -1,3 +1,11 @@
+module FFT
+import Base.*
+import Base.FFTW.*
+export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
+       # the rest are defined imported from FFTW:
+       bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,
+       ifft, ifft2, ifft3, ifftn, irfft, irfftn, rfft, rfftn
+
 function filt(b,a,x)
     if a[1]==0
         error("filt: a[1] must be nonzero")
@@ -125,3 +133,5 @@ function ifftshift(x,dim)
     s[dim] = -div(size(x,dim),2)
     circshift(x, s)
 end
+
+end # module

@@ -20,6 +20,29 @@ cross(a::Vector, b::Vector) =
 # linalg_blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
+lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
+function copy_to{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if tM == 'N'
+        copy_to(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    else
+        copy_to_transpose(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        if tM == 'C'
+            conj!(B)
+        end
+    end
+end
+function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Range1{Int}, tM::Char, M::StridedMatrix{S}, ir_src::Range1{Int}, jr_src::Range1{Int})
+    if tM == 'N'
+        copy_to_transpose(B, ir_dest, jr_dest, M, ir_src, jr_src)
+    else
+        copy_to(B, ir_dest, jr_dest, M, jr_src, ir_src)
+        if tM == 'C'
+            conj!(B)
+        end
+    end
+end
+
+
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
 
@@ -35,40 +58,40 @@ function _jl_generic_matvecmul{T,S}(tA, A::StridedMatrix{T}, B::StridedVector{S}
     _jl_generic_matvecmul(C, tA, A, B)
 end
 function _jl_generic_matvecmul{T,S,R}(C::StridedVector{R}, tA, A::StridedMatrix{T}, B::StridedVector{S})
-    mB = size(B, 1)
-    if tA == 'N'
-        mA = size(A, 1)
-        nA = size(A, 2)
-    else
-        mA = size(A, 2)
-        nA = size(A, 1)
-    end
+    mB = length(B)
+    mA, nA = lapack_size(tA, A)
     if nA != mB; error("*: argument shapes do not match"); end
     if length(C) != mA; error("*: output size does not match"); end
     z = zero(R)
-    fill!(C, z)
-    if tA == 'N'
+
+    Astride = size(A, 1)
+
+    if tA == 'T'  # fastest case
+        for k = 1:mA
+            aoffs = (k-1)*Astride
+            s = z
+            for i = 1:nA
+                s += A[aoffs+i] * B[i]
+            end
+            C[k] = s
+        end
+    elseif tA == 'C'
+        for k = 1:mA
+            aoffs = (k-1)*Astride
+            s = z
+            for i = 1:nA
+                s += conj(A[aoffs+i]) * B[i]
+            end
+            C[k] = s
+        end
+    else # tA == 'N'
+        fill!(C, z)
         for k = 1:mB
+            aoffs = (k-1)*Astride
             b = B[k]
             for i = 1:mA
-                C[i] += A[i, k] * b
+                C[i] += A[aoffs+i] * b
             end
-        end
-    elseif tA == 'T'
-        for k = 1:mA
-            s = z
-            for i = 1:nA
-                s += A[i, k] * B[i]
-            end
-            C[k] = s
-        end
-    else  # 'C'
-        for k = 1:mA
-            s = z
-            for i = 1:nA
-                s += conj(A[i, k]) * B[i]
-            end
-            C[k] = s
         end
     end
     return C
@@ -76,42 +99,84 @@ end
 
 (*){T,S}(A::Vector{S}, B::Matrix{T}) = reshape(A,length(A),1)*B
 
-# TODO: support transposed arguments
 # NOTE: the _jl_generic version is also called as fallback for strides != 1 cases
 #       in libalg_blas.jl
-(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(A, B)
-function _jl_generic_matmatmul{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
-    (mA, nA) = size(A)
-    (mB, nB) = size(B)
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2('N','N',A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3('N','N',A,B); end
-    if nA != mB; error("*: argument shapes do not match"); end
-    C = zeros(promote_type(T,S), mA, nB)
-    z = zero(eltype(C))
+(*){T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'N', A, B)
+function _jl_generic_matmatmul{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+    C = Array(promote_type(T,S), mA, nB)
+    _jl_generic_matmatmul(C, tA, tB, A, B)
+end
 
-    for jb = 1:50:nB
-        jlim = min(jb+50-1,nB)
-        for ib = 1:50:mA
-            ilim = min(ib+50-1,mA)
-            for kb = 1:50:mB
-                klim = min(kb+50-1,mB)
-                for j=jb:jlim
-                    boffs = (j-1)*mB
-                    coffs = (j-1)*mA
-                    for i=ib:ilim
-                        s = z
-                        for k=kb:klim
-                            s += A[i,k] * B[boffs+k]
+const tilebufsize = 10800  # Approximately 32k/3
+const Abuf = Array(Uint8, tilebufsize)
+const Bbuf = Array(Uint8, tilebufsize)
+const Cbuf = Array(Uint8, tilebufsize)
+
+function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
+    if nA != mB; error("*: argument shapes do not match"); end
+    if size(C,1) != mA || size(C,2) != nB; error("*: output size is incorrect"); end
+
+    if mA == nA == nB == 2; return matmul2x2(C, tA, tB, A, B); end
+    if mA == nA == nB == 3; return matmul3x3(C, tA, tB, A, B); end
+
+    tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
+    sz = (tile_size, tile_size)
+    Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
+    Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
+
+    z = zero(R)
+
+    if mA < tile_size && nA < tile_size && nB < tile_size
+        copy_to_transpose(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
+        copy_to(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
+        for j = 1:nB
+            boff = (j-1)*tile_size
+            for i = 1:mA
+                aoff = (i-1)*tile_size
+                s = z
+                for k = 1:nA
+                    s += Atile[aoff+k] * Btile[boff+k]
+                end
+                C[i,j] = s
+            end
+        end
+    else
+        Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
+        for jb = 1:tile_size:nB
+            jlim = min(jb+tile_size-1,nB)
+            jlen = jlim-jb+1
+            for ib = 1:tile_size:mA
+                ilim = min(ib+tile_size-1,mA)
+                ilen = ilim-ib+1
+                fill!(Ctile, z)
+                for kb = 1:tile_size:nA
+                    klim = min(kb+tile_size-1,mB)
+                    klen = klim-kb+1
+                    copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                    copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                    for j=1:jlen
+                        bcoff = (j-1)*tile_size
+                        for i = 1:ilen
+                            aoff = (i-1)*tile_size
+                            s = z
+                            for k = 1:klen
+                                s += Atile[aoff+k] * Btile[bcoff+k]
+                            end
+                            Ctile[bcoff+i] += s
                         end
-                        C[coffs+i] += s
                     end
                 end
+                copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
             end
         end
     end
-
     return C
 end
+
 
 # multiply 2x2 matrices
 function matmul2x2{T,S}(tA, tB, A::StridedMatrix{T}, B::StridedMatrix{S})

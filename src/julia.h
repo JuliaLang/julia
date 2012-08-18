@@ -982,7 +982,7 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 #define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
 
 void jl_gc_init(void);
-void jl_gc_markval(jl_value_t *v);
+void jl_gc_setmark(jl_value_t *v);
 DLLEXPORT void jl_gc_enable(void);
 DLLEXPORT void jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
@@ -1043,7 +1043,6 @@ typedef struct _jl_savestate_t {
     jmp_buf *eh_ctx;
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
-    jl_value_t *ostream_obj;
 #ifdef JL_GC_MARKSWEEP
     jl_gcframe_t *gcstack;
 #endif
@@ -1123,7 +1122,6 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     jl_current_task->state.eh_task = ss->eh_task;
     jl_current_task->state.eh_ctx = ss->eh_ctx;
     jl_current_task->state.bt = ss->bt;
-    jl_current_task->state.ostream_obj = ss->ostream_obj;
     jl_current_task->state.prev = ss->prev;
 #ifdef JL_GC_MARKSWEEP
     jl_pgcstack = ss->gcstack;

@@ -20,12 +20,12 @@ _jl_librandom = dlopen("librandom");
 const _jl_libblas = dlopen(_jl_libblas_name)
 const _jl_liblapack = (_jl_libblas_name == _jl_liblapack_name) ? _jl_libblas : dlopen(_jl_liblapack_name)
 @unix_only begin
-    const _jl_libfftw = dlopen("libfftw3_threads")
-    const _jl_libfftwf = dlopen("libfftw3f_threads")
+    const libfftw = dlopen("libfftw3_threads")
+    const libfftwf = dlopen("libfftw3f_threads")
 end
 @windows_only begin
-    const _jl_libfftw = dlopen("libfftw3") #On MinGw FFTW must be built with integrated threads
-    const _jl_libfftwf = dlopen("libfftw3f")
+    const libfftw = dlopen("libfftw3") #On MinGw FFTW must be built with integrated threads
+    const libfftwf = dlopen("libfftw3f")
 end
 
 ##_jl_libglpk = dlopen("libglpk")

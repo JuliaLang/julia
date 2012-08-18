@@ -28,16 +28,16 @@ ccall(:jl_load_progress_setmax, Void, (Int,), 77)
 
 export
     # Modules
-    Base,Grisu,Printf,PCRE,
+    Base,Grisu,Printf,PCRE,FFTW,FFT,
     # Types
     AbstractMatrix,AbstractVector,AsyncStream,Array,Associative,CharString,Chars,Cmd,Cmds,
     Colon,Complex,Complex128,Complex64,ComplexPair,DArray,Dict,Dims,EachLine,
     EachSearch,Enumerate,EnvHash,Executable,FDSet,FileDes,FileOffset,Filter,
-    GORef,GenericString,GlobalObject,IO,IOStream,IOTally,ImaginaryUnit,Indices,
+    GenericString,GlobalObject,IO,IOStream,ImaginaryUnit,Indices,
     IntSet,LocalProcess,Location,Matrix,ObjectIdDict,Pipe,PipeEnd,PipeIn,
     PipeOut,Port,Ports,ProcessExited,ProcessGroup,ProcessNotRun,ProcessRunning,
     ProcessSignaled,ProcessStatus,ProcessStopped,Range,Range1,RangeIndex,Ranges,
-    Rational,Regex,RegexMatch,RegexMatchIterator,Region,RemoteRef,RepString,
+    Rational,Regex,RegexMatch,RegexMatchIterator,Dimspec,RemoteRef,RepString,
     RevString,Reverse,RopeString,Set,Stream,StridedArray,StridedMatrix,StridedVecOrMat, StridedVector,SubArray,SubDArray,SubOrDArray,SubString,TcpSocket,
 	TransformedString,TTY,VecOrMat,Vector,VersionNumber,WeakKeyDict,Zip,
     Stat, Factorization, Cholesky, LU, QR, QRP,
@@ -70,119 +70,153 @@ export
     >,>=,>>,>>>,\,^,|,~,
     A_ldiv_Bc,A_ldiv_Bt,A_mul_B,A_mul_Bc,A_mul_Bt,A_rdiv_Bc,A_rdiv_Bt,Ac_ldiv_B,
     Ac_ldiv_Bc,Ac_mul_B,Ac_mul_Bc,Ac_rdiv_B,Ac_rdiv_Bc,At_ldiv_B,At_ldiv_Bt,
-    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,A_mul_B_noalias,At_mul_B_noalias,A_mul_Bt_noalias,At_mul_Bt_noalias,
-    # Functions
-    c_free,abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,add,
-    add_each,add_fd_handler,add_weak_key,add_weak_value,
-    addprocs_local,addprocs_sge,addprocs_ssh,all,allp,
-    amap,and!,angle,ans,any,anyp,append,append!,apropos,areduce,
-    ascii,asec,asecd,asech,asin,asind,asinh,assert,assign,at_each,atan,atan2,
-    atand,atanh,axpy,basename,begins_with,betarnd,bfft,bfftn,bin,binomial,bitmix,bits,bool,
-    brfft,brfftn,broadcast,bswap,bsxfun,byte_string_classify,cartesian_map,cat,
-    cbrt,cd,ceil,cell,cell_1d,cell_2d,changedist,char,chars,charwidth,
-    check_ascii,check_utf8,chi2rnd,chol,chol!,chomp,choose,chop,chr2ind,
-    circshift,cis,clamp,close,cmd_stdin_stream,cmd_stdout_stream,cmds,cmp,
-    colon,combinations,compile_hint,complement,complement!,complex,complex128,
-    complex64,cond,conj,conj!,connect,consume,contains,contains_is,conv,conv2,
-    convert,copy,copy_to,copysign,cor,cor_pearson,cor_spearman,cos,
-    cosc,cosd,cosh,cot,cotd,coth,count,count_ones,count_zeros,countlines,countp,
-    cov,cov_pearson,cov_spearman,cross,csc,cscd,csch,cstring,csvread,csvwrite,
-    ctranspose,cumprod,cumsum,current_task,cwd,darray,dcell,dec,decile,deconv,
-    defaultdist,degrees2radians,del,del_all,del_each,del_fd_handler,
-    den,deserialize,det,dfill,diag,diagm,diagmm,diagmm!,dict,diff,
-    dist,distdim,distribute,div,dlmread,dlmwrite,dlopen,dlsym,done,dones,dot,
-    drand,drandn,dump,dup2,dzeros,each_col,each_col!,each_line,each_match,
-    each_row,each_row!,each_search,each_vec,each_vec!,
-    eatwspace,eatwspace_comment,edit,eig,elements,eltype,
-    ends_with,enq_work,enqueue,enumerate,eof,eps,erf,erfc,errno,error,
-    esc,escape_string,evalfile,exec,exit,exp,exp2,expand,expm1,expr,exprnd,eye,
-    factor,factorial,falses,fd,fdio,fetch,fft,fft2,fft3,fft_num_threads,
-    fftn,fftshift,fftw_forget_wisdom,fftwd_import_wisdom_from_filename,
-    fftwf_import_wisdom_from_filename,fill,fill!,filt,filter,filter!,finalizer,
-    find,find_in_path,findmax,findmin,findn,findn_nzs,finfer,first,
-    first_utf8_byte,fld,flipdim,fliplr,flipsign,flipud,float,float32,
-    float32_isvalid,float64,float64_isvalid,float64_valued,floor,flush,
-    force,fork,fpart,fprintf,frexp,full,fullfile,function_loc,gamma,gc,
-    gc_disable,gc_enable,gcd,gcdx,gen_cartesian_map,gensym,get,getenv,
-    gethostname,getipaddr,getmethods,getpid,gradient,
-    grow,has,hasenv,hash,hcat,help,hex,hex2num,hist,histc,
-    htol,hton,hvcat,hypot,iceil,identity,idump,ifft,ifft2,ifft3,ifftn,ifftshift,
-    ifloor,ignorestatus,ilogb,imag,in,include_string,ind2chr,ind2sub,inf,
-    insert,int,int128,int16,int2str,int32,int64,int8,integer,integer_partitions,
-    integer_valued,inter,intersect,intersection,intersection!,intset,inv,invmod,
-    invperm,ipart,ipermute,irfft,irfftn,iround,is_file_readable,is_go_member,
-    is_hex_digit,is_utf8_start,is_valid_ascii,is_valid_utf8,isbool,isbuiltin,
-    iscomplex,isconst,isdenormal,isempty,isequal,iseven,isfinite,isgeneric,
-    ishermitian,isimmutable,isinf,isinteger,isinteractive,isleaftype,
-    isless,islogical,isnan,
-    isodd,isperm,ispow2,isprime,isready,isreal,issorted,issym,issym_rnd,
-    istaskdone,istril,istriu,isvalid,iswalnum,iswalpha,iswascii,iswblank,
-    iswcntrl,iswdigit,iswgraph,iswlower,iswprint,iswpunct,iswspace,iswupper,
-    iswxdigit,itrunc,join,key,keys,kron,last,lc,lcfirst,lcm,ldexp,leading_ones,
-    leading_zeros,length,less,lfact,lgamma,linreg,linspace,load,localize,
-    localize_copy,locate,log,log10,log1p,log2,logb,logspace,lowercase,lpad,ls,
-    lstrip,ltoh,lu,lu!,mad,make_pipe,make_scheduled,map,map_to,map_to2,
-    map_vectorized,mapreduce,match,matches,matmul2x2,matmul3x3,max,maxdim,
-    maxintfloat,mean,median,memcat,memchr,memio,merge,merge!,method_missing,min,
-    mmap,mmap_array,mmap_grow,mmap_stream_settings,mod,mod1,modf,msync,munmap,
-    myid,myindexes,nCr,nPr,names,nan,nb_available,ndigits,ndigits0z,ndims,next,
-    nextfloat,nextind,nextpow2,nnz,nonzeros,norm,not!,nprocs,nthbyte,nthperm,
-    nthperm!,ntoh,ntuple,num,num2hex,numel,object_id,oct,oftype,one,ones,open,
-	open_any_tcp_port,or!,order,
-    other,out,output,owner,pairs,parse,parse_bin,parse_float,parse_hex,
-    parse_input_line,parse_int,parse_oct,parseatom,partitions,pascal,
-    peakflops,permute,pfor,pieceindex,pieceindexes,pipeline_error,pmap,
-    pointer,pointer_to_array,pop,position,pow,power_by_squaring,
-    powermod,preduce,prevfloat,prevind,print,print_escaped,print_joined,
+    At_mul_B,At_mul_Bt,At_rdiv_B,At_rdiv_Bt,
+    # scalar math
+    abs,abs2,acos,acosd,acosh,acot,acotd,acoth,acsc,acscd,acsch,angle,
+    asec,asecd,asech,asin,asind,asinh,atan,atan2,atand,atanh,bitmix,bool,
+    binomial,bswap,cbrt,ceil,cis,clamp,cmp,combinations,complex,complex128,
+    complex64,conj,copysign,cos,cosc,cosd,cosh,cot,cotd,coth,
+    count_ones,count_zeros,csc,cscd,csch,degrees2radians,den,div,eps,
+    erf,erfc,exp,exp2,expm1,factor,factorial,fld,flipsign,float,float32,
+    float64,float64_valued,floor,frexp,gamma,gcd,gcdx,hex2num,hypot,
+    iceil,ifloor,ilogb,imag,inf,int,int128,int16,int32,int64,int8,
+    integer,integer_partitions,integer_valued,inv,invmod,iround,
+    isbool,iscomplex,isdenormal,iseven,isfinite,isinf,isinteger,islogical,isnan,
+    isodd,ispow2,isprime,isreal,itrunc,lcm,ldexp,leading_ones,leading_zeros,
+    lfact,lgamma,log,log10,log1p,log2,logb,maxintfloat,mod,mod1,modf,nCr,nPr,
+    nan,nextfloat,nextpow2,num,num2hex,one,power_by_squaring,powermod,
+    prevfloat,radians2degrees,rational,real,real_valued,realmax,realmin,
+    reim,reinterpret,rem,round,sec,secd,sech,sign,signbit,signed,significand,
+    sin,sinc,sind,sinh,sqrt,square,tan,tand,tanh,trailing_ones,trailing_zeros,
+    trunc,uint,uint128,uint16,uint32,uint64,uint8,unsigned,zero,nextprod,
+    prevprod,isinteger,typemax,typemin,
+    # arrays and linear algebra
+    amap,areduce,axpy,bsxfun,cartesian_map,cat,cell,cell_1d,cell_2d,
+    chol,chol!,circshift,colon,cond,conj!,copy_to,cross,ctranspose,
+    cumprod,cumsum,det,diag,diagm,diagmm,diagmm!,diff,dot,each_col,
+    each_col!,each_row,each_row!,each_vec,each_vec!,eig,eye,falses,
+    fill,fill!,filter,filter!,find,findmax,findmin,findn,findn_nzs,
+    first,flipdim,fliplr,flipud,full,gen_cartesian_map,gradient,grow,
+    hcat,hvcat,ind2sub,insert,invperm,ipermute,ishermitian,isperm,issorted,
+    issym,issym_rnd,istril,istriu,kron,last,linreg,linspace,logspace,
+    lu,lu!,matmul2x2,matmul3x3,max,min,ndims,nnz,nonzeros,norm,
+    nthperm,nthperm!,ones,order,partitions,pascal,permute,pop,prod,
+    promote_shape,push,qr,randcycle,randperm,randsym,rank,repmat,
+    reshape,reverse,reverse!,rot180,rot90,rotl90,rotr90,rref,search_sorted,
+    select,select!,shift,shuffle,shuffle!,size,slice,slicedim,sort,sort!,
+    sort_by,sort_by!,sortperm,sortr,sortr!,squeeze,step,stride,strides,
+    sub,sub2ind,sum,svd,svdvals,trace,transpose,trideig,tril,triu,trues,
+    unshift,vcat,vec,append!,zeros,findfirst,qrp,sdd,ref_shape,
+    assign_shape_check, indices, append_any, make_loop_nest,
+    trailingsize, check_bounds, search_sorted_last, search_sorted_first,
+    # collections
+    add,add_each,add_weak_key,add_weak_value,all,allp,any,anyp,
+    assign,choose,complement,complement!,contains,contains_is,count,countp,
+    del,del_all,del_each,dict,elements,eltype,enqueue,get,has,hash,
+    intersect,intersect!,isempty,key,keys,length,setdiff,
+    map,map_to,map_to2,mapreduce,merge,merge!,numel,pairs,reduce,ref,
+    similar,toggle,toggle_each,union,union!,values,xor!,
+    # strings and text output
+    ascii,begins_with,byte_string_classify,char,chars,charwidth,
+    check_ascii,check_utf8,chomp,chop,chr2ind,bytestring,each_match,
+    each_search,ends_with,escape_string,first_utf8_byte,ind2chr,
+    is_utf8_start,is_valid_ascii,is_valid_utf8,isvalid,
+    iswalnum,iswalpha,iswascii,iswblank,iswcntrl,iswdigit,iswgraph,iswlower,
+    iswprint,iswpunct,iswspace,iswupper,iswxdigit,join,lc,lcfirst,
+    lowercase,lpad,lstrip,match,ismatch,memchr,nextind,prevind,
+    replace,rpad,rstrip,safe_char,search,split,strcat,strchr,string,
+    strip,strlen,strwidth,thisind,transform_to_utf8,uc,ucfirst,
+    uppercase,utf8,randstring,
+    bin,bits,dec,dump,float32_isvalid,float64_isvalid,fprintf,hex,idump,
+    is_hex_digit,ndigits,ndigits0z,oct,parse_bin,parse_float,parse_hex,
+    parse_int,parse_oct,print,print_escaped,print_joined,
     print_matrix,print_quoted,print_quoted_literal,print_shortest,
-    print_unescaped,print_unescaped_chars,printf,println,process_exit_status,
-    process_exited,process_options,process_running,process_signaled,
-    process_status,process_stop_signal,process_stopped,process_term_signal,
-    procs,prod,produce,promote,promote_rule,promote_shape,promote_type,
-    ptr_arg_convert,push,put,qr,quantile,quartile,quintile,quit,quote_string,
-    radians2degrees,rand,rand!,randbeta,randbeta!,randbit,randbit!,randbool,
-    randbool!,randchi2,randchi2!,randcycle,randexp,randexp!,randg,randg!,randg2,
-    randi,randi!,randival,randival!,randn,randn!,randperm,randsym,rank,rational,
-    read,read_from,readall,readchomp,readline,readlines,readuntil,real,
-    real_valued,realmax,realmin,reduce,ref,rehash,reim,reinterpret,rem,
-    remote_call,remote_call_fetch,remote_call_wait,remote_do,repeat,
-    repl_show,replace,repmat,reshape,reverse,reverse!,rfft,rfftn,rot180,rot90,
-    rotl90,rotr90,round,rpad,rr2id,rref,rstrip,run,safe_char,scan,search,
-    search_sorted,sec,secd,sech,seek,select,select!,select_read,serialize,
-    setenv,setfield,setsuccess,shift,show,showall,showcompact,shuffle,shuffle!,
-    sign,signbit,signed,significand,similar,sin,sinc,sind,sinh,size,sizeof,skip,
-    sleep,slice,slicedim,sort,sort!,sort_by,sort_by!,sortperm,sortr,sortr!,
-    spawn,spawnat,spawnlocal,split,sprint,sprintf,sqrt,square,squeeze,srand,
-    repr,start,std,stderr,stderr_stream,stdin,stdin_stream,stdout,
-    stdout_stream,step,strcat,strchr,strerror,strftime,stride,strides,string,
-    strip,strlen,strptime,strwidth,sub,sub2ind,success,successful,sum,summary,
-    super,svd,svdvals,symbol,system,system_error,systmpdir,take,takebuf_string,tan,tand,
-    tanh,thisind,tic,tiedrank,time,times,time_ns,tintersect,tls,tmpnam,toc,toggle,
-    toggle_each,toq,trace,trailing_ones,trailing_zeros,transform_to_utf8,transpose,trideig,
-    tril,triu,trues,trunc,truncate,tty_cols,tty_rows,typemax,typemin,uc,ucfirst,
-    uint,uint128,uint16,uint32,uint64,uint8,
-    unescape_chars,unescape_string,union,
-    union!,unsetenv,unshift,unsigned,uppercase,utf8,values,var,vcat,
-    vec,wait,wait_nohang,weighted_mean,which,whicht,whos,with_output_to_string,
-    write,write_to,xcorr,xor!,yield,zero,zeros,zip, nextprod,
-    prevprod, base, findfirst, qrp, sdd, require, ref_shape,
-    assign_shape_check, to_index, indices, append_any, make_loop_nest,
-    randstring, basename, dirname, dirname_basename, file_path, path_expand, file_copy,
+    print_unescaped,print_unescaped_chars,printf,println,quote_string,
+    repeat,repl_show,show,showall,showcompact,sprint,sprintf,repr,summary,
+    unescape_chars,unescape_string,base,
+    # statistics and random numbers
+    betarnd,chi2rnd,cor,cor_pearson,cor_spearman,cov,cov_pearson,cov_spearman,
+    decile,exprnd,hist,histc,mad,mean,median,quantile,quartile,quintile,
+    rand,rand!,randbeta,randbeta!,randbit,randbit!,randbool,
+    randbool!,randchi2,randchi2!,randexp,randexp!,randg,randg!,randg2,
+    randi,randi!,randival,randival!,randn,randn!,srand,std,tiedrank,var,
+    weighted_mean,
+    # signal processing
+    bfft,bfftn,brfft,brfftn,conv,conv2,deconv,fft,fft2,fft3,
+    fftn,fftshift,filt,ifft,ifft2,ifft3,ifftn,ifftshift,irfft,irfftn,
+    rfft,rfftn,xcorr,
+
+    # iteration
+    start,done,next,enumerate,zip,
+    # object identity and equality
+    copy,isequal,isless,identity,object_id,sizeof,isimmutable,
+    # tasks
+    consume,current_task,istaskdone,produce,tls,
+    # time
+    sleep,strftime,strptime,tic,time,time_ns,toc,toq,
+    # errors
+    assert,error,system_error,
+    # types
+    convert,isleaftype,oftype,promote,promote_rule,promote_type,super,
+    tintersect,
+    # syntax
+    expand,esc,expr,gensym,parse,parse_input_line,parseatom,symbol,
+    # help and reflection
+    ans,apropos,function_loc,edit,methods,help,less,names,which,whicht,whos,
+    isinteractive,disassemble,finfer,
+    # loading source files
+    evalfile,find_in_path,include_string,load,require,
+    # RTS internals
+    compile_hint,finalizer,gc,gc_disable,gc_enable,isbuiltin,isconst,isgeneric,
+    # misc
+    exit,quit,method_missing,ntuple,peakflops,times,tty_cols,tty_rows,
+
+    # I/O and events
+    add_fd_handler,close,countlines,csvread,csvwrite,del_fd_handler,
+    deserialize,dlmread,dlmwrite,each_line,eatwspace,eatwspace_comment,
+    eof,fd,fdio,flush,gethostname,getipaddr,htol,hton,ltoh,ntoh,memio,
+    mmap,mmap_array,mmap_grow,mmap_stream_settings,msync,munmap,
+    nb_available,open,position,read,readall,readchomp,readline,readlines,
+    readuntil,seek,select_read,serialize,skip,stderr,stderr_stream,stdin,
+    stdin_stream,stdout,stdout_stream,takebuf_array,takebuf_string,truncate,
+    with_output_to_string,write,
+    # multiprocessing
+    addprocs_local,addprocs_sge,addprocs_ssh,at_each,broadcast,fetch,
+    is_go_member,isready,make_scheduled,yield,enq_work,myid,nprocs,
+    pfor,pmap,preduce,put,remote_call,remote_call_fetch,remote_call_wait,
+    remote_do,rr2id,spawn,spawnat,spawnlocal,take,
+    # distributed arrays
+    changedist,darray,dcell,defaultdist,dfill,dist,distdim,distribute,dones,
+    drand,drandn,dzeros,localize,localize_copy,locate,map_vectorized,maxdim,
+    myindexes,owner,pieceindex,pieceindexes,procs,
+    # paths and file names
+    basename,cd,cwd,fullfile,is_file_readable,ls,tmpnam,basename,dirname,
+    dirname_basename, file_path, path_expand, file_copy,
     file_remove, file_create, path_rename, dir_create, dir_remove,
     file_exists, tempdir, tempfile, download_file, real_path,
-    abs_path, abs_path_split, filemode, fileparts, filesize, fullfile, isrooted, split_extension, 
+    abs_path, abs_path_split, filemode, fileparts, filesize, fullfile,
+    isrooted, split_extension, 
     split_path, tilde_expand, mtime, ctime, stat, lstat, isfifo, ispath,
     ischardev, isdir, isblockdev, isfile, islink, issocket, issetuid,
     issetgid, issticky, isreadable, iswriteable, isexecutable, uperm,
-    gperm, operm, trailingsize, check_bounds, search_sorted_last,
-    search_sorted_first,
+    gperm, operm, 
+    # external processes
+    cmd_stdin_stream,cmd_stdout_stream,cmds,connect,dup2,exec,fork,getpid,
+    ignorestatus,make_pipe,other,output,pipeline_error,
+    process_exit_status,process_exited,process_options,process_running,
+    process_signaled,process_status,process_stop_signal,process_stopped,
+    process_term_signal,read_from,run,setsuccess,success,successful,system,
+    wait,wait_nohang,write_to,
+    # C interface
+    c_free,dlopen,dlsym,errno,getenv,hasenv,pointer,pointer_to_array,
+    ptr_arg_convert,setenv,strerror,unsetenv,
 	run_event_loop, globalEventLoop, accept, add_io_handler, start_reading,
     # Macros
     @v_str, @unexpected, @assert, @r_str, @str, @S_str, @I_str, @E_str,
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
     @gensym, @eval, @task, @thunk, @L_str, @vectorize_1arg,
-    @vectorize_2arg, @printf, @sprintf
+    @vectorize_2arg, @printf, @sprintf, @memoize
 
 if false
     # simple print definitions for debugging. enable these if something
@@ -327,8 +361,10 @@ include("linalg_lapack.jl")
 include("factorizations.jl")
 
 # signal processing
-include("signal.jl")
 include("signal_fftw.jl")
+include("signal.jl")
+import Base.FFT
+import Base.FFT.*
 
 ccall(:jl_load_progress_setmax, Void, (Int,), 0);
 println()
@@ -444,7 +480,7 @@ compile_hint(eval_annotate, (LambdaStaticData, ObjectIdDict, StaticVarInfo, Obje
 # inference code to cache an optimized version of it.
 begin
     local atypes = (LambdaStaticData, Tuple, (), LambdaStaticData, Bool)
-    local minf = getmethods(typeinf, atypes)
+    local minf = methods(typeinf, atypes)
     typeinf_ext(minf[1][3], atypes, (), minf[1][3])
 end
 

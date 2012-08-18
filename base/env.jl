@@ -31,7 +31,7 @@ end
     if len == 0
         $errorcase
     end
-    cstring(convert(Ptr{Uint8},_jl_win_getenv($var,len)))
+    bytestring(_jl_win_getenv($var,len))
 end
 end
 

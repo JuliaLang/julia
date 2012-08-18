@@ -763,19 +763,6 @@ append!{T<:Integer}(B::BitVector{T}, items::BitVector) = append!(B, reinterpret(
 append!{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append!(B, bitpack(items))
 append!{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append!(A, bitunpack(items))
 
-function append{T<:Integer}(B::BitVector{T}, items::BitVector{T})
-    n0 = length(B)
-    n1 = length(items)
-    r = BitArray(T, n0 + n1)
-    r[1:n0] = B
-    r[n0+1:n0+n1] = items
-    return r
-end
-
-append{T<:Integer}(B::BitVector{T}, items::BitVector) = append(B, reinterpret(T, items))
-append{T<:Integer}(B::BitVector{T}, items::AbstractVector{T}) = append(B, bitpack(items))
-append{T<:Integer}(A::Vector{T}, items::BitVector{T}) = append(A, bitunpack(items))
-
 function grow(B::BitVector, n::Integer)
     n0 = length(B)
     if n < -n0
@@ -1120,7 +1107,7 @@ end
 function slicedim(A::BitArray, d::Integer, i::Integer)
     d_in = size(A)
     leading = d_in[1:(d-1)]
-    d_out = append(leading, (1,), d_in[(d+1):end])
+    d_out = tuple(leading..., 1, d_in[(d+1):end]...)
 
     M = prod(leading)
     N = numel(A)
@@ -1397,7 +1384,7 @@ nonzeros{T<:Integer}(B::BitArray{T}) = bitones(T, nnz(B))
 
 ## Reductions ##
 
-areduce(f::Function, B::BitArray, region::Region, v0, RType::Type) =
+areduce(f::Function, B::BitArray, region::Dimspec, v0, RType::Type) =
     areduce(f, bitunpack(B), region, v0, RType)
 
 let bitareduce_cache = nothing
@@ -1438,7 +1425,7 @@ function gen_bitareduce_func(n, f)
 end
 
 global bitareduce
-function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Region, v0)
+function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Dimspec, v0)
     dimsA = size(A)
     ndimsA = ndims(A)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
@@ -1471,10 +1458,10 @@ function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Region, v0)
 end
 end
 
-max{T}(A::BitArray{T}, b::(), region::Region) = bitareduce(max,A,region,typemin(T))
-min{T}(A::BitArray{T}, b::(), region::Region) = bitareduce(min,A,region,typemax(T))
-sum{T}(A::BitArray{T}, region::Region)  = areduce(+,A,region,0,Int)
-prod{T}(A::BitArray{T}, region::Region) = bitareduce(*,A,region,one(T))
+max{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(max,A,region,typemin(T))
+min{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(min,A,region,typemax(T))
+sum{T}(A::BitArray{T}, region::Dimspec)  = areduce(+,A,region,0,Int)
+prod{T}(A::BitArray{T}, region::Dimspec) = bitareduce(*,A,region,one(T))
 
 sum(B::BitArray) = nnz(B)
 

@@ -88,7 +88,6 @@ void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
     ss->eh_task = jl_current_task->state.eh_task;
     ss->eh_ctx = jl_current_task->state.eh_ctx;
     ss->bt = jl_current_task->state.bt;
-    ss->ostream_obj = jl_current_task->state.ostream_obj;
     ss->prev = jl_current_task->state.prev;
 #ifdef JL_GC_MARKSWEEP
     ss->gcstack = jl_pgcstack;
@@ -884,7 +883,7 @@ void jl_init_primitives(void)
     add_builtin_func("tupleref",  jl_f_tupleref);
     add_builtin_func("tuplelen",  jl_f_tuplelen);
     add_builtin_func("getfield",  jl_f_get_field);
-    add_builtin_func("_setfield",  jl_f_set_field);
+    add_builtin_func("setfield",  jl_f_set_field);
     add_builtin_func("fieldtype", jl_f_field_type);
 
     add_builtin_func("arraylen", jl_f_arraylen);

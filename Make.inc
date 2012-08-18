@@ -44,8 +44,14 @@ USEGCC = 1
 USECLANG = 0
 
 ifeq ($(OS), Darwin)
+OSVER = $(shell uname -r | cut -b 1-2)
+ifeq ($(OSVER), 10)
+USEGCC = 1
+USECLANG = 0
+else
 USEGCC = 0
 USECLANG = 1
+endif
 endif
 
 ifeq ($(USEGCC),1)
@@ -65,9 +71,8 @@ JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -g -DDEBUG
 SHIPFLAGS = -O3 -DNDEBUG
 ifeq ($(OS), Darwin)
-# use $(sw_vers -productVersion) instead of 10.5?
-CC += -mmacosx-version-min=10.5
-CXX += -mmacosx-version-min=10.5
+CC += -mmacosx-version-min=10.6
+CXX += -mmacosx-version-min=10.6
 JCFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
@@ -111,6 +116,8 @@ USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
 endif
 
+# Use system BLAS and LAPACK on Mac
+# https://github.com/JuliaLang/julia/commit/7b6442f1db697d0bc8c39476e7d92afc11b169d2
 ifeq ($(OS), Darwin)
 USE_SYSTEM_BLAS=1
 USE_SYSTEM_LAPACK=1
@@ -258,10 +265,6 @@ LIBLAPACK = -lsatlas
 LIBBLASNAME = libsatlas
 LIBLAPACKNAME = libsatlas
 endif
-
-# Libraries to link
-LIBS = $(shell $(LLVM_CONFIG) --libfiles) $(WHOLE_ARCHIVE) $(JULIAHOME)/src/flisp/libflisp.a $(WHOLE_ARCHIVE) $(JULIAHOME)/src/support/libsupport.a -L$(USR)/lib $(USRLIB)/uv.a $(OSLIBS) -lpthread $(shell $(LLVM_CONFIG) --ldflags)
-
 # Make tricks
 
 define dir_target

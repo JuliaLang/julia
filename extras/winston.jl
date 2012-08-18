@@ -1,3 +1,11 @@
+module Winston
+
+import Base.*
+
+export Curve, FillAbove, FillBelow, FillBetween, Histogram, Legend, LineX, LineY,
+    PlotInset, PlotLabel, Points, Slope, SymmetricErrorBarsX, SymmetricErrorBarsY
+export FramedArray, FramedPlot, Table
+export file, setattr, style
 
 load("inifile.jl")
 load("cairo.jl")
@@ -34,65 +42,60 @@ end
 
 _winston_config = WinstonConfig()
 
-begin
-    global config_value
-    global config_options
-
-    function _atox(s::String)
-        x = strip(s)
-        if x == "nothing"
-            return nothing
-        elseif x == "true"
-            return true
-        elseif x == "false"
-            return false
-        elseif length(x) > 2 && lowercase(x[1:2]) == "0x"
-            try
-                h = parse_hex(x[3:end])
-                return h
-            end
-        elseif x[1] == '{' && x[end] == '}'
-            style = Dict()
-            pairs = map( strip, split(x[2:end-1], ',', false) )
-            for pair in pairs
-                kv = split( pair, ':', false )
-                style[ strip(kv[1]) ] = _atox( strip(kv[2]) )
-            end
-            return style
-        elseif x[1] == '"' && x[end] == '"'
-            return x[2:end-1]
-        end
+function _atox(s::String)
+    x = strip(s)
+    if x == "nothing"
+        return nothing
+    elseif x == "true"
+        return true
+    elseif x == "false"
+        return false
+    elseif length(x) > 2 && lowercase(x[1:2]) == "0x"
         try
-            i = int(x)
-            return i
+            h = parse_hex(x[3:end])
+            return h
         end
-        try
-            f = float(x)
-            return f
+    elseif x[1] == '{' && x[end] == '}'
+        style = Dict()
+        pairs = map( strip, split(x[2:end-1], ',', false) )
+        for pair in pairs
+            kv = split( pair, ':', false )
+            style[ strip(kv[1]) ] = _atox( strip(kv[2]) )
         end
-        return x
+        return style
+    elseif x[1] == '"' && x[end] == '"'
+        return x[2:end-1]
     end
+    try
+        i = int(x)
+        return i
+    end
+    try
+        f = float(x)
+        return f
+    end
+    return x
+end
 
-    function config_value(section, option)
-        global _winston_config
-        strval = get(_winston_config.inifile, section, option, nothing)
-        _atox(strval)
-    end
+function config_value(section, option)
+    global _winston_config
+    strval = get(_winston_config.inifile, section, option, nothing)
+    _atox(strval)
+end
 
-    function config_options( sec::String )
-        global _winston_config
-        opts = Dict()
-        if sec == "defaults"
-            for (k,v) in _winston_config.inifile.defaults
-                opts[k] = _atox(v)
-            end
-        elseif has_section(_winston_config.inifile, sec)
-            for (k,v) in section(_winston_config.inifile, sec)
-                opts[k] = _atox(v)
-            end
+function config_options( sec::String )
+    global _winston_config
+    opts = Dict()
+    if sec == "defaults"
+        for (k,v) in _winston_config.inifile.defaults
+            opts[k] = _atox(v)
         end
-        opts
+    elseif has_section(_winston_config.inifile, sec)
+        for (k,v) in section(_winston_config.inifile, sec)
+            opts[k] = _atox(v)
+        end
     end
+    opts
 end
 
 # utils -----------------------------------------------------------------------
@@ -800,8 +803,7 @@ function LineTextObject( p, q, str, offset, args... )
     else
         kw["textvalign"] = "top"
     end
-    extended_args = append(args, (kw,))
-    TextObject( pos, str, extended_args...)
+    TextObject(pos, str, args..., kw)
 end
 
 type PathObject <: RenderObject
@@ -3142,3 +3144,4 @@ function kw_get( self::HasStyle, key, notfound )
     return get(getattr(self,"style"), key, notfound)
 end
 
+end # module

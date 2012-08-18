@@ -52,7 +52,7 @@ end
 
 function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_pdf_surface_create), Ptr{Void},
-        (Ptr{Uint8},Float64,Float64), cstring(filename), w_pts, h_pts)
+        (Ptr{Uint8},Float64,Float64), bytestring(filename), w_pts, h_pts)
     surface = CairoSurface(ptr, :pdf)
     surface.width = w_pts
     surface.height = h_pts
@@ -61,7 +61,7 @@ end
 
 function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_ps_surface_create), Ptr{Void},
-        (Ptr{Uint8},Float64,Float64), cstring(filename), w_pts, h_pts)
+        (Ptr{Uint8},Float64,Float64), bytestring(filename), w_pts, h_pts)
     ccall(dlsym(_jl_libcairo,:cairo_ps_surface_set_eps), Void,
         (Ptr{Void},Int32), ptr, 1)
     surface = CairoSurface(ptr, :eps)
@@ -72,7 +72,7 @@ end
 
 function write_to_png(surface::CairoSurface, filename::String)
     ccall(dlsym(_jl_libcairo,:cairo_surface_write_to_png), Void,
-        (Ptr{Uint8},Ptr{Uint8}), surface.ptr, cstring(filename))
+        (Ptr{Uint8},Ptr{Uint8}), surface.ptr, bytestring(filename))
 end
 
 # -----------------------------------------------------------------------------
@@ -216,7 +216,7 @@ end
 
 function set_font_from_string(ctx::CairoContext, str::String)
     fontdesc = ccall(dlsym(_jl_libpangocairo,:pango_font_description_from_string),
-        Ptr{Void}, (Ptr{Uint8},), cstring(str))
+        Ptr{Void}, (Ptr{Uint8},), bytestring(str))
     ccall(dlsym(_jl_libpangocairo,:pango_layout_set_font_description), Void,
         (Ptr{Void},Ptr{Void}), ctx.layout, fontdesc)
     ccall(dlsym(_jl_libpangocairo,:pango_font_description_free), Void,
@@ -225,7 +225,7 @@ end
 
 function set_markup(ctx::CairoContext, markup::String)
     ccall(dlsym(_jl_libpangocairo,:pango_layout_set_markup), Void,
-        (Ptr{Void},Ptr{Uint8},Int32), ctx.layout, cstring(markup), -1)
+        (Ptr{Void},Ptr{Uint8},Int32), ctx.layout, bytestring(markup), -1)
 end
 
 function get_layout_size(ctx::CairoContext)

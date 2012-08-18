@@ -161,7 +161,7 @@ end
 function real_path(fname::String)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     system_error(:real_path, sp == C_NULL)
-    s = cstring(sp)
+    s = bytestring(sp)
     ccall(:free, Void, (Ptr{Uint8},), sp)
     return s
 end
@@ -193,7 +193,7 @@ function cwd()
     @unix_only p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     @windows_only p = ccall(:_getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     system_error("cwd", p==C_NULL)
-    cstring(p)
+    bytestring(p)
 end
 
 cd(dir::String) = system_error("chdir", ccall(:uv_chdir,Int64,(Ptr{Uint8},),real_path(dir)) == -1)
@@ -280,7 +280,5 @@ end
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)
-  new_filename = strcat(filename, ".tar.gz")
-  path_rename(filename, new_filename)
-  new_filename
+  filename
 end

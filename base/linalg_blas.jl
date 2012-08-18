@@ -278,16 +278,9 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
    end
 end
 
-function (*){T<:LapackScalar}(A::StridedMatrix{T},
-                                                             B::StridedMatrix{T})
-    _jl_gemm('N', 'N', A, B)
-end
-
-function A_mul_B_noalias{T<:LapackScalar}(C::StridedMatrix{T},
-                                          A::StridedMatrix{T},
-                                          B::StridedMatrix{T})
-    _jl_gemm_prealloc(C, 'N', 'N', A, B)
-end
+(*){T<:LapackScalar}(A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm('N', 'N', A, B)
+A_mul_B{T<:LapackScalar}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'N', 'N', A, B)
+A_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'N', 'N', A, B)
 
 function At_mul_B{T<:LapackScalar}(A::StridedMatrix{T},
                                    B::StridedMatrix{T})
@@ -297,13 +290,10 @@ function At_mul_B{T<:LapackScalar}(A::StridedMatrix{T},
         _jl_gemm('T', 'N', A, B)
     end
 end
-
-function At_mul_B_noalias{T<:LapackScalar}(C::StridedMatrix{T},
-                                           A::StridedMatrix{T},
-                                           B::StridedMatrix{T})
-    # TODO: syrk
-    _jl_gemm_prealloc(C, 'T', 'N', A, B)
-end
+# TODO: syrk
+At_mul_B{T<:LapackScalar}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'T', 'N', A, B)
+At_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('T', 'N', A, B)
+At_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'T', 'N', A, B)
 
 function A_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T},
                                    B::StridedMatrix{T})
@@ -313,26 +303,18 @@ function A_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T},
         _jl_gemm('N', 'T', A, B)
     end
 end
-
-function A_mul_Bt_noalias{T<:LapackScalar}(C::StridedMatrix{T},
-                                           A::StridedMatrix{T},
-                                           B::StridedMatrix{T})
-    _jl_gemm_prealloc(C, 'N', 'T', A, B)
-end
+A_mul_Bt{T<:LapackScalar}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'N', 'T', A, B)
+A_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'T', A, B)
+A_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'N', 'T', A, B)
 
 
-function At_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T},
-                                    B::StridedMatrix{T})
-    _jl_gemm('T', 'T', A, B)
-end
-
-function At_mul_Bt_noalias{T<:LapackScalar}(C::StridedMatrix{T},
-                                            A::StridedMatrix{T},
-                                            B::StridedMatrix{T})
-    _jl_gemm_prealloc(C, 'T', 'T', A, B)
-end
+At_mul_Bt{T<:LapackScalar}(A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm('T', 'T', A, B)
+At_mul_Bt{T<:LapackScalar}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'T', 'T', A, B)
+At_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('T', 'T', A, B)
+At_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'T', 'T', A, B)
 
 Ac_mul_B{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
+Ac_mul_B{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(C, A, B)
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
@@ -341,8 +323,12 @@ function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
         _jl_gemm('C', 'N', A, B)
     end
 end
+Ac_mul_B{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm('C', 'N', A, B)
+Ac_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('C', 'N', A, B)
+Ac_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'C', 'N', A, B)
 
 A_mul_Bc{T<:Union(Float64,Float32)}(A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(A, B)
+A_mul_Bc{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = A_mul_Bt(C, A, B)
 function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
@@ -351,11 +337,14 @@ function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
         _jl_gemm('N', 'C', A, B)
     end
 end
+A_mul_Bc{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'N', 'C', A, B)
+A_mul_Bc{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('N', 'C', A, B)
+A_mul_Bc{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'N', 'C', A, B)
 
-function Ac_mul_Bc{T<:LapackScalar}(A::StridedMatrix{T},
-                                    B::StridedMatrix{T})
-    _jl_gemm('C', 'C', A, B)
-end
+Ac_mul_Bc{T<:LapackScalar}(A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm('C', 'C', A, B)
+Ac_mul_Bc{T<:LapackScalar}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = _jl_gemm(C, 'C', 'C', A, B)
+Ac_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul('C', 'C', A, B)
+Ac_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = _jl_generic_matmatmul(C, 'C', 'C', A, B)
 
 function _jl_copy_upper_to_lower(A::StridedMatrix)
     n = size(A, 1)
@@ -379,11 +368,7 @@ function _jl_syrk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
 
     if stride(A, 1) != 1
-        if tA == 'T'
-            return _jl_generic_matmatmul(A.', A)
-        else
-            return _jl_generic_matmatmul(A, A.')
-        end
+        return _jl_generic_matmatmul(tA, tAt, A, A)
     end
 
     # Result array does not need to be initialized as long as beta==0
@@ -418,11 +403,7 @@ function _jl_herk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     if mA == 3 && nA == 3; return matmul3x3(tA,tAt,A,A); end
 
     if stride(A, 1) != 1
-        if tA == 'C'
-            return _jl_generic_matmatmul(A', A)
-        else
-            return _jl_generic_matmatmul(A, A')
-        end
+        return _jl_generic_matmatmul(tA, tAt, A, A)
     end
 
     # Result array does not need to be initialized as long as beta==0
@@ -435,76 +416,33 @@ function _jl_herk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     return C
 end
 
+
+
 function _jl_gemm{T<:LapackScalar}(tA, tB,
                                    A::StridedMatrix{T},
                                    B::StridedMatrix{T})
-    if tA != 'N'
-        (nA, mA) = size(A)
-    else
-        (mA, nA) = size(A)
-    end
-    if tB != 'N'
-        (nB, mB) = size(B)
-    else
-        (mB, nB) = size(B)
-    end
-
-    if nA != mB; error("*: argument shapes do not match"); end
-
-    if mA == 2 && nA == 2 && nB == 2; return matmul2x2(tA,tB,A,B); end
-    if mA == 3 && nA == 3 && nB == 3; return matmul3x3(tA,tB,A,B); end
-
-    if stride(A, 1) != 1 || stride(B, 1) != 1
-        if tA == 'T'
-            A = A.'
-        elseif tA == 'C'
-            A = A'
-        end
-        if tB == 'T'
-            B = B.'
-        elseif tB == 'C'
-            B = B'
-        end
-        return _jl_generic_matmatmul(A, B)
-    end
-
-    # Result array does not need to be initialized as long as beta==0
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
     C = Array(T, mA, nB)
-
-    _jl_blas_gemm(tA, tB, mA, nB, nA,
-                  one(T), A, stride(A, 2),
-                  B, stride(B, 2),
-                  zero(T), C, mA)
-    return C
+    _jl_gemm(C, tA, tB, A, B)
 end
 
-function _jl_gemm_prealloc{T<:LapackScalar}(C::StridedMatrix{T},
-                                            tA,
-                                            tB,
-                                            A::StridedMatrix{T},
-                                            B::StridedMatrix{T})
-    if tA != 'N'
-        (nA, mA) = size(A)
-    else
-        (mA, nA) = size(A)
-    end
-    if tB != 'N'
-        (nB, mB) = size(B)
-    else
-        (mB, nB) = size(B)
-    end
+function _jl_gemm{T<:LapackScalar}(C::StridedMatrix{T}, tA, tB,
+                                   A::StridedMatrix{T},
+                                   B::StridedMatrix{T})
+    mA, nA = lapack_size(tA, A)
+    mB, nB = lapack_size(tB, B)
 
     if nA != mB; error("*: argument shapes do not match"); end
-    if mA != size(C,1) || nB != size(C, 2); error("*: output size is incorrect"); end
 
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(C,tA,tB,A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(C,tA,tB,A,B); end
 
-    # TODO: permit different strides
-    if stride(A, 1) != 1 || stride(B, 1) != 1 || stride(C, 1) != 1
-        error("strides along first dimension must be 1")
+    if stride(A, 1) != 1 || stride(B, 1) != 1
+        return _jl_generic_matmatmul(C, tA, tB, A, B)
     end
 
+    # Result array does not need to be initialized as long as beta==0
     _jl_blas_gemm(tA, tB, mA, nB, nA,
                   one(T), A, stride(A, 2),
                   B, stride(B, 2),

@@ -31,7 +31,8 @@ del_all{T}(s::Set{T}) = (del_all(s.hash); s)
 
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
-next(s::Set, state) = (((k,v),state) = next(s.hash, state); (k,state))
+# NOTE: manually optimized to take advantage of Dict representation
+next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash.keys,i+1))
 
 union() = Set()
 union(s::Set) = copy(s)
@@ -52,9 +53,8 @@ function union(s::Set, sets::Set...)
     return u
 end
 
-inter() = Set()
-inter(s::Set) = copy(s)
-function inter(s::Set, sets::Set...)
+intersect(s::Set) = copy(s)
+function intersect(s::Set, sets::Set...)
     i = copy(s)
     for x in s
         for t in sets
@@ -66,8 +66,8 @@ function inter(s::Set, sets::Set...)
     return i
 end
 
-diff(a::Set, b::Set) = del_each(copy(a),b)
+setdiff(a::Set, b::Set) = del_each(copy(a),b)
 
 |(s::Set...) = union(s...)
-(&)(s::Set...) = inter(s...)
--(a::Set, b::Set) = diff(a,b)
+(&)(s::Set...) = intersect(s...)
+-(a::Set, b::Set) = setdiff(a,b)

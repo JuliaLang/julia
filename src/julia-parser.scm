@@ -718,7 +718,11 @@
        (take-token s)
        (case nxt
 	 ((end)     (list 'if test then))
-	 ((elseif)  (list 'if test then (parse-resword s 'if)))
+	 ((elseif)
+	  `(if ,test ,then
+	       ;; line number for elseif condition
+	       (block ,(line-number-node s)
+		      ,(parse-resword s 'if))))
 	 ((else)    (list 'if test then (parse-resword s 'begin)))
 	 (else      (error (string "unexpected " nxt))))))
     ((let)
@@ -969,12 +973,20 @@
 	    (else
 	     (error "missing separator in array expression")))))))
 
+(define (parse-comprehension s first closer)
+  (let ((r (parse-comma-separated-iters s)))
+    (if (not (eqv? (require-token s) closer))
+	(error (string "expected " closer))
+	(take-token s))
+    `(comprehension ,first ,@r)))
+
 (define (parse-matrix s first closer)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
 	  ((null? (cdr v)) (cons (car v) outer))
 	  (else            (cons (fix 'row v) outer))))
+  (define semicolon (eqv? (peek-token s) #\;))
   (let loop ((vec   (list first))
 	     (outer '()))
     (let ((t  (if (eqv? (peek-token s) #\newline)
@@ -995,7 +1007,12 @@
 	    ((#\] #\})
 	     (error (string "unexpected " t)))
 	    ((for)
-	     (error "invalid comprehension syntax"))
+	     (if (and (not semicolon)
+		      (length= outer 1)
+		      (null? vec))
+		 (begin (take-token s)
+			(parse-comprehension s (car outer) closer))
+		 (error "invalid comprehension syntax")))
 	    (else
 	     (loop (cons (parse-eq* s) vec) outer)))))))
 
@@ -1014,11 +1031,7 @@
 	    ;; (error "old syntax"))
 	    ((for)
 	     (take-token s)
-	     (let ((r (parse-comma-separated-iters s)))
-	       (if (not (eqv? (require-token s) closer))
-		   (error (string "expected " closer))
-		   (take-token s))
-	       `(comprehension ,first ,@r)))
+	     (parse-comprehension s first closer))
 	    (else
 	     (parse-matrix s first closer))))))))
 

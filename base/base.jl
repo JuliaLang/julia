@@ -77,9 +77,6 @@ int(x::Int) = x
 uint(x) = convert(Uint, x)
 uint(x::Uint) = x
 
-# function version of field assignment
-setfield(s, f, v) = (s.(f) = v)
-
 # reflection
 
 names(m::Module) = ccall(:jl_module_names, Any, (Any,), m)::Array{Any,1}
@@ -103,7 +100,7 @@ gc_disable() = ccall(:jl_gc_disable, Void, ())
 current_task() = ccall(:jl_get_current_task, Task, ())
 istaskdone(t::Task) = t.done
 
-cstring(str::ByteString) = str
+bytestring(str::ByteString) = str
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
 object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)

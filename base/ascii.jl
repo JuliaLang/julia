@@ -16,7 +16,8 @@ ref(s::ASCIIString, r::Vector) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, r::Range1{Int}) = ASCIIString(ref(s.data,r))
 ref(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
 strchr(s::ASCIIString, c::Char, i::Integer) = c < 0x80 ? memchr(s.data,c,i) : 0
-strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) = ASCIIString(memcat(a,b,c...))
+strcat(a::ASCIIString, b::ASCIIString, c::ASCIIString...) =
+    ASCIIString([a.data,b.data,map(s->s.data,c)...])
 
 function ucfirst(s::ASCIIString)
     if 'a' <= s[1] <= 'z'
@@ -77,4 +78,4 @@ ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
 convert(::Type{ASCIIString}, a::Array{Uint8,1}) = check_ascii(ASCIIString(a))
-convert(::Type{ASCIIString}, s::String) = ascii(cstring(s))
+convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))

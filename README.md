@@ -69,7 +69,9 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
-GCC version 4.6 is the minimum required to build julia. If using an older version, set the appropriate OPENBLAS flags in Make.inc.
+GCC version 4.6 is the minimum required to build julia.
+
+If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
@@ -81,7 +83,7 @@ Download and install [gfortran from hpc.sf.net](http://hpc.sf.net/), if necessar
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
-Clang is now used by default to build julia on OS X. Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
+Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
 
 #### FreeBSD
 

@@ -1,20 +1,177 @@
-module pkg
+load("$JULIA_HOME/../../base/git.jl")
+load("$JULIA_HOME/../../extras/linprog.jl")
+
+# module Pkg
 #
 # Julia's git-based declarative package manager
 #
 import Base.*
-import git
+import Git
 
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "git://github.com/StefanKarpinski/jul-METADATA.git"
+const DEFAULT_META = "/Users/stefan/projects/pkg/METADATA"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
-# assert that everything is clean or bail
+# generate versions metadata
 
-assert_clean() = git.dirty() &&
-    error("Uncommited changes found -- please commit, stash or discard.")
+function gen_versions(pkg::String)
+    for (ver,sha1) in Git.each_version(pkg)
+        dir = "METADATA/$pkg/versions/$ver"
+        run(`mkdir -p $dir`)
+        open("$dir/sha1","w") do io
+            println(io,sha1)
+        end
+    end
+end
+
+each_package() = @task begin
+    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
+        m = match(r"\d{6} tree [0-9a-f]{40}\t(\S+)$", line)
+        if m != nothing && isdir("METADATA/$(m.captures[1])/versions")
+            produce(m.captures[1])
+        end
+    end
+end
+
+each_version(pkg::String) = @task begin
+    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
+        m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
+        if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
+            ver = convert(VersionNumber,m.captures[1])
+            dir = "METADATA/$pkg/versions/$(m.captures[1])"
+            if isfile("$dir/sha1")
+                produce((ver,dir))
+            end
+        end
+    end
+end
+
+function packages()
+    pkgs = String[]
+    for pkg in each_package()
+        push(pkgs,pkg)
+    end
+    sort!(pkgs)
+end
+
+type Version
+    package::ByteString
+    version::VersionNumber
+end
+isequal(a::Version, b::Version) =
+    a.package == b.package && a.version == b.version
+function isless(a::Version, b::Version)
+    (a.package < b.package) && return true
+    (a.package > b.package) && return false
+    return a.version < b.version
+end
+
+function versions(pkgs)
+    vers = Version[]
+    for pkg in pkgs
+        for (ver,dir) in each_version(pkg)
+            push(vers,Version(pkg,ver))
+        end
+    end
+    sort!(vers)
+end
+
+type VersionSet
+    package::ByteString
+    versions::Vector{VersionNumber}
+
+    function VersionSet(pkg::ByteString, vers::Vector{VersionNumber})
+        if !issorted(vers)
+            error("version numbers must be sorted")
+        end
+        new(pkg,vers)
+    end
+end
+VersionSet(pkg::ByteString) = VersionSet(pkg, VersionNumber[])
+isless(a::VersionSet, b::VersionSet) = a.package < b.package
+
+function contains(s::VersionSet, v::Version)
+    (s.package != v.package) && return false
+    for i in length(s.versions):-1:1
+        (v.version >= s.versions[i]) && return isodd(i)
+    end
+    return isempty(s.versions)
+end
+
+function parse_requires(file::String)
+    reqs = Dict{String,Vector{VersionNumber}}()
+    open(file) do io
+        for line in each_line(io)
+            if ismatch(r"^\s*(?:#|$)", line) continue end
+            line = replace(line, r"#.*$", "")
+            fields = split(line)
+            pkg = shift(fields)
+            if has(reqs,pkg)
+                error("duplicate requires entry for $pkg in $file")
+            end
+            vers = map(x->convert(VersionNumber,x),fields)
+            if !issorted(vers)
+                error("invalid requires entry for $pkg in $file: $vers")
+            end
+            reqs[pkg] = vers
+        end
+    end
+    [ VersionSet(pkg,reqs[pkg]) for pkg in sort!(keys(reqs)) ]
+end
+
+function dependencies(pkgs,vers)
+    deps = Array((Version,VersionSet),0)
+    for pkg in each_package()
+        for (ver,dir) in each_version(pkg)
+            v = Version(pkg,ver)
+            file = "$dir/requires"
+            if isfile(file)
+                for d in parse_requires("$dir/requires")
+                    push(deps,(v,d))
+                end
+            end
+        end
+    end
+    sort!(deps)
+end
+
+older(a::Version, b::Version) = a.package == b.package && a.version < b.version
+
+function solve(reqs::Vector{VersionSet})
+    pkgs = packages()
+    vers = versions(pkgs)
+    deps = dependencies(pkgs,vers)
+
+    n = length(vers)
+    z = zeros(Int,n)
+    u = ones(Int,n)
+
+    G  = [ v == d[1]        ? 1 : 0  for v=vers, d=deps ]
+    G *= [ contains(d[2],v) ? 1 : 0  for d=deps, v=vers ]
+    G += [ older(a,b)       ? 2 : 0  for a=vers, b=vers ]
+    I = find(G)
+    W = zeros(Int,length(I),n)
+    for (i,r) in enumerate(I)
+        W[r,rem(i-1,21)+1] = -1
+        W[r,div(i-1,21)+1] = G[i]
+    end
+    w = iround(linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
+
+    V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
+    R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
+    D = [ d[1] == v ? 1 : contains(d[2],v) ? -1 : 0  for d=deps, v=vers ]
+    b = [  ones(Int,length(pkgs))
+          -ones(Int,length(reqs))
+          zeros(Int,length(deps)) ]
+
+    x = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
+    vers[x .> 0.5]
+end
+solve() = Version[]
+solve(want::VersionSet...) = solve([want...])
+solve(want::String...) = solve([ VersionSet(x) for x in want ])
 
 # create a new empty packge repository
 
@@ -22,8 +179,7 @@ function init(dir::String, meta::String)
     run(`mkdir $dir`)
     cd(dir) do
         run(`git init`)
-        run(`git commit -m --allow-empty "[jul] empty package repo"`)
-        run(`mkdir VERSIONS`)
+        run(`git commit --allow-empty -m"[jul] empty package repo"`)
         install({"METADATA" => meta})
     end
 end
@@ -40,96 +196,13 @@ function clone(dir::String, url::String)
 end
 clone(url::String) = clone(DEFAULT_DIR, url)
 
-# commit or localize package config files
-
-function stage_config(path)
-    cfg = git.read_config(cd(git.dir,path)*"/config")
-    if success(`test -e $path.local`)
-        del_each(cfg, keys(git.read_config("$path.local")))
-    end
-    cfg = merge(git.read_config("$path.config"), cfg)
-    git.write_config("$path.config", cfg)
-    run(`git add -- $path.config`)
-end
-
-function commit_configs()
-    assert_clean()
-    git.each_submodule(false) do name, path, sha1
-        stage_config(path)
-    end
-    if git.staged()
-        run(`git commit -m "[jul] config changes"`)
-    end
-end
-
-function localize_configs()
-    assert_clean()
-    git.each_submodule(false) do name, path, sha1
-        diff = Dict()
-        original = git.read_config("$path.config")
-        modified = git.read_config(cd(git.dir,path)*"/config")
-        for (key,val) in modified
-            if val != get(original,key,nothing)
-                diff[key] = val
-            end
-        end
-        if !isempty(diff)
-            git.write_config("$path.local", diff)
-        else
-            run(`rm -f $path.local`)
-        end
-    end
-end
-
-function each_config(f::Function)
-    git.each_submodule(false) do name, path, sha1
-        cfg = git.read_config("$path.config")
-        if success(`test -e $path.local`)
-            merge!(cfg, git.read_config("$path.local"))
-        end
-        f(name,path,sha1,cfg)
-    end
-end
-
-function assert_config_clean()
-    dirty = Set{ByteString}()
-    each_config() do name, path, sha1, cfg
-        for (key,val) in merge(cfg, git.read_config(cd(git.dir,path)*"/config"))
-            if val != get(cfg,key,nothing)
-                add(dirty,name)
-                break
-            end
-        end
-    end
-    if isempty(dirty) return end
-    print(stderr_stream,
-        "The following packages have unsaved config changes:\n\n",
-        map(pkg->"    $pkg\n", sort!(elements(dirty)))...,
-        "\nPlease either commit, localize or clobber these changes.\n"
-    )
-    error("pkg: unsaved config changes")
-end
-
-function clobber_configs()
-    each_config() do name, path, sha1, cfg
-        git.write_config(cd(git.dir,path)*"/config", cfg)
-    end
-end
-
 # record all submodule commits as tags
 
 function tag_submodules()
-    git.each_submodule(true) do name, path, sha1
+    Git.in_each_submodule(true) do name, path, sha1
         run(`git fetch-pack -q $path HEAD`)
         run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
         run(`git --git-dir=$path/.git gc -q`)
-    end
-end
-
-function save_heads()
-    git.each_submodule(false) do name, path, sha1
-        head = readchomp(cd(git.dir,path)*"/HEAD")
-        git.modules(`submodule.$name.head $head`)
     end
 end
 
@@ -140,8 +213,8 @@ function checkout(rev::String)
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
     run(`git ls-files --other` | `xargs rm -rf`)
-    git.each_submodule(true) do name, path, sha1
-        branch = try git.modules(`submodule.$name.branch`) end
+    Git.in_each_submodule(true) do name, path, sha1
+        branch = try Git.modules(`submodule.$name.branch`) end
         if branch != nothing
             cd(path) do
                 run(`git checkout -B $branch $sha1`)
@@ -154,10 +227,8 @@ checkout() = checkout("HEAD")
 # commit the current state of the repo with the given message
 
 function commit(msg::String)
-    assert_config_clean()
     tag_submodules()
-    save_heads()
-    git.canonicalize_config(".gitmodules")
+    Git.canonicalize_config(".gitmodules")
     run(`git add .gitmodules`)
     run(`git commit -m $msg`)
 end
@@ -171,7 +242,6 @@ function install(urls::Associative)
     for pkg in names
         url = urls[pkg]
         run(`git submodule add --reference $dir $url $pkg`)
-        stage_config(pkg)
     end
     commit("[jul] install "*join(names, ", "))
     checkout()
@@ -192,9 +262,7 @@ function remove(names::AbstractVector)
     sort!(names)
     for pkg in names
         run(`git rm --cached -- $pkg`)
-        git.modules(`--remove-section submodule.$pkg`)
-        run(`git rm $pkg.config`)
-        run(`rm -f $pkg.local`)
+        Git.modules(`--remove-section submodule.$pkg`)
     end
     run(`git add .gitmodules`)
     commit("[jul] remove "*join(names, ", "))
@@ -211,9 +279,6 @@ function push()
 end
 
 function pull()
-    # abort if things aren't committed
-    assert_clean()
-
     # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
@@ -225,14 +290,14 @@ function pull()
     L = readchomp(`git rev-parse --verify HEAD`)
     R = readchomp(`git rev-parse --verify FETCH_HEAD`)
     B = readchomp(`git merge-base $L $R`)
-    Rc = git.read_config_blob("$R:.gitmodules")
-    Rs = git.config_sections(Rc)
+    Rc = Git.read_config_blob("$R:.gitmodules")
+    Rs = Git.config_sections(Rc)
 
     # intelligently 3-way merge .gitmodules versions
-    if git.different(L,R,".gitmodules")
-        Bc = git.read_config_blob("$B:.gitmodules")
-        Lc = git.read_config_blob("$L:.gitmodules")
-        Cc, conflicts, deleted = git.merge_configs(Bc,Lc,Rc)
+    if Git.different(L,R,".gitmodules")
+        Bc = Git.read_config_blob("$B:.gitmodules")
+        Lc = Git.read_config_blob("$L:.gitmodules")
+        Cc, conflicts, deleted = Git.merge_configs(Bc,Lc,Rc)
         # warn about config conflicts
         for (key,vals) in conflicts
             print(stderr_stream,
@@ -253,13 +318,13 @@ function pull()
             run(`rm -rf $path`)
         end
         # write the result (unconditionally) and stage it (if no conflicts)
-        git.write_config(".gitmodules", Cc)
+        Git.write_config(".gitmodules", Cc)
         if isempty(conflicts) run(`git add .gitmodules`) end
     end
 
     # merge submodules
-    git.each_submodule(false) do name, path, sha1
-        if has(Rs,"submodule.$name") && git.different(L,R,path)
+    Git.in_each_submodule(false) do name, path, sha1
+        if has(Rs,"submodule.$name") && Git.different(L,R,path)
             alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
                 run(`git merge --no-edit $alt`)
@@ -268,30 +333,8 @@ function pull()
         end
     end
 
-    # merge package configs
-    git.each_submodule(false) do name, path, sha1
-        Bpc = git.read_config_blob("$B:$path.config")
-        Lpc = git.read_config_blob("$L:$path.config")
-        Rpc = git.read_config_blob("$R:$path.config")
-        Cpc, conflicts= git.merge_configs(Bpc,Lpc,Rpc)
-        # warn about config conflicts
-        for (key,vals) in conflicts
-            print(stderr_stream,
-                "\nPackage config conflict for package $name and $key:\n",
-                "  local value  = $(vals[1])\n",
-                "  remote value = $(vals[2])\n",
-                "\n",
-                "Both values written to $path.config -- please edit and choose one.\n\n",
-            )
-            Cpc[key] = vals
-        end
-        # write the result (unconditionally) and stage it (if no conflicts)
-        git.write_config("$path.config", Cpc)
-        if isempty(conflicts) run(`git add -- $path.config`) end
-    end
-
     # check for remaining merge conflicts
-    if git.unstaged()
+    if Git.unstaged()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
         print(stderr_stream,
@@ -309,4 +352,4 @@ function pull()
     tag_submodules()
 end
 
-end # module
+# end # module

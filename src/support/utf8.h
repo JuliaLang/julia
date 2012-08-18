@@ -1,7 +1,7 @@
 #ifndef UTF8_H
 #define UTF8_H
 
-extern int locale_is_utf8;
+extern DLLEXPORT int locale_is_utf8;
 
 /* is c the start of a utf8 sequence? */
 #define isutf(c) (((c)&0xC0)!=0x80)

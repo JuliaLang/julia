@@ -715,17 +715,17 @@ any options turned on just uses ``r"..."``:
     julia> typeof(ans)
     Regex
 
-To check if a regex matches a string, use the ``matches`` function:
+To check if a regex matches a string, use the ``ismatch`` function:
 
 ::
 
-    julia> matches(r"^\s*(?:#|$)", "not a comment")
+    julia> ismatch(r"^\s*(?:#|$)", "not a comment")
     false
 
-    julia> matches(r"^\s*(?:#|$)", "# a comment")
+    julia> ismatch(r"^\s*(?:#|$)", "# a comment")
     true
 
-As one can see here, ``matches`` simply returns true or false,
+As one can see here, ``ismatch`` simply returns true or false,
 indicating whether the given regex matches the string or not. Commonly,
 however, one wants to know not just whether a string matched, but also
 *how* it matched. To capture this information about a match, use the
@@ -738,7 +738,7 @@ however, one wants to know not just whether a string matched, but also
     julia> match(r"^\s*(?:#|$)", "# a comment")
     RegexMatch("#")
 
-If the regular expression does not match the given string, ``matches``
+If the regular expression does not match the given string, ``ismatch``
 returns ``nothing`` — a special value that does not print anything at
 the interactive prompt. Other than not printing, it is a completely
 normal value and you can test for it programmatically:
@@ -843,7 +843,7 @@ manpage <http://perldoc.perl.org/perlre.html#Modifiers>`_:
         character whatsoever, even a newline, which normally it would
         not match.
 
-        Used together, as /ms, they let the "." match any character
+        Used together, as r""ms, they let the "." match any character
         whatsoever, while still allowing "^" and "$" to match,
         respectively, just after and just before newlines within the
         string.

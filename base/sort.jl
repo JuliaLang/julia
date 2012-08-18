@@ -353,9 +353,9 @@ function _jl_quickselect(a::AbstractArray, k::Int, lo::Int, hi::Int)
         i, j = lo, hi
         pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])
         while i < j
-            while a[i] < pivot; i += 1; end
-            while a[j] > pivot; j -= 1; end
-            if a[i] == a[j]
+            while isless(a[i], pivot); i += 1; end
+            while isless(pivot, a[j]); j -= 1; end
+            if isequal(a[i], a[j])
                 i += 1
             elseif i < j
                 a[i], a[j] = a[j], a[i]
