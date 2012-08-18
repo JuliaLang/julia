@@ -10,7 +10,7 @@ IntSet(args...) = (s=IntSet(); for a in args; add(s,a); end; s)
 
 similar(s::IntSet) = IntSet()
 
-copy(s::IntSet) = or!(IntSet(), s)
+copy(s::IntSet) = union!(IntSet(), s)
 
 function grow(s::IntSet, top::Integer)
     if top >= s.limit
@@ -56,6 +56,8 @@ function del_each(s::IntSet, ns)
     return s
 end
 
+setdiff(a::IntSet, b::IntSet) = del_each(copy(a),b)
+
 function del_all(s::IntSet)
     s.bits[:] = 0
     return s
@@ -79,7 +81,7 @@ end
 
 function copy_to(to::IntSet, from::IntSet)
     del_all(to)
-    or!(to, from)
+    union!(to, from)
 end
 
 function has(s::IntSet, n::Integer)
@@ -136,7 +138,7 @@ end
 
 
 # Math functions
-function or!(s::IntSet, s2::IntSet)
+function union!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         grow(s, s2.limit)
     end
@@ -153,9 +155,11 @@ function or!(s::IntSet, s2::IntSet)
     s
 end
 
-add_each(s::IntSet, s2::IntSet) = or!(s, s2)
+union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 
-function and!(s::IntSet, s2::IntSet)
+add_each(s::IntSet, s2::IntSet) = union!(s, s2)
+
+function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         grow(s, s2.limit)
     end
@@ -172,13 +176,17 @@ function and!(s::IntSet, s2::IntSet)
     s
 end
 
-function not!(s::IntSet)
+intersect(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+
+function complement!(s::IntSet)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
     s.fill1s = ~s.fill1s
     s
 end
+
+complement(s::IntSet) = complement!(copy(s))
 
 function xor!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -197,17 +205,12 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
-~(s::IntSet) = not!(copy(s))
-|(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(copy(s1), s2) : or!(copy(s2), s1))
-(&)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(copy(s1), s2) : and!(copy(s2), s1))
 ($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(copy(s1), s2) : xor!(copy(s2), s1))
 
-union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
-union(s1::IntSet, s2::IntSet) = s1 | s2
-intersection!(s1::IntSet, s2::IntSet) = and!(s1, s2)
-intersection(s1::IntSet, s2::IntSet) = s1 & s2
-complement!(s1::IntSet) = not!(s1)
-complement(s1::IntSet) = ~s1
+|(s::IntSet, s2::IntSet) = union(s, s2)
+(&)(s::IntSet, s2::IntSet) = intersect(s, s2)
+-(a::IntSet, b::IntSet) = setdiff(a,b)
+~(s::IntSet) = complement(s)
 
 function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s
