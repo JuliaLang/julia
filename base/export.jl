@@ -1023,6 +1023,7 @@ export
     read,
     readall,
     readchomp,
+    readdir,
     readline,
     readlines,
     readuntil,

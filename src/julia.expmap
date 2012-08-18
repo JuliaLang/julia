@@ -70,6 +70,11 @@
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
     jl_stdout_stream;
+    jl_sizeof_uv_fs_t;
+    jl_uv_fs_req_cleanup;
+    jl_readdir;
+    jl_uv_fs_t_ptr;
+    jl_uv_fs_t_ptr_offset;
     jl_sizeof_stat;
     jl_stat;
     jl_lstat;
