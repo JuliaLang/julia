@@ -239,8 +239,6 @@ function download_file(url::String)
 end
 
 function readdir(path::String)
-  path = tilde_expand(path)
-
   # Allocate space for uv_fs_t struct
   uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int, ()))
 
@@ -271,4 +269,5 @@ function readdir(path::String)
   entries
 end
 
+readdir(cmd::Cmd) = readdir(string(cmd)[2:end-1])
 readdir() = readdir(".")
