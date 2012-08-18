@@ -96,14 +96,14 @@ end
 
 function has(s::IntSet, n::Integer)
     if n >= s.limit
-        s.fill1s
+        s.fill1s && n >= 0
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
 end
 
 start(s::IntSet) = int64(0)
-done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit)
+done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
 function next(s::IntSet, i)
     if i >= s.limit
         n = i
@@ -130,8 +130,8 @@ function pop(s::IntSet)
     n
 end
 
-length(s::IntSet) =
-    (s.fill1s ? Inf : int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)))
+length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
+    (s.fill1s ? typemax(Int) - s.limit : 0)
 
 function show(io, s::IntSet)
     print(io, "IntSet(")
@@ -147,7 +147,7 @@ function show(io, s::IntSet)
         first = false
     end
     if s.fill1s
-        print(io, ", ...)")
+        print(io, ", ..., ", typemax(Int)-1, ")")
     else
         print(io, ")")
     end
