@@ -21,6 +21,21 @@
 #include <stdio.h>
 #ifdef __WIN32__
 # define WIN32_LEAN_AND_MEAN
+// Copied from MINGW_FLOAT_H which may not be found due to a colision with the builtin gcc float.h
+// eventually we can probably integrate this into OpenLibm.
+void __cdecl __MINGW_NOTHROW _fpreset (void);
+void __cdecl __MINGW_NOTHROW fpreset (void);
+#define _FPE_INVALID		0x81
+#define _FPE_DENORMAL		0x82
+#define _FPE_ZERODIVIDE		0x83
+#define _FPE_OVERFLOW		0x84
+#define _FPE_UNDERFLOW		0x85
+#define _FPE_INEXACT		0x86
+#define _FPE_UNEMULATED		0x87
+#define _FPE_SQRTNEG		0x88
+#define _FPE_STACKOVERFLOW	0x8a
+#define _FPE_STACKUNDERFLOW	0x8b
+#define _FPE_EXPLICITGEN	0x8c    /* raise( SIGFPE ); */
 # include <windows.h>
 #endif
 #if defined(__linux__)
@@ -48,18 +63,38 @@ static void jl_find_stack_bottom(void)
     jl_stack_lo = jl_stack_hi - stack_size;
 }
 
-#ifndef __WIN32__
+#ifdef __WIN32__
+void fpe_handler(int arg,int num)
+#else
 void fpe_handler(int arg)
+#endif
 {
     (void)arg;
+#ifndef __WIN32__
     sigset_t sset;
     sigemptyset(&sset);
     sigaddset(&sset, SIGFPE);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
-
+#else
+    fpreset();
+    switch(num) {
+        case _FPE_INVALID:
+        case _FPE_OVERFLOW:
+        case _FPE_UNDERFLOW:
+        default:
+        jl_errorf("Unexpected FPE Error");
+        break;
+        case _FPE_ZERODIVIDE:
+#endif
     jl_raise(jl_divbyzero_exception);
+#ifdef __WIN32__
+        break;
+    }
+#endif
 }
 
+
+#ifndef __WIN32__
 void segv_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -351,6 +386,12 @@ void julia_init(char *imageFile)
         JL_PRINTF(JL_STDERR, "sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
+#else
+    if( signal( SIGFPE, (void (__cdecl *)(int)) fpe_handler ) == SIG_ERR )
+     {
+        JL_PRINTF(JL_STDERR, "Couldn't set SIGFPE\n" );
+        jl_exit(1);
+     }
 #endif
 
     atexit(jl_atexit_hook);
