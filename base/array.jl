@@ -1191,7 +1191,7 @@ function vcat{T}(arrays::Array{T,1}...)
     ptr = pointer(arr)
     offset = 0
     if isa(T,BitsKind)
-        elsz = div(T.nbits,8)
+        elsz = sizeof(T)
     else
         elsz = div(WORD_SIZE,8)
     end

@@ -2401,7 +2401,7 @@ void jl_init_types(void)
     jl_init_int32_int64_cache();
     jl_int32_type->bnbits = jl_box_int32(32);
     jl_int64_type->bnbits = jl_box_int32(64);
-    jl_tupleset(jl_bits_kind->types, 3, (jl_value_t*)jl_int32_type);
+    jl_tupleset(jl_bits_kind->types, 6, (jl_value_t*)jl_int32_type);
 
     jl_bool_type = NULL;
     jl_bool_type = jl_new_bits_type((jl_value_t*)jl_symbol("Bool"),
