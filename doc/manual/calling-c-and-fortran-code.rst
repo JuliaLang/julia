@@ -82,7 +82,7 @@ of an environment variable, one makes a call like this:
     julia> path = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
     Ptr{Uint8} @0x00007fff5fbfd670
 
-    julia> cstring(path)
+    julia> bytestring(path)
     "/bin/zsh"
 
 Note that the argument type tuple must be written as ``(Ptr{Uint8},)``,
@@ -111,11 +111,11 @@ in
 
     function getenv(var::String)
       val = ccall(dlsym(libc, :getenv),
-                  Ptr{Uint8}, (Ptr{Uint8},), cstring(var))
+                  Ptr{Uint8}, (Ptr{Uint8},), bytestring(var))
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
-      cstring(val)
+      bytestring(val)
     end
 
 The C ``getenv`` function indicates an error by returning ``NULL``, but
@@ -142,7 +142,7 @@ machine's hostname:
       ccall(dlsym(libc, :gethostname), Int32,
             (Ptr{Uint8}, Ulong),
             hostname, length(hostname))
-      return cstring(convert(Ptr{Uint8}, hostname))
+      return bytestring(convert(Ptr{Uint8}, hostname))
     end
 
 This example first allocates an array of bytes, then calls the C library
