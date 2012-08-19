@@ -3,13 +3,40 @@
 show(x) = show(OUTPUT_STREAM::IOStream, x)
 
 print(io::IOStream, s::Symbol) = ccall(:jl_print_symbol, Void, (Ptr{Void}, Any,), io, s)
-show(io, x) = ccall(:jl_show_any, Void, (Any, Any,), io::IOStream, x)
 
-showcompact(io, x) = show(io, x)
+function show(io, x)
+    if isa(io, IOStream) ccall(:jl_show_any, Void, (Any, Any,), io, x)
+    else                 default_show(io, x)
+    end
+end
+
+default_show(io::IO, x::Union(Type, Function)) = print(io, repr(x))
+function default_show(io::IO, x) 
+    isa(typeof(x), CompositeKind) ? show_composite(io, x) : print(io, repr(x))
+end
+
+function show_composite(io, x)
+    T::CompositeKind = typeof(x)
+    names = filter(name->(name!=symbol("")), [T.names...])
+    values = {}
+    for name in names
+        try        push(values, getfield(x, name))
+        catch err; error("default_show: Error accessing field \"$name\" in $T")
+        end
+    end
+    print(io, T.name, '('); show_comma_list(io, values...); print(io, ')')
+end
+show_comma_list(io::IO) = nothing
+function show_comma_list(io::IO, arg, args...)    
+    rshow(io, arg)
+    for arg in args print(io, ", "); rshow(io, arg) end
+end
+
+showcompact(io, x) = rshow(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
 show(io, s::Symbol) = print(io, s)
-show(io, tn::TypeName) = show(io, tn.name)
+show(io, tn::TypeName) = rshow(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
 show(io, n::Integer) = (write(io, dec(n));nothing)
@@ -30,7 +57,7 @@ end
 
 function show(io, l::LambdaStaticData)
     print(io, "AST(")
-    show(io, l.ast)
+    rshow(io, l.ast)
     print(io, ")")
 end
 
@@ -46,7 +73,7 @@ function show_delim_array(io, itr, op, delim, cl, delim_one)
             if newline
                 if multiline; println(io); end
             end
-	    show(io, x)
+	    rshow(io, x)
 	    if done(itr,state)
                 if delim_one && first
                     print(io, delim)
@@ -94,29 +121,29 @@ function show(io, e::Expr)
     elseif is(hd,:return)
         print(io, "return $(e.args[1])")
     elseif is(hd,:string)
-        show(io, e.args[1])
+        rshow(io, e.args[1])
     elseif is(hd,symbol("::"))
-        show(io, e.args[1])
+        rshow(io, e.args[1])
         print(io, "::")
-        show(io, e.args[2])
+        rshow(io, e.args[2])
     elseif is(hd,:quote)
         show_quoted_expr(io, e.args[1])
     elseif is(hd,:body) || is(hd,:block)
         println(io, "\nbegin")
         for a in e.args
             print(io, "  ")
-            show(io, a)
+            rshow(io, a)
             println(io)
         end
         println(io, "end")
     elseif is(hd,:comparison)
         for a in e.args
-            show(io, a)
+            rshow(io, a)
         end
     elseif is(hd,:(.))
-        show(io, e.args[1])
+        rshow(io, e.args[1])
         print(io, '.')
-        show(io, e.args[2])
+        rshow(io, e.args[2])
     else
         print(io, hd)
         show_comma_array(io, e.args,'(',')')
@@ -136,7 +163,7 @@ function show_quoted_expr(io, a1)
         println(io, "\nquote")
         for a in a1.args
             print(io, "  ")
-            show(io, a)
+            rshow(io, a)
             println(io, )
         end
         println(io, "end")
@@ -166,7 +193,7 @@ function show(io, e::TypeError)
     end
 end
 
-show(io, e::LoadError) = (show(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
+show(io, e::LoadError) = (rshow(io, e.error); print(io, "\nat $(e.file):$(e.line)"))
 show(io, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
 show(io, ::DivideByZeroError) = print(io, "error: integer divide by zero")
 show(io, ::StackOverflowError) = print(io, "error: stack overflow")
@@ -186,7 +213,7 @@ function show(io, e::MethodError)
 end
 
 function show(io, bt::BackTrace)
-    show(io, bt.e)
+    rshow(io, bt.e)
     t = bt.trace
     # we may not declare :_jl_eval_user_input
     # directly so that we get a compile error
@@ -212,7 +239,7 @@ function show(io, m::Method)
     if !isempty(tv)
         show_delim_array(io, tv, '{', ',', '}', false)
     end
-    show(io, m.sig)
+    rshow(io, m.sig)
     li = m.func.code
     if li.line > 0
         print(io, " at ", li.file, ":", li.line)
@@ -225,7 +252,7 @@ function show(io, mt::MethodTable)
     d = mt.defs
     while !is(d,())
         print(io, name)
-        show(io, d)
+        rshow(io, d)
         d = d.next
         if !is(d,())
             println(io)

@@ -270,7 +270,7 @@ sprint(f::Function, args...) = sprint(0, f, args...)
 
 function repr(x)
     s = memio(0, false)
-    show(s, x)
+    rshow(s, x)
     takebuf_string(s)
 end
 

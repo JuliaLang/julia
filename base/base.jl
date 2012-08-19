@@ -60,11 +60,14 @@ type ShowError <: Exception
     err::Exception
 end
 
-show(io, bt::BackTrace) = show(io,bt.e)
+export rshow
+rshow(io, x) = show(io, x)  # hook to allow showing of self-referential data
+
+show(io, bt::BackTrace) = rshow(io,bt.e)
 
 function show(io, se::ShowError)
     println("Error showing value of type ", typeof(se.val), ":")
-    show(io, se.err)
+    rshow(io, se.err)
 end
 
 method_missing(f, args...) = throw(MethodError(f, args))
