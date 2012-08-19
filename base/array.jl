@@ -16,6 +16,20 @@ size(a::Array, d) = arraysize(a, d)
 size(a::Matrix) = (arraysize(a,1), arraysize(a,2))
 length(a::Array) = arraylen(a)
 
+function stride(a::Array, i::Integer)
+    s = 1
+    if i > ndims(a)
+        return numel(a)
+    end
+    for n=1:(i-1)
+        s *= size(a, n)
+    end
+    return s
+end
+strides{T}(a::Array{T,1}) = (1,)
+strides{T}(a::Array{T,2}) = (1, size(a,1))
+strides{T}(a::Array{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
+
 ## copy ##
 
 function copy_to{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
@@ -1716,6 +1730,11 @@ function permute(A::StridedArray, perm)
         offset+=i
     end
     offset = 1-offset
+
+    if isa(A,SubArray)
+        offset += (A.first_index-1)
+        A = A.parent
+    end
 
     function permute_one(ivars)
         len = length(ivars)

@@ -4,7 +4,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
-    strides::Array{Int,1}
+    strides::Array{Int,1}  # for accessing parent with linear indexes
     first_index::Int
 
     #linear indexing constructor (scalar)
@@ -25,17 +25,18 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
             newdims = Array(Int, 0)
             newstrides = Array(Int, 0)
             newfirst = 1
-            pstrides = strides(p)
+            pstride = 1
             for j = 1:length(i)
                 if isa(i[j], Int)
-                    newfirst += (i[j]-1)*pstrides[j]
+                    newfirst += (i[j]-1)*pstride
                 else
                     push(newdims, length(i[j]))
                     #may want to return error if step(i[j]) <= 0
-                    push(newstrides, isa(i[j],Range1) ? pstrides[j] :
-                         pstrides[j] * step(i[j]))
-                    newfirst += (first(i[j])-1)*pstrides[j]
+                    push(newstrides, isa(i[j],Range1) ? pstride :
+                         pstride * step(i[j]))
+                    newfirst += (first(i[j])-1)*pstride
                 end
+                pstride *= size(p,j)
             end
             new(p, i, tuple(newdims...), newstrides, newfirst)
         end
@@ -309,9 +310,14 @@ function assign(s::SubArray, v, I::Indices...)
     assign(s.parent, v, newindexes...)
 end
 
-strides(s::SubArray) = tuple(s.strides...)
-
-stride(s::SubArray, i::Integer) = s.strides[i]
+function stride(s::SubArray, i::Integer)
+    k = stride(s.parent, i)
+    j = s.indexes[i]
+    if isa(j,Range)
+        return k*step(j)
+    end
+    return k
+end
 
 convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)

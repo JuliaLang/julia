@@ -1023,11 +1023,11 @@ Basic functions
 
 .. function:: stride(A, k)
 
-   Returns the size of the stride along dimension k
+   Returns the distance in memory (in number of elements) between adjacent elements in dimension k
 
 .. function:: strides(A)
 
-   Returns a tuple of the linear index distances between adjacent elements in each dimension
+   Returns a tuple of the memory strides in each dimension
 
 Constructors
 ~~~~~~~~~~~~
