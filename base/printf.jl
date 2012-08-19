@@ -319,7 +319,7 @@ function _gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
         end
     else
         if width > 1
-            padding = :($width-pt-neg)
+            padding = :($width-(pt > 0 ? pt : 1)-neg)
         end
     end
     # print space padding
