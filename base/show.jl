@@ -201,6 +201,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_list(io, args, head, indent)
     elseif has(_expr_infix_wide, head) && nargs == 2
         show_list(io, args, " $head ", indent)
+    elseif is(head, symbol("::")) && nargs == 1
+        print(io, "::")        
+        show_unquoted(io, args[1], indent)
     elseif has(_expr_parens, head)               # :tuple/:vcat/:cell1d
         op, cl = _expr_parens[head]
         print(io, op)
