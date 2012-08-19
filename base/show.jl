@@ -95,7 +95,10 @@ function show(io, e::Expr)
         print(io, "return $(e.args[1])")
     elseif is(hd,:string)
         show(io, e.args[1])
-    elseif is(hd,symbol("::"))
+    elseif is(hd,symbol("::")) && length(e.args) == 1
+        print(io, "::")
+        show(io, e.args[1])
+    elseif is(hd,symbol("::")) && length(e.args) == 2
         show(io, e.args[1])
         print(io, "::")
         show(io, e.args[2])
