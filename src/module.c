@@ -240,7 +240,7 @@ jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname)
 
 void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
 {
-    jl_set_const(m, macroname, (jl_value_t*)f);
+    jl_set_global(m, macroname, (jl_value_t*)f);
 }
 
 DLLEXPORT jl_value_t *jl_get_current_module()
