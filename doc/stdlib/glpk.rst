@@ -387,7 +387,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     of ``rows_ids`` which will be considered, and must be less or equal to the length id ``rows_ids``. If ``num_rows`` is 0, ``rows_ids``
     can be ``nothing``. In Julia, ``num_rows`` is optional (it's inferred from ``rows_ids`` if not given).
 
-.. function:: glp_del_cols(glp_prob, cols_ids) =
+.. function:: glp_del_cols(glp_prob, cols_ids)
 
     Deletes columns from the problem object. See ``glp_del_rows``.
 
