@@ -164,6 +164,15 @@ function NamedVector{K<:ByteString,V}(a::Associative{K,V})
 	ret
 end
 
+function NamedVector{K<:ByteString,V}(keys::Vector{K}, values::Vector{V})
+	ret = NamedVector{V}()
+	for i = 1:length(keys)
+		ret[keys[i]] = values[i]
+	end
+	ret
+end
+
+
 # assignment by a string replaces or appends
 function assign(id::NamedVector, v, key::ByteString)
     if has(id.idx, key)

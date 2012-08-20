@@ -78,4 +78,8 @@ test_group("iteration")
 test_group("construction")
 xx=NamedVector({"asdf"=>1, "qwerty"=>2})
 @test typeof(xx) == NamedVector{Int64}
+xx2=NamedVector(["asdf", "querty", "uiop"], [11,22,33])
+@test typeof(xx2) == NamedVector{Int64}
+@test xx2["querty"] == 22
+@test xx2[3] == 33
 
