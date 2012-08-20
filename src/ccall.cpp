@@ -265,7 +265,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == &jl_array_ptr) {
         Value *ary = emit_expr(args[4], ctx);
         JL_GC_POP();
-        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),T_pint8),
+        return mark_julia_type(builder.CreateBitCast(emit_arrayptr(ary),lrt),
                                rt);
     }
 
