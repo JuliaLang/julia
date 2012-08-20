@@ -608,6 +608,16 @@ DLLEXPORT uv_lib_t *jl_wrap_raw_dl_handle(void *handle)
     return lib;
 }
 
+DLLEXPORT int jl_uv_fs_result(uv_fs_t *f)
+{
+    return f->result;
+}
+
+DLLEXPORT int jl_sizeof_uv_fs_t()
+{
+    return sizeof(uv_fs_t);
+}
+
 //#include "os_detect.h"
 
 #ifdef __cplusplus

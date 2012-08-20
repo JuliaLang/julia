@@ -1075,6 +1075,7 @@ typedef union jl_any_stream {
 } jl_any_stream;
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data);
+DLLEXPORT int jl_uv_fs_result(uv_fs_t *f);
 
 extern DLLEXPORT jl_task_t * volatile jl_current_task;
 extern DLLEXPORT jl_task_t *jl_root_task;

@@ -44,7 +44,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
 
     if (*bp != HT_NOTFOUND) {
         if ((*bp)->owner != m) {
-            ios_printf(JL_STDERR,
+            JL_PRINTF(JL_STDERR,
                        "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
         else {

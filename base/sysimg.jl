@@ -216,8 +216,9 @@ export
     @B_str, @b_str, @cmd, @time, @elapsed, @windows_only, @unix_only,
     @sync, @spawn, @spawnlocal, @spawnat, @everywhere, @parallel,
     @gensym, @eval, @task, @thunk, @L_str, @vectorize_1arg,
-    @vectorize_2arg, @printf, @sprintf, @memoize
-
+    @vectorize_2arg, @printf, @sprintf, @memoize,
+    #libuv branch stuff
+    systmpdir
 if false
     # simple print definitions for debugging. enable these if something
     # goes wrong during bootstrap before printing code is available.
@@ -292,6 +293,7 @@ include("inference.jl")
 include("io.jl")
 include("buffer.jl")
 include("stream.jl")
+import Base.FS.*
 include("char.jl")
 include("string.jl")
 include("ascii.jl")

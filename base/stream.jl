@@ -10,6 +10,7 @@
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
 
 
+
 typealias PtrSize Int
 globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
 mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},())
@@ -852,11 +853,11 @@ function arg_gen(head)
     if applicable(start,head)
         vals = ByteString[]
         for x in head
-            push(vals,cstring(x))
+            push(vals,string(x))
         end
         return vals
     else
-        return ByteString[cstring(head)]
+        return ByteString[string(head)]
     end
 end
 
@@ -865,7 +866,7 @@ function arg_gen(head, tail...)
     tail = arg_gen(tail...)
     vals = ByteString[]
     for h = head, t = tail
-        push(vals,cstring(strcat(h,t)))
+        push(vals,bytestring(strcat(h,t)))
     end
     vals
 end
@@ -1000,3 +1001,91 @@ function connect_to_host(host::ByteString,port::Uint16)
     println("done")
     return sock
 end
+
+## UV based file operations ##
+
+module FS
+
+export File, open, close, unlink, write,
+    JL_O_WRONLY, JL_O_RDONLY, JL_O_RDWR, JL_O_APPEND, JL_O_CREAT, JL_O_EXCL,
+    JL_O_TRUNC,JL_O_TEMPORARY,JL_O_SHORT_LIVED,JL_O_SEQUENTIAL,JL_O_RANDOM
+
+import Base.*
+
+include("file_constants.jl")
+
+abstract AbstractFile <: IO
+
+const _sizeof_uv_fs_t = ccall(:jl_sizeof_uv_fs_t,Int32,())
+
+type File <: AbstractFile
+    path::String
+    open::Bool
+    handle::Int32
+    File(path::String) = new(path,false,-1)
+end
+
+type AsyncFile <: AbstractFile
+    path::String
+    open::Bool
+end
+
+#TODO proper error translation
+uv_err_to_string(err::Int32) = string(err)
+uv_error(err::Int32) = err != 0 ? error(uv_err_to_string(err)) : nothing
+
+_uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
+
+function open(f::File,flags::Integer)
+    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    err = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
+                         globalEventLoop(),req,bytestring(f.path),flags,0,C_NULL)
+    uv_error(err)
+    f.handle = _uv_fs_result(req)
+    f.open = true
+    ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
+    f
+end
+open(f::String,flags::Integer) = open(File(string))
+
+function close(f::File)
+    if(!f.open)
+        error("File is already closed")
+    end
+    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Void}),
+                         globalEventLoop(),req,f.handle,C_NULL)
+    uv_error(err)
+    f.handle = -1
+    f.open = false
+    ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
+    f
+end
+
+function unlink(p::String)
+    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    err = ccall(:uv_fs_unlink,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Ptr{Void}),
+                         globalEventLoop(),req,bytestring(p),C_NULL)
+    uv_error(err)
+end
+function unlink(f::File)
+if(f.open)
+    close(f)
+end
+unlink(f.path)
+f
+end
+
+function write(f::File,buf::Ptr{Uint8},len::Int32,offset::Int64)
+    if(!f.open)
+        error("File is not open")
+    end
+    req = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_fs_t)))
+    err = ccall(:uv_fs_close,Int32,(Ptr{Void},Ptr{Void},Int32,Ptr{Uint8},Int32,Int64,Ptr{Void}),
+                         globalEventLoop(),req,f.handle,buf,len,offset,C_NULL)
+    uv_error(err)
+    f
+end
+
+end
+
