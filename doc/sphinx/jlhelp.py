@@ -43,8 +43,8 @@ class JuliaHelpTranslator(TextTranslator):
     def depart_desc(self, node):
         if node.attributes['objtype'] == 'attribute':
             return
-        self.add_text('"}\n', escape=False)
-        self.end_state(first='{E"%s"  E"%s"  E"' % ( \
+        self.add_text('"),\n', escape=False)
+        self.end_state(first='(E"%s",\n E"%s",\n E"' % ( \
             jl_escape(self._current_title), \
             jl_escape(self._desc_name)))
         self.in_desc = False
@@ -78,7 +78,7 @@ class JuliaHelpBuilder(TextBuilder):
             f = codecs.open(outfilename, 'w', 'utf-8')
             try:
                 f.write('# automatically generated -- do not edit\n\n' +
-                        '[\n\n')
+                        '{\n\n')
 
                 for docname in self.status_iterator(
                     sorted(docnames), 'processing... ', darkgreen, len(docnames)):
@@ -86,7 +86,7 @@ class JuliaHelpBuilder(TextBuilder):
                     self.writer.write(doctree, f)
                     f.write("\n")
 
-                f.write('\n]\n')
+                f.write('\n}\n')
             finally:
                 f.close()
         except (IOError, OSError), err:
