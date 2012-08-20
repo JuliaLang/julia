@@ -1654,7 +1654,7 @@ function permute(B::BitArray, perm)
 
         #inner most loop
         toReturn[1] = quote
-            P[ind] = B[+($counts...)+offset]
+            P[ind] = B[+($(counts...))+offset]
             ind+=1
             $counts[1]+= $stridenames[1]
         end

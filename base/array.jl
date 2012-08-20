@@ -1752,7 +1752,7 @@ function permute(A::StridedArray, perm)
 
         #inner most loop
         toReturn[1] = quote
-            P[ind] = A[+($counts...)+offset]
+            P[ind] = A[+($(counts...))+offset]
             ind+=1
             $counts[1]+= $stridenames[1]
         end

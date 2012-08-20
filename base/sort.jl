@@ -286,7 +286,7 @@ macro in_place_matrix_op(out_of_place, args...)
     in_place = esc(symbol("$(out_of_place)!"))
     out_of_place = esc(out_of_place)
     quote
-        function ($in_place)(($args...), a::AbstractMatrix, dim::Int)
+        function ($in_place)($(args...), a::AbstractMatrix, dim::Int)
             m = size(a,1)
             if dim == 1
                 for i = 1:m:numel(a)
@@ -300,11 +300,11 @@ macro in_place_matrix_op(out_of_place, args...)
             return a
         end
         # TODO: in-place generalized AbstractArray implementation
-        ($in_place)(($args...), a::AbstractArray) = ($in_place)($(args...), a,1)
+        ($in_place)($(args...), a::AbstractArray) = ($in_place)($(args...), a,1)
 
-        ($out_of_place)(($args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
-        ($out_of_place)(($args...), a::AbstractArray, d::Int) = ($in_place)($(args...), copy(a), d)
-        ($out_of_place)(($args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
+        ($out_of_place)($(args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
+        ($out_of_place)($(args...), a::AbstractArray, d::Int) = ($in_place)($(args...), copy(a), d)
+        ($out_of_place)($(args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
     end
 end
 

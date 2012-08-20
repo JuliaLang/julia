@@ -61,7 +61,7 @@
 (define (assignment? e)
   (and (pair? e) (eq? (car e) '=)))
 
-(define unary-ops '(+ - ! ~ $ & |<:| |>:|))
+(define unary-ops '(+ - ! ~ |<:| |>:|))
 
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
@@ -550,8 +550,6 @@
 		 (next (peek-token s)))
 	     (cond ((closing-token? next)
 		    op)  ; return operator by itself, as in (+)
-		   ((syntactic-unary-op? op)
-		    (list op (parse-unary s)))
 		   ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
 		    (ts:put-back! s op)
 		    (parse-factor s))
@@ -614,10 +612,22 @@
       `(<: ,(cadr e) ,(cadddr e))
       e))
 
+(define (parse-unary-prefix s)
+  (let ((op (peek-token s)))
+    (if (syntactic-unary-op? op)
+	(begin (take-token s)
+	       (if (eqv? (peek-token s) #\( )
+		   ;; in $(...) the $ only applies to the parens
+		   (list op (parse-atom s))
+		   (if (closing-token? (peek-token s))
+		       op
+		       (list op (parse-call s)))))
+	(parse-atom s))))
+
 ; parse function call, indexing, dot, and transpose expressions
 ; also handles looking for syntactic reserved words
 (define (parse-call s)
-  (let ((ex (parse-atom s)))
+  (let ((ex (parse-unary-prefix s)))
     (if (memq ex reserved-words)
 	(parse-resword s ex)
 	(let loop ((ex ex))
