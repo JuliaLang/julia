@@ -1,0 +1,37 @@
+imsc9, aravali and annapurna are HPC machines at my institute
+* for some reason Weave didn't compile on imsc9
+* octave isn't installed on imsc9 and annapurna
+* matlab isn't installed on either of these four machines
+
+                                     Desktop   imsc9  aravali annapurna
+                        Octave (0):  20.7866     *    21.6179     *
+     Vectorized Fortran (pure) (1):   0.7487  0.6501   0.7507  1.1619
+     Vectorized Fortran (f2py) (2):   0.7190  0.6089   0.6243  1.0312
+                         NumPy (3):   4.1343  2.5844   2.6565  3.7445
+                        Cython (4):   1.7273  1.9927   2.0471  1.3525
+                 Cython with C (5):   1.7248  1.9665   2.0354  1.3367
+                         Weave (6):   1.9818     *     2.1326  1.4003
+         Looped Fortran (f2py) (7):   1.6996  1.9657   2.0429  1.3354
+         Looped Fortran (pure) (8):   1.7189  2.0145   2.0917  1.5086
+                      C (pure) (9):   1.2820  1.9948   2.0527  1.4259
+
+
+
+For comparison with matlab, on a completely different machine we have
+>> tic; laplace; toc  %matlab
+Elapsed time is 6.807470 seconds.
+octave3.0:1> tic; laplace; toc %octave
+Elapsed time is 23.1395 seconds.
+
+
+        0       1       2       3       4       5       6       7     8 
+ 0: 
+ 1:  0.0000 
+ 2:  0.0000  0.0000 
+ 3:  0.0000  0.0000  0.0000 
+ 4:  0.0575  0.0575  0.0575  0.0575 
+ 5:  0.0575  0.0575  0.0575  0.0575  0.0000 
+ 6:  0.0575  0.0575  0.0575  0.0575  0.0000  0.0000 
+ 7:  0.0575  0.0575  0.0575  0.0575  0.0000  0.0000  0.0000 
+ 8:  0.0575  0.0575  0.0575  0.0575  0.0000  0.0000  0.0000  0.0000 
+ 9:  0.0575  0.0575  0.0575  0.0575  0.0000  0.0000  0.0000  0.0000 0.0000
