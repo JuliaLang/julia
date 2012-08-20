@@ -1,7 +1,10 @@
 # set up non-serializable state
 
 # restore shared library handles
-_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
+_jl_lib = ccall(:malloc, Ptr{Void}, (Uint,), 
+        ccall(:jl_sizeof_uv_lib_t, Uint, ()))
+@assert ccall(:jl_uv_dlopen, Int32, (Ptr{Void}, Ptr{Void}), C_NULL, _jl_lib) == 0
+
 @unix_only _jl_repl = _jl_lib
 @windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 

@@ -44,6 +44,7 @@ include("tuple.jl")
 include("cell.jl")
 include("expr.jl")
 include("error.jl")
+include("osutils.jl")
 
 # core numeric operations & types
 include("bool.jl")
@@ -53,8 +54,10 @@ include("promotion.jl")
 include("operators.jl")
 include("pointer.jl")
 
-_jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
-_jl_libfdm = dlopen("libfdm")
+_jl_lib = ccall(:malloc, Ptr{Void}, (Uint,), 
+        ccall(:jl_sizeof_uv_lib_t, Uint, ()))
+ccall(:jl_uv_dlopen, Int32, (Ptr{Void}, Ptr{Void}), C_NULL, _jl_lib)
+_jl_libfdm = ccall(:c_dlopen, Ptr{Void}, (Ptr{Uint8},), "libfdm") # dlopen isn't defined yet
 
 include("float.jl")
 include("reduce.jl")
@@ -78,6 +81,7 @@ include("char.jl")
 include("ascii.jl")
 include("utf8.jl")
 include("string.jl")
+include("dlload.jl")
 include("regex.jl")
 include("show.jl")
 include("grisu.jl")
@@ -91,7 +95,6 @@ include("serialize.jl")
 include("multi.jl")
 
 # system & environment
-include("osutils.jl")
 include("libc.jl")
 include("env.jl")
 include("errno_h.jl")

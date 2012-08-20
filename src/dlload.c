@@ -27,55 +27,50 @@ static char *extensions[] = { ".so", "" };
 #include "julia.h"
 #include "uv.h"
 
-#define PATHBUF 512
+DLLEXPORT size_t jl_sizeof_uv_lib_t() { return sizeof(uv_lib_t); }
 
-extern char *julia_home;
-
-int jl_uv_dlopen(const char* filename, uv_lib_t* lib)
-{
-#ifdef RTLD_DEEPBIND
-    dlerror(); /* Reset error status. */
-    lib->handle = dlopen(filename, RTLD_LAZY|RTLD_DEEPBIND);
-    if (lib->handle) {
-        lib->errmsg = NULL;
+DLLEXPORT int jl_uv_dlopen(const char* filename, uv_lib_t* lib) {
+    lib->errmsg=NULL;
+    if (filename == NULL) {
+#ifdef _WIN32
+        if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            (LPCSTR)(&jl_uv_dlopen),
+            &lib->handle))
+            jl_errorf("could not load base module", modname);
+#else
+        lib->handle = dlopen(NULL,RTLD_NOW);
+        assert(lib->handle != NULL);
+#endif
         return 0;
     } else {
-        lib->errmsg = strdup(dlerror());
-        return -1;
-    }
+#ifdef RTLD_DEEPBIND
+        dlerror(); /* Reset error status. */
+        lib->handle = dlopen(filename, RTLD_LAZY|RTLD_DEEPBIND);
+        if (lib->handle) {
+            lib->errmsg = NULL;
+            return 0;
+        } else {
+            lib->errmsg = strdup(dlerror());
+            return -1;
+        }
 #else
-    return uv_dlopen(filename, lib);
+        return uv_dlopen(filename, lib);
 #endif
+    }
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname)
-{
+#define PATHBUF 512
+extern char *julia_home;
+// minimal boot-strapping dlopen() function, until Julia has enough functions to implement
+// the necessary string and array processing for path and extension searching :O
+// (this is only actually used for loading libfdm)
+DLLEXPORT uv_lib_t *c_dlopen(char *modname) {
     int error;
     char *ext;
     char path[PATHBUF];
     int i;
     uv_lib_t *handle=malloc(sizeof(uv_lib_t));
     handle->errmsg=NULL;
-
-    if (modname == NULL) {
-#ifdef _WIN32
-        if(!GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)(&jl_load_dynamic_library),
-            &handle->handle))
-            jl_errorf("could not load base module", modname);
-#else
-        handle->handle = dlopen(NULL,RTLD_NOW);
-#endif
-        goto done;
-    }
-#ifdef _WIN32
-    else if (modname[1] == ':') {
-#else
-    else if (modname[0] == '/') {
-#endif
-        error = jl_uv_dlopen(modname,handle);
-        if (!error) goto done;
-    }
 
     for(i=0; i < N_EXTENSIONS; i++) {
         ext = extensions[i];
@@ -86,11 +81,11 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
                 /* try julia_home/../lib */
                 snprintf(path, PATHBUF, "%s/../lib/%s%s", julia_home, modname, ext);
                 error = jl_uv_dlopen(path, handle);
-                if (!error) goto done;
+                if (!error) return handle;
                 // if file exists but didn't load, show error details
                 struct stat sbuf;
                 if (stat(path, &sbuf) != -1) {
-                    //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
+                    //warning: this leaks memory:
                     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
                 }
             }
@@ -98,17 +93,14 @@ uv_lib_t *jl_load_dynamic_library(char *modname)
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
         error = jl_uv_dlopen(path, handle);
-        if (!error) goto done;
+        if (!error) return handle;
     }
 
-    //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
+    //warning: this leaks memory:
     jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
-    uv_dlclose(handle);
-    free(handle);
     return NULL;
-done:
-    return handle;
 }
+
 
 void *jl_dlsym_e(uv_lib_t *handle, char *symbol) {
     void *ptr;
