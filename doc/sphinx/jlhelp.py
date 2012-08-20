@@ -43,8 +43,8 @@ class JuliaHelpTranslator(TextTranslator):
     def depart_desc(self, node):
         if node.attributes['objtype'] == 'attribute':
             return
-        self.add_text('"),\n', escape=False)
-        self.end_state(first='(E"%s",E"%s",E"' % ( \
+        self.add_text('"}\n', escape=False)
+        self.end_state(first='{E"%s"  E"%s"  E"' % ( \
             jl_escape(self._current_title), \
             jl_escape(self._desc_name)))
         self.in_desc = False
