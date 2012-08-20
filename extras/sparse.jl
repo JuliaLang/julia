@@ -672,12 +672,7 @@ function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector
 end
 
 ## assign
-assign(A::SparseMatrixCSC,v::AbstractArray,i::Integer) =
-    invoke(assign, (SparseMatrixCSC, Any, Integer), A, v, i)
-assign(A::SparseMatrixCSC, v::AbstractArray, i0::Integer, i1::Integer) =
-    invoke(assign, (SparseMatrixCSC, Any, Integer, Integer), A, v, i0, i1)
-assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i))
-assign(A::SparseMatrixCSC, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
+assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i)...)
 
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
@@ -783,15 +778,6 @@ function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Intege
     end
     return A
 end
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, J::AbstractVector{S}) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, J)
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector{S}) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, [i], J)
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Integer) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
 
 assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
 assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
@@ -1006,9 +992,6 @@ end
 
 ref{T}(S::SparseAccumulator{T}, i::Integer) = S.flags[i] ? S.vals[i] : zero(T)
 
-assign(S::SparseAccumulator, v::AbstractArray, i::Integer) =
-    invoke(assign, (SparseAccumulator, Any, Integer), S, v, i)
-
 function assign(S::SparseAccumulator, v, i::Integer)
     if v == 0
         if S.flags[i]
@@ -1040,7 +1023,7 @@ function assign(S::SparseAccumulator, v, i::Integer)
     end
     return S
 end
-                                                
+
 type Tridiagonal{T<:Float} <: AbstractMatrix{T}
     a::Vector{T}   # sub-diagonal
     b::Vector{T}   # diagonal
