@@ -284,8 +284,7 @@ function _jl_init_help()
         _jl_help_category_list = {}
         _jl_help_category_dict = Dict()
         _jl_help_function_dict = Dict()
-        for idx = 1:size(helpdb,1)
-            (cat,func,desc) = helpdb[idx,:]...
+        for (cat,func,desc) in helpdb
             if !has(_jl_help_category_dict, cat)
                 push(_jl_help_category_list, cat)
                 _jl_help_category_dict[cat] = {}
