@@ -6,6 +6,7 @@ import Base.*
 export NamedIndex, SimpleIndex, NamedVector,
 	length, isempty, names, copy, names!, replace_names!,
 	replace_names, has, keys, push, del, ref,
+	select, select_kv,
 	set_group, set_groups, get_groups, isgroup,
 	start, done, next, show
 	
@@ -155,6 +156,14 @@ type NamedVector{V} <: Associative{ByteString,V}
 end
 NamedVector() = NamedVector{Any}()
 
+function NamedVector{K<:ByteString,V}(a::Associative{K,V})
+	ret = NamedVector{V}()
+	for k in keys(a)
+		ret[k] = a[k]
+	end
+	ret
+end
+
 # assignment by a string replaces or appends
 function assign(id::NamedVector, v, key::ByteString)
     if has(id.idx, key)
@@ -176,6 +185,11 @@ function get{K}(id::NamedVector{K}, key, deflt)
         deflt
     end
 end
+
+names(nv::NamedVector) = names(nv.idx)
+keys(nv::NamedVector) = names(nv)
+select(nv::NamedVector, r) = nv[r]
+select_kv(nv::NamedVector, r) = (names(nv)[r], nv[r])
 
 has(id::NamedVector, key) = has(id.idx, key)
 isempty(id::NamedVector) = isempty(id.arr)

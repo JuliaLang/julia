@@ -70,3 +70,12 @@ end
 @test t1[1:3] == [11, 22, 33]
 @test t1[["four", "two"]] == [44, 22]
 
+test_group("iteration")
+@test all([x::Int64 for x in t1] .== [11, 22, 33, 44])
+@test select(t1, 3) == 33
+@test select_kv(t1, 3) == ("three", 33)
+
+test_group("construction")
+xx=NamedVector({"asdf"=>1, "qwerty"=>2})
+@test typeof(xx) == NamedVector{Int64}
+
