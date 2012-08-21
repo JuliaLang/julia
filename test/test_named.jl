@@ -18,6 +18,8 @@ test_group("access")
 @testfails ni1["six"] == 6
 @test ni1[6] == 6            # falls through even if there's no name for this!
 @test ni1[[true, false, true, false, true]] == [1,3,5]
+@test ni1[:one] == ni1["one"]
+@test ni1[[:one, :five]] == [1, 5]
 
 test_group("changing names")
 ni2 = copy(ni1)
@@ -69,6 +71,8 @@ end
 @test t1[2] == 22
 @test t1[1:3] == [11, 22, 33]
 @test t1[["four", "two"]] == [44, 22]
+@test t1[:one] == 11
+@test t1[[:four, :two]] == [44, 22]
 
 test_group("iteration")
 @test all([x::Int64 for x in t1] .== [11, 22, 33, 44])

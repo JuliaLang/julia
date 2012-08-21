@@ -88,6 +88,10 @@ end
 ref{T<:ByteString}(x::NamedIndex, idx::Vector{T}) = [[x.lookup[i] for i in idx]...]
 ref{T<:ByteString}(x::NamedIndex, idx::T) = x.lookup[idx]
 
+# if we get a symbol or a vector of symbols, convert to strings for ref
+ref(x::NamedIndex, idx::Symbol) = x[string(idx)]
+ref(x::NamedIndex, idx::Vector{Symbol}) = [[x.lookup[string(i)] for i in idx]...]
+
 # fall-throughs, when something other than the index type is passed
 ref(x::AbstractIndex, idx::Int) = idx
 ref(x::AbstractIndex, idx::Vector{Int}) = idx
@@ -182,6 +186,7 @@ function assign(id::NamedVector, v, key::ByteString)
         push(id.idx, key)
     end
 end
+assign(id::NamedVector, v, key::Symbol) = assign(id, v, string(key))
 # assignment by an integer replaces or throws an error
 assign(id::NamedVector, v, pos) = id.arr[pos] = v
 
