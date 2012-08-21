@@ -717,3 +717,171 @@ end
 
 # TODO: use *gels transpose argument
 (/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
+
+## Balancing and back-transforming
+for (gebal, gebak, elty) in
+    (("dgebal_","dgebak_",:Float64),
+     ("sgebal_","sgebak_",:Float32),
+     ("zgebal_","zgebak_",:Complex128),
+     ("cgebal_","cgebak_",:Complex64))
+    
+    @eval begin
+        #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          JOB
+        #      INTEGER            IHI, ILP, INFO, LDA, N
+        #     .. Array Arguments ..
+        #      DOUBLE PRECISION   A( LDA, * ), SCALE( * )
+        function _jl_lapack_gebal!(job::LapackChar, A::StridedMatrix{$elty})
+            if stride(A,1) != 1
+                error("_jl_lapack_gebal!: matrix columns must have contiguous elements")
+            end
+            m, n    = size(A)
+            if m != n error("_jl_lapack_gebal!: Matrix A must be square") end
+            lda     = stride(A, 2)
+            info    = Array(Int32, 1)
+            ihi     = Array(Int32, 1)
+            ilo     = Array(Int32, 1)
+            scale   = Array($elty, n)
+            ccall(dlsym(Base._jl_liblapack, $gebal),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                   Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                  &job, &n, A, &lda, ilo, ihi, scale, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
+            ilo[1], ihi[1], scale
+        end
+        #     SUBROUTINE DGEBAK( JOB, SIDE, N, ILO, IHI, SCALE, M, V, LDV, INFO )
+        #*     .. Scalar Arguments ..
+        #      CHARACTER          JOB, SIDE
+        #      INTEGER            IHI, ILP, INFO, LDV, M, N
+        #     .. Array Arguments ..
+        #      DOUBLE PRECISION   SCALE( * ), V( LDV, * )
+        function _jl_lapack_gebak!(job::LapackChar, side::LapackChar,
+                        ilo::Int32, ihi::Int32, scale::Vector{$elty},
+                        V::StridedMatrix{$elty})
+            if stride(V,1) != 1
+                error("_jl_lapack_gebak!: matrix columns must have contiguous elements")
+            end
+            m, n    = size(V)
+            if m != n error("_jl_lapack_gebal!: Matrix V must be square") end
+            ldv     = stride(V, 2)
+            info    = Array(Int32, 1)
+            ccall(dlsym(Base._jl_liblapack, $gebak),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+                  &job, &side, &m, &ilo, &ihi, scale, &n, V, &ldv, info)
+            if info[1] != 0 throw(Base.LapackException(info[1])) end
+            V
+        end
+    end
+end
+
+## Destructive matrix exponential using algorithm from Higham, 2008,
+## "Functions of Matrices: Theory and Computation", SIAM
+function expm!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
+    m, n = size(A)
+    if m != n error("expm!: Matrix A must be square") end
+    if m < 2 return exp(A) end
+    ilo, ihi, scale = _jl_lapack_gebal!('B', A)    # modifies A
+    nA   = norm(A, 1)
+    I    = convert(Array{T,2}, eye(n))
+    ## For sufficiently small nA, use lower order Padé-Approximations
+    if (nA <= 2.1)
+        if nA > 0.95
+            C = [17643225600.,8821612800.,2075673600.,302702400.,
+                    30270240.,   2162160.,    110880.,     3960.,
+                          90.,         1.]
+        elseif nA > 0.25
+            C = [17297280.,8648640.,1995840.,277200.,
+                    25200.,   1512.,     56.,     1.]
+        elseif nA > 0.015
+            C = [30240.,15120.,3360.,
+                   420.,   30.,   1.]
+        else
+            C = [120.,60.,12.,1.]
+        end
+        A2 = A * A
+        P  = copy(I)
+        U  = C[2] * P
+        V  = C[1] * P
+        for k in 1:(div(size(C, 1), 2) - 1)
+            k2 = 2 * k
+            P *= A2
+            U += C[k2 + 2] * P
+            V += C[k2 + 1] * P
+        end
+        U  = A * U
+        X  = (V - U)\(V + U)
+    else
+        s  = log2(nA/5.4)               # power of 2 later reversed by squaring
+        if s > 0
+            si = iceil(s)
+            A /= 2^si
+        end
+        CC = [64764752532480000.,32382376266240000.,7771770303897600.,
+               1187353796428800.,  129060195264000.,  10559470521600.,
+                   670442572800.,      33522128640.,      1323241920.,
+                       40840800.,           960960.,           16380.,
+                            182.,                1.]
+        A2 = A * A
+        A4 = A2 * A2
+        A6 = A2 * A4
+        U  = A * (A6 * (CC[14]*A6 + CC[12]*A4 + CC[10]*A2) +
+                  CC[8]*A6 + CC[6]*A4 + CC[4]*A2 + CC[2]*I)
+        V  = A6 * (CC[13]*A6 + CC[11]*A4 + CC[9]*A2) +
+                  CC[7]*A6 + CC[5]*A4 + CC[3]*A2 + CC[1]*I
+        X  = (V-U)\(V+U)
+                         
+        if s > 0            # squaring to reverse dividing by power of 2
+            for t in 1:si X *= X end
+        end
+    end
+                                        # Undo the balancing
+    doscale = false                     # check if rescaling is needed
+    for i = ilo:ihi
+        if scale[i] != 1.
+            doscale = true
+            break
+        end
+    end
+    if doscale
+        for j = ilo:ihi
+            scj = scale[j]
+            if scj != 1.                # is this overkill?
+                for i = ilo:ihi
+                    X[i,j] *= scale[i]/scj
+                end
+            else
+                for i = ilo:ihi
+                    X[i,j] *= scale[i]
+                end
+            end
+        end
+    end
+    if ilo > 1       # apply lower permutations in reverse order
+        for j in (ilo-1):1:-1 rcswap!(j, int(scale[j]), X) end
+    end
+    if ihi < n       # apply upper permutations in forward order
+        for j in (ihi+1):n    rcswap!(j, int(scale[j]), X) end
+    end
+    X
+end
+
+## Swap rows j and jp and columns j and jp in X
+function rcswap!{T<:Number}(j::Int, jp::Int, X::StridedMatrix{T})
+    for k in 1:size(X, 2)
+        tmp     = X[k,j]
+        X[k,j]  = X[k,jp]
+        X[k,jp] = tmp
+        tmp     = X[j,k]
+        X[j,k]  = X[jp,k]
+        X[jp,k] = tmp
+    end
+end
+
+# Matrix exponential
+expm{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = expm!(copy(A))
+expm{T<:Integer}(A::StridedMatrix{T}) = expm!(float(A))
+

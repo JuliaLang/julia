@@ -616,6 +616,7 @@ export
     diagmm!,
     dot,
     eig,
+    expm,
     eye,
     ishermitian,
     issym,
