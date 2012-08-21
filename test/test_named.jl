@@ -87,3 +87,14 @@ xx2=NamedVector(["asdf", "querty", "uiop"], [11,22,33])
 @test xx2["querty"] == 22
 @test xx2[3] == 33
 
+test_group("copying")
+t2 = copy(t1)
+# neither adding nor modifying should affect t1
+t2["five"] = 55
+t2["one"] = 111
+@test t2["five"] == 55
+@test t2["one"] == 111
+@testfails t1["five"]
+@test t1["one"] == 11
+
+

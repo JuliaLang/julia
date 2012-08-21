@@ -155,13 +155,14 @@ end
 type NamedVector{V} <: Associative{ByteString,V}
     idx::NamedIndex
     arr::Vector{V}
-
-    NamedVector() = new(NamedIndex(), Array(V,0))
+	#NamedVector() = new(NamedIndex(), Array(V,0))
 end
-NamedVector() = NamedVector{Any}()
+NamedVector() = NamedVector(NamedIndex(), Array(Any,0))
+NamedVector(T::Type) = NamedVector(NamedIndex(), Array(T,0))
+#NamedVector(i::NamedIndex, a::Vector) = NamedVector(i,a)
 
 function NamedVector{K<:ByteString,V}(a::Associative{K,V})
-	ret = NamedVector{V}()
+	ret = NamedVector(V)
 	for k in keys(a)
 		ret[k] = a[k]
 	end
@@ -169,7 +170,7 @@ function NamedVector{K<:ByteString,V}(a::Associative{K,V})
 end
 
 function NamedVector{K<:ByteString,V}(keys::Vector{K}, values::Vector{V})
-	ret = NamedVector{V}()
+	ret = NamedVector(V)
 	for i = 1:length(keys)
 		ret[keys[i]] = values[i]
 	end
@@ -223,7 +224,10 @@ function show(io, id::NamedVector)
     end
 end
 
-# this is handy -- should maybe go elsewhere?
+# copying has to copy everything, because otherwise you can append an item,
+# which can cause the vector to change length and break the original
+copy(nv::NamedVector) = NamedVector(copy(nv.idx), copy(nv.arr))
+
 function make_unique{S<:ByteString}(names::Vector{S})
     x = NamedIndex()
     names = copy(names)
