@@ -37,7 +37,7 @@ function jl_zmq_error_str()
     errno = ccall(_jl_zmq_errno, Int32, ())
     c_strerror = ccall (_jl_zmq_strerror, Ptr{Uint8}, (Int32,), errno)
     if c_strerror != C_NULL
-        strerror = cstring(c_strerror)
+        strerror = bytestring(c_strerror)
         return strerror
     else 
         return "Unknown error"
@@ -299,7 +299,7 @@ for (fset, fget, k) in opslist
             if rc != 0
                 throw(ZMQStateError(jl_zmq_error_str()))
             end
-            return cstring(convert(Ptr{Uint8}, $u8ap), int(($sz)[1]))
+            return bytestring(convert(Ptr{Uint8}, $u8ap), int(($sz)[1]))
         end
     end        
 end
@@ -308,14 +308,14 @@ end  # let
 
 
 function bind(socket::ZMQSocket, endpoint::String)
-    rc = ccall(_jl_zmq_bind, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
+    rc = ccall(_jl_zmq_bind, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, endpoint)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
 end
 
 function connect(socket::ZMQSocket, endpoint::String)
-    rc=ccall(_jl_zmq_connect, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, cstring(endpoint))
+    rc=ccall(_jl_zmq_connect, Int32, (Ptr{Void}, Ptr{Uint8}), socket.data, endpoint)
     if rc != 0
         throw(ZMQStateError(jl_zmq_error_str()))
     end
@@ -379,7 +379,7 @@ function ref(::Type{Uint8}, zmsg::ZMQMessage)
 end
 # Convert message to string with ASCIIString[zmsg]
 # Copies the data
-ref(::Type{ASCIIString}, zmsg::ZMQMessage) = cstring(msg_data(zmsg), msg_size(zmsg))
+ref(::Type{ASCIIString}, zmsg::ZMQMessage) = bytestring(msg_data(zmsg), msg_size(zmsg))
 # Build an IOStream from a message
 # Copies the data
 function convert(::Type{IOStream}, zmsg::ZMQMessage)
