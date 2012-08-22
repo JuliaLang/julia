@@ -70,6 +70,11 @@
     jl_sizeof_off_t;
     jl_sizeof_ios_t;
     jl_stdout_stream;
+    jl_sizeof_uv_fs_t;
+    jl_uv_fs_req_cleanup;
+    jl_readdir;
+    jl_uv_fs_t_ptr;
+    jl_uv_fs_t_ptr_offset;
     jl_sizeof_stat;
     jl_stat;
     jl_lstat;
@@ -103,6 +108,7 @@
     u8_isvalid;
     u8_strwidth;
     u8_strlen;
+    locale_is_utf8;
     ios_close;
     ios_flush;
     ios_read;
@@ -163,6 +169,7 @@
     jl_load_;
     jl_load_file_string;
     jl_expand;
+    jl_macroexpand;
     jl_dlsym;
     jl_load_dynamic_library;
     jl_stdin_callback;

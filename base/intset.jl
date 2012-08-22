@@ -3,17 +3,14 @@ type IntSet
     limit::Int
     fill1s::Bool
 
-    IntSet() = IntSet(1024)
-    IntSet(top::Integer) = (lim = (top+31) & -32;
-                            new(zeros(Uint32,lim>>>5), top, false))
+    IntSet() = new(zeros(Uint32,256>>>5), 256, false)
 end
-function IntSet(s::IntSet)
-    s2::IntSet = IntSet(s.limit)
-    s2.fill1s = s.fill1s
-    or!(s2, s)
-    s2
-end
-intset(args...) = add_each(IntSet(), args)
+
+IntSet(args...) = (s=IntSet(); for a in args; add(s,a); end; s)
+
+similar(s::IntSet) = IntSet()
+
+copy(s::IntSet) = union!(IntSet(), s)
 
 function grow(s::IntSet, top::Integer)
     if top >= s.limit
@@ -31,8 +28,12 @@ end
 
 function add(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = int(n + div(n,2))
-        grow(s, lim)
+        if s.fill1s
+            return s
+        else
+            lim = int(n + div(n,2))
+            grow(s, lim)
+        end
     end
     s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
     return s
@@ -46,9 +47,15 @@ function add_each(s::IntSet, ns)
 end
 
 function del(s::IntSet, n::Integer)
-    if n < s.limit
-        s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
+    if n >= s.limit
+        if s.fill1s
+            lim = int(n + div(n,2))
+            grow(s, lim)
+        else
+            return s
+        end
     end
+    s.bits[n>>5 + 1] &= ~(uint32(1)<<(n&31))
     return s
 end
 
@@ -58,6 +65,8 @@ function del_each(s::IntSet, ns)
     end
     return s
 end
+
+setdiff(a::IntSet, b::IntSet) = del_each(copy(a),b)
 
 function del_all(s::IntSet)
     s.bits[:] = 0
@@ -82,30 +91,30 @@ end
 
 function copy_to(to::IntSet, from::IntSet)
     del_all(to)
-    or!(to, from)
+    union!(to, from)
 end
-
-similar(s::IntSet) = IntSet()
-
-copy(s::IntSet) = or!(IntSet(), s)
 
 function has(s::IntSet, n::Integer)
     if n >= s.limit
-        false
+        s.fill1s && n >= 0
     else
         (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
     end
 end
 
 start(s::IntSet) = int64(0)
-done(s::IntSet, i) = (next(s,i)[1] >= s.limit)
+done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
 function next(s::IntSet, i)
-    n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+    if i >= s.limit
+        n = i
+    else
+        n = ccall(:bitvector_next, Int64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit)
+    end
     (n, n+1)
 end
 
 isempty(s::IntSet) =
-    ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
+    !s.fill1s && ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
 
 function choose(s::IntSet)
     n = next(s,0)[1]
@@ -121,13 +130,16 @@ function pop(s::IntSet)
     n
 end
 
-length(s::IntSet) =
-    int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit))
+length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
+    (s.fill1s ? typemax(Int) - s.limit : 0)
 
 function show(io, s::IntSet)
-    print(io, "intset(")
+    print(io, "IntSet(")
     first = true
     for n in s
+        if n > s.limit
+            break
+        end
         if !first
             print(io, ", ")
         end
@@ -135,7 +147,7 @@ function show(io, s::IntSet)
         first = false
     end
     if s.fill1s
-        print(io, ", ...)")
+        print(io, ", ..., ", typemax(Int)-1, ")")
     else
         print(io, ")")
     end
@@ -143,7 +155,7 @@ end
 
 
 # Math functions
-function or!(s::IntSet, s2::IntSet)
+function union!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         grow(s, s2.limit)
     end
@@ -160,9 +172,11 @@ function or!(s::IntSet, s2::IntSet)
     s
 end
 
-add_each(s::IntSet, s2::IntSet) = or!(s, s2)
+union(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? union!(copy(s1), s2) : union!(copy(s2), s1))
 
-function and!(s::IntSet, s2::IntSet)
+add_each(s::IntSet, s2::IntSet) = union!(s, s2)
+
+function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
         grow(s, s2.limit)
     end
@@ -170,7 +184,7 @@ function and!(s::IntSet, s2::IntSet)
     for n = 1:lim
         s.bits[n] &= s2.bits[n]
     end
-    if ~s2.fill1s   
+    if !s2.fill1s   
         for n=lim+1:length(s.bits)
             s.bits[n] = uint32(0)
         end
@@ -179,13 +193,17 @@ function and!(s::IntSet, s2::IntSet)
     s
 end
 
-function not!(s::IntSet)
+intersect(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? intersect!(copy(s1), s2) : intersect!(copy(s2), s1))
+
+function complement!(s::IntSet)
     for n = 1:length(s.bits)
         s.bits[n] = ~s.bits[n]
     end
-    s.fill1s = ~s.fill1s
+    s.fill1s = !s.fill1s
     s
 end
+
+complement(s::IntSet) = complement!(copy(s))
 
 function xor!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
@@ -204,17 +222,12 @@ function xor!(s::IntSet, s2::IntSet)
     s
 end
 
-~(s::IntSet) = not!(IntSet(s))
-|(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? or!(IntSet(s1), s2) : or!(IntSet(s2), s1))
-(&)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? and!(IntSet(s1), s2) : and!(IntSet(s2), s1))
-($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(IntSet(s1), s2) : xor!(IntSet(s2), s1))
+($)(s1::IntSet, s2::IntSet) = (s1.limit >= s2.limit ? xor!(copy(s1), s2) : xor!(copy(s2), s1))
 
-union!(s1::IntSet, s2::IntSet) = or!(s1, s2)
-union(s1::IntSet, s2::IntSet) = s1 | s2
-intersection!(s1::IntSet, s2::IntSet) = and!(s1, s2)
-intersection(s1::IntSet, s2::IntSet) = s1 & s2
-complement!(s1::IntSet) = not!(s1)
-complement(s1::IntSet) = ~s1
+|(s::IntSet, s2::IntSet) = union(s, s2)
+(&)(s::IntSet, s2::IntSet) = intersect(s, s2)
+-(a::IntSet, b::IntSet) = setdiff(a,b)
+~(s::IntSet) = complement(s)
 
 function isequal(s1::IntSet, s2::IntSet)
     if s1.fill1s != s2.fill1s

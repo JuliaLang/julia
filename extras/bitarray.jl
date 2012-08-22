@@ -1384,7 +1384,7 @@ nonzeros{T<:Integer}(B::BitArray{T}) = bitones(T, nnz(B))
 
 ## Reductions ##
 
-areduce(f::Function, B::BitArray, region::Region, v0, RType::Type) =
+areduce(f::Function, B::BitArray, region::Dimspec, v0, RType::Type) =
     areduce(f, bitunpack(B), region, v0, RType)
 
 let bitareduce_cache = nothing
@@ -1425,7 +1425,7 @@ function gen_bitareduce_func(n, f)
 end
 
 global bitareduce
-function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Region, v0)
+function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Dimspec, v0)
     dimsA = size(A)
     ndimsA = ndims(A)
     dimsR = ntuple(ndimsA, i->(contains(region, i) ? 1 : dimsA[i]))
@@ -1458,10 +1458,10 @@ function bitareduce{T<:Integer}(f::Function, A::BitArray{T}, region::Region, v0)
 end
 end
 
-max{T}(A::BitArray{T}, b::(), region::Region) = bitareduce(max,A,region,typemin(T))
-min{T}(A::BitArray{T}, b::(), region::Region) = bitareduce(min,A,region,typemax(T))
-sum{T}(A::BitArray{T}, region::Region)  = areduce(+,A,region,0,Int)
-prod{T}(A::BitArray{T}, region::Region) = bitareduce(*,A,region,one(T))
+max{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(max,A,region,typemin(T))
+min{T}(A::BitArray{T}, b::(), region::Dimspec) = bitareduce(min,A,region,typemax(T))
+sum{T}(A::BitArray{T}, region::Dimspec)  = areduce(+,A,region,0,Int)
+prod{T}(A::BitArray{T}, region::Dimspec) = bitareduce(*,A,region,one(T))
 
 sum(B::BitArray) = nnz(B)
 
@@ -1629,7 +1629,7 @@ function permute(B::BitArray, perm)
     end
 
     #calculates all the strides
-    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
+    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0

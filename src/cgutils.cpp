@@ -434,7 +434,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     //if (jt == (jl_value_t*)jl_null) return T_void;
-    if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
+    if (jl_is_cpointer_type(jt)) {
         Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
         if (lt == NULL)
             return NULL;

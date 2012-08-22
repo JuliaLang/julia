@@ -155,4 +155,4 @@ doctest:
 
 helpdb.jl: stdlib/base.rst sphinx/jlhelp.py
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
-	mv $(BUILDDIR)/jlhelp/stdlib/base.jl helpdb.jl
+	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl

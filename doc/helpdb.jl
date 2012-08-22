@@ -1,6 +1,6 @@
 # automatically generated -- do not edit
 
-[
+{
 
 (E"Getting Around",E"exit",E"exit([code])
 
@@ -9,9 +9,9 @@
 
 "),
 
-(E"Getting Around",E"whos",E"whos([pattern::Regex])
+(E"Getting Around",E"whos",E"whos([Module][, pattern::Regex])
 
-   Print information about global user-defined variables, optionally
+   Print information about global variables in a module, optionally
    restricted to those matching 'pattern'.
 
 "),
@@ -38,9 +38,28 @@
 
 "),
 
+(E"Getting Around",E"help",E"help('name' or object)
+
+   Get help for a function
+
+"),
+
+(E"Getting Around",E"apropos",E"apropos('string')
+
+   Search help for a substring
+
+"),
+
+(E"Getting Around",E"which",E"which(f, args...)
+
+   Show which method of 'f' will be called for the given arguments
+
+"),
+
 (E"All Objects",E"is",E"is(x, y)
 
-   Determine whether 'x' and 'y' refer to the same object in memory.
+   Determine whether 'x' and 'y' are identical, in the sense that no
+   program could distinguish them.
 
 "),
 
@@ -247,16 +266,11 @@
 
 "),
 
-(E"General Collections",E"numel",E"numel(collection)
-
-   Return the number of elements in a collection.
-
-"),
-
 (E"General Collections",E"length",E"length(collection)
 
    For ordered, indexable collections, the maximum index 'i' for which
-   'ref(collection, i)' is valid.
+   'ref(collection, i)' is valid. For unordered collections, the
+   number of elements.
 
 "),
 
@@ -400,16 +414,17 @@ collection[key...] = value
 
 "),
 
-(E"Set-Like Collections",E"intset",E"intset(i...)
+(E"Set-Like Collections",E"Set",E"Set(x...)
 
-   Construct an 'IntSet' of the given integers.
+   Construct a 'Set' with the given elements. Should be used instead
+   of 'IntSet' for sparse integer sets.
 
 "),
 
-(E"Set-Like Collections",E"IntSet",E"IntSet(n)
+(E"Set-Like Collections",E"IntSet",E"IntSet(i...)
 
-   Construct a set for holding integers up to 'n' (larger integers may
-   also be added later).
+   Construct an 'IntSet' of the given integers. Implemented as a bit
+   string, and therefore good for dense integer sets.
 
 "),
 
@@ -469,13 +484,6 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"append",E"append(collection, items)
-
-   Construct an array composed of the elements of 'items' added to the
-   end of a collection. Does not modify collection.
-
-"),
-
 (E"Dequeues",E"append!(collection, items)",E"append!(collection, items)
 
    Add the elements of 'items' to the end of a collection.
@@ -519,13 +527,13 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"cstring",E"cstring(::Ptr{Uint8})
+(E"Strings",E"bytestring",E"bytestring(::Ptr{Uint8})
 
    Create a string from the address of a C (0-terminated) string.
 
 "),
 
-(E"Strings",E"cstring",E"cstring(s)
+(E"Strings",E"bytestring",E"bytestring(s)
 
    Convert a string to a contiguous byte array representation
    appropriate for passing it to C functions.
@@ -775,13 +783,14 @@ collection[key...] = value
 (E"Text I/O",E"show",E"show(x)
 
    Write an informative text representation of a value to the current
-   output stream.
+   output stream. New types should overload 'show(io, x)' where the
+   first argument is a stream.
 
 "),
 
 (E"Text I/O",E"print",E"print(x)
 
-   Write (to the current output stream) a canonical (un-decorated)
+   Write (to the default output stream) a canonical (un-decorated)
    text representation of a value if there is one, otherwise call
    'show'.
 
@@ -1459,14 +1468,14 @@ collection[key...] = value
 
 (E"Arrays",E"stride",E"stride(A, k)
 
-   Returns the size of the stride along dimension k
+   Returns the distance in memory (in number of elements) between
+   adjacent elements in dimension k
 
 "),
 
 (E"Arrays",E"strides",E"strides(A)
 
-   Returns a tuple of the linear index distances between adjacent
-   elements in each dimension
+   Returns a tuple of the memory strides in each dimension
 
 "),
 
@@ -1548,12 +1557,6 @@ collection[key...] = value
    but with the specified element type and dimensions. The second and
    third arguments are both optional. The 'dims' argument may be a
    tuple or a series of integer arguments.
-
-"),
-
-(E"Arrays",E"empty",E"empty(A)
-
-   Construct an empty 1-d array similar to the given array
 
 "),
 
@@ -1720,18 +1723,6 @@ collection[key...] = value
 
    Make a vector out of an array with only one non-singleton
    dimension.
-
-"),
-
-(E"Arrays",E"rowvec",E"rowvec(A, i)
-
-   Return the ith row of matrix A as a vector.
-
-"),
-
-(E"Arrays",E"colvec",E"colvec(A, i)
-
-   Return the ith column of matrix A as a vector.
 
 "),
 
@@ -2354,13 +2345,13 @@ collection[key...] = value
 
 "),
 
-(E"System",E"getcwd",E"getcwd()
+(E"System",E"cwd",E"cwd()
 
    Get the current working directory.
 
 "),
 
-(E"System",E"setcwd",E"setcwd('dir')
+(E"System",E"cd",E"cd('dir')
 
    Set the current working directory. Returns the new current
    directory.
@@ -2524,4 +2515,1792 @@ collection[key...] = value
 
 "),
 
-]
+(E"cpp.jl --- Calling C++ from Julia",E"cpp",E"cpp()
+
+   Suppose you have a C++ shared library, 'libdemo', which contains a
+   function 'timestwo':
+
+      int timestwo(int x) {
+        return 2*x;
+      }
+
+      double timestwo(double x) {
+        return 2*x;
+      }
+
+   You can use these functions by placing the '@cpp' macro prior to a
+   ccall, for example:
+
+      mylib = dlopen('libdemo')
+      x = 3.5
+      x2 = @cpp ccall(dlsym(mylib, :timestwo), Float64, (Float64,), x)
+      y = 3
+      y2 = @cpp ccall(dlsym(mylib, :timestwo), Int, (Int,), y)
+
+   The macro performs C++ ABI name-mangling (using the types of the
+   parameters) to determine the correct library symbol.
+
+   Like 'ccall', this performs library calls without overhead.
+   However, currently it has a number of limitations:
+
+   * It does not support pure-header libraries
+
+   * The restrictions of 'ccall' apply here; for example, there is no
+     support for 'struct'. Consequently it is not possible to use C++
+     objects.
+
+   * Currently there is no C++ namespace support
+
+   * Currently there is no support for templated functions
+
+   * Currently only g++ is supported
+
+   The latter three may not be difficult to fix.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_create_file",E"fits_create_file(filename::String)
+
+   Create and open a new empty output FITS file.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_clobber_file",E"fits_clobber_file(filename::String)
+
+   Like fits_create_file, but overwrites 'filename' if it exists.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_open_file",E"fits_open_file(filename::String)
+
+   Open an existing data file.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_close_file",E"fits_close_file(f::FITSFile)
+
+   Close a previously opened FITS file.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_get_hdrspace",E"fits_get_hdrspace(f::FITSFile) -> (keysexist, morekeys)
+
+   Return the number of existing keywords (not counting the END
+   keyword) and the amount of space currently available for more
+   keywords.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_read_keyword",E"fits_read_keyword(f::FITSFile, keyname::String) -> (value, comment)
+
+   Return the specified keyword.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_read_record",E"fits_read_record(f::FITSFile, keynum::Int) -> String
+
+   Return the nth header record in the CHU. The first keyword in the
+   header is at keynum = 1.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_read_keyn",E"fits_read_keyn(f::FITSFile, keynum::Int) -> (name, value, comment)
+
+   Return the nth header record in the CHU. The first keyword in the
+   header is at keynum = 1.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_write_key",E"fits_write_key(f::FITSFile, keyname::String, value, comment::String)
+
+   Write a keyword of the appropriate data type into the CHU.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_write_record",E"fits_write_record(f::FITSFile, card::String)
+
+   Write a user specified keyword record into the CHU.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_delete_record",E"fits_delete_record(f::FITSFile, keynum::Int)
+
+   Delete the keyword record at the specified index.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_delete_key",E"fits_delete_key(f::FITSFile, keyname::String)
+
+   Delete the keyword named *keyname*.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_get_img_size",E"fits_get_img_size(f::FITSFile)
+
+   Get the dimensions of the image.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_create_img",E"fits_create_img(f::FITSFile, t::Type, naxes::Vector{Int})
+
+   Create a new primary array or IMAGE extension with a specified data
+   type and size.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_write_pix",E"fits_write_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
+
+   Write pixels from *data* into the FITS file.
+
+"),
+
+(E"fitsio.jl --- FITS File I/O",E"fits_read_pix",E"fits_read_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
+
+   Read pixels from the FITS file into 'data'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_prob_name",E"glp_set_prob_name(glp_prob, name)
+
+   Assigns a name to the problem object (or deletes it if 'name' is
+   empty or 'nothing').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_obj_name",E"glp_set_obj_name(glp_prob, name)
+
+   Assigns a name to the objective function (or deletes it if 'name'
+   is empty or 'nothing').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_obj_dir",E"glp_set_obj_dir(glp_prob, dir)
+
+   Sets the optimization direction, 'GLP_MIN' (minimization) or
+   'GLP_MAX' (maximization).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_add_rows",E"glp_add_rows(glp_prob, rows)
+
+   Adds the given number of rows (constraints) to the problem object;
+   returns the number of the first new row added.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_add_cols",E"glp_add_cols(glp_prob, cols)
+
+   Adds the given number of columns (structural variables) to the
+   problem object; returns the number of the first new column added.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_row_name",E"glp_set_row_name(glp_prob, row, name)
+
+   Assigns a name to the specified row (or deletes it if 'name' is
+   empty or 'nothing').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_col_name",E"glp_set_col_name(glp_prob, col, name)
+
+   Assigns a name to the specified column (or deletes it if 'name' is
+   empty or 'nothing').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_row_bnds",E"glp_set_row_bnds(glp_prob, row, bounds_type, lb, ub)
+
+   Sets the type and bounds on a row. 'type' must be one of 'GLP_FR'
+   (free), 'GLP_LO' (lower bounded), 'GLP_UP' (upper bounded),
+   'GLP_DB' (double bounded), 'GLP_FX' (fixed).
+
+   At initialization, each row is free.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_col_bnds",E"glp_set_col_bnds(glp_prob, col, bounds_type, lb, ub)
+
+   Sets the type and bounds on a column. 'type' must be one of
+   'GLP_FR' (free), 'GLP_LO' (lower bounded), 'GLP_UP' (upper
+   bounded), 'GLP_DB' (double bounded), 'GLP_FX' (fixed).
+
+   At initialization, each column is fixed at 0.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_obj_coef",E"glp_set_obj_coef(glp_prob, col, coef)
+
+   Sets the objective coefficient to a column ('col' can be 0 to
+   indicate the constant term of the objective function).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_mat_row",E"glp_set_mat_row(glp_prob, row[, len], ind, val)
+
+   Sets (replaces) the content of a row. The content is specified in
+   sparse format: 'ind' is a vector of indices, 'val' is the vector of
+   corresponding values. 'len' is the number of vector elements which
+   will be considered, and must be less or equal to the length of both
+   'ind' and 'val'.  If 'len' is 0, 'ind' and/or 'val' can be
+   'nothing'.
+
+   In Julia, 'len' can be omitted, and then it is inferred from 'ind'
+   and 'val' (which need to have the same length in such case).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_mat_col",E"glp_set_mat_col(glp_prob, col[, len], ind, val)
+
+   Sets (replaces) the content of a column. Everything else is like
+   'glp_set_mat_row'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_load_matrix",E"glp_load_matrix(glp_prob[, numel], ia, ja, ar)
+glp_load_matrix(glp_prob, A)
+
+   Sets (replaces) the content matrix (i.e. sets all  rows/coluns at
+   once). The matrix is passed in sparse format.
+
+   In the first form (original C API), it's passed via 3 vectors: 'ia'
+   and 'ja' are for rows/columns indices, 'ar' is for values. 'numel'
+   is the number of elements which will be read and must be less or
+   equal to the length of any of the 3 vectors. If 'numel' is 0, any
+   of the vectors can be passed as 'nothing'.
+
+   In Julia, 'numel' can be omitted, and then it is inferred from
+   'ia', 'ja' and 'ar' (which need to have the same length in such
+   case).
+
+   Also, in Julia there's a second, simpler calling form, in which the
+   matrix is passed as a 'SparseMatrixCSC' object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_check_dup",E"glp_check_dup(rows, cols[, numel], ia, ja)
+
+   Check for duplicates in the indices vectors 'ia' and 'ja'. 'numel'
+   has the same meaning and (optional) use as in 'glp_load_matrix'.
+   Returns 0 if no duplicates/out-of-range indices are found, or a
+   positive number indicating where a duplicate occurs, or a negative
+   number indicating an out-of-bounds index.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sort_matrix",E"glp_sort_matrix(glp_prob)
+
+   Sorts the elements of the problem object's matrix.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_del_rows",E"glp_del_rows(glp_prob[, num_rows], rows_ids)
+
+   Deletes rows from the problem object. Rows are specified in the
+   'rows_ids' vector. 'num_rows' is the number of elements of
+   'rows_ids' which will be considered, and must be less or equal to
+   the length id 'rows_ids'. If 'num_rows' is 0, 'rows_ids' can be
+   'nothing'. In Julia, 'num_rows' is optional (it's inferred from
+   'rows_ids' if not given).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_del_cols",E"glp_del_cols(glp_prob, cols_ids)
+
+   Deletes columns from the problem object. See 'glp_del_rows'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_copy_prob",E"glp_copy_prob(glp_prob_dest, glp_prob, copy_names)
+
+   Makes a copy of the problem object. The flag 'copy_names'
+   determines if names are copied, and must be either 'GLP_ON' or
+   'GLP_OFF'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_erase_prob",E"glp_erase_prob(glp_prob)
+
+   Resets the problem object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_prob_name",E"glp_get_prob_name(glp_prob)
+
+   Returns the problem object's name. Unlike the C version, if the
+   problem has no assigned name, returns an empty string.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_obj_name",E"glp_get_obj_name(glp_prob)
+
+   Returns the objective function's name. Unlike the C version, if the
+   objective has no assigned name, returns an empty string.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_obj_dir",E"glp_get_obj_dir(glp_prob)
+
+   Returns the optimization direction, 'GLP_MIN' (minimization) or
+   'GLP_MAX' (maximization).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_num_rows",E"glp_get_num_rows(glp_prob)
+
+   Returns the current number of rows.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_num_cols",E"glp_get_num_cols(glp_prob)
+
+   Returns the current number of columns.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_name",E"glp_get_row_name(glp_prob, row)
+
+   Returns the name of the specified row. Unlike the C version, if the
+   row has no assigned name, returns an empty string.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_name",E"glp_get_col_name(glp_prob, col)
+
+   Returns the name of the specified column. Unlike the C version, if
+   the column has no assigned name, returns an empty string.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_type",E"glp_get_row_type(glp_prob, row)
+
+   Returns the type of the specified row: 'GLP_FR' (free), 'GLP_LO'
+   (lower bounded), 'GLP_UP' (upper bounded), 'GLP_DB' (double
+   bounded), 'GLP_FX' (fixed).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_lb",E"glp_get_row_lb(glp_prob, row)
+
+   Returns the lower bound of the specified row, '-DBL_MAX' if
+   unbounded.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_ub",E"glp_get_row_ub(glp_prob, row)
+
+   Returns the upper bound of the specified row, '+DBL_MAX' if
+   unbounded.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_type",E"glp_get_col_type(glp_prob, col)
+
+   Returns the type of the specified column: 'GLP_FR' (free), 'GLP_LO'
+   (lower bounded), 'GLP_UP' (upper bounded), 'GLP_DB' (double
+   bounded), 'GLP_FX' (fixed).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_lb",E"glp_get_col_lb(glp_prob, col)
+
+   Returns the lower bound of the specified column, '-DBL_MAX' if
+   unbounded.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_ub",E"glp_get_col_ub(glp_prob, col)
+
+   Returns the upper bound of the specified column, '+DBL_MAX' if
+   unbounded.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_obj_coef",E"glp_get_obj_coef(glp_prob, col)
+
+   Return the objective coefficient to a column ('col' can be 0 to
+   indicate the constant term of the objective function).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_num_nz",E"glp_get_num_nz(glp_prob)
+
+   Return the number of non-zero elements in the constraint matrix.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_mat_row",E"glp_get_mat_row(glp_prob, row, ind, val)
+glp_get_mat_row(glp_prob, row)
+
+   Returns the contents of a row. In the first form (original C API),
+   it fills the 'ind' and 'val' vectors provided, which must be of
+   type 'Vector{Int32}' and 'Vector{Float64}' respectively, and have a
+   sufficient length to hold the result (or they can be empty or
+   'nothing', and then they're not filled). It returns the length of
+   the result.
+
+   In Julia, there's a second, simpler calling form which allocates
+   and returns the two vectors as '(ind, val)'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_mat_col",E"glp_get_mat_col(glp_prob, col, ind, val)
+glp_get_mat_col(glp_prob, col)
+
+   Returns the contents of a column. See 'glp_get_mat_row'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_create_index",E"glp_create_index(glp_prob)
+
+   Creates the name index (used by 'glp_find_row', 'glp_find_col') for
+   the problem object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_find_row",E"glp_find_row(glp_prob, name)
+
+   Finds the numeric id of a row by name. Returns 0 if no row with the
+   given name is found.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_find_col",E"glp_find_col(glp_prob, name)
+
+   Finds the numeric id of a column by name. Returns 0 if no column
+   with the given name is found.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_delete_index",E"glp_delete_index(glp_prob)
+
+   Deletes the name index for the problem object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_rii",E"glp_set_rii(glp_prob, row, rii)
+
+   Sets the rii scale factor for the specified row.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_sjj",E"glp_set_sjj(glp_prob, col, sjj)
+
+   Sets the sjj scale factor for the specified column.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_rii",E"glp_get_rii(glp_prob, row)
+
+   Returns the rii scale factor for the specified row.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_sjj",E"glp_get_sjj(glp_prob, col)
+
+   Returns the sjj scale factor for the specified column.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_scale_prob",E"glp_scale_prob(glp_prob, flags)
+
+   Performs automatic scaling of problem data for the problem object.
+   The parameter 'flags' can be 'GLP_SF_AUTO' (automatic) or a bitwise
+   OR of the forllowing: 'GLP_SF_GM' (geometric mean), 'GLP_SF_EQ'
+   (equilibration), 'GLP_SF_2N' (nearest power of 2), 'GLP_SF_SKIP'
+   (skip if well scaled).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_unscale_prob",E"glp_unscale_prob(glp_prob)
+
+   Unscale the problem data (cancels the scaling effect).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_row_stat",E"glp_set_row_stat(glp_prob, row, stat)
+
+   Sets the status of the specified row. 'stat' must be one of:
+   'GLP_BS' (basic), 'GLP_NL' (non-basic lower bounded), 'GLP_NU'
+   (non-basic upper-bounded), 'GLP_NF' (non-basic free), 'GLP_NS'
+   (non-basic fixed).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_col_stat",E"glp_set_col_stat(glp_prob, col, stat)
+
+   Sets the status of the specified column. 'stat' must be one of:
+   'GLP_BS' (basic), 'GLP_NL' (non-basic lower bounded), 'GLP_NU'
+   (non-basic upper-bounded), 'GLP_NF' (non-basic free), 'GLP_NS'
+   (non-basic fixed).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_std_basis",E"glp_std_basis(glp_prob)
+
+   Constructs the standard (trivial) initial LP basis for the problem
+   object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_adv_basis",E"glp_adv_basis(glp_prob[, flags])
+
+   Constructs an advanced initial LP basis for the problem object. The
+   flag 'flags' is optional; it must be 0 if given.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_cpx_basis",E"glp_cpx_basis(glp_prob)
+
+   Constructs an initial LP basis for the problem object with the
+   algorithm proposed by R. Bixby.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_simplex",E"glp_simplex(glp_prob[, glp_param])
+
+   The routine 'glp_simplex' is a driver to the LP solver based on the
+   simplex method. This routine retrieves problem data from the
+   specified problem object, calls the solver to solve the problem
+   instance, and stores results of computations back into the problem
+   object.
+
+   The parameters are specified via the optional 'glp_param' argument,
+   which is of type 'GLPSimplexParam' (or 'nothing' to use the default
+   settings).
+
+   Returns 0 in case of success, or a non-zero flag specifying the
+   reason for failure: 'GLP_EBADB' (invalid base), 'GLP_ESING'
+   (singular matrix), 'GLP_ECOND' (ill-conditioned matrix),
+   'GLP_EBOUND' (incorrect bounds), 'GLP_EFAIL' (solver failure),
+   'GLP_EOBJLL' (lower limit reached), 'GLP_EOBJUL' (upper limit
+   reached), 'GLP_ITLIM' (iterations limit exceeded), 'GLP_ETLIM'
+   (time limit exceeded), 'GLP_ENOPFS' (no primal feasible solution),
+   'GLP_ENODFS' (no dual feasible solution).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_exact",E"glp_exact(glp_prob[, glp_param])
+
+   A tentative implementation of the primal two-phase simplex method
+   based on exact (rational) arithmetic. Similar to 'glp_simplex'. The
+   optional glp_param is of type 'GLPSimplexParam'.
+
+   The possible return values are 0 (success) or 'GLP_EBADB',
+   'GLP_ESING', 'GLP_EBOUND', 'GLP_EFAIL', 'GLP_ITLIM', 'GLP_ETLIM'
+   (see 'glp_simplex').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_init_smcp",E"glp_init_smcp(glp_param)
+
+   Initializes a 'GLPSimplexParam' object with the default values. In
+   Julia, this is done at object creation time; this function can be
+   used to reset the object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_status",E"glp_get_status(glp_prob)
+
+   Returns the generic status of the current basic solution: 'GLP_OPT'
+   (optimal), 'GLP_FEAS' (feasible), 'GLP_INFEAS' (infeasible),
+   'GLP_NOFEAS' (no feasible solution), 'GLP_UNBND' (unbounded
+   solution), 'GLP_UNDEF' (undefined).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_prim_stat",E"glp_get_prim_stat(glp_prob)
+
+   Returns the status of the primal basic solution: 'GLP_FEAS',
+   'GLP_INFEAS', 'GLP_NOFEAS', 'GLP_UNDEF' (see 'glp_get_status').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_dual_stat",E"glp_get_dual_stat(glp_prob)
+
+   Returns the status of the dual basic solution: 'GLP_FEAS',
+   'GLP_INFEAS', 'GLP_NOFEAS', 'GLP_UNDEF' (see 'glp_get_status').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_obj_val",E"glp_get_obj_val(glp_prob)
+
+   Returns the current value of the objective function.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_stat",E"glp_get_row_stat(glp_prob, row)
+
+   Returns the status of the specified row: 'GLP_BS', 'GLP_NL',
+   'GLP_NU', 'GLP_NF', 'GLP_NS' (see 'glp_set_row_stat').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_prim",E"glp_get_row_prim(glp_prob, row)
+
+   Returns the primal value of the specified row.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_dual",E"glp_get_row_dual(glp_prob, row)
+
+   Returns the dual value (reduced cost) of the specified row.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_stat",E"glp_get_col_stat(glp_prob, col)
+
+   Returns the status of the specified column: 'GLP_BS', 'GLP_NL',
+   'GLP_NU', 'GLP_NF', 'GLP_NS' (see 'glp_set_row_stat').
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_prim",E"glp_get_col_prim(glp_prob, col)
+
+   Returns the primal value of the specified column.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_dual",E"glp_get_col_dual(glp_prob, col)
+
+   Returns the dual value (reduced cost) of the specified column.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_unbnd_ray",E"glp_get_unbnd_ray(glp_prob)
+
+   Returns the number k of a variable, which causes primal or dual
+   unboundedness (if 1 <= k <= rows it's row k; if rows+1 <= k <=
+   rows+cols it's column k-rows, if k=0 such variable is not defined).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_interior",E"glp_interior(glp_prob[, glp_param])
+
+   The routine 'glp_interior' is a driver to the LP solver based on
+   the primal-dual interior-point method. This routine retrieves
+   problem data from the specified problem object, calls the solver to
+   solve the problem instance, and stores results of computations back
+   into the problem object.
+
+   The parameters are specified via the optional 'glp_param' argument,
+   which is of type 'GLPInteriorParam' (or 'nothing' to use the
+   default settings).
+
+   Returns 0 in case of success, or a non-zero flag specifying the
+   reason for failure: 'GLP_EFAIL' (solver failure), 'GLP_ENOCVG'
+   (very slow convergence, or divergence), 'GLP_ITLIM' (iterations
+   limit exceeded), 'GLP_EINSTAB' (numerical instability).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_init_iptcp",E"glp_init_iptcp(glp_param)
+
+   Initializes a 'GLPInteriorParam' object with the default values. In
+   Julia, this is done at object creation time; this function can be
+   used to reset the object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_status",E"glp_ipt_status(glp_prob)
+
+   Returns the status of the interior-point solution: 'GLP_OPT'
+   (optimal), 'GLP_INFEAS' (infeasible), 'GLP_NOFEAS' (no feasible
+   solution), 'GLP_UNDEF' (undefined).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_obj_val",E"glp_ipt_obj_val(glp_prob)
+
+   Returns the current value of the objective function for the
+   interior-point solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_row_prim",E"glp_ipt_row_prim(glp_prob, row)
+
+   Returns the primal value of the specified row for the interior-
+   point solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_row_dual",E"glp_ipt_row_dual(glp_prob, row)
+
+   Returns the dual value (reduced cost) of the specified row for the
+   interior-point solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_col_prim",E"glp_ipt_col_prim(glp_prob, col)
+
+   Returns the primal value of the specified column for the interior-
+   point solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ipt_col_dual",E"glp_ipt_col_dual(glp_prob, col)
+
+   Returns the dual value (reduced cost) of the specified column for
+   the interior-point solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_col_kind",E"glp_set_col_kind(glp_prob, col, kind)
+
+   Sets the kind for the specified column (for mixed-integer
+   programming). 'kind' must be one of: 'GLP_CV' (continuous),
+   'GLP_IV' (integer), 'GLP_BV' (binary, 0/1).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_kind",E"glp_get_col_kind(glp_prob, col)
+
+   Returns the kind for the specified column (see *glp_set_col_kind*).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_num_int",E"glp_get_num_int(glp_prob)
+
+   Returns the number of columns marked as integer (including binary).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_num_bin",E"glp_get_num_bin(glp_prob)
+
+   Returns the number of columns marked binary.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_intopt",E"glp_intopt(glp_prob[, glp_param])
+
+   The routine 'glp_intopt' is a driver to the mixed-integer-
+   programming (MIP) solver based on the branch- and-cut method, which
+   is a hybrid of branch-and-bound and cutting plane methods.
+
+   The parameters are specified via the optional 'glp_param' argument,
+   which is of type 'GLPIntoptParam' (or 'nothing' to use the default
+   settings).
+
+   Returns 0 in case of success, or a non-zero flag specifying the
+   reason for failure: 'GLP_EBOUND' (incorrect bounds), 'GLP_EROOT'
+   (no optimal LP basis given), 'GLP_ENOPFS' (no primal feasible LP
+   solution), 'GLP_ENODFS' (no dual feasible LP solution), 'GLP_EFAIL'
+   (solver failure), 'GLP_EMIPGAP' (mip gap tolearance reached),
+   'GLP_ETLIM' (time limit exceeded), 'GLP_ESTOP' (terminated by
+   application).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_init_iocp",E"glp_init_iocp(glp_param)
+
+   Initializes a 'GLPIntoptParam' object with the default values. In
+   Julia, this is done at object creation time; this function can be
+   used to reset the object.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mip_status",E"glp_mip_status(glp_prob)
+
+   Returns the generic status of the MIP solution: 'GLP_OPT'
+   (optimal), 'GLP_FEAS' (feasible), 'GLP_NOFEAS' (no feasible
+   solution), 'GLP_UNDEF' (undefined).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mip_obj_val",E"glp_mip_obj_val(glp_prob)
+
+   Returns the current value of the objective function for the MIP
+   solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mip_row_val",E"glp_mip_row_val(glp_prob, row)
+
+   Returns the value of the specified row for the MIP solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mip_col_val",E"glp_mip_col_val(glp_prob, col)
+
+   Returns the value of the specified column for the MIP solution.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_mps",E"glp_read_mps(glp_prob, format[, param], filename)
+
+   Reads problem data in MPS format from a text file. 'format' must be
+   one of 'GLP_MPS_DECK' (fixed, old) or 'GLP_MPS_FILE' (free,
+   modern). 'param' is optional; if given it must be 'nothing'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_mps",E"glp_write_mps(glp_prob, format[, param], filename)
+
+   Writes problem data in MPS format from a text file. See
+   'glp_read_mps'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_lp",E"glp_read_lp(glp_prob[, param], filename)
+
+   Reads problem data in CPLEX LP format from a text file. 'param' is
+   optional; if given it must be 'nothing'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_lp",E"glp_write_lp(glp_prob[, param], filename)
+
+   Writes problem data in CPLEX LP format from a text file. See
+   'glp_read_lp'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_prob",E"glp_read_prob(glp_prob[, flags], filename)
+
+   Reads problem data in GLPK LP/MIP format from a text file. 'flags'
+   is optional; if given it must be 0.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_prob",E"glp_write_prob(glp_prob[, flags], filename)
+
+   Writes problem data in GLPK LP/MIP format from a text file. See
+   'glp_read_prob'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mpl_read_model",E"glp_mpl_read_model(glp_tran, filename, skip)
+
+   Reads the model section and, optionally, the data section, from a
+   text file in MathProg format, and stores it in 'glp_tran', which is
+   a 'GLPMathProgWorkspace' object. If 'skip' is nonzero, the data
+   section is skipped if present.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mpl_read_data",E"glp_mpl_read_data(glp_tran, filename)
+
+   Reads data section from a text file in MathProg format and stores
+   it in 'glp_tran', which is a 'GLPMathProgWorkspace' object. May be
+   called more than once.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mpl_generate",E"glp_mpl_generate(glp_tran[, filename])
+
+   Generates the model using its description stored in the
+   'GLPMathProgWorkspace' translator workspace 'glp_tran'. The
+   optional 'filename' specifies an output file; if not given or
+   'nothing', the terminal is used.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mpl_build_prob",E"glp_mpl_build_prob(glp_tran, glp_prob)
+
+   Transfer information from the 'GLPMathProgWorkspace' translator
+   workspace 'glp_tran' to the 'GLPProb' problem object 'glp_prob'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mpl_postsolve",E"glp_mpl_postsolve(glp_tran, glp_prob, sol)
+
+   Copies the solution from the 'GLPProb' problem object 'glp_prob' to
+   the 'GLPMathProgWorkspace' translator workspace 'glp_tran' and then
+   executes all the remaining model statements, which follow the solve
+   statement.
+
+   The parameter 'sol' specifies which solution should be copied from
+   the problem object to the workspace: 'GLP_SOL' (basic), 'GLP_IPT'
+   (interior-point), 'GLP_MIP' (MIP).
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_print_sol",E"glp_print_sol(glp_prob, filename)
+
+   Writes the current basic solution to a text file, in printable
+   format.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_sol",E"glp_read_sol(glp_prob, filename)
+
+   Reads the current basic solution from a text file, in the format
+   used by 'glp_write_sol'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_sol",E"glp_write_sol(glp_prob, filename)
+
+   Writes the current basic solution from a text file, in a format
+   which can be read by 'glp_read_sol'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_print_ipt",E"glp_print_ipt(glp_prob, filename)
+
+   Writes the current interior-point solution to a text file, in
+   printable format.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_ipt",E"glp_read_ipt(glp_prob, filename)
+
+   Reads the current interior-point solution from a text file, in the
+   format used by 'glp_write_ipt'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_ipt",E"glp_write_ipt(glp_prob, filename)
+
+   Writes the current interior-point solution from a text file, in a
+   format which can be read by 'glp_read_ipt'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_print_mip",E"glp_print_mip(glp_prob, filename)
+
+   Writes the current MIP solution to a text file, in printable
+   format.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_mip",E"glp_read_mip(glp_prob, filename)
+
+   Reads the current MIP solution from a text file, in the format used
+   by 'glp_write_mip'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_mip",E"glp_write_mip(glp_prob, filename)
+
+   Writes the current MIP solution from a text file, in a format which
+   can be read by 'glp_read_mip'.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_print_ranges",E"glp_print_ranges(glp_prob, [[len,] list,] [flags,] filename)
+
+   Performs sensitivity analysis of current optimal basic solution and
+   writes the analysis report in human-readable format to a text file.
+   'list' is a vector specifying the rows/columns to analyze (if 1 <=
+   list[i] <= rows, analyzes row list[i]; if rows+1 <= list[i] <=
+   rows+cols, analyzes column list[i]-rows). 'len' is the number of
+   elements of 'list' which will be consideres, and must be smaller or
+   equal to the length of the list. In Julia, 'len' is optional (it's
+   inferred from 'len' if not given). 'list' can be empty of 'nothing'
+   or not given at all, implying all indices will be analyzed. 'flags'
+   is optional, and must be 0 if given.
+
+   To call this function, the current basic solution must be optimal,
+   and the basis factorization must exist.
+
+   Returns 0 upon success, non-zero otherwise.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_bf_exists",E"glp_bf_exists(glp_prob)
+
+   Returns non-zero if the basis fatorization for the current basis
+   exists, 0 otherwise.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_factorize",E"glp_factorize(glp_prob)
+
+   Computes the basis factorization for the current basis.
+
+   Returns 0 if successful, otherwise: 'GLP_EBADB' (invalid matrix),
+   'GLP_ESING' (singluar matrix), 'GLP_ECOND' (ill-conditioned
+   matrix).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_bf_updated",E"glp_bf_updated(glp_prob)
+
+   Returns 0 if the basis factorization was computed from scratch,
+   non-zero otherwise.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_bfcp",E"glp_get_bfcp(glp_prob, glp_param)
+
+   Retrieves control parameters, which are used on computing and
+   updating the basis factorization associated with the problem
+   object, and stores them in the 'GLPBasisFactParam' object
+   'glp_param'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_set_bfcp",E"glp_set_bfcp(glp_prob[, glp_param])
+
+   Sets the control parameters stored in the 'GLPBasisFactParam'
+   object 'glp_param' into the problem object. If 'glp_param' is
+   'nothing' or is omitted, resets the parameters to their defaults.
+
+   The 'glp_param' should always be retreived via 'glp_get_bfcp'
+   before changing its values and calling this function.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_bhead",E"glp_get_bhead(glp_prob, k)
+
+   Returns the basis header information for the current basis. 'k' is
+   a row index.
+
+   Returns either i such that 1 <= i <= rows, if 'k' corresponds to
+   i-th auxiliary variable, or rows+j such that 1 <= j <= columns, if
+   'k' corresponds to the j-th structural variable.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_row_bind",E"glp_get_row_bind(glp_prob, row)
+
+   Returns the index of the basic variable 'k' which is associated
+   with the specified row, or 0 if the variable is non-basic. If
+   'glp_get_bhead(glp_prob, k) = row', then 'glp_get_bind(glp_prob,
+   row) = k'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_get_col_bind",E"glp_get_col_bind(glp_prob, col)
+
+   Returns the index of the basic variable 'k' which is associated
+   with the specified column, or 0 if the variable is non-basic. If
+   'glp_get_bhead(glp_prob, k) = rows+col', then
+   'glp_get_bind(glp_prob, col) = k'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_ftran",E"glp_ftran(glp_prob, v)
+
+   Performs forward transformation (FTRAN), i.e. it solves the system
+   Bx = b, where B is the basis matrix, x is the vector of unknowns to
+   be computed, b is the vector of right-hand sides. At input, 'v'
+   represents the vector b; at output, it contains the vector x. 'v'
+   must be a 'Vector{Float64}' whose length is the number of rows.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_btran",E"glp_btran(glp_prob, v)
+
+   Performs backward transformation (BTRAN), i.e. it solves the system
+   B'x = b, where B is the transposed of the basis matrix, x is the
+   vector of unknowns to be computed, b is the vector of right-hand
+   sides. At input, 'v' represents the vector b; at output, it
+   contains the vector x. 'v' must be a 'Vector{Float64}' whose length
+   is the number of rows.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_warm_up",E"glp_warm_up(glp_prob)
+
+   'Warms up' the LP basis using current statuses assigned to rows and
+   columns, i.e. computes factorization of the basis matrix (if it
+   does not exist), computes primal and dual components of basic
+   solution, and determines the solution status.
+
+   Returns 0 if successful, otherwise: 'GLP_EBADB' (invalid matrix),
+   'GLP_ESING' (singluar matrix), 'GLP_ECOND' (ill-conditioned
+   matrix).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_eval_tab_row",E"glp_eval_tab_row(glp_prob, k, ind, val)
+glp_eval_tab_row(glp_prob, k)
+
+   Computes a row of the current simplex tableau which corresponds to
+   some basic variable specified by the parameter 'k'. If 1 <= 'k' <=
+   rows, uses 'k'-th auxiliary variable; if rows+1 <= 'k' <=
+   rows+cols, uses ('k'-rows)-th structural variable. The basis
+   factorization must exist.
+
+   In the first form, stores the result in the provided vectors 'ind'
+   and 'val', which must be of type 'Vector{Int32}' and
+   'Vector{Float64}', respectively, and returns the length of the
+   outcome; in Julia, the vectors will be resized as needed to hold
+   the result.
+
+   In the second, simpler form, 'ind' and 'val' are returned in a
+   tuple as the output of the function.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_eval_tab_col",E"glp_eval_tab_col(glp_prob, k, ind, val)
+glp_eval_tab_col(glp_prob, k)
+
+   Computes a column of the current simplex tableau which corresponds
+   to some non-basic variable specified by the parameter 'k'. See
+   'glp_eval_tab_row'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_transform_row",E"glp_transform_row(glp_prob[, len], ind, val)
+
+   Performs the same operation as 'glp_eval_tab_row' with the
+   exception that the row to be transformed is specified explicitly as
+   a sparse vector. The parameter 'len' is the number of elements of
+   'ind' and 'val' which will be used, and must be smaller or equal to
+   the length of both vectors; in Julia it is optional (and the 'ind'
+   and 'val' must have the same length). The vectors 'int' and 'val'
+   must be of type 'Vector{Int32}' and 'Vector{Float64}',
+   respectively, since they will also hold the result; in Julia, they
+   will be resized to the resulting required length.
+
+   Returns the length if the resulting vectors 'ind' and 'val'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_transform_col",E"glp_transform_col(glp_prob[, len], ind, val)
+
+   Performs the same operation as 'glp_eval_tab_col' with the
+   exception that the row to be transformed is specified explicitly as
+   a sparse vector. See 'glp_transform_row'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_prim_rtest",E"glp_prim_rtest(glp_prob[, len], ind, val, dir, eps)
+
+   Performs the primal ratio test using an explicitly specified column
+   of the simplex table. The current basic solution must be primal
+   feasible. The column is specified in sparse format by 'len' (length
+   of the vector), 'ind' and 'val' (indices and values of the vector).
+   'len' is the number of elements which will be considered and must
+   be smaller or equal to the length of both 'ind' and 'val'; in
+   Julia, it can be omitted (and then 'ind' and 'val' must have the
+   same length). The indices in 'ind' must be between 1 and rows+cols;
+   they must correspond to basic variables. 'dir' is a direction
+   parameter which must be either +1 (increasing) or -1 (decreasing).
+   'eps' is a tolerance parameter and must be positive. See the GLPK
+   manual for a detailed explanation.
+
+   Returns the position in 'ind' and 'val' which corresponds to the
+   pivot element, or 0 if the choice cannot be made.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_dual_rtest",E"glp_dual_rtest(glp_prob[, len], ind, val, dir, eps)
+
+   Performs the dual ratio test using an explicitly specified row of
+   the simplex table. The current basic solution must be dual
+   feasible. The indices in 'ind' must correspond to non-basic
+   variables. Everything else is like in 'glp_prim_rtest'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_analyze_bound",E"glp_analyze_bound(glp_prob, k)
+
+   Analyzes the effect of varying the active bound of specified non-
+   basic variable. See the GLPK manual for a detailed explanation. In
+   Julia, this function has a different API then C. It returns
+   '(limit1, var1, limit2, var2)' rather then taking them as pointers
+   in the argument list.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_analyze_coef",E"glp_analyze_coef(glp_prob, k)
+
+   Analyzes the effect of varying the objective coefficient at
+   specified basic variable. See the GLPK manual for a detailed
+   explanation. In Julia, this function has a different API then C. It
+   returns '(coef1, var1, value1, coef2, var2, value2)' rather then
+   taking them as pointers in the argument list.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_init_env",E"glp_init_env()
+
+   Initializes the GLPK environment. Not normally needed.
+
+   Returns 0 (initilization successful), 1 (environment already
+   initialized), 2 (failed, insufficient memory) or 3 (failed,
+   unsupported programming model).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_version",E"glp_version()
+
+   Returns the GLPK version number. In Julia, instead of returning a
+   string as in C, it returns a tuple of integer values, containing
+   the major and the minor number.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_free_env",E"glp_free_env()
+
+   Frees all resources used by GLPK routines (memory blocks, etc.)
+   which are currently still in use. Not normally needed.
+
+   Returns 0 if successful, 1 if envirnoment is inactive.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_term_out",E"glp_term_out(flag)
+
+   Enables/disables the terminal output of glpk routines. 'flag' is
+   either 'GLP_ON' (output enabled) or 'GLP_OFF' (output disabled).
+
+   Returns the previous status of the terminal output.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_open_tee",E"glp_open_tee(filename)
+
+   Starts copying all the terminal output to an output text file.
+
+   Returns 0 if successful, 1 if already active, 2 if it fails
+   creating the output file.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_close_tee",E"glp_close_tee()
+
+   Stops copying the terminal output to the output text file
+   previously open by the 'glp_open_tee'.
+
+   Return 0 if successful, 1 if copying terminal output was not
+   started.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_malloc",E"glp_malloc(size)
+
+   Replacement of standard C 'malloc'. Allocates uninitialized memeory
+   which must freed with 'glp_free'.
+
+   Returns a pointer to the allocated memory.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_calloc",E"glp_calloc(n, size)
+
+   Replacement of standard C 'calloc', but does not initialize the
+   memeory. Allocates uninitialized memeory which must freed with
+   'glp_free'.
+
+   Returns a pointer to the allocated memory.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_free",E"glp_free(ptr)
+
+   Deallocates a memory block previously allocated by 'glp_malloc' or
+   'glp_calloc'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mem_usage",E"glp_mem_usage()
+
+   Reports some information about utilization of the memory by the
+   routines 'glp_malloc', 'glp_calloc', and 'glp_free'. In Julia, this
+   function has a different API then C. It returns '(count, cpeak,
+   total, tpeak)' rather then taking them as pointers in the argument
+   list.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_mem_limit",E"glp_mem_limit(limit)
+
+   Limits the amount of memory avaliable for dynamic allocation to a
+   value in megabyes given by the integer parameter 'limit'.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_time",E"glp_time()
+
+   Returns the current universal time (UTC), in milliseconds.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_difftime",E"glp_difftime(t1, t0)
+
+   Returns the difference between two time values 't1' and 't0',
+   expressed in seconds.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_open_file",E"glp_sdf_open_file(filename)
+
+   Opens a plain data file.
+
+   If successful, returns a GLPData() object, otherwise throws an
+   error.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_read_int",E"glp_sdf_read_int(glp_data)
+
+   Reads an integer number from the plain data file specified by the
+   'GLPData' parameter 'glp_data', skipping initial whitespace.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_read_num",E"glp_sdf_read_num(glp_data)
+
+   Reads a floating point number from the plain data file specified by
+   the 'GLPData' parameter 'glp_data', skipping initial whitespace.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_read_item",E"glp_sdf_read_item(glp_data)
+
+   Reads a data item (a String) from the plain data file specified by
+   the 'GLPData' parameter 'glp_data', skipping initial whitespace.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_read_text",E"glp_sdf_read_text(glp_data)
+
+   Reads a line of text from the plain data file specified by the
+   'GLPData' parameter 'glp_data', skipping initial and final
+   whitespace.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_line",E"glp_sdf_line(glp_data)
+
+   Returns the current line in the GLPData object 'glp_data'
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_sdf_close_file",E"glp_sdf_close_file(glp_data)
+
+   Closes the file associated to 'glp_data' and frees the resources.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_read_cnfsat",E"glp_read_cnfsat(glp_prob, filename)
+
+   Reads the CNF-SAT problem data in DIMACS format from a text file.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_check_cnfsat",E"glp_check_cnfsat(glp_prob)
+
+   Checks if the problem object encodes a CNF-SAT problem instance, in
+   which case it returns 0, otherwise returns non-zero.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_write_cnfsat",E"glp_write_cnfsat(glp_prob, filename)
+
+   Writes the CNF-SAT problem data in DIMACS format into a text file.
+
+   Returns 0 upon success; throws an error in case of failure.
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_minisat1",E"glp_minisat1(glp_prob)
+
+   The routine *glp_minisat1* is a driver to MiniSat, a CNF-SAT solver
+   developed by Niklas Eén and Niklas Sörensson, Chalmers University
+   of Technology, Sweden.
+
+   Returns 0 in case of success, or a non-zero flag specifying the
+   reason for failure: 'GLP_EDATA' (problem is not CNF-SAT),
+   'GLP_EFAIL' (solver failure).
+
+"),
+
+(E"glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)",E"glp_intfeas1",E"glp_intfeas1(glp_prob, use_bound, obj_bound)
+
+   The routine glp_intfeas1 is a tentative implementation of an
+   integer feasibility solver based on a CNF-SAT solver (currently
+   MiniSat). 'use_bound' is a flag: if zero, any feasible solution is
+   seeked, otherwise seraches for an integer feasible solution.
+   'obj_bound' is used only if 'use_bound' is non-zero, and specifies
+   an upper/lower bound (for maximization/minimazion respectively) to
+   the objective function.
+
+   All variables (columns) must either be binary or fixed. All
+   constraint and objective coeffient must be integer.
+
+   Returns 0 in case of success, or a non-zero flag specifying the
+   reason for failure: 'GLP_EDATA' (problem data is not valid),
+   'GLP_ERANGE' (integer overflow occurred), 'GLP_EFAIL' (solver
+   failure).
+
+"),
+
+
+(E"options.jl --- Optional arguments to functions",E"options",E"options()
+
+   Use the '@options' macro to set the value of optional parameters
+   for a function that has been written to use them (see 'defaults()'
+   to learn how to write such functions).  The syntax is:
+
+      opts = @options a=5 b=7
+
+   For a function that uses optional parameters 'a' and 'b', this will
+   override the default settings for these parameters. You would
+   likely call that function in the following way:
+
+      myfunc(requiredarg1, requiredarg2, ..., opts)
+
+   Most functions written to use optional arguments will probably
+   check to make sure that you are not supplying parameters that are
+   never used by the function or its sub-functions. Typically,
+   supplying unused parameters will result in an error. You can
+   control the behavior this way:
+
+      # throw an error if a or b is not used (the default)
+      opts = @options CheckError a=5 b=2
+      # issue a warning if a or b is not used
+      opts = @options CheckWarn a=5 b=2
+      # don't check whether a and b are used
+      opts = @options CheckNone a=5 b=2
+
+   As an alternative to the macro syntax, you can also say:
+
+      opts = Options(CheckWarn, :a, 5, :b, 2)
+
+   The check flag is optional.
+
+"),
+
+(E"options.jl --- Optional arguments to functions",E"set_options",E"set_options()
+
+   The '@set_options' macro lets you add new parameters to an existing
+   options structure.  For example:
+
+      @set_options opts d=99
+
+   would add 'd' to the set of parameters in 'opts', or re-set its
+   value if it was already supplied.
+
+"),
+
+(E"options.jl --- Optional arguments to functions",E"defaults",E"defaults()
+
+   The '@defaults' macro is for writing functions that take optional
+   parameters.  The typical syntax of such functions is:
+
+      function myfunc(requiredarg1, requiredarg2, ..., opts::Options)
+          @defaults opts a=11 b=2a+1 c=a*b d=100
+          # The function body. Use a, b, c, and d just as you would
+          # any other variable. For example,
+          k = a + b
+          # You can pass opts down to subfunctions, which might supply
+          # additional defaults for other variables aa, bb, etc.
+          y = subfun(k, opts)
+          # Terminate your function with check_used, then return values
+          @check_used opts
+          return y
+      end
+
+   Note the function calls 'check_used()' at the end.
+
+   It is possible to have more than one Options parameter to a
+   function, for example:
+
+      function twinopts(x, plotopts::Options, calcopts::Options)
+          @defaults plotopts linewidth=1
+          @defaults calcopts n_iter=100
+          # Do stuff
+          @check_used plotopts
+          @check_used calcopts
+      end
+
+   Within a given scope, you should only have one call to '@defaults'
+   per options variable.
+
+"),
+
+(E"options.jl --- Optional arguments to functions",E"check_used",E"check_used()
+
+   The '@check_used' macro tests whether user-supplied parameters were
+   ever accessed by the '@defaults' macro. The test is performed at
+   the end of the function body, so that subfunction handling
+   parameters not used by the parent function may be 'credited' for
+   their usage. Each sub-function should also call '@check_used', for
+   example:
+
+      function complexfun(x, opts::Options)
+          @defaults opts parent=3 both=7
+          println(parent)
+          println(both)
+          subfun1(x, opts)
+          subfun2(x, opts)
+          @check_used opts
+      end
+
+      function subfun1(x, opts::Options)
+          @defaults opts sub1='sub1 default' both=0
+          println(sub1)
+          println(both)
+          @check_used opts
+      end
+
+      function subfun2(x, opts::Options)
+          @defaults opts sub2='sub2 default' both=22
+          println(sub2)
+          println(both)
+          @check_used opts
+      end
+
+"),
+
+(E"options.jl --- Optional arguments to functions",E"check_lock",E"class class Options(OptionsChecking, param1, val1, param2, val2, ...)
+
+   'Options' is the central type used for handling optional arguments.
+   Its fields are briefly described below.
+
+   key2index
+
+      A 'Dict' that looks up an integer index, given the symbol for a
+      variable (e.g., 'key2index[:a]' for the variable 'a')
+
+   vals
+
+      'vals[key2index[:a]]' is the value to be assigned to the
+      variable 'a'
+
+   used
+
+      A vector of booleans, one per variable, with
+      'used[key2index[:a]]' representing the value for variable 'a'.
+      These all start as 'false', but access by a '@defaults' command
+      sets the corresponding value to 'true'. This marks the variable
+      as having been used in the function.
+
+   check_lock
+
+      A vector of booleans, one per variable. This is a 'lock' that
+      prevents sub-functions from complaining that they did not access
+      variables that were intended for the parent function.
+      '@defaults' sets the lock to true for any options variables that
+      have already been defined; new variables added through
+      '@set_options' will start with their 'check_lock' set to
+      'false', to be handled by a subfunction.
+
+"),
+
+(E"profile.jl --- A simple profiler for Julia",E"profile",E"profile()
+
+   Profiling is controlled via the '@profile' macro. Your first step
+   is to determine which code you want to profile and encapsulate it
+   inside a '@profile begin ... end' block, like this:
+
+      @profile begin
+      function f1(x::Int)
+        z = 0
+        for j = 1:x
+          z += j^2
+        end
+        return z
+      end
+
+      function f1(x::Float64)
+        return x+2
+      end
+
+      function f1{T}(x::T)
+        return x+5
+      end
+
+      f2(x) = 2*x
+      end     # @profile begin
+
+   Now load the file and execute the code you want to profile, e.g.:
+
+      f1(215)
+      for i = 1:100
+        f1(3.5)
+      end
+      for i = 1:150
+        f1(uint8(7))
+      end
+      for i = 1:125
+        f2(11)
+      end
+
+   To view the execution times, type '@profile report'.  Each row of
+   the output shows the number of times the line was executed, the
+   cumulative time spent on that line, the estimated 'compensated'
+   cumulative time (compensating for the overhead of profiling, see
+   below), and the line number and filename.
+
+   Here are the various options you have for controlling profiling:
+
+   * '@profile report': display cumulative profiling results
+
+   * '@profile clear': clear all timings accumulated thus far (start
+     from zero)
+
+   * '@profile off': turn profiling off (there is no need to remove
+     '@profile begin ... end' blocks)
+
+   * '@profile on': turn profiling back on
+
+   Be aware that profiling adds a significant performance overhead.
+   You can prevent a subsection of your code from being profiled by
+   encapsulating it inside a 'begin ... end' block; in this case, the
+   block as a whole is profiled, but the individual lines inside the
+   block are not separately timed.
+
+   Profiling is implemented in terms of the 'time()' function. The
+   resolution of this timer is not sufficient for individually-
+   accurate measurements on quickly-executing lines:  you frequently
+   get a measured time of 0, with occassional non-zero measurements
+   when the clock ticks over to the next higher value. Consequently,
+   you should be skeptical about the timing measurements on simple
+   lines that run fewer than hundreds of times.
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"airyai",E"airy(x)
+airyai(x)
+
+   Airy function \\operatorname{Ai}(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"airyaiprime",E"airyprime(x)
+airyaiprime(x)
+
+   Airy function derivative \\operatorname{Ai}'(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"airybi",E"airybi(x)
+
+   Airy function \\operatorname{Bi}(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"airybiprime",E"airybiprime(x)
+
+   Airy function derivative \\operatorname{Bi}'(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"besselj0",E"besselj0(x)
+
+   Bessel function of the first kind of order 0, J_0(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"besselj1",E"besselj1(x)
+
+   Bessel function of the first kind of order 1, J_1(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"besselj",E"besselj(nu, x)
+
+   Bessel function of the first kind of order 'nu', J_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"bessely0",E"bessely0(x)
+
+   Bessel function of the second kind of order 0, Y_0(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"bessely1",E"bessely1(x)
+
+   Bessel function of the second kind of order 1, Y_1(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"bessely",E"bessely(nu, x)
+
+   Bessel function of the second kind of order 'nu', Y_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"hankelh1",E"hankelh1(nu, x)
+
+   Bessel function of the third kind of order 'nu', H^{(1)}_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"hankelh2",E"hankelh2(nu, x)
+
+   Bessel function of the third kind of order 'nu', H^{(2)}_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"besseli",E"besseli(nu, x)
+
+   Modified Bessel function of the first kind of order 'nu',
+   I_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"besselk",E"besselk(nu, x)
+
+   Modified Bessel function of the second kind of order 'nu',
+   K_\\nu(x).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"beta",E"beta(x, y)
+
+   Euler integral of the first kind \\operatorname{B}(x,y) =
+   \\Gamma(x)\\Gamma(y)/\\Gamma(x+y).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"lbeta",E"lbeta(x, y)
+
+   Natural logarithm of the beta function
+   \\log(\\operatorname{B}(x,y)).
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"eta",E"eta(x)
+
+   Dirichlet eta function \\eta(s) =
+   \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}.
+
+"),
+
+(E"specfun.jl --- Special mathematical functions",E"zeta",E"zeta(x)
+
+   Riemann zeta function \\zeta(s).
+
+"),
+
+
+}

@@ -166,6 +166,12 @@ end
 #permutes correctly
 @assert isequal(z,permute(y,(3,1,2))) 
 
+# of a subarray
+a = rand(5,5)
+s = sub(a,2:3,2:3)
+p = permute(s, [2,1])
+@assert p[1,1]==a[2,2] && p[1,2]==a[3,2]
+@assert p[2,1]==a[2,3] && p[2,2]==a[3,3]
 
 ## ipermute ##
 

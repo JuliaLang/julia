@@ -1108,6 +1108,12 @@
        ,(construct-loops (reverse ranges) (list) 1)
        ,result ))))
 
+(define (lhs-vars e)
+  (cond ((symbol? e) (list e))
+	((and (pair? e) (eq? (car e) 'tuple))
+	 (apply append (map lhs-vars (cdr e))))
+	(else '())))
+
 (define lower-comprehensions
   (pattern-set
 
@@ -1136,28 +1142,23 @@
 	    `(for ,(car ranges)
 		  ,(construct-loops (cdr ranges)))))
 
-      (define (lhs-vars e)
-	(cond ((symbol? e) (list e))
-	      ((and (pair? e) (eq? (car e) 'tuple))
-	       (apply append (map lhs-vars (cdr e))))
-	      (else '())))
-
       ;; Evaluate the comprehension
       (let ((loopranges
 	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
-	`(scope-block
-	  (block
+	`(block
+	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	  (scope-block
+	   (block
 	   (local ,oneresult)
 	   ,@(map (lambda (r) `(local ,r))
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	   ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	   (label ,initlabl)
 	   (= ,result (call (top Array)
 			    (static_typeof ,oneresult)
 			    ,@(compute-dims loopranges)))
 	   (= ,ri 1)
 	   ,(construct-loops (reverse loopranges))
-	   ,result))))))
+	   ,result)))))))
 
    ;; cell array comprehensions
    (pattern-lambda
@@ -1182,13 +1183,16 @@
 		  ,(construct-loops (cdr ranges) (cdr rs)))))
 
       ;; Evaluate the comprehension
-      `(scope-block
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+        (scope-block
 	(block 
-	 ,@(map make-assignment rs (map caddr ranges))
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result))))
+	 ,result)))))
 
 )) ;; lower-comprehensions
 

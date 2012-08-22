@@ -4,7 +4,7 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
     parent::A
     indexes::I
     dims::Dims
-    strides::Array{Int,1}
+    strides::Array{Int,1}  # for accessing parent with linear indexes
     first_index::Int
 
     #linear indexing constructor (scalar)
@@ -25,17 +25,18 @@ type SubArray{T,N,A<:AbstractArray,I<:(RangeIndex...,)} <: AbstractArray{T,N}
             newdims = Array(Int, 0)
             newstrides = Array(Int, 0)
             newfirst = 1
-            pstrides = strides(p)
+            pstride = 1
             for j = 1:length(i)
                 if isa(i[j], Int)
-                    newfirst += (i[j]-1)*pstrides[j]
+                    newfirst += (i[j]-1)*pstride
                 else
                     push(newdims, length(i[j]))
                     #may want to return error if step(i[j]) <= 0
-                    push(newstrides, isa(i[j],Range1) ? pstrides[j] :
-                         pstrides[j] * step(i[j]))
-                    newfirst += (first(i[j])-1)*pstrides[j]
+                    push(newstrides, isa(i[j],Range1) ? pstride :
+                         pstride * step(i[j]))
+                    newfirst += (first(i[j])-1)*pstride
                 end
+                pstride *= size(p,j)
             end
             new(p, i, tuple(newdims...), newstrides, newfirst)
         end
@@ -195,13 +196,7 @@ function ref(s::SubArray, I::Indices...)
     reshape(ref(s.parent, newindexes...), ref_shape(I...))
 end
 
-assign(s::SubArray, v::AbstractArray, i::Integer) =
-    invoke(assign, (SubArray, Any, Integer), s, v, i)
-
 assign(s::SubArray, v, i::Integer) = assign(s, v, ind2sub(size(s), i)...)
-
-assign{T}(s::SubArray{T,2}, v::AbstractArray, ind::Integer) =
-    invoke(assign, (SubArray{T,2}, Any, Integer), a, v, ind)
 
 function assign{T}(s::SubArray{T,2}, v, ind::Integer)
     ld = size(s,1)
@@ -210,12 +205,6 @@ function assign{T}(s::SubArray{T,2}, v, ind::Integer)
     s.parent[s.first_index + (i-1)*s.strides[1] + (j-1)*s.strides[2]] = v
     return s
 end
-
-assign(s::SubArray, v::AbstractArray, i::Integer, is::Integer...) =
-    invoke(assign, (SubArray, Any, Integer...), s, v, tuple(i,is...))
-
-assign(s::SubArray, v::AbstractArray, is::Integer...) =
-    invoke(assign, (SubArray, Any, Integer...), s, v, is)
 
 function assign(s::SubArray, v, is::Integer...)
     index = s.first_index
@@ -226,48 +215,22 @@ function assign(s::SubArray, v, is::Integer...)
     return s
 end
 
-assign{T}(s::SubArray{T,0,AbstractArray{T,0}}, v::AbstractArray) =
-    assign(s.parent, v)
-
 assign{T}(s::SubArray{T,0,AbstractArray{T,0}},v) = assign(s.parent, v)
-
-assign{T}(s::SubArray{T,0}, v::AbstractArray) =
-    assign(s.parent, v, s.first_index)
 
 assign{T}(s::SubArray{T,0}, v) = assign(s.parent, v, s.first_index)
 
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, i::Integer) =
-    assign(s.parent, v, s.first_index + (i-1)*s.strides[1])
-
 assign{T}(s::SubArray{T,1}, v, i::Integer) =
     assign(s.parent, v, s.first_index + (i-1)*s.strides[1])
-
-assign{T}(s::SubArray{T,2}, v::AbstractArray, i::Integer, j::Integer) =
-    assign(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
 assign{T}(s::SubArray{T,2}, v, i::Integer, j::Integer) =
     assign(s.parent, v, s.first_index +(i-1)*s.strides[1]+(j-1)*s.strides[2])
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range1{Int}) =
-    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
-
 assign{T}(s::SubArray{T,1}, v, I::Range1{Int}) =
     assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):s.strides[1]:(s.first_index+(last(I)-1)*s.strides[1]))
 
-assign{T}(s::SubArray{T,1}, v::AbstractArray, I::Range{Int}) =
-    assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
-
 assign{T}(s::SubArray{T,1}, v, I::Range{Int}) =
     assign(s.parent, v, (s.first_index+(first(I)-1)*s.strides[1]):(s.strides[1]*step(I)):(s.first_index+(last(I)-1)*s.strides[1]))
-
-function assign{T,S<:Integer}(s::SubArray{T,1}, v::AbstractArray, I::AbstractVector{S})
-    t = Array(Int, length(I))
-    for i = 1:length(I)
-        t[i] = s.first_index + (I[i]-1)*s.strides[1]
-    end
-    assign(s.parent, v, t)
-end
 
 function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
     t = Array(Int, length(I))
@@ -275,23 +238,6 @@ function assign{T,S<:Integer}(s::SubArray{T,1}, v, I::AbstractVector{S})
         t[i] = s.first_index + (I[i]-1)*s.strides[1]
     end
     assign(s.parent, v, t)
-end
-
-function assign(s::SubArray, v::AbstractArray, I0::Indices, I::Indices...)
-    I0 = indices(I0)
-    I = indices(I)
-    j = 1 #the jth dimension in subarray
-    n = ndims(s.parent)
-    newindexes = cell(n)
-    I = tuple(I0, I...)
-    for i = 1:n
-        t = s.indexes[i]
-        #TODO: don't generate the dense vector indexes if they can be ranges
-        newindexes[i] = isa(t, Int) ? t : t[I[j]]
-        j += 1
-    end
-
-    assign(s.parent, reshape(v, map(length, I)), newindexes...)
 end
 
 function assign(s::SubArray, v, I::Indices...)
@@ -309,9 +255,14 @@ function assign(s::SubArray, v, I::Indices...)
     assign(s.parent, v, newindexes...)
 end
 
-strides(s::SubArray) = tuple(s.strides...)
-
-stride(s::SubArray, i::Integer) = s.strides[i]
+function stride(s::SubArray, i::Integer)
+    k = stride(s.parent, i)
+    j = s.indexes[i]
+    if isa(j,Range)
+        return k*step(j)
+    end
+    return k
+end
 
 convert{T}(::Type{Ptr{T}}, x::SubArray{T}) =
     pointer(x.parent) + (x.first_index-1)*sizeof(T)

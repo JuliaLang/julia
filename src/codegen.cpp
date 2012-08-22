@@ -28,6 +28,7 @@
 #include <sstream>
 #include <map>
 #include <vector>
+#include <set>
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -251,6 +252,7 @@ typedef struct {
     std::map<std::string, bool> *isAssigned;
     std::map<std::string, bool> *isCaptured;
     std::map<std::string, bool> *escapes;
+    std::set<jl_sym_t*> *volatilevars;
     std::map<std::string, jl_value_t*> *declTypes;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *savestates;
@@ -369,6 +371,87 @@ static bool symbol_eq(jl_value_t *e, jl_sym_t *sym)
     return ((jl_is_symbol(e) && ((jl_sym_t*)e)==sym) ||
             (jl_is_symbolnode(e) && jl_symbolnode_sym(e)==sym) ||
             (jl_is_topnode(e) && ((jl_sym_t*)jl_fieldref(e,0))==sym));
+}
+
+// --- find volatile variables ---
+
+// assigned in a try block and used outside that try block
+
+static bool local_var_occurs(jl_value_t *e, jl_sym_t *s)
+{
+    if (jl_is_symbol(e) || jl_is_symbolnode(e)) {
+        if (symbol_eq(e, s))
+            return true;
+    }
+    else if (jl_is_expr(e)) {
+        jl_expr_t *ex = (jl_expr_t*)e;
+        for(int i=0; i < (int)ex->args->length; i++) {
+            if (local_var_occurs(jl_exprarg(ex,i),s))
+                return true;
+        }
+    }
+    else if (jl_is_getfieldnode(e)) {
+        if (local_var_occurs(jl_fieldref(e,0),s))
+            return true;
+    }
+    return false;
+}
+
+static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l,
+                                           int *pend)
+{
+    std::set<jl_sym_t*> av;
+    for(int i=s; i < (int)stmts->length; i++) {
+        jl_value_t *st = jl_arrayref(stmts,i);
+        if (jl_is_expr(st)) {
+            if (((jl_expr_t*)st)->head == assign_sym) {
+                jl_sym_t *sy;
+                jl_value_t *ar = jl_exprarg(st, 0);
+                if (jl_is_symbolnode(ar)) {
+                    sy = jl_symbolnode_sym(ar);
+                }
+                else {
+                    assert(jl_is_symbol(ar));
+                    sy = (jl_sym_t*)ar;
+                }
+                av.insert(sy);
+            }
+        }
+        if (jl_is_labelnode(st)) {
+            if (jl_labelnode_label(st) == l) {
+                *pend = i;
+                break;
+            }
+        }
+    }
+    return av;
+}
+
+static std::set<jl_sym_t*> find_volatile_vars(jl_array_t *stmts)
+{
+    std::set<jl_sym_t*> vv;
+    for(int i=0; i < (int)stmts->length; i++) {
+        jl_value_t *st = jl_arrayref(stmts,i);
+        if (jl_is_expr(st)) {
+            if (((jl_expr_t*)st)->head == enter_sym) {
+                int last = (int)stmts->length-1;
+                std::set<jl_sym_t*> as =
+                    assigned_in_try(stmts, i+1,
+                                    jl_unbox_long(jl_exprarg(st,0)), &last);
+                for(int j=0; j < (int)stmts->length; j++) {
+                    if (j < i || j > last) {
+                        std::set<jl_sym_t*>::iterator it = as.begin();
+                        for(; it != as.end(); it++) {
+                            if (local_var_occurs(jl_arrayref(stmts,j), *it)) {
+                                vv.insert(*it);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return vv;
 }
 
 // --- gc root counting ---
@@ -1229,13 +1312,14 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
                             boxed(emit_expr(r, ctx, true)));
     }
     else {
+        bool vol = ctx->volatilevars->find(s) != ctx->volatilevars->end();
         Type *vt = bp->getType();
         if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt)
             builder.CreateStore(emit_unbox(vt->getContainedType(0), vt,
                                            emit_unboxed(r, ctx)),
-                                bp);
+                                bp, vol);
         else
-            builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp);
+            builder.CreateStore(boxed(emit_expr(r, ctx, true)), bp, vol);
     }
 }
 
@@ -1544,6 +1628,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     std::map<std::string, bool> isAssigned;
     std::map<std::string, bool> isCaptured;
     std::map<std::string, bool> escapes;
+    std::set<jl_sym_t*> volvars;
     std::map<std::string, jl_value_t*> declTypes;
     std::map<int, BasicBlock*> labels;
     std::map<int, Value*> savestates;
@@ -1563,6 +1648,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
     ctx.isAssigned = &isAssigned;
     ctx.isCaptured = &isCaptured;
     ctx.escapes = &escapes;
+    ctx.volatilevars = &volvars;
     ctx.declTypes = &declTypes;
     ctx.labels = &labels;
     ctx.savestates = &savestates;
@@ -1655,6 +1741,8 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
         escapes[vname] = true;
         declTypes[vname] = jl_cellref(vi,1);
     }
+
+    volvars = find_volatile_vars(stmts);
 
     int n_roots = 0;
     // allocate local variables
@@ -2067,6 +2155,8 @@ static void init_julia_llvm_env(Module *m)
     setjmp_func =
         Function::Create(FunctionType::get(T_int32, args1, false),
                          Function::ExternalLinkage, "_setjmp", jl_Module);
+        //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
+    setjmp_func->addFnAttr(Attribute::ReturnsTwice);
     jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&_setjmp);
 
     std::vector<Type*> te_args(0);

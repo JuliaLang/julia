@@ -5,9 +5,9 @@ Getting Around
 
    Quit (or control-D at the prompt). The default exit code is zero, indicating that the processes completed successfully.
 
-.. function:: whos([pattern::Regex])
+.. function:: whos([Module][, pattern::Regex])
 
-   Print information about global user-defined variables, optionally restricted
+   Print information about global variables in a module, optionally restricted
    to those matching ``pattern``.
 
 .. function:: edit("file"[, line])
@@ -22,12 +22,24 @@ Getting Around
 
    Evaluate the contents of a source file
 
+.. function:: help("name" or object)
+
+   Get help for a function
+
+.. function:: apropos("string")
+
+   Search help for a substring
+
+.. function:: which(f, args...)
+
+   Show which method of ``f`` will be called for the given arguments
+
 All Objects
 -----------
 
 .. function:: is(x, y)
 
-   Determine whether ``x`` and ``y`` refer to the same object in memory.
+   Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them.
 
 .. function:: isa(x, type)
 
@@ -175,13 +187,9 @@ General Collections
 
    Determine whether a collection is empty (has no elements).
 
-.. function:: numel(collection)
-
-   Return the number of elements in a collection.
-
 .. function:: length(collection)
 
-   For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid.
+   For ordered, indexable collections, the maximum index ``i`` for which ``ref(collection, i)`` is valid. For unordered collections, the number of elements.
 
 Fully implemented by: ``Range``, ``Range1``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
 
@@ -299,13 +307,13 @@ Set-Like Collections
 
    Add an element to a set-like collection.
 
-.. function:: intset(i...)
+.. function:: Set(x...)
 
-   Construct an ``IntSet`` of the given integers.
+   Construct a ``Set`` with the given elements. Should be used instead of ``IntSet`` for sparse integer sets.
 
-.. function:: IntSet(n)
+.. function:: IntSet(i...)
 
-   Construct a set for holding integers up to ``n`` (larger integers may also be added later).
+   Construct an ``IntSet`` of the given integers. Implemented as a bit string, and therefore good for dense integer sets.
 
 .. function:: choose(s)
 
@@ -348,10 +356,6 @@ Dequeues
 
    Add uninitialized space for ``n`` elements at the end of a collection.
 
-.. function:: append(collection, items)
-
-   Construct an array composed of the elements of ``items`` added to the end of a collection. Does not modify collection.
-
 .. function:: append!(collection, items)
 
    Add the elements of ``items`` to the end of a collection.
@@ -385,11 +389,11 @@ Strings
 
    Create a string from any value using the ``show`` function.
 
-.. function:: cstring(::Ptr{Uint8})
+.. function:: bytestring(::Ptr{Uint8})
 
    Create a string from the address of a C (0-terminated) string.
 
-.. function:: cstring(s)
+.. function:: bytestring(s)
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions.
 
@@ -403,7 +407,7 @@ Strings
 
 .. function:: strchr(string, char[, i])
 
-   Return the index of ``char`` in ``string``, giving an error if not found. The third argument optionally specifies a starting index.
+   Return the index of ``char`` in ``string``, giving 0 if not found. The third argument optionally specifies a starting index.
 
 .. function:: lpad(string, n, p)
 
@@ -547,11 +551,11 @@ Text I/O
 
 .. function:: show(x)
 
-   Write an informative text representation of a value to the current output stream.
+   Write an informative text representation of a value to the current output stream. New types should overload ``show(io, x)`` where the first argument is a stream.
 
 .. function:: print(x)
 
-   Write (to the current output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``.
+   Write (to the default output stream) a canonical (un-decorated) text representation of a value if there is one, otherwise call ``show``.
 
 .. function:: println(x)
 
@@ -690,7 +694,7 @@ Mathematical Functions
 
    Accurate natural logarithm of ``1+x``
 
-``logb`` ``ilogb`` ``exp``
+``logb`` ``ilogb`` ``frexp`` ``significand`` ``exp``
 
 .. function:: expm1(x)
 
@@ -720,13 +724,13 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-``exp2`` ``ldexp`` ``round`` ``iround`` ``ipart`` ``fpart`` ``min`` ``max`` ``clamp`` ``abs``
+``exp2`` ``ldexp`` ``round`` ``iround`` ``min`` ``max`` ``clamp`` ``abs``
 
 .. function:: abs2(x)
 
    Squared absolute value of ``x``
 
-``copysign`` ``sign`` ``signbit`` ``pow`` ``sqrt`` ``cbrt`` ``erf`` ``erfc`` ``gamma`` ``lgamma`` ``lfact`` ``real`` ``imag`` ``conj`` ``angle`` ``cis(theta)``
+``copysign`` ``sign`` ``signbit`` ``sqrt`` ``cbrt`` ``erf`` ``erfc`` ``gamma`` ``lgamma`` ``lfact`` ``real`` ``imag`` ``conj`` ``angle`` ``cis(theta)``
 
 .. function:: binomial(n,k)
 
@@ -1019,11 +1023,11 @@ Basic functions
 
 .. function:: stride(A, k)
 
-   Returns the size of the stride along dimension k
+   Returns the distance in memory (in number of elements) between adjacent elements in dimension k
 
 .. function:: strides(A)
 
-   Returns a tuple of the linear index distances between adjacent elements in each dimension
+   Returns a tuple of the memory strides in each dimension
 
 Constructors
 ~~~~~~~~~~~~
@@ -1182,14 +1186,6 @@ Indexing, Assignment, and Concatenation
 .. function:: vec(A)
 
    Make a vector out of an array with only one non-singleton dimension.
-
-.. function:: rowvec(A, i)
-
-   Return the ith row of matrix A as a vector.
-
-.. function:: colvec(A, i)
-
-   Return the ith column of matrix A as a vector.
 
 Linear Algebra
 --------------

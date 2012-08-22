@@ -803,8 +803,7 @@ function LineTextObject( p, q, str, offset, args... )
     else
         kw["textvalign"] = "top"
     end
-    extended_args = append_any(args, (kw,))
-    TextObject( pos, str, extended_args...)
+    TextObject(pos, str, args..., kw)
 end
 
 type PathObject <: RenderObject

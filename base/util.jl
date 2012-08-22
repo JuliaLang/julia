@@ -159,7 +159,7 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = t.env
+methods(t::CompositeKind) = methods(t,Tuple)
 
 
 # require

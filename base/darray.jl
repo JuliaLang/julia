@@ -438,11 +438,6 @@ function ref{T}(d::DArray{T,1}, i::Int)
     return remote_call_fetch(d.pmap[p], ref, d, i)::T
 end
 
-assign{T}(d::DArray{T,1}, v::AbstractArray, i::Int) =
-    invoke(assign, (DArray{T,1}, Any, Int), d, v, i)
-
-assign{T}(d::DArray{T,1}, v, i::Int) = assign(d, v, int(i))
-
 # 1d scalar assign
 function assign{T}(d::DArray{T,1}, v, i::Int)
     p = locate(d, i)
@@ -585,20 +580,6 @@ function assign_elt(d::DArray, v, sub::(Int...))
     end
     d
 end
-
-# disambiguating definitions
-assign(d::DArray, v::AbstractArray) = assign_elt(d, v, ())
-
-assign(d::DArray, v::AbstractArray, i::Int) =
-    assign_elt(d, v, ind2sub(d.dims, i))
-
-assign{T}(d::DArray{T,2}, v::AbstractArray, i0::Int, i1::Int) =
-    assign_elt(d, v, (i0,i1))
-assign(d::DArray, v::AbstractArray, i0::Int, i1::Int) =
-    assign_elt(d, v, (i0,i1))
-
-assign(d::DArray, v::AbstractArray, i0::Int, I::Int...) =
-    assign_elt(d, v, tuple(i0,I...))
 
 assign(d::DArray, v, i::Int) = assign_elt(d, v, ind2sub(d.dims, i))
 assign(d::DArray, v, i0::Int, I::Int...) = assign_elt(d, v, tuple(i0,I...))
@@ -902,6 +883,6 @@ prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
 max(d::DArray) = reduce(max, d)
 
-areduce(f::Function, d::DArray, r::Region, v0, T::Type) = error("not yet implemented")
+areduce(f::Function, d::DArray, r::Dimspec, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
