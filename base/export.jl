@@ -938,6 +938,7 @@ export
     
 # syntax
     expand,
+    macroexpand,
     esc,
     expr,
     gensym,

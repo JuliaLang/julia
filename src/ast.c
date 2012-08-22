@@ -479,6 +479,19 @@ jl_value_t *jl_expand(jl_value_t *expr)
     return result;
 }
 
+DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
+{
+    int np = jl_gc_n_preserved_values();
+    value_t arg = julia_to_scm(expr);
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-macroexpand")), arg);
+    jl_value_t *result;
+    result = scm_to_julia(e);
+    while (jl_gc_n_preserved_values() > np) {
+        jl_gc_unpreserve();
+    }
+    return result;
+}
+
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
