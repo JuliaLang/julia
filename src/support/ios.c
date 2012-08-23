@@ -789,6 +789,7 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
+    s->rereadable = 1;
     _buf_realloc(s, initsize);
     return s;
 }
