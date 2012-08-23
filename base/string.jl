@@ -42,6 +42,8 @@ function bytestring(p::Ptr{Uint8},len::Int)
     ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
 end
 
+convert(::Type{Array{Uint8,1}}, s::String) = bytestring(s).data
+convert(::Type{Array{Uint8}}, s::String) = bytestring(s).data
 convert(::Type{Ptr{Uint8}}, s::String) = convert(Ptr{Uint8}, bytestring(s))
 convert(::Type{ByteString}, s::String) = bytestring(s)
 
