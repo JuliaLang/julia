@@ -11,7 +11,7 @@ import Git
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "/Users/stefan/projects/pkg/METADATA"
+const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # generate versions metadata
