@@ -61,6 +61,10 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+STAGE1_DEPS += zlib
+endif
+
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
@@ -870,6 +874,39 @@ install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 clean-glpk-wrapper:
 	rm -f $(GLPK_OBJ_TARGET) $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT)
 distclean-glpk-wrapper: clean-glpk-wrapper
+
+## ZLIB ##
+
+ifeq ($(USE_SYSTEM_ZLIB), 1)
+ZLIB_OBJ_TARGET =
+else
+ZLIB_OBJ_TARGET = $(USRLIB)/libz.$(SHLIB_EXT)
+endif
+
+compile-zlib: install-zlib
+install-zlib: $(ZLIB_OBJ_TARGET)
+
+zlib-$(ZLIB_VER).tar.gz:
+	$(WGET) http://zlib.net/$@
+zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
+	tar zxf $<
+	touch $@
+zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+	cd zlib-$(ZLIB_VER) && \
+	./configure --prefix=$(abspath $(USR))
+	touch $@
+$(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
+	$(MAKE) -C zlib-$(ZLIB_VER)
+	$(MAKE) -C zlib-$(ZLIB_VER) check
+	$(MAKE) -C zlib-$(ZLIB_VER) install
+	$(INSTALL_NAME_CMD)libz.dylib $@
+	touch $@
+
+clean-zlib:
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
+	rm -f $(ZLIB_OBJ_TARGET)
+distclean-zlib:
+	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
 
 ## phony targets ##
 
