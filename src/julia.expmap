@@ -16,6 +16,7 @@
     bitvector_any1;
     jl_new_struct;
     jl_new_structt;
+    jl_get_nth_field;
     jl_new_lambda_info;
     jl_new_closure;
     jl_new_array;

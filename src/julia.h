@@ -705,7 +705,7 @@ double jl_unbox_float64(jl_value_t *v);
 // structs
 void jl_compute_struct_offsets(jl_struct_type_t *st);
 int jl_field_index(jl_struct_type_t *t, jl_sym_t *fld, int err);
-jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
+DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 
 // arrays
