@@ -11,10 +11,67 @@ import Git
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA"
+const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA.git"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
-# generate versions metadata
+# create a new empty packge repository
+
+function init(dir::String, meta::String)
+    run(`mkdir $dir`)
+    cd(dir) do
+        run(`git init`)
+        run(`git submodule add $meta METADATA`)
+        run(`git commit -m"[jul] METADATA"`)
+    end
+end
+init(dir::String) = init(dir, DEFAULT_META)
+init() = init(DEFAULT_DIR)
+
+# install & remove packages by name
+
+function install(pkgs::String...)
+    for pkg in pkgs
+        if !contains(packages(),pkg)
+            error("invalid package: $pkg")
+        end
+        reqs = parse_requires("REQUIRES")
+        if anyp(req->req.package==pkg,reqs)
+            error("package already required: $pkg")
+        end
+        open("REQUIRES","a") do io
+            println(io,pkg)
+        end
+    end
+    run(`git add REQUIRES`)
+    update()
+end
+
+function remove(pkgs::String...)
+    for pkg in pkgs
+        if !contains(packages(),pkg)
+            error("invalid package: $pkg")
+        end
+        reqs = parse_requires("REQUIRES")
+        if !anyp(req->req.package==pkg,reqs)
+            error("package not required: $pkg")
+        end
+        open("REQUIRES") do r
+            open("REQUIRES.new","w") do w
+                for line in each_line(r)
+                    fields = split(line)
+                    if isempty(fields) || fields[1]!=pkg
+                        print(w,line)
+                    end
+                end
+            end
+        end
+        run(`mv REQUIRES.new REQUIRES`)
+    end
+    run(`git add REQUIRES`)
+    update()
+end
+
+# dealing with version metadata
 
 function gen_versions(pkg::String)
     for (ver,sha1) in Git.each_version(pkg)
@@ -173,18 +230,13 @@ solve() = Version[]
 solve(want::VersionSet...) = solve([want...])
 solve(want::String...) = solve([ VersionSet(x) for x in want ])
 
-# create a new empty packge repository
+# update packages from requirements
 
-function init(dir::String, meta::String)
-    run(`mkdir $dir`)
-    cd(dir) do
-        run(`git init`)
-        run(`git commit --allow-empty -m"[jul] empty package repo"`)
-        install({"METADATA" => meta})
-    end
+function update(reqs::Vector{VersionSet})
+    vers = solve(reqs)
+    # TODO
 end
-init(dir::String) = init(dir, DEFAULT_META)
-init() = init(DEFAULT_DIR)
+update() = update(parse_requires("REQUIRES"))
 
 # clone a new package repo from a URL
 
@@ -232,43 +284,6 @@ function commit(msg::String)
     run(`git add .gitmodules`)
     run(`git commit -m $msg`)
 end
-
-# install packages by name and, optionally, git url
-
-function install(urls::Associative)
-    names = sort!(keys(urls))
-    if isempty(names) return end
-    dir = cwd()
-    for pkg in names
-        url = urls[pkg]
-        run(`git submodule add --reference $dir $url $pkg`)
-    end
-    commit("[jul] install "*join(names, ", "))
-    checkout()
-end
-function install(names::AbstractVector)
-    urls = Dict()
-    for pkg in names
-        urls[pkg] = readchomp("METADATA/$pkg/url")
-    end
-    install(urls)
-end
-install(names::String...) = install([names...])
-
-# remove packages by name
-
-function remove(names::AbstractVector)
-    if isempty(names) return end
-    sort!(names)
-    for pkg in names
-        run(`git rm --cached -- $pkg`)
-        Git.modules(`--remove-section submodule.$pkg`)
-    end
-    run(`git add .gitmodules`)
-    commit("[jul] remove "*join(names, ", "))
-    run(`rm -rf $names`)
-end
-remove(names::String...) = remove([names...])
 
 # push & pull package repos to/from remotes
 
