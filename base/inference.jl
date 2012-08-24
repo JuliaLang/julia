@@ -396,6 +396,8 @@ function isconstantfunc(f, vars)
         _iisconst(f) && _iisbound(f) && f
 end
 
+const isconstantref = isconstantfunc
+
 isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
 
 limit_tuple_depth(t) = limit_tuple_depth(t,0)
@@ -534,6 +536,16 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
             e.head = :call1
         end
+        if is(f,getfield) && length(argtypes)==2 && is(argtypes[1],Module)
+            themod = isconstantref(e.args[2], vtypes, sv)
+            if !is(themod,false) && isa(fargs[2], QuoteNode)
+                themod = _ieval(themod)
+                sym = fargs[2].value
+                if isa(sym,Symbol) && isconst(themod,sym) && isbound(themod,sym)
+                    return abstract_eval_constant(eval(themod, sym))
+                end
+            end
+        end
         rt = builtin_tfunction(f, fargs, argtypes)
         #print("=> ", rt, "\n")
         return rt
@@ -640,9 +652,6 @@ function abstract_eval_constant(x::ANY)
         end
         return Type{x}
     end
-    if isa(x,LambdaStaticData)
-        return Function
-    end
     return typeof(x)
 end
 
@@ -693,6 +702,8 @@ abstract_eval(s::SymbolNode, vtypes, sv::StaticVarInfo) =
     abstract_eval(s.name, vtypes, sv)
 
 abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
+
+abstract_eval(x::LambdaStaticData, vtypes, sv::StaticVarInfo) = Function
 
 typealias VarTable ObjectIdDict
 
