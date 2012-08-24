@@ -31,7 +31,7 @@ static jl_methtable_t *new_method_table(jl_sym_t *name)
     mt->cache = JL_NULL;
     mt->cache_arg1 = JL_NULL;
     mt->cache_targ = JL_NULL;
-    mt->max_args = jl_box_long(0);
+    mt->max_args = 0;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
@@ -182,7 +182,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
  mt_assoc_bt_lkup:
     while (ml != JL_NULL) {
         if (cache_match_by_type(&jl_tupleref(types,0), jl_tuple_len(types),
-                                (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
+                                (jl_tuple_t*)ml->sig, ml->va)) {
             return ml->func;
         }
         ml = ml->next;
@@ -235,8 +235,8 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
         ml = mt->cache;
  mt_assoc_lkup:
     while (ml != JL_NULL) {
-        if (jl_tuple_len(ml->sig) == n || ml->va==jl_true) {
-            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
+        if (jl_tuple_len(ml->sig) == n || ml->va) {
+            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va)) {
                 return ml->func;
             }
         }
@@ -403,7 +403,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_tupleref(newast, 0);
-        li->inferred = jl_true;
+        li->inferred = 1;
 #endif
         li->inInference = 0;
     }
@@ -606,9 +606,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (jl_tuple_len(type) > jl_unbox_long(mt->max_args) &&
+    if (jl_tuple_len(type) > mt->max_args &&
         jl_is_seq_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
-        size_t nspec = jl_unbox_long(mt->max_args)+2;
+        size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
@@ -979,7 +979,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->tvars = tvars;
             l->va = (jl_tuple_len(type) > 0 &&
                      jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
-                jl_true : jl_false;
+                1 : 0;
             l->invokes = JL_NULL;
             l->func = method;
             JL_SIGATOMIC_END();
@@ -1006,7 +1006,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&
                   jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
-        jl_true : jl_false;
+        1 : 0;
     newrec->func = method;
     newrec->invokes = JL_NULL;
     newrec->next = l;
@@ -1086,8 +1086,8 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     size_t na = jl_tuple_len(t);
     if (is_va_tuple(t))
         na--;
-    if (na > jl_unbox_long(mt->max_args)) {
-        mt->max_args = jl_box_long(na);
+    if (na > mt->max_args) {
+        mt->max_args = na;
     }
     JL_SIGATOMIC_END();
     return ml;
@@ -1356,7 +1356,7 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
         else {
             jl_lambda_info_t *li = ml->func->linfo;
             assert(li);
-            long lno = jl_unbox_long(li->line);
+            long lno = li->line;
             if (lno > 0) {
                 char *fname = ((jl_sym_t*)li->file)->name;
                 JL_PRINTF(s, " at %s:%d", fname, lno);

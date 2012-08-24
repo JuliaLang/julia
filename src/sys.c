@@ -315,7 +315,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *str = alloc_2w();
     str->type = (jl_type_t*)string_type;
-    jl_fieldref(str,0) = (jl_value_t*)a;
+    jl_set_nth_field(str, 0, (jl_value_t*)a);
     JL_GC_POP();
     return str;
 }

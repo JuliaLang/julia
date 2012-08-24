@@ -1605,7 +1605,6 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nbt->super = jl_any_type;
             nbt->parameters = iparams_tuple;
             nbt->nbits = bitst->nbits;
-            nbt->bnbits = bitst->bnbits;
             nbt->super = (jl_tag_type_t*)inst_type_w_((jl_value_t*)bitst->super, env, n, stack);
             nbt->uid = 0;
             if (cacheable) cache_type_((jl_type_t*)nbt);
@@ -1628,10 +1627,12 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             nst->parameters = iparams_tuple;
             nst->names = st->names;
             nst->types = jl_null; // to be filled in below
-            if (isabstract)
+            if (isabstract) {
                 nst->fptr = jl_f_no_function;
-            else
+            }
+            else {
                 nst->fptr = jl_f_ctor_trampoline;
+            }
             nst->env = (jl_value_t*)nst;
             nst->linfo = NULL;
             nst->ctor_factory = st->ctor_factory;
@@ -1642,6 +1643,8 @@ static jl_type_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             if (ftypes != NULL) {
                 // recursively instantiate the types of the fields
                 nst->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack);
+                if (!isabstract)
+                    jl_compute_struct_offsets(nst);
             }
             if (cacheable) cache_type_((jl_type_t*)nst);
             result = (jl_type_t*)nst;
@@ -2265,15 +2268,18 @@ void jl_init_types(void)
     jl_tuple_set_len_unsafe(jl_null, 0);
     jl_nothing = (jl_value_t*)jl_null; // for bootstrapping
 
-    jl_tag_kind = jl_new_struct_type(jl_symbol("AbstractKind"), NULL,
-                                     jl_null, jl_null, jl_null);
+    jl_tag_kind = jl_new_uninitialized_struct_type(6);
     jl_tag_type_type = jl_tag_kind;
 
     jl_any_type = jl_new_tagtype((jl_value_t*)jl_symbol("Any"), NULL, jl_null);
     jl_any_type->super = jl_any_type;
     jl_type_type = jl_new_tagtype((jl_value_t*)jl_symbol("Type"), jl_any_type, jl_null);
 
+    // initialize them. lots of cycles.
+    jl_tag_kind->name = jl_new_typename(jl_symbol("AbstractKind"));
+    jl_tag_kind->name->primary = (jl_value_t*)jl_tag_kind;
     jl_tag_kind->super = jl_type_type;
+    jl_tag_kind->parameters = jl_null;
     jl_tag_kind->names = jl_tuple(6, jl_symbol(""),jl_symbol(""),jl_symbol(""),
                                   jl_symbol("name"), jl_symbol("super"),
                                   jl_symbol("parameters"));
@@ -2282,12 +2288,11 @@ void jl_init_types(void)
                                   jl_tuple_type);
     jl_tag_kind->fptr = jl_f_no_function;
 
-    // initialize them. lots of cycles.
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
     jl_struct_kind->super = (jl_tag_type_t*)jl_type_type;
     jl_struct_kind->parameters = jl_null;
-    jl_struct_kind->names = jl_tuple(10, jl_symbol(""),
+    jl_struct_kind->names = jl_tuple(10, jl_symbol("fptr"),
                                      jl_symbol("env"), jl_symbol("code"),
                                      jl_symbol("name"), jl_symbol("super"),
                                      jl_symbol("parameters"),
@@ -2398,8 +2403,6 @@ void jl_init_types(void)
     jl_int64_type = jl_new_bits_type((jl_value_t*)jl_symbol("Int64"),
                                      jl_any_type, jl_null, 64);
     jl_init_int32_int64_cache();
-    jl_int32_type->bnbits = jl_box_int32(32);
-    jl_int64_type->bnbits = jl_box_int32(64);
     jl_tupleset(jl_bits_kind->types, 6, (jl_value_t*)jl_int32_type);
 
     jl_bool_type = NULL;
@@ -2414,7 +2417,7 @@ void jl_init_types(void)
                                     jl_symbol("tvars"), jl_symbol("func"),
                                     jl_symbol("invokes"), jl_symbol("next")),
                            jl_tuple(6, jl_tuple_type, jl_bool_type,
-                                    jl_tuple_type, jl_function_type,
+                                    jl_tuple_type, jl_any_type,
                                     jl_any_type, jl_any_type));
     jl_method_type->fptr = jl_f_no_function;
 
@@ -2505,7 +2508,7 @@ void jl_init_types(void)
                            jl_tuple(12, jl_any_type, jl_tuple_type,
                                     jl_any_type, jl_sym_type,
                                     jl_any_type, jl_tuple_type,
-                                    jl_function_type, jl_array_any_type,
+                                    jl_any_type, jl_array_any_type,
                                     jl_bool_type,
                                     jl_sym_type, jl_long_type,
                                     jl_module_type));
@@ -2530,7 +2533,7 @@ void jl_init_types(void)
 
     jl_function_type =
         jl_new_struct_type(jl_symbol("Function"), jl_any_type, jl_null,
-                           jl_tuple(3, jl_symbol(""), jl_symbol("env"),
+                           jl_tuple(3, jl_symbol("fptr"), jl_symbol("env"),
                                     jl_symbol("code")),
                            jl_tuple(3, jl_any_type, jl_any_type,
                                     jl_lambda_info_type));
@@ -2558,6 +2561,32 @@ void jl_init_types(void)
                       jl_tuple(1,jl_typetype_tvar));
 
     jl_ANY_flag = (jl_value_t*)tvar("ANY");
+
+    // complete builtin type metadata
+    jl_value_t *pointer_void = jl_apply_type((jl_value_t*)jl_pointer_type,
+                                             jl_tuple(1,jl_bottom_type));
+    jl_tupleset(jl_struct_kind->types, 0, pointer_void);
+    jl_tupleset(jl_function_type->types, 0, pointer_void);
+
+    jl_compute_struct_offsets(jl_struct_kind);
+    jl_compute_struct_offsets(jl_typename_type);
+    jl_compute_struct_offsets(jl_tag_kind);
+    jl_compute_struct_offsets(jl_union_kind);
+    jl_compute_struct_offsets(jl_bits_kind);
+    jl_compute_struct_offsets(jl_tvar_type);
+    jl_compute_struct_offsets(jl_method_type);
+    jl_compute_struct_offsets(jl_methtable_type);
+    jl_compute_struct_offsets(jl_expr_type);
+    jl_compute_struct_offsets(jl_linenumbernode_type);
+    jl_compute_struct_offsets(jl_labelnode_type);
+    jl_compute_struct_offsets(jl_gotonode_type);
+    jl_compute_struct_offsets(jl_quotenode_type);
+    jl_compute_struct_offsets(jl_topnode_type);
+    jl_compute_struct_offsets(jl_module_type);
+    jl_compute_struct_offsets(jl_lambda_info_type);
+    jl_compute_struct_offsets(jl_box_type);
+    jl_compute_struct_offsets(jl_typector_type);
+    jl_compute_struct_offsets(jl_function_type);
 
     call_sym = jl_symbol("call");
     call1_sym = jl_symbol("call1");

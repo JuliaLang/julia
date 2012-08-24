@@ -157,9 +157,9 @@ typedef struct _jl_lambda_info_t {
     struct _jl_function_t *unspecialized;
     // pairlist of all lambda infos with code generated from this one
     jl_array_t *specializations;
-    jl_value_t *inferred;
+    int8_t inferred;
     jl_value_t *file;
-    jl_value_t *line;
+    ptrint_t line;
     struct _jl_module_t *module;
 
     // hidden fields:
@@ -214,8 +214,9 @@ typedef struct _jl_tag_type_t {
 } jl_tag_type_t;
 
 typedef struct {
-    uint16_t offset;
-    uint16_t size;
+    uint16_t offset;   // offset relative to data start, excluding type tag
+    uint16_t size:15;
+    uint16_t isptr:1;
 } jl_fielddesc_t;
 
 typedef struct {
@@ -232,10 +233,12 @@ typedef struct {
     // hidden fields:
     uptrint_t uid;
     uint32_t size;
-    uint16_t alignment;  // strictest alignment over all fields
-    uint16_t nptrs;      // # of pointer fields (flush at end of object)
+    uint32_t alignment;  // strictest alignment over all fields
     jl_fielddesc_t fields[1];
 } jl_struct_type_t;
+
+#define jl_field_offset(st,i) (((jl_struct_type_t*)st)->fields[i].offset)
+#define jl_field_size(st,i)   (((jl_struct_type_t*)st)->fields[i].size)
 
 typedef struct {
     JL_STRUCT_TYPE
@@ -243,9 +246,8 @@ typedef struct {
     jl_typename_t *name;
     jl_tag_type_t *super;
     jl_tuple_t *parameters;
-    jl_value_t *bnbits;
+    int32_t nbits;
     // hidden fields:
-    size_t nbits;
     uptrint_t uid;
 } jl_bits_type_t;
 
@@ -283,7 +285,7 @@ typedef struct _jl_module_t {
 typedef struct _jl_methlist_t {
     JL_STRUCT_TYPE
     jl_tuple_t *sig;
-    jl_value_t *va;
+    int8_t va;
     jl_tuple_t *tvars;
     jl_function_t *func;
     // cache of specializations of this method for invoke(), i.e.
@@ -304,7 +306,7 @@ typedef struct _jl_methtable_t {
     jl_methlist_t *cache;
     jl_array_t *cache_arg1;
     jl_array_t *cache_targ;
-    jl_value_t *max_args;  // max # of non-vararg arguments in a signature
+    ptrint_t max_args;  // max # of non-vararg arguments in a signature
 #ifdef JL_GF_PROFILE
     int ncalls;
 #endif
@@ -468,13 +470,13 @@ void *allocobj(size_t sz);
 
 #define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
 
-#define jl_fieldref(s,i) (((jl_value_t**)(s))[1+(i)])
+#define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
 
 #define jl_symbolnode_sym(s) ((jl_sym_t*)jl_fieldref(s,0))
 #define jl_symbolnode_type(s) (jl_fieldref(s,1))
-#define jl_linenode_line(x) jl_unbox_long(jl_fieldref(x,0))
-#define jl_labelnode_label(x) jl_unbox_long(jl_fieldref(x,0))
-#define jl_gotonode_label(x) jl_unbox_long(jl_fieldref(x,0))
+#define jl_linenode_line(x) (((ptrint_t*)x)[1])
+#define jl_labelnode_label(x) (((ptrint_t*)x)[1])
+#define jl_gotonode_label(x) (((ptrint_t*)x)[1])
 #define jl_getfieldnode_val(s) (jl_fieldref(s,0))
 #define jl_getfieldnode_name(s) ((jl_sym_t*)jl_fieldref(s,1))
 #define jl_getfieldnode_type(s) (jl_fieldref(s,2))
@@ -592,7 +594,6 @@ static inline int jl_is_type_type(jl_value_t *v)
 
 // type info accessors
 jl_value_t *jl_full_type(jl_value_t *v);
-size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld);
 
 // type predicates
 int jl_is_type(jl_value_t *v);
@@ -700,6 +701,12 @@ double jl_unbox_float64(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// structs
+void jl_compute_struct_offsets(jl_struct_type_t *st);
+int jl_field_index(jl_struct_type_t *t, jl_sym_t *fld, int err);
+jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
+jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
@@ -999,7 +1006,7 @@ typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
     jl_value_t *tls;
-    jl_value_t *done;
+    int8_t done;
     jmp_buf ctx;
     union {
         void *stackbase;

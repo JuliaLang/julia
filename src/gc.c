@@ -579,15 +579,11 @@ static void gc_mark_all()
 #endif
     }
     else {
-        int nf = (int)jl_tuple_len(((jl_struct_type_t*)vt)->names);
-        if (nf > 0) {
-            int i = 0;
-            if (vt == (jl_value_t*)jl_struct_kind ||
-                vt == (jl_value_t*)jl_function_type) {
-                i++;  // skip fptr field
-            }
-            for(; i < nf; i++) {
-                jl_value_t *fld = ((jl_value_t**)v)[i+1];
+        jl_struct_type_t *st = (jl_struct_type_t*)vt;
+        int nf = (int)jl_tuple_len(st->names);
+        for(int i=0; i < nf; i++) {
+            if (st->fields[i].isptr) {
+                jl_value_t *fld = *(jl_value_t**)((char*)v + st->fields[i].offset + sizeof(void*));
                 if (fld)
                     gc_push_root(fld);
             }
