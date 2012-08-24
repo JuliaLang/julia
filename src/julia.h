@@ -231,7 +231,7 @@ typedef struct {
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
     // hidden fields:
-    uptrint_t uid;
+    uint32_t uid;
     uint32_t size;
     uint32_t alignment;  // strictest alignment over all fields
     jl_fielddesc_t fields[1];
@@ -248,7 +248,7 @@ typedef struct {
     jl_tuple_t *parameters;
     int32_t nbits;
     // hidden fields:
-    uptrint_t uid;
+    uint32_t uid;
 } jl_bits_type_t;
 
 typedef struct {
