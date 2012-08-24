@@ -65,7 +65,8 @@ function del_all(lru::LRU)
 end
 
 
-show(lru::BoundedLRU) = print("BoundedLRU($(lru.maxsize))")
+show(io, lru::UnboundedLRU) = print("UnboundedLRU()")
+show(io, lru::BoundedLRU) = print("BoundedLRU($(lru.maxsize))")
 
 ## indexable ##
 
