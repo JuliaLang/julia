@@ -291,6 +291,7 @@ static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
 // --- code gen for intrinsic functions ---
 
 #include "intrinsics.cpp"
+#include "ccallback.cpp"
 
 // --- constant determination ---
 
@@ -1023,7 +1024,34 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return builder.CreateTrunc(elt, T_int1);
                 return mark_julia_type(elt, ety);
             }
-        }
+        } else if (jl_is_cpointer_type(aty) && ity == (jl_value_t*)jl_long_type) {
+			jl_value_t *ety = jl_tparam0(aty);
+            if (!jl_is_typevar(ety)) {
+                if (!jl_is_bits_type(ety)) {
+                    ety = (jl_value_t*)jl_any_type;
+                }
+                Value *ary = emit_unbox(jl_pvalue_llvmt, jl_ppvalue_llvmt,
+                                        emit_unboxed(args[1], ctx));
+                Type *elty = julia_type_to_llvm(ety, ctx);
+                assert(elty != NULL);
+                bool isbool=false;
+                if (elty==T_int1) { elty = T_int8; isbool=true; }
+                Value *data =
+                    builder.CreateBitCast(ary, PointerType::get(elty, 0));
+                Value *idx = emit_unbox(T_size, T_psize,
+                                        emit_unboxed(args[2], ctx));
+                Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+                Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
+                                              false);
+                if (ety == (jl_value_t*)jl_any_type) {
+                    null_pointer_check(elt, ctx);
+                }
+                JL_GC_POP();
+                if (isbool)
+                    return builder.CreateTrunc(elt, T_int1);
+                return mark_julia_type(elt, ety);
+			}
+		}
     }
     else if (f->fptr == &jl_f_arrayset && nargs==3) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
