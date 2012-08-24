@@ -111,13 +111,6 @@ USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
 endif
 
-# Use system BLAS and LAPACK on Mac
-# https://github.com/JuliaLang/julia/commit/7b6442f1db697d0bc8c39476e7d92afc11b169d2
-ifeq ($(OS), Darwin)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-endif
-
 -include $(JULIAHOME)/Make.user
 
 # ===========================================================================
