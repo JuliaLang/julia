@@ -1025,7 +1025,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return mark_julia_type(elt, ety);
             }
         } else if (jl_is_cpointer_type(aty) && ity == (jl_value_t*)jl_long_type) {
-			jl_value_t *ety = jl_tparam0(aty);
+            jl_value_t *ety = jl_tparam0(aty);
             if (!jl_is_typevar(ety)) {
                 if (!jl_is_bits_type(ety)) {
                     ety = (jl_value_t*)jl_any_type;
@@ -1050,8 +1050,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (isbool)
                     return builder.CreateTrunc(elt, T_int1);
                 return mark_julia_type(elt, ety);
-			}
-		}
+            }
+        }
     }
     else if (f->fptr == &jl_f_arrayset && nargs==3) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
