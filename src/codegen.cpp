@@ -971,7 +971,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_throw && nargs==1) {
         Value *arg1 = boxed(emit_expr(args[1], ctx));
         JL_GC_POP();
-        return builder.CreateCall(jlraise_func, arg1);
+        builder.CreateCall(jlraise_func, arg1);
+        return V_null;
     }
     else if (f->fptr == &jl_f_arraylen && nargs==1) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
@@ -1320,7 +1321,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx,
         }
     }
     Value *arg = (*ctx->passedArguments)[sym->name];
-    if (arg != NULL && isboxed && !(*ctx->isAssigned)[sym->name]) {
+    if (arg!=NULL && arg!=V_null && isboxed && !(*ctx->isAssigned)[sym->name]) {
         // if we need a boxed version of an argument that's not assigned,
         // use the original value.
         return arg;
@@ -1953,13 +1954,12 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             // to leave it in the input argument array.
             localVars[argname] = argPtr;
             //argumentMap[argname] = argPtr;
+            passedArgumentMap[argname] = V_null;
         }
         else {
             LoadInst *theArg = builder.CreateLoad(argPtr, false);
-            if (!isAssigned[argname]) {
-                // keep track of original (boxed) value to avoid re-boxing
-                passedArgumentMap[argname] = theArg;
-            }
+            // keep track of original (boxed) value to avoid re-boxing
+            passedArgumentMap[argname] = theArg;
             if (isBoxed(argname, &ctx))
                 builder.CreateStore(builder.CreateCall(jlbox_func, theArg), lv);
             else if (dyn_cast<GetElementPtrInst>(lv) != NULL)
