@@ -799,11 +799,16 @@ distclean-gmp:
 
 ## GMP Wrapper
 
-GMP_INC = -I gmp-$(GMP_VER)/
-GMP_LIB = -L$(USRLIB)/ -lgmp
+ifeq ($(USE_SYSTEM_GMP), 1)
+GMPW_INC =
+GMPW_LIB = -lgmp
+else
+GMPW_INC = -I gmp-$(GMP_VER)/
+GMPW_LIB = -L$(USRLIB)/ -lgmp
+endif
 
 $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMPW_LIB)
 	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)
