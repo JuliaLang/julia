@@ -5,7 +5,7 @@ export
     Printf,
     PCRE,
     FFTW,
-    FFT,
+    Signal,
     
 # Types
     AbstractMatrix,

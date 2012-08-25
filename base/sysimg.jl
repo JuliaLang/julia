@@ -136,8 +136,8 @@ include("factorizations.jl")
 # signal processing
 include("signal_fftw.jl")
 include("signal.jl")
-import Base.FFT
-import Base.FFT.*
+import Base.Signal
+import Base.Signal.*
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(cwd, ())
