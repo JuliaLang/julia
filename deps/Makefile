@@ -626,7 +626,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -803,7 +803,7 @@ ifeq ($(USE_SYSTEM_GMP), 1)
 GMPW_INC =
 GMPW_LIB = -lgmp
 else
-GMPW_INC = -I gmp-$(GMP_VER)/
+GMPW_INC = -I $(USRINC)
 GMPW_LIB = -L$(USRLIB)/ -lgmp
 endif
 
@@ -855,7 +855,7 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
-GLPKW_INC = -I $(abspath $(USR))/include/
+GLPKW_INC = -I $(USRINC)
 GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 
