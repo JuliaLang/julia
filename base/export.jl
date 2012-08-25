@@ -6,6 +6,8 @@ export
     PCRE,
     FFTW,
     Signal,
+    LibRandom,
+    RNG,
     
 # Types
     AbstractMatrix,

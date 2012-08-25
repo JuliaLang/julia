@@ -111,6 +111,7 @@ include("combinatorics.jl")
 include("statistics.jl")
 
 # random number generation
+include("random_librandom.jl")
 include("random.jl")
 
 # distributed arrays and memory-mapped arrays
@@ -172,10 +173,10 @@ compile_hint(cmp, (Int32, Int32))
 compile_hint(min, (Int32, Int32))
 compile_hint(==, (ASCIIString, ASCIIString))
 compile_hint(arg_gen, (ASCIIString,))
-compile_hint(_jl_librandom_init, ())
-compile_hint(srand, (ASCIIString, Int))
+#compile_hint(librandom_init, ())
+#compile_hint(srand, (ASCIIString, Int))
 compile_hint(open, (ASCIIString, Bool, Bool, Bool, Bool))
-compile_hint(srand, (Uint64,))
+#compile_hint(srand, (Uint64,))
 compile_hint(done, (IntSet, Int64))
 compile_hint(next, (IntSet, Int64))
 compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))

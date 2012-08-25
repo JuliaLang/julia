@@ -6,12 +6,12 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 @windows_only _jl_repl = ccall(:GetModuleHandleA,stdcall,Ptr{Void},(Ptr{Void},),C_NULL)
 
 # Essential libraries
-libpcre = dlopen("libpcre")
-libgrisu = dlopen("libgrisu")
+const libpcre = dlopen("libpcre")
+const libgrisu = dlopen("libgrisu")
+const librandom = dlopen("librandom");
+@windows_only _jl_advapi32 = dlopen("Advapi32")
 _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
-_jl_librandom = dlopen("librandom");
-@windows_only _jl_advapi32 = dlopen("Advapi32")
 
 # Optional libraries
 const _jl_libblas = dlopen(_jl_libblas_name)
