@@ -1,4 +1,4 @@
-module FFT
+module Signal
 import Base.*
 import Base.FFTW.*
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,

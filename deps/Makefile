@@ -626,7 +626,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -799,11 +799,16 @@ distclean-gmp:
 
 ## GMP Wrapper
 
-GMP_INC = -I gmp-$(GMP_VER)/
-GMP_LIB = -L$(USRLIB)/ -lgmp
+ifeq ($(USE_SYSTEM_GMP), 1)
+GMPW_INC =
+GMPW_LIB = -lgmp
+else
+GMPW_INC = -I $(USRINC)
+GMPW_LIB = -L$(USRLIB)/ -lgmp
+endif
 
 $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMPW_LIB)
 	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)
@@ -850,7 +855,7 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
-GLPKW_INC = -I $(abspath $(USR))/include/
+GLPKW_INC = -I $(USRINC)
 GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 

@@ -37,7 +37,7 @@ const ytab = [
   0.0118216532614, 0.00860719483079, 0.00553245272614, 0.00265435214565,
 ]
 
-const ktab = [
+const ktab = uint32([
          0, 12590644, 14272653, 14988939,
   15384584, 15635009, 15807561, 15933577,
   16029594, 16105155, 16166147, 16216399,
@@ -70,7 +70,7 @@ const ktab = [
   16522287, 16507638, 16490152, 16468907,
   16442518, 16408804, 16364095, 16301683,
   16207738, 16047994, 15704248, 15472926,
-]
+])
 
 const wtab = [
   1.62318314817e-08, 2.16291505214e-08, 2.54246305087e-08, 2.84579525938e-08,
@@ -107,7 +107,7 @@ const wtab = [
   1.83813550477e-07, 1.92166040885e-07, 2.05295471952e-07, 2.22600839893e-07,
 ]
 
-function randn_zig(sigma::Number)
+function randn_zig()
     sign = 0
     x = 0.0
 
@@ -133,7 +133,14 @@ function randn_zig(sigma::Number)
         if y < exp(-0.5*x*x); break; end
     end
 
-    return sign != 0 ? sigma*x : -sigma*x
+    return sign != 0 ? x : -x
 end
 
-randn_zig() = randn_zig(1.0)
+randn_zig(sigma::Number) = sigma*x
+
+function randn_zig!(A::Array)
+    for i=1:numel(A)
+        A[i] = randn_zig()
+    end
+    return A
+end
