@@ -30,7 +30,7 @@ end
 gc()
 
 # issue #1211
-load("$JULIA_HOME/../../examples/ziggurat.jl")
+load("ziggurat.jl")
 a = Array(Float64, 1000000)
 @timeit randn_zig!(a) "randn_zig"
 
