@@ -111,8 +111,10 @@ include("combinatorics.jl")
 include("statistics.jl")
 
 # random number generation
-include("random_librandom.jl")
-include("random.jl")
+include("RNG_librandom.jl")
+include("RNG.jl")
+import Base.RNG
+import Base.RNG.*
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")

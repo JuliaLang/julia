@@ -99,7 +99,7 @@ const dsfmt_min_array_size = LibRandom.dsfmt_get_min_array_size()
 
 function rand!(A::Array{Float64})
     n = numel(A)
-    if n <= dsfmt_min_array_size
+    if n <= dsfmt_min_array_size()
         for i = 1:n
             A[i] = rand()
         end
