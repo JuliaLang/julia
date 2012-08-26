@@ -137,10 +137,10 @@ include("linalg_lapack.jl")
 include("factorizations.jl")
 
 # signal processing
-include("signal_fftw.jl")
-include("signal.jl")
-import Base.Signal
-import Base.Signal.*
+include("DSP_fftw.jl")
+include("DSP.jl")
+import Base.DSP
+import Base.DSP.*
 
 # prime method cache with some things we know we'll need right after startup
 compile_hint(cwd, ())

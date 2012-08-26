@@ -506,7 +506,8 @@ jl_struct_type_t *jl_new_uninitialized_struct_type(size_t nfields)
 {
     return (jl_struct_type_t*)
         newobj((jl_type_t*)jl_struct_kind,
-               STRUCT_TYPE_NW + NWORDS(nfields*sizeof(jl_fielddesc_t)));
+               NWORDS(sizeof(jl_struct_type_t) - sizeof(void*) +
+                      (nfields-1)*sizeof(jl_fielddesc_t)));
 }
 
 void jl_compute_struct_offsets(jl_struct_type_t *st)

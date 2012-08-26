@@ -51,5 +51,3 @@
    *  ``@profile on``: turn profiling back on
 
    Be aware that profiling adds a significant performance overhead. You can prevent a subsection of your code from being profiled by encapsulating it inside a ``begin ... end`` block; in this case, the block as a whole is profiled, but the individual lines inside the block are not separately timed.
-
-   Profiling is implemented in terms of the ``time()`` function. The resolution of this timer is not sufficient for individually-accurate measurements on quickly-executing lines:  you frequently get a measured time of 0, with occassional non-zero measurements when the clock ticks over to the next higher value. Consequently, you should be skeptical about the timing measurements on simple lines that run fewer than hundreds of times.

@@ -4,10 +4,9 @@ export
     Grisu,
     Printf,
     PCRE,
-    FFTW,
-    Signal,
-    LibRandom,
     RNG,
+    FFTW,
+    DSP,
     
 # Types
     AbstractMatrix,
@@ -1127,7 +1126,6 @@ export
     path_rename,
     dir_create,
     dir_remove,
-    file_exists,
     tempdir,
     tempfile,
     download_file,
