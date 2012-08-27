@@ -70,8 +70,8 @@ typedef struct {
 // pseudo-object to track managed malloc pointers
 // currently only referenced from an array's data owner field
 typedef struct _jl_mallocptr_t {
-    JL_STRUCT_TYPE
     struct _jl_mallocptr_t *next;
+    size_t sz;
     void *ptr;
 } jl_mallocptr_t;
 
@@ -90,8 +90,9 @@ typedef struct {
     void *data;
     size_t length;
 
-    unsigned short ndims:15;
+    unsigned short ndims:14;
     unsigned short ptrarray:1;  // representation is pointer array
+    unsigned short ismalloc:1;  // data owner is a jl_mallocptr_t
     uint16_t elsize;
     uint32_t offset;  // for 1-d only. does not need to get big.
 
@@ -231,7 +232,7 @@ typedef struct {
     jl_value_t *ctor_factory;
     jl_value_t *instance;  // for singletons
     // hidden fields:
-    uptrint_t uid;
+    uint32_t uid;
     uint32_t size;
     uint32_t alignment;  // strictest alignment over all fields
     jl_fielddesc_t fields[1];
@@ -248,7 +249,7 @@ typedef struct {
     jl_tuple_t *parameters;
     int32_t nbits;
     // hidden fields:
-    uptrint_t uid;
+    uint32_t uid;
 } jl_bits_type_t;
 
 typedef struct {
@@ -950,7 +951,7 @@ void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
 jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-jl_mallocptr_t *jl_gc_acquire_buffer(void *b);
+jl_mallocptr_t *jl_gc_acquire_buffer(void *b, size_t sz);
 jl_mallocptr_t *jl_gc_managed_malloc(size_t sz);
 void *alloc_2w(void);
 void *alloc_3w(void);

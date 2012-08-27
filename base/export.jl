@@ -5,7 +5,7 @@ export
     Printf,
     PCRE,
     FFTW,
-    FFT,
+    DSP,
     
 # Types
     AbstractMatrix,
@@ -983,6 +983,7 @@ export
 # misc
     exit,
     quit,
+    atexit,
     method_missing,
     ntuple,
     peakflops,
@@ -1125,7 +1126,6 @@ export
     path_rename,
     dir_create,
     dir_remove,
-    file_exists,
     tempdir,
     tempfile,
     download_file,
