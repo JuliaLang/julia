@@ -1,6 +1,8 @@
-module Signal
+module DSP
+
 import Base.*
 import Base.FFTW.*
+
 export FFTW, filt, deconv, conv, conv2, xcorr, fftshift, ifftshift,
        # the rest are defined imported from FFTW:
        bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,
