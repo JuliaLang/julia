@@ -983,6 +983,7 @@ export
 # misc
     exit,
     quit,
+    atexit,
     method_missing,
     ntuple,
     peakflops,
