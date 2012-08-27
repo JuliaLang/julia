@@ -1,5 +1,5 @@
 load("$JULIA_HOME/../../base/git.jl")
-load("$JULIA_HOME/../../extras/linprog.jl")
+load("$JULIA_HOME/../../base/pkgmetadata.jl")
 
 # module Pkg
 #
@@ -7,6 +7,8 @@ load("$JULIA_HOME/../../extras/linprog.jl")
 #
 import Base.*
 import Git
+import Metadata
+import Metadata.*
 
 # default locations: local package repo, remote metadata repo
 
@@ -27,11 +29,15 @@ end
 init(dir::String) = init(dir, DEFAULT_META)
 init() = init(DEFAULT_DIR)
 
+# list required packages
+
+list() = run(`cat REQUIRES`)
+
 # install & remove packages by name
 
 function install(pkgs::String...)
     for pkg in pkgs
-        if !contains(packages(),pkg)
+        if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
         end
         reqs = parse_requires("REQUIRES")
@@ -43,12 +49,12 @@ function install(pkgs::String...)
         end
     end
     run(`git add REQUIRES`)
-    update()
+    resolve()
 end
 
 function remove(pkgs::String...)
     for pkg in pkgs
-        if !contains(packages(),pkg)
+        if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
         end
         reqs = parse_requires("REQUIRES")
@@ -68,175 +74,17 @@ function remove(pkgs::String...)
         run(`mv REQUIRES.new REQUIRES`)
     end
     run(`git add REQUIRES`)
-    update()
+    resolve()
 end
 
 # dealing with version metadata
 
-function gen_versions(pkg::String)
-    for (ver,sha1) in Git.each_version(pkg)
-        dir = "METADATA/$pkg/versions/$ver"
-        run(`mkdir -p $dir`)
-        open("$dir/sha1","w") do io
-            println(io,sha1)
-        end
-    end
-end
-
-each_package() = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\S+)$", line)
-        if m != nothing && isdir("METADATA/$(m.captures[1])/versions")
-            produce(m.captures[1])
-        end
-    end
-end
-
-each_version(pkg::String) = @task begin
-    for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD:$pkg/versions`)
-        m = match(r"\d{6} tree [0-9a-f]{40}\t(\d\S*)$", line)
-        if m != nothing && ismatch(Base.VERSION_REGEX,m.captures[1])
-            ver = convert(VersionNumber,m.captures[1])
-            dir = "METADATA/$pkg/versions/$(m.captures[1])"
-            if isfile("$dir/sha1")
-                produce((ver,dir))
-            end
-        end
-    end
-end
-
-function packages()
-    pkgs = String[]
-    for pkg in each_package()
-        push(pkgs,pkg)
-    end
-    sort!(pkgs)
-end
-
-type Version
-    package::ByteString
-    version::VersionNumber
-end
-isequal(a::Version, b::Version) =
-    a.package == b.package && a.version == b.version
-function isless(a::Version, b::Version)
-    (a.package < b.package) && return true
-    (a.package > b.package) && return false
-    return a.version < b.version
-end
-
-function versions(pkgs)
-    vers = Version[]
-    for pkg in pkgs
-        for (ver,dir) in each_version(pkg)
-            push(vers,Version(pkg,ver))
-        end
-    end
-    sort!(vers)
-end
-
-type VersionSet
-    package::ByteString
-    versions::Vector{VersionNumber}
-
-    function VersionSet(pkg::ByteString, vers::Vector{VersionNumber})
-        if !issorted(vers)
-            error("version numbers must be sorted")
-        end
-        new(pkg,vers)
-    end
-end
-VersionSet(pkg::ByteString) = VersionSet(pkg, VersionNumber[])
-isless(a::VersionSet, b::VersionSet) = a.package < b.package
-
-function contains(s::VersionSet, v::Version)
-    (s.package != v.package) && return false
-    for i in length(s.versions):-1:1
-        (v.version >= s.versions[i]) && return isodd(i)
-    end
-    return isempty(s.versions)
-end
-
-function parse_requires(file::String)
-    reqs = Dict{String,Vector{VersionNumber}}()
-    open(file) do io
-        for line in each_line(io)
-            if ismatch(r"^\s*(?:#|$)", line) continue end
-            line = replace(line, r"#.*$", "")
-            fields = split(line)
-            pkg = shift(fields)
-            if has(reqs,pkg)
-                error("duplicate requires entry for $pkg in $file")
-            end
-            vers = map(x->convert(VersionNumber,x),fields)
-            if !issorted(vers)
-                error("invalid requires entry for $pkg in $file: $vers")
-            end
-            reqs[pkg] = vers
-        end
-    end
-    [ VersionSet(pkg,reqs[pkg]) for pkg in sort!(keys(reqs)) ]
-end
-
-function dependencies(pkgs,vers)
-    deps = Array((Version,VersionSet),0)
-    for pkg in each_package()
-        for (ver,dir) in each_version(pkg)
-            v = Version(pkg,ver)
-            file = "$dir/requires"
-            if isfile(file)
-                for d in parse_requires("$dir/requires")
-                    push(deps,(v,d))
-                end
-            end
-        end
-    end
-    sort!(deps)
-end
-
-older(a::Version, b::Version) = a.package == b.package && a.version < b.version
-
-function solve(reqs::Vector{VersionSet})
-    pkgs = packages()
-    vers = versions(pkgs)
-    deps = dependencies(pkgs,vers)
-
-    n = length(vers)
-    z = zeros(Int,n)
-    u = ones(Int,n)
-
-    G  = [ v == d[1]        ? 1 : 0  for v=vers, d=deps ]
-    G *= [ contains(d[2],v) ? 1 : 0  for d=deps, v=vers ]
-    G += [ older(a,b)       ? 2 : 0  for a=vers, b=vers ]
-    I = find(G)
-    W = zeros(Int,length(I),n)
-    for (i,r) in enumerate(I)
-        W[r,rem(i-1,21)+1] = -1
-        W[r,div(i-1,21)+1] = G[i]
-    end
-    w = iround(linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
-
-    V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
-    R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
-    D = [ d[1] == v ? 1 : contains(d[2],v) ? -1 : 0  for d=deps, v=vers ]
-    b = [  ones(Int,length(pkgs))
-          -ones(Int,length(reqs))
-          zeros(Int,length(deps)) ]
-
-    x = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
-    vers[x .> 0.5]
-end
-solve() = Version[]
-solve(want::VersionSet...) = solve([want...])
-solve(want::String...) = solve([ VersionSet(x) for x in want ])
-
 # update packages from requirements
 
-function update(reqs::Vector{VersionSet})
-    vers = solve(reqs)
+function resolve()
+    vers = Metadata.resolve(parse_requires("REQUIRES"))
     # TODO
 end
-update() = update(parse_requires("REQUIRES"))
 
 # clone a new package repo from a URL
 
