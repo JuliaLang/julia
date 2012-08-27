@@ -16,6 +16,9 @@ ARCH = $(shell uname -m)
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
+USE_ATLAS = 0
+ATLAS_LIBDIR = /path/to/atlas/build/lib
+
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
@@ -250,6 +253,15 @@ ifneq ($(strip $(MKLLIB)),)
     RPATH += -Wl,-rpath,$(MKLLIB)
   endif
 endif
+endif
+
+ifeq ($(USE_ATLAS), 1)
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
+LIBLAPACK = $(LIBBLAS)
+LIBBLASNAME = libsatlas
+LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
 # Make tricks
