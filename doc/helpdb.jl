@@ -4454,6 +4454,90 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
+(E"gzip.jl",E"gzopen",E"gzopen(fname[, gzmode[, buf_size]])
+
+   Opens a file with mode (default 'r'), setting internal buffer size
+   to buf_size (default Z_DEFAULT_BUFSIZE=8192), and returns a the
+   file as a GZipStream.
+
+   'gzmode' must contain one of
+
+   +------+-----------------------------------+
+   | r    | read                              |
+   +------+-----------------------------------+
+   | w    | write, create, truncate           |
+   +------+-----------------------------------+
+   | a    | write, create, append             |
+   +------+-----------------------------------+
+
+   In addition, gzmode may also contain
+
+   +-------+-----------------------------------+
+   | x     | create the file exclusively       |
+   +-------+-----------------------------------+
+   | 0-9   | compression level                 |
+   +-------+-----------------------------------+
+
+   and/or a compression strategy:
+
+   +------+-----------------------------------+
+   | f    | filtered data                     |
+   +------+-----------------------------------+
+   | h    | Huffman-only compression          |
+   +------+-----------------------------------+
+   | R    | run-length encoding               |
+   +------+-----------------------------------+
+   | F    | fixed code compression            |
+   +------+-----------------------------------+
+
+   Note that '+' is not allowed in gzmode.
+
+   If an error occurs, 'gzopen' throws a GZError()
+
+"),
+
+(E"gzip.jl",E"gzdopen",E"gzdopen(fd[, gzmode[, buf_size]])
+
+   Create a 'GZipStream' object from an integer file descriptor. See
+   'gzopen' for 'gzmode' and 'buf_size' descriptions.
+
+"),
+
+(E"gzip.jl",E"gzdopen",E"gzdopen(s[, gzmode[, buf_size]])
+
+   Create a 'GZipStream' object from IOStream 's'.
+
+"),
+
+(E"gzip.jl",E"GZipStream",E"type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
+
+   Subtype of 'IO' which wraps a gzip stream.  Returned by 'gzopen'
+   and 'gzdopen'.
+
+"),
+
+(E"gzip.jl",E"GZError",E"type GZError(err, err_str)
+
+   gzip error number and string.  Possible error values:
+
+   +-----------------------+-----------------------------------------+
+   | 'Z_OK'                | No error                                |
+   +-----------------------+-----------------------------------------+
+   | 'Z_ERRNO'             | Filesystem error (consult errno())      |
+   +-----------------------+-----------------------------------------+
+   | 'Z_STREAM_ERROR'      | Inconsistent stream state               |
+   +-----------------------+-----------------------------------------+
+   | 'Z_DATA_ERROR'        | Compressed data error                   |
+   +-----------------------+-----------------------------------------+
+   | 'Z_MEM_ERROR'         | Out of memory                           |
+   +-----------------------+-----------------------------------------+
+   | 'Z_BUF_ERROR'         | Input buffer full/output buffer empty   |
+   +-----------------------+-----------------------------------------+
+   | 'Z_VERSION_ERROR'     | zlib library version is incompatible    |
+   +-----------------------+-----------------------------------------+
+
+"),
+
 
 (E"options.jl",E"options",E"options()
 
