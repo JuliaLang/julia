@@ -554,8 +554,8 @@ collection[key...] = value
 
 (E"Strings",E"strchr",E"strchr(string, char[, i])
 
-   Return the index of 'char' in 'string', giving an error if not
-   found. The third argument optionally specifies a starting index.
+   Return the index of 'char' in 'string', giving 0 if not found. The
+   third argument optionally specifies a starting index.
 
 "),
 

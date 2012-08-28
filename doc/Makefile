@@ -153,6 +153,6 @@ doctest:
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in $(BUILDDIR)/doctest/output.txt."
 
-helpdb.jl: stdlib/base.rst sphinx/jlhelp.py
+helpdb.jl: stdlib/*.rst sphinx/jlhelp.py
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
