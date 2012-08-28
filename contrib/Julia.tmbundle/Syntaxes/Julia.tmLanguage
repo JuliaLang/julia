@@ -102,9 +102,15 @@
 						</dict>
 					</dict>
 					<key>end</key>
-					<string>\)</string>
-					<key>name</key>
-					<string>meta.function.call.julia</string>
+					<string>\)(('|(\.'))*\.?')?</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transposed-func.julia</string>
+						</dict>
+					</dict>
 					<key>patterns</key>
 					<array>
 						<dict>
@@ -294,7 +300,7 @@
 						</dict>
 					</dict>
 					<key>match</key>
-					<string>(\w+)([.']*')</string>
+					<string>(\w+)(('|(\.'))*\.?')</string>
 				</dict>
 				<dict>
 					<key>begin</key>
@@ -308,7 +314,7 @@
 						</dict>
 					</dict>
 					<key>end</key>
-					<string>(\])([.']*')</string>
+					<string>(\])(('|(\.'))*\.?')</string>
 					<key>endCaptures</key>
 					<dict>
 						<key>1</key>
@@ -320,6 +326,40 @@
 						<dict>
 							<key>name</key>
 							<string>keyword.operator.transposed-matrix.julia</string>
+						</dict>
+					</dict>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
+				</dict>
+				<dict>
+					<key>begin</key>
+					<string>(\()</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.bracket.julia</string>
+						</dict>
+					</dict>
+					<key>end</key>
+					<string>(\))(('|(\.'))*\.?')</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.bracket.julia</string>
+						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transposed-parens.julia</string>
 						</dict>
 					</dict>
 					<key>patterns</key>
