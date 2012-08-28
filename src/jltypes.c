@@ -1386,7 +1386,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
         else {
             // NOTE: type checking deferred to inst_type_w_ to make sure
             // supertype parameters are checked recursively.
-            if (tc!=jl_type_type && jl_is_typector(params[i]))
+            if (tc!=(jl_value_t*)jl_type_type && jl_is_typector(params[i]))
                 env[ne*2+1] = (jl_value_t*)((jl_typector_t*)params[i])->body;
             else
                 env[ne*2+1] = params[i];
