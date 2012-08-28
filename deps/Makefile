@@ -896,7 +896,7 @@ zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 	./configure --prefix=$(abspath $(USR))
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
-	$(MAKE) -C zlib-$(ZLIB_VER)
+	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
 	$(MAKE) -C zlib-$(ZLIB_VER) check
 	$(MAKE) -C zlib-$(ZLIB_VER) install
 	$(INSTALL_NAME_CMD)libz.dylib $@
