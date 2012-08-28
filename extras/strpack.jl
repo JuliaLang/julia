@@ -325,7 +325,7 @@ function interp_struct_parse(str::String)
 end
 
 macro s_str(str)
-    interp_struct_parse(eval(_jl_interp_parse(str)))
+    interp_struct_parse(str)
 end
 
 # Julian aliases for the "object-style" calls to pack/unpack/struct
