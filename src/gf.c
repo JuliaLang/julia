@@ -70,15 +70,15 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
         else if (jl_is_tag_type(a) && jl_is_tag_type(decl) &&
                  ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
                  ((jl_tag_type_t*)a   )->name == jl_type_type->name) {
-            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+            jl_value_t *tp0 = jl_tparam0(decl);
+            if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
-                if (!jl_types_equal(jl_tparam0(a), jl_tparam0(decl))) {
+                if (!jl_types_equal(jl_tparam0(a), tp0))
                     return 0;
-                }
             }
         }
         else if (decl == (jl_value_t*)jl_any_type) {
@@ -120,13 +120,14 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         }
         else if (jl_is_type_type(decl) &&
                  jl_is_nontuple_type(a)) {   //***
-            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+            jl_value_t *tp0 = jl_tparam0(decl);
+            if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
-                if (a!=jl_tparam0(decl) && !jl_types_equal(a,jl_tparam0(decl)))
+                if (a!=tp0 && !jl_types_equal(a,tp0))
                     return 0;
             }
         }
@@ -441,6 +442,13 @@ static int tuple_all_Any(jl_tuple_t *t)
     return 1;
 }
 
+static int is_kind(jl_value_t *v)
+{
+    return (v==(jl_value_t*)jl_union_kind || v==(jl_value_t*)jl_struct_kind ||
+            v==(jl_value_t*)jl_bits_kind || v==(jl_value_t*)jl_typector_type ||
+            v==(jl_value_t*)jl_tag_kind);
+}
+
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
@@ -456,8 +464,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
+        jl_value_t *decl_i = nth_slot_type(decl,i);
         int set_to_any = 0;
-        if (nth_slot_type(decl,i) == jl_ANY_flag) {
+        if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
             temp = jl_tupleref(type, i);
             jl_tupleset(type, i, (jl_value_t*)jl_any_type);
@@ -572,8 +581,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
-        else if (jl_is_type_type(elt) &&
-                 very_general_type(nth_slot_type(decl,i))) {
+        else if (jl_is_type_type(elt) && very_general_type(decl_i)) {
             /*
               here's a fairly complex heuristic: if this argument slot's
               declared type is Any, and no definition overlaps with Type
@@ -581,24 +589,66 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               might be passed.
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
+              
+              TypeConstructors are problematic because they can be alternate
+              representations of any type. Extensionally, TC == TC.body, but
+              typeof(TC) != typeof(TC.body). This creates an ambiguity:
+              Type{TC} is type-equal to Type{TC.body}, yet a slot
+              x::TypeConstructor matches the first but not the second, while
+              also matching all other TypeConstructors. This means neither
+              Type{TC} nor TypeConstructor is more specific.
+              
+              To solve this, we identify "kind slots", which are slots
+              for which some definition specifies a kind (e.g. AbstractKind).
+              Those tend to be in reflective functions that look at types
+              themselves. For these slots we specialize on jl_typeof(T) instead
+              of Type{T}, i.e. the kind of the type rather than the specific
+              type.
             */
-            int ok=1;
+            int ok=1, kindslot=0;
             jl_methlist_t *curr = mt->defs;
+            jl_value_t *kind = (jl_value_t*)jl_typeof(jl_tparam0(elt));
             while (curr != JL_NULL) {
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
-                if (slottype &&
-                    !very_general_type(slottype) &&
-                    jl_type_intersection(slottype,
-                                         (jl_value_t*)jl_type_type) !=
-                    (jl_value_t*)jl_bottom_type) {
-                    ok=0;
-                    break;
+                if (slottype && curr->func!=method) {
+                    if (slottype == kind) {
+                        ok=0;
+                        break;
+                    }
+                    if (is_kind(slottype))
+                        kindslot=1;
                 }
                 curr = curr->next;
             }
             if (ok) {
-                jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
+                if (kindslot) {
+                    jl_tupleset(type, i, kind);
+                }
+                else {
+                    curr = mt->defs;
+                    while (curr != JL_NULL) {
+                        jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                        if (slottype && curr->func!=method) {
+                            if (!very_general_type(slottype) &&
+                                jl_type_intersection(slottype, (jl_value_t*)jl_type_type) !=
+                                (jl_value_t*)jl_bottom_type) {
+                                ok=0;
+                                break;
+                            }
+                        }
+                        curr = curr->next;
+                    }
+                    if (ok) {
+                        jl_tupleset(type, i, jl_typetype_type);
+                    }
+                }
             }
+        }
+        else if (is_kind(decl_i)) {
+            // if a slot is specialized for a particular kind, it can be
+            // considered a reflective method and so only needs to be
+            // specialized for type representation, not type extent.
+            jl_tupleset(type, i, decl_i);
         }
     }
 
