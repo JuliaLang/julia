@@ -434,6 +434,7 @@ off_t ios_seek_end(ios_t *s)
         off_t fdpos = lseek(s->fd, 0, SEEK_END);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;
@@ -789,6 +790,7 @@ ios_t *ios_mem(ios_t *s, size_t initsize)
 {
     _ios_init(s);
     s->bm = bm_mem;
+    s->rereadable = 1;
     _buf_realloc(s, initsize);
     return s;
 }

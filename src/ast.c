@@ -31,6 +31,8 @@ value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
 {
     argcount("defined-julia-global", nargs, 1);
     (void)tosymbol(args[0], "defined-julia-global");
+    if (jl_current_module == NULL)
+        return FL_F;
     char *name = symbol_name(args[0]);
     return jl_boundp(jl_current_module, jl_symbol(name)) ? FL_T : FL_F;
 }
@@ -479,6 +481,19 @@ jl_value_t *jl_expand(jl_value_t *expr)
     return result;
 }
 
+DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
+{
+    int np = jl_gc_n_preserved_values();
+    value_t arg = julia_to_scm(expr);
+    value_t e = fl_applyn(1, symbol_value(symbol("jl-macroexpand")), arg);
+    jl_value_t *result;
+    result = scm_to_julia(e);
+    while (jl_gc_n_preserved_values() > np) {
+        jl_gc_unpreserve();
+    }
+    return result;
+}
+
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
@@ -581,9 +596,10 @@ int jl_is_rest_arg(jl_value_t *ex)
     return 1;
 }
 
-static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
+static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
 {
     if (jl_is_symbol(expr)) {
+        if (!do_sp) return expr;
         // pre-evaluate certain static parameters to help type inference
         for(int i=0; i < jl_tuple_len(sp); i+=2) {
             assert(jl_is_typevar(jl_tupleref(sp,i)));
@@ -615,7 +631,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         JL_GC_PUSH(&na);
         size_t i;
         for(i=0; i < jl_array_len(a); i++)
-            jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp));
+            jl_cellset(na, i, copy_ast(jl_cellref(a,i), sp, do_sp));
         JL_GC_POP();
         return (jl_value_t*)na;
     }
@@ -624,8 +640,15 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp)
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH(&ne);
         size_t i;
-        for(i=0; i < jl_array_len(e->args); i++)
-            jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp);
+        if (e->head == lambda_sym) {
+            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
+            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
+            jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
+        }
+        else {
+            for(i=0; i < jl_array_len(e->args); i++)
+                jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
+        }
         JL_GC_POP();
         return (jl_value_t*)ne;
     }
@@ -675,7 +698,7 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     if (jl_is_tuple(ast))
         ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
-    ast = copy_ast(ast, sparams);
+    ast = copy_ast(ast, sparams, 1);
     eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
     eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
     JL_GC_POP();

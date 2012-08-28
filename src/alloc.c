@@ -124,6 +124,44 @@ void jl_assign_bits(void *dest, jl_value_t *bits)
     }
 }
 
+int jl_field_index(jl_struct_type_t *t, jl_sym_t *fld, int err)
+{
+    jl_tuple_t *fn = t->names;
+    size_t i;
+    for(i=0; i < jl_tuple_len(fn); i++) {
+        if (jl_tupleref(fn,i) == (jl_value_t*)fld) {
+            return (int)i;
+        }
+    }
+    if (err)
+        jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
+    return -1;
+}
+
+jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
+{
+    jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
+    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    if (st->fields[i].isptr) {
+        return *(jl_value_t**)((char*)v + offs);
+    }
+    return jl_new_bits((jl_bits_type_t*)jl_tupleref(st->types,i),
+                       (char*)v + offs);
+}
+
+jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+{
+    jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
+    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    if (st->fields[i].isptr) {
+        *(jl_value_t**)((char*)v + offs) = rhs;
+    }
+    else {
+        jl_assign_bits((char*)v + offs, rhs);
+    }
+    return rhs;
+}
+
 DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
 {
     if (type->instance != NULL) return type->instance;
@@ -131,9 +169,9 @@ DLLEXPORT jl_value_t *jl_new_struct(jl_struct_type_t *type, ...)
     size_t nf = jl_tuple_len(type->names);
     size_t i;
     va_start(args, type);
-    jl_value_t *jv = newobj((jl_type_t*)type, nf);
+    jl_value_t *jv = newstruct(type);
     for(i=0; i < nf; i++) {
-        ((jl_value_t**)jv)[i+1] = va_arg(args, jl_value_t*);
+        jl_set_nth_field(jv, i, va_arg(args, jl_value_t*));
     }
     if (nf == 0) type->instance = jv;
     va_end(args);
@@ -144,11 +182,8 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_struct_type_t *type)
 {
     if (type->instance != NULL) return type->instance;
     size_t nf = jl_tuple_len(type->names);
-    size_t i;
-    jl_value_t *jv = newobj((jl_type_t*)type, nf);
-    for(i=0; i < nf; i++) {
-        ((jl_value_t**)jv)[i+1] = NULL;
-    }
+    jl_value_t *jv = newstruct(type);
+    memset(&((void**)jv)[1], 0, type->size);
     if (nf == 0) type->instance = jv;
     return jv;
 }
@@ -158,7 +193,7 @@ DLLEXPORT jl_value_t *jl_new_structt(jl_struct_type_t *type, jl_tuple_t *t)
     assert(jl_tuple_len(type->names) == jl_tuple_len(t));
     jl_value_t *jv = jl_new_struct_uninit(type);
     for(size_t i=0; i < jl_tuple_len(t); i++) {
-        ((jl_value_t**)jv)[i+1] = jl_tupleref(t, i);
+        jl_set_nth_field(jv, i, jl_tupleref(t, i));
     }
     return jv;
 }
@@ -261,12 +296,12 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
                                   LAMBDA_INFO_NW);
     li->ast = ast;
     li->file = (jl_value_t*)null_sym;
-    li->line = jl_box_long(0);
+    li->line = 0;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)ast),0);
         if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
             li->file = jl_exprarg(body1, 1);
-            li->line = jl_exprarg(body1, 0);
+            li->line = jl_unbox_long(jl_exprarg(body1, 0));
         }
     }
     li->module = jl_current_module;
@@ -276,7 +311,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->roots = NULL;
     li->functionObject = NULL;
     li->specTypes = NULL;
-    li->inferred = jl_false;
+    li->inferred = 0;
     li->inInference = 0;
     li->inCompile = 0;
     li->unspecialized = NULL;
@@ -467,14 +502,49 @@ JL_CALLABLE(jl_f_ctor_trampoline)
     return jl_apply((jl_function_t*)F, args, nargs);
 }
 
+jl_struct_type_t *jl_new_uninitialized_struct_type(size_t nfields)
+{
+    return (jl_struct_type_t*)
+        newobj((jl_type_t*)jl_struct_kind,
+               NWORDS(sizeof(jl_struct_type_t) - sizeof(void*) +
+                      (nfields-1)*sizeof(jl_fielddesc_t)));
+}
+
+void jl_compute_struct_offsets(jl_struct_type_t *st)
+{
+    size_t sz = 0, alignm = 0;
+
+    for(size_t i=0; i < st->types->length; i++) {
+        jl_value_t *ty = jl_tupleref(st->types, i);
+        size_t fsz, al;
+        if (jl_is_bits_type(ty)) {
+            fsz = jl_bitstype_nbits(ty)/8;
+            al = fsz;   // alignment == size for bits types
+            st->fields[i].isptr = 0;
+        }
+        else {
+            fsz = sizeof(void*);
+            al = fsz;
+            st->fields[i].isptr = 1;
+        }
+        sz = LLT_ALIGN(sz, al);
+        if (al > alignm)
+            alignm = al;
+        st->fields[i].offset = sz;
+        st->fields[i].size = fsz;
+        sz += fsz;
+    }
+    st->alignment = alignm;
+    st->size = LLT_ALIGN(sz, alignm);
+}
+
 jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
                                      jl_tuple_t *parameters,
                                      jl_tuple_t *fnames, jl_tuple_t *ftypes)
 {
     jl_typename_t *tn = jl_new_typename(name);
     JL_GC_PUSH(&tn);
-    jl_struct_type_t *t = (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                                    STRUCT_TYPE_NW);
+    jl_struct_type_t *t = jl_new_uninitialized_struct_type(fnames->length);
     t->name = tn;
     t->name->primary = (jl_value_t*)t;
     t->super = super;
@@ -486,10 +556,14 @@ jl_struct_type_t *jl_new_struct_type(jl_sym_t *name, jl_tag_type_t *super,
     t->linfo = NULL;
     t->ctor_factory = (jl_value_t*)jl_null;
     t->instance = NULL;
-    if (!jl_is_leaf_type((jl_value_t*)t))
+    if (!jl_is_leaf_type((jl_value_t*)t)) {
         t->uid = 0;
-    else
+    }
+    else {
         t->uid = jl_assign_type_uid();
+        if (t->types != NULL)
+            jl_compute_struct_offsets(t);
+    }
     JL_GC_POP();
     return t;
 }
@@ -524,10 +598,6 @@ jl_bits_type_t *jl_new_bits_type(jl_value_t *name, jl_tag_type_t *super,
     }
     t->super = super;
     t->parameters = parameters;
-    if (jl_int32_type != NULL)
-        t->bnbits = jl_box_int32(nbits);
-    else
-        t->bnbits = (jl_value_t*)jl_null;
     t->nbits = nbits;
     if (!jl_is_leaf_type((jl_value_t*)t))
         t->uid = 0;

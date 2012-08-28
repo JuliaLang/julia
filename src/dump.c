@@ -105,6 +105,12 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
     if (jl_is_struct_type(v)) {
         writetag(s, (jl_value_t*)jl_struct_kind);
         jl_serialize_value(s, jl_struct_kind);
+        write_uint16(s, ((jl_struct_type_t*)v)->names->length);
+        write_int32(s, ((jl_struct_type_t*)v)->uid);
+        write_int32(s, ((jl_struct_type_t*)v)->size);
+        write_int32(s, ((jl_struct_type_t*)v)->alignment);
+        size_t nf = ((jl_struct_type_t*)v)->names->length;
+        ios_write(s, (char*)&((jl_struct_type_t*)v)->fields[0], nf*sizeof(jl_fielddesc_t));
         jl_serialize_value(s, ((jl_struct_type_t*)v)->name);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->parameters);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->super);
@@ -114,7 +120,6 @@ static void jl_serialize_tag_type(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, ((jl_struct_type_t*)v)->env);
         jl_serialize_value(s, ((jl_struct_type_t*)v)->linfo);
         jl_serialize_fptr(s, ((jl_struct_type_t*)v)->fptr);
-        write_int32(s, ((jl_struct_type_t*)v)->uid);
     }
     else if (jl_is_bits_type(v)) {
         writetag(s, jl_struct_kind);
@@ -320,9 +325,9 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
-        jl_serialize_value(s, (jl_value_t*)li->inferred);
+        write_int8(s, li->inferred);
         jl_serialize_value(s, (jl_value_t*)li->file);
-        jl_serialize_value(s, (jl_value_t*)li->line);
+        write_int32(s, li->line);
         jl_serialize_value(s, (jl_value_t*)li->module);
     }
     else if (jl_typeis(v, jl_module_type)) {
@@ -350,11 +355,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         else if (jl_is_struct_type(t)) {
             writetag(s, jl_struct_kind);
             jl_serialize_value(s, t);
-            size_t nf = jl_tuple_len(((jl_struct_type_t*)t)->names);
+            jl_struct_type_t *st = (jl_struct_type_t*)t;
+            size_t nf = jl_tuple_len(st->names);
             size_t i;
             for(i=0; i < nf; i++) {
-                jl_value_t *fld = ((jl_value_t**)v)[i+1];
-                jl_serialize_value(s, fld);
+                jl_serialize_value(s, jl_get_nth_field(v, i));
             }
             if (t == jl_idtable_type) {
                 jl_cell_1d_push(idtable_list, v);
@@ -384,9 +389,12 @@ static jl_fptr_t jl_deserialize_fptr(ios_t *s)
 static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int pos)
 {
     if (kind == jl_struct_kind) {
-        jl_struct_type_t *st =
-            (jl_struct_type_t*)newobj((jl_type_t*)jl_struct_kind,
-                                      STRUCT_TYPE_NW);
+        uint16_t nf = read_uint16(s);
+        jl_struct_type_t *st = jl_new_uninitialized_struct_type(nf);
+        st->uid = read_int32(s);
+        st->size = read_int32(s);
+        st->alignment = read_int32(s);
+        ios_read(s, (char*)&st->fields[0], nf*sizeof(jl_fielddesc_t));
         st->instance = NULL;
         ptrhash_put(&backref_table, (void*)(ptrint_t)pos, st);
         st->name = (jl_typename_t*)jl_deserialize_value(s);
@@ -398,7 +406,6 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
         st->env = jl_deserialize_value(s);
         st->linfo = (jl_lambda_info_t*)jl_deserialize_value(s);
         st->fptr = jl_deserialize_fptr(s);
-        st->uid = read_int32(s);;
         if (st->name == jl_array_type->name) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
@@ -425,7 +432,6 @@ static jl_value_t *jl_deserialize_tag_type(ios_t *s, jl_struct_type_t *kind, int
 
         size_t nbits = read_int32(s);
         bt->nbits = nbits;
-        bt->bnbits = jl_box_int32(nbits);
         bt->fptr = NULL;
         bt->env = NULL;
         bt->linfo = NULL;
@@ -586,9 +592,9 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         li->name = (jl_sym_t*)jl_deserialize_value(s);
         li->specTypes = jl_deserialize_value(s);
         li->specializations = (jl_array_t*)jl_deserialize_value(s);
-        li->inferred = jl_deserialize_value(s);
+        li->inferred = read_int8(s);
         li->file = jl_deserialize_value(s);
-        li->line = jl_deserialize_value(s);
+        li->line = read_int32(s);
         li->module = (jl_module_t*)jl_deserialize_value(s);
 
         li->fptr = &jl_trampoline;
@@ -665,7 +671,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, v);
         for(i=0; i < nf; i++) {
-            ((jl_value_t**)v)[i+1] = jl_deserialize_value(s);
+            jl_set_nth_field(v, i, jl_deserialize_value(s));
         }
         // TODO: put WeakRefs on the weak_refs list
         return v;
@@ -701,7 +707,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
     jl_array_t *spec = mt->defs->func->linfo->specializations;
     if (spec->length > 0 &&
-        ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == jl_false) {
+        ((jl_lambda_info_t*)jl_cellref(spec,0))->inferred == 0) {
         mt->cache = JL_NULL;
         mt->cache_arg1 = JL_NULL;
         mt->defs->func->linfo->tfunc = (jl_value_t*)jl_null;

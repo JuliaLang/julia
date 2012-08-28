@@ -5,7 +5,7 @@ export
     Printf,
     PCRE,
     FFTW,
-    FFT,
+    DSP,
     
 # Types
     AbstractMatrix,
@@ -616,6 +616,7 @@ export
     diagmm!,
     dot,
     eig,
+    expm,
     eye,
     ishermitian,
     issym,
@@ -937,6 +938,7 @@ export
     
 # syntax
     expand,
+    macroexpand,
     esc,
     expr,
     gensym,
@@ -981,6 +983,7 @@ export
 # misc
     exit,
     quit,
+    atexit,
     method_missing,
     ntuple,
     peakflops,
@@ -1023,10 +1026,12 @@ export
     read,
     readall,
     readchomp,
+    readdir,
     readline,
     readlines,
     readuntil,
     seek,
+    seek_end,
     select_read,
     serialize,
     skip,
@@ -1122,7 +1127,6 @@ export
     path_rename,
     dir_create,
     dir_remove,
-    file_exists,
     tempdir,
     tempfile,
     download_file,

@@ -404,7 +404,13 @@ jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
     JL_GC_PUSH(&gf);
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
+    assert(jl_is_tuple(t));
     jl_check_type_tuple(argtypes, name, "method definition");
+    for(size_t i=0; i < t->length; i++) {
+        if (!jl_is_typevar(jl_tupleref(t,i)))
+            jl_type_error_rt(name->name, "method definition",
+                             (jl_value_t*)jl_tvar_type, jl_tupleref(t,i));
+    }
     jl_add_method((jl_function_t*)gf, argtypes, f, t);
     if (jl_boot_file_loaded &&
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {

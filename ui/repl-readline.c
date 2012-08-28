@@ -135,8 +135,7 @@ static void reset_indent(void) {
 // TODO: is it appropriate to call this on the int values readline uses?
 static int jl_word_char(uint32_t wc)
 {
-    return ('A' <= wc && wc <= 'Z') || ('a' <= wc && wc <= 'z') ||
-           ('0' <= wc && wc <= '9') || (0xA1 <= wc) || (wc == '_');
+    return strchr(rl_completer_word_break_characters, wc) == NULL;
 }
 
 static int newline_callback(int count, int key) {

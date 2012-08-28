@@ -106,6 +106,22 @@ DLLEXPORT jl_value_t *jl_stdout_stream(void)
     return (jl_value_t*)a;
 }
 
+// --- dir/file stuff ---
+
+DLLEXPORT int jl_sizeof_uv_fs_t(void) { return sizeof(uv_fs_t); }
+DLLEXPORT void jl_uv_fs_req_cleanup(uv_fs_t* req) {
+  uv_fs_req_cleanup(req);
+}
+
+DLLEXPORT int jl_readdir(const char* path, uv_fs_t* readdir_req)
+{
+  // Note that the flags field is mostly ignored by libuv
+  return uv_fs_readdir(uv_default_loop(), readdir_req, path, 0 /*flags*/, NULL);
+}
+
+DLLEXPORT char* jl_uv_fs_t_ptr(uv_fs_t* req) {return req->ptr; }
+DLLEXPORT char* jl_uv_fs_t_ptr_offset(uv_fs_t* req, int offset) {return req->ptr + offset; }
+
 // --- stat ---
 DLLEXPORT int jl_sizeof_stat(void) { return sizeof(struct stat); }
 
@@ -299,7 +315,7 @@ jl_value_t *jl_readuntil(ios_t *s, uint8_t delim)
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *str = alloc_2w();
     str->type = (jl_type_t*)string_type;
-    jl_fieldref(str,0) = (jl_value_t*)a;
+    jl_set_nth_field(str, 0, (jl_value_t*)a);
     JL_GC_POP();
     return str;
 }

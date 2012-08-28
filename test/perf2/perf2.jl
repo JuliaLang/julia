@@ -29,6 +29,10 @@ end
 @timeit listn1n2(1,10^6) "cons    "
 gc()
 
+# issue #1211
+load("ziggurat.jl")
+a = Array(Float64, 1000000)
+@timeit randn_zig!(a) "randn_zig"
 
 # issue #950
 load("gk.jl")

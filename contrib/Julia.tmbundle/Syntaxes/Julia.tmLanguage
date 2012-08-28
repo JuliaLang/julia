@@ -280,10 +280,55 @@
 					<string>keyword.operator.dots.julia</string>
 				</dict>
 				<dict>
+					<key>captures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>variable</string>
+						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transposed-variable.julia</string>
+						</dict>
+					</dict>
 					<key>match</key>
-					<string>(?&lt;=\w)'</string>
-					<key>name</key>
-					<string>keyword.operator.transpose.julia</string>
+					<string>(\w+)([.']*')</string>
+				</dict>
+				<dict>
+					<key>begin</key>
+					<string>(\[)</string>
+					<key>beginCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.bracket.julia</string>
+						</dict>
+					</dict>
+					<key>end</key>
+					<string>(\])([.']*')</string>
+					<key>endCaptures</key>
+					<dict>
+						<key>1</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.bracket.julia</string>
+						</dict>
+						<key>2</key>
+						<dict>
+							<key>name</key>
+							<string>keyword.operator.transposed-matrix.julia</string>
+						</dict>
+					</dict>
+					<key>patterns</key>
+					<array>
+						<dict>
+							<key>include</key>
+							<string>$self</string>
+						</dict>
+					</array>
 				</dict>
 			</array>
 		</dict>

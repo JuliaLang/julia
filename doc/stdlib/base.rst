@@ -407,7 +407,7 @@ Strings
 
 .. function:: strchr(string, char[, i])
 
-   Return the index of ``char`` in ``string``, giving an error if not found. The third argument optionally specifies a starting index.
+   Return the index of ``char`` in ``string``, giving 0 if not found. The third argument optionally specifies a starting index.
 
 .. function:: lpad(string, n, p)
 
@@ -540,6 +540,10 @@ I/O
 .. function:: seek(s, pos)
 
    Seek a stream to the given position.
+
+.. function:: seek_end(s)
+
+   Seek a stream to the end.
 
 .. function:: skip(s, offset)
 

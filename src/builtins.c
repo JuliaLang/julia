@@ -343,33 +343,6 @@ JL_CALLABLE(jl_f_tuplelen)
 
 // composite types ------------------------------------------------------------
 
-static size_t field_offset(jl_struct_type_t *t, jl_sym_t *fld, int err)
-{
-    jl_tuple_t *fn = t->names;
-    size_t i;
-    for(i=0; i < jl_tuple_len(fn); i++) {
-        if (jl_tupleref(fn,i) == (jl_value_t*)fld) {
-            return i;
-        }
-    }
-    if (err)
-        jl_errorf("type %s has no field %s", t->name->name->name, fld->name);
-    return -1;
-}
-
-size_t jl_field_offset(jl_struct_type_t *t, jl_sym_t *fld)
-{
-    return field_offset(t, fld, 0);
-}
-
-static jl_value_t *nth_field(jl_value_t *v, size_t i)
-{
-    jl_value_t *fld = ((jl_value_t**)v)[1+i];
-    if (fld == NULL)
-        jl_raise(jl_undefref_exception);
-    return fld;
-}
-
 JL_CALLABLE(jl_f_get_field)
 {
     JL_NARGS(getfield, 2, 2);
@@ -382,8 +355,12 @@ JL_CALLABLE(jl_f_get_field)
     if (!jl_is_struct_type(vt)) {
         jl_type_error("getfield", (jl_value_t*)jl_struct_kind, v);
     }
-    size_t i = field_offset((jl_struct_type_t*)vt, (jl_sym_t*)args[1], 1);
-    return nth_field(v, i);
+    jl_struct_type_t *st = (jl_struct_type_t*)vt;
+    jl_sym_t *fld = (jl_sym_t*)args[1];
+    jl_value_t *fval = jl_get_nth_field(v, jl_field_index(st, fld, 1));
+    if (fval == NULL)
+        jl_raise(jl_undefref_exception);
+    return fval;
 }
 
 JL_CALLABLE(jl_f_set_field)
@@ -395,12 +372,13 @@ JL_CALLABLE(jl_f_set_field)
     if (!jl_is_struct_type(vt))
         jl_type_error("setfield", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;
-    size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
+    jl_sym_t *fld = (jl_sym_t*)args[1];
+    size_t i = jl_field_index(st, fld, 1);
     jl_value_t *ft = jl_tupleref(st->types,i);
     if (!jl_subtype(args[2], ft, 1)) {
         jl_type_error("setfield", ft, args[2]);
     }
-    ((jl_value_t**)v)[1+i] = args[2];
+    jl_set_nth_field(v, i, args[2]);
     return args[2];
 }
 
@@ -413,8 +391,8 @@ JL_CALLABLE(jl_f_field_type)
     if (!jl_is_struct_type(vt))
         jl_type_error("fieldtype", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;
-    size_t i = field_offset(st, (jl_sym_t*)args[1], 1);
-    return jl_tupleref(st->types, i);
+    jl_sym_t *fld = (jl_sym_t*)args[1];
+    return jl_tupleref(st->types, jl_field_index(st, fld, 1));
 }
 
 // conversion -----------------------------------------------------------------
@@ -642,7 +620,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             size_t i;
             size_t n = jl_tuple_len(st->names);
             for(i=0; i < n; i++) {
-                jl_show(str, nth_field(v, i));
+                jl_show(str, jl_get_nth_field(v, i));
                 if (i < n-1)
                     JL_PUTC(',', s);
             }
@@ -662,7 +640,7 @@ JL_CALLABLE(jl_trampoline)
     jl_function_t *f = (jl_function_t*)F;
     assert(f->linfo != NULL);
     // to run inference on all thunks. slows down loading files.
-    if (f->linfo->inferred == jl_false) {
+    if (f->linfo->inferred == 0) {
         if (!jl_in_inference) {
             if (jl_is_tuple(f->linfo->ast)) {
                 f->linfo->ast = jl_uncompress_ast((jl_tuple_t*)f->linfo->ast);
