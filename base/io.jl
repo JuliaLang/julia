@@ -47,6 +47,10 @@ seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
      error("seek failed"))
 
+seek_end(s::IOStream) =
+    (ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
+     error("seek_end failed"))
+
 skip(s::IOStream, delta::Integer) =
     (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
      error("skip failed"))

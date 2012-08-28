@@ -774,6 +774,12 @@ collection[key...] = value
 
 "),
 
+(E"I/O",E"seek_end",E"seek_end(s)
+
+   Seek a stream to the end.
+
+"),
+
 (E"I/O",E"skip",E"skip(s, offset)
 
    Seek a stream relative to the current position.
