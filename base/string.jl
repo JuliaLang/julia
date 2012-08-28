@@ -480,7 +480,7 @@ lcfirst(s::String) = TransformedString((c,i)->i==1 ? lowercase(c) : c, s)
 const uc = uppercase
 const lc = lowercase
 
-## string map ##
+## string map, filter, has ##
 
 function map(f::Function, s::String)
     out = memio(length(s))
@@ -489,6 +489,18 @@ function map(f::Function, s::String)
     end
     takebuf_string(out)
 end
+
+function filter(f::Function, s::String)
+    out = memio(length(s))
+    for c in s
+        if f(c)
+            write(out, c)
+        end
+    end
+    takebuf_string(out)
+end
+
+has(s::String, c::Char) = has(Set(s...), c)
 
 ## string promotion rules ##
 
