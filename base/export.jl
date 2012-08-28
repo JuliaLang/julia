@@ -1031,6 +1031,7 @@ export
     readlines,
     readuntil,
     seek,
+    seek_end,
     select_read,
     serialize,
     skip,

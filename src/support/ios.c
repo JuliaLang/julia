@@ -434,6 +434,7 @@ off_t ios_seek_end(ios_t *s)
         off_t fdpos = lseek(s->fd, 0, SEEK_END);
         if (fdpos == (off_t)-1)
             return fdpos;
+        s->fpos = fdpos;
         s->bpos = s->size = 0;
     }
     return 0;
