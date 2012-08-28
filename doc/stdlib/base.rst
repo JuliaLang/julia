@@ -541,6 +541,10 @@ I/O
 
    Seek a stream to the given position.
 
+.. function:: seek_end(s)
+
+   Seek a stream to the end.
+
 .. function:: skip(s, offset)
 
    Seek a stream relative to the current position.
