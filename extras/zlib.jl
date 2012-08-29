@@ -59,11 +59,8 @@ function compress_to_buffer(source::Array{Uint8}, dest::Array{Uint8}, level::Int
                 dest, dest_buf_size, source, length(source), int32(level))
 
     if ret != Z_OK
-        if ret < 0
-            throw(ZError(ret))
-        else
-            error("ZLib.compress (zlib compress2) error: $(zlib_error_str[ret])")
-        end
+        # Note that if ret > 0, it's not an (unrecoverable) error, but that won't happen here
+        throw(ZError(ret))
     end
 
     # Shrink the buffer to the actual compressed size
@@ -117,11 +114,8 @@ function uncompress_to_buffer(source::Array{Uint8}, dest::Array{Uint8})
                 dest, dest_buf_size, source, length(source))
 
     if ret != Z_OK
-        if ret < 0
-            throw(ZError(ret))
-        else
-            error("ZLib.compress (zlib uncompress) error: $(zlib_error_str[ret])")
-        end
+        # Note that if ret > 0, it's not an (unrecoverable) error, but that won't happen here
+        throw(ZError(ret))
     end
 
     return dest_buf_size[1]
