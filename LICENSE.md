@@ -58,3 +58,4 @@ External libraries, if used, include their own licenses:
 - [PCRE](http://www.pcre.org/licence.txt)
 - [READLINE](http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
+- [ZLIB](http://zlib.net/zlib_license.html)
