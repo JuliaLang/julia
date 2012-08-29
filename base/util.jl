@@ -159,7 +159,8 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = methods(t,Tuple)
+methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
+                             t.env)
 
 
 # require

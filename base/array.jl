@@ -728,10 +728,14 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
 end
 
 function grow(a::Vector, n::Integer)
-    if n < -length(a)
-        throw(BoundsError())
+    if n > 0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
+    else
+        if n < -length(a)
+            throw(BoundsError())
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, -n)
     end
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     return a
 end
 
@@ -1331,8 +1335,6 @@ function nonzeros{T}(A::StridedArray{T})
 end
 
 ## Reductions ##
-
-contains(s::Number, n::Number) = (s == n)
 
 areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =
     areduce(f,A,region,v0,T)
