@@ -1,6 +1,6 @@
 ## linalg_dense.jl: Basic Linear Algebra functions for dense representations ##
 #
-# note that many functions have specific versions for Float/Complex arguments
+# note that many functions have specific versions for FloatingPoint/Complex arguments
 # which use BLAS instead
 
 Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]

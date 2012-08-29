@@ -601,7 +601,7 @@ _int_dec(x::Real) = _int_dec(float(x))
 _int_hex(x::Real) = _int_hex(integer(x)) # TODO: real float decoding.
 _int_HEX(x::Real) = _int_HEX(integer(x)) # TODO: real float decoding.
 
-function _int_dec(x::Float)
+function _int_dec(x::FloatingPoint)
     if x == 0.0
         NEG[1] = false
         POINT[1] = 1
@@ -630,7 +630,7 @@ end
 _fix_dec(x::Integer, n::Int) = (_int_dec(x); LEN[1]=POINT[1])
 _fix_dec(x::Real, n::Int) = _fix_dec(float(x),n)
 
-function _fix_dec(x::Float, n::Int)
+function _fix_dec(x::FloatingPoint, n::Int)
     if n > BUFLEN-1; n = BUFLEN-1; end
     @grisu_ccall x Grisu.FIXED n
     if LEN[1] == 0
@@ -680,7 +680,7 @@ end
 _ini_dec(x::Integer, n::Int) = (@_handle_negative; _ini_dec(unsigned(x),n))
 _ini_dec(x::Real, n::Int) = _ini_dec(float(x),n)
 
-function _ini_dec(x::Float, n::Int)
+function _ini_dec(x::FloatingPoint, n::Int)
     if x == 0.0
         POINT[1] = 1
         NEG[1] = signbit(x)
@@ -742,7 +742,7 @@ end
 _sig_dec(x::Integer, n::Int) = (@_handle_negative; _sig_dec(unsigned(x),n))
 _sig_dec(x::Real, n::Int) = _sig_dec(float(x),n)
 
-function _sig_dec(x::Float, n::Int)
+function _sig_dec(x::FloatingPoint, n::Int)
     @grisu_ccall x Grisu.PRECISION n
     if x == 0.0; return; end
     while DIGITS[n] == '0'

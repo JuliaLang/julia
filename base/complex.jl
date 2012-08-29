@@ -26,7 +26,7 @@ function _jl_show(io, z::Complex, compact::Bool)
         end
         compact ? showcompact(io, i) : show(io, i)
         if !(isa(i,Integer) || isa(i,Rational) ||
-             isa(i,Float) && isfinite(i))
+             isa(i,FloatingPoint) && isfinite(i))
             print(io, "*")
         end
         print(io, "im")
@@ -117,10 +117,10 @@ sizeof(::Type{Complex64}) = 8
 
 complex(x::Float64, y::Float64) = complex128(x, y)
 complex(x::Float32, y::Float32) = complex64(x, y)
-complex(x::Float, y::Float) = complex(promote(x,y)...)
-complex(x::Float, y::Real) = complex(promote(x,y)...)
-complex(x::Real, y::Float) = complex(promote(x,y)...)
-complex(x::Float) = complex(x, zero(x))
+complex(x::FloatingPoint, y::FloatingPoint) = complex(promote(x,y)...)
+complex(x::FloatingPoint, y::Real) = complex(promote(x,y)...)
+complex(x::Real, y::FloatingPoint) = complex(promote(x,y)...)
+complex(x::FloatingPoint) = complex(x, zero(x))
 
 
 ## complex with arbitrary component type ##

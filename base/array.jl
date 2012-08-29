@@ -165,7 +165,7 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
     return a
 end
-function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
+function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     if isa(T,BitsKind) && convert(T,x) == 0
         ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
     else
@@ -1427,7 +1427,7 @@ function sum{T}(A::StridedArray{T})
     v
 end
 
-function sum{T<:Float}(A::StridedArray{T})
+function sum{T<:FloatingPoint}(A::StridedArray{T})
     n = length(A)
     if (n == 0)
         return zero(T)

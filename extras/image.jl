@@ -423,7 +423,7 @@ function write_bitmap_data(s, img)
         else
             error("unsupported array dimensions")
         end
-    elseif eltype(img) <: Float
+    elseif eltype(img) <: FloatingPoint
         # prevent overflow
         a = copy(img)
         a[img .> 1] = 1
@@ -730,7 +730,7 @@ end
 imfilter(img, filter) = imfilter(img, filter, "replicate", 0)
 imfilter(img, filter, border) = imfilter(img, filter, border, 0)
 
-function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
+function imlineardiffusion{T}(img::Array{T,2}, dt::FloatingPoint, iterations::Integer)
     u = img
     f = imlaplacian()
     for i = dt:dt:dt*iterations
@@ -739,7 +739,7 @@ function imlineardiffusion{T}(img::Array{T,2}, dt::Float, iterations::Integer)
     u
 end
 
-function imthresh{T}(img::Array{T,2}, threshold::Float)
+function imthresh{T}(img::Array{T,2}, threshold::FloatingPoint)
     if !(0.0 <= threshold <= 1.0)
         error("threshold must be between 0 and 1")
     end

@@ -360,7 +360,7 @@ function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
+function sprand_rng(m::Int, n::Int, density::FloatingPoint, rng::Function)
     # TODO: Need to be able to generate int32 random integer arrays.
     # That will save extra memory utilization in the int32() calls.
     numnz = int(m*n*density)
@@ -372,8 +372,8 @@ function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
     return S
 end
 
-sprand(m::Int, n::Int, density::Float)  = sprand_rng (m,n,density,rand)
-sprandn(m::Int, n::Int, density::Float) = sprand_rng (m,n,density,randn)
+sprand(m::Int, n::Int, density::FloatingPoint)  = sprand_rng (m,n,density,rand)
+sprandn(m::Int, n::Int, density::FloatingPoint) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
 spones{T}(S::SparseMatrixCSC{T}) =
@@ -1024,7 +1024,7 @@ function assign(S::SparseAccumulator, v, i::Integer)
     return S
 end
 
-type Tridiagonal{T<:Float} <: AbstractMatrix{T}
+type Tridiagonal{T<:FloatingPoint} <: AbstractMatrix{T}
     a::Vector{T}   # sub-diagonal
     b::Vector{T}   # diagonal
     c::Vector{T}   # sup-diagonal

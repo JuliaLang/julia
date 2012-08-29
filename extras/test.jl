@@ -9,7 +9,7 @@ type TestResult
     group
     expr_str::String
     succeed::Bool # good outcome == true
-    elapsed::Float
+    elapsed::FloatingPoint
     exception_thrown::Exception
     operation
     arg1

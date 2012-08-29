@@ -1003,19 +1003,19 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"ceil",E"ceil(x) -> Float
+(E"Mathematical Functions",E"ceil",E"ceil(x) -> FloatingPoint
 
    Returns the nearest integer not less than 'x'.
 
 "),
 
-(E"Mathematical Functions",E"floor",E"floor(x) -> Float
+(E"Mathematical Functions",E"floor",E"floor(x) -> FloatingPoint
 
    Returns the nearest integer not greater than 'x'.
 
 "),
 
-(E"Mathematical Functions",E"trunc",E"trunc(x) -> Float
+(E"Mathematical Functions",E"trunc",E"trunc(x) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than 'x'.
 

@@ -349,7 +349,7 @@ end
 
 # issue #1153
 type SI{m, s, kg}
-    value::Float
+    value::FloatingPoint
 end
 
 *{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)
