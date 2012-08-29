@@ -136,7 +136,6 @@ include("factorizations.jl")
 # signal processing
 include("DSP_fftw.jl")
 include("DSP.jl")
-import Base.DSP
 import Base.DSP.*
 
 # prime method cache with some things we know we'll need right after startup
