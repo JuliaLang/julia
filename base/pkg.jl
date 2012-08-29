@@ -2,12 +2,12 @@ load("$JULIA_HOME/../../base/git.jl")
 load("$JULIA_HOME/../../base/pkgmetadata.jl")
 
 # module Pkg
+import Metadata
 #
 # Julia's git-based declarative package manager
 #
 import Base.*
 import Git
-import Metadata
 import Metadata.*
 
 # default locations: local package repo, remote metadata repo
@@ -22,6 +22,8 @@ function init(dir::String, meta::String)
     run(`mkdir $dir`)
     cd(dir) do
         run(`git init`)
+        run(`touch REQUIRES`)
+        run(`git add REQUIRES`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
     end
@@ -29,11 +31,20 @@ end
 init(dir::String) = init(dir, DEFAULT_META)
 init() = init(DEFAULT_DIR)
 
-# list required packages
+# list required & installed packages
 
-list() = run(`cat REQUIRES`)
+required() = open("REQUIRES") do io
+    for line in each_line(io)
+        print(line)
+    end
+end
+installed() = Git.in_each_submodule(false) do name, path, sha1
+    if name != "METADATA"
+        println(name)
+    end
+end
 
-# install & remove packages by name
+# require & unrequire packages by name
 
 function install(pkgs::String...)
     for pkg in pkgs
@@ -77,13 +88,47 @@ function remove(pkgs::String...)
     resolve()
 end
 
-# dealing with version metadata
-
 # update packages from requirements
 
 function resolve()
-    vers = Metadata.resolve(parse_requires("REQUIRES"))
-    # TODO
+    want = Metadata.resolve(parse_requires("REQUIRES"))
+    have = Dict{String,ASCIIString}()
+    Git.in_each_submodule(false) do pkg, path, sha1
+        if pkg != "METADATA"
+            have[pkg] = sha1
+        end
+    end
+    pkgs = sort!(keys(merge(want,have)))
+    for pkg in pkgs
+        if has(have,pkg) # TODO: && !cd(Git.detached,pkg)
+            if has(want,pkg)
+                if have[pkg] != want[pkg]
+                    oldver = Metadata.version(pkg,have[pkg])
+                    newver = Metadata.version(pkg,want[pkg])
+                    up = oldver < newver ? "up" : "down"
+                    println("$(up)grading $pkg v$oldver => v$newver")
+                    cd(pkg) do
+                        run(`git reset --soft $(want[pkg])`)
+                    end
+                    run(`git add -- $pkg`)
+                end
+            else
+                ver = Metadata.version(pkg,have[pkg])
+                println("removing $pkg v$ver")
+                run(`git rm -qrf --cached -- $pkg`)
+            end
+        else
+            ver = Metadata.version(pkg,want[pkg])
+            println("installing $pkg v$ver")
+            url = readchomp("METADATA/$pkg/url")
+            run(`git submodule add --reference . $url $pkg`)
+            cd(pkg) do
+                run(`git checkout -q --detach`)
+                run(`git reset --soft $(want[pkg])`)
+            end
+            run(`git add -- $pkg`)
+        end
+    end
 end
 
 # clone a new package repo from a URL

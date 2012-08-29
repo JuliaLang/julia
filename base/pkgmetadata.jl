@@ -16,6 +16,20 @@ function gen_versions(pkg::String)
     end
 end
 
+function gen_hashes(pkg::String)
+    for (ver,dir) in each_version(pkg)
+        sha1 = readchomp("$dir/sha1")
+        run(`mkdir -p METADATA/$pkg/hashes`)
+        open("METADATA/$pkg/hashes/$sha1","w") do io
+            println(io,ver)
+        end
+    end
+end
+gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
+
+version(pkg::String, sha1::String) =
+    convert(VersionNumber,readchomp("METADATA/$pkg/hashes/$sha1"))
+
 each_package() = @task begin
     for line in each_line(`git --git-dir=METADATA/.git ls-tree HEAD`)
         m = match(r"\d{6} tree [0-9a-f]{40}\t(\S+)$", line)
@@ -67,6 +81,7 @@ function versions(pkgs)
     end
     sort!(vers)
 end
+versions() = versions(packages())
 
 type VersionSet
     package::ByteString
@@ -157,7 +172,11 @@ function resolve(reqs::Vector{VersionSet})
           zeros(Int,length(deps)) ]
 
     x = Main.linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
-    vers[x .> 0.5]
+    h = Dict{String,ASCIIString}()
+    for v in vers[x .> 0.5]
+        h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
+    end
+    return h
 end
 
 end # module
