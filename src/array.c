@@ -454,8 +454,11 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec > a->length)
         jl_error("array_del_end: index out of range");
+    char *ptail = (char*)a->data + (a->length-dec)*a->elsize;
     if (a->ptrarray)
-        memset((char*)a->data + (a->length-dec)*a->elsize, 0, dec*a->elsize);
+        memset(ptail, 0, dec*a->elsize);
+    else
+        ptail[0] = 0;
     a->length -= dec; a->nrows -= dec;
 }
 
