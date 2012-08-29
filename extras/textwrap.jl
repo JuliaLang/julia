@@ -108,7 +108,7 @@ function _munge_whitespace(text::String, expand_tabs::Bool, replace_whitespace::
     # whitespace characters to spaces.  Eg. " foo\tbar\n\nbaz"
     # becomes " foo    bar  baz".
     if expand_tabs
-        text = _expand_tabs(text) # TODO
+        text = _expand_tabs(text)
     end
     if replace_whitespace
         text = _translate_whitespace(text)
