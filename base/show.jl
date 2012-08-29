@@ -441,6 +441,8 @@ function alignment(
             aij = _jl_undef_ref_alignment
             try
                 aij = alignment(X[i,j])
+            catch err
+                if !isa(err,UndefRefError) throw(err) end
             end
             l = max(l, aij[1])
             r = max(r, aij[2])
@@ -471,6 +473,8 @@ function print_matrix_row(io,
             x = X[i,j]
             a = alignment(x)
             sx = sprint(showcompact, x)
+        catch err
+            if !isa(err,UndefRefError) throw(err) end
         end
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
@@ -637,6 +641,8 @@ function show{T}(io, x::AbstractArray{T,0})
     sx = _jl_undef_ref_str
     try
         sx = sprint(showcompact, x[])
+    catch err
+        if !isa(err,UndefRefError) throw(err) end
     end
     print(io, sx)
 end
