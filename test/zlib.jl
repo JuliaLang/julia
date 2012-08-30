@@ -1,10 +1,10 @@
-require("test.jl")
-require("zlib.jl")
+require("../extras/zlib.jl")
+
 import Zlib
 import Zlib.*
 
 ########################
-test_context("Zlib tests")
+# Zlib tests
 ########################
 
 # Initialize byte compression buffer
@@ -20,7 +20,7 @@ end
 r = b[randi((1,256), 65536)]
 
 ########################
-test_group("type size tests")
+# type size tests
 ########################
 # This test group is to make sure that our interpretation of zlib's
 # type sizes is correct.  zlib gives this information via the
@@ -45,85 +45,92 @@ z_off_t_sz   = 2 << ((zlib_compile_flags >> 6) & uint(3))
 ## the zlib wrapper.  If they are not true, we should get an error here,
 ## so things can be fixed.
 
-assert(z_uInt_sz == sizeof(Uint32),
-       "zlib: sizeof(uInt) ($z_uInt_sz) != sizeof(Uint32) ($(sizeof(Uint32)))!  Please file a bug!")
-assert(z_uLong_sz == sizeof(Uint),
-       "zlib: sizeof(uLong) ($z_uLong_sz) != sizeof(Uint) ($(sizeof(Uint)))!  Please file a bug!")
-assert(z_voidpf_sz == sizeof(Ptr),
-       "zlib: sizeof(voidpf) ($z_voidpf_sz) != sizeof(Ptr) ($(sizeof(Ptr)))!  Please file a bug!")
-assert(z_off_t_sz == sizeof(FileOffset),
-       "zlib: sizeof(z_off_t) ($z_off_t_sz) != sizeof(FileOffset) ($(sizeof(FileOffset)))!  Please file a bug!")
+@assert(z_uInt_sz == sizeof(Uint32))
+@assert(z_uLong_sz == sizeof(Uint))
+@assert(z_voidpf_sz == sizeof(Ptr))
+@assert(z_off_t_sz == sizeof(FileOffset))
 
 ########################
-test_group("compress/uncompress tests")
+# compress/uncompress tests
 ########################
 
 # Simple string compression/decompression 
 s = "This is a test string"
 cs = compress(s)
 us = bytestring(uncompress(cs))
-@test us == s
+@assert us == s
 
 # Test compression, uncompression of b
 cb = compress(b)
 ub = uncompress(cb)
-@test ub == b
+@assert ub == b
 
 # Test uncompression of uncompressed data
-@testfails throws_exception(uncompress(b), ZError)
+@assert_fails uncompress(b)
 
 
 ########################
-test_group("compress_to_buffer/uncompress tests")
+# compress_to_buffer/uncompress tests
 ########################
 
 # String compression to buffer
 max_buf_s = compress_bound(length(s))
-cb = zeros(Uint8, max_buf_s)
-ncb = compress_to_buffer(s, cb)
-us = bytestring(uncompress(cb))
-@test ncb < max_buf_s
-@test us == s
+cs = zeros(Uint8, max_buf_s)
+ncb = compress_to_buffer(s, cs)
+us = bytestring(uncompress(cs))
+@assert ncb < max_buf_s
+@assert us == s
+
+# Data compression to buffer
+max_buf_b = compress_bound(length(b))
+cb = zeros(Uint8, max_buf_b)
+ncb = compress_to_buffer(b, cb)
+ub = uncompress(cb)
+@assert ncb < max_buf_b
+@assert ub == b
 
 # Random data compression to buffer
 max_buf_r = compress_bound(length(r))
 cr = zeros(Uint8, max_buf_r)
 ncr = compress_to_buffer(r, cr)
-@test ncr < max_buf_r
+ur = uncompress(cr)
+@assert ncr < max_buf_r
+@assert ur == r
 
 ########################
-test_group("uncompress to buffer tests")
+# uncompress to buffer tests
 ########################
 
 # Test uncompression to tiny buffer (ZError)
-ub = zeros(Uint8, 1)
-@testfails throws_exception(uncompress_to_buffer(cb, ub), ZError)
+ub = zeros(Uint8, 2)
+@assert_fails uncompress_to_buffer(cb, ub)
 
 # Test uncompression to buffer which is slightly too small (ZError)
 ub = zeros(Uint8, BUFSIZE-1)
-@testfails throws_exception(uncompress_to_buffer(cb, ub), ZError)
+@assert_fails uncompress_to_buffer(cb, ub)
 
 # Test uncompression of uncompressed data to buffer
 ub = zeros(Uint8, BUFSIZE)
-@testfails throws_exception(uncompress_to_buffer(b, ub), ZError)
+@assert_fails uncompress_to_buffer(b, ub)
 
 # Test uncompression to buffer
 nb = uncompress_to_buffer(cb, ub)
-@test nb == length(b)
-@test ub == b
+@assert nb == length(b)
+@assert ub == b
 
 # Test uncompression to buffer which is larger than necessary
 ub = zeros(Uint8, BUFSIZE + 100)
 nb = uncompress_to_buffer(cb, ub)
-@test nb == length(ub)-100
-@test ub[1:nb] == b
+@assert nb == length(ub)-100
+@assert ub[1:nb] == b
 
 # Test uncompress to small buffer, random data (ZError)
 ur = zeros(Uint8, BUFSIZE-1)
-@testfails throws_exception(uncompress_to_buffer(cr, ur), ZError)
+@assert_fails uncompress_to_buffer(cr, ur)
 
 # Test uncompress to large buffer, random data
 ur = zeros(Uint8, BUFSIZE+10)
 nur = uncompress_to_buffer(cr, ur)
-@test nur == BUFSIZE
-@test ur[1:nur] == r
+@assert nur == BUFSIZE
+@assert ur[1:nur] == r
+
