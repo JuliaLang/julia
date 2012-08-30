@@ -104,7 +104,7 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 
 ==(x::Rational, y::Number  ) = x.num == x.den*y
 ==(x::Number  , y::Rational) = y == x
-==(x::Rational, y::FloatingPoint   ) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
+==(x::Rational, y::FloatingPoint) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
 
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
 < (x::Rational, y::Real    ) = x.num < x.den*y
