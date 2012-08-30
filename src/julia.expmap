@@ -96,6 +96,7 @@
     jl_stderr_obj;
     ios_fd;
     ios_mem;
+    jl_get_binding;
     jl_boundp;
     jl_get_root_symbol;
     julia_free;
@@ -192,12 +193,14 @@
     jl_errorexception_type;
     jl_loaderror_type;
     jl_backtrace_type;
+    jl_module_type;
     jl_show;
     jl_show_any;
     jl_print_symbol;
     jl_print_int64;
     jl_pgcstack;
     jl_symbol;
+    jl_symbol_lookup;
     jl_core_module;
     jl_base_module;
     jl_main_module;
