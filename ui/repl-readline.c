@@ -370,7 +370,7 @@ static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            jl_boundp(jl_base_module, tree)) {
+            jl_boundp(jl_current_module, tree)) {
             ios_puts(tree->name, result);
             ios_putc('\n', result);
             (*pcount)++;
