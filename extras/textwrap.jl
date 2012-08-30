@@ -16,6 +16,7 @@
 #    'println_wrapped' which just print the result of
 #    'wrapped_string' and take and optional io::IO as
 #    their first argument
+# 4) changed sentence_ending regular expression
 
 require("options.jl")
 
@@ -31,9 +32,9 @@ export
     dedent
 
 # unlike Julia's native split, this keeps the separators in the
-# resulting Vector (but unlike Python's it discards empty strings)
-_pylike_split(str::String, splitter) = _pylike_split(utf8(str), splitter)
-function _pylike_split(str::UTF8String, splitter)
+# resulting Vector (but it discards empty strings)
+_split_keep_seps(str::String, splitter) = _split_keep_seps(utf8(str), splitter)
+function _split_keep_seps(str::UTF8String, splitter)
     strs = String[]
     i = start(str)
     n = length(str)
@@ -76,7 +77,7 @@ function _expand_tabs(text::String)
     return takebuf_string(out_buf)
 end
 
-function _translate_whitespace(text::String)
+function _replace_whitespace(text::String)
     # Hardcode the recognized whitespace characters to the US-ASCII
     # whitespace characters.  The main reason for doing this is that in
     # ISO-8859-1, 0xa0 is non-breaking whitespace, so in certain locales
@@ -102,21 +103,7 @@ function _translate_whitespace(text::String)
     return takebuf_string(out_buf)
 end
 
-
-function _munge_whitespace(text::String, expand_tabs::Bool, replace_whitespace::Bool)
-    # Munge whitespace in text: expand tabs and convert all other
-    # whitespace characters to spaces.  Eg. " foo\tbar\n\nbaz"
-    # becomes " foo    bar  baz".
-    if expand_tabs
-        text = _expand_tabs(text)
-    end
-    if replace_whitespace
-        text = _translate_whitespace(text)
-    end
-    return text
-end
-
-function _split(text::String, break_on_hyphens::Bool)
+function _break_to_chunks(text::String, break_on_hyphens::Bool)
     # Split the text to wrap into indivisible chunks.  Chunks are
     # not quite the same as words; see _wrap_chunks() for full
     # details.  As an example, the text
@@ -124,7 +111,7 @@ function _split(text::String, break_on_hyphens::Bool)
     # breaks into the following chunks:
     #   "Look,", " ", "goof-", "ball", " ", "--", " ",
     #   "use", " ", "the", " ", "-b", " ", "option!"
-    # if break_on_hyphens is True, or in:
+    # if break_on_hyphens is true, or in:
     #   "Look,", " ", "goof-ball", " ", "--", " ",
     #   "use", " ", "the", " ", "-b", " ", option!"
     # otherwise.
@@ -134,24 +121,23 @@ function _split(text::String, break_on_hyphens::Bool)
            [^\s\w]*\w+[^0-9\W]-(?=\w+[^0-9\W])|
            (?<=[\w\!\"\'\&\.\,\?])-{2,}(?=\w))"x
 
-    _wordsep_simple_re = r"(\s+)"
+    _wordsep_simple_re = r"\s+"
 
     if break_on_hyphens
-        chunks = _pylike_split(text, _wordsep_re)
+        chunks = _split_keep_seps(text, _wordsep_re)
     else
-        chunks = _pylike_split(text, _wordsep_simple_re)
+        chunks = _split_keep_seps(text, _wordsep_simple_re)
     end
     return chunks
 end
 
 function _fix_sentence_endings{T<:String}(chunks::Vector{T})
     # Correct for sentence endings buried in 'chunks'.  Eg. when the
-    # original text contains "... foo.\nBar ...", _munge_whitespace()
-    # and _split() will convert that to [..., "foo.", " ", "Bar", ...]
-    # which has one too few spaces; this method simply changes the one
-    # space to two.
+    # original text contains "... foo.\nBar ...", chunks will
+    # contain [..., "foo.", " ", "Bar", ...], which has one too few
+    # spaces; this function simply changes the one space to two.
 
-    _sentence_end_re = r"[a-z][\.\!\?][\"\']?\Z"
+    _sentence_end_re = r"\w([\.\!\?…]|\.\.\.)[\"\'´„]?\Z"
 
     i = 1
     while i < length(chunks)
@@ -165,9 +151,9 @@ function _fix_sentence_endings{T<:String}(chunks::Vector{T})
     return chunks
 end
 
-function _handle_long_word{T<:String}(reversed_chunks::Vector{T}, cur_line::Vector{T}, cur_len::Integer, width::Integer, break_long_words::Bool)
-    # Handle a chunk of text (most likely a word, not whitespace) that
-    # is too long to fit in any line.
+function _handle_long_word{T<:String}(reversed_chunks::Vector{T},
+    cur_line::Vector{T}, cur_len::Integer, width::Integer, break_long_words::Bool)
+    # Handle a chunk of text that # is too long to fit in any line.
     
     # Figure out when indent is larger than the specified width, and make
     # sure at least one character is stripped off on every pass
@@ -211,9 +197,6 @@ function _wrap_chunks{T<:String}(chunks::Vector{T}, width::Integer,
     # Whitespace chunks will be removed from the beginning and end of
     # lines, but apart from that whitespace is preserved.
     lines = String[]
-    if width <= 0
-        error("invalid width $width (must be > 0)")
-    end
 
     # Arrange in reverse order so items can be efficiently popped
     # from a stack of chucks.
@@ -276,6 +259,25 @@ function _wrap_chunks{T<:String}(chunks::Vector{T}, width::Integer,
     return lines
 end
 
+_check_width(width) = error("width must be an integer")
+function _check_width(width::Integer)
+    if width <= 0
+        error("invalid width $width (must be > 0)")
+    end
+    return true
+end
+_check_indent(indent) = error("indentation must be either an Integer or a String")
+function _check_indent(indent::Integer)
+    if indent < 0
+        error("invalid intent $indent (must be >= 0 or a String)")
+    end
+    return true
+end
+_check_indent(indent::String) = true
+_check_is_bool(flag) = error("invalid value $flag (must be a Bool)")
+_check_is_bool(flag::Bool) = true
+
+
 function wrap(text::String, opts::Options)
     # Reformat the single paragraph in 'text' so it fits in lines of
     # no more than 'opts.width' columns, and return a Vector of wrapped
@@ -294,13 +296,39 @@ function wrap(text::String, opts::Options)
         break_on_hyphens=>true)
     @check_used(opts)
 
-    text = _munge_whitespace(text, expand_tabs, replace_whitespace)
-    chunks = _split(text, break_on_hyphens)
+    # Sanity checks
+    _check_width(width)
+    _check_indent(initial_indent)
+    _check_indent(subsequent_indent)
+    _check_is_bool(expand_tabs)
+    _check_is_bool(replace_whitespace)
+    _check_is_bool(fix_sentence_endings)
+    _check_is_bool(break_long_words)
+    _check_is_bool(drop_whitespace)
+    _check_is_bool(break_on_hyphens)
+
+    if isa(initial_indent, Integer)
+        initial_indent = " "^initial_indent
+    end
+    if isa(subsequent_indent, Integer)
+        subsequent_indent = " "^subsequent_indent
+    end
+
+    if expand_tabs
+        text = _expand_tabs(text)
+    end
+    if replace_whitespace
+        text = _replace_whitespace(text)
+    end
+
+    chunks = _break_to_chunks(text, break_on_hyphens)
     if fix_sentence_endings
         chunks = _fix_sentence_endings(chunks)
     end
-    return _wrap_chunks(chunks, width, initial_indent,
+    lines = _wrap_chunks(chunks, width, initial_indent,
             subsequent_indent, drop_whitespace, break_long_words)
+
+    return lines
 end
 wrap(text::String) = wrap(text, Options())
 
@@ -311,15 +339,42 @@ function wrapped_string(text::String, opts::Options)
 end
 wrapped_string(text::String) = wrapped_string(text, Options())
 
-print_wrapped(io::IO, text::String, opts::Options) = print(io, wrapped_string(text, opts))
-print_wrapped(text::String) = print_wrapped(stdout_stream, text, Options())
-print_wrapped(text::String, opts::Options) = print_wrapped(stdout_stream, text, opts)
-print_wrapped(io::IO, text::String) = print_wrapped(io, text, Options())
+# print functions signature:
+#   first arg: IO
+#   last arg: Options
+#   inbetween: anything printable
+#
+#   all arguments are optional
+#
+function _print_wrapped(newline::Bool, args...)
+    if !isempty(args) && isa(args[1], IO)
+        io = args[1]
+        args = args[2:end]
+    else
+        io = stdout_stream
+    end
+    if !isempty(args) && isa(args[end], Options)
+        opts = args[end]
+        args = args[1:end-1]
+    else
+        opts = Options()
+    end
 
-println_wrapped(io::IO, text::String, opts::Options) = println(io, wrapped_string(text, opts))
-println_wrapped(text::String) = println_wrapped(stdout_stream, text, Options())
-println_wrapped(text::String, opts::Options) = println_wrapped(stdout_stream, text, opts)
-println_wrapped(io::IO, text::String) = println_wrapped(io, text, Options())
+    if !isempty(args)
+        ws = wrapped_string(strcat(args...), opts)
+    else
+        ws = ""
+    end
+
+    if newline
+        println(io, ws)
+    else
+        print(io, ws)
+    end
+end
+print_wrapped(args...) = _print_wrapped(false, args...)
+println_wrapped(args...) = _print_wrapped(true, args...)
+
 
 function dedent(text::String)
     # Remove any common leading whitespace from every line in `text`.
