@@ -574,62 +574,348 @@ diagmm{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
     diagmm!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), b, A)
 
 
-# Tridiagonal solver
+##### Tridiagonal solver #####
 # Allocation-free variants
-function solve(x::Array, xstart::Int, xstride::Int, M::Tridiagonal, d::Array, dstart::Int, dstride::Int)
-    # Grab refs to members (for efficiency)
-    a = M.a
-    b = M.b
-    c = M.c
-    cp = M.cp
-    dp = M.dp
-    N = length(b)
-    # Forward sweep
-    cp[1] = c[1] / b[1]
-    dp[1] = d[dstart] / b[1]
-    id = dstart+dstride
-    for i = 2:N
-        atmp = a[i]
-        temp = b[i] - atmp*cp[i-1]
-        cp[i] = c[i] / temp
-        dp[i] = (d[id] - atmp*dp[i-1])/temp
-        id += dstride
+# Note that solve is non-aliasing, so you can use the same array for
+# input and output
+function solve(x::AbstractArray, xrng::Ranges{Int}, M::Tridiagonal, rhs::AbstractArray, rhsrng::Ranges{Int})
+    d = M.d
+    N = length(d)
+    if length(xrng) != N || length(rhsrng) != N
+        error("dimension mismatch")
     end
+    dl = M.dl
+    du = M.du
+    dutmp = M.dutmp
+    rhstmp = M.rhstmp
+    xstart = first(xrng)
+    xstride = step(xrng)
+    rhsstart = first(rhsrng)
+    rhsstride = step(rhsrng)
+    # Forward sweep
+    denom = d[1]
+    dulast = du[1] / denom
+    dutmp[1] = dulast
+    rhslast = rhs[rhsstart] / denom
+    rhstmp[1] = rhslast
+    irhs = rhsstart+rhsstride
+    for i in 2:N-1
+        dltmp = dl[i-1]
+        denom = d[i] - dltmp*dulast
+        dulast = du[i] / denom
+        dutmp[i] = dulast
+        rhslast = (rhs[irhs] - dltmp*rhslast)/denom
+        rhstmp[i] = rhslast
+        irhs += rhsstride
+    end
+    dltmp = dl[N-1]
+    denom = d[N] - dltmp*dulast
+    xlast = (rhs[irhs] - dltmp*rhslast)/denom
     # Backward sweep
     ix = xstart + (N-2)*xstride
-    x[ix+xstride] = dp[N]
-    for i = N-1:-1:1
-        x[ix] = dp[i] - cp[i]*x[ix+xstride]
+    x[ix+xstride] = xlast
+    for i in N-1:-1:1
+        xlast = rhstmp[i] - dutmp[i]*xlast
+        x[ix] = xlast
         ix -= xstride
     end
-end
-function solve(x::Vector, M::Tridiagonal, d::Vector)
-    if length(d) != length(M.b)
-        error("Size mismatch between matrix and rhs")
-    end
-    solve(x, 1, 1, M, d, 1, 1)
-end
-# User-friendly solver
-function \(M::Tridiagonal, d::Vector)
-    x = similar(d)
-    solve(x, M, d)
     return x
+end
+solve(x::StridedVector, M::Tridiagonal, rhs::StridedVector) = solve(x, 1:length(x), M, rhs, 1:length(rhs))
+function solve(M::Tridiagonal, rhs::StridedVector)
+    x = similar(rhs)
+    solve(x, M, rhs)
+end
+function solve(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
+    if size(B, 1) != size(M, 1)
+        error("dimension mismatch")
+    end
+    if size(X) != size(B)
+        error("dimension mismatch in output")
+    end
+    m, n = size(B)
+    r = 1:m
+    for j = 1:n
+        r.start = (j-1)*m+1
+        solve(X, r, M, B, r)
+    end
+    return X
+end
+function solve(M::Tridiagonal, B::StridedMatrix)
+    X = similar(B)
+    solve(X, M, B)
 end
 
-# Tridiagonal multiplication
-function mult(x::Vector, M::Tridiagonal, v::Vector)
-    a = M.a
-    b = M.b
-    c = M.c
-    N = length(b)
-    x[1] = b[1]*v[1] + c[1]*v[2]
-    for i = 2:N-1
-        x[i] = a[i]*v[i-1] + b[i]*v[i] + c[i]*v[i+1]
+# User-friendly solver
+typealias LapackScalar Union(Float64,Float32,Complex128,Complex64)
+function \{T<:LapackScalar}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
+    if stride(rhs, 1) == 1
+        x = copy(rhs)
+        Mc = copy(M)
+        Mlu, x = _jl_lapack_gtsv(Mc, x)
+        return x
     end
-    x[N] = a[N]*v[N-1] + b[N]*v[n]
+    solve(M, rhs)
 end
-function *(M::Tridiagonal, v::Vector)
-    x = similar(v)
-    mult(x, M, v)
+\(M::Tridiagonal, rhs::Union(StridedVector,StridedMatrix)) = solve(M, rhs)
+
+# Tridiagonal multiplication
+function mult(x::AbstractArray, xrng::Ranges{Int}, M::Tridiagonal, v::AbstractArray, vrng::Ranges{Int})
+    dl = M.dl
+    d = M.d
+    du = M.du
+    N = length(d)
+    xi = first(xrng)
+    xstride = step(xrng)
+    vi = first(vrng)
+    vstride = step(vrng)
+    x[xi] = d[1]*v[vi] + du[1]*v[vi+vstride]
+    xi += xstride
+    for i = 2:N-1
+        x[xi] = dl[i-1]*v[vi] + d[i]*v[vi+vstride] + du[i]*v[vi+2*vstride]
+        xi += xstride
+        vi += vstride
+    end
+    x[xi] = dl[N-1]*v[vi] + d[N]*v[vi+vstride]
     return x
+end
+mult(x::StridedVector, M::Tridiagonal, v::StridedVector) = mult(x, 1:length(x), M, v, 1:length(v))
+function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
+    if size(B, 1) != size(M, 1)
+        error("dimension mismatch")
+    end
+    if size(X) != size(B)
+        error("dimension mismatch in output")
+    end
+    m, n = size(B)
+    r = 1:m
+    for j = 1:n
+        r.start = (j-1)*m+1
+        solve(X, r, M, B, r)
+    end
+    return X
+end
+mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2))
+function *(M::Tridiagonal, B::Union(StridedVector,StridedMatrix))
+    X = similar(B)
+    mult(X, M, B)
+end
+
+
+# Lapack routines
+_jl_liblapack = dlopen("libopenblas") # FIXME: use choice in build_h.jl?
+typealias LapackChar Char
+# Decompositions
+for (gttrf, pttrf, elty) in
+    ((:dgttrf_,:dpttrf_,:Float64),
+     (:sgttrf_,:spttrf_,:Float32),
+     (:zgttrf_,:zpttrf_,:Complex128),
+     (:cgttrf_,:cpttrf_,:Complex64))
+    @eval begin
+        function _jl_lapack_gttrf(M::Tridiagonal{$elty})
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            ipiv = Array(Int32, n)
+            ccall(dlsym(_jl_liblapack, $string(gttrf)),
+                  Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{Int32}),
+                  &n, M.dl, M.d, M.du, M.dutmp, ipiv, &info)
+            if info != 0 throw(LapackException(info)) end
+            M, ipiv
+        end
+        function _jl_lapack_pttrf(M::Tridiagonal{$elty})
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            ccall(dlsym(_jl_liblapack, $string(pttrf)),
+                  Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, M.d, M.dl, &info)
+            if info != 0 throw(LapackException(info)) end
+            M
+        end
+    end
+end
+# Direct solvers
+for (gtsv, ptsv, elty) in
+    ((:dgtsv_,:dptsv_,:Float64),
+     (:sgtsv_,:sptsv,:Float32),
+     (:zgtsv_,:zptsv,:Complex128),
+     (:cgtsv_,:cptsv,:Complex64))
+    @eval begin
+        function _jl_lapack_gtsv(M::Tridiagonal{$elty}, B::StridedVecOrMat{$elty})
+            if stride(B,1) != 1
+                error("_jl_lapack_gtsv: matrix columns must have contiguous elements");
+            end
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            nrhs = int32(size(B, 2))
+            ldb  = int32(stride(B, 2))
+            ccall(dlsym(_jl_liblapack, $string(gtsv)),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{Int32}),
+                  &n, &nrhs, M.dl, M.d, M.du, B, &ldb, &info)
+            if info != 0 throw(LapackException(info)) end
+            M, B
+        end
+        function _jl_lapack_ptsv(M::Tridiagonal{$elty}, B::StridedVecOrMat{$elty})
+            if stride(B,1) != 1
+                error("_jl_lapack_ptsv: matrix columns must have contiguous elements");
+            end
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            nrhs = int32(size(B, 2))
+            ldb  = int32(stride(B, 2))
+            ccall(dlsym(_jl_liblapack, $string(ptsv)),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{Int32}),
+                  &n, &nrhs, M.d, M.dl, B, &ldb, &info)
+            if info != 0 throw(LapackException(info)) end
+            M, B
+        end
+    end
+end
+# Solvers using decompositions
+for (gttrs, pttrs, elty) in
+    ((:dgttrs_,:dpttrs_,:Float64),
+     (:sgttrs_,:spttrs,:Float32),
+     (:zgttrs_,:zpttrs,:Complex128),
+     (:cgttrs_,:cpttrs,:Complex64))
+    @eval begin
+        function _jl_lapack_gttrs(trans::LapackChar, M::Tridiagonal{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
+            if stride(B,1) != 1
+                error("_jl_lapack_gttrs: matrix columns must have contiguous elements");
+            end
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            nrhs = int32(size(B, 2))
+            ldb  = int32(stride(B, 2))
+            ccall(dlsym(_jl_liblapack, $string(gttrs)),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+                  &trans, &n, &nrhs, M.dl, M.d, M.du, M.dutmp, ipiv, B, &ldb, &info)
+            if info != 0 throw(LapackException(info)) end
+            B
+        end
+        function _jl_lapack_pttrs(M::Tridiagonal{$elty}, B::StridedVecOrMat{$elty})
+            if stride(B,1) != 1
+                error("_jl_lapack_pttrs: matrix columns must have contiguous elements");
+            end
+            info = zero(Int32)
+            n    = int32(length(M.d))
+            nrhs = int32(size(B, 2))
+            ldb  = int32(stride(B, 2))
+            ccall(dlsym(_jl_liblapack, $string(pttrs)),
+                  Void,
+                  (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{Int32}),
+                  &n, &nrhs, M.d, M.dl, B, &ldb, &info)
+            if info != 0 throw(LapackException(info)) end
+            B
+        end
+    end
+end
+# Eigenvalue-eigenvector (symmetric only)
+for (stev, elty) in
+    ((:dstev_,:Float64),
+     (:sstev_,:Float32),
+     (:zstev_,:Complex128),
+     (:cstev_,:Complex64))
+    @eval begin
+        function _jl_lapack_stev(Z::Array, M::Tridiagonal{$elty})
+            n    = int32(length(M.d))
+            if isempty(Z)
+                job = 'N'
+                ldz = 1
+                work = Array($elty, 0)
+                Ztmp = work
+            else
+                if stride(Z,1) != 1
+                    error("_jl_lapack_stev: eigenvector matrix columns must have contiguous elements");
+                end
+                if size(Z, 1) != n
+                    error("_jl_lapack_stev: eigenvector matrix columns are not of the correct size")
+                end
+                Ztmp = Z
+                job = 'V'
+                ldz  = int32(stride(Z, 2))
+                work = Array($elty, max(1, 2*n-2))
+            end
+            info = zero(Int32)
+            ccall(dlsym(_jl_liblapack, $string(stev)),
+                  Void,
+                  (Ptr{Uint8}, Ptr{Int32},
+                   Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                   Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                  &job, &n, M.d, M.dl, Ztmp, &ldz, work, &info)
+            if info != 0 throw(LapackException(info)) end
+            M.d
+        end
+    end
+end
+function _jl_lapack_stev(job::LapackChar, M::Tridiagonal)
+    if job == 'N' || job == 'n'
+        Z = []
+    elseif job == 'V' || job == 'v'
+        n = length(M.d)
+        Z = Array(eltype(M), n, n)
+    else
+        error("Job type not recognized")
+    end
+    D = _jl_lapack_stev(Z, M)
+    return D, Z
+end
+eig(M::Tridiagonal) = _jl_lapack_stev('V', copy(M))
+
+
+##### Woodbury matrix routines #####
+function *(W::Woodbury, B::StridedVecOrMat)
+    return W.A*B + W.U*(W.C*(W.V*B))
+end
+function \(W::Woodbury, R::StridedVecOrMat)
+    AinvR = W.A\R
+    return AinvR - W.A\(W.U*(W.Cp*(W.V*AinvR)))
+end
+# Allocation-free solver for arbitrary strides (requires that W.A has a
+# non-aliasing "solve" routine, e.g., is tridiagonal)
+function solve(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})
+    solve(W.tmpN1, 1:length(W.tmpN1), W.A, rhs, rhsrng)
+    A_mul_B(W.tmpk1, W.V, W.tmpN1)
+    A_mul_B(W.tmpk2, W.Cp, W.tmpk1)
+    A_mul_B(W.tmpN2, W.U, W.tmpk2)
+    solve(W.tmpN2, W.A, W.tmpN2)
+    indx = first(xrng)
+    xinc = step(xrng)
+    for i = 1:length(W.tmpN2)
+        x[indx] = W.tmpN1[i] - W.tmpN2[i]
+        indx += xinc
+    end
+end
+solve(x::AbstractVector, W::Woodbury, rhs::AbstractVector) = solve(x, 1:length(x), W, rhs, 1:length(rhs))
+function solve(W::Woodbury, rhs::AbstractVector)
+    x = similar(rhs)
+    solve(x, W, rhs)
+end
+function solve(X::StridedMatrix, W::Woodbury, B::StridedMatrix)
+    if size(B, 1) != size(W, 1)
+        error("dimension mismatch")
+    end
+    if size(X) != size(B)
+        error("dimension mismatch in output")
+    end
+    m, n = size(B)
+    r = 1:m
+    for j = 1:n
+        r.start = (j-1)*m+1
+        solve(X, r, W, B, r)
+    end
+    return X
+end
+function solve(W::Woodbury, B::StridedMatrix)
+    X = similar(B)
+    solve(X, W, B)
 end

@@ -1024,47 +1024,117 @@ function assign(S::SparseAccumulator, v, i::Integer)
     return S
 end
 
-type Tridiagonal{T<:FloatingPoint} <: AbstractMatrix{T}
-    a::Vector{T}   # sub-diagonal
-    b::Vector{T}   # diagonal
-    c::Vector{T}   # sup-diagonal
-    cp::Vector{T}  # scratch space, sup-diagonal
-    dp::Vector{T}  # scratch space, rhs
+type Tridiagonal{T} <: AbstractMatrix{T}
+    dl::Vector{T}   # sub-diagonal
+    d::Vector{T}   # diagonal
+    du::Vector{T}   # sup-diagonal
+    dutmp::Vector{T}  # scratch space for vector RHS solver, sup-diagonal
+    rhstmp::Vector{T}  # scratch space, rhs
 
     function Tridiagonal(N::Int)
-        cp = Array(T, N)
-        dp = Array(T, N)
-        new(cp, cp, cp, cp, dp)  # first three will be overwritten
+        dutmp = Array(T, N-1)
+        rhstmp = Array(T, N)
+        new(dutmp, rhstmp, dutmp, dutmp, rhstmp)  # first three will be overwritten
     end
 end
-function Tridiagonal{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
-    N = length(b)
-    if length(a) != N || length(c) != N
-        error("All three vectors must have the same length")
+function Tridiagonal{T<:Number}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
+    N = length(d)
+    if length(dl) != N-1 || length(du) != N-1
+        error("The sub- and super-diagonals must have length N-1")
     end
     M = Tridiagonal{T}(N)
-    M.a = copy(a)
-    M.b = copy(b)
-    M.c = copy(c)
+    M.dl = copy(dl)
+    M.d = copy(d)
+    M.du = copy(du)
     return M
 end
-size(M::Tridiagonal) = (length(M.b), length(M.b))
+function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
+    R = promote(Tl, Td, Tu)
+    Tridiagonal(convert(Vector{R}, dl), convert(Vector{R}, d), convert(Vector{R}, du))
+end
+size(M::Tridiagonal) = (length(M.d), length(M.d))
 function show(io, M::Tridiagonal)
     println(io, summary(M), ":")
-    print_matrix(io, vcat((M.a)', (M.b)', (M.c)'))
-#    println(io, " sub: ", (M.a)')
-#    println(io, "diag: ", (M.b)')
-#    println(io, " sup: ", (M.c)')
+    print(io, " sub: ")
+    print_matrix(io, (M.dl)')
+    print(io, "\ndiag: ")
+    print_matrix(io, (M.d)')
+    print(io, "\n sup: ")
+    print_matrix(io, (M.du)')
 end
 full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
     A = zeros(T, size(M))
-    for i = 1:length(M.b)
-        A[i,i] = M.b[i]
+    for i = 1:length(M.d)
+        A[i,i] = M.d[i]
     end
-    for i = 1:length(M.b)-1
-        A[i+1,i] = M.a[i+1]
-        A[i,i+1] = M.c[i]
+    for i = 1:length(M.d)-1
+        A[i+1,i] = M.dl[i]
+        A[i,i+1] = M.du[i]
     end
     return A
+end
+function similar(M::Tridiagonal, T, dims::Dims)
+    if length(dims) != 2 || dims[1] != dims[2]
+        error("Tridiagonal matrices must be square")
+    end
+    return Tridiagonal{T}(dims[1])
+end
+copy(M::Tridiagonal) = Tridiagonal(M.dl, M.d, M.du)
+
+# Operations on Tridiagonal matrices
+round(M::Tridiagonal) = Tridiagonal(round(M.dl), round(M.d), round(M.du))
+iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
+
+
+# Support for Woodbury matrix identity
+type Woodbury{T} <: AbstractMatrix{T}
+    A
+    U::Matrix{T}
+    C
+    Cp
+    V::Matrix{T}
+    tmpN1::Vector{T}
+    tmpN2::Vector{T}
+    tmpk1::Vector{T}
+    tmpk2::Vector{T}
+
+    function Woodbury(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T})
+        N = size(A, 1)
+        k = size(U, 2)
+        if size(A, 2) != N || size(U, 1) != N || size(V, 1) != k || size(V, 2) != N
+            error("Sizes do not match")
+        end
+        if k > 1
+            if size(C, 1) != k || size(C, 2) != k
+                error("Size of C is incorrect")
+            end
+        end
+        Cp = inv(inv(C) + V*(A\U))
+        # temporary space for allocation-free solver
+        tmpN1 = Array(T, N)
+        tmpN2 = Array(T, N)
+        tmpk1 = Array(T, k)
+        tmpk2 = Array(T, k)
+        # don't copy A, it could be huge
+        new(A, copy(U), copy(C), Cp, copy(V), tmpN1, tmpN2, tmpk1, tmpk2)
+    end
+end
+Woodbury{T}(A::AbstractMatrix{T}, U::Matrix{T}, C, V::Matrix{T}) = Woodbury{T}(A, U, C, V)
+Woodbury{T}(A::AbstractMatrix{T}, U::Vector{T}, C, V::Matrix{T}) = Woodbury{T}(A, reshape(U, length(U), 1), C, V)
+
+size(W::Woodbury) = size(W.A)
+function show(io, W::Woodbury)
+    println(io, summary(W), ":")
+    print(io, "A: ", W.A)
+    print(io, "\nU:\n")
+    print_matrix(io, W.U)
+    if isa(W.C, Matrix)
+        print(io, "\nC:\n")
+        print_matrix(io, W.C)
+    else
+        print(io, "\nC: ", W.C)
+    end
+    print(io, "\nV:\n")
+    print_matrix(io, W.V)
 end
