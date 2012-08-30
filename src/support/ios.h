@@ -70,7 +70,7 @@ typedef struct {
 /* low-level interface functions */
 DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
 DLLEXPORT size_t ios_readall(ios_t *s, char *dest, size_t n);
-DLLEXPORT size_t ios_write(ios_t *s, char *data, size_t n);
+DLLEXPORT size_t ios_write(ios_t *s, const char *data, size_t n);
 DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
 DLLEXPORT off_t ios_seek_end(ios_t *s);
 DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek

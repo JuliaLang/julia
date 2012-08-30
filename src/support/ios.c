@@ -107,7 +107,7 @@ static int _os_read_all(long fd, void *buf, size_t n, size_t *nread)
     return 0;
 }
 
-static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
+static int _os_write(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     ssize_t r;
 
@@ -126,7 +126,7 @@ static int _os_write(long fd, void *buf, size_t n, size_t *nwritten)
     return 0;
 }
 
-int _os_write_all(long fd, void *buf, size_t n, size_t *nwritten)
+int _os_write_all(long fd, const void *buf, size_t n, size_t *nwritten)
 {
     size_t wrote;
 
@@ -185,7 +185,7 @@ static char *_buf_realloc(ios_t *s, size_t sz)
 
 // write a block of data into the buffer at the current position, resizing
 // if necessary. returns # written.
-static size_t _write_grow(ios_t *s, char *data, size_t n)
+static size_t _write_grow(ios_t *s, const char *data, size_t n)
 {
     size_t amt;
     size_t newsize;
@@ -347,7 +347,7 @@ DLLEXPORT size_t ios_write_direct(ios_t *dest, ios_t *src)
     return nwr;
 }
 
-size_t ios_write(ios_t *s, char *data, size_t n)
+size_t ios_write(ios_t *s, const char *data, size_t n)
 {
     if (s->readonly) return 0;
     if (n == 0) return 0;
