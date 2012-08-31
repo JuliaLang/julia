@@ -1,3 +1,5 @@
+.. _options-module:
+
 :mod:`options.jl` --- Optional arguments to functions
 =====================================================
 

@@ -5,7 +5,7 @@
    :synopsis: Zlib compress/uncompress wrapper
 
 This module provides a wrapper for the compress/uncompress and related
-utility functions of (`zlib <http://zlib.net/`_), a free,
+utility functions of (`zlib <http://zlib.net/>`_), a free,
 general-purpose, legally unencumbered, lossless data-compression
 library.  These functions allow the compression and decompression of
 byte buffers (``Array{Uint8,1}``).
