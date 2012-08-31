@@ -1138,3 +1138,14 @@ function show(io, W::Woodbury)
     print(io, "\nV:\n")
     print_matrix(io, W.V)
 end
+full{T}(W::Woodbury{T}) = convert(Matrix{T}, W)
+convert{T}(::Type{Matrix{T}}, W::Woodbury{T}) = full(W.A) + W.U*W.C*W.V
+function similar(W::Woodbury, T, dims::Dims)
+    if length(dims) != 2 || dims[1] != dims[2]
+        error("Woodbury matrices must be square")
+    end
+    n = size(W, 1)
+    k = size(W.U, 2)
+    return Woodbury{T}(similar(W.A), Array(T, n, k), Array(T, k, k), Array(T, k, n))
+end
+copy(W::Woodbury) = Woodbury(W.A, W.U, W.C, W.V)

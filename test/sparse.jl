@@ -98,7 +98,7 @@ U = randn(n,2)
 V = randn(2,n)
 C = randn(2,2)
 W = Woodbury(T, U, C, V)
-F = full(T) + U*C*V
+F = full(W)
 
 @assert norm(W*v - F*v) < Eps
 @assert norm(W\v - F\v) < Eps
