@@ -1003,19 +1003,19 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"ceil",E"ceil(x) -> Float
+(E"Mathematical Functions",E"ceil",E"ceil(x) -> FloatingPoint
 
    Returns the nearest integer not less than 'x'.
 
 "),
 
-(E"Mathematical Functions",E"floor",E"floor(x) -> Float
+(E"Mathematical Functions",E"floor",E"floor(x) -> FloatingPoint
 
    Returns the nearest integer not greater than 'x'.
 
 "),
 
-(E"Mathematical Functions",E"trunc",E"trunc(x) -> Float
+(E"Mathematical Functions",E"trunc",E"trunc(x) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than 'x'.
 
@@ -4183,14 +4183,6 @@ glp_eval_tab_col(glp_prob, k)
    block as a whole is profiled, but the individual lines inside the
    block are not separately timed.
 
-   Profiling is implemented in terms of the 'time()' function. The
-   resolution of this timer is not sufficient for individually-
-   accurate measurements on quickly-executing lines:  you frequently
-   get a measured time of 0, with occassional non-zero measurements
-   when the clock ticks over to the next higher value. Consequently,
-   you should be skeptical about the timing measurements on simple
-   lines that run fewer than hundreds of times.
-
 "),
 
 (E"specfun.jl --- Special mathematical functions",E"airyai",E"airy(x)
@@ -4305,6 +4297,115 @@ airyaiprime(x)
 (E"specfun.jl --- Special mathematical functions",E"zeta",E"zeta(x)
 
    Riemann zeta function \\zeta(s).
+
+"),
+
+(E"textwrap.jl --- Text wrapping module",E"wrap",E"wrap(string[, options])
+
+   Returns a string in which newlines are inserted as appropriate in
+   order for each line to fit within a specified width.
+
+   The options are passed via an 'Options' object (see the *options
+   page*). The available options, and their default values, are:
+
+   * 'width' (default = '70'): the maximum width of the wrapped text,
+     including indentation.
+
+   * 'initial_indent' (default = ''''): indentation of the first line.
+     This can be any string (shorter than 'width'), or it can be an
+     integer number (lower than 'width').
+
+   * 'subsequent_indent' (default = ''''): indentation of all lines
+     except the first. Works the same as 'initial_indent'.
+
+   * 'break_on_hyphens' (default = 'true'): this flag determines
+     whether words can be broken on hyphens, e.g. whether 'high-
+     precision' can be split into 'high-' and 'precision'.
+
+   * 'break_long_words' (default = 'true'): this flag determines what
+     to do when a word is too long to fit in any line. If 'true', the
+     word will be broken, otherwise it will go beyond the desired text
+     width.
+
+   * 'replace_whitespace' (default = 'true'): if this flag is true,
+     all whitespace characters in the original text (including
+     newlines) will be replaced by spaces.
+
+   * 'expand_tabs' (default = 'true'): if this flag is true, tabs will
+     be expanded in-place into spaces. The expansion happens before
+     whitespace replacement.
+
+   * 'fix_sentence_endings' (default = 'false'): if this flag is true,
+     the wrapper will try to recognize sentence endings in the middle
+     of a paragraph and put two spaces before the next sentence in
+     case only one is present.
+
+"),
+
+(E"textwrap.jl --- Text wrapping module",E"println_wrapped",E"print_wrapped(text...[, options])
+print_wrapped(io, text...[, options])
+println_wrapped(text...[, options])
+println_wrapped(io, text...[, options])
+
+   These are just like the standard 'print' and 'println' functions
+   (they print multiple arguments and accept an optional 'IO' first
+   argument), except that they wrap the result, and accept an optional
+   last argument with the options to pass to 'wrap'.
+
+"),
+
+(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_bound",E"compress_bound(input_size)
+
+   Returns the maximum size of the compressed output buffer for a
+   given uncompressed input size.
+
+"),
+
+(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress",E"compress(source[, level])
+
+   Compresses source using the given compression level, and returns
+   the compressed buffer ('Array{Uint8,1}').  'level' is an integer
+   between 0 and 9, or one of 'Z_NO_COMPRESSION', 'Z_BEST_SPEED',
+   'Z_BEST_COMPRESSION', or 'Z_DEFAULT_COMPRESSION'.  It defaults to
+   'Z_DEFAULT_COMPRESSION'.
+
+   If an error occurs, 'compress' throws a ZLibError with more
+   information about the error.
+
+"),
+
+(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
+
+   Compresses the source buffer into the destination buffer, and
+   returns the number of bytes written into dest.
+
+   If an error occurs, 'uncompress' throws a ZLibError with more
+   information about the error.
+
+"),
+
+(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress",E"uncompress(source[, uncompressed_size])
+
+   Allocates a buffer of size 'uncompressed_size', uncompresses source
+   to this buffer using the given compression level, and returns the
+   compressed buffer.  If 'uncompressed_size' is not given, the size
+   of the output buffer is estimated as '2*length(source)'.  If the
+   uncompressed_size is larger than uncompressed_size, the allocated
+   buffer is grown and the uncompression is retried.
+
+   If an error occurs, 'uncompress' throws a ZLibError with more
+   information about the error.
+
+"),
+
+(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
+
+   Uncompresses the source buffer into the destination buffer. Returns
+   the number of bytes written into dest.  An error is thrown if the
+   destination buffer does not have enough space.
+
+   If an error occurs, 'uncompress_to_buffer' throws a ZLibError with
+   more information about the error.
 
 "),
 

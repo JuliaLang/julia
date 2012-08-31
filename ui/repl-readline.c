@@ -366,19 +366,33 @@ static int common_prefix(const char *s1, const char *s2)
 }
 
 static void symtab_search(jl_sym_t *tree, int *pcount, ios_t *result,
+                          jl_module_t *module, const char *str,
                           const char *prefix, int plen)
 {
     do {
         if (common_prefix(prefix, tree->name) == plen &&
-            jl_boundp(jl_base_module, tree)) {
-            ios_puts(tree->name, result);
+            jl_boundp(module, tree)) {
+            ios_puts(str, result);
+            ios_puts(tree->name + plen, result);
             ios_putc('\n', result);
             (*pcount)++;
         }
         if (tree->left)
-            symtab_search(tree->left, pcount, result, prefix, plen);
+            symtab_search(tree->left, pcount, result, module, str, prefix, plen);
         tree = tree->right;
     } while (tree != NULL);
+}
+
+static jl_module_t *
+find_submodule_named(jl_module_t *module, const char *name)
+{
+    jl_sym_t *s = jl_symbol_lookup(name);
+    if (!s) return NULL;
+
+    jl_binding_t *b = jl_get_binding(module, s);
+    if (!b) return NULL;
+
+    return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
@@ -386,26 +400,40 @@ static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
     int x, plen, count=0;
     ios_t ans;
 
-    plen = strlen(str);
+    // given str "X.Y.a", set module := X.Y and name := "a"
+    jl_module_t *module = jl_current_module;
+    char *name = NULL, *strcopy = strdup(str);
+    for (char *s=strcopy, *t, *r; (t=strtok_r(s, ".", &r)); s=NULL) {
+        if (name) {
+            module = find_submodule_named(module, name);
+            if (!module) goto symtab_get_matches_exit;
+        }
+        name = t;
+    }
+
+    plen = strlen(name);
 
     while (tree != NULL) {
-        x = common_prefix(str, tree->name);
+        x = common_prefix(name, tree->name);
         if (x == plen) {
             ios_mem(&ans, 0);
-            symtab_search(tree, &count, &ans, str, plen);
+            symtab_search(tree, &count, &ans, module, str, name, plen);
             size_t nb;
             *answer = ios_takebuf(&ans, &nb);
-            return count;
+            break;
         }
         else {
-            x = strcmp(str, tree->name);
+            x = strcmp(name, tree->name);
             if (x < 0)
                 tree = tree->left;
             else
                 tree = tree->right;
         }
     }
-    return 0;
+
+symtab_get_matches_exit:
+    free(strcopy);
+    return count;
 }
 
 int tab_complete(const char *line, char **answer, int *plen)

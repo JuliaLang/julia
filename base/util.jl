@@ -159,7 +159,8 @@ function methods(f::Function)
     f.env
 end
 
-methods(t::CompositeKind) = methods(t,Tuple)
+methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
+                             t.env)
 
 
 # require
@@ -170,14 +171,16 @@ require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
     path = find_in_path(name)
     if !has(_jl_package_list,path)
-        load(name)
+        load_now(name)
     else
         # Determine whether the file has been modified since it was last loaded
         if mtime(path) > _jl_package_list[path]
-            load(name)
+            load_now(name)
         end
     end
 end
+
+const load = require
 
 # remote/parallel load
 
@@ -215,11 +218,10 @@ begin
 local in_load = false
 local in_remote_load = false
 local load_dict = {}
-global load, remote_load
+global load_now, remote_load
 
-load(fname::String) = load(bytestring(fname))
-load(f::String, fs::String...) = (load(f); for x in fs load(x); end)
-function load(fname::ByteString)
+load_now(fname::String) = load_now(bytestring(fname))
+function load_now(fname::ByteString)
     if in_load
         path = find_in_path(fname)
         _jl_package_list[path] = time()
@@ -239,7 +241,7 @@ function load(fname::ByteString)
         in_load = true
         iserr, err = false, ()
         try
-            load(fname)
+            load_now(fname)
             for p = 1:nprocs()
                 if p != myid()
                     remote_do(p, remote_load, load_dict)
@@ -258,7 +260,7 @@ function remote_load(dict)
     load_dict = dict
     in_remote_load = true
     try
-        load(dict[1])
+        load_now(dict[1])
     catch e
         in_remote_load = false
         throw(e)

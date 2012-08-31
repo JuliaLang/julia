@@ -704,15 +704,15 @@ Mathematical Functions
 
    Accurately compute ``exp(x)-1``
 
-.. function:: ceil(x) -> Float
+.. function:: ceil(x) -> FloatingPoint
 
    Returns the nearest integer not less than ``x``.
 
-.. function:: floor(x) -> Float
+.. function:: floor(x) -> FloatingPoint
 
    Returns the nearest integer not greater than ``x``.
 
-.. function:: trunc(x) -> Float
+.. function:: trunc(x) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than ``x``.
 

@@ -50,6 +50,7 @@ External libraries, if used, include their own licenses:
 - [FDLIBM](http://www.netlib.org/fdlibm/fdlibm.h)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
+- [GLPK](http://www.gnu.org/software/glpk)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [LIBUNWIND](http://git.savannah.gnu.org/gitweb/?p=libunwind.git;a=blob_plain;f=LICENSE;hb=master)
 - [LLVM](http://llvm.org/releases/3.0/LICENSE.TXT)
@@ -58,3 +59,4 @@ External libraries, if used, include their own licenses:
 - [PCRE](http://www.pcre.org/licence.txt)
 - [READLINE](http://cnswww.cns.cwru.edu/php/chet/readline/rltop.html)
 - [SUITESPARSE](http://www.cise.ufl.edu/research/sparse/SuiteSparse/current/SuiteSparse/)
+- [ZLIB](http://zlib.net/zlib_license.html)

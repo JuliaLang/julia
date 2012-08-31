@@ -162,7 +162,7 @@ else
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
-@eval function hash(x::Float)
+@eval function hash(x::FloatingPoint)
     if trunc(x) == x
         # hash as integer if equal to some integer. note the result of
         # float to int conversion is only defined for in-range values.

@@ -378,6 +378,11 @@ jl_sym_t *jl_symbol(const char *str)
     return *pnode;
 }
 
+jl_sym_t *jl_symbol_lookup(const char *str)
+{
+    return *symtab_lookup(&symtab, str);
+}
+
 DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
 {
     char name[len+1];

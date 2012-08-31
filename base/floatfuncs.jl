@@ -3,15 +3,15 @@
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
 
-isnan(x::Float) = (x != x)
+isnan(x::FloatingPoint) = (x != x)
 isnan(x::Real) = isnan(float(x))
 isnan(x::Integer) = false
 
-isinf(x::Float) = (abs(x) == Inf)
+isinf(x::FloatingPoint) = (abs(x) == Inf)
 isinf(x::Real) = isinf(float(x))
 isinf(x::Integer) = false
 
-isfinite(x::Float) = (x-x == 0)
+isfinite(x::FloatingPoint) = (x-x == 0)
 isfinite(x::Real) = isfinite(float(x))
 isfinite(x::Integer) = true
 
@@ -26,10 +26,10 @@ signbit(x::Float32) = signbit(reinterpret(Int32,x))
 
 maxintfloat(::Type{Float64}) = 9007199254740992.
 maxintfloat(::Type{Float32}) = float32(16777216.)
-maxintfloat{T<:Float}(x::T)  = maxintfloat(T)
+maxintfloat{T<:FloatingPoint}(x::T)  = maxintfloat(T)
 maxintfloat() = maxintfloat(Float64)
 
-integer_valued(x::Float) = (trunc(x)==x)&isfinite(x)
+integer_valued(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
 sqrt(x::Real) = sqrt(float(x))
 sin(x::Real) = sin(float(x))

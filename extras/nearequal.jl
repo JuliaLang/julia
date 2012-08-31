@@ -25,12 +25,12 @@ isapproxn(x, y, rtol, atol) = isapprox(x, y, rtol, atol) || (isnan(x) && isnan(y
 
 for fun in (:isapprox, :isapproxn)
     @eval begin
-        function ($fun){T1<:Float, T2<:Float}(x::T1, y::T2)
+        function ($fun){T1<:FloatingPoint, T2<:FloatingPoint}(x::T1, y::T2)
             tol = max(eps(T1), eps(T2))
             ($fun)(x, y, tol^(1/3), sqrt(tol))
         end
-        ($fun){T1<:Integer, T2<:Float}(x::T1, y::T2) = ($fun)(float(x), y)
-        ($fun){T1<:Float, T2<:Integer}(x::T1, y::T2) = ($fun)(x, float(y))
+        ($fun){T1<:Integer, T2<:FloatingPoint}(x::T1, y::T2) = ($fun)(float(x), y)
+        ($fun){T1<:FloatingPoint, T2<:Integer}(x::T1, y::T2) = ($fun)(x, float(y))
 
         ($fun)(X::AbstractArray, y::Number) = map(x -> ($fun)(x, y), X)
         ($fun)(x::Number, Y::AbstractArray) = map(y -> ($fun)(y, x), Y)
@@ -50,7 +50,7 @@ end
 
 # For integers, isapprox() is just isequal() unless you specify nondefault tolerances.
 isapprox{T1<:Integer, T2<:Integer}(x::T1, y::T2) = isequal(x, y)
-#isapproxn() doesn't apply to two Integer types, since typeof(NaN)<:Float
+#isapproxn() doesn't apply to two Integer types, since typeof(NaN)<:FloatingPoint
 
 #ISEQUALN Check for equality, treating NaNs as mutually equal.
 #   ISEQUALN(x, y) gives the same results as ISEQUAL(x, y), unless both x and y are NaN

@@ -61,6 +61,10 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+STAGE1_DEPS += zlib
+endif
+
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
@@ -160,10 +164,15 @@ llvm_python_workaround:
 	mkdir -p llvm-$(LLVM_VER)/python2_path && \
 	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
+LLVM_CXX = $(CXX)
+ifeq ($(ARCH), ppc64)
+  LLVM_CXX += -mminimal-toc
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)" && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -549,7 +558,10 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
+ifneq ($(ARCH), ppc64)
+  FFTW_CONFIG += --enable-sse2
+endif
 ifeq ($(OS),WINNT)
 	FFTW_CONFIG += --with-our-malloc --with-combined-threads
 endif
@@ -563,7 +575,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -870,6 +882,39 @@ install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 clean-glpk-wrapper:
 	rm -f $(GLPK_OBJ_TARGET) $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT)
 distclean-glpk-wrapper: clean-glpk-wrapper
+
+## ZLIB ##
+
+ifeq ($(USE_SYSTEM_ZLIB), 1)
+ZLIB_OBJ_TARGET =
+else
+ZLIB_OBJ_TARGET = $(USRLIB)/libz.$(SHLIB_EXT)
+endif
+
+compile-zlib: install-zlib
+install-zlib: $(ZLIB_OBJ_TARGET)
+
+zlib-$(ZLIB_VER).tar.gz:
+	$(WGET) http://zlib.net/$@
+zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
+	tar zxf $<
+	touch $@
+zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+	cd zlib-$(ZLIB_VER) && \
+	./configure --prefix=$(abspath $(USR))
+	touch $@
+$(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
+	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
+	$(MAKE) -C zlib-$(ZLIB_VER) check
+	$(MAKE) -C zlib-$(ZLIB_VER) install
+	$(INSTALL_NAME_CMD)libz.dylib $@
+	touch $@
+
+clean-zlib:
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
+	rm -f $(ZLIB_OBJ_TARGET)
+distclean-zlib:
+	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
 
 ## phony targets ##
 

@@ -648,7 +648,20 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             // if a slot is specialized for a particular kind, it can be
             // considered a reflective method and so only needs to be
             // specialized for type representation, not type extent.
-            jl_tupleset(type, i, decl_i);
+            jl_methlist_t *curr = mt->defs;
+            int ok=1;
+            while (curr != JL_NULL) {
+                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                if (slottype && curr->func!=method) {
+                    if (jl_subtype(slottype, decl_i, 0)) {
+                        ok=0;
+                        break;
+                    }
+                }
+                curr = curr->next;
+            }
+            if (ok)
+                jl_tupleset(type, i, decl_i);
         }
     }
 

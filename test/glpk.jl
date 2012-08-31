@@ -25,7 +25,7 @@ glp_set_col_bnds(lp, 3, GLP_LO, 0.0, 0.0)
 glp_set_obj_coef(lp, 3, 4.0)
 ia = zeros(Int, 9)
 ja = zeros(Int, 9)
-ar = zeros(Float, 9)
+ar = zeros(FloatingPoint, 9)
 ia[1] = 1; ja[1] = 1; ar[1] = 1.0
 ia[2] = 1; ja[2] = 2; ar[2] = 1.0
 ia[3] = 1; ja[3] = 3; ar[3] = 1.0

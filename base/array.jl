@@ -165,7 +165,7 @@ function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
     ccall(:memset, Void, (Ptr{T}, Int32, Int), a, x, length(a))
     return a
 end
-function fill!{T<:Union(Integer,Float)}(a::Array{T}, x)
+function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
     if isa(T,BitsKind) && convert(T,x) == 0
         ccall(:memset, Ptr{T}, (Ptr{T}, Int32, Int32), a,0,length(a)*sizeof(T))
     else
@@ -728,10 +728,14 @@ function append!{T}(a::Array{T,1}, items::Array{T,1})
 end
 
 function grow(a::Vector, n::Integer)
-    if n < -length(a)
-        throw(BoundsError())
+    if n > 0
+        ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
+    else
+        if n < -length(a)
+            throw(BoundsError())
+        end
+        ccall(:jl_array_del_end, Void, (Any, Uint), a, -n)
     end
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
     return a
 end
 
@@ -1332,8 +1336,6 @@ end
 
 ## Reductions ##
 
-contains(s::Number, n::Number) = (s == n)
-
 areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =
     areduce(f,A,region,v0,T)
 
@@ -1425,7 +1427,7 @@ function sum{T}(A::StridedArray{T})
     v
 end
 
-function sum{T<:Float}(A::StridedArray{T})
+function sum{T<:FloatingPoint}(A::StridedArray{T})
     n = length(A)
     if (n == 0)
         return zero(T)
