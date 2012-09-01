@@ -11,7 +11,9 @@ else
     typealias FileOffset Int64
 end
 
-type IOStream <: IO
+abstract IOS <: IO    # superclass for IOStream, MemIO
+
+type IOStream <: IOS
     # NOTE: for some reason the order of these field is significant!?
     ios::Array{Uint8,1}
     name::String
@@ -30,34 +32,35 @@ type IOStream <: IO
     IOStream(name::String) = IOStream(name, true)
 end
 
-convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
+convert(T::Type{Ptr{Void}}, s::IOS) = convert(T, s.ios)
 
 show(io, s::IOStream) = print(io, "IOStream(", s.name, ")")
 
 fd(s::IOStream) = ccall(:jl_ios_fd, Int, (Ptr{Void},), s.ios)
 
-close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
+close(s::IOS) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 
-flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
+flush(s::IOS) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
-truncate(s::IOStream, n::Integer) =
+# Note: in ios.c, only implemented for MemIO
+truncate(s::IOS, n::Integer) =
     ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, n)
 
-seek(s::IOStream, n::Integer) =
+seek(s::IOS, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
      error("seek failed"))
 
-seek_end(s::IOStream) =
+seek_end(s::IOS) =
     (ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios)==0 ||
      error("seek_end failed"))
 
-skip(s::IOStream, delta::Integer) =
+skip(s::IOS, delta::Integer) =
     (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
      error("skip failed"))
 
-position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
+position(s::IOS) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
 
-eof(s::IOStream) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
+eof(s::IOS) = bool(ccall(:jl_ios_eof, Int32, (Ptr{Void},), s.ios))
 
 ## constructing and opening streams ##
 
@@ -110,8 +113,27 @@ function open(f::Function, args...)
     return x
 end
 
+type MemIO <: IOS
+    ios::Array{Uint8,1}
+
+    MemIO(buf::Array{Uint8,1}) = new(buf)
+
+    # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
+    # in the case where we takebuf it.
+    function MemIO(finalize::Bool)
+        x = new(zeros(Uint8,sizeof_ios_t))
+        if finalize
+            finalizer(x, close)
+        end
+        return x
+    end
+    MemIO() = MemIO(true)
+end
+
+show(io, s::MemIO) = print(io, "MemIO()")
+
 function memio(x::Integer, finalize::Bool)
-    s = IOStream("<memio>", finalize)
+    s = MemIO(finalize)
     ccall(:ios_mem, Ptr{Void}, (Ptr{Uint8}, Uint), s.ios, x)
     return s
 end
@@ -137,7 +159,7 @@ else
 end
 
 ## binary I/O ##
-write(x) = write(OUTPUT_STREAM::IOStream, x)
+write(x) = write(OUTPUT_STREAM::IOS, x)
 write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
 
 if ENDIAN_BOM == 0x01020304
@@ -194,9 +216,9 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
+write(s::IOS, b::Uint8) = ccall(:ios_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
 
-function write{T}(s::IOStream, a::Array{T})
+function write{T}(s::IOS, a::Array{T})
     if isa(T,BitsKind)
         ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
               s.ios, a, numel(a)*sizeof(T))
@@ -205,11 +227,11 @@ function write{T}(s::IOStream, a::Array{T})
     end
 end
 
-function write(s::IOStream, p::Ptr, nb::Integer)
+function write(s::IOS, p::Ptr, nb::Integer)
     ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
-function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
+function write{T,N}(s::IOS, a::SubArray{T,N,Array})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
@@ -223,9 +245,9 @@ function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
 end
 
 # num bytes available without blocking
-nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
+nb_available(s::IOS) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
-function read(s::IOStream, ::Type{Uint8})
+function read(s::IOS, ::Type{Uint8})
     b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
@@ -233,7 +255,7 @@ function read(s::IOStream, ::Type{Uint8})
     uint8(b)
 end
 
-function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
+function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOS, a::Array{T})
     if isa(T,BitsKind)
         nb = numel(a)*sizeof(T)
         if ccall(:ios_readall, Uint,
@@ -248,17 +270,17 @@ end
 
 ## text I/O ##
 
-write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
+write(s::IOS, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
-read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
+read(s::IOS, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
-takebuf_string(s::IOStream) =
+takebuf_string(s::MemIO) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
-takebuf_array(s::IOStream) =
+takebuf_array(s::MemIO) =
     ccall(:jl_takebuf_array, Vector{Uint8}, (Ptr{Void},), s.ios)
 
-function takebuf_raw(s::IOStream)
+function takebuf_raw(s::MemIO)
     sz = position(s)
     buf = ccall(:jl_takebuf_raw, Ptr{Uint8}, (Ptr{Void},), s.ios)
     return buf, sz
@@ -294,12 +316,12 @@ function with_output_to_string(thunk)
     takebuf_string(m)
 end
 
-function readuntil(s::IOStream, delim)
+function readuntil(s::IOS, delim)
     # TODO: faster versions that avoid the encoding check
     ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
 end
 
-function readall(s::IOStream)
+function readall(s::IOS)
     dest = memio()
     ccall(:ios_copyall, Uint, (Ptr{Void}, Ptr{Void}), dest.ios, s.ios)
     takebuf_string(dest)
@@ -308,14 +330,14 @@ readall(filename::String) = open(readall, filename)
 
 readchomp(x) = chomp(readall(x))
 
-readline(s::IOStream) = readuntil(s, '\n')
+readline(s::IOS) = readuntil(s, '\n')
 
 ## high-level iterator interfaces ##
 
 type EachLine
-    stream::IOStream
+    stream::IOS
 end
-each_line(stream::IOStream) = EachLine(stream)
+each_line(stream::IOS) = EachLine(stream)
 
 start(itr::EachLine) = readline(itr.stream)
 function done(itr::EachLine, line)
@@ -410,7 +432,7 @@ end
 
 ## Character streams ##
 const _wstmp = Array(Char, 1)
-function eatwspace(s::IOStream)
+function eatwspace(s::IOS)
     status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     while status > 0 && iswspace(_wstmp[1])
         read(s, Char)  # advance one character
@@ -418,7 +440,7 @@ function eatwspace(s::IOStream)
     end
 end
 
-function eatwspace_comment(s::IOStream, cmt::Char)
+function eatwspace_comment(s::IOS, cmt::Char)
     status = ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Uint32}), s.ios, _wstmp)
     while status > 0 && (iswspace(_wstmp[1]) || _wstmp[1] == cmt)
         if _wstmp[1] == cmt
