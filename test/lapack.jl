@@ -140,4 +140,60 @@ eA3 = [-1.50964415879218 -5.6325707998812  -4.934938326092;
         0.367879439109187 1.47151775849686  1.10363831732856;
         0.135335281175235 0.406005843524598 0.541341126763207]'
 @assert norm((expm(A3) - eA3) ./ eA3) < 50000*eps()
+
+
+# basic tridiagonal operations
+n = 5
+d = 1 + rand(n)
+dl = -rand(n-1)
+du = -rand(n-1)
+T = Tridiagonal(dl, d, du)
+@assert size(T, 1) == n
+@assert size(T) == (n, n)
+F = diagm(d)
+for i = 1:n-1
+    F[i,i+1] = du[i]
+    F[i+1,i] = dl[i]
+end
+@assert full(T) == F
+
+# tridiagonal linear algebra
+Eps = sqrt(eps())
+v = randn(n)
+@assert T*v == F*v
+invFv = F\v
+@assert norm(T\v - invFv) < Eps
+@assert norm(solve(T,v) - invFv) < Eps
+B = randn(n,2)
+@assert norm(solve(T, B) - F\B) < Eps
+Tlu = LU(T)
+x = Tlu\v
+@assert norm(x - invFv) < Eps
+
+# symmetric tridiagonal
+Ts = Tridiagonal(dl, d, dl)
+Fs = full(Ts)
+invFsv = Fs\v
+Tldlt = LDLT(Ts)
+x = Tldlt\v
+@assert norm(x - invFsv) < Eps
+
+# eigenvalues/eigenvectors of symmetric tridiagonal
+DT, VT = eig(Ts)
+D, V = eig(Fs)
+@assert norm(DT - D) < Eps
+@assert norm(VT - V) < Eps
+
+
+# Woodbury
+U = randn(n,2)
+V = randn(2,n)
+C = randn(2,2)
+W = Woodbury(T, U, C, V)
+F = full(W)
+
+@assert norm(W*v - F*v) < Eps
+@assert norm(W\v - F\v) < Eps
+
+
 end
