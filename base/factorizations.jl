@@ -307,10 +307,15 @@ type LUTridiagonal{T} <: Factorization{T}
         m == numel(ipiv) ? new(lu, ipiv) : error("LU: dimension mismatch")
     end
 end
+show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 function LU{T<:LapackScalar}(A::Tridiagonal{T})
     lu, ipiv = _jl_lapack_gttrf(copy(A))
     LUTridiagonal{T}(lu, ipiv)
+end
+
+function lu(A::Tridiagonal)
+    error("lu(A) is not defined when A is Tridiagonal. Use LU(A) instead.")
 end
 
 function det(lu::LUTridiagonal)
