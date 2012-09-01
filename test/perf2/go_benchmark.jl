@@ -40,7 +40,7 @@ neighbor(i::Int, j::Int, k::Int) = (i + deltai[k], j + deltaj[k])
 
 type Board
   size::Int
-  komi::Float
+  komi::Float64
   
   # Board represented by a 1D array. The first board_size*board_size
   # elements are used. Vertices are indexed row by row, starting with 0
@@ -86,7 +86,7 @@ ref(board::Board, i::Int, j::Int) = board.board[i, j]
 POS(board::Board, i::Int, j::Int) = (j - 1) * board.size + i
 IJ(board::Board, pos::Int) = (1 + mod((pos - 1), board.size), 1 + fld(pos - 1, board.size))
 
-function set_komi(board::Board, komi::Float)
+function set_komi(board::Board, komi::Float64)
   board.komi = komi
 end
 
