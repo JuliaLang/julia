@@ -135,6 +135,15 @@
 
 "),
 
+(E"All Objects",E"deep_copy",E"deep_copy(x)
+
+   Create a deep copy of 'x': everything is copied recursively,
+   resulting in a fully independent object. For example, deep-copying
+   an array produces a new array whose elements are deep-copies of the
+   original elements.
+
+"),
+
 (E"All Objects",E"convert",E"convert(type, x)
 
    Try to convert 'x' to the given type.

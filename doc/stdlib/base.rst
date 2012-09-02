@@ -81,6 +81,10 @@ All Objects
 
    Create a shallow copy of ``x``: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
 
+.. function:: deep_copy(x)
+
+   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep-copies of the original elements.
+
 .. function:: convert(type, x)
 
    Try to convert ``x`` to the given type.
