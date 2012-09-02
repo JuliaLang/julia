@@ -135,7 +135,7 @@
 
 "),
 
-(E"All Objects",E"deep_copy",E"deep_copy(x)
+(E"All Objects",E"deepcopy",E"deepcopy(x)
 
    Create a deep copy of 'x': everything is copied recursively,
    resulting in a fully independent object. For example, deep-copying

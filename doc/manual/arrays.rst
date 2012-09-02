@@ -63,7 +63,7 @@ dimension sizes passed as a variable number of arguments.
 7.  ``reshape(A, dims...)`` — an array with the same data as the given
     array, but with different dimensions.
 8.  ``copy(A)``  — copy ``A``
-9.  ``deep_copy(A)`` — copy ``A``, recursively copying its elements
+9.  ``deepcopy(A)`` — copy ``A``, recursively copying its elements
 10. ``similar(A, element_type, dims...)`` — an uninitialized array of
     the same type as the given array (dense, sparse, etc.), but with the
     specified element type and dimensions. The second and third
