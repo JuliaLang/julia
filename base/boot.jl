@@ -122,7 +122,7 @@ import Root
 export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     BitsKind, Bool, BoundsError, Box, ByteString, Char, CompositeKind,
     Core, Root, DirectIndexString, DivideByZeroError, DomainError, EOFError,
-    Exception, Expr, Float, Float32, Float64, Function, GotoNode, IOError,
+    Exception, Expr, FloatingPoint, Float32, Float64, Function, GotoNode, IOError,
     InexactError, Integer, Int, Int8, Int16, Int32, Int64, Int128,
     InterruptException,
     IntrinsicFunction, LabelNode, LambdaStaticData, LineNumberNode,
@@ -165,13 +165,13 @@ const (===) = is
 
 abstract Number
 abstract Real     <: Number
-abstract Float    <: Real
+abstract FloatingPoint <: Real
 abstract Integer  <: Real
 abstract Signed   <: Integer
 abstract Unsigned <: Integer
 
-bitstype 32 Float32 <: Float
-bitstype 64 Float64 <: Float
+bitstype 32 Float32 <: FloatingPoint
+bitstype 64 Float64 <: FloatingPoint
 
 bitstype 8  Bool <: Integer
 bitstype 32 Char <: Integer

@@ -37,7 +37,7 @@ end
 
 convert{T<:Integer}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
 convert{T<:Integer}(::Type{Rational{T}}, x::Integer) = Rational(convert(T,x), convert(T,1))
-function convert{T<:Integer}(::Type{Rational{T}}, x::Float, tol::Real)
+function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
@@ -53,7 +53,7 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::Float, tol::Real)
         y = 1/y
     end
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,0)
+convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,0)
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
 convert{T<:Rational}(::Type{T}, x::Rational) = x
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
@@ -61,7 +61,7 @@ convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)
 promote_rule{T<:Integer}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
 promote_rule{T<:Integer,S<:Integer}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-promote_rule{T<:Integer,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+promote_rule{T<:Integer,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 num(x::Integer) = x
 den(x::Integer) = one(x)
@@ -104,7 +104,7 @@ hash(x::Rational) = integer_valued(x) ? hash(x.num) :
 
 ==(x::Rational, y::Number  ) = x.num == x.den*y
 ==(x::Number  , y::Rational) = y == x
-==(x::Rational, y::Float   ) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
+==(x::Rational, y::FloatingPoint) = x.den==0 ? oftype(y,x)==y : x.num == x.den*y
 
 < (x::Rational, y::Rational) = x.den == y.den ? x.num < y.num : x.num*y.den < x.den*y.num
 < (x::Rational, y::Real    ) = x.num < x.den*y

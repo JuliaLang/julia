@@ -324,18 +324,32 @@ begin
     @assert_fails my_func(a,c)
 end
 
-# issue #1131
 begin
-    local baar
-    baar(x) = 0
+    local baar, foor, boor
+    # issue #1131
+    baar(x::CompositeKind) = 0
     baar(x::UnionKind) = 1
-    @assert baar(StridedArray) == 1
+    baar(x::TypeConstructor) = 2
+    @assert baar(StridedArray) == 2
     @assert baar(StridedArray.body) == 1
+    @assert baar(Vector) == 2
+    @assert baar(Vector.body) == 0
+
+    boor(x) = 0
+    boor(x::UnionKind) = 1
+    @assert boor(StridedArray) == 0
+    @assert boor(StridedArray.body) == 1
+
+    # issue #1202
+    foor(x::UnionKind) = 1
+    @assert_fails foor(StridedArray)
+    @assert foor(StridedArray.body) == 1
+    @assert_fails foor(StridedArray)
 end
 
 # issue #1153
 type SI{m, s, kg}
-    value::Float
+    value::FloatingPoint
 end
 
 *{m1, m2, s1, s2, kg1, kg2}(x::SI{m1, s1, kg1}, y::SI{m2, s2, kg2}) = SI{m1 + m2, s1 + s2, kg1 + kg2}(x.value * y.value)

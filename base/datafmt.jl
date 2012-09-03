@@ -164,7 +164,7 @@ function dlmwrite(io, a::Matrix, dlm::Char)
     for i = 1:nr
         for j = 1:nc
             elt = a[i,j]
-            if isa(elt,Float)
+            if isa(elt,FloatingPoint)
                 print_shortest(io, elt)
             else
                 print(io, elt)

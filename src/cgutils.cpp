@@ -68,7 +68,7 @@ static Value *emit_typeof(Value *p)
     if (p->getType() == jl_pvalue_llvmt) {
         Value *tt = builder.CreateBitCast(p, jl_ppvalue_llvmt);
         tt = builder.
-            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_int32,0)),
+            CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_size,0)),
                        false);
         return tt;
     }
@@ -202,7 +202,7 @@ static void emit_func_check(Value *x, jl_codectx_t *ctx)
 static Value *emit_nthptr_addr(Value *v, size_t n)
 {
     return builder.CreateGEP(builder.CreateBitCast(v, jl_ppvalue_llvmt),
-                             ConstantInt::get(T_int32, n));
+                             ConstantInt::get(T_size, n));
 }
 
 static Value *emit_nthptr_addr(Value *v, Value *idx)
@@ -321,7 +321,7 @@ static Value *emit_arrayptr(Value *t)
 static Value *bitstype_pointer(Value *x)
 {
     return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
-                             ConstantInt::get(T_int32, 1));
+                             ConstantInt::get(T_size, 1));
 }
 
 // --- scheme for tagging llvm values with julia types using metadata ---
@@ -434,7 +434,7 @@ static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
     if (jt == (jl_value_t*)jl_float32_type) return T_float32;
     if (jt == (jl_value_t*)jl_float64_type) return T_float64;
     //if (jt == (jl_value_t*)jl_null) return T_void;
-    if (jl_is_bits_type(jt) && jl_is_cpointer_type(jt)) {
+    if (jl_is_cpointer_type(jt)) {
         Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
         if (lt == NULL)
             return NULL;

@@ -61,6 +61,10 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_ZLIB), 0)
+STAGE1_DEPS += zlib
+endif
+
 ifeq ($(USE_SYSTEM_ARPACK), 0)
 STAGE2_DEPS += arpack
 endif
@@ -179,10 +183,15 @@ llvm_python_workaround:
 	mkdir -p llvm-$(LLVM_VER)/python2_path && \
 	ln -s /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 
+LLVM_CXX = $(CXX)
+ifeq ($(ARCH), ppc64)
+  LLVM_CXX += -mminimal-toc
+endif
+
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/configure | llvm_python_workaround
 	cd llvm-$(LLVM_VER) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) --disable-threads --enable-optimized --disable-profiling --disable-assertions --enable-shared --enable-targets=host --disable-bindings --disable-docs CC="$(CC)" CXX="$(LLVM_CXX)" && \
 	$(MAKE)
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | llvm_python_workaround
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
@@ -295,7 +304,7 @@ distclean-openlibm: clean-openlibm
 ifeq ($(OS), WINNT) 
 UV_CFLAGS=
 else
-UV_CFLAGS = CFLAGS="-g -DEV_SIGNAL_ENABLE=0 -fPIC"
+UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a
@@ -484,7 +493,7 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
-OPENBLAS_FLAGS = USE_THREAD=0 CC=$(CC) FC=$(FC) FFLAGS="$(FFLAGS) -mpreferred-stack-boundary=2 $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+OPENBLAS_FLAGS = USE_THREAD=0 CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
 
 ifeq ($(OS), WINNT)
 OPENBLAS_FLAGS += COMMON_OPT="-mpreferred-stack-boundary=2"
@@ -530,7 +539,7 @@ endif
 #ATLAS_FLAGS += -V 192 -A 13  # requires SSE2 (P4 & later)
 #ATLAS_FLAGS += -V 128 -A 12 # requires SSE1 (P3 & later)
 #ATLAS_FLAGS += -V -1 -A 11 # any x87 (PentiumPro or Athlon & later)
-ATLAS_FLAGS += -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
+#ATLAS_FLAGS += -A 25  # requires Corei132 (Corei232 doesn't have definition yet)
 
 
 build-atlas: $(ATLAS_OBJ_SOURCE)
@@ -637,7 +646,10 @@ install-fftw: install-fftw-single install-fftw-double
 install-fftw-single: $(FFTW_SINGLE_OBJ_TARGET)
 install-fftw-double: $(FFTW_DOUBLE_OBJ_TARGET)
 
-FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-sse2 --enable-threads
+FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-fma --enable-threads
+ifneq ($(ARCH), ppc64)
+  FFTW_CONFIG += --enable-sse2
+endif
 ifeq ($(OS),WINNT)
 	FFTW_CONFIG += --with-our-malloc --with-combined-threads --with-incoming-stack-boundary=2 LIBS=-lpthread
 endif
@@ -651,7 +663,7 @@ fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
 	touch $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
-	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-sse --enable-single CC="$(CC)" CXX="$(CXX)" && \
+	./configure --prefix=$(abspath $(USR)) $(FFTW_CONFIG) --enable-single CC="$(CC)" CXX="$(CXX)" && \
 	$(MAKE) clean
 	touch $@
 $(FFTW_SINGLE_OBJ_TARGET): fftw-$(FFTW_VER)-single/config.status
@@ -714,7 +726,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -918,11 +930,16 @@ distclean-gmp:
 
 ## GMP Wrapper
 
-GMP_INC = -I gmp-$(GMP_VER)/
-GMP_LIB = -L$(USRLIB)/ -lgmp
+ifeq ($(USE_SYSTEM_GMP), 1)
+GMPW_INC =
+GMPW_LIB = -lgmp
+else
+GMPW_INC = -I $(USRINC)
+GMPW_LIB = -L$(USRLIB)/ -lgmp
+endif
 
 $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT): gmp_wrapper.c $(GMP_OBJ_TARGET) | $(USRLIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMP_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMP_LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(GMPW_INC) gmp_wrapper.c -o $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB) $(GMPW_LIB)
 	$(INSTALL_NAME_CMD)libgmp_wrapper.$(SHLIB_EXT) $@
 	touch $@
 install-gmp-wrapper: $(USRLIB)/libgmp_wrapper.$(SHLIB_EXT)
@@ -970,8 +987,8 @@ ifeq ($(USE_SYSTEM_GLPK), 1)
 GLPKW_INC = -I /usr/include/
 GLPKW_LIB = -lglpk
 else
-GLPKW_INC = -I $(abspath $(USR))/include/
-GLPKW_LIB = -L$(USRLIB) -lglpk
+GLPKW_INC = -I $(USRINC)
+GLPKW_LIB = -L$(USRLIB)/ -lglpk
 endif
 
 
@@ -985,6 +1002,39 @@ install-glpk-wrapper: $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT) glpk_wrapper.c
 clean-glpk-wrapper:
 	rm -f $(GLPK_OBJ_TARGET) $(USRLIB)/libglpk_wrapper.$(SHLIB_EXT)
 distclean-glpk-wrapper: clean-glpk-wrapper
+
+## ZLIB ##
+
+ifeq ($(USE_SYSTEM_ZLIB), 1)
+ZLIB_OBJ_TARGET =
+else
+ZLIB_OBJ_TARGET = $(USRLIB)/libz.$(SHLIB_EXT)
+endif
+
+compile-zlib: install-zlib
+install-zlib: $(ZLIB_OBJ_TARGET)
+
+zlib-$(ZLIB_VER).tar.gz:
+	$(WGET) http://zlib.net/$@
+zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
+	tar zxf $<
+	touch $@
+zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+	cd zlib-$(ZLIB_VER) && \
+	./configure --prefix=$(abspath $(USR))
+	touch $@
+$(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
+	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
+	$(MAKE) -C zlib-$(ZLIB_VER) check
+	$(MAKE) -C zlib-$(ZLIB_VER) install
+	$(INSTALL_NAME_CMD)libz.dylib $@
+	touch $@
+
+clean-zlib:
+	$(MAKE) -j$(PARALLEL_BUILD_JOBS) -C zlib-$(ZLIB_VER) clean
+	rm -f $(ZLIB_OBJ_TARGET)
+distclean-zlib:
+	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
 
 ## phony targets ##
 

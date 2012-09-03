@@ -541,7 +541,7 @@ end
 # =============================================================================
 
 abstract RenderObject
-typealias RenderStyle Dict{String,Union(Integer,Float,String)}
+typealias RenderStyle Dict{String,Union(Integer,FloatingPoint,String)}
 
 function kw_init( self::RenderObject, args...)
     for (k,v) in kw_defaults(self)

@@ -51,7 +51,7 @@ airyaiprime(z) = airy(1,z)
 airybi(z) = airy(2,z)
 airybiprime(z) = airy(3,z)
 
-airy(k, x::Float) = oftype(x, real(airy(k, complex(x))))
+airy(k, x::FloatingPoint) = oftype(x, real(airy(k, complex(x))))
 airy(k, x::Real) = airy(k, float(x))
 airy(k, z::Complex64) = complex64(airy(k, complex128(z)))
 airy(k, z::Complex) = airy(k, complex128(z))
@@ -140,7 +140,7 @@ let
         end
     end
 
-    function besselj(nu::Integer, x::Float)
+    function besselj(nu::Integer, x::FloatingPoint)
         if x == 0
             return (nu == 0) ? one(x) : zero(x)
         end
@@ -177,7 +177,7 @@ besseli(nu::Real, z::Complex64) = complex64(bessely(float64(nu), complex128(z)))
 besseli(nu::Real, z::Complex) = besseli(float64(nu), complex128(z))
 besseli(nu::Real, x::Real) = besseli(float64(nu), complex128(x))
 
-function besselj(nu::Float, x::Float)
+function besselj(nu::FloatingPoint, x::FloatingPoint)
     ans = besselj(float64(nu), complex128(x))
     (x > 0) ? oftype(x, real(ans)) : ans
 end

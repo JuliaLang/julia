@@ -1629,7 +1629,7 @@ function permute(B::BitArray, perm)
     end
 
     #calculates all the strides
-    strides = [ stride(B, perm[dim]) for dim = 1:length(perm) ]
+    strides = [ prod(dimsB[1:(perm[dim]-1)])::Int for dim = 1:length(perm) ]
 
     #Creates offset, because indexing starts at 1
     offset = 0

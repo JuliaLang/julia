@@ -357,7 +357,7 @@ function a2t(a::AbstractVector)
     return tuple(a...)
 end
 
-function isconstantfunc(f, vtypes, sv::StaticVarInfo)
+function _isconstantfunc_part1(f)
     if isa(f,TopNode)
         return _iisconst(f.name) && f.name
     end
@@ -373,12 +373,30 @@ function isconstantfunc(f, vtypes, sv::StaticVarInfo)
             return isbound(M,s) && isconst(M,s) && f
         end
     end
+    return true
+end
+
+function isconstantfunc(f, vtypes, sv::StaticVarInfo)
+    u = _isconstantfunc_part1(f)
+    if !is(u,true); return u; end
     if isa(f,SymbolNode)
         f = f.name
     end
     return isa(f,Symbol) && !has(vtypes,f) && !has(sv.cenv,f) &&
-            _iisconst(f) && _iisbound(f) && f
+        _iisconst(f) && _iisbound(f) && f
 end
+
+function isconstantfunc(f, vars)
+    u = _isconstantfunc_part1(f)
+    if !is(u,true); return u; end
+    if isa(f,SymbolNode)
+        f = f.name
+    end
+    return isa(f,Symbol) && !contains_is(vars,f) &&
+        _iisconst(f) && _iisbound(f) && f
+end
+
+const isconstantref = isconstantfunc
 
 isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
 
@@ -518,6 +536,16 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
             e.head = :call1
         end
+        if is(f,getfield) && length(argtypes)==2 && is(argtypes[1],Module)
+            themod = isconstantref(e.args[2], vtypes, sv)
+            if !is(themod,false) && isa(fargs[2], QuoteNode)
+                themod = _ieval(themod)
+                sym = fargs[2].value
+                if isa(sym,Symbol) && isconst(themod,sym) && isbound(themod,sym)
+                    return abstract_eval_constant(eval(themod, sym))
+                end
+            end
+        end
         rt = builtin_tfunction(f, fargs, argtypes)
         #print("=> ", rt, "\n")
         return rt
@@ -624,9 +652,6 @@ function abstract_eval_constant(x::ANY)
         end
         return Type{x}
     end
-    if isa(x,LambdaStaticData)
-        return Function
-    end
     return typeof(x)
 end
 
@@ -677,6 +702,8 @@ abstract_eval(s::SymbolNode, vtypes, sv::StaticVarInfo) =
     abstract_eval(s.name, vtypes, sv)
 
 abstract_eval(x, vtypes, sv::StaticVarInfo) = abstract_eval_constant(x)
+
+abstract_eval(x::LambdaStaticData, vtypes, sv::StaticVarInfo) = Function
 
 typealias VarTable ObjectIdDict
 
@@ -1089,7 +1116,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     
     if !rec
         fulltree.args[3] = inlining_pass(fulltree.args[3], vars, fulltree)[1]
-        tuple_elim_pass(fulltree)
+        tuple_elim_pass(fulltree, vars)
         linfo.inferred = true
     end
     
@@ -1329,10 +1356,21 @@ end
 
 # detect some important side-effect-free calls
 function effect_free(e)
+    if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
+        isa(e,TopNode) || isa(e,QuoteNode)
+        return true
+    end
     if isa(e,Expr) && (e.head === :call || e.head === :call1)
         ea = e.args
-        if isa(ea[1],TopNode) && ea[1].name === :getfield
-            if length(ea) > 1 && (isa(ea[2],Symbol) || isa(ea[2],SymbolNode))
+        for a in ea
+            if !effect_free(a)
+                return false
+            end
+        end
+        if isa(ea[1],TopNode)
+            n = ea[1].name
+            if (n === :getfield || n === :tuple || n === :tupleref ||
+                n === :tuplelen || n === :fieldtype)
                 return true
             end
         end
@@ -1417,7 +1455,9 @@ function inlineable(f, e::Expr, vars, enclosing_ast)
     args = f_argnames(ast)
     na = length(args)
     if na>0 && is_rest_arg(ast.args[1][na])
-        return NF
+        # construct tuple-forming expression for argument tail
+        vararg = _jl_mk_tuplecall(argexprs[na:end])
+        argexprs = {argexprs[1:(na-1)]..., vararg}
     end
     expr = body[1].args[1]
 
@@ -1464,11 +1504,17 @@ _jl_tn(sym::Symbol) =
     ccall(:jl_new_struct, Any, (Any,Any...), TopNode, sym, Any)
 
 const _jl_top_tupleref = _jl_tn(:tupleref)
+const _jl_top_tuple = _jl_tn(:tuple)
 
 function _jl_mk_tupleref(texpr, i)
     e = :(($_jl_top_tupleref)($texpr, $i))
     e.typ = exprtype(texpr)[i]
     e
+end
+
+function _jl_mk_tuplecall(args)
+    Expr(:call1, {_jl_top_tuple, args...},
+         ntuple(length(args), i->exprtype(args[i])))
 end
 
 function inlining_pass(e::Expr, vars, ast)
@@ -1567,10 +1613,10 @@ function inlining_pass(e::Expr, vars, ast)
             for i = 3:na
                 aarg = e.args[i]
                 t = exprtype(aarg)
-                if isa(aarg,Expr) && is_top_call(aarg, :tuple)
+                if isa(aarg,Expr) && is_known_call(aarg, tuple, vars)
                     # apply(f,tuple(x,y,...)) => f(x,y,...)
                     newargs[i-2] = aarg.args[2:]
-                elseif isa(t,Tuple) && isleaftype(t)
+                elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg)
                     # apply(f,t::(x,y)) => f(t[1],t[2])
                     newargs[i-2] = { _jl_mk_tupleref(aarg,j) for j=1:length(t) }
                 else
@@ -1621,13 +1667,16 @@ function unique_name(ast)
     g
 end
 
-function is_top_call(e::Expr, fname)
-    return is(e.head,:call) && isa(e.args[1],TopNode) &&
-        is(e.args[1].name,fname)
+function is_known_call(e::Expr, func, vars)
+    if !(is(e.head,:call) || is(e.head,:call1))
+        return false
+    end
+    f = isconstantfunc(e.args[1], vars)
+    return isa(f,Symbol) && is(_ieval(f), func)
 end
 
 # eliminate allocation of tuples used to return multiple values
-function tuple_elim_pass(ast::Expr)
+function tuple_elim_pass(ast::Expr, vars)
     body = (ast.args[3].args)::Array{Any,1}
     i = 1
     while i < length(body)-1
@@ -1638,7 +1687,7 @@ function tuple_elim_pass(ast::Expr)
             # look for t = top(tuple)(...)
             if isa(ret,Expr) && is(ret.head,:(=))
                 rhs = ret.args[2]
-                if isa(rhs,Expr) && is_top_call(rhs,:tuple)
+                if isa(rhs,Expr) && is_known_call(rhs,tuple,vars)
                     tup = rhs.args
                     tupname = ret.args[1]
                     nv = length(tup)-1
@@ -1663,7 +1712,7 @@ function tuple_elim_pass(ast::Expr)
                             if isa(stmt,Expr) && is(stmt.head,:(=))
                                 rhs = stmt.args[2]
                                 if isa(rhs,Expr)
-                                    if is_top_call(rhs,:tupleref) &&
+                                    if is_known_call(rhs,tupleref,vars) &&
                                         isequal(rhs.args[2],tupname)
                                         r = vals[k]
                                         if isa(r,Symbol)
@@ -1673,7 +1722,7 @@ function tuple_elim_pass(ast::Expr)
                                         k += 1
                                     elseif length(rhs.args)>2 &&
                                         isa(rhs.args[3],Expr) &&
-                                        is_top_call(rhs.args[3],:tupleref) &&
+                                        is_known_call(rhs.args[3],tupleref,vars) &&
                                         isequal(rhs.args[3].args[2],tupname)
                                         # assignment with conversion
                                         r = vals[k]

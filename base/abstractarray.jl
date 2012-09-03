@@ -23,20 +23,7 @@ length(t::AbstractArray) = prod(size(t))
 first(a::AbstractArray) = a[1]
 last(a::AbstractArray) = a[end]
 
-function stride(a::AbstractArray, i::Integer)
-    s = 1
-    if i > ndims(a)
-        return numel(a)
-    end
-    for n=1:(i-1)
-        s *= size(a, n)
-    end
-    return s
-end
-strides{T}(a::AbstractArray{T,1}) = (1,)
-strides{T}(a::AbstractArray{T,2}) = (1, size(a,1))
-strides{T}(a::AbstractArray{T,3}) = (1, size(a,1), size(a,1)*size(a,2))
-strides   (a::AbstractArray)      = ntuple(ndims(a), i->stride(a,i))
+strides(a::AbstractArray) = ntuple(ndims(a), i->stride(a,i))::Dims
 
 isinteger{T<:Integer}(::AbstractArray{T}) = true
 isinteger(::AbstractArray) = false

@@ -487,7 +487,7 @@ You can search for the index of a particular character using the
     5
 
     julia> strchr("xylophone", 'z')
-    char not found
+    0
 
 You can start the search for a character at a given offset by providing
 a third argument:
@@ -501,7 +501,7 @@ a third argument:
     7
 
     julia> strchr("xylophone", 'o', 8)
-    char not found
+    0
 
 Another handy string function is ``repeat``:
 

@@ -20,6 +20,7 @@ MKLLIB = /path/to/mkl/lib/intel64
 # or installed to usr/lib/libatlas from some another source (built as
 # a shared library, for your platform, single threaded)
 USE_ATLAS = 0
+ATLAS_LIBDIR = ${USRLIB}
 
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
@@ -60,7 +61,10 @@ CXX = g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
+endif
 endif
 
 ifeq ($(USECLANG),1)
@@ -100,6 +104,7 @@ USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
 USE_SYSTEM_NGINX=0
+USE_SYSTEM_ZLIB=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LLVM=1
@@ -114,13 +119,7 @@ USE_SYSTEM_GMP=1
 USE_SYSTEM_ARPACK=1
 USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
-endif
-
-# Use system BLAS and LAPACK on Mac
-# https://github.com/JuliaLang/julia/commit/7b6442f1db697d0bc8c39476e7d92afc11b169d2
-ifeq ($(OS), Darwin)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
+USE_SYSTEM_ZLIB=1
 endif
 
 -include $(JULIAHOME)/Make.user
@@ -258,13 +257,14 @@ endif
 endif
 
 ifeq ($(USE_ATLAS), 1)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
-LIBBLAS = -lsatlas
-LIBLAPACK = -lsatlas
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
+LIBLAPACK = $(LIBBLAS)
 LIBBLASNAME = libsatlas
-LIBLAPACKNAME = libsatlas
+LIBLAPACKNAME = $(LIBBLASNAME)
 endif
+
 # Make tricks
 
 define dir_target

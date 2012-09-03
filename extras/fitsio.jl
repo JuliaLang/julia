@@ -22,7 +22,7 @@ fits_assert_ok(f::FITSFile) = fits_assert_ok(f.status)
 # constants
 
 _cfitsio_bitpix{T<:Integer}(::Type{T}) = int32(8*sizeof(T))
-_cfitsio_bitpix{T<:Float}(::Type{T}) = int32(-8*sizeof(T))
+_cfitsio_bitpix{T<:FloatingPoint}(::Type{T}) = int32(-8*sizeof(T))
 
 _cfitsio_datatype(::Type{Uint8})      = int32(11)
 _cfitsio_datatype(::Type{Int8})       = int32(12)

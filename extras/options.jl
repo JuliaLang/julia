@@ -177,9 +177,11 @@ macro defaults(opts,ex...)
     #htindex = gensym()
     for i = 1:length(ex)
         thisex = ex[i]
-        if !isa(thisex,Expr) || thisex.head != :(=)
+        if !isa(thisex,Expr) || !(thisex.head == :(=) || thisex.head == :(=>) || thisex.head == :(:=))
             error("@defaults: following the options variable, all statements must be assignments")
         end
+        thisex.head = :(=)
+
         thissym = thisex.args[1]
         exret = quote
             $exret
@@ -232,9 +234,10 @@ macro set_options(opts,ex...)
     end
     for indx = 1:length(ex)
         thisex = ex[indx]
-        if !isa(thisex,Expr) || thisex.head != :(=)
+        if !isa(thisex,Expr) || !(thisex.head == :(=) || thisex.head == :(=>) || thisex.head == :(:=))
             error("Arguments to add_options must be a list of assignments, e.g.,a=5")
         end
+        thisex.head = :(=)
         thissym = thisex.args[1]
         thisval = thisex.args[2]
         exret = quote

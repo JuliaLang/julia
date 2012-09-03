@@ -48,7 +48,7 @@ function grisu_sig(x::Real, n::Integer)
     grisu(float64(x), PRECISION, int32(n))
 end
 
-function _show(io, x::Float, mode::Int32, n::Int)
+function _show(io, x::FloatingPoint, mode::Int32, n::Int)
     if isnan(x); return write(io, "NaN"); end
     if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode n
@@ -101,7 +101,7 @@ end
 
 show(io, x::Float64) = _show(io, x, SHORTEST, 0)
 show(io, x::Float32) = _show(io, x, SHORTEST_SINGLE, 0)
-showcompact(io, x::Float) = _show(io, x, PRECISION, 6)
+showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 
 # normal:
 #   0 < pt < len        ####.####           len+1
@@ -112,7 +112,7 @@ showcompact(io, x::Float) = _show(io, x, PRECISION, 6)
 #   pt <= 0             ########e-###       len+k+2
 #   0 < pt              ########e###        len+k+1
 
-function _print_shortest(io, x::Float, dot::Bool, mode::Int32)
+function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
     if isnan(x); return write(io, "NaN"); end
     if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
     @grisu_ccall x mode 0
@@ -158,7 +158,7 @@ end
 
 print_shortest(io, x::Float64, dot::Bool) = _print_shortest(io, x, dot, SHORTEST)
 print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST_SINGLE)
-print_shortest(io, x::Union(Float,Integer)) = print_shortest(io, float(x), false)
+print_shortest(io, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module
 import Base.Grisu.print_shortest

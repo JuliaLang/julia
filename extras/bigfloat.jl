@@ -2,7 +2,7 @@ _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
 require("bigint.jl")
 
-type BigFloat <: Float
+type BigFloat <: FloatingPoint
 	mpf::Ptr{Void}
 
 	function BigFloat(x::String) 

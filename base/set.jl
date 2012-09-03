@@ -16,6 +16,7 @@ elements(s::Set) = keys(s.hash)
 eltype{T}(s::Set{T}) = T
 
 has(s::Set, x) = has(s.hash, x)
+contains(s::Set, x) = has(s, x)
 get(s::Set, x, deflt) = get(s.hash, x, false)
 
 add(s::Set, x) = (s.hash[x] = true; s)

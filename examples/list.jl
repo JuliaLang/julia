@@ -16,27 +16,25 @@ nil() = nil(Any)
 head(x::Cons) = x.head
 tail(x::Cons) = x.tail
 
-function show{T}(l::List{T})
+function show{T}(io, l::List{T})
     if isa(l,Nil)
         if is(T,Any)
-            print("nil()")
+            print(io, "nil()")
         else
-            print("nil(")
-            show(T)
-            print(")")
+            print(io, "nil(", T, ")")
         end
     else
-        print("list(")
+        print(io, "list(")
         while true
-            show(head(l))
+            show(io, head(l))
             l = tail(l)
             if isa(l,Cons)
-                print(", ")
+                print(io, ", ")
             else
                 break
             end
         end
-        print(")")
+        print(io, ")")
     end
 end
 

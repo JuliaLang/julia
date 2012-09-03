@@ -84,7 +84,7 @@ action:
     julia> typeof(ans)
     Uint8
 
-    julia> convert(Float, x)
+    julia> convert(FloatingPoint, x)
     12.0
 
     julia> typeof(ans)
@@ -96,8 +96,8 @@ requested conversion:
 
 ::
 
-    julia> convert(Float, "foo")
-    no method convert(Type{Float},ASCIIString)
+    julia> convert(FloatingPoint, "foo")
+    no method convert(Type{FloatingPoint},ASCIIString)
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -153,7 +153,7 @@ right after the declaration of the type and its constructors:
     convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
     convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
 
-    function convert{T<:Int}(::Type{Rational{T}}, x::Float, tol::Real)
+    function convert{T<:Int}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
         if isnan(x); return zero(T)//zero(T); end
         if isinf(x); return sign(x)//zero(T); end
         y = x
@@ -168,9 +168,9 @@ right after the declaration of the type and its constructors:
             y = 1/y
         end
     end
-    convert{T<:Int}(rt::Type{Rational{T}}, x::Float) = convert(rt,x,eps(x))
+    convert{T<:Int}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(x))
 
-    convert{T<:Float}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
+    convert{T<:FloatingPoint}(::Type{T}, x::Rational) = convert(T,x.num)/convert(T,x.den)
     convert{T<:Int}(::Type{T}, x::Rational) = div(convert(T,x.num),convert(T,x.den))
 
 The initial four convert methods provide conversions to rational types.
@@ -357,7 +357,7 @@ mechanism with the following promotion rules:
     promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
     promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}
     promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{Rational{S}}) = Rational{promote_type(T,S)}
-    promote_rule{T<:Int,S<:Float}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
+    promote_rule{T<:Int,S<:FloatingPoint}(::Type{Rational{T}}, ::Type{S}) = promote_type(T,S)
 
 The first rule asserts that promotion of a rational number with its own
 numerator/denominator type, simply promotes to itself. The second rule

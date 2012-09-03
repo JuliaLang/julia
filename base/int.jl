@@ -571,14 +571,14 @@ sizeof(::Type{Uint128}) = 16
 # requires int arithmetic defined, for the loops to work
 
 for f in (:int, :int8, :int16, :int32, :signed, :integer)
-    @eval ($f)(x::Float) = ($f)(iround(x))
+    @eval ($f)(x::FloatingPoint) = ($f)(iround(x))
 end
 
 for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32),
               (:int64,:Int64), (:uint64,:Uint64),
               (:int128,:Int128), (:uint128,:Uint128),
               (:unsigned,:Uint), (:uint,:Uint))
-    @eval ($f)(x::Float) = iround($t,x)
+    @eval ($f)(x::FloatingPoint) = iround($t,x)
 end
 
 ## wide multiplication, Int128 multiply and divide ##

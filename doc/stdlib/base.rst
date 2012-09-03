@@ -81,6 +81,10 @@ All Objects
 
    Create a shallow copy of ``x``: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
 
+.. function:: deepcopy(x)
+
+   Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep-copies of the original elements.
+
 .. function:: convert(type, x)
 
    Try to convert ``x`` to the given type.
@@ -397,17 +401,25 @@ Strings
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions.
 
-.. function:: ASCIIString(::Array{Uint8,1})
+.. function:: ascii(::Array{Uint8,1})
 
    Create an ASCII string from a byte array.
 
-.. function:: UTF8String(::Array{Uint8,1})
+.. function:: ascii(s)
+
+   Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
+
+.. function:: utf8(::Array{Uint8,1})
 
    Create a UTF-8 string from a byte array.
 
+.. function:: utf8(s)
+
+   Convert a string to a contiguous UTF-8 string (all characters must be valid UTF-8 characters).
+
 .. function:: strchr(string, char[, i])
 
-   Return the index of ``char`` in ``string``, giving an error if not found. The third argument optionally specifies a starting index.
+   Return the index of ``char`` in ``string``, giving 0 if not found. The second argument may also be a vector or a set of characters. The third argument optionally specifies a starting index.
 
 .. function:: lpad(string, n, p)
 
@@ -417,9 +429,13 @@ Strings
 
    Make a string at least ``n`` characters long by padding on the right with copies of ``p``.
 
-.. function:: split(string, char, include_empty)
+.. function:: search(string, chars[, start])
 
-   Return an array of strings by splitting the given string on occurrences of the given character delimiter. The second argument may also be a set of character delimiters to use. The third argument specifies whether empty fields should be included.
+   Search for the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (but regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a tuple with 2 integers: the index of the match and the first valid index past the match (or an index beyond the end of the string if the match is at the end); it returns ``(0,0)`` if no match was found, and ``(start,start)`` if ``chars`` is empty.
+
+.. function:: split(string, chars[, limit][, include_empty])
+
+   Return an array of strings by splitting the given string on occurrences of the given character delimiters, which may be specified in any of the formats allowed by ``search``'s second argument. The last two arguments are optional; they are are a maximum size for the result and a flag determining whether empty fields should be included in the result.
 
 .. function:: strip(string)
 
@@ -540,6 +556,10 @@ I/O
 .. function:: seek(s, pos)
 
    Seek a stream to the given position.
+
+.. function:: seek_end(s)
+
+   Seek a stream to the end.
 
 .. function:: skip(s, offset)
 
@@ -700,15 +720,15 @@ Mathematical Functions
 
    Accurately compute ``exp(x)-1``
 
-.. function:: ceil(x) -> Float
+.. function:: ceil(x) -> FloatingPoint
 
    Returns the nearest integer not less than ``x``.
 
-.. function:: floor(x) -> Float
+.. function:: floor(x) -> FloatingPoint
 
    Returns the nearest integer not greater than ``x``.
 
-.. function:: trunc(x) -> Float
+.. function:: trunc(x) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
@@ -1023,11 +1043,11 @@ Basic functions
 
 .. function:: stride(A, k)
 
-   Returns the size of the stride along dimension k
+   Returns the distance in memory (in number of elements) between adjacent elements in dimension k
 
 .. function:: strides(A)
 
-   Returns a tuple of the linear index distances between adjacent elements in each dimension
+   Returns a tuple of the memory strides in each dimension
 
 Constructors
 ~~~~~~~~~~~~

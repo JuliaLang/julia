@@ -29,6 +29,8 @@ Extras
    cpp
    specfun
    glpk
+   textwrap
+   zlib
 
 ************
 File Formats
