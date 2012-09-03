@@ -933,7 +933,7 @@ function lpad(s::String, n::Integer, p::String)
     if m <= 0; return s; end
     l = strlen(p)
     if l==1
-        return p^m * s
+        return bytestring(p^m * s)
     end
     q = div(m,l)
     r = m - q*l
@@ -945,7 +945,7 @@ function rpad(s::String, n::Integer, p::String)
     if m <= 0; return s; end
     l = strlen(p)
     if l==1
-        return s * p^m
+        return bytestring(s * p^m)
     end
     q = div(m,l)
     r = m - q*l
