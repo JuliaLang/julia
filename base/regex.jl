@@ -112,7 +112,8 @@ function search(str::ByteString, re::Regex, idx::Integer)
     m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
     isempty(m) ? (0,0) : (m[1]+1,m[2]+1)
 end
-search(s::ByteString, r::Regex) = search(s,r,start(s))
+search(s::String, r::Regex, idx::Integer) = error("regex search is only available for bytestrings; use bytestring(s) to convert")
+search(s::String, r::Regex) = search(s,r,start(s))
 
 type RegexMatchIterator
     regex::Regex
