@@ -792,7 +792,7 @@ void jl_restore_system_image(char *fname);
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
 void jl_start_parsing_file(const char *fname);
 void jl_stop_parsing();
-jl_value_t *jl_parse_next(int *plineno);
+jl_value_t *jl_parse_next();
 DLLEXPORT void jl_load_file_string(const char *text);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);

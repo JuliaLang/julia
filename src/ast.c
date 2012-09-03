@@ -439,7 +439,9 @@ void jl_stop_parsing()
     fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
 }
 
-jl_value_t *jl_parse_next(int *plineno)
+extern int jl_lineno;
+
+jl_value_t *jl_parse_next()
 {
     value_t c = fl_applyn(0, symbol_value(symbol("jl-parser-next")));
     if (c == FL_F)
@@ -447,8 +449,8 @@ jl_value_t *jl_parse_next(int *plineno)
     if (iscons(c)) {
         value_t a = car_(c);
         if (isfixnum(a)) {
-            *plineno = numval(a);
-            //ios_printf(ios_stderr, "  on line %d\n", *plineno);
+            jl_lineno = numval(a);
+            //ios_printf(ios_stderr, "  on line %d\n", jl_lineno);
             return scm_to_julia(cdr_(c));
         }
     }

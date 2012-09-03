@@ -20,10 +20,12 @@
 #include "builtin_proto.h"
 
 DLLEXPORT char *julia_home = NULL;
+// current line number in a file
+int jl_lineno = 0;
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno);
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
-jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
     jl_module_t *last_module = jl_current_module;
@@ -60,13 +62,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex, int *plineno)
         for(int i=0; i < exprs->length; i++) {
             // process toplevel form
             jl_value_t *form = jl_cellref(exprs, i);
-            if (jl_is_linenode(form)) {
-                if (plineno)
-                    *plineno = jl_linenode_line(form);
-            }
-            else {
-                (void)jl_toplevel_eval_flex(form, 1, plineno);
-            }
+            (void)jl_toplevel_eval_flex(form, 1);
         }
     }
     JL_CATCH {
@@ -186,7 +182,7 @@ static jl_module_t *eval_import_path(jl_array_t *args)
     return m;
 }
 
-jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
+jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
     //jl_show(ex);
     //JL_PRINTF(JL_STDOUT, "\n");
@@ -200,7 +196,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
     }
 
     if (ex->head == module_sym) {
-        return jl_eval_module_expr(ex, plineno);
+        return jl_eval_module_expr(ex);
     }
 
     // handle import, export toplevel-only forms
@@ -286,21 +282,22 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast, int *plineno)
 
 jl_value_t *jl_toplevel_eval(jl_value_t *v)
 {
-    return jl_toplevel_eval_flex(v, 1, NULL);
+    return jl_toplevel_eval_flex(v, 1);
 }
 
 // repeatedly call jl_parse_next and eval everything
 void jl_parse_eval_all(char *fname)
 {
     //ios_printf(ios_stderr, "***** loading %s\n", fname);
-    int lineno=0;
+    int last_lineno = jl_lineno;
+    jl_lineno=0;
     jl_value_t *fn=NULL, *ln=NULL, *form=NULL;
     JL_GC_PUSH(&fn, &ln, &form);
     JL_TRY {
         jl_register_toplevel_eh();
         // handle syntax error
         while (1) {
-            form = jl_parse_next(&lineno);
+            form = jl_parse_next();
             if (form == NULL)
                 break;
             if (jl_is_expr(form)) {
@@ -311,17 +308,19 @@ void jl_parse_eval_all(char *fname)
                     jl_interpret_toplevel_expr(form);
                 }
             }
-            (void)jl_toplevel_eval_flex(form, 1, &lineno);
+            (void)jl_toplevel_eval_flex(form, 1);
         }
     }
     JL_CATCH {
         jl_stop_parsing();
         fn = jl_pchar_to_string(fname, strlen(fname));
-        ln = jl_box_long(lineno);
+        ln = jl_box_long(jl_lineno);
+        jl_lineno = last_lineno;
         jl_raise(jl_new_struct(jl_loaderror_type, fn, ln,
                                jl_exception_in_transit));
     }
     jl_stop_parsing();
+    jl_lineno = last_lineno;
     JL_GC_POP();
 }
 
