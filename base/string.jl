@@ -497,7 +497,7 @@ lcfirst(s::String) = TransformedString(_TF_l, s)
 
 function _transfunc_compose(f2::Function, f1::Function)
     allf = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
-    if !has(allf, f2) || !has(allf, f1)
+    if !contains(allf, f2) || !contains(allf, f1)
         return nothing
     end
     if f2 == _TF_U || f2 == _TF_L || f2 == _TF_C || f2 == _TF_c ||
