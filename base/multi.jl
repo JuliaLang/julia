@@ -89,7 +89,7 @@ function send_msg_now(s::Stream, kind, args...)
 end
 
 type Worker
-    host::String
+    host::ByteString
     port::Uint16
     socket::TcpSocket
     sendbuf::Buffer
@@ -98,7 +98,7 @@ type Worker
     id::Int
     gcflag::Bool
     
-    Worker(host::String,port::Integer)=Worker(cstring(host),uint16(port))
+    Worker(host::String,port::Integer)=Worker(bytestring(host),uint16(port))
     Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
 
     Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, DynamicBuffer(),
@@ -134,11 +134,14 @@ end
 #TODO: Move to different Thread
 function enq_send_req(sock::TcpSocket,buf,now::Bool)
     len=position(buf)
-    write(sock,pointer(takebuf_array(buf)),len)
+    arr=takebuf_array(buf)
+	println(arr)
+    write(sock,pointer(arr),len)
     #TODO implement "now"
 end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
+	println("Sending msg $kind")
     buf = w.sendbuf
     #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
@@ -200,9 +203,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         push(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
-        d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        w[i].socket.readcb = (args...)->message_handler(d,args...)
-        start_reading(w[i].socket)
+        Deserializer((this)->message_handler_loop(true,this),w[i].socket)
     end
     PGRP.locs = newlocs
     PGRP.np += n
@@ -217,9 +218,7 @@ function _jl_join_pgroup(myid, locs)
     for i = 2:(myid-1)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
-        d=Deserializer((this)->message_handler_loop(true,this),w[i].socket)
-        w[i].socket.readcb = (args...)->message_handler(d,args...)
-        start_reading(w[i].socket)
+        Deserializer((this)->message_handler_loop(true,this),w[i].socket)
         send_msg_now(w[i], :identify_socket, myid)
     end
     for i = (myid+1):np
@@ -850,6 +849,7 @@ end
 
 # activity on accept fd
 function accept_handler(server::TcpSocket,status::Int32,isclient)
+	println("Accepted")
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -859,9 +859,7 @@ function accept_handler(server::TcpSocket,status::Int32,isclient)
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
         first = true# isempty(sockets)
-        d=Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
-        client.readcb = (args...)->message_handler(d,args...)
-        start_reading(client)
+        Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
     end
 end
 
@@ -869,9 +867,11 @@ type DisconnectException <: Exception end
 
 function message_handler_loop(isclient,this::Deserializer)
     global PGRP
+	println("message_handler_loop")
     refs = (PGRP::ProcessGroup).refs
     this.task=current_task()
     first = !isclient
+	println("loop")
     while true
         if(first)
             # first connection; get process group info from client
@@ -884,15 +884,16 @@ function message_handler_loop(isclient,this::Deserializer)
             println("tt2")
             first=false
 	else
-	try
+	#try
             msg = force(deserialize(this))
-            #print("$(myid()) got $msg\n")
+			println(msg)
+            print("$(myid()) got $msg\n")
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                 id = force(deserialize(this))
                 f = deserialize(this)
                 args = deserialize(this)
-                #print("$(myid()) got call $id\n")
+                print("$(myid()) got call $id\n")
                 wi = schedule_call(id, f, args)
                 if is(msg, :call_fetch)
                     wi.notify = (this, :call_fetch, id, wi.notify)
@@ -902,7 +903,7 @@ function message_handler_loop(isclient,this::Deserializer)
             elseif is(msg, :do)
                 f = deserialize(this)
                 args = deserialize(this)
-                #print("$(myid()) got $args\n")
+                print("$(myid()) got $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(force(func),force(ar))))
                 end
@@ -928,32 +929,22 @@ function message_handler_loop(isclient,this::Deserializer)
                     wi.notify = (this, msg, oid, wi.notify)
                 end
             end
-        catch e
-            if isa(e,EOFError)
-                #print("eof. $(myid()) exiting\n")
-                stop_reading(this.stream)
-                # TODO: remove machine from group
-                throw(DisconnectException())
-            else
-		throw(e) 
-                #print("deserialization error: ", e, "\n")
-                #while nb_available(sock) > 0 #|| select(sock)
-                #    read(sock, Uint8)
-                #end
-            end
-        end
+        #catch e
+        #    if isa(e,EOFError)
+        #        print("eof. $(myid()) exiting\n")
+        #        stop_reading(this.stream)
+        #        # TODO: remove machine from group
+        #        throw(DisconnectException())
+        #    else
+		#throw(e) 
+        #        print("deserialization error: ", e, "\n")
+        #        #while nb_available(sock) > 0 #|| select(sock)
+        #        #    read(sock, Uint8)
+        #        #end
+        #    end
+        #end
 	end
     end
-end
-
-# activity on message socket
-function message_handler(ds::Deserializer,handle::TcpSocket)
-    ds.buf          =   handle.buffer.data
-    ds.buflen       =   handle.buffer.ptr
-    ds.pos          =   1
-    ds.returntask   =   current_task()
-    yieldto(ds.task)
-    handle.buffer.ptr = 1 #reuse buffer
 end
 
 ## worker creation and setup ##
@@ -975,11 +966,11 @@ function start_worker(out::Stream)
     global const Scheduler = current_task()
 
 
-    try
+    #try
         event_loop(false)
-    catch e
-        print("unhandled exception on $(myid()): $e\nexiting.\n")
-    end
+    #catch e
+    #    print("unhandled exception on $(myid()): $e\nexiting.\n")
+    #end
 
     close(sock)
     exit(0)
@@ -1019,7 +1010,7 @@ function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream)
         stream.buffer = DynamicBuffer()
         stream.buffer.data = old_buffer.data
         stream.buffer.ptr = old_buffer.ptr
-        stream.readcb = x->(println(ascii(stream.buffer.data[1:stream.buffer.ptr]));stream.buffer.ptr=1)
+        stream.readcb = x->(println(ascii(x.buffer.data[1:stream.buffer.ptr]));x.buffer.ptr=1)
         todo[1]-=1
         println(todo[1])
         if(todo[1]<=0)
@@ -1606,25 +1597,25 @@ function event_loop(isclient)
     timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(_jl_work_cb_handle))
     startTimer(timer,int64(1),int64(10000)) #do work every 10s
     while true
-        try
+        #try
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
             run_event_loop(globalEventLoop());
-        catch e
-            if isa(e,DisconnectException)
-                # TODO: wake up tasks waiting for failed process
-                if !isclient
-                    return
-                end
-            elseif isclient && isa(e,InterruptException)
-                # root task is waiting for something on client. allow C-C
-                # to interrupt.
-                interrupt_waiting_task(_jl_roottask_wi, e)
-            end
-            iserr, lasterr = true, e
-        end
+        #catch e
+        #    if isa(e,DisconnectException)
+        #        # TODO: wake up tasks waiting for failed process
+        #        if !isclient
+        #            return
+        #        end
+        #    elseif isclient && isa(e,InterruptException)
+        #        # root task is waiting for something on client. allow C-C
+        #        # to interrupt.
+        #        interrupt_waiting_task(_jl_roottask_wi, e)
+        #    end
+        #    iserr, lasterr = true, e
+        #end
     end
 end
 

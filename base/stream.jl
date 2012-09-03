@@ -298,13 +298,14 @@ end
 notify_content_accepted(buffer::DynamicBuffer,accepted) = false #Buffer conent management is left to the user
 notify_content_accepted(buffer::FixedBuffer,accepted) = false #Buffer conent management is left to the user
 function notify_content_accepted(buffer::LineBuffer,accepted)
-    len = buffer.ptr - buffer.nlpos
+    println("LBc: ",buffer.nlpos)
+	len = buffer.ptr - buffer.nlpos
     if(len > 0)
         copy_to(buffer.data,1,buffer.data,buffer.nlpos,len)
     end
     buffer.ptr = len+1
     buffer.nlpos = 0
-    !accepted || notify_filled(buffer)
+    return notify_filled(buffer)
 end
 
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
@@ -777,15 +778,15 @@ end
 
 
 function wait(procs::Union(Process,Vector{Process}))
-    try
+    #try
         while(!process_exited(procs))
             process_events(globalEventLoop())
         end
-    catch e
-        kill(procs)
-        println(e)
-        throw(e)
-    end
+    #catch e
+    #    kill(procs)
+    #    println(e)
+    #    throw(e)
+    #end
     return success(procs)
 end
 wait(procs::ProcessChain) = wait(procs.processes)

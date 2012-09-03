@@ -241,31 +241,52 @@ force(x::Function) = x()
 # we actually make objects. this allows for constructing objects that might
 # interfere with I/O by reading, writing, blocking, etc.
 
-type Deserializer
+type Deserializer <: Buffer
     task::Task
     returntask::Task
     stream::AsyncStream
-    buf::Array{Uint8}
-    buflen::Int
-    pos::Int
+    data::Array{Uint8}
+    ptr::Int
+	buflen::Int
     function Deserializer(loop::Function,stream::AsyncStream)
         this=new()
         this.task=Task(()->loop(this))
         this.stream=stream
-        this.buflen=0
-        this.pos=1
+		this.data=Array(Uint8,4096)
+		stream.buffer = this
+		stream.readcb = false
+		start_reading(stream)
+        this.ptr=1
         this
     end
 end
 
+function alloc_request(buffer::Deserializer, recommended_size)
+    if(length(buffer.data)<recommended_size)
+        grow(buffer, recommended_size-length(buffer.data))
+    end
+    return (pointer(buffer.data), recommended_size)
+end
+function notify_filled(this::Deserializer, nread::Int, base::Ptr, len::Int32)
+	println("filled")
+	this.returntask = current_task()
+	this.ptr=1
+	this.buflen=nread
+	yieldto(this.task)
+	true
+end
+notify_content_accepted(buffer::Deserializer,accepted) = false
+
 function read(this::Deserializer,::Type{Uint8})
-    if(this.pos>this.buflen)
+    if(this.ptr>this.buflen)
         yieldto(this.returntask)
     end
-    b::Uint8=uint8(this.buf[this.pos])
-    this.pos=this.pos+1
+    b::Uint8=uint8(this.data[this.ptr])
+    this.ptr=this.ptr+1
     b
 end
+write(::Deserializer,args...) = error("write not implemented for deserializer")
+position(d::Deserializer) = d.pos
 
 function deserialize(s)
     b = int32(read(s, Uint8))
@@ -273,6 +294,7 @@ function deserialize(s)
         return _jl_deser_tag[int32(read(s, Uint8))]
     end
     tag = _jl_deser_tag[b]
+	println(tag)
     if b >= _jl_VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
@@ -288,7 +310,7 @@ end
 deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
                              ()->map(force, a))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
+deserialize(s, ::Type{Symbol}) = (p=int32(read(s, Uint8));x=symbol(read(s, Uint8,p));println(p," ",x);x)
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})

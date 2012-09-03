@@ -29,7 +29,7 @@ string(s::String) = s
 string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
-bytestring(s::Array{Uint8,1}) = utf8(s)
+bytestring(s::Array{Uint8,1}) = byetstring(pointer(s),length(s))
 bytestring(s::String) = print_to_string(s)
 
 function bytestring(p::Ptr{Uint8})

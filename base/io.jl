@@ -222,7 +222,7 @@ end
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
 function read(s::IOStream, ::Type{Uint8})
-    b = ccall(:jl_getc, Int32, (Ptr{Void},), s.ios)
+    b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
     end

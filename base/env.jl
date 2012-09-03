@@ -24,7 +24,7 @@ macro accessEnv(var,errorcase)
      if val == C_NULL
         $errorcase
      end
-     cstring(val)
+     bytestring(val)
 end
 @windows_only return quote
     len=_getenvlen($var)
