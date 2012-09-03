@@ -462,6 +462,7 @@ write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 
 type TransformedString <: String
     transform::Function
+    tag::Char
     string::String
 end
 
@@ -476,17 +477,74 @@ end
 
 ## uppercase and lowercase transformations ##
 
+function _transfunc_tag2func(tag::Char)
+    if tag == 'U' # all-uppercase
+        return (c,i)->uppercase(c)
+    elseif tag == 'L' # all-lowercase
+        return (c,i)->lowercase(c)
+    elseif tag == 'u' # uppercase-first
+        return (c,i)->i==1 ? uppercase(c) : c
+    elseif tag == 'l' # lowercase-first
+        return (c,i)->i==1 ? lowercase(c) : c
+    elseif tag == 'C' # camelcase
+        return (c,i)->i==1 ? uppercase(c) : lowercase(c)
+    elseif tag == 'c' # inverse-camelcase
+        return (c,i)->i==1 ? lowercase(c) : uppercase(c)
+    else
+        error("unknown tag ", tag)
+    end
+end
+TransformedString(tag::Char, s::String) = TransformedString(_transfunc_tag2func(tag), tag, s)
+
+# Note: comment to disallow custom transform functions
+TransformedString(transform::Function, s::String) = TransformedString(transform, 'X', s)
+
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 
 uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
 lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
 
-uppercase(s::String) = TransformedString((c,i)->uppercase(c), s)
-lowercase(s::String) = TransformedString((c,i)->lowercase(c), s)
+uppercase(s::String) = TransformedString('U', s)
+lowercase(s::String) = TransformedString('L', s)
 
-ucfirst(s::String) = TransformedString((c,i)->i==1 ? uppercase(c) : c, s)
-lcfirst(s::String) = TransformedString((c,i)->i==1 ? lowercase(c) : c, s)
+ucfirst(s::String) = TransformedString('u', s)
+lcfirst(s::String) = TransformedString('l', s)
+
+function _transfunc_tag_compose(tag2::Char, tag1::Char)
+    # Note: comment to disallow custom transform functions
+    if !contains("ULulCc", tag2) || !contains("ULulCc", tag1)
+        return 'X'
+    end
+    if tag2 == 'U' || tag2 == 'L' || tag2 == 'C' || tag2 == 'c' ||
+            tag2 == tag1 ||
+            (tag2 == 'u' && tag1 == 'l') ||
+            (tag2 == 'l' && tag1 == 'u')
+        return tag2
+    elseif (tag2 == 'u' && (tag1 == 'U' || tag1 == 'C')) ||
+           (tag2 == 'l' && (tag1 == 'L' || tag1 == 'c'))
+        return tag1
+    elseif (tag2 == 'u' && tag1 == 'L')
+        return 'C'
+    elseif (tag2 == 'l' && tag1 == 'U')
+        return 'c'
+    elseif (tag2 == 'u' && tag1 == 'c')
+        return 'U'
+    elseif (tag2 == 'l' && tag1 == 'C')
+        return 'L'
+    else
+        error("invalid transform tags: (", tag2, ",", tag1, ")")
+    end
+end
+
+function TransformedString(tag::Char, s::TransformedString)
+    newtag = _transfunc_tag_compose(tag, s.tag)
+    # Note: comment to disallow custom transform functions
+    if newtag == 'X'
+        return TransformedString(_transfunc_tag2func(tag), tag, s)
+    end
+    TransformedString(newtag, s.string)
+end
 
 const uc = uppercase
 const lc = lowercase
