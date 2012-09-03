@@ -275,7 +275,7 @@ cause a compile-time error:
 ::
 
     julia> $a + b
-    not supported
+    unsupported or misplaced expression $
 
 .. _man-macros:
 
