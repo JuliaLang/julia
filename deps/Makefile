@@ -916,6 +916,22 @@ clean-zlib:
 distclean-zlib:
 	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
 
+## Tk wrapper ##
+
+TKW_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USRLIB)/ -ljulia-release
+
+$(USRLIB)/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
+	mkdir -p $(USRLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-tk-wrapper: $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
+
+clean-tk-wrapper:
+	rm -f $(USRLIB)/libtk_wrapper.$(SHLIB_EXT)
+distclean-tk-wrapper: clean-tk-wrapper
+
 ## phony targets ##
 
 .PHONY: \

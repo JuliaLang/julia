@@ -1,3 +1,13 @@
+# julia tk interface
+# TODO:
+# - callbacks (possibly via C wrapper)
+# - portable event handling, probably using Tcl_CreateEventSource
+# - types: may not make sense to have one for each widget, maybe one TkWidget
+# - state-interrogating functions
+# - expose constants from tcl.h like TCL_OK, TCL_ERROR, etc.
+# - Cairo drawing surfaces
+# - more widgets
+
 module Tk
 import Base.*
 
@@ -6,6 +16,7 @@ export Window, Button, pack, place, tcl_eval
 libtcl = dlopen("libtcl8.5")
 libtk = dlopen("libtk8.5")
 libX = dlopen("libX11")
+tk_wrapper = dlopen("libtk_wrapper")
 
 function tcl_doevent(fd)
     while (ccall(dlsym(libtcl,:Tcl_DoOneEvent), Int32, (Int32,), (1<<1))!=0)
@@ -30,6 +41,10 @@ function init()
     tcl_interp
 end
 
+type TclError <: Exception
+    msg::String
+end
+
 function tcl_result()
     bytestring(ccall(dlsym(libtcl,:Tcl_GetStringResult),
                      Ptr{Uint8}, (Ptr{Void},), tcl_interp))
@@ -38,17 +53,20 @@ end
 function tcl_evalfile(name)
     if ccall(dlsym(libtcl,:Tcl_EvalFile), Int32, (Ptr{Void}, Ptr{Uint8}),
              tcl_interp, name) != 0
-        println("tcl error: ", tcl_result())
+        throw(TclError(tcl_result()))
     end
     nothing
 end
 
 function tcl_eval(cmd)
-    if ccall(dlsym(libtcl,:Tcl_Eval), Int32, (Ptr{Void}, Ptr{Uint8}),
-             tcl_interp, cmd) != 0
-        println("tcl error: ", tcl_result())
+    code = ccall(dlsym(libtcl,:Tcl_Eval), Int32, (Ptr{Void}, Ptr{Uint8}),
+                 tcl_interp, cmd)
+    result = tcl_result()
+    if code != 0
+        throw(TclError(result))
+    else
+        result
     end
-    nothing
 end
 
 type Window
@@ -57,7 +75,7 @@ type Window
     WIN_ID::Int = 0
     Window(title) = Window(title, 200, 200)
     function Window(title, w, h)
-        wpath = ".jl_frame_$WIN_ID"; WIN_ID += 1
+        wpath = ".jl_fra$WIN_ID"; WIN_ID += 1
         tcl_eval("frame $wpath -width $w -height $h")
         tcl_eval("wm manage $wpath")
         tcl_eval("wm title $wpath \"$title\"")
@@ -70,10 +88,15 @@ type Button
     parent
 
     BUTTON_ID::Int = 0
-    function Button(parent, text)
-        bpath = "jl_button_$BUTTON_ID"; BUTTON_ID += 1
+    Button(parent, text) = Button(parent, text, nothing)
+    function Button(parent, text, command)
+        bpath = "jl_but$BUTTON_ID"; BUTTON_ID += 1
         path = "$(parent.path).$bpath"
-        tcl_eval("ttk::button $path -text \"$text\"")
+        cmd = "ttk::button $path -text \"$text\""
+        if isa(command,Function)
+            cmd = cmd * " -command $(tcl_callback(command))"
+        end
+        tcl_eval(cmd)
         new(path, parent)
     end
 end
@@ -81,6 +104,19 @@ end
 pack(widget) = tcl_eval("pack $(widget.path)")
 
 place(widget, x::Int, y::Int) = tcl_eval("place $(widget.path) -x $x -y $y")
+
+const _callbacks = ObjectIdDict()
+
+function tcl_callback(f)
+    cname = string("jl_cb", repr(uint32(object_id(f))))
+    # TODO: use Tcl_CreateObjCommand instead
+    ccall(dlsym(libtcl,:Tcl_CreateCommand), Ptr{Void},
+          (Ptr{Void}, Ptr{Uint8}, Ptr{Void}, Any, Ptr{Void}),
+          tcl_interp, cname, dlsym(tk_wrapper,:jl_tcl_callback), f, C_NULL)
+    # TODO: use a delete proc (last arg) to remove this
+    _callbacks[f] = true
+    cname
+end
 
 tcl_interp = init()
 tcl_eval("wm withdraw .")
