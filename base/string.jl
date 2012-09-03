@@ -63,6 +63,7 @@ ref(s::String, v::AbstractVector) =
 symbol(s::String) = symbol(bytestring(s))
 
 print(io::IO, s::String) = for c in s write(io, c) end
+write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
 (*)(s::String...) = strcat(s...)
@@ -156,7 +157,7 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-typealias Chars Union(Char,AbstractVector{Char})
+typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
     if i < 1 error("index out of range") end
@@ -174,7 +175,15 @@ strchr(s::String, c::Chars) = strchr(s,c,start(s))
 
 contains(s::String, c::Char) = (strchr(s,c)!=0)
 
-search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
+function search(s::String, c::Chars, i::Integer)
+    if isempty(c)
+        return 1 <= i <= length(s)+1 ? (i,i) :
+               i == length(s)+2      ? (0,0) :
+               error("index out of range")
+    end
+    i=strchr(s,c,i)
+    (i, nextind(s,i))
+end
 search(s::String, c::Chars) = search(s,c,start(s))
 
 function search(s::String, t::String, i::Integer)
@@ -447,6 +456,8 @@ strcat(xs...) = string(xs...)  # backwards compat
 
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 
+write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
+
 ## transformed strings ##
 
 type TransformedString <: String
@@ -500,7 +511,7 @@ function filter(f::Function, s::String)
     takebuf_string(out)
 end
 
-has(s::String, c::Char) = has(Set(s...), c)
+has(s::String, c::Char) = contains(s, c)
 
 ## string promotion rules ##
 
