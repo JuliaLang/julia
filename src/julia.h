@@ -1067,14 +1067,24 @@ DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
 DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(__WIN32__)
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
+#define jl_setjmp_f    _setjmp
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
+#else
+// determine actual entry point name
+#if defined(sigsetjmp)
+#define jl_setjmp_f    __sigsetjmp
+#else
+#define jl_setjmp_f    sigsetjmp
+#endif
+#define jl_setjmp(a,b) sigsetjmp(a,b)
+#define jl_longjmp(a,b) siglongjmp(a,b)
 #endif
 
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!sigsetjmp(__handlr,1))                                         \
+    if (!jl_setjmp(__handlr,1))                                         \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
 #define JL_EH_POP() jl_eh_restore_state(&__ss)

@@ -337,7 +337,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__ss, &__handlr);
-                if (!setjmp(__handlr)) {
+                if (!jl_setjmp(__handlr,1)) {
                     return eval_body(stmts, locals, nl, i+1);
                 }
                 else {

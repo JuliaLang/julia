@@ -265,7 +265,7 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
-    if (setjmp(jl_root_task->base_ctx)) {
+    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif
