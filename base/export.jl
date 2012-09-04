@@ -473,6 +473,7 @@ export
     sign,
     signbit,
     signed,
+    signif,
     significand,
     sin,
     sinc,
