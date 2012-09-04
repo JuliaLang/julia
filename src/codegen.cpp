@@ -1595,7 +1595,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                             builder.CreateGEP((*ctx->savestates)[labl],
                                               ConstantInt::get(T_size,0)),
                             jbuf);
-        Value *sj = builder.CreateCall(setjmp_func, jbuf);
+        Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,1));
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
@@ -2234,13 +2234,15 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlnew_func,
                                          (void*)&jl_new_struct_uninit);
 
-    std::vector<Type*> empty_args(0);
+    std::vector<Type*> args2(0);
+    args2.push_back(T_pint8);
+    args2.push_back(T_int32);
     setjmp_func =
-        Function::Create(FunctionType::get(T_int32, args1, false),
-                         Function::ExternalLinkage, "_setjmp", jl_Module);
+        Function::Create(FunctionType::get(T_int32, args2, false),
+                         Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
-    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&_setjmp);
+    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&sigsetjmp);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
@@ -2353,6 +2355,7 @@ static void init_julia_llvm_env(Module *m)
                          "allocobj", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlallocobj_func, (void*)&allocobj);
 
+    std::vector<Type*> empty_args(0);
     jlalloc2w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
