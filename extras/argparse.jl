@@ -16,6 +16,7 @@ export
     add_argument,
     import_parser,
     parse_args,
+    argparser_usage,
 
 # action constants
     store_arg,
@@ -30,7 +31,7 @@ export
 
 # auxiliary functions/constants
 _found_a_bug() = error("you just found a bug in the ArgParse module, please report it.")
-_nbsp = "\u00a0"
+const _nbsp = "\u00a0"
 
 # ArgParserActions
 #{{{
@@ -179,14 +180,18 @@ is_arg(arg::ArgParserField) = isempty(arg.long_opt_name) && isempty(arg.short_op
 #{{{
 type ArgumentParser
     description::String
+    epilog::String
+    prog::String
+    usage::String
     version::String
     add_help::Bool
     add_version::Bool
     error_on_conflict::Bool
+    suppress_warnings::Bool
     args::Vector{ArgParserField}
     
     function ArgumentParser(desc::String, add_help::Bool, version::String, add_version::Bool)
-        ret = new(desc, version, add_help, add_version, true, ArgParserField[])
+        ret = new(desc, "", "", "", version, add_help, add_version, true, false, ArgParserField[])
         return ret
     end
 end
@@ -254,14 +259,13 @@ end
 function _check_long_opt_name(name::String, arg_parser::ArgumentParser)
     if contains(name, '=')
         error("illegal option name: $name (contains '=')")
-    end
-    if ismatch(r"\s", name)
+    elseif ismatch(r"\s", name)
         error("illegal option name: $name (containes whitespace)")
-    end
-    if arg_parser.add_help && name == "help"
+    elseif contains(name, _nbsp)
+        error("illegal option name: $name (containes non-breakable-space)")
+    elseif arg_parser.add_help && name == "help"
         error("option --help is reserved in the current settings")
-    end
-    if arg_parser.add_version && name == "version"
+    elseif arg_parser.add_version && name == "version"
         error("option --version is reserved in the current settings")
     end
     return true
@@ -269,14 +273,13 @@ end
 function _check_short_opt_name(name::String, arg_parser::ArgumentParser)
     if strlen(name) != 1
         error("short options must use a single character")
-    end
-    if name == "="
+    elseif name == "="
         error("illegal short option name: $name")
-    end
-    if ismatch(r"\s", name)
+    elseif ismatch(r"\s", name)
         error("illegal option name: $name (containes whitespace)")
-    end
-    if arg_parser.add_help && name == "h"
+    elseif contains(name, _nbsp)
+        error("illegal option name: $name (containes non-breakable-space)")
+    elseif arg_parser.add_help && name == "h"
         error("option -h is reserved for help in the current settings")
     end
     return true
@@ -285,6 +288,16 @@ function _check_arg_name(name::String)
     return true
 end
 function _check_for_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserField)
+    function idstring(arg::ArgParserField)
+        if is_arg(arg)
+            return "argument $(arg.metavar)"
+        elseif !isempty(arg.long_opt_name)
+            return "option --$(arg.long_opt_name[1])"
+        else
+            return "option -$(arg.short_opt_name[1])"
+        end
+    end
+
     for a in args
         for l1 in a.long_opt_name, l2 in new_arg.long_opt_name
             if l1 == l2
@@ -296,8 +309,16 @@ function _check_for_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserF
                 error("duplicate short opt name $(s1)")
             end
         end
-        if a.dest_name == new_arg.dest_name && a.arg_type != new_arg.arg_type
-            error("arguments with the same destination have different arg types")
+        if is_arg(a) && is_arg(new_arg) && a.metavar == new_arg.metavar
+            error("two arguments have the same metavar: $(a.metavar)")
+        end
+        if a.dest_name == new_arg.dest_name
+            if a.arg_type != new_arg.arg_type
+                error("$(idstring(a)) and $(idstring(new_arg)) have the same destination but different arg types")
+            elseif (is_multi_action(a.action) && !is_multi_action(new_arg.action)) ||
+                   (!is_multi_action(a.action) && is_multi_action(new_arg.action))
+                error("$(idstring(a)) and $(idstring(new_arg)) have the same destination but incompatible actions")
+            end
         end
     end
     return true
@@ -309,15 +330,16 @@ function _check_default_type(default, arg_type::Type)
     return true
 end
 function _check_default_type_multi(default, arg_type::Type)
-    if !(default === nothing) && !isa(default, Vector{None}) && !isa(default, Vector{arg_type})
-        error("the default value is of the incorrect type (default=$default, should be a Vector of $arg_type's)")
+    if !(default === nothing) && !isa(default, Vector{None}) &&
+            !(isa(default, Vector) && (arg_type <: eltype(default)))
+        error("the default value is of the incorrect type (default=$default, should be a Vector{T} with T<:$arg_type})")
     end
     return true
 end
 function _check_default_type_multi2(default, arg_type::Type)
     if !(default === nothing) && !isa(default, Vector{None}) &&
-            !isa(default, Vector{Vector{None}}) && !isa(default, Vector{Vector{arg_type}})
-        error("the default value is of the incorrect type (default=$default, should be a Vector of Vectors of $arg_type's)")
+            !(isa(default, Vector) && (Vector{arg_type} <: eltype(default)))
+        error("the default value is of the incorrect type (default=$default, should be a Vector{T} with Vector{$arg_type}<:T)")
     end
     return true
 end
@@ -378,6 +400,12 @@ end
 function _check_metavar(metavar::String)
     if strlen(metavar) == 0
         error("empty metavar")
+    elseif begins_with(metavar, "-")
+        error("metavars cannot begin with -")
+    elseif ismatch(r"\s", metavar)
+        error("illegal metavar name: $metavar (containes whitespace)")
+    elseif contains(metavar, _nbsp)
+        error("illegal metavar name: $metavar (containes non-breakable-space)")
     end
     return true
 end
@@ -499,32 +527,34 @@ function add_argument(arg_parser::ArgumentParser, name::ArgName, desc::Options)
     new_arg.nargs = nargs
     new_arg.action = action
 
-    if is_flag
-        valid_keys = [:nargs, :action, :help]
-        if action == store_const || action == append_const
-            append!(valid_keys, [:default, :constant, :arg_type, :dest_name])
-        elseif action == store_true || action == store_false || action == count_invocations
-            push(valid_keys, :dest_name)
-        elseif action == show_help || action == show_version
-        else
-            _found_a_bug()
-        end
-        _warn_extra_opts(supplied_opts, valid_keys)
+    if (action == store_const || action == append_const) &&
+           !contains(supplied_opts, :constant)
+        error("action $action requires the 'constant' field")
+    end
 
-        if (action == store_const || action == append_const)
-            if !contains(supplied_opts, :constant)
-                error("action $action requires the 'constant' field")
+    if !arg_parser.suppress_warnings
+        if is_flag
+            valid_keys = [:nargs, :action, :help]
+            if action == store_const || action == append_const
+                append!(valid_keys, [:default, :constant, :arg_type, :dest_name])
+            elseif action == store_true || action == store_false || action == count_invocations
+                push(valid_keys, :dest_name)
+            elseif action == show_help || action == show_version
+            else
+                _found_a_bug()
             end
+            _warn_extra_opts(supplied_opts, valid_keys)
+
+        elseif is_opt
+            valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :dest_name, :help, :metavar]
+            if nargs.desc == '?'
+                push(valid_keys, :constant)
+            end
+            _warn_extra_opts(supplied_opts, valid_keys)
+        else
+            valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :is_mandatory, :dest_name, :help, :metavar]
+            _warn_extra_opts(supplied_opts, valid_keys)
         end
-    elseif is_opt
-        valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :dest_name, :help, :metavar]
-        if nargs.desc == '?'
-            push(valid_keys, :constant)
-        end
-        _warn_extra_opts(supplied_opts, valid_keys)
-    else
-        valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :is_mandatory, :dest_name, :help, :metavar]
-        _warn_extra_opts(supplied_opts, valid_keys)
     end
 
     if contains(supplied_opts, :dest_name)
@@ -603,7 +633,11 @@ function add_argument(arg_parser::ArgumentParser, name::ArgName, desc::Options)
         end
 
         if isempty(new_arg.metavar)
-            new_arg.metavar = uppercase(new_arg.dest_name)
+            if is_opt
+                new_arg.metavar = uppercase(new_arg.dest_name)
+            else
+                new_arg.metavar = new_arg.dest_name
+            end
         end
         _check_metavar(new_arg.metavar)
     end
@@ -624,13 +658,21 @@ function _override_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserFi
     ids0 = Int[]
     for ia in 1:length(args)
         a = args[ia]
-        if a.dest_name == new_arg.dest_name && a.arg_type != new_arg.arg_type
+        if (a.dest_name == new_arg.dest_name) &&
+            ((a.arg_type != new_arg.arg_type) ||
+             (is_multi_action(a.action) && !is_multi_action(new_arg.action)) ||
+             (!is_multi_action(a.action) && is_multi_action(new_arg.action)))
+            # unsolvable conflict, mark for deletion
+            push(ids0, ia)
+            continue
+        end
+        if is_arg(a) && is_arg(new_arg) && a.metavar == new_arg.metavar
             # unsolvable conflict, mark for deletion
             push(ids0, ia)
             continue
         end
 
-        if isempty(a.long_opt_name) && isempty(a.short_opt_name) 
+        if is_arg(a) || is_arg(new_arg)
             # not an option, skip
             continue
         end
@@ -736,8 +778,15 @@ function _parse_item(it_type::Type, x::String)
     end
 end
 
-function _build_usage_line(arg_parser::ArgumentParser)
-    usage_pre = "usage: <command>" # TODO: command?!?
+function argparser_usage(arg_parser::ArgumentParser)
+    if !isempty(arg_parser.usage)
+        return arg_parser.usage
+    end
+    if isempty(arg_parser.prog)
+        usage_pre = "usage: <command>"
+    else
+        usage_pre = "usage: " * arg_parser.prog
+    end
     pos_lst = {}
     opt_lst = {}
     for f in arg_parser.args
@@ -857,7 +906,8 @@ function _show_help(arg_parser::ArgumentParser)
     lc_usable_len = lc_len_limit - lc_left_indent - lc_right_margin
     max_lc_len = 0
 
-    usage_str = _build_usage_line(arg_parser)
+    usage_str = argparser_usage(arg_parser)
+
     pos_lst = {}
     opt_lst = {}
     for f in arg_parser.args
@@ -937,6 +987,10 @@ function _show_help(arg_parser::ArgumentParser)
         end
         println()
     end
+    if length(arg_parser.epilog) > 0
+        println_wrapped(arg_parser.epilog, twopts_desc)
+        println()
+    end
     exit(0)
 end
 
@@ -948,16 +1002,23 @@ end
 
 # parse_args & friends
 #{{{
+
+function _default_handler(arg_parser::ArgumentParser, err)
+    println(stderr_stream, err.text)
+    println(stderr_stream, argparser_usage(arg_parser))
+    exit(1)
+end
+
 parse_args(arg_parser::ArgumentParser) = parse_args(arg_parser, ARGS)
 parse_args(arg_parser::ArgumentParser, args_list::Vector) =
-    parse_args(arg_parser, args_list, err->(println(stderr_stream, err.text);exit(1)))
+    parse_args(arg_parser, args_list, _default_handler)
 function parse_args(arg_parser::ArgumentParser, args_list::Vector, exc_handler::Function)
     local parsed_args
     try
         parsed_args = _parse_args_unhandled(arg_parser, args_list)
     catch err
         if isa(err, ArgParseError)
-            exc_handler(err)
+            exc_handler(arg_parser, err)
         else
             throw(err)
         end
@@ -1037,6 +1098,179 @@ function _parse_args_unhandled(arg_parser::ArgumentParser, args_list::Vector)
     return out_dict
 end
 
+# common parse functions
+#{{{
+function _parse1_flag(arg_parser::ArgumentParser, f::ArgParserField, has_arg::Bool, opt_name::String, out_dict::Dict)
+    if has_arg
+        argparse_error("option $opt_name takes no arguments")
+    end
+    if f.action == store_true
+        out_dict[f.dest_name] = true
+    elseif f.action == store_false
+        out_dict[f.dest_name] = false
+    elseif f.action == store_const
+        out_dict[f.dest_name] = f.constant
+    elseif f.action == append_const
+        push(out_dict[f.dest_name], f.constant)
+    elseif f.action == count_invocations
+        out_dict[f.dest_name] += 1
+    elseif f.action == show_help
+        _show_help(arg_parser)
+    elseif f.action == show_version
+        _show_version(arg_parser)
+    end
+    return out_dict
+end
+
+function _err_arg_required(name::String, num::Int, is_opt::Bool)
+    argparse_error((is_opt?"option":"argument")*" $name requires $num argument(s)")
+end
+function _err_arg_outofrange(name::String, a, is_opt::Bool)
+    argparse_error("out of range " *
+                   (is_opt?"argument to option":"input to argument") *
+                   " $name: $a")
+end
+
+# XXX weird bug
+#function _parse1_optarg(f::ArgParserField, rest, args_list, name::String,
+#                        is_opt::Bool, arg_delim_found::Bool,
+#                        out_dict::Dict, last_ind::Int) # actual line
+function _parse1_optarg(f::ArgParserField, rest, args_list, name::String,
+                        is_opt::Bool, arg_delim_found::Bool,
+                        out_dict::Dict, last_ind::Int, result) # workaround
+    arg_consumed = false
+    if is_multi_nargs(f.nargs)
+        opt_arg = Array(f.arg_type, 0)
+    end
+    if f.nargs.desc == 'N'
+        num = f.nargs.num
+        @assert num > 0
+        if !(rest === nothing)
+            corr = 1
+        else
+            corr = 0
+        end
+        if length(args_list) - last_ind + corr < num
+            _err_arg_required(name, num, is_opt)
+        end
+        if !(rest === nothing)
+            a = _parse_item(f.arg_type, rest)
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+            arg_consumed = true
+        end
+        for i = (1+corr):num
+            last_ind += 1
+            a = _parse_item(f.arg_type, args_list[last_ind])
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+        end
+    elseif f.nargs.desc == 'A'
+        if !(rest === nothing)
+            a = _parse_item(f.arg_type, rest)
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            opt_arg = a
+            arg_consumed = true
+        else
+            if length(args_list) - last_ind < 1
+                @assert is_opt
+                argparse_error("option $name requires an argument")
+            end
+            last_ind += 1
+            a = _parse_item(f.arg_type, args_list[last_ind])
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            opt_arg = a
+        end
+    elseif f.nargs.desc == '?'
+        if !is_opt
+            _found_a_bug()
+        end
+        if !(rest === nothing)
+            a = _parse_item(f.arg_type, rest)
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            opt_arg = a
+            arg_consumed = true
+        else
+            if length(args_list) - last_ind < 1
+                opt_arg = deepcopy(f.constant)
+            else
+                last_ind += 1
+                a = _parse_item(f.arg_type, args_list[last_ind])
+                if !_test_range(f.range_tester, a)
+                    _err_arg_outofrange(name, a, is_opt)
+                end
+                opt_arg = a
+            end
+        end
+    elseif f.nargs.desc == '*' || f.nargs.desc == '+'
+        arg_found = false
+        if !(rest === nothing)
+            a = _parse_item(f.arg_type, rest)
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+            arg_consumed = true
+            arg_found = true
+        end
+        while last_ind < length(args_list)
+            if !arg_delim_found && begins_with(args_list[last_ind+1], '-')
+                break
+            end
+            last_ind += 1
+            a = _parse_item(f.arg_type, args_list[last_ind])
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+            arg_found = true
+        end
+        if f.nargs.desc == '+' && !arg_found
+            @assert is_opt
+            argparse_error("option $name requires at least one (not-looking-like-an-option) argument")
+        end
+    elseif f.nargs.desc == 'R'
+        if !(rest === nothing)
+            a = _parse_item(f.arg_type, rest)
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+            arg_consumed = true
+        end
+        while last_ind < length(args_list)
+            last_ind += 1
+            a = _parse_item(f.arg_type, args_list[last_ind])
+            if !_test_range(f.range_tester, a)
+                _err_arg_outofrange(name, a, is_opt)
+            end
+            push(opt_arg, a)
+        end
+    else
+        _found_a_bug()
+    end
+    if f.action == store_arg
+        out_dict[f.dest_name] = opt_arg
+    elseif f.action == append_arg
+        push(out_dict[f.dest_name], opt_arg)
+    else
+        _found_a_bug()
+    end
+    #return out_dict, last_ind, arg_consumed # XXX actual line
+    result[1] = out_dict; result[2] = last_ind; result[3] = arg_consumed; # workaround
+end
+#}}}
+
 # parse long opts
 #{{{
 function _parse_long_opt(arg_parser::ArgumentParser, opt_name::String, last_ind::Int, arg_after_eq::Union(String,Nothing), args_list::Vector, out_dict::Dict)
@@ -1071,148 +1305,18 @@ function _parse_long_opt(arg_parser::ArgumentParser, opt_name::String, last_ind:
     opt_name = fln
 
     if is_flag(f)
-        if !(arg_after_eq === nothing)
-            argparse_error("option --$opt_name takes no arguments")
-        end
-        if f.action == store_true
-            out_dict[f.dest_name] = true
-        elseif f.action == store_false
-            out_dict[f.dest_name] = false
-        elseif f.action == store_const
-            out_dict[f.dest_name] = f.constant
-        elseif f.action == append_const
-            push(out_dict[f.dest_name], f.constant)
-        elseif f.action == count_invocations
-            out_dict[f.dest_name] += 1
-        elseif f.action == show_help
-            _show_help(arg_parser)
-        elseif f.action == show_version
-            _show_version(arg_parser)
-        end
+        out_dict = _parse1_flag(arg_parser, f, !(arg_after_eq === nothing), "--"*opt_name, out_dict)
     else
-        if is_multi_nargs(f.nargs)
-            opt_arg = Array(f.arg_type, 0)
-        else
-            #local opt_arg::(f.arg_type)
-        end
-        if f.nargs.desc == 'N'
-            #if f.nargs.desc == 'A'
-                #num = 1
-            #else
-                num = f.nargs.num
-            #end
-            @assert num > 0
-            if !(arg_after_eq === nothing)
-                corr = 1
-            else
-                corr = 0
-            end
-            if length(args_list) - last_ind + corr < num
-                argparse_error("option --$opt_name requires $num argument(s)")
-            end
-            if !(arg_after_eq === nothing)
-                a = _parse_item(f.arg_type, arg_after_eq)
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-            end
-            for i = (1+corr):num
-                last_ind += 1
-                a = _parse_item(f.arg_type, args_list[last_ind])
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-            end
-        elseif f.nargs.desc == 'A'
-            if !(arg_after_eq === nothing)
-                a = _parse_item(f.arg_type, arg_after_eq)
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                opt_arg = a
-            else
-                if length(args_list) - last_ind < 1
-                    argparse_error("option --$opt_name requires an argument")
-                end
-                last_ind += 1
-                a = _parse_item(f.arg_type, args_list[last_ind])
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                opt_arg = a
-            end
-        elseif f.nargs.desc == '?'
-            if !(arg_after_eq === nothing)
-                a = _parse_item(f.arg_type, arg_after_eq)
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                opt_arg = a
-            else
-                if length(args_list) - last_ind < 1
-                    opt_arg = deepcopy(f.constant)
-                else
-                    last_ind += 1
-                    a = _parse_item(f.arg_type, args_list[last_ind])
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option --$opt_name: $a")
-                    end
-                    opt_arg = a
-                end
-            end
-        elseif f.nargs.desc == '*' || f.nargs.desc == '+'
-            arg_found = false
-            if !(arg_after_eq === nothing)
-                a = _parse_item(f.arg_type, arg_after_eq)
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-                arg_found = true
-            end
-            while last_ind < length(args_list)
-                if begins_with(args_list[last_ind+1], '-')
-                    break
-                end
-                last_ind += 1
-                a = _parse_item(f.arg_type, args_list[last_ind])
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-                arg_found = true
-            end
-            if f.nargs.desc == '+' && !arg_found
-                argparse_error("option --$opt_name requires at least one (not-looking-like-an-option) argument")
-            end
-        elseif f.nargs.desc == 'R'
-            if !(arg_after_eq === nothing)
-                a = _parse_item(f.arg_type, arg_after_eq)
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-            end
-            while last_ind < length(args_list)
-                last_ind += 1
-                a = _parse_item(f.arg_type, args_list[last_ind])
-                if !_test_range(f.range_tester, a)
-                    argparse_error("out of range argument to option --$opt_name: $a")
-                end
-                push(opt_arg, a)
-            end
-        else
-            _found_a_bug()
-        end
-        if f.action == store_arg
-            out_dict[f.dest_name] = opt_arg
-        elseif f.action == append_arg
-            push(out_dict[f.dest_name], opt_arg)
-        else
-            _found_a_bug()
-        end
+        # XXX weird bug (actually fine here, the bug shows up in _parse_short_opt)
+        #out_dict, last_ind, arg_consumed =
+        #        _parse1_optarg(f, arg_after_eq, args_list, "--"*opt_name,
+        #                       true, false,
+        #                       out_dict, last_ind) # actual line
+        result = Array(Any, 3) # workaround
+        _parse1_optarg(f, arg_after_eq, args_list, "--"*opt_name,
+                       true, false,
+                       out_dict, last_ind, result) # workaround
+        out_dict = result[1]; last_ind = result[2]; arg_consumed = result[3]; # workaround
     end
     return last_ind, out_dict
 end
@@ -1258,149 +1362,18 @@ function _parse_short_opt(arg_parser::ArgumentParser, shopts_lst::String, last_i
             argparse_error("unrecognized option -$opt_name")
         end
         if is_flag(f)
-            if next_is_eq
-                argparse_error("option -$opt_name takes no arguments")
-            end
-            if f.action == store_true
-                out_dict[f.dest_name] = true
-            elseif f.action == store_false
-                out_dict[f.dest_name] = false
-            elseif f.action == store_const
-                out_dict[f.dest_name] = f.constant
-            elseif f.action == append_const
-                push(out_dict[f.dest_name], f.constant)
-            elseif f.action == count_invocations
-                out_dict[f.dest_name] += 1
-            elseif f.action == show_help
-                _show_help(arg_parser)
-            elseif f.action == show_version
-                _show_version(arg_parser)
-            end
+            out_dict = _parse1_flag(arg_parser, f, next_is_eq, "-"*opt_name, out_dict)
         else
-            if is_multi_nargs(f.nargs)
-                opt_arg = Array(f.arg_type, 0)
-            else
-                #local opt_arg::(f.arg_type)
-            end
-            if f.nargs.desc == 'N'
-                num = f.nargs.num
-                @assert num > 0
-                if !(rest_as_arg === nothing)
-                    corr = 1
-                else
-                    corr = 0
-                end
-                if length(args_list) - last_ind + corr < num
-                    argparse_error("option -$opt_name requires $num argument(s)")
-                end
-                if !(rest_as_arg === nothing)
-                    a = _parse_item(f.arg_type, rest_as_arg)
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                    arg_consumed = true
-                end
-                for i = (1+corr):num
-                    last_ind += 1
-                    a = _parse_item(f.arg_type, args_list[last_ind])
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                end
-            elseif f.nargs.desc == 'A'
-                if !(rest_as_arg === nothing)
-                    a = _parse_item(f.arg_type, rest_as_arg)
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    opt_arg = a
-                    arg_consumed = true
-                else
-                    if length(args_list) - last_ind < 1
-                        argparse_error("option -$opt_name requires an argument")
-                    end
-                    last_ind += 1
-                    a = _parse_item(f.arg_type, args_list[last_ind])
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    opt_arg = a
-                end
-            elseif f.nargs.desc == '?'
-                if !(rest_as_arg === nothing)
-                    a = _parse_item(f.arg_type, rest_as_arg)
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    opt_arg = a
-                    arg_consumed = true
-                else
-                    if length(args_list) - last_ind < 1
-                        opt_arg = deepcopy(f.constant)
-                    else
-                        last_ind += 1
-                        a = _parse_item(f.arg_type, args_list[last_ind])
-                        if !_test_range(f.range_tester, a)
-                            argparse_error("out of range argument to option -$opt_name: $a")
-                        end
-                        opt_arg = a
-                    end
-                end
-            elseif f.nargs.desc == '*' || f.nargs.desc == '+'
-                arg_found = false
-                if !(rest_as_arg === nothing)
-                    a = _parse_item(f.arg_type, rest_as_arg)
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                    arg_consumed = true
-                    arg_found = true
-                end
-                while last_ind < length(args_list)
-                    if begins_with(args_list[last_ind+1], '-')
-                        break
-                    end
-                    last_ind += 1
-                    a = _parse_item(f.arg_type, args_list[last_ind])
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                    arg_found = true
-                end
-                if f.nargs.desc == '+' && !arg_found
-                    argparse_error("option -$opt_name requires at least one (not-looking-like-an-option) argument")
-                end
-            elseif f.nargs.desc == 'R'
-                if !(rest_as_arg === nothing)
-                    a = _parse_item(f.arg_type, rest_as_arg)
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                    arg_consumed = true
-                end
-                while last_ind < length(args_list)
-                    last_ind += 1
-                    a = _parse_item(f.arg_type, args_list[last_ind])
-                    if !_test_range(f.range_tester, a)
-                        argparse_error("out of range argument to option -$opt_name: $a")
-                    end
-                    push(opt_arg, a)
-                end
-            else
-                _found_a_bug()
-            end
-            if f.action == store_arg
-                out_dict[f.dest_name] = opt_arg
-            elseif f.action == append_arg
-                push(out_dict[f.dest_name], opt_arg)
-            else
-                _found_a_bug()
-            end
+            # XXX weird bug
+            #out_dict, last_ind, arg_consumed =
+            #        _parse1_optarg(f, rest_as_arg, args_list, "-"*opt_name,
+            #                       true, false,
+            #                       out_dict, last_ind) # actual line
+            result = Array(Any, 3) # workaround
+            _parse1_optarg(f, rest_as_arg, args_list, "-"*opt_name,
+                           true, false,
+                           out_dict, last_ind, result) # workaround
+            out_dict = result[1]; last_ind = result[2]; arg_consumed = result[3]; # workaround
         end
         if arg_consumed
             break
@@ -1427,75 +1400,17 @@ function _parse_arg(arg_parser::ArgumentParser, last_ind::Int, last_arg::Int, ar
     end
     f = arg_parser.args[new_arg_ind]
 
-    if is_multi(f)
-        opt_arg = Array(f.arg_type, 0)
-    else
-        #local opt_arg::(f.arg_type)
-    end
-    if f.nargs.desc == 'N' || (f.nargs.desc == 'A' && is_multi(f))
-        if f.nargs.desc == 'A'
-            num = 1
-        else
-            num = f.nargs.num
-        end
-        @assert num > 0
-        if length(args_list) - last_ind + 1 < num
-            argparse_error("argument $(f.dest_name) requires $num argument(s)")
-        end
-        for i = 1:num
-            a = _parse_item(f.arg_type, args_list[last_ind])
-            if !_test_range(f.range_tester, a)
-                argparse_error("out of range input to argument $(f.dest_name): $a")
-            end
-            push(opt_arg, a)
-            last_ind += 1
-        end
-        last_ind -= 1
-    elseif f.nargs.desc == 'A'
-        a = _parse_item(f.arg_type, args_list[last_ind])
-        if !_test_range(f.range_tester, a)
-            argparse_error("out of range input to argument $(f.dest_name): $a")
-        end
-        opt_arg = a
-    elseif f.nargs.desc == '?'
-        _found_a_bug()
-    elseif f.nargs.desc == '*' || f.nargs.desc == '+'
-        while last_ind <= length(args_list)
-            if !arg_delim_found && begins_with(args_list[last_ind], '-')
-                break
-            end
-            a = _parse_item(f.arg_type, args_list[last_ind])
-            if !_test_range(f.range_tester, a)
-                argparse_error("out of range input to argument $(f.dest_name): $a")
-            end
-            push(opt_arg, a)
-            last_ind += 1
-        end
-        last_ind -= 1
-    elseif f.nargs.desc == 'R'
-        while last_ind <= length(args_list)
-            a = _parse_item(f.arg_type, args_list[last_ind])
-            if !_test_range(f.range_tester, a)
-                argparse_error("out of range input to argument $(f.dest_name): $a")
-            end
-            push(opt_arg, a)
-            last_ind += 1
-        end
-        last_ind -= 1
-    else
-        _found_a_bug()
-    end
-    if f.action == store_arg
-        out_dict[f.dest_name] = opt_arg
-    elseif f.action == append_arg
-        if is_multi(f)
-            append!(out_dict[f.dest_name], opt_arg)
-        else
-            push(out_dict[f.dest_name], opt_arg)
-        end
-    else
-        _found_a_bug()
-    end
+    # XXX weird bug (the bug shows up in _parse_short_opt)
+    #out_dict, last_ind, arg_consumed =
+    #        _parse1_optarg(f, nothing, args_list, f.dest_name,
+    #                       false, arg_delim_found,
+    #                       out_dict, last_ind-1) # actual line
+    result = Array(Any, 3) # workaround
+    _parse1_optarg(f, nothing, args_list, f.metavar,
+                   false, arg_delim_found,
+                   out_dict, last_ind-1, result) # workaround
+    out_dict = result[1]; last_ind = result[2]; arg_consumed = result[3]; # workaround
+
     return last_ind, new_arg_ind, out_dict
 end
 #}}}
