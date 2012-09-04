@@ -4,7 +4,6 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>
 #include <assert.h>
 #include <sys/mman.h>
 #include <signal.h>
@@ -17,9 +16,7 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
-#include <setjmp.h>
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
+#include <malloc.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -57,9 +54,9 @@ static void probe(struct _probe_data *p)
 {
     p->prior_local = p->probe_local;
     p->probe_local = (intptr_t)&p;
-    setjmp( *(p->ref_probe) );
+    sigsetjmp( *(p->ref_probe), 1 );
     p->ref_probe = &p->probe_env;
-    setjmp( p->probe_sameAR );
+    sigsetjmp( p->probe_sameAR, 1 );
     boundhigh(p);
 }
 
@@ -179,7 +176,7 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char 
     if (t->stkbuf != NULL) {
         memcpy(_x, t->stkbuf, t->ssize);
     }
-    longjmp(*jl_jmp_target, 1);
+    siglongjmp(*jl_jmp_target, 1);
 }
 
 static void switch_stack(jl_task_t *t, jmp_buf *where)
@@ -207,7 +204,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
     /*
       making task switching interrupt-safe is going to be challenging.
       we need JL_SIGATOMIC_BEGIN in jl_enter_handler, and then
-      JL_SIGATOMIC_END after every JL_TRY setjmp that returns zero.
+      JL_SIGATOMIC_END after every JL_TRY sigsetjmp that returns zero.
       also protect jl_eh_restore_state.
       then we need JL_SIGATOMIC_BEGIN at the top of this function (ctx_switch).
       the JL_SIGATOMIC_END at the end of this function handles the case
@@ -217,7 +214,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
       *IF AND ONLY IF* throwing the exception involved a task switch.
     */
     //JL_SIGATOMIC_BEGIN();
-    if (!setjmp(jl_current_task->ctx)) {
+    if (!sigsetjmp(jl_current_task->ctx, 1)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
@@ -232,9 +229,9 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
 #ifdef COPY_STACKS
         jl_jmp_target = where;
-        longjmp(lastt->base_ctx, 1);
+        siglongjmp(lastt->base_ctx, 1);
 #else
-        longjmp(*where, 1);
+        siglongjmp(*where, 1);
 #endif
     }
     //JL_SIGATOMIC_END();
@@ -365,7 +362,7 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (setjmp(t->base_ctx)) {
+    if (sigsetjmp(t->base_ctx, 1)) {
         // we get here to remove our data from the process stack
         switch_stack(jl_current_task, jl_jmp_target);
     }
@@ -394,7 +391,7 @@ static void start_task(jl_task_t *t)
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
-    if (setjmp(t->ctx)) {
+    if (sigsetjmp(t->ctx, 1)) {
         start_task(t);
     }
     // this runs when the task is created
@@ -534,8 +531,8 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh) {
-        longjmp(*eh->state.eh_ctx, 1);
+    if (jl_current_task == eh && eh->state.eh_ctx!=0) {
+        siglongjmp(*eh->state.eh_ctx, 1);
     }
     else {
         if (eh->done || eh->state.eh_ctx==NULL) {
