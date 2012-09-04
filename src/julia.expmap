@@ -1,4 +1,4 @@
-
+{
   global:
     asprintf;
     bitvector_any1;

@@ -1020,13 +1020,20 @@ zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	tar zxf $<
 	touch $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
+ifeq ($(OS), WINNT)
+	cd zlib-$(ZLIB_VER) && \
+	cp win32/Makefile.gcc Makefile
+else
 	cd zlib-$(ZLIB_VER) && \
 	./configure --prefix=$(abspath $(USR))
+endif
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
+ifneq ($(OS), WINNT)
 	$(MAKE) -C zlib-$(ZLIB_VER) check
-	$(MAKE) -C zlib-$(ZLIB_VER) install
+	PREFIX=$(USRLIB) $(MAKE) -C zlib-$(ZLIB_VER) install
+endif
 	$(INSTALL_NAME_CMD)libz.dylib $@
 	touch $@
 

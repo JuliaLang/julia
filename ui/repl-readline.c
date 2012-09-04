@@ -410,6 +410,32 @@ find_submodule_named(jl_module_t *module, const char *name)
     return (jl_is_module(b->value)) ? (jl_module_t *)b->value : NULL;
 }
 
+static char *strtok_saveptr;
+
+#if defined(_WIN32) && !defined(__MINGW_H)
+#define strtok_r(s,d,p) strtok_s(s,d,p)
+#elif defined(__MINGW_H)
+char *strtok_r(char *str, const char *delim, char **save)
+{
+    char *res, *last;
+
+    if( !save )
+        return strtok(str, delim);
+    if( !str && !(str = *save) )
+        return NULL;
+    last = str + strlen(str);
+    if( (*save = res = strtok(str, delim)) )
+    {
+        *save += strlen(res);
+        if( *save < last )
+            (*save)++;
+        else
+            *save = NULL;
+    }
+    return res;
+}
+#endif
+
 static int symtab_get_matches(jl_sym_t *tree, const char *str, char **answer)
 {
     int x, plen, count=0;
@@ -466,32 +492,6 @@ int tab_complete(const char *line, char **answer, int *plen)
 
     return symtab_get_matches(jl_get_root_symbol(), &line[len], answer);
 }
-
-static char *strtok_saveptr;
-
-#if defined(_WIN32) && !defined(__MINGW_H)
-#define strtok_r(s,d,p) strtok_s(s,d,p)
-#elif defined(__MINGW_H)
-char *strtok_r(char *str, const char *delim, char **save)
-{
-    char *res, *last;
-
-    if( !save )
-        return strtok(str, delim);
-    if( !str && !(str = *save) )
-        return NULL;
-    last = str + strlen(str);
-    if( (*save = res = strtok(str, delim)) )
-    {
-        *save += strlen(res);
-        if( *save < last )
-            (*save)++;
-        else
-            *save = NULL;
-    }
-    return res;
-}
-#endif
 
 static char *do_completions(const char *ch, int c)
 {
