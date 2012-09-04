@@ -2234,6 +2234,11 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlnew_func,
                                          (void*)&jl_new_struct_uninit);
 
+#if defined(sigsetjmp)
+#define sigsetjmp_f    __sigsetjmp
+#else
+#define sigsetjmp_f    sigsetjmp
+#endif
     std::vector<Type*> args2(0);
     args2.push_back(T_pint8);
     args2.push_back(T_int32);
@@ -2242,7 +2247,8 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
-    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&sigsetjmp);
+    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&sigsetjmp_f);
+#undef sigsetjmp_f
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
