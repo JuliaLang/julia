@@ -32,8 +32,11 @@ replace_names!(ni2, ["tres", "quatro"], ["troix", "quatre"])
 @test ni2["troix"] == 3
 replace_names!(ni2, "cinco", "cinc")
 @test ni2["cinc"] == 5
-#replace_names!(ni2, 1, "un") # doesn't work yet
 @test names(ni2) == ["uno", "dos", "troix", "quatre", "cinc"]
+replace_names!(ni2, 1, "ichi")
+replace_names!(ni2, [2,4], ["ni", "shi"])
+@test names(ni2) == ["ichi", "ni", "troix", "shi", "cinc"]
+@testfails replace_names!(ni2, 2, "ichi")
 
 test_group("methods")
 @test has(ni1, "one") == true

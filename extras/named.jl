@@ -1,3 +1,10 @@
+# When building data structures for use with interactive data manipuluation, 
+# it is often handy to have data structures that can be efficiently indexed
+# by position (like a vector) as well as readably indexed by name (like a
+# hash table). The NamedIndex type here maps unique names to integer 
+# indexes, looking up ByteString indexes in a Dict and passing other
+# index types through. The NamedVector type implements a simple use case,
+# with a backing vector of an arbitrary type. 
 
 module Named
 	
@@ -7,7 +14,7 @@ export NamedIndex, SimpleIndex, NamedVector,
 	length, isempty, names, copy, names!, replace_names!,
 	replace_names, has, keys, push, del, ref,
 	select, select_kv,
-	set_group, set_groups, get_groups, isgroup,
+	set_group, set_groups, get_group, get_groups, isgroup,
 	start, done, next, show
 	
 
@@ -20,15 +27,22 @@ abstract AbstractIndex
 
 type NamedIndex <: AbstractIndex   # an OrderedDict would be nice here...
     lookup::Dict{ByteString,Indices}      # name => names array position
+	groups::Dict  					  	# name => [other names]
     names::Vector{ByteString}
 end
-NamedIndex{T<:ByteString}(x::Vector{T}) = NamedIndex(Dict{ByteString, Indices}(tuple(x...), tuple([1:length(x)]...)),
-                                           make_unique(convert(Vector{ByteString}, x)))
-NamedIndex() = NamedIndex(Dict{ByteString,Indices}(), ByteString[])
+
+function NamedIndex{T<:ByteString}(x::Vector{T})
+	NamedIndex(Dict{ByteString, Indices}(tuple(x...), tuple([1:length(x)]...)),
+			   Dict(),
+               make_unique(convert(Vector{ByteString}, x)))
+end
+NamedIndex() = NamedIndex(Dict{ByteString,Indices}(), Dict(), ByteString[])
+
 length(x::NamedIndex) = length(x.names)
 names(x::NamedIndex) = copy(x.names)
-copy(x::NamedIndex) = NamedIndex(copy(x.lookup), copy(x.names))
+copy(x::NamedIndex) = NamedIndex(copy(x.lookup), copy(x.groups), copy(x.names))
 
+# note: replacing names removes any groups no longer present
 function names!(x::NamedIndex, nm::Vector)
     if length(nm) != length(x)
         error("lengths don't match.")
@@ -38,9 +52,45 @@ function names!(x::NamedIndex, nm::Vector)
         x.lookup[nm[i]] = i
     end
     x.names = nm
+	clean_groups!(x, nm)
+	x.names
 end
 
-# TODO: replace_names!(ni, 1, "one")
+function clean_groups!(x::NamedIndex, nm::Vector)
+	for gr_key in keys(x.groups)
+		new_val = intersect(x.groups[gr_key], nm)
+		if length(new_val) == 0
+			del(x.groups, gr_key)
+		else
+			x.groups[gr_key] = new_val
+		end
+	end
+end
+
+function replace_names!(x::NamedIndex, indexes::Vector{Int}, new_names::Vector)
+    if length(indexes) != length(new_names)
+        error("lengths of indexes and new_names don't match.")
+    end
+	# it's tricky to figure out if we're ending up with dupes without trying it...
+	# for now, copy twice to avoid clobbering the caller if we end up failing
+	newx = copy(x)
+    for i = 1:length(indexes)
+		# remove the old lookup
+		del(newx.lookup, newx.names[i])
+		# add the new lookup
+		newx.lookup[new_names[i]] = indexes[i]
+		# replace the name
+		newx.names[indexes[i]] = new_names[i]
+    end
+	# make sure we didn't screw anything up
+	if length(keys(x.lookup)) != length(x.names)
+		error("replacement failed -- ended up with duplicate names")
+	end
+	x.names = newx.names
+	x.lookup = newx.lookup
+	clean_groups!(x, x.names)
+    x.names
+end
 function replace_names!(x::NamedIndex, from::Vector, to::Vector)
     if length(from) != length(to)
         error("lengths of from and to don't match.")
@@ -52,11 +102,13 @@ function replace_names!(x::NamedIndex, from::Vector, to::Vector)
             del(x.lookup, from[idx])
         end
     end
+	clean_groups!(x, x.names)
     x.names
 end
 replace_names!(x::NamedIndex, from, to) = replace_names!(x, [from], [to])
 replace_names(x::NamedIndex, from, to) = replace_names!(copy(x), from, to)
 
+# groups work with ref(), but not has(), keys(), etc
 has(x::NamedIndex, key) = has(x.lookup, key)
 keys(x::NamedIndex) = names(x)
 function push(x::NamedIndex, nm)
@@ -68,14 +120,10 @@ function del(x::NamedIndex, idx::Integer)
     for i in idx+1:length(x.names)
         x.lookup[x.names[i]] = i - 1
     end
-    gr = get_groups(x)
     del(x.lookup, x.names[idx])
     del(x.names, idx)
-    # fix groups:
-    for (k,v) in gr
-        newv = [[has(x, vv) ? vv : ASCIIString[] for vv in v]...]
-        set_group(x, k, newv)
-    end
+    # fix groups
+	clean_groups!(x, x.names)
 end
 function del(x::NamedIndex, nm)
     if !has(x.lookup, nm)
@@ -85,8 +133,26 @@ function del(x::NamedIndex, nm)
     del(x, idx)
 end
 
-ref{T<:ByteString}(x::NamedIndex, idx::Vector{T}) = [[x.lookup[i] for i in idx]...]
-ref{T<:ByteString}(x::NamedIndex, idx::T) = x.lookup[idx]
+# ref should properly deal with the new groups
+function ref{T<:ByteString}(x::NamedIndex, idx::Vector{T})
+	# expand any groups, then do the comprehension
+	idx2 = T[]
+	for i in idx
+		if isgroup(x, i)
+			push(idx2, get_group(x, i))
+		else
+			push(idx2, i)
+		end
+	end
+	[[x.lookup[i] for i in idx]...]
+end
+function ref{T<:ByteString}(x::NamedIndex, idx::T)
+	if isgroup(x, idx)
+		ref(x, get_group(x, idx))
+	else
+		x.lookup[idx]
+	end
+end
 
 # if we get a symbol or a vector of symbols, convert to strings for ref
 ref(x::NamedIndex, idx::Symbol) = x[string(idx)]
@@ -108,36 +174,25 @@ SimpleIndex() = SimpleIndex(0)
 length(x::SimpleIndex) = x.length
 names(x::SimpleIndex) = nothing
 
-# Chris's idea of namespaces adapted by Harlan for column groups
+# Chris DuBois' idea: named
 function set_group(idx::NamedIndex, newgroup, names)
-    if !has(idx, newgroup) || isa(idx.lookup[newgroup], Array)
-        idx.lookup[newgroup] = [[idx.lookup[nm] for nm in names]...]
-    end
+	# confirm that the names exist
+	for name in names
+		if !has(idx, name)
+			error("can't add group referring to non-existent name!")
+		end
+	end
+	# add the group
+	idx.groups[newgroup] = Set(names...)
 end
 function set_groups(idx::NamedIndex, gr::Dict)  # {ByteString,Vector{ByteString}}) breaks; duck type
     for (k,v) in gr
-        if !has(idx, k) 
-            idx.lookup[k] = [[idx.lookup[nm] for nm in v]...]
-        end
+        set_group(idx, k, v)
     end
 end
-function get_groups(idx::NamedIndex)
-    gr = Dict{ByteString,Vector{ByteString}}()
-    for (k,v) in idx.lookup
-        if isa(v,Array)
-            gr[k] = idx.names[v]
-        end
-    end
-    gr
-end
-function isgroup(idx::NamedIndex, name::ByteString)
-  if has(idx, name)
-    return isa(idx.lookup[name], Array)
-  else
-    return false
-  end
-end
-
+get_group(idx::NamedIndex, name) = elements(idx.groups[name]) # set -> array
+get_groups(idx::NamedIndex) = idx.groups # returns a dict to sets, which may not be what you want
+isgroup(idx::NamedIndex, name::ByteString) = has(idx.groups, name)
 
 # special pretty-printer for groups, which are just Dicts.
 function pretty_show(io, gr::Dict{ByteString,Vector{ByteString}})
