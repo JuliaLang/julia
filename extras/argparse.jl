@@ -673,16 +673,17 @@ function _override_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserFi
 end
 
 function import_parser(arg_parser::ArgumentParser, other::ArgumentParser)
+    oargs = deepcopy(other.args)
     if arg_parser.error_on_conflict
-        for a in other.args
+        for a in oargs
             _check_for_duplicates(arg_parser.args, a)
         end
     else
-        for a in other.args
+        for a in oargs
             _override_duplicates(arg_parser.args, a)
         end
     end
-    append!(arg_parser.args, other.args)
+    append!(arg_parser.args, oargs)
     return
 end
 #}}}
