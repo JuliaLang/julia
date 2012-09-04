@@ -63,6 +63,7 @@ ref(s::String, v::AbstractVector) =
 symbol(s::String) = symbol(bytestring(s))
 
 print(io::IO, s::String) = for c in s write(io, c) end
+write(io::IO, s::String) = print(io, s)
 show(io::IO, s::String) = print_quoted(io, s)
 
 (*)(s::String...) = strcat(s...)
@@ -156,7 +157,7 @@ function chr2ind(s::String, i::Integer)
     end
 end
 
-typealias Chars Union(Char,AbstractVector{Char})
+typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
     if i < 1 error("index out of range") end
@@ -174,7 +175,15 @@ strchr(s::String, c::Chars) = strchr(s,c,start(s))
 
 contains(s::String, c::Char) = (strchr(s,c)!=0)
 
-search(s::String, c::Chars, i::Integer) = (i=strchr(s,c,i); (i,nextind(s,i)))
+function search(s::String, c::Chars, i::Integer)
+    if isempty(c)
+        return 1 <= i <= length(s)+1 ? (i,i) :
+               i == length(s)+2      ? (0,0) :
+               error("index out of range")
+    end
+    i=strchr(s,c,i)
+    (i, nextind(s,i))
+end
 search(s::String, c::Chars) = search(s,c,start(s))
 
 function search(s::String, t::String, i::Integer)
@@ -447,6 +456,8 @@ strcat(xs...) = string(xs...)  # backwards compat
 
 print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 
+write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
+
 ## transformed strings ##
 
 type TransformedString <: String
@@ -465,17 +476,57 @@ end
 
 ## uppercase and lowercase transformations ##
 
+const _TF_U = (c,i)->uppercase(c)
+const _TF_L = (c,i)->lowercase(c)
+const _TF_u = (c,i)->i==1 ? uppercase(c) : c
+const _TF_l = (c,i)->i==1 ? lowercase(c) : c
+const _TF_C = (c,i)->i==1 ? uppercase(c) : lowercase(c)
+const _TF_c = (c,i)->i==1 ? lowercase(c) : uppercase(c)
+
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
 
 uppercase(c::Uint8) = ccall(:toupper, Uint8, (Uint8,), c)
 lowercase(c::Uint8) = ccall(:tolower, Uint8, (Uint8,), c)
 
-uppercase(s::String) = TransformedString((c,i)->uppercase(c), s)
-lowercase(s::String) = TransformedString((c,i)->lowercase(c), s)
+uppercase(s::String) = TransformedString(_TF_U, s)
+lowercase(s::String) = TransformedString(_TF_L, s)
 
-ucfirst(s::String) = TransformedString((c,i)->i==1 ? uppercase(c) : c, s)
-lcfirst(s::String) = TransformedString((c,i)->i==1 ? lowercase(c) : c, s)
+ucfirst(s::String) = TransformedString(_TF_u, s)
+lcfirst(s::String) = TransformedString(_TF_l, s)
+
+function _transfunc_compose(f2::Function, f1::Function)
+    allf = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
+    if !contains(allf, f2) || !contains(allf, f1)
+        return nothing
+    end
+    if f2 == _TF_U || f2 == _TF_L || f2 == _TF_C || f2 == _TF_c ||
+            f2 == f1 ||
+            (f2 == _TF_u && f1 == _TF_l) ||
+            (f2 == _TF_l && f1 == _TF_u)
+        return f2
+    elseif (f2 == _TF_u && (f1 == _TF_U || f1 == _TF_C)) ||
+           (f2 == _TF_l && (f1 == _TF_L || f1 == _TF_c))
+        return f1
+    elseif (f2 == _TF_u && f1 == _TF_L)
+        return _TF_C
+    elseif (f2 == _TF_l && f1 == _TF_U)
+        return _TF_c
+    elseif (f2 == _TF_u && f1 == _TF_c)
+        return _TF_U
+    elseif (f2 == _TF_l && f1 == _TF_C)
+        return _TF_L
+    end
+    error("this is a bug")
+end
+
+function TransformedString(transform::Function, s::TransformedString)
+    newtf = _transfunc_compose(transform, s.transform)
+    if newtf === nothing
+        return invoke(TransformedString, (Function, String), transform, s)
+    end
+    TransformedString(newtf, s.string)
+end
 
 const uc = uppercase
 const lc = lowercase
@@ -500,7 +551,7 @@ function filter(f::Function, s::String)
     takebuf_string(out)
 end
 
-has(s::String, c::Char) = has(Set(s...), c)
+has(s::String, c::Char) = contains(s, c)
 
 ## string promotion rules ##
 
@@ -864,7 +915,7 @@ function lpad(s::String, n::Integer, p::String)
     if m <= 0; return s; end
     l = strlen(p)
     if l==1
-        return p^m * s
+        return bytestring(p^m * s)
     end
     q = div(m,l)
     r = m - q*l
@@ -876,7 +927,7 @@ function rpad(s::String, n::Integer, p::String)
     if m <= 0; return s; end
     l = strlen(p)
     if l==1
-        return s * p^m
+        return bytestring(s * p^m)
     end
     q = div(m,l)
     r = m - q*l

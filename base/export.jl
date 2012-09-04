@@ -897,6 +897,7 @@ export
     
 # object identity and equality
     copy,
+    deepcopy,
     isequal,
     isless,
     identity,

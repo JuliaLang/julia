@@ -121,6 +121,7 @@ include("mmap.jl")
 include("version.jl")
 include("util.jl")
 include("datafmt.jl")
+include("deepcopy.jl")
 
 ## Load optional external libraries
 

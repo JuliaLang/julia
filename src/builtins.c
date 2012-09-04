@@ -620,7 +620,11 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             size_t i;
             size_t n = jl_tuple_len(st->names);
             for(i=0; i < n; i++) {
-                jl_show(str, jl_get_nth_field(v, i));
+                jl_value_t *fval = jl_get_nth_field(v, i);
+                if (fval == NULL)
+                    JL_PUTS("#undef", s);
+                else
+                    jl_show(str, fval);
                 if (i < n-1)
                     JL_PUTC(',', s);
             }

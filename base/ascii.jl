@@ -70,7 +70,7 @@ end
 ## outputing ASCII strings ##
 
 print(io::IO, s::ASCIIString) = (write(io, s.data);nothing)
-write(io, s::ASCIIString) = write(io, s.data)
+write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
 

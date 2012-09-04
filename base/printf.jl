@@ -139,9 +139,9 @@ function _special_handler(flags::ASCIIString, width::Int)
     pos = contains(flags,'+') ? "+" :
           contains(flags,' ') ? " " : ""
     abn = quote
-        isnan($x) ? $(bytestring(pad("NaN", width))) :
-         $x < 0   ? $(bytestring(pad("-Inf", width))) :
-                    $(bytestring(pad("$(pos)Inf", width)))
+        isnan($x) ? $(pad("NaN", width)) :
+         $x < 0   ? $(pad("-Inf", width)) :
+                    $(pad("$(pos)Inf", width))
     end
     ex = :(isfinite($x) ? $blk : write(out, $abn))
     x, ex, blk
