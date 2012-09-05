@@ -26,6 +26,7 @@ function init(dir::String, meta::String)
         run(`git add REQUIRES`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
+        Metadata.gen_hashes()
     end
 end
 init(dir::String) = init(dir, DEFAULT_META)
@@ -38,9 +39,14 @@ required() = open("REQUIRES") do io
         print(line)
     end
 end
-installed() = Git.in_each_submodule(false) do name, path, sha1
+installed() = Git.each_submodule(false) do name, path, sha1
     if name != "METADATA"
-        println(name)
+        try
+            ver = Metadata.version(name,sha1)
+            println("$name\tv$ver")
+        catch
+            println("$name\t$sha1")
+        end
     end
 end
 
@@ -90,10 +96,12 @@ end
 
 # update packages from requirements
 
+# TODO: how to deal with attached head packages?
+
 function resolve()
     want = Metadata.resolve(parse_requires("REQUIRES"))
     have = Dict{String,ASCIIString}()
-    Git.in_each_submodule(false) do pkg, path, sha1
+    Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
         end
@@ -116,6 +124,8 @@ function resolve()
                 ver = Metadata.version(pkg,have[pkg])
                 println("removing $pkg v$ver")
                 run(`git rm -qrf --cached -- $pkg`)
+                Git.modules(`--remove-section submodule.$pkg`)
+                run(`git add .gitmodules`)
             end
         else
             ver = Metadata.version(pkg,want[pkg])
@@ -144,7 +154,7 @@ clone(url::String) = clone(DEFAULT_DIR, url)
 # record all submodule commits as tags
 
 function tag_submodules()
-    Git.in_each_submodule(true) do name, path, sha1
+    Git.each_submodule(true) do name, path, sha1
         run(`git fetch-pack -q $path HEAD`)
         run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
         run(`git --git-dir=$path/.git gc -q`)
@@ -158,7 +168,7 @@ function checkout(rev::String)
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
     run(`git ls-files --other` | `xargs rm -rf`)
-    Git.in_each_submodule(true) do name, path, sha1
+    Git.each_submodule(true) do name, path, sha1
         branch = try Git.modules(`submodule.$name.branch`) end
         if branch != nothing
             cd(path) do
@@ -231,7 +241,7 @@ function pull()
     end
 
     # merge submodules
-    Git.in_each_submodule(false) do name, path, sha1
+    Git.each_submodule(false) do name, path, sha1
         if has(Rs,"submodule.$name") && Git.different(L,R,path)
             alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
@@ -258,6 +268,23 @@ function pull()
     run(`git commit -m "[jul] pull (complex merge)"`)
     checkout("HEAD")
     tag_submodules()
+end
+
+# update system to latest and greatest
+
+function update()
+    Git.each_submodule(false) do name, path, sha1
+        # FIXME: if attached head then do nothing
+        cd(path) do
+            run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+        end
+    end
+    cd("METADATA") do
+        run(`git pull`)
+    end
+    run(`git add METADATA`)
+    Metadata.gen_hashes()
+    resolve()
 end
 
 # end # module

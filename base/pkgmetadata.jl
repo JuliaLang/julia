@@ -159,8 +159,8 @@ function resolve(reqs::Vector{VersionSet})
     I = find(G)
     W = zeros(Int,length(I),n)
     for (i,r) in enumerate(I)
-        W[r,rem(i-1,21)+1] = -1
-        W[r,div(i-1,21)+1] = G[i]
+        W[r,rem(i-1,n)+1] = -1
+        W[r,div(i-1,n)+1] = G[i]
     end
     w = iround(Main.linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
 
