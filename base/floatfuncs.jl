@@ -59,13 +59,13 @@ end
 @vectorize_1arg Real isfinite
 
 # ported from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
-# if method's not round, ceil, floor, or trunc, you're on your own
-function round(x::Real, digits, method)
-	if x != 0
-		og = 10 ^ floor(log10(abs(x)) - digits + 1)
-		method(x / og) * og
-	else
-		0
-	end
-end
-round(x, digits) = round(x, digits, round)
+_round_og(x, digits) = 10. ^ floor(log10(abs(x)) - digits + 1.)
+for f in (:round, :ceil, :floor, :trunc)
+    @eval begin
+        function ($f)(x, digits)
+            og = _round_og(x, digits)
+            ($f)(x / og) * og
+        end
+    end #eval
+end # for
+
