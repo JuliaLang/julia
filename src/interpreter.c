@@ -311,7 +311,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
     jl_savestate_t __ss;
-    jmp_buf __handlr;
+    jl_jmp_buf __handlr;
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);

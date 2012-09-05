@@ -123,8 +123,8 @@ void jl_get_builtin_hooks(void);
 uv_lib_t *jl_dl_handle;
 
 #ifdef COPY_STACKS
-void jl_switch_stack(jl_task_t *t, jmp_buf *where);
-extern jmp_buf * volatile jl_jmp_target;
+void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
+extern jl_jmp_buf * volatile jl_jmp_target;
 #endif
 
 void julia_init(char *imageFile)
