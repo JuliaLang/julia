@@ -1,4 +1,6 @@
-## linalg.jl: Basic Linear Algebra interface specifications ##
+## linalg.jl: Basic Linear Algebra interface specifications and
+## specialized matrix types
+
 #
 # This file mostly contains commented functions which are supposed
 # to be defined in type-specific linalg_<type>.jl files.
