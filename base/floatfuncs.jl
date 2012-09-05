@@ -58,14 +58,36 @@ end
 @vectorize_1arg Real isinf
 @vectorize_1arg Real isfinite
 
-# ported from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
-_round_og(x, digits) = 10. ^ floor(log10(abs(x)) - digits + 1.)
+# adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
+# for round, og is the power of 10 relative to the decimal point
+# for signif, og is the absolute power of 10
+# digits and base must be integers, x must be convertable to float
+function _signif_og(x, digits, base)
+    if base == 10
+        10. ^ floor(log10(abs(x)) - digits + 1.)
+    elseif base == 2
+        2. ^ floor(log2(abs(x)) - digits + 1.)
+    else
+        float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.)
+    end
+end
+_round_og(digits, base) = float(base) ^ (- digits)
+
+function signif(x, digits::Integer, base::Integer)
+    if digits < 0
+        throw(DomainError())
+    end
+    og = _signif_og(float(x), digits, base)
+    round(float(x)/og) * og
+end
+signif(x, digits) = signif(x, digits, 10)
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
-        function ($f)(x, digits)
-            og = _round_og(x, digits)
-            ($f)(x / og) * og
+        function ($f)(x, digits::Integer, base::Integer)
+            og = _round_og(digits, base)
+            ($f)(float(x) / og) * og
         end
+        ($f)(x, digits) = ($f)(x, digits, 10)
     end #eval
 end # for
 
