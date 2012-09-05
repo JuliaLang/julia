@@ -264,6 +264,26 @@ triu{T}(M::Matrix{T}, k::Integer) = [ j-i >= k ? M[i,j] : zero(T) for
                                      i=1:size(M,1), j=1:size(M,2) ]
 tril{T}(M::Matrix{T}, k::Integer) = [ j-i <= k ? M[i,j] : zero(T) for
                                      i=1:size(M,1), j=1:size(M,2) ]
+function triu!{T}(M::Matrix{T}, k::Integer)
+    m, n = size(M)
+    for i = 1:m
+        for j = 1:n
+            if j-i < k
+                M[i,j] = zero(T)
+            end
+        end
+    end
+end
+function tril!{T}(M::Matrix{T}, k::Integer)
+    m, n = size(M)
+    for i = 1:m
+        for j = 1:n
+            if j-i > k
+                M[i,j] = zero(T)
+            end
+        end
+    end
+end
 
 diff(a::Vector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 

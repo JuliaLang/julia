@@ -201,67 +201,6 @@ for (orgqr, elty) in
     end
 end
 
-# chol() does not check that input matrix is symmetric/hermitian
-# It simply uses upper triangular half
-chol{T<:Integer}(x::StridedMatrix{T}) = chol(float64(x))
-
-function chol{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    R = chol!(copy(A))
-end
-
-## chol! overwrites A with either the upper or lower triangular
-## Cholesky factor (default is upper)
-chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}) = chol!(A, 'U')
-function chol!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T}, uplo::LapackChar)
-    info = _jl_lapack_potrf(uplo, A)
-    if info != 0 error("chol: matrix is not positive definite, error $info") end
-    uplo == 'U' ? triu(A) : tril(A)
-end
-
-
-lu{T<:Integer}(x::StridedMatrix{T}) = lu(float64(x))
-
-## LU decomposition returning L and U separately and P as a permutation
-function lu{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    LU, ipiv = _jl_lapack_getrf(copy(A))
-    m, n = size(A)
-
-    L = m >= n ? tril(LU, -1) + eye(m,n) : tril(LU, -1)[:, 1:m] + eye(m,m)
-    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
-    P = [1:m]
-    for i=1:min(m,n)
-        t = P[i]
-        P[i] = P[ipiv[i]]
-        P[ipiv[i]] = t
-    end
-    L, U, P
-end
-
-## lu! overwrites A with the components of the LU decomposition
-## Note that returned value includes the pivot indices, not the permutation
-function lu!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    _jl_lapack_getrf(A)
-end
-
-## QR decomposition without column pivots
-qr{T<:Integer}(x::StridedMatrix{T}) = qr(float64(x))
-
-function qr{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    aa, tau = _jl_lapack_geqrf(copy(A))
-    R = triu(aa[1:min(size(A)),:])
-    _jl_lapack_orgqr(aa, tau), R
-end
-
-## QR decomposition with column pivots
-qrp{T<:Integer}(x::StridedMatrix{T}) = qrp(float64(x))
-
-function qrp{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
-    aa, tau, jpvt = _jl_lapack_geqp3(copy(A))
-    R = triu(aa[1:min(size(A)),:])
-    _jl_lapack_orgqr(aa, tau), R, jpvt
-end
-
-
 # eigenvalue-eigenvector, symmetric (Hermitian) or general cases
 for (syev, geev, elty) in
     ((:dsyev_,:dgeev_,:Float64),

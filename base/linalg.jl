@@ -23,6 +23,8 @@ triu(M::AbstractMatrix) = triu(M,0)
 tril(M::AbstractMatrix) = tril(M,0)
 #triu{T}(M::AbstractMatrix{T}, k::Integer)
 #tril{T}(M::AbstractMatrix{T}, k::Integer)
+triu!(M::AbstractMatrix) = triu!(M,0)
+tril!(M::AbstractMatrix) = tril!(M,0)
 
 #diff(a::AbstractVector)
 #diff(a::AbstractMatrix, dim::Integer)

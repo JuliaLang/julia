@@ -7,20 +7,20 @@ n = 10
 a = rand(n,n)
 asym = a+a'+n*eye(n)
 b = rand(n)
-r = chol(asym)                          # Cholesky decomposition
+r = factors(chol(asym))                          # Cholesky decomposition
 @assert norm(r'*r - asym) < Eps
 
-l = chol!(copy(asym), 'L')              # lower-triangular Cholesky decomposition
+l = factors(chol!(copy(asym), 'L'))              # lower-triangular Cholesky decomposition
 @assert norm(l*l' - asym) < Eps
 
-(l,u,p) = lu(a)                         # LU decomposition
+(l,u,p) = factors(lu(a))                         # LU decomposition
 @assert norm(l*u - a[p,:]) < Eps
 @assert norm(l[invperm(p),:]*u - a) < Eps
 
-(q,r) = qr(a)                           # QR decomposition
+(q,r) = factors(qr(a))                           # QR decomposition
 @assert norm(q*r - a) < Eps
 
-(q,r,p) = qrp(a)                        # pivoted QR decomposition
+(q,r,p) = factors(qrp(a))                        # pivoted QR decomposition
 @assert norm(q*r - a[:,p]) < Eps
 @assert norm(q*r[:,invperm(p)] - a) < Eps
 
@@ -166,7 +166,7 @@ invFv = F\v
 @assert norm(solve(T,v) - invFv) < Eps
 B = randn(n,2)
 @assert norm(solve(T, B) - F\B) < Eps
-Tlu = LU(T)
+Tlu = lu(T)
 x = Tlu\v
 @assert norm(x - invFv) < Eps
 
@@ -174,7 +174,7 @@ x = Tlu\v
 Ts = Tridiagonal(dl, d, dl)
 Fs = full(Ts)
 invFsv = Fs\v
-Tldlt = LDLT(Ts)
+Tldlt = ldlt(Ts)
 x = Tldlt\v
 @assert norm(x - invFsv) < Eps
 
