@@ -269,9 +269,19 @@ function profile_report()
 end
 
 function profile_print(tc)
+    # Compute total elapsed time
+    ttotal = 0.0
     for i = 1:length(tc)
         timers = tc[i][1]
-        ttotal = float64(sum(timers))
+        counters = tc[i][2]
+        for j = 1:length(counters)
+            calib_time = timers[j] - counters[j]*_PROFILE_CALIB
+            ttotal += calib_time
+        end
+    end
+    # Display output
+    for i = 1:length(tc)
+        timers = tc[i][1]
         counters = tc[i][2]
         println("   count  time(%)  time(s)")
         for j = 1:length(counters)
