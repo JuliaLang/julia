@@ -1338,6 +1338,8 @@ function exprtype(x::ANY)
         return Any
     elseif isa(x,Type)
         return Type{x}
+    elseif isa(x,LambdaStaticData)
+        return Function
     else
         return typeof(x)
     end
@@ -1438,7 +1440,7 @@ function inlineable(f, e::Expr, vars, enclosing_ast)
         ast = ccall(:jl_uncompress_ast, Any, (Any,), ast)
     end
     ast = ast::Expr
-    for vi = ast.args[2][2]
+    for vi in ast.args[2][2]
         if (vi[3]&1)!=0
             # captures variables (TODO)
             return NF
@@ -1675,75 +1677,117 @@ function is_known_call(e::Expr, func, vars)
     return isa(f,Symbol) && is(_ieval(f), func)
 end
 
-# eliminate allocation of tuples used to return multiple values
-function tuple_elim_pass(ast::Expr, vars)
-    body = (ast.args[3].args)::Array{Any,1}
-    i = 1
-    while i < length(body)-1
+# compute set of vars assigned once
+function find_sa_vars(ast)
+    body = ast.args[3].args
+    av = ObjectIdDict()
+    av2 = ObjectIdDict()
+    for i = 1:length(body)
         e = body[i]
-        if isa(e,Expr) && is(e.head,:multiple_value)
-            i_start = i
-            ret = body[i+1]
-            # look for t = top(tuple)(...)
-            if isa(ret,Expr) && is(ret.head,:(=))
-                rhs = ret.args[2]
-                if isa(rhs,Expr) && is_known_call(rhs,tuple,vars)
-                    tup = rhs.args
-                    tupname = ret.args[1]
-                    nv = length(tup)-1
-                    if nv > 0
-                        del(body, i)  # remove (multiple_value)
-                        del(body, i)  # remove tuple allocation
-                        # convert tuple allocation to a series of assignments
-                        # to local variables
-                        vals = cell(nv)
-                        for j=1:nv
-                            vals[j] = unique_name(ast)
-                            tupelt = tup[j+1]
-                            tmp = Expr(:(=), {vals[j],tupelt}, Any)
-                            add_variable(ast, vals[j], exprtype(tupelt))
-                            insert(body, i+j-1, tmp)
-                        end
-                        i = i+nv
-                        i0 = i
-                        j = 1; k = 1
-                        while k <= nv
-                            stmt = body[i+j-1]
-                            if isa(stmt,Expr) && is(stmt.head,:(=))
-                                rhs = stmt.args[2]
-                                if isa(rhs,Expr)
-                                    if is_known_call(rhs,tupleref,vars) &&
-                                        isequal(rhs.args[2],tupname)
-                                        r = vals[k]
-                                        if isa(r,Symbol)
-                                            r = SymbolNode(r, exprtype(tup[k+1]))
-                                        end
-                                        stmt.args[2] = r
-                                        k += 1
-                                    elseif length(rhs.args)>2 &&
-                                        isa(rhs.args[3],Expr) &&
-                                        is_known_call(rhs.args[3],tupleref,vars) &&
-                                        isequal(rhs.args[3].args[2],tupname)
-                                        # assignment with conversion
-                                        r = vals[k]
-                                        if isa(r,Symbol)
-                                            r = SymbolNode(r, exprtype(tup[k+1]))
-                                        end
-                                        rhs.args[3] = r
-                                        k += 1
-                                    end
-                                end
-                            end
-                            j += 1
-                        end
-                        i = i_start
-                    end
+        if isa(e,Expr) && is(e.head,:(=))
+            lhs = e.args[1]
+            if !has(av, lhs)
+                av[lhs] = e.args[2]
+            else
+                av2[lhs] = true
+            end
+        end
+    end
+    filter!((var,_)->!has(av2,var), av)
+    for vi in ast.args[2][2]
+        if (vi[3]&1)!=0
+            # remove captured vars
+            del(av, vi[1])
+        end
+    end
+    av
+end
+
+function occurs_outside_tupleref(e, sym, vars, tuplen)
+    if is(e, sym) || (isa(e, SymbolNode) && is(e.name, sym))
+        return true
+    end
+    if isa(e,Expr)
+        if is_known_call(e, tupleref, vars) && isequal(e.args[2],sym)
+            targ = e.args[2]
+            if !(exprtype(targ)<:Tuple)
+                return true
+            end
+            idx = e.args[3]
+            if !isa(idx,Int) || !(1 <= idx <= tuplen)
+                return true
+            end
+            return false
+        end
+        if is(e.head,:(=))
+            return occurs_outside_tupleref(e.args[2], sym, vars, tuplen)
+        else
+            for a in e.args
+                if occurs_outside_tupleref(a, sym, vars, tuplen)
+                    return true
                 end
             end
         end
-        i += 1
     end
-    ast
+    return false
+end
+
+# eliminate allocation of unnecessary tuples
+function tuple_elim_pass(ast::Expr, vars)
+    bexpr = ast.args[3]::Expr
+    body = (ast.args[3].args)::Array{Any,1}
+    vs = find_sa_vars(ast)
+    i = 1
+    while i < length(body)
+        e = body[i]
+        if !(isa(e,Expr) && is(e.head,:(=)) && has(vs, e.args[1]))
+            i += 1
+            continue
+        end
+        var = e.args[1]
+        rhs = e.args[2]
+        if isa(rhs,Expr) && is_known_call(rhs, tuple, vars)
+            tup = rhs.args
+            nv = length(tup)-1
+            if occurs_outside_tupleref(bexpr, var, vars, nv) ||
+                !contains_is(vars, var)
+                i += 1
+                continue
+            end
+
+            del(body, i)  # remove tuple allocation
+            # convert tuple allocation to a series of local var assignments
+            vals = cell(nv)
+            for j=1:nv
+                tmpv = unique_name(ast)
+                tupelt = tup[j+1]
+                elty = exprtype(tupelt)
+                tmp = Expr(:(=), {tmpv,tupelt}, Any)
+                add_variable(ast, tmpv, elty)
+                insert(body, i+j-1, tmp)
+                vals[j] = SymbolNode(tmpv, elty)
+            end
+            i += nv
+            replace_tupleref(bexpr, var, vals, vars, i)
+        else
+            i += 1
+        end
+    end
+end
+
+function replace_tupleref(e, tupname, vals, vars, i0)
+    if !isa(e,Expr)
+        return
+    end
+    for i = i0:length(e.args)
+        a = e.args[i]
+        if isa(a,Expr) && is_known_call(a,tupleref,vars) &&
+            isequal(a.args[2],tupname)
+            e.args[i] = vals[a.args[3]]
+        else
+            replace_tupleref(a, tupname, vals, vars, 1)
+        end
+    end
 end
 
 function finfer(f, types)

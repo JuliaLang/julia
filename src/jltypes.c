@@ -2618,7 +2618,6 @@ void jl_init_types(void)
     leave_sym = jl_symbol("leave");
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
-    multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
