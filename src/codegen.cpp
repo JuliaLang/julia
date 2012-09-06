@@ -1907,7 +1907,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             Value *jmpb =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
-                                                      sizeof(jmp_buf)));
+                                                      sizeof(jl_jmp_buf)));
             savestates[labl] = svst;
             jmpbufs[labl] = jmpb;
         }
