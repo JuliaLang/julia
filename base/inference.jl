@@ -1734,7 +1734,7 @@ end
 
 # eliminate allocation of unnecessary tuples
 function tuple_elim_pass(ast::Expr)
-    vars = [f_argnames(ast), (ast.args[2][1])::Array{Any,1}]
+    vars = append_any(f_argnames(ast), ast.args[2][1]::Array{Any,1})
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
