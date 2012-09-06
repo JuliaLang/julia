@@ -160,7 +160,7 @@ end
 # tridiagonal linear algebra
 Eps = sqrt(eps())
 v = randn(n)
-@assert T*v == F*v
+@assert norm(T*v - F*v) < Eps
 invFv = F\v
 @assert norm(T\v - invFv) < Eps
 @assert norm(solve(T,v) - invFv) < Eps
