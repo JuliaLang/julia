@@ -622,7 +622,7 @@ SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
 endif
 
 ifeq ($(OS), Darwin)
-SUITE_SPARSE_LIB = -lm
+SUITE_SPARSE_LIB = -lm -Wl,-rpath,'$(USRLIB)'
 else
 SUITE_SPARSE_LIB = -lm -lrt -Wl,-rpath,'$(USRLIB)'
 endif
