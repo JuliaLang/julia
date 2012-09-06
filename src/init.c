@@ -68,14 +68,16 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     sigaddset(&sset, SIGSEGV);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
+    if (
 #ifdef COPY_STACKS
-    if ((char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)info->si_addr < (char*)jl_stack_hi) {
+        (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
+        (char*)info->si_addr < (char*)jl_stack_hi
 #else
-    if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
+        (char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
         (char*)info->si_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize) {
+        (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
+        ) {
         jl_raise(jl_stackovf_exception);
     }
     else {
@@ -86,11 +88,13 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
-void restore_signals() {
-	sigset_t sset;
-	sigemptyset (&sset);
-	sigprocmask (SIG_SETMASK, &sset, 0);
+void restore_signals()
+{
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigprocmask(SIG_SETMASK, &sset, 0);
 }
+
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
     sigset_t sset;
@@ -129,7 +133,8 @@ extern jl_jmp_buf * volatile jl_jmp_target;
 
 void julia_init(char *imageFile)
 {
-	(void)uv_default_loop(); restore_signals(); //XXX: this needs to be early in load process
+    (void)uv_default_loop();
+    restore_signals(); //XXX: this needs to be early in load process
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);

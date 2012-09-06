@@ -7,6 +7,7 @@
     connect_to_host;
     get_exename;
     getlocalip;
+    int32hash;
     int64hash;
     int64to32hash;
     ios_close;
@@ -199,7 +200,6 @@
     jl_stdout;
     jl_stdout_obj;
     jl_stdout_stream;
-    jl_strerror;
     jl_strtod;
     jl_strtof;
     jl_symbol;

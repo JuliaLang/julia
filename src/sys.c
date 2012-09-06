@@ -329,12 +329,6 @@ void jl_free2(void *p, void *hint)
 
 int jl_errno(void) { return errno; }
 
-jl_value_t *jl_strerror(int errnum)
-{
-    char *str = strerror(errnum);
-    return jl_pchar_to_string((char*)str, strlen(str));
-}
-
 // -- get the number of CPU cores --
 
 #ifdef __WIN32__

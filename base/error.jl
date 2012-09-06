@@ -11,7 +11,7 @@ end
 ## system error handling ##
 
 errno() = ccall(:jl_errno, Int32, ())
-strerror(e::Integer) = ccall(:jl_strerror, Any, (Int32,), e)::ByteString
+strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{Uint8}, (Int32,), e))
 strerror() = strerror(errno())
 system_error(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
