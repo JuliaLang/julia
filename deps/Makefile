@@ -627,6 +627,12 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
 endif
 
+ifeq ($(OS), Darwin)
+SUITE_SPARSE_LIB = -lm
+else
+SUITE_SPARSE_LIB = -lm -lrt
+endif
+
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
 install-suitesparse: $(SUITESPARSE_OBJ_TARGET) $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT)
 
@@ -638,7 +644,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)" LIB=$(SUITE_SPARSE_LIB)
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
