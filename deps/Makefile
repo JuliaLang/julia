@@ -260,19 +260,13 @@ endif
 
 ## LIBUV
 
-ifeq ($(OS), WINNT) 
-UV_CFLAGS=
-else
-UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
-endif
-
 UV_OBJ_TARGET = $(USRLIB)/uv.a
 UV_OBJ_SOURCE = libuv/uv.a
 
 libuv/Makefile:
 	(cd .. && git submodule update --init)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS)
+	$(MAKE) -C libuv 
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
