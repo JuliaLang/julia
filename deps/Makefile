@@ -260,13 +260,19 @@ endif
 
 ## LIBUV
 
+ifeq ($(OS), WINNT) 
+UV_CFLAGS=
+else
+UV_CFLAGS = CFLAGS="-g -fPIC"
+endif
+
 UV_OBJ_TARGET = $(USRLIB)/uv.a
 UV_OBJ_SOURCE = libuv/uv.a
 
 libuv/Makefile:
 	(cd .. && git submodule update --init)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv 
+	$(MAKE) -C libuv $(UV_CFLAGS)
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
@@ -605,10 +611,10 @@ endif
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	$(MAKE) -C fftw-$(FFTW_VER)-single clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	$(MAKE) -C fftw-$(FFTW_VER)-double clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
