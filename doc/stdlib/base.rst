@@ -1232,17 +1232,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
+.. function:: lu(A) -> LU
+
+   Compute LU factorization. LU is an "LU factorization" type that can be used as an ordinary matrix.
+
 .. function:: chol(A)
 
    Compute Cholesky factorization
 
-.. function:: lu(A) -> L, U, p
-
-   Compute LU factorization
-
-.. function:: qr(A) -> Q, R, p
+.. function:: qr(A)
 
    Compute QR factorization
+
+.. function:: qrp(A)
+
+   Compute QR factorization with pivoting
+
+.. function:: factors(D)
+
+   Return the factors of a decomposition D. For an LU decomposition, factors(LU) -> L, U, p
 
 .. function:: eig(A) -> D, V
 
@@ -1267,6 +1275,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: diagm(v)
 
    Construct a diagonal matrix from a vector
+
+.. function:: Tridiagonal(dl, d, du)
+
+   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
+
+.. function:: Woodbury(A, U, C, V)
+
+   Construct a matrix in a form suitable for applying the Woodbury matrix identity
 
 .. function:: rank(M)
 
