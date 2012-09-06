@@ -173,7 +173,7 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     r = 1:m
     for j = 1:n
         r.start = (j-1)*m+1
-        solve(X, r, M, B, r)
+        mult(X, r, M, B, r)
     end
     return X
 end
