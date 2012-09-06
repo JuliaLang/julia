@@ -287,9 +287,6 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             jl_errorf("syntax error: %s", jl_string_data(args[0]));
         jl_raise(args[0]);
     }
-    else if (ex->head == multivalue_sym) {
-        return (jl_value_t*)jl_nothing;
-    }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;
 }

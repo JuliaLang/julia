@@ -968,7 +968,8 @@ split(s::String, spl, keep::Bool) = split(s, spl, 0, keep)
 split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
-split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
+const _default_delims = [' ','\t','\n','\v','\f','\r']
+split(str::String) = split(str, _default_delims, 0, false)
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1

@@ -1608,8 +1608,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (!strcmp(head->name, "$"))
             jl_error("syntax error: prefix $ outside of quote block");
         // some expression types are metadata and can be ignored
-        if (valuepos || !(head == line_sym || head == multivalue_sym ||
-                          head == type_goto_sym)) {
+        if (valuepos || !(head == line_sym || head == type_goto_sym)) {
             jl_errorf("unsupported or misplaced expression %s in function %s",
                       head->name, ctx->linfo->name->name);
         }
@@ -1908,7 +1907,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             Value *jmpb =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
-                                                      sizeof(jmp_buf)));
+                                                      sizeof(jl_jmp_buf)));
             savestates[labl] = svst;
             jmpbufs[labl] = jmpb;
         }
