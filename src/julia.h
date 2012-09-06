@@ -13,7 +13,13 @@
 
 #include "htable.h"
 #include "arraylist.h"
+
 #include <setjmp.h>
+#if defined(__FreeBSD__)
+#  define jl_jmp_buf sigjmp_buf
+#else
+#  define jl_jmp_buf jmp_buf
+#endif
 
 // Check windows
 #if _WIN32 || _WIN64
@@ -994,7 +1000,7 @@ typedef struct _jl_savestate_t {
     // eh_task is who I yield to for exception handling
     struct _jl_task_t *eh_task;
     // eh_ctx is where I go to handle an exception yielded to me
-    jmp_buf *eh_ctx;
+    jl_jmp_buf *eh_ctx;
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
 #ifdef JL_GC_MARKSWEEP
@@ -1008,12 +1014,12 @@ typedef struct _jl_task_t {
     struct _jl_task_t *on_exit;
     jl_value_t *tls;
     int8_t done;
-    jmp_buf ctx;
+    jl_jmp_buf ctx;
     union {
         void *stackbase;
         void *stack;
     };
-    jmp_buf base_ctx;
+    jl_jmp_buf base_ctx;
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
@@ -1062,7 +1068,7 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
+DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr);
 DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(__WIN32__)
@@ -1081,7 +1087,7 @@ DLLEXPORT void jl_pop_handler(int n);
 #endif
 
 #define JL_TRY                                                          \
-    int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
+    int i__tr, i__ca; jl_savestate_t __ss; jl_jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
     if (!jl_setjmp(__handlr,1))                                         \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))

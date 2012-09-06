@@ -37,11 +37,11 @@ struct _probe_data {
     intptr_t high_bound;	/* above probe on stack */
     intptr_t prior_local;	/* value of probe_local from earlier call */
 
-    jmp_buf probe_env;	/* saved environment of probe */
-    jmp_buf probe_sameAR;	/* second environment saved by same call */
-    jmp_buf probe_samePC;	/* environment saved on previous call */
+    jl_jmp_buf probe_env;	/* saved environment of probe */
+    jl_jmp_buf probe_sameAR;	/* second environment saved by same call */
+    jl_jmp_buf probe_samePC;	/* environment saved on previous call */
 
-    jmp_buf * ref_probe;	/* switches between probes */
+    jl_jmp_buf * ref_probe;	/* switches between probes */
 };
 
 static void boundhigh(struct _probe_data *p)
@@ -92,9 +92,9 @@ extern char *jl_stack_hi;
 static void _probe_arch(void)
 {
     struct _probe_data p;
-    memset(p.probe_env, 0, sizeof(jmp_buf));
-    memset(p.probe_sameAR, 0, sizeof(jmp_buf));
-    memset(p.probe_samePC, 0, sizeof(jmp_buf));
+    memset(p.probe_env, 0, sizeof(jl_jmp_buf));
+    memset(p.probe_sameAR, 0, sizeof(jl_jmp_buf));
+    memset(p.probe_samePC, 0, sizeof(jl_jmp_buf));
     p.ref_probe = &p.probe_samePC;
 
     _infer_stack_direction();
@@ -142,7 +142,7 @@ jl_gcframe_t *jl_pgcstack = NULL;
 static void start_task(jl_task_t *t);
 
 #ifdef COPY_STACKS
-jmp_buf * volatile jl_jmp_target;
+jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
@@ -161,7 +161,7 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
-void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char *p)
+void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
     char* _x = (char*)(t->stackbase-t->ssize);
     if (!p) {
@@ -179,7 +179,7 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char 
     jl_longjmp(*jl_jmp_target, 1);
 }
 
-static void switch_stack(jl_task_t *t, jmp_buf *where)
+static void switch_stack(jl_task_t *t, jl_jmp_buf *where)
 {
     assert(t == jl_current_task);
     if (t->stkbuf == NULL) {
@@ -191,13 +191,13 @@ static void switch_stack(jl_task_t *t, jmp_buf *where)
     }
 }
 
-void jl_switch_stack(jl_task_t *t, jmp_buf *where)
+void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where)
 {
     switch_stack(t, where);
 }
 #endif
 
-static void ctx_switch(jl_task_t *t, jmp_buf *where)
+static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 {
     if (t == jl_current_task)
         return;
@@ -298,7 +298,7 @@ static intptr_t ptr_demangle(intptr_t p)
 #endif //__linux__
 
 /* rebase any values in saved state to the new stack */
-static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
+static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
