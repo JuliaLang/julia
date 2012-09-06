@@ -1116,7 +1116,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     
     if !rec
         fulltree.args[3] = inlining_pass(fulltree.args[3], vars, fulltree)[1]
-        tuple_elim_pass(fulltree, vars)
+        tuple_elim_pass(fulltree)
         linfo.inferred = true
     end
     
@@ -1733,7 +1733,8 @@ function occurs_outside_tupleref(e, sym, vars, tuplen)
 end
 
 # eliminate allocation of unnecessary tuples
-function tuple_elim_pass(ast::Expr, vars)
+function tuple_elim_pass(ast::Expr)
+    vars = [f_argnames(ast), (ast.args[2][1])::Array{Any,1}]
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
