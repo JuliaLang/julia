@@ -235,7 +235,7 @@ macro options(ex...)
     # we can manipulate it
     ex = {ex...}
     i = 1
-    if isa(ex[1], Symbol)
+    if length(ex) >= 1 && isa(ex[1], Symbol)
         push(callargs, esc(ex[1]))
         i += 1
     end
