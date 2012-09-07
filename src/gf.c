@@ -146,13 +146,13 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
     return 1;
 }
 
-static inline jl_value_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty,
-                                              int tparam)
+static inline
+jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
 {
     uptrint_t uid;
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
-        jl_methlist_t *ml = jl_cellref(a, uid & (a->length-1));
+        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->length-1));
         if (ml && ml!=JL_NULL) {
             jl_value_t *t = jl_tupleref(ml->sig, 0);
             if (tparam) t = jl_tparam0(t);
@@ -194,7 +194,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
     if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
         (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
         while (1) {
-            jl_methlist_t **pml = &jl_cellref(*pa, uid & ((*pa)->length-1));
+            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->length-1));
             if (*pml == NULL || *pml == JL_NULL) {
                 *pml = JL_NULL;
                 return pml;
