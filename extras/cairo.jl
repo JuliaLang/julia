@@ -17,7 +17,7 @@ export CairoSurface, finish, destroy, status,
     stroke_preserve, set_fill_type, set_line_width, rotate, set_source_rgb,
     move_to, line_to, rel_line_to, rel_move_to, set_source_rgba, rectangle,
     circle, arc, set_dash, set_clip_rect, set_font_from_string, set_markup,
-    get_layout_size, update_layout, show_layout,
+    get_layout_size, update_layout, show_layout, image, read_from_png,
     RendererState, color_to_rgb, Renderer, CairoRenderer, PNGRenderer,
     PDFRenderer, EPSRenderer, save_state, restore_state, move, lineto,
     linetorel, line, rect, circle, ellipse, arc, symbol, symbols, set, get,
@@ -33,12 +33,11 @@ _jl_libgobject = openlib("libgobject-2.0")
 
 type CairoSurface
     ptr::Ptr{Void}
-    kind::Symbol
     width::Float64
     height::Float64
 
-    function CairoSurface(ptr::Ptr{Void}, kind::Symbol)
-        self = new(ptr, kind)
+    function CairoSurface(ptr::Ptr{Void}, w, h)
+        self = new(ptr, w, h)
         finalizer(self, destroy)
         self
     end
@@ -71,11 +70,7 @@ const CAIRO_CONTENT_COLOR_ALPHA = int(0x3000)
 function CairoRGBSurface(w::Integer, h::Integer)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_image_surface_create),
         Ptr{Void}, (Int32,Int32,Int32), CAIRO_FORMAT_RGB24, w, h)
-    surface = CairoSurface(ptr, :rgb)
-    @assert status(surface) == 0
-    surface.width = w
-    surface.height = h
-    surface
+    CairoSurface(ptr, w, h)
 end
 
 function CairoARGBSurface(w::Integer, h::Integer)
@@ -87,10 +82,7 @@ end
 function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_pdf_surface_create), Ptr{Void},
         (Ptr{Uint8},Float64,Float64), bytestring(filename), w_pts, h_pts)
-    surface = CairoSurface(ptr, :pdf)
-    surface.width = w_pts
-    surface.height = h_pts
-    surface
+    CairoSurface(ptr, w_pts, h_pts)
 end
 
 function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
@@ -98,20 +90,24 @@ function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
         (Ptr{Uint8},Float64,Float64), bytestring(filename), w_pts, h_pts)
     ccall(dlsym(_jl_libcairo,:cairo_ps_surface_set_eps), Void,
         (Ptr{Void},Int32), ptr, 1)
-    surface = CairoSurface(ptr, :eps)
-    surface.width = w_pts
-    surface.height = h_pts
-    surface
+    CairoSurface(ptr, w_pts, h_pts)
 end
 
 function CairoXlibSurface(display, drawable, visual, w, h)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_xlib_surface_create), Ptr{Void},
                 (Ptr{Void}, Int32, Ptr{Void}, Int32, Int32),
                 display, drawable, visual, w, h)
-    surface = CairoSurface(ptr, :xlib)
-    surface.width = w
-    surface.height = h
-    surface
+    CairoSurface(ptr, w, h)
+end
+
+function read_from_png(filename::String)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_image_surface_create_from_png),
+        Ptr{Void}, (Ptr{Uint8},), bytestring(filename))
+    w = ccall(dlsym(_jl_libcairo,:cairo_image_surface_get_width),
+        Int32, (Ptr{Void},), ptr)
+    h = ccall(dlsym(_jl_libcairo,:cairo_image_surface_get_height),
+        Int32, (Ptr{Void},), ptr)
+    CairoSurface(ptr, w, h)
 end
 
 function write_to_png(surface::CairoSurface, filename::String)
@@ -211,6 +207,10 @@ line_to(ctx::CairoContext, x, y) = _line_to(ctx, x, ctx.surface.height-y)
 rel_line_to(ctx::CairoContext, x, y) = _rel_line_to(ctx, x, -y)
 rel_move_to(ctx::CairoContext, x, y) = _rel_move_to(ctx, x, -y)
 
+@_CTX_FUNC_DD scale cairo_scale
+@_CTX_FUNC_DD _translate cairo_translate
+translate(ctx::CairoContext, x, y) = _translate(ctx, x, ctx.surface.height-y)
+
 macro _CTX_FUNC_DDD(NAME, FUNCTION)
     quote
         ($esc(NAME))(ctx::CairoContext, d0::Real, d1::Real, d2::Real) =
@@ -253,6 +253,11 @@ circle(ctx::CairoContext, x::Real, y::Real, r::Real) =
 function set_dash(ctx::CairoContext, dashes::Vector{Float64})
     ccall(dlsym(_jl_libcairo,:cairo_set_dash), Void,
         (Ptr{Void},Ptr{Float64},Int32,Float64), ctx.ptr, dashes, length(dashes), 0.)
+end
+
+function set_source_surface(ctx::CairoContext, s::CairoSurface, x::Real, y::Real)
+    ccall(dlsym(_jl_libcairo,:cairo_set_source_surface), Void,
+        (Ptr{Void},Ptr{Void},Float64,Float64), ctx.ptr, s.ptr, x, y)
 end
 
 function set_clip_rect(ctx::CairoContext, cr)
@@ -619,6 +624,16 @@ function curve( self::CairoRenderer, x::Vector, y::Vector )
         line_to( self.ctx, x[i], y[i] )
     end
     stroke(self.ctx)
+end
+
+function image(r::CairoRenderer, s::CairoSurface, x, y, w, h)
+    rectangle(r.ctx, x, y, w, h)
+    save(r.ctx)
+    translate(r.ctx, x, y+h) # yuck
+    scale(r.ctx, w/s.width, h/s.height)
+    set_source_surface(r.ctx, s, 0, 0)
+    fill(r.ctx)
+    restore(r.ctx)
 end
 
 function polygon( self::CairoRenderer, points::Vector )
