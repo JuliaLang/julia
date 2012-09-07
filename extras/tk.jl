@@ -8,10 +8,14 @@
 # - Cairo drawing surfaces
 # - more widgets
 
+require("cairo.jl")
+
 module Tk
 import Base.*
+import Cairo.*
 
-export Window, Button, pack, place, tcl_eval
+export Window, Button, Canvas, pack, place, tcl_eval, TclError,
+    cairo_surface_for, width, height
 
 libtcl = dlopen("libtcl8.5")
 libtk = dlopen("libtk8.5")
@@ -33,13 +37,15 @@ function init()
     ccall(dlsym(libtcl,:Tcl_Init), Int32, (Ptr{Void},), tcl_interp)
     ccall(dlsym(libtk,:Tk_Init), Int32, (Ptr{Void},), tcl_interp)
     # TODO: for now cheat and use X-specific hack for events
-    mainwin = ccall(dlsym(libtk,:Tk_MainWindow), Ptr{Void}, (Ptr{Void},),
-                    tcl_interp)
+    mainwin = mainwindow(tcl_interp)
     disp = tk_display(mainwin)
     fd = ccall(dlsym(libX,:XConnectionNumber), Int32, (Ptr{Void},), disp)
     add_fd_handler(fd, tcl_doevent)
     tcl_interp
 end
+
+mainwindow(interp) =
+    ccall(dlsym(libtk,:Tk_MainWindow), Ptr{Void}, (Ptr{Void},), interp)
 
 type TclError <: Exception
     msg::String
@@ -69,41 +75,55 @@ function tcl_eval(cmd)
     end
 end
 
-type Window
+type TkWidget
     path::ByteString
+    kind::ByteString
+    parent::Union(TkWidget,Nothing)
 
-    WIN_ID::Int = 0
-    Window(title) = Window(title, 200, 200)
+    ID::Int = 0
+    function TkWidget(parent::TkWidget, kind)
+        path = "$(parent.path).jl_$(kind)$(ID)"; ID += 1
+        new(path, kind, parent)
+    end
+    global Window
     function Window(title, w, h)
-        wpath = ".jl_fra$WIN_ID"; WIN_ID += 1
+        wpath = ".jl_win$ID"; ID += 1
         tcl_eval("frame $wpath -width $w -height $h")
         tcl_eval("wm manage $wpath")
         tcl_eval("wm title $wpath \"$title\"")
-        new(wpath)
+        new(wpath, "frame", nothing)
     end
 end
 
-type Button
-    path::ByteString
-    parent
+Window(title) = Window(title, 200, 200)
 
-    BUTTON_ID::Int = 0
-    Button(parent, text) = Button(parent, text, nothing)
-    function Button(parent, text, command)
-        bpath = "jl_but$BUTTON_ID"; BUTTON_ID += 1
-        path = "$(parent.path).$bpath"
-        cmd = "ttk::button $path -text \"$text\""
-        if isa(command,Function)
-            cmd = cmd * " -command $(tcl_callback(command))"
-        end
-        tcl_eval(cmd)
-        new(path, parent)
+Button(parent, text) = Button(parent, text, nothing)
+
+function Button(parent, text, command)
+    b = TkWidget(parent, "ttk::button")
+    cmd = "ttk::button $(b.path) -text \"$text\""
+    if isa(command,Function)
+        cmd = cmd * " -command $(tcl_callback(command))"
     end
+    tcl_eval(cmd)
+    b
 end
 
-pack(widget) = tcl_eval("pack $(widget.path)")
+function Canvas(parent, w, h)
+    c = TkWidget(parent, "canvas")
+    tcl_eval("canvas $(c.path) -width $w -height $h")
+    c
+end
 
-place(widget, x::Int, y::Int) = tcl_eval("place $(widget.path) -x $x -y $y")
+pack(widget::TkWidget) = tcl_eval("pack $(widget.path)")
+
+place(widget::TkWidget, x::Int, y::Int) = tcl_eval("place $(widget.path) -x $x -y $y")
+
+function nametowindow(name)
+    ccall(dlsym(libtk, :Tk_NameToWindow), Ptr{Void},
+          (Ptr{Void}, Ptr{Uint8}, Ptr{Void}),
+          tcl_interp, name, mainwindow(tcl_interp))
+end
 
 const _callbacks = ObjectIdDict()
 
@@ -116,6 +136,24 @@ function tcl_callback(f)
     # TODO: use a delete proc (last arg) to remove this
     _callbacks[f] = true
     cname
+end
+
+width(w::TkWidget) = int(tcl_eval("$(w.path) cget -width"))
+height(w::TkWidget) = int(tcl_eval("$(w.path) cget -height"))
+
+# NOTE: This has to be ported to each window environment.
+# But, this should be the only such function needed.
+function cairo_surface_for(w::TkWidget)
+    win = nametowindow(w.path)
+    disp = ccall(dlsym(tk_wrapper,:jl_tkwin_display), Ptr{Void}, (Ptr{Void},),
+                 win)
+    d = ccall(dlsym(tk_wrapper,:jl_tkwin_id), Int32, (Ptr{Void},), win)
+    vis = ccall(dlsym(tk_wrapper,:jl_tkwin_visual), Ptr{Void}, (Ptr{Void},),
+                win)
+    if disp==C_NULL || d==0 || vis==C_NULL
+        error("invalid window")
+    end
+    CairoXlibSurface(disp, d, vis, width(w), height(w))
 end
 
 tcl_interp = init()

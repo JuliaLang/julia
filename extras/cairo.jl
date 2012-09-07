@@ -1,3 +1,24 @@
+module Cairo
+import Base.*
+
+export CairoSurface, finish, destroy, status,
+    CAIRO_FORMAT_ARGB32,
+    CAIRO_FORMAT_RGB24,
+    CAIRO_FORMAT_A8,
+    CAIRO_FORMAT_A1,
+    CAIRO_FORMAT_RGB16_565,
+    CairoRGBSurface, CairoPDFSurface, CairoEPSSurface, CairoXlibSurface,
+    write_to_png, CairoContext, save, restore, show_page, clip, clip_preserve,
+    fill, fill_preserve, new_path, new_sub_path, close_path, paint, stroke,
+    stroke_preserve, set_fill_type, set_line_width, rotate, set_source_rgb,
+    move_to, line_to, rel_line_to, rel_move_to, set_source_rgba, rectangle,
+    circle, arc, set_dash, set_clip_rect, set_font_from_string, set_markup,
+    get_layout_size, update_layout, show_layout,
+    RendererState, color_to_rgb, Renderer, CairoRenderer, PNGRenderer,
+    PDFRenderer, EPSRenderer, save_state, restore_state, move, lineto,
+    linetorel, line, rect, circle, ellipse, arc, symbol, symbols, set, get,
+    open, close, curve, polygon, layout_text, text, textwidth, textheight,
+    TeXLexer, tex2pango
 
 load("color.jl")
 
@@ -67,6 +88,16 @@ function CairoEPSSurface(filename::String, w_pts::Real, h_pts::Real)
     surface = CairoSurface(ptr, :eps)
     surface.width = w_pts
     surface.height = h_pts
+    surface
+end
+
+function CairoXlibSurface(display, drawable, visual, w, h)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_xlib_surface_create), Ptr{Void},
+                (Ptr{Void}, Int32, Ptr{Void}, Int32, Int32),
+                display, drawable, visual, w, h)
+    surface = CairoSurface(ptr, :xlib)
+    surface.width = w
+    surface.height = h
     surface
 end
 
@@ -1049,3 +1080,5 @@ function tex2pango( str::String, fontsize::Real )
 
     return output
 end
+
+end  # module

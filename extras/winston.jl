@@ -1,6 +1,9 @@
+load("cairo.jl")
+
 module Winston
 
 import Base.*
+import Cairo.*
 
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Legend, LineX, LineY,
     PlotInset, PlotLabel, Points, Slope, SymmetricErrorBarsX, SymmetricErrorBarsY
@@ -8,7 +11,6 @@ export FramedArray, FramedPlot, Table
 export file, setattr, style
 
 load("inifile.jl")
-load("cairo.jl")
 
 abstract HasAttr
 abstract HasStyle <: HasAttr
@@ -1102,7 +1104,7 @@ function _magform( x )
         return 0., 0
     end
     a, b = modf(log10(abs(x)))
-    a, b = pow(10,a), int(b)
+    a, b = 10^a, int(b)
     if a < 1.
         a, b = a * 10, b - 1
     end
@@ -1150,7 +1152,7 @@ function _ticklist_linear( lo, hi, sep, origin )
 end
 
 function _pow10(x)
-    return pow(10.0,x)
+    return 10.0^x
 end
 
 function _ticks_default_linear( lim )
@@ -1165,7 +1167,7 @@ function _ticks_default_linear( lim )
         x = 10
     end
 
-    major_div = x * pow(10.0, b)
+    major_div = x * 10.0^b
     return _ticklist_linear( lim[1], lim[2], major_div )
 end
 
@@ -1177,10 +1179,10 @@ function _ticks_default_log( lim )
 
     if nn >= 10
         #return map( _pow10, _ticks_default_linear(log_lim) )
-        return [ pow(10.,x) for x=_ticks_default_linear(log_lim) ]
+        return [ 10.0^x for x=_ticks_default_linear(log_lim) ]
     elseif nn >= 2
         #return map( _pow10, range(nlo, nhi+1) )
-        return [ pow(10.,i) for i=nlo:nhi ]
+        return [ 10.0^i for i=nlo:nhi ]
     else
         return _ticks_default_linear( lim )
     end
@@ -1205,7 +1207,7 @@ function _ticks_num_log( lim, num )
     #    push( ticks, a + i*b )
     #end
     #return map( _pow10, ticks )
-    [ pow(10., a + i*b) for i=0:num-1 ]
+    [ 10.0^(a + i*b) for i=0:num-1 ]
 end
 
 _subticks_linear( lim, ticks ) = _subticks_linear(lim, ticks, nothing)
