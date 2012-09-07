@@ -7,7 +7,11 @@ export CairoSurface, finish, destroy, status,
     CAIRO_FORMAT_A8,
     CAIRO_FORMAT_A1,
     CAIRO_FORMAT_RGB16_565,
+    CAIRO_CONTENT_COLOR,
+    CAIRO_CONTENT_ALPHA,
+    CAIRO_CONTENT_COLOR_ALPHA,
     CairoRGBSurface, CairoPDFSurface, CairoEPSSurface, CairoXlibSurface,
+    CairoARGBSurface, surface_create_similar,
     write_to_png, CairoContext, save, restore, show_page, clip, clip_preserve,
     fill, fill_preserve, new_path, new_sub_path, close_path, paint, stroke,
     stroke_preserve, set_fill_type, set_line_width, rotate, set_source_rgb,
@@ -60,6 +64,9 @@ const CAIRO_FORMAT_RGB24 = 1
 const CAIRO_FORMAT_A8 = 2
 const CAIRO_FORMAT_A1 = 3
 const CAIRO_FORMAT_RGB16_565 = 4
+const CAIRO_CONTENT_COLOR = int(0x1000)
+const CAIRO_CONTENT_ALPHA = int(0x2000)
+const CAIRO_CONTENT_COLOR_ALPHA = int(0x3000)
 
 function CairoRGBSurface(w::Integer, h::Integer)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_image_surface_create),
@@ -69,6 +76,12 @@ function CairoRGBSurface(w::Integer, h::Integer)
     surface.width = w
     surface.height = h
     surface
+end
+
+function CairoARGBSurface(w::Integer, h::Integer)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_image_surface_create),
+        Ptr{Void}, (Int32,Int32,Int32), CAIRO_FORMAT_ARGB32, w, h)
+    CairoSurface(ptr, w, h)
 end
 
 function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
@@ -104,6 +117,13 @@ end
 function write_to_png(surface::CairoSurface, filename::String)
     ccall(dlsym(_jl_libcairo,:cairo_surface_write_to_png), Void,
         (Ptr{Uint8},Ptr{Uint8}), surface.ptr, bytestring(filename))
+end
+
+function surface_create_similar(s::CairoSurface, w, h)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_surface_create_similar), Ptr{Void},
+                (Ptr{Void}, Int32, Int32, Int32),
+                s.ptr, CAIRO_CONTENT_COLOR_ALPHA, w, h)
+    CairoSurface(ptr, w, h)
 end
 
 # -----------------------------------------------------------------------------
