@@ -198,7 +198,7 @@ function _start()
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
 
-    _jl_librandom_init()
+    RNG.librandom_init()
 
     atexit(()->flush(stdout_stream))
     try

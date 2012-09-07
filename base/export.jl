@@ -4,6 +4,8 @@ export
     Grisu,
     Printf,
     PCRE,
+    LibRandom,
+    RNG,
     FFTW,
     DSP,
     
