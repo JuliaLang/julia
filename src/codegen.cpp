@@ -322,7 +322,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=t
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(ctx->module,
                                          (jl_sym_t*)jl_fieldref(ex,0));
-        if (b && b->constp)
+        if (b == NULL) return NULL;
+        if (b->constp)
             return b->value;
     }
     if (jl_is_quotenode(ex))
