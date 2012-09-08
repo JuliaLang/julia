@@ -194,13 +194,26 @@ get_group(idx::NamedIndex, name) = elements(idx.groups[name]) # set -> array
 get_groups(idx::NamedIndex) = idx.groups # returns a dict to sets, which may not be what you want
 isgroup(idx::NamedIndex, name::ByteString) = has(idx.groups, name)
 
+function show(io, idx::NamedIndex)
+    println(io, "$(length(idx))-element NamedIndex")
+    pretty_show(io, idx.groups)
+    for i = 1:min(length(idx), 9)
+        println(io, "$i = $(names(idx)[i])")
+    end
+    if length(idx) > 9
+        println(io, "...")
+    end
+end
+
 # special pretty-printer for groups, which are just Dicts.
-function pretty_show(io, gr::Dict{ByteString,Vector{ByteString}})
+function pretty_show(io, gr)
     allkeys = keys(gr)
     for k = allkeys
         print(io, "$(k): ")
         print(io, join(gr[k], ", "))
-        if k != last(allkeys)
+        if k == last(allkeys)
+            println(io)
+        else
             print(io, "; ")
         end
     end
@@ -271,6 +284,7 @@ next(id::NamedVector, i) = (id[i], i+1)
 
 function show(io, id::NamedVector)
     n = names(id.idx)
+    println(io, "$(length(id))-element $(eltype(id.arr)) NamedVector")
     for i = 1:min(length(id), 9)
         println(io, "$i, $(n[i]): $(id[i])")
     end
