@@ -12,7 +12,7 @@ import Base.*
 
 export NamedIndex, SimpleIndex, NamedVector,
 	length, isempty, names, copy, names!, replace_names!,
-	replace_names, has, keys, push, del, ref,
+	replace_names, has, keys, values, push, del, ref,
 	select, select_kv,
 	set_group, set_groups, get_group, get_groups, isgroup,
 	start, done, next, show
@@ -260,6 +260,8 @@ assign(id::NamedVector, v, key::Symbol) = assign(id, v, string(key))
 assign(id::NamedVector, v, pos) = id.arr[pos] = v
 
 ref(id::NamedVector, i) = id.arr[id.idx[i]]
+# ref gives the vector value; find gives the _position_ in the underlying NamedIndex
+find(id::NamedVector, v) = has(id, v) ? id.idx[v] : 0
 
 function get{K}(id::NamedVector{K}, key, deflt)
     try
@@ -271,6 +273,7 @@ end
 
 names(nv::NamedVector) = names(nv.idx)
 keys(nv::NamedVector) = names(nv)
+values(nv::NamedVector) = nv.arr
 select(nv::NamedVector, r) = nv[r]
 select_kv(nv::NamedVector, r) = (names(nv)[r], nv[r])
 
