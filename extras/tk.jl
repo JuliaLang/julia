@@ -14,8 +14,8 @@ module Tk
 import Base.*
 import Cairo.*
 
-export Window, Button, Canvas, pack, place, tcl_eval, TclError,
-    cairo_surface_for, width, height
+export Window, Button, TkCanvas, Canvas, pack, place, tcl_eval, TclError,
+    cairo_surface_for, width, height, reveal, cairo_context, cairo_surface
 
 libtcl = dlopen("libtcl8.5")
 libtk = dlopen("libtk8.5")
@@ -91,6 +91,7 @@ type TkWidget
         tcl_eval("frame $wpath -width $w -height $h")
         tcl_eval("wm manage $wpath")
         tcl_eval("wm title $wpath \"$title\"")
+        tcl_doevent(0)
         new(wpath, "frame", nothing)
     end
 end
@@ -109,7 +110,7 @@ function Button(parent, text, command)
     b
 end
 
-function Canvas(parent, w, h)
+function TkCanvas(parent, w, h)
     c = TkWidget(parent, "canvas")
     tcl_eval("canvas $(c.path) -width $w -height $h")
     c
@@ -155,6 +156,51 @@ function cairo_surface_for(w::TkWidget)
     end
     CairoXlibSurface(disp, d, vis, width(w), height(w))
 end
+
+# TkCanvas is the plain Tk canvas widget. This one is double-buffered
+# and built on Cairo.
+type Canvas
+    c::TkWidget
+    front::CairoSurface  # surface for window
+    back::CairoSurface   # backing store
+    frontcc::CairoContext
+    backcc::CairoContext
+
+    function Canvas(parent, x, y, w, h)
+        c = TkWidget(parent, "frame")
+        # frame supports empty background, allowing us to control drawing
+        tcl_eval("frame $(c.path) -width $w -height $h -background \"\"")
+        place(c, x, y)
+        tcl_doevent(0)  # make sure window resources are assigned
+        front = cairo_surface_for(c)
+        back = surface_create_similar(front, w, h)
+        can = new(c, front, back, CairoContext(front), CairoContext(back))
+        cb = tcl_callback((x...)->reveal(can))
+        tcl_eval("bind $(c.path) <Expose> \"$(cb)\"")
+        can
+    end
+end
+
+function reveal(c::Canvas)
+    set_source_surface(c.frontcc, c.back, 0, 0)
+    paint(c.frontcc)
+end
+
+cairo_context(c::Canvas) = c.backcc
+cairo_surface(c::Canvas) = c.back
+
+# Example:
+#    w = Window("test", 640, 400)
+#    c = Canvas(w, 10, 10, 320, 200)
+#    cr = cairo_context(c)
+#    set_source_rgb(cr,1,1,1)
+#    paint(cr)
+#    set_source_rgb(cr,1,0,0)
+#    move_to(cr,320,0)
+#    line_to(cr,0,200)
+#    stroke(cr)
+#    reveal(c)
+
 
 tcl_interp = init()
 tcl_eval("wm withdraw .")
