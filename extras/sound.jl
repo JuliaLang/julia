@@ -1,7 +1,12 @@
 # -*- mode: julia; -*-
 # sound.jl
-require("options.jl")
+require("extras/options.jl")
+
+module Sound
+import Base.*
 import OptionsMod.*
+
+export wavread, wavwrite
 
 # Required WAV Chunk; The format chunk describes how the waveform data is stored
 type WAVFormat
@@ -256,3 +261,5 @@ function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::
     # The file is not flushed unless I explicitly call it here
     flush(io)
 end
+
+end # module
