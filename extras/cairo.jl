@@ -21,7 +21,7 @@ export CairoSurface, finish, destroy, status,
     get_layout_size, update_layout, show_layout, image, read_from_png,
     RendererState, color_to_rgb, Renderer, CairoRenderer, PNGRenderer,
     PDFRenderer, EPSRenderer, save_state, restore_state, move, lineto,
-    linetorel, line, rect, circle, ellipse, arc, symbol, symbols, set, get,
+    linetorel, line, rect, ellipse, symbol, symbols, set, get,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango
 
@@ -198,19 +198,12 @@ macro _CTX_FUNC_DD(NAME, FUNCTION)
     end
 end
 
-@_CTX_FUNC_DD _line_to cairo_line_to
-@_CTX_FUNC_DD _move_to cairo_move_to
-@_CTX_FUNC_DD _rel_line_to cairo_rel_line_to
-@_CTX_FUNC_DD _rel_move_to cairo_rel_move_to
-
-move_to(ctx::CairoContext, x, y) = _move_to(ctx, x, ctx.surface.height-y)
-line_to(ctx::CairoContext, x, y) = _line_to(ctx, x, ctx.surface.height-y)
-rel_line_to(ctx::CairoContext, x, y) = _rel_line_to(ctx, x, -y)
-rel_move_to(ctx::CairoContext, x, y) = _rel_move_to(ctx, x, -y)
-
+@_CTX_FUNC_DD line_to cairo_line_to
+@_CTX_FUNC_DD move_to cairo_move_to
+@_CTX_FUNC_DD rel_line_to cairo_rel_line_to
+@_CTX_FUNC_DD rel_move_to cairo_rel_move_to
 @_CTX_FUNC_DD scale cairo_scale
-@_CTX_FUNC_DD _translate cairo_translate
-translate(ctx::CairoContext, x, y) = _translate(ctx, x, ctx.surface.height-y)
+@_CTX_FUNC_DD translate cairo_translate
 
 macro _CTX_FUNC_DDD(NAME, FUNCTION)
     quote
@@ -232,10 +225,7 @@ macro _CTX_FUNC_DDDD(NAME, FUNCTION)
 end
 
 @_CTX_FUNC_DDDD set_source_rgba cairo_set_source_rgba
-@_CTX_FUNC_DDDD _rectangle cairo_rectangle
-
-rectangle(ctx::CairoContext, x::Real, y::Real, w::Real, h::Real) =
-    _rectangle(ctx, x, ctx.surface.height-y-h, w, h)
+@_CTX_FUNC_DDDD rectangle cairo_rectangle
 
 macro _CTX_FUNC_DDDDD(NAME, FUNCTION)
     quote
@@ -246,10 +236,7 @@ macro _CTX_FUNC_DDDDD(NAME, FUNCTION)
     end
 end
 
-@_CTX_FUNC_DDDDD _arc cairo_arc
-
-circle(ctx::CairoContext, x::Real, y::Real, r::Real) =
-    _arc(ctx, x, ctx.surface.height-y, r, 0., 2pi)
+@_CTX_FUNC_DDDDD arc cairo_arc
 
 function set_dash(ctx::CairoContext, dashes::Vector{Float64})
     ccall(dlsym(_jl_libcairo,:cairo_set_dash), Void,
@@ -259,16 +246,6 @@ end
 function set_source_surface(ctx::CairoContext, s::CairoSurface, x::Real, y::Real)
     ccall(dlsym(_jl_libcairo,:cairo_set_source_surface), Void,
         (Ptr{Void},Ptr{Void},Float64,Float64), ctx.ptr, s.ptr, x, y)
-end
-
-function set_clip_rect(ctx::CairoContext, cr)
-    x = cr[1]
-    y = cr[3]
-    width = cr[2] - cr[1]
-    height = cr[4] - cr[3]
-    rectangle(ctx, x, y, width, height)
-    clip(ctx)
-    new_path(ctx)
 end
 
 function set_font_from_string(ctx::CairoContext, str::String)
@@ -303,6 +280,26 @@ function show_layout(ctx::CairoContext)
 end
 
 # -----------------------------------------------------------------------------
+
+_circle(ctx::CairoContext, x::Real, y::Real, r::Real) =
+    arc(ctx, x, ctx.surface.height-y, r, 0., 2pi)
+_move_to(ctx::CairoContext, x, y) = move_to(ctx, x, ctx.surface.height-y)
+_line_to(ctx::CairoContext, x, y) = line_to(ctx, x, ctx.surface.height-y)
+_rectangle(ctx::CairoContext, x::Real, y::Real, w::Real, h::Real) =
+    rectangle(ctx, x, ctx.surface.height-y-h, w, h)
+_rel_line_to(ctx::CairoContext, x, y) = rel_line_to(ctx, x, -y)
+_rel_move_to(ctx::CairoContext, x, y) = rel_move_to(ctx, x, -y)
+_translate(ctx::CairoContext, x, y) = translate(ctx, x, ctx.surface.height-y)
+
+function set_clip_rect(ctx::CairoContext, cr)
+    x = cr[1]
+    y = cr[3]
+    width = cr[2] - cr[1]
+    height = cr[4] - cr[3]
+    _rectangle(ctx, x, y, width, height)
+    clip(ctx)
+    new_path(ctx)
+end
 
 type RendererState
     current::Dict
@@ -489,29 +486,29 @@ end
 stroke(cr::CairoRenderer) = stroke(cr.ctx)
 
 function move(self::CairoRenderer, p)
-    move_to( self.ctx, p[1], p[2] )
+    _move_to( self.ctx, p[1], p[2] )
 end
 
 function lineto( self::CairoRenderer, p )
-    line_to( self.ctx, p[1], p[2] )
+    _line_to( self.ctx, p[1], p[2] )
 end
 
 function linetorel( self::CairoRenderer, p )
-    rel_line_to( self.ctx, p[1], p[2] )
+    _rel_line_to( self.ctx, p[1], p[2] )
 end
 
 function line( self::CairoRenderer, p, q )
-    move_to(self.ctx, p[1], p[2])
-    line_to(self.ctx, q[1], q[2])
+    _move_to(self.ctx, p[1], p[2])
+    _line_to(self.ctx, q[1], q[2])
     stroke(self.ctx)
 end
 
 function rect( self::CairoRenderer, p, q )
-    rectangle( self.ctx, p[1], p[2], q[1]-p[1], q[2]-p[2] )
+    _rectangle( self.ctx, p[1], p[2], q[1]-p[1], q[2]-p[2] )
 end
 
 function circle( self::CairoRenderer, p, r )
-    circle( self.ctx, p[1], p[2], r )
+    _circle( self.ctx, p[1], p[2], r )
 end
 
 function ellipse( self::CairoRenderer, p, rx, ry, angle )
@@ -536,68 +533,68 @@ function symbols( self::CairoRenderer, x, y )
 
     const symbol_funcs = {
         "asterisk" => (c, x, y, r) -> (
-            move_to(c, x, y+r);
-            line_to(c, x, y-r);
-            move_to(c, x+0.866r, y-0.5r);
-            line_to(c, x-0.866r, y+0.5r);
-            move_to(c, x+0.866r, y+0.5r);
-            line_to(c, x-0.866r, y-0.5r)
+            _move_to(c, x, y+r);
+            _line_to(c, x, y-r);
+            _move_to(c, x+0.866r, y-0.5r);
+            _line_to(c, x-0.866r, y+0.5r);
+            _move_to(c, x+0.866r, y+0.5r);
+            _line_to(c, x-0.866r, y-0.5r)
         ),
         "cross" => (c, x, y, r) -> (
-            move_to(c, x+r, y+r);
-            line_to(c, x-r, y-r);
-            move_to(c, x+r, y-r);
-            line_to(c, x-r, y+r)
+            _move_to(c, x+r, y+r);
+            _line_to(c, x-r, y-r);
+            _move_to(c, x+r, y-r);
+            _line_to(c, x-r, y+r)
         ),
         "diamond" => (c, x, y, r) -> (
-            move_to(c, x, y+r);
-            line_to(c, x+r, y);
-            line_to(c, x, y-r);
-            line_to(c, x-r, y);
+            _move_to(c, x, y+r);
+            _line_to(c, x+r, y);
+            _line_to(c, x, y-r);
+            _line_to(c, x-r, y);
             close_path(c)
         ),
         "dot" => (c, x, y, r) -> (
             new_sub_path(c);
-            rectangle(c, x, y, 1., 1.)
+            _rectangle(c, x, y, 1., 1.)
         ),
         "plus" => (c, x, y, r) -> (
-            move_to(c, x+r, y);
-            line_to(c, x-r, y);
-            move_to(c, x, y+r);
-            line_to(c, x, y-r)
+            _move_to(c, x+r, y);
+            _line_to(c, x-r, y);
+            _move_to(c, x, y+r);
+            _line_to(c, x, y-r)
         ),
         "square" => (c, x, y, r) -> (
             new_sub_path(c);
-            rectangle(c, x-0.866r, y-0.866r, 1.732r, 1.732r)
+            _rectangle(c, x-0.866r, y-0.866r, 1.732r, 1.732r)
         ),
         "triangle" => (c, x, y, r) -> (
-            move_to(c, x, y+r);
-            line_to(c, x+0.866r, y-0.5r);
-            line_to(c, x-0.866r, y-0.5r);
+            _move_to(c, x, y+r);
+            _line_to(c, x+0.866r, y-0.5r);
+            _line_to(c, x-0.866r, y-0.5r);
             close_path(c)
         ),
         "down-triangle" => (c, x, y, r) -> (
-            move_to(c, x, y-r);
-            line_to(c, x+0.866r, y+0.5r);
-            line_to(c, x-0.866r, y+0.5r);
+            _move_to(c, x, y-r);
+            _line_to(c, x+0.866r, y+0.5r);
+            _line_to(c, x-0.866r, y+0.5r);
             close_path(c)
         ),
         "right-triangle" => (c, x, y, r) -> (
-            move_to(c, x+r, y);
-            line_to(c, x-0.5r, y+0.866r);
-            line_to(c, x-0.5r, y-0.866r);
+            _move_to(c, x+r, y);
+            _line_to(c, x-0.5r, y+0.866r);
+            _line_to(c, x-0.5r, y-0.866r);
             close_path(c)
         ),
         "left-triangle" => (c, x, y, r) -> (
-            move_to(c, x-r, y);
-            line_to(c, x+0.5r, y+0.866r);
-            line_to(c, x+0.5r, y-0.866r);
+            _move_to(c, x-r, y);
+            _line_to(c, x+0.5r, y+0.866r);
+            _line_to(c, x+0.5r, y-0.866r);
             close_path(c)
         ),
     }
     default_symbol_func = (ctx,x,y,r) -> (
         new_sub_path(ctx);
-        circle(ctx,x,y,r)
+        _circle(ctx,x,y,r)
     )
     symbol_func = get(symbol_funcs, name, default_symbol_func)
 
@@ -620,17 +617,17 @@ function curve( self::CairoRenderer, x::Vector, y::Vector )
         return
     end
     new_path(self.ctx)
-    move_to(self.ctx, x[1], y[1])
+    _move_to(self.ctx, x[1], y[1])
     for i = 2:n
-        line_to( self.ctx, x[i], y[i] )
+        _line_to( self.ctx, x[i], y[i] )
     end
     stroke(self.ctx)
 end
 
 function image(r::CairoRenderer, s::CairoSurface, x, y, w, h)
-    rectangle(r.ctx, x, y, w, h)
+    _rectangle(r.ctx, x, y, w, h)
     save(r.ctx)
-    translate(r.ctx, x, y+h) # yuck
+    _translate(r.ctx, x, y+h)
     scale(r.ctx, w/s.width, h/s.height)
     set_source_surface(r.ctx, s, 0, 0)
     fill(r.ctx)
@@ -658,7 +655,7 @@ function text( self::CairoRenderer, p, text )
     valign = get( self.state, "textvalign", "center" )
     angle = get( self.state, "textangle", 0. )
 
-    move_to( self.ctx, p[1], p[2] )
+    _move_to( self.ctx, p[1], p[2] )
     save(self.ctx)
     rotate(self.ctx, -angle*pi/180.)
 
@@ -675,7 +672,7 @@ function text( self::CairoRenderer, p, text )
     extents = get_layout_size(self.ctx)
     dx = -_xxx[halign]*extents[1]
     dy = _xxx[valign]*extents[2]
-    rel_move_to(self.ctx, dx, dy)
+    _rel_move_to(self.ctx, dx, dy)
 
     show_layout(self.ctx)
     restore(self.ctx)
