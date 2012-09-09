@@ -203,7 +203,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     end
     PGRP.locs = newlocs
     PGRP.np += n
-    PGRP
+    :ok
 end
 
 function _jl_join_pgroup(myid, locs, sockets)

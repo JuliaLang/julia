@@ -23,6 +23,7 @@
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
+(define inside-vec #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
@@ -41,6 +42,12 @@
 
 (define-macro (with-space-sensitive . body)
   `(with-bindings ((space-sensitive #t)
+		   (whitespace-newline #f))
+		  ,@body))
+
+(define-macro (with-inside-vec . body)
+  `(with-bindings ((space-sensitive #t)
+		   (inside-vec #t)
 		   (whitespace-newline #f))
 		  ,@body))
 
@@ -899,18 +906,17 @@
 	  (else   (reverse! (cons r ranges))))))))
 
 (define (parse-space-separated-exprs s)
-  (let ((inside-vec space-sensitive))
-    (with-space-sensitive
-     (let loop ((exprs '()))
-       (if (or (closing-token? (peek-token s))
-	       (newline? (peek-token s))
-	       (and inside-vec (or (eq? (peek-token s) '|\||)
-				   (eq? (peek-token s) 'for))))
-	   (reverse! exprs)
-	   (let ((e (parse-eq s)))
-	     (case (peek-token s)
-	       ((#\newline)   (reverse! (cons e exprs)))
-	       (else          (loop (cons e exprs))))))))))
+  (with-space-sensitive
+   (let loop ((exprs '()))
+     (if (or (closing-token? (peek-token s))
+	     (newline? (peek-token s))
+	     (and inside-vec (or (eq? (peek-token s) '|\||)
+				 (eq? (peek-token s) 'for))))
+	 (reverse! exprs)
+	 (let ((e (parse-eq s)))
+	   (case (peek-token s)
+	     ((#\newline)   (reverse! (cons e exprs)))
+	     (else          (loop (cons e exprs)))))))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -1019,7 +1025,7 @@
 
 (define (parse-cat s closer)
   (with-normal-ops
-   (with-space-sensitive
+   (with-inside-vec
     (if (eqv? (require-token s) closer)
 	(begin (take-token s)
 	       (list 'vcat))  ; [] => (vcat)
