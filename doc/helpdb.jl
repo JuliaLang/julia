@@ -142,6 +142,15 @@
    an array produces a new array whose elements are deep-copies of the
    original elements.
 
+   While it isn't normally necessary, user-defined types can override
+   the default 'deepcopy' behavior by defining a specialized version
+   of the function 'deepcopy_internal(x::T, dict::ObjectIdDict)'
+   (which shouldn't otherwise be used), where 'T' is the type to be
+   specialized for, and 'dict' keeps track of objects copied so far
+   within the recursion. Within the definition, 'deepcopy_internal'
+   should be used in place of 'deepcopy', and the 'dict' variable
+   should be updated as appropriate before returning.
+
 "),
 
 (E"All Objects",E"convert",E"convert(type, x)
@@ -1808,21 +1817,35 @@ collection[key...] = value
 
 "),
 
+(E"Linear Algebra",E"lu",E"lu(A) -> LU
+
+   Compute LU factorization. LU is an 'LU factorization' type that can
+   be used as an ordinary matrix.
+
+"),
+
 (E"Linear Algebra",E"chol",E"chol(A)
 
    Compute Cholesky factorization
 
 "),
 
-(E"Linear Algebra",E"lu",E"lu(A) -> L, U, p
+(E"Linear Algebra",E"qr",E"qr(A)
 
-   Compute LU factorization
+   Compute QR factorization
 
 "),
 
-(E"Linear Algebra",E"qr",E"qr(A) -> Q, R, p
+(E"Linear Algebra",E"qrp",E"qrp(A)
 
-   Compute QR factorization
+   Compute QR factorization with pivoting
+
+"),
+
+(E"Linear Algebra",E"factors",E"factors(D)
+
+   Return the factors of a decomposition D. For an LU decomposition,
+   factors(LU) -> L, U, p
 
 "),
 
@@ -1859,6 +1882,20 @@ collection[key...] = value
 (E"Linear Algebra",E"diagm",E"diagm(v)
 
    Construct a diagonal matrix from a vector
+
+"),
+
+(E"Linear Algebra",E"Tridiagonal",E"Tridiagonal(dl, d, du)
+
+   Construct a tridiagonal matrix from the lower diagonal, diagonal,
+   and upper diagonal
+
+"),
+
+(E"Linear Algebra",E"Woodbury",E"Woodbury(A, U, C, V)
+
+   Construct a matrix in a form suitable for applying the Woodbury
+   matrix identity
 
 "),
 

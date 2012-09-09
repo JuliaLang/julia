@@ -149,7 +149,7 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
                        (char*)v + offs);
 }
 
-DLLEXPORT jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);

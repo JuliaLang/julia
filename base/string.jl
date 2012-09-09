@@ -482,6 +482,7 @@ const _TF_u = (c,i)->i==1 ? uppercase(c) : c
 const _TF_l = (c,i)->i==1 ? lowercase(c) : c
 const _TF_C = (c,i)->i==1 ? uppercase(c) : lowercase(c)
 const _TF_c = (c,i)->i==1 ? lowercase(c) : uppercase(c)
+const _TF_ALL = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
 
 uppercase(c::Char) = ccall(:towupper, Char, (Char,), c)
 lowercase(c::Char) = ccall(:towlower, Char, (Char,), c)
@@ -496,8 +497,7 @@ ucfirst(s::String) = TransformedString(_TF_u, s)
 lcfirst(s::String) = TransformedString(_TF_l, s)
 
 function _transfunc_compose(f2::Function, f1::Function)
-    allf = [_TF_U, _TF_L, _TF_u, _TF_l, _TF_C, _TF_c]
-    if !contains(allf, f2) || !contains(allf, f1)
+    if !contains(_TF_ALL, f2) || !contains(_TF_ALL, f1)
         return nothing
     end
     if f2 == _TF_U || f2 == _TF_L || f2 == _TF_C || f2 == _TF_c ||
@@ -526,6 +526,18 @@ function TransformedString(transform::Function, s::TransformedString)
         return invoke(TransformedString, (Function, String), transform, s)
     end
     TransformedString(newtf, s.string)
+end
+
+function deepcopy_internal(tstr::TransformedString, stackdict::ObjectIdDict)
+    if has(stackdict, tstr)
+        return stackdict[tstr]
+    end
+    t_copy = contains(_TF_ALL, tstr.transform) ? tstr.transform :
+             deepcopy_internal(tstr.transform, stackdict)
+    s_copy = deepcopy_internal(tstr.string, stackdict)
+    tstr_copy = TransformedString(t_copy, s_copy)
+    stackdict[tstr] = tstr_copy
+    return tstr_copy
 end
 
 const uc = uppercase
