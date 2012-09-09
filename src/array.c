@@ -372,14 +372,35 @@ jl_value_t *jl_arrayref(jl_array_t *a, size_t i)
 JL_CALLABLE(jl_f_arrayref)
 {
     JL_NARGS(arrayref, 2, 2);
-    JL_TYPECHK(arrayref, array, args[0]);
     JL_TYPECHK(arrayref, long, args[1]);
-    jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = jl_unbox_long(args[1])-1;
-    if (i >= a->length) {
-        jl_errorf("ref array[%d]: index out of range", i+1);
+    if (jl_is_pointer(args[0])) {
+        void *a = (void*)jl_unbox_long(args[0]);
+        size_t i = jl_unbox_long(args[1])-1;
+        jl_type_t *el_type = (jl_type_t*)jl_tparam0(jl_typeof(args[0]));
+        jl_value_t *elt;
+        if (jl_is_bits_type(el_type)) {
+            size_t elsize = ((jl_bits_type_t*)el_type)->nbits/8;
+            elt = jl_new_bits((jl_bits_type_t*)el_type,
+                              &((char*)a)[i*elsize]);
+        }
+        else {
+            elt = ((jl_value_t**)a)[i];
+            if (elt == NULL) {
+                jl_raise(jl_undefref_exception);
+            }
+        }
+        return elt;
+    } else if (jl_is_array(args[0])) {
+        jl_array_t *a = (jl_array_t*)args[0];
+        size_t i = jl_unbox_long(args[1])-1;
+        if (i >= a->length) {
+            jl_errorf("ref array[%d]: index out of range", i+1);
+        }
+        return jl_arrayref(a, i);
+    } else {
+        jl_type_error("arrayref", (jl_value_t*)jl_array_type, args[0]);
+        return NULL;
     }
-    return jl_arrayref(a, i);
 }
 
 void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *rhs)

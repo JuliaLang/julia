@@ -31,6 +31,9 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool)
     ccall(:jl_ptr_to_array, Array{T,N}, (Any, Ptr{T}, Any, Int32),
           Array{T,N}, p, dims, own)
 end
+ref(p::Ptr, i::Int) = arrayref(p,i)
+ref(p::Ptr, i::Integer) = arrayref(p,int(i))
+ref(p::Ptr) = arrayref(p,1)
 
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)

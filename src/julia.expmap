@@ -235,6 +235,7 @@
     u8_strlen;
     u8_strwidth;
     uv_exepath;
+    ccallback;
   local:
     *;
 };
