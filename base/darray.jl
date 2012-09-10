@@ -886,3 +886,36 @@ max(d::DArray) = reduce(max, d)
 areduce(f::Function, d::DArray, r::Dimspec, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
+
+function sum(A::DArray, d::Int)
+    if d < 1
+        throw(ArgumentError("invalid dimension"))
+    end
+    if d > ndims(A)
+        return A
+    end
+    sz = ntuple(ndims(A), i->(i==d ? 1 : size(A,i)))
+    if d == distdim(A)
+        darray(eltype(A), sz, distdim(A)) do T,lsz,da
+            mapreduce(+, fetch,
+                      {@spawnat p sum(localize(A),d) for p in procs(A)})
+        end
+    else
+        darray((T,lsz,da)->sum(localize(A),d),
+               eltype(A), sz, distdim(A), procs(A))
+    end
+end
+
+function each_vec{T}(f::Function, A::DArray{T,2}, d::Int)
+    if !(d==1 || d==2)
+        throw(ArgumentError("invalid dimension"))
+    end
+    if d == distdim(A)
+        error("not yet implemented")
+    end
+    darray(eltype(A), size(A), distdim(A)) do T,lsz,da
+        each_vec(f, localize(A), d)
+    end
+end
+
+sort{T}(A::DArray{T,2}, d::Int) = each_vec(sort!, A, d)

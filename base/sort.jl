@@ -254,6 +254,8 @@ function sort!{T<:FloatingPoint}(a::AbstractVector{T})
     return a
 end
 
+# TODO: something sensible should happen when each_col et. al. are used with a
+# pure function argument
 function each_col!(f::Function, a::AbstractMatrix)
     m = size(a,1)
     for i = 1:m:numel(a)
@@ -271,8 +273,8 @@ function each_row!(f::Function, a::AbstractMatrix)
 end
 
 function each_vec!(f::Function, a::AbstractMatrix, dim::Integer)
-    if dim == 1; return each_col(f,a); end
-    if dim == 2; return each_row(f,a); end
+    if dim == 1; return each_col!(f,a); end
+    if dim == 2; return each_row!(f,a); end
     error("invalid matrix dimensions: $dim")
 end
 
