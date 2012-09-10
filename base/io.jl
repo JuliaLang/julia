@@ -1,6 +1,7 @@
 ## core stream types ##
 
 abstract IO
+# the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
 
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
@@ -14,6 +15,7 @@ end
 abstract Stream <: IO
 
 type IOStream <: Stream
+    handle::Ptr{Void}
     ios::Array{Uint8,1}
     name::String
 
@@ -22,7 +24,8 @@ type IOStream <: Stream
     # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
     # in the case where we takebuf it.
     function IOStream(name::String, finalize::Bool)
-        x = new(zeros(Uint8,sizeof_ios_t), name)
+        buf = zeros(Uint8,sizeof_ios_t)
+        x = new(pointer(buf), buf, name)
         if finalize
             finalizer(x, close)
         end
