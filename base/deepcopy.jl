@@ -1,14 +1,25 @@
 # deep copying
-deepcopy(x) = _deepcopy(x, ObjectIdDict())
 
-_deepcopy(x::Union(Symbol,Function,LambdaStaticData,
-                   TopNode,QuoteNode,BitsKind,CompositeKind,AbstractKind,
-                   UnionKind), stackdict::ObjectIdDict) = x
-_deepcopy(x::Tuple, stackdict::ObjectIdDict) =
-    ntuple(length(x), i->_deepcopy(x[i], stackdict))
-_deepcopy(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
+# Note: deepcopy_internal(::Any, ::ObjectIdDict) is
+#       only exposed for specialization by libraries
 
-function _deepcopy(x, stackdict::ObjectIdDict)
+deepcopy(x) = deepcopy_internal(x, ObjectIdDict())
+
+deepcopy_internal(x::Union(Symbol,LambdaStaticData,TopNode,QuoteNode,
+                  BitsKind,CompositeKind,AbstractKind,UnionKind),
+                  stackdict::ObjectIdDict) = x
+deepcopy_internal(x::Tuple, stackdict::ObjectIdDict) =
+    ntuple(length(x), i->deepcopy_internal(x[i], stackdict))
+deepcopy_internal(x::Module, stackdict::ObjectIdDict) = error("deepcopy of Modules not supported")
+
+function deepcopy_internal(x::Function, stackdict::ObjectIdDict)
+    if isa(x.env, Union(MethodTable, Symbol)) || x.env === ()
+        return x
+    end
+    invoke(deepcopy_internal, (Any, ObjectIdDict), x, stackdict)
+end
+
+function deepcopy_internal(x, stackdict::ObjectIdDict)
     if has(stackdict, x)
         return stackdict[x]
     end
@@ -17,14 +28,11 @@ end
 
 _deepcopy_t(x, T::BitsKind, stackdict::ObjectIdDict) = x
 function _deepcopy_t(x, T::CompositeKind, stackdict::ObjectIdDict)
-    nf = length(T.names)
-
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     stackdict[x] = ret
-    for i=1:nf
+    for f in T.names
         try
-            ccall(:jl_set_nth_field, Any, (Any, Int, Any),
-                  ret, i-1, _deepcopy(x.(T.names[i]), stackdict))
+            ret.(f) = deepcopy_internal(x.(f), stackdict)
         catch err
             # we ignore undefined references errors
             if !isa(err, UndefRefError)
@@ -38,7 +46,7 @@ _deepcopy_t(x, T, stackdict::ObjectIdDict) =
     error("deepcopy of objects of type ", T, " not supported")
 
 
-function _deepcopy(x::Array, stackdict::ObjectIdDict)
+function deepcopy_internal(x::Array, stackdict::ObjectIdDict)
     if has(stackdict, x)
         return stackdict[x]
     end
@@ -55,7 +63,7 @@ function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
             for i=i0:length(x)
                 # NOTE: this works around the performance problem caused by all
                 # the doubled definitions of assign()
-                arrayset(dest, i, _deepcopy(x[i], stackdict))
+                arrayset(dest, i, deepcopy_internal(x[i], stackdict))
             end
             break
         catch err
