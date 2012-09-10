@@ -333,7 +333,7 @@ type SubString{T<:String} <: String
     length::Int
 
     SubString(s::T, i::Int, j::Int) =
-        (o=nextind(s,i-1)-1; new(s,o,thisind(s,j)-o))
+        (o=nextind(s,i-1)-1; new(s,o,nextind(s,j)-o-1))
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
