@@ -79,7 +79,8 @@ uint(x::Uint) = x
 
 # reflection
 
-names(m::Module) = ccall(:jl_module_names, Any, (Any,), m)::Array{Any,1}
+names(m::Module, all::Bool) = ccall(:jl_module_names, Any, (Any,Int32), m, all)::Array{Any,1}
+names(m::Module) = names(m,false)
 
 # index colon
 type Colon

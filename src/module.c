@@ -254,7 +254,7 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
     jl_current_module = (jl_module_t*)m;
 }
 
-DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m)
+DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
 {
     jl_array_t *a = jl_alloc_cell_1d(0);
     JL_GC_PUSH(&a);
@@ -263,7 +263,7 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp || m == jl_main_module)
+            if (all || b->exportp || m == jl_main_module)
                 jl_cell_1d_push(a, (jl_value_t*)b->name);
         }
     }
