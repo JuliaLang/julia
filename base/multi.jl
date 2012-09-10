@@ -1067,7 +1067,7 @@ function start_sge_workers(n)
     for i=1:n
         # wait for each output stream file to get created
         fname = "$sgedir/JULIA.o$(id).$(i)"
-        local fl, conninfo
+        local fl, hostname, port
         fexists = false
         sleep(0.5)
         while !fexists
@@ -1075,20 +1075,20 @@ function start_sge_workers(n)
                 fl = open(fname)
                 try
                     conninfo = readline(fl)
+                    hostname, port = parse_connection_info(conninfo)
                 catch e
                     close(fl)
                     throw(e)
                 end
-                fexists = true
+                close(fl)
+                fexists = (hostname != "")
             catch
                 print("."); flush(stdout_stream)
                 sleep(0.5)
             end
         end
-        hostname, port = parse_connection_info(conninfo)
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
-        close(fl)
     end
     print("\n")
     workers
