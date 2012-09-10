@@ -1001,16 +1001,23 @@ function start_remote_workers(machines, cmds)
         local hostname::String, port::Int16
         while true
             conninfo = readline(outs[i])
-            m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
-            if m != nothing
-                port = parse_int(Int16, m.captures[1])
-                hostname = m.captures[2]
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
                 break
             end
         end
         w[i] = Worker(hostname, port)
     end
     w
+end
+
+function parse_connection_info(str)
+    m = match(r"^julia_worker:(\d+)#(.*)", str)
+    if m != nothing
+        (m.captures[2], parse_int(Int16, m.captures[1]))
+    else
+        ("", int16(-1))
+    end
 end
 
 function worker_ssh_cmd(host)
@@ -1060,14 +1067,14 @@ function start_sge_workers(n)
     for i=1:n
         # wait for each output stream file to get created
         fname = "$sgedir/JULIA.o$(id).$(i)"
-        local fl, port
+        local fl, conninfo
         fexists = false
         sleep(0.5)
         while !fexists
             try
                 fl = open(fname)
                 try
-                    port = read(fl,Int16)
+                    conninfo = readline(fl)
                 catch e
                     close(fl)
                     throw(e)
@@ -1078,7 +1085,7 @@ function start_sge_workers(n)
                 sleep(0.5)
             end
         end
-        hostname = bytestring(readline(fl)[1:end-1])
+        hostname, port = parse_connection_info(conninfo)
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
         close(fl)
