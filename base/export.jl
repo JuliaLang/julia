@@ -907,6 +907,7 @@ export
 # object identity and equality
     copy,
     deepcopy,
+    deepcopy_internal,
     isequal,
     isless,
     identity,
