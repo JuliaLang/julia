@@ -448,12 +448,12 @@ function alignment(
             r = max(r, aij[2])
         end
         push(a, (l, r))
-        if sum(map(sum,a)) + sep*length(a) >= cols_if_complete
+        if length(a) > 1 && sum(map(sum,a)) + sep*length(a) >= cols_if_complete
             pop(a)
             break
         end
     end
-    if length(a) < size(X,2)
+    if 1 < length(a) < size(X,2)
         while sum(map(sum,a)) + sep*length(a) >= cols_otherwise
             pop(a)
         end
