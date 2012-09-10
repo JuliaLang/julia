@@ -396,6 +396,7 @@ extern jl_bits_type_t *jl_pointer_type;
 
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
+extern jl_type_t *jl_array_symbol_type;
 extern DLLEXPORT jl_struct_type_t *jl_expr_type;
 extern jl_struct_type_t *jl_symbolnode_type;
 extern jl_struct_type_t *jl_getfieldnode_type;

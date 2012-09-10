@@ -2439,7 +2439,12 @@ void jl_init_types(void)
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_any_type,
                                            jl_box_long(1)));
-
+    
+    jl_array_symbol_type =
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple(2, jl_symbol_type,
+                                           jl_box_long(1)));
+    
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),
                            jl_any_type, jl_null,
