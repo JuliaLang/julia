@@ -136,7 +136,7 @@ end
 
 function _first_not_none( args... )
     for arg in args
-	if arg != nothing
+	if !is(arg,nothing)
 	    return arg
         end
     end
@@ -243,7 +243,7 @@ end
 copy(bb::BoundingBox) = BoundingBox(bb.p0, bb.p1)
 
 function is_null( self::BoundingBox )
-    return self.p0 == nothing || self.p1 == nothing
+    return is(self.p0,nothing) || is(self.p1,nothing)
 end
 
 function width( self::BoundingBox )
@@ -521,7 +521,7 @@ function push_style( context::PlotContext, style )
         "symbolsize" => _kw_func_relative_size,
     }
     save_state(context.draw)
-    if style != nothing
+    if !is(style,nothing)
         for (key, value) in style
             if has(_kw_func, key)
                 method = _kw_func[key]
@@ -741,7 +741,7 @@ type TextObject <: RenderObject
     str
 
     function TextObject( pos, str, args... )
-        @assert str != nothing
+        @assert !is(str,nothing)
         self = new(RenderStyle())
         kw_init(self, args...)
         self.pos = pos
@@ -1237,7 +1237,7 @@ end
 _subticks_linear( lim, ticks ) = _subticks_linear(lim, ticks, nothing)
 function _subticks_linear( lim, ticks, num )
     major_div = (ticks[end] - ticks[1])/float(length(ticks) - 1)
-    if num == nothing
+    if is(num,nothing)
         _num = 4
         a, b = _magform( major_div )
         if 1. < a < (2 + 5)/2.
@@ -1335,7 +1335,7 @@ function _align( self::HalfAxisX )
 end
 
 function _intercept( self::HalfAxisX, context )
-    if getattr(self, "intercept") != nothing
+    if !is(getattr(self,"intercept"),nothing)
         return getattr(self, "intercept")
     end
     limits = context.data_bbox
@@ -1347,7 +1347,7 @@ function _intercept( self::HalfAxisX, context )
 end
 
 function _log( self::HalfAxisX, context )
-    if getattr(self, "log") == nothing
+    if is(getattr(self,"log"),nothing)
         return context.xlog
     end
     return getattr(self, "log")
@@ -1363,14 +1363,14 @@ end
 
 function _range( self::HalfAxisX, context )
     r = getattr(self, "range")
-    if r != nothing
+    if !is(r,nothing)
         a,b = r
-        if a == nothing || b == nothing
+        if is(a,nothing) || is(b,nothing)
             c,d = xrange(context.data_bbox)
-            if a == nothing
+            if is(a,nothing)
                 a = c
             end
-            if b == nothing
+            if is(b,nothing)
                 b = d
             end
             return a,b
@@ -1433,7 +1433,7 @@ end
 
 function _intercept( self::HalfAxisY, context )
     intercept = getattr(self, "intercept")
-    if intercept != nothing
+    if !is(intercept,nothing)
         return intercept
     end
     limits = context.data_bbox
@@ -1445,7 +1445,7 @@ function _intercept( self::HalfAxisY, context )
 end
 
 function _log( self::HalfAxisY, context )
-    if getattr(self, "log") == nothing
+    if is(getattr(self,"log"),nothing)
         return context.ylog
     end
     return getattr(self, "log")
@@ -1461,14 +1461,14 @@ end
 
 function _range( self::HalfAxisY, context )
     r = getattr(self, "range")
-    if r != nothing
+    if !is(r,nothing)
         a,b = r
-        if a == nothing || b == nothing
+        if is(a,nothing) || is(b,nothing)
             c,d = yrange(context.data_bbox)
-            if a == nothing
+            if is(a,nothing)
                 a = c
             end
-            if b == nothing
+            if is(b,nothing)
                 b = d
             end
             return a,b
@@ -1594,10 +1594,10 @@ function make( self::HalfAxis, context )
     draw_subticks = getattr(self, "draw_subticks")
     draw_ticklabels = getattr(self, "draw_ticklabels")
 
-    implicit_draw_subticks = draw_subticks == nothing && draw_ticks
+    implicit_draw_subticks = is(draw_subticks,nothing) && draw_ticks
 
-    implicit_draw_ticklabels = (draw_ticklabels == nothing) && 
-        (getattr(self, "range") != nothing || getattr(self, "ticklabels") != nothing)
+    implicit_draw_ticklabels = is(draw_ticklabels,nothing) &&
+        (!is(getattr(self, "range"),nothing) || !is(getattr(self, "ticklabels"),nothing))
 
     objs = {}
     if getattr(self, "draw_grid")
@@ -1605,7 +1605,7 @@ function make( self::HalfAxis, context )
     end
 
     if getattr(self, "draw_axis")
-        if (draw_subticks != nothing && draw_subticks) || implicit_draw_subticks
+        if (!is(draw_subticks,nothing) && draw_subticks) || implicit_draw_subticks
             push(objs, _make_ticks( self, context, subticks, 
                 getattr(self, "subticks_size"), 
                 getattr(self, "subticks_style")))
@@ -1622,13 +1622,13 @@ function make( self::HalfAxis, context )
         end
     end
 
-    if (draw_ticklabels != nothing && draw_ticklabels) || implicit_draw_ticklabels
+    if (!is(draw_ticklabels,nothing) && draw_ticklabels) || implicit_draw_ticklabels
         push(objs, _make_ticklabels( self, context, ticks, ticklabels ))
     end
 
     # has to be made last
     if hasattr(self, "label")
-        if getattr(self, "label") != nothing # XXX:remove
+        if !is(getattr(self, "label"),nothing) # XXX:remove
             push(objs, BoxLabel(
                 _Group(objs),
                 getattr(self, "label"),
@@ -1708,17 +1708,17 @@ function _limits_axis( content_range, gutter, user_range, is_log )
 
     r0, r1 = 0, 1
 
-    if content_range != nothing
+    if !is(content_range,nothing)
         a, b = content_range
-        if a != nothing
+        if !is(a,nothing)
             r0 = a
         end
-        if b != nothing
+        if !is(b,nothing)
             r1 = b
         end
     end
 
-    if gutter != nothing
+    if !is(gutter,nothing)
         dx = 0.5 * gutter * (r1 - r0)
         a = r0 - dx
         if ! is_log || a > 0
@@ -1727,12 +1727,12 @@ function _limits_axis( content_range, gutter, user_range, is_log )
         r1 = r1 + dx
     end
 
-    if user_range != nothing
+    if !is(user_range,nothing)
         a, b = user_range
-        if a != nothing
+        if !is(a,nothing)
             r0 = a
         end
-        if b != nothing
+        if !is(b,nothing)
             r1 = b
         end
     end
@@ -2073,7 +2073,7 @@ end
 compose_interior( self::Plot, device::Renderer, region::BoundingBox ) =
     compose_interior( self, device, region, nothing )
 function compose_interior( self::Plot, device, region, lmts )
-    if lmts == nothing
+    if is(lmts,nothing)
         lmts = limits(self)
     end
     context = PlotContext( device, region, lmts, getattr(self,"xlog"), getattr(self,"ylog") )
@@ -2107,10 +2107,10 @@ function _frame_bbox( obj, device, region, limits, labelticks )
 end
 
 function _range_union( a, b )
-    if a == nothing
+    if is(a,nothing)
         return b
     end
-    if b == nothing
+    if is(b,nothing)
         return a
     end
     return min(a[1],b[1]), max(a[2],b[2])
@@ -2227,10 +2227,10 @@ function exterior( self::FramedArray, device::Renderer, int_bbox::BoundingBox )
         getattr(self,"label_size"), int_bbox, device.bbox )
     margin = labeloffset + labelsize
 
-    if getattr(self,"xlabel") != nothing
+    if !is(getattr(self,"xlabel"),nothing)
         deform( bb, 0, margin, 0, 0 )
     end
-    if getattr(self,"ylabel") != nothing
+    if !is(getattr(self,"ylabel"),nothing)
         deform( bb, 0, 0, margin, 0 )
     end
 
@@ -2276,13 +2276,13 @@ function _labels_draw( self::FramedArray, device::Renderer, int_bbox::BoundingBo
     save_state(device)
     set( device, "fontsize", labelsize )
     set( device, "texthalign", "center" )
-    if getattr(self,"xlabel") != nothing
+    if !is(getattr(self,"xlabel"),nothing)
         x = center(int_bbox)[1]
         y = yrange(bb)[1] - labeloffset
         set( device, "textvalign", "top" )
         text( device, (x,y), getattr(self,"xlabel") )
     end
-    if getattr(self,"ylabel") != nothing
+    if !is(getattr(self,"ylabel"),nothing)
         x = xrange(bb)[1] - labeloffset
         y = center(int_bbox)[2]
         set( device, "textangle", 90. )
@@ -2395,7 +2395,7 @@ function interior( self::PlotContainer, device::Renderer, exterior_bbox::Boundin
         if sll < TOL && sur < TOL
             # XXX:fixme
             ar = getattr(self, "aspect_ratio")
-            if ar != nothing
+            if !is(ar,nothing)
                 make_aspect_ratio(interior_bbox, ar)
             end
             return interior_bbox
@@ -2735,7 +2735,7 @@ type BoxLabel <: PlotComponent
     offset
 
     function BoxLabel( obj, str::String, side, offset, args... )
-        @assert str != nothing
+        @assert !is(str,nothing)
         self = new(Dict(), obj, str, side, offset)
         kw_init(self, args...)
         self

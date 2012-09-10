@@ -35,6 +35,10 @@ class JuliaHelpTranslator(TextTranslator):
         self.in_desc = True
         self.new_state(0)
 
+    def visit_desc_signature(self, node):
+        self._current_module = node.attributes.get('module', None)
+        TextTranslator.visit_desc_signature(self, node)
+
     def visit_desc_name(self, node):
         self._desc_name = node.astext()
         TextTranslator.visit_desc_name(self, node)
@@ -43,8 +47,11 @@ class JuliaHelpTranslator(TextTranslator):
         if node.attributes['objtype'] == 'attribute':
             return
         self.add_text('"),\n', escape=False)
+        category = self._current_title
+        if self._current_module is not None:
+            category = self._current_module
         self.end_state(first='(E"%s",E"%s",E"' % ( \
-            jl_escape(self._current_title), \
+            jl_escape(category), \
             jl_escape(self._desc_name)))
         self.in_desc = False
 
