@@ -882,6 +882,11 @@ function reduce(f, v::DArray)
               { @spawnat p reduce(f,localize(v)) for p = procs(v) })
 end
 
+function mapreduce(op, f, v::DArray)
+    mapreduce(op, fetch,
+              { @spawnat p mapreduce(op,f,localize(v)) for p = procs(v) })
+end
+
 sum(d::DArray) = reduce(+, d)
 prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
