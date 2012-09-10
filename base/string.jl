@@ -387,6 +387,8 @@ function repeat(s::String, r::Integer)
     RepString(s,r)
 end
 
+convert(::Type{RepString}, s::String) = RepString(s,1)
+
 ## reversed strings without data movement ##
 
 type RevString <: String
@@ -558,6 +560,7 @@ has(s::String, c::Char) = contains(s, c)
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
 promote_rule(::Type{UTF8String} , ::Type{CharString} ) = UTF8String
 promote_rule(::Type{ASCIIString}, ::Type{CharString} ) = UTF8String
+promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
 
