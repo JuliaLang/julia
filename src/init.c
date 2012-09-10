@@ -192,6 +192,19 @@ void julia_init(char *imageFile)
         }
     }
 
+    // set module field of primitive types
+    int i;
+    void **table = jl_core_module->bindings.table;
+    for(i=1; i < jl_core_module->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->value && jl_is_some_tag_type(b->value)) {
+                jl_tag_type_t *tt = (jl_tag_type_t*)b->value;
+                tt->name->module = jl_core_module;
+            }
+        }
+    }
+
     if (jl_main_module == NULL) {
         // the Main module is the one which is always open, and set as the
         // current module for bare (non-module-wrapped) toplevel expressions.

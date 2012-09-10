@@ -424,8 +424,9 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
+    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 4);
     tn->name = name;
+    tn->module = jl_current_module;
     tn->primary = NULL;
     tn->cache = jl_null;
     return tn;

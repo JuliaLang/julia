@@ -199,6 +199,7 @@ typedef struct {
 typedef struct {
     JL_STRUCT_TYPE
     jl_sym_t *name;
+    struct _jl_module_t *module;
     // if this is the name of a parametric type, this field points to the
     // original type.
     // a type alias, for example, might make a type constructor that is

@@ -2259,7 +2259,7 @@ void jl_init_types(void)
     // create base objects
     jl_struct_kind = jl_new_uninitialized_struct_type(10);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
-    jl_typename_type = jl_new_uninitialized_struct_type(3);
+    jl_typename_type = jl_new_uninitialized_struct_type(4);
     jl_sym_type = jl_new_uninitialized_struct_type(0);
     jl_symbol_type = jl_sym_type;
 
@@ -2315,10 +2315,11 @@ void jl_init_types(void)
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_null;
-    jl_typename_type->names = jl_tuple(3, jl_symbol("name"), jl_symbol(""),
-                                       jl_symbol(""));
-    jl_typename_type->types = jl_tuple(3, jl_sym_type, jl_type_type,
-                                       jl_tuple_type);
+    jl_typename_type->names = jl_tuple(4, jl_symbol("name"),
+                                       jl_symbol("module"),
+                                       jl_symbol(""), jl_symbol(""));
+    jl_typename_type->types = jl_tuple(4, jl_sym_type, jl_any_type,
+                                       jl_type_type, jl_tuple_type);
     jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->fptr = jl_f_no_function;
     jl_typename_type->env = (jl_value_t*)jl_null;
@@ -2492,6 +2493,8 @@ void jl_init_types(void)
         jl_new_struct_type(jl_symbol("Module"), jl_any_type, jl_null,
                            jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
                            jl_tuple(2, jl_sym_type, jl_any_type));
+
+    jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
