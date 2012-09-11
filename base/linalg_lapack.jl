@@ -846,19 +846,19 @@ for (gttrf, pttrf, elty) in
      (:cgttrf_,:cpttrf_,:Complex64))
     @eval begin
         function _jl_lapack_gttrf(M::Tridiagonal{$elty})
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(M.d))
             ipiv = Array(Int32, n)
             ccall(dlsym(_jl_liblapack, $string(gttrf)),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
-                  &n, M.dl, M.d, M.du, M.dutmp, ipiv, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &n, M.dl, M.d, M.du, M.dutmp, ipiv, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             M, ipiv
         end
         function _jl_lapack_pttrf(D::Vector{$elty}, E::Vector{$elty})
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(D))
             if length(E) != n-1
                 error("subdiagonal must be one element shorter than diagonal")
@@ -866,8 +866,8 @@ for (gttrf, pttrf, elty) in
             ccall(dlsym(_jl_liblapack, $string(pttrf)),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
-                  &n, D, E, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &n, D, E, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             D, E
         end
     end
@@ -883,7 +883,7 @@ for (gtsv, ptsv, elty) in
             if stride(B,1) != 1
                 error("_jl_lapack_gtsv: matrix columns must have contiguous elements");
             end
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
@@ -891,15 +891,15 @@ for (gtsv, ptsv, elty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
-                  &n, &nrhs, M.dl, M.d, M.du, B, &ldb, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &n, &nrhs, M.dl, M.d, M.du, B, &ldb, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             M, B
         end
         function _jl_lapack_ptsv(M::Tridiagonal{$elty}, B::StridedVecOrMat{$elty})
             if stride(B,1) != 1
                 error("_jl_lapack_ptsv: matrix columns must have contiguous elements");
             end
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
@@ -907,8 +907,8 @@ for (gtsv, ptsv, elty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
-                  &n, &nrhs, M.d, M.dl, B, &ldb, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &n, &nrhs, M.d, M.dl, B, &ldb, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             M, B
         end
     end
@@ -924,7 +924,7 @@ for (gttrs, pttrs, elty) in
             if stride(B,1) != 1
                 error("_jl_lapack_gttrs: matrix columns must have contiguous elements");
             end
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
@@ -933,15 +933,15 @@ for (gttrs, pttrs, elty) in
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &trans, &n, &nrhs, M.dl, M.d, M.du, M.dutmp, ipiv, B, &ldb, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &trans, &n, &nrhs, M.dl, M.d, M.du, M.dutmp, ipiv, B, &ldb, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
         function _jl_lapack_pttrs(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             if stride(B,1) != 1
                 error("_jl_lapack_pttrs: matrix columns must have contiguous elements");
             end
-            info = zero(Int32)
+            info = Array(Int32, 1)
             n    = int32(length(D))
             if length(E) != n-1
                 error("subdiagonal must be one element shorter than diagonal")
@@ -952,8 +952,8 @@ for (gttrs, pttrs, elty) in
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
-                  &n, &nrhs, D, E, B, &ldb, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &n, &nrhs, D, E, B, &ldb, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             B
         end
     end
@@ -984,14 +984,14 @@ for (stev, elty) in
                 ldz  = int32(stride(Z, 2))
                 work = Array($elty, max(1, 2*n-2))
             end
-            info = zero(Int32)
+            info = Array(Int32, 1)
             ccall(dlsym(_jl_liblapack, $string(stev)),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  &job, &n, M.d, M.dl, Ztmp, &ldz, work, &info)
-            if info != 0 throw(LapackException(info)) end
+                  &job, &n, M.d, M.dl, Ztmp, &ldz, work, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             M.d
         end
     end

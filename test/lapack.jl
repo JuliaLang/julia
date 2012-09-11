@@ -171,7 +171,7 @@ x = Tlu\v
 @assert norm(x - invFv) < Eps
 
 # symmetric tridiagonal
-Ts = Tridiagonal(dl, d, dl)
+Ts = Tridiagonal(dl, d+1, dl)
 Fs = full(Ts)
 invFsv = Fs\v
 Tldlt = ldlt(Ts)
