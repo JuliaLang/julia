@@ -30,6 +30,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <cstdio>
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -165,7 +166,28 @@ static Function *to_function(jl_lambda_info_t *li)
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
-    emit_function(li, f);
+    JL_TRY {
+        emit_function(li, f);
+    }
+    JL_CATCH {
+        li->functionObject = NULL;
+        nested_compile = last_n_c;
+        if (old != NULL) {
+            builder.SetInsertPoint(old);
+            builder.SetCurrentDebugLocation(olddl);
+        }
+        JL_SIGATOMIC_END();
+        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
+            char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+            char buf[1024];
+            int nc = snprintf(buf, sizeof(buf), "error compiling %s: %s",
+                              li->name->name, str);
+            jl_value_t *msg = jl_pchar_to_string(buf, nc);
+            JL_GC_PUSH(&msg);
+            jl_raise(jl_new_struct(jl_errorexception_type, msg));
+        }
+        jl_raise(jl_exception_in_transit);
+    }
     nested_compile = last_n_c;
     //f->dump();
     //verifyFunction(*f);

@@ -336,7 +336,7 @@ static int jl_type_to_typeid(jl_value_t *t)
     if (it == typeToTypeId.end()) {
         int mine = cur_type_id++;
         if (mine > 65025)
-            jl_error("unexpected error: too many bits types");
+            jl_error("internal compiler error: too many bits types");
         typeToTypeId[t] = mine;
         typeIdToType[mine] = t;
         return mine;
@@ -348,7 +348,7 @@ static jl_value_t *jl_typeid_to_type(int i)
 {
     std::map<int, jl_value_t*>::iterator it = typeIdToType.find(i);
     if (it == typeIdToType.end()) {
-        jl_error("unexpected error: invalid type id");
+        jl_error("internal compiler error: invalid type id");
     }
     return (*it).second;
 }

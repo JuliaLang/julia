@@ -33,7 +33,7 @@ static void *alloc_temp_arg_space(uint32_t sz)
     if (arg_area_loc+sz > arg_area_sz) {
 #ifdef JL_GC_MARKSWEEP
         if (arg_block_n >= N_TEMP_ARG_BLOCKS)
-            jl_error("ccall: out of temporary argument space");
+            jl_error("internal compiler error: out of temporary argument space in ccall");
         p = malloc(sz);
         temp_arg_blocks[arg_block_n++] = p;
 #else
