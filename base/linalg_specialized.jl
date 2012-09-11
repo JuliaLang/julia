@@ -177,12 +177,12 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     end
     return X
 end
-mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2))
-function *(M::Tridiagonal, B::Union(StridedVector,StridedMatrix))
-    X = similar(B)
+mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2)) # OPTIMIZE ME (ideally, with banded matrices)
+function *{T,S}(M::Tridiagonal{T}, B::StridedVecOrMat{S})
+    X = Array(promote_type(T,S), size(B)...)
     mult(X, M, B)
 end
-
+*(A::Tridiagonal, B::Tridiagonal) = A*full(B)
 
 
 #### Woodbury matrices ####
