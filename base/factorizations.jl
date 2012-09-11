@@ -341,6 +341,12 @@ end
 (\){T<:LapackScalar}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_pttrs(C.D, C.E, copy(B))
 
+function factors{T<:LapackScalar}(C::LDLTTridiagonal{T})
+    N = length(C.D)
+    z = zeros(N-1)
+    Tridiagonal(C.E, ones(N), z), Tridiagonal(z, C.D, z)
+end
+
 type LUTridiagonal{T} <: Factorization{T}
     lu::Tridiagonal{T}
     ipiv::Vector{Int32}
