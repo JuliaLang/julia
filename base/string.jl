@@ -750,8 +750,9 @@ macro b_str(s); ex = _jl_interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
-function _jl_shell_parse(s::String, interp::Bool)
+function _jl_shell_parse(raw::String, interp::Bool)
 
+    s = strip(raw)
     in_single_quotes = false
     in_double_quotes = false
 
