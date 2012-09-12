@@ -33,7 +33,7 @@ try
     global _jl_libcairo = openlib("libcairo")
     global _jl_libpangocairo = openlib("libpangocairo-1.0")
     global _jl_libgobject = openlib("libgobject-2.0")
-catch
+catch err
     println("Oops, could not load cairo or pango libraries. Are they installed?")
     if OS_NAME == :Darwin
         println(E"
@@ -42,9 +42,10 @@ catch
 
   macports:
     $ port install cairo pango
-    $ export LD_LIBRARY_PATH=/opt/local/lib"
-        )
+    $ export LD_LIBRARY_PATH=/opt/local/lib
+"       )
     end
+    throw(err)
 end
 
 type CairoSurface
