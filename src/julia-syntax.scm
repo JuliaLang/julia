@@ -1254,7 +1254,18 @@
 ; In this form, expressions can be analyzed freely without fear of
 ; intervening branches. Similarly, control flow can be analyzed without
 ; worrying about implicit value locations (the "evaluation stack").
+(define *lff-line* 0)
 (define (to-LFF e)
+  (set! *lff-line* 0)
+  (with-exception-catcher
+   (lambda (e)
+     (if (and (> *lff-line* 0) (pair? e) (eq? (car e) 'error))
+	 (let ((msg (cadr e)))
+	   (raise `(error ,(string msg " at line " *lff-line*))))
+	 (raise e)))
+   (lambda () (to-LFF- e))))
+
+(define (to-LFF- e)
   (define (to-blk r)
     (if (length= r 1)
 	(car r)
@@ -1276,7 +1287,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (memq (car e) '(quote top line))
+    (if (or (not (pair? e)) (memq (car e) '(quote top))
 	    (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
@@ -1288,7 +1299,7 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment lvalue " (cadr e)))
+	       (error (string "invalid assignment location " (cadr e)))
 	       (let ((r (to-lff (caddr e) (cadr e) #f)))
 		 (cond ((symbol? dest)
 			(cons `(block ,(car r)
@@ -1311,6 +1322,10 @@
 		 (else (let ((g (gensy)))
 			 (cons g
 			       (cons `(local! ,g) (to-lff e g #f)))))))
+
+	  ((line)
+	   (set! *lff-line* (cadr e))
+	   (cons e '()))
 
 	  ((trycatch)
 	   (cond (tail
