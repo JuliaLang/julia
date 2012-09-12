@@ -487,7 +487,7 @@ function (>>>)(src::String, dst::Cmds)
     return hscmd | dst
 end
 
-(<<<)(dst::Cmds, src::String) = (>>>)(src, dst)
+#(<<<)(dst::Cmds, src::String) = (>>>)(src, dst)
 
 
 # spawn(cmd) starts all processes connected to cmd
