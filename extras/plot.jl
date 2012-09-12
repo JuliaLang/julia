@@ -7,6 +7,7 @@ import Base.*
 import Winston.*
 
 export plot, semilogx, semilogy, loglog
+export file
 
 function plot(args...)
     p = FramedPlot()
