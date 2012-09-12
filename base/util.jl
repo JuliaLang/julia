@@ -224,12 +224,12 @@ load_now(fname::String) = load_now(bytestring(fname))
 function load_now(fname::ByteString)
     if in_load
         path = find_in_path(fname)
-        _jl_package_list[path] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))
         close(f)
         include(path)
+        _jl_package_list[path] = time()
         return
     elseif in_remote_load
         for i=1:2:length(load_dict)
