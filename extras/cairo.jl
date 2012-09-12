@@ -28,9 +28,24 @@ export CairoSurface, finish, destroy, status,
 load("color.jl")
 
 load("openlib.jl")
-_jl_libcairo = openlib("libcairo")
-_jl_libpangocairo = openlib("libpangocairo-1.0")
-_jl_libgobject = openlib("libgobject-2.0")
+
+try
+    global _jl_libcairo = openlib("libcairo")
+    global _jl_libpangocairo = openlib("libpangocairo-1.0")
+    global _jl_libgobject = openlib("libgobject-2.0")
+catch
+    println("Oops, could not load cairo or pango libraries. Are they installed?")
+    if CURRENT_OS == :OSX
+        println(E"
+  homebrew:
+    $ brew install cairo pango
+
+  macports:
+    $ port install cairo pango
+    $ export LD_LIBRARY_PATH=/opt/local/lib"
+        )
+    end
+end
 
 type CairoSurface
     ptr::Ptr{Void}
