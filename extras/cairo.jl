@@ -35,7 +35,7 @@ try
     global _jl_libgobject = openlib("libgobject-2.0")
 catch
     println("Oops, could not load cairo or pango libraries. Are they installed?")
-    if CURRENT_OS == :OSX
+    if OS_NAME == :Darwin
         println(E"
   homebrew:
     $ brew install cairo pango

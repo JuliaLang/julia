@@ -113,7 +113,7 @@ export
     ARGS,
     C_NULL,
     CPU_CORES,
-    CURRENT_OS,
+    OS_NAME,
     ENDIAN_BOM,
     ENV,
     Inf,

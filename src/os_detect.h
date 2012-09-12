@@ -46,7 +46,7 @@ XX(ISUNIX)              - OS Traits
     X(0,Windows)        XX(0)   \
     X(1,Linux)          XX(1)   \
     X(2,FreeBSD)        XX(1)   \
-    X(3,OSX)           XX(1)
+    X(3,Darwin)         XX(1)
 #define JL_OS_MAP(X) JL_OS_MAP2(X,NOP)
 #define OS_INDEX_MAP(x) x
 
@@ -57,7 +57,7 @@ XX(ISUNIX)              - OS Traits
 #elif defined(__FreeBSD__)
     #define OS_CURRENT  FreeBSD
 #elif defined(__APPLE__)
-    #define OS_CURRENT OSX
+    #define OS_CURRENT Darwin
 #else
     #define OS_CURRENT Unknown
 #endif
@@ -66,7 +66,7 @@ XX(ISUNIX)              - OS Traits
 /** REMOVED - SEE ABOVE COMMENT */
 #else
 
-const CURRENT_OS = :OS_CURRENT
+const OS_NAME = :OS_CURRENT
 
 #define OS_NAME_IFELSE(NUM,NAME) JL_IF(JL_BOOL(NUM),elseif,if) (os==:NAME) return
 #define ATTR(IS_UNIX) JL_TF(JL_BOOL(IS_UNIX)); \n
