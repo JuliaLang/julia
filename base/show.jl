@@ -257,7 +257,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :null)
         print(io, "nothing")
     else
-        print(io, "(\$expr(")
+        print(io, "\$(expr(")
         show_quoted(io, ex.head, indent)
         for arg in args
             print(io, ", ")
