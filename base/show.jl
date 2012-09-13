@@ -12,7 +12,7 @@ show(io, s::Symbol) = print(io, s)
 show(io, tn::TypeName) = show(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
-show(io, n::Integer) = (write(io, dec(n));nothing)
+show(io, n::Signed) = (write(io, dec(n)); nothing)
 show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 
 show{T}(io, p::Ptr{T}) =
