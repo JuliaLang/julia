@@ -473,7 +473,8 @@
 (define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
 					  '(end else elseif catch #\newline)
 					  #t))
-(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
+;; ";" at the top level produces a sequence of top level expressions
+(define (parse-stmts s) (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
@@ -1352,7 +1353,9 @@
 	 ;; as a special case, allow early end of input if there is
 	 ;; nothing left but whitespace
 	 (skip-ws-and-comments (ts:port s))
-	 (if (eqv? (peek-token s) #\newline) (take-token s))
+	 (let skip-loop ((tok (peek-token s)))
+	   (if (or (eqv? tok #\newline) )
+	       (begin (take-token s) (skip-loop (peek-token s)))))
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)
 	       t

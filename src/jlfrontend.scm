@@ -86,15 +86,17 @@
   (and (pair? e) (eq? (car e) 'lambda)))
 
 (define (expand-toplevel-expr e)
-  (let ((ex (expand-toplevel-expr- e)))
-    (cond ((simple-assignment? ex)  (cadr ex))
-	  ((and (length= ex 2) (eq? (car ex) 'body)
-		(not (lambda-ex? (cadadr ex))))
-	   ;; (body (return x)) => x
-	   ;; if x is not a lambda expr, so we don't think it is a thunk
-	   ;; to be called immediately.
-	   (cadadr ex))
-	  (else ex))))
+  (if (and (pair? e) (eq? (car e) 'toplevel))
+      `(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      (let ((ex (expand-toplevel-expr- e)))
+	(cond ((simple-assignment? ex)  (cadr ex))
+	      ((and (length= ex 2) (eq? (car ex) 'body)
+		    (not (lambda-ex? (cadadr ex))))
+	       ;; (body (return x)) => x
+	       ;; if x is not a lambda expr, so we don't think it is a thunk
+	       ;; to be called immediately.
+	       (cadadr ex))
+	      (else ex)))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
