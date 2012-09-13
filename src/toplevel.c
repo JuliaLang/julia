@@ -246,6 +246,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         ex = (jl_expr_t*)jl_expand(e);
     }
 
+    if (jl_is_expr(ex) && ex->head == toplevel_sym) {
+        int i=0; jl_value_t *res=jl_nothing;
+        for(i=0; i < ex->args->length; i++) {
+            res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
+        }
+        return res;
+    }
+
     if (jl_is_expr(ex) && ex->head == thunk_sym) {
         thk = (jl_lambda_info_t*)jl_exprarg(ex,0);
         assert(jl_is_lambda_info(thk));
