@@ -3,9 +3,6 @@
 isodd(n::Integer) = bool(rem(n,2))
 iseven(n::Integer) = !isodd(n)
 
-sign{T<:Integer}(x::T) = convert(T,(x>0)-(x<0))
-sign{T<:Unsigned}(x::T) = convert(T,(x>0))
-
 signbit(x::Unsigned) = 0
 signbit(x::Int8) = int(x>>>7)
 signbit(x::Int16) = int(x>>>15)
