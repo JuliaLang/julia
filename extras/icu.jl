@@ -17,6 +17,7 @@ module ICU
 import Base.*
 
 export ICUString,
+    foldcase,
     lowercase,
     set_locale,
     titlecase,
@@ -29,12 +30,15 @@ for suffix in ["", ["_"*string(i) for i in 42:50]]
     if dlsym(iculib, "u_strToUpper"*suffix) != C_NULL
         for f in (:u_strFromUTF8,
                   :u_strToUTF8,
+                  :u_strFoldCase,
                   :u_strToLower,
                   :u_strToTitle,
                   :u_strToUpper,
                   :u_strlen,
                   :ucasemap_open,
                   :ucasemap_close,
+                  :ucasemap_getBreakIterator,
+                  :ucasemap_utf8FoldCase,
                   :ucasemap_utf8ToLower,
                   :ucasemap_utf8ToTitle,
                   :ucasemap_utf8ToUpper)
@@ -51,8 +55,12 @@ locale = C_NULL
 casemap = C_NULL
 
 function set_locale(s::Union(ByteString,Ptr{None}))
+    global casemap
+    if casemap != C_NULL
+        ccall(dlsym(iculib,ucasemap_close), Void, (Ptr{Void},), casemap)
+    end
     err = UErrorCode[0]
-    global casemap = ccall(dlsym(iculib,ucasemap_open), Ptr{Void},
+    casemap = ccall(dlsym(iculib,ucasemap_open), Ptr{Void},
         (Ptr{Uint8},Int32,Ptr{UErrorCode}), s, 0, err)
     if casemap != C_NULL
         global locale = s
@@ -116,18 +124,32 @@ for (a,b) in [(:lowercase,:u_strToLower),
     end
 end
 
+function foldcase(s::ICUString)
+    src = s.data
+    destsiz = int32(2*numel(src))
+    dest = zeros(UChar, destsiz)
+    err = UErrorCode[0]
+    n = ccall(dlsym(iculib,u_strFoldCase), Int32,
+        (Ptr{UChar},Int32,Ptr{UChar},Int32,Uint32,Ptr{UErrorCode}),
+        dest, destsiz, src, numel(src), 0, err)
+    return ICUString(dest[1:n])
+end
+
 function titlecase(s::ICUString)
     src = s.data
     destsiz = int32(2*numel(src))
     dest = zeros(UChar, destsiz)
     err = UErrorCode[0]
+    breakiter = ccall(dlsym(iculib,ucasemap_getBreakIterator),
+        Ptr{Void}, (Ptr{Void},), casemap)
     n = ccall(dlsym(iculib,u_strToTitle), Int32,
         (Ptr{UChar},Int32,Ptr{UChar},Int32,Ptr{Void},Ptr{Uint8},Ptr{UErrorCode}),
-        dest, destsiz, src, numel(src), C_NULL, locale, err)
+        dest, destsiz, src, numel(src), breakiter, locale, err)
     return ICUString(dest[1:n])
 end
 
-for (a,b) in [(:lowercase,:ucasemap_utf8ToLower),
+for (a,b) in [(:foldcase,:ucasemap_utf8FoldCase),
+              (:lowercase,:ucasemap_utf8ToLower),
               (:titlecase,:ucasemap_utf8ToTitle),
               (:uppercase,:ucasemap_utf8ToUpper)]
     @eval begin
