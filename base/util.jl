@@ -241,6 +241,7 @@ function load_now(fname::ByteString)
         in_load = true
         iserr, err = false, ()
         try
+            ccall(:jl_register_toplevel_eh, Void, ())
             load_now(fname)
             for p = 1:nprocs()
                 if p != myid()

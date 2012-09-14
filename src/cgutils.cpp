@@ -243,13 +243,29 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return jl_symbolnode_type(e);
     if (jl_is_quotenode(e))
         return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
-    if (jl_is_symbol(e))
-        return (jl_value_t*)jl_any_type;
     if (jl_is_lambda_info(e))
         return (jl_value_t*)jl_function_type;
-    if (jl_is_topnode(e)) {
-        jl_binding_t *b = jl_get_binding(ctx->module,
-                                         (jl_sym_t*)jl_fieldref(e,0));
+    if (jl_is_getfieldnode(e))
+        return jl_getfieldnode_type(e);
+    if (jl_is_topnode(e) || jl_is_symbol(e)) {
+        if (jl_is_symbol(e)) {
+            if (is_global((jl_sym_t*)e, ctx)) {
+                // look for static parameter
+                for(size_t i=0; i < jl_tuple_len(ctx->sp); i+=2) {
+                    assert(jl_is_symbol(jl_tupleref(ctx->sp, i)));
+                    if (e == jl_tupleref(ctx->sp, i)) {
+                        e = jl_tupleref(ctx->sp, i+1);
+                        goto type_of_constant;
+                    }
+                }
+            }
+            else {
+                return (jl_value_t*)jl_any_type;
+            }
+        }
+        if (jl_is_topnode(e))
+            e = jl_fieldref(e,0);
+        jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);
         if (!b || !b->value)
             return jl_top_type;
         if (b->constp)
@@ -257,8 +273,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         else
             return (jl_value_t*)jl_any_type;
     }
-    if (jl_is_getfieldnode(e))
-        return jl_getfieldnode_type(e);
+type_of_constant:
     if (jl_is_some_tag_type(e))
         return (jl_value_t*)jl_wrap_Type(e);
     return (jl_value_t*)jl_typeof(e);
