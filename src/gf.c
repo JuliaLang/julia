@@ -31,7 +31,7 @@ static jl_methtable_t *new_method_table(jl_sym_t *name)
     mt->cache = JL_NULL;
     mt->cache_arg1 = JL_NULL;
     mt->cache_targ = JL_NULL;
-    mt->max_args = jl_box_long(0);
+    mt->max_args = 0;
 #ifdef JL_GF_PROFILE
     mt->ncalls = 0;
 #endif
@@ -70,15 +70,15 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
         else if (jl_is_tag_type(a) && jl_is_tag_type(decl) &&
                  ((jl_tag_type_t*)decl)->name == jl_type_type->name &&
                  ((jl_tag_type_t*)a   )->name == jl_type_type->name) {
-            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+            jl_value_t *tp0 = jl_tparam0(decl);
+            if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
-                if (!jl_types_equal(jl_tparam0(a), jl_tparam0(decl))) {
+                if (!jl_types_equal(jl_tparam0(a), tp0))
                     return 0;
-                }
             }
         }
         else if (decl == (jl_value_t*)jl_any_type) {
@@ -94,6 +94,7 @@ static int cache_match_by_type(jl_value_t **types, size_t n, jl_tuple_t *sig,
 static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
                               int va)
 {
+    // NOTE: This function is a huge performance hot spot!!
     if (jl_tuple_len(sig) > n) {
         if (n != jl_tuple_len(sig)-1)
             return 0;
@@ -120,13 +121,14 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         }
         else if (jl_is_type_type(decl) &&
                  jl_is_nontuple_type(a)) {   //***
-            if (jl_tparam0(decl) == (jl_value_t*)jl_typetype_tvar) {
+            jl_value_t *tp0 = jl_tparam0(decl);
+            if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have
                 // to match exactly either. this is cached as Type{T}.
                 // analogous to the situation with tuples.
             }
             else {
-                if (a!=jl_tparam0(decl) && !jl_types_equal(a,jl_tparam0(decl)))
+                if (a!=tp0 && !jl_types_equal(a,tp0))
                     return 0;
             }
         }
@@ -144,6 +146,69 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
     return 1;
 }
 
+static inline
+jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
+{
+    uptrint_t uid;
+    if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
+        (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
+        jl_methlist_t *ml = (jl_methlist_t*)jl_cellref(a, uid & (a->length-1));
+        if (ml && ml!=JL_NULL) {
+            jl_value_t *t = jl_tupleref(ml->sig, 0);
+            if (tparam) t = jl_tparam0(t);
+            if (t == ty)
+                return ml;
+        }
+    }
+    return JL_NULL;
+}
+
+static void mtcache_rehash(jl_array_t **pa)
+{
+    size_t len = (*pa)->length;
+    jl_value_t **d = (jl_value_t**)(*pa)->data;
+    jl_array_t *n = jl_alloc_cell_1d(len*2);
+    jl_value_t **nd = (jl_value_t**)n->data;
+    size_t i;
+    for(i=0; i < len; i++) {
+        jl_methlist_t *ml = (jl_methlist_t*)d[i];
+        if (ml && ml!=JL_NULL) {
+            jl_value_t *t = jl_tupleref(ml->sig,0);
+            if (jl_is_type_type(t))
+                t = jl_tparam0(t);
+            uptrint_t uid;
+            if (jl_is_struct_type(t))
+                uid = ((jl_struct_type_t*)t)->uid;
+            else
+                uid = ((jl_bits_type_t*)t)->uid;
+            nd[uid & (len*2-1)] = (jl_value_t*)ml;
+        }
+    }
+    *pa = n;
+}
+
+static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
+                                       int tparam)
+{
+    uptrint_t uid;
+    if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
+        (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
+        while (1) {
+            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->length-1));
+            if (*pml == NULL || *pml == JL_NULL) {
+                *pml = JL_NULL;
+                return pml;
+            }
+            jl_value_t *t = jl_tupleref((*pml)->sig,0);
+            if (tparam) t = jl_tparam0(t);
+            if (t == ty)
+                return pml;
+            mtcache_rehash(pa);
+        }
+    }
+    return NULL;
+}
+
 /*
   Method caches are divided into three parts: one for signatures where
   the first argument is a singleton kind (Type{Foo}), one indexed by the
@@ -156,25 +221,16 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
     jl_methlist_t *ml = JL_NULL;
     if (jl_tuple_len(types) > 0) {
         jl_value_t *ty = jl_t0(types);
-        uptrint_t uid;
         if (jl_is_type_type(ty)) {
             jl_value_t *a0 = jl_tparam0(ty);
-            jl_value_t *tty = (jl_value_t*)jl_typeof(a0);
-            if ((tty == (jl_value_t*)jl_struct_kind && (uid = ((jl_struct_type_t*)a0)->uid)) ||
-                (tty == (jl_value_t*)jl_bits_kind   && (uid = ((jl_bits_type_t*)a0)->uid))) {
-                if (mt->cache_targ!=JL_NULL &&
-                    uid < jl_array_len(mt->cache_targ)) {
-                    ml = (jl_methlist_t*)jl_cellref(mt->cache_targ, uid);
-                    if (ml!=JL_NULL)
-                        goto mt_assoc_bt_lkup;
-                }
+            if (mt->cache_targ != JL_NULL) {
+                ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
+                if (ml!=JL_NULL)
+                    goto mt_assoc_bt_lkup;
             }
         }
-        if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
-            (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
-            if (mt->cache_arg1!=JL_NULL && uid < jl_array_len(mt->cache_arg1)) {
-                ml = (jl_methlist_t*)jl_cellref(mt->cache_arg1, uid);
-            }
+        if (mt->cache_arg1 != JL_NULL) {
+            ml = mtcache_hash_lookup(mt->cache_arg1, ty, 0);
         }
     }
     if (ml == JL_NULL)
@@ -182,7 +238,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
  mt_assoc_bt_lkup:
     while (ml != JL_NULL) {
         if (cache_match_by_type(&jl_tupleref(types,0), jl_tuple_len(types),
-                                (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
+                                (jl_tuple_t*)ml->sig, ml->va)) {
             return ml->func;
         }
         ml = ml->next;
@@ -193,40 +249,35 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
 static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
                                                   jl_value_t **args, size_t n)
 {
+    // NOTE: This function is a huge performance hot spot!!
     jl_methlist_t *ml = JL_NULL;
     if (n > 0) {
         jl_value_t *a0 = args[0];
         jl_value_t *ty = (jl_value_t*)jl_typeof(a0);
-        uptrint_t uid;
-        if ((ty == (jl_value_t*)jl_struct_kind && (uid = ((jl_struct_type_t*)a0)->uid)) ||
-            (ty == (jl_value_t*)jl_bits_kind   && (uid = ((jl_bits_type_t*)a0)->uid))) {
-            if (mt->cache_targ!=JL_NULL &&
-                uid < jl_array_len(mt->cache_targ)) {
-                ml = (jl_methlist_t*)jl_cellref(mt->cache_targ, uid);
+        if (ty == (jl_value_t*)jl_struct_kind ||
+            ty == (jl_value_t*)jl_bits_kind) {
+            if (mt->cache_targ != JL_NULL) {
+                ml = mtcache_hash_lookup(mt->cache_targ, a0, 1);
                 if (ml != JL_NULL)
                     goto mt_assoc_lkup;
             }
         }
-        if ((jl_is_struct_type(ty) && (uid = ((jl_struct_type_t*)ty)->uid)) ||
-            (jl_is_bits_type(ty)   && (uid = ((jl_bits_type_t*)ty)->uid))) {
-            if (mt->cache_arg1!=JL_NULL &&
-                uid < jl_array_len(mt->cache_arg1)) {
-                ml = (jl_methlist_t*)jl_cellref(mt->cache_arg1, uid);
-                if (ml!=JL_NULL) {
-                    if (ml->next==JL_NULL && n==1 && jl_tuple_len(ml->sig)==1)
-                        return ml->func;
-                    if (n==2) {
-                        // some manually-unrolled common special cases
-                        jl_value_t *a1 = args[1];
-                        jl_methlist_t *mn = ml;
-                        if (jl_tuple_len(mn->sig)==2 &&
-                            jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                            return mn->func;
-                        mn = mn->next;
-                        if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
-                            jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
-                            return mn->func;
-                    }
+        if (mt->cache_arg1 != JL_NULL) {
+            ml = mtcache_hash_lookup(mt->cache_arg1, ty, 0);
+            if (ml != JL_NULL) {
+                if (ml->next==JL_NULL && n==1 && jl_tuple_len(ml->sig)==1)
+                    return ml->func;
+                if (n==2) {
+                    // some manually-unrolled common special cases
+                    jl_value_t *a1 = args[1];
+                    jl_methlist_t *mn = ml;
+                    if (jl_tuple_len(mn->sig)==2 &&
+                        jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
+                        return mn->func;
+                    mn = mn->next;
+                    if (mn!=JL_NULL && jl_tuple_len(mn->sig)==2 &&
+                        jl_tupleref(mn->sig,1)==(jl_value_t*)jl_typeof(a1))
+                        return mn->func;
                 }
             }
         }
@@ -235,8 +286,8 @@ static jl_function_t *jl_method_table_assoc_exact(jl_methtable_t *mt,
         ml = mt->cache;
  mt_assoc_lkup:
     while (ml != JL_NULL) {
-        if (jl_tuple_len(ml->sig) == n || ml->va==jl_true) {
-            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va==jl_true)) {
+        if (jl_tuple_len(ml->sig) == n || ml->va) {
+            if (cache_match(args, n, (jl_tuple_t*)ml->sig, ml->va)) {
                 return ml->func;
             }
         }
@@ -305,15 +356,8 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                 uid = ((jl_bits_type_t*)a0)->uid;
             if (uid > 0) {
                 if (mt->cache_targ == JL_NULL)
-                    mt->cache_targ = jl_alloc_cell_1d(0);
-                int al = jl_array_len(mt->cache_targ);
-                if (uid >= (uptrint_t)al) {
-                    jl_array_grow_end(mt->cache_targ, uid+4-al);
-                    int nl = jl_array_len(mt->cache_targ);
-                    for(int i=al; i < nl; i++)
-                        jl_cellref(mt->cache_targ, i) = JL_NULL;
-                }
-                pml = (jl_methlist_t**)&jl_cellref(mt->cache_targ, uid);
+                    mt->cache_targ = jl_alloc_cell_1d(16);
+                pml = mtcache_hash_bp(&mt->cache_targ, a0, 1);
                 goto ml_do_insert;
             }
         }
@@ -323,15 +367,8 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
             uid = ((jl_bits_type_t*)t0)->uid;
         if (uid > 0) {
             if (mt->cache_arg1 == JL_NULL)
-                mt->cache_arg1 = jl_alloc_cell_1d(0);
-            int al = jl_array_len(mt->cache_arg1);
-            if (uid >= (uptrint_t)al) {
-                jl_array_grow_end(mt->cache_arg1, uid+4-al);
-                int nl = jl_array_len(mt->cache_arg1);
-                for(int i=al; i < nl; i++)
-                    jl_cellref(mt->cache_arg1, i) = JL_NULL;
-            }
-            pml = (jl_methlist_t**)&jl_cellref(mt->cache_arg1, uid);
+                mt->cache_arg1 = jl_alloc_cell_1d(16);
+            pml = mtcache_hash_bp(&mt->cache_arg1, t0, 0);
         }
     }
  ml_do_insert:
@@ -403,7 +440,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_tupleref(newast, 0);
-        li->inferred = jl_true;
+        li->inferred = 1;
 #endif
         li->inInference = 0;
     }
@@ -441,6 +478,13 @@ static int tuple_all_Any(jl_tuple_t *t)
     return 1;
 }
 
+static int is_kind(jl_value_t *v)
+{
+    return (v==(jl_value_t*)jl_union_kind || v==(jl_value_t*)jl_struct_kind ||
+            v==(jl_value_t*)jl_bits_kind || v==(jl_value_t*)jl_typector_type ||
+            v==(jl_value_t*)jl_tag_kind);
+}
+
 static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                               jl_sym_t *name, int lim);
 
@@ -456,8 +500,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
+        jl_value_t *decl_i = nth_slot_type(decl,i);
         int set_to_any = 0;
-        if (nth_slot_type(decl,i) == jl_ANY_flag) {
+        if (decl_i == jl_ANY_flag) {
             // don't specialize on slots marked ANY
             temp = jl_tupleref(type, i);
             jl_tupleset(type, i, (jl_value_t*)jl_any_type);
@@ -572,8 +617,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             }
             assert(jl_tupleref(type,i) != (jl_value_t*)jl_bottom_type);
         }
-        else if (jl_is_type_type(elt) &&
-                 very_general_type(nth_slot_type(decl,i))) {
+        else if (jl_is_type_type(elt) && very_general_type(decl_i)) {
             /*
               here's a fairly complex heuristic: if this argument slot's
               declared type is Any, and no definition overlaps with Type
@@ -581,24 +625,79 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               might be passed.
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
+              
+              TypeConstructors are problematic because they can be alternate
+              representations of any type. Extensionally, TC == TC.body, but
+              typeof(TC) != typeof(TC.body). This creates an ambiguity:
+              Type{TC} is type-equal to Type{TC.body}, yet a slot
+              x::TypeConstructor matches the first but not the second, while
+              also matching all other TypeConstructors. This means neither
+              Type{TC} nor TypeConstructor is more specific.
+              
+              To solve this, we identify "kind slots", which are slots
+              for which some definition specifies a kind (e.g. AbstractKind).
+              Those tend to be in reflective functions that look at types
+              themselves. For these slots we specialize on jl_typeof(T) instead
+              of Type{T}, i.e. the kind of the type rather than the specific
+              type.
             */
-            int ok=1;
+            int ok=1, kindslot=0;
             jl_methlist_t *curr = mt->defs;
+            jl_value_t *kind = (jl_value_t*)jl_typeof(jl_tparam0(elt));
             while (curr != JL_NULL) {
                 jl_value_t *slottype = nth_slot_type(curr->sig, i);
-                if (slottype &&
-                    !very_general_type(slottype) &&
-                    jl_type_intersection(slottype,
-                                         (jl_value_t*)jl_type_type) !=
-                    (jl_value_t*)jl_bottom_type) {
-                    ok=0;
-                    break;
+                if (slottype && curr->func!=method) {
+                    if (slottype == kind) {
+                        ok=0;
+                        break;
+                    }
+                    if (is_kind(slottype))
+                        kindslot=1;
                 }
                 curr = curr->next;
             }
             if (ok) {
-                jl_tupleset(type, i, (jl_value_t*)jl_typetype_type);
+                if (kindslot) {
+                    jl_tupleset(type, i, kind);
+                }
+                else {
+                    curr = mt->defs;
+                    while (curr != JL_NULL) {
+                        jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                        if (slottype && curr->func!=method) {
+                            if (!very_general_type(slottype) &&
+                                jl_type_intersection(slottype, (jl_value_t*)jl_type_type) !=
+                                (jl_value_t*)jl_bottom_type) {
+                                ok=0;
+                                break;
+                            }
+                        }
+                        curr = curr->next;
+                    }
+                    if (ok) {
+                        jl_tupleset(type, i, jl_typetype_type);
+                    }
+                }
             }
+        }
+        else if (is_kind(decl_i)) {
+            // if a slot is specialized for a particular kind, it can be
+            // considered a reflective method and so only needs to be
+            // specialized for type representation, not type extent.
+            jl_methlist_t *curr = mt->defs;
+            int ok=1;
+            while (curr != JL_NULL) {
+                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                if (slottype && curr->func!=method) {
+                    if (jl_subtype(slottype, decl_i, 0)) {
+                        ok=0;
+                        break;
+                    }
+                }
+                curr = curr->next;
+            }
+            if (ok)
+                jl_tupleset(type, i, decl_i);
         }
     }
 
@@ -606,9 +705,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (jl_tuple_len(type) > jl_unbox_long(mt->max_args) &&
+    if (jl_tuple_len(type) > mt->max_args &&
         jl_is_seq_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
-        size_t nspec = jl_unbox_long(mt->max_args)+2;
+        size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
@@ -979,7 +1078,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             l->tvars = tvars;
             l->va = (jl_tuple_len(type) > 0 &&
                      jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
-                jl_true : jl_false;
+                1 : 0;
             l->invokes = JL_NULL;
             l->func = method;
             JL_SIGATOMIC_END();
@@ -1006,7 +1105,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&
                   jl_is_seq_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
-        jl_true : jl_false;
+        1 : 0;
     newrec->func = method;
     newrec->invokes = JL_NULL;
     newrec->next = l;
@@ -1070,14 +1169,14 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     if (mt->cache_arg1 != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_arg1); i++) {
             jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_arg1,i);
-            if (*pl != JL_NULL)
+            if (*pl && *pl != JL_NULL)
                 remove_conflicting(pl, (jl_value_t*)type);
         }
     }
     if (mt->cache_targ != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_targ); i++) {
             jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_targ,i);
-            if (*pl != JL_NULL)
+            if (*pl && *pl != JL_NULL)
                 remove_conflicting(pl, (jl_value_t*)type);
         }
     }
@@ -1086,8 +1185,8 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     size_t na = jl_tuple_len(t);
     if (is_va_tuple(t))
         na--;
-    if (na > jl_unbox_long(mt->max_args)) {
-        mt->max_args = jl_box_long(na);
+    if (na > mt->max_args) {
+        mt->max_args = na;
     }
     JL_SIGATOMIC_END();
     return ml;
@@ -1356,7 +1455,7 @@ static void print_methlist(jl_value_t *outstr, char *name, jl_methlist_t *ml)
         else {
             jl_lambda_info_t *li = ml->func->linfo;
             assert(li);
-            long lno = jl_unbox_long(li->line);
+            long lno = li->line;
             if (lno > 0) {
                 char *fname = ((jl_sym_t*)li->file)->name;
                 JL_PRINTF(s, " at %s:%d", fname, lno);
@@ -1497,7 +1596,7 @@ jl_value_t *jl_matching_methods(jl_function_t *gf, jl_value_t *type, int lim)
 {
     assert(jl_is_func(gf));
     if (gf->fptr == jl_f_no_function)
-        return jl_false;
+        return (jl_value_t*)jl_an_empty_cell;
     if (gf->fptr == jl_f_ctor_trampoline)
         jl_add_constructors((jl_struct_type_t*)gf);
     if (!jl_is_gf(gf)) {

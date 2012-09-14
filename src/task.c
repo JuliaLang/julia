@@ -4,7 +4,6 @@
 */
 #include <stdlib.h>
 #include <string.h>
-#include <setjmp.h>
 #include <assert.h>
 #include <sys/mman.h>
 #include <signal.h>
@@ -17,9 +16,7 @@
 #include <execinfo.h>
 #elif defined(__WIN32__)
 #include <Winbase.h>
-#include <setjmp.h>
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
+#include <malloc.h>
 #else
 // This gives unwind only local unwinding options ==> faster code
 #define UNW_LOCAL_ONLY
@@ -40,11 +37,11 @@ struct _probe_data {
     intptr_t high_bound;	/* above probe on stack */
     intptr_t prior_local;	/* value of probe_local from earlier call */
 
-    jmp_buf probe_env;	/* saved environment of probe */
-    jmp_buf probe_sameAR;	/* second environment saved by same call */
-    jmp_buf probe_samePC;	/* environment saved on previous call */
+    jl_jmp_buf probe_env;	/* saved environment of probe */
+    jl_jmp_buf probe_sameAR;	/* second environment saved by same call */
+    jl_jmp_buf probe_samePC;	/* environment saved on previous call */
 
-    jmp_buf * ref_probe;	/* switches between probes */
+    jl_jmp_buf * ref_probe;	/* switches between probes */
 };
 
 static void boundhigh(struct _probe_data *p)
@@ -57,9 +54,9 @@ static void probe(struct _probe_data *p)
 {
     p->prior_local = p->probe_local;
     p->probe_local = (intptr_t)&p;
-    setjmp( *(p->ref_probe) );
+    jl_setjmp( *(p->ref_probe), 1 );
     p->ref_probe = &p->probe_env;
-    setjmp( p->probe_sameAR );
+    jl_setjmp( p->probe_sameAR, 1 );
     boundhigh(p);
 }
 
@@ -95,9 +92,9 @@ extern char *jl_stack_hi;
 static void _probe_arch(void)
 {
     struct _probe_data p;
-    memset(p.probe_env, 0, sizeof(jmp_buf));
-    memset(p.probe_sameAR, 0, sizeof(jmp_buf));
-    memset(p.probe_samePC, 0, sizeof(jmp_buf));
+    memset(p.probe_env, 0, sizeof(jl_jmp_buf));
+    memset(p.probe_sameAR, 0, sizeof(jl_jmp_buf));
+    memset(p.probe_samePC, 0, sizeof(jl_jmp_buf));
     p.ref_probe = &p.probe_samePC;
 
     _infer_stack_direction();
@@ -145,7 +142,7 @@ jl_gcframe_t *jl_pgcstack = NULL;
 static void start_task(jl_task_t *t);
 
 #ifdef COPY_STACKS
-jmp_buf * volatile jl_jmp_target;
+jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
@@ -164,7 +161,7 @@ static void save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
-void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char *p)
+void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
     char* _x = (char*)(t->stackbase-t->ssize);
     if (!p) {
@@ -179,10 +176,10 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jmp_buf *where, char 
     if (t->stkbuf != NULL) {
         memcpy(_x, t->stkbuf, t->ssize);
     }
-    longjmp(*jl_jmp_target, 1);
+    jl_longjmp(*jl_jmp_target, 1);
 }
 
-static void switch_stack(jl_task_t *t, jmp_buf *where)
+static void switch_stack(jl_task_t *t, jl_jmp_buf *where)
 {
     assert(t == jl_current_task);
     if (t->stkbuf == NULL) {
@@ -194,13 +191,13 @@ static void switch_stack(jl_task_t *t, jmp_buf *where)
     }
 }
 
-void jl_switch_stack(jl_task_t *t, jmp_buf *where)
+void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where)
 {
     switch_stack(t, where);
 }
 #endif
 
-static void ctx_switch(jl_task_t *t, jmp_buf *where)
+static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 {
     if (t == jl_current_task)
         return;
@@ -217,7 +214,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
       *IF AND ONLY IF* throwing the exception involved a task switch.
     */
     //JL_SIGATOMIC_BEGIN();
-    if (!setjmp(jl_current_task->ctx)) {
+    if (!jl_setjmp(jl_current_task->ctx, 1)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
@@ -232,9 +229,9 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
 #ifdef COPY_STACKS
         jl_jmp_target = where;
-        longjmp(lastt->base_ctx, 1);
+        jl_longjmp(lastt->base_ctx, 1);
 #else
-        longjmp(*where, 1);
+        jl_longjmp(*where, 1);
 #endif
     }
     //JL_SIGATOMIC_END();
@@ -242,7 +239,7 @@ static void ctx_switch(jl_task_t *t, jmp_buf *where)
 
 static jl_value_t *switchto(jl_task_t *t)
 {
-    if (t->done==jl_true) {
+    if (t->done) {
         jl_task_arg_in_transit = (jl_value_t*)jl_null;
         return t->result;
     }
@@ -301,7 +298,7 @@ static intptr_t ptr_demangle(intptr_t p)
 #endif //__linux__
 
 /* rebase any values in saved state to the new stack */
-static void rebase_state(jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
+static void rebase_state(jl_jmp_buf *ctx, intptr_t local_sp, intptr_t new_sp)
 {
     ptrint_t *s = (ptrint_t*)ctx;
     ptrint_t diff = new_sp - local_sp; /* subtract old base, and add new base */
@@ -342,8 +339,8 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
 
 static void finish_task(jl_task_t *t, jl_value_t *resultval)
 {
-    assert(t->done==jl_false);
-    t->done = jl_true;
+    assert(t->done==0);
+    t->done = 1;
     t->result = resultval;
     // TODO: early free of t->stkbuf
 #ifdef COPY_STACKS
@@ -365,7 +362,7 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (setjmp(t->base_ctx)) {
+    if (jl_setjmp(t->base_ctx, 1)) {
         // we get here to remove our data from the process stack
         switch_stack(jl_current_task, jl_jmp_target);
     }
@@ -385,7 +382,7 @@ static void start_task(jl_task_t *t)
     finish_task(t, res);
     jl_task_t *cont = t->on_exit;
     // if parent task has exited, try its parent, and so on
-    while (cont->done==jl_true)
+    while (cont->done)
         cont = cont->on_exit;
     jl_switchto(cont, t->result);
     assert(0);
@@ -394,7 +391,7 @@ static void start_task(jl_task_t *t)
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
-    if (setjmp(t->ctx)) {
+    if (jl_setjmp(t->ctx, 1)) {
         start_task(t);
     }
     // this runs when the task is created
@@ -534,11 +531,11 @@ void jl_raise(jl_value_t *e)
         jl_exception_in_transit = bt;
         JL_GC_POP();
     }
-    if (jl_current_task == eh) {
-        longjmp(*eh->state.eh_ctx, 1);
+    if (jl_current_task == eh && eh->state.eh_ctx!=0) {
+        jl_longjmp(*eh->state.eh_ctx, 1);
     }
     else {
-        if (eh->done==jl_true || eh->state.eh_ctx==NULL) {
+        if (eh->done || eh->state.eh_ctx==NULL) {
             // our handler is not available, use root task
             JL_PRINTF(JL_STDERR, "warning: exception handler exited\n");
             eh = jl_root_task;
@@ -560,7 +557,7 @@ jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
     t->ssize = ssize;
     t->on_exit = jl_current_task;
     t->tls = jl_current_task->tls;
-    t->done = jl_false;
+    t->done = 0;
     t->start = start;
     t->result = NULL;
     t->state.err = 0;
@@ -678,7 +675,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task->stkbuf = NULL;
     jl_current_task->on_exit = jl_current_task;
     jl_current_task->tls = NULL;
-    jl_current_task->done = jl_false;
+    jl_current_task->done = 0;
     jl_current_task->start = NULL;
     jl_current_task->result = NULL;
     jl_current_task->state.err = 0;

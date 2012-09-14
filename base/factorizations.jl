@@ -112,50 +112,95 @@ end
 
 abstract  Factorization{T}
 
-type Cholesky{T} <: Factorization{T}
+type CholeskyDense{T} <: Factorization{T}
     LR::Matrix{T}
     uplo::LapackChar
-    function Cholesky(A::Matrix{T}, ul::LapackChar)
-        if ul != 'U' && ul != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
-        Acopy = copy(A)
-        _jl_lapack_potrf(ul, Acopy) == 0 ? new(ul == 'U' ? triu(Acopy) : tril(Acopy), ul) : error("Cholesky: Matrix is not positive-definite")
-    end
 end
 
-Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, 'U')
+# chol() does not check that input matrix is symmetric/hermitian
+# It simply uses upper triangular half
+function chol{T<:LapackScalar}(A::Matrix{T}, ul::LapackChar)
+    if ul != 'U' && ul != 'L'; error("Cholesky: uplo must be 'U' or 'L'"); end
+    C = CholeskyDense{T}(Array(T, size(A)), ul)
+    chol(C, A)
+end
+chol{T<:Real}(A::Matrix{T}, ul::LapackChar) = chol(float64(A), ul)
+chol(A) = chol(A, 'U')
 
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
+function _chol{T<:LapackScalar}(C::CholeskyDense{T})
+    if _jl_lapack_potrf(C.uplo, C.LR) != 0
+        error("Cholesky: Matrix is not positive-definite")
+    end
+    if C.uplo == 'U'
+        triu!(C.LR)
+    else
+        tril!(C.LR)
+    end
+    C
+end
+function chol{T}(C::CholeskyDense{T}, A::Matrix{T})
+    copy_to(C.LR, A)
+    _chol(C)
+end
+function chol!{T<:LapackScalar}(A::Matrix{T}, ul::LapackChar)
+    C = CholeskyDense{T}(A, ul)
+    _chol(C)
+end
+    
+factors(C::CholeskyDense) = C.LR
+
+
+(\){T<:LapackScalar}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_potrs(C.uplo, C.LR, copy(B))
 
-inv(C::Cholesky) = _jl_lapack_potri(C.uplo, copy(C.LR)) # should symmetrize the result
+inv{T<:LapackScalar}(C::CholeskyDense{T}) = _jl_lapack_potri(C.uplo, copy(C.LR)) # should symmetrize the result
  
-type LU{T} <: Factorization{T}
+type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
     ipiv::Vector{Int32}
-    function LU(lu::Matrix{T}, ipiv::Vector{Int32})
+    function LUDense(lu::Matrix{T}, ipiv::Vector{Int32})
         m, n = size(lu)
-        m == numel(ipiv) ? new(lu, ipiv) : error("LU: dimension mismatch")
+        m == numel(ipiv) ? new(lu, ipiv) : error("LUDense: dimension mismatch")
     end
 end
+size(A::LUDense) = size(A.lu)
+size(A::LUDense,n) = size(A.lu,n)
 
-function LU{T<:Union(Float64,Float32,Complex64,Complex128)}(A::Matrix{T})
-    lu, ipiv = _jl_lapack_getrf(copy(A))
-    LU{T}(lu, ipiv)
+lu{T<:LapackScalar}(A::Matrix{T}) = lu!(copy(A))
+function lu!{T<:LapackScalar}(A::Matrix{T})
+    lu, ipiv = _jl_lapack_getrf(A)
+    LUDense{T}(lu, ipiv)
 end
 
-LU{T<:Number}(A::Matrix{T}) = LU(float64(A))
+lu{T<:Real}(A::Matrix{T}) = lu(float64(A))
 
-function det(lu::LU)
+function det(lu::LUDense)
     m, n = size(lu.lu)
     if m != n error("det only defined for square matrices") end
     prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
 
-det(A::Matrix) = det(LU(A))
+det(A::Matrix) = det(lu(A))
 
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) =
+(\){T<:LapackScalar}(lu::LUDense{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_getrs('N', lu.lu, lu.ipiv, copy(B))
-inv(lu::LU) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)
+
+inv{T<:LapackScalar}(lu::LUDense{T}) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)
+
+function factors{T<:LapackScalar}(lu::LUDense{T}) 
+    LU, ipiv = lu.lu, lu.ipiv
+    m, n = size(LU)
+
+    L = m >= n ? tril(LU, -1) + eye(m,n) : tril(LU, -1)[:, 1:m] + eye(m,m)
+    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
+    P = [1:m]
+    for i=1:min(m,n)
+        t = P[i]
+        P[i] = P[ipiv[i]]
+        P[ipiv[i]] = t
+    end
+    L, U, P
+end
 
 ## Multiplication by Q or Q' from a QR factorization
 for (orm2r, elty) in
@@ -193,74 +238,72 @@ for (orm2r, elty) in
     end
 end
 
-type QR{T} <: Factorization{T}
+abstract QRFactorization{T} <: Factorization{T}
+
+## QR decomposition without column pivots
+type QRDense{T} <: QRFactorization{T}
     hh::Matrix{T}                       # Householder transformations and R
     tau::Vector{T}                      # Scalar factors of transformations
-    function QR(hh::Matrix{T}, tt::Vector{T})
+    function QRDense(hh::Matrix{T}, tt::Vector{T})
         numel(tt) == min(size(hh)) ? new(hh, tt) : error("QR: mismatched dimensions")
     end
 end
+size(A::QRFactorization) = size(A.hh)
+size(A::QRFactorization,n) = size(A.hh,n)
 
-function QR(A::Matrix)
+function qr{T<:LapackScalar}(A::StridedMatrix{T})
     hh, tt = _jl_lapack_geqrf(copy(A))
-    QR{typeof(A[1])}(hh, tt)
+    QRDense{eltype(A)}(hh, tt)
 end
 
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T}) = size(A.hh)
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},n) = size(A.hh,n)
+qr{T<:Real}(x::StridedMatrix{T}) = qr(float64(x))
+
+function factors{T<:LapackScalar}(qrd::QRDense{T})
+    aa, tau = qrd.hh, qrd.tau
+    R = triu(aa[1:min(size(qrd)),:])
+    _jl_lapack_orgqr(aa, tau), R
+end
 
 ## Multiplication by Q from the QR decomposition
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                             B::StridedVecOrMat{T})
+(*){T<:LapackScalar}(A::QRFactorization{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
-end
 
 ## Multiplication by Q' from the QR decomposition
-function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                                  B::StridedVecOrMat{T})
+Ac_mul_B{T<:LapackScalar}(A::QRFactorization{T}, B::StridedVecOrMat{T}) =
     _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
-end
 
 ## Least squares solution.  Should be more careful about cases with m < n
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                             B::StridedVecOrMat{T})
+function (\){T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = numel(A.tau)
     qtb = isa(B, Vector) ? (A' * B)[1:n] : (A' * B)[1:n, :]
     ## Not sure if this avoids copying A.hh[1:n,:] but at least it is not all of A.hh
     _jl_lapack_trtrs('U','N','N', A.hh[1:n,:], qtb)
 end
 
-type QRP{T} <: Factorization{T}
+type QRPDense{T} <: QRFactorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     jpvt::Vector{Int32}
-    function QRP(hh::Matrix{T}, tt::Vector{T}, jj::Vector{Int32})
+    function QRPDense(hh::Matrix{T}, tt::Vector{T}, jj::Vector{Int32})
         m, n = size(hh)
-        numel(tt) == min(m,n) && numel(jj) == n ? new(hh,tt,jj) : error("QRP: mismatched dimensions")
+        numel(tt) == min(m,n) && numel(jj) == n ? new(hh,tt,jj) : error("QRPDense: mismatched dimensions")
     end
 end
 
-function QRP(A::Matrix)
-    hh, tt, jj = _jl_lapack_geqp3(copy(A))
-    QRP{typeof(A[1])}(hh, tt, jj)
+function qrp{T<:LapackScalar}(A::StridedMatrix{T})
+    aa, tau, jpvt = _jl_lapack_geqp3(copy(A))
+    QRPDense{T}(aa, tau, jpvt)
+end
+qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
+
+function factors{T<:LapackScalar}(qrpd::QRPDense{T})
+    aa, tau = qrpd.hh, qrpd.tau
+    R = triu(aa[1:min(size(qrpd)),:])
+    _jl_lapack_orgqr(aa, tau), R, qrpd.jpvt
 end
 
-## Not sure how to avoid cut-and-paste programming on these.
-## Create another abstract type with both QR{T} and QRP{T} as subtypes?
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T}) = size(A.hh)
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},n) = size(A.hh,n)
-
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                             B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
-end
-
-function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                                  B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
-end
-
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+# FIXME \
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRPDense{T},
                                                              B::StridedVecOrMat{T})
     n = numel(A.tau)
     ## Replace this with a direct call to _jl_lapack_trtrs to save copying A.hh?
@@ -268,7 +311,7 @@ function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
     triu(A.hh[1:n,:]) \ (A' * B)[1:n]   
 end
 
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
+function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRPDense{T},
                                                              B::StridedVecOrMat{T})
     ## may be better to define one method for B::Vector{T} and another for StridedMatrix
     BV  = isa(B, Vector)
@@ -281,3 +324,49 @@ end
 ##ToDo:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
+
+
+#### Factorizations for Tridiagonal ####
+type LDLTTridiagonal{T} <: Factorization{T}
+    D::Vector{T}
+    E::Vector{T}
+end
+function ldlt{T<:LapackScalar}(A::Tridiagonal{T})
+    D = copy(A.d)
+    E = copy(A.dl)
+    _jl_lapack_pttrf(D, E)
+    LDLTTridiagonal{T}(D, E)
+end
+
+(\){T<:LapackScalar}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
+    _jl_lapack_pttrs(C.D, C.E, copy(B))
+
+function factors{T<:LapackScalar}(C::LDLTTridiagonal{T})
+    N = length(C.D)
+    z = zeros(N-1)
+    Tridiagonal(C.E, ones(N), z), Tridiagonal(z, C.D, z)
+end
+
+type LUTridiagonal{T} <: Factorization{T}
+    lu::Tridiagonal{T}
+    ipiv::Vector{Int32}
+    function LUTridiagonal(lu::Tridiagonal{T}, ipiv::Vector{Int32})
+        m, n = size(lu)
+        m == numel(ipiv) ? new(lu, ipiv) : error("LUTridiagonal: dimension mismatch")
+    end
+end
+show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
+
+function lu{T<:LapackScalar}(A::Tridiagonal{T})
+    lu, ipiv = _jl_lapack_gttrf(copy(A))
+    LUTridiagonal{T}(lu, ipiv)
+end
+
+function det(lu::LUTridiagonal)
+    prod(lu.lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
+end
+
+det(A::Tridiagonal) = det(lu(A))
+
+(\){T<:LapackScalar}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
+    _jl_lapack_gttrs('N', lu.lu, lu.ipiv, copy(B))

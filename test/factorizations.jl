@@ -15,15 +15,15 @@ begin
     bd   = rand(n)
     bz   = complex(bd)
                                         # Cholesky decomposition
-    chd  = Cholesky(symd)
-    chz  = Cholesky(herz)
+    chd  = chol(symd)
+    chz  = chol(herz)
     xd   = chd \ bd
     xz   = chz \ bz    
     @assert norm(symd * xd - bd) < Eps
     @assert norm(herz * xz - bz) < Eps
                                         # LU decomposition
-    lud  = LU(sqd)
-    luz  = LU(sqz)    
+    lud  = lu(sqd)
+    luz  = lu(sqz)    
     xd   = lud \ bd
     xz   = luz \ bz
     @assert norm(sqd * xd - bd) < Eps
@@ -38,10 +38,10 @@ begin
     @assert_approx_eq det(symd) prod(eig(symd)[1])
 #    @assert_approx_eq det(herz) prod(eig(herz)[1])
 
-    qrd  = QR(mmd)                      # QR and QRP decompositions
-    qrz  = QR(mmz)
-    qrpd = QRP(mmd)
-    qrpz = QRP(mmz)
+    qrd  = qr(mmd)                      # QR and QRP decompositions
+    qrz  = qr(mmz)
+    qrpd = qrp(mmd)
+    qrpz = qrp(mmz)
     yyd  = randn(3*n)
     yyz  = complex(yyd)
     qyd  = qrd * yyd

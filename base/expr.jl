@@ -55,6 +55,7 @@ function show(io, tv::TypeVar)
 end
 
 expand(x) = ccall(:jl_expand, Any, (Any,), x)
+macroexpand(x) = ccall(:jl_macroexpand, Any, (Any,), x)
 
 ## misc syntax ##
 

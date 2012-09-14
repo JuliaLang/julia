@@ -180,12 +180,13 @@ function serialize(s, linfo::LambdaStaticData)
     serialize(s, linfo.ast)
     serialize(s, linfo.sparams)
     serialize(s, linfo.inferred)
+    serialize(s, linfo.module)
 end
 
 function serialize_type_data(s, t)
     tname = t.name.name
     serialize(s, tname)
-    # TODO: use full name
+    serialize(s, t.name.module)
     if isbound(tname) && is(t,eval(tname))
         serialize(s, ())
     else
@@ -299,12 +300,14 @@ function deserialize(s, ::Type{LambdaStaticData})
     ast = deserialize(s)
     sparams = deserialize(s)
     infr = force(deserialize(s))
+    mod = force(deserialize(s))
     if has(_jl_known_lambda_data, lnumber)
         return _jl_known_lambda_data[lnumber]
     else
         linfo = ccall(:jl_new_lambda_info, Any, (Any, Any),
                       force(ast), force(sparams))
         linfo.inferred = infr
+        linfo.module = mod
         _jl_known_lambda_data[lnumber] = linfo
         return linfo
     end
@@ -359,8 +362,9 @@ end
 
 function deserialize(s, ::Type{AbstractKind})
     name = deserialize(s)::Symbol
+    mod = deserialize(s)::Module
     params = force(deserialize(s))
-    ty = eval(name)
+    ty = eval(mod,name)
     if is(params,())
         return ty
     end

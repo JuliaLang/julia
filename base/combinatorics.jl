@@ -55,7 +55,7 @@ function binomial{T<:Integer}(n::T, k::T)
         rr += 1
         nn += 1
     end
-    return sgn*convert(T,x)
+    return sgn*iround(T,x)
 end
 
 const nCr = binomial

@@ -40,8 +40,10 @@ static jl_array_t *_new_array(jl_type_t *atype,
 
     int ndimwords = jl_array_ndimwords(ndims);
     if (tot <= ARRAY_INLINE_NBYTES) {
-        a = allocobj((sizeof(jl_array_t)+tot+ndimwords*sizeof(size_t)+15)&-16);
+        size_t tsz = tot>sizeof(size_t) ? tot-sizeof(size_t) : tot;
+        a = allocobj((sizeof(jl_array_t)+tsz+ndimwords*sizeof(size_t)+15)&-16);
         a->type = atype;
+        a->ismalloc = 0;
         data = (&a->_space[0] + ndimwords*sizeof(size_t));
         if (tot > 0 && !isunboxed) {
             memset(data, 0, tot);
@@ -51,6 +53,7 @@ static jl_array_t *_new_array(jl_type_t *atype,
         a = allocobj((sizeof(jl_array_t)+ndimwords*sizeof(size_t)+15)&-16);
         JL_GC_PUSH(&a);
         a->type = atype;
+        a->ismalloc = 1;
         // temporarily initialize to make gc-safe
         a->data = NULL;
         jl_value_t **powner = (jl_value_t**)(&a->_space[0] + ndimwords*sizeof(size_t));
@@ -110,16 +113,19 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
             memcpy(mp->ptr, data->data, data->length * data->elsize);
             a->data = mp->ptr;
             jl_array_data_owner(a) = (jl_value_t*)mp;
+            a->ismalloc = 1;
             //data->data = mp->ptr;
             //data->offset = 0;
             //data->maxsize = data->length;
             //jl_array_data_owner(data) = (jl_value_t*)mp;
         }
         else {
+            a->ismalloc = 0;
             jl_array_data_owner(a) = (jl_value_t*)data;
         }
     }
     else {
+        a->ismalloc = data->ismalloc;
         jl_array_data_owner(a) = jl_array_data_owner(data);
     }
 
@@ -177,9 +183,11 @@ jl_array_t *jl_ptr_to_array_1d(jl_type_t *atype, void *data, size_t nel,
     a->ndims = 1;
 
     if (own_buffer) {
-        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data);
+        a->ismalloc = 1;
+        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz);
     }
     else {
+        a->ismalloc = 0;
         jl_array_data_owner(a) = (jl_value_t*)a;
     }
 
@@ -218,9 +226,11 @@ jl_array_t *jl_ptr_to_array(jl_type_t *atype, void *data, jl_tuple_t *dims,
     a->ndims = ndims;
 
     if (own_buffer) {
-        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data);
+        a->ismalloc = 1;
+        jl_array_data_owner(a) = (jl_value_t*)jl_gc_acquire_buffer(data,nel*elsz);
     }
     else {
+        a->ismalloc = 0;
         jl_array_data_owner(a) = (jl_value_t*)a;
     }
 
@@ -285,7 +295,7 @@ jl_value_t *jl_array_to_string(jl_array_t *a)
         jl_ascii_string_type : jl_utf8_string_type;
     jl_value_t *s = alloc_2w();
     s->type = (jl_type_t*)string_type;
-    jl_fieldref(s,0) = (jl_value_t*)a;
+    jl_set_nth_field(s, 0, (jl_value_t*)a);
     return s;
 }
 
@@ -436,6 +446,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         a->maxsize = newlen;
         a->data = newdata;
         jl_array_data_owner(a) = (jl_value_t*)mp;
+        a->ismalloc = 1;
     }
     a->length += inc; a->nrows += inc;
 }
@@ -444,7 +455,11 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec > a->length)
         jl_error("array_del_end: index out of range");
-    memset((char*)a->data + (a->length-dec)*a->elsize, 0, dec*a->elsize);
+    char *ptail = (char*)a->data + (a->length-dec)*a->elsize;
+    if (a->ptrarray)
+        memset(ptail, 0, dec*a->elsize);
+    else
+        ptail[0] = 0;
     a->length -= dec; a->nrows -= dec;
 }
 
@@ -482,7 +497,7 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
         }
         memmove(&newdata[nb], a->data, anb);
         a->data = newdata;
-        if (mp) { jl_array_data_owner(a) = (jl_value_t*)mp; }
+        if (mp) { jl_array_data_owner(a) = (jl_value_t*)mp; a->ismalloc = 1; }
     }
     a->length += inc; a->nrows += inc;
 }

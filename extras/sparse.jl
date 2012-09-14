@@ -360,7 +360,7 @@ function findn_nzs{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
+function sprand_rng(m::Int, n::Int, density::FloatingPoint, rng::Function)
     # TODO: Need to be able to generate int32 random integer arrays.
     # That will save extra memory utilization in the int32() calls.
     numnz = int(m*n*density)
@@ -372,8 +372,8 @@ function sprand_rng(m::Int, n::Int, density::Float, rng::Function)
     return S
 end
 
-sprand(m::Int, n::Int, density::Float)  = sprand_rng (m,n,density,rand)
-sprandn(m::Int, n::Int, density::Float) = sprand_rng (m,n,density,randn)
+sprand(m::Int, n::Int, density::FloatingPoint)  = sprand_rng (m,n,density,rand)
+sprandn(m::Int, n::Int, density::FloatingPoint) = sprand_rng (m,n,density,randn)
 #sprandi(m,n,density) = sprand_rng (m,n,density,randi)
 
 spones{T}(S::SparseMatrixCSC{T}) =
@@ -672,12 +672,7 @@ function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector
 end
 
 ## assign
-assign(A::SparseMatrixCSC,v::AbstractArray,i::Integer) =
-    invoke(assign, (SparseMatrixCSC, Any, Integer), A, v, i)
-assign(A::SparseMatrixCSC, v::AbstractArray, i0::Integer, i1::Integer) =
-    invoke(assign, (SparseMatrixCSC, Any, Integer, Integer), A, v, i0, i1)
-assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i))
-assign(A::SparseMatrixCSC, v, I::(Integer,Integer)) = assign(A, v, I[1], I[2])
+assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i)...)
 
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
@@ -783,15 +778,6 @@ function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Intege
     end
     return A
 end
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, J::AbstractVector{S}) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, J)
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, i::Integer, J::AbstractVector{S}) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, [i], J)
-
-assign{T,S<:Integer}(A::SparseMatrixCSC{T}, v::AbstractMatrix, I::AbstractVector{S}, j::Integer) =
-    invoke(assign, (SparseMatrixCSC{T}, AbstractMatrix, AbstractVector, AbstractVector), A, v, I, [j])
 
 assign(A::SparseMatrixCSC, v::AbstractMatrix, i::Integer, J::AbstractVector) = assign(A, v, [i], J)
 assign(A::SparseMatrixCSC, v::AbstractMatrix, I::AbstractVector, J::Integer) = assign(A, v, I, [j])
@@ -1006,9 +992,6 @@ end
 
 ref{T}(S::SparseAccumulator{T}, i::Integer) = S.flags[i] ? S.vals[i] : zero(T)
 
-assign(S::SparseAccumulator, v::AbstractArray, i::Integer) =
-    invoke(assign, (SparseAccumulator, Any, Integer), S, v, i)
-
 function assign(S::SparseAccumulator, v, i::Integer)
     if v == 0
         if S.flags[i]
@@ -1039,49 +1022,4 @@ function assign(S::SparseAccumulator, v, i::Integer)
         end
     end
     return S
-end
-                                                
-type Tridiagonal{T<:Float} <: AbstractMatrix{T}
-    a::Vector{T}   # sub-diagonal
-    b::Vector{T}   # diagonal
-    c::Vector{T}   # sup-diagonal
-    cp::Vector{T}  # scratch space, sup-diagonal
-    dp::Vector{T}  # scratch space, rhs
-
-    function Tridiagonal(N::Int)
-        cp = Array(T, N)
-        dp = Array(T, N)
-        new(cp, cp, cp, cp, dp)  # first three will be overwritten
-    end
-end
-function Tridiagonal{T}(a::Vector{T}, b::Vector{T}, c::Vector{T})
-    N = length(b)
-    if length(a) != N || length(c) != N
-        error("All three vectors must have the same length")
-    end
-    M = Tridiagonal{T}(N)
-    M.a = copy(a)
-    M.b = copy(b)
-    M.c = copy(c)
-    return M
-end
-size(M::Tridiagonal) = (length(M.b), length(M.b))
-function show(io, M::Tridiagonal)
-    println(io, summary(M), ":")
-    print_matrix(io, vcat((M.a)', (M.b)', (M.c)'))
-#    println(io, " sub: ", (M.a)')
-#    println(io, "diag: ", (M.b)')
-#    println(io, " sup: ", (M.c)')
-end
-full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
-function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
-    A = zeros(T, size(M))
-    for i = 1:length(M.b)
-        A[i,i] = M.b[i]
-    end
-    for i = 1:length(M.b)-1
-        A[i+1,i] = M.a[i+1]
-        A[i,i+1] = M.c[i]
-    end
-    return A
 end

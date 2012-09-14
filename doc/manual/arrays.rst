@@ -62,25 +62,26 @@ dimension sizes passed as a variable number of arguments.
 6.  ``falses(dims...)`` — a ``Bool`` array with all values ``false``
 7.  ``reshape(A, dims...)`` — an array with the same data as the given
     array, but with different dimensions.
-8.  ``copy(A)`` — copy ``A``
-9.  ``similar(A, element_type, dims...)`` — an uninitialized array of
+8.  ``copy(A)``  — copy ``A``
+9.  ``deepcopy(A)`` — copy ``A``, recursively copying its elements
+10. ``similar(A, element_type, dims...)`` — an uninitialized array of
     the same type as the given array (dense, sparse, etc.), but with the
     specified element type and dimensions. The second and third
     arguments are both optional, defaulting to the element type and
     dimensions of ``A`` if omitted.
-10. ``reinterpret(type, A)`` — an array with the same binary data as the
+11. ``reinterpret(type, A)`` — an array with the same binary data as the
     given array, but with the specified element type.
-11. ``rand(dims)`` — random array with ``Float64`` uniformly distributed
+12. ``rand(dims)`` — random array with ``Float64`` uniformly distributed
     values in [0,1)
-12. ``randf(dims)`` — random array with ``Float32`` uniformly
+13. ``randf(dims)`` — random array with ``Float32`` uniformly
     distributed values in [0,1)
-13. ``randn(dims)`` — random array with ``Float64`` normally distributed
+14. ``randn(dims)`` — random array with ``Float64`` normally distributed
     random values with a mean of 0 and standard deviation of 1
-14. ``eye(n)`` — n-by-n identity matrix
-15. ``eye(m, n)`` — m-by-n identity matrix
-16. ``linspace(start, stop, n)`` — a vector of ``n`` linearly-spaced
+15. ``eye(n)`` — n-by-n identity matrix
+16. ``eye(m, n)`` — m-by-n identity matrix
+17. ``linspace(start, stop, n)`` — a vector of ``n`` linearly-spaced
     elements from ``start`` to ``stop``.
-17. ``fill!(A, x)`` — fill the array ``A`` with value ``x``
+18. ``fill!(A, x)`` — fill the array ``A`` with value ``x``
 
 The last function, ``fill!``, is different in that it modifies an
 existing array instead of constructing a new one. As a convention,

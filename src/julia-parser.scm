@@ -7,10 +7,10 @@
      ; the way the lexer works, every prefix of an operator must also
      ; be an operator.
      (<- -- -->)
-     (> < >= <= == === != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:|)
+     (> < >= <= == === != |.>| |.<| |.>=| |.<=| |.==| |.!=| |.=| |.!| |<:| |>:| |&>| |&<|)
      (: |..|)
      (+ - |.+| |.-| |\|| $)
-     (<< >> >>>)
+     (<< >> >>> |.<<| |.>>| |&>>| |&<<|)
      (* / |./| % & |.*| |\\| |.\\|)
      (// .//)
      (^ |.^|)
@@ -23,6 +23,7 @@
 (define range-colon-enabled #t)
 ; in space-sensitive mode "x -y" is 2 expressions, not a subtraction
 (define space-sensitive #f)
+(define inside-vec #f)
 ; treat 'end' like a normal symbol instead of a reserved word
 (define end-symbol #f)
 ; treat newline like ordinary whitespace instead of as a potential separator
@@ -41,6 +42,12 @@
 
 (define-macro (with-space-sensitive . body)
   `(with-bindings ((space-sensitive #t)
+		   (whitespace-newline #f))
+		  ,@body))
+
+(define-macro (with-inside-vec . body)
+  `(with-bindings ((space-sensitive #t)
+		   (inside-vec #t)
 		   (whitespace-newline #f))
 		  ,@body))
 
@@ -160,7 +167,7 @@
       (and (>= c #\a) (<= c #\f))
       (and (>= c #\A) (<= c #\F))))
 
-(define (read-number port . leadingdot)
+(define (read-number port leadingdot neg)
   (let ((str  (open-output-string))
 	(pred char-numeric?)
 	(leadingzero #f))
@@ -187,7 +194,8 @@
 	       (not (eof-object? d))
 	       (display d str)
 	       #t))))
-    (if (pair? leadingdot)
+    (if neg (write-char #\- str))
+    (if leadingdot
 	(write-char #\. str)
 	(if (eqv? (peek-char port) #\0)
 	    (begin (write-char (read-char port) str)
@@ -247,7 +255,7 @@
 
 	  ((special-char? c)    (read-char port))
 
-	  ((char-numeric? c)    (read-number port))
+	  ((char-numeric? c)    (read-number port #f #f))
 	  
 	  ((eqv? c #\#)         (skip-to-eol port) (next-token port s))
 	  
@@ -258,7 +266,7 @@
 		  (cond ((eof-object? nextc)
 			 '|.|)
 			((char-numeric? nextc)
-			 (read-number port c))
+			 (read-number port #t #f))
 			((opchar? nextc)
 			 (string->symbol
 			  (string-append (string c)
@@ -318,25 +326,37 @@
 ; produces structures like (+ (+ (+ 2 3) 4) 5)
 (define (parse-LtoR s down ops)
   (let loop ((ex (down s)))
-    (let ((t (peek-token s)))
+    (let ((t   (peek-token s))
+	  #;(spc (ts:space? s)))
       (if (not (memq t ops))
 	  ex
 	  (begin (take-token s)
-		 (if (syntactic-op? t)
-		     (loop (list t ex (down s)))
-		     (loop (list 'call t ex (down s)))))))))
+		 (cond #;((and space-sensitive spc (memq t unary-and-binary-ops)
+			     (not (eqv? (peek-char (ts:port s)) #\ )))
+			(ts:put-back! s t)
+			ex)
+		       ((syntactic-op? t)
+			(loop (list t ex (down s))))
+		       (else
+			(loop (list 'call t ex (down s))))))))))
 
 ; parse right-to-left binary operator
 ; produces structures like (= a (= b (= c d)))
 (define (parse-RtoL s down ops)
   (let ((ex (down s)))
-    (let ((t (peek-token s)))
+    (let ((t   (peek-token s))
+	  (spc (ts:space? s)))
       (if (not (memq t ops))
 	  ex
 	  (begin (take-token s)
-		 (if (syntactic-op? t)
-		     (list t ex (parse-RtoL s down ops))
-		     (list 'call t ex (parse-RtoL s down ops))))))))
+		 (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
+			     (not (eqv? (peek-char (ts:port s)) #\ )))
+			(ts:put-back! s t)
+			ex)
+		       ((syntactic-op? t)
+			(list t ex (parse-RtoL s down ops)))
+		       (else
+			(list 'call t ex (parse-RtoL s down ops)))))))))
 
 (define (parse-cond s)
   (let ((ex (parse-or s)))
@@ -453,7 +473,8 @@
 (define (parse-block-stmts s) (parse-Nary s parse-eq #\; 'block
 					  '(end else elseif catch #\newline)
 					  #t))
-(define (parse-stmts s) (parse-Nary s parse-eq    #\; 'block '(#\newline) #t))
+;; ";" at the top level produces a sequence of top level expressions
+(define (parse-stmts s) (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
@@ -481,7 +502,7 @@
 	    (begin
 	      (take-token s)
 	      (cond ((and space-sensitive spc (memq t unary-and-binary-ops)
-			  (or (peek-token s) #t) (not (ts:space? s)))
+			  (not (eqv? (peek-char (ts:port s)) #\ )))
 		     ;; here we have "x -y"
 		     (ts:put-back! s t)
 		     ex)
@@ -509,7 +530,8 @@
   (let ((ops (prec-ops 9)))
     (let loop ((ex       (parse-rational s))
 	       (chain-op #f))
-      (let ((t (peek-token s)))
+      (let ((t   (peek-token s))
+	    (spc (ts:space? s)))
 	(cond ((not (memq t ops))
 	       ex)
 	      ;; TODO: maybe parse 2x*y as (call * 2 x y)
@@ -519,8 +541,12 @@
 			    chain-op)))
 	      (else
 	       (begin (take-token s)
-		      (loop (list 'call t ex (parse-rational s))
-			    (and (eq? t '*) t)))))))))
+		      (if (and space-sensitive spc (memq t unary-and-binary-ops)
+			       (not (eqv? (peek-char (ts:port s)) #\ )))
+			  (begin (ts:put-back! s t)
+				 ex)
+			  (loop (list 'call t ex (parse-rational s))
+				(and (eq? t '*) t))))))))))
 
 (define (parse-rational s) (parse-LtoR s parse-unary (prec-ops 10)))
 
@@ -541,35 +567,58 @@
       (and (eq? tok 'end) (not end-symbol))
       (memv tok '(#\, #\) #\] #\} #\; else elseif catch))))
 
+(define (maybe-negate op num)
+  (if (eq? op '-) (- num) num))
+
+(define (parse-juxtapose ex s)
+  (let ((next (peek-token s)))
+    ;; numeric literal juxtaposition is a unary operator
+    (if (and (juxtapose? ex next)
+	     (not (ts:space? s)))
+	(begin
+	  #;(if (and (number? ex) (= ex 0))
+  	      (error "juxtaposition with literal 0"))
+	  `(call * ,ex ,(parse-unary s)))
+	ex)))
+
 (define (parse-unary s)
   (let ((t (require-token s)))
     (if (closing-token? t)
 	(error (string "unexpected " t)))
     (cond ((memq t unary-ops)
-	   (let ((op (take-token s))
-		 (next (peek-token s)))
-	     (cond ((closing-token? next)
-		    op)  ; return operator by itself, as in (+)
-		   ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
-		    (ts:put-back! s op)
-		    (parse-factor s))
-		   (else
-		    (let ((arg (parse-unary s)))
-		      (if (and (pair? arg)
-			       (eq? (car arg) 'tuple))
-			  (list* 'call op (cdr arg))
-			  (list  'call op arg)))))))
+	   (let* ((op  (take-token s))
+		  (nch (peek-char (ts:port s))))
+	     (if (and (or (eq? op '-) (eq? op '+))
+		      (or (char-numeric? nch)
+			  (and (eqv? nch #\.) (read-char (ts:port s)))))
+		 (let ((num
+			(parse-juxtapose
+			 (read-number (ts:port s) (eqv? nch #\.) (eq? op '-))
+			 s)))
+		   (if (memq (peek-token s) '(^ .^))
+		       ;; -2^x parsed as (- (^ 2 x))
+		       (begin (if (= num -9223372036854775808)
+				  (error (string "invalid numeric constant "
+						 (- num))))
+			      (ts:put-back! s (maybe-negate op num))
+			      (list 'call op (parse-factor s)))
+		       num))
+		 (let ((next (peek-token s)))
+		   (cond ((closing-token? next)
+			  op)  ; return operator by itself, as in (+)
+			 ((syntactic-unary-op? op)
+			  (list op (parse-unary s)))
+			 ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
+			  (ts:put-back! s op)
+			  (parse-factor s))
+			 (else
+			  (let ((arg (parse-unary s)))
+			    (if (and (pair? arg)
+				     (eq? (car arg) 'tuple))
+				(list* 'call op (cdr arg))
+				(list  'call op arg)))))))))
 	  (else
-	   (let ((ex (parse-factor s)))
-	     (let ((next (peek-token s)))
-	       ;; numeric literal juxtaposition is a unary operator
-	       (if (and (juxtapose? ex next)
-			(not (ts:space? s)))
-		   (begin
-		     #;(if (and (number? ex) (= ex 0))
-			 (error "juxtaposition with literal 0"))
-		     `(call * ,ex ,(parse-unary s)))
-		   ex)))))))
+	   (parse-juxtapose (parse-factor s) s)))))
 
 ; handle ^, .^, and postfix ...
 (define (parse-factor-h s down ops)
@@ -909,18 +958,17 @@
 	  (else   (reverse! (cons r ranges))))))))
 
 (define (parse-space-separated-exprs s)
-  (let ((inside-vec space-sensitive))
-    (with-space-sensitive
-     (let loop ((exprs '()))
-       (if (or (closing-token? (peek-token s))
-	       (newline? (peek-token s))
-	       (and inside-vec (or (eq? (peek-token s) '|\||)
-				   (eq? (peek-token s) 'for))))
-	   (reverse! exprs)
-	   (let ((e (parse-eq s)))
-	     (case (peek-token s)
-	       ((#\newline)   (reverse! (cons e exprs)))
-	       (else          (loop (cons e exprs))))))))))
+  (with-space-sensitive
+   (let loop ((exprs '()))
+     (if (or (closing-token? (peek-token s))
+	     (newline? (peek-token s))
+	     (and inside-vec (or (eq? (peek-token s) '|\||)
+				 (eq? (peek-token s) 'for))))
+	 (reverse! exprs)
+	 (let ((e (parse-eq s)))
+	   (case (peek-token s)
+	     ((#\newline)   (reverse! (cons e exprs)))
+	     (else          (loop (cons e exprs)))))))))
 
 ; handle function call argument list, or any comma-delimited list.
 ; . an extra comma at the end is allowed
@@ -1029,7 +1077,7 @@
 
 (define (parse-cat s closer)
   (with-normal-ops
-   (with-space-sensitive
+   (with-inside-vec
     (if (eqv? (require-token s) closer)
 	(begin (take-token s)
 	       (list 'vcat))  ; [] => (vcat)
@@ -1317,7 +1365,9 @@
 	 ;; as a special case, allow early end of input if there is
 	 ;; nothing left but whitespace
 	 (skip-ws-and-comments (ts:port s))
-	 (if (eqv? (peek-token s) #\newline) (take-token s))
+	 (let skip-loop ((tok (peek-token s)))
+	   (if (or (eqv? tok #\newline) )
+	       (begin (take-token s) (skip-loop (peek-token s)))))
 	 (let ((t (peek-token s)))
 	   (if (eof-object? t)
 	       t

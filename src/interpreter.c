@@ -7,9 +7,12 @@
 #include "julia.h"
 #include "builtin_proto.h"
 
+extern int jl_lineno;
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
 static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start);
+jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
@@ -106,6 +109,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         if (jl_is_lambda_info(e)) {
             return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
                                                (jl_lambda_info_t*)e);
+        }
+        if (jl_is_linenode(e)) {
+            jl_lineno = jl_linenode_line(e);
         }
         return e;
     }
@@ -250,6 +256,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_check_type_tuple(st->types, st->name->name, "type definition");
         super = eval(args[4], locals, nl);
         jl_set_tag_type_super((jl_tag_type_t*)st, super);
+        jl_compute_struct_offsets(st);
         jl_add_constructors(st);
         JL_GC_POP();
         return (jl_value_t*)jl_nothing;
@@ -268,16 +275,17 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_set_expander(jl_current_module, nm, f);
         return (jl_value_t*)jl_nothing;
     }
+    else if (ex->head == line_sym) {
+        jl_lineno = jl_unbox_long(jl_exprarg(ex,0));
+        return (jl_value_t*)jl_nothing;
+    }
+    else if (ex->head == module_sym) {
+        return jl_eval_module_expr(ex);
+    }
     else if (ex->head == error_sym || ex->head == jl_continue_sym) {
         if (jl_is_byte_string(args[0]))
             jl_errorf("syntax error: %s", jl_string_data(args[0]));
         jl_raise(args[0]);
-    }
-    else if (ex->head == line_sym) {
-        return (jl_value_t*)jl_nothing;
-    }
-    else if (ex->head == multivalue_sym) {
-        return (jl_value_t*)jl_nothing;
     }
     jl_errorf("unsupported or misplaced expression %s", ex->head->name);
     return (jl_value_t*)jl_nothing;
@@ -300,7 +308,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                              int start)
 {
     jl_savestate_t __ss;
-    jmp_buf __handlr;
+    jl_jmp_buf __handlr;
     size_t i=start;
     while (1) {
         jl_value_t *stmt = jl_cellref(stmts,i);
@@ -326,7 +334,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__ss, &__handlr);
-                if (!setjmp(__handlr)) {
+                if (!jl_setjmp(__handlr,1)) {
                     return eval_body(stmts, locals, nl, i+1);
                 }
                 else {

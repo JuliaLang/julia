@@ -27,7 +27,7 @@ function each_version()
 end
 each_version(dir::String) = cd(each_version,dir)
 
-function in_each_submodule(f::Function, recursive::Bool, dir::ByteString)
+function each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`
     for line in each_line(cmd)
         name, path, sha1 = match(r"^(.*)\t(.*)\t([0-9a-f]{40})$", line).captures
@@ -36,7 +36,7 @@ function in_each_submodule(f::Function, recursive::Bool, dir::ByteString)
         end
         if recursive
             cd(path) do
-                in_each_submodule(true, dir) do n,p,s
+                each_submodule(true, dir) do n,p,s
                     cd(dir) do
                         f(n,"$path/$p",s)
                     end
@@ -45,7 +45,7 @@ function in_each_submodule(f::Function, recursive::Bool, dir::ByteString)
         end
     end
 end
-in_each_submodule(f::Function, r::Bool) = in_each_submodule(f, r, cwd())
+each_submodule(f::Function, r::Bool) = each_submodule(f, r, cwd())
 
 function read_config(file::String)
     cfg = Dict()

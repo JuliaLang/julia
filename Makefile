@@ -27,7 +27,7 @@ $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/lib/julia/sys.ji: VERSION base/*.jl $(BUILD)/lib/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/lib/julia/sys.ji || $(JULIA_EXECUTABLE) -b sysimg.jl) && $(JULIA_EXECUTABLE) sysimg.jl
+	(test -f $(BUILD)/lib/julia/sys.ji || $(JULIA_EXECUTABLE) -b sysimg.jl) && $(JULIA_EXECUTABLE) sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'."
 
 ifeq ($(OS), WINNT)
 OPENBLASNAME=openblas-r0.1.1
@@ -38,14 +38,9 @@ PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
-ifeq ($(OS), Darwin)
-	install_name_tool -rpath $(BUILD)/lib $(PREFIX)/lib $(PREFIX)/bin/julia-release-basic
-	install_name_tool -rpath $(BUILD)/lib $(PREFIX)/lib $(PREFIX)/bin/julia-release-readline
-	install_name_tool -add_rpath $(PREFIX)/lib $(PREFIX)/bin/julia-release-webserver
-endif
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,umfpack}.$(SHLIB_EXT) $(PREFIX)/lib
+	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,umfpack,z}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
@@ -59,8 +54,11 @@ endif
 
 dist: cleanall
 	rm -fr julia-*.tar.gz julia-$(JULIA_COMMIT)
-	$(MAKE) -C deps clean-openblas
+	-$(MAKE) -C deps clean-openblas
 	$(MAKE) install OPENBLAS_DYNAMIC_ARCH=1
+ifeq ($(OS), Darwin)
+	-./contrib/fixup-libgfortran.sh $(PREFIX)/lib /usr/local/lib
+endif
 	tar zcvf julia-$(JULIA_COMMIT)-$(OS)-$(ARCH).tar.gz julia-$(JULIA_COMMIT)
 	rm -fr julia-$(JULIA_COMMIT)
 

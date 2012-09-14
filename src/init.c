@@ -68,14 +68,16 @@ void segv_handler(int sig, siginfo_t *info, void *context)
     sigaddset(&sset, SIGSEGV);
     sigprocmask(SIG_UNBLOCK, &sset, NULL);
 
+    if (
 #ifdef COPY_STACKS
-    if ((char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
-        (char*)info->si_addr < (char*)jl_stack_hi) {
+        (char*)info->si_addr > (char*)jl_stack_lo-3000000 &&
+        (char*)info->si_addr < (char*)jl_stack_hi
 #else
-    if ((char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
+        (char*)info->si_addr > (char*)jl_current_task->stack-8192 &&
         (char*)info->si_addr <
-        (char*)jl_current_task->stack+jl_current_task->ssize) {
+        (char*)jl_current_task->stack+jl_current_task->ssize
 #endif
+        ) {
         jl_raise(jl_stackovf_exception);
     }
     else {
@@ -85,6 +87,13 @@ void segv_handler(int sig, siginfo_t *info, void *context)
 
 volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
+
+void restore_signals()
+{
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigprocmask(SIG_SETMASK, &sset, 0);
+}
 
 void sigint_handler(int sig, siginfo_t *info, void *context)
 {
@@ -118,12 +127,14 @@ void jl_get_builtin_hooks(void);
 uv_lib_t *jl_dl_handle;
 
 #ifdef COPY_STACKS
-void jl_switch_stack(jl_task_t *t, jmp_buf *where);
-extern jmp_buf * volatile jl_jmp_target;
+void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where);
+extern jl_jmp_buf * volatile jl_jmp_target;
 #endif
 
 void julia_init(char *imageFile)
 {
+    (void)uv_default_loop();
+    restore_signals(); //XXX: this needs to be early in load process
     jl_page_size = sysconf(_SC_PAGESIZE);
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
@@ -178,6 +189,19 @@ void julia_init(char *imageFile)
             jl_show(jl_stderr_obj(), jl_exception_in_transit);
             JL_PRINTF(JL_STDOUT, "\n");
             jl_exit(1);
+        }
+    }
+
+    // set module field of primitive types
+    int i;
+    void **table = jl_core_module->bindings.table;
+    for(i=1; i < jl_core_module->bindings.size; i+=2) {
+        if (table[i] != HT_NOTFOUND) {
+            jl_binding_t *b = (jl_binding_t*)table[i];
+            if (b->value && jl_is_some_tag_type(b->value)) {
+                jl_tag_type_t *tt = (jl_tag_type_t*)b->value;
+                tt->name->module = jl_core_module;
+            }
         }
     }
 
@@ -259,7 +283,7 @@ int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]))
 #ifdef COPY_STACKS
     // initialize base context of root task
     jl_root_task->stackbase = (char*)&argc;
-    if (setjmp(jl_root_task->base_ctx)) {
+    if (jl_setjmp(jl_root_task->base_ctx, 1)) {
         jl_switch_stack(jl_current_task, jl_jmp_target);
     }
 #endif

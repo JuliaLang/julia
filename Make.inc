@@ -16,6 +16,9 @@ ARCH = $(shell uname -m)
 USE_MKL = 0
 MKLLIB = /path/to/mkl/lib/intel64
 
+USE_ATLAS = 0
+ATLAS_LIBDIR = /path/to/atlas/build/lib
+
 ifeq ($(OS), MINGW32_NT-6.1)
 OS=WINNT
 endif
@@ -55,7 +58,10 @@ CXX = g++
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
 DEBUGFLAGS = -ggdb3 -DDEBUG
-SHIPFLAGS = -O3 -DNDEBUG -falign-functions -momit-leaf-frame-pointer
+SHIPFLAGS = -O3 -DNDEBUG -falign-functions
+ifneq ($(ARCH), ppc64)
+  SHIPFLAGS += -momit-leaf-frame-pointer
+endif
 endif
 
 ifeq ($(USECLANG),1)
@@ -95,6 +101,7 @@ USE_SYSTEM_ARPACK=0
 USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_GLPK=0
 USE_SYSTEM_NGINX=0
+USE_SYSTEM_ZLIB=0
 
 ifeq ($(USE_DEBIAN), 1)
 USE_SYSTEM_LLVM=1
@@ -109,13 +116,7 @@ USE_SYSTEM_GMP=1
 USE_SYSTEM_ARPACK=1
 USE_SYSTEM_SUITESPARSE=1
 USE_SYSTEM_GLPK=1
-endif
-
-# Use system BLAS and LAPACK on Mac
-# https://github.com/JuliaLang/julia/commit/7b6442f1db697d0bc8c39476e7d92afc11b169d2
-ifeq ($(OS), Darwin)
-USE_SYSTEM_BLAS=1
-USE_SYSTEM_LAPACK=1
+USE_SYSTEM_ZLIB=1
 endif
 
 -include $(JULIAHOME)/Make.user
@@ -186,7 +187,7 @@ endif
 # OS specific stuff
 
 # must end with a / and have no trailing spaces
-INSTALL_NAME_ID_DIR = @executable_path/../lib/
+INSTALL_NAME_ID_DIR = @rpath/
 
 RPATH = 
 RPATH_ORIGIN = 
@@ -224,7 +225,7 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,$(BUILD)/lib
+RPATH = -Wl,-rpath,@executable_path/../lib
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load
@@ -255,6 +256,15 @@ ifneq ($(strip $(MKLLIB)),)
     RPATH += -Wl,-rpath,$(MKLLIB)
   endif
 endif
+endif
+
+ifeq ($(USE_ATLAS), 1)
+USE_SYSTEM_BLAS = 1
+USE_SYSTEM_LAPACK = 1
+LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
+LIBLAPACK = $(LIBBLAS)
+LIBBLASNAME = libsatlas
+LIBLAPACKNAME = $(LIBBLASNAME)
 endif
 
 # Make tricks

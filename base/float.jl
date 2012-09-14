@@ -24,20 +24,20 @@ convert(::Type{Float64}, x::Uint32)  = box(Float64,uitofp64(unbox(Uint32,x)))
 convert(::Type{Float64}, x::Uint64)  = box(Float64,uitofp64(unbox(Uint64,x)))
 convert(::Type{Float64}, x::Float32) = box(Float64,fpext64(unbox(Float32,x)))
 
-convert(::Type{Float}, x::Bool)   = convert(Float32, x)
-convert(::Type{Float}, x::Char)   = convert(Float32, x)
-convert(::Type{Float}, x::Int8)   = convert(Float32, x)
-convert(::Type{Float}, x::Int16)  = convert(Float32, x)
-convert(::Type{Float}, x::Int32)  = convert(Float64, x)
-convert(::Type{Float}, x::Int64)  = convert(Float64, x) # LOSSY
-convert(::Type{Float}, x::Uint8)  = convert(Float32, x)
-convert(::Type{Float}, x::Uint16) = convert(Float32, x)
-convert(::Type{Float}, x::Uint32) = convert(Float64, x)
-convert(::Type{Float}, x::Uint64) = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Bool)   = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Char)   = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int8)   = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int16)  = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Int32)  = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::Int64)  = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::Uint8)  = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Uint16) = convert(Float32, x)
+convert(::Type{FloatingPoint}, x::Uint32) = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::Uint64) = convert(Float64, x) # LOSSY
 
 float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
-float(x)   = convert(Float,   x)
+float(x)   = convert(FloatingPoint,   x)
 
 ## conversions from floating-point ##
 
@@ -72,8 +72,8 @@ iround(::Type{Uint64}, x::Float64) = box(Uint64,fpuiround64(unbox(Float64,x)))
 # this is needed very early because it is used by Range and colon
 floor(x::Float64) = ccall(dlsym(_jl_libfdm,:floor), Float64, (Float64,), x)
 
-iceil(x::Float)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::Float) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
+iceil(x::FloatingPoint)  = itrunc(ceil(x))  # TODO: fast primitive for iceil
+ifloor(x::FloatingPoint) = itrunc(floor(x)) # TOOD: fast primitive for ifloor
 
 ## floating point promotions ##
 
@@ -140,10 +140,10 @@ isequal(x::Float64, y::Float64) = fpiseq64(unbox(Float64,x),unbox(Float64,y))
 isless (x::Float32, y::Float32) = fpislt32(unbox(Float32,x),unbox(Float32,y))
 isless (x::Float64, y::Float64) = fpislt64(unbox(Float64,x),unbox(Float64,y))
 
-isequal(a::Integer, b::Float) = (a==b) & isequal(float(a),b)
-isequal(a::Float, b::Integer) = isequal(b, a)
-isless (a::Integer, b::Float) = (a<b) | isless(float(a),b)
-isless (a::Float, b::Integer) = (a<b) | isless(a,float(b))
+isequal(a::Integer, b::FloatingPoint) = (a==b) & isequal(float(a),b)
+isequal(a::FloatingPoint, b::Integer) = isequal(b, a)
+isless (a::Integer, b::FloatingPoint) = (a<b) | isless(float(a),b)
+isless (a::FloatingPoint, b::Integer) = (a<b) | isless(a,float(b))
 
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
 ==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
@@ -187,8 +187,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     nan(::Type{Float32}) = $NaN32
     inf(::Type{Float64}) = $Inf
     nan(::Type{Float64}) = $NaN
-    inf{T<:Float}(x::T) = inf(T)
-    nan{T<:Float}(x::T) = nan(T)
+    inf{T<:FloatingPoint}(x::T) = inf(T)
+    nan{T<:FloatingPoint}(x::T) = nan(T)
 
     isdenormal(x::Float32) = (abs(x) < $box(Float32,unbox(Uint32,0x00800000)))
     isdenormal(x::Float64) = (abs(x) < $box(Float64,unbox(Uint64,0x0010000000000000)))
@@ -204,17 +204,17 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     realmin(::Type{Float64}) = $box(Float64,unbox(Uint64,0x0010000000000000))
     realmax(::Type{Float32}) = $box(Float32,unbox(Uint32,0x7f7fffff))
     realmax(::Type{Float64}) = $box(Float64,unbox(Uint64,0x7fefffffffffffff))
-    realmin{T<:Float}(x::T) = realmin(T)
-    realmax{T<:Float}(x::T) = realmax(T)
+    realmin{T<:FloatingPoint}(x::T) = realmin(T)
+    realmax{T<:FloatingPoint}(x::T) = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
     nextfloat(x::Float32, i::Integer) = box(Float32,add_int(unbox(Float32,x),unbox(Int32,int32(i))))
     nextfloat(x::Float64, i::Integer) = box(Float64,add_int(unbox(Float64,x),unbox(Int64,int64(i))))
-    nextfloat(x::Float) = nextfloat(x,1)
-    prevfloat(x::Float) = nextfloat(x,-1)
+    nextfloat(x::FloatingPoint) = nextfloat(x,1)
+    prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
-    eps(x::Float) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
+    eps(x::FloatingPoint) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
     eps(::Type{Float32}) = $box(Float32,unbox(Uint32,0x34000000))
     eps(::Type{Float64}) = $box(Float64,unbox(Uint64,0x3cb0000000000000))
     eps() = eps(Float64)

@@ -115,8 +115,8 @@ exception is thrown, otherwise, the left-hand value is returned:
 
 ::
 
-    julia> (1+2)::Float
-    type error: typeassert: expected Float, got Int64
+    julia> (1+2)::FloatingPoint
+    type error: typeassert: expected FloatingPoint, got Int64
 
     julia> (1+2)::Int
     3
@@ -217,7 +217,7 @@ that make up Julia's numerical hierarchy:
 
     abstract Number
     abstract Real     <: Number
-    abstract Float    <: Real
+    abstract FloatingPoint <: Real
     abstract Integer  <: Real
     abstract Signed   <: Integer
     abstract Unsigned <: Integer
@@ -225,10 +225,10 @@ that make up Julia's numerical hierarchy:
 The ``Number`` type is a direct child type of ``Any``, and ``Real`` is
 its child. In turn, ``Real`` has two children (it has more, but only two
 are shown here; we'll get to the others later): ``Integer`` and
-``Float``, separating the world into representations of integers and
+``FloatingPoint``, separating the world into representations of integers and
 representations of real numbers. Representations of real numbers
 include, of course, floating-point types, but also include other types,
-such as Julia's rationals. Hence, ``Float`` is a proper subtype of
+such as Julia's rationals. Hence, ``FloatingPoint`` is a proper subtype of
 ``Real``, including only floating-point representations of real numbers.
 Integers are further subdivided into ``Signed`` and ``Unsigned``
 varieties.
@@ -244,7 +244,7 @@ subtype of its right operand:
     julia> Integer <: Number
     true
 
-    julia> Integer <: Float
+    julia> Integer <: FloatingPoint
     false
 
 Since abstract types have no instantiations and serve as no more than
@@ -263,8 +263,8 @@ the standard bits types are all defined in the language itself:
 
 ::
 
-    bitstype 32 Float32 <: Float
-    bitstype 64 Float64 <: Float
+    bitstype 32 Float32 <: FloatingPoint
+    bitstype 64 Float64 <: FloatingPoint
 
     bitstype 8  Bool <: Integer
     bitstype 32 Char <: Integer
@@ -1014,7 +1014,7 @@ true or false:
     julia> isa(1,Int)
     true
 
-    julia> isa(1,Float)
+    julia> isa(1,FloatingPoint)
     false
 
 The ``typeof`` function, already used throughout the manual in examples,
@@ -1100,7 +1100,7 @@ only kinds of types that the ``super`` function applies to:
 ::
 
     julia> super(Float64)
-    Float
+    FloatingPoint
 
     julia> super(Number)
     Any

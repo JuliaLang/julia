@@ -203,7 +203,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     end
     PGRP.locs = newlocs
     PGRP.np += n
-    PGRP
+    :ok
 end
 
 function _jl_join_pgroup(myid, locs, sockets)
@@ -1001,16 +1001,23 @@ function start_remote_workers(machines, cmds)
         local hostname::String, port::Int16
         while true
             conninfo = readline(outs[i])
-            m = match(r"^julia_worker:(\d+)#(.*)", conninfo)
-            if m != nothing
-                port = parse_int(Int16, m.captures[1])
-                hostname = m.captures[2]
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
                 break
             end
         end
         w[i] = Worker(hostname, port)
     end
     w
+end
+
+function parse_connection_info(str)
+    m = match(r"^julia_worker:(\d+)#(.*)", str)
+    if m != nothing
+        (m.captures[2], parse_int(Int16, m.captures[1]))
+    else
+        ("", int16(-1))
+    end
 end
 
 function worker_ssh_cmd(host)
@@ -1045,10 +1052,10 @@ addprocs_local(np::Integer) =
 
 function start_sge_workers(n)
     home = JULIA_HOME
-    sgedir = "$home/SGE"
+    sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia --worker` | qsub_cmd
+    `echo $home/julia-release-basic --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
@@ -1060,28 +1067,28 @@ function start_sge_workers(n)
     for i=1:n
         # wait for each output stream file to get created
         fname = "$sgedir/JULIA.o$(id).$(i)"
-        local fl, port
+        local fl, hostname, port
         fexists = false
         sleep(0.5)
         while !fexists
             try
                 fl = open(fname)
                 try
-                    port = read(fl,Int16)
+                    conninfo = readline(fl)
+                    hostname, port = parse_connection_info(conninfo)
                 catch e
                     close(fl)
                     throw(e)
                 end
-                fexists = true
+                close(fl)
+                fexists = (hostname != "")
             catch
                 print("."); flush(stdout_stream)
                 sleep(0.5)
             end
         end
-        hostname = bytestring(readline(fl)[1:end-1])
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
-        close(fl)
     end
     print("\n")
     workers

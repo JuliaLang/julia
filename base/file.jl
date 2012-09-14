@@ -237,3 +237,37 @@ function download_file(url::String)
   run(`curl -o $filename $url`)
   filename
 end
+
+function readdir(path::String)
+  # Allocate space for uv_fs_t struct
+  uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int, ()))
+
+  # defined in sys.c, to call uv_fs_readdir
+  file_count = ccall(:jl_readdir, Int, (Ptr{Uint8}, Ptr{Uint8}), 
+                     bytestring(path), uv_readdir_req)
+
+  if file_count < 0
+    error("Unable to read directory $path.")
+  end
+
+  # The list of dir entries is returned as a contiguous sequence of null-terminated
+  # strings, the first of which is pointed to by ptr in uv_readdir_req.
+  # The following lines extracts those strings into dirent
+  entries = String[]
+  offset = 0
+
+  for i = 1:file_count
+    entry = bytestring(ccall(:jl_uv_fs_t_ptr_offset, Ptr{Uint8}, 
+                             (Ptr{Uint8}, Int), uv_readdir_req, offset))
+    push(entries, entry)
+    offset += length(entry) + 1   # offset to the next entry
+  end
+
+  # Clean up the request string
+  ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{Uint8},), uv_readdir_req)
+
+  entries
+end
+
+readdir(cmd::Cmd) = readdir(string(cmd)[2:end-1])
+readdir() = readdir(".")
