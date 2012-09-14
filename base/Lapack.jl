@@ -237,7 +237,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             work  = Array($elty, 1)
             lwork = int32(-1)
             info  = Array(Int32, 1)
-            Rtyp  = typeof(real(work[1]))
+            Rtyp  = typeof(real(A[1]))
             cmplx = iscomplex(A)
             if cmplx rwork = Array(Rtyp, 2n) end
             for i in 1:2
@@ -468,7 +468,7 @@ for (geev, gesvd, gesdd, elty) in
             rvecs = jobvr == 'V'
             VL    = Array($elty, (n, lvecs ? n : 0))
             VR    = Array($elty, (n, rvecs ? n : 0))
-            Rtyp  = typeof(real(work[1]))
+            Rtyp  = typeof(real(A[1]))
             cmplx = iscomplex(A)
             if cmplx
                 W     = Array($elty, n)
@@ -535,7 +535,7 @@ for (geev, gesvd, gesdd, elty) in
             end
             work   = Array($elty, 1)
             lwork  = int32(-1)
-            Rtyp   = typeof(real(work[1]))
+            Rtyp   = typeof(real(A[1]))
             S      = Array(Rtyp, minmn)
             cmplx  = iscomplex(A)
             if cmplx
@@ -901,17 +901,18 @@ end
 ## (PT) positive-definite, symmetric, tri-diagonal matrices
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
 for (ptsv, pttrf, pttrs, elty) in
-    ((:dptsv_,:dpttrs_,:dpttrs_,:Float64),
-     (:sptsv_,:spttrf_,:spttrs_,:Float32),
-     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128),
-     (:cptsv_,:cpttrf_,:cpttrs_,:Complex64))
+    ((:dptsv_,:dpttrf_,:dpttrs_,:Float64),
+     (:sptsv_,:spttrf_,:spttrs_,:Float32)
+#     , (:zptsv_,:zpttrf_,:zpttrs_,:Complex128)  # need to fix calling sequence.
+#     , (:cptsv_,:cpttrf_,:cpttrs_,:Complex64)   # D is real, not complex
+     )
     @eval begin
         #       SUBROUTINE DPTSV( N, NRHS, D, E, B, LDB, INFO )
         #       .. Scalar Arguments ..
         #       INTEGER            INFO, LDB, N, NRHS
         #       .. Array Arguments ..
         #       DOUBLE PRECISION   B( LDB, * ), D( * ), E( * )
-        function ptsv!(D::Vector{$elty}, D::Vector{$elty}, B::StridedVecOrMat{$elty})
+        function ptsv!(D::Vector{$elty}, E::Vector{$elty}, B::StridedVecOrMat{$elty})
             chkstride1(B)
             n    = length(D)
             if length(E) != n - 1 || n != size(B,1) throw(LapackDimMismatch("ptsv!")) end
@@ -930,7 +931,7 @@ for (ptsv, pttrf, pttrs, elty) in
         #       DOUBLE PRECISION   D( * ), E( * )
         function pttrf!(D::Vector{$elty}, E::Vector{$elty})
             n    = length(D)
-            if length(E) != (n-1) throw(LapackDimMisMatch("pttrs!")) end
+            if length(E) != (n-1) throw(LapackDimMisMatch("pttrf!")) end
             info = Array(Int32, 1)
             ccall(dlsym(Base._jl_liblapack, $string(pttrf)), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
