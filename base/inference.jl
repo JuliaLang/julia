@@ -1540,9 +1540,7 @@ function inlining_pass(e::Expr, sv, ast)
         return (e,())
     end
     arg1 = eargs[1]
-    if is(e.head,:call1) && (is(arg1, :ccall) ||
-                             (isa(arg1,SymbolNode) && is(arg1.name, :ccall)) ||
-                             (isa(arg1,TopNode) && is(arg1.name, :ccall)))
+    if is_known_call(e, ccall, sv)
         i0 = 3
         isccall = true
     else
