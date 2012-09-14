@@ -5,7 +5,7 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                       (:zcopy_,:Complex128), (:ccopy_,:Complex64))
     @eval begin
         function _jl_blas_copy(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(_jl_libblas, $string(fname)),
+            ccall(dlsym(_jl_libblas, $(string(fname))),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
@@ -51,7 +51,7 @@ end
 for (fname, elty) in ((:ddot_,:Float64), (:sdot_,:Float32))
     @eval begin
         function _jl_blas_dot(n::Integer, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer, DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(_jl_libblas, $string(fname)),
+            ccall(dlsym(_jl_libblas, $(string(fname))),
                   $elty,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
@@ -82,7 +82,7 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:scnrm2_,:Complex64,:Float32))
     @eval begin
         function _jl_blas_nrm2(n::Integer, X::Union(Ptr{$elty},Array{$elty}), incx::Integer)
-            ccall(dlsym(_jl_libblas, $string(fname)),
+            ccall(dlsym(_jl_libblas, $(string(fname))),
                   $ret_type,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, X, &incx)
@@ -111,7 +111,7 @@ for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
         function _jl_blas_axpy(n::Integer, a::($elty),
                                DX::Union(Ptr{$elty},Array{$elty}), incx::Integer,
                                DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
-            ccall(dlsym(_jl_libblas, $string(fname)),
+            ccall(dlsym(_jl_libblas, $(string(fname))),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, &a, DX, &incx, DY, &incy)
@@ -152,7 +152,7 @@ for (fname, elty) in ((:dsyrk_,:Float64), (:ssyrk_,:Float32),
        function _jl_blas_syrk(uplo, trans, n::Integer, k::Integer,
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -177,7 +177,7 @@ for (fname, elty) in ((:zherk_,:Complex128), (:cherk_,:Complex64))
        function _jl_blas_herk(uplo, trans, n::Integer, k::Integer,
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -204,7 +204,7 @@ for (fname, elty) in ((:dgbmv_,:Float64), (:sgbmv_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              x::StridedVector{$elty}, incx::Integer,
                              beta::($elty), y::StridedVector{$elty}, incy::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -234,7 +234,7 @@ for (fname, elty) in ((:dsbmv_,:Float64), (:ssbmv_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              x::StridedVector{$elty}, incx::Integer,
                              beta::($elty), y::StridedVector{$elty}, incy::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -263,7 +263,7 @@ for (fname, elty) in ((:dgemm_,:Float64), (:sgemm_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              B::StridedMatrix{$elty}, ldb::Integer,
                              beta::($elty), C::StridedMatrix{$elty}, ldc::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -465,7 +465,7 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
                              alpha::($elty), A::StridedMatrix{$elty}, lda::Integer,
                              X::StridedVector{$elty}, incx::Integer,
                              beta::($elty), Y::StridedVector{$elty}, incy::Integer)
-           ccall(dlsym(_jl_libblas, $string(fname)),
+           ccall(dlsym(_jl_libblas, $(string(fname))),
                  Void,
                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                   Ptr{$elty}, Ptr{$elty}, Ptr{Int32},

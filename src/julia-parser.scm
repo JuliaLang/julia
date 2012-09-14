@@ -606,8 +606,6 @@
 		 (let ((next (peek-token s)))
 		   (cond ((closing-token? next)
 			  op)  ; return operator by itself, as in (+)
-			 ((syntactic-unary-op? op)
-			  (list op (parse-unary s)))
 			 ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
 			  (ts:put-back! s op)
 			  (parse-factor s))
@@ -665,12 +663,9 @@
   (let ((op (peek-token s)))
     (if (syntactic-unary-op? op)
 	(begin (take-token s)
-	       (if (eqv? (peek-token s) #\( )
-		   ;; in $(...) the $ only applies to the parens
-		   (list op (parse-atom s))
-		   (if (closing-token? (peek-token s))
-		       op
-		       (list op (parse-call s)))))
+	       (cond ((closing-token? (peek-token s))  op)
+		     ((eq? op '&)  (list op (parse-call s)))
+		     (else         (list op (parse-atom s)))))
 	(parse-atom s))))
 
 ; parse function call, indexing, dot, and transpose expressions

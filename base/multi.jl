@@ -1286,7 +1286,7 @@ end
 macro sync(block)
     quote
         sync_begin()
-        v = $esc(block)
+        v = $(esc(block))
         sync_end()
         v
     end
@@ -1354,7 +1354,7 @@ end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawn($esc(expr)))
+    :(spawn($(esc(expr))))
 end
 
 function spawnlocal(thunk)
@@ -1373,12 +1373,12 @@ end
 
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnlocal($esc(expr)))
+    :(spawnlocal($(esc(expr))))
 end
 
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat($p, $esc(expr)))
+    :(spawnat($p, $(esc(expr))))
 end
 
 function at_each(f, args...)
@@ -1390,7 +1390,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval($expr(:quote,ex)))
+            at_each(()->eval($(expr(:quote,ex))))
         end
     end
 end
@@ -1478,10 +1478,10 @@ function make_preduce_body(reducer, var, body)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            $esc(var) = lo
-            ac = $esc(body)
-            for $esc(var) = (lo+1):hi
-                ac = ($esc(reducer))(ac, $esc(body))
+            $(esc(var)) = lo
+            ac = $(esc(body))
+            for $(esc(var)) = (lo+1):hi
+                ac = ($(esc(reducer)))(ac, $(esc(body)))
             end
             ac
         end
@@ -1493,8 +1493,8 @@ function make_pfor_body(var, body)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            for $esc(var) = lo:hi
-                $esc(body)
+            for $(esc(var)) = lo:hi
+                $(esc(body))
             end
         end
     end
@@ -1519,12 +1519,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($make_pfor_body(var, body), $esc(r))
+            pfor($(make_pfor_body(var, body)), $(esc(r)))
         end
     else
         quote
-            preduce($esc(reducer),
-                    $make_preduce_body(reducer, var, body), $esc(r))
+            preduce($(esc(reducer)),
+                    $(make_preduce_body(reducer, var, body)), $(esc(r)))
         end
     end
 end

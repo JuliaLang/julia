@@ -35,7 +35,7 @@ end
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
-@eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
+@eval sizeof(::Type{Ptr}) = $(div(WORD_SIZE,8))
 
 ## limited pointer arithmetic & comparison ##
 

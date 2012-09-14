@@ -21,5 +21,5 @@ assert(x) = assert(x,'?')
 assert(x,labl) = x ? nothing : error("assertion failed: ", labl)
 
 macro assert(ex)
-    :($esc(ex) ? nothing : error("assertion failed: ", $string(ex)))
+    :($(esc(ex)) ? nothing : error("assertion failed: ", $(string(ex))))
 end

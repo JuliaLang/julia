@@ -1269,7 +1269,7 @@ end
 
 let findn_cache = nothing
 function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end for i = 1:length(ivars)}
+    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
     quote
     	Aind = A[$(ivars...)]
     	if Aind != z
@@ -1353,19 +1353,19 @@ function gen_areduce_func(n, f)
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
-            $lo[i] = 1
-            $hi[i] = size(A,$i)
+            $(lo[i]) = 1
+            $(hi[i]) = size(A,$i)
         else
-            $lo[i] = $hi[i] = $ivars[i]
+            $(lo[i]) = $(hi[i]) = $(ivars[i])
         end
                end for i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) for i=1:n }  # lo:hi for all dims
+    rranges = { :( $(lo[i]):$(hi[i]) ) for i=1:n }  # lo:hi for all dims
     body =
     quote
         _tot = v0
         $(setlims...)
-        $make_loop_nest(rvars, rranges,
-                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        $(make_loop_nest(rvars, rranges,
+                         :(_tot = ($f)(_tot, A[$(rvars...)]))))
         R[_ind] = _tot
         _ind += 1
     end
@@ -1373,7 +1373,7 @@ function gen_areduce_func(n, f)
         local _F_
         function _F_(f, A, region, R, v0)
             _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body)
+            $(make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body))
         end
         _F_
     end
@@ -1768,25 +1768,25 @@ function permute(A::StridedArray, perm)
         tmp = counts[end]
         toReturn[len+1] = quote
             ind = 1
-            $tmp = $stridenames[len]
+            $tmp = $(stridenames[len])
         end
 
         #inner most loop
         toReturn[1] = quote
             P[ind] = A[+($(counts...))+offset]
             ind+=1
-            $counts[1]+= $stridenames[1]
+            $(counts[1]) += $(stridenames[1])
         end
         for i = 1:len-1
             tmp = counts[i]
             val = i
             toReturn[(i+1)] = quote
-                $tmp = $stridenames[val]
+                $tmp = $(stridenames[val])
             end
             tmp2 = counts[i+1]
             val = i+1
             toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $stridenames[val]
+                 $tmp2 += $(stridenames[val])
             end
         end
         toReturn

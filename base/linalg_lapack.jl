@@ -25,7 +25,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
             m    = int32(size(A, 1))
             n    = int32(size(A, 2))
             lda  = int32(stride(A, 2))
-            ccall(dlsym(_jl_liblapack, $string(potrf)),
+            ccall(dlsym(_jl_liblapack, $(string(potrf))),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &uplo, &n, A, &lda, info)
@@ -54,7 +54,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
             n    = int32(size(A, 2))
             lda  = int32(stride(A, 2))
             ipiv = Array(Int32, n)
-            ccall(dlsym(_jl_liblapack, $string(getrf)),
+            ccall(dlsym(_jl_liblapack, $(string(getrf))),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
@@ -79,7 +79,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
             lwork = int32(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(dlsym(_jl_liblapack, $string(geqrf)),
+                ccall(dlsym(_jl_liblapack, $(string(geqrf))),
                       Void,
                       (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
@@ -115,14 +115,14 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
             if cmplx rwork = Array(Rtyp, 2n) end
             for i in 1:2
                 if cmplx
-                    ccall(dlsym(_jl_liblapack, $string(geqp3)),
+                    ccall(dlsym(_jl_liblapack, $(string(geqp3))),
                           Void,
                           (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Rtyp}, Ptr{Int32}),
                           &m, &n, A, &lda, jpvt, tau, work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(_jl_liblapack, $string(geqp3)),
+                    ccall(dlsym(_jl_liblapack, $(string(geqp3))),
                           Void,
                           (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -152,7 +152,7 @@ for (gbtrf, geqrf, geqp3, getrf, potrf, elty) in
             mnmn = min(m, n)
             ldab = stride(AB, 2)
             ipiv = Array(Int32, mnmn)
-            ccall(dlsym(_jl_liblapack, $string(gbtrf)),
+            ccall(dlsym(_jl_liblapack, $(string(gbtrf))),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
@@ -185,7 +185,7 @@ for (orgqr, elty) in
             lwork = -1
             work  = Array($elty, (1,))
             for i in 1:2
-                ccall(dlsym(_jl_liblapack, $string(orgqr)),
+                ccall(dlsym(_jl_liblapack, $(string(orgqr))),
                       Void,
                       (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                        Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
@@ -231,14 +231,14 @@ for (syev, geev, elty) in
             for i in 1:2
                 if iscomplex(A)
                     rwork = Array(Rtyp, max(1, 2n-1))
-                    ccall(dlsym(_jl_liblapack, $string(syev)),
+                    ccall(dlsym(_jl_liblapack, $(string(syev))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Rtyp}, Ptr{Int32}),
                           &jobz, &uplo, &n, A, &lda, W, work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(_jl_liblapack, $string(syev)),
+                    ccall(dlsym(_jl_liblapack, $(string(syev))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -290,7 +290,7 @@ for (syev, geev, elty) in
             end
             for i = 1:2
                 if cmplx
-                    ccall(dlsym(_jl_liblapack, $string(geev)),
+                    ccall(dlsym(_jl_liblapack, $(string(geev))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, 
@@ -299,7 +299,7 @@ for (syev, geev, elty) in
                           &jobvl, &jobvr, &n, A, &lda, W, VL, &n, VR, &n,
                           work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(_jl_liblapack, $string(geev)),
+                    ccall(dlsym(_jl_liblapack, $(string(geev))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -401,7 +401,7 @@ for (gesvd, gesdd, elty) in
             if cmplx rwork = Array(Rtyp, job == 'N' ? 5minmn : minmn*max(5minmn+7,2max(m,n)+2minmn+1)) end
             for i = 1:2
                 if iscomplex(A)
-                    ccall(dlsym(_jl_liblapack, $string(gesdd)),
+                    ccall(dlsym(_jl_liblapack, $(string(gesdd))),
                           Void,
                           (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -410,7 +410,7 @@ for (gesvd, gesdd, elty) in
                           &job, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, rwork, iwork, info)
                 else
-                    ccall(dlsym(_jl_liblapack, $string(gesdd)),
+                    ccall(dlsym(_jl_liblapack, $(string(gesdd))),
                           Void,
                           (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
@@ -454,7 +454,7 @@ for (gesvd, gesdd, elty) in
             if cmplx rwork = Array(Rtyp, 5minmn) end
             for i in 1:2
                 if cmplx
-                    ccall(dlsym(_jl_liblapack, $string(gesvd)),
+                    ccall(dlsym(_jl_liblapack, $(string(gesvd))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
@@ -463,7 +463,7 @@ for (gesvd, gesdd, elty) in
                           &jobu, &jobvt, &m, &n, A, &lda, S, U, &m, VT, &n,
                           work, &lwork, rwork, info)
                 else
-                    ccall(dlsym(_jl_liblapack, $string(gesvd)),
+                    ccall(dlsym(_jl_liblapack, $(string(gesvd))),
                           Void,
                           (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
@@ -849,7 +849,7 @@ for (gttrf, pttrf, elty) in
             info = Array(Int32, 1)
             n    = int32(length(M.d))
             ipiv = Array(Int32, n)
-            ccall(dlsym(_jl_liblapack, $string(gttrf)),
+            ccall(dlsym(_jl_liblapack, $(string(gttrf))),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
@@ -863,7 +863,7 @@ for (gttrf, pttrf, elty) in
             if length(E) != n-1
                 error("subdiagonal must be one element shorter than diagonal")
             end
-            ccall(dlsym(_jl_liblapack, $string(pttrf)),
+            ccall(dlsym(_jl_liblapack, $(string(pttrf))),
                   Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
                   &n, D, E, info)
@@ -887,7 +887,7 @@ for (gtsv, ptsv, elty) in
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
-            ccall(dlsym(_jl_liblapack, $string(gtsv)),
+            ccall(dlsym(_jl_liblapack, $(string(gtsv))),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
@@ -903,7 +903,7 @@ for (gtsv, ptsv, elty) in
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
-            ccall(dlsym(_jl_liblapack, $string(ptsv)),
+            ccall(dlsym(_jl_liblapack, $(string(ptsv))),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
@@ -928,7 +928,7 @@ for (gttrs, pttrs, elty) in
             n    = int32(length(M.d))
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
-            ccall(dlsym(_jl_liblapack, $string(gttrs)),
+            ccall(dlsym(_jl_liblapack, $(string(gttrs))),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
@@ -948,7 +948,7 @@ for (gttrs, pttrs, elty) in
             end
             nrhs = int32(size(B, 2))
             ldb  = int32(stride(B, 2))
-            ccall(dlsym(_jl_liblapack, $string(pttrs)),
+            ccall(dlsym(_jl_liblapack, $(string(pttrs))),
                   Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}),
@@ -985,7 +985,7 @@ for (stev, elty) in
                 work = Array($elty, max(1, 2*n-2))
             end
             info = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $string(stev)),
+            ccall(dlsym(_jl_liblapack, $(string(stev))),
                   Void,
                   (Ptr{Uint8}, Ptr{Int32},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
