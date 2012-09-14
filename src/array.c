@@ -40,7 +40,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
 
     int ndimwords = jl_array_ndimwords(ndims);
     if (tot <= ARRAY_INLINE_NBYTES) {
-        a = allocobj((sizeof(jl_array_t)+tot+ndimwords*sizeof(size_t)+15)&-16);
+        size_t tsz = tot>sizeof(size_t) ? tot-sizeof(size_t) : tot;
+        a = allocobj((sizeof(jl_array_t)+tsz+ndimwords*sizeof(size_t)+15)&-16);
         a->type = atype;
         a->ismalloc = 0;
         data = (&a->_space[0] + ndimwords*sizeof(size_t));

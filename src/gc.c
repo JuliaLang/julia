@@ -225,11 +225,11 @@ static void *alloc_big(size_t sz)
         jl_gc_collect();
     }
     sz = (sz+3) & -4;
-    allocd_bytes += sz;
     size_t offs = BVOFFS*sizeof(void*);
     if (sz + offs < offs)  // overflow in adding offs, size was "negative"
         jl_raise(jl_memory_exception);
     bigval_t *v = (bigval_t*)malloc(sz + offs);
+    allocd_bytes += (sz+offs);
     if (v == NULL)
         jl_raise(jl_memory_exception);
     v->sz = sz;
