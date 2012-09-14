@@ -541,7 +541,7 @@ function spawn(cmd::Cmd)
             println(stderr_stream, "dup: ", strerror())
             exit(0x7f)
         end
-        bk_stderr_stream = fdio(bk_stderr_fd)
+        bk_stderr_stream = fdio(bk_stderr_fd, true)
 
         # now actually do the fork and exec without writes
         pid = fork()

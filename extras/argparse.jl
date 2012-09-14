@@ -9,13 +9,14 @@ import OptionsMod.*
 export
 # types
     ArgParseSettings,
-    ArgParserError,
-    ArgParserField, # it shouldn't be necessary to export this, yet it is for some reason
+    ArgParseError,
+    ArgParseField, # it shouldn't be necessary to export this, yet it is for some reason
 
-# functions
+# functions & macros
     add_arg_table,
     @add_arg_table,
-    add_arg_fields,
+    @add_arg_subtable,
+    add_command,
     import_settings,
     usage_string,
     parse_args
@@ -28,13 +29,17 @@ const _nbsp = "\u00a0"
 #{{{
 const _all_actions = [:store_arg, :store_true, :store_false, :store_const,
                       :append_arg, :append_const, :count_invocations,
+                      :command_arg, :command_flag,
                       :show_help, :show_version]
 
-const _nonflag_actions = [:store_arg, :append_arg]
+const _nonflag_actions = [:store_arg, :append_arg, :command_arg]
 is_flag_action(a::Symbol) = !contains(_nonflag_actions, a)
 
 const _multi_actions = [:append_arg, :append_const]
 is_multi_action(a::Symbol) = contains(_multi_actions, a)
+
+const _command_actions = [:command_arg, :command_flag]
+is_command_action(a::Symbol) = contains(_command_actions, a)
 #}}}
 
 # ArgConsumerType
@@ -88,9 +93,9 @@ function default_action(nargs::ArgConsumerType)
 end
 #}}}
 
-# ArgParserField
+# ArgParseField
 #{{{
-type ArgParserField
+type ArgParseField
     dest_name::String
     long_opt_name::Vector{String}
     short_opt_name::Vector{String}
@@ -103,26 +108,33 @@ type ArgParserField
     required::Bool
     help::String
     metavar::String
-    function ArgParserField()
+    function ArgParseField()
         return new("", String[], String[], Any, :store_true, ArgConsumerType(),
                    nothing, nothing, x->true, false, "", "")
     end
 end
 
-is_flag(arg::ArgParserField) = is_flag_action(arg.action)
+is_flag(arg::ArgParseField) = is_flag_action(arg.action)
 
-is_multi(arg::ArgParserField) = is_multi_action(arg.action) || is_multi_nargs(arg.nargs)
+is_arg(arg::ArgParseField) = isempty(arg.long_opt_name) && isempty(arg.short_opt_name)
 
-is_arg(arg::ArgParserField) = isempty(arg.long_opt_name) && isempty(arg.short_opt_name)
+#}}}
 
+# ArgParseTable
+#{{{
+type ArgParseTable
+    fields::Vector{ArgParseField}
+    subtables::Dict{String,Any}
+    ArgParseTable() = new(ArgParseField[], Dict{String,Any}())
+end
 #}}}
 
 # ArgParseSettings
 #{{{
 type ArgParseSettings
+    prog::String
     description::String
     epilog::String
-    prog::String
     usage::String
     version::String
     add_help::Bool
@@ -130,20 +142,25 @@ type ArgParseSettings
     error_on_conflict::Bool
     suppress_warnings::Bool
     allow_ambiguous_opts::Bool
-    args::Vector{ArgParserField}
+    args_table::ArgParseTable
     exc_handler::Function
 
-    function ArgParseSettings(desc::String, add_help::Bool, version::String, add_version::Bool)
-        this = new(desc, "", "", "", version, add_help, add_version,
-                   true, false, false, ArgParserField[], _default_handler)
+    function ArgParseSettings(prog::String, desc::String, add_help::Bool)
+        this = new(prog, desc, "", "", "Unknown version", add_help, false,
+                   true, false, false, ArgParseTable(), _default_handler)
         return this
     end
 end
-ArgParseSettings(desc::String, add_help::Bool) = ArgParseSettings(desc, true, "Unknown version", false)
-ArgParseSettings(desc::String) = ArgParseSettings(desc, true)
+ArgParseSettings(prog::String, desc::String) = ArgParseSettings(prog, desc, true)
+ArgParseSettings(prog::String) = ArgParseSettings(prog, "")
 ArgParseSettings() = ArgParseSettings("")
 
 typealias ArgName{T<:String} Union(T, Vector{T})
+
+ref(s::ArgParseSettings, c::String) = s.args_table.subtables[c]
+has(s::ArgParseSettings, c::String) = has(s.args_table.subtables, c)
+assign(s::ArgParseSettings, x::ArgParseSettings, c::String) = assign(s.args_table.subtables, x, c)
+
 #}}}
 
 # fields declarations sanity checks
@@ -237,19 +254,44 @@ function _check_short_opt_name(name::String, settings::ArgParseSettings)
     return true
 end
 function _check_arg_name(name::String)
+    if ismatch(r"^%[A-Z]*%$", name)
+        error("invalid positional arg name: $name (is reserved)")
+    end
     return true
 end
-function _check_for_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserField)
-    function idstring(arg::ArgParserField)
-        if is_arg(arg)
-            return "argument $(arg.metavar)"
-        elseif !isempty(arg.long_opt_name)
-            return "option --$(arg.long_opt_name[1])"
-        else
-            return "option -$(arg.short_opt_name[1])"
+function _check_dest_name(name::String)
+    if ismatch(r"^%[A-Z]*%$", name)
+        error("invalid dest_name: $name (is reserved)")
+    end
+    return true
+end
+function idstring(arg::ArgParseField)
+    if is_arg(arg)
+        return "argument $(arg.metavar)"
+    elseif !isempty(arg.long_opt_name)
+        return "option --$(arg.long_opt_name[1])"
+    else
+        return "option -$(arg.short_opt_name[1])"
+    end
+end
+function _check_conflicts_with_commands(settings::ArgParseSettings, new_arg::ArgParseField)
+    for (cmd, ss) in settings.args_table.subtables
+        if cmd == new_arg.dest_name
+            error("$(idstring(new_arg)) has the same destination of a command: $cmd")
         end
     end
+    return true
+end
+function _check_conflicts_with_commands(settings::ArgParseSettings, new_cmd::String)
+    for a in settings.args_table.fields
+        if new_cmd == a.dest_name
+            error("command $new_cmd has the same destination of $(idstring(a))")
+        end
+    end
+    return true
+end
 
+function _check_for_duplicates(args::Vector{ArgParseField}, new_arg::ArgParseField)
     for a in args
         for l1 in a.long_opt_name, l2 in new_arg.long_opt_name
             if l1 == l2
@@ -284,14 +326,14 @@ end
 function _check_default_type_multi(default, arg_type::Type)
     if !(default === nothing) && !isa(default, Vector{None}) &&
             !(isa(default, Vector) && (arg_type <: eltype(default)))
-        error("the default value is of the incorrect type (default=$default, should be a Vector{T} with T<:$arg_type})")
+        error("the default value is of the incorrect type (typeof(default)=$(typeof(default)), should be a Vector{T} with T<:$arg_type})")
     end
     return true
 end
 function _check_default_type_multi2(default, arg_type::Type)
     if !(default === nothing) && !isa(default, Vector{None}) &&
             !(isa(default, Vector) && (Vector{arg_type} <: eltype(default)))
-        error("the default value is of the incorrect type (default=$default, should be a Vector{T} with Vector{$arg_type}<:T)")
+        error("the default value is of the incorrect type (typeof(default)=$(typeof(default)), should be a Vector{T} with Vector{$arg_type}<:T)")
     end
     return true
 end
@@ -363,7 +405,7 @@ function _check_metavar(metavar::String)
 end
 #}}}
 
-# add argument
+# add_arg_table and related
 #{{{
 
 function _name_to_fieldnames(name::ArgName, settings::ArgParseSettings)
@@ -449,15 +491,7 @@ function add_arg_table(settings::ArgParseSettings, table::Union(ArgName, Options
     end
 end
 
-function add_arg_fields(f::Function, settings::ArgParseSettings)
-    adder = (x...)->add_arg_field(settings, x...)
-    f(adder)
-end
-
 macro add_arg_table(s, x...)
-    if !isa(s, Symbol)
-        error("first argument to @add_arg_table must be of type ArgParseSettings")
-    end
     # transform the tuple into a vector, so that
     # we can manipulate it
     x = {x...}
@@ -551,23 +585,47 @@ macro add_arg_table(s, x...)
     exret
 end
 
+macro add_arg_subtable(s, c, x...)
+    s = esc(s)
+    c = esc(c)
+    x = map(esc, x)
+
+    exadd = expr(:call, :add_command, s, c)
+    #sat = expr(:(.), s, :(:args_table))
+    #sats = expr(:(.), sat, :(:subtables))
+    ss = expr(:ref, s, c)
+    extbl = expr(:macrocall, :add_arg_table, ss, x...)
+    quote
+        if !isa($s, ArgParseSettings)
+            error("first argument to @add_arg_subtable must be of type ArgParseSettings")
+        end
+        if !isa($c, String)
+            error("second argument to @add_arg_subtable must be a String")
+        end
+        $exadd
+        $extbl
+    end
+end
+
 add_arg_field(settings::ArgParseSettings, name::ArgName) = add_arg_field(settings, name, Options())
 function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
     _check_name_format(name)
 
     supplied_opts = keys(desc.key2index)
 
-    @defaults(desc,
-        nargs => ArgConsumerType(),
-        action => default_action(nargs),
-        arg_type => Any,
-        default => nothing,
-        constant => nothing,
-        required => false,
-        range_tester => x->true,
-        dest_name => "",
-        help => "",
-        metavar => "")
+    @defaults desc begin
+        nargs = ArgConsumerType()
+        action = default_action(nargs)
+        arg_type = Any
+        default = nothing
+        constant = nothing
+        required = false
+        range_tester = x->true
+        dest_name = ""
+        help = ""
+        metavar = ""
+        force_override = !settings.error_on_conflict
+    end
     @check_used(desc)
 
     _check_type(nargs, Union(ArgConsumerType,Int,Char), "nargs must be an Int or a Char")
@@ -578,6 +636,7 @@ function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
     _check_type(dest_name, String, "dest_name must be a String")
     _check_type(help, String, "help must be a String")
     _check_type(metavar, String, "metavar must be a String")
+    _check_type(force_override, Bool, "force_override must be a Bool")
 
     if !isa(nargs, ArgConsumerType)
         nargs = ArgConsumerType(nargs)
@@ -589,7 +648,7 @@ function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
     _check_action_is_valid(action)
     _check_nargs_and_action(nargs, action)
 
-    new_arg = ArgParserField()
+    new_arg = ArgParseField()
 
     is_opt = isa(name, Vector) || begins_with(name, '-')
     is_flag = is_flag_action(action)
@@ -613,42 +672,78 @@ function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
            !contains(supplied_opts, :constant)
         error("action $action requires the 'constant' field")
     end
-
-    if !settings.suppress_warnings
-        if is_flag
-            valid_keys = [:nargs, :action, :help]
-            if action == :store_const || action == :append_const
-                append!(valid_keys, [:default, :constant, :arg_type, :dest_name])
-            elseif action == :store_true || action == :store_false || action == :count_invocations
-                push(valid_keys, :dest_name)
-            elseif action == :show_help || action == :show_version
-            else
-                _found_a_bug()
-            end
-            _warn_extra_opts(supplied_opts, valid_keys)
-
-        elseif is_opt
-            valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :dest_name, :help, :metavar]
-            if nargs.desc == '?'
-                push(valid_keys, :constant)
-            end
-            _warn_extra_opts(supplied_opts, valid_keys)
+    if (action == :command_flag)
+        if !contains(supplied_opts, :constant)
+            constant = new_arg.dest_name
         else
-            valid_keys = [:nargs, :action, :arg_type, :default, :range_tester, :required, :help, :metavar]
-            _warn_extra_opts(supplied_opts, valid_keys)
+            _check_type(constant, String, "constant must be a String for command_flag action")
         end
     end
 
-    if is_opt && contains(supplied_opts, :dest_name)
+    valid_keys = [:nargs, :action, :help, :force_override]
+    if is_flag
+        if action == :store_const || action == :append_const
+            append!(valid_keys, [:default, :constant, :arg_type, :dest_name])
+        elseif action == :store_true || action == :store_false || action == :count_invocations
+            push(valid_keys, :dest_name)
+        elseif action == :command_flag
+            push(valid_keys, :constant)
+        elseif action == :show_help || action == :show_version
+        else
+            _found_a_bug()
+        end
+    elseif is_opt
+        if action == :command_arg
+            push(valid_keys, :metavar)
+        else
+            append!(valid_keys, [:arg_type, :default, :range_tester, :dest_name, :metavar])
+            if nargs.desc == '?'
+                push(valid_keys, :constant)
+            end
+        end
+    else
+        if action == :command_arg
+            append!(valid_keys, [:required, :metavar])
+        else
+            append!(valid_keys, [:arg_type, :default, :range_tester, :required, :metavar])
+        end
+    end
+    if !settings.suppress_warnings
+        _warn_extra_opts(supplied_opts, valid_keys)
+    end
+
+    if is_opt && contains(supplied_opts, :dest_name) &&
+                 contains(valid_keys, :dest_name)
         new_arg.dest_name = dest_name
     end
-    new_arg.arg_type = arg_type
-    new_arg.default = deepcopy(default)
-    new_arg.constant = deepcopy(constant)
-    new_arg.range_tester = range_tester
-    new_arg.required = required
-    new_arg.help = help
-    new_arg.metavar = metavar
+
+    _check_dest_name(dest_name)
+
+    set_if_valid(k, x) = if contains(valid_keys, k) new_arg.(k) = x end
+
+    set_if_valid(:arg_type, arg_type)
+    set_if_valid(:default, deepcopy(default))
+    set_if_valid(:constant, deepcopy(constant))
+    set_if_valid(:range_tester, range_tester)
+    set_if_valid(:required, required)
+    set_if_valid(:help, help)
+    set_if_valid(:metavar, metavar)
+
+    if !is_flag
+        if isempty(new_arg.metavar)
+            if is_opt
+                new_arg.metavar = uppercase(new_arg.dest_name)
+            else
+                new_arg.metavar = new_arg.dest_name
+            end
+        end
+        _check_metavar(new_arg.metavar)
+    end
+
+    if is_command_action(action)
+        new_arg.dest_name = "%COMMAND%"
+        new_arg.arg_type = String
+    end
 
     if is_flag
         if action == :store_true
@@ -678,7 +773,10 @@ function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
                     new_arg.default = Array(new_arg.arg_type, 0)
                 end
             end
+        elseif action == :command_flag
+            # nothing to do
         elseif action == :show_help || action == :show_version
+            # nothing to do
         else
             _found_a_bug()
         end
@@ -713,30 +811,67 @@ function add_arg_field(settings::ArgParseSettings, name::ArgName, desc::Options)
                 _check_range_default_multi(constant, range_tester)
             end
         end
-
-        if isempty(new_arg.metavar)
-            if is_opt
-                new_arg.metavar = uppercase(new_arg.dest_name)
-            else
-                new_arg.metavar = new_arg.dest_name
-            end
-        end
-        _check_metavar(new_arg.metavar)
     end
 
-    if settings.error_on_conflict
-        _check_for_duplicates(settings.args, new_arg)
+    _check_conflicts_with_commands(settings, new_arg)
+    if force_override
+        _override_duplicates(settings.args_table.fields, new_arg)
     else
-        _override_duplicates(settings.args, new_arg)
+        _check_for_duplicates(settings.args_table.fields, new_arg)
     end
-    push(settings.args, new_arg)
+    push(settings.args_table.fields, new_arg)
+    if action == :command_flag && !has(settings, new_arg.constant)
+        add_command(settings, new_arg.constant, force_override)
+    end
     return
+end
+
+# TODO? options
+add_command(settings::ArgParseSettings, command::String) =
+    add_command(settings, command, !settings.error_on_conflict)
+function add_command(settings::ArgParseSettings, command::String, force_override::Bool)
+    if has(settings, command)
+        return settings[command]
+        #error("subtable $command already added")
+    end
+    if force_override
+        _override_conflicts_with_commands(settings, command)
+    else
+        _check_conflicts_with_commands(settings, command)
+    end
+    settings[command] = ArgParseSettings()
+    ss = settings[command]
+    ss.prog = "$(settings.prog) $command"
+    ss.description = ""
+    ss.epilog = ""
+    ss.usage = ""
+    ss.version = settings.version
+    ss.add_help = settings.add_help
+    ss.add_version = settings.add_version
+    ss.error_on_conflict = settings.error_on_conflict
+    ss.suppress_warnings = settings.suppress_warnings
+    ss.allow_ambiguous_opts = settings.allow_ambiguous_opts
+    ss.exc_handler = settings.exc_handler
+
+    return ss
 end
 #}}}
 
 # import_settings & friends
 #{{{
-function _override_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserField)
+function _override_conflicts_with_commands(settings::ArgParseSettings, new_cmd::String)
+    ids0 = Int[]
+    for ia in 1:length(settings.args_table.fields)
+        a = settings.args_table.fields[ia]
+        if new_cmd == a.dest_name
+            push(ids0, ia)
+        end
+    end
+    while !isempty(ids0)
+        del(settings.args_table.fields, pop(ids0))
+    end
+end
+function _override_duplicates(args::Vector{ArgParseField}, new_arg::ArgParseField)
     ids0 = Int[]
     for ia in 1:length(args)
         a = args[ia]
@@ -796,20 +931,43 @@ function _override_duplicates(args::Vector{ArgParserField}, new_arg::ArgParserFi
     end
 end
 
+function _check_settings_are_compatible(settings::ArgParseSettings, other::ArgParseSettings)
+    table = settings.args_table
+    otable = other.args_table
+    for a in otable.fields
+        _check_conflicts_with_commands(settings, a)
+        if settings.error_on_conflict
+            _check_for_duplicates(table.fields, a)
+        end
+    end
+
+    for (subk, subs) in otable.subtables
+        if settings.error_on_conflict
+            _check_conflicts_with_commands(settings, subk)
+        end
+        if has(settings, subk)
+            _check_settings_are_compatible(settings[subk], subs)
+        end
+    end
+    return true
+end
+
 import_settings(settings::ArgParseSettings, other::ArgParseSettings) =
     import_settings(settings, other, true)
 function import_settings(settings::ArgParseSettings, other::ArgParseSettings, args_only::Bool)
-    oargs = deepcopy(other.args)
-    if settings.error_on_conflict
-        for a in oargs
-            _check_for_duplicates(settings.args, a)
+    _check_settings_are_compatible(settings, other)
+
+    fields = settings.args_table.fields
+    ofields = deepcopy(other.args_table.fields)
+    if !settings.error_on_conflict
+        for a in ofields
+            _override_duplicates(fields, a)
         end
-    else
-        for a in oargs
-            _override_duplicates(settings.args, a)
+        for (subk, subs) in other.args_table.subtables
+            _override_conflicts_with_commands(settings, subk)
         end
     end
-    append!(settings.args, oargs)
+    append!(fields, ofields)
     if !args_only
         settings.add_help = other.add_help
         settings.add_version = other.add_version
@@ -818,7 +976,13 @@ function import_settings(settings::ArgParseSettings, other::ArgParseSettings, ar
         settings.exc_handler = other.exc_handler
         settings.allow_ambiguous_opts = other.allow_ambiguous_opts
     end
-    return
+    for (subk, subs) in other.args_table.subtables
+        if !has(settings, subk)
+            add_command(settings, subk)
+        end
+        import_settings(settings[subk], subs, args_only)
+    end
+    return settings
 end
 #}}}
 
@@ -843,10 +1007,10 @@ function _test_range(range_tester::Function, arg)
     return rng_chk
 end
 
-function _test_mandatory_args(settings::ArgParseSettings, found_args::Set{String})
-    for f in settings.args
-        if is_arg(f) && f.required && !has(found_args, f.dest_name)
-            argparse_error("mandatory argument $(f.dest_name) was not provided")
+function _test_required_args(settings::ArgParseSettings, found_args::Set{String})
+    for f in settings.args_table.fields
+        if is_arg(f) && f.required && !has(found_args, f.metavar)
+            argparse_error("required argument $(f.metavar) was not provided")
         end
     end
     return true
@@ -884,20 +1048,22 @@ const _number_regex =
       $"x
 
 function _looks_like_an_option(arg::String, settings::ArgParseSettings)
-    if !begins_with(arg, '-')
+    if !begins_with(arg, '-') || arg == "-"
         return false
     elseif begins_with(arg, "--")
         return true
     end
     # begins with '-'
     if !ismatch(_number_regex, arg)
+        # it's not a number
         return true
     elseif !settings.allow_ambiguous_opts
+        # it's a number
         return false
     end
     # looks like a number; but is it overridden by an option?
     d = arg[2]
-    for a in settings.args, s in a.short_opt_name
+    for a in settings.args_table.fields, s in a.short_opt_name
         if s == d
             return true
         end
@@ -917,7 +1083,7 @@ function usage_string(settings::ArgParseSettings)
     end
     pos_lst = {}
     opt_lst = {}
-    for f in settings.args
+    for f in settings.args_table.fields
         if is_arg(f)
             if !f.required
                 bra_pre = "["
@@ -989,7 +1155,7 @@ function usage_string(settings::ArgParseSettings)
     return out_str
 end
 
-function _gen_help_text(arg::ArgParserField)
+function _gen_help_text(arg::ArgParseField)
     pre = isempty(arg.help) ? "" : " "
     if !is_flag(arg)
         type_str = ""
@@ -1038,7 +1204,7 @@ function _show_help(settings::ArgParseSettings)
 
     pos_lst = {}
     opt_lst = {}
-    for f in settings.args
+    for f in settings.args_table.fields
         if is_arg(f)
             push(pos_lst, {f.metavar, _gen_help_text(f)})
             max_lc_len = max(max_lc_len, strlen(f.metavar))
@@ -1138,10 +1304,11 @@ function _default_handler(settings::ArgParseSettings, err)
 end
 
 parse_args(settings::ArgParseSettings) = parse_args(ARGS, settings)
+
 function parse_args(args_list::Vector, settings::ArgParseSettings)
     local parsed_args
     try
-        parsed_args = _parse_args_unhandled(settings, args_list)
+        parsed_args = _parse_args_unhandled(args_list, settings)
     catch err
         if isa(err, ArgParseError)
             settings.exc_handler(settings, err)
@@ -1152,7 +1319,7 @@ function parse_args(args_list::Vector, settings::ArgParseSettings)
     parsed_args
 end
 
-function _parse_args_unhandled(settings::ArgParseSettings, args_list::Vector)
+function _parse_args_unhandled(args_list::Vector, settings::ArgParseSettings)
     if any(map(x->!isa(x,String), args_list))
         argparse_error("malformed args_list")
     end
@@ -1175,10 +1342,10 @@ function _parse_args_unhandled(settings::ArgParseSettings, args_list::Vector)
         help_added = true
     end
 
-    out_dict = Dict{String,Any}()
     found_args = Set{String}()
+    out_dict = Dict{String,Any}()
 
-    for f in settings.args
+    for f in settings.args_table.fields
         if f.action == :show_help || f.action == :show_version
             continue
         end
@@ -1188,6 +1355,7 @@ function _parse_args_unhandled(settings::ArgParseSettings, args_list::Vector)
     arg_delim_found = false
     last_ind = 0
     last_arg = 0
+    command = nothing
     while last_ind < length(args_list)
         last_ind += 1
 
@@ -1207,22 +1375,36 @@ function _parse_args_unhandled(settings::ArgParseSettings, args_list::Vector)
             if strlen(opt_name) == 0
                 argparse_error("illegal option: $arg")
             end
-            last_ind, out_dict = _parse_long_opt(settings, opt_name, last_ind, arg_after_eq, args_list, out_dict)
+            last_ind, command, out_dict = _parse_long_opt(settings, opt_name, last_ind, arg_after_eq, args_list, out_dict)
         elseif !arg_delim_found && _looks_like_an_option(arg, settings)
             shopts_lst = arg[2:end]
-            last_ind, out_dict = _parse_short_opt(settings, shopts_lst, last_ind, args_list, out_dict)
+            last_ind, command, shopts_lst_rest, out_dict = _parse_short_opt(settings, shopts_lst, last_ind, args_list, out_dict)
+            if !(command === nothing) && !(shopts_lst_rest === nothing)
+                args_list = copy(args_list)
+                args_list[last_ind] = "-" * shopts_lst_rest
+                last_ind -= 1
+            end
         else
-            last_ind, last_arg, out_dict = _parse_arg(settings, last_ind, last_arg, arg_delim_found, args_list, out_dict)
-            add(found_args, settings.args[last_arg].dest_name)
+            last_ind, last_arg, command, out_dict = _parse_arg(settings, last_ind, last_arg, arg_delim_found, args_list, out_dict)
+            add(found_args, settings.args_table.fields[last_arg].metavar)
+        end
+        if !(command === nothing)
+            break
         end
     end
-    _test_mandatory_args(settings, found_args)
+    _test_required_args(settings, found_args)
+    if !(command == nothing)
+        if !has(settings, command)
+            argparse_error("unknown command: $command")
+        end
+        out_dict[command] = parse_args(args_list[last_ind+1:end], settings[command])
+    end
     if help_added
-        pop(settings.args)
+        pop(settings.args_table.fields)
         settings.add_help = true
     end
     if version_added
-        pop(settings.args)
+        pop(settings.args_table.fields)
         settings.add_version = true
     end
     return out_dict
@@ -1230,10 +1412,11 @@ end
 
 # common parse functions
 #{{{
-function _parse1_flag(settings::ArgParseSettings, f::ArgParserField, has_arg::Bool, opt_name::String, out_dict::Dict)
+function _parse1_flag(settings::ArgParseSettings, f::ArgParseField, has_arg::Bool, opt_name::String, out_dict::Dict)
     if has_arg
         argparse_error("option $opt_name takes no arguments")
     end
+    command = nothing
     if f.action == :store_true
         out_dict[f.dest_name] = true
     elseif f.action == :store_false
@@ -1244,12 +1427,15 @@ function _parse1_flag(settings::ArgParseSettings, f::ArgParserField, has_arg::Bo
         push(out_dict[f.dest_name], f.constant)
     elseif f.action == :count_invocations
         out_dict[f.dest_name] += 1
+    elseif f.action == :command_flag
+        out_dict[f.dest_name] = f.constant
+        command = f.constant
     elseif f.action == :show_help
         _show_help(settings)
     elseif f.action == :show_version
         _show_version(settings)
     end
-    return out_dict
+    return out_dict, command
 end
 
 function _err_arg_required(name::String, num::Int, is_opt::Bool)
@@ -1261,10 +1447,11 @@ function _err_arg_outofrange(name::String, a, is_opt::Bool)
                    " $name: $a")
 end
 
-function _parse1_optarg(settings::ArgParseSettings, f::ArgParserField, rest, args_list, name::String,
+function _parse1_optarg(settings::ArgParseSettings, f::ArgParseField, rest, args_list, name::String,
                         is_opt::Bool, arg_delim_found::Bool,
                         out_dict::Dict, last_ind::Int)
     arg_consumed = false
+    command = nothing
     if is_multi_nargs(f.nargs)
         opt_arg = Array(f.arg_type, 0)
     end
@@ -1385,25 +1572,28 @@ function _parse1_optarg(settings::ArgParseSettings, f::ArgParserField, rest, arg
         out_dict[f.dest_name] = opt_arg
     elseif f.action == :append_arg
         push(out_dict[f.dest_name], opt_arg)
+    elseif f.action == :command_arg
+        out_dict[f.dest_name] = opt_arg
+        command = opt_arg
     else
         _found_a_bug()
     end
-    return out_dict, last_ind, arg_consumed
+    return out_dict, last_ind, arg_consumed, command
 end
 #}}}
 
 # parse long opts
 #{{{
 function _parse_long_opt(settings::ArgParseSettings, opt_name::String, last_ind::Int, arg_after_eq::Union(String,Nothing), args_list::Vector, out_dict::Dict)
-    local f::ArgParserField
+    local f::ArgParseField
     local fln::String
     exact_match = false
     nfound = 0
-    for g in settings.args
+    for g in settings.args_table.fields
         for ln in g.long_opt_name
             if ln == opt_name
                 exact_match = true
-                nfound += 1
+                nfound = 1
                 f = g
                 fln = ln
                 break
@@ -1419,27 +1609,29 @@ function _parse_long_opt(settings::ArgParseSettings, opt_name::String, last_ind:
     end
     if nfound == 0
         argparse_error("unrecognized option --$opt_name")
-    elseif !exact_match && nfound > 1
+    elseif nfound > 1
         argparse_error("long option --$opt_name is ambiguous ($nfound partial matches)")
     end
 
     opt_name = fln
 
     if is_flag(f)
-        out_dict = _parse1_flag(settings, f, !(arg_after_eq === nothing), "--"*opt_name, out_dict)
+        out_dict, command = _parse1_flag(settings, f, !(arg_after_eq === nothing), "--"*opt_name, out_dict)
     else
-        out_dict, last_ind, arg_consumed =
+        out_dict, last_ind, arg_consumed, command =
                 _parse1_optarg(settings, f, arg_after_eq, args_list, "--"*opt_name,
                                true, false,
                                out_dict, last_ind)
     end
-    return last_ind, out_dict
+    return last_ind, command, out_dict
 end
 #}}}
 
 # parse short opts
 #{{{
 function _parse_short_opt(settings::ArgParseSettings, shopts_lst::String, last_ind::Int, args_list::Vector, out_dict::Dict)
+    command = nothing
+    rest_as_arg = nothing
     sind = start(shopts_lst)
     while !done(shopts_lst, sind)
         opt_char, next_sind = next(shopts_lst, sind)
@@ -1460,9 +1652,9 @@ function _parse_short_opt(settings::ArgParseSettings, shopts_lst::String, last_i
         opt_name = string(opt_char)
         arg_consumed = false
 
-        local f::ArgParserField
+        local f::ArgParseField
         found = false
-        for f in settings.args
+        for f in settings.args_table.fields
             for sn in f.short_opt_name
                 if sn == opt_name
                     found = true
@@ -1477,9 +1669,9 @@ function _parse_short_opt(settings::ArgParseSettings, shopts_lst::String, last_i
             argparse_error("unrecognized option -$opt_name")
         end
         if is_flag(f)
-            out_dict = _parse1_flag(settings, f, next_is_eq, "-"*opt_name, out_dict)
+            out_dict, command = _parse1_flag(settings, f, next_is_eq, "-"*opt_name, out_dict)
         else
-            out_dict, last_ind, arg_consumed =
+            out_dict, last_ind, arg_consumed, command =
                     _parse1_optarg(settings, f, rest_as_arg, args_list, "-"*opt_name,
                                    true, false,
                                    out_dict, last_ind)
@@ -1487,9 +1679,15 @@ function _parse_short_opt(settings::ArgParseSettings, shopts_lst::String, last_i
         if arg_consumed
             break
         end
+        if !(command == nothing) && !(rest_as_arg == nothing)
+            if isempty(rest_as_arg)
+                rest_as_arg = nothing
+            end
+            break
+        end
         sind = next_sind
     end
-    return last_ind, out_dict
+    return last_ind, command, rest_as_arg, out_dict
 end
 #}}}
 
@@ -1498,8 +1696,8 @@ end
 function _parse_arg(settings::ArgParseSettings, last_ind::Int, last_arg::Int, arg_delim_found::Bool, args_list::Vector, out_dict::Dict)
     local new_arg_ind
     found = false
-    for new_arg_ind = last_arg+1:length(settings.args)
-        if is_arg(settings.args[new_arg_ind])
+    for new_arg_ind = last_arg+1:length(settings.args_table.fields)
+        if is_arg(settings.args_table.fields[new_arg_ind])
             found = true
             break
         end
@@ -1507,14 +1705,14 @@ function _parse_arg(settings::ArgParseSettings, last_ind::Int, last_arg::Int, ar
     if !found
         argparse_error("too many arguments")
     end
-    f = settings.args[new_arg_ind]
+    f = settings.args_table.fields[new_arg_ind]
 
-    out_dict, last_ind, arg_consumed =
+    out_dict, last_ind, arg_consumed, command =
             _parse1_optarg(settings, f, nothing, args_list, f.dest_name,
                            false, arg_delim_found,
                            out_dict, last_ind-1)
 
-    return last_ind, new_arg_ind, out_dict
+    return last_ind, new_arg_ind, command, out_dict
 end
 #}}}
 #}}}
