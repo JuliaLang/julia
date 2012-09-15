@@ -115,14 +115,14 @@ macro _jl_libRmath_1par_0d(base)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
-            ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number) = ($dd)(x, p1, false)
         @vectorize_2arg Number $dd
 
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, lower_tail::Bool) = ($pp)(q, p1, lower_tail, false)
@@ -131,7 +131,7 @@ macro _jl_libRmath_1par_0d(base)
         @vectorize_2arg Number $pp
 
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, lower_tail::Bool) = ($qq)(p, p1, lower_tail, false)
@@ -140,7 +140,7 @@ macro _jl_libRmath_1par_0d(base)
         @vectorize_2arg Number $qq
 
         ($rr)(nn::Integer, p1::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,), p1) for i=1:nn ]
     end
 end
 
@@ -158,7 +158,7 @@ macro _jl_libRmath_1par_1d(base, d1)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, give_log::Bool) = 
-            ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Int32), x, p1, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Int32), x, p1, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, give_log::Bool) = ($dd)(x, $d1, give_log)
@@ -169,7 +169,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($dd){T<:Number}(x::AbstractArray{T}) = ($dd)(x, $d1, false)
 
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Int32,Int32), q, p1, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, $d1, lower_tail, log_p)
@@ -184,7 +184,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($pp){T<:Number}(q::AbstractArray{T}) = ($pp)(q, $d1, true, false)
 
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Int32,Int32), p, p1, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, $d1, lower_tail, log_p)
@@ -199,7 +199,7 @@ macro _jl_libRmath_1par_1d(base, d1)
         ($qq){T<:Number}(p::AbstractArray{T}) = ($qq)(p, $d1, true, false)
 
         ($rr)(nn::Integer, p1::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,), p1) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,), p1) for i=1:nn ]
         ($rr)(nn::Integer) = ($rr)(nn, $d1)
     end
 end
@@ -216,14 +216,14 @@ macro _jl_libRmath_2par_0d(base)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, p2::Number) = ($dd)(x, p1, p2, false)
         @_jl_libRmath_vectorize_3arg $dd
 
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool) = ($pp)(q, p1, p2, lower_tail, false)
@@ -233,7 +233,7 @@ macro _jl_libRmath_2par_0d(base)
         @_jl_libRmath_vectorize_3arg $pp
 
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool) = ($qq)(p, p1, p2, lower_tail, false)
@@ -243,7 +243,7 @@ macro _jl_libRmath_2par_0d(base)
         @_jl_libRmath_vectorize_3arg $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
     end
 end
 
@@ -263,7 +263,7 @@ macro _jl_libRmath_2par_1d(base, d2)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
@@ -274,7 +274,7 @@ macro _jl_libRmath_2par_1d(base, d2)
         @vectorize_2arg Number $dd
         
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
@@ -289,7 +289,7 @@ macro _jl_libRmath_2par_1d(base, d2)
         @vectorize_2arg Number $pp
         
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
@@ -304,7 +304,7 @@ macro _jl_libRmath_2par_1d(base, d2)
         @vectorize_2arg Number $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
         ($rr)(nn::Integer, p1::Number) = ($rr)(nn, p1, $d2)
     end
 end
@@ -326,7 +326,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, give_log::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(ddsym)), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(ddsym))), Float64, (Float64,Float64,Float64,Int32), x, p1, p2, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, p2, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, give_log::Bool) = ($dd)(x, p1, $d2, give_log)
@@ -342,7 +342,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
 
         
         ($pp)(q::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(ppsym)), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(ppsym))), Float64, (Float64,Float64,Float64,Int32,Int32), q, p1, p2, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, p2, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($pp)(q, p1, $d2, lower_tail, log_p)
@@ -363,7 +363,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($pp){T<:Number}(q::AbstractArray{T}) = ($pp)(q, $d1, $d2, true, false)
         
         ($qq)(p::Number, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qqsym)), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qqsym))), Float64, (Float64,Float64,Float64,Int32,Int32), p, p1, p2, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, p2, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, lower_tail::Bool, log_p::Bool) = ($qq)(p, p1, $d2, lower_tail, log_p)
@@ -384,7 +384,7 @@ macro _jl_libRmath_2par_2d(base, d1, d2)
         ($qq){T<:Number}(p::AbstractArray{T}) = ($qq)(p, $d1, $d2, true, false)
 
         ($rr)(nn::Integer, p1::Number, p2::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,Float64), p1, p2) for i=1:nn ]
         ($rr)(nn::Integer, p1::Number) = ($rr)(nn, p1, $d2)
         ($rr)(nn::Integer) = ($rr)(nn, $d1, $d2)
     end
@@ -405,14 +405,14 @@ macro _jl_libRmath_3par_0d(base)
     quote
         global $dd, $pp, $qq, $rr
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number, give_log::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(dd)), Float64, (Float64,Float64,Float64,Float64,Int32), x, p1, p2, p3, give_log)
+            ccall(dlsym(_jl_libRmath,$(string(dd))), Float64, (Float64,Float64,Float64,Float64,Int32), x, p1, p2, p3, give_log)
         ($dd){T<:Number}(x::AbstractArray{T}, p1::Number, p2::Number, p3::Number, give_log::Bool) =
             reshape([ ($dd)(x[i], p1, p2, p3, give_log) for i=1:numel(x) ], size(x))
         ($dd)(x::Number, p1::Number, p2::Number, p3::Number) = ($dd)(x, p1, p2, p3, false)
         @_jl_libRmath_vectorize_4arg $dd
 
         ($pp)(q::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(pp)), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), q, p1, p2, p3, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(pp))), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), q, p1, p2, p3, lower_tail, log_p)
         ($pp){T<:Number}(q::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($pp)(q[i], p1, p2, p3, lower_tail, log_p) for i=1:numel(q) ], size(q))
         ($pp)(q::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool) = ($pp)(q, p1, p2, p3, lower_tail, false)
@@ -422,7 +422,7 @@ macro _jl_libRmath_3par_0d(base)
         @_jl_libRmath_vectorize_4arg $pp
 
         ($qq)(p::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
-            ccall(dlsym(_jl_libRmath,$string(qq)), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), p, p1, p2, p3, lower_tail, log_p)
+            ccall(dlsym(_jl_libRmath,$(string(qq))), Float64, (Float64,Float64,Float64,Float64,Int32,Int32), p, p1, p2, p3, lower_tail, log_p)
         ($qq){T<:Number}(p::AbstractArray{T}, p1::Number, p2::Number, p3::Number, lower_tail::Bool, log_p::Bool) =
             reshape([ ($qq)(p[i], p1, p2, p3, lower_tail, log_p) for i=1:numel(p) ], size(p))
         ($qq)(p::Number, p1::Number, p2::Number, p3::Number, lower_tail::Bool) = ($qq)(p, p1, p2, p3, lower_tail, false)
@@ -432,7 +432,7 @@ macro _jl_libRmath_3par_0d(base)
         @_jl_libRmath_vectorize_4arg $qq
 
         ($rr)(nn::Integer, p1::Number, p2::Number, p3::Number) =
-            [ ccall(dlsym(_jl_libRmath,$string(rr)), Float64, (Float64,Float64,Float64), p1, p2, p3) for i=1:nn ]
+            [ ccall(dlsym(_jl_libRmath,$(string(rr))), Float64, (Float64,Float64,Float64), p1, p2, p3) for i=1:nn ]
     end
 end
 
