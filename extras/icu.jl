@@ -34,7 +34,7 @@ for suffix in ["", ["_"*string(i) for i in 42:50]]
                   :u_strToLower,
                   :u_strToTitle,
                   :u_strToUpper,
-                  :u_strlen,
+                  :u_countChar32,
                   :ucasemap_open,
                   :ucasemap_close,
                   :ucasemap_getBreakIterator,
@@ -86,13 +86,22 @@ function ICUString(str::ByteString)
 end
 
 strlen(s::ICUString) =
-    ccall(dlsym(iculib,u_strlen), Int32, (Ptr{UChar},), s.data)
+    ccall(dlsym(iculib,u_countChar32), Int32, (Ptr{UChar},Int32), s.data, length(s.data))
 
 length(icu::ICUString) = length(icu.data)
 
+utf16_is_lead(c::Uint16) = (c & 0xfc00) == 0xd800
+utf16_is_trail(c::Uint16) = (c & 0xfc00) == 0xdc00
+utf16_is_surrogate(c::Uint16) = (c & 0xf800) == 0xd800
+utf16_get_supplementary(lead::Uint16, trail::Uint16) = char((lead-0xd7f7)<<10 + trail)
+
 function next(s::ICUString, i::Int)
-    # XXX:fixme
-    char(s.data[i]), i+1
+    if !utf16_is_surrogate(s.data[i])
+        return char(s.data[i]), i+1
+    elseif length(s.data) > i && utf16_is_lead(s.data[i]) && utf16_is_trail(s.data[i+1])
+        return utf16_get_supplementary(s.data[i], s.data[i+1]), i+2
+    end
+    error("invalid UTF-16 character index")
 end
 
 function utf8(src::ICUString)
