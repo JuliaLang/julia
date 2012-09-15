@@ -119,7 +119,7 @@ for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
     end
 end
 
-function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Vector{T}, y::Vector{T})
+function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Array{T}, y::Array{T})
     if length(x) != length(y)
         error("Inputs should be of the same length")
     end
@@ -127,7 +127,7 @@ function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Vector{T}, y::Vector{T}
     return y
 end
 
-function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
+function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Array{T}, rx::Union(Range1{TI},Range{TI}), y::Array{T}, ry::Union(Range1{TI},Range{TI}))
     if length(rx) != length(ry)
         error("Ranges should be of the same length")
     end

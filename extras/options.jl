@@ -126,6 +126,9 @@ end
 function ischeck(o::Options{CheckNone})
     return falses(length(o.vals))
 end
+function ischeck(a)
+    error("First argument must be an options type")
+end
 function docheck_common(o::Options,checkflag::Vector{Bool})
     unused = checkflag & !o.used[1:length(checkflag)]
     msg = ""
