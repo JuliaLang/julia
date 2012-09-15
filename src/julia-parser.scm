@@ -705,7 +705,7 @@
 		       ;; custom prefixed string literals, x"s" => @x_str "s"
 		       (let ((str (begin (take-token s)
 					 (parse-string-literal s)))
-			     (macname (symbol (string ex '_str))))
+			     (macname (symbol (string #\@ ex '_str))))
 			 (let ((nxt (peek-token s)))
 			   (if (and (symbol? nxt) (not (operator? nxt))
 				    (not (ts:space? s)))
@@ -917,7 +917,7 @@
 
 (define (macrocall-to-atsym e)
   (if (and (pair? e) (eq? (car e) 'macrocall))
-      (symbol (string #\@ (cadr e)))
+      (cadr e)
       e))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
@@ -1132,7 +1132,7 @@
 		     (write-char (not-eof-2 c) b))
 		 (loop (read-char p)))))
     (let ((str (io.tostring! b)))
-      `(macrocall cmd ,str))))
+      `(macrocall @cmd ,str))))
 
 (define (not-eof-3 c)
   (if (eof-object? c)
@@ -1311,7 +1311,7 @@
 	   (take-token s)
 	   (let ((ps (parse-string-literal s)))
 	     (if (cdr ps)
-		 `(macrocall str ,(car ps))
+		 `(macrocall @str ,(car ps))
 		 (let ((str (unescape-string (car ps))))
 		   (if (not (string.isutf8 str))
 		       (error "invalid UTF-8 sequence"))
@@ -1320,15 +1320,13 @@
 	  ;; macro call
 	  ((eqv? t #\@)
 	   (take-token s)
-	   (let ((head (parse-atom s)))
-	     (if (not (symbol? head))
-		 (error (string "invalid macro use @" head)))
-	     (let ((args (if (and (eqv? (peek-token s) #\( )
-				  (not (ts:space? s)))
-			     (begin (take-token s)
-				    (parse-arglist s #\) ))
-			     (parse-space-separated-exprs s))))
-	       `(macrocall ,head ,@args))))
+	   (let ((head (with-space-sensitive
+			(parse-call s))))
+	     (if (and (pair? head) (eq? (car head) 'call))
+		 `(macrocall ,(macroify-name (cadr head))
+			     ,@(cddr head))
+		 `(macrocall ,(macroify-name head)
+			     ,@(parse-space-separated-exprs s)))))
 
 	  ;; command syntax
 	  ((eqv? t #\`)
@@ -1336,6 +1334,18 @@
 	   (parse-backquote s))
 
 	  (else (error (string "invalid syntax: " (take-token s)))))))
+
+(define (valid-modref? e)
+  (and (length= e 3) (eq? (car e) '|.|) (pair? (caddr e))
+       (eq? (car (caddr e)) 'quote) (symbol? (cadr (caddr e)))
+       (or (symbol? (cadr e))
+	   (valid-modref? (cadr e)))))
+
+(define (macroify-name e)
+  (cond ((symbol? e)  (symbol (string #\@ e)))
+	((valid-modref? e)  `(|.| ,(cadr e)
+			      (quote ,(macroify-name (cadr (caddr e))))))
+	(else (error (string "invalid macro use @" e)))))
 
 ; --- main entry point ---
 

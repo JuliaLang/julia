@@ -1964,8 +1964,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-		(apply invoke-julia-macro (symbol (string #\@ (cadr e)))
-		       (cddr e))))
+		(apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
@@ -1995,10 +1994,9 @@ So far only the second case can actually occur.
 	 (case (car e)
 	   ((escape) (cadr e))
 	   ((macrocall)
-	    `(macrocall ,(cadr e) ;; TODO: might need to be resolved
-			,@(map (lambda (x)
+	    `(macrocall ,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
-			       (cddr e))))
+			       (cdr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)

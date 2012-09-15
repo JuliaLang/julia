@@ -272,7 +272,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             li->ast = jl_compress_ast(li, li->ast);
             li->name = nm;
         }
-        jl_set_expander(jl_current_module, nm, f);
+        jl_set_global(jl_current_module, nm, (jl_value_t*)f);
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == line_sym) {

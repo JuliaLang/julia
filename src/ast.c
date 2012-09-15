@@ -41,26 +41,20 @@ value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
 {
     if (nargs < 1)
         argcount("invoke-julia-macro", nargs, 1);
-    (void)tosymbol(args[0], "invoke-julia-macro");
-    jl_sym_t *name = jl_symbol(symbol_name(args[0]));
-    jl_function_t *f = jl_get_expander(jl_current_module, name);
-    if (f == NULL)
-        return FL_F;
-    jl_value_t **margs;
-    int na = nargs-1;
-    if (na > 0)
-        margs = alloca(na * sizeof(jl_value_t*));
-    else
-        margs = NULL;
+    jl_function_t *f = NULL;
+    jl_value_t **margs = alloca(nargs * sizeof(jl_value_t*));
     int i;
-    for(i=0; i < na; i++) margs[i] = NULL;
-    JL_GC_PUSHARGS(margs, na);
-    for(i=0; i < na; i++) margs[i] = scm_to_julia(args[i+1]);
+    for(i=0; i < nargs; i++) margs[i] = NULL;
+    JL_GC_PUSHARGS(margs, nargs);
+    for(i=1; i < nargs; i++) margs[i] = scm_to_julia(args[i]);
     jl_value_t *result;
 
     JL_TRY {
         jl_register_toplevel_eh();
-        result = jl_apply(f, margs, na);
+
+        margs[0] = scm_to_julia(args[0]);
+        f = (jl_function_t*)jl_toplevel_eval(margs[0]);
+        result = jl_apply(f, &margs[1], nargs-1);
     }
     JL_CATCH {
         JL_GC_POP();
