@@ -361,3 +361,19 @@ begin
     @assert typeof(a) === SI{1,2,1}
     @assert typeof(b) === SI{1,-2,1}
 end
+
+# pull request 1270
+begin
+    local a,p, a2,p2
+    a = [11,12,13]
+    p = pointer(a)
+    @assert unsafe_ref(p, 1) == 11
+    unsafe_assign(p, 99, 2)
+    @assert a == [11,99,13]
+    a2 = Any[101,102,103]
+    p2 = pointer(a2)
+    @assert unsafe_ref(p2) == 101
+    unsafe_assign(p2, 909, 3)
+    @assert a2 == [101,102,909]
+end
+
