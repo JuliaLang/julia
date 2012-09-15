@@ -58,6 +58,162 @@ static Value *literal_pointer_val(void *p)
     return literal_pointer_val(p, T_pint8);
 }
 
+// --- mapping between julia and llvm types ---
+
+static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
+{
+    if (jt == (jl_value_t*)jl_bool_type) return T_int1;
+    if (jt == (jl_value_t*)jl_float32_type) return T_float32;
+    if (jt == (jl_value_t*)jl_float64_type) return T_float64;
+    //if (jt == (jl_value_t*)jl_null) return T_void;
+    if (jl_is_cpointer_type(jt)) {
+        Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
+        if (lt == NULL)
+            return NULL;
+        if (lt == T_void)
+            lt = T_int8;
+        return PointerType::get(lt, 0);
+    }
+    if (jl_is_bits_type(jt)) {
+        int nb = jl_bitstype_nbits(jt);
+        if (nb == 8)  return T_int8;
+        if (nb == 16) return T_int16;
+        if (nb == 32) return T_int32;
+        if (nb == 64) return T_int64;
+        else          return Type::getIntNTy(getGlobalContext(), nb);
+    }
+    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
+    //if (jt == (jl_value_t*)jl_any_type)
+    //    return jl_pvalue_llvmt;
+    return jl_pvalue_llvmt;
+    //emit_type_error(literal_pointer_val(jt), (jl_value_t*)jl_bits_kind,
+    //                "conversion to native type", ctx);
+    //return NULL;
+}
+
+// NOTE: llvm cannot express all julia types (for example unsigned),
+// so this is an approximation. it's only correct if the associated LLVM
+// value is not tagged with our value name hack.
+// boxed(v) below gets the correct type.
+static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
+{
+    if (t == T_int1)  return (jl_value_t*)jl_bool_type;
+    if (t == T_int8)  return (jl_value_t*)jl_int8_type;
+    if (t == T_int16) return (jl_value_t*)jl_int16_type;
+    if (t == T_int32) return (jl_value_t*)jl_int32_type;
+    if (t == T_int64) return (jl_value_t*)jl_int64_type;
+    if (t == T_float32) return (jl_value_t*)jl_float32_type;
+    if (t == T_float64) return (jl_value_t*)jl_float64_type;
+    if (t == T_void) return (jl_value_t*)jl_bottom_type;
+    if (t == jl_pvalue_llvmt)
+        return (jl_value_t*)jl_any_type;
+    if (t->isPointerTy()) {
+        jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0),
+                                              throw_error);
+        if (elty != NULL) {
+            return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
+                                              jl_tuple1(elty));
+        }
+    }
+    if (throw_error) {
+        jl_error("cannot convert type to a julia type");
+    }
+    return NULL;
+}
+
+// --- scheme for tagging llvm values with julia types using metadata ---
+
+static std::map<int, jl_value_t*> typeIdToType;
+static std::map<jl_value_t*, int> typeToTypeId;
+static int cur_type_id = 1;
+
+static int jl_type_to_typeid(jl_value_t *t)
+{
+    std::map<jl_value_t*, int>::iterator it = typeToTypeId.find(t);
+    if (it == typeToTypeId.end()) {
+        int mine = cur_type_id++;
+        if (mine > 65025)
+            jl_error("internal compiler error: too many bits types");
+        typeToTypeId[t] = mine;
+        typeIdToType[mine] = t;
+        return mine;
+    }
+    return (*it).second;
+}
+
+static jl_value_t *jl_typeid_to_type(int i)
+{
+    std::map<int, jl_value_t*>::iterator it = typeIdToType.find(i);
+    if (it == typeIdToType.end()) {
+        jl_error("internal compiler error: invalid type id");
+    }
+    return (*it).second;
+}
+
+static bool has_julia_type(Value *v)
+{
+    return ((dyn_cast<Instruction>(v) != NULL) &&
+            ((Instruction*)v)->getMetadata("julia_type")!=NULL);
+}
+
+static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
+{
+    if (dyn_cast<AllocaInst>(v) != NULL ||
+        dyn_cast<GetElementPtrInst>(v) != NULL) {
+        // an alloca always has llvm type pointer
+        return llvm_type_to_julia(v->getType()->getContainedType(0), err);
+    }
+    return llvm_type_to_julia(v->getType(), err);
+}
+
+static jl_value_t *julia_type_of(Value *v)
+{
+    MDNode *mdn;
+    if (dyn_cast<Instruction>(v) == NULL ||
+        (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
+        return julia_type_of_without_metadata(v, true);
+    }
+    MDString *md = (MDString*)mdn->getOperand(0);
+    const char *vts = md->getString().data();
+    int id = (vts[0]-1) + (vts[1]-1)*255;
+    return jl_typeid_to_type(id);
+}
+
+static Value *NoOpCast(Value *v)
+{
+    v = CastInst::Create(Instruction::BitCast, v, v->getType());
+    builder.Insert((Instruction*)v);
+    return v;
+}
+
+static Value *mark_julia_type(Value *v, jl_value_t *jt)
+{
+    if (jt == (jl_value_t*)jl_any_type)
+        return v;
+    if (has_julia_type(v) && julia_type_of(v) == jt)
+        return v;
+    if (julia_type_of_without_metadata(v,false) == jt)
+        return NoOpCast(v);
+    if (dyn_cast<Instruction>(v) == NULL)
+        v = NoOpCast(v);
+    assert(dyn_cast<Instruction>(v));
+    char name[3];
+    int id = jl_type_to_typeid(jt);
+    // store id as base-255 to avoid NUL
+    name[0] = (id%255)+1;
+    name[1] = (id/255)+1;
+    name[2] = '\0';
+    MDString *md = MDString::get(jl_LLVMContext, name);
+    MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Value*>(md));
+    ((Instruction*)v)->setMetadata("julia_type", mdn);
+    return v;
+}
+
+static Value *mark_julia_type(Value *v, jl_bits_type_t *jt)
+{
+    return mark_julia_type(v, (jl_value_t*)jt);
+}
+
 // --- generating various error checks ---
 
 static jl_value_t *llvm_type_to_julia(Type *t, bool err=true);
@@ -197,7 +353,7 @@ static void emit_func_check(Value *x, jl_codectx_t *ctx)
     builder.SetInsertPoint(mergeBB1);
 }
 
-// --- loading and storing the Nth word in an object ---
+// --- loading and storing ---
 
 static Value *emit_nthptr_addr(Value *v, size_t n)
 {
@@ -222,6 +378,39 @@ static Value *emit_nthptr(Value *v, Value *idx)
     // p = (jl_value_t**)v; p[n]
     Value *vptr = emit_nthptr_addr(v, idx);
     return builder.CreateLoad(vptr, false);
+}
+
+static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
+                         jl_codectx_t *ctx)
+{
+    Type *elty = julia_type_to_llvm(jltype, ctx);
+    assert(elty != NULL);
+    bool isbool=false;
+    if (elty==T_int1) { elty = T_int8; isbool=true; }
+    Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    Value *elt = builder.CreateLoad(builder.CreateGEP(data, idx_0based), false);
+    if (elty == jl_pvalue_llvmt) {
+        null_pointer_check(elt, ctx);
+    }
+    if (isbool)
+        return builder.CreateTrunc(elt, T_int1);
+    return mark_julia_type(elt, jltype);
+}
+
+static Value *emit_unbox(Type *to, Type *pto, Value *x);
+
+static Value *typed_store(Value *ptr, Value *idx_0based, Value *rhs,
+                          jl_value_t *jltype, jl_codectx_t *ctx)
+{
+    Type *elty = julia_type_to_llvm(jltype, ctx);
+    assert(elty != NULL);
+    if (elty==T_int1) { elty = T_int8; }
+    if (jl_is_bits_type(jltype))
+        rhs = emit_unbox(elty, PointerType::get(elty,0), rhs);
+    else
+        rhs = boxed(rhs);
+    Value *data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
+    return builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based));
 }
 
 // --- convert boolean value to julia ---
@@ -339,99 +528,6 @@ static Value *bitstype_pointer(Value *x)
                              ConstantInt::get(T_size, 1));
 }
 
-// --- scheme for tagging llvm values with julia types using metadata ---
-
-static std::map<int, jl_value_t*> typeIdToType;
-static std::map<jl_value_t*, int> typeToTypeId;
-static int cur_type_id = 1;
-
-static int jl_type_to_typeid(jl_value_t *t)
-{
-    std::map<jl_value_t*, int>::iterator it = typeToTypeId.find(t);
-    if (it == typeToTypeId.end()) {
-        int mine = cur_type_id++;
-        if (mine > 65025)
-            jl_error("internal compiler error: too many bits types");
-        typeToTypeId[t] = mine;
-        typeIdToType[mine] = t;
-        return mine;
-    }
-    return (*it).second;
-}
-
-static jl_value_t *jl_typeid_to_type(int i)
-{
-    std::map<int, jl_value_t*>::iterator it = typeIdToType.find(i);
-    if (it == typeIdToType.end()) {
-        jl_error("internal compiler error: invalid type id");
-    }
-    return (*it).second;
-}
-
-static bool has_julia_type(Value *v)
-{
-    return ((dyn_cast<Instruction>(v) != NULL) &&
-            ((Instruction*)v)->getMetadata("julia_type")!=NULL);
-}
-
-static jl_value_t *julia_type_of_without_metadata(Value *v, bool err=true)
-{
-    if (dyn_cast<AllocaInst>(v) != NULL ||
-        dyn_cast<GetElementPtrInst>(v) != NULL) {
-        // an alloca always has llvm type pointer
-        return llvm_type_to_julia(v->getType()->getContainedType(0), err);
-    }
-    return llvm_type_to_julia(v->getType(), err);
-}
-
-static jl_value_t *julia_type_of(Value *v)
-{
-    MDNode *mdn;
-    if (dyn_cast<Instruction>(v) == NULL ||
-        (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
-        return julia_type_of_without_metadata(v, true);
-    }
-    MDString *md = (MDString*)mdn->getOperand(0);
-    const char *vts = md->getString().data();
-    int id = (vts[0]-1) + (vts[1]-1)*255;
-    return jl_typeid_to_type(id);
-}
-
-static Value *NoOpCast(Value *v)
-{
-    v = CastInst::Create(Instruction::BitCast, v, v->getType());
-    builder.Insert((Instruction*)v);
-    return v;
-}
-
-static Value *mark_julia_type(Value *v, jl_value_t *jt)
-{
-    if (jt == (jl_value_t*)jl_any_type)
-        return v;
-    if (has_julia_type(v) && julia_type_of(v) == jt)
-        return v;
-    if (julia_type_of_without_metadata(v,false) == jt)
-        return NoOpCast(v);
-    if (dyn_cast<Instruction>(v) == NULL)
-        v = NoOpCast(v);
-    assert(dyn_cast<Instruction>(v));
-    char name[3];
-    int id = jl_type_to_typeid(jt);
-    // store id as base-255 to avoid NUL
-    name[0] = (id%255)+1;
-    name[1] = (id/255)+1;
-    name[2] = '\0';
-    MDString *md = MDString::get(jl_LLVMContext, name);
-    MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Value*>(md));
-    ((Instruction*)v)->setMetadata("julia_type", mdn);
-    return v;
-}
-
-static Value *mark_julia_type(Value *v, jl_bits_type_t *jt)
-{
-    return mark_julia_type(v, (jl_value_t*)jt);
-}
-
 // --- propagate julia type from value a to b. returns b. ---
 
 static Value *tpropagate(Value *a, Value *b)
@@ -439,69 +535,6 @@ static Value *tpropagate(Value *a, Value *b)
     if (has_julia_type(a))
         return mark_julia_type(b, julia_type_of(a));
     return b;
-}
-
-// --- mapping between julia and llvm types ---
-
-static Type *julia_type_to_llvm(jl_value_t *jt, jl_codectx_t *ctx)
-{
-    if (jt == (jl_value_t*)jl_bool_type) return T_int1;
-    if (jt == (jl_value_t*)jl_float32_type) return T_float32;
-    if (jt == (jl_value_t*)jl_float64_type) return T_float64;
-    //if (jt == (jl_value_t*)jl_null) return T_void;
-    if (jl_is_cpointer_type(jt)) {
-        Type *lt = julia_type_to_llvm(jl_tparam0(jt), ctx);
-        if (lt == NULL)
-            return NULL;
-        if (lt == T_void)
-            lt = T_int8;
-        return PointerType::get(lt, 0);
-    }
-    if (jl_is_bits_type(jt)) {
-        int nb = jl_bitstype_nbits(jt);
-        if (nb == 8)  return T_int8;
-        if (nb == 16) return T_int16;
-        if (nb == 32) return T_int32;
-        if (nb == 64) return T_int64;
-        else          return Type::getIntNTy(getGlobalContext(), nb);
-    }
-    if (jt == (jl_value_t*)jl_bottom_type) return T_void;
-    //if (jt == (jl_value_t*)jl_any_type)
-    //    return jl_pvalue_llvmt;
-    return jl_pvalue_llvmt;
-    //emit_type_error(literal_pointer_val(jt), (jl_value_t*)jl_bits_kind,
-    //                "conversion to native type", ctx);
-    //return NULL;
-}
-
-// NOTE: llvm cannot express all julia types (for example unsigned),
-// so this is an approximation. it's only correct if the associated LLVM
-// value is not tagged with our value name hack.
-// boxed(v) below gets the correct type.
-static jl_value_t *llvm_type_to_julia(Type *t, bool throw_error)
-{
-    if (t == T_int1)  return (jl_value_t*)jl_bool_type;
-    if (t == T_int8)  return (jl_value_t*)jl_int8_type;
-    if (t == T_int16) return (jl_value_t*)jl_int16_type;
-    if (t == T_int32) return (jl_value_t*)jl_int32_type;
-    if (t == T_int64) return (jl_value_t*)jl_int64_type;
-    if (t == T_float32) return (jl_value_t*)jl_float32_type;
-    if (t == T_float64) return (jl_value_t*)jl_float64_type;
-    if (t == T_void) return (jl_value_t*)jl_bottom_type;
-    if (t == jl_pvalue_llvmt)
-        return (jl_value_t*)jl_any_type;
-    if (t->isPointerTy()) {
-        jl_value_t *elty = llvm_type_to_julia(t->getContainedType(0),
-                                              throw_error);
-        if (elty != NULL) {
-            return (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                              jl_tuple1(elty));
-        }
-    }
-    if (throw_error) {
-        jl_error("cannot convert type to a julia type");
-    }
-    return NULL;
 }
 
 // --- boxing ---

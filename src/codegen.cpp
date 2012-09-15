@@ -704,24 +704,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                                   ConstantInt::get(T_size,
                                                    sty->fields[idx].offset + sizeof(void*)));
-            Value *fld;
-            if (sty->fields[idx].isptr) {
-                fld = builder.CreateLoad(builder.CreateBitCast(addr, jl_ppvalue_llvmt), false);
-                null_pointer_check(fld, ctx);
-            }
-            else {
-                jl_value_t *jfty = jl_tupleref(sty->types, idx);
-                Type *fty = julia_type_to_llvm(jfty, ctx);
-                bool isbool = false;
-                if (fty == T_int1) { fty = T_int8; isbool = true; }
-                Value *data = builder.CreateBitCast(addr,
-                                                    PointerType::get(fty,0));
-                fld = builder.CreateLoad(data, false);
-                if (isbool) fld = builder.CreateTrunc(fld, T_int1);
-                else        fld = mark_julia_type(fld, jfty);
-            }
+            jl_value_t *jfty = jl_tupleref(sty->types, idx);
             JL_GC_POP();
-            return fld;
+            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
         }
     }
     // TODO: attempt better codegen for approximate types, if the types
@@ -747,18 +732,8 @@ static void emit_setfield(jl_struct_type_t *sty, Value *strct, size_t idx,
     Value *addr =
         builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                           ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
-    if (sty->fields[idx].isptr) {
-        builder.CreateStore(boxed(rhs),
-                            builder.CreateBitCast(addr, jl_ppvalue_llvmt));
-    }
-    else {
-        jl_value_t *jfty = jl_tupleref(sty->types, idx);
-        Type *fty = julia_type_to_llvm(jfty, ctx);
-        if (fty == T_int1) { fty = T_int8; }
-        Value *data = builder.CreateBitCast(addr, PointerType::get(fty,0));
-        rhs = emit_unbox(fty, PointerType::get(fty,0), rhs);
-        builder.CreateStore(rhs, data);
-    }
+    jl_value_t *jfty = jl_tupleref(sty->types, idx);
+    typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
 }
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
@@ -1067,28 +1042,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx);
-                Type *elty = julia_type_to_llvm(ety, ctx);
-                assert(elty != NULL);
-                bool isbool=false;
-                if (elty==T_int1) { elty = T_int8; isbool=true; }
-                Value *data =
-                    builder.CreateBitCast(emit_arrayptr(ary),
-                                          PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
                 Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
                 Value *im1 =
                     emit_bounds_check(idx, alen,
                                       "arrayref: index out of range", ctx);
-                Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
-                                              false);
-                if (ety == (jl_value_t*)jl_any_type) {
-                    null_pointer_check(elt, ctx);
-                }
                 JL_GC_POP();
-                if (isbool)
-                    return builder.CreateTrunc(elt, T_int1);
-                return mark_julia_type(elt, ety);
+                return typed_load(emit_arrayptr(ary), im1, ety, ctx);
             }
         }
     }
@@ -1104,27 +1065,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx);
-                Type *elty = julia_type_to_llvm(ety, ctx);
-                assert(elty != NULL);
-                if (elty==T_int1) { elty = T_int8; }
-                Value *data =
-                    builder.CreateBitCast(emit_arrayptr(ary),
-                                          PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
                 Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
-                Value *rhs;
-                if (jl_is_bits_type(ety)) {
-                    rhs = emit_unbox(elty, PointerType::get(elty,0),
-                                     emit_unboxed(args[3], ctx));
-                }
-                else {
-                    rhs = boxed(emit_expr(args[3], ctx));
-                }
                 Value *im1 =
                     emit_bounds_check(idx, alen,
                                       "arrayset: index out of range", ctx);
-                builder.CreateStore(rhs, builder.CreateGEP(data, im1));
+                typed_store(emit_arrayptr(ary), im1, emit_unboxed(args[3],ctx),
+                            ety, ctx);
                 JL_GC_POP();
                 return ary;
             }

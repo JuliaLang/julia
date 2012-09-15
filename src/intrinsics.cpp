@@ -134,20 +134,16 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
         jl_bits_type_t *bt = (jl_bits_type_t*)jl_typeof(e);
         int nb = jl_bitstype_nbits(bt);
         if (nb == 8)
-            return mark_julia_type(ConstantInt::get(T_int8,
-                                                    jl_unbox_int8(e)),
+            return mark_julia_type(ConstantInt::get(T_int8, jl_unbox_int8(e)),
                                    (jl_value_t*)bt);
         if (nb == 16)
-            return mark_julia_type(ConstantInt::get(T_int16,
-                                                    jl_unbox_int16(e)),
+            return mark_julia_type(ConstantInt::get(T_int16, jl_unbox_int16(e)),
                                    (jl_value_t*)bt);
         if (nb == 32)
-            return mark_julia_type(ConstantInt::get(T_int32,
-                                                    jl_unbox_int32(e)),
+            return mark_julia_type(ConstantInt::get(T_int32, jl_unbox_int32(e)),
                                    (jl_value_t*)bt);
         if (nb == 64)
-            return mark_julia_type(ConstantInt::get(T_int64,
-                                                    jl_unbox_int64(e)),
+            return mark_julia_type(ConstantInt::get(T_int64, jl_unbox_int64(e)),
                                    (jl_value_t*)bt);
         // TODO: bigger sizes
     }
