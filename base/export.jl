@@ -1220,6 +1220,8 @@ export
     ptr_arg_convert,
     setenv,
     strerror,
+    unsafe_ref,
+    unsafe_assign,
     unsetenv,
     
 # Macros

@@ -33,6 +33,8 @@ namespace JL_I {
         // functions
         abs_float, copysign_float,
         flipsign_int,
+        // pointer access
+        pointerref, pointerset,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -364,6 +366,47 @@ static Value *emit_eqfui64(Value *x, Value *y)
                                T_int64)));
 }
 
+static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+{
+    jl_value_t *aty = expr_type(e, ctx);
+    if (!jl_is_cpointer_type(aty))
+        jl_error("pointerref: expected pointer type as first argument");
+    jl_value_t *ety = jl_tparam0(aty);
+    if(jl_is_typevar(ety))
+        jl_error("pointerref: invalid pointer");
+    if (!jl_is_bits_type(ety)) {
+        ety = (jl_value_t*)jl_any_type;
+    }
+    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+        jl_error("pointerref: invalid index type");
+    }
+    //Value *idx = builder.CreateIntCast(auto_unbox(i,ctx), T_size, false); //TODO: use this instead (and remove assert jl_is_long)?
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+    return typed_load(auto_unbox(e, ctx), im1, ety, ctx);
+}
+
+static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
+    jl_value_t *aty = expr_type(e, ctx);
+    if (!jl_is_cpointer_type(aty))
+        jl_error("pointerref: expected pointer type as first argument");
+    jl_value_t *ety = jl_tparam0(aty);
+    if(jl_is_typevar(ety))
+        jl_error("pointerref: invalid pointer");
+    jl_value_t *xty = expr_type(x, ctx);    
+    if (!jl_subtype(xty, ety, 0))
+        jl_error("pointerref: type mismatch in assign");
+    if (!jl_is_bits_type(ety)) {
+        ety = (jl_value_t*)jl_any_type;
+    }
+    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+        jl_error("pointerref: invalid index type");
+    }
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+    return typed_store(auto_unbox(e,ctx), im1, emit_unboxed(x,ctx), ety, ctx);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -395,6 +438,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=2)
             jl_error("zext_int: wrong number of arguments");
         return generic_zext(args[1], args[2], ctx);
+    }
+    if (f == pointerref) {
+        if (nargs!=2)
+            jl_error("pointerref: wrong number of arguments");
+        return emit_pointerref(args[1], args[2], ctx);
+    }
+    if (f == pointerset) {
+        if (nargs!=3)
+            jl_error("pointerset: wrong number of arguments");
+        return emit_pointerset(args[1], args[2], args[3], ctx);
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -987,6 +1040,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int);
+    ADD_I(pointerref); ADD_I(pointerset);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);
