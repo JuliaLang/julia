@@ -1,6 +1,6 @@
 ## integer conversions ##
 
-convert(::Type{Int8}, x::Bool   ) = box(Int8,unbox(Bool,x))
+convert(::Type{Int8}, x::Bool   ) = box(Int8,zext_int(Int8,unbox(Bool,x)))
 convert(::Type{Int8}, x::Uint8  ) = box(Int8,unbox(Uint8,x))
 convert(::Type{Int8}, x::Int16  ) = box(Int8,trunc8(unbox(Int16,x)))
 convert(::Type{Int8}, x::Uint16 ) = box(Int8,trunc8(unbox(Uint16,x)))
@@ -14,7 +14,7 @@ convert(::Type{Int8}, x::Uint128) = box(Int8,trunc8(unbox(Uint128,x)))
 convert(::Type{Int8}, x::Float32) = box(Int8,trunc8(checked_fptosi32(unbox(Float32,x))))
 convert(::Type{Int8}, x::Float64) = box(Int8,trunc8(checked_fptosi64(unbox(Float64,x))))
 
-convert(::Type{Uint8}, x::Bool   ) = box(Uint8,unbox(Bool,x))
+convert(::Type{Uint8}, x::Bool   ) = box(Uint8,zext_int(Int8,unbox(Bool,x)))
 convert(::Type{Uint8}, x::Int8   ) = box(Uint8,unbox(Uint8,x))
 convert(::Type{Uint8}, x::Int16  ) = box(Uint8,trunc8(unbox(Int16,x)))
 convert(::Type{Uint8}, x::Uint16 ) = box(Uint8,trunc8(unbox(Uint16,x)))

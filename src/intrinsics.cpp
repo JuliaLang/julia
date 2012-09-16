@@ -156,12 +156,12 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 static Value *emit_unbox(Type *to, Type *pto, Value *x)
 {
     if (x->getType() != jl_pvalue_llvmt) {
-        // bools are stored internally as int8 (for now), so we need to make
-        // unbox8(x::Bool) work.
+        // bools are stored internally as int8 (for now)
         if (x->getType() == T_int1 && to == T_int8)
             return builder.CreateZExt(x, T_int8);
         if (x->getType()->isPointerTy() && !to->isPointerTy())
             return builder.CreatePtrToInt(x, to);
+        assert(x->getType() == to);
         return x;
     }
     Value *p = bitstype_pointer(x);
@@ -180,9 +180,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 {
     Value *v = emit_unboxed(x, ctx);
     if (v->getType() != jl_pvalue_llvmt) {
-        if (v->getType() == T_int1)
-            return builder.CreateZExt(v, T_int8);
-        return JL_INT(v);
+        return v;
     }
     jl_value_t *bt = expr_type(x, ctx);
     if (!jl_is_bits_type(bt)) {
@@ -196,8 +194,11 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             return ConstantInt::get(T_size, 0);
         }
     }
-    unsigned int nb = jl_bitstype_nbits(bt);
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = julia_type_to_llvm(bt, ctx);
+    if (to == NULL || to == jl_pvalue_llvmt) {
+        unsigned int nb = jl_bitstype_nbits(bt);
+        to = IntegerType::get(jl_LLVMContext, nb);
+    }
     return emit_unbox(to, PointerType::get(to, 0), v);
 }
 
@@ -207,6 +208,8 @@ static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
     jl_value_t *et = expr_type(targ, ctx);
     if (jl_is_type_type(et)) {
         jl_value_t *p = jl_tparam0(et);
+        if (p == (jl_value_t*)jl_bool_type)
+            return 1;
         if (jl_is_bits_type(p))
             return jl_bitstype_nbits(p);
         if (jl_is_typevar(p)) {
@@ -233,7 +236,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         }
         if (bt == NULL || !jl_is_bits_type(bt))
             jl_error("unbox: could not determine argument size");
-        nb = jl_bitstype_nbits(bt);
+        nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
@@ -267,9 +270,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
     else {
         llvmt = julia_type_to_llvm(bt, ctx);
-        int btnb = jl_bitstype_nbits(bt);
-        assert(nb==-1 || nb==btnb);
-        nb = btnb;
+        if (nb == -1)
+            nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
 
     if (nb == -1)
@@ -279,8 +281,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
 
     Value *vx = auto_unbox(x, ctx);
-    if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
-        jl_errorf("box: expected argument with %d bits", nb);
+    //if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
+    //    jl_errorf("box: expected argument with %d bits, got %d", nb,
+    //              vx->getType()->getPrimitiveSizeInBits());
 
     if (vx->getType() != llvmt) {
         if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
@@ -313,8 +316,11 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = julia_type_to_llvm(bt, ctx);
+    if (to == NULL) {
+        unsigned int nb = jl_bitstype_nbits(bt);
+        to = IntegerType::get(jl_LLVMContext, nb);
+    }
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
