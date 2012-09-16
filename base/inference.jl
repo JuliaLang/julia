@@ -265,6 +265,9 @@ t_func[tupleref] = (2, 2, tupleref_tfunc)
 getfield_tfunc = function (A, s, name)
     if isType(s)
         s = typeof(s.parameters[1])
+        if s === TypeVar
+            return Any
+        end
     end
     if !isa(s,CompositeKind)
         return Any
