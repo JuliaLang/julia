@@ -1,6 +1,6 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Bool)    = box(Float32,sitofp32(unbox(Bool,x)))
+convert(::Type{Float32}, x::Bool)    = box(Float32,uitofp32(unbox(Bool,x)))
 convert(::Type{Float32}, x::Char)    = box(Float32,uitofp32(unbox(Float32,x)))
 convert(::Type{Float32}, x::Int8)    = box(Float32,sitofp32(unbox(Int8,x)))
 convert(::Type{Float32}, x::Int16)   = box(Float32,sitofp32(unbox(Int16,x)))
@@ -12,7 +12,7 @@ convert(::Type{Float32}, x::Uint32)  = box(Float32,uitofp32(unbox(Uint32,x)))
 convert(::Type{Float32}, x::Uint64)  = box(Float32,uitofp32(unbox(Uint64,x)))
 convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc32(unbox(Float64,x)))
 
-convert(::Type{Float64}, x::Bool)    = box(Float64,sitofp64(unbox(Bool,x)))
+convert(::Type{Float64}, x::Bool)    = box(Float64,uitofp64(unbox(Bool,x)))
 convert(::Type{Float64}, x::Char)    = box(Float64,uitofp64(unbox(Char,x)))
 convert(::Type{Float64}, x::Int8)    = box(Float64,sitofp64(unbox(Int8,x)))
 convert(::Type{Float64}, x::Int16)   = box(Float64,sitofp64(unbox(Int16,x)))
