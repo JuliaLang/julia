@@ -723,5 +723,5 @@ function cmd_gen(parsed)
 end
 
 macro cmd(str)
-    :(cmd_gen($_jl_shell_parse(str)))
+    :(cmd_gen($(_jl_shell_parse(str))))
 end

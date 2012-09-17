@@ -175,7 +175,7 @@ end
 macro defaults(opts,ex...)
     # Create a new variable storing the checkflag
     varname = strcat("_",string(opts),"_checkflag")
-    exret = :($esc(symbol(varname)) = ischeck($esc(opts)))
+    exret = :($(esc(symbol(varname))) = ischeck($(esc(opts))))
     # Transform the tuple into a vector, so that
     # we can manipulate it
     ex = {ex...}
@@ -206,13 +206,13 @@ macro defaults(opts,ex...)
         sym = y.args[1]
         exret = quote
             $exret
-            htindex = Base.ht_keyindex(($esc(opts)).key2index,$expr(:quote,sym))
+            htindex = Base.ht_keyindex($(esc(opts)).key2index,$(expr(:quote,sym)))
             if htindex > 0
-                htindex = ($esc(opts)).key2index.vals[htindex]
-                ($esc(sym)) = ($esc(opts)).vals[htindex]
-                ($esc(opts)).used[htindex] = true
+                htindex = $(esc(opts)).key2index.vals[htindex]
+                $(esc(sym)) = $(esc(opts)).vals[htindex]
+                $(esc(opts)).used[htindex] = true
             else
-                ($esc(y))
+                $(esc(y))
             end
         end
         i += 1
@@ -226,7 +226,7 @@ end
 #    @check_used opts
 macro check_used(opts)
     varname = strcat("_",string(opts),"_checkflag")
-    :(docheck($esc(opts),$esc(symbol(varname))))
+    :(docheck($(esc(opts)),$(esc(symbol(varname)))))
 end
 
 # Macro for setting options. Usage:
@@ -305,7 +305,7 @@ macro set_options(opts,ex...)
         val = y.args[2]
         exret = quote
             $exret
-            ($esc(opts))[$expr(:quote,sym)] = $esc(val)
+            $(esc(opts))[$(expr(:quote,sym))] = $(esc(val))
         end
         i += 1
     end

@@ -262,7 +262,7 @@ function profile_report()
     ret = gensym()
     exret[1] = :($ret = {})
     for i = 1:length(_PROFILE_REPORTS)
-        exret[i+1] = :(push($ret,$expr(:call,{_PROFILE_REPORTS[i]})))
+        exret[i+1] = :(push($ret,$(expr(:call,{_PROFILE_REPORTS[i]}))))
     end
     exret[end] = :(profile_print($ret))
     return expr(:block,exret)

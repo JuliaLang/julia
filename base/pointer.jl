@@ -40,7 +40,7 @@ unsafe_assign{T}(p::Ptr{T}, x) = unsafe_assign(p, convert(T,x), 1)
 integer(x::Ptr) = convert(Uint, x)
 unsigned(x::Ptr) = convert(Uint, x)
 
-@eval sizeof(::Type{Ptr}) = $div(WORD_SIZE,8)
+@eval sizeof(::Type{Ptr}) = $(div(WORD_SIZE,8))
 eltype{T}(::Ptr{T}) = T
 
 ## limited pointer arithmetic & comparison ##

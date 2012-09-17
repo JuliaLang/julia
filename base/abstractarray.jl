@@ -235,7 +235,7 @@ function gen_cartesian_map(cache, genbodies, ranges, exargnames, exargs...)
         quote
             local _F_
             function _F_($(dimargnames...), $(exargnames...))
-                $make_loop_nest(ivars, dimargnames, body, bodies)
+                $(make_loop_nest(ivars, dimargnames, body, bodies))
             end
             _F_
         end
@@ -333,7 +333,7 @@ function gen_array_index_map(cache, genbody, ranges, exargnames, exargs...)
         fexpr = quote
             local _F_
             function _F_($(dimargnames...), $(exargnames...))
-                $make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, dimargnames, body, exargnames[1])
+                $(make_arrayind_loop_nest(loopvars, offsetvars, stridevars, linearind, dimargnames, body, exargnames[1]))
             end
             return _F_
         end

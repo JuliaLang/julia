@@ -50,7 +50,7 @@ end
     end
     for i = 1:length(dims)
         ex = quote
-            for ($names[i]) in dims[$i]
+            for $(names[i]) in dims[$i]
                 $ex
             end
         end

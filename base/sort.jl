@@ -31,7 +31,7 @@ function ($insertionsort)($(args...), a::AbstractVector, lo::Int, hi::Int)
         j = i
         x = a[i]
         while j > lo
-            if $lt(:x, :(a[j-1]))
+            if $(lt(:x, :(a[j-1])))
                 a[j] = a[j-1]
                 j -= 1
                 continue
@@ -50,7 +50,7 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
         x = a[i]
         xp = p[i]
         while j > lo
-            if $lt(:x, :(a[j-1]))
+            if $(lt(:x, :(a[j-1])))
                 a[j] = a[j-1]
                 p[j] = p[j-1]
                 j -= 1
@@ -64,13 +64,13 @@ function ($insertionsort)($(args...), a::AbstractVector, p::AbstractVector{Int},
     return a, p
 end
 
-($pivot_middle)(a,b,c) = $lt(:a,:b) ? ($lt(:b,:c) ? b : c) : ($lt(:a,:c) ? a : c)
+($pivot_middle)(a,b,c) = $(lt(:a,:b)) ? ($(lt(:b,:c)) ? b : c) : ($(lt(:a,:c)) ? a : c)
 
 # very fast but unstable
 function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
     while hi > lo
         if hi-lo <= 20
-            return $expr(:call, insertionsort, args..., :a, :lo, :hi)
+            return $(expr(:call, insertionsort, args..., :a, :lo, :hi))
         end
         i, j = lo, hi
         # pivot = (a[lo]+a[hi])/2                                   # 1.14x
@@ -79,8 +79,8 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
         # pivot = _jl_pivot_middle(a[lo], a[hi], a[(lo+hi)>>>1])    # 1.23x
         # pivot = a[randival(lo,hi)]                                # 1.28x
         while i <= j
-            while $lt(:(a[i]), :pivot); i += 1; end
-            while $lt(:pivot, :(a[j])); j -= 1; end
+            while $(lt(:(a[i]), :pivot)); i += 1; end
+            while $(lt(:pivot, :(a[j]))); j -= 1; end
             if i <= j
                 a[i], a[j] = a[j], a[i]
                 i += 1
@@ -88,7 +88,7 @@ function ($quicksort)($(args...), a::AbstractVector, lo::Int, hi::Int)
             end
         end
         if lo < j
-            $expr(:call, quicksort, args..., :a, :lo, :j)
+            $(expr(:call, quicksort, args..., :a, :lo, :j))
         end
         lo = i
     end
@@ -118,7 +118,7 @@ function ($mergesort)($(args...), a::AbstractVector, lo::Int, hi::Int, b::Abstra
         i = 1
         k = lo
         while k < j <= hi
-            if $lt(:(a[j]), :(b[i]))
+            if $(lt(:(a[j]), :(b[i])))
                 a[k] = a[j]
                 j += 1
             else
@@ -162,7 +162,7 @@ function ($mergesort)($(args...),
         i = 1
         k = lo
         while k < j <= hi
-            if $lt(:(a[j]), :(b[i]))
+            if $(lt(:(a[j]), :(b[i])))
                 a[k] = a[j]
                 p[k] = p[j]
                 j += 1
@@ -288,7 +288,7 @@ macro in_place_matrix_op(out_of_place, args...)
     in_place = esc(symbol("$(out_of_place)!"))
     out_of_place = esc(out_of_place)
     quote
-        function ($in_place)(($args...), a::AbstractMatrix, dim::Int)
+        function ($in_place)($(args...), a::AbstractMatrix, dim::Int)
             m = size(a,1)
             if dim == 1
                 for i = 1:m:numel(a)
@@ -302,11 +302,11 @@ macro in_place_matrix_op(out_of_place, args...)
             return a
         end
         # TODO: in-place generalized AbstractArray implementation
-        ($in_place)(($args...), a::AbstractArray) = ($in_place)($(args...), a,1)
+        ($in_place)($(args...), a::AbstractArray) = ($in_place)($(args...), a,1)
 
-        ($out_of_place)(($args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
-        ($out_of_place)(($args...), a::AbstractArray, d::Int) = ($in_place)($(args...), copy(a), d)
-        ($out_of_place)(($args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
+        ($out_of_place)($(args...), a::AbstractVector) = ($in_place)($(args...), copy(a))
+        ($out_of_place)($(args...), a::AbstractArray, d::Int) = ($in_place)($(args...), copy(a), d)
+        ($out_of_place)($(args...), a::AbstractArray) = ($out_of_place)($(args...), a,1)
     end
 end
 

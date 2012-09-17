@@ -9,9 +9,9 @@ macro memoize(ex)
     end
     f_cache = esc(symbol(string(f,"_cache")))
     quote
-        ($esc(ex))
+        $(esc(ex))
         const ($f_cache) = Dict{Tuple,Any}()
-        ($esc(f))(args...) = has(($f_cache),args) ?
-            ($f_cache)[args] : (($f_cache)[args] = ($esc(u))(args...))
+        $(esc(f))(args...) = has(($f_cache),args) ?
+            ($f_cache)[args] : (($f_cache)[args] = $(esc(u))(args...))
     end
 end

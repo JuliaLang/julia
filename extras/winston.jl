@@ -22,7 +22,7 @@ typealias List Array{Any,1}
 typealias PlotAttributes Associative # TODO: does Associative need {K,V}?
 
 macro desc(x)
-    :( println($string(x)," = ",$esc(x)) )
+    :( println($(string(x))," = ",$(esc(x))) )
 end
 
 # config ----------------------------------------------------------------------
