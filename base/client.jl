@@ -218,7 +218,13 @@ function _start()
             global PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/", "$JULIA_HOME/../lib/julia/ui/"]
+        global const LOAD_PATH = String[
+            ".",
+            abs_path("$JULIA_HOME/../lib/julia"),
+            abs_path("$JULIA_HOME/../lib/julia/base"),
+            abs_path("$JULIA_HOME/../lib/julia/extras"),
+            abs_path("$JULIA_HOME/../lib/julia/ui"),
+        ]
 
         # Load customized startup
         try include(strcat(cwd(),"/startup.jl")) end
