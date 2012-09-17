@@ -424,6 +424,8 @@ static Value *julia_bool(Value *cond)
 
 // --- get the inferred type of an AST node ---
 
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true);
+
 static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
 {
     if (jl_is_expr(e))
@@ -434,8 +436,13 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return (jl_value_t*)jl_typeof(jl_fieldref(e,0));
     if (jl_is_lambda_info(e))
         return (jl_value_t*)jl_function_type;
-    if (jl_is_getfieldnode(e))
-        return jl_getfieldnode_type(e);
+    if (jl_is_getfieldnode(e)) {
+        jl_value_t *v = static_eval(e, ctx);
+        if (v == NULL)
+            return jl_getfieldnode_type(e);
+        e = v;
+        goto type_of_constant;
+    }
     if (jl_is_topnode(e) || jl_is_symbol(e)) {
         if (jl_is_symbol(e)) {
             if (is_global((jl_sym_t*)e, ctx)) {

@@ -320,7 +320,7 @@ static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
 // --- constant determination ---
 
 // try to statically evaluate, NULL if not possible
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
 {
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
