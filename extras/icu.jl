@@ -13,15 +13,17 @@
 # after the locale is set to Turkish.
 #
 
+load("utf16.jl")
+
 module ICU
 import Base.*
+import UTF16.*
 
-export ICUString,
-    foldcase,
-    lowercase,
-    set_locale,
-    titlecase,
-    uppercase
+export foldcase,
+       lowercase,
+       set_locale,
+       titlecase,
+       uppercase
 
 load("openlib.jl")
 const iculib = openlib(OS_NAME == :Darwin ? "libicucore" : "libicuuc")
@@ -29,13 +31,10 @@ const iculibi18n = OS_NAME == :Darwin ? iculib : openlib("libicui18n")
 
 for suffix in ["", ["_"*string(i) for i in 42:50]]
     if dlsym(iculib, "u_strToUpper"*suffix) != C_NULL
-        for f in (:u_strFromUTF8,
-                  :u_strToUTF8,
-                  :u_strFoldCase,
+        for f in (:u_strFoldCase,
                   :u_strToLower,
                   :u_strToTitle,
                   :u_strToUpper,
-                  :u_countChar32,
                   :ucal_add,
                   :ucal_clear,
                   :ucal_close,
@@ -59,8 +58,7 @@ for suffix in ["", ["_"*string(i) for i in 42:50]]
     end
 end
 
-const UChar = Uint16
-const UErrorCode = Int32
+typealias UErrorCode Int32
 
 locale = C_NULL
 casemap = C_NULL
@@ -76,97 +74,47 @@ function set_locale(s::Union(ByteString,Ptr{None}))
     if casemap != C_NULL
         global locale = s
     end
-
 end
 set_locale(locale)
-
-type ICUString <: String
-    data::Array{UChar,1}
-end
-
-function ICUString(str::ByteString)
-    bufsiz = int32(length(str))
-    buf = zeros(UChar, bufsiz)
-    err = UErrorCode[0]
-    pn = Int32[0]
-    ccall(dlsym(iculib,u_strFromUTF8), Ptr{UChar},
-        (Ptr{UChar},Int32,Ptr{Int32},Ptr{Uint8},Int32,Ptr{UErrorCode}),
-        buf, bufsiz, pn, bytestring(str), -1, err)
-    n = pn[1]
-    @assert n <= bufsiz
-    return ICUString(buf[1:n])
-end
-
-strlen(s::ICUString) =
-    ccall(dlsym(iculib,u_countChar32), Int32, (Ptr{UChar},Int32), s.data, length(s.data))
-
-length(icu::ICUString) = length(icu.data)
-
-utf16_is_lead(c::Uint16) = (c & 0xfc00) == 0xd800
-utf16_is_trail(c::Uint16) = (c & 0xfc00) == 0xdc00
-utf16_is_surrogate(c::Uint16) = (c & 0xf800) == 0xd800
-utf16_get_supplementary(lead::Uint16, trail::Uint16) = char((lead-0xd7f7)<<10 + trail)
-
-function next(s::ICUString, i::Int)
-    if !utf16_is_surrogate(s.data[i])
-        return char(s.data[i]), i+1
-    elseif length(s.data) > i && utf16_is_lead(s.data[i]) && utf16_is_trail(s.data[i+1])
-        return utf16_get_supplementary(s.data[i], s.data[i+1]), i+2
-    end
-    error("invalid UTF-16 character index")
-end
-
-function utf8(src::ICUString)
-    destsiz = int32(2*length(src))
-    dest = zeros(Uint8, destsiz)
-    err = UErrorCode[0]
-    pn = Int32[0]
-    ccall(dlsym(iculib,u_strToUTF8), Ptr{Uint8},
-        (Ptr{Uint8},Int32,Ptr{Int32},Ptr{UChar},Int32,Ptr{UErrorCode}),
-        dest, destsiz, pn, src.data, numel(src.data), err)
-    n = pn[1]
-    @assert n <= destsiz
-    utf8(dest[1:n])
-end
 
 for (a,b) in [(:lowercase,:u_strToLower),
               (:uppercase,:u_strToUpper)]
     @eval begin
-        function ($a)(s::ICUString)
+        function ($a)(s::UTF16String)
             src = s.data
             destsiz = int32(2*numel(src))
-            dest = zeros(UChar, destsiz)
+            dest = zeros(Uint16, destsiz)
             err = UErrorCode[0]
             n = ccall(dlsym(iculib,$b), Int32,
-                (Ptr{UChar},Int32,Ptr{UChar},Int32,Ptr{Uint8},Ptr{UErrorCode}),
+                (Ptr{Uint16},Int32,Ptr{Uint16},Int32,Ptr{Uint8},Ptr{UErrorCode}),
                 dest, destsiz, src, numel(src), locale, err)
-            return ICUString(dest[1:n])
+            return UTF16String(dest[1:n])
         end
     end
 end
 
-function foldcase(s::ICUString)
+function foldcase(s::UTF16String)
     src = s.data
     destsiz = int32(2*numel(src))
-    dest = zeros(UChar, destsiz)
+    dest = zeros(Uint16, destsiz)
     err = UErrorCode[0]
     n = ccall(dlsym(iculib,u_strFoldCase), Int32,
-        (Ptr{UChar},Int32,Ptr{UChar},Int32,Uint32,Ptr{UErrorCode}),
+        (Ptr{Uint16},Int32,Ptr{Uint16},Int32,Uint32,Ptr{UErrorCode}),
         dest, destsiz, src, numel(src), 0, err)
-    return ICUString(dest[1:n])
+    return UTF16String(dest[1:n])
 end
 
-function titlecase(s::ICUString)
+function titlecase(s::UTF16String)
     src = s.data
     destsiz = int32(2*numel(src))
-    dest = zeros(UChar, destsiz)
+    dest = zeros(Uint16, destsiz)
     err = UErrorCode[0]
     breakiter = ccall(dlsym(iculib,ucasemap_getBreakIterator),
         Ptr{Void}, (Ptr{Void},), casemap)
     n = ccall(dlsym(iculib,u_strToTitle), Int32,
-        (Ptr{UChar},Int32,Ptr{UChar},Int32,Ptr{Void},Ptr{Uint8},Ptr{UErrorCode}),
+        (Ptr{Uint16},Int32,Ptr{Uint16},Int32,Ptr{Void},Ptr{Uint8},Ptr{UErrorCode}),
         dest, destsiz, src, numel(src), breakiter, locale, err)
-    return ICUString(dest[1:n])
+    return UTF16String(dest[1:n])
 end
 
 for (a,b) in [(:foldcase,:ucasemap_utf8FoldCase),
@@ -186,10 +134,10 @@ for (a,b) in [(:foldcase,:ucasemap_utf8FoldCase),
     end
 end
 
+foldcase(s::ASCIIString) = foldcase(utf8(s))
+titlecase(s::ASCIIString) = titlecase(utf8(s))
+
 function test_icustring()
-    s = "𝕥𝟶f𠂊"
-    t = ICUString(s)
-    @assert strlen(t) == 4
     @assert uppercase("testingß") == "TESTINGSS"
     set_locale("tr")       # set locale to Turkish
     @assert uppercase("testingß") == "TESTİNGSS"
@@ -266,10 +214,10 @@ type ICUCalendar
 end
 
 function ICUCalendar(timezone::String)
-    tz_u16 = ICUString(timezone)
+    tz_u16 = utf16(timezone)
     err = UErrorCode[0]
     p = ccall(dlsym(iculibi18n,ucal_open), Ptr{Void},
-        (Ptr{UChar},Int32,Ptr{Uint8},Int32,Ptr{UErrorCode}),
+        (Ptr{Uint16},Int32,Ptr{Uint8},Int32,Ptr{UErrorCode}),
         tz_u16.data, length(tz_u16.data), locale, 0, err)
     ICUCalendar(p)
 end
