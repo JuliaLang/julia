@@ -507,7 +507,7 @@ collection[key...] = value
 
 "),
 
-(E"Dequeues",E"append!(collection, items)",E"append!(collection, items)
+(E"Dequeues",E"append!",E"append!(collection, items)
 
    Add the elements of 'items' to the end of a collection.
 
@@ -1592,7 +1592,7 @@ collection[key...] = value
 
 "),
 
-(E"Arrays",E"fill!(A, x)",E"fill!(A, x)
+(E"Arrays",E"fill!",E"fill!(A, x)
 
    Fill array 'A' with value 'x'
 
@@ -1966,7 +1966,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"sort!(v)",E"sort!(v)
+(E"Combinatorics",E"sort!",E"sort!(v)
 
    In-place sort
 
@@ -1978,7 +1978,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"sortr!(v)",E"sortr!(v)
+(E"Combinatorics",E"sortr!",E"sortr!(v)
 
    In-place descending-order sort
 
@@ -2015,7 +2015,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"nthperm!(v, k)",E"nthperm!(v, k)
+(E"Combinatorics",E"nthperm!",E"nthperm!(v, k)
 
    In-place version of 'nthperm'
 
@@ -2039,7 +2039,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"shuffle!(v)",E"shuffle!(v)
+(E"Combinatorics",E"shuffle!",E"shuffle!(v)
 
    In-place version of 'shuffle'
 
@@ -2051,7 +2051,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"reverse!(v)",E"reverse!(v)
+(E"Combinatorics",E"reverse!",E"reverse!(v)
 
    Reverse vector 'v' in-place
 
@@ -2064,7 +2064,7 @@ collection[key...] = value
 
 "),
 
-(E"Combinatorics",E"select!(v, k)",E"select!(v, k)
+(E"Combinatorics",E"select!",E"select!(v, k)
 
    In-place version of 'select'
 
