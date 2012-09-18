@@ -566,10 +566,16 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     if anyp(x->is(x,None), argtypes)
         return None
     end
-    func = isconstantfunc(e.args[1], sv)
+    called = e.args[1]
+    func = isconstantfunc(called, sv)
     if is(func,false)
-        # TODO: lambda expression (let)
-        ft = abstract_eval(e.args[1], vtypes, sv)
+        if isa(called, LambdaStaticData)
+            # called lambda expression (let)
+            (_, result) = typeinf(called, argtypes, called.sparams, called,
+                                  false)
+            return result
+        end
+        ft = abstract_eval(called, vtypes, sv)
         if isType(ft) && isa(ft.parameters[1],CompositeKind)
             st = ft.parameters[1]
             if isgeneric(st) && isleaftype(st)
