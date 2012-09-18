@@ -37,6 +37,7 @@ class JuliaHelpTranslator(TextTranslator):
 
     def visit_desc_signature(self, node):
         self._current_module = node.attributes.get('module', None)
+        self._current_class = node.attributes.get('class', None)
         TextTranslator.visit_desc_signature(self, node)
 
     def visit_desc_name(self, node):
@@ -50,9 +51,12 @@ class JuliaHelpTranslator(TextTranslator):
         category = self._current_title
         if self._current_module is not None:
             category = self._current_module
+        name = self._desc_name
+        if self._current_class:
+            name = self._current_class
         self.end_state(first='(E"%s",E"%s",E"' % ( \
             jl_escape(category), \
-            jl_escape(self._desc_name)))
+            jl_escape(name)))
         self.in_desc = False
 
 class JuliaHelpWriter(TextWriter):
