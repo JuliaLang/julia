@@ -20,6 +20,7 @@ export                                  # types
     HyperGeometric,
     Logistic,
     logNormal,
+    Multinomial,
     NegativeBinomial,
     NoncentralBeta,
     NoncentralChisq,
@@ -27,6 +28,7 @@ export                                  # types
     NoncentralT,
     Normal,
     Poisson,
+    TDist,
     Uniform,
     Weibull,
                                         # methods
@@ -50,6 +52,7 @@ export                                  # types
     pmf,        # probability mass function (DiscreteDistribution)
     quantile,   # inverse of cdf (defined for p in (0,1))
     rand,       # random sampler
+    sample,     # another random sampler - not sure why this is here
     skewness,   # skewness of the distribution
     std,        # standard deviation of distribution
     var         # variance of distribution
