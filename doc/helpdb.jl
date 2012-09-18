@@ -4168,7 +4168,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"options.jl",E"Options",E"class class Options(OptionsChecking, param1, val1, param2, val2, ...)
+(E"options.jl",E"Options",E"type Options(OptionsChecking, param1, val1, param2, val2, ...)
 
    'Options' is the central type used for handling optional arguments.
    Its fields are briefly described below.

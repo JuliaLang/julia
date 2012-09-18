@@ -101,7 +101,7 @@
 Advanced topics
 ---------------
 
-.. class:: Options(OptionsChecking, param1, val1, param2, val2, ...)
+.. type:: Options(OptionsChecking, param1, val1, param2, val2, ...)
 
    ``Options`` is the central type used for handling optional arguments. Its fields are briefly described below.
 

@@ -6,7 +6,7 @@ import sphinx.domains.python
 
 sphinx.domains.python.py_sig_re = re.compile(
     r'''^ ([\w.]*\.)?            # class name(s)
-          (\w[\w!]*)  \s*             # thing name
+          (\w[\w!]*)  \s*        # thing name
           (?: \((.*)\)           # optional: arguments
            (?:\s* -> \s* (.*))?  #           return annotation
           )? $                   # and nothing more
@@ -16,6 +16,8 @@ class JuliaDomain(sphinx.domains.python.PythonDomain):
     """Julia language domain."""
     name = 'jl'
     label = 'Julia'
+
+JuliaDomain.directives['type'] = JuliaDomain.directives['class']
 
 def setup(app):
     app.add_domain(JuliaDomain)
