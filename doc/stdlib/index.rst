@@ -31,6 +31,7 @@ Extras
    glpk
    textwrap
    zlib
+   blas
 
 ************
 File Formats

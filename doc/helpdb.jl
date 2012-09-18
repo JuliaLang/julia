@@ -1798,9 +1798,8 @@ collection[key...] = value
    Matrix division using a polyalgorithm. For input matrices 'A' and
    'B', the result 'X' is such that 'A*X == B'. For rectangular 'A',
    QR factorization is used. For triangular 'A', a triangular solve is
-   performed. For square 'A', Cholesky factorization is tried if the
-   input is symmetric with a heavy diagonal. LU factorization is used
-   in case Cholesky factorization fails or for general square inputs.
+   performed. For symmetric 'A' the Bunch-Kaufman factorization is
+   used. LU factorization is used for general square inputs.
 
 "),
 
@@ -2601,6 +2600,105 @@ collection[key...] = value
 
    Assign a value to a symbol in the current task's task-local
    storage.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.copy!(n, X, incx, Y, incy)",E"BLAS.copy!(n, X, incx, Y, incy)
+
+   Copy 'n' elements of array 'X' with stride 'incx' to array 'Y' with
+   stride 'incy'.  Returns 'Y'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"dot",E"BLAS.dot(n, X, incx, Y, incy)
+
+   Dot product of two vectors consisting of 'n' elements of array 'X'
+   with stride 'incx' and 'n' elements of array 'Y' with stride
+   'incy'.  There are no 'BLAS.dot' methods for 'Complex' arrays.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"nrm2",E"BLAS.nrm2(n, X, incx)
+
+   2-norm of a vector consisting of 'n' elements of array 'X' with
+   stride 'incx'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)",E"BLAS.axpy!(n, a, X, incx, Y, incy)
+
+   Overwrite 'Y' with 'a*X + Y'.  Returns 'Y'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
+
+   Rank-k update of the symmetric matrix 'C' as 'alpha*A*A.' + beta*C'
+   or 'alpha*A.'*A + beta*C' according to whether 'trans' is 'N' or
+   'T'.  When 'uplo' is 'U' the upper triangle of 'C' is updated ('L'
+   for lower triangle).  Returns 'C'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"syrk",E"BLAS.syrk(uplo, trans, alpha, A)
+
+   Returns either the upper triangle or the lower triangle, according
+   to 'uplo' ('U' or 'L'), of 'alpha*A*A.'' or 'alpha*A.'*A',
+   according to 'trans' ('N' or 'T').
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
+
+   Methods for complex arrays only.  Rank-k update of the Hermitian
+   matrix 'C' as 'alpha*A*A' + beta*C' or 'alpha*A'*A + beta*C'
+   according to whether 'trans' is 'N' or 'T'.  When 'uplo' is 'U' the
+   upper triangle of 'C' is updated ('L' for lower triangle). Returns
+   'C'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"herk",E"BLAS.herk(uplo, trans, alpha, A)
+
+   Methods for complex arrays only.  Returns either the upper triangle
+   or the lower triangle, according to 'uplo' ('U' or 'L'), of
+   'alpha*A*A'' or 'alpha*A'*A', according to 'trans' ('N' or 'T').
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Update vector 'y' as 'alpha*A*x + beta*y' or 'alpha*A'*x + beta*y'
+   according to 'trans' ('N' or 'T').  The matrix 'A' is a general
+   band matrix of dimension 'm' by 'size(A,2)' with 'kl' sub-diagonals
+   and 'ku' super-diagonals. Returns the updated 'y'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"gbmv",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Returns 'alpha*A*x' or 'alpha*A'*x' according to 'trans' ('N' or
+   'T'). The matrix 'A' is a general band matrix of dimension 'm' by
+   'size(A,2)' with 'kl' sub-diagonals and 'ku' super-diagonals.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
+
+   Update vector 'y' as 'alpha*A*x + beta*y' where 'A' is a a
+   symmetric band matrix of order 'size(A,2)' with 'k' super-diagonals
+   stored in the argument 'A'.  The storage layout for 'A' is
+   described the reference BLAS module, level-2 BLAS at
+   *<http://www.netlib.org/lapack/explore-html/>*.
+
+   Returns the updated 'y'.
+
+"),
+
+(E"blas.jl --- Wrappers for some of the BLAS",E"sbmv",E"BLAS.sbmv(uplo, k, alpha, A, x)
+
+   Returns 'alpha*A*x' where 'A' is a symmetric band matrix of order
+   'size(A,2)' with 'k' super-diagonals stored in the argument 'A'.
 
 "),
 

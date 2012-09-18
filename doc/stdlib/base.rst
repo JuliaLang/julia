@@ -1222,7 +1222,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: \
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For symmetric ``A`` the Bunch-Kaufman factorization is used. LU factorization is used for general square inputs.
 
 .. function:: dot
 
