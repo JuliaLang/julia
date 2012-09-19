@@ -17,6 +17,16 @@ static inline int symchar(char c)
     return !strchr(special, c);
 }
 
+// like strtoull, but accepts "0b" prefix for base 2
+static unsigned long long strtoull_0b(const char *nptr, char **endptr, int base)
+{
+    if (base == 2 && *nptr == '0' && nptr[1] == 'b'
+        && (nptr[2] == '0' || nptr[2] == '1')) {
+        nptr += 2;
+    }
+    return strtoull(nptr, endptr, base);
+}
+
 int isnumtok_base(char *tok, value_t *pval, int base)
 {
     char *end;
@@ -68,7 +78,7 @@ int isnumtok_base(char *tok, value_t *pval, int base)
         return (*end == '\0');
     }
     errno = 0;
-    ui64 = strtoull(tok, &end, base);
+    ui64 = strtoull_0b(tok, &end, base);
     if (errno)
         return 0;
     if (pval) *pval = return_from_uint64(ui64);
