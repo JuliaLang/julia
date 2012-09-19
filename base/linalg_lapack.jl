@@ -595,7 +595,7 @@ for (gesv, posv, gels, trtrs, elty) in
             end
             R       = triu(A[1:n,1:n])
             X       = vecb ? B[1:n] : B[1:n,:]
-            RSS     = vecb ? sum(B[(n+1):m].^2) : [sum(B[(n+1):m, i].^2) for i=1:n]
+            RSS     = vecb ? sum(B[(n+1):m].^2) : [sum(B[(n+1):m, i].^2) for i=1:nrhs]
             R, X, RSS
         end
 
