@@ -3,38 +3,72 @@ Eps = sqrt(eps())
 
 begin
 local n
-n = 10
-a = rand(n,n)
-asym = a+a'+n*eye(n)
-b = rand(n)
-r = factors(chol(asym))                          # Cholesky decomposition
-@assert norm(r'*r - asym) < Eps
+n     = 10
+srand(1234321)
+a     = rand(n,n)
+asym  = a' + a                          # symmetric indefinite
+apd   = a'*a                            # symmetric positive-definite
+b     = rand(n)
 
-l = factors(chol!(copy(asym), 'L'))              # lower-triangular Cholesky decomposition
-@assert norm(l*l' - asym) < Eps
+capd   = chold(apd)                      # upper Cholesky factor
+r     = factors(capd)
+@assert r == chol(apd)
+@assert norm(r'*r - apd) < Eps
+@assert norm(b - apd * (capd\b)) < Eps
+@assert norm(apd * inv(capd) - eye(n)) < Eps
+@assert norm(a*(capd\(a'*b)) - b) < Eps  # least squares soln for square a
 
-(l,u,p) = factors(lu(a))                         # LU decomposition
+l     = factors(chold(apd, false))      # lower Cholesky factor
+@assert norm(l*l' - apd) < Eps
+
+bc1   = BunchKaufman(asym)              # Bunch-Kaufman factor of indefinite matrix
+@assert norm(inv(bc1) * asym - eye(n)) < Eps
+@assert norm(asym * (bc1\b) - b) < Eps
+bc2   = BunchKaufman(apd)               # Bunch-Kaufman factors of a pos-def matrix
+@assert norm(inv(bc2) * apd - eye(n)) < Eps
+@assert norm(apd * (bc2\b) - b) < Eps
+
+lua   = lud(a)                          # LU decomposition
+l,u,p = lu(a)
+L,U,P = factors(lua)
+@assert l == L && u == U && p == P
 @assert norm(l*u - a[p,:]) < Eps
 @assert norm(l[invperm(p),:]*u - a) < Eps
+@assert norm(a * inv(lua) - eye(n)) < Eps
+@assert norm(a*(lua\b) - b) < Eps
 
-(q,r) = factors(qr(a))                           # QR decomposition
+qra   = qrd(a)                          # QR decomposition
+q,r   = factors(qra)
+@assert norm(q'*q - eye(n)) < Eps
+@assert norm(q*q' - eye(n)) < Eps
+Q,R   = qr(a)
+@assert q == Q && r == R
 @assert norm(q*r - a) < Eps
+@assert norm(qra*b - Q*b) < Eps
+@assert norm(qra'*b - Q'*b) < Eps
+@assert norm(a*(qra\b) - b) < Eps
 
-(q,r,p) = factors(qrp(a))                        # pivoted QR decomposition
+qrpa  = qrpd(a)                         # pivoted QR decomposition
+q,r,p = factors(qrpa)
+@assert norm(q'*q - eye(n)) < Eps
+@assert norm(q*q' - eye(n)) < Eps
+Q,R,P = qrp(a)
+@assert q == Q && r == R && p == P
 @assert norm(q*r - a[:,p]) < Eps
 @assert norm(q*r[:,invperm(p)] - a) < Eps
+@assert norm(a*(qrpa\b) - b) < Eps
 
-(d,v) = eig(asym)                       # symmetric eigen-decomposition
+d,v   = eig(asym)                       # symmetric eigen-decomposition
 @assert norm(asym*v[:,1]-d[1]*v[:,1]) < Eps
 @assert norm(v*diagmm(d,v') - asym) < Eps
 
-(d,v) = eig(a)
+d,v   = eig(a)                          # non-symmetric eigen decomposition
 for i in 1:size(a,2) @assert norm(a*v[:,i] - d[i]*v[:,i]) < Eps end
 
-(u,s,vt) = svd(a)                       # singular value decomposition
+u,s,vt = svd(a)                         # singular value decomposition
 @assert norm(u*diagmm(s,vt) - a) < Eps
 
-(u,s,vt) = sdd(a)                       # svd using divide-and-conquer
+u,s,vt = sdd(a)                         # svd using divide-and-conquer
 @assert norm(u*diagmm(s,vt) - a) < Eps
 
 x = a \ b
@@ -123,6 +157,7 @@ Ai = A - im
 Asub = sub(Ai, 1:2:2*cutoff, 1:3)
 Aref = Ai[1:2:2*cutoff, 1:3]
 @assert Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
+                                        # Matrix exponential
 A1  = float([4 2 0; 1 4 1; 1 1 4])
 eA1 = [147.866622446369 127.781085523181  127.781085523182;
        183.765138646367 183.765138646366  163.679601723179;
@@ -158,7 +193,6 @@ end
 @assert full(T) == F
 
 # tridiagonal linear algebra
-Eps = sqrt(eps())
 v = randn(n)
 @assert norm(T*v - F*v) < Eps
 invFv = F\v
@@ -166,15 +200,15 @@ invFv = F\v
 @assert norm(solve(T,v) - invFv) < Eps
 B = randn(n,2)
 @assert norm(solve(T, B) - F\B) < Eps
-Tlu = lu(T)
+Tlu = lud(T)
 x = Tlu\v
 @assert norm(x - invFv) < Eps
 
 # symmetric tridiagonal
-Ts = Tridiagonal(dl, d+1, dl)
+Ts = SymTridiagonal(d, dl)
 Fs = full(Ts)
 invFsv = Fs\v
-Tldlt = ldlt(Ts)
+Tldlt = ldltd(Ts)
 x = Tldlt\v
 @assert norm(x - invFsv) < Eps
 

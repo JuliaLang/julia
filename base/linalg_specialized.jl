@@ -1,15 +1,56 @@
 #### Specialized matrix types ####
 
-# Some of these also have important routines defined in factorizations.jl,
-# linalg_lapack.jl, etc.
+## Symmetric tridiagonal matrices
+type SymTridiagonal{T<:LapackScalar} <: AbstractMatrix{T}
+    dv::Vector{T}                        # diagonal
+    ev::Vector{T}                        # sub/super diagonal
+    function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
+        if length(ev) != length(dv) - 1 error("dimension mismatch") end
+        new(dv,ev)
+    end
+end
 
-#### Tridiagonal matrices ####
+SymTridiagonal{T<:LapackScalar}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
+function SymTridiagonal{T<:Real}(dv::Vector{T}, ev::Vector{T})
+    SymTridiagonal{Float64}(float64(dv),float64(ev))
+end
+function SymTridiagonal{Td<:Number,Te<:Number}(dv::Vector{Td}, ev::Vector{Te})
+    T = promote(Td,Tv)
+    SymTridiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev))
+end
+copy(S::SymTridiagonal) = SymTridiagonal(S.dv,S.ev)
+function full(S::SymTridiagonal)
+    M = diagm(S.dv)
+    for i in 1:length(S.ev)
+        j = i + 1
+        M[i,j] = M[j,i] = S.ev[i]
+    end
+    M
+end
+
+function show(io, S::SymTridiagonal)
+    println(io, summary(S), ":")
+    print(io, "diag: ")
+    print_matrix(io, (S.dv)')
+    print(io, "\n sup: ")
+    print_matrix(io, (S.ev)')
+end
+
+size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
+size(m::SymTridiagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
+
+eig(m::SymTridiagonal, vecs::Bool) = Lapack.stev!(vecs ? 'V' : 'N', copy(m.dv), copy(m.ev))
+eig(m::SymTridiagonal) = eig(m::SymTridiagonal, true)
+## This function has been in Julia for some time.  Could probably be dropped.
+trideig{T<:LapackScalar}(d::Vector{T}, e::Vector{T}) = Lapack.stev!('N', copy(d), copy(e))[1]
+
+## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
-    dl::Vector{T}   # sub-diagonal
-    d::Vector{T}   # diagonal
-    du::Vector{T}   # sup-diagonal
-    dutmp::Vector{T}  # scratch space for vector RHS solver, sup-diagonal
-    rhstmp::Vector{T}  # scratch space, rhs
+    dl::Vector{T}    # sub-diagonal
+    d::Vector{T}     # diagonal
+    du::Vector{T}    # sup-diagonal
+    dutmp::Vector{T} # scratch space for vector RHS solver, sup-diagonal
+    rhstmp::Vector{T}# scratch space, rhs
 
     function Tridiagonal(N::Int)
         dutmp = Array(T, N-1)
@@ -17,6 +58,7 @@ type Tridiagonal{T} <: AbstractMatrix{T}
         new(dutmp, rhstmp, dutmp, dutmp, rhstmp)  # first three will be overwritten
     end
 end
+
 function Tridiagonal{T<:Number}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     N = length(d)
     if length(dl) != N-1 || length(du) != N-1
@@ -32,6 +74,7 @@ function Tridiagonal{Tl<:Number, Td<:Number, Tu<:Number}(dl::Vector{Tl}, d::Vect
     R = promote(Tl, Td, Tu)
     Tridiagonal(convert(Vector{R}, dl), convert(Vector{R}, d), convert(Vector{R}, du))
 end
+
 size(M::Tridiagonal) = (length(M.d), length(M.d))
 function show(io, M::Tridiagonal)
     println(io, summary(M), ":")
@@ -67,6 +110,18 @@ round(M::Tridiagonal) = Tridiagonal(round(M.dl), round(M.d), round(M.du))
 iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 
 ## Solvers
+
+#### Tridiagonal matrix routines ####
+function \{T<:LapackScalar}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
+    if stride(rhs, 1) == 1
+        return Lapack.gtsv!(copy(M.dl), copy(M.d), copy(M.du), copy(rhs))
+    end
+    solve(M, rhs)  # use the Julia "fallback"
+end
+
+# This is definitely not going to work
+#eig(M::Tridiagonal) = Lapack.stev!('V', copy(M))
+
 # Allocation-free variants
 # Note that solve is non-aliasing, so you can use the same array for
 # input and output
@@ -177,9 +232,9 @@ function mult(X::StridedMatrix, M::Tridiagonal, B::StridedMatrix)
     end
     return X
 end
-mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2)) # OPTIMIZE ME (ideally, with banded matrices)
-function *{T,S}(M::Tridiagonal{T}, B::StridedVecOrMat{S})
-    X = Array(promote_type(T,S), size(B)...)
+mult(X::StridedMatrix, M1::Tridiagonal, M2::Tridiagonal) = mult(X, M1, full(M2))
+function *(M::Tridiagonal, B::Union(StridedVector,StridedMatrix))
+    X = similar(B)
     mult(X, M, B)
 end
 *(A::Tridiagonal, B::Tridiagonal) = A*full(B)
