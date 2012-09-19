@@ -45,13 +45,7 @@ function (\){T<:LapackScalar}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     if m == n # Square
         if istriu(A) return Lapack.trtrs!('U', 'N', 'N', Acopy, X) end
         if istril(A) return Lapack.trtrs!('L', 'N', 'N', Acopy, X) end
-                                        # Check for SPD matrix
-        if ishermitian(Acopy) && all([ Acopy[i,i] > 0 for i=1:n ]) 
-            AA, X, info = Lapack.posv!('U', Acopy, X)
-            if info == 0 return X end
-            Acopy[:] = A             # restore contents of Acopy and X
-            X[:] = B
-        end
+        if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
     Lapack.gels!('N', Acopy, X)[2]
