@@ -1017,3 +1017,12 @@ for n = 1:100
     end
     @assert n == m
 end
+
+# binary literals (issue #1280)
+@assert 0b1010101 == 0x55
+@assert isa(0b11111111,Uint8)
+@assert isa(0b111111111,Uint16)
+@assert isa(0b1111111111111111,Uint16)
+@assert isa(0b11111111111111111,Uint32)
+@assert isa(0b11111111111111111111111111111111,Uint32)
+@assert isa(0b111111111111111111111111111111111,Uint64)
