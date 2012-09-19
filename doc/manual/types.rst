@@ -111,9 +111,7 @@ implementation — recall that all concrete types are final, so no
 implementation is a subtype of any other. When the type is abstract, it
 suffices for the value to be implemented by a concrete type that is a
 subtype of the abstract type. If the type assertion is not true, an
-exception is thrown, otherwise, the left-hand value is returned:
-
-::
+exception is thrown, otherwise, the left-hand value is returned::
 
     julia> (1+2)::FloatingPoint
     type error: typeassert: expected FloatingPoint, got Int64
@@ -127,9 +125,7 @@ When attached to a variable, the ``::`` operator means something a bit
 different: it declares the variable to always have the specified type,
 like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
-using the ``convert`` function:
-
-::
+using the ``convert`` function::
 
     julia> function foo()
              x::Int8 = 1000
@@ -146,9 +142,7 @@ This feature is useful for avoiding performance "gotchas" that could
 occur if one of the assignments to a variable changed its type
 unexpectedly.
 
-The "declaration" behavior only occurs in specific contexts:
-
-::
+The "declaration" behavior only occurs in specific contexts::
 
     x::Int8        # a variable by itself
     local x::Int8  # in a local declaration
@@ -190,9 +184,7 @@ for example, to easily program to any type that is an integer, without
 restricting an algorithm to a specific type of integer.
 
 Abstract types are declared using the ``abstract`` keyword. The general
-syntaxes for declaring an abstract type are:
-
-::
+syntaxes for declaring an abstract type are::
 
     abstract «name»
     abstract «name» <: «supertype»
@@ -211,9 +203,7 @@ abstract "bottom" type, at the nadir of the type graph, which is called
 of ``None`` and all types are supertypes of ``None``.
 
 As a specific example, let's consider a subset of the abstract types
-that make up Julia's numerical hierarchy:
-
-::
+that make up Julia's numerical hierarchy::
 
     abstract Number
     abstract Real     <: Number
@@ -237,9 +227,7 @@ The ``<:`` operator in general means "is a subtype of", and, used in
 declarations like this, declares the right-hand type to be an immediate
 supertype of the newly declared type. It can also be used in expressions
 as a subtype operator which returns ``true`` when its left operand is a
-subtype of its right operand:
-
-::
+subtype of its right operand::
 
     julia> Integer <: Number
     true
@@ -259,9 +247,7 @@ A bits type is a concrete type whose data consists of plain old bits.
 Classic examples of bits types are integers and floating-point values.
 Unlike most languages, Julia lets you declare your own bits types,
 rather than providing only a fixed set of built-in bits types. In fact,
-the standard bits types are all defined in the language itself:
-
-::
+the standard bits types are all defined in the language itself::
 
     bitstype 32 Float32 <: FloatingPoint
     bitstype 64 Float64 <: FloatingPoint
@@ -278,9 +264,7 @@ the standard bits types are all defined in the language itself:
     bitstype 64 Int64  <: Signed
     bitstype 64 Uint64 <: Unsigned
 
-The general syntaxes for declaration of a bitstypes are:
-
-::
+The general syntaxes for declaration of a bitstypes are::
 
     bitstype «bits» «name»
     bitstype «bits» «name» <: «supertype»
@@ -341,9 +325,7 @@ beneficial aspect of the language design.
 Since composite types are the most common form of user-defined concrete
 type, they are simply introduced with the ``type`` keyword followed by a
 block of field names, optionally annotated with types using the ``::``
-operator:
-
-::
+operator::
 
     type Foo
       bar
@@ -355,9 +337,7 @@ Fields with no type annotation default to ``Any``, and can accordingly
 hold any type of value.
 
 New objects of composite type ``Foo`` are created by applying the
-``Foo`` type object like a function to values for its fields:
-
-::
+``Foo`` type object like a function to values for its fields::
 
     julia> foo = Foo("Hello, world.", 23, 1.5)
     Foo("Hello, world.",23,1.5)
@@ -369,17 +349,13 @@ Since the ``bar`` field is unconstrained in type, any value will do; the
 value for ``baz`` must be an ``Int`` and ``qux`` must be a ``Float64``.
 The signature of the default constructor is taken directly from the
 field type declarations ``(Any,Int,Float64)``, so arguments must match
-this implied type signature:
-
-::
+this implied type signature::
 
     julia> Foo((), 23.5, 1)
     no method Foo((),Float64,Int64)
 
 You can access the field values of a composite object using the
-traditional ``foo.bar`` notation:
-
-::
+traditional ``foo.bar`` notation::
 
     julia> foo.bar
     "Hello, world."
@@ -390,9 +366,7 @@ traditional ``foo.bar`` notation:
     julia> foo.qux
     1.5
 
-You can also change the values as one would expect:
-
-::
+You can also change the values as one would expect::
 
     julia> foo.qux = 2
     2.0
@@ -401,9 +375,7 @@ You can also change the values as one would expect:
     1//2
 
 Composite types with no fields are singletons; there can be only one
-instance of such types:
-
-::
+instance of such types::
 
     type NoFields
     end
@@ -425,9 +397,7 @@ Type Unions
 
 A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
-``Union`` function:
-
-::
+``Union`` function::
 
     julia> IntOrString = Union(Int,String)
     Union(Int,String)
@@ -443,9 +413,7 @@ instances of any of its argument types, constructed using the special
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
-union of no types is the "bottom" type, ``None``:
-
-::
+union of no types is the "bottom" type, ``None``::
 
     julia> Union()
     None
@@ -462,16 +430,12 @@ Tuple Types
 Tuples are an abstraction of the arguments of a function — without the
 function itself. The salient aspects of a function's arguments are their
 order and their types. The type of a tuple of values is the tuple of
-types of values:
-
-::
+types of values::
 
     julia> typeof((1,"foo",2.5))
     (Int64,ASCIIString,Float64)
 
-Accordingly, a tuple of types can be used anywhere a type is expected:
-
-::
+Accordingly, a tuple of types can be used anywhere a type is expected::
 
     julia> (1,"foo",2.5) :: (Int64,String,Any)
     (1,"foo",2.5)
@@ -480,16 +444,12 @@ Accordingly, a tuple of types can be used anywhere a type is expected:
     type error: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
-get an error:
-
-::
+get an error::
 
     julia> (1,"foo",2.5) :: (Int64,String,3)
     type error: typeassert: expected Type{T}, got (BitsKind,AbstractKind,Int64)
 
-Note that the empty tuple ``()`` is its own type:
-
-::
+Note that the empty tuple ``()`` is its own type::
 
     julia> typeof(())
     ()
@@ -530,9 +490,7 @@ Parametric Composite Types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Type parameters are introduced immediately after the type name,
-surrounded by curly braces:
-
-::
+surrounded by curly braces::
 
     type Point{T}
       x::T
@@ -547,9 +505,7 @@ type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
 ``Float64``. Thus, this single declaration actually declares an
 unlimited number of types: ``Point{Float64}``, ``Point{String}``,
-``Point{Int64}``, etc. Each of these is now a usable concrete type:
-
-::
+``Point{Int64}``, etc. Each of these is now a usable concrete type::
 
     julia> Point{Float64}
     Point{Float64}
@@ -560,9 +516,7 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
 floating-point values, while the type ``Point{String}`` is a "point"
 whose "coordinates" are string objects (see :ref:`man-strings`).
-However, ``Point`` itself is also a valid type object:
-
-::
+However, ``Point`` itself is also a valid type object::
 
     julia> Point
     Point{T}
@@ -570,9 +524,7 @@ However, ``Point`` itself is also a valid type object:
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
 that contains all the specific instances ``Point{Float64}``,
-``Point{String}``, etc.:
-
-::
+``Point{String}``, etc.::
 
     julia> Point{Float64} <: Point
     true
@@ -580,9 +532,7 @@ that contains all the specific instances ``Point{Float64}``,
     julia> Point{String} <: Point
     true
 
-Other types, of course, are not subtypes of it:
-
-::
+Other types, of course, are not subtypes of it::
 
     julia> Float64 <: Point
     false
@@ -591,9 +541,7 @@ Other types, of course, are not subtypes of it:
     false
 
 Concrete ``Point`` types with different values of ``T`` are never
-subtypes of each other:
-
-::
+subtypes of each other::
 
     julia> Point{Float64} <: Point{Int64}
     false
@@ -640,9 +588,7 @@ object constructor.
 
 Since the type ``Point{Float64}`` is a concrete type equivalent to
 ``Point`` declared with ``Float64`` in place of ``T``, it can be applied
-as a constructor accordingly:
-
-::
+as a constructor accordingly::
 
     julia> Point{Float64}(1.0,2.0)
     Point(1.0,2.0)
@@ -651,9 +597,7 @@ as a constructor accordingly:
     Point{Float64}
 
 For the default constructor, exactly one argument must be supplied for
-each field:
-
-::
+each field::
 
     julia> Point{Float64}(1.0)
     no method Point(Float64,)
@@ -669,9 +613,7 @@ In many cases, it is redundant to provide the type of ``Point`` object
 one wants to construct, since the types of arguments to the constructor
 call already implicitly provide type information. For that reason, you
 can also apply ``Point`` itself as a constructor, provided that the
-implied value of the parameter type ``T`` is unambiguous:
-
-::
+implied value of the parameter type ``T`` is unambiguous::
 
     julia> Point(1.0,2.0)
     Point(1.0,2.0)
@@ -687,9 +629,7 @@ implied value of the parameter type ``T`` is unambiguous:
 
 In the case of ``Point``, the type of ``T`` is unambiguously implied if
 and only if the two arguments to ``Point`` have the same type. When this
-isn't the case, the constructor will fail with a no method error:
-
-::
+isn't the case, the constructor will fail with a no method error::
 
     julia> Point(1,2.5)
     no method Point(Int64,Float64)
@@ -702,17 +642,13 @@ Parametric Abstract Types
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Parametric abstract type declarations declare a collection of abstract
-types, in much the same way:
-
-::
+types, in much the same way::
 
     abstract Pointy{T}
 
 With this declaration, ``Pointy{T}`` is a distinct abstract type for
 each type or integer value of ``T``. As with parametric composite types,
-each such instance is a subtype of ``Pointy``:
-
-::
+each such instance is a subtype of ``Pointy``::
 
     julia> Pointy{Int64} <: Pointy
     true
@@ -721,9 +657,7 @@ each such instance is a subtype of ``Pointy``:
     true
 
 Parametric abstract types are invariant, much as parametric composite
-types are:
-
-::
+types are::
 
     julia> Pointy{Float64} <: Pointy{Real}
     false
@@ -735,9 +669,7 @@ Much as plain old abstract types serve to create a useful hierarchy of
 types over concrete types, parametric abstract types serve the same
 purpose with respect to parametric composite types. We could, for
 example, have declared ``Point{T}`` to be a subtype of ``Pointy{T}`` as
-follows:
-
-::
+follows::
 
     type Point{T} <: Pointy{T}
       x::T
@@ -745,9 +677,7 @@ follows:
     end
 
 Given such a declaration, for each choice of ``T``, we have ``Point{T}``
-as a subtype of ``Pointy{T}``:
-
-::
+as a subtype of ``Pointy{T}``::
 
     julia> Point{Float64} <: Pointy{Float64}
     true
@@ -758,18 +688,14 @@ as a subtype of ``Pointy{T}``:
     julia> Point{String} <: Pointy{String}
     true
 
-This relationship is also invariant:
-
-::
+This relationship is also invariant::
 
     julia> Point{Float64} <: Pointy{Real}
     false
 
 What purpose do parametric abstract types like ``Pointy`` serve?
 Consider if we create a point-like implementation that only requires a
-single coordinate because the point is on the diagonal line *x = y*:
-
-::
+single coordinate because the point is on the diagonal line *x = y*::
 
     type DiagPoint{T} <: Pointy{T}
       x::T
@@ -785,17 +711,13 @@ section, :ref:`man-methods`.
 
 There are situations where it may not make sense for type parameters to
 range freely over all possible types. In such situations, one can
-constrain the range of ``T`` like so:
-
-::
+constrain the range of ``T`` like so::
 
     abstract Pointy{T<:Real}
 
 With such a declaration, it is acceptable to use any type that is a
 subtype of ``Real`` in place of ``T``, but not types that are not
-subtypes of ``Real``:
-
-::
+subtypes of ``Real``::
 
     julia> Pointy{Float64}
     Pointy{Float64}
@@ -810,9 +732,7 @@ subtypes of ``Real``:
     type error: Pointy: in T, expected Real, got Int64
 
 Type parameters for parametric composite types can be restricted in the
-same manner:
-
-::
+same manner::
 
     type Point{T<:Real} <: Pointy{T}
       x::T
@@ -821,9 +741,7 @@ same manner:
 
 To give a couple of real-world examples of how all this parametric type
 machinery can be useful, here is the actual definition of Julia's
-``Rational`` type, representing an exact ratio of integers:
-
-::
+``Rational`` type, representing an exact ratio of integers::
 
     type Rational{T<:Integer} <: Real
       num::T
@@ -844,9 +762,7 @@ There is a special kind of abstract parametric type that must be
 mentioned here: singleton types. For each type, ``T``, the "singleton
 type" ``Type{T}`` is an abstract type whose only instance is the object
 ``T``. Since the definition is a little difficult to parse, let's look
-at some examples:
-
-::
+at some examples::
 
     julia> isa(Float64, Type{Float64})
     true
@@ -863,9 +779,7 @@ at some examples:
 In other words, ``isa(A,Type{B})`` is true if and only if ``A`` and
 ``B`` are the same object and that object is a type. Without the
 parameter, ``Type`` is simply an abstract type which has all type
-objects as its instances, including, of course, singleton types:
-
-::
+objects as its instances, including, of course, singleton types::
 
     julia> isa(Type{Float64},Type)
     true
@@ -876,9 +790,7 @@ objects as its instances, including, of course, singleton types:
     julia> isa(Real,Type)
     true
 
-Any object that is not a type is not an instance of ``Type``:
-
-::
+Any object that is not a type is not an instance of ``Type``::
 
     julia> isa(1,Type)
     false
@@ -908,9 +820,7 @@ Parametric Bits Types
 
 Bits types can also be declared parametrically. For example, pointers
 are represented as boxed bits types which would be declared in Julia
-like this:
-
-::
+like this::
 
     # 32-bit system:
     bitstype 32 Ptr{T}
@@ -925,9 +835,7 @@ essentially defining an entire family of types with identical structure,
 differentiated only by their type parameter. Thus, ``Ptr{Float64}`` and
 ``Ptr{Int64}`` are distinct types, even though they have identical
 representations. And of course, all specific pointer types are subtype
-of the umbrella ``Ptr`` type:
-
-::
+of the umbrella ``Ptr`` type::
 
     julia> Ptr{Float64} <: Ptr
     true
@@ -941,9 +849,7 @@ Type Aliases
 Sometimes it is convenient to introduce a new name for an already
 expressible type. For such occasions, Julia provides the ``typealias``
 mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
-``Uint64`` as is appropriate for the size of pointers on the system:
-
-::
+``Uint64`` as is appropriate for the size of pointers on the system::
 
     # 32-bit system:
     julia> Uint
@@ -953,9 +859,7 @@ mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
     julia> Uint
     Uint64
 
-This is accomplished via the following code in ``src/boot.jl``:
-
-::
+This is accomplished via the following code in ``src/boot.jl``::
 
     if is(Int,Int64)
         typealias Uint Uint64
@@ -971,9 +875,7 @@ new parametric types name where one of the parameter choices is fixed.
 Julia's arrays have type ``Array{T,n}`` where ``T`` is the element type
 and ``n`` is the number of array dimensions. For convenience, writing
 ``Array{Float64}`` allows one to specify the element type without
-specifying the dimension:
-
-::
+specifying the dimension::
 
     julia> Array{Float64,1} <: Array{Float64} <: Array
     true
@@ -981,9 +883,7 @@ specifying the dimension:
 However, there is no way to equally simply restrict just the dimension
 but not the element type. Yet, one often needs to program to just
 vectors or matrices. For that reason, the following type aliases are
-provided:
-
-::
+provided::
 
     typealias Vector{T} Array{T,1}
     typealias Matrix{T} Array{T,2}
@@ -1007,9 +907,7 @@ operator, which indicates whether its left hand operand is a subtype of
 its right hand operand.
 
 The ``isa`` function tests if an object is of a given type and returns
-true or false:
-
-::
+true or false::
 
     julia> isa(1,Int)
     true
@@ -1021,9 +919,7 @@ The ``typeof`` function, already used throughout the manual in examples,
 returns the type of its argument. Since, as noted above, types are
 objects, they also have types, and we can ask what their types are. Here
 we apply ``typeof`` to an instance of each of the kinds of types
-discussed above:
-
-::
+discussed above::
 
     julia> typeof(Real)
     AbstractKind
@@ -1051,9 +947,7 @@ As you can see, the types of types are called, by convention, "kinds":
 
 What if we repeat the process? What is the type of a kind? Kinds, as it
 happens, are all composite values and thus all have a type of
-``CompositeKind``:
-
-::
+``CompositeKind``::
 
     julia> typeof(AbstractKind)
     CompositeKind
@@ -1071,9 +965,7 @@ The reader may note that ``CompositeKind`` shares with the empty tuple
 (see `above <#tuple-types>`_), the distinction of being its own type
 (i.e. a fixed point of the ``typeof`` function). This leads any number
 of tuple types recursively built with ``()`` and ``CompositeKind`` as
-their only atomic values, which are their own type:
-
-::
+their only atomic values, which are their own type::
 
     julia> typeof(())
     ()
@@ -1095,9 +987,7 @@ All fixed points of the ``typeof`` function are like this.
 Another operation that applies to some kinds of types is ``super``. Only
 abstract types (``AbstractKind``), bits types (``BitsKind``), and
 composite types (``CompositeKind``) have a supertype, so these are the
-only kinds of types that the ``super`` function applies to:
-
-::
+only kinds of types that the ``super`` function applies to::
 
     julia> super(Float64)
     FloatingPoint
@@ -1112,9 +1002,7 @@ only kinds of types that the ``super`` function applies to:
     Any
 
 If you apply ``super`` to other type objects (or non-type objects), a
-"no method" error is raised:
-
-::
+"no method" error is raised::
 
     julia> super(Union(Float64,Int64))
     no method super(UnionKind,)

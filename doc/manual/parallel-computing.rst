@@ -89,9 +89,7 @@ reference ``r``.
 
 The syntax of ``remote_call`` is not especially convenient. The macro
 ``@spawn`` makes things easier. It operates on an expression rather than
-a function, and picks where to do the operation for you:
-
-::
+a function, and picks where to do the operation for you::
 
     julia> r = @spawn rand(2,2)
     RemoteRef(1,1,0)
@@ -114,9 +112,7 @@ as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
 One important point is that your code must be available on any processor
-that runs it. For example, type the following into the julia prompt:
-
-::
+that runs it. For example, type the following into the julia prompt::
 
     julia> function rand2(dims...)
              return 2*rand(dims...)
@@ -166,9 +162,7 @@ it directly asks that an object be moved to the local machine.
 ``@spawn`` (and a few related constructs) also moves data, but this is
 not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a
-random matrix:
-
-::
+random matrix::
 
     # method 1
     A = rand(1000,1000)
@@ -206,9 +200,7 @@ Parallel Map and Loops
 Fortunately, many useful parallel computations do not require data
 movement. A common example is a monte carlo simulation, where multiple
 processors can handle independent simulation trials simultaneously. We
-can use ``@spawn`` to flip coins on two processors:
-
-::
+can use ``@spawn`` to flip coins on two processors::
 
     function count_heads(n)
         c::Int = 0
@@ -243,9 +235,7 @@ Notice that our use of this pattern with ``count_heads`` can be
 generalized. We used two explicit ``@spawn`` statements, which limits
 the parallelism to two processors. To run on any number of processors,
 we can use a *parallel for loop*, which can be written in Julia like
-this:
-
-::
+this::
 
     nheads = @parallel (+) for i=1:200000000
       randbit()
@@ -264,9 +254,7 @@ be globally visible since iterations run on different processors. Any
 variables used inside the parallel loop will be copied and broadcast to
 each processor.
 
-For example, the following code will not work as intended:
-
-::
+For example, the following code will not work as intended::
 
     a = zeros(100000)
     @parallel for i=1:100000
@@ -280,9 +268,7 @@ must be avoided. Fortunately, distributed arrays can be used to get
 around this limitation, as we will see in the next section.
 
 Using "outside" variables in parallel loops is perfectly reasonable if
-the variables are read-only:
-
-::
+the variables are read-only::
 
     a = randn(1000)
     @parallel (+) for i=1:100000
@@ -297,9 +283,7 @@ apply a function to all integers in some range (or, more generally, to
 all elements in some collection). This is another useful operation
 called *parallel map*, implemented in Julia as the ``pmap`` function.
 For example, we could compute the singular values of several large
-random matrices in parallel as follows:
-
-::
+random matrices in parallel as follows::
 
     M = {rand(1000,1000) for i=1:10}
     pmap(svd, M)
@@ -338,9 +322,7 @@ range of rows. If it is distributed in dimension 2, each processor holds
 a certain range of columns.
 
 Common kinds of arrays can be constructed with functions beginning with
-``d``:
-
-::
+``d``::
 
     dzeros(100,100,10)
     dones(100,100,10)
@@ -352,9 +334,7 @@ Common kinds of arrays can be constructed with functions beginning with
 In the last case, each element will be initialized to the specified
 value ``x``. These functions automatically pick a distributed dimension
 for you. To specify the distributed dimension, other forms are
-available:
-
-::
+available::
 
     drand((100,100,10), 3)
     dzeros(Int64, (100,100), 2)
@@ -408,9 +388,7 @@ Constructing Distributed Arrays
 -------------------------------
 
 The primitive ``DArray`` constructor is the function ``darray``, which
-has the following somewhat elaborate signature:
-
-::
+has the following somewhat elaborate signature::
 
     darray(init, type, dims, distdim, procs, dist)
 
@@ -439,9 +417,7 @@ are omitted. The first argument, the ``init`` function, can also be
 omitted, in which case an uninitialized ``DArray`` is constructed.
 
 As an example, here is how to turn the local array constructor ``rand``
-into a distributed array constructor:
-
-::
+into a distributed array constructor::
 
     drand(args...) = darray((T,d,da)->rand(d), Float64, args...)
 
@@ -453,9 +429,7 @@ local counterparts, so calls like ``drand(m,n)`` will also work.
 
 The ``changedist`` function, which changes the distribution of a
 ``DArray``, can be implemented with one call to ``darray`` where the
-``init`` function uses indexing to gather data from the existing array:
-
-::
+``init`` function uses indexing to gather data from the existing array::
 
     function changedist(A::DArray, to_dist)
         return darray((T,sz,da)->A[myindexes(da)...],
@@ -465,9 +439,7 @@ The ``changedist`` function, which changes the distribution of a
 It is particularly easy to construct a ``DArray`` where each block is a
 function of a block in an existing ``DArray``. This is done with the
 form ``darray(f, A)``. For example, the unary minus function can be
-implemented as:
-
-::
+implemented as::
 
     -(A::DArray) = darray(-, A)
 
@@ -479,9 +451,7 @@ to use distributed arrays, but they are not always sufficient. To handle
 more complex problems, tasks can be spawned to operate on parts of a
 ``DArray`` and write the results to another ``DArray``. For example,
 here is how you could apply a function ``f`` to each 2-d slice of a 3-d
-``DArray``:
-
-::
+``DArray``::
 
     function compute_something(A::DArray)
         B = darray(eltype(A), size(A), 3)
@@ -501,9 +471,7 @@ processing. This is known as a "race condition", one of the famous
 pitfalls of parallel programming. Some form of synchronization is
 necessary to wait for the result. As we saw above, ``@spawn`` returns a
 remote reference that can be used to wait for its computation. We could
-use that feature to wait for specific blocks of work to complete:
-
-::
+use that feature to wait for specific blocks of work to complete::
 
     function compute_something(A::DArray)
         B = darray(eltype(A), size(A), 3)
@@ -517,9 +485,7 @@ use that feature to wait for specific blocks of work to complete:
 Now a function that needs to access slice ``i`` can perform
 ``wait(deps[i])`` first to make sure the data is available.
 
-Another option is to use a ``@sync`` block, as follows:
-
-::
+Another option is to use a ``@sync`` block, as follows::
 
     function compute_something(A::DArray)
         B = darray(eltype(A), size(A), 3)
@@ -562,9 +528,7 @@ workloads, where we want to assign more work to processors only when
 they finish their current tasks.
 
 As an example, consider computing the singular values of matrices of
-different sizes:
-
-::
+different sizes::
 
     M = {rand(800,800), rand(600,600), rand(800,800), rand(600,600)}
     pmap(svd, M)
@@ -573,9 +537,7 @@ If one processor handles both 800x800 matrices and another handles both
 600x600 matrices, we will not get as much scalability as we could. The
 solution is to make a local task to "feed" work to each processor when
 it completes its current task. This can be seen in the implementation of
-``pmap``:
-
-::
+``pmap``::
 
     function pmap(f, lst)
         np = nprocs()  # determine the number of processors available

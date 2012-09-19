@@ -8,9 +8,7 @@ In Julia, a function is an object that maps a tuple of argument values
 to a return value. Julia functions are not pure mathematical functions,
 in the sense that functions can alter and be affected by the global
 state of the program. The basic syntax for defining functions in Julia
-is:
-
-::
+is::
 
     function f(x,y)
       x + y
@@ -38,9 +36,7 @@ the behavior of functions in Julia directly.
 
 There is a second, more terse syntax for defining a function in Julia.
 The traditional function declaration syntax demonstrated above is
-equivalent to the following compact "assignment form":
-
-::
+equivalent to the following compact "assignment form"::
 
     f(x,y) = x + y
 
@@ -51,17 +47,13 @@ function definitions are common in Julia. The short function syntax is
 accordingly quite idiomatic, considerably reducing both typing and
 visual noise.
 
-A function is called using the traditional parenthesis syntax:
-
-::
+A function is called using the traditional parenthesis syntax::
 
     julia> f(2,3)
     5
 
 Without parentheses, the expression ``f`` refers to the function object,
-and can be passed around like any value:
-
-::
+and can be passed around like any value::
 
     julia> g = f;
 
@@ -71,9 +63,7 @@ and can be passed around like any value:
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
 Functions <#operators-are-functions>`_ below), or with the ``apply``
-function:
-
-::
+function::
 
     julia> apply(f,2,3)
     5
@@ -92,9 +82,7 @@ function definition. In the example function, ``f``, from the previous
 section this is the value of the expression ``x + y``. As in C and most
 other imperative or functional languages, the ``return`` keyword causes
 a function to return immediately, providing an expression whose value is
-returned:
-
-::
+returned::
 
     function g(x,y)
       return x * y
@@ -102,9 +90,7 @@ returned:
     end
 
 Since functions definitions can be entered into interactive sessions, it
-is easy to compare these definitions:
-
-::
+is easy to compare these definitions::
 
     f(x,y) = x + y
 
@@ -125,9 +111,7 @@ evaluated and we could simply make ``x * y`` the last expression in the
 function and omit the ``return``. In conjunction with other control
 flow, however, ``return`` is of real use. Here, for example, is a
 function that computes the hypotenuse length of a right triangle with
-sides of length *x* and *y*, avoiding overflow:
-
-::
+sides of length *x* and *y*, avoiding overflow::
 
     function hypot(x,y)
       x = abs(x)
@@ -157,9 +141,7 @@ like ``&&`` and ``||``. These operators cannot be functions since
 short-circuit evaluation (see :ref:`man-short-circuit-evaluation`) requires that
 their operands are not evaluated before evaluation of the operator.
 Accordingly, you can also apply them using parenthesized argument lists,
-just as you would any other function:
-
-::
+just as you would any other function::
 
     julia> 1 + 2 + 3
     6
@@ -170,9 +152,7 @@ just as you would any other function:
 The infix form is exactly equivalent to the function application form —
 in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
-``+`` and ``*`` just like you would with other function values:
-
-::
+``+`` and ``*`` just like you would with other function values::
 
     julia> f = +;
 
@@ -191,9 +171,7 @@ Functions in Julia are first-class objects: they can be assigned to
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without giving them a name:
-
-::
+without giving them a name::
 
     julia> x -> x^2 + 2x - 1
     #<function>
@@ -203,9 +181,7 @@ value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
 other functions as arguments. A classic example is the ``map`` function,
 which applies a function to each value of an array and returns a new
-array containing the resulting values:
-
-::
+array containing the resulting values::
 
     julia> map(round, [1.2,3.5,1.7])
     [1.0,4.0,2.0]
@@ -214,9 +190,7 @@ This is fine if a named function effecting the transform one wants
 already exists to pass as the first argument to ``map``. Often, however,
 a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
-function object without needing a name:
-
-::
+function object without needing a name::
 
     julia> map(x -> x^2 + 2x - 1, [1,3,-1])
     [2,14,-2]
@@ -235,27 +209,21 @@ In Julia, one returns a tuple of values to simulate returning multiple
 values. However, tuples can be created and destructured without needing
 parentheses, thereby providing an illusion that multiple values are
 being returned, rather than a single tuple value. For example, the
-following function returns a pair of values:
-
-::
+following function returns a pair of values::
 
     function foo(a,b)
       a+b, a*b
     end
 
 If you call it in an interactive session without assigning the return
-value anywhere, you will see the tuple returned:
-
-::
+value anywhere, you will see the tuple returned::
 
     julia> foo(2,3)
     (5,6)
 
 A typical usage of such a pair of return values, however, extracts each
 value into a variable. Julia supports simple tuple "destructuring" that
-facilitates this:
-
-::
+facilitates this::
 
     julia> x, y = foo(2,3);
 
@@ -266,9 +234,7 @@ facilitates this:
     6
 
 You can also return multiple values via an explicit usage of the
-``return`` keyword:
-
-::
+``return`` keyword::
 
     function foo(a,b)
       return a+b, a*b
@@ -283,17 +249,13 @@ It is often convenient to be able to write functions taking an arbitrary
 number of arguments. Such functions are traditionally known as "varargs"
 functions, which is short for "variable number of arguments". You can
 define a varargs function by following the last argument with an
-ellipsis:
-
-::
+ellipsis::
 
     bar(a,b,x...) = (a,b,x)
 
 The variables ``a`` and ``b`` are bound to the first two argument values
 as usual, and the variable ``x`` is bound to an iterable collection of
-the zero or more values passed to ``bar`` after its first two arguments:
-
-::
+the zero or more values passed to ``bar`` after its first two arguments::
 
     julia> bar(1,2)
     (1,2,())
@@ -312,9 +274,7 @@ passed to ``bar``.
 
 On the flip side, it is often handy to "splice" the values contained in
 an iterable collection into a function call as individual arguments. To
-do this, one also uses ``...`` but in the function call instead:
-
-::
+do this, one also uses ``...`` but in the function call instead::
 
     julia> x = (3,4)
     (3,4)
@@ -324,9 +284,7 @@ do this, one also uses ``...`` but in the function call instead:
 
 In this case a tuple of values is spliced into a varargs call precisely
 where the variable number of arguments go. This need not be the case,
-however:
-
-::
+however::
 
     julia> x = (2,3,4)
     (2,3,4)
@@ -341,9 +299,7 @@ however:
     (1,2,(3,4))
 
 Furthermore, the iterable object spliced into a function call need not
-be a tuple:
-
-::
+be a tuple::
 
     julia> x = [3,4]
     [3,4]
@@ -358,9 +314,7 @@ be a tuple:
     (1,2,(3,4))
 
 Also, the function that arguments are spliced into need not be a varargs
-function (although it often is):
-
-::
+function (although it often is)::
 
     baz(a,b) = a + b
 
@@ -386,9 +340,7 @@ Block Syntax for Function Arguments
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially
 awkward to write when the function argument requires multiple lines. As
-an example, consider calling ``map`` on a function with several cases:
-
-::
+an example, consider calling ``map`` on a function with several cases::
 
     map(x->begin
                if x < 0 && iseven(x)
@@ -401,9 +353,7 @@ an example, consider calling ``map`` on a function with several cases:
            end,
         [A, B, C])
 
-Julia provides a reserved word ``do`` for rewriting this code more clearly:
-
-::
+Julia provides a reserved word ``do`` for rewriting this code more clearly::
 
     map([A, B, C]) do x
         if x < 0 && iseven(x)
@@ -424,9 +374,7 @@ a function ``cd`` for running code in a given directory, and switching back
 to the previous directory when the code finishes or aborts. There is also
 a definition of ``open`` that runs code ensuring that the opened file is
 eventually closed. We can combine these functions to safely write a file
-in a certain directory:
-
-::
+in a certain directory::
 
     cd("data") do
         open("outfile", "w") do f

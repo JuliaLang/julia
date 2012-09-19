@@ -68,9 +68,7 @@ function. The ``convert`` function generally takes two arguments: the
 first is a type object while the second is a value to convert to that
 type; the returned value is the value converted to an instance of given
 type. The simplest way to understand this function is to see it in
-action:
-
-::
+action::
 
     julia> x = 12
     12
@@ -92,9 +90,7 @@ action:
 
 Conversion isn't always possible, in which case a no method error is
 thrown indicating that ``convert`` doesn't know how to perform the
-requested conversion:
-
-::
+requested conversion::
 
     julia> convert(FloatingPoint, "foo")
     no method convert(Type{FloatingPoint},ASCIIString)
@@ -110,9 +106,7 @@ Defining New Conversions
 
 To define a new conversion, simply provide a new method for ``convert``.
 That's really all there is to it. For example, the method to convert a
-number to a boolean is simply this:
-
-::
+number to a boolean is simply this::
 
     convert(::Type{Bool}, x::Number) = (x!=0)
 
@@ -121,9 +115,7 @@ type <man-singleton-types>`, ``Type{Bool}``, the only instance of
 which is ``Bool``. Thus, this method is only invoked when the first
 argument is the type value ``Bool``. When invoked, the method determines
 whether a numeric value is true or false as a boolean, by comparing it
-to zero:
-
-::
+to zero::
 
     julia> convert(Bool, 1)
     true
@@ -146,9 +138,7 @@ Case Study: Rational Conversions
 To continue our case study of Julia's ``Rational`` type, here are the
 conversions declared in
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
-right after the declaration of the type and its constructors:
-
-::
+right after the declaration of the type and its constructors::
 
     convert{T<:Int}(::Type{Rational{T}}, x::Rational) = Rational(convert(T,x.num),convert(T,x.den))
     convert{T<:Int}(::Type{Rational{T}}, x::Int) = Rational(convert(T,x), convert(T,1))
@@ -209,9 +199,7 @@ Promotion to a common supertype is performed in Julia by the ``promote``
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
-promotion is to convert numeric arguments to a common type:
-
-::
+promotion is to convert numeric arguments to a common type::
 
     julia> promote(1, 2.5)
     (1.0,2.5)
@@ -244,9 +232,7 @@ matter of clever application, the most typical "clever" application
 being the definition of catch-all methods for numeric operations like
 the arithmetic operators ``+``, ``-``, ``*`` and ``/``. Here are some of
 the the catch-all method definitions given in
-`promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_:
-
-::
+`promotion.jl <https://github.com/JuliaLang/julia/blob/master/base/promotion.jl>`_::
 
     +(x::Number, y::Number) = +(promote(x,y)...)
     -(x::Number, y::Number) = -(promote(x,y)...)
@@ -267,15 +253,11 @@ in outer constructors methods, provided for convenience, to allow
 constructor calls with mixed types to delegate to an inner type with
 fields promoted to an appropriate common type. For example, recall that
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_
-provides the following outer constructor method:
-
-::
+provides the following outer constructor method::
 
     Rational(n::Int, d::Int) = Rational(promote(n,d)...)
 
-This allows calls like the following to work:
-
-::
+This allows calls like the following to work::
 
     julia> Rational(int8(15),int32(-5))
     -3//1
@@ -298,18 +280,14 @@ possible permutations of argument types. Instead, the behavior of
 ``promote_rule``, which one can provide methods for. The
 ``promote_rule`` function takes a pair of type objects and returns
 another type object, such that instances of the argument types will be
-promoted to the returned type. Thus, by defining the rule:
-
-::
+promoted to the returned type. Thus, by defining the rule::
 
     promote_rule(::Type{Float64}, ::Type{Float32} ) = Float64
 
 one declares that when 64-bit and 32-bit floating-point values are
 promoted together, they should be promoted to 64-bit floating-point. The
 promotion type does not need to be one of the argument types, however;
-the following promotion rules both occur in Julia's standard library:
-
-::
+the following promotion rules both occur in Julia's standard library::
 
     promote_rule(::Type{Uint8}, ::Type{Int8}) = Int16
     promote_rule(::Type{Char}, ::Type{Uint8}) = Int32
@@ -331,9 +309,7 @@ second function called ``promote_type``, which, given any number of type
 objects, returns the common type to which those values, as arguments to
 ``promote`` should be promoted. Thus, if one wants to know, in absence
 of actual values, what type a collection of values of certain types
-would promote to, one can use ``promote_type``:
-
-::
+would promote to, one can use ``promote_type``::
 
     julia> promote_type(Int8, Uint16)
     Int32
@@ -350,9 +326,7 @@ Case Study: Rational Promotions
 
 Finally, we finish off our ongoing case study of Julia's rational number
 type, which makes relatively sophisticated use of the promotion
-mechanism with the following promotion rules:
-
-::
+mechanism with the following promotion rules::
 
     promote_rule{T<:Int}(::Type{Rational{T}}, ::Type{T}) = Rational{T}
     promote_rule{T<:Int,S<:Int}(::Type{Rational{T}}, ::Type{S}) = Rational{promote_type(T,S)}

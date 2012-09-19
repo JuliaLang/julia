@@ -34,18 +34,14 @@ access to the functionality of the POSIX ``dlopen(3)`` call: it locates
 a shared library binary and loads it into the process' memory allowing
 the program to access functions and variables contained in the library.
 The following call loads the standard C library, and stores the
-resulting handle in a Julia variable called ``libc``:
-
-::
+resulting handle in a Julia variable called ``libc``::
 
     libc = dlopen("libc")
 
 Once a library has been loaded, functions can be looked up by name using
 the ``dlsym`` function, which exposes the functionality of the POSIX
 ``dlsym(3)`` call. This returns a handle to the ``clock`` function from
-the standard C library:
-
-::
+the standard C library::
 
     libc_clock = dlsym(libc, :clock)
 
@@ -62,9 +58,7 @@ library function. Inputs to ``ccall`` are as follows:
    passed to the function.
 
 As a complete but simple example, the following calls the ``clock``
-function from the standard C library:
-
-::
+function from the standard C library::
 
     julia> t = ccall(dlsym(libc, :clock), Int32, ())
     5380445
@@ -75,9 +69,7 @@ function from the standard C library:
 ``clock`` takes no arguments and returns an ``Int32``. One common gotcha
 is that a 1-tuple must be written with with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
-of an environment variable, one makes a call like this:
-
-::
+of an environment variable, one makes a call like this::
 
     julia> path = ccall(dlsym(libc, :getenv), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
     Ptr{Uint8} @0x00007fff5fbfd670
@@ -87,9 +79,7 @@ of an environment variable, one makes a call like this:
 
 Note that the argument type tuple must be written as ``(Ptr{Uint8},)``,
 rather than ``(Ptr{Uint8})``. This is because ``(Ptr{Uint8})`` is just
-``Ptr{Uint8}``, rather than a 1-tuple containing ``Ptr{Uint8}``:
-
-::
+``Ptr{Uint8}``, rather than a 1-tuple containing ``Ptr{Uint8}``::
 
     julia> (Ptr{Uint8})
     Ptr{Uint8}
@@ -105,9 +95,7 @@ especially important since C and Fortran APIs are notoriously
 inconsistent about how they indicate error conditions. For example, the
 ``getenv`` C library function is wrapped in the following Julia function
 in
-`env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_:
-
-::
+`env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
 
     function getenv(var::String)
       val = ccall(dlsym(libc, :getenv),
@@ -122,9 +110,7 @@ The C ``getenv`` function indicates an error by returning ``NULL``, but
 other standard C functions indicate errors in various different ways,
 including by returning -1, 0, 1 and other special values. This wrapper
 throws an exception clearly indicating the problem if the caller tries
-to get a non-existent environment variable:
-
-::
+to get a non-existent environment variable::
 
     julia> getenv("SHELL")
     "/bin/zsh"
@@ -133,9 +119,7 @@ to get a non-existent environment variable:
     getenv: undefined variable: FOOBAR
 
 Here is a slightly more complex example that discovers the local
-machine's hostname:
-
-::
+machine's hostname::
 
     function gethostname()
       hostname = Array(Uint8, 128)
@@ -195,16 +179,12 @@ Mapping C Types to Julia
 ------------------------
 
 Julia automatically inserts calls to the ``convert`` function to convert
-each argument to the specified type. For example, the following call:
-
-::
+each argument to the specified type. For example, the following call::
 
     ccall(dlsym(libfoo, :foo), Void, (Int32, Float64),
           x, y)
 
-will behave as if the following were written:
-
-::
+will behave as if the following were written::
 
     ccall(dlsym(libfoo, :foo), Void, (Int32, Float64),
           convert(Int32, x), convert(Float64, y))
@@ -265,15 +245,11 @@ systems we currently support (UNIX), it is a 32 bits.
 
 C functions that take an arguments of the type ``char**`` can be called
 by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, C
-functions of the form:
-
-::
+functions of the form::
 
     int main(int argc, char **argv);
 
-can be called via the following Julia code:
-
-::
+can be called via the following Julia code::
 
     argv = [ "a.out", "arg1", "arg2" ]
     ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
