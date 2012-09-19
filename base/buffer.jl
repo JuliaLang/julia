@@ -99,7 +99,7 @@ end
 function takebuf_array(b::Buffer)
     d = b.data
     b.data = Uint8[]
-    grow(d,b.ptr-length(d))
+    grow(d,b.ptr-length(d)-1)
     b.ptr = 1
     d
 end

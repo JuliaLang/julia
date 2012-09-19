@@ -133,15 +133,14 @@ end
 
 #TODO: Move to different Thread
 function enq_send_req(sock::TcpSocket,buf,now::Bool)
-    len=position(buf)
     arr=takebuf_array(buf)
-	println(arr)
-    write(sock,pointer(arr),len)
+    println(arr)
+    write(sock,arr)
     #TODO implement "now"
 end
 
 function send_msg_(w::Worker, kind, args, now::Bool)
-	println("Sending msg $kind")
+    println("Sending msg $kind")
     buf = w.sendbuf
     #ccall(:jl_buf_mutex_lock, Void, (Ptr{Void},), buf.ios)
     serialize(buf, kind)
@@ -849,7 +848,7 @@ end
 
 # activity on accept fd
 function accept_handler(server::TcpSocket,status::Int32,isclient)
-	println("Accepted")
+    println("Accepted")
     if(status == -1)
         error("An error occured during the creation of the server")
     end
@@ -867,11 +866,11 @@ type DisconnectException <: Exception end
 
 function message_handler_loop(isclient,this::Deserializer)
     global PGRP
-	println("message_handler_loop")
+    println("message_handler_loop")
     refs = (PGRP::ProcessGroup).refs
     this.task=current_task()
     first = !isclient
-	println("loop")
+    println("loop")
     while true
         if(first)
             # first connection; get process group info from client
@@ -883,11 +882,10 @@ function message_handler_loop(isclient,this::Deserializer)
             PGRP.workers[1] = Worker("", 0, this.stream, 1)
             println("tt2")
             first=false
-	else
-	#try
+    else
+    #try
             msg = force(deserialize(this))
-			println(msg)
-            print("$(myid()) got $msg\n")
+            println("got msg: ",msg)
             # handle message
             if is(msg, :call) || is(msg, :call_fetch) || is(msg, :call_wait)
                 id = force(deserialize(this))
@@ -903,7 +901,7 @@ function message_handler_loop(isclient,this::Deserializer)
             elseif is(msg, :do)
                 f = deserialize(this)
                 args = deserialize(this)
-                print("$(myid()) got $args\n")
+                print("got args: $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(force(func),force(ar))))
                 end
@@ -936,14 +934,14 @@ function message_handler_loop(isclient,this::Deserializer)
         #        # TODO: remove machine from group
         #        throw(DisconnectException())
         #    else
-		#throw(e) 
+        #throw(e) 
         #        print("deserialization error: ", e, "\n")
         #        #while nb_available(sock) > 0 #|| select(sock)
         #        #    read(sock, Uint8)
         #        #end
         #    end
         #end
-	end
+    end
     end
 end
 
@@ -1010,7 +1008,11 @@ function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream)
         stream.buffer = DynamicBuffer()
         stream.buffer.data = old_buffer.data
         stream.buffer.ptr = old_buffer.ptr
-        stream.readcb = x->(println(ascii(x.buffer.data[1:stream.buffer.ptr]));x.buffer.ptr=1)
+        stream.readcb = x->(
+            data = ascii(x.buffer.data[1:stream.buffer.ptr]);
+            data = split(data,'\n');
+            for d = data; println("\tFrom worker $(w[i].id):\t",d); end;
+            x.buffer.ptr=1)
         todo[1]-=1
         println(todo[1])
         if(todo[1]<=0)

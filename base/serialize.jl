@@ -247,19 +247,20 @@ type Deserializer <: Buffer
     stream::AsyncStream
     data::Array{Uint8}
     ptr::Int
-	buflen::Int
+    buflen::Int
     function Deserializer(loop::Function,stream::AsyncStream)
         this=new()
         this.task=Task(()->loop(this))
         this.stream=stream
-		this.data=Array(Uint8,4096)
-		stream.buffer = this
-		stream.readcb = false
-		start_reading(stream)
+        this.data=Array(Uint8,4096)
+        stream.buffer = this
+        stream.readcb = false
+        start_reading(stream)
         this.ptr=1
         this
     end
 end
+show(io::IO,d::Deserializer) = print(io,"Deserializer()")
 
 function alloc_request(buffer::Deserializer, recommended_size)
     if(length(buffer.data)<recommended_size)
@@ -268,21 +269,21 @@ function alloc_request(buffer::Deserializer, recommended_size)
     return (pointer(buffer.data), recommended_size)
 end
 function notify_filled(this::Deserializer, nread::Int, base::Ptr, len::Int32)
-	println("filled")
-	this.returntask = current_task()
-	this.ptr=1
-	this.buflen=nread
-	yieldto(this.task)
-	true
+    println("filled")
+    this.returntask = current_task()
+    this.ptr=1
+    this.buflen=nread
+    yieldto(this.task)
+    true
 end
 notify_content_accepted(buffer::Deserializer,accepted) = false
 
 function read(this::Deserializer,::Type{Uint8})
-    if(this.ptr>this.buflen)
+    while (this.ptr>this.buflen)
         yieldto(this.returntask)
     end
     b::Uint8=uint8(this.data[this.ptr])
-    this.ptr=this.ptr+1
+    this.ptr+=1
     b
 end
 write(::Deserializer,args...) = error("write not implemented for deserializer")
@@ -294,7 +295,7 @@ function deserialize(s)
         return _jl_deser_tag[int32(read(s, Uint8))]
     end
     tag = _jl_deser_tag[b]
-	println(tag)
+    println(tag)
     if b >= _jl_VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
