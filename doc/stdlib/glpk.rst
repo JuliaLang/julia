@@ -12,9 +12,6 @@ of returning tuples/strings/vectors etc.
 
 It's currently based on GLPK version 4.47.
 
-.. contents::
-   :local:
-
 --------
 Preamble
 --------
