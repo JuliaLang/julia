@@ -298,7 +298,7 @@ end
 notify_content_accepted(buffer::DynamicBuffer,accepted) = false #Buffer conent management is left to the user
 notify_content_accepted(buffer::FixedBuffer,accepted) = false #Buffer conent management is left to the user
 function notify_content_accepted(buffer::LineBuffer,accepted)
-    println("LBc: ",buffer.nlpos)
+    #println("LBc: ",buffer.nlpos)
     len = buffer.ptr - buffer.nlpos
     if(len > 0)
         copy_to(buffer.data,1,buffer.data,buffer.nlpos,len)
@@ -960,7 +960,7 @@ _jl_sockaddr_set_port(ptr::Ptr{Void},port::Uint16) = ccall(:jl_sockaddr_set_port
 _uv_lasterror(loop::Ptr{Void}) = ccall(:jl_last_errno,Int32,(Ptr{Void},),loop)
 
 function connect_callback(sock::TcpSocket,status::Int32)
-    println("connect_callback")
+    #println("connect_callback")
     if(status==-1)
         error("Socket connection failed: ",_uv_lasterror(globalEventLoop()))
     end
@@ -969,7 +969,7 @@ end
 
 
 function getaddrinfo_callback(sock::TcpSocket,status::Int32,port::Uint16,addrinfo_list::Ptr)
-    println("getaddrinfo_callback")
+    #println("getaddrinfo_callback")
     if(status==-1)
         error("Name lookup failed")
     end
