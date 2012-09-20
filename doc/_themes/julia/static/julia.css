@@ -17,7 +17,7 @@ body {
   font: 11.5pt Georgia, Arial, sans-serif;
   width: 55em;
   text-align: left;
-  line-height: 1.5em;
+  line-height: 1.5;
   margin: 3em auto 2em auto;
 }
 
@@ -104,11 +104,12 @@ dl dt big, span.optional {
 /* inline code and code blocks */
 
 code,tt,pre {
-  font: 80% Monaco, 'Courier New', Courier, monospace;
+  font: 80% Menlo, Consolas, Monaco, 'Courier New', Courier, monospace;
 }
 
 pre {
   border: 1px solid #ddd;
+  line-height: 1.5;
   margin: 1em 2em 1em 1.5em;
   padding: .75em 1.25em;
 }
