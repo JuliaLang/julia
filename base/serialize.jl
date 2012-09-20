@@ -245,45 +245,64 @@ type Deserializer <: Buffer
     task::Task
     returntask::Task
     stream::AsyncStream
-    data::Array{Uint8}
-    ptr::Int
-    buflen::Int
+    buffer::DynamicBuffer
+    readptr::Int
     function Deserializer(loop::Function,stream::AsyncStream)
         this=new()
         this.task=Task(()->loop(this))
         this.stream=stream
-        this.data=Array(Uint8,4096)
-        stream.buffer = this
+        this.buffer=DynamicBuffer(Array(Uint8,4096))
+        this.readptr=1
+        stream.buffer=this
         stream.readcb = false
         start_reading(stream)
-        this.ptr=1
         this
     end
 end
 show(io::IO,d::Deserializer) = print(io,"Deserializer()")
 
-function alloc_request(buffer::Deserializer, recommended_size)
-    if(length(buffer.data)<recommended_size)
-        grow(buffer, recommended_size-length(buffer.data))
-    end
-    return (pointer(buffer.data), recommended_size)
-end
+alloc_request(buffer::Deserializer, recommended_size) = alloc_request(buffer.buffer, recommended_size)
+notify_content_accepted(buffer::Deserializer,accepted) = false
 function notify_filled(this::Deserializer, nread::Int, base::Ptr, len::Int32)
-    println("filled")
+    #println("filled")
+    notify_filled(this.buffer, nread, base, len)
     this.returntask = current_task()
-    this.ptr=1
-    this.buflen=nread
     yieldto(this.task)
     true
 end
-notify_content_accepted(buffer::Deserializer,accepted) = false
+
+function read{T}(this::Deserializer, a::Array{T})
+    if isa(T, BitsKind)
+        nb = numel(a)*sizeof(T)
+        while position(this.buffer) - this.readptr < nb
+            yieldto(this.returntask)
+        end
+        temp = Array(Uint8,sizeof(T))
+        for i = 1:numel(a)
+            for x = 1:sizeof(T)
+                temp[x] = this.buffer.data[this.readptr]
+                this.readptr += 1
+            end
+            a[i] = reinterpret(T, temp)[1]
+        end
+        return a
+    else
+        #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")
+        error("Read from Buffer only supports bits types or arrays of bits types")
+    end
+end
 
 function read(this::Deserializer,::Type{Uint8})
-    while (this.ptr>this.buflen)
+    while (this.readptr >= position(this.buffer))
         yieldto(this.returntask)
     end
-    b::Uint8=uint8(this.data[this.ptr])
-    this.ptr+=1
+    b::Uint8=uint8(this.buffer.data[this.readptr])
+    this.readptr+=1
+    if this.readptr == position(this.buffer)
+        this.buffer.ptr = 1
+        this.readptr = 1
+        #println("emptied")
+    end
     b
 end
 write(::Deserializer,args...) = error("write not implemented for deserializer")
