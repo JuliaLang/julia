@@ -778,21 +778,21 @@ end
 
 
 function wait(procs::Union(Process,Vector{Process}))
-    #try
-        while(!process_exited(procs))
-            process_events(globalEventLoop())
+    try
+        while(!process_exited(procs)) #wait(procs)
+            process_events()
         end
-    #catch e
-    #    kill(procs)
-    #    println(e)
-    #    throw(e)
-    #end
+    catch e
+        kill(procs)
+        process_events() #join(procs)
+        throw(e)
+    end
     return success(procs)
 end
 wait(procs::ProcessChain) = wait(procs.processes)
 function wait(w::AsyncStream,condition::Function)
     while(condition(w))
-        process_events(globalEventLoop())
+        process_events()
     end
     return true
 end
@@ -821,6 +821,8 @@ _jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int
 function kill(p::Process,signum::Int32)
     if p.exit_code == -2
         _jl_kill(p, int32(9))
+    else
+        -1
     end
 end
 kill(ps::Vector{Process}) = map(kill, ps)

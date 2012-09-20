@@ -295,7 +295,6 @@ function deserialize(s)
         return _jl_deser_tag[int32(read(s, Uint8))]
     end
     tag = _jl_deser_tag[b]
-    println(tag)
     if b >= _jl_VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
@@ -311,7 +310,7 @@ end
 deserialize_tuple(s, len) = (a = ntuple(len, i->deserialize(s));
                              ()->map(force, a))
 
-deserialize(s, ::Type{Symbol}) = (p=int32(read(s, Uint8));x=symbol(read(s, Uint8,p));println(p," ",x);x)
+deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})

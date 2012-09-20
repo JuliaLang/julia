@@ -202,7 +202,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
         push(PGRP.workers, w[i])
         w[i].id = PGRP.np+i
         send_msg_now(w[i], w[i].id, newlocs)
-        Deserializer((this)->message_handler_loop(true,this),w[i].socket)
+        Deserializer(message_handler_loop,w[i].socket)
     end
     PGRP.locs = newlocs
     PGRP.np += n
@@ -217,7 +217,7 @@ function _jl_join_pgroup(myid, locs)
     for i = 2:(myid-1)
         w[i] = Worker(locs[i].host, locs[i].port)
         w[i].id = i
-        Deserializer((this)->message_handler_loop(true,this),w[i].socket)
+        Deserializer(message_handler_loop,w[i].socket)
         send_msg_now(w[i], :identify_socket, myid)
     end
     for i = (myid+1):np
@@ -252,7 +252,7 @@ function worker_from_id(id)
 end
 
 # establish a Worker connection for processes that connected to us
-function _jl_identify_socket(otherid, fd, sock)
+function _jl_identify_socket(otherid, sock)
     global PGRP
     i = otherid
     #locs = PGRP.locs
@@ -263,7 +263,7 @@ function _jl_identify_socket(otherid, fd, sock)
         PGRP.workers[(end-d+1):end] = nothing
         PGRP.np += d
     end
-    PGRP.workers[i] = Worker("", 0, fd, sock, i)
+    PGRP.workers[i] = Worker("", 0, sock, i)
     #write(stdout_stream, "$(PGRP.myid) heard from $i\n")
     nothing
 end
@@ -847,7 +847,7 @@ end
 ## message event handlers ##
 
 # activity on accept fd
-function accept_handler(server::TcpSocket,status::Int32,isclient)
+function accept_handler(server::TcpSocket, status::Int32)
     println("Accepted")
     if(status == -1)
         error("An error occured during the creation of the server")
@@ -857,33 +857,28 @@ function accept_handler(server::TcpSocket,status::Int32,isclient)
     if err!=0
         print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
     else
-        first = true# isempty(sockets)
-        Deserializer((this::Deserializer)->message_handler_loop(isclient,this),client)
+        Deserializer(message_handler_loop,client)
     end
 end
 
 type DisconnectException <: Exception end
 
-function message_handler_loop(isclient,this::Deserializer)
+function message_handler_loop(this::Deserializer)
     global PGRP
     println("message_handler_loop")
     refs = (PGRP::ProcessGroup).refs
     this.task=current_task()
-    first = !isclient
-    println("loop")
-    while true
-        if(first)
+    if PGRP.myid == 0
             # first connection; get process group info from client
             _myid = force(deserialize(this))
             locs = force(deserialize(this))
             print("\nLocation: ",locs,"\nId:",_myid,"\n")
             PGRP = _jl_join_pgroup(_myid, locs)
-            println("tt1")
             PGRP.workers[1] = Worker("", 0, this.stream, 1)
-            println("tt2")
-            first=false
-    else
-    #try
+    end
+    println("loop")
+    while true
+        #try
             msg = force(deserialize(this))
             println("got msg: ",msg)
             # handle message
@@ -913,7 +908,7 @@ function message_handler_loop(isclient,this::Deserializer)
                 deliver_result((), mkind, oid, val)
             elseif is(msg, :identify_socket)
                 otherid = force(deserialize(this))
-                _jl_identify_socket(otherid, fd, this)
+                _jl_identify_socket(otherid, this.stream)
             else
                 # the synchronization messages
                 oid = force(deserialize(this))::(Int,Int)
@@ -934,14 +929,12 @@ function message_handler_loop(isclient,this::Deserializer)
         #        # TODO: remove machine from group
         #        throw(DisconnectException())
         #    else
-        #throw(e) 
         #        print("deserialization error: ", e, "\n")
         #        #while nb_available(sock) > 0 #|| select(sock)
         #        #    read(sock, Uint8)
         #        #end
         #    end
         #end
-    end
     end
 end
 
@@ -952,8 +945,7 @@ end
 start_worker() = start_worker(STDOUT)
 function start_worker(out::Stream)
     default_port = uint16(9009)
-    worker_sockets = Dict()
-    (actual_port,sock) = open_any_tcp_port(default_port,(handle,status)->accept_handler(handle,status,false))
+    (actual_port,sock) = open_any_tcp_port(default_port,(handle,status)->accept_handler(handle,status))
     write(out, "julia_worker:")  # print header
     write(out, "$(dec(actual_port))#") # print port
     write(out, "localhost")      #TODO: print hostname
@@ -990,34 +982,37 @@ function writeback(handle,nread,base,buflen)
     end
 end
 
-function _parse_conninfo(ps,w,i::Int,todo,stream::AsyncStream)
+function _parse_conninfo(ps,w,i::Int,stream::AsyncStream)
     println("readcb")
-    m = match(r"^julia_worker:(\d+)#(.*)", ascii(take_line(stream.buffer)))
+    s = ascii(take_line(stream.buffer))
+    m = match(r"^julia_worker:(\d+)#(.*)", s)
     println(m)
     if m != nothing
         println("ok")
         port = parse_int(Uint16, m.captures[1])
-        println("trace")
         hostname::ByteString = m.captures[2]
-        println("trace2")
         w[i] = Worker(hostname, port)
         sock = w[i].socket
-        println("trace3")
         notify_content_accepted(stream.buffer,false)
         old_buffer = stream.buffer
         stream.buffer = DynamicBuffer()
         stream.buffer.data = old_buffer.data
         stream.buffer.ptr = old_buffer.ptr
-        stream.readcb = x->(
-            data = ascii(x.buffer.data[1:stream.buffer.ptr]);
-            data = split(data,'\n');
-            for d = data; println("\tFrom worker $(w[i].id):\t",d); end;
-            x.buffer.ptr=1)
-        todo[1]-=1
-        println(todo[1])
-        if(todo[1]<=0)
-            ps.exit_code=0
+        stream.readcb = function (x)
+            try
+                data = ascii(x.buffer.data[1:stream.buffer.ptr])
+                data = split(data,'\n')
+                for d = data
+                    println("\tFrom worker $(w[i].id):\t",d)
+                end
+            catch e
+                println("\tError parsing reply from worker $(w[i].id):\t",e)
+            end
+            x.buffer.ptr=1
         end
+        ps.exit_code=0
+    else
+        error("_parse_conninfo failed $s")
     end
     true
 end
@@ -1027,16 +1022,14 @@ function start_remote_workers(machines, cmds)
     outs = cell(n)
     w = cell(n)
     pps = Array(Process,n)
-    todo = [int32(n)]
-    for i=1:n
+    for i=1:n; let i=i, ostream, ps
         ostream,ps = read_from(cmds[i])
-        ostream.readcb = (stream)->(_parse_conninfo(ps,w,i,todo,stream);true)
+        ostream.readcb = (stream)->(_parse_conninfo(ps,w,i,stream);true)
         ostream.buffer = LineBuffer()
         # redirect console output from workers to the client's stdout
         start_reading(ostream)
         pps[i] = ps
-    end
-    print(length(_jl_wait_for))
+    end; end
     wait(pps)
     w
 end
@@ -1586,6 +1579,9 @@ function _jl_work_cb()
         perform_work()
     else
         queueAsync(fgcm)
+    end
+    if !isempty(Workqueue)
+        queueAsync(_jl_work_cb_handle)
     end
 end
 _jl_work_cb(args...) = _jl_work_cb()

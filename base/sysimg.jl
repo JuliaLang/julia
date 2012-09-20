@@ -24,7 +24,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 80)
+ccall(:jl_load_progress_setmax, Void, (Int,), 72)
 
 include("export.jl")
 
@@ -104,7 +104,6 @@ include("buffer.jl")
 include("stream.jl")
 import Base.FS.*
 include("char.jl")
-include("string.jl")
 include("ascii.jl")
 include("utf8.jl")
 include("string.jl")
@@ -112,15 +111,6 @@ include("regex.jl")
 include("show.jl")
 include("grisu.jl")
 include("printf.jl")
-
-# core math functions
-include("intfuncs.jl")
-include("floatfuncs.jl")
-include("math.jl")
-include("math_libm.jl")
-include("sort.jl")
-include("combinatorics.jl")
-include("statistics.jl")
 
 # concurrency and parallelism
 include("iterator.jl")
