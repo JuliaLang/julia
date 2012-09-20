@@ -607,7 +607,7 @@
 	   (let* ((op  (take-token s))
 		  (nch (peek-char (ts:port s))))
 	     (if (and (or (eq? op '-) (eq? op '+))
-		      (or (char-numeric? nch)
+		      (or (and (char? nch) (char-numeric? nch))
 			  (and (eqv? nch #\.) (read-char (ts:port s)))))
 		 (let ((num
 			(parse-juxtapose
