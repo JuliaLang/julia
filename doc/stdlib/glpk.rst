@@ -256,9 +256,9 @@ Some library functions return multiple values; as C cannot do this directly, thi
 In Julia, on the other hand, this is not necessary, and providing an exact counterpart to the C version would be awkward and
 pointless. There are 3 such functions:
 
-    * ``glp_analyze_bound``
-    * ``glp_analyze_coef``
-    * ``glp_mem_usage``
+* ``glp_analyze_bound``
+* ``glp_analyze_coef``
+* ``glp_mem_usage``
 
 For example the C declaration for ``glp_analyze_bound`` is:
 
