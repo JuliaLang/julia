@@ -31,7 +31,7 @@ test_group("exception tests")
 @testfails throws_exception(complex(1,2) > 0, SystemError) 
 
 test_group("printing tests")
-@test sprint(show, :(1+2)) == "+(1,2)"
+@test sprint(show, :(1+2)) == ":( +(1, 2) )"
 @test prints(print_joined, ([1,2,3], " : "), "1 : 2 : 3") # prints is a helper
 @testfails prints(print_joined, ([1,2,3], " ! "), "1 : 2 : 3")
 
