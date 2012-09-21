@@ -1,5 +1,5 @@
-:mod:`blas.jl` --- Wrappers for some of the BLAS
-=======================================================
+:mod:`blas.jl` --- Basic Linear Algebra Subroutines
+===================================================
 
 .. module::BLAS
    :synopsis: Wrapper functions for the Basic Linear Algebra Subroutines
@@ -94,13 +94,13 @@ Utility Functions
    order ``size(A,2)`` with ``k`` super-diagonals stored in the
    argument ``A``.
 
-.. function BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+.. function:: BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update ``C`` as ``alpha*A*B + beta*C`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.  Returns the
    updated ``C``.
 
-.. function BLAS.gemm(tA, tB, alpha, A, B)
+.. function:: BLAS.gemm(tA, tB, alpha, A, B)
 
    Returns ``alpha*A*B`` or the other three variants
    according to ``tA`` (transpose ``A``) and ``tB``.
