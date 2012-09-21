@@ -70,17 +70,16 @@ a {
   a:visited { color: #88b; }
   a:hover   { color: #008; }
 
-ol {
-  margin-left: 2.25em;
+ol,ul {
+  margin-left: 2.2em;
 }
 
 ul {
-  margin-left: 1.8em;
   list-style-type: circle;
 }
 
 li {
-  margin-top: 0.5em;
+  margin-top: 0.25em;
 }
 
 tt.descname {
@@ -101,10 +100,15 @@ dl dt big, span.optional {
   margin: 3em 0em;
 }
 
-/* inline code and code blocks */
+/* code blocks, tables, and blockquotes */
 
 code,tt,pre {
   font: 80% Menlo, Consolas, Monaco, 'Courier New', Courier, monospace;
+}
+
+blockquote,table {
+  /* same as pre, but scaled by 80% */
+  margin: 0.8em 1.6em 0.8em 1.2em;
 }
 
 pre {
@@ -114,16 +118,21 @@ pre {
   padding: .75em 1.25em;
 }
 
+table.docutils {
+  border: 1px solid #ddd;
+}
+
+table.docutils td, table.docutils th {
+  border-bottom: 1px solid #ddd;
+  padding: 0.4em 1.4em 0.4em 1em;
+}
+
 .sidebar {
   border: 1px solid #ddd;
   padding: .75em 1.25em;
   line-height: 1.45em;
   margin: 1em 0.5em 1em 0em;
   font-size: 90%;
-}
-
-blockquote {
-  margin: 1em 2em 1em 1em;
 }
 
 .chaplink {
