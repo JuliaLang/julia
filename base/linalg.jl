@@ -243,6 +243,7 @@ function _jl_gemm{T<:LapackScalar}(C::StridedMatrix{T}, tA, tB,
 
     if nA != mB; error("*: argument shapes do not match"); end
 
+    if nA == 0 return zeros(T, mA, nB); end
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2(C,tA,tB,A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3(C,tA,tB,A,B); end
 
