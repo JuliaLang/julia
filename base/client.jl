@@ -226,12 +226,12 @@ function _start()
             abs_path("$JULIA_HOME/../lib/julia/ui"),
         ]
 
-        # Load customized startup
-        try include(strcat(cwd(),"/startup.jl")) end
-        try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
-
         (quiet,repl) = process_options(ARGS)
         if repl
+            # Load customized startup
+            try include(strcat(cwd(),"/startup.jl")) end
+            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+
             global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
             global _jl_is_interactive = true
