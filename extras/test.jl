@@ -99,13 +99,13 @@ end
 # that does the real work
 macro test(ex)
     quote
-        $_test(expr(:quote, ex), true)
+        $(_test(expr(:quote, ex), true))
     end
 end
 
 macro testfails(ex)
     quote
-        $_test(expr(:quote, ex), false)
+        $(_test(expr(:quote, ex), false))
     end
 end
 
