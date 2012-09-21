@@ -231,7 +231,13 @@
 			      (write-char (read-char port) str)
 			      (read-digs #f)
 			      (disallow-dot))
-		       (io.ungetc port c))))))
+		       (io.ungetc port c))))
+          ; disallow digits after binary literals, e.g., 0b12
+          (if (and (eq? pred char-bin?)
+                   (not (eof-object? c))
+                   (char-numeric? c))
+              (error (string "invalid numeric constant "
+                             (get-output-string str) c)))))
     (let* ((s (get-output-string str))
            (r (cond ((eq? pred char-hex?) 16)
                     ((eq? pred char-bin?) 2)
