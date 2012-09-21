@@ -60,6 +60,10 @@ set_groups(ni4, {"even"=>["two", "four"], "prime"=>["one", "two", "three", "five
 @test isgroup(ni4, "nope") == false
 
 test_group("UTF-8")
+ni5 = copy(ni1)
+replace_names!(ni5, 4, "fourty€")
+@test ni5["fourty€"] == 4
+@test ni5[:fourty€] == 4
 
 test_context("NamedVector")
 
@@ -100,4 +104,8 @@ t2["one"] = 111
 @testfails t1["five"]
 @test t1["one"] == 11
 
-
+test_group("groups")
+t3 = copy(t1)
+set_group(t3, "odd", ["one", "three"])
+@test all(t3["odd"] .== [11, 33])
+@test length(get_groups(t3)) == 1

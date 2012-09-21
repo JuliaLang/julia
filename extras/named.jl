@@ -219,6 +219,7 @@ function pretty_show(io, gr)
     end
 end
 
+############ NamedVector #############
 
 type NamedVector{V} <: Associative{ByteString,V}
     idx::NamedIndex
@@ -288,6 +289,7 @@ next(id::NamedVector, i) = (id[i], i+1)
 function show(io, id::NamedVector)
     n = names(id.idx)
     println(io, "$(length(id))-element $(eltype(id.arr)) NamedVector")
+    pretty_show(io, id.idx.groups)
     for i = 1:min(length(id), 9)
         println(io, "$i, $(n[i]): $(id[i])")
     end
@@ -327,5 +329,12 @@ function make_unique{S<:ByteString}(names::Vector{S})
     end
     names
 end
+
+set_group(v::NamedVector, newgroup, names) = set_group(v.idx, newgroup, names)
+set_groups(v::NamedVector, gr) = set_groups(v.idx, gr)
+
+get_group(v::NamedVector, name) = get_group(v.idx, name)
+get_groups(v::NamedVector) = get_groups(v.idx)
+isgroup(v::NamedVector, name::ByteString) = isgroup(v.idx, name)
 
 end #module
