@@ -41,16 +41,6 @@ function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Ran
         end
     end
 end
-# lapackconj is used only for non-BitsKinds
-function lapackconj(tA, A::Matrix, i::Int, j::Int)
-    if tA == 'N'
-        return A[i,j]
-    elseif tA == 'T'
-        return A[j,i]
-    else
-        return conj(A[j,i])
-    end
-end
 
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
@@ -186,13 +176,101 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
         end
     else
         # Multiplication for non-BitsKind uses the naive algorithm
-        for i = 1:mA
-            for j = 1:nB
-                Ctmp = lapackconj(tA, A, i, 1)*lapackconj(tB, B, 1, j)
-                for k = 2:nA
-                    Ctmp += lapackconj(tA, A, i, k)*lapackconj(tB, B, k, j)
+        if tA == 'N'
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*B[1, j]
+                        for k = 2:nA
+                            Ctmp += A[i, k]*B[k, j]
+                        end
+                        C[i,j] = Ctmp
+                    end
                 end
-                C[i,j] = Ctmp
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += A[i, k]*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += A[i, k]*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            end
+        elseif tA == 'T'
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*B[1, j]
+                        for k = 2:nA
+                            Ctmp += A[k, i]*B[k, j]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += A[k, i]*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += A[k, i]*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            end
+        else
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*B[1, j]
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*B[k, j]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
             end
         end
     end

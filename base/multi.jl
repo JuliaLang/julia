@@ -745,6 +745,7 @@ function perform_work(job::WorkItem)
         println()
         result = e
     end
+    # restart job by yielding back to whatever task just switched to us
     job.task = current_task().last
     if istaskdone(job.task)
         # job done
