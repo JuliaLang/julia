@@ -1012,8 +1012,11 @@ typedef struct _jl_savestate_t {
 typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
+    struct _jl_task_t *last;
     jl_value_t *tls;
+    jl_value_t *consumers;
     int8_t done;
+    int8_t runnable;
     jl_jmp_buf ctx;
     union {
         void *stackbase;

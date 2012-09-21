@@ -565,12 +565,12 @@ static void gc_mark_all()
     }
     else if (vt == (jl_value_t*)jl_task_type) {
         jl_task_t *ta = (jl_task_t*)v;
-        gc_push_root(ta->on_exit);
+        if (ta->on_exit) gc_push_root(ta->on_exit);
+        gc_push_root(ta->last);
         gc_push_root(ta->tls);
-        if (ta->start)
-            gc_push_root(ta->start);
-        if (ta->result)
-            gc_push_root(ta->result);
+        gc_push_root(ta->consumers);
+        if (ta->start)  gc_push_root(ta->start);
+        if (ta->result) gc_push_root(ta->result);
         gc_push_root(ta->state.eh_task);
         if (ta->stkbuf != NULL)
             gc_setmark_buf(ta->stkbuf);

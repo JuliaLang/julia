@@ -98,9 +98,6 @@ gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
 
-current_task() = ccall(:jl_get_current_task, Task, ())
-istaskdone(t::Task) = t.done
-
 bytestring(str::ByteString) = str
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)

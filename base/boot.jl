@@ -108,8 +108,11 @@
 
 # type Task
 #     parent::Task
+#     last::Task
 #     tls::Any
+#     consumers
 #     done::Bool
+#     runnable::Bool
 # end
 
 import Root

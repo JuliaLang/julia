@@ -566,7 +566,7 @@ function remote_call_fetch(w::LocalProcess, f, args...)
     oid = rr2id(rr)
     wi = schedule_call(oid, local_remote_call_thunk(f,args))
     wi.notify = ((), :call_fetch, oid, wi.notify)
-    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
+    force(yield(WaitFor(:call_fetch, rr)))
 end
 
 function remote_call_fetch(w::Worker, f, args...)
@@ -575,7 +575,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
+    force(yield(WaitFor(:call_fetch, rr)))
 end
 
 remote_call_fetch(id::Integer, f, args...) =
@@ -588,7 +588,7 @@ function remote_call_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
-    yieldto(Scheduler, WaitFor(:wait, rr))
+    yield(WaitFor(:wait, rr))
 end
 
 remote_call_wait(id::Integer, f, args...) =
@@ -628,7 +628,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
         send_msg(pg.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
-    v = yieldto(Scheduler, WaitFor(verb, r))
+    v = yield(WaitFor(verb, r))
     return is(verb,:fetch) ? force(v) : r
 end
 
@@ -641,7 +641,7 @@ function put_ref(rid, val::ANY)
     wi = lookup_ref(rid)
     if wi.done
         wi.notify = ((), :take, rid, wi.notify)
-        yieldto(Scheduler, WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
+        yield(WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
     end
     wi.result = val
     wi.done = true
@@ -731,6 +731,7 @@ function perform_work(job::WorkItem)
             # continuing interrupted work item
             arg = job.argument
             job.argument = ()
+            job.task.runnable = true
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
@@ -744,6 +745,7 @@ function perform_work(job::WorkItem)
         println()
         result = e
     end
+    job.task = current_task().last
     if istaskdone(job.task)
         # job done
         job.done = true
@@ -755,19 +757,32 @@ function perform_work(job::WorkItem)
         notify_done(job)
         job.thunk = bottom_func  # avoid reference retention
     elseif isa(result,WaitFor)
-        # add to waiting set to wait on a sync event
+        job.task.runnable = false
         wf::WaitFor = result
-        rr = wf.rr
-        #println("$(myid()) waiting for $rr")
-        oid = rr2id(rr)
-        waitinfo = (wf.msg, job, rr)
-        waiters = get(Waiting, oid, false)
-        if isequal(waiters,false)
-            Waiting[oid] = {waitinfo}
+        if wf.msg === :consume
+            P = wf.rr::Task
+            # queue consumers waiting for producer P. note that in order
+            # to avoid scheduling overhead for a typical produce/consume,
+            # there is no fairness unless consumers explicitly yield().
+            if P.consumers === nothing
+                P.consumers = {job}
+            else
+                enqueue(P.consumers, job)
+            end
         else
-            push(waiters, waitinfo)
+            # add to waiting set to wait on a sync event
+            rr = wf.rr
+            #println("$(myid()) waiting for $rr")
+            oid = rr2id(rr)
+            waitinfo = (wf.msg, job, rr)
+            waiters = get(Waiting, oid, false)
+            if isequal(waiters,false)
+                Waiting[oid] = {waitinfo}
+            else
+                push(waiters, waitinfo)
+            end
         end
-    else
+    elseif job.task.runnable
         # otherwise return to queue
         enq_work(job)
     end
@@ -1556,7 +1571,14 @@ function make_scheduled(t::Task)
     t
 end
 
-yield() = yieldto(Scheduler)
+function yield(args...)
+    ct = current_task()
+    # preserve Task.last across calls to the scheduler
+    prev = ct.last
+    v = yieldto(Scheduler, args...)
+    ct.last = prev
+    return v
+end
 
 const _jl_fd_handlers = Dict()
 
