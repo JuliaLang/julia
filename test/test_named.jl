@@ -80,6 +80,10 @@ end
 @test t1[["four", "two"]] == [44, 22]
 @test t1[:one] == 11
 @test t1[[:four, :two]] == [44, 22]
+@test first(t1) == 11
+@test last(t1) == 44
+@test sum(t1) == 110
+@test sprint(show, t1) == "4-element Any NamedVector\n1, one: 11\n2, two: 22\n3, three: 33\n4, four: 44\n"
 
 test_group("iteration")
 @test all([x::Int64 for x in t1] .== [11, 22, 33, 44])

@@ -17,6 +17,8 @@ export NamedIndex, SimpleIndex, NamedVector,
 	set_group, set_groups, get_group, get_groups, isgroup,
 	start, done, next, show
 	
+# should this go elsewhere?
+promote_rule(::Type{Union(UTF8String,ASCIIString)}, ::Type{ASCIIString} ) = Union(UTF8String,ASCIIString)
 
 # an AbstractIndex is a thing that can be used to look up ordered things by name, but that
 # will also accept a position or set of positions or range or other things and pass them
@@ -221,7 +223,7 @@ end
 
 ############ NamedVector #############
 
-type NamedVector{V} <: Associative{ByteString,V}
+type NamedVector{V} <: AbstractVector{V}
     idx::NamedIndex
     arr::Vector{V}
 	#NamedVector() = new(NamedIndex(), Array(V,0))
@@ -246,6 +248,21 @@ function NamedVector{K<:ByteString,V}(keys::Vector{K}, values::Vector{V})
 	ret
 end
 
+# similar's a little funny -- we make a similar array, but if the new vector's
+# longer than what we started with, the new keys are weird
+function similar(nv::NamedVector, element_type, dims)
+    new_arr = similar(nv.arr, element_type, dims)
+    if dims == size(nv)
+        new_idx = copy(nv.idx)
+    elseif dims < size(nv)
+        new_idx = NamedIndex(names(nv.idx)[1:dims[1]])
+    else
+        new_names = vcat(names(nv.idx), fill("X", dims[1]-length(nv)))
+        new_names = make_unique(new_names)
+        new_idx = NamedIndex(new_names)
+    end
+    NamedVector(new_idx, new_arr)
+end
 
 # assignment by a string replaces or appends
 function assign(id::NamedVector, v, key::ByteString)
@@ -258,8 +275,13 @@ function assign(id::NamedVector, v, key::ByteString)
 end
 assign(id::NamedVector, v, key::Symbol) = assign(id, v, string(key))
 # assignment by an integer replaces or throws an error
+assign(id::NamedVector, v, pos::Integer) = id.arr[pos] = v
+assign(id::NamedVector, v, pos::Real) = assign(id, v, iround(pos))
 assign(id::NamedVector, v, pos) = id.arr[pos] = v
 
+ref{V,T<:Integer}(id::NamedVector{V}, ii::AbstractArray{T,1}) = id.arr[id.idx[ii]]
+ref(id::NamedVector, i::Integer) = id.arr[id.idx[i]]
+ref(id::NamedVector, i::Real) = ref(id, iround(i))
 ref(id::NamedVector, i) = id.arr[id.idx[i]]
 # ref gives the vector value; find gives the _position_ in the underlying NamedIndex
 find(id::NamedVector, v) = has(id, v) ? id.idx[v] : 0
@@ -272,9 +294,11 @@ function get{K}(id::NamedVector{K}, key, deflt)
     end
 end
 
+size(nv::NamedVector) = size(nv.arr)
 names(nv::NamedVector) = names(nv.idx)
 keys(nv::NamedVector) = names(nv)
 values(nv::NamedVector) = nv.arr
+select(nv::NamedVector, r::Int64) = nv[r]
 select(nv::NamedVector, r) = nv[r]
 select_kv(nv::NamedVector, r) = (names(nv)[r], nv[r])
 
@@ -297,6 +321,7 @@ function show(io, id::NamedVector)
         println(io, "...")
     end
 end
+repl_show(io, id::NamedVector) = show(io, id::NamedVector)
 
 # copying has to copy everything, because otherwise you can append an item,
 # which can cause the vector to change length and break the original
