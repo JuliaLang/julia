@@ -67,7 +67,7 @@ function copy_to{T<:LapackScalar,TI<:Integer}(dest::Array{T}, rdest::Union(Range
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    BLAS.copy(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
               pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end
