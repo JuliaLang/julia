@@ -1,283 +1,258 @@
-## solvers and inverses using factorizations
-for (getrs, potrs, getri, potri, trtri, elty) in
-    (("dgetrs_","dpotrs_","dgetri_","dpotri_","dtrtri_",:Float64),
-     ("sgetrs_","spotrs_","sgetri_","spotri_","strtri_",:Float32),
-     ("zgetrs_","zpotrs_","zgetri_","zpotri_","ztrtri_",:Complex128),
-     ("cgetrs_","cpotrs_","cgetri_","cpotri_","ctrtri_",:Complex64))
+abstract Factorization{T}
+## Create an extractor that extracts the modified original matrix, e.g.
+## LD for BunchKaufman, LR for CholeskyDense, LU for LUDense and
+## define size methods for Factorization types using it.
+
+## merge symmetrize with _jl_copy_upper_to_lower in linalg_blas.jl
+## maybe another function makehermitian and use conj for complex
+function symmetrize!(A::AbstractMatrix, upper::Bool)
+    m, n = size(A)
+    if m != n error("symmetrize: Matrix must be square") end
+    for i = 1:(n-1)
+        for j = (i+1):n
+            if upper A[j,i] = A[i,j] else A[i,j] = A[j,i] end
+        end
+    end
+    A
+end
+
+type BunchKaufman{T<:LapackScalar} <: Factorization{T}
+    LD::Matrix{T}
+    ipiv::Vector{Int32}
+    upper::Bool
+    function BunchKaufman(A::Matrix{T}, upper::Bool)
+        LD, ipiv = Lapack.sytrf!(upper ? 'U' : 'L' , copy(A))
+        new(LD, ipiv, upper)
+    end
+end
+
+BunchKaufman{T<:LapackScalar}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman{T}(A, upper)
+BunchKaufman{T<:Real}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman(float64(A), upper)
+BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, true)
+
+size(B::BunchKaufman) = size(B.LD)
+size(B::BunchKaufman,d::Integer) = size(B.LD,d)
+## need to work out how to extract the factors.
+#factors(B::BunchKaufman) = Lapack.syconv!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv)
+
+function inv(B::BunchKaufman)
+    symmetrize!(Lapack.sytri!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv), B.upper)
+end
+
+\{T<:LapackScalar}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
+    Lapack.sytrs!(B.upper ? 'U' : 'L', B.LD, B.ipiv, copy(R))
     
-    @eval begin
-        #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-        #*     .. Scalar Arguments ..
-        #      CHARACTER          TRANS
-        #      INTEGER            INFO, LDA, LDB, N, NRHS
-        #     .. Array Arguments ..
-        #      INTEGER            IPIV( * )
-        #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_getrs(trans::LapackChar, A::StridedMatrix{$elty}, ipiv::Vector{Int32}, B::StridedVecOrMat{$elty})
-            if stride(A,1) != 1 || stride(B,1) != 1
-                error("_jl_lapack_getrs: matrix columns must have contiguous elements")
-            end
-            m, n    = size(A)
-            if m != n || size(B, 1) != m error("_jl_lapack_getrs: dimension mismatch") end
-            nrhs    = size(B, 2)
-            lda     = stride(A, 2)
-            ldb     = isa(B, Vector) ? m : stride(B, 2)
-            info    = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $getrs),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                   Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &trans, &n, &nrhs, A, &lda, ipiv, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_getrs: error $(info[1])") end
-            B
-        end
-        #     SUBROUTINE DPOTRS( UPLO, N, NRHS, A, LDA, B, LDB, INFO )
-        #*     .. Scalar Arguments ..
-        #      CHARACTER          UPLO
-        #      INTEGER            INFO, LDA, LDB, N, NRHS
-        #     .. Array Arguments ..
-        #      DOUBLE PRECISION   A( LDA, * ), B( LDB, * )
-        function _jl_lapack_potrs(uplo::LapackChar, A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
-            if stride(A,1) != 1 || stride(B,1) != 1
-                error("_jl_lapack_potrs: matrix columns must have contiguous elements")
-            end
-            m, n    = size(A)
-            if m != n || size(B,1) != m error("_jl_lapack_potrs: dimension mismatch") end
-            nrhs    = size(B, 2)
-            lda     = stride(A, 2)
-            ldb     = isa(B, Vector) ? m : stride(B, 2)
-            info    = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $potrs),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                   Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                  &uplo, &n, &nrhs, A, &lda, B, &ldb, info)
-            if info[1] != 0 error("_jl_lapack_potrs: error $(info[1])") end
-            B
-        end
-        #     SUBROUTINE DGETRI( N, A, LDA, IPIV, WORK, LWORK, INFO )
-        #*     .. Scalar Arguments ..
-        #      INTEGER            INFO, LDA, LWORK, N
-        #*     .. Array Arguments ..
-        #      INTEGER            IPIV( * )
-        #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
-        function _jl_lapack_getri(A::StridedMatrix{$elty}, ipiv::Vector{Int32})
-            if stride(A,1) != 1
-                error("_jl_lapack_getri: matrix columns must have contiguous elements");
-            end
-            m, n    = size(A)
-            if m != n || n != numel(ipiv) error("_jl_lapack_getri: dimension mismatch") end
-            lda     = stride(A, 2)
-            info    = Array(Int32, 1)
-            lwork   = -1
-            work    = Array($elty, 1)
-            for i in 1:2
-                ccall(dlsym(_jl_liblapack, $getri),
-                      Void,
-                      (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
-                       Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                      &n, A, &lda, ipiv, work, &lwork, info)
-                if info[1] != 0 error("_jl_lapack_getri: error $(info[1])") end
-                if lwork < 0
-                    lwork = int32(real(work[1]))
-                    work  = Array($elty, lwork)
-                end
-            end
-            A
-        end
-        #     SUBROUTINE DTRTRI( UPLO, DIAG, N, A, LDA, INFO )
-        #*     .. Scalar Arguments ..
-        #      CHARACTER          DIAG, UPLO
-        #      INTEGER            INFO, LDA, N
-        #     .. Array Arguments ..
-        #      DOUBLE PRECISION   A( LDA, * )
-        function _jl_lapack_trtri(uplo::LapackChar, diag::LapackChar, A::StridedMatrix{$elty})
-            if stride(A,1) != 1
-                error("_jl_lapack_trtri: matrix columns must have contiguous elements");
-            end
-            m, n    = size(A)
-            if m != n error("_jl_lapack_trtri: dimension mismatch") end
-            lda     = stride(A, 2)
-            info    = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $trtri),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                   Ptr{Int32}),
-                  &uplo, &diag, &n, A, &lda, info)
-            if info[1] != 0 error("_jl_lapack_trtri: error $(info[1])") end
-            A
-        end
-    end
-end
-
-abstract  Factorization{T}
-
-type Cholesky{T} <: Factorization{T}
+type CholeskyDense{T<:LapackScalar} <: Factorization{T}
     LR::Matrix{T}
-    uplo::LapackChar
-    function Cholesky(A::Matrix{T}, ul::LapackChar)
-        if ul != 'U' && ul != 'L' error("Cholesky: uplo must be 'U' or 'L'") end
-        Acopy = copy(A)
-        _jl_lapack_potrf(ul, Acopy) == 0 ? new(ul == 'U' ? triu(Acopy) : tril(Acopy), ul) : error("Cholesky: Matrix is not positive-definite")
+    upper::Bool
+    function CholeskyDense(A::Matrix{T}, upper::Bool)
+        A, info = Lapack.potrf!(upper ? 'U' : 'L' , A)
+        if info != 0 error("Matrix A not positive-definite") end
+        new(upper? triu(A) : tril(A), upper)
     end
 end
 
-Cholesky(A::Matrix) = Cholesky{eltype(A)}(A, 'U')
+size(C::CholeskyDense) = size(C.LR)
+size(C::CholeskyDense,d::Integer) = size(C.LR,d)
 
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(C::Cholesky{T}, B::StridedVecOrMat{T}) =
-    _jl_lapack_potrs(C.uplo, C.LR, copy(B))
+factors(C::CholeskyDense) = C.LR
 
-inv(C::Cholesky) = _jl_lapack_potri(C.uplo, copy(C.LR)) # should symmetrize the result
+\{T<:LapackScalar}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
+
+function det(C::CholeskyDense)
+    ff = C.LR
+    dd = 0.
+    for i in 1:size(ff,1) dd += ff[i,i]^2 end
+    dd
+end
+    
+function inv(C::CholeskyDense)
+    Ci, info = Lapack.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    if info != 0 error("Matrix singular") end 
+    symmetrize!(Ci, C.upper)
+end
+
+## Should these functions check that the matrix is Hermitian?
+chold!{T<:LapackScalar}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
+chold{T<:LapackScalar}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
+chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
+chold{T<:Number}(A::Matrix{T}) = chold(A, true)
+
+## Matlab (and R) compatible
+chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
  
-type LU{T} <: Factorization{T}
+type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
     ipiv::Vector{Int32}
-    function LU(lu::Matrix{T}, ipiv::Vector{Int32})
+    function LUDense(lu::Matrix{T}, ipiv::Vector{Int32})
         m, n = size(lu)
-        m == numel(ipiv) ? new(lu, ipiv) : error("LU: dimension mismatch")
+        m == numel(ipiv) ? new(lu, ipiv) : error("LUDense: dimension mismatch")
     end
 end
 
-function LU{T<:Union(Float64,Float32,Complex64,Complex128)}(A::Matrix{T})
-    lu, ipiv = _jl_lapack_getrf(copy(A))
-    LU{T}(lu, ipiv)
+size(A::LUDense) = size(A.lu)
+size(A::LUDense,n) = size(A.lu,n)
+
+function factors{T<:LapackScalar}(lu::LUDense{T}) 
+    LU, ipiv = lu.lu, lu.ipiv
+    m, n = size(LU)
+
+    L = m >= n ? tril(LU, -1) + eye(m,n) : tril(LU, -1)[:, 1:m] + eye(m,m)
+    U = m <= n ? triu(LU) : triu(LU)[1:n, :]
+    P = [1:m]
+    for i = 1:min(m,n)
+        t = P[i]
+        P[i] = P[ipiv[i]]
+        P[ipiv[i]] = t
+    end
+    L, U, P
 end
 
-LU{T<:Number}(A::Matrix{T}) = LU(float64(A))
+function lud!{T<:LapackScalar}(A::Matrix{T})
+    lu, ipiv = Lapack.getrf!(A)
+    LUDense{T}(lu, ipiv)
+end
 
-function det(lu::LU)
+lud{T<:LapackScalar}(A::Matrix{T}) = lud!(copy(A))
+lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
+
+## Matlab-compatible
+lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
+
+function det(lu::LUDense)
     m, n = size(lu.lu)
     if m != n error("det only defined for square matrices") end
     prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
 
-det(A::Matrix) = det(LU(A))
+det(A::Matrix) = det(lud(A))
 
-(\){T<:Union(Float64,Float32,Complex128,Complex64)}(lu::LU{T}, B::StridedVecOrMat{T}) =
-    _jl_lapack_getrs('N', lu.lu, lu.ipiv, copy(B))
-inv(lu::LU) = _jl_lapack_getri(copy(lu.lu), lu.ipiv)
+(\){T<:LapackScalar}(lu::LUDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.getrs!('N', lu.lu, lu.ipiv, copy(B))
 
-## Multiplication by Q or Q' from a QR factorization
-for (orm2r, elty) in
-    (("dorm2r_",:Float64),
-     ("sorm2r_",:Float32),
-     ("zunm2r_",:Complex128),
-     ("cunm2r_",:Complex64))
-    @eval begin
-        #      SUBROUTINE DORM2R( SIDE, TRANS, M, N, K, A, LDA, TAU, C, LDC,
-        #                         WORK, INFO )
-        #      .. Scalar Arguments ..
-        #      CHARACTER          SIDE, TRANS
-        #      INTEGER            INFO, K, LDA, LDC, M, N
-        #      .. Array Arguments ..
-        #      DOUBLE PRECISION   A( LDA, * ), C( LDC, * ), TAU( * ), WORK( * )
-        function _jl_lapack_orm2r(side::LapackChar, trans::LapackChar, A::StridedMatrix{$elty}, k::Integer, tau::Vector{$elty}, C::StridedVecOrMat{$elty})
-            if stride(A,1) != 1 || stride(C,1) != 1
-                error("_jl_lapack_orm2r: matrix columns must have contiguous elements");
-            end
-            m    = size(C, 1)
-            n    = size(C, 2)
-            if size(A, 1) != m error("_jl_lapack_orm2r: dimension mismatch") end
-            lda  = stride(A, 2)
-            ldc  = isa(C, Vector) ? m : stride(C, 2)
-            work = Array($elty, side == 'L' ? n : m)
-            info = Array(Int32, 1)
-            ccall(dlsym(_jl_liblapack, $orm2r),
-                  Void,
-                  (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
-                   Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  &side, &trans, &m, &n, &k, A, &lda, tau, C, &ldc, work, info)
-            if info[1] != 0 error("_jl_lapack_orm2r: error $(info[1])") end
-            C
-        end
-    end
-end
+inv{T<:LapackScalar}(lu::LUDense{T}) = Lapack.getri!(copy(lu.lu), lu.ipiv)
 
-type QR{T} <: Factorization{T}
+## QR decomposition without column pivots
+type QRDense{T} <: Factorization{T}
     hh::Matrix{T}                       # Householder transformations and R
     tau::Vector{T}                      # Scalar factors of transformations
-    function QR(hh::Matrix{T}, tt::Vector{T})
-        numel(tt) == min(size(hh)) ? new(hh, tt) : error("QR: mismatched dimensions")
+    function QRDense(hh::Matrix{T}, tau::Vector{T})
+        numel(tau) == min(size(hh)) ? new(hh, tau) : error("QR: mismatched dimensions")
     end
 end
+size(A::QRDense) = size(A.hh)
+size(A::QRDense,n) = size(A.hh,n)
 
-function QR(A::Matrix)
-    hh, tt = _jl_lapack_geqrf(copy(A))
-    QR{typeof(A[1])}(hh, tt)
+qrd!{T<:LapackScalar}(A::StridedMatrix{T}) = QRDense{T}(Lapack.geqrf!(A)...)
+qrd{T<:LapackScalar}(A::StridedMatrix{T}) = qrd!(copy(A))
+qrd{T<:Real}(A::StridedMatrix{T}) = qrd(float64(A))
+
+function factors{T<:LapackScalar}(qrd::QRDense{T})
+    aa  = copy(qrd.hh)
+    R   = triu(aa[1:min(size(aa)),:])   # must be *before* call to orgqr!
+    Lapack.orgqr!(aa, qrd.tau, size(aa,2)), R
 end
 
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T}) = size(A.hh)
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},n) = size(A.hh,n)
+qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
 
 ## Multiplication by Q from the QR decomposition
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                             B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
-end
+(*){T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.ormqr!('L', 'N', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Multiplication by Q' from the QR decomposition
-function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                                  B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
-end
+Ac_mul_B{T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Least squares solution.  Should be more careful about cases with m < n
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QR{T},
-                                                             B::StridedVecOrMat{T})
-    n   = numel(A.tau)
-    qtb = isa(B, Vector) ? (A' * B)[1:n] : (A' * B)[1:n, :]
-    ## Not sure if this avoids copying A.hh[1:n,:] but at least it is not all of A.hh
-    _jl_lapack_trtrs('U','N','N', A.hh[1:n,:], qtb)
+function (\){T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T})
+    n   = length(A.tau)
+    Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
 end
 
-type QRP{T} <: Factorization{T}
+type QRPDense{T} <: Factorization{T}
     hh::Matrix{T}
     tau::Vector{T}
     jpvt::Vector{Int32}
-    function QRP(hh::Matrix{T}, tt::Vector{T}, jj::Vector{Int32})
+    function QRPDense(hh::Matrix{T}, tau::Vector{T}, jpvt::Vector{Int32})
         m, n = size(hh)
-        numel(tt) == min(m,n) && numel(jj) == n ? new(hh,tt,jj) : error("QRP: mismatched dimensions")
+        if length(tau) != min(m,n) || length(jpvt) != n
+            error("QRPDense: mismatched dimensions")
+        end
+        new(hh,tau,jpvt)
     end
 end
+size(x::QRPDense)   = size(x.hh)
+size(x::QRPDense,d) = size(x.hh,d)
+## Multiplication by Q from the QR decomposition
+(*){T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
+## Multiplication by Q' from the QR decomposition
+Ac_mul_B{T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+    Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-function QRP(A::Matrix)
-    hh, tt, jj = _jl_lapack_geqp3(copy(A))
-    QRP{typeof(A[1])}(hh, tt, jj)
+qrpd!{T<:LapackScalar}(A::StridedMatrix{T}) = QRPDense{T}(Lapack.geqp3!(A)...)
+qrpd{T<:LapackScalar}(A::StridedMatrix{T}) = qrpd!(copy(A))
+qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
+
+function factors{T<:LapackScalar}(x::QRPDense{T})
+    aa = copy(x.hh)
+    R  = triu(aa[1:min(size(aa)),:])
+    Lapack.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
 end
 
-## Not sure how to avoid cut-and-paste programming on these.
-## Create another abstract type with both QR{T} and QRP{T} as subtypes?
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T}) = size(A.hh)
-size{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},n) = size(A.hh,n)
+qrp{T<:LapackScalar}(x::StridedMatrix{T}) = factors(qrpd(x))
+qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
-function (*){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                             B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', 'N', A.hh, size(A, 2), A.tau, copy(B))
-end
-
-function Ac_mul_B{T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                                  B::StridedVecOrMat{T})
-    _jl_lapack_orm2r('L', iscomplex(A.tau) ? 'C' : 'T', A.hh, size(A, 2), A.tau, copy(B))
-end
-
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                             B::StridedVecOrMat{T})
-    n = numel(A.tau)
-    ## Replace this with a direct call to _jl_lapack_trtrs to save copying A.hh?
-    ## Actually would need to call the appropriate Lapack subroutine to save copying.
-    triu(A.hh[1:n,:]) \ (A' * B)[1:n]   
-end
-
-function (\){T<:Union(Float64,Float32,Complex128,Complex64)}(A::QRP{T},
-                                                             B::StridedVecOrMat{T})
-    ## may be better to define one method for B::Vector{T} and another for StridedMatrix
-    BV  = isa(B, Vector)
-    n   = numel(A.tau)
-    qtb = BV ? (A' * B)[1:n] : (A' * B)[1:n, :]
-    ans = _jl_lapack_trtrs('U', 'N', 'N', A.hh[1:n,:], qtb)
-    BV ? ans[invperm(A.jpvt)] : ans[invperm(A.jpvt), :]
+function (\){T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T})
+    n = length(A.tau)
+    x = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
 
 ##ToDo:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
+
+#### Factorizations for Tridiagonal ####
+type LDLTTridiagonal{T} <: Factorization{T}
+    D::Vector{T}
+    E::Vector{T}
+end
+
+ldltd!{T<:LapackScalar}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(Lapack.pttrf!(A.dv,A.ev)...)
+ldltd{T<:LapackScalar}(A::SymTridiagonal{T}) = ldltd!(copy(A))
+
+(\){T<:LapackScalar}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
+    Lapack.pttrs!(C.D, C.E, copy(B))
+
+type LUTridiagonal{T} <: Factorization{T}
+    dl::Vector{T}
+    d::Vector{T}
+    du::Vector{T}
+    du2::Vector{T}
+    ipiv::Vector{Int32}
+    function LUTridiagonal(dl::Vector{T}, d::Vector{T}, du::Vector{T},
+                           du2::Vector{T}, ipiv::Vector{Int32})
+        n = length(d)
+        if length(dl) != n - 1 || length(du) != n - 1 || length(ipiv) != n || length(du2) != n-2
+            error("LUTridiagonal: dimension mismatch")
+        end
+        new(dl, d, du, du2, ipiv)
+    end
+end
+#show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
+
+lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(Lapack.gttrf!(A.dl,A.d,A.du)...)
+lud{T}(A::Tridiagonal{T}) =
+    LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lu(A::Tridiagonal) = factors(lud(A))
+
+function det(lu::LUTridiagonal)
+    prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
+end
+
+det(A::Tridiagonal) = det(lud(A))
+
+(\){T<:LapackScalar}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
+    Lapack.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))

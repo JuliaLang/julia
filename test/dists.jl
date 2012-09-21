@@ -1,4 +1,5 @@
-load("../extras/distributions.jl")
+require("distributions.jl")
+import Distributions.*
 
 # n probability points, i.e. the midpoints of the intervals [0, 1/n],...,[1-1/n, 1]
 probpts(n::Int) = ((1:n) - 0.5)/n  

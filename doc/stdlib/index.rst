@@ -27,10 +27,19 @@ Extras
    profile
    options
    cpp
-   specfun
-   glpk
    textwrap
    zlib
+
+****************
+Math & Numerical
+****************
+
+.. toctree::
+   :maxdepth: 1
+
+   blas
+   glpk
+   specfun
 
 ************
 File Formats

@@ -15,12 +15,12 @@ typemax(::Type{Bool}) = true
 
 ## boolean operations ##
 
-!(x::Bool) = eq_int(unbox(Bool,x),trunc8(0))
+!(x::Bool) = box(Bool,not_int(unbox(Bool,x)))
 isequal(x::Bool, y::Bool) = eq_int(unbox(Bool,x),unbox(Bool,y))
 
 (~)(x::Bool) = !x
-(&)(x::Bool, y::Bool) = eq_int(and_int(unbox(Bool,x),unbox(Bool,y)),trunc8(1))
-(|)(x::Bool, y::Bool) = eq_int( or_int(unbox(Bool,x),unbox(Bool,y)),trunc8(1))
+(&)(x::Bool, y::Bool) = box(Bool,and_int(unbox(Bool,x),unbox(Bool,y)))
+(|)(x::Bool, y::Bool) = box(Bool,or_int(unbox(Bool,x),unbox(Bool,y)))
 ($)(x::Bool, y::Bool) = (x!=y)
 
 any() = false

@@ -40,8 +40,8 @@ type DArray{T,N,distdim} <: AbstractArray{T,N}
     end
 end
 
-typealias SubDArray{T,N}   SubArray{T,N,DArray{T}}
-typealias SubOrDArray{T,N} Union(DArray{T,N}, SubDArray{T,N})
+typealias SubDArray{T,N,D<:DArray} SubArray{T,N,D}
+typealias SubOrDArray{T,N}         Union(DArray{T,N}, SubDArray{T,N})
 
 size(d::DArray) = d.dims
 distdim(d::DArray) = d.distdim
@@ -81,7 +81,11 @@ end
 
 function pieceindexes(d::SubDArray, p, locl::Bool)
     dd = distdim(d)
-    ntuple(ndims(d), i->(i==dd ? pieceindex(d, p, locl) : 1:size(d,i)))
+    if locl
+        ntuple(ndims(d), i->(i==dd ? pieceindex(d, p, locl) : d.indexes[i]))
+    else
+        ntuple(ndims(d), i->(i==dd ? pieceindex(d, p, locl) : 1:size(d,i)))
+    end
 end
 
 pieceindexes(s::SubDArray, p) = pieceindexes(s, p, false)
@@ -878,6 +882,11 @@ function reduce(f, v::DArray)
               { @spawnat p reduce(f,localize(v)) for p = procs(v) })
 end
 
+function mapreduce(op, f, v::DArray)
+    mapreduce(op, fetch,
+              { @spawnat p mapreduce(op,f,localize(v)) for p = procs(v) })
+end
+
 sum(d::DArray) = reduce(+, d)
 prod(d::DArray) = reduce(*, d)
 min(d::DArray) = reduce(min, d)
@@ -886,3 +895,36 @@ max(d::DArray) = reduce(max, d)
 areduce(f::Function, d::DArray, r::Dimspec, v0, T::Type) = error("not yet implemented")
 cumsum(d::DArray) = error("not yet implemented")
 cumprod(d::DArray) = error("not yet implemented")
+
+function sum{T}(A::DArray{T}, d::Int)
+    if d < 1
+        throw(ArgumentError("invalid dimension"))
+    end
+    if d > ndims(A)
+        return A
+    end
+    S = typeof(zero(T)+zero(T))
+    sz = ntuple(ndims(A), i->(i==d ? 1 : size(A,i)))
+    if d == distdim(A)
+        darray(S, sz, distdim(A)) do T,lsz,da
+            mapreduce(+, fetch,
+                      {@spawnat p sum(localize(A),d) for p in procs(A)})
+        end
+    else
+        darray((T,lsz,da)->sum(localize(A),d), S, sz, distdim(A), procs(A))
+    end
+end
+
+function each_vec{T}(f::Function, A::DArray{T,2}, d::Int)
+    if !(d==1 || d==2)
+        throw(ArgumentError("invalid dimension"))
+    end
+    if d == distdim(A)
+        error("not yet implemented")
+    end
+    darray(eltype(A), size(A), distdim(A)) do T,lsz,da
+        each_vec(f, localize(A), d)
+    end
+end
+
+sort{T}(A::DArray{T,2}, d::Int) = each_vec(sort!, A, d)

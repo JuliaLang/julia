@@ -501,7 +501,7 @@ end
 
 macro _handle_zero()
     quote
-        if $esc(:x) == 0
+        if $(esc(:x)) == 0
             POINT[1] = 1
             DIGITS[1] = '0'
             return
@@ -580,9 +580,9 @@ _int_HEX(x::Unsigned) = (NEG[1]=false; _decode_HEX(x))
 
 macro _handle_negative()
     quote
-        if $esc(:x) < 0
+        if $(esc(:x)) < 0
             NEG[1] = true
-            $esc(:x) = -($esc(:x))
+            $(esc(:x)) = -$(esc(:x))
         else
             NEG[1] = false
         end
@@ -784,7 +784,7 @@ macro printf(args...)
     end
     for i = length(args):-1:1
         var = sym_args[i].args[1]
-        unshift(blk.args, :($var = $esc(args[i])))
+        unshift(blk.args, :($var = $(esc(args[i]))))
     end
     blk
 end

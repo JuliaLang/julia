@@ -85,6 +85,10 @@ All Objects
 
    Create a deep copy of ``x``: everything is copied recursively, resulting in a fully independent object. For example, deep-copying an array produces a new array whose elements are deep-copies of the original elements.
 
+   As a special case, functions can only be actually deep-copied if they are anonymous, otherwise they are just copied. The difference is only relevant in the case of closures, i.e. functions which may contain hidden internal references.
+
+   While it isn't normally necessary, user-defined types can override the default ``deepcopy`` behavior by defining a specialized version of the function ``deepcopy_internal(x::T, dict::ObjectIdDict)`` (which shouldn't otherwise be used), where ``T`` is the type to be specialized for, and ``dict`` keeps track of objects copied so far within the recursion. Within the definition, ``deepcopy_internal`` should be used in place of ``deepcopy``, and the ``dict`` variable should be updated as appropriate before returning.
+
 .. function:: convert(type, x)
 
    Try to convert ``x`` to the given type.
@@ -720,17 +724,25 @@ Mathematical Functions
 
    Accurately compute ``exp(x)-1``
 
-.. function:: ceil(x) -> FloatingPoint
+.. function:: round(x, digits, base) -> FloatingPoint
 
-   Returns the nearest integer not less than ``x``.
+   ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: floor(x) -> FloatingPoint
+.. function:: ceil(x, digits, base) -> FloatingPoint
 
-   Returns the nearest integer not greater than ``x``.
+   Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x) -> FloatingPoint
+.. function:: floor(x, digits, base) -> FloatingPoint
 
-   Returns the nearest integer not greater in magnitude than ``x``.
+   Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
+
+.. function:: trunc(x, digits, base) -> FloatingPoint
+
+   Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+
+.. function:: iround(x) -> Integer
+
+   Returns the nearest integer to ``x``.
 
 .. function:: iceil(x) -> Integer
 
@@ -744,7 +756,11 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-``exp2`` ``ldexp`` ``round`` ``iround`` ``min`` ``max`` ``clamp`` ``abs``
+.. function:: signif(x, digits, base) -> FloatingPoint
+
+   Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
+
+``exp2`` ``ldexp`` ``min`` ``max`` ``clamp`` ``abs``
 
 .. function:: abs2(x)
 
@@ -1232,17 +1248,25 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the norm of a ``Vector`` or a ``Matrix``
 
+.. function:: lu(A) -> LU
+
+   Compute LU factorization. LU is an "LU factorization" type that can be used as an ordinary matrix.
+
 .. function:: chol(A)
 
    Compute Cholesky factorization
 
-.. function:: lu(A) -> L, U, p
-
-   Compute LU factorization
-
-.. function:: qr(A) -> Q, R, p
+.. function:: qr(A)
 
    Compute QR factorization
+
+.. function:: qrp(A)
+
+   Compute QR factorization with pivoting
+
+.. function:: factors(D)
+
+   Return the factors of a decomposition D. For an LU decomposition, factors(LU) -> L, U, p
 
 .. function:: eig(A) -> D, V
 
@@ -1267,6 +1291,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: diagm(v)
 
    Construct a diagonal matrix from a vector
+
+.. function:: Tridiagonal(dl, d, du)
+
+   Construct a tridiagonal matrix from the lower diagonal, diagonal, and upper diagonal
+
+.. function:: Woodbury(A, U, C, V)
+
+   Construct a matrix in a form suitable for applying the Woodbury matrix identity
 
 .. function:: rank(M)
 

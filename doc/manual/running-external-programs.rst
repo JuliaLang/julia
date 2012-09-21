@@ -29,9 +29,7 @@ or Ruby:
    syntax. The command is run as ``julia``'s immediate child process,
    using ``fork`` and ``exec`` calls.
 
-Here's a simple example of actually running an external program:
-
-::
+Here's a simple example of actually running an external program::
 
     julia> run(`echo hello`)
     hello
@@ -50,9 +48,7 @@ Interpolation
 Suppose you want to do something a bit more complicated and use the name
 of a file in the variable ``file`` as an argument to a command. You can
 use ``$`` for interpolation much as you would in a string literal (see
-:ref:`man-strings`):
-
-::
+:ref:`man-strings`)::
 
     julia> file = "/etc/passwd"
     "/etc/passwd"
@@ -64,9 +60,7 @@ A common pitfall when running external programs via a shell is that if a
 file name contains characters that are special to the shell, they may
 cause undesirable behavior. Suppose, for example, rather than
 ``/etc/passwd``, we wanted to sort the contents of the file
-``/Volumes/External HD/data.csv``. Let's try it:
-
-::
+``/Volumes/External HD/data.csv``. Let's try it::
 
     julia> file = "/Volumes/External HD/data.csv"
     "/Volumes/External HD/data.csv"
@@ -79,9 +73,7 @@ be interpolated as a single argument, so it quotes the word for you.
 Actually, that is not quite accurate: the value of ``file`` is never
 interpreted by a shell, so there's no need for actual quoting; the
 quotes are inserted only for presentation to the user. This will even
-work if you interpolate a value as part of a shell word:
-
-::
+work if you interpolate a value as part of a shell word::
 
     julia> path = "/Volumes/External HD"
     "/Volumes/External HD"
@@ -97,9 +89,7 @@ work if you interpolate a value as part of a shell word:
 
 As you can see, the space in the ``path`` variable is appropriately
 escaped. But what if you *want* to interpolate multiple words? In that
-case, just use an array (or any other iterable container):
-
-::
+case, just use an array (or any other iterable container)::
 
     julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
     ["/etc/passwd","/Volumes/External HD/data.csv"]
@@ -108,9 +98,7 @@ case, just use an array (or any other iterable container):
     `grep foo /etc/passwd '/Volumes/External HD/data.csv'`
 
 If you interpolate an array as part of a shell word, Julia emulates the
-shell's ``{a,b,c}`` argument generation:
-
-::
+shell's ``{a,b,c}`` argument generation::
 
     julia> names = ["foo","bar","baz"]
     ["foo","bar","baz"]
@@ -119,9 +107,7 @@ shell's ``{a,b,c}`` argument generation:
     `grep xylophone foo.txt bar.txt baz.txt`
 
 Moreover, if you interpolate multiple arrays into the same word, the
-shell's Cartesian product generation behavior is emulated:
-
-::
+shell's Cartesian product generation behavior is emulated::
 
     julia> names = ["foo","bar","baz"]
     ["foo","bar","baz"]
@@ -133,9 +119,7 @@ shell's Cartesian product generation behavior is emulated:
     `rm -f foo.aux foo.log bar.aux bar.log baz.aux baz.log`
 
 Since you can interpolate literal arrays, you can use this generative
-functionality without needing to create temporary array objects first:
-
-::
+functionality without needing to create temporary array objects first::
 
     julia> `rm -rf $["foo","bar","baz","qux"].$["aux","log","pdf"]`
     `rm -rf foo.aux foo.log foo.pdf bar.aux bar.log bar.pdf baz.aux baz.log baz.pdf qux.aux qux.log qux.pdf`
@@ -145,9 +129,7 @@ Quoting
 
 Inevitably, one wants to write commands that aren't quite so simple, and
 it becomes necessary to use quotes. Here's a simple example of a perl
-one-liner at a shell prompt:
-
-::
+one-liner at a shell prompt::
 
     sh$ perl -le '$|=1; for (0..3) { print }'
     0
@@ -159,9 +141,7 @@ The Perl expression needs to be in single quotes for two reasons: so
 that spaces don't break the expression into multiple shell words, and so
 that uses of Perl variables like ``$|`` (yes, that's the name of a
 variable in Perl), don't cause interpolation. In other instances, you
-may want to use double quotes so that interpolation *does* occur:
-
-::
+may want to use double quotes so that interpolation *does* occur::
 
     sh$ first="A"
     sh$ second="B"
@@ -175,9 +155,7 @@ work: the escaping, quoting, and interpolation behaviors are the same as
 the shell's. The only difference is that the interpolation is integrated
 and aware of Julia's notion of what is a single string value, and what
 is a container for multiple values. Let's try the above two examples in
-Julia:
-
-::
+Julia::
 
     julia> `perl -le '$|=1; for (0..3) { print }'`
     `perl -le '$|=1; for (0..3) { print }'`
@@ -212,9 +190,7 @@ Pipelines
 
 Shell metacharacters, such as ``|``, ``&``, and ``>``, are not special
 inside of Julia's backticks: unlike in the shell, inside of Julia's
-backticks, a pipe is always just a pipe:
-
-::
+backticks, a pipe is always just a pipe::
 
     julia> run(`echo hello | sort`)
     hello | sort
@@ -225,9 +201,7 @@ arguments: "hello", "\|", and "sort". The result is that a single line
 is printed: "hello \| sort". Inside of backticks, a "\|" is just a
 literal pipe character. How, then, does one construct a pipeline?
 Instead of using "\|" inside of backticks, one uses Julia's ``|``
-operator between ``Cmd`` objects:
-
-::
+operator between ``Cmd`` objects::
 
     julia> run(`echo hello` | `sort`)
     hello
@@ -235,9 +209,7 @@ operator between ``Cmd`` objects:
 
 This pipes the output of the ``echo`` command to the ``sort`` command.
 Of course, this isn't terribly interesting since there's only one line
-to sort, but we can certainly do much more interesting things:
-
-::
+to sort, but we can certainly do much more interesting things::
 
     julia> run(`cut -d: -f3 /etc/passwd` | `sort -n` | `tail -n5`)
     210
@@ -254,9 +226,7 @@ itself does the work to setup pipes and connect file descriptors that is
 normally done by the shell. Since Julia does this itself, it retains
 better control and can do some things that shells cannot.
 
-Julia can run multiple commands in parallel:
-
-::
+Julia can run multiple commands in parallel::
 
     julia> run(`echo hello` & `echo world`)
     world
@@ -267,9 +237,7 @@ The order of the output here is non-deterministic because the two
 ``echo`` processes are started nearly simultaneously, and race to make
 the first write to the ``stdout`` descriptor they share with each other
 and the ``julia`` parent process. Julia lets you pipe the output from
-both of these processes to another program:
-
-::
+both of these processes to another program::
 
     julia> run(`echo world` & `echo hello` | `sort`)
     hello
@@ -284,9 +252,7 @@ The combination of a high-level programming language, a first-class
 command abstraction, and automatic setup of pipes between processes is a
 powerful one. To give some sense of the complex pipelines that can be
 created easily, here are some more sophisticated examples, with
-apologies for the excessive use of Perl one-liners:
-
-::
+apologies for the excessive use of Perl one-liners::
 
     julia> prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
 
@@ -314,9 +280,7 @@ flush the ``stdout`` handle, which is necessary for this example to
 work. Otherwise all the output is buffered and printed to the pipe at
 once, to be read by just one consumer process.)
 
-Here is an even more complex multi-stage producer-consumer example:
-
-::
+Here is an even more complex multi-stage producer-consumer example::
 
     julia> run(`perl -le '$|=1; for(0..9){ print; sleep 1 }'` |
                prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |
@@ -338,9 +302,7 @@ of consumers, and the stages have different latency so they use a
 different number of parallel workers, to maintain saturated throughput.
 
 Finally, we have an example of how you can make a process read from
-itself:
-
-::
+itself::
 
     julia> gen = `perl -le '$|=1; for(0..9){ print; sleep 1 }'`
     `perl -le '$|=1; for(0..9){ print; sleep 1 }'`

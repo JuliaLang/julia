@@ -1,5 +1,7 @@
 #include <stdlib.h>
+#include <string.h>
 #include <tcl.h>
+#include <tk.h>
 #include "julia.h"
 
 int jl_tcl_callback(ClientData clientData, Tcl_Interp *interp,
@@ -24,4 +26,19 @@ int jl_tcl_callback(ClientData clientData, Tcl_Interp *interp,
     Tcl_SetResult(interp, jl_string_data(result), TCL_VOLATILE);
     JL_GC_POP();
     return TCL_OK;
+}
+
+void *jl_tkwin_display(Tk_Window tkwin)
+{
+    return Tk_Display(tkwin);
+}
+
+void *jl_tkwin_visual(Tk_Window tkwin)
+{
+    return Tk_Visual(tkwin);
+}
+
+int jl_tkwin_id(Tk_Window tkwin)
+{
+    return Tk_WindowId(tkwin);
 }

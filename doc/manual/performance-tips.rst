@@ -16,16 +16,12 @@ using global variables. Variables should be local, or passed as
 arguments to functions, whenever possible.
 
 We find that global names are frequently constants, and declaring them
-as such greatly improves performance:
-
-::
+as such greatly improves performance::
 
     const DEFAULT_VAL = 0
 
 Uses of non-constant globals can be optimized by annotating their types
-at the point of use:
-
-::
+at the point of use::
 
     global x
     y = f(x::Int + 1)
@@ -42,9 +38,7 @@ helpful.
 Declare specific types for fields of composite types
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Given a user-defined type like the following:
-
-::
+Given a user-defined type like the following::
 
     type Foo
         field
@@ -62,9 +56,7 @@ It is often convenient to work with data structures that may contain
 values of any type, such as the original ``Foo`` type above, or cell
 arrays (arrays of type ``Array{Any}``). But, if you're using one of
 these structures and happen to know the type of an element, it helps to
-share this knowledge with the compiler:
-
-::
+share this knowledge with the compiler::
 
     function foo(a::Array{Any,1})
         x = a[1]::Int32
@@ -84,9 +76,7 @@ Writing a function as many small definitions allows the compiler to
 directly call the most applicable code, or even inline it.
 
 Here is an example of a "compound function" that should really be
-written as multiple definitions:
-
-::
+written as multiple definitions::
 
     function norm(A)
         if isa(A, Vector)
@@ -98,9 +88,7 @@ written as multiple definitions:
         end
     end
 
-This can be written more concisely and efficiently as:
-
-::
+This can be written more concisely and efficiently as::
 
     norm(A::Vector) = sqrt(real(dot(x,x)))
     norm(A::Matrix) = max(svd(A)[2])
@@ -109,9 +97,7 @@ Write "type-stable" functions
 -----------------------------
 
 When possible, it helps to ensure that a function always returns a value
-of the same type. Consider the following definition:
-
-::
+of the same type. Consider the following definition::
 
     pos(x) = x < 0 ? 0 : x
 
@@ -119,9 +105,7 @@ Although this seems innocent enough, the problem is that ``0`` is an
 integer (of type ``Int``) and ``x`` might be of any type. Thus,
 depending on the value of ``x``, this function might return a value of
 either of two types. This behavior is allowed, and may be desirable in
-some cases. But it can easily be fixed as follows:
-
-::
+some cases. But it can easily be fixed as follows::
 
     pos(x) = x < 0 ? zero(x) : x
 
@@ -133,9 +117,7 @@ Avoid changing the type of a variable
 -------------------------------------
 
 An analogous "type-stability" problem exists for variables used
-repeatedly within a function:
-
-::
+repeatedly within a function::
 
     function foo()
         x = 1
@@ -161,9 +143,7 @@ Many functions follow a pattern of performing some set-up work, and then
 running many iterations to perform a core computation. Where possible,
 it is a good idea to put these core computations in separate functions.
 For example, the following contrived function returns an array of a
-randomly-chosen type:
-
-::
+randomly-chosen type::
 
     function strange_twos(n)
         a = Array(randbool() ? Int64 : Float64, n)
@@ -173,9 +153,7 @@ randomly-chosen type:
         return a
     end
 
-This should be written as:
-
-::
+This should be written as::
 
     function fill_twos!(a)
         for i=1:numel(a)

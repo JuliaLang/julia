@@ -82,7 +82,7 @@ JL_CALLABLE(jl_f_throw)
     return (jl_value_t*)jl_null;
 }
 
-void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr)
+void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr)
 {
     JL_SIGATOMIC_BEGIN();
     ss->eh_task = jl_current_task->state.eh_task;

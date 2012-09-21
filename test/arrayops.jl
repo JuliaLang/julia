@@ -217,7 +217,7 @@ d = drand(10,10)
 ## cumsum
 
 begin
-    local A, A1, A2, A3
+    local A, A1, A2, A3, v, v2, cv, cv2, c
     A = ones(Int,2,3,4)
     A1 = reshape(repmat([1,2],1,12),2,3,4)
     A2 = reshape(repmat([1 2 3],2,4),2,3,4)
@@ -241,4 +241,28 @@ begin
         @assert c[1,2] == A[1,1]+A[1,3]
         @assert c[2,2] == A[3,1]+A[3,3]
     end
+
+    v   = [1,1e100,1,-1e100]*1000
+    v2  = [1,-1e100,1,1e100]*1000
+
+    cv  = [1,1e100,1e100,2]*1000
+    cv2 = [1,-1e100,-1e100,2]*1000
+
+    @assert isequal(cumsum(v), cv)
+    @assert isequal(cumsum(v2), cv2)
+
+    A = [v reverse(v) v2 reverse(v2)]
+
+    c = cumsum(A, 1)
+
+    @assert isequal(c[:,1], cv)
+    @assert isequal(c[:,3], cv2)
+    @assert isequal(c[4,:], [2.0 2.0 2.0 2.0]*1000)
+
+    c = cumsum(A, 2)
+
+    @assert isequal(c[1,:], cv2')
+    @assert isequal(c[3,:], cv')
+    @assert isequal(c[:,4], [2.0,2.0,2.0,2.0]*1000)
+
 end

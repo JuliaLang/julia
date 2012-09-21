@@ -337,6 +337,10 @@ void jl_input_line_callback(char *input)
     if (!input || ios_eof(ios_stdin)) {
         end = 1;
         rl_ast = NULL;
+    } else if (!rl_ast) {
+        // In vi mode, it's possible for this function to be called w/o a
+        // previous call to return_callback.
+        rl_ast = jl_parse_input_line(rl_line_buffer);
     }
 
     if (rl_ast != NULL) {
@@ -349,6 +353,7 @@ void jl_input_line_callback(char *input)
     callback_en = 0;
     rl_callback_handler_remove();
     handle_input(rl_ast, end, doprint);
+    rl_ast = NULL;
 }
 
 char *read_expr(char *prompt)

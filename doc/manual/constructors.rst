@@ -9,9 +9,7 @@ instances of :ref:`man-composite-types`. In Julia,
 type objects also serve as constructor functions: they create new
 instances of themselves when applied to an argument tuple as a function.
 This much was already mentioned briefly when composite types were
-introduced. For example:
-
-::
+introduced. For example::
 
     type Foo
       bar
@@ -50,9 +48,7 @@ Accordingly, you can add functionality to a constructor by simply
 defining new methods. For example, let's say you want to add a
 constructor method for ``Foo`` objects that takes only one argument and
 uses the given value for both the ``bar`` and ``baz`` fields. This is
-simple:
-
-::
+simple::
 
     Foo(x) = Foo(x,x)
 
@@ -60,9 +56,7 @@ simple:
     Foo(1,1)
 
 You could also add a zero-argument ``Foo`` constructor method that
-supplies default values for both of the ``bar`` and ``baz`` fields:
-
-::
+supplies default values for both of the ``bar`` and ``baz`` fields::
 
     Foo() = Foo(0)
 
@@ -112,9 +106,7 @@ constructor method, with two differences:
 
 For example, suppose one wants to declare a type that holds a pair of
 real numbers, subject to the constraint that the first number is
-not greater than the second one. One could declare it like this:
-
-::
+not greater than the second one. One could declare it like this::
 
     type OrderedPair
       x::Real
@@ -124,9 +116,7 @@ not greater than the second one. One could declare it like this:
     end
 
 Now ``OrderedPair`` objects can only be constructed such that
-``x <= y``:
-
-::
+``x <= y``::
 
     julia> OrderedPair(1,2)
     OrderedPair(1,2)
@@ -154,9 +144,7 @@ all the inner constructors you need. The default constructor is
 equivalent to writing your own inner constructor method that takes all
 of the object's fields as parameters (constrained to be of the correct
 type, if the corresponding field has a type), and passes them to
-``new``, returning the resulting object:
-
-::
+``new``, returning the resulting object::
 
     type Foo
       bar
@@ -168,9 +156,7 @@ type, if the corresponding field has a type), and passes them to
 This declaration has the same effect as the earlier definition of the
 ``Foo`` type without an explicit inner constructor method. The following
 two types are equivalent — one with a default constructor, the other
-with an explicit constructor:
-
-::
+with an explicit constructor::
 
     type T1
       x::Int64
@@ -209,9 +195,7 @@ Incomplete Initialization
 The final problem which has still not been addressed is construction of
 self-referential objects, or more generally, recursive data structures.
 Since the fundamental difficulty may not be immediately obvious, let us
-briefly explain it. Consider the following recursive type declaration:
-
-::
+briefly explain it. Consider the following recursive type declaration::
 
     type SelfReferential
       obj::SelfReferential
@@ -219,9 +203,7 @@ briefly explain it. Consider the following recursive type declaration:
 
 This type may appear innocuous enough, until one considers how to
 construct an instance of it. If ``a`` is an instance of
-``SelfReferential``, then a second instance can be created by the call:
-
-::
+``SelfReferential``, then a second instance can be created by the call::
 
     b = SelfReferential(a)
 
@@ -239,9 +221,7 @@ fields uninitialized. The inner constructor method can then use the
 incomplete object, finishing its initialization before returning it.
 Here, for example, we take another crack at defining the
 ``SelfReferential`` type, with a zero-argument inner constructor
-returning instances having ``obj`` fields pointing to themselves:
-
-::
+returning instances having ``obj`` fields pointing to themselves::
 
     type SelfReferential
       obj::SelfReferential
@@ -250,9 +230,7 @@ returning instances having ``obj`` fields pointing to themselves:
     end
 
 We can verify that this constructor works and constructs objects that
-are, in fact, self-referential:
-
-::
+are, in fact, self-referential::
 
     x = SelfReferential();
 
@@ -267,9 +245,7 @@ are, in fact, self-referential:
 
 Although it is generally a good idea to return a fully initialized
 object from an inner constructor, incompletely initialized objects can
-be returned:
-
-::
+be returned::
 
     type Incomplete
       xx
@@ -280,9 +256,7 @@ be returned:
     julia> z = Incomplete();
 
 While you are allowed to create objects with uninitialized fields, any
-access to an uninitialized field is an immediate error:
-
-::
+access to an uninitialized field is an immediate error::
 
     julia> z.xx
     access to undefined reference
@@ -293,9 +267,7 @@ the way they have to check for ``null`` values everywhere in Java: if a
 field is uninitialized and it is used in any way, an error is thrown
 immediately so no error checking is required. You can also pass
 incomplete objects to other functions from inner constructors to
-delegate their completion:
-
-::
+delegate their completion::
 
     type Lazy
       xx
@@ -315,9 +287,7 @@ Parametric types add a few wrinkles to the constructor story. Recall
 from :ref:`man-parametric-types` that, by default,
 instances of parametric composite types can be constructed either with
 explicitly given type parameters or with type parameters implied by the
-types of the arguments given to the constructor. Here are some examples:
-
-::
+types of the arguments given to the constructor. Here are some examples::
 
     type Point{T<:Real}
       x::T
@@ -370,9 +340,7 @@ behaves just like non-parametric default inner constructors do. It also
 provides a single general outer ``Point`` constructor that takes pairs
 of real arguments, which must be of the same type. This automatic
 provision of constructors is equivalent to the following explicit
-declaration:
-
-::
+declaration::
 
     type Point{T<:Real}
       x::T
@@ -404,9 +372,7 @@ method" errors.
 Suppose we wanted to make the constructor call ``Point(1,2.5)`` work by
 "promoting" the integer value ``1`` to the floating-point value ``1.0``.
 The simplest way to achieve this is to define the following additional
-outer constructor method:
-
-::
+outer constructor method::
 
     Point(x::Int64, y::Float64) = Point(convert(Float64,x),y)
 
@@ -414,9 +380,7 @@ This method uses the ``convert`` function to explicitly convert ``x`` to
 ``Float64`` and then delegates construction to the general constructor
 for the case where both arguments are ``Float64``. With this method
 definition what was previously a "no method" error now successfully
-creates a point of type ``Point{Float64}``:
-
-::
+creates a point of type ``Point{Float64}``::
 
     julia> Point(1,2.5)
     Point(1.0,2.5)
@@ -424,9 +388,7 @@ creates a point of type ``Point{Float64}``:
     julia> typeof(ans)
     Point{Float64}
 
-However, other similar calls still don't work:
-
-::
+However, other similar calls still don't work::
 
     julia> Point(1.5,2)
     no method Point(Float64,Int64)
@@ -435,18 +397,14 @@ For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
 of spoiling the suspense, we can reveal here that the all it takes is
 the following outer method definition to make all calls to the general
-``Point`` constructor work as one would expect:
-
-::
+``Point`` constructor work as one would expect::
 
     Point(x::Real, y::Real) = Point(promote(x,y)...)
 
 The ``promote`` function converts all its arguments to a common type
 — in this case ``Float64``. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
-like ``+`` do, and works for all kinds of real numbers:
-
-::
+like ``+`` do, and works for all kinds of real numbers::
 
     julia> Point(1.5,2)
     Point(1.5,2.0)
@@ -470,9 +428,7 @@ Perhaps the best way to tie all these pieces together is to present a
 real world example of a parametric composite type and its constructor
 methods. To that end, here is beginning of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_,
-which implements Julia's :ref:`man-rational-numbers`:
-
-::
+which implements Julia's :ref:`man-rational-numbers`::
 
     type Rational{T<:Integer} <: Real
         num::T
@@ -546,9 +502,7 @@ number, we construct a new rational for the resulting ratio slightly
 differently; this behavior is actually identical to division of a
 rational with an integer. Finally, applying ``//`` to complex integral
 values creates an instance of ``Complex{Rational}`` — a complex number
-whose real and imaginary parts are rationals:
-
-::
+whose real and imaginary parts are rationals::
 
     julia> (1 + 2im)//(1 - 2im)
     -3//5 + 4//5im

@@ -33,6 +33,8 @@ namespace JL_I {
         // functions
         abs_float, copysign_float,
         flipsign_int,
+        // pointer access
+        pointerref, pointerset,
         // checked arithmetic
         checked_sadd, checked_uadd, checked_ssub, checked_usub,
         checked_smul, checked_umul,
@@ -134,20 +136,16 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
         jl_bits_type_t *bt = (jl_bits_type_t*)jl_typeof(e);
         int nb = jl_bitstype_nbits(bt);
         if (nb == 8)
-            return mark_julia_type(ConstantInt::get(T_int8,
-                                                    jl_unbox_int8(e)),
+            return mark_julia_type(ConstantInt::get(T_int8, jl_unbox_int8(e)),
                                    (jl_value_t*)bt);
         if (nb == 16)
-            return mark_julia_type(ConstantInt::get(T_int16,
-                                                    jl_unbox_int16(e)),
+            return mark_julia_type(ConstantInt::get(T_int16, jl_unbox_int16(e)),
                                    (jl_value_t*)bt);
         if (nb == 32)
-            return mark_julia_type(ConstantInt::get(T_int32,
-                                                    jl_unbox_int32(e)),
+            return mark_julia_type(ConstantInt::get(T_int32, jl_unbox_int32(e)),
                                    (jl_value_t*)bt);
         if (nb == 64)
-            return mark_julia_type(ConstantInt::get(T_int64,
-                                                    jl_unbox_int64(e)),
+            return mark_julia_type(ConstantInt::get(T_int64, jl_unbox_int64(e)),
                                    (jl_value_t*)bt);
         // TODO: bigger sizes
     }
@@ -158,12 +156,12 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
 static Value *emit_unbox(Type *to, Type *pto, Value *x)
 {
     if (x->getType() != jl_pvalue_llvmt) {
-        // bools are stored internally as int8 (for now), so we need to make
-        // unbox8(x::Bool) work.
+        // bools are stored internally as int8 (for now)
         if (x->getType() == T_int1 && to == T_int8)
             return builder.CreateZExt(x, T_int8);
         if (x->getType()->isPointerTy() && !to->isPointerTy())
             return builder.CreatePtrToInt(x, to);
+        assert(x->getType() == to);
         return x;
     }
     Value *p = bitstype_pointer(x);
@@ -182,9 +180,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
 {
     Value *v = emit_unboxed(x, ctx);
     if (v->getType() != jl_pvalue_llvmt) {
-        if (v->getType() == T_int1)
-            return builder.CreateZExt(v, T_int8);
-        return JL_INT(v);
+        return v;
     }
     jl_value_t *bt = expr_type(x, ctx);
     if (!jl_is_bits_type(bt)) {
@@ -198,8 +194,11 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             return ConstantInt::get(T_size, 0);
         }
     }
-    unsigned int nb = jl_bitstype_nbits(bt);
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = julia_type_to_llvm(bt, ctx);
+    if (to == NULL || to == jl_pvalue_llvmt) {
+        unsigned int nb = jl_bitstype_nbits(bt);
+        to = IntegerType::get(jl_LLVMContext, nb);
+    }
     return emit_unbox(to, PointerType::get(to, 0), v);
 }
 
@@ -209,6 +208,8 @@ static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
     jl_value_t *et = expr_type(targ, ctx);
     if (jl_is_type_type(et)) {
         jl_value_t *p = jl_tparam0(et);
+        if (p == (jl_value_t*)jl_bool_type)
+            return 1;
         if (jl_is_bits_type(p))
             return jl_bitstype_nbits(p);
         if (jl_is_typevar(p)) {
@@ -235,7 +236,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         }
         if (bt == NULL || !jl_is_bits_type(bt))
             jl_error("unbox: could not determine argument size");
-        nb = jl_bitstype_nbits(bt);
+        nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
     Type *to = IntegerType::get(jl_LLVMContext, nb);
     return emit_unbox(to, PointerType::get(to, 0), emit_unboxed(x, ctx));
@@ -269,9 +270,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     }
     else {
         llvmt = julia_type_to_llvm(bt, ctx);
-        int btnb = jl_bitstype_nbits(bt);
-        assert(nb==-1 || nb==btnb);
-        nb = btnb;
+        if (nb == -1)
+            nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
 
     if (nb == -1)
@@ -281,8 +281,9 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         llvmt = IntegerType::get(jl_LLVMContext, nb);
 
     Value *vx = auto_unbox(x, ctx);
-    if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
-        jl_errorf("box: expected argument with %d bits", nb);
+    //if (vx->getType()->getPrimitiveSizeInBits() != (unsigned)nb)
+    //    jl_errorf("box: expected argument with %d bits, got %d", nb,
+    //              vx->getType()->getPrimitiveSizeInBits());
 
     if (vx->getType() != llvmt) {
         if (vx->getType()->isPointerTy() && !llvmt->isPointerTy()) {
@@ -315,8 +316,11 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
-    unsigned int nb = jl_bitstype_nbits(bt);
-    Type *to = IntegerType::get(jl_LLVMContext, nb);
+    Type *to = julia_type_to_llvm(bt, ctx);
+    if (to == NULL) {
+        unsigned int nb = jl_bitstype_nbits(bt);
+        to = IntegerType::get(jl_LLVMContext, nb);
+    }
     return builder.CreateTrunc(JL_INT(auto_unbox(x,ctx)), to);
 }
 
@@ -368,6 +372,47 @@ static Value *emit_eqfui64(Value *x, Value *y)
                                T_int64)));
 }
 
+static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
+{
+    jl_value_t *aty = expr_type(e, ctx);
+    if (!jl_is_cpointer_type(aty))
+        jl_error("pointerref: expected pointer type as first argument");
+    jl_value_t *ety = jl_tparam0(aty);
+    if(jl_is_typevar(ety))
+        jl_error("pointerref: invalid pointer");
+    if (!jl_is_bits_type(ety)) {
+        ety = (jl_value_t*)jl_any_type;
+    }
+    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+        jl_error("pointerref: invalid index type");
+    }
+    //Value *idx = builder.CreateIntCast(auto_unbox(i,ctx), T_size, false); //TODO: use this instead (and remove assert jl_is_long)?
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+    return typed_load(auto_unbox(e, ctx), im1, ety, ctx);
+}
+
+static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
+    jl_value_t *aty = expr_type(e, ctx);
+    if (!jl_is_cpointer_type(aty))
+        jl_error("pointerref: expected pointer type as first argument");
+    jl_value_t *ety = jl_tparam0(aty);
+    if(jl_is_typevar(ety))
+        jl_error("pointerref: invalid pointer");
+    jl_value_t *xty = expr_type(x, ctx);    
+    if (!jl_subtype(xty, ety, 0))
+        jl_error("pointerref: type mismatch in assign");
+    if (!jl_is_bits_type(ety)) {
+        ety = (jl_value_t*)jl_any_type;
+    }
+    if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
+        jl_error("pointerref: invalid index type");
+    }
+    Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
+    Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
+    return typed_store(auto_unbox(e,ctx), im1, emit_unboxed(x,ctx), ety, ctx);
+}
+
 #define HANDLE(intr,n)                                                  \
     case intr: if (nargs!=n) jl_error(#intr": wrong number of arguments");
 
@@ -399,6 +444,16 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         if (nargs!=2)
             jl_error("zext_int: wrong number of arguments");
         return generic_zext(args[1], args[2], ctx);
+    }
+    if (f == pointerref) {
+        if (nargs!=2)
+            jl_error("pointerref: wrong number of arguments");
+        return emit_pointerref(args[1], args[2], ctx);
+    }
+    if (f == pointerset) {
+        if (nargs!=3)
+            jl_error("pointerset: wrong number of arguments");
+        return emit_pointerset(args[1], args[2], args[3], ctx);
     }
     if (nargs < 1) jl_error("invalid intrinsic call");
     Value *x = auto_unbox(args[1], ctx);
@@ -991,6 +1046,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(fptrunc32); ADD_I(fpext64);
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int);
+    ADD_I(pointerref); ADD_I(pointerset);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);

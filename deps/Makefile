@@ -263,7 +263,7 @@ endif
 ifeq ($(OS), WINNT) 
 UV_CFLAGS=
 else
-UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
+UV_CFLAGS = CFLAGS="-g -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a
@@ -611,10 +611,10 @@ endif
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	$(MAKE) -C fftw-$(FFTW_VER)-single clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	$(MAKE) -C fftw-$(FFTW_VER)-double clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
@@ -625,6 +625,12 @@ distclean-fftw:
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
+endif
+
+ifeq ($(OS), Darwin)
+SUITE_SPARSE_LIB = -lm -Wl,-rpath,'$(USRLIB)'
+else
+SUITE_SPARSE_LIB = -lm -lrt -Wl,-rpath,'$(USRLIB)'
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -638,7 +644,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)" LIB="$(SUITE_SPARSE_LIB)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)

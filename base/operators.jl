@@ -59,6 +59,8 @@ end
 .\(x,y) = y./x
 .*(x,y) = x*y
 .^(x,y) = x^y
+.+(x,y) = x+y
+.-(x,y) = x-y
 
 .==(x,y) = x==y
 .!=(x,y) = x!=y

@@ -8,9 +8,7 @@ The latest version of Julia can be downloaded and installed by following
 the instructions on the `main GitHub
 page <https://github.com/JuliaLang/julia#readme>`_. The easiest way to
 learn and experiment with Julia is by starting an interactive session
-(also known as a read-eval-print loop or "repl"):
-
-::
+(also known as a read-eval-print loop or "repl")::
 
     $ julia
                    _
@@ -41,9 +39,7 @@ last evaluated expression whether it is shown or not. The ``load``
 function reads and evaluates the contents of the given file.
 
 To run code in a file non-interactively, you can give it as the first
-argument to the julia command:
-
-::
+argument to the julia command::
 
     $ julia script.jl arg1 arg2...
 
@@ -52,17 +48,13 @@ are taken as command-line arguments to the program ``script.jl``, passed
 in the global constant ``ARGS``. ``ARGS`` is also set when script code
 is given using the ``-e`` option on the command line (see the ``julia``
 help output below). For example, to just print the arguments given to a
-script, you could do this:
-
-::
+script, you could do this::
 
     $ julia -e 'for x in ARGS; println(x); end' foo bar
     foo
     bar
 
-Or you could put that code into a script and run it:
-
-::
+Or you could put that code into a script and run it::
 
     $ echo 'for x in ARGS; println(x); end' > script.jl
     $ julia script.jl foo bar
@@ -70,9 +62,7 @@ Or you could put that code into a script and run it:
     bar
 
 There are various ways to run Julia code and provide options, similar to
-those available for the ``perl`` and ``ruby`` programs:
-
-::
+those available for the ``perl`` and ``ruby`` programs::
 
     julia [options] [program] [args...]
      -v --version             Display version information

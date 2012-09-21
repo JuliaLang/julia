@@ -1,6 +1,6 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Bool)    = box(Float32,sitofp32(unbox(Bool,x)))
+convert(::Type{Float32}, x::Bool)    = box(Float32,uitofp32(unbox(Bool,x)))
 convert(::Type{Float32}, x::Char)    = box(Float32,uitofp32(unbox(Float32,x)))
 convert(::Type{Float32}, x::Int8)    = box(Float32,sitofp32(unbox(Int8,x)))
 convert(::Type{Float32}, x::Int16)   = box(Float32,sitofp32(unbox(Int16,x)))
@@ -12,7 +12,7 @@ convert(::Type{Float32}, x::Uint32)  = box(Float32,uitofp32(unbox(Uint32,x)))
 convert(::Type{Float32}, x::Uint64)  = box(Float32,uitofp32(unbox(Uint64,x)))
 convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc32(unbox(Float64,x)))
 
-convert(::Type{Float64}, x::Bool)    = box(Float64,sitofp64(unbox(Bool,x)))
+convert(::Type{Float64}, x::Bool)    = box(Float64,uitofp64(unbox(Bool,x)))
 convert(::Type{Float64}, x::Char)    = box(Float64,uitofp64(unbox(Char,x)))
 convert(::Type{Float64}, x::Int8)    = box(Float64,sitofp64(unbox(Int8,x)))
 convert(::Type{Float64}, x::Int16)   = box(Float64,sitofp64(unbox(Int16,x)))
@@ -190,8 +190,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     inf{T<:FloatingPoint}(x::T) = inf(T)
     nan{T<:FloatingPoint}(x::T) = nan(T)
 
-    isdenormal(x::Float32) = (abs(x) < $box(Float32,unbox(Uint32,0x00800000)))
-    isdenormal(x::Float64) = (abs(x) < $box(Float64,unbox(Uint64,0x0010000000000000)))
+    isdenormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000))))
+    isdenormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000))))
 
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
@@ -200,10 +200,10 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
-    realmin(::Type{Float32}) = $box(Float32,unbox(Uint32,0x00800000))
-    realmin(::Type{Float64}) = $box(Float64,unbox(Uint64,0x0010000000000000))
-    realmax(::Type{Float32}) = $box(Float32,unbox(Uint32,0x7f7fffff))
-    realmax(::Type{Float64}) = $box(Float64,unbox(Uint64,0x7fefffffffffffff))
+    realmin(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x00800000)))
+    realmin(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x0010000000000000)))
+    realmax(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x7f7fffff)))
+    realmax(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x7fefffffffffffff)))
     realmin{T<:FloatingPoint}(x::T) = realmin(T)
     realmax{T<:FloatingPoint}(x::T) = realmax(T)
     realmin() = realmin(Float64)
@@ -215,8 +215,8 @@ const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
     prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
     eps(x::FloatingPoint) = isfinite(x) ? abs(nextfloat(x)-x) : nan(x)
-    eps(::Type{Float32}) = $box(Float32,unbox(Uint32,0x34000000))
-    eps(::Type{Float64}) = $box(Float64,unbox(Uint64,0x3cb0000000000000))
+    eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
+    eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
     eps() = eps(Float64)
 end
 

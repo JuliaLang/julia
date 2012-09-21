@@ -14,14 +14,14 @@ _jl_libglpk_wrapper = dlopen("libglpk_wrapper")
 macro glpk_ccall(func, args...)
     f = "glp_$(func)"
     quote
-        ccall(dlsym(_jl_libglpk, $f), $args...)
+        ccall(dlsym(_jl_libglpk, $f), $(args...))
     end
 end
 
 macro glpkw_ccall(func, args...)
     f = "_jl_glpkw__$(func)"
     quote
-        ccall(dlsym(_jl_libglpk_wrapper, $f), $args...)
+        ccall(dlsym(_jl_libglpk_wrapper, $f), $(args...))
     end
 end
 

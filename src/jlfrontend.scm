@@ -54,7 +54,7 @@
 ;; return a lambda expression representing a thunk for a top-level expression
 ;; note: expansion of stuff inside module is delayed, so the contents obey
 ;; toplevel expansion order (don't expand until stuff before is evaluated).
-(define (expand-toplevel-expr- e)
+(define (expand-toplevel-expr-- e)
   (cond ((or (boolean? e) (eof-object? e)
 	     ;; special top-level expressions left alone
 	     (and (pair? e) (or (eq? (car e) 'line) (eq? (car e) 'module))))
@@ -64,17 +64,20 @@
 	((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
 	 e)
 	(else
-	 (let* ((ex (julia-expand0 e))
-		(gv (toplevel-expr-globals ex))
-		(th (julia-expand1
-		     `(lambda ()
-			(scope-block
-			 (block ,@(map (lambda (v) `(global ,v)) gv)
-				,ex))))))
-	   (if (null? (car (caddr th)))
-	       ;; if no locals, return just body of function
-	       (cadddr th)
-	       `(thunk ,th))))))
+	 (let ((ex0 (julia-expand-macros e)))
+	   (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
+	       `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
+	       (let* ((ex (julia-expand01 ex0))
+		      (gv (toplevel-expr-globals ex))
+		      (th (julia-expand1
+			   `(lambda ()
+			      (scope-block
+			       (block ,@(map (lambda (v) `(global ,v)) gv)
+				      ,ex))))))
+		 (if (null? (car (caddr th)))
+		     ;; if no locals, return just body of function
+		     (cadddr th)
+		     `(thunk ,th))))))))
 
 ;; (body (= v _) (return v)) => (= v _)
 (define (simple-assignment? e)
@@ -85,8 +88,8 @@
 (define (lambda-ex? e)
   (and (pair? e) (eq? (car e) 'lambda)))
 
-(define (expand-toplevel-expr e)
-  (let ((ex (expand-toplevel-expr- e)))
+(define (expand-toplevel-expr- e)
+  (let ((ex (expand-toplevel-expr-- e)))
     (cond ((simple-assignment? ex)  (cadr ex))
 	  ((and (length= ex 2) (eq? (car ex) 'body)
 		(not (lambda-ex? (cadadr ex))))
@@ -95,6 +98,19 @@
 	   ;; to be called immediately.
 	   (cadadr ex))
 	  (else ex))))
+
+(define *in-expand* #f)
+
+(define (expand-toplevel-expr e)
+  (if (and (pair? e) (eq? (car e) 'toplevel))
+      `(toplevel ,@(map expand-toplevel-expr (cdr e)))
+      (let ((last *in-expand*))
+	(if (not last)
+	    (begin (reset-gensyms)
+		   (set! *in-expand* #t)))
+	(let ((ex (expand-toplevel-expr- e)))
+	  (set! *in-expand* last)
+	  ex))))
 
 ;; parse only, returning end position, no expansion.
 (define (jl-parse-one-string s pos0 greedy)
@@ -161,6 +177,7 @@
 
 ; macroexpand only
 (define (jl-macroexpand expr)
+  (reset-gensyms)
   (parser-wrap (lambda ()
 		 (julia-expand-macros expr))))
 

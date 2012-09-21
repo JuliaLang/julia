@@ -17,7 +17,7 @@ body {
   font: 11.5pt Georgia, Arial, sans-serif;
   width: 55em;
   text-align: left;
-  line-height: 1.5em;
+  line-height: 1.5;
   margin: 3em auto 2em auto;
 }
 
@@ -70,17 +70,16 @@ a {
   a:visited { color: #88b; }
   a:hover   { color: #008; }
 
-ol {
-  margin-left: 2.25em;
+ol,ul {
+  margin-left: 2.2em;
 }
 
 ul {
-  margin-left: 1.8em;
   list-style-type: circle;
 }
 
 li {
-  margin-top: 0.5em;
+  margin-top: 0.25em;
 }
 
 tt.descname {
@@ -101,16 +100,31 @@ dl dt big, span.optional {
   margin: 3em 0em;
 }
 
-/* inline code and code blocks */
+/* code blocks, tables, and blockquotes */
 
 code,tt,pre {
-  font: 80% Monaco, 'Courier New', Courier, monospace;
+  font: 80% Menlo, Consolas, Monaco, 'Courier New', Courier, monospace;
+}
+
+blockquote,table {
+  /* same as pre, but scaled by 80% */
+  margin: 0.8em 1.6em 0.8em 1.2em;
 }
 
 pre {
   border: 1px solid #ddd;
+  line-height: 1.5;
   margin: 1em 2em 1em 1.5em;
   padding: .75em 1.25em;
+}
+
+table.docutils {
+  border: 1px solid #ddd;
+}
+
+table.docutils td, table.docutils th {
+  border-bottom: 1px solid #ddd;
+  padding: 0.4em 1.4em 0.4em 1em;
 }
 
 .sidebar {
@@ -119,10 +133,6 @@ pre {
   line-height: 1.45em;
   margin: 1em 0.5em 1em 0em;
   font-size: 90%;
-}
-
-blockquote {
-  margin: 1em 2em 1em 1em;
 }
 
 .chaplink {

@@ -44,6 +44,16 @@ end
 @assert (10.^[-1])[1] == 0.1
 @assert (10.^[-1.])[1] == 0.1
 
+# tricky space sensitive syntax cases
+@assert [-1 ~1] == [(-1) (~1)]
+
+# lexing typemin(Int64)
+@assert_fails parse("9223372036854775808")
+@assert_fails parse("-(9223372036854775808)")
+@assert_fails parse("-9223372036854775808^1")
+@assert (-9223372036854775808)^1 == -9223372036854775808
+@assert [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
+
 # dict
 h = Dict()
 for i=1:10000

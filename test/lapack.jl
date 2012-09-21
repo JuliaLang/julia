@@ -3,38 +3,72 @@ Eps = sqrt(eps())
 
 begin
 local n
-n = 10
-a = rand(n,n)
-asym = a+a'+n*eye(n)
-b = rand(n)
-r = chol(asym)                          # Cholesky decomposition
-@assert norm(r'*r - asym) < Eps
+n     = 10
+srand(1234321)
+a     = rand(n,n)
+asym  = a' + a                          # symmetric indefinite
+apd   = a'*a                            # symmetric positive-definite
+b     = rand(n)
 
-l = chol!(copy(asym), 'L')              # lower-triangular Cholesky decomposition
-@assert norm(l*l' - asym) < Eps
+capd   = chold(apd)                      # upper Cholesky factor
+r     = factors(capd)
+@assert r == chol(apd)
+@assert norm(r'*r - apd) < Eps
+@assert norm(b - apd * (capd\b)) < Eps
+@assert norm(apd * inv(capd) - eye(n)) < Eps
+@assert norm(a*(capd\(a'*b)) - b) < Eps  # least squares soln for square a
 
-(l,u,p) = lu(a)                         # LU decomposition
+l     = factors(chold(apd, false))      # lower Cholesky factor
+@assert norm(l*l' - apd) < Eps
+
+bc1   = BunchKaufman(asym)              # Bunch-Kaufman factor of indefinite matrix
+@assert norm(inv(bc1) * asym - eye(n)) < Eps
+@assert norm(asym * (bc1\b) - b) < Eps
+bc2   = BunchKaufman(apd)               # Bunch-Kaufman factors of a pos-def matrix
+@assert norm(inv(bc2) * apd - eye(n)) < Eps
+@assert norm(apd * (bc2\b) - b) < Eps
+
+lua   = lud(a)                          # LU decomposition
+l,u,p = lu(a)
+L,U,P = factors(lua)
+@assert l == L && u == U && p == P
 @assert norm(l*u - a[p,:]) < Eps
 @assert norm(l[invperm(p),:]*u - a) < Eps
+@assert norm(a * inv(lua) - eye(n)) < Eps
+@assert norm(a*(lua\b) - b) < Eps
 
-(q,r) = qr(a)                           # QR decomposition
+qra   = qrd(a)                          # QR decomposition
+q,r   = factors(qra)
+@assert norm(q'*q - eye(n)) < Eps
+@assert norm(q*q' - eye(n)) < Eps
+Q,R   = qr(a)
+@assert q == Q && r == R
 @assert norm(q*r - a) < Eps
+@assert norm(qra*b - Q*b) < Eps
+@assert norm(qra'*b - Q'*b) < Eps
+@assert norm(a*(qra\b) - b) < Eps
 
-(q,r,p) = qrp(a)                        # pivoted QR decomposition
+qrpa  = qrpd(a)                         # pivoted QR decomposition
+q,r,p = factors(qrpa)
+@assert norm(q'*q - eye(n)) < Eps
+@assert norm(q*q' - eye(n)) < Eps
+Q,R,P = qrp(a)
+@assert q == Q && r == R && p == P
 @assert norm(q*r - a[:,p]) < Eps
 @assert norm(q*r[:,invperm(p)] - a) < Eps
+@assert norm(a*(qrpa\b) - b) < Eps
 
-(d,v) = eig(asym)                       # symmetric eigen-decomposition
+d,v   = eig(asym)                       # symmetric eigen-decomposition
 @assert norm(asym*v[:,1]-d[1]*v[:,1]) < Eps
 @assert norm(v*diagmm(d,v') - asym) < Eps
 
-(d,v) = eig(a)
+d,v   = eig(a)                          # non-symmetric eigen decomposition
 for i in 1:size(a,2) @assert norm(a*v[:,i] - d[i]*v[:,i]) < Eps end
 
-(u,s,vt) = svd(a)                       # singular value decomposition
+u,s,vt = svd(a)                         # singular value decomposition
 @assert norm(u*diagmm(s,vt) - a) < Eps
 
-(u,s,vt) = sdd(a)                       # svd using divide-and-conquer
+u,s,vt = sdd(a)                         # svd using divide-and-conquer
 @assert norm(u*diagmm(s,vt) - a) < Eps
 
 x = a \ b
@@ -52,7 +86,15 @@ x = tril(a) \ b
 @assert norm(inv([1. 2; 2 1]) - [-1. 2; 2 -1]/3) < Eps
 
 ## Test Julia fallbacks to BLAS routines
-## 2x2
+# matrices with zero dimensions
+@assert ones(0,5)*ones(5,3) == zeros(0,3)
+@assert ones(3,5)*ones(5,0) == zeros(3,0)
+@assert ones(3,0)*ones(0,4) == zeros(3,4)
+@assert ones(0,5)*ones(5,0) == zeros(0,0)
+@assert ones(0,0)*ones(0,4) == zeros(0,4)
+@assert ones(3,0)*ones(0,0) == zeros(3,0)
+@assert ones(0,0)*ones(0,0) == zeros(0,0)
+# 2x2
 A = [1 2; 3 4]
 B = [5 6; 7 8]
 @assert A*B == [19 22; 43 50]
@@ -123,6 +165,7 @@ Ai = A - im
 Asub = sub(Ai, 1:2:2*cutoff, 1:3)
 Aref = Ai[1:2:2*cutoff, 1:3]
 @assert Ac_mul_B(Asub, Asub) == Ac_mul_B(Aref, Aref)
+                                        # Matrix exponential
 A1  = float([4 2 0; 1 4 1; 1 1 4])
 eA1 = [147.866622446369 127.781085523181  127.781085523182;
        183.765138646367 183.765138646366  163.679601723179;
@@ -140,4 +183,59 @@ eA3 = [-1.50964415879218 -5.6325707998812  -4.934938326092;
         0.367879439109187 1.47151775849686  1.10363831732856;
         0.135335281175235 0.406005843524598 0.541341126763207]'
 @assert norm((expm(A3) - eA3) ./ eA3) < 50000*eps()
+
+
+# basic tridiagonal operations
+n = 5
+d = 1 + rand(n)
+dl = -rand(n-1)
+du = -rand(n-1)
+T = Tridiagonal(dl, d, du)
+@assert size(T, 1) == n
+@assert size(T) == (n, n)
+F = diagm(d)
+for i = 1:n-1
+    F[i,i+1] = du[i]
+    F[i+1,i] = dl[i]
+end
+@assert full(T) == F
+
+# tridiagonal linear algebra
+v = randn(n)
+@assert norm(T*v - F*v) < Eps
+invFv = F\v
+@assert norm(T\v - invFv) < Eps
+@assert norm(solve(T,v) - invFv) < Eps
+B = randn(n,2)
+@assert norm(solve(T, B) - F\B) < Eps
+Tlu = lud(T)
+x = Tlu\v
+@assert norm(x - invFv) < Eps
+
+# symmetric tridiagonal
+Ts = SymTridiagonal(d, dl)
+Fs = full(Ts)
+invFsv = Fs\v
+Tldlt = ldltd(Ts)
+x = Tldlt\v
+@assert norm(x - invFsv) < Eps
+
+# eigenvalues/eigenvectors of symmetric tridiagonal
+DT, VT = eig(Ts)
+D, V = eig(Fs)
+@assert norm(DT - D) < Eps
+@assert norm(VT - V) < Eps
+
+
+# Woodbury
+U = randn(n,2)
+V = randn(2,n)
+C = randn(2,2)
+W = Woodbury(T, U, C, V)
+F = full(W)
+
+@assert norm(W*v - F*v) < Eps
+@assert norm(W\v - F\v) < Eps
+
+
 end

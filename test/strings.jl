@@ -466,3 +466,25 @@ end
 @assert ends_with("abcd", "cd")
 @assert !ends_with("abcd", "dc")
 @assert !ends_with("cd", "abcd")
+
+# RepStrings and SubStrings
+u8str2 = u8str^2
+len_u8str = length(u8str)
+slen_u8str = strlen(u8str)
+len_u8str2 = length(u8str2)
+slen_u8str2 = strlen(u8str2)
+
+@assert len_u8str2 == 2 * len_u8str
+@assert slen_u8str2 == 2 * slen_u8str
+
+u8str2plain = utf8(u8str2)
+
+for i1 = 1:length(u8str2)
+    if !isvalid(u8str2, i1); continue; end
+    for i2 = i1:length(u8str2)
+        if !isvalid(u8str2, i2); continue; end
+        @assert length(u8str2[i1:i2]) == length(u8str2plain[i1:i2])
+        @assert strlen(u8str2[i1:i2]) == strlen(u8str2plain[i1:i2])
+        @assert u8str2[i1:i2] == u8str2plain[i1:i2]
+    end
+end

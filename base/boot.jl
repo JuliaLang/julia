@@ -20,23 +20,18 @@
 #    parameters::Tuple
 #end
 
-#type CompositeKind <: AbstractKind
-#    #name::TypeName
-#    #super::Type
-#    #parameters::Tuple
+#type CompositeKind <: Type
+#    name::TypeName
+#    super::Type
+#    parameters::Tuple
 #    names::Tuple
 #    types::Tuple
 #end
 
-#type BitsKind <: AbstractKind
-#    #name::TypeName
-#    #super::Type
-#    #parameters::Tuple
-#end
-
-#type FuncKind <: Type
-#    from::Type
-#    to::Type
+#type BitsKind <: Type
+#    name::TypeName
+#    super::Type
+#    parameters::Tuple
 #end
 
 #type UnionKind <: Type
@@ -113,8 +108,11 @@
 
 # type Task
 #     parent::Task
+#     last::Task
 #     tls::Any
+#     consumers
 #     done::Bool
+#     runnable::Bool
 # end
 
 import Root

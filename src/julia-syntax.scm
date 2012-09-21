@@ -525,7 +525,7 @@
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0- (car binds)))))
+			     (let ((asgn (cadr (julia-expand0 (car binds)))))
 			       (loop (cdr binds) args inits
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
@@ -613,7 +613,7 @@
 			    ((and (pair? (cadar binds))
 				  (eq? (caadar binds) 'call))
 			     ;; f()=c
-			     (let ((asgn (cadr (julia-expand0- (car binds)))))
+			     (let ((asgn (cadr (julia-expand0 (car binds)))))
 			       (loop (cdr binds) args inits
 				     (cons (cadr asgn) locls)
 				     (cons asgn stmts))))
@@ -684,7 +684,6 @@
 (define (lower-tuple-assignment lhss x)
   (let ((t (gensy)))
     `(block
-      (multiple_value)
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
 		   (i   1))
@@ -1255,7 +1254,18 @@
 ; In this form, expressions can be analyzed freely without fear of
 ; intervening branches. Similarly, control flow can be analyzed without
 ; worrying about implicit value locations (the "evaluation stack").
+(define *lff-line* 0)
 (define (to-LFF e)
+  (set! *lff-line* 0)
+  (with-exception-catcher
+   (lambda (e)
+     (if (and (> *lff-line* 0) (pair? e) (eq? (car e) 'error))
+	 (let ((msg (cadr e)))
+	   (raise `(error ,(string msg " at line " *lff-line*))))
+	 (raise e)))
+   (lambda () (to-LFF- e))))
+
+(define (to-LFF- e)
   (define (to-blk r)
     (if (length= r 1)
 	(car r)
@@ -1277,7 +1287,7 @@
   ; This expression walk is entirely within the "else" clause of the giant
   ; case expression. Everything else deals with special forms.
   (define (to-lff e dest tail)
-    (if (or (not (pair? e)) (memq (car e) '(quote top line))
+    (if (or (not (pair? e)) (memq (car e) '(quote top))
 	    (equal? e '(null)))
 	(cond ((symbol? dest) (cons `(= ,dest ,e) '()))
 	      (dest (cons (if tail `(return ,e) e)
@@ -1289,7 +1299,7 @@
 	   (if (or (not (symbol? (cadr e)))
 		   (eq? (cadr e) 'true)
 		   (eq? (cadr e) 'false))
-	       (error (string "invalid assignment lvalue " (cadr e)))
+	       (error (string "invalid assignment location " (cadr e)))
 	       (let ((r (to-lff (caddr e) (cadr e) #f)))
 		 (cond ((symbol? dest)
 			(cons `(block ,(car r)
@@ -1312,6 +1322,10 @@
 		 (else (let ((g (gensy)))
 			 (cons g
 			       (cons `(local! ,g) (to-lff e g #f)))))))
+
+	  ((line)
+	   (set! *lff-line* (cadr e))
+	   (cons e '()))
 
 	  ((trycatch)
 	   (cond (tail
@@ -1822,7 +1836,7 @@ So far only the second case can actually occur.
     (define (compile e break-labels vi)
       (if (or (not (pair? e)) (equal? e '(null)))
 	  ; atom has no effect, but keep symbols for undefined-var checking
-	  (if (symbol? e) (emit e) #f)
+	  #f #;(if (symbol? e) (emit e) #f)
 	  (case (car e)
 	    ((call)  (emit (goto-form e)))
 	    ((=)     (let ((vt (vinfo:type
@@ -1950,8 +1964,7 @@ So far only the second case can actually occur.
 	((eq? (car e) 'macrocall)
 	 ;; expand macro
 	 (let ((form
-		(apply invoke-julia-macro (symbol (string #\@ (cadr e)))
-		       (cddr e))))
+		(apply invoke-julia-macro (cadr e) (cddr e))))
 	   (if (not form)
 	       (error (string "macro " (cadr e) " not defined")))
 	   (if (and (pair? form) (eq? (car form) 'error))
@@ -1981,10 +1994,9 @@ So far only the second case can actually occur.
 	 (case (car e)
 	   ((escape) (cadr e))
 	   ((macrocall)
-	    `(macrocall ,(cadr e) ;; TODO: might need to be resolved
-			,@(map (lambda (x)
+	    `(macrocall ,@(map (lambda (x)
 				 (resolve-expansion-vars- x env m))
-			       (cddr e))))
+			       (cdr e))))
 	   ;; todo: trycatch
 	   (else
 	    (cons (car e)
@@ -2061,23 +2073,17 @@ So far only the second case can actually occur.
     (flatten-scopes
      (identify-locals ex)))))
 
-(define *in-expand0* #f)
-
-(define (julia-expand0 ex)
-  (let ((last *in-expand0*))
-    (if (not last)
-	(begin (reset-gensyms)
-	       (set! *in-expand0* #t)))
-    (let ((e (julia-expand0- ex)))
-      (set! *in-expand0* last)
-      e)))
-
-(define (julia-expand0- ex)
+(define (julia-expand01 ex)
   (to-LFF
    (pattern-expand patterns
     (pattern-expand lower-comprehensions
-     (pattern-expand binding-form-patterns
-      (julia-expand-macros ex))))))
+     (pattern-expand binding-form-patterns ex)))))
+
+(define (julia-expand0 ex)
+  (let ((e (julia-expand-macros ex)))
+    (if (and (pair? e) (eq? (car e) 'toplevel))
+	`(toplevel ,@(map julia-expand01 (cdr e)))
+	(julia-expand01 e))))
 
 (define (julia-expand ex)
   (julia-expand1 (julia-expand0 ex)))

@@ -1,8 +1,13 @@
 
 load("winston.jl")
 
-let # module
-global plot, semilogx, semilogy, loglog
+module Plot
+
+import Base.*
+import Winston.*
+
+export plot, semilogx, semilogy, loglog
+export file
 
 function plot(args...)
     p = FramedPlot()

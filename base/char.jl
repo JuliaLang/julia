@@ -84,5 +84,5 @@ for f = (:iswalnum, :iswalpha, :iswblank, :iswcntrl, :iswdigit,
          # these are BSD-only
          #:iswhexnumber, :iswideogram, :iswnumber, :iswphonogram, :iswrune, :iswspecial, 
          )
-    @eval ($f)(c::Char) = bool(ccall($expr(:quote,f), Int32, (Char,), c))
+    @eval ($f)(c::Char) = bool(ccall($(expr(:quote,f)), Int32, (Char,), c))
 end

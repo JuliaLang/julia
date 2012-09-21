@@ -8,7 +8,8 @@
 function list_all(T::Type, modules::Array{Module}, f::Function)
     a = Dict{String, T}()
     for m = modules
-        for s = names(m)
+        sm = string(m)
+        for s = names(m,true)
             try
                 t = eval(s)
                 if f(t)
