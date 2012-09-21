@@ -191,11 +191,8 @@ get_data_range(samples::Array, subrange::Range1{Int}) = samples[subrange, :]
 
 # How do I make the options optional? It seems that I have to pass *something* in.
 # @note This only works on little-endian machines! Need to byte swap on big-endian systems.
-function wavread(filename::String, opts::Options)
+function wavread(io::IO, opts::Options)
     @defaults opts subrange=Any format="double"
-    io = open(filename, "r")
-    finalizer(io, close)
-
     chunk_size = read_header(io)
     fmt = WAVFormat()
     samples = Array(Float32)
@@ -229,18 +226,23 @@ function wavread(filename::String, opts::Options)
     return samples, fmt.sample_rate, fmt.nbits, None
 end
 
+function wavread(filename::String, opts::Options)
+    @defaults opts subrange=Any format="double"
+    io = open(filename, "r")
+    finalizer(io, close)
+    return wavread(io, opts)
+end
+
 # These are the MATLAB compatible signatures
 wavread(filename::String) = wavread(filename, @options format="double")
+wavread(io::IO) = wavread(io, @options format="double")
 wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
 wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
 wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
 wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
 wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
 
-function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::String)
-    io = open(filename, "w")
-    finalizer(io, close)
-
+function wavwrite(samples::Array, sample_rate::Number, nbits::Number, io::IO)
     fmt = WAVFormat()
     fmt.compression_code = 1 # Linear PCM
     fmt.nchannels = size(samples, 2)
@@ -256,6 +258,12 @@ function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::
 
     # The file is not flushed unless I explicitly call it here
     flush(io)
+end
+
+function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::String)
+    io = open(filename, "w")
+    finalizer(io, close)
+    return wavwrite(samples, sample_rate, nbits, io)
 end
 
 end # module
