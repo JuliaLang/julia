@@ -9,6 +9,7 @@
     ev_break;
     get_exename;
     getlocalip;
+    int32hash;
     int64hash;
     int64to32hash;
     ios_close;
@@ -206,7 +207,6 @@
     jl_set_current_module;
     jl_set_current_output_stream_obj;
     jl_set_global;
-    jl_set_nth_field;
     jl_set_timeval;
     jl_show;
     jl_show_any;
@@ -237,8 +237,6 @@
     jl_stdin_stream;
     jl_stdout_obj;
     jl_stdout_stream;
-    jl_stop_reading;
-    jl_strerror;
     jl_strtod;
     jl_strtof;
     jl_symbol;

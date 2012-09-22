@@ -185,7 +185,7 @@ endif
 # OS specific stuff
 
 # must end with a / and have no trailing spaces
-INSTALL_NAME_ID_DIR = @executable_path/../lib/
+INSTALL_NAME_ID_DIR = @rpath/
 
 RPATH = 
 RPATH_ORIGIN = 
@@ -223,7 +223,7 @@ endif
 ifeq ($(OS), Darwin)
 INSTALL_NAME_CMD = install_name_tool -id $(INSTALL_NAME_ID_DIR)
 INSTALL_NAME_CHANGE_CMD = install_name_tool -change
-RPATH = -Wl,-rpath,$(BUILD)/lib
+RPATH = -Wl,-rpath,@executable_path/../lib
 SHLIB_EXT = dylib
 OSLIBS += -ldl -Wl,-w -framework CoreServices -framework ApplicationServices
 WHOLE_ARCHIVE = -Xlinker -all_load

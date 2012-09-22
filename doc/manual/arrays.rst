@@ -94,9 +94,7 @@ Comprehensions
 
 Comprehensions provide a general and powerful way to construct arrays.
 Comprehension syntax is similar to set construction notation in
-mathematics:
-
-::
+mathematics::
 
     A = [ F(x,y,...) for x=rx, y=ry, ... ]
 
@@ -129,9 +127,7 @@ variables.
 Indexing
 --------
 
-The general syntax for indexing into an n-dimensional array A is:
-
-::
+The general syntax for indexing into an n-dimensional array A is::
 
     X = A[I_1, I_2, ..., I_n]
 
@@ -146,15 +142,11 @@ The result X has the dimensions
 ``(i_1, i_2, ..., i_n)`` of X containing the value
 ``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
-Indexing syntax is equivalent to a call to ``ref``:
-
-::
+Indexing syntax is equivalent to a call to ``ref``::
 
     X = ref(A, I_1, I_2, ..., I_n)
 
-Example:
-
-::
+Example::
 
     julia> x = reshape(1:16, 4, 4)
     4x4 Int64 Array
@@ -171,9 +163,7 @@ Example:
 Assignment
 ----------
 
-The general syntax for assigning values in an n-dimensional array A is:
-
-::
+The general syntax for assigning values in an n-dimensional array A is::
 
     A[I_1, I_2, ..., I_n] = X
 
@@ -187,15 +177,11 @@ The size of X should be ``(size(I_1), size(I_2), ..., size(I_n))``, and
 the value in location ``(i_1, i_2, ..., i_n)`` of A is overwritten with
 the value ``X[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``.
 
-Index assignment syntax is equivalent to a call to ``assign``:
-
-::
+Index assignment syntax is equivalent to a call to ``assign``::
 
       A = assign(A, X, I_1, I_2, ..., I_n)
 
-Example:
-
-::
+Example::
 
     julia> x = reshape(1:9, 3, 3)
     3x3 Int64 Array

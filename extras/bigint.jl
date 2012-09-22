@@ -75,7 +75,7 @@ function *(x::BigInt, y::BigInt)
     BigInt(z)
 end
 
-function div (x::BigInt, y::BigInt)
+function div(x::BigInt, y::BigInt)
     z= _jl_bigint_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_div), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
@@ -88,7 +88,7 @@ function divmod(x::BigInt, y::BigInt)
     BigInt(z1),BigInt(z2)
 end
 
-function rem (x::BigInt, y::BigInt)
+function rem(x::BigInt, y::BigInt)
     z= _jl_bigint_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_rem), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
@@ -108,6 +108,23 @@ function pow(x::BigInt, y::Uint)
     z = _jl_bigint_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
     BigInt(z)
+end
+
+function gcd(x::BigInt, y::BigInt)
+    z = _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_gcd), Void,
+        (Ptr{Void}, Ptr{Void}, Ptr{Void}), z, x.mpz, y.mpz)
+    BigInt(z)
+end
+
+function gcdext(a::BigInt, b::BigInt)
+    g = _jl_bigint_init()
+    s = _jl_bigint_init()
+    t = _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_gcdext), Void,
+        (Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}, Ptr{Void}),
+        g, s, t, a.mpz, b.mpz)
+    BigInt(g), BigInt(s), BigInt(t)
 end
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0

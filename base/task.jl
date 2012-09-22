@@ -1,5 +1,8 @@
 show(io, t::Task) = print(io, "Task")
 
+current_task() = ccall(:jl_get_current_task, Task, ())
+istaskdone(t::Task) = t.done
+
 # task-local storage
 function tls()
     t = current_task()
@@ -17,21 +20,41 @@ function tls(key, val)
     tls()[key] = val
 end
 
-let _generator_stack = {}
-    global produce, consume
-    function produce(v)
-        caller = pop(_generator_stack::Array{Any,1})
-        yieldto(caller, v)
-    end
-
-    function consume(G::Task, args...)
-        push(_generator_stack::Array{Any,1}, current_task())
-        v = yieldto(G, args...)
-        if istaskdone(G)
-            pop(_generator_stack::Array{Any,1})
+function produce(v)
+    ct = current_task()
+    q = ct.consumers
+    if !is(q,nothing)
+        Q = q::Array{Any,1}
+        if !isempty(Q)
+            # make a task waiting for us runnable again
+            enq_work(pop(Q))
         end
-        v
     end
+    yieldto(ct.last, v)
+    ct.parent = ct.last  # always exit to last consumer
+    nothing
+end
+
+function consume(P::Task)
+    while !(P.runnable || P.done)
+        yield(WaitFor(:consume, P))
+    end
+    ct = current_task()
+    prev = ct.last
+    ct.runnable = false
+    v = yieldto(P)
+    ct.last = prev
+    ct.runnable = true
+    if P.done
+        q = P.consumers
+        if !is(q, nothing)
+            Q = q::Array{Any,1}
+            while !isempty(Q)
+                enq_work(pop(Q))
+            end
+        end
+    end
+    v
 end
 
 start(t::Task) = consume(t)
@@ -39,5 +62,5 @@ done(t::Task, val) = istaskdone(t)
 next(t::Task, val) = (val, consume(t))
 
 macro task(ex)
-    :(Task(()->$esc(ex)))
+    :(Task(()->$(esc(ex))))
 end

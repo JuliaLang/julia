@@ -105,8 +105,10 @@
 	     (evenp (julia-strcount
 		     (buffer-substring p0 (point)) ?\")))
 	t
-      (progn (backward-char 1)
-	     (julia-find-comment-open p0)))))
+      (if (= (point) p0)
+	  nil
+	(progn (backward-char 1)
+	       (julia-find-comment-open p0))))))
 
 (defun julia-in-comment ()
   (save-excursion

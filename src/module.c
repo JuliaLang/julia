@@ -233,16 +233,6 @@ void jl_declare_constant(jl_binding_t *b)
     b->constp = 1;
 }
 
-jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname)
-{
-    return (jl_function_t*)jl_get_global(m, macroname);
-}
-
-void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f)
-{
-    jl_set_global(m, macroname, (jl_value_t*)f);
-}
-
 DLLEXPORT jl_value_t *jl_get_current_module()
 {
     return (jl_value_t*)jl_current_module;
@@ -254,17 +244,20 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
     jl_current_module = (jl_module_t*)m;
 }
 
-DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m)
+DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
 {
-    jl_array_t *a = jl_alloc_cell_1d(0);
+    jl_array_t *a = jl_alloc_array_1d(jl_array_symbol_type, 0);
     JL_GC_PUSH(&a);
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp || m == jl_main_module)
-                jl_cell_1d_push(a, (jl_value_t*)b->name);
+            if (all || b->exportp || m == jl_main_module) {
+                jl_array_grow_end(a, 1);
+                //XXX: change to jl_arrayset if array storage allocation for Array{Symbols,1} changes:
+                jl_cellset(a, a->length-1, (jl_value_t*)b->name);
+            }
         }
     }
     JL_GC_POP();

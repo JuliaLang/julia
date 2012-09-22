@@ -30,6 +30,7 @@
 #include <map>
 #include <vector>
 #include <set>
+#include <cstdio>
 #ifdef DEBUG
 #undef NDEBUG
 #endif
@@ -165,7 +166,28 @@ static Function *to_function(jl_lambda_info_t *li)
     DebugLoc olddl = builder.getCurrentDebugLocation();
     bool last_n_c = nested_compile;
     nested_compile = true;
-    emit_function(li, f);
+    JL_TRY {
+        emit_function(li, f);
+    }
+    JL_CATCH {
+        li->functionObject = NULL;
+        nested_compile = last_n_c;
+        if (old != NULL) {
+            builder.SetInsertPoint(old);
+            builder.SetCurrentDebugLocation(olddl);
+        }
+        JL_SIGATOMIC_END();
+        if (jl_typeis(jl_exception_in_transit, jl_errorexception_type)) {
+            char *str = jl_string_data(jl_fieldref(jl_exception_in_transit,0));
+            char buf[1024];
+            int nc = snprintf(buf, sizeof(buf), "error compiling %s: %s",
+                              li->name->name, str);
+            jl_value_t *msg = jl_pchar_to_string(buf, nc);
+            JL_GC_PUSH(&msg);
+            jl_raise(jl_new_struct(jl_errorexception_type, msg));
+        }
+        jl_raise(jl_exception_in_transit);
+    }
     nested_compile = last_n_c;
     //f->dump();
     //verifyFunction(*f);
@@ -298,7 +320,7 @@ static Value *emit_checked_var(Value *bp, const char *name, jl_codectx_t *ctx);
 // --- constant determination ---
 
 // try to statically evaluate, NULL if not possible
-static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=true)
+static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams)
 {
     if (jl_is_symbolnode(ex))
         ex = (jl_value_t*)jl_symbolnode_sym(ex);
@@ -322,7 +344,8 @@ static jl_value_t *static_eval(jl_value_t *ex, jl_codectx_t *ctx, bool sparams=t
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(ctx->module,
                                          (jl_sym_t*)jl_fieldref(ex,0));
-        if (b && b->constp)
+        if (b == NULL) return NULL;
+        if (b->constp)
             return b->value;
     }
     if (jl_is_quotenode(ex))
@@ -681,24 +704,9 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                                   ConstantInt::get(T_size,
                                                    sty->fields[idx].offset + sizeof(void*)));
-            Value *fld;
-            if (sty->fields[idx].isptr) {
-                fld = builder.CreateLoad(builder.CreateBitCast(addr, jl_ppvalue_llvmt), false);
-                null_pointer_check(fld, ctx);
-            }
-            else {
-                jl_value_t *jfty = jl_tupleref(sty->types, idx);
-                Type *fty = julia_type_to_llvm(jfty, ctx);
-                bool isbool = false;
-                if (fty == T_int1) { fty = T_int8; isbool = true; }
-                Value *data = builder.CreateBitCast(addr,
-                                                    PointerType::get(fty,0));
-                fld = builder.CreateLoad(data, false);
-                if (isbool) fld = builder.CreateTrunc(fld, T_int1);
-                else        fld = mark_julia_type(fld, jfty);
-            }
+            jl_value_t *jfty = jl_tupleref(sty->types, idx);
             JL_GC_POP();
-            return fld;
+            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
         }
     }
     // TODO: attempt better codegen for approximate types, if the types
@@ -724,18 +732,8 @@ static void emit_setfield(jl_struct_type_t *sty, Value *strct, size_t idx,
     Value *addr =
         builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
                           ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
-    if (sty->fields[idx].isptr) {
-        builder.CreateStore(boxed(rhs),
-                            builder.CreateBitCast(addr, jl_ppvalue_llvmt));
-    }
-    else {
-        jl_value_t *jfty = jl_tupleref(sty->types, idx);
-        Type *fty = julia_type_to_llvm(jfty, ctx);
-        if (fty == T_int1) { fty = T_int8; }
-        Value *data = builder.CreateBitCast(addr, PointerType::get(fty,0));
-        rhs = emit_unbox(fty, PointerType::get(fty,0), rhs);
-        builder.CreateStore(rhs, data);
-    }
+    jl_value_t *jfty = jl_tupleref(sty->types, idx);
+    typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
 }
 
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
@@ -1044,28 +1042,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx);
-                Type *elty = julia_type_to_llvm(ety, ctx);
-                assert(elty != NULL);
-                bool isbool=false;
-                if (elty==T_int1) { elty = T_int8; isbool=true; }
-                Value *data =
-                    builder.CreateBitCast(emit_arrayptr(ary),
-                                          PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
                 Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
                 Value *im1 =
                     emit_bounds_check(idx, alen,
                                       "arrayref: index out of range", ctx);
-                Value *elt=builder.CreateLoad(builder.CreateGEP(data, im1),
-                                              false);
-                if (ety == (jl_value_t*)jl_any_type) {
-                    null_pointer_check(elt, ctx);
-                }
                 JL_GC_POP();
-                if (isbool)
-                    return builder.CreateTrunc(elt, T_int1);
-                return mark_julia_type(elt, ety);
+                return typed_load(emit_arrayptr(ary), im1, ety, ctx);
             }
         }
     }
@@ -1081,27 +1065,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     ety = (jl_value_t*)jl_any_type;
                 }
                 Value *ary = emit_expr(args[1], ctx);
-                Type *elty = julia_type_to_llvm(ety, ctx);
-                assert(elty != NULL);
-                if (elty==T_int1) { elty = T_int8; }
-                Value *data =
-                    builder.CreateBitCast(emit_arrayptr(ary),
-                                          PointerType::get(elty, 0));
                 Value *alen = emit_arraylen(ary);
                 Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
-                Value *rhs;
-                if (jl_is_bits_type(ety)) {
-                    rhs = emit_unbox(elty, PointerType::get(elty,0),
-                                     emit_unboxed(args[3], ctx));
-                }
-                else {
-                    rhs = boxed(emit_expr(args[3], ctx));
-                }
                 Value *im1 =
                     emit_bounds_check(idx, alen,
                                       "arrayset: index out of range", ctx);
-                builder.CreateStore(rhs, builder.CreateGEP(data, im1));
+                typed_store(emit_arrayptr(ary), im1, emit_unboxed(args[3],ctx),
+                            ety, ctx);
                 JL_GC_POP();
                 return ary;
             }
@@ -1595,7 +1566,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                             builder.CreateGEP((*ctx->savestates)[labl],
                                               ConstantInt::get(T_size,0)),
                             jbuf);
-        Value *sj = builder.CreateCall(setjmp_func, jbuf);
+        Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
@@ -1606,10 +1577,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else {
         if (!strcmp(head->name, "$"))
-            jl_error("syntax error: prefix $ outside of quote block");
+            jl_error("syntax error: prefix $ in non-quoted expression");
         // some expression types are metadata and can be ignored
-        if (valuepos || !(head == line_sym || head == multivalue_sym ||
-                          head == type_goto_sym)) {
+        if (valuepos || !(head == line_sym || head == type_goto_sym)) {
             jl_errorf("unsupported or misplaced expression %s in function %s",
                       head->name, ctx->linfo->name->name);
         }
@@ -1908,7 +1878,7 @@ static void emit_function(jl_lambda_info_t *lam, Function *f)
             Value *jmpb =
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
-                                                      sizeof(jmp_buf)));
+                                                      sizeof(jl_jmp_buf)));
             savestates[labl] = svst;
             jmpbufs[labl] = jmpb;
         }
@@ -2234,13 +2204,15 @@ static void init_julia_llvm_env(Module *m)
     jl_ExecutionEngine->addGlobalMapping(jlnew_func,
                                          (void*)&jl_new_struct_uninit);
 
-    std::vector<Type*> empty_args(0);
+    std::vector<Type*> args2(0);
+    args2.push_back(T_pint8);
+    args2.push_back(T_int32);
     setjmp_func =
-        Function::Create(FunctionType::get(T_int32, args1, false),
-                         Function::ExternalLinkage, "_setjmp", jl_Module);
+        Function::Create(FunctionType::get(T_int32, args2, false),
+                         Function::ExternalLinkage, "sigsetjmp", jl_Module);
         //Intrinsic::getDeclaration(jl_Module, Intrinsic::eh_sjlj_setjmp);
     setjmp_func->addFnAttr(Attribute::ReturnsTwice);
-    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&_setjmp);
+    jl_ExecutionEngine->addGlobalMapping(setjmp_func, (void*)&jl_setjmp_f);
 
     std::vector<Type*> te_args(0);
     te_args.push_back(T_pint8);
@@ -2353,6 +2325,7 @@ static void init_julia_llvm_env(Module *m)
                          "allocobj", jl_Module);
     jl_ExecutionEngine->addGlobalMapping(jlallocobj_func, (void*)&allocobj);
 
+    std::vector<Type*> empty_args(0);
     jlalloc2w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,

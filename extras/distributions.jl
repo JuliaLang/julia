@@ -1,3 +1,62 @@
+module Distributions
+import Base.*
+
+export                                  # types
+    Distribution,
+    DiscreteDistribution,
+    ContinuousDistribution,
+    Bernoulli,
+    Beta,
+    Binomial,
+    Categorical,
+    Cauchy,
+    Chisq,
+    Dirichlet,
+#    DiscreteUniform,            # need to add this
+    Exponential,
+    FDist,
+    Gamma,
+    Geometric,
+    HyperGeometric,
+    Logistic,
+    logNormal,
+    Multinomial,
+    NegativeBinomial,
+    NoncentralBeta,
+    NoncentralChisq,
+    NoncentralF,
+    NoncentralT,
+    Normal,
+    Poisson,
+    TDist,
+    Uniform,
+    Weibull,
+                                        # methods
+    ccdf,       # complementary cdf, i.e. 1 - cdf
+    cdf,        # cumulative distribution function
+    cquantile,  # complementary quantile (i.e. using prob in right hand tail)
+    deviance,   # deviance of fitted and observed responses
+    devresid,   # vector of squared deviance residuals
+    insupport,  # predicate, is x in the support of the distribution?
+    invlogccdf, # complementary quantile based on log probability
+    invlogcdf,  # quantile based on log probability
+    kurtosis,   # kurtosis of the distribution
+    logccdf,    # ccdf returning log-probability
+    logcdf,     # cdf returning log-probability
+    logpdf,     # log probability density
+    logpmf,     # log probability mass
+    mean,       # mean of distribution
+    median,     # median of distribution
+    mustart,    # starting values of mean vector in GLMs
+    pdf,        # probability density function (ContinuousDistribution)
+    pmf,        # probability mass function (DiscreteDistribution)
+    quantile,   # inverse of cdf (defined for p in (0,1))
+    rand,       # random sampler
+    sample,     # another random sampler - not sure why this is here
+    skewness,   # skewness of the distribution
+    std,        # standard deviation of distribution
+    var         # variance of distribution
+
 abstract Distribution
 abstract DiscreteDistribution   <: Distribution
 abstract ContinuousDistribution <: Distribution
@@ -5,23 +64,59 @@ abstract ContinuousDistribution <: Distribution
 _jl_libRmath = dlopen("libRmath")
 
 ## Fallback methods, usually overridden for specific distributions
-## cdf      -> cumulative distribution function
-## ccdf     -> complementary cdf, i.e. 1 - cdf
-## pdf      -> probability density function (ContinuousDistribution)
-## pmf      -> probability mass function (DiscreteDistribution)
-## quantile -> inverse of cdf (defined for p in (0,1))
-## mean, median -> as the name implies
-## var      -> variance
-## std      -> standard deviation
-## rand     -> random sampler
 ccdf(d::Distribution, q::Real)                = 1 - cdf(d,q)
+cquantile(d::Distribution, p::Real)           = quantile(d, 1-p)
+function deviance{M<:Real,Y<:Real,W<:Real}(d::DiscreteDistribution,
+                                           mu::AbstractArray{M},
+                                           y::AbstractArray{Y},
+                                           wt::AbstractArray{W})
+    promote_shape(size(mu), promote_shape(size(y), size(wt)))
+    ans = 0.
+    for i in 1:numel(y)
+        ans += wt[i] * logpmf(d, mu[i], y[i])
+    end
+    -2ans
+end
+function deviance{M<:Real,Y<:Real,W<:Real}(d::ContinuousDistribution,
+                                           mu::AbstractArray{M},
+                                           y::AbstractArray{Y},
+                                           wt::AbstractArray{W})
+    promote_shape(size(mu), promote_shape(size(y), size(wt))) 
+    ans = 0.
+    for i in 1:numel(y)
+        ans += wt[i] * logpdf(d, mu[i], y[i])
+    end
+    -2ans
+end
+devresid(d::DiscreteDistribution, y::Real, mu::Real, wt::Real) =
+    -2wt*logpmf(d, mu, y)
+devresid(d::ContinuousDistribution, y::Real, mu::Real, wt::Real) =
+    -2wt*logpdf(d, mu, y)
+function devresid{Y<:Real,M<:Real,W<:Real}(d::Distribution,
+                                           y::AbstractArray{Y},
+                                           mu::AbstractArray{M},
+                                           wt::AbstractArray{W})
+    R = Array(Float64, promote_shape(size(y), promote_shape(size(mu), size(wt))))
+    for i in 1:numel(mu)
+        R[i] = devResid(d, y[i], mu[i], wt[i])
+    end
+    R
+end
+invlogccdf(d::Distribution, lp::Real)         = quantile(d, exp(-lp))
+invlogcdf(d::Distribution, lp::Real)          = quantile(d, exp(lp))
+logccdf(d::Distribution, q::Real)             = log(ccdf(d,q))
+logcdf(d::Distribution, q::Real)              = log(cdf(d,q))
 logpdf(d::ContinuousDistribution, x::Real)    = log(pdf(d,x))
 logpmf(d::DiscreteDistribution, x::Real)      = log(pmf(d,x))
-logcdf(d::Distribution, q::Real)              = log(cdf(d,q))
-logccdf(d::Distribution, q::Real)             = log(ccdf(d,q))
-cquantile(d::Distribution, p::Real)           = quantile(d, 1-p)
-invlogcdf(d::Distribution, lp::Real)          = quantile(d, exp(lp))
-invlogccdf(d::Distribution, lp::Real)         = quantile(d, exp(-lp))
+function mustart{Y<:Real,W<:Real}(d::Distribution,
+                                  y::AbstractArray{Y},
+                                  wt::AbstractArray{W})
+    M = Array(Float64, promote_shape(size(y), size(wt)))
+    for i in 1:numel(M)
+        M[i] = mustart(d, y[i], wt[i])
+    end
+    M
+end
 std(d::Distribution)                          = sqrt(var(d))
 function rand!(d::ContinuousDistribution, A::Array{Float64})
     for i in 1:numel(A) A[i] = rand(d) end
@@ -35,6 +130,22 @@ function rand!(d::DiscreteDistribution, A::Array{Int})
 end
 rand(d::DiscreteDistribution, dims::Dims)     = rand!(d, Array(Int,dims))
 rand(d::DiscreteDistribution, dims::Int...)   = rand(d, dims)
+function var{M<:Real}(d::Distribution, mu::AbstractArray{M})
+    V = similar(mu, Float64)
+    for i in 1:numel(mu)
+        V[i] = var(d, mu[i])
+    end
+    V
+end
+
+function insupport{T<:Real}(d::Distribution, x::AbstractArray{T})
+    for e in x
+        if !insupport(d, e)
+            return false
+        end
+    end
+    true
+end
 
 ## FIXME: Replace the three _jl_dist_*p macros with one by defining
 ## the argument tuples for the ccall dynamically from pn
@@ -290,15 +401,19 @@ type Bernoulli <: DiscreteDistribution
     Bernoulli(p) = 0. <= p <= 1. ? new(float64(p)) : error("prob must be in [0,1]")
 end
 Bernoulli() = Bernoulli(0.5)
-mean(d::Bernoulli)     = d.prob
-var(d::Bernoulli)      = d.prob * (1. - d.prob)
-skewness(d::Bernoulli) = (1-2d.prob)/std(d)
-kurtosis(d::Bernoulli) = 1/var(d) - 6
-pmf(d::Bernoulli, x::Real) = x == 0 ? (1 - d.prob) : (x == 1 ? d.prob : 0)
+
 cdf(d::Bernoulli, q::Real) = q < 0. ? 0. : (q >= 1. ? 1. : 1. - d.prob)
+insupport(d::Bernoulli, x::Number) = (x == 0) || (x == 1)
+kurtosis(d::Bernoulli) = 1/var(d) - 6
+logpmf( d::Bernoulli, mu::Real, y::Real) = y==0? log(1. - mu): (y==1? log(mu): -Inf)
+mean(d::Bernoulli) = d.prob
+mustart(d::Bernoulli,  y::Real, wt::Real) = (wt * y + 0.5)/(wt + 1)
+pmf(d::Bernoulli, x::Real) = x == 0 ? (1 - d.prob) : (x == 1 ? d.prob : 0)
 quantile(d::Bernoulli, p::Real) = 0 < p < 1 ? (p <= (1. - d.prob) ? 0 : 1) : NaN
 rand(d::Bernoulli) = rand() > d.prob ? 0 : 1
-insupport(d::Bernoulli, x::Number) = (x == 0) || (x == 1)
+skewness(d::Bernoulli) = (1-2d.prob)/std(d)
+var(d::Bernoulli, mu::Real) = max(eps(), mu*(1. - mu))
+var(d::Bernoulli) = d.prob * (1. - d.prob)
 
 type Beta <: ContinuousDistribution
     alpha::Float64
@@ -573,10 +688,13 @@ type Poisson <: DiscreteDistribution
     Poisson(l) = l > 0 ? new(float64(l)) : error("lambda must be positive")
 end
 Poisson() = Poisson(1)
-mean(d::Poisson) = d.lambda
-var(d::Poisson) = d.lambda
-@_jl_dist_1p Poisson pois
+devresid(d::Poisson,  y::Real, mu::Real, wt::Real) = 2wt*((y==0? 0.: log(y/mu)) - (y-mu))
 insupport(d::Poisson, x::Number) = integer_valued(x) && 0 <= x
+logpmf(  d::Poisson, mu::Real, y::Real) = ccall(dlsym(_jl_libRmath,:dpois),Float64,(Float64,Float64,Int32),y,mu,1)
+mean(d::Poisson) = d.lambda
+mustart( d::Poisson,  y::Real, wt::Real) = y + 0.1
+var(     d::Poisson, mu::Real) = mu
+var(d::Poisson) = d.lambda
 
 type TDist <: ContinuousDistribution
     df::Float64                         # non-integer degrees of freedom allowed
@@ -830,3 +948,5 @@ function sample(a::Array)
   probs = ones(n) ./ n
   sample(a, probs)
 end
+
+end  #module

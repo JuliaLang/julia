@@ -304,7 +304,7 @@ distclean-openlibm: clean-openlibm
 ifeq ($(OS), WINNT) 
 UV_CFLAGS=
 else
-UV_CFLAGS = CFLAGS="-DEV_SIGNAL_ENABLE=0 -fPIC"
+UV_CFLAGS = CFLAGS="-g -fPIC"
 endif
 
 UV_OBJ_TARGET = $(USRLIB)/uv.a
@@ -699,10 +699,10 @@ endif
 
 clean-fftw: clean-fftw-single clean-fftw-double
 clean-fftw-single:
-	$(MAKE) -C fftw-$(FFTW_VER)-single clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-single clean
 	rm -f $(FFTW_SINGLE_OBJ_TARGET)
 clean-fftw-double:
-	$(MAKE) -C fftw-$(FFTW_VER)-double clean
+	-$(MAKE) -C fftw-$(FFTW_VER)-double clean
 	rm -f $(FFTW_DOUBLE_OBJ_TARGET)
 distclean-fftw:
 	rm -rf fftw-$(FFTW_VER).tar.gz fftw-$(FFTW_VER)-{single,double}
@@ -713,6 +713,12 @@ distclean-fftw:
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
 SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(USRLIB)/libumfpack.$(SHLIB_EXT)
+endif
+
+ifeq ($(OS), Darwin)
+SUITE_SPARSE_LIB = -lm -Wl,-rpath,'$(USRLIB)'
+else
+SUITE_SPARSE_LIB = -lm -lrt -Wl,-rpath,'$(USRLIB)'
 endif
 
 compile-suitesparse: $(SUITESPARSE_OBJ_SOURCE)
@@ -726,7 +732,7 @@ SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch $@
 $(SUITESPARSE_OBJ_SOURCE): $(OPENBLAS_OBJ_SOURCE) SuiteSparse-$(SUITESPARSE_VER)/Makefile
 	cd SuiteSparse-$(SUITESPARSE_VER) && \
-	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)"
+	$(MAKE) CC="$(CC)" CXX="$(CXX)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" INSTALL_LIB="$(USRLIB)" INSTALL_INCLUDE="$(USRINC)" LIB="$(SUITE_SPARSE_LIB)"
 	touch $@
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 0)
@@ -1042,6 +1048,22 @@ clean-zlib:
 	rm -f $(ZLIB_OBJ_TARGET)
 distclean-zlib:
 	rm -rf zlib-$(ZLIB_VER).tar.gz zlib-$(ZLIB_VER)
+
+## Tk wrapper ##
+
+TKW_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USRLIB)/ -ljulia-release
+
+$(USRLIB)/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
+	mkdir -p $(USRLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(TKW_INC) tk_wrapper.c $(TKW_LIB) -o $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(INSTALL_NAME_CMD)libtk_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-tk-wrapper: $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
+
+clean-tk-wrapper:
+	rm -f $(USRLIB)/libtk_wrapper.$(SHLIB_EXT)
+distclean-tk-wrapper: clean-tk-wrapper
 
 ## phony targets ##
 

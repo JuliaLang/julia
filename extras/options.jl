@@ -126,6 +126,9 @@ end
 function ischeck(o::Options{CheckNone})
     return falses(length(o.vals))
 end
+function ischeck(a)
+    error("First argument must be an options type")
+end
 function docheck_common(o::Options,checkflag::Vector{Bool})
     unused = checkflag & !o.used[1:length(checkflag)]
     msg = ""
@@ -172,28 +175,47 @@ end
 macro defaults(opts,ex...)
     # Create a new variable storing the checkflag
     varname = strcat("_",string(opts),"_checkflag")
-    exret = :($esc(symbol(varname)) = ischeck($esc(opts)))
+    exret = :($(esc(symbol(varname))) = ischeck($(esc(opts))))
+    # Transform the tuple into a vector, so that
+    # we can manipulate it
+    ex = {ex...}
     # Check each argument in the assignment list
-    #htindex = gensym()
-    for i = 1:length(ex)
-        thisex = ex[i]
-        if !isa(thisex,Expr) || !(thisex.head == :(=) || thisex.head == :(=>) || thisex.head == :(:=))
-            error("@defaults: following the options variable, all statements must be assignments")
+    i = 1
+    while i <= length(ex)
+        y = ex[i]
+        if isa(y, Expr) && y.head == :block
+            # Found a begin..end block: expand its contents in-place
+            # and restart from the same position
+            del(ex, i)
+            i0 = i
+            for z in y.args
+                insert(ex, i, z)
+                i += 1
+            end
+            i = i0
+            continue
+        elseif isa(y, LineNumberNode)
+            # A line number node, ignore
+            i += 1
+            continue
+        elseif !isa(y,Expr) || !(y.head == :(=) || y.head == :(=>) || y.head == :(:=))
+            error("Arguments to @defaults following the options variable must be assignments, e.g., a=5 or a=>5")
         end
-        thisex.head = :(=)
+        y.head = :(=)
 
-        thissym = thisex.args[1]
+        sym = y.args[1]
         exret = quote
             $exret
-            htindex = Base.ht_keyindex(($esc(opts)).key2index,$expr(:quote,thissym))
+            htindex = Base.ht_keyindex($(esc(opts)).key2index,$(expr(:quote,sym)))
             if htindex > 0
-                htindex = ($esc(opts)).key2index.vals[htindex]
-                ($esc(thissym)) = ($esc(opts)).vals[htindex]
-                ($esc(opts)).used[htindex] = true
+                htindex = $(esc(opts)).key2index.vals[htindex]
+                $(esc(sym)) = $(esc(opts)).vals[htindex]
+                $(esc(opts)).used[htindex] = true
             else
-                ($esc(thisex))
+                $(esc(y))
             end
         end
+        i += 1
     end
     exret
 end
@@ -204,7 +226,7 @@ end
 #    @check_used opts
 macro check_used(opts)
     varname = strcat("_",string(opts),"_checkflag")
-    :(docheck($esc(opts),$esc(symbol(varname))))
+    :(docheck($(esc(opts)),$(esc(symbol(varname)))))
 end
 
 # Macro for setting options. Usage:
@@ -212,17 +234,37 @@ end
 #    opts = @options CheckWarn a=5 b=7
 macro options(ex...)
     callargs = Any[:Options]
-    istart = 1
-    if isa(ex[1], Symbol)
+    # Transform the tuple into a vector, so that
+    # we can manipulate it
+    ex = {ex...}
+    i = 1
+    if length(ex) >= 1 && isa(ex[1], Symbol)
         push(callargs, esc(ex[1]))
-        istart = 2
+        i += 1
     end
-    for indx = istart:length(ex)
-        if !isa(ex[indx], Expr)
-            error("Arguments to @options must be assignments, e.g., a=5")
+    while i <= length(ex)
+        y = ex[i]
+        if isa(y, Expr) && y.head == :block
+            # Found a begin..end block: expand its contents in-place
+            # and restart from the same position
+            del(ex, i)
+            i0 = i
+            for z in y.args
+                insert(ex, i, z)
+                i += 1
+            end
+            i = i0
+            continue
+        elseif isa(y, LineNumberNode)
+            # A line number node, ignore
+            i += 1
+            continue
+        elseif !isa(y,Expr) || !(y.head == :(=) || y.head == :(=>) || y.head == :(:=))
+            error("Arguments to @options must be assignments, e.g., a=5 or a=>5")
         end
-        push(callargs, expr(:quote, ex[indx].args[1]))
-        push(callargs, esc(ex[indx].args[2]))
+        push(callargs, expr(:quote, y.args[1]))
+        push(callargs, esc(y.args[2]))
+        i += 1
     end
     expr(:call, callargs)
 end
@@ -232,18 +274,40 @@ end
 macro set_options(opts,ex...)
     exret = quote
     end
-    for indx = 1:length(ex)
-        thisex = ex[indx]
-        if !isa(thisex,Expr) || !(thisex.head == :(=) || thisex.head == :(=>) || thisex.head == :(:=))
-            error("Arguments to add_options must be a list of assignments, e.g.,a=5")
+    # Transform the tuple into a vector, so that
+    # we can manipulate it
+    ex = {ex...}
+    # Check each argument in the assignment list
+    i = 1
+    while i <= length(ex)
+        y = ex[i]
+        if isa(y, Expr) && y.head == :block
+            # Found a begin..end block: expand its contents in-place
+            # and restart from the same position
+            del(ex, i)
+            i0 = i
+            for z in y.args
+                insert(ex, i, z)
+                i += 1
+            end
+            i = i0
+            continue
+        elseif isa(y, LineNumberNode)
+            # A line number node, ignore
+            i += 1
+            continue
+        elseif !isa(y,Expr) || !(y.head == :(=) || y.head == :(=>) || y.head == :(:=))
+            error("Arguments to @set_options following the options variable must be assignments, e.g., a=5 or a=>5")
         end
-        thisex.head = :(=)
-        thissym = thisex.args[1]
-        thisval = thisex.args[2]
+        y.head = :(=)
+
+        sym = y.args[1]
+        val = y.args[2]
         exret = quote
             $exret
-            ($esc(opts))[$expr(:quote,thissym)] = $esc(thisval)
+            $(esc(opts))[$(expr(:quote,sym))] = $(esc(val))
         end
+        i += 1
     end
     exret
 end

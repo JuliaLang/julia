@@ -1269,7 +1269,7 @@ end
 
 let findn_cache = nothing
 function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end for i = 1:length(ivars)}
+    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
     quote
     	Aind = A[$(ivars...)]
     	if Aind != z
@@ -1353,19 +1353,19 @@ function gen_areduce_func(n, f)
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
-            $lo[i] = 1
-            $hi[i] = size(A,$i)
+            $(lo[i]) = 1
+            $(hi[i]) = size(A,$i)
         else
-            $lo[i] = $hi[i] = $ivars[i]
+            $(lo[i]) = $(hi[i]) = $(ivars[i])
         end
                end for i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) for i=1:n }  # lo:hi for all dims
+    rranges = { :( $(lo[i]):$(hi[i]) ) for i=1:n }  # lo:hi for all dims
     body =
     quote
         _tot = v0
         $(setlims...)
-        $make_loop_nest(rvars, rranges,
-                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        $(make_loop_nest(rvars, rranges,
+                         :(_tot = ($f)(_tot, A[$(rvars...)]))))
         R[_ind] = _tot
         _ind += 1
     end
@@ -1373,7 +1373,7 @@ function gen_areduce_func(n, f)
         local _F_
         function _F_(f, A, region, R, v0)
             _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body)
+            $(make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body))
         end
         _F_
     end
@@ -1446,6 +1446,64 @@ function sum{T<:FloatingPoint}(A::StridedArray{T})
     end
 
     s + c
+end
+
+# Uses K-B-N summation
+function cumsum{T<:FloatingPoint}(v::StridedVector{T})
+    n = length(v)
+    r = similar(v, n)
+    if n == 0; return r; end
+
+    s = r[1] = v[1]
+    c = zero(T)
+    for i=2:n
+        vi = v[i]
+        t = s + vi
+        if abs(s) >= abs(vi)
+            c += ((s-t) + vi)
+        else
+            c += ((vi-t) + s)
+        end
+        s = t
+        r[i] = s+c
+    end
+    return r
+end
+
+# Uses K-B-N summation
+function cumsum{T<:FloatingPoint}(A::StridedArray{T}, axis::Integer)
+    dimsA = size(A)
+    ndimsA = ndims(A)
+    axis_size = dimsA[axis]
+    axis_stride = 1
+    for i = 1:(axis-1)
+        axis_stride *= size(A,i)
+    end
+
+    if axis_size <= 1
+        return A
+    end
+
+    B = similar(A)
+    C = similar(A)
+
+    for i = 1:length(A)
+        if div(i-1, axis_stride) % axis_size == 0
+            B[i] = A[i]
+            C[i] = zero(T)
+        else
+            s = B[i-axis_stride]
+            Ai = A[i]
+            B[i] = t = s + Ai
+            if abs(s) >= abs(Ai)
+                C[i] = C[i-axis_stride] + ((s-t) + Ai)
+            else
+                C[i] = C[i-axis_stride] + ((Ai-t) + s)
+            end
+        end
+    end
+
+    return B + C
 end
 
 function prod{T}(A::StridedArray{T})
@@ -1710,25 +1768,25 @@ function permute(A::StridedArray, perm)
         tmp = counts[end]
         toReturn[len+1] = quote
             ind = 1
-            $tmp = $stridenames[len]
+            $tmp = $(stridenames[len])
         end
 
         #inner most loop
         toReturn[1] = quote
-            P[ind] = A[+($counts...)+offset]
+            P[ind] = A[+($(counts...))+offset]
             ind+=1
-            $counts[1]+= $stridenames[1]
+            $(counts[1]) += $(stridenames[1])
         end
         for i = 1:len-1
             tmp = counts[i]
             val = i
             toReturn[(i+1)] = quote
-                $tmp = $stridenames[val]
+                $tmp = $(stridenames[val])
             end
             tmp2 = counts[i+1]
             val = i+1
             toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $stridenames[val]
+                 $tmp2 += $(stridenames[val])
             end
         end
         toReturn

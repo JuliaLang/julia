@@ -35,7 +35,7 @@ end
 macro time(ex)
     quote
         local t0 = time()
-        local val = $esc(ex)
+        local val = $(esc(ex))
         local t1 = time()
         println("elapsed time: ", t1-t0, " seconds")
         val
@@ -46,7 +46,7 @@ end
 macro elapsed(ex)
     quote
         local t0 = time()
-        local val = $esc(ex)
+        local val = $(esc(ex))
         time()-t0
     end
 end
@@ -224,12 +224,12 @@ load_now(fname::String) = load_now(bytestring(fname))
 function load_now(fname::ByteString)
     if in_load
         path = find_in_path(fname)
-        _jl_package_list[path] = time()
         push(load_dict, fname)
         f = open(path)
         push(load_dict, readall(f))
         close(f)
         include(path)
+        _jl_package_list[path] = time()
         return
     elseif in_remote_load
         for i=1:2:length(load_dict)
@@ -241,6 +241,7 @@ function load_now(fname::ByteString)
         in_load = true
         iserr, err = false, ()
         try
+            ccall(:jl_register_toplevel_eh, Void, ())
             load_now(fname)
             for p = 1:nprocs()
                 if p != myid()

@@ -63,8 +63,7 @@ int jl_is_type(jl_value_t *v)
         size_t i;
         for(i=0; i < jl_tuple_len(t); i++) {
             jl_value_t *vv = jl_tupleref(t, i);
-            if (!jl_is_typevar(vv) && !jl_is_type(vv) &&
-                !jl_is_typector(vv))
+            if (!jl_is_typevar(vv) && !jl_is_type(vv))
                 return 0;
         }
         return 1;
@@ -719,11 +718,9 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
     if (jl_is_tuple(b)) {
         return jl_type_intersect(b, a, penv,eqc,var);
     }
-    if (jl_is_long(a) || jl_is_long(b))
-        return (jl_value_t*)jl_bottom_type;
     // tag
-    assert(jl_is_some_tag_type(a));
-    assert(jl_is_some_tag_type(b));
+    if (!jl_is_some_tag_type(a) || !jl_is_some_tag_type(b))
+        return (jl_value_t*)jl_bottom_type;
     jl_tag_type_t *tta = (jl_tag_type_t*)a;
     jl_tag_type_t *ttb = (jl_tag_type_t*)b;
     if (tta->name == ttb->name)
@@ -961,7 +958,7 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     //if (jl_types_equal((jl_value_t*)tv->lb, ty))
     //    return ty;
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
-        if (jl_is_leaf_type(ty) || jl_is_long(ty))
+        if (jl_is_leaf_type(ty) || !jl_is_type(ty))
             return ty;
         return (jl_value_t*)jl_new_typevar(underscore_sym, tv->lb, ty);
     }
@@ -1047,7 +1044,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                         return 0;
                     v = jl_box_long(mv);
                 }
-                else if (jl_is_long(S) && jl_is_typevar(*pU)) {
+                else if (!jl_is_type(S) && jl_is_typevar(*pU)) {
                     // combine T<:2 with T==N  =>  T==N
                     v = *pU;
                 }
@@ -1073,7 +1070,7 @@ static int solve_tvar_constraints(cenv_t *env, cenv_t *soln)
                 if (*tvar_lookup(soln, &S) != T)
                     extend(T, S, soln);
             }
-            else if (!jl_is_long(S)) {
+            else if (jl_is_type(S)) {
                 // ints in the <: env are not definite
                 if (jl_is_leaf_type(S) || S == (jl_value_t*)jl_bottom_type) {
                     v = S;
@@ -1245,11 +1242,6 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
             return 0;
         }
     }
-    if (jl_is_long(a)) {
-        if (jl_is_long(b))
-            return (jl_unbox_long(a) == jl_unbox_long(b));
-        return 0;
-    }
     if (jl_is_tuple(a)) {
         if (jl_is_tuple(b)) {
             jl_tuple_t *ta = (jl_tuple_t*)a; jl_tuple_t *tb = (jl_tuple_t*)b;
@@ -1275,8 +1267,9 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
         }
         return 0;
     }
-    assert(jl_is_some_tag_type(a));
-    if (!jl_is_some_tag_type(b)) return 0;
+    if (!jl_is_some_tag_type(a) || !jl_is_some_tag_type(b)) {
+        return jl_egal(a, b);
+    }
     jl_tag_type_t *tta = (jl_tag_type_t*)a;
     jl_tag_type_t *ttb = (jl_tag_type_t*)b;
     if (tta->name != ttb->name) return 0;
@@ -1322,6 +1315,13 @@ int jl_types_equal_generic(jl_value_t *a, jl_value_t *b)
     return type_le_generic(a, b) && type_le_generic(b, a);
 }
 
+static int valid_type_param(jl_value_t *v)
+{
+    // TODO: maybe more things
+    return jl_is_type(v) || jl_is_long(v) || jl_is_symbol(v) ||
+        jl_is_typevar(v);
+}
+
 jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
 {
     if (n == 0) {
@@ -1346,7 +1346,7 @@ jl_value_t *jl_apply_type_(jl_value_t *tc, jl_value_t **params, size_t n)
     }
     for(i=0; i < n; i++) {
         jl_value_t *pi = params[i];
-        if (!jl_is_type(pi) && !jl_is_long(pi) && !jl_is_typevar(pi)) {
+        if (!valid_type_param(pi)) {
             jl_type_error_rt("apply_type", tname,
                              (jl_value_t*)jl_type_type, pi);
         }
@@ -1428,7 +1428,7 @@ void jl_set_t_uid_ctr(int i) { t_uid_ctr=i; }
 
 int jl_assign_type_uid(void)
 {
-    return t_uid_ctr++;
+    return int32hash(t_uid_ctr++);
 }
 
 static void cache_type_(jl_type_t *type)
@@ -1931,13 +1931,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int morespecific,
     }
     if (jl_is_tuple(a)) return 0;
 
-    if (jl_is_long(a)) {
-        if (jl_is_long(b))
-            return (jl_unbox_long(a)==jl_unbox_long(b));
-        return 0;
-    }
-    if (jl_is_long(b)) return 0;
-    return 0;
+    return jl_egal(a, b);
 }
 
 int jl_subtype(jl_value_t *a, jl_value_t *b, int ta)
@@ -2042,16 +2036,6 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         }
         return jl_false;
     }
-    if (jl_is_long(child)) {
-        if (jl_is_long(parent)) {
-            if (jl_unbox_long((jl_value_t*)child) ==
-                jl_unbox_long((jl_value_t*)parent))
-                return jl_true;
-        }
-        return jl_false;
-    }
-    if (jl_is_long(parent))
-        return jl_false;
     if (!invariant && parent == (jl_value_t*)jl_any_type)
         return jl_true;
     if (child  == (jl_value_t*)jl_any_type) return jl_false;
@@ -2166,8 +2150,9 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
         return jl_false;
     }
 
-    assert(jl_is_some_tag_type(child));
-    assert(jl_is_some_tag_type(parent));
+    if (!jl_is_some_tag_type(child) || !jl_is_some_tag_type(parent)) {
+        return jl_egal(child,parent) ? jl_true : jl_false;
+    }
     jl_tag_type_t *tta = (jl_tag_type_t*)child;
     jl_tag_type_t *ttb = (jl_tag_type_t*)parent;
     int super = 0;
@@ -2257,7 +2242,7 @@ void jl_init_types(void)
     // create base objects
     jl_struct_kind = jl_new_uninitialized_struct_type(10);
     jl_struct_kind->type = (jl_type_t*)jl_struct_kind;
-    jl_typename_type = jl_new_uninitialized_struct_type(3);
+    jl_typename_type = jl_new_uninitialized_struct_type(4);
     jl_sym_type = jl_new_uninitialized_struct_type(0);
     jl_symbol_type = jl_sym_type;
 
@@ -2313,10 +2298,11 @@ void jl_init_types(void)
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
     jl_typename_type->super = jl_any_type;
     jl_typename_type->parameters = jl_null;
-    jl_typename_type->names = jl_tuple(3, jl_symbol("name"), jl_symbol(""),
-                                       jl_symbol(""));
-    jl_typename_type->types = jl_tuple(3, jl_sym_type, jl_type_type,
-                                       jl_tuple_type);
+    jl_typename_type->names = jl_tuple(4, jl_symbol("name"),
+                                       jl_symbol("module"),
+                                       jl_symbol(""), jl_symbol(""));
+    jl_typename_type->types = jl_tuple(4, jl_sym_type, jl_any_type,
+                                       jl_type_type, jl_tuple_type);
     jl_typename_type->uid = jl_assign_type_uid();
     jl_typename_type->fptr = jl_f_no_function;
     jl_typename_type->env = (jl_value_t*)jl_null;
@@ -2451,7 +2437,12 @@ void jl_init_types(void)
         (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                   jl_tuple(2, jl_any_type,
                                            jl_box_long(1)));
-
+    
+    jl_array_symbol_type =
+        (jl_type_t*)jl_apply_type((jl_value_t*)jl_array_type,
+                                  jl_tuple(2, jl_symbol_type,
+                                           jl_box_long(1)));
+    
     jl_expr_type =
         jl_new_struct_type(jl_symbol("Expr"),
                            jl_any_type, jl_null,
@@ -2490,6 +2481,8 @@ void jl_init_types(void)
         jl_new_struct_type(jl_symbol("Module"), jl_any_type, jl_null,
                            jl_tuple(2, jl_symbol("name"), jl_symbol("parent")),
                            jl_tuple(2, jl_sym_type, jl_any_type));
+
+    jl_tupleset(jl_typename_type->types, 1, jl_module_type);
 
     jl_lambda_info_type =
         jl_new_struct_type(jl_symbol("LambdaStaticData"),
@@ -2616,7 +2609,6 @@ void jl_init_types(void)
     leave_sym = jl_symbol("leave");
     static_typeof_sym = jl_symbol("static_typeof");
     new_sym = jl_symbol("new");
-    multivalue_sym = jl_symbol("multiple_value");
     const_sym = jl_symbol("const");
     global_sym = jl_symbol("global");
     thunk_sym = jl_symbol("thunk");
@@ -2627,4 +2619,5 @@ void jl_init_types(void)
     bitstype_sym = jl_symbol("bits_type");
     compositetype_sym = jl_symbol("composite_type");
     type_goto_sym = jl_symbol("type_goto");
+    toplevel_sym = jl_symbol("toplevel");
 }

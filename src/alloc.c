@@ -27,6 +27,7 @@ jl_struct_type_t *jl_array_type;
 jl_typename_t *jl_array_typename;
 jl_type_t *jl_array_uint8_type;
 jl_type_t *jl_array_any_type;
+jl_type_t *jl_array_symbol_type;
 jl_function_t *jl_bottom_func;
 jl_struct_type_t *jl_weakref_type;
 jl_struct_type_t *jl_ascii_string_type;
@@ -62,7 +63,7 @@ jl_value_t *jl_memory_exception;
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
 jl_sym_t *call1_sym;   jl_sym_t *module_sym;
 jl_sym_t *export_sym;  jl_sym_t *import_sym;
-jl_sym_t *importall_sym;
+jl_sym_t *importall_sym; jl_sym_t *toplevel_sym;
 jl_sym_t *quote_sym;   jl_sym_t *amp_sym;
 jl_sym_t *top_sym;     jl_sym_t *colons_sym;
 jl_sym_t *line_sym;    jl_sym_t *jl_continue_sym;
@@ -75,7 +76,7 @@ jl_sym_t *macro_sym;   jl_sym_t *method_sym;
 jl_sym_t *enter_sym;   jl_sym_t *leave_sym;
 jl_sym_t *exc_sym;     jl_sym_t *error_sym;
 jl_sym_t *static_typeof_sym;
-jl_sym_t *new_sym;     jl_sym_t *multivalue_sym;
+jl_sym_t *new_sym;
 jl_sym_t *const_sym;   jl_sym_t *thunk_sym;
 jl_sym_t *anonymous_sym;  jl_sym_t *underscore_sym;
 jl_sym_t *abstracttype_sym; jl_sym_t *bitstype_sym;
@@ -149,7 +150,7 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
                        (char*)v + offs);
 }
 
-DLLEXPORT jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
+jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
@@ -424,8 +425,9 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char* str, int32_t len)
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 3);
+    jl_typename_t *tn=(jl_typename_t*)newobj((jl_type_t*)jl_typename_type, 4);
     tn->name = name;
+    tn->module = jl_current_module;
     tn->primary = NULL;
     tn->cache = jl_null;
     return tn;

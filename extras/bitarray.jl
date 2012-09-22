@@ -1,10 +1,10 @@
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) quote _msk64 >>> (64-$esc(l)) end end
-macro _div64(l) quote $esc(l) >>> 6 end end
-macro _mod64(l) quote $esc(l) & 63 end end
-macro _msk_end(l) quote @_mskr @_mod64 $esc(l) end end
+macro _mskr(l) quote _msk64 >>> (64-$(esc(l))) end end
+macro _div64(l) quote $(esc(l)) >>> 6 end end
+macro _mod64(l) quote $(esc(l)) & 63 end end
+macro _msk_end(l) quote @_mskr @_mod64 $(esc(l)) end end
 _jl_num_bit_chunks(n::Int) = @_div64 (n+63)
 function _jl_check_is_valid_bit{T}(x::T)
     if !(isequal(x, zero(T)) || isequal(x, one(T)))
@@ -1210,13 +1210,13 @@ end
 # implemented as a macro to improve performance
 macro _jl_reverse_bits(dest, src)
     quote
-        z    = $esc(src)
+        z    = $(esc(src))
         z    = ((z >>>  1) & 0x5555555555555555) | ((z <<  1) & 0xaaaaaaaaaaaaaaaa)
         z    = ((z >>>  2) & 0x3333333333333333) | ((z <<  2) & 0xcccccccccccccccc)
         z    = ((z >>>  4) & 0x0f0f0f0f0f0f0f0f) | ((z <<  4) & 0xf0f0f0f0f0f0f0f0)
         z    = ((z >>>  8) & 0x00ff00ff00ff00ff) | ((z <<  8) & 0xff00ff00ff00ff00)
         z    = ((z >>> 16) & 0x0000ffff0000ffff) | ((z << 16) & 0xffff0000ffff0000)
-        $esc(dest) = ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
+        $(esc(dest)) = ((z >>> 32) & 0x00000000ffffffff) | ((z << 32) & 0xffffffff00000000)
     end
 end
 
@@ -1346,7 +1346,7 @@ end
 
 let findn_cache = nothing
 function findn_one(ivars)
-    s = { quote I[$i][count] = $ivars[i] end for i = 1:length(ivars)}
+    s = { quote I[$i][count] = $(ivars[i]) end for i = 1:length(ivars)}
     quote
     	Bind = B[$(ivars...)]
     	if Bind != z
@@ -1398,19 +1398,19 @@ function gen_bitareduce_func(n, f)
     setlims = { quote
         # each dim of reduction is either 1:sizeA or ivar:ivar
         if contains(region,$i)
-            $lo[i] = 1
-            $hi[i] = size(A,$i)
+            $(lo[i]) = 1
+            $(hi[i]) = size(A,$i)
         else
-            $lo[i] = $hi[i] = $ivars[i]
+            $(lo[i]) = $(hi[i]) = $(ivars[i])
         end
                end for i=1:n }
-    rranges = { :( ($lo[i]):($hi[i]) ) for i=1:n }  # lo:hi for all dims
+    rranges = { :( $(lo[i]):$(hi[i]) ) for i=1:n }  # lo:hi for all dims
     body =
     quote
         _tot = v0
         $(setlims...)
-        $make_loop_nest(rvars, rranges,
-                        :(_tot = ($f)(_tot, A[$(rvars...)])))
+        $(make_loop_nest(rvars, rranges,
+                         :(_tot = ($f)(_tot, A[$(rvars...)]))))
         R[_ind] = _tot
         _ind += 1
     end
@@ -1418,7 +1418,7 @@ function gen_bitareduce_func(n, f)
         local _F_
         function _F_(f, A, region, R, v0)
             _ind = 1
-            $make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body)
+            $(make_loop_nest(ivars, { :(1:size(R,$i)) for i=1:n }, body))
         end
         _F_
     end
@@ -1526,13 +1526,13 @@ transpose(B::BitVector) = reshape(copy(B), 1, length(B))
 # implemented as a macro to improve performance
 macro _jl_transpose8x8(x)
     quote
-        y = $esc(x)
+        y = $(esc(x))
         t = (y $ (y >>> 7)) & 0x00aa00aa00aa00aa;
         y = y $ t $ (t << 7)
         t = (y $ (y >>> 14)) & 0x0000cccc0000cccc
         y = y $ t $ (t << 14)
         t = (y $ (y >>> 28)) & 0x00000000f0f0f0f0
-        $esc(x) = y $ t $ (t << 28)
+        $(esc(x)) = y $ t $ (t << 28)
     end
 end
 
@@ -1649,25 +1649,25 @@ function permute(B::BitArray, perm)
         tmp = counts[end]
         toReturn[len+1] = quote
             ind = 1
-            $tmp = $stridenames[len]
+            $tmp = $(stridenames[len])
         end
 
         #inner most loop
         toReturn[1] = quote
-            P[ind] = B[+($counts...)+offset]
+            P[ind] = B[+($(counts...))+offset]
             ind+=1
-            $counts[1]+= $stridenames[1]
+            $(counts[1]) += $(stridenames[1])
         end
         for i = 1:len-1
             tmp = counts[i]
             val = i
             toReturn[(i+1)] = quote
-                $tmp = $stridenames[val]
+                $tmp = $(stridenames[val])
             end
             tmp2 = counts[i+1]
             val = i+1
             toReturn[(i+1)+(len+1)] = quote
-                 $tmp2 += $stridenames[val]
+                 $tmp2 += $(stridenames[val])
             end
         end
         toReturn

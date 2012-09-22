@@ -13,7 +13,13 @@
 
 #include "htable.h"
 #include "arraylist.h"
+
 #include <setjmp.h>
+#if defined(__FreeBSD__)
+#  define jl_jmp_buf sigjmp_buf
+#else
+#  define jl_jmp_buf jmp_buf
+#endif
 
 // Check windows
 #if _WIN32 || _WIN64
@@ -193,6 +199,7 @@ typedef struct {
 typedef struct {
     JL_STRUCT_TYPE
     jl_sym_t *name;
+    struct _jl_module_t *module;
     // if this is the name of a parametric type, this field points to the
     // original type.
     // a type alias, for example, might make a type constructor that is
@@ -402,6 +409,7 @@ extern jl_bits_type_t *jl_pointer_type;
 
 extern jl_type_t *jl_array_uint8_type;
 extern jl_type_t *jl_array_any_type;
+extern jl_type_t *jl_array_symbol_type;
 extern DLLEXPORT jl_struct_type_t *jl_expr_type;
 extern jl_struct_type_t *jl_symbolnode_type;
 extern jl_struct_type_t *jl_getfieldnode_type;
@@ -441,8 +449,7 @@ extern jl_sym_t *call1_sym;
 extern jl_sym_t *dots_sym;
 extern jl_sym_t *quote_sym;
 extern jl_sym_t *top_sym;
-extern jl_sym_t *line_sym;
-extern jl_sym_t *multivalue_sym;
+extern jl_sym_t *line_sym;    extern jl_sym_t *toplevel_sym;
 extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
@@ -881,8 +888,6 @@ void jl_declare_constant(jl_binding_t *b);
 void jl_module_importall(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
-jl_function_t *jl_get_expander(jl_module_t *m, jl_sym_t *macroname);
-void jl_set_expander(jl_module_t *m, jl_sym_t *macroname, jl_function_t *f);
 
 // external libraries
 DLLEXPORT uv_lib_t *jl_load_dynamic_library(char *fname);
@@ -1059,7 +1064,7 @@ typedef struct _jl_savestate_t {
     // eh_task is who I yield to for exception handling
     struct _jl_task_t *eh_task;
     // eh_ctx is where I go to handle an exception yielded to me
-    jmp_buf *eh_ctx;
+    jl_jmp_buf *eh_ctx;
     ptrint_t err : 1;
     ptrint_t bt : 1;  // whether exceptions caught here build a backtrace
 #ifdef JL_GC_MARKSWEEP
@@ -1071,14 +1076,17 @@ typedef struct _jl_savestate_t {
 typedef struct _jl_task_t {
     JL_STRUCT_TYPE
     struct _jl_task_t *on_exit;
+    struct _jl_task_t *last;
     jl_value_t *tls;
+    jl_value_t *consumers;
     int8_t done;
-    jmp_buf ctx;
+    int8_t runnable;
+    jl_jmp_buf ctx;
     union {
         void *stackbase;
         void *stack;
     };
-    jmp_buf base_ctx;
+    jl_jmp_buf base_ctx;
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
@@ -1149,18 +1157,28 @@ static inline void jl_eh_restore_state(jl_savestate_t *ss)
     JL_SIGATOMIC_END();
 }
 
-DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jmp_buf *handlr);
+DLLEXPORT void jl_enter_handler(jl_savestate_t *ss, jl_jmp_buf *handlr);
 DLLEXPORT void jl_pop_handler(int n);
 
 #if defined(__WIN32__)
-#define sigsetjmp(a,b) setjmp(a)
-#define siglongjmp(a,b) longjmp(a,b)
+#define jl_setjmp_f    _setjmp
+#define jl_setjmp(a,b) setjmp(a)
+#define jl_longjmp(a,b) longjmp(a,b)
+#else
+// determine actual entry point name
+#if defined(sigsetjmp)
+#define jl_setjmp_f    __sigsetjmp
+#else
+#define jl_setjmp_f    sigsetjmp
+#endif
+#define jl_setjmp(a,b) sigsetjmp(a,b)
+#define jl_longjmp(a,b) siglongjmp(a,b)
 #endif
 
 #define JL_TRY                                                          \
-    int i__tr, i__ca; jl_savestate_t __ss; jmp_buf __handlr;            \
+    int i__tr, i__ca; jl_savestate_t __ss; jl_jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!sigsetjmp(__handlr,1))                                              \
+    if (!jl_setjmp(__handlr,0))                                         \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
 #define JL_EH_POP() jl_eh_restore_state(&__ss)

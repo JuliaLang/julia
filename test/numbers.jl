@@ -1017,3 +1017,55 @@ for n = 1:100
     end
     @assert n == m
 end
+
+# binary literals
+
+@assert 0b1010101 == 0x55
+@assert isa(0b00000000,Uint8)
+@assert isa(0b000000000,Uint16)
+@assert isa(0b0000000000000000,Uint16)
+@assert isa(0b00000000000000000,Uint32)
+@assert isa(0b00000000000000000000000000000000,Uint32)
+@assert isa(0b000000000000000000000000000000000,Uint64)
+@assert isa(0b11111111,Uint8)
+@assert isa(0b111111111,Uint16)
+@assert isa(0b1111111111111111,Uint16)
+@assert isa(0b11111111111111111,Uint32)
+@assert isa(0b11111111111111111111111111111111,Uint32)
+@assert isa(0b111111111111111111111111111111111,Uint64)
+
+# custom rounding and significant-digit ops
+function approx_eq(a, b, tol)
+    abs(a - b) < tol
+end
+approx_eq(a, b) = approx_eq(a, b, 1e-6)
+# rounding to digits relative to the decimal point 
+@assert approx_eq(round(pi,0), 3.)
+@assert approx_eq(round(pi,1), 3.1)
+@assert approx_eq(round(10*pi,-1), 30.)
+@assert round(.1,0) == 0.
+@assert round(-.1,0) == -0.
+@assert isnan(round(NaN, 2))
+@assert isinf(round(Inf,2))
+@assert isinf(round(-Inf,2))
+# round vs trunc vs floor vs ceil
+@assert approx_eq(round(123.456,1), 123.5)
+@assert approx_eq(round(-123.456,1), -123.5)
+@assert approx_eq(trunc(123.456,1), 123.4)
+@assert approx_eq(trunc(-123.456,1), -123.4)
+@assert approx_eq(ceil(123.456,1), 123.5)
+@assert approx_eq(ceil(-123.456,1), -123.4)
+@assert approx_eq(floor(123.456,1), 123.4)
+@assert approx_eq(floor(-123.456,1), -123.5)
+# rounding in other bases
+@assert approx_eq(round(pi,2,2), 3.25)
+@assert approx_eq(round(pi,3,2), 3.125)
+@assert approx_eq(round(pi,3,5), 3.144)
+# significant digits (would be nice to have a smart vectorized
+# version of signif)
+@assert approx_eq(signif(123.456,1), 100.)
+@assert approx_eq(signif(123.456,3), 123.)
+@assert approx_eq(signif(123.456,5), 123.46)
+@assert approx_eq(signif(123.456,8,2), 123.5)
+
+

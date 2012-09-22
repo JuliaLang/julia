@@ -212,7 +212,7 @@ function wrap(text::String, opts::Options)
     # Preliminary conversion to UTF8
     text = utf8(text)
 
-    # We iterate over the text, lookin for whitespace
+    # We iterate over the text, looking for whitespace
     # where to split.
     i = start(text)
     l = length(text)

@@ -210,7 +210,7 @@ function add_workers(PGRP::ProcessGroup, w::Array{Any,1})
     end
     PGRP.locs = newlocs
     PGRP.np += n
-    PGRP
+    :ok
 end
 
 myid() = PGRP.myid
@@ -551,7 +551,7 @@ function remote_call_fetch(w::LocalProcess, f, args...)
     oid = rr2id(rr)
     wi = schedule_call(oid, local_remote_call_thunk(f,args))
     wi.notify = ((), :call_fetch, oid, wi.notify)
-    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
+    force(yield(WaitFor(:call_fetch, rr)))
 end
 
 function remote_call_fetch(w::Worker, f, args...)
@@ -560,7 +560,7 @@ function remote_call_fetch(w::Worker, f, args...)
     rr = WeakRemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_fetch, oid, f, args)
-    force(yieldto(Scheduler, WaitFor(:call_fetch, rr)))
+    force(yield(WaitFor(:call_fetch, rr)))
 end
 
 remote_call_fetch(id::Integer, f, args...) =
@@ -573,7 +573,7 @@ function remote_call_wait(w::Worker, f, args...)
     rr = RemoteRef(w)
     oid = rr2id(rr)
     send_msg(w, :call_wait, oid, f, args)
-    yieldto(Scheduler, WaitFor(:wait, rr))
+    yield(WaitFor(:wait, rr))
 end
 
 remote_call_wait(id::Integer, f, args...) =
@@ -613,7 +613,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
         send_msg(pg.workers[r.where], verb, oid)
     end
     # yield to event loop, return here when answer arrives
-    v = yieldto(Scheduler, WaitFor(verb, r))
+    v = yield(WaitFor(verb, r))
     return is(verb,:fetch) ? force(v) : r
 end
 
@@ -626,7 +626,7 @@ function put_ref(rid, val::ANY)
     wi = lookup_ref(rid)
     if wi.done
         wi.notify = ((), :take, rid, wi.notify)
-        yieldto(Scheduler, WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
+        yield(WaitFor(:take, RemoteRef(myid(), rid[1], rid[2])))
     end
     wi.result = val
     wi.done = true
@@ -717,6 +717,7 @@ function perform_work(job::WorkItem)
             # continuing interrupted work item
             arg = job.argument
             job.argument = ()
+            job.task.runnable = true
             result = is(arg,()) ? yieldto(job.task) : yieldto(job.task, arg)
         else
             job.task = Task(job.thunk)
@@ -730,6 +731,8 @@ function perform_work(job::WorkItem)
         println()
         result = e
     end
+    # restart job by yielding back to whatever task just switched to us
+    job.task = current_task().last
     if istaskdone(job.task)
         # job done
         job.done = true
@@ -741,19 +744,32 @@ function perform_work(job::WorkItem)
         notify_done(job)
         job.thunk = bottom_func  # avoid reference retention
     elseif isa(result,WaitFor)
-        # add to waiting set to wait on a sync event
+        job.task.runnable = false
         wf::WaitFor = result
-        rr = wf.rr
-        #println("$(myid()) waiting for $rr")
-        oid = rr2id(rr)
-        waitinfo = (wf.msg, job, rr)
-        waiters = get(Waiting, oid, false)
-        if isequal(waiters,false)
-            Waiting[oid] = {waitinfo}
+        if wf.msg === :consume
+            P = wf.rr::Task
+            # queue consumers waiting for producer P. note that in order
+            # to avoid scheduling overhead for a typical produce/consume,
+            # there is no fairness unless consumers explicitly yield().
+            if P.consumers === nothing
+                P.consumers = {job}
+            else
+                enqueue(P.consumers, job)
+            end
         else
-            push(waiters, waitinfo)
+            # add to waiting set to wait on a sync event
+            rr = wf.rr
+            #println("$(myid()) waiting for $rr")
+            oid = rr2id(rr)
+            waitinfo = (wf.msg, job, rr)
+            waiters = get(Waiting, oid, false)
+            if isequal(waiters,false)
+                Waiting[oid] = {waitinfo}
+            else
+                push(waiters, waitinfo)
+            end
         end
-    else
+    elseif job.task.runnable
         # otherwise return to queue
         enq_work(job)
     end
@@ -1018,8 +1034,8 @@ function _parse_conninfo(ps,w,i::Int,stream::AsyncStream)
             x.buffer.ptr = j
         end
         ps.exit_code=0
-    else
-        error("_parse_conninfo failed $s")
+#    else
+#        println("_parse_conninfo failed $s")
     end
     true
 end
@@ -1039,6 +1055,15 @@ function start_remote_workers(machines, cmds)
     end; end
     wait(pps)
     w
+end
+
+function parse_connection_info(str)
+    m = match(r"^julia_worker:(\d+)#(.*)", str)
+    if m != nothing
+        (m.captures[2], parse_int(Int16, m.captures[1]))
+    else
+        ("", int16(-1))
+    end
 end
 
 function worker_ssh_cmd(host)
@@ -1073,10 +1098,10 @@ addprocs_local(np::Integer) =
 
 function start_sge_workers(n)
     home = JULIA_HOME
-    sgedir = "$home/SGE"
+    sgedir = "$home/../../SGE"
     run(`mkdir -p $sgedir`)
     qsub_cmd = `qsub -N JULIA -terse -e $sgedir -o $sgedir -t 1:$n`
-    `echo $home/julia --worker` | qsub_cmd
+    `echo $home/julia-release-basic --worker` | qsub_cmd
     out = cmd_stdout_stream(qsub_cmd)
     if !success(qsub_cmd)
         error("batch queue not available (could not run qsub)")
@@ -1088,28 +1113,28 @@ function start_sge_workers(n)
     for i=1:n
         # wait for each output stream file to get created
         fname = "$sgedir/JULIA.o$(id).$(i)"
-        local fl, port
+        local fl, hostname, port
         fexists = false
         sleep(0.5)
         while !fexists
             try
                 fl = open(fname)
                 try
-                    port = read(fl,Int16)
+                    conninfo = readline(fl)
+                    hostname, port = parse_connection_info(conninfo)
                 catch e
                     close(fl)
                     throw(e)
                 end
-                fexists = true
+                close(fl)
+                fexists = (hostname != "")
             catch
                 print(".");
                 sleep(0.5)
             end
         end
-        hostname = bytestring(readline(fl)[1:end-1])
         #print("hostname=$hostname, port=$port\n")
         workers[i] = Worker(hostname, port)
-        close(fl)
     end
     print("\n")
     workers
@@ -1307,7 +1332,7 @@ end
 macro sync(block)
     quote
         sync_begin()
-        v = $esc(block)
+        v = $(esc(block))
         sync_end()
         v
     end
@@ -1375,7 +1400,7 @@ end
 
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawn($esc(expr)))
+    :(spawn($(esc(expr))))
 end
 
 function spawnlocal(thunk)
@@ -1396,12 +1421,12 @@ end
 
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnlocal($esc(expr)))
+    :(spawnlocal($(esc(expr))))
 end
 
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat($p, $esc(expr)))
+    :(spawnat($p, $(esc(expr))))
 end
 
 function at_each(f, args...)
@@ -1413,7 +1438,7 @@ end
 macro everywhere(ex)
     quote
         @sync begin
-            at_each(()->eval($expr(:quote,ex)))
+            at_each(()->eval($(expr(:quote,ex))))
         end
     end
 end
@@ -1501,10 +1526,10 @@ function make_preduce_body(reducer, var, body)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            $esc(var) = lo
-            ac = $esc(body)
-            for $esc(var) = (lo+1):hi
-                ac = ($esc(reducer))(ac, $esc(body))
+            $(esc(var)) = lo
+            ac = $(esc(body))
+            for $(esc(var)) = (lo+1):hi
+                ac = ($(esc(reducer)))(ac, $(esc(body)))
             end
             ac
         end
@@ -1516,8 +1541,8 @@ function make_pfor_body(var, body)
     localize_vars(
     quote
         function (lo::Int, hi::Int)
-            for $esc(var) = lo:hi
-                $esc(body)
+            for $(esc(var)) = lo:hi
+                $(esc(body))
             end
         end
     end
@@ -1542,12 +1567,12 @@ macro parallel(args...)
     body = loop.args[2]
     if na==1
         quote
-            pfor($make_pfor_body(var, body), $esc(r))
+            pfor($(make_pfor_body(var, body)), $(esc(r)))
         end
     else
         quote
-            preduce($esc(reducer),
-                    $make_preduce_body(reducer, var, body), $esc(r))
+            preduce($(esc(reducer)),
+                    $(make_preduce_body(reducer, var, body)), $(esc(r)))
         end
     end
 end
@@ -1579,7 +1604,14 @@ function make_scheduled(t::Task)
     t
 end
 
-yield() = yieldto(Scheduler)
+function yield(args...)
+    ct = current_task()
+    # preserve Task.last across calls to the scheduler
+    prev = ct.last
+    v = yieldto(Scheduler, args...)
+    ct.last = prev
+    return v
+end
 
 function _jl_work_cb()
     global multi_cb_handles

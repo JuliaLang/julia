@@ -79,7 +79,8 @@ uint(x::Uint) = x
 
 # reflection
 
-names(m::Module) = ccall(:jl_module_names, Any, (Any,), m)::Array{Any,1}
+names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32), m, all)
+names(m::Module) = names(m,false)
 
 # index colon
 type Colon
@@ -96,9 +97,6 @@ finalizer(o, f::Function) = ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
-
-current_task() = ccall(:jl_get_current_task, Task, ())
-istaskdone(t::Task) = t.done
 
 bytestring(str::ByteString) = str
 
@@ -133,7 +131,7 @@ function append_any(xs...)
     out
 end
 
-macro thunk(ex); :(()->$esc(ex)); end
+macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end
 
 function compile_hint(f, args::Tuple)

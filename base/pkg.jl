@@ -1,8 +1,7 @@
-load("$JULIA_HOME/../../base/git.jl")
-load("$JULIA_HOME/../../base/pkgmetadata.jl")
+load("../base/git.jl")
+load("../base/pkgmetadata.jl")
 
-# module Pkg
-import Metadata
+module Pkg
 #
 # Julia's git-based declarative package manager
 #
@@ -26,27 +25,15 @@ function init(dir::String, meta::String)
         run(`git add REQUIRES`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
+        Metadata.gen_hashes()
     end
 end
 init(dir::String) = init(dir, DEFAULT_META)
 init() = init(DEFAULT_DIR)
 
-# list required & installed packages
-
-required() = open("REQUIRES") do io
-    for line in each_line(io)
-        print(line)
-    end
-end
-installed() = Git.in_each_submodule(false) do name, path, sha1
-    if name != "METADATA"
-        println(name)
-    end
-end
-
 # require & unrequire packages by name
 
-function install(pkgs::String...)
+function require(pkgs::Array{VersionSet})
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
@@ -63,7 +50,7 @@ function install(pkgs::String...)
     resolve()
 end
 
-function remove(pkgs::String...)
+function unrequire(pkgs::String...)
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
@@ -88,19 +75,53 @@ function remove(pkgs::String...)
     resolve()
 end
 
-# update packages from requirements
+# list required & installed packages
 
-function resolve()
-    want = Metadata.resolve(parse_requires("REQUIRES"))
-    have = Dict{String,ASCIIString}()
-    Git.in_each_submodule(false) do pkg, path, sha1
-        if pkg != "METADATA"
-            have[pkg] = sha1
+requires() = open("REQUIRES") do io
+    for line in each_line(io)
+        print(line)
+    end
+end
+
+installed() = Git.each_submodule(false) do name, path, sha1
+    if name != "METADATA"
+        try
+            ver = Metadata.version(name,sha1)
+            println("$name\tv$ver")
+        catch
+            println("$name\t$sha1")
         end
     end
+end
+
+# update packages from requirements
+
+# TODO: how to deal with attached-head packages?
+
+function resolve()
+    reqs = parse_requires("REQUIRES")
+    have = Dict{String,ASCIIString}()
+    Git.each_submodule(false) do pkg, path, sha1
+        if pkg != "METADATA"
+            have[pkg] = sha1
+            if cd(Git.attached,path) && isfile("$path/REQUIRES")
+                append!(reqs,parse_requires("$path/REQUIRES"))
+                if isfile("$path/VERSION")
+                    ver = convert(VersionNumber,readchomp("$path/VERSION"))
+                    push(reqs,VersionSet(pkg,[ver]))
+                end
+            end
+        end
+    end
+    sort!(reqs)
+    want = Metadata.resolve(reqs)
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
-        if has(have,pkg) # TODO: && !cd(Git.detached,pkg)
+        if has(have,pkg)
+            if cd(Git.attached,pkg)
+                # don't touch packages with attached heads
+                continue
+            end
             if has(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
@@ -116,6 +137,8 @@ function resolve()
                 ver = Metadata.version(pkg,have[pkg])
                 println("removing $pkg v$ver")
                 run(`git rm -qrf --cached -- $pkg`)
+                Git.modules(`--remove-section submodule.$pkg`)
+                run(`git add .gitmodules`)
             end
         else
             ver = Metadata.version(pkg,want[pkg])
@@ -144,7 +167,7 @@ clone(url::String) = clone(DEFAULT_DIR, url)
 # record all submodule commits as tags
 
 function tag_submodules()
-    Git.in_each_submodule(true) do name, path, sha1
+    Git.each_submodule(true) do name, path, sha1
         run(`git fetch-pack -q $path HEAD`)
         run(`git tag -f submodules/$path/$(sha1[1:10]) $sha1`)
         run(`git --git-dir=$path/.git gc -q`)
@@ -158,7 +181,7 @@ function checkout(rev::String)
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
     run(`git ls-files --other` | `xargs rm -rf`)
-    Git.in_each_submodule(true) do name, path, sha1
+    Git.each_submodule(true) do name, path, sha1
         branch = try Git.modules(`submodule.$name.branch`) end
         if branch != nothing
             cd(path) do
@@ -231,7 +254,7 @@ function pull()
     end
 
     # merge submodules
-    Git.in_each_submodule(false) do name, path, sha1
+    Git.each_submodule(false) do name, path, sha1
         if has(Rs,"submodule.$name") && Git.different(L,R,path)
             alt = readchomp(`git rev-parse $R:$path`)
             cd(path) do
@@ -260,4 +283,24 @@ function pull()
     tag_submodules()
 end
 
-# end # module
+# update system to latest and greatest
+
+function update()
+    Git.each_submodule(false) do name, path, sha1
+        cd(path) do
+            if Git.attached()
+                run(`git pull`)
+            else
+                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+            end
+        end
+    end
+    cd("METADATA") do
+        run(`git pull`)
+    end
+    run(`git add METADATA`)
+    Metadata.gen_hashes()
+    resolve()
+end
+
+end # module

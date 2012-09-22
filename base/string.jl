@@ -333,7 +333,7 @@ type SubString{T<:String} <: String
     length::Int
 
     SubString(s::T, i::Int, j::Int) =
-        (o=nextind(s,i-1)-1; new(s,o,thisind(s,j)-o))
+        (o=nextind(s,i-1)-1; new(s,o,nextind(s,j)-o-1))
 end
 SubString{T<:String}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
@@ -386,6 +386,8 @@ function repeat(s::String, r::Integer)
     r == 1 ? s  :
     RepString(s,r)
 end
+
+convert(::Type{RepString}, s::String) = RepString(s,1)
 
 ## reversed strings without data movement ##
 
@@ -558,6 +560,7 @@ has(s::String, c::Char) = contains(s, c)
 promote_rule(::Type{UTF8String} , ::Type{ASCIIString}) = UTF8String
 promote_rule(::Type{UTF8String} , ::Type{CharString} ) = UTF8String
 promote_rule(::Type{ASCIIString}, ::Type{CharString} ) = UTF8String
+promote_rule{T<:String}(::Type{RepString}, ::Type{T}) = RepString
 
 ## printing literal quoted string data ##
 
@@ -747,8 +750,9 @@ macro b_str(s); ex = _jl_interp_parse_bytes(s); :(($ex).data); end
 
 ## shell-like command parsing ##
 
-function _jl_shell_parse(s::String, interp::Bool)
+function _jl_shell_parse(raw::String, interp::Bool)
 
+    s = strip(raw)
     in_single_quotes = false
     in_double_quotes = false
 
@@ -968,7 +972,8 @@ split(s::String, spl, keep::Bool) = split(s, spl, 0, keep)
 split(s::String, spl)             = split(s, spl, 0, true)
 
 # a bit oddball, but standard behavior in Perl, Ruby & Python:
-split(str::String) = split(str, [' ','\t','\n','\v','\f','\r'], 0, false)
+const _default_delims = [' ','\t','\n','\v','\f','\r']
+split(str::String) = split(str, _default_delims, 0, false)
 
 function replace(str::ByteString, pattern, repl::Function, limit::Integer)
     n = 1

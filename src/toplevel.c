@@ -234,6 +234,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return jl_nothing;
     }
 
+    if (ex->head == toplevel_sym) {
+        int i=0; jl_value_t *res=jl_nothing;
+        for(i=0; i < ex->args->length; i++) {
+            res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
+        }
+        return res;
+    }
+
     jl_value_t *thunk=NULL;
     jl_value_t *result;
     jl_lambda_info_t *thk=NULL;
@@ -243,6 +251,14 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
     if (ex->head != body_sym && ex->head != thunk_sym) {
         // not yet expanded
         ex = (jl_expr_t*)jl_expand(e);
+    }
+
+    if (jl_is_expr(ex) && ex->head == toplevel_sym) {
+        int i=0; jl_value_t *res=jl_nothing;
+        for(i=0; i < ex->args->length; i++) {
+            res = jl_toplevel_eval_flex(jl_cellref(ex->args, i), fast);
+        }
+        return res;
     }
 
     if (jl_is_expr(ex) && ex->head == thunk_sym) {

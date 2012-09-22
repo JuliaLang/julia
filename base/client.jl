@@ -263,15 +263,22 @@ function _start()
             yield()
         end
 
-        global const LOAD_PATH = String["", "$JULIA_HOME/../lib/julia/extras/", "$JULIA_HOME/../lib/julia/ui/"]
-
-        # Load customized startup
-        try include(strcat(cwd(),"/startup.jl")) end
-        try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+        global const LOAD_PATH = String[
+            ".",
+            abs_path("$JULIA_HOME/../lib/julia"),
+            abs_path("$JULIA_HOME/../lib/julia/base"),
+            abs_path("$JULIA_HOME/../lib/julia/extras"),
+            abs_path("$JULIA_HOME/../lib/julia/ui"),
+        ]
 
         (quiet,repl) = process_options(ARGS)
         if repl
-            @unix_only global _jl_have_color = success(`tput setaf 0`) || has(ENV, "TERM") && begins_with(get(ENV,"TERM",""),"xterm")
+            # Load customized startup
+            try include(strcat(cwd(),"/startup.jl")) end
+            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+
+            @unix_only global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
+                                    success(`tput setaf 0`)
             @windows_only global _jl_have_color = true
             global _jl_is_interactive = true
             if !quiet

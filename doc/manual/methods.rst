@@ -81,24 +81,18 @@ type and count.
 
 When defining a function, one can optionally constrain the types of
 parameters it is applicable to, using the ``::`` type-assertion
-operator, introduced in the section on :ref:`man-composite-types`:
-
-::
+operator, introduced in the section on :ref:`man-composite-types`::
 
     f(x::Float64, y::Float64) = 2x + y
 
 This function definition applies only to calls where ``x`` and ``y`` are
-both values of type ``Float64``:
-
-::
+both values of type ``Float64``::
 
     julia> f(2.0, 3.0)
     7.0
 
 Applying it to any other types of arguments will result in a "no method"
-error:
-
-::
+error::
 
     julia> f(2.0, 3)
     no method f(Float64,Int64)
@@ -119,9 +113,7 @@ strings parsed as numbers. Because ``Float64`` is a concrete type and
 concrete types cannot be subclassed in Julia, such a definition can only
 be applied to arguments that are exactly of type ``Float64``. It may
 often be useful, however, to write more general methods where the
-declared parameter types are abstract:
-
-::
+declared parameter types are abstract::
 
     f(x::Number, y::Number) = 2x - y
 
@@ -145,9 +137,7 @@ the behavior for ``f`` over all pairs of instances of the abstract type
 ``Number`` — but with a different behavior specific to pairs of
 ``Float64`` values. If one of the arguments is a 64-bit float but the
 other one is not, then the ``f(Float64,Float64)`` method cannot be
-called and the more general ``f(Number,Number)`` method must be used:
-
-::
+called and the more general ``f(Number,Number)`` method must be used::
 
     julia> f(2.0, 3.0)
     7.0
@@ -170,9 +160,7 @@ from magic. [#]_
 
 For non-numeric values, and for fewer or more than two arguments, the
 function ``f`` remains undefined, and applying it will still result in a
-"no method" error:
-
-::
+"no method" error::
 
     julia> f("foo", 3)
     no method f(ASCIIString,Int64)
@@ -181,9 +169,7 @@ function ``f`` remains undefined, and applying it will still result in a
     no method f()
 
 You can easily see which methods exist for a function by entering the
-function object itself in an interactive session:
-
-::
+function object itself in an interactive session::
 
     julia> f
     Methods for generic function f
@@ -197,9 +183,7 @@ one taking two ``Float64`` arguments and one taking arguments of type
 In the absence of a type declaration with ``::``, the type of a method
 parameter is ``Any`` by default, meaning that it is unconstrained since
 all values in Julia are instances of the abstract type ``Any``. Thus, we
-can define a catch-all method for ``f`` like so:
-
-::
+can define a catch-all method for ``f`` like so::
 
     julia> f(x,y) = println("Whoa there, Nelly.")
 
@@ -212,9 +196,7 @@ pairs of arguments to which no other method definition applies.
 
 Although it seems a simple concept, multiple dispatch on the types of
 values is perhaps the single most powerful and central feature of the
-Julia language. Core operations typically have dozens of methods:
-
-::
+Julia language. Core operations typically have dozens of methods::
 
     julia> +
     Methods for generic function +
@@ -265,9 +247,7 @@ Method Ambiguities
 
 It is possible to define a set of function methods such that there is no
 unique most specific method applicable to some combinations of
-arguments:
-
-::
+arguments::
 
     julia> g(x::Float64, y) = 2x + y
 
@@ -289,9 +269,7 @@ Here the call ``g(2.0, 3.0)`` could be handled by either the
 more specific than the other. In such cases, Julia warns you about this
 ambiguity, but allows you to proceed, arbitrarily picking a method. You
 should avoid method ambiguities by specifying an appropriate method for
-the intersection case:
-
-::
+the intersection case::
 
     julia> g(x::Float64, y::Float64) = 2x + 2y
 
@@ -318,9 +296,7 @@ Parametric Methods
 ------------------
 
 Method definitions can optionally have type parameters immediately after
-the method name and before the parameter tuple:
-
-::
+the method name and before the parameter tuple::
 
     same_type{T}(x::T, y::T) = true
     same_type(x,y) = false
@@ -329,9 +305,7 @@ The first method applies whenever both arguments are of the same
 concrete type, regardless of what type that is, while the second method
 acts as a catch-all, covering all other cases. Thus, overall, this
 defines a boolean function that checks whether its two arguments are of
-the same type:
-
-::
+the same type::
 
     julia> same_type(1, 2)
     true
@@ -357,9 +331,7 @@ to being used as the types of parameters: they can be used anywhere a
 value would be in the signature of the function or body of the function.
 Here's an example where the method type parameter ``T`` is used as the
 type parameter to the parametric type ``Vector{T}`` in the method
-signature:
-
-::
+signature::
 
     julia> myappend{T}(v::Vector{T}, x::T) = [v..., x]
 
@@ -378,9 +350,7 @@ signature:
 As you can see, the type of the appended element must match the element
 type of the vector it is appended to, or a "no method" error is raised.
 In the following example, the method type parameter ``T`` is used as the
-return value:
-
-::
+return value::
 
     julia> mytypeof{T}(x::T) = T
 
@@ -392,9 +362,7 @@ return value:
 
 Just as you can put subtype constraints on type parameters in type
 declarations (see :ref:`man-parametric-types`), you
-can also constrain type parameters of methods:
-
-::
+can also constrain type parameters of methods::
 
     same_type_numeric{T<:Number}(x::T, y::T) = true
     same_type_numeric(x::Number, y::Number) = false
