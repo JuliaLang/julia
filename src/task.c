@@ -54,9 +54,9 @@ static void probe(struct _probe_data *p)
 {
     p->prior_local = p->probe_local;
     p->probe_local = (intptr_t)&p;
-    jl_setjmp( *(p->ref_probe), 1 );
+    jl_setjmp( *(p->ref_probe), 0 );
     p->ref_probe = &p->probe_env;
-    jl_setjmp( p->probe_sameAR, 1 );
+    jl_setjmp( p->probe_sameAR, 0 );
     boundhigh(p);
 }
 
@@ -214,7 +214,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
       *IF AND ONLY IF* throwing the exception involved a task switch.
     */
     //JL_SIGATOMIC_BEGIN();
-    if (!jl_setjmp(jl_current_task->ctx, 1)) {
+    if (!jl_setjmp(jl_current_task->ctx, 0)) {
 #ifdef COPY_STACKS
         jl_task_t *lastt = jl_current_task;
         save_stack(lastt);
@@ -366,7 +366,7 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (jl_setjmp(t->base_ctx, 1)) {
+    if (jl_setjmp(t->base_ctx, 0)) {
         // we get here to remove our data from the process stack
         switch_stack(jl_current_task, jl_jmp_target);
     }
@@ -395,7 +395,7 @@ static void start_task(jl_task_t *t)
 #ifndef COPY_STACKS
 static void init_task(jl_task_t *t)
 {
-    if (jl_setjmp(t->ctx, 1)) {
+    if (jl_setjmp(t->ctx, 0)) {
         start_task(t);
     }
     // this runs when the task is created

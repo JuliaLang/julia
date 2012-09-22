@@ -1566,7 +1566,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                             builder.CreateGEP((*ctx->savestates)[labl],
                                               ConstantInt::get(T_size,0)),
                             jbuf);
-        Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,1));
+        Value *sj = builder.CreateCall2(setjmp_func, jbuf, ConstantInt::get(T_int32,0));
         Value *isz = builder.CreateICmpEQ(sj, ConstantInt::get(T_int32,0));
         BasicBlock *tryblk = BasicBlock::Create(getGlobalContext(), "try",
                                                 ctx->f);
