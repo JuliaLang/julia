@@ -39,7 +39,7 @@ end
 
 function dsfmt_get_idstring()
     idstring = ccall(dlsym(Main.librandom, :dsfmt_get_idstring),
-                     Ptr{Char},
+                     Ptr{Uint8},
                      ())
     bytestring(idstring)
 end
@@ -80,14 +80,14 @@ for (genrand, gv_genrand) in
     @eval begin
      
         function ($genrand)(s::DSFMT_state)
-            r = ccall(dlsym(Main.librandom, ($genrand)),
+            r = ccall(dlsym(Main.librandom, $(string(genrand)) ),
                       Float64,
                       (Ptr{Void},),
                       s.state)
         end
 
         function ($gv_genrand)()
-            r = ccall(dlsym(Main.librandom, ($gv_genrand)),
+            r = ccall(dlsym(Main.librandom, $(string(gv_genrand)) ),
                       Float64,
                       ())
         end
@@ -107,7 +107,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
     @eval begin
 
         function ($genrand_fill_name)(s::DSFMT_state, A::Array{Float64})
-            ccall(dlsym(Main.librandom, ($genrand_fill)),
+            ccall(dlsym(Main.librandom, $(string(genrand_fill)) ),
                   Void,
                   (Ptr{Void}, Ptr{Float64}, Int32),
                   s.state, A, n)
@@ -115,7 +115,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
         end
         
         function ($gv_genrand_fill_name)(A::Array{Float64})
-            ccall(dlsym(Main.librandom, ($gv_genrand_fill)),
+            ccall(dlsym(Main.librandom, $(string(gv_genrand_fill)) ),
                   Void,
                   (Ptr{Void}, Int32),
                   A, n)
