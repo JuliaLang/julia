@@ -613,10 +613,15 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
     }
     else {
         jl_value_t *t = (jl_value_t*)jl_typeof(v);
-        if (jl_is_struct_type(t)) {
-            jl_struct_type_t *st = (jl_struct_type_t*)t;
-            JL_PUTS(st->name->name->name, s);
-            JL_PUTC('(', s);
+        assert(jl_is_struct_type(t) || jl_is_bits_type(t));
+        jl_tag_type_t *tt = (jl_tag_type_t*)t;
+        JL_PUTS(tt->name->name->name, s);
+        if (tt->parameters != jl_null) {
+            jl_show_tuple(str, tt->parameters, '{', '}', 0);
+        }
+        JL_PUTC('(', s);
+        if (jl_is_struct_type(tt)) {
+            jl_struct_type_t *st = (jl_struct_type_t*)tt;
             size_t i;
             size_t n = jl_tuple_len(st->names);
             for(i=0; i < n; i++) {
@@ -628,8 +633,15 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
                 if (i < n-1)
                     JL_PUTC(',', s);
             }
-            JL_PUTC(')', s);
         }
+        else {
+            size_t nb = jl_bitstype_nbits(tt)/8;
+            char *data = (char*)jl_bits_data(v);
+            JL_PUTS("0x", s);
+            for(int i=nb-1; i >= 0; --i)
+                ios_printf(s, "%02hhx", data[i]);
+        }
+        JL_PUTC(')', s);
     }
 }
 
