@@ -1,4 +1,4 @@
-require("rng_librandom.jl")
+require("librandom.jl")
 
 const librandom = dlopen("librandom")
 
