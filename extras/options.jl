@@ -162,8 +162,12 @@ function docheck(o::Options{CheckError},checkflag::Vector{Bool})
 end
 # Reset status on handled options (in case o is reused later)
 function clearcheck(o::Options,checkflag::Vector{Bool})
-    o.used[checkflag] = false
-    o.check_lock[checkflag] = false
+    for i = 1:length(checkflag)
+        if checkflag[i]
+            o.used[i] = false
+            o.check_lock[i] = false
+        end
+    end
 end
 
 
