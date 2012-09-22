@@ -137,7 +137,7 @@ include("linalg_specialized.jl")
 include("factorizations.jl")
 
 # signal processing
-include("DSP_fftw.jl")
+include("fftw.jl")
 include("DSP.jl")
 import Base.DSP.*
 
