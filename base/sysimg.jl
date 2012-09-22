@@ -128,7 +128,7 @@ include("deepcopy.jl")
 include("build_h.jl")
 
 # linear algebra
-include("linalg_blas.jl")
+include("blas.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
 include("lapack.jl")

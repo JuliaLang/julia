@@ -7,7 +7,7 @@ export
     FFTW,
     DSP,
     Lapack,
-    BLAS,
+    Blas,
     
 # Types
     AbstractMatrix,

@@ -3,7 +3,7 @@ abstract Factorization{T}
 ## LD for BunchKaufman, LR for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
-## merge symmetrize with _jl_copy_upper_to_lower in linalg_blas.jl
+## merge symmetrize with _jl_copy_upper_to_lower in blas.jl
 ## maybe another function makehermitian and use conj for complex
 function symmetrize!(A::AbstractMatrix, upper::Bool)
     m, n = size(A)

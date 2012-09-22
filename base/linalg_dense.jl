@@ -17,7 +17,7 @@ end
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-# linalg_blas.jl defines matmul for floats; other integer and mixed precision
+# blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
 lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))

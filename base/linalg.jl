@@ -23,7 +23,7 @@ function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Array{T}, y::Array{T})
     if length(x) != length(y)
         error("Inputs should be of the same length")
     end
-    BLAS.axpy!(length(x), convert(T, alpha), x, 1, y, 1)
+    Blas.axpy!(length(x), convert(T, alpha), x, 1, y, 1)
     return y
 end
 
@@ -34,13 +34,13 @@ function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Array{T}, 
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
-    BLAS.axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Blas.axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
     return y
 end
 
 function copy_to{T<:LapackScalar}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
-        BLAS.copy!(n, src, 1, dest, 1)
+        Blas.copy!(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
@@ -53,7 +53,7 @@ function copy_to{T<:LapackScalar}(dest::Array{T}, src::Array{T})
         throw(BoundsError())
     end
     if n < 200
-        BLAS.copy!(n, src, 1, dest, 1)
+        Blas.copy!(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
@@ -67,14 +67,14 @@ function copy_to{T<:LapackScalar,TI<:Integer}(dest::Array{T}, rdest::Union(Range
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
               pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end
 
 function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
-    BLAS.dot(length(x), x, 1, y, 1)
+    Blas.dot(length(x), x, 1, y, 1)
 end
 
 function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
@@ -82,16 +82,16 @@ function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Ra
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
-    BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    Blas.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
-norm{T<:LapackScalar}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
+norm{T<:LapackScalar}(x::Vector{T}) = Blas.nrm2(length(x), x, 1)
 
 function norm{T<:LapackScalar, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
     if min(rx) < 1 || max(rx) > length(x)
         throw(BoundsError())
     end
-    BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    Blas.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
 
@@ -189,7 +189,7 @@ function _jl_syrk{T<:LapackScalar}(tA, A::StridedMatrix{T})
         return _jl_generic_matmatmul(tA, tAt, A, A)
     end
 
-    _jl_copy_upper_to_lower(BLAS.syrk('U', tA, one(T), A))
+    _jl_copy_upper_to_lower(Blas.syrk('U', tA, one(T), A))
 end
 
 function _jl_copy_upper_to_lower_conj(A::StridedMatrix)
@@ -221,7 +221,7 @@ function _jl_herk{T<:LapackScalar}(tA, A::StridedMatrix{T})
     # Result array does not need to be initialized as long as beta==0
 #    C = Array(T, mA, mA)
 
-    _jl_copy_upper_to_lower_conj(BLAS.herk('U', tA, one(T), A))
+    _jl_copy_upper_to_lower_conj(Blas.herk('U', tA, one(T), A))
 end
 
 
@@ -251,7 +251,7 @@ function _jl_gemm{T<:LapackScalar}(C::StridedMatrix{T}, tA, tB,
         return _jl_generic_matmatmul(C, tA, tB, A, B)
     end
 
-    BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
+    Blas.gemm!(tA, tB, one(T), A, B, zero(T), C)
 end
 
 function (*){T<:LapackScalar}(A::StridedMatrix{T},
@@ -290,7 +290,7 @@ function _jl_gemv{T<:LapackScalar}(y::StridedVector{T},
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
 
-    BLAS.gemv!(tA, one(T), A, x, zero(T), y)
+    Blas.gemv!(tA, one(T), A, x, zero(T), y)
 end
 
 triu(M::AbstractMatrix) = triu(M,0)
