@@ -924,7 +924,7 @@ distclean-zlib:
 
 ## Tk wrapper ##
 
-TKW_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
 TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USRLIB)/ -ljulia-release
 
 $(USRLIB)/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
