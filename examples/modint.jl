@@ -1,4 +1,4 @@
-type ModInt{N}
+type ModInt{N} <: Integer
     k::Int
     ModInt(k) = new(k % N)
 end
