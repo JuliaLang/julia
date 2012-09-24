@@ -17,7 +17,7 @@ end
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
 
-# linalg_blas.jl defines matmul for floats; other integer and mixed precision
+# blas.jl defines matmul for floats; other integer and mixed precision
 # cases are handled here
 
 lapack_size(t::Char, M::StridedVecOrMat) = (t == 'N') ? (size(M, 1), size(M, 2)) : (size(M,2), size(M, 1))
@@ -41,7 +41,6 @@ function copy_to_transpose{R,S}(B::Matrix{R}, ir_dest::Range1{Int}, jr_dest::Ran
         end
     end
 end
-
 
 # TODO: It will be faster for large matrices to convert to float,
 # call BLAS, and convert back to required type.
@@ -123,54 +122,155 @@ function _jl_generic_matmatmul{T,S,R}(C::StridedMatrix{R}, tA, tB, A::StridedMat
     if mA == nA == nB == 2; return matmul2x2(C, tA, tB, A, B); end
     if mA == nA == nB == 3; return matmul3x3(C, tA, tB, A, B); end
 
-    tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
-    sz = (tile_size, tile_size)
-    Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
-    Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
+    if isa(R, BitsKind)
+        tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
+        sz = (tile_size, tile_size)
+        Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
+        Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
 
-    z = zero(R)
+        z = zero(R)
 
-    if mA < tile_size && nA < tile_size && nB < tile_size
-        copy_to_transpose(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
-        copy_to(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
-        for j = 1:nB
-            boff = (j-1)*tile_size
-            for i = 1:mA
-                aoff = (i-1)*tile_size
-                s = z
-                for k = 1:nA
-                    s += Atile[aoff+k] * Btile[boff+k]
+        if mA < tile_size && nA < tile_size && nB < tile_size
+            copy_to_transpose(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
+            copy_to(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
+            for j = 1:nB
+                boff = (j-1)*tile_size
+                for i = 1:mA
+                    aoff = (i-1)*tile_size
+                    s = z
+                    for k = 1:nA
+                        s += Atile[aoff+k] * Btile[boff+k]
+                    end
+                    C[i,j] = s
                 end
-                C[i,j] = s
+            end
+        else
+            Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
+            for jb = 1:tile_size:nB
+                jlim = min(jb+tile_size-1,nB)
+                jlen = jlim-jb+1
+                for ib = 1:tile_size:mA
+                    ilim = min(ib+tile_size-1,mA)
+                    ilen = ilim-ib+1
+                    fill!(Ctile, z)
+                    for kb = 1:tile_size:nA
+                        klim = min(kb+tile_size-1,mB)
+                        klen = klim-kb+1
+                        copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
+                        copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
+                        for j=1:jlen
+                            bcoff = (j-1)*tile_size
+                            for i = 1:ilen
+                                aoff = (i-1)*tile_size
+                                s = z
+                                for k = 1:klen
+                                    s += Atile[aoff+k] * Btile[bcoff+k]
+                                end
+                                Ctile[bcoff+i] += s
+                            end
+                        end
+                    end
+                    copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
+                end
             end
         end
     else
-        Ctile = pointer_to_array(convert(Ptr{R}, pointer(Cbuf)), sz)
-        for jb = 1:tile_size:nB
-            jlim = min(jb+tile_size-1,nB)
-            jlen = jlim-jb+1
-            for ib = 1:tile_size:mA
-                ilim = min(ib+tile_size-1,mA)
-                ilen = ilim-ib+1
-                fill!(Ctile, z)
-                for kb = 1:tile_size:nA
-                    klim = min(kb+tile_size-1,mB)
-                    klen = klim-kb+1
-                    copy_to_transpose(Atile, 1:klen, 1:ilen, tA, A, ib:ilim, kb:klim)
-                    copy_to(Btile, 1:klen, 1:jlen, tB, B, kb:klim, jb:jlim)
-                    for j=1:jlen
-                        bcoff = (j-1)*tile_size
-                        for i = 1:ilen
-                            aoff = (i-1)*tile_size
-                            s = z
-                            for k = 1:klen
-                                s += Atile[aoff+k] * Btile[bcoff+k]
-                            end
-                            Ctile[bcoff+i] += s
+        # Multiplication for non-BitsKind uses the naive algorithm
+        if tA == 'N'
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*B[1, j]
+                        for k = 2:nA
+                            Ctmp += A[i, k]*B[k, j]
                         end
+                        C[i,j] = Ctmp
                     end
                 end
-                copy_to(C, ib:ilim, jb:jlim, Ctile, 1:ilen, 1:jlen)
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += A[i, k]*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[i, 1]*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += A[i, k]*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            end
+        elseif tA == 'T'
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*B[1, j]
+                        for k = 2:nA
+                            Ctmp += A[k, i]*B[k, j]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += A[k, i]*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = A[1, i]*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += A[k, i]*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            end
+        else
+            if tB == 'N'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*B[1, j]
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*B[k, j]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            elseif tB == 'T'
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*B[j, 1]
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*B[j, k]
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
+            else
+                for i = 1:mA
+                    for j = 1:nB
+                        Ctmp = conj(A[1, i])*conj(B[j, 1])
+                        for k = 2:nA
+                            Ctmp += conj(A[k, i])*conj(B[j, k])
+                        end
+                        C[i,j] = Ctmp
+                    end
+                end
             end
         end
     end

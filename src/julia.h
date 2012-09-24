@@ -1092,7 +1092,7 @@ DLLEXPORT void jl_pop_handler(int n);
 #define JL_TRY                                                          \
     int i__tr, i__ca; jl_savestate_t __ss; jl_jmp_buf __handlr;            \
     jl_enter_handler(&__ss, &__handlr);                                 \
-    if (!jl_setjmp(__handlr,1))                                         \
+    if (!jl_setjmp(__handlr,0))                                         \
         for (i__tr=1; i__tr; i__tr=0, jl_eh_restore_state(&__ss))
 
 #define JL_EH_POP() jl_eh_restore_state(&__ss)

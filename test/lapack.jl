@@ -86,7 +86,15 @@ x = tril(a) \ b
 @assert norm(inv([1. 2; 2 1]) - [-1. 2; 2 -1]/3) < Eps
 
 ## Test Julia fallbacks to BLAS routines
-## 2x2
+# matrices with zero dimensions
+@assert ones(0,5)*ones(5,3) == zeros(0,3)
+@assert ones(3,5)*ones(5,0) == zeros(3,0)
+@assert ones(3,0)*ones(0,4) == zeros(3,4)
+@assert ones(0,5)*ones(5,0) == zeros(0,0)
+@assert ones(0,0)*ones(0,4) == zeros(0,4)
+@assert ones(3,0)*ones(0,0) == zeros(3,0)
+@assert ones(0,0)*ones(0,0) == zeros(0,0)
+# 2x2
 A = [1 2; 3 4]
 B = [5 6; 7 8]
 @assert A*B == [19 22; 43 50]
@@ -176,6 +184,11 @@ eA3 = [-1.50964415879218 -5.6325707998812  -4.934938326092;
         0.135335281175235 0.406005843524598 0.541341126763207]'
 @assert norm((expm(A3) - eA3) ./ eA3) < 50000*eps()
 
+# matmul for types w/o sizeof (issue #1282)
+A = Array(ComplexPair{Int},10,10)
+A[:] = complex(1,1)
+A2 = A^2
+@assert A2[1,1] == 20im
 
 # basic tridiagonal operations
 n = 5

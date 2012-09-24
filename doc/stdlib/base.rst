@@ -724,17 +724,25 @@ Mathematical Functions
 
    Accurately compute ``exp(x)-1``
 
-.. function:: ceil(x) -> FloatingPoint
+.. function:: round(x[, digits[, base]]) -> FloatingPoint
 
-   Returns the nearest integer not less than ``x``.
+   ``round(x)`` returns the nearest integer to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 3, 2)`` is ``3.125``.
 
-.. function:: floor(x) -> FloatingPoint
+.. function:: ceil(x[, digits[, base]]) -> FloatingPoint
 
-   Returns the nearest integer not greater than ``x``.
+   Returns the nearest integer not less than ``x``. ``digits`` and ``base`` work as above.
 
-.. function:: trunc(x) -> FloatingPoint
+.. function:: floor(x[, digits[, base]]) -> FloatingPoint
 
-   Returns the nearest integer not greater in magnitude than ``x``.
+   Returns the nearest integer not greater than ``x``. ``digits`` and ``base`` work as above.
+
+.. function:: trunc(x[, digits[, base]]) -> FloatingPoint
+
+   Returns the nearest integer not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+
+.. function:: iround(x) -> Integer
+
+   Returns the nearest integer to ``x``.
 
 .. function:: iceil(x) -> Integer
 
@@ -748,7 +756,11 @@ Mathematical Functions
 
    Returns the nearest integer not greater in magnitude than ``x``.
 
-``exp2`` ``ldexp`` ``round`` ``iround`` ``min`` ``max`` ``clamp`` ``abs``
+.. function:: signif(x, digits[, base]) -> FloatingPoint
+
+   Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
+
+``exp2`` ``ldexp`` ``min`` ``max`` ``clamp`` ``abs``
 
 .. function:: abs2(x)
 

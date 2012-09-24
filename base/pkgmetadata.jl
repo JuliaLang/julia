@@ -4,7 +4,7 @@ module Metadata
 import Base.*
 import Main
 import Git
-export parse_requires
+export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
     for (ver,sha1) in Git.each_version(pkg)
@@ -106,24 +106,22 @@ function contains(s::VersionSet, v::Version)
 end
 
 function parse_requires(file::String)
-    reqs = Dict{String,Vector{VersionNumber}}()
+    reqs = VersionSet[]
     open(file) do io
         for line in each_line(io)
             if ismatch(r"^\s*(?:#|$)", line) continue end
             line = replace(line, r"#.*$", "")
             fields = split(line)
             pkg = shift(fields)
-            if has(reqs,pkg)
-                error("duplicate requires entry for $pkg in $file")
-            end
-            vers = map(x->convert(VersionNumber,x),fields)
+            vers = [ convert(VersionNumber,x) for x=fields ]
             if !issorted(vers)
                 error("invalid requires entry for $pkg in $file: $vers")
             end
-            reqs[pkg] = vers
+            # TODO: merge version sets instead of appending?
+            push(reqs,VersionSet(pkg,vers))
         end
     end
-    [ VersionSet(pkg,reqs[pkg]) for pkg in sort!(keys(reqs)) ]
+    sort!(reqs)
 end
 
 function dependencies(pkgs,vers)

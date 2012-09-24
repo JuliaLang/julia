@@ -14,8 +14,8 @@ _jl_librandom = dlopen("librandom");
 @windows_only _jl_advapi32 = dlopen("Advapi32")
 
 # Optional libraries
-const _jl_libblas = dlopen(_jl_libblas_name)
-const _jl_liblapack = (_jl_libblas_name == _jl_liblapack_name) ? _jl_libblas : dlopen(_jl_liblapack_name)
+const libblas = dlopen(libblas_name)
+const liblapack = (libblas_name == liblapack_name) ? libblas : dlopen(liblapack_name)
 const libfftw = dlopen("libfftw3_threads")
 const libfftwf = dlopen("libfftw3f_threads")
 

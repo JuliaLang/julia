@@ -1058,21 +1058,40 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"ceil",E"ceil(x) -> FloatingPoint
+(E"Mathematical Functions",E"round",E"round(x[, digits[, base]]) -> FloatingPoint
 
-   Returns the nearest integer not less than 'x'.
-
-"),
-
-(E"Mathematical Functions",E"floor",E"floor(x) -> FloatingPoint
-
-   Returns the nearest integer not greater than 'x'.
+   'round(x)' returns the nearest integer to 'x'. 'round(x, digits)'
+   rounds to the specified number of digits after the decimal place,
+   or before if negative, e.g., 'round(pi,2)' is '3.14'. 'round(x,
+   digits, base)' rounds using a different base, defaulting to 10,
+   e.g., 'round(pi, 3, 2)' is '3.125'.
 
 "),
 
-(E"Mathematical Functions",E"trunc",E"trunc(x) -> FloatingPoint
+(E"Mathematical Functions",E"ceil",E"ceil(x[, digits[, base]]) -> FloatingPoint
+
+   Returns the nearest integer not less than 'x'. 'digits' and 'base'
+   work as above.
+
+"),
+
+(E"Mathematical Functions",E"floor",E"floor(x[, digits[, base]]) -> FloatingPoint
+
+   Returns the nearest integer not greater than 'x'. 'digits' and
+   'base' work as above.
+
+"),
+
+(E"Mathematical Functions",E"trunc",E"trunc(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than 'x'.
+   'digits' and 'base' work as above.
+
+"),
+
+(E"Mathematical Functions",E"iround",E"iround(x) -> Integer
+
+   Returns the nearest integer to 'x'.
 
 "),
 
@@ -1091,6 +1110,15 @@ collection[key...] = value
 (E"Mathematical Functions",E"itrunc",E"itrunc(x) -> Integer
 
    Returns the nearest integer not greater in magnitude than 'x'.
+
+"),
+
+(E"Mathematical Functions",E"signif",E"signif(x, digits[, base]) -> FloatingPoint
+
+   Rounds (in the sense of 'round') 'x' so that there are 'digits'
+   significant digits, under a base 'base' representation, default 10.
+   E.g., 'signif(123.456, 2)' is '120.0', and 'signif(357.913, 4, 2)'
+   is '352.0'.
 
 "),
 
@@ -2601,6 +2629,120 @@ collection[key...] = value
 
    Assign a value to a symbol in the current task's task-local
    storage.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.copy!(n, X, incx, Y, incy)
+
+   Copy 'n' elements of array 'X' with stride 'incx' to array 'Y' with
+   stride 'incy'.  Returns 'Y'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.dot(n, X, incx, Y, incy)
+
+   Dot product of two vectors consisting of 'n' elements of array 'X'
+   with stride 'incx' and 'n' elements of array 'Y' with stride
+   'incy'.  There are no 'BLAS.dot' methods for 'Complex' arrays.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.nrm2(n, X, incx)
+
+   2-norm of a vector consisting of 'n' elements of array 'X' with
+   stride 'incx'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)
+
+   Overwrite 'Y' with 'a*X + Y'.  Returns 'Y'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
+
+   Rank-k update of the symmetric matrix 'C' as 'alpha*A*A.' + beta*C'
+   or 'alpha*A.'*A + beta*C' according to whether 'trans' is 'N' or
+   'T'.  When 'uplo' is 'U' the upper triangle of 'C' is updated ('L'
+   for lower triangle).  Returns 'C'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk(uplo, trans, alpha, A)
+
+   Returns either the upper triangle or the lower triangle, according
+   to 'uplo' ('U' or 'L'), of 'alpha*A*A.'' or 'alpha*A.'*A',
+   according to 'trans' ('N' or 'T').
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
+
+   Methods for complex arrays only.  Rank-k update of the Hermitian
+   matrix 'C' as 'alpha*A*A' + beta*C' or 'alpha*A'*A + beta*C'
+   according to whether 'trans' is 'N' or 'T'.  When 'uplo' is 'U' the
+   upper triangle of 'C' is updated ('L' for lower triangle). Returns
+   'C'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk(uplo, trans, alpha, A)
+
+   Methods for complex arrays only.  Returns either the upper triangle
+   or the lower triangle, according to 'uplo' ('U' or 'L'), of
+   'alpha*A*A'' or 'alpha*A'*A', according to 'trans' ('N' or 'T').
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Update vector 'y' as 'alpha*A*x + beta*y' or 'alpha*A'*x + beta*y'
+   according to 'trans' ('N' or 'T').  The matrix 'A' is a general
+   band matrix of dimension 'm' by 'size(A,2)' with 'kl' sub-diagonals
+   and 'ku' super-diagonals. Returns the updated 'y'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Returns 'alpha*A*x' or 'alpha*A'*x' according to 'trans' ('N' or
+   'T'). The matrix 'A' is a general band matrix of dimension 'm' by
+   'size(A,2)' with 'kl' sub-diagonals and 'ku' super-diagonals.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
+
+   Update vector 'y' as 'alpha*A*x + beta*y' where 'A' is a a
+   symmetric band matrix of order 'size(A,2)' with 'k' super-diagonals
+   stored in the argument 'A'.  The storage layout for 'A' is
+   described the reference BLAS module, level-2 BLAS at
+   *<http://www.netlib.org/lapack/explore-html/>*.
+
+   Returns the updated 'y'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv(uplo, k, alpha, A, x)
+
+   Returns 'alpha*A*x' where 'A' is a symmetric band matrix of order
+   'size(A,2)' with 'k' super-diagonals stored in the argument 'A'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+
+   Update 'C' as 'alpha*A*B + beta*C' or the other three variants
+   according to 'tA' (transpose 'A') and 'tB'.  Returns the updated
+   'C'.
+
+"),
+
+(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm(tA, tB, alpha, A, B)
+
+   Returns 'alpha*A*B' or the other three variants according to 'tA'
+   (transpose 'A') and 'tB'.
 
 "),
 

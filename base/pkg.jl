@@ -1,8 +1,7 @@
-load("$JULIA_HOME/../../base/git.jl")
-load("$JULIA_HOME/../../base/pkgmetadata.jl")
+load("../base/git.jl")
+load("../base/pkgmetadata.jl")
 
-# module Pkg
-import Metadata
+module Pkg
 #
 # Julia's git-based declarative package manager
 #
@@ -32,27 +31,9 @@ end
 init(dir::String) = init(dir, DEFAULT_META)
 init() = init(DEFAULT_DIR)
 
-# list required & installed packages
-
-required() = open("REQUIRES") do io
-    for line in each_line(io)
-        print(line)
-    end
-end
-installed() = Git.each_submodule(false) do name, path, sha1
-    if name != "METADATA"
-        try
-            ver = Metadata.version(name,sha1)
-            println("$name\tv$ver")
-        catch
-            println("$name\t$sha1")
-        end
-    end
-end
-
 # require & unrequire packages by name
 
-function install(pkgs::String...)
+function require(pkgs::Array{VersionSet})
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
@@ -69,7 +50,7 @@ function install(pkgs::String...)
     resolve()
 end
 
-function remove(pkgs::String...)
+function unrequire(pkgs::String...)
     for pkg in pkgs
         if !contains(Metadata.packages(),pkg)
             error("invalid package: $pkg")
@@ -94,21 +75,53 @@ function remove(pkgs::String...)
     resolve()
 end
 
+# list required & installed packages
+
+requires() = open("REQUIRES") do io
+    for line in each_line(io)
+        print(line)
+    end
+end
+
+installed() = Git.each_submodule(false) do name, path, sha1
+    if name != "METADATA"
+        try
+            ver = Metadata.version(name,sha1)
+            println("$name\tv$ver")
+        catch
+            println("$name\t$sha1")
+        end
+    end
+end
+
 # update packages from requirements
 
-# TODO: how to deal with attached head packages?
+# TODO: how to deal with attached-head packages?
 
 function resolve()
-    want = Metadata.resolve(parse_requires("REQUIRES"))
+    reqs = parse_requires("REQUIRES")
     have = Dict{String,ASCIIString}()
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
+            if cd(Git.attached,path) && isfile("$path/REQUIRES")
+                append!(reqs,parse_requires("$path/REQUIRES"))
+                if isfile("$path/VERSION")
+                    ver = convert(VersionNumber,readchomp("$path/VERSION"))
+                    push(reqs,VersionSet(pkg,[ver]))
+                end
+            end
         end
     end
+    sort!(reqs)
+    want = Metadata.resolve(reqs)
     pkgs = sort!(keys(merge(want,have)))
     for pkg in pkgs
-        if has(have,pkg) # TODO: && !cd(Git.detached,pkg)
+        if has(have,pkg)
+            if cd(Git.attached,pkg)
+                # don't touch packages with attached heads
+                continue
+            end
             if has(want,pkg)
                 if have[pkg] != want[pkg]
                     oldver = Metadata.version(pkg,have[pkg])
@@ -274,9 +287,12 @@ end
 
 function update()
     Git.each_submodule(false) do name, path, sha1
-        # FIXME: if attached head then do nothing
         cd(path) do
-            run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+            if Git.attached()
+                run(`git pull`)
+            else
+                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+            end
         end
     end
     cd("METADATA") do
@@ -287,4 +303,4 @@ function update()
     resolve()
 end
 
-# end # module
+end # module

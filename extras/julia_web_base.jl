@@ -16,7 +16,7 @@
 # [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
-load("julia_message_types_h.jl")
+load("webrepl_msgtypes_h.jl")
 
 ###########################################
 # set up the socket connection
