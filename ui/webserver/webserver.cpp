@@ -304,7 +304,8 @@ void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
             if (msg.type == MSG_OUTPUT_EVAL_INPUT ||
                 msg.type == MSG_OUTPUT_EVAL_RESULT ||
                 msg.type == MSG_OUTPUT_EVAL_ERROR ||
-                msg.type == MSG_OUTPUT_PLOT) {
+                msg.type == MSG_OUTPUT_PLOT ||
+                msg.type == MSG_OUTPUT_HTML) {
                 julia_session_ptr->outbox_history.push_back(msg);
                 for (map<string, web_session>::iterator iter = julia_session_ptr->web_session_map.begin(); iter != julia_session_ptr->web_session_map.end(); iter++)
                     iter->second.outbox.push_back(msg);
