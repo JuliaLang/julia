@@ -173,6 +173,9 @@ end
 # event handler for socket input
 add_fd_handler(__connectfd, __socket_callback)
 
+web_show(user_id, ans) =
+    __Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)})
+
 function __eval_exprs(__parsed_exprs)
     global ans
     user_id = ""
@@ -192,7 +195,7 @@ function __eval_exprs(__parsed_exprs)
     if isa(ans,Nothing)
         return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, ""}))
     else
-        return __write_message(__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)}))
+        return __write_message(web_show(user_id, ans))
     end
 end
 

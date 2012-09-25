@@ -121,6 +121,7 @@ var MSG_OUTPUT_EVAL_RESULT      = 8;
 var MSG_OUTPUT_EVAL_ERROR       = 9;
 var MSG_OUTPUT_PLOT             = 10;
 var MSG_OUTPUT_GET_USER         = 11;
+var MSG_OUTPUT_HTML             = 12;
 
 /*
     REPL implementation.
@@ -324,6 +325,22 @@ function indent_and_escape_html(str) {
     return escape_html(str.replace(/\n/g, "\n       "));
 }
 
+function add_html_to_terminal(data) {
+    // update the html
+    $("#terminal").append(data);
+
+    // apply the color scheme to the new content
+    apply_color_scheme();
+
+    // reset the size of the input box
+    set_input_width();
+
+    // scroll to the new data
+    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+
+    new_line = false;
+}
+
 // add html to the terminal (preserving whitespace)
 function add_to_terminal(data) {
     // preserve whitespace with non-breaking spaces
@@ -344,23 +361,11 @@ function add_to_terminal(data) {
         }
     }
 
-    // update the html
-    $("#terminal").append(new_data);
-
-    // apply the color scheme to the new content
-    apply_color_scheme();
-
-    // reset the size of the input box
-    set_input_width();
-
-    // scroll to the new data
-    $("#terminal-form").prop("scrollTop", $("#terminal-form").prop("scrollHeight"));
+    add_html_to_terminal(new_data);
 
     // determine whether the last thing added was a newline
     if (new_data.length >= 6)
         new_line = (new_data.substr(new_data.length-6, 6) == "<br />");
-    else
-        new_line = false;
 }
 
 // the first request
@@ -478,20 +483,24 @@ message_handlers[MSG_OUTPUT_EVAL_INCOMPLETE] = function(msg) {
     $("#terminal-input").newline_at_caret();
 };
 
+function enable_prompt() {
+    // show the prompt
+    $("#prompt").show();
+
+    // re-enable the input field
+    $("#terminal-input").removeAttr("disabled");
+
+    // focus the input field
+    $("#terminal-input").focus();
+}
+
 message_handlers[MSG_OUTPUT_EVAL_ERROR] = function(msg) {
     // print the error message
     add_to_terminal("<span class=\"color-scheme-error\">"+escape_html(msg[1])+"</span><br /><br />");
 
     // check if this was from us
     if (msg[0] == user_id) {
-        // show the prompt
-        $("#prompt").show();
-
-        // re-enable the input field
-        $("#terminal-input").removeAttr("disabled");
-
-        // focus the input field
-        $("#terminal-input").focus();
+        enable_prompt();
     }
 };
 
@@ -503,16 +512,16 @@ message_handlers[MSG_OUTPUT_EVAL_RESULT] = function(msg) {
         add_to_terminal(escape_html(msg[1])+"<br /><br />");
 
     if (msg[0] == user_id) {
-        // show the prompt
-        $("#prompt").show();
-
-        // re-enable the input field
-        $("#terminal-input").removeAttr("disabled");
-
-        // focus the input field
-        $("#terminal-input").focus();
+        enable_prompt();
     }
 };
+
+message_handlers[MSG_OUTPUT_HTML] = function(msg) {
+    add_html_to_terminal(msg[1]);
+    if (msg[0] == user_id) {
+        enable_prompt();
+    }
+}
 
 message_handlers[MSG_OUTPUT_GET_USER] = function(msg) {
     // set the user name

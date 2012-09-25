@@ -62,6 +62,7 @@ var MSG_OUTPUT_EVAL_RESULT      = 8;
 var MSG_OUTPUT_EVAL_ERROR       = 9;
 var MSG_OUTPUT_PLOT             = 10;
 var MSG_OUTPUT_GET_USER         = 11;
+var MSG_OUTPUT_HTML             = 12;
 
 // how long we delay in ms before polling the server again
 var poll_interval = 200;

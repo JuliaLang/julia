@@ -87,6 +87,8 @@
     jl_exception_in_transit;
     jl_expand;
     jl_expr_type;
+    jl_ascii_string_type;
+    jl_utf8_string_type;
     jl_fd_clr;
     jl_fd_isset;
     jl_fd_set;

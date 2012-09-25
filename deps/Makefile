@@ -924,7 +924,7 @@ distclean-zlib:
 
 ## Tk wrapper ##
 
-TKW_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
 TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USRLIB)/ -ljulia-release
 
 $(USRLIB)/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
@@ -937,6 +937,22 @@ install-tk-wrapper: $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
 clean-tk-wrapper:
 	rm -f $(USRLIB)/libtk_wrapper.$(SHLIB_EXT)
 distclean-tk-wrapper: clean-tk-wrapper
+
+## Cairo wrapper ##
+
+CAIRO_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+CAIRO_LIB = -L$(USRLIB)/ -ljulia-release
+
+$(USRLIB)/libcairo_wrapper.$(SHLIB_EXT): cairo_wrapper.c
+	mkdir -p $(USRLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(CAIRO_INC) cairo_wrapper.c $(CAIRO_LIB) -o $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(INSTALL_NAME_CMD)libcairo_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-cairo-wrapper: $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) cairo_wrapper.c
+
+clean-cairo-wrapper:
+	rm -f $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT)
+distclean-cairo-wrapper: clean-cairo-wrapper
 
 ## phony targets ##
 
