@@ -61,7 +61,7 @@ function info{T}(
               ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
               ret == ERROR_BADOPTION ? "invalid option flags" :
-                                            "unknown error")
+                                       "unknown error $ret")
     end
     reinterpret(T,buf)[1]
 end
