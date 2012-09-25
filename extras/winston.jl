@@ -5,11 +5,12 @@ module Winston
 import Base.*
 import Cairo.*
 
+export PlotContainer
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,
     LineX, LineY, PlotInset, PlotLabel, Points, Slope,
     SymmetricErrorBarsX, SymmetricErrorBarsY
 export FramedArray, FramedPlot, Table
-export file, setattr, style
+export file, setattr, style, svg
 
 load("inifile.jl")
 
@@ -2507,6 +2508,18 @@ function file( self::PlotContainer, filename::String, args... )
     else
         error("I can't export .$extn, sorry.")
     end
+end
+
+function svg(self::PlotContainer, args...)
+    opts = args2dict(args...)
+    width = has(opts,"width") ? opts["width"] : config_value("window","width")
+    height = has(opts,"height") ? opts["height"] : config_value("window","height")
+    stream = memio(0, false)
+    device = SVGRenderer(stream, width, height)
+    page_compose(self, device)
+    s = takebuf_string(stream)
+    a,b = search(s, "<svg")
+    s[a:end]
 end
 
 #function multipage( plots, filename, args... )

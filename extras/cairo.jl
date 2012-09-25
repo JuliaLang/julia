@@ -11,7 +11,7 @@ export CairoSurface, finish, destroy, status,
     CAIRO_CONTENT_ALPHA,
     CAIRO_CONTENT_COLOR_ALPHA,
     CairoRGBSurface, CairoPDFSurface, CairoEPSSurface, CairoXlibSurface,
-    CairoARGBSurface, surface_create_similar,
+    CairoARGBSurface, CairoSVGSurface, surface_create_similar,
     write_to_png, CairoContext, save, restore, show_page, clip, clip_preserve,
     fill, fill_preserve, new_path, new_sub_path, close_path, paint, stroke,
     stroke_preserve, set_fill_type, set_line_width, rotate, set_source_rgb,
@@ -23,7 +23,7 @@ export CairoSurface, finish, destroy, status,
     PDFRenderer, EPSRenderer, save_state, restore_state, move, lineto,
     linetorel, line, rect, ellipse, symbol, symbols, set, get,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
-    TeXLexer, tex2pango
+    TeXLexer, tex2pango, SVGRenderer
 
 load("color.jl")
 
@@ -33,6 +33,7 @@ try
     global _jl_libcairo = openlib("libcairo")
     global _jl_libpangocairo = openlib("libpangocairo-1.0")
     global _jl_libgobject = openlib("libgobject-2.0")
+    global libcairo_wrapper = dlopen("libcairo_wrapper")
 catch err
     println("Oops, could not load cairo or pango libraries. Are they installed?")
     if OS_NAME == :Darwin
@@ -114,6 +115,13 @@ function CairoXlibSurface(display, drawable, visual, w, h)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_xlib_surface_create), Ptr{Void},
                 (Ptr{Void}, Int32, Ptr{Void}, Int32, Int32),
                 display, drawable, visual, w, h)
+    CairoSurface(ptr, w, h)
+end
+
+function CairoSVGSurface(stream::IOStream, w, h)
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_svg_surface_create_for_stream), Ptr{Void},
+                (Ptr{Void}, Ptr{Void}, Float64, Float64),
+                dlsym(libcairo_wrapper,:cairo_write_to_ios_callback), stream, w, h)
     CairoSurface(ptr, w, h)
 end
 
@@ -441,6 +449,14 @@ function EPSRenderer(filename::String, w_pts::Float64, h_pts::Float64)
     r = CairoRenderer(surface)
     r.upperright = (w_pts,h_pts)
     r.on_close = () -> show_page(r.ctx)
+    r
+end
+
+function SVGRenderer(stream::IOStream, w::Real, h::Real)
+    surface = CairoSVGSurface(stream, w, h)
+    r = CairoRenderer(surface)
+    r.upperright = (w,h)
+    #r.on_close = () -> show_page(r.ctx)
     r
 end
 
