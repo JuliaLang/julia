@@ -4,7 +4,7 @@ import Base.*
 import Main
 import Main.*
 
-export dsfmt_get_min_array_size, dsfmt_get_idstring,
+export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_gv_init_gen_rand, 
        dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_genrand_close1_open2, dsfmt_gv_genrand_close1_open2,
@@ -23,12 +23,8 @@ export dsfmt_get_min_array_size, dsfmt_get_idstring,
 ## DSFMT
 
 type DSFMT_state
-    state::Array{Int32}
-    isinit::Bool
-    function DSFMT_state()
-        state = Array(Int32, 770)
-        new(state, false)
-    end
+    val::Vector{Int32}
+    DSFMT_state() = new(Array(Int32, 770))
 end
 
 function dsfmt_get_min_array_size()
@@ -41,20 +37,20 @@ function dsfmt_get_idstring()
     idstring = ccall(dlsym(Main.librandom, :dsfmt_get_idstring),
                      Ptr{Uint8},
                      ())
-    bytestring(idstring)
+    return bytestring(idstring)
 end
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::Uint32)
     ccall(dlsym(Main.librandom, :dsfmt_init_gen_rand),
           Void, 
           (Ptr{Void}, Uint32,), 
-          s.state, seed)
+          s.val, seed)
 end
 
 function dsfmt_gv_init_gen_rand(seed::Uint32)
     ccall(dlsym(Main.librandom, :dsfmt_gv_init_gen_rand),
           Void, 
-          (Uint32,), 
+          (Uint32,),
           seed)
 end
 
@@ -62,7 +58,7 @@ function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{Uint32})
     ccall(dlsym(Main.librandom, :dsfmt_init_by_array),
           Void, 
           (Ptr{Void}, Ptr{Uint32}, Int32), 
-          s.state, seed, length(seed))
+          s.val, seed, length(seed))
 end
 
 function dsfmt_gv_init_by_array(seed::Vector{Uint32})
@@ -83,7 +79,7 @@ for (genrand, gv_genrand) in
             r = ccall(dlsym(Main.librandom, $(string(genrand)) ),
                       Float64,
                       (Ptr{Void},),
-                      s.state)
+                      s.val)
         end
 
         function ($gv_genrand)()
@@ -110,7 +106,7 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
             ccall(dlsym(Main.librandom, $(string(genrand_fill)) ),
                   Void,
                   (Ptr{Void}, Ptr{Float64}, Int32),
-                  s.state, A, n)
+                  s.val, A, n)
             return A
         end
         
@@ -129,7 +125,7 @@ function dsfmt_genrand_uint32(s::DSFMT_state)
     r = ccall(dlsym(Main.librandom, :dsfmt_genrand_uint32), 
               Uint32,
               (Ptr{Void},),
-              s.state)
+              s.val)
 end
 
 function dsfmt_gv_genrand_uint32()
