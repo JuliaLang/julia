@@ -752,7 +752,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(and_int,2) return builder.CreateAnd(JL_INT(x), JL_INT(y));
     HANDLE(or_int,2)  return builder.CreateOr(JL_INT(x), JL_INT(y));
     HANDLE(xor_int,2) return builder.CreateXor(JL_INT(x), JL_INT(y));
-    HANDLE(not_int,1) return builder.CreateXor(JL_INT(x), ConstantInt::get(t, -1));
+    HANDLE(not_int,1) return builder.CreateXor(JL_INT(x), ConstantInt::get(t, -1, true));
     HANDLE(shl_int,2) return builder.CreateShl(JL_INT(x), uint_cnvt(t,JL_INT(y)));
     HANDLE(lshr_int,2) return builder.CreateLShr(JL_INT(x), uint_cnvt(t,JL_INT(y)));
     HANDLE(ashr_int,2) return builder.CreateAShr(JL_INT(x), uint_cnvt(t,JL_INT(y)));

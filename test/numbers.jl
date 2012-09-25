@@ -1068,4 +1068,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @assert approx_eq(signif(123.456,5), 123.46)
 @assert approx_eq(signif(123.456,8,2), 123.5)
 
-
+# issue #1308
+@assert hex(~uint128(0)) == "f"^32
+@assert uint128(~0) == ~uint128(0)
+@assert int128(~0) == ~int128(0)
