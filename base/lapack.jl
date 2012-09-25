@@ -76,10 +76,10 @@ end
 
 ## (GE) general matrices: balancing and back-transforming
 for (gebal, gebak, elty) in
-    (("dgebal_","dgebak_",:Float64),
-     ("sgebal_","sgebak_",:Float32),
-     ("zgebal_","zgebak_",:Complex128),
-     ("cgebal_","cgebak_",:Complex64))
+    ((:dgebal_, :dgebak_, :Float64),
+     (:sgebal_, :sgebak_, :Float32),
+     (:zgebal_, :zgebak_, :Complex128),
+     (:cgebal_, :cgebak_, :Complex64))
     @eval begin
         #     SUBROUTINE DGEBAL( JOB, N, A, LDA, ILO, IHI, SCALE, INFO )
         #*     .. Scalar Arguments ..
