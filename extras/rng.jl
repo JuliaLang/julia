@@ -20,7 +20,7 @@ export librandom_init, srand,
 
 abstract Rng
 
-start(r::Rng) = 1
+start(r::Rng) = 0
 done(r::Rng, count) = r.len == count ? true : false
 next(r::Rng, count) = (rand(r), count + 1)
 
