@@ -634,6 +634,7 @@ export
     diagmm!,
     dot,
     eig,
+    eigvals.
     expm,
     eye,
     factors,
@@ -661,7 +662,6 @@ export
     randsym,
     rank,
     rref,
-    sdd,
     solve,
     svd,
     svdvals,
