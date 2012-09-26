@@ -27,7 +27,7 @@ $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
 # use sys.ji if it exists, otherwise run two stages
 $(BUILD)/lib/julia/sys.ji: VERSION base/*.jl $(BUILD)/lib/julia/helpdb.jl
 	$(QUIET_JULIA) cd base && \
-	(test -f $(BUILD)/lib/julia/sys.ji || $(JULIA_EXECUTABLE) -b sysimg.jl) && $(JULIA_EXECUTABLE) sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'."
+	(test -f $(BUILD)/lib/julia/sys.ji || $(JULIA_EXECUTABLE) -bf sysimg.jl) && $(JULIA_EXECUTABLE) -f sysimg.jl || echo "Note: this error is usually fixed by running 'make clean'."
 
 ifeq ($(OS), WINNT)
 OPENBLASNAME=openblas-r0.1.1

@@ -124,6 +124,7 @@ function process_options(args::Array{Any,1})
     global ARGS
     quiet = false
     repl = true
+    startup = true
     if has(ENV, "JL_POST_BOOT")
         eval(parse_input_line(ENV["JL_POST_BOOT"]))
     end
@@ -167,6 +168,8 @@ function process_options(args::Array{Any,1})
             exit(0)
         elseif args[i]=="--no-history"
             # see repl-readline.c
+        elseif args[i] == "-f" || args[i] == "--no-startup"
+            startup = false
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -179,7 +182,7 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl)
+    return (quiet,repl,startup)
 end
 
 const _jl_roottask = current_task()
@@ -226,11 +229,17 @@ function _start()
             abs_path("$JULIA_HOME/../lib/julia/ui"),
         ]
 
-        (quiet,repl) = process_options(ARGS)
-        if repl
-            # Load customized startup
+        (quiet,repl,startup) = process_options(ARGS)
+
+        # Load customized startup
+        if startup
             try include(strcat(cwd(),"/startup.jl")) end
-            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+        end
+
+        if repl
+            if startup
+                try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+            end
 
             global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
