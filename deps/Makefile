@@ -298,7 +298,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
+	./configure --prefix=$(abspath $(USR)) --enable-utf --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@

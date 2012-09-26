@@ -15,7 +15,50 @@ export librandom_init, srand,
        randg, randg!,
        randexp, randexp!, exprnd,
        randchi2, randchi2!, chi2rnd,
-       randbeta, randbeta!, betarnd
+       randbeta, randbeta!, betarnd,
+       Rng_MT
+
+abstract Rng
+
+start(r::Rng) = 0
+done(r::Rng, count) = r.len == count ? true : false
+next(r::Rng, count) = (rand(r), count + 1)
+
+type Rng_MT <: Rng
+    state::DSFMT_state
+    seed::Union(Uint32,Vector{Uint32})
+    len::Int   # Use for iteration. Set to -1 otherwise.
+
+    function Rng_MT()
+        seed = uint32(0)
+        state = DSFMT_state()
+        dsfmt_init_gen_rand(state, seed)
+        return new(state, seed, -1)
+    end
+
+    Rng_MT(seed) = Rng_MT(seed, -1)
+
+    function Rng_MT(seed::Uint32, len::Int)
+        state = DSFMT_state()
+        dsfmt_init_gen_rand(state, seed)
+        return new(state, seed, len)
+    end
+
+    function Rng_MT(seed::Vector{Uint32}, len::Int)
+        state = DSFMT_state()
+        dsfmt_init_by_array(state, seed)
+        return new(state, seed, len)
+    end
+end
+
+rand(r::Rng_MT) = dsfmt_genrand_close_open(r.state)
+rand(r::Rng_MT, args) = rand(r, args...)
+
+function srand(r::Rng_MT, seed) 
+    r.seed = seed
+    dsfmt_init_gen_rand(r.state, seed)
+    return r
+end
 
 ## initialization
 
@@ -39,11 +82,11 @@ end
 
 @windows_only begin
     a = zeros(Uint32, 2)
-    LibRandom.win32_SystemFunction036!(a)
+    win32_SystemFunction036!(a)
     srand(a)
 end
 
-    LibRandom.randmtzig_create_ziggurat_tables()
+    randmtzig_create_ziggurat_tables()
 end
 
 # macros to generate random arrays
@@ -82,12 +125,12 @@ end
 
 function srand(seed::Uint32)
     global RANDOM_SEED = seed
-    LibRandom.dsfmt_gv_init_gen_rand(seed)
+    dsfmt_gv_init_gen_rand(seed)
 end
 
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
-    LibRandom.dsfmt_gv_init_by_array(seed)
+    dsfmt_gv_init_by_array(seed)
 end
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
@@ -105,9 +148,9 @@ srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
-rand() = LibRandom.dsfmt_gv_genrand_close_open()
+rand() = dsfmt_gv_genrand_close_open()
 
-const dsfmt_min_array_size = LibRandom.dsfmt_get_min_array_size()
+const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
 function rand!(A::Array{Float64})
     n = numel(A)
@@ -116,7 +159,7 @@ function rand!(A::Array{Float64})
             A[i] = rand()
         end
     else
-        A = LibRandom.dsfmt_gv_fill_array_close_open!(A, n & 0xfffffffe)
+        A = dsfmt_gv_fill_array_close_open!(A, n & 0xfffffffe)
         if isodd(n)
             A[n] = rand()
         end
@@ -200,15 +243,15 @@ randbool() = randbit() == 1
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-randn() = LibRandom.randmtzig_randn()
-randn!(A::Array{Float64}) = LibRandom.randmtzig_fill_randn!(A)
+randn() = randmtzig_randn()
+randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn(dims)
 
 ## randexp() - Exponentially distributed random numbers using Ziggurat algorithm
 
-randexp() = LibRandom.randmtzig_exprnd()
-randexp!(A::Array{Float64}) = LibRandom.randmtzig_fill_exprnd!(A)
+randexp() = randmtzig_exprnd()
+randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp(dims)
 
