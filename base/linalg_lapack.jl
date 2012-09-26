@@ -24,18 +24,20 @@ function eig{T<:LapackScalar}(A::StridedMatrix{T})
     complex(WR, WI), evec
 end
 
-sdd!{T<:LapackScalar}(A::StridedMatrix{T},vecs::Char) = Lapack.gesdd!(vecs, copy(A))
-sdd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Char) = sdd!(copy(A), vecs)
-sdd{T<:Real}(x::StridedMatrix{T},vecs::Char) = sdd(float64(x),vecs)
-sdd(A) = sdd(A, 'A')
-
-function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool)
-    Lapack.gesvd!(vecs ? 'A' : 'N', vecs ? 'A' : 'N', copy(A))
+function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+    m,n = size(A)
+    if m == 0 || n == 0
+        if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
+        return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
+    end
+    if vecs; return Lapack.gesdd!(thin ? 'O' : 'A', copy(A)); end
+    Lapack.gesdd!('N', copy(A))
 end
 
-svd{T<:Integer}(x::StridedMatrix{T},vecs) = svd(float64(x),vecs)
-svd(A) = svd(A,true)
-svdvals(A) = svd(A,false)[2]
+svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
+svd(A::StridedMatrix) = svd(A,true,false)
+svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
+svdvals(A) = svd(A,false,true)[2]
 
 function (\){T<:LapackScalar}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)
