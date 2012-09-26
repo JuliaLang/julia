@@ -634,7 +634,7 @@ export
     diagmm!,
     dot,
     eig,
-    eigvals.
+    eigvals,
     expm,
     eye,
     factors,
