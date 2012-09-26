@@ -1,28 +1,41 @@
 # linear algebra functions that use the Lapack module
 
-eig{T<:Integer}(x::StridedMatrix{T}) = eig(float64(x))
-
-function eig{T<:LapackScalar}(A::StridedMatrix{T})
-    if ishermitian(A) return Lapack.syev!('V','U',copy(A)) end
-                                        # Only compute right eigenvectors
-    if iscomplex(A) return Lapack.geev!('N','V',copy(A))[2:3] end
-    VL, WR, WI, VR = Lapack.geev!('N','V',copy(A))
-    if all(WI .== 0.) return WR, VR end
+function eig{T<:LapackScalar}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
-    evec = complex(zeros(T, n, n))
-    j = 1
-    while j <= n
-        if WI[j] == 0.0
-            evec[:,j] = VR[:,j]
-        else
-            evec[:,j]   = VR[:,j] + im*VR[:,j+1]
-            evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
+    if ishermitian(A) return Lapack.syev!(vecs ? 'V' : 'N', 'U', copy(A)) end
+
+    if iscomplex(A)
+        W, VR = Lapack.geev!('N', vecs ? 'V' : 'N', copy(A))[2:3]
+        if vecs; return W, VR; end
+        return W
+    end
+
+    VL, WR, WI, VR = Lapack.geev!('N', vecs ? 'V' : 'N', copy(A))
+    if all(WI .== 0.) 
+        if vecs; return WR, VR; end
+        return WR
+    end
+    if vecs    
+        evec = complex(zeros(T, n, n))
+        j = 1
+        while j <= n
+            if WI[j] == 0.0
+                evec[:,j] = VR[:,j]
+            else
+                evec[:,j]   = VR[:,j] + im*VR[:,j+1]
+                evec[:,j+1] = VR[:,j] - im*VR[:,j+1]
+                j += 1
+            end
             j += 1
         end
-        j += 1
+        return complex(WR, WI), evec
     end
-    complex(WR, WI), evec
+    complex(WR, WI)
 end
+
+eig{T<:Integer}(x::StridedMatrix{T}, vecs::Bool) = eig(float64(x), vecs)
+eig(x::StridedMatrix) = eig(x, true)
+eigvals(x::StridedMatrix) = eig(x, false)
 
 function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     m,n = size(A)
