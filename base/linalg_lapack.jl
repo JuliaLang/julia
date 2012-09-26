@@ -2,7 +2,7 @@
 
 function eig{T<:LapackScalar}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
-    if n == 0; return vecs ? zeros(T, 0), zeros(T, 0, 0) : zeros(T, 0, 0); end
+    if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
 
     if ishermitian(A); return Lapack.syev!(vecs ? 'V' : 'N', 'U', copy(A)); end
 
