@@ -120,17 +120,6 @@
   TZ64_index_shiftup (tz_index::IUI3264)= TZ_index_shiftup!(_TZ64_index_mask_ & tz_index)
   TZ64_index_shiftdn (zonedtime::IUI64) = ((zonedtime >>> _TZ64_index_shift_) & _TZ64_index_mask_)
 
-  zonedtime_from_tocks(E::Int, t::TAI64_tocks) = TAI64_zoned{E}(reinterpret(Int64,t))
-  zonedtime_from_tocks(E::Int, t::UTC64_tocks) = UTC64_zoned{E}(reinterpret(Int64,t))
-
-  zone_from_zonedtime{E}(d::TAI64_zoned{E}) = (E)
-  zone_from_zonedtime{E}(d::UTC64_zoned{E}) = (E)
-
-  tocks_from_zonedtime{E}(d::TAI64_zoned{E}) =
-     reinterpret(Int64,(reinterpret(Uint64,d) & _TZ64_index_filter_))
-  tocks_from_zonedtime{E}(d::UTC64_zoned{E}) =
-     reinterpret(Int64,(reinterpret(Uint64,d) & _TZ64_index_filter_))
-
 
   convert(::Type{Uint64}, x::TAI64_tocks) = reinterpret(Uint64, x)
   convert(::Type{ Int64}, x::TAI64_tocks) = reinterpret( Int64, x)
@@ -162,6 +151,20 @@
   TAI_zoned(E::Integer, x::IUI64) = TAI_zoned(x, convert(Int,E))
   UTC_zoned(E::IUI,     x::IUI64) = convert(UTC64_zoned{E}, x)
   UTC_zoned(E::Integer, x::IUI64) = UTC_zoned(x, convert(Int,E))
+
+
+  # intra-instantiators
+
+  zonedtime_from_tocks(E::Int, t::TAI64_tocks) = TAI_zoned(E,reinterpret(Int64,t))
+  zonedtime_from_tocks(E::Int, t::UTC64_tocks) = UTC_zoned(E,reinterpret(Int64,t))
+
+  tocks_from_zonedtime{E}(d::TAI64_zoned{E}) =
+     reinterpret(Int64,(reinterpret(Uint64,d) & _TZ64_index_filter_))
+  tocks_from_zonedtime{E}(d::UTC64_zoned{E}) =
+     reinterpret(Int64,(reinterpret(Uint64,d) & _TZ64_index_filter_))
+
+  zone_from_zonedtime{E}(d::TAI64_zoned{E}) = (E)
+  zone_from_zonedtime{E}(d::UTC64_zoned{E}) = (E)
 
 
   # show, print for MeasuredTime with specializations for ZonedTime
@@ -199,41 +202,41 @@
 
 
 
-  # conversion an promotion for <T>_tocks with Uint64, Int64
+  # # conversion an promotion for <T>_tocks with Uint64, Int64
 
-  convert(::Int64 , tai::Type{TAI_tocks}) = int64(tai)
-  convert(::Int64 , utc::Type{UTC_tocks}) = int64(utc)
-  convert(::Uint64, tai::Type{TAI_tocks}) = uint(tai)
-  convert(::Uint64, utc::Type{UTC_tocks}) = uint(utc)
-  #
-  convert(::Type{TAI_tocks}, si::Int64 )  = TAItictoc(si)
-  convert(::Type{UTC_tocks}, si::Int64 )  = UTCtictoc(si)
-  convert(::Type{TAI_tocks}, ui::Uint64)  = TAItictoc(ui)
-  convert(::Type{UTC_tocks}, ui::Uint64)  = UTCtictoc(ui)
-  #
-  convert(::Type{TAI_tocks}, utc::Type{UTC_tocks}) = TAItictoc(int64(utc))
-  convert(::Type{UTC_tocks}, tai::Type{TAI_tocks}) = UTCtictoc(int64(tai))
-  #
-  #
-  promote_rule(::Type{TAI_tocks}, ::Type{Uint64}) = TAI_tocks
-  promote_rule(::Type{TAI_tocks}, ::Type{Int64} ) = TAI_tocks
-  promote_rule(::Type{TAI_tocks}, ::Type{Int64} ) = TAI_tocks
-  promote_rule(::Type{UTC_tocks}, ::Type{Uint64}) = UTC_tocks
-  promote_rule(::Type{UTC_tocks}, ::Type{Int64} ) = UTC_tocks
-  promote_rule(::Type{UTC_tocks}, ::Type{Uint64}) = UTC_tocks
-  #
-  promote_rule(::Type{TAI_tocks}, ::Type{UTC_tocks}) = TAI_tocks
+  # convert(::Int64 , tai::Type{TAI_tocks}) = int64(tai)
+  # convert(::Int64 , utc::Type{UTC_tocks}) = int64(utc)
+  # convert(::Uint64, tai::Type{TAI_tocks}) = uint(tai)
+  # convert(::Uint64, utc::Type{UTC_tocks}) = uint(utc)
+  # #
+  # convert(::Type{TAI_tocks}, si::Int64 )  = TAItictoc(si)
+  # convert(::Type{UTC_tocks}, si::Int64 )  = UTCtictoc(si)
+  # convert(::Type{TAI_tocks}, ui::Uint64)  = TAItictoc(ui)
+  # convert(::Type{UTC_tocks}, ui::Uint64)  = UTCtictoc(ui)
+  # #
+  # convert(::Type{TAI_tocks}, utc::Type{UTC_tocks}) = TAItictoc(int64(utc))
+  # convert(::Type{UTC_tocks}, tai::Type{TAI_tocks}) = UTCtictoc(int64(tai))
+  # #
+  # #
+  # promote_rule(::Type{TAI_tocks}, ::Type{Uint64}) = TAI_tocks
+  # promote_rule(::Type{TAI_tocks}, ::Type{Int64} ) = TAI_tocks
+  # promote_rule(::Type{TAI_tocks}, ::Type{Int64} ) = TAI_tocks
+  # promote_rule(::Type{UTC_tocks}, ::Type{Uint64}) = UTC_tocks
+  # promote_rule(::Type{UTC_tocks}, ::Type{Int64} ) = UTC_tocks
+  # promote_rule(::Type{UTC_tocks}, ::Type{Uint64}) = UTC_tocks
+  # #
+  # promote_rule(::Type{TAI_tocks}, ::Type{UTC_tocks}) = TAI_tocks
 
 
-  #
-  promote_rule(::Type{TAI_zoned}, ::Type{Uint64}) = TAI_zoned
-  promote_rule(::Type{TAI_zoned}, ::Type{Int64} ) = TAI_zoned
-  promote_rule(::Type{TAI_zoned}, ::Type{Int64} ) = TAI_zoned
-  promote_rule(::Type{UTC_zoned}, ::Type{Uint64}) = UTC_zoned
-  promote_rule(::Type{UTC_zoned}, ::Type{Int64} ) = UTC_zoned
-  promote_rule(::Type{UTC_zoned}, ::Type{Uint64}) = UTC_zoned
-  #
-  promote_rule(::Type{TAI_zoned}, ::Type{UTC_zoned}) = TAI_zoned
+  # #
+  # promote_rule(::Type{TAI_zoned}, ::Type{Uint64}) = TAI_zoned
+  # promote_rule(::Type{TAI_zoned}, ::Type{Int64} ) = TAI_zoned
+  # promote_rule(::Type{TAI_zoned}, ::Type{Int64} ) = TAI_zoned
+  # promote_rule(::Type{UTC_zoned}, ::Type{Uint64}) = UTC_zoned
+  # promote_rule(::Type{UTC_zoned}, ::Type{Int64} ) = UTC_zoned
+  # promote_rule(::Type{UTC_zoned}, ::Type{Uint64}) = UTC_zoned
+  # #
+  # promote_rule(::Type{TAI_zoned}, ::Type{UTC_zoned}) = TAI_zoned
 
 
 
