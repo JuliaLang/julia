@@ -103,9 +103,9 @@ function insert_profile_block(fblock::Expr, tlast, tnow, timers, counters, tags,
             push(tags,lasttag)
             if saveret
                 if is_expr_head(fblock.args[i], :return)
-                    push(fblocknewargs, :($retsym = $fblock.args[i].args[1]))
+                    push(fblocknewargs, :($retsym = $(fblock.args[i].args[1])))
                 else
-                    push(fblocknewargs, :($retsym = $fblock.args[i]))
+                    push(fblocknewargs, :($retsym = $(fblock.args[i])))
                 end
             else
                 push(fblocknewargs, fblock.args[i])
