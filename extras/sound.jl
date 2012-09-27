@@ -185,9 +185,11 @@ function write_data(io::IO, fmt::WAVFormat, samples::Array)
     write(io, convert(Array{data_type}, flat_array))
 end
 
-get_data_range(samples::Array, subrange::Any) = samples
+get_data_range(samples::Array, subrange) = samples
 get_data_range(samples::Array, subrange::Int) = samples[1:subrange, :]
+get_data_range(samples::Array, subrange::Real) = samples[1:convert(Int, subrange), :]
 get_data_range(samples::Array, subrange::Range1{Int}) = samples[subrange, :]
+get_data_range(samples::Array, subrange::Range1{Real}) = samples[convert(Range1{Int}, subrange), :]
 
 # How do I make the options optional? It seems that I have to pass *something* in.
 # @note This only works on little-endian machines! Need to byte swap on big-endian systems.
@@ -234,8 +236,8 @@ function wavread(filename::String, opts::Options)
 end
 
 # These are the MATLAB compatible signatures
-wavread(filename::String) = wavread(filename, @options format="double")
-wavread(io::IO) = wavread(io, @options format="double")
+wavread(filename::String) = wavread(filename, @options)
+wavread(io::IO) = wavread(io, @options)
 wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
 wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
 wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
