@@ -2276,6 +2276,7 @@ void jl_init_types(void)
     jl_tag_kind->fptr = jl_f_no_function;
     jl_tag_kind->env = (jl_value_t*)jl_null;
     jl_tag_kind->linfo = NULL;
+    jl_tag_kind->uid = jl_assign_type_uid();
 
     jl_struct_kind->name = jl_new_typename(jl_symbol("CompositeKind"));
     jl_struct_kind->name->primary = (jl_value_t*)jl_struct_kind;
