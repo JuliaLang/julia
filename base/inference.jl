@@ -1777,16 +1777,22 @@ function tuple_elim_pass(ast::Expr)
             del(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
+            n_ins = 0
             for j=1:nv
-                tmpv = unique_name(ast)
                 tupelt = tup[j+1]
-                elty = exprtype(tupelt)
-                tmp = Expr(:(=), {tmpv,tupelt}, Any)
-                add_variable(ast, tmpv, elty)
-                insert(body, i+j-1, tmp)
-                vals[j] = SymbolNode(tmpv, elty)
+                if isa(tupelt,Number) || isa(tupelt,String) || isa(tupelt,QuoteNode)
+                    vals[j] = tupelt
+                else
+                    elty = exprtype(tupelt)
+                    tmpv = unique_name(ast)
+                    tmp = Expr(:(=), {tmpv,tupelt}, Any)
+                    add_variable(ast, tmpv, elty)
+                    insert(body, i+n_ins, tmp)
+                    vals[j] = SymbolNode(tmpv, elty)
+                    n_ins += 1
+                end
             end
-            i += nv
+            i += n_ins
             replace_tupleref(bexpr, var, vals, sv, i)
         else
             i += 1
