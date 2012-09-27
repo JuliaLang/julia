@@ -213,7 +213,7 @@ function wavread(io::IO, opts::Options)
             fmt = read_format(io, subchunk_size)
         elseif subchunk_id == b"data"
             if format == "size"
-                return number_of_samples(subchunk_size, fmt), int(fmt.nchannels)
+                return int(number_of_samples(subchunk_size, fmt) / fmt.nchannels), int(fmt.nchannels)
             end
             samples = read_data(io, subchunk_size, fmt, opts)
         else
