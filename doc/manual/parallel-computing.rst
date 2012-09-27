@@ -132,21 +132,13 @@ that runs it. For example, type the following into the julia prompt::
     julia> exception on 2: in anonymous: rand2 not defined 
 
 Processor 1 knew about the function ``rand2``, but processor 2 did not.
-To make your code available to all processors, there are two primary
-methods. First, the ``load`` function will automatically load a source
-file on all currently available processors. In a cluster, the contents
-of the file (and any files loaded recursively) will be sent over the
-network.
-
-::
+To make your code available to all processors, the ``load`` function will
+automatically load a source file on all currently available processors::
 
     julia> load("myfile.jl")
 
-Alternatively, all Julia processes will automatically load a file called
-``startup.jl`` (if it exists) in the same directory as the Julia
-executable on startup. If you regularly work with certain source files,
-it makes sense to load them from this file. Julia also loads the file
-``.juliarc.jl`` in the user's home directory.
+In a cluster, the contents of the file (and any files loaded recursively)
+will be sent over the network.
 
 Data Movement
 -------------
