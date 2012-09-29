@@ -622,7 +622,6 @@ export
     check_bounds, 
 
 # linear algebra
-    axpy,
     chol,
     chold,
     chold!,

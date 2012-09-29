@@ -51,7 +51,7 @@ end
 #      INTEGER INCX,INCY,N
 #*     .. Array Arguments ..
 #      DOUBLE PRECISION DX(*),DY(*)
-for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
+for (fname, elty) in ((:daxpy_,:Float64),    (:saxpy_,:Float32),
                       (:zaxpy_,:Complex128), (:caxpy_,:Complex64))
     @eval begin
         function axpy!(n::Integer, a::($elty),
