@@ -16,25 +16,34 @@ import Base.*
 
 import jas_arith.jas_quorem
 
-import jtm_consts.TAI_SecondsPerDay # int64(86_400)
-import jtm_consts.TAI_min_year      # -3999 from notes for ymd_to_daynum!!
-import jtm_consts.TAI_top_year      #  4000 from notes for ymd_to_daynum!!
+import jtm_consts.TAI_SecondsPerDay    # int64(86_400)
+import jtm_consts.TAI_SecondsPerHour   # int64(3_600)
+import jtm_consts.TAI_SecondsPerMinute # int64(60)
+import jtm_consts.TAI_min_year         # -3999 from notes for ymd_to_daynum!!
+import jtm_consts.TAI_top_year         #  4000 from notes for ymd_to_daynum!!
 
 import jtm_iuitypes.IUI3264
 
 
-# import YMD.ymd_check
-# import HMS.hms_check
-# import YMDSEC.ymdsec_check
-# import YMDHMS.ymdhms_check
 
-# import HMS.hms_to_sec!!
-# import HMS.sec_to_hms!!
-# import HMS.hms_to_sec
-# import HMS.sec_to_hms
+hms_to_sec(hr::IUI3264, mi::IUI3264, sc::IUI3264) =
+    (((hr * 60) + mi) * 60) + sc
 
-#import BitFields.bitmaskof
-#import BitFields.bitfilterof
+dhms_to_sec(dy::IUI3264, hr::IUI3264, mi::IUI3264, sc::IUI3264) =
+    (((((dy * 24) + hr) * 60) + mi) * 60) + sc
+
+function sec_to_dhms(sec::IUI3264)
+    dy, sec = jas_quorem(sec, TAI_SecondsPerDay )
+    hr, sec = jas_quorem(sec, TAI_SecondsPerHour)
+    mi, sec = jas_quorem(sec, TAI_SecondsPerMinuite)
+    (dy, hr, mi, sec)
+end
+
+function sec_to_hms(sec::IUI3264)
+    hr, sec = jas_quorem(sec, TAI_SecondsPerHour)
+    mi, sec = jas_quorem(sec, TAI_SecondsPerMinuite)
+    (hr, mi, sec)
+end
 
 
 # Dates in a proleptic Gregorian calendar using year zero.
