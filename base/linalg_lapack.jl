@@ -45,14 +45,29 @@ function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
     end
-    if vecs; return Lapack.gesdd!(thin ? 'O' : 'A', copy(A)); end
-    Lapack.gesdd!('N', copy(A))
+    if vecs; return Lapack.gesvd!(thin ? 'O' : 'A', thin ? 'O' : 'A', copy(A)); end
+    Lapack.gesvd!('N', 'N', copy(A))
 end
 
 svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
 svd(A::StridedMatrix) = svd(A,true,false)
 svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 svdvals(A) = svd(A,false,true)[2]
+
+function sdd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+    m,n = size(A)
+    if m == 0 || n == 0
+        if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
+        return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
+    end
+    if vecs; return Lapack.gesdd!(thin ? 'O' : 'A', copy(A)); end
+    Lapack.gesdd!('N', copy(A))
+end
+
+sdd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = sdd(float64(x),vecs,thin)
+sdd(A::StridedMatrix) = sdd(A,true,false)
+sdd(A::StridedMatrix, thin::Bool) = sdd(A,true,thin)
+sddvals(A) = sdd(A,false,true)[2]
 
 function (\){T<:LapackScalar}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)

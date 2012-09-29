@@ -667,6 +667,8 @@ export
     solve,
     svd,
     svdvals,
+    sdd,
+    sddvals,
     trace,
     transpose,
     trideig,
