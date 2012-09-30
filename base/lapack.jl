@@ -525,7 +525,7 @@ for (geev, gesvd, gesdd, elty) in
                 VT = Array($elty, (n, n))
             elseif job == 'S'
                 U  = Array($elty, (m, minmn))
-                VT = Array($elty, (n, minmn))
+                VT = Array($elty, (minmn, n))
             elseif job == 'O'
                 U  = Array($elty, (m, m >= n ? 0 : m))
                 VT = Array($elty, (n, m >= n ? n : 0))
@@ -550,7 +550,7 @@ for (geev, gesvd, gesdd, elty) in
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Rtyp}, Ptr{Int32}, Ptr{Int32}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &m, VT, &n,
+                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
                     ccall(dlsym(Base.liblapack, $(string(gesdd))), Void,
@@ -558,7 +558,7 @@ for (geev, gesvd, gesdd, elty) in
                            Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32},
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                            Ptr{Int32}, Ptr{Int32}),
-                          &job, &m, &n, A, &stride(A,2), S, U, &m, VT, &n,
+                          &job, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, iwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -567,7 +567,11 @@ for (geev, gesvd, gesdd, elty) in
                     work = Array($elty, lwork)
                 end
             end
-            if job == 'O' if m >= n return (A, S, VT) else return (U, S, A) end end
+            if job == 'O' 
+                if m >= n return (A, S, VT) 
+                else return (U, S, A) 
+                end 
+            end
             return (U, S, VT)
         end
         # SUBROUTINE DGESVD( JOBU, JOBVT, M, N, A, LDA, S, U, LDU, VT, LDVT, WORK, LWORK, INFO )
@@ -584,7 +588,7 @@ for (geev, gesvd, gesdd, elty) in
             minmn  = min(m, n)
             S      = Array(Rtyp, minmn)
             U      = Array($elty, jobu  == 'A'? (m, m):(jobu  == 'S'? (m, minmn) : (m, 0)))
-            VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (n, minmn) : (n, 0)))
+            VT     = Array($elty, jobvt == 'A'? (n, n):(jobvt == 'S'? (minmn, n) : (n, 0)))
             work   = Array($elty, 1)
             cmplx  = iscomplex(A)
             if cmplx rwork = Array(Rtyp, 5minmn) end
@@ -597,7 +601,7 @@ for (geev, gesvd, gesdd, elty) in
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{Rtyp}, Ptr{Int32}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &m, VT, &n,
+                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
                     ccall(dlsym(Base.liblapack, $(string(gesvd))), Void,
@@ -605,7 +609,7 @@ for (geev, gesvd, gesdd, elty) in
                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty},
                            Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty},
                            Ptr{Int32}, Ptr{Int32}),
-                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &m, VT, &n,
+                          &jobu, &jobvt, &m, &n, A, &stride(A,2), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, info)
                 end
                 if info[1] != 0 throw(LapackException(info[1])) end

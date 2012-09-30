@@ -45,7 +45,7 @@ function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
     end
-    if vecs; return Lapack.gesvd!(thin ? 'O' : 'A', thin ? 'O' : 'A', copy(A)); end
+    if vecs; return Lapack.gesvd!(thin ? 'S' : 'A', thin ? 'S' : 'A', copy(A)); end
     Lapack.gesvd!('N', 'N', copy(A))
 end
 
@@ -60,7 +60,7 @@ function sdd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
     end
-    if vecs; return Lapack.gesdd!(thin ? 'O' : 'A', copy(A)); end
+    if vecs; return Lapack.gesdd!(thin ? 'S' : 'A', copy(A)); end
     Lapack.gesdd!('N', copy(A))
 end
 
