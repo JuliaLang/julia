@@ -792,7 +792,7 @@ clp-$(CLP_VER)/configure: clp-$(CLP_VER).tar.gz
 	touch $@
 clp-$(CLP_VER)/config.status: clp-$(CLP_VER)/configure
 	cd clp-$(CLP_VER) && \
-	./configure --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
+	./configure --prefix="$(abspath $(USR))" CC="$(CC)" CXX="$(CXX)"
 $(CLP_OBJ_TARGET): clp-$(CLP_VER)/config.status
 	$(MAKE) -C clp-$(CLP_VER) install
 	touch $@
@@ -825,7 +825,7 @@ libunwind-$(UNWIND_VER).tar.gz:
 	$(WGET) http://savannah.spinellicreations.com/libunwind/libunwind-$(UNWIND_VER).tar.gz
 libunwind-$(UNWIND_VER)/Makefile: libunwind-$(UNWIND_VER).tar.gz
 	tar xfz $<
-	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(LIBUNWIND_CFLAGS)" --prefix=$(abspath $(USR)) CC="$(CC)" CXX="$(CXX)"
+	cd libunwind-$(UNWIND_VER) && ./configure  CFLAGS="$(LIBUNWIND_CFLAGS)" --prefix="$(abspath $(USR))" CC="$(CC)" CXX="$(CXX)"
 
 $(LIBUNWIND_TARGET_SOURCE): libunwind-$(UNWIND_VER)/Makefile
 	cd libunwind-$(UNWIND_VER) && $(MAKE)
@@ -879,27 +879,36 @@ else
 NGINX_OBJ_TARGET =
 endif
 
+ifeq ($(OS), WINNT)
+NGINX_FLAGS += \
+	--with-cc-opt="-D_NO_OLDNAMES -UWIN32 -Wno-error" \
+	--with-ld-opt="-L'$(USRLIB)' -lpcre"
+else
+NGINX_FLAGS += \
+	--with-ld-opt="-L'$(USRLIB)' -lpcre"
+endif
+
 compile-nginx: install-nginx
 install-nginx: $(NGINX_OBJ_TARGET)
 
-NGINX_BASE = nginx-$(NGINX_VER)
-
-$(NGINX_BASE).tar.gz:
-	$(WGET) http://www.nginx.org/download/$(NGINX_BASE).tar.gz
-$(NGINX_BASE)/configure: $(NGINX_BASE).tar.gz $(NGINX_BASE).tar.gz compile-pcre
-	tar zxf $<
+nginx/auto/configure: | compile-pcre
+	(cd .. && git submodule update --init)
 	touch $@
-$(NGINX_BASE)/config.status: $(NGINX_BASE)/configure
-	cd $(NGINX_BASE) && \
-	./configure --without-http_gzip_module --without-http_rewrite_module  --with-ld-opt="-L $(USRLIB) -lpcre" --with-debug --prefix=$(abspath $(USR)) 
-$(NGINX_OBJ_TARGET): $(NGINX_BASE)/config.status
-	$(MAKE) -C $(NGINX_BASE) install
+nginx/Makefile: nginx/auto/configure
+	cd nginx && \
+	./auto/configure --without-http_gzip_module --without-http_rewrite_module $(NGINX_FLAGS) --with-debug --prefix=".."
+$(NGINX_OBJ_TARGET): nginx/Makefile
+ifeq ($(OS), WINNT)
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/AdvAPI32.Lib nginx
+	-cp '/c/Program Files/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib '/c/Program Files (x86)/Microsoft SDKs/Windows/'*/Lib/WS2_32.Lib nginx
+endif
+	$(MAKE) -C nginx install DESTDIR="$(abspath $(USRBIN))/"
 	touch $@
 
 clean-nginx:
-	$(MAKE) -C $(NGINX_BASE) clean
+	-$(MAKE) -C nginx clean
 distclean-nginx:
-	rm -rf $(NGINX_BASE) $(NGINX_BASE).tar.gz
+	-rm -rf nginx
 
 ## GMP ##
 

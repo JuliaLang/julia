@@ -1,22 +1,33 @@
 @echo off
-cd /d %~dp0\bin
-set PATH=..\lib;%PATH%
-if exist ..\sbin\lighttpd.exe goto lighttpd
-if exist ..\sbin\nginx.exe goto nginx
+
+pushd %cd%
+setlocal enableextensions enabledelayedexpansion
+call %~dp0prepare_env.bat %*
+
+if exist %JULIA_HOME%..\sbin\nginx.exe goto nginx
+if exist %JULIA_HOME%..\sbin\lighttpd.exe goto lighttpd
 
 :error
 echo "Please install either lighttpd or nginx into usr/sbin"
+goto end
 
 :nginx
-start ..\sbin\nginx -c ..\etc\nginx.conf
+pushd %cd%
+cd %JULIA_HOME%..\sbin
+start nginx -c %JULIA_HOME%..\etc\nginx.conf
+popd
 goto julia
 
 :lighttpd
-start ..\sbin\lighttpd -D -f ..\etc\lighttpd.conf -m ..\lib
+start %JULIA_HOME%..\sbin\lighttpd -D -f %JULIA_HOME%..\etc\lighttpd.conf -m %JULIA_HOME%..\lib
 goto julia
 
 :julia
 echo "Connect to http://localhost:2000/ for the web REPL."
-julia-release-webserver -p 2001 
+start http://localhost:2000/
+cd %JULIA_HOME%..\bin
+julia-release-webserver.exe -p 2001 
 
 :end
+endlocal
+%popd

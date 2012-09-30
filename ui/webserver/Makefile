@@ -25,9 +25,14 @@ WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 	$(QUIET_CC)$(CC) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@
 
 	
-LAUNCH_SCRIPT = launch-julia-webserver
 ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
+$(USRBIN)/$(LAUNCH_SCRIPT):
+	cp ${JULIAHOME}/dist/windows/*.bat ${USRBIN}
+else
+LAUNCH_SCRIPT = launch-julia-webserver
+$(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
+	cp $< $@
 endif 
 	
 julia-release julia-debug: %: $(USRBIN)/%-webserver $(USRBIN)/$(LAUNCH_SCRIPT)
@@ -40,9 +45,6 @@ $(USRBIN)/julia-release-webserver: $(WEBSERVER_SRCS) server.h
 
 $(USRBIN)/julia-debug-webserver: $(WEBSERVER_SRCS) server.h
 	$(QUIET_LINK) $(CXX) $(CXXFLAGS) -o $@ $(DEBUGFLAGS) $(WEBSERVER_SRCS) $(LIBS)
-	
-$(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)
-	cp $< $@
 
 clean:
 	rm -f *.o *.do

@@ -4,3 +4,6 @@
 [submodule "deps/openlibm"]
 	path = deps/openlibm
 	url = http://github.com/JuliaLang/openlibm.git
+[submodule "deps/nginx"]
+	path = deps/nginx
+	url = https://github.com/git-mirror/nginx
