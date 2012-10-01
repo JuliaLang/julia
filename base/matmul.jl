@@ -47,38 +47,38 @@ At_mul_B(y::StridedVector, A::StridedMatrix, x::StridedVector) = generic_matvecm
 
 # Matrix-matrix multiplication
 
-(*){T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm('N', 'N', A, B)
-A_mul_B{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'N', 'N', A, B)
+(*){T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper('N', 'N', A, B)
+A_mul_B{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'N', 'N', A, B)
 A_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'N', 'N', A, B)
 
 function At_mul_B{T<:LapackType}(A::StridedMatrix{T},
                                  B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
-        syrk('T', A)
+        syrk_wrapper('T', A)
     else
-        gemm('T', 'N', A, B)
+        gemm_wrapper('T', 'N', A, B)
     end
 end
 
-At_mul_B{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'T', 'N', A, B)
+At_mul_B{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'T', 'N', A, B)
 At_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('T', 'N', A, B)
 At_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'T', 'N', A, B)
 
 function A_mul_Bt{T<:LapackType}(A::StridedMatrix{T},
                                  B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
-        syrk('N', A)
+        syrk_wrapper('N', A)
     else
-        gemm('N', 'T', A, B)
+        gemm_wrapper('N', 'T', A, B)
     end
 end
 
-A_mul_Bt{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'N', 'T', A, B)
+A_mul_Bt{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'N', 'T', A, B)
 A_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'T', A, B)
 A_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'N', 'T', A, B)
 
-At_mul_Bt{T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm('T', 'T', A, B)
-At_mul_Bt{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'T', 'T', A, B)
+At_mul_Bt{T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper('T', 'T', A, B)
+At_mul_Bt{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'T', 'T', A, B)
 At_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('T', 'T', A, B)
 At_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'T', 'T', A, B)
 
@@ -88,13 +88,13 @@ Ac_mul_B{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B:
 function Ac_mul_B{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
     if is(A, B) && size(A,1)>=500
-        herk('C', A)
+        herk_wrapper('C', A)
     else
-        gemm('C', 'N', A, B)
+        gemm_wrapper('C', 'N', A, B)
     end
 end
 
-Ac_mul_B{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm('C', 'N', A, B)
+Ac_mul_B{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper('C', 'N', A, B)
 Ac_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('C', 'N', A, B)
 Ac_mul_B{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'C', 'N', A, B)
 
@@ -103,17 +103,17 @@ A_mul_Bc{T<:Union(Float64,Float32)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B:
 function A_mul_Bc{T<:Union(Complex128,Complex64)}(A::StridedMatrix{T},
                                                   B::StridedMatrix{T})
     if is(A, B) && size(A,2)>=500
-        herk('N', A)
+        herk_wrapper('N', A)
     else
-        gemm('N', 'C', A, B)
+        gemm_wrapper('N', 'C', A, B)
     end
 end
-A_mul_Bc{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'N', 'C', A, B)
+A_mul_Bc{T<:Union(Complex128,Complex64)}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'N', 'C', A, B)
 A_mul_Bc{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('N', 'C', A, B)
 A_mul_Bc{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'N', 'C', A, B)
 
-Ac_mul_Bc{T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm('C', 'C', A, B)
-Ac_mul_Bc{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm(C, 'C', 'C', A, B)
+Ac_mul_Bc{T<:LapackType}(A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper('C', 'C', A, B)
+Ac_mul_Bc{T<:LapackType}(C::StridedMatrix{T}, A::StridedMatrix{T}, B::StridedMatrix{T}) = gemm_wrapper(C, 'C', 'C', A, B)
 Ac_mul_Bt{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul('C', 'C', A, B)
 Ac_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) = generic_matmatmul(C, 'C', 'C', A, B)
 
@@ -181,7 +181,7 @@ function gemv{T<:LapackType}(y::StridedVector{T},
     Blas.gemv!(tA, one(T), A, x, zero(T), y)
 end
 
-function syrk{T<:LapackType}(tA, A::StridedMatrix{T})
+function syrk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
     if tA == 'T'
         (nA, mA) = size(A)
         tAt = 'N'
@@ -200,7 +200,7 @@ function syrk{T<:LapackType}(tA, A::StridedMatrix{T})
     symmetrize!(Blas.syrk('U', tA, one(T), A))
 end
 
-function herk{T<:LapackType}(tA, A::StridedMatrix{T})
+function herk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
     if tA == 'C'
         (nA, mA) = size(A)
         tAt = 'N'
@@ -222,16 +222,16 @@ function herk{T<:LapackType}(tA, A::StridedMatrix{T})
     symmetrize_conj!(Blas.herk('U', tA, one(T), A))
 end
 
-function gemm{T<:LapackType}(tA, tB,
+function gemm_wrapper{T<:LapackType}(tA, tB,
                              A::StridedMatrix{T},
                              B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = Array(T, mA, nB)
-    gemm(C, tA, tB, A, B)
+    gemm_wrapper(C, tA, tB, A, B)
 end
 
-function gemm{T<:LapackType}(C::StridedMatrix{T}, tA, tB,
+function gemm_wrapper{T<:LapackType}(C::StridedMatrix{T}, tA, tB,
                              A::StridedMatrix{T},
                              B::StridedMatrix{T})
     mA, nA = lapack_size(tA, A)
