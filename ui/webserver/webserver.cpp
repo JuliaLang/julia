@@ -250,7 +250,7 @@ void socketClosed(uv_handle_t *stream)
     delete (uv_tcp_t *)stream;
 }
 
-//read from julia on metadata socket (4444)
+//read from julia on metadata socket (typically starts at 4444)
 void readSocketData(uv_stream_t *sock,ssize_t nread, uv_buf_t buf)
 {
     julia_session *julia_session_ptr=(julia_session*)sock->data;
@@ -756,7 +756,7 @@ string get_session(string user_name, string session_name) {
 void requestDone(uv_handle_t *handle)
 {
 #ifdef CPP_DEBUG_TRACE
-    cout << "Request Done";
+    cout << "Request Done\n";
 #endif
     delete (reading_in_progress*)handle->data;
     delete (uv_tcp_t*)(handle);
@@ -1027,7 +1027,7 @@ void get_response(request* req,uv_stream_t *client)
     buf.len=response.size();
     uv_write_t *wr = new uv_write_t;
     uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
-    wr->data=(void*)buf.base;
+    //wr->data=(void*)buf.base;
 
     // destroySoon the connection to the client
     uv_shutdown_t *sr = new uv_shutdown_t;
@@ -1036,10 +1036,16 @@ void get_response(request* req,uv_stream_t *client)
 
 
 // CTRL+C signal handler
-void sigproc(int)
-{
+#if defined(__WIN32__)
+BOOL WINAPI sigint_handler(DWORD wsig) { //This needs winapi types to guarantee __stdcall
+#else
+void sigint_handler(int sig, siginfo_t *info, void *context) {
+#endif
     // print a message
-    cout<<"cleaning up...\n";
+    cout<<"cleaning up...\nexiting...\n";
+#if defined(__WIN32__)
+    cout<<"\nImportant: Please answer N to the following question:\n";
+#endif
     
     // clean up
     for (size_t i = 0; i < julia_session_list.size(); i++)
@@ -1062,11 +1068,29 @@ void sigproc(int)
     exit(0);
 }
 
+uv_tty_t *stdin_handle;
+static void jl_install_sigint_handler() {
+#ifdef __WIN32__
+    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+    SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
+#else
+    struct sigaction act;
+    memset(&act, 0, sizeof(struct sigaction));
+    sigemptyset(&act.sa_mask);
+    act.sa_sigaction = sigint_handler;
+    act.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGINT, &act, NULL) < 0) {
+        fprintf(stderr, "sigaction: %s\n", strerror(errno));
+        exit(1);
+    }
+#endif
+}
+
 // program entrypoint
 int main(int argc, char* argv[])
 {
     // set the Ctrl+C handler
-    signal(SIGINT, sigproc);
+    jl_install_sigint_handler();
 
     // get the command line arguments
     int port_num = 1441;

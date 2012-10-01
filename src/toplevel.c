@@ -357,8 +357,7 @@ void jl_load(const char *fname)
     if (jl_load_progress_max > 0) {
         jl_load_progress_i++;
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
-        ios_printf(ios_stdout, "\e[0G\e[2K%0.1f%% %s", (double)jl_load_progress_i / jl_load_progress_max * 100, fname);
-        ios_flush(ios_stdout);
+        jl_printf(JL_STDOUT, "\e[0G\e[2K%0.1f%% %s", (double)jl_load_progress_i / jl_load_progress_max * 100, fname);
     }
     char *fpath = (char*)fname;
     uv_statbuf_t stbuf;

@@ -7,7 +7,7 @@
 pushd %cd%
 setlocal enableextensions enabledelayedexpansion
 call %~dp0prepare_env.bat %*
-%JULIA% %*
+call %JULIA% %*
 endlocal
 %popd
 
