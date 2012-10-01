@@ -16,7 +16,7 @@ function symmetrize!(A::AbstractMatrix, upper::Bool)
     A
 end
 
-type BunchKaufman{T<:LapackScalar} <: Factorization{T}
+type BunchKaufman{T<:LapackType} <: Factorization{T}
     LD::Matrix{T}
     ipiv::Vector{Int32}
     upper::Bool
@@ -26,7 +26,7 @@ type BunchKaufman{T<:LapackScalar} <: Factorization{T}
     end
 end
 
-BunchKaufman{T<:LapackScalar}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman{T}(A, upper)
+BunchKaufman{T<:LapackType}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman{T}(A, upper)
 BunchKaufman{T<:Real}(A::StridedMatrix{T}, upper::Bool) = BunchKaufman(float64(A), upper)
 BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, true)
 
@@ -39,10 +39,10 @@ function inv(B::BunchKaufman)
     symmetrize!(Lapack.sytri!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv), B.upper)
 end
 
-\{T<:LapackScalar}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
+\{T<:LapackType}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
     Lapack.sytrs!(B.upper ? 'U' : 'L', B.LD, B.ipiv, copy(R))
     
-type CholeskyDense{T<:LapackScalar} <: Factorization{T}
+type CholeskyDense{T<:LapackType} <: Factorization{T}
     LR::Matrix{T}
     upper::Bool
     function CholeskyDense(A::Matrix{T}, upper::Bool)
@@ -57,7 +57,7 @@ size(C::CholeskyDense,d::Integer) = size(C.LR,d)
 
 factors(C::CholeskyDense) = C.LR
 
-\{T<:LapackScalar}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
+\{T<:LapackType}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
     Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
 
 function det(C::CholeskyDense)
@@ -74,8 +74,8 @@ function inv(C::CholeskyDense)
 end
 
 ## Should these functions check that the matrix is Hermitian?
-chold!{T<:LapackScalar}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
-chold{T<:LapackScalar}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
+chold!{T<:LapackType}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
+chold{T<:LapackType}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
 chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
 chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
@@ -94,7 +94,7 @@ end
 size(A::LUDense) = size(A.lu)
 size(A::LUDense,n) = size(A.lu,n)
 
-function factors{T<:LapackScalar}(lu::LUDense{T}) 
+function factors{T<:LapackType}(lu::LUDense{T}) 
     LU, ipiv = lu.lu, lu.ipiv
     m, n = size(LU)
 
@@ -109,12 +109,12 @@ function factors{T<:LapackScalar}(lu::LUDense{T})
     L, U, P
 end
 
-function lud!{T<:LapackScalar}(A::Matrix{T})
+function lud!{T<:LapackType}(A::Matrix{T})
     lu, ipiv = Lapack.getrf!(A)
     LUDense{T}(lu, ipiv)
 end
 
-lud{T<:LapackScalar}(A::Matrix{T}) = lud!(copy(A))
+lud{T<:LapackType}(A::Matrix{T}) = lud!(copy(A))
 lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 
 ## Matlab-compatible
@@ -128,10 +128,10 @@ end
 
 det(A::Matrix) = det(lud(A))
 
-(\){T<:LapackScalar}(lu::LUDense{T}, B::StridedVecOrMat{T}) =
+(\){T<:LapackType}(lu::LUDense{T}, B::StridedVecOrMat{T}) =
     Lapack.getrs!('N', lu.lu, lu.ipiv, copy(B))
 
-inv{T<:LapackScalar}(lu::LUDense{T}) = Lapack.getri!(copy(lu.lu), lu.ipiv)
+inv{T<:LapackType}(lu::LUDense{T}) = Lapack.getri!(copy(lu.lu), lu.ipiv)
 
 ## QR decomposition without column pivots
 type QRDense{T} <: Factorization{T}
@@ -144,11 +144,11 @@ end
 size(A::QRDense) = size(A.hh)
 size(A::QRDense,n) = size(A.hh,n)
 
-qrd!{T<:LapackScalar}(A::StridedMatrix{T}) = QRDense{T}(Lapack.geqrf!(A)...)
-qrd{T<:LapackScalar}(A::StridedMatrix{T}) = qrd!(copy(A))
+qrd!{T<:LapackType}(A::StridedMatrix{T}) = QRDense{T}(Lapack.geqrf!(A)...)
+qrd{T<:LapackType}(A::StridedMatrix{T}) = qrd!(copy(A))
 qrd{T<:Real}(A::StridedMatrix{T}) = qrd(float64(A))
 
-function factors{T<:LapackScalar}(qrd::QRDense{T})
+function factors{T<:LapackType}(qrd::QRDense{T})
     aa  = copy(qrd.hh)
     R   = triu(aa[1:min(size(aa)),:])   # must be *before* call to orgqr!
     Lapack.orgqr!(aa, qrd.tau, size(aa,2)), R
@@ -157,15 +157,15 @@ end
 qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
 
 ## Multiplication by Q from the QR decomposition
-(*){T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+(*){T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T}) =
     Lapack.ormqr!('L', 'N', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T}) =
+Ac_mul_B{T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T}) =
     Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Least squares solution.  Should be more careful about cases with m < n
-function (\){T<:LapackScalar}(A::QRDense{T}, B::StridedVecOrMat{T})
+function (\){T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
     Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
 end
@@ -185,26 +185,26 @@ end
 size(x::QRPDense)   = size(x.hh)
 size(x::QRPDense,d) = size(x.hh,d)
 ## Multiplication by Q from the QR decomposition
-(*){T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+(*){T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
     Lapack.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
 ## Multiplication by Q' from the QR decomposition
-Ac_mul_B{T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
+Ac_mul_B{T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
     Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-qrpd!{T<:LapackScalar}(A::StridedMatrix{T}) = QRPDense{T}(Lapack.geqp3!(A)...)
-qrpd{T<:LapackScalar}(A::StridedMatrix{T}) = qrpd!(copy(A))
+qrpd!{T<:LapackType}(A::StridedMatrix{T}) = QRPDense{T}(Lapack.geqp3!(A)...)
+qrpd{T<:LapackType}(A::StridedMatrix{T}) = qrpd!(copy(A))
 qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
 
-function factors{T<:LapackScalar}(x::QRPDense{T})
+function factors{T<:LapackType}(x::QRPDense{T})
     aa = copy(x.hh)
     R  = triu(aa[1:min(size(aa)),:])
     Lapack.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
 end
 
-qrp{T<:LapackScalar}(x::StridedMatrix{T}) = factors(qrpd(x))
+qrp{T<:LapackType}(x::StridedMatrix{T}) = factors(qrpd(x))
 qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
-function (\){T<:LapackScalar}(A::QRPDense{T}, B::StridedVecOrMat{T})
+function (\){T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
     x = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
@@ -220,10 +220,10 @@ type LDLTTridiagonal{T} <: Factorization{T}
     E::Vector{T}
 end
 
-ldltd!{T<:LapackScalar}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(Lapack.pttrf!(A.dv,A.ev)...)
-ldltd{T<:LapackScalar}(A::SymTridiagonal{T}) = ldltd!(copy(A))
+ldltd!{T<:LapackType}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(Lapack.pttrf!(A.dv,A.ev)...)
+ldltd{T<:LapackType}(A::SymTridiagonal{T}) = ldltd!(copy(A))
 
-(\){T<:LapackScalar}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
+(\){T<:LapackType}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
     Lapack.pttrs!(C.D, C.E, copy(B))
 
 type LUTridiagonal{T} <: Factorization{T}
@@ -254,5 +254,5 @@ end
 
 det(A::Tridiagonal) = det(lud(A))
 
-(\){T<:LapackScalar}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
+(\){T<:LapackType}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
     Lapack.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))

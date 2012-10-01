@@ -1,6 +1,6 @@
 # linear algebra functions that use the Lapack module
 
-function eig{T<:LapackScalar}(A::StridedMatrix{T}, vecs::Bool)
+function eig{T<:LapackType}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
     if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
 
@@ -39,7 +39,7 @@ eig{T<:Integer}(x::StridedMatrix{T}, vecs::Bool) = eig(float64(x), vecs)
 eig(x::StridedMatrix) = eig(x, true)
 eigvals(x::StridedMatrix) = eig(x, false)
 
-function svd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+function svd{T<:LapackType}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
@@ -54,7 +54,7 @@ svd(A::StridedMatrix) = svd(A,true,false)
 svd(A::StridedMatrix, thin::Bool) = svd(A,true,thin)
 svdvals(A) = svd(A,false,true)[2]
 
-function sdd{T<:LapackScalar}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
+function sdd{T<:LapackType}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
     m,n = size(A)
     if m == 0 || n == 0
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
@@ -69,7 +69,7 @@ sdd(A::StridedMatrix) = sdd(A,true,false)
 sdd(A::StridedMatrix, thin::Bool) = sdd(A,true,thin)
 sddvals(A) = sdd(A,false,true)[2]
 
-function (\){T<:LapackScalar}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
+function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     Acopy = copy(A)
     m, n  = size(Acopy)
     X     = copy(B)

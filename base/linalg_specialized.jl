@@ -1,7 +1,7 @@
 #### Specialized matrix types ####
 
 ## Symmetric tridiagonal matrices
-type SymTridiagonal{T<:LapackScalar} <: AbstractMatrix{T}
+type SymTridiagonal{T<:LapackType} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # sub/super diagonal
     function SymTridiagonal(dv::Vector{T}, ev::Vector{T})
@@ -10,7 +10,7 @@ type SymTridiagonal{T<:LapackScalar} <: AbstractMatrix{T}
     end
 end
 
-SymTridiagonal{T<:LapackScalar}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
+SymTridiagonal{T<:LapackType}(dv::Vector{T}, ev::Vector{T}) = SymTridiagonal{T}(copy(dv), copy(ev))
 function SymTridiagonal{T<:Real}(dv::Vector{T}, ev::Vector{T})
     SymTridiagonal{Float64}(float64(dv),float64(ev))
 end
@@ -42,7 +42,7 @@ size(m::SymTridiagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<
 eig(m::SymTridiagonal, vecs::Bool) = Lapack.stev!(vecs ? 'V' : 'N', copy(m.dv), copy(m.ev))
 eig(m::SymTridiagonal) = eig(m::SymTridiagonal, true)
 ## This function has been in Julia for some time.  Could probably be dropped.
-trideig{T<:LapackScalar}(d::Vector{T}, e::Vector{T}) = Lapack.stev!('N', copy(d), copy(e))[1]
+trideig{T<:LapackType}(d::Vector{T}, e::Vector{T}) = Lapack.stev!('N', copy(d), copy(e))[1]
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
@@ -112,7 +112,7 @@ iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 ## Solvers
 
 #### Tridiagonal matrix routines ####
-function \{T<:LapackScalar}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
+function \{T<:LapackType}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
     if stride(rhs, 1) == 1
         return Lapack.gtsv!(copy(M.dl), copy(M.d), copy(M.du), copy(rhs))
     end
