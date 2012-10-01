@@ -322,7 +322,8 @@ end
 function copy_to{T<:LapackType}(dest::Array{T}, src::Array{T})
     n = numel(src)
     if n > numel(dest); throw(BoundsError()); end
-    return copy_to(pointer(dest), pointer(src), n*sizeof(T))
+    copy_to(pointer(dest), pointer(src), n)
+    return dest
 end
 
 function copy_to{T<:LapackType,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
