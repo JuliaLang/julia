@@ -1270,6 +1270,7 @@ export
 
 export
 #libuv branch stuff
+    accept,
     AsyncStream,
     Stream,
     TcpSocket,

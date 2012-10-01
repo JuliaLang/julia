@@ -697,7 +697,7 @@ end
 function enq_work(wi::WorkItem)
     global Workqueue,multi_cb_handles
     enqueue(Workqueue, wi)
-    #queueAsync(multi_cb_handles.work_cb)
+    queueAsync(multi_cb_handles.work_cb)
 end
 
 enq_work(f::Function) = enq_work(WorkItem(f))

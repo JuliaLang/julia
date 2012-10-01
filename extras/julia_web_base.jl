@@ -38,11 +38,11 @@ function connect_cb(server::AsyncStream,status::Int32)
     __client = client
     err = accept(server,client)
     if err!=0
-        print("accept error: ", _uv_lasterror(globalEventLoop()), "\n")
+        print("accept error: ", Base._uv_lasterror(Base.globalEventLoop()), "\n")
     else
         p=__PartialMessageBuffer()
 		client.readcb = (args...)->__socket_callback(client,p,args...)
-        start_reading(client)
+        Base.start_reading(client)
     end
 end
 
@@ -290,7 +290,7 @@ println(Base._jl_commit_string, "\n")
 
 while true
 try
-    run_event_loop(globalEventLoop())
+    Base.run_event_loop()
 catch(err)
     print(err)
 end
