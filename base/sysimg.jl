@@ -129,6 +129,7 @@ include("build_h.jl")
 
 # linear algebra
 include("blas.jl")
+include("matmul.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
 include("lapack.jl")
