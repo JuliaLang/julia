@@ -136,7 +136,7 @@ include("linalg_dense.jl")
 
 # signal processing
 include("fftw.jl")
-include("DSP.jl")
+include("dsp.jl")
 import Base.DSP.*
 
 # prime method cache with some things we know we'll need right after startup
