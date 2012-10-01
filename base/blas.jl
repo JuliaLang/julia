@@ -307,3 +307,33 @@ for (fname, elty) in ((:dgemv_,:Float64), (:sgemv_,:Float32),
 end
 
 end # module
+
+# Use BLAS copy for small arrays where it is faster than memcpy, and for strided copying
+
+function copy_to{T<:LapackType}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
+    if n < 200
+        Blas.copy!(n, src, 1, dest, 1)
+    else
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
+    end
+    return dest
+end
+
+function copy_to{T<:LapackType}(dest::Array{T}, src::Array{T})
+    n = numel(src)
+    if n > numel(dest); throw(BoundsError()); end
+    return copy_to(pointer(dest), pointer(src), n*sizeof(T))
+end
+
+function copy_to{T<:LapackType,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{Ti},Range{Ti}), 
+                                            src::Array{T}, rsrc::Union(Range1{Ti},Range{Ti}))
+    if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
+        throw(BoundsError())
+    end
+    if length(rdest) != length(rsrc)
+        error("Ranges must be of the same length")
+    end
+    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+              pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
+    return dest
+end

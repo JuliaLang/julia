@@ -1,57 +1,5 @@
-## linalg.jl: Basic Linear Algebra interface specifications and
-## specialized matrix types
+## linalg.jl: Linear Algebra
 
-#
-# This file mostly contains commented functions which are supposed
-# to be defined in type-specific linalg_<type>.jl files.
-#
-# It defines functions in cases where sufficiently few assumptions about
-# storage can be made.
-
-#Ac_mul_B(x::AbstractVector, y::AbstractVector)
-#At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
-
-#dot(x::AbstractVector, y::AbstractVector)
-
-#cross(a::AbstractVector, b::AbstractVector)
-
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
-#(*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
-
-function copy_to{T<:LapackType}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
-    if n < 200
-        Blas.copy!(n, src, 1, dest, 1)
-    else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
-    end
-    dest
-end
-
-function copy_to{T<:LapackType}(dest::Array{T}, src::Array{T})
-    n = numel(src)
-    if n > numel(dest)
-        throw(BoundsError())
-    end
-    if n < 200
-        Blas.copy!(n, src, 1, dest, 1)
-    else
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
-    end
-    dest
-end
-
-function copy_to{T<:LapackType,TI<:Integer}(dest::Array{T}, rdest::Union(Range1{TI},Range{TI}), src::Array{T}, rsrc::Union(Range1{TI},Range{TI}))
-    if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
-        throw(BoundsError())
-    end
-    if length(rdest) != length(rsrc)
-        error("Ranges must be of the same length")
-    end
-    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
-              pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
-    return dest
-end
 
 function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
