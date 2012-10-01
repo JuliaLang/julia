@@ -1,42 +1,4 @@
-## linalg.jl: Basic Linear Algebra interface specifications and
-## specialized matrix types
-
-#
-# This file mostly contains commented functions which are supposed
-# to be defined in type-specific linalg_<type>.jl files.
-#
-# It defines functions in cases where sufficiently few assumptions about
-# storage can be made.
-
-#Ac_mul_B(x::AbstractVector, y::AbstractVector)
-#At_mul_B{T<:Real}(x::AbstractVector{T}, y::AbstractVector{T})
-
-#dot(x::AbstractVector, y::AbstractVector)
-
-#cross(a::AbstractVector, b::AbstractVector)
-
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractVector{S})
-#(*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
-#(*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
-
-function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Array{T}, y::Array{T})
-    if length(x) != length(y)
-        error("Inputs should be of the same length")
-    end
-    Blas.axpy!(length(x), convert(T, alpha), x, 1, y, 1)
-    return y
-end
-
-function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Array{T}, rx::Union(Range1{TI},Range{TI}), y::Array{T}, ry::Union(Range1{TI},Range{TI}))
-    if length(rx) != length(ry)
-        error("Ranges should be of the same length")
-    end
-    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
-        throw(BoundsError())
-    end
-    Blas.axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
-    return y
-end
+## copy_to
 
 function copy_to{T<:LapackScalar}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
@@ -49,9 +11,7 @@ end
 
 function copy_to{T<:LapackScalar}(dest::Array{T}, src::Array{T})
     n = numel(src)
-    if n > numel(dest)
-        throw(BoundsError())
-    end
+    if n > numel(dest); throw(BoundsError()); end
     if n < 200
         Blas.copy!(n, src, 1, dest, 1)
     else
@@ -60,7 +20,10 @@ function copy_to{T<:LapackScalar}(dest::Array{T}, src::Array{T})
     dest
 end
 
-function copy_to{T<:LapackScalar,TI<:Integer}(dest::Array{T}, rdest::Union(Range1{TI},Range{TI}), src::Array{T}, rsrc::Union(Range1{TI},Range{TI}))
+function copy_to{T<:LapackScalar,TI<:Integer}(dest::Array{T}, 
+                                              rdest::Union(Range1{TI},Range{TI}), 
+                                              src::Array{T}, 
+                                              rsrc::Union(Range1{TI},Range{TI}))
     if min(rdest) < 1 || max(rdest) > length(dest) || min(rsrc) < 1 || max(rsrc) > length(src)
         throw(BoundsError())
     end
