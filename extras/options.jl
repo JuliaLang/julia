@@ -135,11 +135,11 @@ function docheck_common(o::Options,checkflag::Vector{Bool})
     if any(unused)
         s = Array(ASCIIString,0)
         for (k, v) = o.key2index
-            if unused[v]
+            if v > length(unused) || unused[v]
                 push(s,string(k))
             end
         end
-        msg = strcat("The following options were not used: ",s)
+        msg = strcat("At least one of the following options was not used: ",s)
     end
     return unused, msg
 end
