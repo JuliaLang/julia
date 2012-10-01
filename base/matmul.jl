@@ -119,6 +119,48 @@ Ac_mul_Bt{T,S,R}(C::StridedMatrix{R}, A::StridedMatrix{T}, B::StridedMatrix{S}) 
 
 # Supporting functions for matrix multiplication
 
+function symmetrize!(A::StridedMatrix, upper::Bool)
+    m, n = size(A)
+    if m != n error("symmetrize: Matrix must be square") end
+    if upper
+        for i = 1:(n-1)
+            for j = (i+1):n
+                A[j,i] = A[i,j]
+            end
+        end
+    else
+        for i = 1:(n-1)
+            for j = (i+1):n
+                 A[i,j] = A[j,i]
+            end
+        end
+    end
+    return A
+end
+
+symmetrize!(A) = symmetrize!(A, true)
+
+function symmetrize_conj!(A::StridedMatrix, upper::Bool)
+    m, n = size(A)
+    if m != n error("symmetrize: Matrix must be square") end
+    if upper
+        for i = 1:(n-1)
+            for j = (i+1):n
+                A[j,i] = conj(A[i,j])
+            end
+        end
+    else
+        for i = 1:(n-1)
+            for j = (i+1):n
+                 A[i,j] = conj(A[j,i])
+            end
+        end
+    end
+    return A
+end
+
+symmetrize_conj!(A) = symmetrize_conj!(A, true)
+
 function gemv{T<:LapackType}(y::StridedVector{T},
                              tA,
                              A::StridedMatrix{T},
@@ -139,16 +181,6 @@ function gemv{T<:LapackType}(y::StridedVector{T},
     Blas.gemv!(tA, one(T), A, x, zero(T), y)
 end
 
-function copy_upper_to_lower(A::StridedMatrix)
-    n = size(A, 1)
-    for i = 1:n-1
-        for j = i+1:n
-            A[j, i] = A[i, j]
-        end
-    end
-    A
-end
-
 function syrk{T<:LapackType}(tA, A::StridedMatrix{T})
     if tA == 'T'
         (nA, mA) = size(A)
@@ -165,17 +197,7 @@ function syrk{T<:LapackType}(tA, A::StridedMatrix{T})
         return generic_matmatmul(tA, tAt, A, A)
     end
 
-    copy_upper_to_lower(Blas.syrk('U', tA, one(T), A))
-end
-
-function copy_upper_to_lower_conj(A::StridedMatrix)
-    n = size(A, 1)
-    for i = 1:n-1
-        for j = i+1:n
-            A[j, i] = conj(A[i, j])
-        end
-    end
-    A
+    symmetrize!(Blas.syrk('U', tA, one(T), A))
 end
 
 function herk{T<:LapackType}(tA, A::StridedMatrix{T})
@@ -197,7 +219,7 @@ function herk{T<:LapackType}(tA, A::StridedMatrix{T})
     # Result array does not need to be initialized as long as beta==0
     #    C = Array(T, mA, mA)
 
-    copy_upper_to_lower_conj(Blas.herk('U', tA, one(T), A))
+    symmetrize_conj!(Blas.herk('U', tA, one(T), A))
 end
 
 function gemm{T<:LapackType}(tA, tB,
