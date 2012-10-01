@@ -221,7 +221,7 @@ extern jl_jmp_buf * volatile jl_jmp_target;
 #ifdef __WIN32__
 static long chachedPagesize = 0;
 long getPageSize (void) {
-	if (!chachedPagesize) {
+    if (!chachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
         chachedPagesize = systemInfo.dwPageSize;
@@ -263,7 +263,7 @@ void *init_stdio_handle(uv_file fd,int readable)
                 jl_error("unknown file stream");
             break;
         default:
-            handle=0;
+            handle=NULL;
             jl_errorf("This type of handle for stdio is not yet supported (%d)!\n",type);
             break;
     }
@@ -279,9 +279,7 @@ void init_stdio()
 
 void julia_init(char *imageFile)
 {
-    (void)uv_default_loop();
-    restore_signals(); //XXX: this needs to be early in load process
-    jl_page_size = sysconf(_SC_PAGESIZE);
+    jl_page_size = getPageSize();
     jl_find_stack_bottom();
     jl_dl_handle = jl_load_dynamic_library(NULL);
 #ifdef __WIN32__

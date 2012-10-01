@@ -1270,7 +1270,9 @@ export
 
 export
 #libuv branch stuff
+    AsyncStream,
     Stream,
+    TcpSocket,
     jl_alloca,
     systmpdir
 
