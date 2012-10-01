@@ -25,17 +25,17 @@
 // eventually we can probably integrate this into OpenLibm.
 void __cdecl __MINGW_NOTHROW _fpreset (void);
 void __cdecl __MINGW_NOTHROW fpreset (void);
-#define _FPE_INVALID		0x81
-#define _FPE_DENORMAL		0x82
-#define _FPE_ZERODIVIDE		0x83
-#define _FPE_OVERFLOW		0x84
-#define _FPE_UNDERFLOW		0x85
-#define _FPE_INEXACT		0x86
-#define _FPE_UNEMULATED		0x87
-#define _FPE_SQRTNEG		0x88
-#define _FPE_STACKOVERFLOW	0x8a
-#define _FPE_STACKUNDERFLOW	0x8b
-#define _FPE_EXPLICITGEN	0x8c    /* raise( SIGFPE ); */
+#define _FPE_INVALID        0x81
+#define _FPE_DENORMAL       0x82
+#define _FPE_ZERODIVIDE     0x83
+#define _FPE_OVERFLOW       0x84
+#define _FPE_UNDERFLOW      0x85
+#define _FPE_INEXACT        0x86
+#define _FPE_UNEMULATED     0x87
+#define _FPE_SQRTNEG        0x88
+#define _FPE_STACKOVERFLOW  0x8a
+#define _FPE_STACKUNDERFLOW 0x8b
+#define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 # include <windows.h>
 #endif
 #if defined(__linux__)
@@ -128,53 +128,53 @@ volatile sig_atomic_t jl_defer_signal = 0;
 volatile HANDLE hMainThread;
 void restore_signals() { }
 void win_raise_sigint() {
-	jl_raise(jl_interrupt_exception);
+    jl_raise(jl_interrupt_exception);
 }
 BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guarantee __stdcall
-{	
-	int sig;
-	//windows signals use different numbers from unix
-	switch(wsig){
-		case CTRL_C_EVENT: sig = SIGINT; break;
-		//case CTRL_BREAK_EVENT: sig = SIGTERM; break;
-		// etc.
-		default: sig = SIGTERM; break;
-	}
+{   
+    int sig;
+    //windows signals use different numbers from unix
+    switch(wsig){
+        case CTRL_C_EVENT: sig = SIGINT; break;
+        //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
+        // etc.
+        default: sig = SIGTERM; break;
+    }
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     } else {
         jl_signal_pending = 0;
-		SuspendThread(hMainThread);
-		CONTEXT ctxThread;
-		memset(&ctxThread,0,sizeof(CONTEXT));
-		ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
-		if (!GetThreadContext(hMainThread, &ctxThread)) {
-			//error
-			printf("error: GetThreadContext failed\n");
-			return 0;
-		}
-		ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
-		if (!SetThreadContext(hMainThread,&ctxThread)) {
-			printf("error: SetThreadContext failed\n");
-			//error
-			return 0;
-		}
-		if ((DWORD)-1 == ResumeThread (hMainThread)) {
-			printf("error: ResumeThread failed\n");
-			//error
-			return 0;
-		}
+        SuspendThread(hMainThread);
+        CONTEXT ctxThread;
+        memset(&ctxThread,0,sizeof(CONTEXT));
+        ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
+        if (!GetThreadContext(hMainThread, &ctxThread)) {
+            //error
+            printf("error: GetThreadContext failed\n");
+            return 0;
+        }
+        ctxThread.Eip = (DWORD)&win_raise_sigint; //on win64, use .Rip = (DWORD64)...
+        if (!SetThreadContext(hMainThread,&ctxThread)) {
+            printf("error: SetThreadContext failed\n");
+            //error
+            return 0;
+        }
+        if ((DWORD)-1 == ResumeThread (hMainThread)) {
+            printf("error: ResumeThread failed\n");
+            //error
+            return 0;
+        }
     }
-	return 1;
+    return 1;
 }
-#else	
+#else   
 void restore_signals() {
-	sigset_t sset;
-	sigemptyset(&sset);
-	sigprocmask(SIG_SETMASK, &sset, 0);
+    sigset_t sset;
+    sigemptyset(&sset);
+    sigprocmask(SIG_SETMASK, &sset, 0);
 }
 void sigint_handler(int sig, siginfo_t *info, void *context)
-{	
+{   
     if (jl_defer_signal) {
         jl_signal_pending = sig;
     } else {
@@ -230,7 +230,7 @@ long getPageSize (void) {
 }
 #else
 long getPageSize (void) {
-	return sysconf(_SC_PAGESIZE);
+    return sysconf(_SC_PAGESIZE);
 }
 #endif
 
@@ -253,14 +253,18 @@ void *init_stdio_handle(uv_file fd,int readable)
             ((uv_pipe_t*)handle)->data=0;
             break;
         case UV_FILE:
-            if(readable)
-                jl_printf(JL_STDERR,"Reading from files as STDIN is not yet supported. Proceed with caution!");
-            else if(fd == 1)
+            if(readable) {
+                jl_printf(JL_STDERR,"Reading from files as STDIN is not yet supported. Proceed with caution!\n");
+                handle = malloc(sizeof(uv_pipe_t));
+                uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,readable);
+                uv_pipe_open((uv_pipe_t*)handle,fd);
+                ((uv_pipe_t*)handle)->data=0;
+            } else if (fd == 1)
                 handle=ios_stdout;
-            else if(fd == 2)
+            else if (fd == 2)
                 handle=ios_stderr;
             else
-                jl_error("unknown file stream");
+                jl_error("unknown output file stream");
             break;
         default:
             handle=NULL;
@@ -419,9 +423,9 @@ void julia_init(char *imageFile)
 DLLEXPORT void jl_install_sigint_handler()
 {
 #ifdef __WIN32__
-	DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
-		GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
-		TRUE, DUPLICATE_SAME_ACCESS );
+    DuplicateHandle( GetCurrentProcess(), GetCurrentThread(),
+        GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
+        TRUE, DUPLICATE_SAME_ACCESS );
     SetConsoleCtrlHandler((PHANDLER_ROUTINE)sigint_handler,1);
 #else
     struct sigaction act;
