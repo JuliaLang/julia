@@ -129,13 +129,10 @@ include("build_h.jl")
 
 # linear algebra
 include("blas.jl")
+include("lapack.jl")
 include("matmul.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
-include("lapack.jl")
-include("linalg_lapack.jl")
-include("linalg_specialized.jl")
-include("factorizations.jl")
 
 # signal processing
 include("fftw.jl")

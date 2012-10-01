@@ -1,4 +1,4 @@
-## linalg.jl: Linear Algebra
+## linalg.jl: Some generic Linear Algebra definitions
 
 cross(a::Vector, b::Vector) =
     [a[2]*b[3]-a[3]*b[2], a[3]*b[1]-a[1]*b[3], a[1]*b[2]-a[2]*b[1]]
@@ -22,15 +22,6 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 #diag(A::AbstractMatrix)
 
 #diagm{T}(v::Union(AbstractVector{T},AbstractMatrix{T}))
-
-norm{T<:LapackType}(x::Vector{T}) = Blas.nrm2(length(x), x, 1)
-
-function norm{T<:LapackType, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
-    if min(rx) < 1 || max(rx) > length(x)
-        throw(BoundsError())
-    end
-    Blas.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
-end
 
 function norm(x::AbstractVector, p::Number)
     if length(x) == 0
