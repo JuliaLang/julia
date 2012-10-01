@@ -54,16 +54,37 @@ end
 for (fname, elty) in ((:daxpy_,:Float64), (:saxpy_,:Float32),
                       (:zaxpy_,:Complex128), (:caxpy_,:Complex64))
     @eval begin
-        function axpy!(n::Integer, a::($elty),
-                       DX::Union(Ptr{$elty},Array{$elty}), incx::Integer,
-                       DY::Union(Ptr{$elty},Array{$elty}), incy::Integer)
+        function axpy!(n::Integer, alpha::($elty),
+                       dx::Union(Ptr{$elty},Array{$elty}), incx::Integer,
+                       dy::Union(Ptr{$elty},Array{$elty}), incy::Integer)
             ccall(dlsym(Base.libblas, $(string(fname))), Void,
                   (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
-                  &n, &a, DX, &incx, DY, &incy)
-            DY
+                  &n, &alpha, dx, &incx, dy, &incy)
+            return dy
         end
     end
 end
+
+function axpy!{T,Ta<:Number}(alpha::Ta, x::Array{T}, y::Array{T})
+    if length(x) != length(y)
+        error("Inputs should be of the same length")
+    end
+    return axpy!(length(x), convert(T, alpha), x, 1, y, 1)
+end
+
+function axpy!{T,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(Range1{Ti},Range{Ti}), y::Array{T}, ry::Union(Range1{Ti},Range{Ti}))
+
+    if length(rx) != length(ry)
+        error("Ranges should be of the same length")
+    end
+
+    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
+        throw(BoundsError())
+    end
+
+    return axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+end
+
 
 # SUBROUTINE DSYRK(UPLO,TRANS,N,K,ALPHA,A,LDA,BETA,C,LDC)
 # *     .. Scalar Arguments ..

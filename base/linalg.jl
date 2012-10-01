@@ -19,25 +19,6 @@
 #(*){T,S}(A::AbstractVector{S}, B::AbstractMatrix{T})
 #(*){T,S}(A::AbstractMatrix{T}, B::AbstractMatrix{S})
 
-function axpy{TA<:Number, T<:LapackScalar}(alpha::TA, x::Array{T}, y::Array{T})
-    if length(x) != length(y)
-        error("Inputs should be of the same length")
-    end
-    Blas.axpy!(length(x), convert(T, alpha), x, 1, y, 1)
-    return y
-end
-
-function axpy{TA<:Number, T<:LapackScalar, TI<:Integer}(alpha::TA, x::Array{T}, rx::Union(Range1{TI},Range{TI}), y::Array{T}, ry::Union(Range1{TI},Range{TI}))
-    if length(rx) != length(ry)
-        error("Ranges should be of the same length")
-    end
-    if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
-        throw(BoundsError())
-    end
-    Blas.axpy!(length(rx), convert(T, alpha), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
-    return y
-end
-
 function copy_to{T<:LapackScalar}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
         Blas.copy!(n, src, 1, dest, 1)
