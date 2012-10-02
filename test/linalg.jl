@@ -67,9 +67,6 @@ begin
     u,s,vt = svd(a)                         # singular value decomposition
     @assert norm(u*diagmm(s,vt) - a) < Eps
 
-    u,s,vt = sdd(a)                         # svd using divide-and-conquer
-    @assert norm(u*diagmm(s,vt) - a) < Eps
-
     x = a \ b
     @assert norm(a*x - b) < Eps
 
