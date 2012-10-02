@@ -1,5 +1,7 @@
 require("../extras/Rmath.jl")
 
+srand(124)
+
 function allEq(target::Vector{Float64}, current::Vector{Float64}, tolerance::Float64)
     @assert numel(target) == numel(current)
     if all(target == current)
