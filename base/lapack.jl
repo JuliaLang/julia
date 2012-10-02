@@ -1040,10 +1040,10 @@ end
 ## (SY) symmetric matrices - eigendecomposition, Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
 for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
-    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri2_,:dsytrs_,:Float64),
-     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri2_,:ssytrs_,:Float32),
-     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri2_,:zhetrs_,:Complex128),
-     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri2_,:chetrs_,:Complex64))
+    ((:dsyconv_,:dsyev_,:dsysv_,:dsytrf_,:dsytri_,:dsytrs_,:Float64),
+     (:ssyconv_,:ssyev_,:ssysv_,:ssytrf_,:ssytri_,:ssytrs_,:Float32),
+     (:zheconv_,:zheev_,:zhesv_,:zhetrf_,:zhetri_,:zhetrs_,:Complex128),
+     (:checonv_,:cheev_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64))
     @eval begin
         #       SUBROUTINE DSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
         # *     .. Scalar Arguments ..
@@ -1170,24 +1170,44 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IPIV( * )
         #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
+#         function sytri!(uplo::LapackChar, A::StridedMatrix{$elty}, ipiv::Vector{Int32})
+#             chkstride1(A)
+#             chksquare(A)
+#             n     = size(A,1)
+#             work  = Array($elty, 1)
+#             lwork = int32(-1)
+#             info  = Array(Int32, 1)
+#             for i in 1:2
+#                 ccall(dlsym(Base.liblapack, $(string(sytri))), Void,
+#                       (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+#                        Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
+#                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
+#                 if info[1] != 0 throw(LapackException(info[1])) end
+#                 if lwork < 0
+#                     lwork = int32(real(work[1]))
+#                     work = Array($elty, lwork)
+#                 end
+#             end
+#             A
+#         end
+        #      SUBROUTINE DSYTRI( UPLO, N, A, LDA, IPIV, WORK, INFO )
+        #     .. Scalar Arguments ..
+        #      CHARACTER          UPLO
+        #      INTEGER            INFO, LDA, N
+        #     .. Array Arguments ..
+        #      INTEGER            IPIV( * )
+        #      DOUBLE PRECISION   A( LDA, * ), WORK( * )
         function sytri!(uplo::LapackChar, A::StridedMatrix{$elty}, ipiv::Vector{Int32})
             chkstride1(A)
             chksquare(A)
             n     = size(A,1)
-            work  = Array($elty, 1)
-            lwork = int32(-1)
+            work  = Array($elty, n)
             info  = Array(Int32, 1)
-            for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(sytri))), Void,
-                      (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                       Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                      &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
-                if lwork < 0
-                    lwork = int32(real(work[1]))
-                    work = Array($elty, lwork)
-                end
-            end
+            ccall(dlsym(Base.liblapack, $(string(sytri))), Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                   Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
+                  &uplo, &n, A, &stride(A,2), ipiv, work, info)
+            if info[1] != 0 throw(LapackException(info[1])) end
             A
         end
         #       SUBROUTINE DSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
