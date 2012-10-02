@@ -1334,6 +1334,30 @@ function nonzeros{T}(A::StridedArray{T})
     return V
 end
 
+function findmax(a::Array)
+    m = typemin(eltype(a))
+    mi = 0
+    for i=1:length(a)
+        if a[i] > m
+            m = a[i]
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
+function findmin(a::Array)
+    m = typemax(eltype(a))
+    mi = 0
+    for i=1:length(a)
+        if a[i] < m
+            m = a[i]
+            mi = i
+        end
+    end
+    return (m, mi)
+end
+
 ## Reductions ##
 
 areduce{T}(f::Function, A::StridedArray{T}, region::Dimspec, v0) =

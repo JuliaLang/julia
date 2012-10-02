@@ -8,6 +8,8 @@ export
     DSP,
     Lapack,
     Blas,
+    LibRandom,
+    RNG,
     
 # Types
     AbstractMatrix,
@@ -868,6 +870,9 @@ export
     quantile,
     quartile,
     quintile,
+    librandom_init,
+    Rng_MT,
+    Rng,
     rand,
     rand!,
     randbeta,

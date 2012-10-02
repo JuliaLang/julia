@@ -198,10 +198,10 @@ function _start()
     global const stderr_stream = make_stderr_stream()
     global OUTPUT_STREAM = stdout_stream
 
+    librandom_init()
+
     # set CPU core count
     global const CPU_CORES = ccall(:jl_cpu_cores, Int32, ())
-
-    _jl_librandom_init()
 
     atexit(()->flush(stdout_stream))
     try

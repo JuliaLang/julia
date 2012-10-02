@@ -111,7 +111,9 @@ include("combinatorics.jl")
 include("statistics.jl")
 
 # random number generation
-include("random.jl")
+include("librandom.jl")
+include("rng.jl")
+import Base.RNG.*
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
@@ -129,16 +131,14 @@ include("build_h.jl")
 
 # linear algebra
 include("blas.jl")
+include("lapack.jl")
+include("matmul.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
-include("lapack.jl")
-include("linalg_lapack.jl")
-include("linalg_specialized.jl")
-include("factorizations.jl")
 
 # signal processing
 include("fftw.jl")
-include("DSP.jl")
+include("dsp.jl")
 import Base.DSP.*
 
 # prime method cache with some things we know we'll need right after startup
@@ -173,10 +173,10 @@ compile_hint(cmp, (Int32, Int32))
 compile_hint(min, (Int32, Int32))
 compile_hint(==, (ASCIIString, ASCIIString))
 compile_hint(arg_gen, (ASCIIString,))
-compile_hint(_jl_librandom_init, ())
-compile_hint(srand, (ASCIIString, Int))
+compile_hint(RNG.librandom_init, ())
+compile_hint(RNG.srand, (ASCIIString, Int))
 compile_hint(open, (ASCIIString, Bool, Bool, Bool, Bool))
-compile_hint(srand, (Uint64,))
+compile_hint(RNG.srand, (Uint64,))
 compile_hint(done, (IntSet, Int64))
 compile_hint(next, (IntSet, Int64))
 compile_hint(ht_keyindex, (Dict{Any,Any}, Int32))
