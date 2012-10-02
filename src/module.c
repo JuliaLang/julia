@@ -92,7 +92,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
         return;
     jl_binding_t *b = jl_get_binding(from, s);
     if (b == NULL || !b->exportp) {
-        ios_printf(JL_STDERR,
+        jl_printf(JL_STDERR,
                    "Warning: could not import %s.%s into %s\n",
                    from->name->name, s->name, to->name->name);
     }
@@ -100,7 +100,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
         if (*bp != HT_NOTFOUND) {
             if ((*bp)->owner != to) {
-                ios_printf(JL_STDERR,
+                jl_printf(JL_STDERR,
                            "Warning: ignoring conflicting import of %s.%s into %s\n",
                            from->name->name, s->name, to->name->name);
             }
@@ -113,7 +113,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
                     // import of equivalent binding
                     return;
                 }
-                ios_printf(JL_STDERR,
+                jl_printf(JL_STDERR,
                            "Warning: import of %s.%s into %s conflicts with an existing identifier; ignored.\n",
                            from->name->name, s->name, to->name->name);
             }

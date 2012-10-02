@@ -643,7 +643,7 @@ DLLEXPORT void jl_show_any(jl_value_t *str, jl_value_t *v)
             char *data = (char*)jl_bits_data(v);
             JL_PUTS("0x", s);
             for(int i=nb-1; i >= 0; --i)
-                ios_printf(s, "%02hhx", data[i]);
+                jl_printf(s, "%02hhx", data[i]);
         }
         JL_PUTC(')', s);
     }
@@ -702,7 +702,7 @@ JL_CALLABLE(jl_f_typevar)
     JL_TYPECHK(typevar, symbol, args[0]);
     if (jl_boundp(jl_current_module, (jl_sym_t*)args[0]) &&
         jl_is_type(jl_get_global(jl_current_module, (jl_sym_t*)args[0]))) {
-        ios_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
+        jl_printf(JL_STDERR, "Warning: type parameter name %s shadows an identifier.\n", ((jl_sym_t*)args[0])->name);
     }
     jl_value_t *lb = (jl_value_t*)jl_bottom_type;
     jl_value_t *ub = (jl_value_t*)jl_any_type;
