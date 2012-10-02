@@ -10,7 +10,7 @@ libpcre = dlopen("libpcre")
 libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libm")
 _jl_libfdm = dlopen("libfdm")
-_jl_librandom = dlopen("librandom");
+librandom = dlopen("librandom")
 @windows_only _jl_advapi32 = dlopen("Advapi32")
 
 # Optional libraries

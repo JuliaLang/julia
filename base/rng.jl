@@ -1,12 +1,7 @@
-require("librandom.jl")
-
-const librandom = dlopen("librandom")
-
 module RNG
 
 import Base.*
-import LibRandom
-import LibRandom.*
+import Base.LibRandom.*
 
 export librandom_init, srand,
        rand, rand!,
@@ -16,7 +11,7 @@ export librandom_init, srand,
        randexp, randexp!, exprnd,
        randchi2, randchi2!, chi2rnd,
        randbeta, randbeta!, betarnd,
-       Rng_MT
+       Rng, Rng_MT
 
 abstract Rng
 
@@ -50,9 +45,6 @@ type Rng_MT <: Rng
         return new(state, seed, len)
     end
 end
-
-rand(r::Rng_MT) = dsfmt_genrand_close_open(r.state)
-rand(r::Rng_MT, args) = rand(r, args...)
 
 function srand(r::Rng_MT, seed) 
     r.seed = seed
@@ -149,26 +141,15 @@ srand(filename::String) = srand(filename, 4)
 ## rand()
 
 rand() = dsfmt_gv_genrand_close_open()
+rand(r::Rng_MT) = dsfmt_genrand_close_open(r.state)
 
-const dsfmt_min_array_size = dsfmt_get_min_array_size()
-
-function rand!(A::Array{Float64})
-    n = numel(A)
-    if n <= dsfmt_min_array_size
-        for i = 1:n
-            A[i] = rand()
-        end
-    else
-        A = dsfmt_gv_fill_array_close_open!(A, n & 0xfffffffe)
-        if isodd(n)
-            A[n] = rand()
-        end
-    end
-    return A
-end
-
+rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Int...) = rand(dims)
+
+rand!(r::Rng_MT, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
+rand(r::Rng, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::Rng, dims::Int...) = rand(r, dims)
 
 ## random integers
 
