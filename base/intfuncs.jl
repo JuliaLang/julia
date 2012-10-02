@@ -133,11 +133,21 @@ function powermod(x::Integer, p::Integer, m::Integer)
     return r
 end
 
-# smallest power of 2 >= x
-nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
-nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
-ispow2(x::Integer) = (x&(x-1))==0
+# zero is not an integer power of 2
+ispow2(x::Unsigned) = (x != 0 == (x & (x-1)))
+ispow2(x::Signed  ) = (x < 0) ? ispow2(unsigned(-x)) : ispow2(unsigned(x))
+
+# largest power of 2 <= x
+prevpow2(x::Unsigned) = (one(x) >> (x==0)) << ((sizeof(x)<<3) - leading_zeros(x) - 1)
+prevpow2(x::Signed  ) =
+   oftype(x, (x < 0) ? prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+
+# smallest power of 2 >= x
+nextpow2(x::Unsigned) = (one(x) >> (x==typemax(x)) << ((sizeof(x)<<3)-leading_zeros(x-1))
+nextpow2(x::Signed  ) =
+   oftype(x, (x < 0) ? nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
+
 
 # smallest integer n for which a^n >= x
 function nextpow(a, x)
