@@ -9,33 +9,35 @@ function norm{T<:LapackType, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Ran
     Blas.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
-triu{T}(M::Matrix{T}, k::Integer) = [ j-i >= k ? M[i,j] : zero(T) for
-                                     i=1:size(M,1), j=1:size(M,2) ]
-
-tril{T}(M::Matrix{T}, k::Integer) = [ j-i <= k ? M[i,j] : zero(T) for
-                                     i=1:size(M,1), j=1:size(M,2) ]
-
 function triu!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
-    for i = 1:m
-        for j = 1:n
-            if j-i < k
-                M[i,j] = zero(T)
-            end
+    idx = 1
+    for j = 0:n-1
+        ii = min(max(0, j+1-k), m)
+        for i = (idx+ii):(idx+m-1)
+            M[i] = zero(T)
         end
+        idx += m
     end
+    return M
 end
+
+triu(M::Matrix, k::Integer) = triu!(copy(M), k)
 
 function tril!{T}(M::Matrix{T}, k::Integer)
     m, n = size(M)
-    for i = 1:m
-        for j = 1:n
-            if j-i > k
-                M[i,j] = zero(T)
+    idx = 1
+    for j = 0:n-1
+        ii = min(max(0, j-k), m)
+        for i = idx:(idx+ii-1)
+            M[i] = zero(T)
             end
-        end
+        idx += m
     end
+    return M
 end
+
+tril(M::Matrix, k::Integer) = tril!(copy(M), k)
 
 diff(a::Vector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 
