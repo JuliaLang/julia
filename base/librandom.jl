@@ -27,6 +27,13 @@ type DSFMT_state
     DSFMT_state() = new(Array(Int32, 770))
 end
 
+function dsfmt_get_idstring()
+    idstring = ccall(dlsym(Base.librandom, :dsfmt_get_idstring),
+                     Ptr{Uint8},
+                     ())
+    return bytestring(idstring)
+end
+
 function dsfmt_get_min_array_size()
     min_array_size = ccall(dlsym(Base.librandom, :dsfmt_get_min_array_size), 
                            Int32, 
@@ -34,13 +41,6 @@ function dsfmt_get_min_array_size()
 end
 
 const dsfmt_min_array_size = dsfmt_get_min_array_size()
-
-function dsfmt_get_idstring()
-    idstring = ccall(dlsym(Base.librandom, :dsfmt_get_idstring),
-                     Ptr{Uint8},
-                     ())
-    return bytestring(idstring)
-end
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::Uint32)
     ccall(dlsym(Base.librandom, :dsfmt_init_gen_rand),
@@ -165,9 +165,9 @@ function randmtzig_create_ziggurat_tables()
 end
 
 function randmtzig_randn()
-    call(dlsym(Base.librandom, :randmtzig_randn), 
-         Float64,
-         ())
+    ccall(dlsym(Base.librandom, :randmtzig_randn), 
+          Float64,
+          ())
 end
 
 function randmtzig_fill_randn!(A)
@@ -175,6 +175,7 @@ function randmtzig_fill_randn!(A)
           Void,
           (Ptr{Float64}, Uint32), 
           A, numel(A))
+    return A
 end
 
 function randmtzig_exprnd()
@@ -184,10 +185,11 @@ function randmtzig_exprnd()
 end
 
 function randmtzig_fill_exprnd!(A)
-   ccall(dlsym(Base.librandom, :randmtzig_fill_exprnd),
-         Void,
-         (Ptr{Float64}, Uint32), 
-         A, numel(A))
+    ccall(dlsym(Base.librandom, :randmtzig_fill_exprnd),
+          Void,
+          (Ptr{Float64}, Uint32), 
+          A, numel(A))
+    return A
 end
 
 ## Windows entropy
