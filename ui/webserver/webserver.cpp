@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <assert.h>
 #include <stdio.h>
+#include <errno.h>
 #include "server.h"
 #include "json.h"
 #include "message_types.h"

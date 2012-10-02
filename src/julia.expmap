@@ -57,6 +57,7 @@
     jl_arrayref;
     jl_arrayset;
     jl_array_to_string;
+    jl_async_send;
     jl_backtrace_type;
     jl_base_module;
     jl_boundp;
@@ -156,6 +157,7 @@
     jl_main_module;
     jl_make_async;
     jl_make_pipe;
+    jl_make_tcp;
     jl_make_timer;
     jl_matching_methods;
     jl_match_method;

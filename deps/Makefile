@@ -493,13 +493,13 @@ else
 OPENBLAS_OBJ_SOURCE = 
 endif
 
-OPENBLAS_FLAGS = USE_THREAD=0 CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" TARGET=$(TARGET_OPENBLAS_ARCH)
+OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 
 ifeq ($(OS), WINNT)
-OPENBLAS_FLAGS += COMMON_OPT="-mpreferred-stack-boundary=2"
+OPENBLAS_BUILD_OPTS += COMMON_OPT="-mpreferred-stack-boundary=2"
 endif
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
-OPENBLAS_FLAGS += DYNAMIC_ARCH=1
+OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
@@ -513,7 +513,7 @@ openblas-$(OPENBLAS_VER)/Makefile: openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $@.system
 	touch $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/Makefile
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_FLAGS)
+	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS)
 $(USRLIB)/libopenblas.$(SHLIB_EXT): $(OPENBLAS_OBJ_SOURCE) | $(USRLIB)
 	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(USRLIB)
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(USRLIB)/libopenblas.$(SHLIB_EXT)
