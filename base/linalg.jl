@@ -46,7 +46,7 @@ function norm(A::AbstractMatrix, p)
     elseif p == 1
         return max(sum(abs(A),1))
     elseif p == 2
-        return max(svd(A)[2])
+        return max(svdvals(A))
     elseif p == Inf
         return max(sum(abs(A),2))
     elseif p == "fro"
