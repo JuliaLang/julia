@@ -1,5 +1,39 @@
 # matmul.jl: Everything to do with dense matrix multiplication
 
+# multiply by diagonal matrix as vector
+function diagmm!(C::Matrix, A::Matrix, b::Vector)
+    m, n = size(A)
+    if n != length(b)
+        error("argument dimensions do not match")
+    end
+    for j = 1:n
+        bj = b[j]
+        for i = 1:m
+            C[i,j] = A[i,j]*bj
+        end
+    end
+    return C
+end
+
+function diagmm!(C::Matrix, b::Vector, A::Matrix)
+    m, n = size(A)
+    if m != length(b)
+        error("argument dimensions do not match")
+    end
+    for j=1:n
+        for i=1:m
+            C[i,j] = A[i,j]*b[i]
+        end
+    end
+    return C
+end
+
+diagmm(A::Matrix, b::Vector) =
+    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
+
+diagmm(b::Vector, A::Matrix) =
+    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
+
 # Dot products
 
 function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)

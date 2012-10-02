@@ -1,5 +1,47 @@
 ## linalg_dense.jl: Linear Algebra functions for dense representations ##
 
+function issym(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:(n-1), j = (i+1):n
+        if A[i,j] != A[j,i]
+            return false
+        end
+    end
+    return true
+end
+
+function ishermitian(A::Matrix)
+    m, n = size(A)
+    if m != n; error("matrix must be square, got $(m)x$(n)"); end
+    for i = 1:n, j = i:n
+        if A[i,j] != conj(A[j,i])
+            return false
+        end
+    end
+    return true
+end
+
+function istriu(A::Matrix)
+    m, n = size(A)
+    for j = 1:min(n,m-1), i = j+1:m
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
+function istril(A::Matrix)
+    m, n = size(A)
+    for j = 2:n, i = 1:min(j-1,m)
+        if A[i,j] != 0
+            return false
+        end
+    end
+    return true
+end
+
 norm{T<:LapackType}(x::Vector{T}) = Blas.nrm2(length(x), x, 1)
 
 function norm{T<:LapackType, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
@@ -121,98 +163,6 @@ function randsym(n)
     end
     a
 end
-
-function issym(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:(n-1), j = (i+1):n
-        if A[i,j] != A[j,i]
-            return false
-        end
-    end
-    return true
-end
-
-# Randomized matrix symmetry test
-# Theorem: Matrix is symmetric iff x'*A*y == y'*A*x, for randomly chosen x and y.
-function issym_rnd(A::Matrix)
-    m, n = size(A)
-    if m != n; return false; end
-    ntrials = 5
-
-    for i=1:ntrials
-        x = randn(n)
-        y = randn(n)
-        if (x'*A*y - y'*A*x)[1] > 1e-6; return false; end
-    end
-
-    return true
-end
-
-function ishermitian(A::Matrix)
-    m, n = size(A)
-    if m != n; error("matrix must be square, got $(m)x$(n)"); end
-    for i = 1:n, j = i:n
-        if A[i,j] != conj(A[j,i])
-            return false
-        end
-    end
-    return true
-end
-
-function istriu(A::Matrix)
-    m, n = size(A)
-    for j = 1:min(n,m-1), i = j+1:m
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
-
-function istril(A::Matrix)
-    m, n = size(A)
-    for j = 2:n, i = 1:min(j-1,m)
-        if A[i,j] != 0
-            return false
-        end
-    end
-    return true
-end
-
-# multiply by diagonal matrix as vector
-function diagmm!(C::Matrix, A::Matrix, b::Vector)
-    m, n = size(A)
-    if n != length(b)
-        error("argument dimensions do not match")
-    end
-    for j = 1:n
-        bj = b[j]
-        for i = 1:m
-            C[i,j] = A[i,j]*bj
-        end
-    end
-    return C
-end
-
-function diagmm!(C::Matrix, b::Vector, A::Matrix)
-    m, n = size(A)
-    if m != length(b)
-        error("argument dimensions do not match")
-    end
-    for j=1:n
-        for i=1:m
-            C[i,j] = A[i,j]*b[i]
-        end
-    end
-    return C
-end
-
-diagmm(A::Matrix, b::Vector) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), A, b)
-
-diagmm(b::Vector, A::Matrix) =
-    diagmm!(Array(promote_type(eltype(A),eltype(b)),size(A)), b, A)
 
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : power_by_squaring(A,p)
 
