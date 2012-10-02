@@ -29,6 +29,7 @@ Extras
    cpp
    textwrap
    zlib
+   strpack
 
 ****************
 Math & Numerical
