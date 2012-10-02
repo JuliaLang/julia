@@ -82,7 +82,7 @@ static void init_history(void) {
     } else if (errno == ENOENT) {
         write_history(history_file);
     } else {
-        ios_printf(ios_stderr, "history file error: %s\n", strerror(errno));
+        jl_printf(jl_uv_stderr, "history file error: %s\n", strerror(errno));
         exit(1);
     }
 }
@@ -335,9 +335,7 @@ static int down_callback(int count, int key) {
 }
 
 static int sigint_callback(int count, int key) {
-    //use either line, but not both:
-    //raise(SIGINT);
-    ios_write(ios_stdout, "^C\n", 3); jl_clear_input();
+    jl_write(jl_uv_stdout, "^C\n", 3); jl_clear_input();
     return 0;
 }
 
@@ -358,10 +356,7 @@ void jl_input_line_callback(char *input)
     if (rl_ast != NULL) {
         doprint = !ends_with_semicolon(input);
         add_history_permanent(input);
-#ifdef __WIN32__
-        ios_putc('\r', ios_stdout);
-#endif
-        ios_putc('\n', ios_stdout);
+        jl_putc('\n', jl_uv_stdout);
         free(input);
     }
 
@@ -647,13 +642,13 @@ void install_event_handler(char *prompt, rl_vcpfunc_t *func)
 void parseAndExecute(char *str)
 {
     if (!str || ios_eof(ios_stdin)) {
-        ios_printf(ios_stdout, "\n");
+        jl_printf(jl_uv_stdout, "\n");
         return;
     }
     jl_value_t *ast = jl_parse_input_line(str);
     jl_value_t *value = jl_toplevel_eval(ast);
     jl_show_any(value);
-    ios_printf(ios_stdout, "\n\n");
+    jl_printf(jl_uv_stdout, "\n\n");
 }
 
 void repl_callback_enable()
@@ -687,10 +682,10 @@ DLLEXPORT void jl_clear_input(void) {
     int i;
     for (i = 0; *p != '\0'; p++, i++) {
         if (i >= rl_point && *p == '\n') {
-            ios_putc('\n', ios_stdout);
+            jl_putc('\n', jl_uv_stdout);
         }
     }
-    ios_putc('\n', ios_stdout);
+    jl_putc('\n', jl_uv_stdout);
     //reset state:
     rl_reset_line_state();
     reset_indent();
@@ -698,7 +693,9 @@ DLLEXPORT void jl_clear_input(void) {
     //and redisplay prompt:
     rl_forced_update_display();
     rl_on_new_line_with_prompt();
-#ifndef __WIN32__
+#ifdef __WIN32__
+    jl_write(jl_uv_stdout, "\e[4C", 4); //hack: try to fix cursor location
+#else
     ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
 #endif
 }

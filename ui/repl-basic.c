@@ -51,12 +51,11 @@ void jl_input_line_callback(char *input)
 
 void repl_callback_enable()
 {
-    ios_printf(ios_stdout, prompt_string);
-    ios_flush(ios_stdout);
+    jl_printf(jl_uv_stdout, prompt_string);
     jl_prep_terminal(1);
 }
 
-void stdin_buf_pushc(char c) {
+static void stdin_buf_pushc(char c) {
     if (stdin_buf_len >= stdin_buf_maxlen) {
         stdin_buf_maxlen *= 2;
         stdin_buf = LLT_REALLOC(stdin_buf, stdin_buf_maxlen);
@@ -70,7 +69,7 @@ void stdin_buf_pushc(char c) {
     stdin_buf_len++;
 }
 
-void basic_stdin_callback(void)
+static void basic_stdin_callback(void)
 {
     stdin_buf_pushc('\0');
     stdin_buf_len--;
@@ -87,15 +86,13 @@ void jl_readBuffer(char* base, ssize_t nread)
             switch (*start) {
             case '\n':
             case '\r':
-#ifdef __WIN32__
-                ios_putc('\r', ios_stdout);
-#endif
-                ios_putc('\n', ios_stdout);
+                jl_putc('\n', jl_uv_stdout);
                 stdin_buf_pushc('\n');
                 newline = 1;
                 break;
             case '\x03':
-                raise(SIGINT);
+                jl_write(jl_uv_stdout, "^C\n", 3);
+				jl_clear_input();
                 break;
             case '\x04':
                 raise(SIGTERM);
@@ -112,7 +109,7 @@ void jl_readBuffer(char* base, ssize_t nread)
             case '\b':
                 if (stdin_buf_len > 0 && stdin_buf[stdin_buf_len-1] != '\n') {
                     stdin_buf_len--;
-                    ios_write(ios_stdout,"\b \b",3);
+                    jl_write(jl_uv_stdout,"\b \b",3);
                 }
             }
         } else if (esc == 1) {
@@ -126,13 +123,12 @@ void jl_readBuffer(char* base, ssize_t nread)
             // this misses delete ^[[3~ and possibly others?
             esc = 0;
         } else {
-            ios_putc(*start, ios_stdout);
+            jl_putc(*start, jl_uv_stdout);
             stdin_buf_pushc(*start);
         }
         start++;
         nread--;
     }
-    ios_flush(ios_stdout);
     if (newline) basic_stdin_callback();
 }
 
@@ -140,7 +136,7 @@ void jl_clear_input(void)
 {
     stdin_buf_len = 0;
     stdin_buf[0] = 0;
-    ios_printf(ios_stdout, "\n");
+    jl_printf(jl_uv_stdout, "\n");
     repl_callback_enable();
 }
 

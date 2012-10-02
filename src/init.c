@@ -126,7 +126,9 @@ volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef __WIN32__
 volatile HANDLE hMainThread;
-void restore_signals() { }
+void restore_signals() {
+    SetConsoleCtrlHandler(NULL,0); //turn on ctrl-c handler
+}
 void win_raise_sigint() {
     jl_raise(jl_interrupt_exception);
 }
