@@ -588,7 +588,7 @@ extern int _rl_echoing_p;
 
 void jl_prep_terminal (int meta_flag)
 {   //order must be 2,1,0
-#ifndef __WIN32_
+#ifndef __WIN32__
     struct termios beforeRl_err = ((uv_tty_t*)jl_uv_stderr)->orig_termios;
     struct termios beforeRl_out = ((uv_tty_t*)jl_uv_stdout)->orig_termios;
     struct termios beforeRl_in = ((uv_tty_t*)jl_uv_stdin)->orig_termios;
@@ -597,9 +597,9 @@ void jl_prep_terminal (int meta_flag)
     rl_prep_terminal(1);
     _rl_echoing_p=1;
     uv_tty_set_mode((uv_tty_t*)JL_STDERR,1);
-	uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
-	uv_tty_set_mode((uv_tty_t*)JL_STDIN,1);
-#ifndef __WIN32_
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,1);
+    uv_tty_set_mode((uv_tty_t*)JL_STDIN,1);
+#ifndef __WIN32__
     ((uv_tty_t*)jl_uv_stderr)->orig_termios=beforeRl_err;
     ((uv_tty_t*)jl_uv_stdout)->orig_termios=beforeRl_out;
     ((uv_tty_t*)jl_uv_stdin)->orig_termios=beforeRl_in;
@@ -611,7 +611,7 @@ void jl_deprep_terminal ()
 {   //order must be 0,1,2
     rl_deprep_terminal();
     uv_tty_set_mode((uv_tty_t*)JL_STDIN,0);
-	uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
+    uv_tty_set_mode((uv_tty_t*)JL_STDOUT,0);
     uv_tty_set_mode((uv_tty_t*)JL_STDERR,0);
 }
 
