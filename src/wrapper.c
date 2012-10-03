@@ -215,7 +215,7 @@ DLLEXPORT void jl_close_uv(uv_handle_t *handle)
 {
     if(handle) uv_close(handle,&closeHandle);
     if(handle->type==UV_TTY)
-        uv_tty_reset_mode();
+        uv_tty_set_mode((uv_tty_t*)handle,0);
 }
 
 DLLEXPORT void jl_uv_associate_julia_struct(uv_handle_t *handle, jl_value_t *data)
@@ -502,8 +502,8 @@ void getlocalip(char *buf, size_t len)
             tmpAddrPtr=&(ifa.sin_addr);
             inet_ntop(AF_INET, tmpAddrPtr, buf, len); //Not available on WinXP
 #else
-			strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
-			buf[len]=0;
+            strncpy(buf,inet_ntoa(ifa.sin_addr),len-1);
+            buf[len]=0;
 #endif
 
             if (strcmp(buf,"127.0.0.1"))

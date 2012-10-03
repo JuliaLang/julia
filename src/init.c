@@ -188,6 +188,9 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void* arg) {
+    jl_close_uv(handle);
+}
 void jl_atexit_hook()
 {
     if (jl_base_module) {
@@ -196,6 +199,9 @@ void jl_atexit_hook()
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
+    uv_loop_t* loop = jl_global_event_loop();
+    uv_walk(loop, jl_uv_exitcleanup_walk, 0);
+    uv_run(loop);
 }
 
 void jl_get_builtin_hooks(void);
