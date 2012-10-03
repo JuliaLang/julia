@@ -695,8 +695,17 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
         ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     ast = copy_ast(ast, sparams, 1);
-    eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
-    eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = li->module;
+        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
+        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
     JL_GC_POP();
     return ast;
 }
