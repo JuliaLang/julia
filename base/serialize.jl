@@ -278,14 +278,8 @@ function read{T}(this::Deserializer, a::Array{T})
         while position(this.buffer) - this.readptr < nb
             yieldto(this.returntask)
         end
-        temp = Array(Uint8,sizeof(T))
-        for i = 1:numel(a)
-            for x = 1:sizeof(T)
-                temp[x] = this.buffer.data[this.readptr]
-                this.readptr += 1
-            end
-            a[i] = reinterpret(T, temp)[1]
-        end
+        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), a, pointer(this.buffer.data,this.readptr), nb)
+        this.readptr += nb
         return a
     else
         #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")

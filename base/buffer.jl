@@ -33,11 +33,12 @@ end
 function read{T}(from::Buffer, a::Array{T})
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
-        if length(from.data) - from.ptr < nb
+        if length(from.data) - from.ptr + 1 < nb
             throw(EOFError())
         end
+        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), a, pointer(from.data,from.ptr), nb)
         from.ptr += nb
-        return reshape(reinterpret(T, from.data[from.ptr-nb:from.ptr-1]), size(a))
+        return a
     else
         #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")
         error("Read from Buffer only supports bits types or arrays of bits types")
@@ -72,7 +73,7 @@ function write{T}(to::Buffer, a::Array{T})
         if nshort > 0
             grow(to, nshort)
         end
-        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a, (numel(a),))
+        to.data[to.ptr:to.ptr+nb-1] = reinterpret(Uint8, a, (numel(a)*sizeof(T),))
         to.ptr += nb
     else
         error("Write to Buffer only supports bits types or arrays of bits types.")
