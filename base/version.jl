@@ -164,7 +164,7 @@ const _jl_banner_plain =
 I"               _
    _       _ _(_)_     |  A fresh approach to technical computing
   (_)     | (_) (_)    |  Documentation: http://docs.julialang.org
-   _ _   _| |_  __ _   |  Type "help()" to list help topics
+   _ _   _| |_  __ _   |  Type \"help()\" to list help topics
   | | | | | | |/ _` |  |
   | | |_| | | | (_| |  |  $_jl_version_string
  _/ |\__'_|_|_|\__'_|  |  $_jl_commit_string
@@ -181,7 +181,7 @@ const _jl_banner_color =
 "\033[1m               $(d3)_
    $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
   $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
-   $(jl)_ _   _| |_  __ _$(tx)   |  Type "help()" to list help topics
+   $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" to list help topics
   $(jl)| | | | | | |/ _` |$(tx)  |
   $(jl)| | |_| | | | (_| |$(tx)  |  $_jl_version_string
  $(jl)_/ |\\__'_|_|_|\\__'_|$(tx)  |  $_jl_commit_string
