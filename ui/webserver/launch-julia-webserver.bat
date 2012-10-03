@@ -16,6 +16,7 @@ goto julia
 
 :julia
 echo "Connect to http://localhost:2000/ for the web REPL."
+start http://localhost:2000
 julia-release-webserver -p 2001 
 
 :end
