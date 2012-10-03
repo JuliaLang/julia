@@ -126,24 +126,16 @@ function run_repl()
     STDIN.readcb = readBuffer
     start_reading(STDIN)
 
-    cont = true
-    lasterr = ()
-    iserr = false
-    while cont
-        cont = false
-        try
-            run_event_loop(globalEventLoop());
-        catch e
-            if isa(e, InterruptException)
-                println("^C")
-                show(e)
-                ccall(dlsym(_jl_repl,:jl_clear_input), Void, ());
-                cont = true
-            else
-                iserr = true
-                lasterr = e
-            end
+    while true
+        ccall(:repl_callback_enable, Void, ())
+        start_reading(STDIN)
+        STDIN.readcb = readBuffer
+        (ast, show_value) = take(_jl_repl_channel)
+        if show_value == -1
+            # exit flag
+            break
         end
+        _jl_eval_user_input(ast, show_value!=0)
     end
 
     if iserr

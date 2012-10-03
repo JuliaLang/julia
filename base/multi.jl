@@ -1640,7 +1640,7 @@ function event_loop(isclient)
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
-            process_events();
+            run_event_loop();
         if isempty(Workqueue)
             flush_gc_msgs()
         else

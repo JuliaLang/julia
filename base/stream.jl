@@ -483,8 +483,8 @@ change_readcb(stream::AsyncStream,readcb::Function) = ccall(:jl_change_readcb,In
 
 function readall(stream::AsyncStream)
     start_reading(stream)
-    run_event_loop()
-    return takebuf_string(stream.buf)
+    wait(stream)
+    return takebuf_string(stream.buffer)
 end
 
 show(io, p::Process) = print(io, "Process(", p.cmd, ")")
