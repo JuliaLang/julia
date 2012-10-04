@@ -215,6 +215,7 @@ function wavread(io::IO, opts::Options)
             fmt = read_format(io, subchunk_size)
         elseif subchunk_id == b"data"
             if format == "size"
+                @check_used opts
                 return int(number_of_samples(subchunk_size, fmt) / fmt.nchannels), int(fmt.nchannels)
             end
             samples = read_data(io, subchunk_size, fmt, opts)
@@ -225,6 +226,7 @@ function wavread(io::IO, opts::Options)
         end
     end
     samples = get_data_range(samples, subrange)
+    @check_used opts
     return samples, fmt.sample_rate, fmt.nbits, None
 end
 
@@ -232,6 +234,7 @@ function wavread(filename::String, opts::Options)
     @defaults opts subrange=Any format="double"
     io = open(filename, "r")
     finalizer(io, close)
+    @check_used opts
     return wavread(io, opts)
 end
 
@@ -260,11 +263,13 @@ function wavwrite(samples::Array, sample_rate::Number, nbits::Number, io::IO)
 
     # The file is not flushed unless I explicitly call it here
     flush(io)
+    @check_used opts
 end
 
 function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::String)
     io = open(filename, "w")
     finalizer(io, close)
+    @check_used opts
     return wavwrite(samples, sample_rate, nbits, io)
 end
 
