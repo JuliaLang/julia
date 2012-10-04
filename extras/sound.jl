@@ -82,60 +82,59 @@ end
 
 number_of_samples(chunk_size::Uint32, fmt::WAVFormat) = int(chunk_size / (fmt.nbits / 8))
 
-function read_data(io::IO, chunk_size::Uint32, fmt::WAVFormat, opts::Options)
-    @defaults opts format="double"
-    n_samples = number_of_samples(chunk_size, fmt)
-    bias = 0
-
+function native_data_type(nbits::Integer)
     # WAV Files are funny;
     # Data values are signed unless the sample is encoded with 8 bits.
-    if fmt.nbits != 24
-        if fmt.nbits == 16
-            data_type = Int16
-        elseif fmt.nbits == 32
-            data_type = Int32
-        elseif fmt.nbits == 8
-            data_type = Uint8
-            bias = 1
-        else
-            error("Unsupported bit width")
+    if nbits == 16
+        return Int16
+    elseif nbits == 24
+        return Int32
+    elseif nbits == 32
+        return Float32
+    elseif nbits == 8
+        return Uint8
+    end
+    error("'$nbits' is not a supported number of bits.")
+end
+
+function read_samples!{T<:Real}(io::IO, samples::Array{T})
+    for i = 1:size(samples, 1)
+        for j = 1:size(samples, 2)
+            samples[i, j] = read(io, T)
         end
-        max_value = typemax(data_type)
-        if fmt.nbits == 8
-            max_value /= 2
-        end
-        samples = read(io, data_type, n_samples)
-    else # fmt.nbits == 24
-        max_value = 2^23 - 1
-        data_type = Int32
-        raw_samples = read(io, Uint8, n_samples * 3)
-        samples = zeros(Int32, n_samples)
-        for i = 1:n_samples
-            samples[i] |= uint32(raw_samples[(i - 1) * 3 + 1])
-            samples[i] |= uint32(raw_samples[(i - 1) * 3 + 2]) << 8
-            samples[i] |= uint32(raw_samples[(i - 1) * 3 + 3]) << 16
+    end
+    samples
+end
+
+# support for 24 bit values encoded in 32 bits
+function read_samples!(io::IO, samples::Array{Int32})
+    for i = 1:size(samples, 1)
+        for j = 1:size(samples, 2)
+            raw_sample = read(io, Uint8, 3)
+            my_sample = uint32(0)
+            my_sample |= uint32(raw_sample[1])
+            my_sample |= uint32(raw_sample[2]) << 8
+            my_sample |= uint32(raw_sample[3]) << 16
             # sign extend negative values
-            if samples[i] & 0x00800000 > 0
-                samples[i] |= 0xff000000
+            if my_sample & 0x00800000 > 0
+                my_sample |= 0xff000000
             end
+            samples[i, j] = int32(my_sample)
         end
     end
-                
-    # reshape to honor the number of channels...
-    # I couldn't get reshape to work the way that I want it to. Channels are interleaved in
-    # the file.
-    my_samples = zeros(data_type, int(n_samples / fmt.nchannels), int(fmt.nchannels))
-    for i = 1:fmt.nchannels
-        my_samples[:, i] = samples[i:fmt.nchannels:n_samples]
-    end
-    
-    # TODO I think that MATLAB always converts the samples to floating point, but I'm not sure.
-    # and rebase the floating point value to the range -1.0 to 1.0 where 0 is the midpoint
-    if format == "native"
-        return my_samples
-    end
-    # format == "double"
-    return convert(Array{Float64}, my_samples) / max_value - bias
+    samples
+end
+
+convert_samples_to_double(samples::Array{Int16}) = convert(Array{Float64}, samples) / typemax(Int16)
+convert_samples_to_double(samples::Array{Int32}) = convert(Array{Float64}, samples) / (2^23 - 1)
+convert_samples_to_double(samples::Array{Float32}) = convert(Array{Float64}, samples)
+convert_samples_to_double(samples::Array{Uint8}) = convert(Array{Float64}, samples) / typemax(Uint8) * 2.0 - 1.0
+
+function read_data(io::IO, chunk_size::Uint32, fmt::WAVFormat, opts::Options)
+    @defaults opts format="double"
+    samps_per_channel = int(number_of_samples(chunk_size, fmt) / fmt.nchannels)
+    samples = read_samples!(io, Array(native_data_type(fmt.nbits), samps_per_channel, fmt.nchannels))
+    return (format == "native" ? samples : convert_samples_to_double(samples))
 end
 
 function write_data(io::IO, fmt::WAVFormat, samples::Array)
@@ -197,7 +196,7 @@ function wavread(io::IO, opts::Options)
     @defaults opts subrange=Any format="double"
     chunk_size = read_header(io)
     fmt = WAVFormat()
-    samples = Array(Float32)
+    samples = Array(Float64)
 
     # Note: This assumes that the format chunk is written in the file before the data chunk. The
     # specification does not require this assumption, but most real files are written that way.
