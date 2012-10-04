@@ -1,5 +1,5 @@
-load("../base/git.jl")
-load("../base/pkgmetadata.jl")
+load("git.jl")
+load("pkgmetadata.jl")
 
 module Pkg
 #
@@ -7,6 +7,7 @@ module Pkg
 #
 import Base.*
 import Git
+import Metadata
 import Metadata.*
 
 # default locations: local package repo, remote metadata repo
@@ -31,49 +32,66 @@ end
 init(dir::String) = init(dir, DEFAULT_META)
 init() = init(DEFAULT_DIR)
 
-# require & unrequire packages by name
+# add and remove packages by name
 
-function require(pkgs::Array{VersionSet})
-    for pkg in pkgs
-        if !contains(Metadata.packages(),pkg)
-            error("invalid package: $pkg")
+global add
+function add(pkgs::Vector{VersionSet})
+    commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg.package)
+                error("invalid package: $(pkg.package)")
+            end
+            reqs = parse_requires("REQUIRES")
+            if anyp(req->req.package==pkg.package,reqs)
+                error("package already required: $pkg")
+            end
+            open("REQUIRES","a") do io
+                print(io,pkg.package)
+                for ver in pkg.versions
+                    print(io,"\t$ver")
+                end
+                println(io)
+            end
         end
-        reqs = parse_requires("REQUIRES")
-        if anyp(req->req.package==pkg,reqs)
-            error("package already required: $pkg")
-        end
-        open("REQUIRES","a") do io
-            println(io,pkg)
-        end
+        run(`git add REQUIRES`)
+        resolve()
     end
-    run(`git add REQUIRES`)
-    resolve()
+end
+function add(pkgs::Union(String,VersionSet)...)
+    pkgs_ = VersionSet[]
+    for pkg in pkgs
+        push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+    end
+    add(pkgs_)
 end
 
-function unrequire(pkgs::String...)
-    for pkg in pkgs
-        if !contains(Metadata.packages(),pkg)
-            error("invalid package: $pkg")
-        end
-        reqs = parse_requires("REQUIRES")
-        if !anyp(req->req.package==pkg,reqs)
-            error("package not required: $pkg")
-        end
-        open("REQUIRES") do r
-            open("REQUIRES.new","w") do w
-                for line in each_line(r)
-                    fields = split(line)
-                    if isempty(fields) || fields[1]!=pkg
-                        print(w,line)
+function rm(pkgs::Vector{String})
+    commit("rm: $(join(sort!(pkgs), ' '))") do
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg)
+                error("invalid package: $pkg")
+            end
+            reqs = parse_requires("REQUIRES")
+            if !anyp(req->req.package==pkg,reqs)
+                error("package not required: $pkg")
+            end
+            open("REQUIRES") do r
+                open("REQUIRES.new","w") do w
+                    for line in each_line(r)
+                        fields = split(line)
+                        if isempty(fields) || fields[1]!=pkg
+                            print(w,line)
+                        end
                     end
                 end
             end
+            run(`mv REQUIRES.new REQUIRES`)
         end
-        run(`mv REQUIRES.new REQUIRES`)
+        run(`git add REQUIRES`)
+        resolve()
     end
-    run(`git add REQUIRES`)
-    resolve()
 end
+rm(pkgs::String...) = rm(String[pkgs...])
 
 # list required & installed packages
 
@@ -201,6 +219,20 @@ function commit(msg::String)
     run(`git commit -m $msg`)
 end
 
+function commit(f::Function, msg::String)
+    if Git.dirty()
+        error("The following contents must be committed:",
+              readall(`git ls-files -d -m -s -u`))
+    end
+    try f()
+    catch err
+        println(stderr_stream, "Error encountered\nRolling back to HEAD...")
+        checkout()
+        throw(err)
+    end
+    commit(msg)
+end
+
 # push & pull package repos to/from remotes
 
 function push()
@@ -286,21 +318,23 @@ end
 # update system to latest and greatest
 
 function update()
-    Git.each_submodule(false) do name, path, sha1
-        cd(path) do
-            if Git.attached()
-                run(`git pull`)
-            else
-                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+    commit("update") do
+        Git.each_submodule(false) do name, path, sha1
+            cd(path) do
+                if Git.attached()
+                    run(`git pull`)
+                else
+                    run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+                end
             end
         end
+        cd("METADATA") do
+            run(`git pull`)
+        end
+        run(`git add METADATA`)
+        Metadata.gen_hashes()
+        resolve()
     end
-    cd("METADATA") do
-        run(`git pull`)
-    end
-    run(`git add METADATA`)
-    Metadata.gen_hashes()
-    resolve()
 end
 
 end # module
