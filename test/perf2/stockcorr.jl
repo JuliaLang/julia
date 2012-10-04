@@ -26,7 +26,7 @@ function stockcorr()
 
     for i = 1:n
        Wiener = randn(T-1,2)
-       CorrWiener = Wiener*factors(UpperTriangle)
+       CorrWiener = Wiener*UpperTriangle
        for j = 2:T
           SimulPriceA[j,i] = SimulPriceA[j-1,i]*exp((r-Div[1]-Vol[1]^2/2)*dt+Vol[1]*sqrt(dt)*CorrWiener[j-1,1])
           SimulPriceB[j,i] = SimulPriceB[j-1,i]*exp((r-Div[2]-Vol[2]^2/2)*dt+Vol[2]*sqrt(dt)*CorrWiener[j-1,2])

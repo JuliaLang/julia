@@ -78,16 +78,16 @@ for (genrand, gv_genrand) in
     @eval begin
      
         function ($genrand)(s::DSFMT_state)
-            r = ccall(dlsym(Base.librandom, $(string(genrand)) ),
-                      Float64,
-                      (Ptr{Void},),
-                      s.val)
+            ccall(dlsym(Base.librandom, $(string(genrand)) ),
+                  Float64,
+                  (Ptr{Void},),
+                  s.val)
         end
 
         function ($gv_genrand)()
-            r = ccall(dlsym(Base.librandom, $(string(gv_genrand)) ),
-                      Float64,
-                      ())
+            ccall(dlsym(Base.librandom, $(string(gv_genrand)) ),
+                  Float64,
+                  ())
         end
         
     end
@@ -144,16 +144,16 @@ for (genrand_fill, gv_genrand_fill, genrand_fill_name, gv_genrand_fill_name) in
 end
 
 function dsfmt_genrand_uint32(s::DSFMT_state)
-    r = ccall(dlsym(Base.librandom, :dsfmt_genrand_uint32), 
-              Uint32,
-              (Ptr{Void},),
-              s.val)
+    ccall(dlsym(Base.librandom, :dsfmt_genrand_uint32), 
+          Uint32,
+          (Ptr{Void},),
+          s.val)
 end
 
 function dsfmt_gv_genrand_uint32()
-    r = ccall(dlsym(Base.librandom, :dsfmt_gv_genrand_uint32), 
-              Uint32,
-              ())
+    ccall(dlsym(Base.librandom, :dsfmt_gv_genrand_uint32), 
+          Uint32,
+          ())
 end
 
 ## randmtzig

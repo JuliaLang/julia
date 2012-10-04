@@ -278,6 +278,9 @@ getfield_tfunc = function (A, s, name)
         if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
             return abstract_eval_constant(eval(A1,fld))
         end
+        if s === Module
+            return Top
+        end
         for i=1:length(s.names)
             if is(s.names[i],fld)
                 return s.types[i]
@@ -386,9 +389,20 @@ function isconstantfunc(f, sv::StaticVarInfo)
     end
     if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) &&
-            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode) &&
-            isa(f.args[2],Module)
-            M = f.args[2]; s = f.args[3].value
+            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
+            s = f.args[3].value
+            if isa(f.args[2],Module)
+                M = f.args[2]
+            else
+                M = isconstantfunc(f.args[2], sv)
+                if M === false
+                    return false
+                end
+                M = _ieval(M)
+                if !isa(M,Module)
+                    return false
+                end
+            end
             return isbound(M,s) && isconst(M,s) && f
         end
     end
@@ -539,14 +553,10 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
             e.head = :call1
         end
-        if is(f,getfield) && length(argtypes)==2 && is(argtypes[1],Module)
-            themod = isconstantref(e.args[2], sv)
-            if !is(themod,false) && isa(fargs[2], QuoteNode)
-                themod = _ieval(themod)
-                sym = fargs[2].value
-                if isa(sym,Symbol) && isconst(themod,sym) && isbound(themod,sym)
-                    return abstract_eval_constant(eval(themod, sym))
-                end
+        if is(f,getfield)
+            val = isconstantref(e, sv)
+            if !is(val,false)
+                return abstract_eval_constant(_ieval(val))
             end
         end
         rt = builtin_tfunction(f, fargs, argtypes)
