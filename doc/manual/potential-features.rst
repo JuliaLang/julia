@@ -13,7 +13,6 @@ issues <https://github.com/JuliaLang/julia/issues>`_ for the latest
 discussion on potential features.
 
 -  `Local ``goto`` <https://github.com/JuliaLang/julia/issues/101>`_
--  `Namespaces/modules <https://github.com/JuliaLang/julia/issues/57>`_
 -  `Abstract multiple
    inheritance <https://github.com/JuliaLang/julia/issues/5>`_
 -  `Enhanced C struct and array
