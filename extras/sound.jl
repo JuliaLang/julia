@@ -97,8 +97,6 @@ function read_data(io::IO, chunk_size::Uint32, fmt::WAVFormat, opts::Options)
         elseif fmt.nbits == 8
             data_type = Uint8
             bias = 1
-        elseif fmt.nbits == 64
-            data_type = Int64
         else
             error("Unsupported bit width")
         end
@@ -154,8 +152,6 @@ function write_data(io::IO, fmt::WAVFormat, samples::Array)
     elseif fmt.nbits == 8
         data_type = Uint8
         bias = 1.0
-    elseif fmt.nbits == 64
-        data_type = Int64
     elseif fmt.nbits == 24
         max_value = 2^23 - 1
         samples = convert(Array{Int32}, round(samples * max_value))
