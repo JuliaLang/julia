@@ -23,6 +23,19 @@ end
 WAVFormat() = WAVFormat(uint16(0), uint16(0), uint32(0), uint32(0), uint16(0), uint16(0), Array(Uint8), uint32(0))
 WAVFormat(comp, chan, fs, bytes, ba, nbits) = WAVFormat(comp, chan, fs, bytes, ba, nbits, Array(Uint8), uint32(0))
 
+const WAV_LINEAR_PCM  = 1
+const WAV_NORM_FLOAT = 3
+
+function compression_code(code::Uint16)
+    if code == WAV_LINEAR_PCM
+        return "Linear PCM"
+    end
+    if code == WAV_NORM_FLOAT
+        return "Normalized Floating Point"
+    end
+    return "Unknown Compression Code"
+end
+
 function read_header(io::IO)
     # check if the given file has a valid RIFF header
     riff = read(io, Uint8, 4)
@@ -82,19 +95,19 @@ end
 
 number_of_samples(chunk_size::Uint32, fmt::WAVFormat) = int(chunk_size / (fmt.nbits / 8))
 
-function native_data_type(nbits::Integer)
+function native_data_type(fmt::WAVFormat)
     # WAV Files are funny;
     # Data values are signed unless the sample is encoded with 8 bits.
-    if nbits == 16
+    if fmt.nbits == 16
         return Int16
-    elseif nbits == 24
+    elseif fmt.nbits == 24
         return Int32
-    elseif nbits == 32
+    elseif fmt.nbits == 32 && fmt.compression_code == WAV_NORM_FLOAT
         return Float32
-    elseif nbits == 8
+    elseif fmt.nbits == 8
         return Uint8
     end
-    error("'$nbits' is not a supported number of bits.")
+    error("$(compression_code(fmt.compression_code)) with $(int(fmt.nbits)) bits is not a supported format.")
 end
 
 function read_samples!{T<:Real}(io::IO, samples::Array{T})
@@ -133,55 +146,70 @@ convert_samples_to_double(samples::Array{Uint8}) = convert(Array{Float64}, sampl
 function read_data(io::IO, chunk_size::Uint32, fmt::WAVFormat, opts::Options)
     @defaults opts format="double"
     samps_per_channel = int(number_of_samples(chunk_size, fmt) / fmt.nchannels)
-    samples = read_samples!(io, Array(native_data_type(fmt.nbits), samps_per_channel, fmt.nchannels))
+    samples = read_samples!(io, Array(native_data_type(fmt), samps_per_channel, fmt.nchannels))
     return (format == "native" ? samples : convert_samples_to_double(samples))
 end
 
-function write_data(io::IO, fmt::WAVFormat, samples::Array)
-    # write the data subchunk header
-    write(io, b"data")
-    write(io, fmt.data_length) # Uint32
-
-    bias = 0
-    data_type = Int16
-    if fmt.nbits == 16
-        data_type = Int16
-    elseif fmt.nbits == 32
-        data_type = Int32
-    elseif fmt.nbits == 8
-        data_type = Uint8
-        bias = 1.0
-    elseif fmt.nbits == 24
-        max_value = 2^23 - 1
-        samples = convert(Array{Int32}, round(samples * max_value))
-        assert(max(samples) < 2^23)
-         # for each sample
-        for i = 1:size(samples, 1)
-            # for each channel
-            for j = 1:size(samples, 2)
-                write(io, convert(Uint8, samples[i, j] & 0xff))
-                write(io, convert(Uint8, (samples[i, j]>>8) & 0xff))
-                write(io, convert(Uint8, (samples[i, j]>>16) & 0xff))
-            end
+function clamp_and_write_samples{T}(io::IO, samples::Array{T, }, minval::T, maxval::T)
+    # Interleave the channel samples before writing to the stream.
+    for i = 1:size(samples, 1) # for each sample
+        for j = 1:size(samples, 2) # for each channel
+            write(io, clamp(samples[i, j], minval, maxval))
         end
-        return
-    else
-        error("Unsupported bit width")
     end
-    max_value = typemax(data_type)
-    if fmt.nbits == 8
-        max_value /= 2
+end
+
+function write_data(io::IO, fmt::WAVFormat, samples::Array{Uint8, })
+    if fmt.nbits != 8
+        error("Uint8 arrays must be encoded with 8 bits!")
     end
+    clamp_and_write_samples(io, samples, 0x0, 0xff)
+end
+
+function write_data(io::IO, fmt::WAVFormat, samples::Array{Int16, })
+    if fmt.nbits != 16
+        error("Int16 arrays must be encoded with 16 bits!")
+    end
+    clamp_and_write_samples(io, samples, typemin(Int16), typemax(Int16))
+end
+
+function write_data(io::IO, fmt::WAVFormat, samples::Array{Int32, })
+    if fmt.nbits != 24
+        error("Int32 arrays must be encoded with 24 bits!")
+    end
+    for i = 1:size(samples, 1) # number of samples in each channel
+        for j = 1:fmt.nchannels
+            s = clamp(samples[i, j], int32(-2^23), int32(2^23 - 1))
+            # TODO Swap here when worried about big endian byte order
+            write(io, uint8( s & 0x000000ff))
+            write(io, uint8((s & 0x0000ff00) >> 8))
+            write(io, uint8((s & 0x00ff0000) >> 16))
+        end
+    end
+end
+
+function write_data(io::IO, fmt::WAVFormat, samples::Array{Float32, })
+    if fmt.nbits != 32
+        error("Float32 arrays must be encoded with 32 bits!")
+    end
+    clamp_and_write_samples(io, samples, float32(-1.0), float32(1.0))
+end
+
+function write_data(io::IO, fmt::WAVFormat, samples::Array{Float64, })
+    # clamp the input data to the valid range
+    samples = [clamp(samples[i, j], -1.0, 1.0) for i = 1:size(samples, 1), j = 1:size(samples, 2)]
 
     # Scale to full range of the chosen data type
-    samples = round((samples + bias) * max_value)
-
-    # Interleave the channel samples before writing to the stream.
-    flat_array = zeros(Float64, length(samples))
-    for i = 1:fmt.nchannels
-        flat_array[i:fmt.nchannels:length(samples)] = samples[:, i]
+    if fmt.nbits == 16
+        return write_data(io, fmt, convert(Array{Int16}, round(samples * typemax(Int16))))
+    elseif fmt.nbits == 24
+        return write_data(io, fmt, convert(Array{Int32}, round(samples * (2^23 - 1))))
+    elseif fmt.nbits == 32
+        return write_data(io, fmt, convert(Array{Float32}, samples))
+    elseif fmt.nbits == 8
+        return write_data(io, fmt, convert(Array{Uint8}, round((samples + 1.0) * typemax(Uint8) / 2)))
     end
-    write(io, convert(Array{data_type}, flat_array))
+    error("Unsupported bit width")
 end
 
 get_data_range(samples::Array, subrange) = samples
@@ -246,11 +274,15 @@ wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=
 wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
 wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
 
-function wavwrite(samples::Array, sample_rate::Number, nbits::Number, io::IO)
+get_compression_code(samples::Array, nbits::Integer) = WAV_LINEAR_PCM
+get_compression_code{T<:FloatingPoint}(samples::Array{T}, nbits::Integer) = nbits != 32 ? WAV_LINEAR_PCM : WAV_NORM_FLOAT
+
+function wavwrite(samples::Array, io::IO, opts::Options)
+    @defaults opts Fs=8000 nbits=16
     fmt = WAVFormat()
-    fmt.compression_code = 1 # Linear PCM
+    fmt.compression_code = get_compression_code(samples, nbits)
     fmt.nchannels = size(samples, 2)
-    fmt.sample_rate = sample_rate
+    fmt.sample_rate = Fs
     fmt.nbits = nbits
     fmt.block_align = fmt.nbits / 8 * fmt.nchannels
     fmt.bps = fmt.sample_rate * fmt.block_align
@@ -258,6 +290,9 @@ function wavwrite(samples::Array, sample_rate::Number, nbits::Number, io::IO)
 
     write_header(io, fmt)
     write_format(io, fmt)
+    # write the data subchunk header
+    write(io, b"data")
+    write(io, fmt.data_length) # Uint32
     write_data(io, fmt, samples)
 
     # The file is not flushed unless I explicitly call it here
@@ -265,11 +300,27 @@ function wavwrite(samples::Array, sample_rate::Number, nbits::Number, io::IO)
     @check_used opts
 end
 
-function wavwrite(samples::Array, sample_rate::Number, nbits::Number, filename::String)
+function wavwrite(samples::Array, filename::String, opts::Options)
+    @defaults opts Fs=8000 nbits=16
     io = open(filename, "w")
     finalizer(io, close)
     @check_used opts
-    return wavwrite(samples, sample_rate, nbits, io)
+    return wavwrite(samples, io, opts)
 end
+
+wavwrite(y::Array, filename::String) = wavwrite(y, filename, @options)
+wavwrite(y::Array, io::IO) = wavwrite(y, io, @options)
+wavwrite(y::Array, f::Real, filename::String) = wavwrite(y, filename, @options Fs=f)
+wavwrite(y::Array, f::Real, N::Real, filename::String) = wavwrite(y, filename, @options Fs=f nbits=N)
+
+# support for writing native arrays...
+wavwrite(y::Array{Uint8, }, io::IO) = wavwrite(y, io, @options nbits=8)
+wavwrite(y::Array{Uint8, }, filename::String) = wavwrite(y, filename, @options nbits=8)
+wavwrite(y::Array{Int16, }, io::IO) = wavwrite(y, io, @options nbits=16)
+wavwrite(y::Array{Int16, }, filename::String) = wavwrite(y, filename, @options nbits=16)
+wavwrite(y::Array{Int32, }, io::IO) = wavwrite(y, io, @options nbits=24)
+wavwrite(y::Array{Int32, }, filename::String) = wavwrite(y, filename, @options nbits=24)
+wavwrite(y::Array{Float32, }, io::IO) = wavwrite(y, io, @options nbits=32)
+wavwrite(y::Array{Float32, }, filename::String) = wavwrite(y, filename, @options nbits=32)
 
 end # module
