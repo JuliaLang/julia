@@ -1,4 +1,4 @@
-load("$JULIA_HOME/../../extras/linprog.jl")
+load("linprog.jl")
 
 module Metadata
 import Base.*

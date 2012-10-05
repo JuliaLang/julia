@@ -351,11 +351,11 @@ function quantile(x, qs)
     
     if lx > 0 && lqs > 0
         index = 1 + (lx-1) * bqs
-        lo = int(floor(index))
-        hi = int(ceil(index))
+        lo = ifloor(index)
+        hi = iceil(index)
         sortedX = sort(x)
         i = index .> lo
-        ret = sortedX[lo]
+        ret = float(sortedX[lo])
         i = [1:length(i)][i]
         h = (index - lo)[i]
         ret[i] = (1-h) .* ret[i] + h .* sortedX[hi[i]]
