@@ -25,7 +25,7 @@ diag(A::AbstractVector) = error("Perhaps you meant to use diagm().")
 
 function norm(x::AbstractVector, p::Number)
     if length(x) == 0
-        return 0.0
+        return zero(eltype(x))
     elseif p == Inf
         return max(abs(x))
     elseif p == -Inf
@@ -40,7 +40,7 @@ norm(x::AbstractVector) = sqrt(real(dot(x,x)))
 function norm(A::AbstractMatrix, p)
     m, n = size(A)
     if m == 0 || n == 0
-        return 0.0
+        return zero(eltype(A))
     elseif m == 1 || n == 1
         return norm(reshape(A, numel(A)), p)
     elseif p == 1
