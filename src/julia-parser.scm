@@ -435,13 +435,17 @@
 		 (first? #t))
 	(let ((t (peek-token s)))
 	  (if (not (eqv? t op))
-	      (if (or (null? ex) (pair? (cdr ex)) (not first?))
-	          ; () => (head)
-	          ; (ex2 ex1) => (head ex1 ex2)
-	          ; (ex1) ** if operator appeared => (head ex1) (handles "x;")
-		  (cons head (reverse ex))
-	          ; (ex1) => ex1
-		  (car ex))
+	      (begin
+		(if (not (or (eof-object? t) (eqv? t #\newline) (eqv? op #\,)
+			     (memv t closers)))
+		    (error "extra token after end of expression"))
+		(if (or (null? ex) (pair? (cdr ex)) (not first?))
+		    ;; () => (head)
+		    ;; (ex2 ex1) => (head ex1 ex2)
+		    ;; (ex1) if operator appeared => (head ex1) (handles "x;")
+		    (cons head (reverse ex))
+		    ;; (ex1) => ex1
+		    (car ex)))
 	      (begin (take-token s)
 		     ; allow input to end with the operator, as in a;b;
 		     (if (or (eof-object? (peek-token s))
@@ -498,16 +502,23 @@
 					  '(end else elseif catch #\newline)
 					  #t))
 ;; ";" at the top level produces a sequence of top level expressions
-(define (parse-stmts s) (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t))
+(define (parse-stmts s)
+  (let ((ex (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t)))
+    ;; check for unparsed junk after an expression
+    (let ((t (peek-token s)))
+      (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
+	  (error "extra token after end of expression")))
+    ex))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
     (short-form-function-loc
      (parse-RtoL s parse-comma (prec-ops 0)) lno)))
+
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-cond  (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
-(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '( #\) ) #f))
+(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '() #f))
 (define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 2)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))

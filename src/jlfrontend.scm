@@ -127,9 +127,7 @@
   (parser-wrap (lambda ()
 		 (let* ((inp  (make-token-stream (open-input-string s)))
 			(expr (julia-parse inp)))
-		   (if (not (eof-object? (julia-parse inp)))
-		       (error "extra input after end of expression")
-		       (expand-toplevel-expr expr))))))
+		   (expand-toplevel-expr expr)))))
 
 ;; parse file-in-a-string
 (define (jl-parse-string-stream str)
