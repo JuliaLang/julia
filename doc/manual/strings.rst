@@ -660,7 +660,7 @@ however, one wants to know not just whether a string matched, but also
     julia> match(r"^\s*(?:#|$)", "# a comment")
     RegexMatch("#")
 
-If the regular expression does not match the given string, ``ismatch``
+If the regular expression does not match the given string, ``match``
 returns ``nothing`` — a special value that does not print anything at
 the interactive prompt. Other than not printing, it is a completely
 normal value and you can test for it programmatically::
