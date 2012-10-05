@@ -126,11 +126,11 @@ Types
 
 .. function:: eps([type])
 
-   The distance between 1.0 and the next largest representable floating-point value of ``type``. The only types that are sensible arguments are ``Float32`` and ``Float64``. If ``type`` is omitted, then ``eps(Float64)`` is returned.
+   The distance between 1.0 and the next larger representable floating-point value of ``type``. The only types that are sensible arguments are ``Float32`` and ``Float64``. If ``type`` is omitted, then ``eps(Float64)`` is returned.
 
 .. function:: eps(x)
 
-   The distance between ``x`` and the next largest representable floating-point value of the same type as ``x``.
+   The distance between ``x`` and the next larger representable floating-point value of the same type as ``x``.
 
 .. function:: promote_type(type1, type2)
 
