@@ -34,6 +34,10 @@ Getting Around
 
    Show which method of ``f`` will be called for the given arguments
 
+.. function:: methods(f)
+
+   Show all methods of ``f`` with their argument types
+
 All Objects
 -----------
 
