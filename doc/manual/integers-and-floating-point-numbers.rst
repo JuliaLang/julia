@@ -245,7 +245,7 @@ Note that ``Float32`` values ``NaN``, ``Inf`` and ``-Inf`` are shown
 identically to their ``Float64`` counterparts.
 
 Floating-point types also support the ``eps`` function, which gives the
-distance between ``1.0`` and the next largest representable
+distance between ``1.0`` and the next larger representable
 floating-point value::
 
     julia> eps(Float32)
@@ -274,7 +274,7 @@ than ``x``::
     julia> eps(0.0)
     4.94065645841246544e-324
 
-As you can see, the distance to the next largest representable
+As you can see, the distance to the next larger representable
 floating-point value is smaller for smaller values and larger for larger
 values. In other words, the representable floating-point numbers are
 densest in the real number line near zero, and grow sparser
