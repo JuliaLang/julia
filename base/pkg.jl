@@ -13,7 +13,7 @@ import Metadata.*
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA.git"
+const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # create a new empty packge repository
@@ -226,11 +226,19 @@ function commit(f::Function, msg::String)
     end
     try f()
     catch err
-        println(stderr_stream, "Error encountered\nRolling back to HEAD...")
+        print(stderr_stream,
+              "\n\n*** ERROR ENCOUNTERED ***\n\n",
+              "Rolling back to HEAD...\n")
         checkout()
         throw(err)
     end
-    commit(msg)
+    if Git.staged() && !Git.unstaged()
+        commit(msg)
+    elseif !Git.dirty()
+        println(stderr_stream, "Nothing to commit.")
+    else
+        error("There are both staged and unstaged changes to packages.")
+    end
 end
 
 # push & pull package repos to/from remotes
@@ -301,7 +309,7 @@ function pull()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
         print(stderr_stream,
-            "\n*** WARNING ***\n\n",
+            "\n\n*** WARNING ***\n\n",
             "You have unresolved merge conflicts in the following files:\n\n",
             unmerged,
             "\nPlease resolve these conflicts, `git add` the files, and commit.\n"
