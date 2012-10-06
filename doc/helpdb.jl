@@ -219,7 +219,7 @@
 
 (E"Types",E"eps",E"eps([type])
 
-   The distance between 1.0 and the next largest representable
+   The distance between 1.0 and the next larger representable
    floating-point value of 'type'. The only types that are sensible
    arguments are 'Float32' and 'Float64'. If 'type' is omitted, then
    'eps(Float64)' is returned.
@@ -228,7 +228,7 @@
 
 (E"Types",E"eps",E"eps(x)
 
-   The distance between 'x' and the next largest representable
+   The distance between 'x' and the next larger representable
    floating-point value of the same type as 'x'.
 
 "),
