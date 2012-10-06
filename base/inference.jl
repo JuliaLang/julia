@@ -1246,10 +1246,14 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
 
     # add declarations for variables that are always the same type
     for vi in ast.args[2][2]::Array{Any,1}
-        vi[2] = get(decls, vi[1], vi[2])
+        if (vi[3]&4)==0
+            vi[2] = get(decls, vi[1], vi[2])
+        end
     end
     for vi in ast.args[2][3]::Array{Any,1}
-        vi[2] = get(decls, vi[1], vi[2])
+        if (vi[3]&4)==0
+            vi[2] = get(decls, vi[1], vi[2])
+        end
     end
 
     for (li::LambdaStaticData) in closures
@@ -1257,7 +1261,9 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
             a = li.ast
             # pass on declarations of captured vars
             for vi in a.args[2][3]::Array{Any,1}
-                vi[2] = get(decls, vi[1], vi[2])
+                if (vi[3]&4)==0
+                    vi[2] = get(decls, vi[1], vi[2])
+                end
             end
             na = length(a.args[1])
             typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
@@ -1515,7 +1521,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
                     vnew = unique_name(enclosing_ast)
                     add_variable(enclosing_ast, vnew, aeitype)
                     push(stmts, Expr(:(=), {vnew, aei}, Any))
-                    argexprs[i] = SymbolNode(vnew,aeitype)
+                    argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 elseif !isType(aeitype) && !effect_free(aei)
                     push(stmts, aei)
                 end
