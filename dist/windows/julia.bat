@@ -7,8 +7,8 @@
 pushd %cd%
 setlocal enableextensions enabledelayedexpansion
 call %~dp0prepare_env.bat %*
-call %JULIA% %*
+call %JULIA_HOME%julia-debug-basic.exe %*
 endlocal
-%popd
+popd
 
 @echo on

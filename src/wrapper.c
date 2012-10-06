@@ -444,12 +444,14 @@ DLLEXPORT size_t jl_sizeof_uv_pipe_t()
     return sizeof(uv_pipe_t);
 }
 
+extern void jl_atexit_hook();
 DLLEXPORT void jl_exit(int exitcode)
 {
     /*if(jl_io_loop) {
         jl_process_events(&jl_io_loop);
     }*/
     uv_tty_reset_mode();
+    jl_atexit_hook();
     exit(exitcode);
 }
 

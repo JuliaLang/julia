@@ -188,19 +188,68 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 }
 #endif
 
-static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void* arg) {
-    jl_close_uv(handle);
+struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
+struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
+static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
+    //if (status == 0) uv_close((uv_handle_t*)req->handle,NULL);
+    if (status != 0) printf("cb %d status: %d\n",((uv_pipe_t*)req->handle)->handle,status);
+    fflush(stdout);
+    free(req);
 }
-void jl_atexit_hook()
-{
+static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
+	struct uv_shutdown_queue *queue = arg;
+    struct uv_shutdown_queue_item *item = malloc(sizeof(struct uv_shutdown_queue_item));
+    item->h = handle;
+    item->next = NULL;
+    if (queue->last) queue->last->next = item;
+    if (!queue->first) queue->first = item;
+    queue->last = item;
+}
+void jl_atexit_hook() {
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
         if (f!=NULL && jl_is_function(f)) {
             jl_apply((jl_function_t*)f, NULL, 0);
         }
     }
-    uv_loop_t* loop = jl_global_event_loop();
-    uv_walk(loop, jl_uv_exitcleanup_walk, 0);
+	uv_loop_t* loop = jl_global_event_loop();
+    struct uv_shutdown_queue queue = {NULL, NULL};
+    uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
+    struct uv_shutdown_queue_item *item = queue.first;
+    while (item) {
+		uv_handle_t *handle = item->h;
+        switch(handle->type) {
+            case UV_UDP:
+            case UV_TCP:
+            case UV_NAMED_PIPE:
+            case UV_TTY:
+                if (uv_is_writable((uv_stream_t*)handle)){
+                    uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
+                    int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
+                    //printf("shutdown %d\n",((uv_pipe_t*)handle)->handle);
+                    if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
+                    fflush(stdout);
+                } else {
+                    printf("non-writable!\n"); fflush(stdout);
+                }
+                break;
+            case UV_POLL:
+            case UV_TIMER:
+            case UV_PREPARE:
+            case UV_CHECK:
+            case UV_IDLE:
+            case UV_ASYNC:
+            //case UV_SIGNAL:
+            case UV_PROCESS:
+            case UV_FS_EVENT:
+            //case UV_FS_POLL:
+                uv_close(handle,NULL);
+                break;
+            default:
+                assert(0);
+        }
+		item = item->next;
+    }
     uv_run(loop);
 }
 
@@ -256,7 +305,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             break;
         case UV_NAMED_PIPE:
             handle = malloc(sizeof(uv_pipe_t));
-            uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,0);
+            uv_pipe_init(jl_io_loop,(uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
             uv_pipe_open((uv_pipe_t*)handle,fd);
             ((uv_pipe_t*)handle)->data=0;
             break;
@@ -264,7 +313,7 @@ void *init_stdio_handle(uv_file fd,int readable)
             if(readable) {
                 jl_printf(JL_STDERR,"Reading from files as STDIN is not yet supported. Proceed with caution!\n");
                 handle = malloc(sizeof(uv_pipe_t));
-                uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,readable);
+                uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle,(readable?UV_PIPE_READABLE:UV_PIPE_WRITEABLE));
                 uv_pipe_open((uv_pipe_t*)handle,fd);
                 ((uv_pipe_t*)handle)->data=0;
             } else if (fd == 1)
@@ -421,7 +470,7 @@ void julia_init(char *imageFile)
      }
 #endif
 
-    atexit(jl_atexit_hook);
+    //atexit(jl_atexit_hook);
 
 #ifdef JL_GC_MARKSWEEP
     jl_gc_enable();

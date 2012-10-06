@@ -127,7 +127,7 @@ function run_repl()
     start_reading(STDIN)
 
     while true
-        ccall(:repl_callback_enable, Void, ())
+        ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
         start_reading(STDIN)
         STDIN.readcb = readBuffer
         (ast, show_value) = take(_jl_repl_channel)
@@ -283,6 +283,7 @@ function _start()
         println()
         exit(1)
     end
+    exit(0) //HACK: always exit using jl_exit
 end
 
 const _jl_atexit_hooks = {}
