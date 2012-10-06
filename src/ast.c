@@ -161,7 +161,16 @@ static jl_value_t *scm_to_julia(value_t e)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 #endif
-    jl_value_t *v = scm_to_julia_(e);
+    jl_value_t *v;
+    JL_TRY {
+        v = scm_to_julia_(e);
+    }
+    JL_CATCH {
+        // if expression cannot be converted, replace with error expr
+        jl_expr_t *ex = jl_exprn(error_sym, 1);
+        jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
+        v = (jl_value_t*)ex;
+    }
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
