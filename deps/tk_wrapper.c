@@ -20,6 +20,7 @@ int jl_tcl_callback(ClientData clientData, Tcl_Interp *interp,
         result = jl_apply(f, jlargs, argc);
     }
     JL_CATCH {
+        //jl_show(jl_stdout_obj(), jl_exception_in_transit);
         JL_GC_POP();
         return TCL_ERROR;
     }
