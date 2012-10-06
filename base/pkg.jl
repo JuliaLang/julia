@@ -93,7 +93,11 @@ function rm(pkgs::Vector{String})
 end
 rm(pkgs::String...) = rm(String[pkgs...])
 
-# list required & installed packages
+# list available, required & installed packages
+
+available() = for pkg in Metadata.each_package()
+    println(pkg)
+end
 
 requires() = open("REQUIRES") do io
     for line in each_line(io)
