@@ -11,6 +11,7 @@ export librandom_init, srand,
        randexp, randexp!, exprnd,
        randchi2, randchi2!, chi2rnd,
        randbeta, randbeta!, betarnd,
+       randbit, randbit!, randbool, randbool!,
        Rng, Rng_MT
 
 abstract Rng
