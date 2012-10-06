@@ -813,10 +813,9 @@ DLLEXPORT int jl_egal(jl_value_t *a, jl_value_t *b);
 DLLEXPORT uptrint_t jl_object_id(jl_value_t *v);
 
 // modules
-extern DLLEXPORT jl_module_t *jl_root_module;
+extern DLLEXPORT jl_module_t *jl_main_module;
 extern DLLEXPORT jl_module_t *jl_core_module;
 extern DLLEXPORT jl_module_t *jl_base_module;
-extern DLLEXPORT jl_module_t *jl_main_module;
 extern DLLEXPORT jl_module_t *jl_current_module;
 jl_module_t *jl_new_module(jl_sym_t *name);
 // get binding for reading

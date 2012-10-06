@@ -167,9 +167,15 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         }
     }
     jl_serialize_value(s, NULL);
-    write_int32(s, m->imports.len);
-    for(i=0; i < m->imports.len; i++) {
-        jl_serialize_value(s, (jl_value_t*)m->imports.items[i]);
+    if (m == jl_main_module) {
+        write_int32(s, 1);
+        jl_serialize_value(s, (jl_value_t*)jl_core_module);
+    }
+    else {
+        write_int32(s, m->imports.len);
+        for(i=0; i < m->imports.len; i++) {
+            jl_serialize_value(s, (jl_value_t*)m->imports.items[i]);
+        }
     }
 }
 
@@ -724,11 +730,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
     ios_file(&f, fname, 1, 1, 1, 1);
 
     // orphan old Base module if present
-    jl_base_module = (jl_module_t*)jl_get_global(jl_root_module, jl_symbol("Base"));
-
-    // remove Main module
-    jl_binding_t *b = jl_get_binding_wr(jl_root_module, jl_symbol("Main"));
-    b->value = NULL; b->constp = 0;
+    jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
     // delete cached slow ASCIIString constructor if present
     jl_methtable_t *mt = jl_gf_mtable((jl_function_t*)jl_ascii_string_type);
@@ -745,7 +747,7 @@ void jl_save_system_image(char *fname, char *startscriptname)
 
     jl_serialize_value(&f, jl_array_type->env);
 
-    jl_serialize_value(&f, jl_root_module);
+    jl_serialize_value(&f, jl_main_module);
 
     write_int32(&f, jl_get_t_uid_ctr());
     write_int32(&f, jl_get_gs_ctr());
@@ -784,10 +786,10 @@ void jl_restore_system_image(char *fname)
 
     jl_array_type->env = jl_deserialize_value(&f);
     
-    jl_root_module = (jl_module_t*)jl_deserialize_value(&f);
-    jl_core_module = (jl_module_t*)jl_get_global(jl_root_module,
+    jl_main_module = (jl_module_t*)jl_deserialize_value(&f);
+    jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Core"));
-    jl_base_module = (jl_module_t*)jl_get_global(jl_root_module,
+    jl_base_module = (jl_module_t*)jl_get_global(jl_main_module,
                                                  jl_symbol("Base"));
     jl_current_module = jl_base_module; // run start_image in Base
 

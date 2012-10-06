@@ -4,10 +4,9 @@
 #include <assert.h>
 #include "julia.h"
 
-jl_module_t *jl_root_module=NULL;
+jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_core_module=NULL;
 jl_module_t *jl_base_module=NULL;
-jl_module_t *jl_main_module=NULL;
 jl_module_t *jl_current_module=NULL;
 
 jl_module_t *jl_new_module(jl_sym_t *name)
@@ -21,6 +20,8 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     if (jl_core_module) {
         jl_module_importall(m, jl_core_module);
     }
+    // export own name, so import Foo.* also imports Foo
+    jl_module_export(m, name);
     return m;
 }
 
@@ -55,9 +56,6 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
-    if (m == jl_root_module) {
-        b->exportp = 1;  // export everything from Root
-    }
     return *bp;
 }
 

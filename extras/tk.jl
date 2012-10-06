@@ -3,10 +3,12 @@
 # * callbacks (possibly via C wrapper)
 # - portable event handling, probably using Tcl_CreateEventSource
 # * types: may not make sense to have one for each widget, maybe one TkWidget
-# - state-interrogating functions
-# - expose constants from tcl.h like TCL_OK, TCL_ERROR, etc.
 # * Cairo drawing surfaces
+# - port cairo_surface_for to other platforms
+# - expose constants from tcl.h like TCL_OK, TCL_ERROR, etc.
 # - more widgets
+# - state-interrogating functions
+# - cleaning up unused callbacks
 
 require("cairo.jl")
 

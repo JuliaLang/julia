@@ -1,6 +1,5 @@
 export
 # Modules
-    Base,
     Grisu,
     Printf,
     PCRE,

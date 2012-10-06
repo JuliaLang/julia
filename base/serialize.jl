@@ -268,7 +268,7 @@ deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})
     path = force(deserialize(s))
-    m = Root
+    m = Main
     for mname in path
         m = eval(m,mname)
     end

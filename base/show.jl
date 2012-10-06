@@ -18,11 +18,11 @@ show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 show{T}(io, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
-full_name(m::Module) = m===Root ? () : tuple(full_name(m.parent)...,m.name)
+full_name(m::Module) = m===Main ? () : tuple(full_name(m.parent)...,m.name)
 
 function show(io, m::Module)
-    if is(m,Root)
-        print(io, "Root")
+    if is(m,Main)
+        print(io, "Main")
     else
         print(io, join(full_name(m),"."))
     end

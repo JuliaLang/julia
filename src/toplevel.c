@@ -33,14 +33,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     if (!jl_is_symbol(name)) {
         jl_type_error("module", (jl_value_t*)jl_sym_type, (jl_value_t*)name);
     }
-    jl_module_t *parent_module;
-    if (jl_current_module == jl_core_module ||
-        jl_current_module == jl_main_module) {
-        parent_module = jl_root_module;
-    }
-    else {
-        parent_module = jl_current_module;
-    }
+    jl_module_t *parent_module = jl_current_module;
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
@@ -49,11 +42,14 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = (jl_value_t*)parent_module;
     b->value = (jl_value_t*)newm;
-    if (parent_module == jl_root_module && name == jl_symbol("Base") &&
+    if (parent_module == jl_main_module && name == jl_symbol("Base") &&
         jl_base_module == NULL) {
         // pick up Base module during bootstrap
         jl_base_module = newm;
     }
+    // export all modules from Main
+    if (parent_module == jl_main_module)
+        jl_module_export(jl_main_module, name);
     JL_GC_PUSH(&last_module);
     jl_current_module = newm;
 
@@ -171,7 +167,7 @@ extern int jl_in_inference;
 
 static jl_module_t *eval_import_path(jl_array_t *args)
 {
-    jl_module_t *m = jl_root_module;
+    jl_module_t *m = jl_main_module;
     for(size_t i=0; i < args->length-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
