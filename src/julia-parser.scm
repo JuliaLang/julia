@@ -76,7 +76,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
-      <<= >>= >>>= -> --> |\|\|| && : |::| |.|))
+      <<= >>= >>>= -> --> |\|\|| && |::| |.|))
 (define syntactic-unary-operators '($ &))
 
 (define reserved-words '(begin while if for try return break continue
@@ -1225,6 +1225,13 @@
 
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
+  (let ((ex (parse-atom- s)))
+    (if (and (symbol? ex)
+	     (memq ex syntactic-operators))
+	(error (string "invalid identifier name " ex)))
+    ex))
+
+(define (parse-atom- s)
   (let ((t (require-token s)))
     (cond ((or (string? t) (number? t)) (take-token s))
 
@@ -1263,7 +1270,7 @@
 	   (take-token s)
 	   (if (closing-token? (peek-token s))
 	       ':
-	       (let ((ex (parse-atom s)))
+	       (let ((ex (parse-atom- s)))
 		 (list 'quote ex))))
 
 	  ;; misplaced =
@@ -1280,13 +1287,13 @@
 	   (if (eqv? (require-token s) #\) )
 	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
-	       (if (eq? (peek-token s) '=)
-		   ;; allow (=)
-		   (begin (take-token s)
-			  (if (not (eqv? (require-token s) #\) ))
-			      (error "invalid tuple")
-			      (take-token s))
-			  '=)
+	       (if (memq (peek-token s) syntactic-operators)
+		   ;; allow (=) etc.
+		   (let ((tok (take-token s)))
+		     (if (not (eqv? (require-token s) #\) ))
+			 (error (string "invalid identifier name " tok))
+			 (take-token s))
+		     tok)
 		   ;; here we parse the first subexpression separately, so
 		   ;; we can look for a comma to see if it's a tuple.
 		   ;; this lets us distinguish (x) from (x,)
