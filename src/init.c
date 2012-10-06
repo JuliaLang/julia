@@ -191,9 +191,7 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
 struct uv_shutdown_queue_item { uv_handle_t *h; struct uv_shutdown_queue_item *next; };
 struct uv_shutdown_queue { struct uv_shutdown_queue_item *first; struct uv_shutdown_queue_item *last; };
 static void jl_shutdown_uv_cb(uv_shutdown_t* req, int status) {
-    //if (status == 0) uv_close((uv_handle_t*)req->handle,NULL);
-    if (status != 0) printf("cb %d status: %d\n",((uv_pipe_t*)req->handle)->handle,status);
-    fflush(stdout);
+    //if (status == 0) uv_close((uv_handle_t*)req->handle,NULL); //doesn't appear to be necessary...
     free(req);
 }
 static void jl_uv_exitcleanup_walk(uv_handle_t* handle, void *arg) {
@@ -220,17 +218,17 @@ void jl_atexit_hook() {
 		uv_handle_t *handle = item->h;
         switch(handle->type) {
             case UV_UDP:
+            case UV_TTY:
+#ifndef __WIN32__ //unix only supports shutdown on TCP and NAMED_PIPE
+                uv_close(handle,NULL);
+                break;
+#endif
             case UV_TCP:
             case UV_NAMED_PIPE:
-            case UV_TTY:
-                if (uv_is_writable((uv_stream_t*)handle)){
+                {
                     uv_shutdown_t *req = malloc(sizeof(uv_shutdown_t));
                     int err = uv_shutdown(req, (uv_stream_t*)handle, jl_shutdown_uv_cb);
-                    //printf("shutdown %d\n",((uv_pipe_t*)handle)->handle);
                     if (err != 0) { printf("err: %s\n", uv_strerror(uv_last_error(jl_global_event_loop())));}
-                    fflush(stdout);
-                } else {
-                    printf("non-writable!\n"); fflush(stdout);
                 }
                 break;
             case UV_POLL:
@@ -243,14 +241,14 @@ void jl_atexit_hook() {
             case UV_PROCESS:
             case UV_FS_EVENT:
             //case UV_FS_POLL:
-                uv_close(handle,NULL);
+                uv_close(handle,NULL); //do we want to use jl_close_uv?
                 break;
             default:
                 assert(0);
         }
 		item = item->next;
     }
-    uv_run(loop);
+    uv_run(loop); //let libuv spin until everything has finished closing
 }
 
 void jl_get_builtin_hooks(void);

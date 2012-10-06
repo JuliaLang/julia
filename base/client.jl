@@ -283,7 +283,7 @@ function _start()
         println()
         exit(1)
     end
-    exit(0) //HACK: always exit using jl_exit
+    exit(0) #HACK: always exit using jl_exit
 end
 
 const _jl_atexit_hooks = {}
