@@ -13,7 +13,7 @@ import Metadata.*
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA.git"
+const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # create a new empty packge repository
