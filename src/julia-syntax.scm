@@ -1193,14 +1193,6 @@
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result)))))
 
-   ;; tuple comprehension
-   (pattern-lambda
-    (tuple-comprehension expr . ranges)
-    (begin (if (not (length= ranges 1))
-	       (error "tuple comprehension must have exactly one range"))
-	   `(call (top tuple)
-		  (... (comprehension ,expr ,@ranges)))))
-
 )) ;; lower-comprehensions
 
 

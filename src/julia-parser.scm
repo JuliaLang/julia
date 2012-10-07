@@ -1324,10 +1324,6 @@
 			   (error "unexpected line break in tuple"))
 			   ((memv t '(#\] #\}))
 			    (error (string "unexpected " t " in tuple")))
-			   ((eq? t 'for)
-			    (take-token s)
-			    (cons 'tuple-comprehension
-				  (cdr (parse-comprehension s ex #\) ))))
 			   (else
 			    (error "missing separator in tuple")))))))))
 

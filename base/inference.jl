@@ -585,7 +585,7 @@ end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:]
-    argtypes = (abstract_eval(fargs[i],vtypes,sv) for i=1:length(fargs))
+    argtypes = tuple([abstract_eval(a, vtypes, sv) for a in fargs]...)
     if anyp(x->is(x,None), argtypes)
         return None
     end
@@ -1279,7 +1279,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
                 end
             end
             na = length(a.args[1])
-            typeinf(li, (i>na ? (Tuple)[1] : Any for i=1:na+1),
+            typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
                     li.sparams, li, false)
         end
     end
@@ -1440,7 +1440,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     argexprs = e.args[2:]
-    atypes = limit_tuple_type((exprtype(ae) for ae in argexprs))
+    atypes = limit_tuple_type(tuple(map(exprtype, argexprs)...))
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -1565,7 +1565,7 @@ function mk_tupleref(texpr, i)
 end
 
 function mk_tuplecall(args)
-    Expr(:call1, {_jl_top_tuple, args...}, (exprtype(a) for a in args))
+    Expr(:call1, {_jl_top_tuple, args...}, tuple(map(exprtype, args)...))
 end
 
 function inlining_pass(e::Expr, sv, ast)
@@ -1700,7 +1700,8 @@ function add_variable(ast, name, typ)
     push(vinflist, vinf)
 end
 
-const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6}
+const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
+                    :_var7, :_var8, :_var9, :_var10, :_var11, :_var12}
 
 function unique_name(ast)
     locllist = ast.args[2][1]::Array{Any,1}
