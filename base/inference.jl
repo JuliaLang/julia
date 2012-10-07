@@ -538,6 +538,19 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                          limit_tuple_type(apply(tuple,aargtypes...)) : ()
                     return abstract_call(_ieval(af), (), at, vtypes, sv, ())
                 end
+                af = _ieval(af)
+                if is(af,tuple) && length(fargs)==2
+                    # tuple(xs...)
+                    aat = aargtypes[1]
+                    if aat <: AbstractArray
+                        # tuple(array...)
+                        # TODO: > 1 array of the same type
+                        try
+                            return (eltype(aat)...)
+                        end
+                    end
+                    return Tuple
+                end
             end
         end
         if is(f,invoke) && length(fargs)>1
