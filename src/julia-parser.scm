@@ -1301,9 +1301,10 @@
 			  (t (require-token s)))
 		     (cond ((eqv? t #\) )
 			    (take-token s)
-			    ;; value in parentheses (x)
 			    (if (and (pair? ex) (eq? (car ex) '...))
+				;; (ex...)
 				`(tuple ,ex)
+				;; value in parentheses (x)
 				ex))
 			   ((eqv? t #\, )
 			    ;; tuple (x,) (x,y) (x...) etc.
@@ -1323,6 +1324,10 @@
 			   (error "unexpected line break in tuple"))
 			   ((memv t '(#\] #\}))
 			    (error (string "unexpected " t " in tuple")))
+			   ((eq? t 'for)
+			    (take-token s)
+			    (cons 'tuple-comprehension
+				  (cdr (parse-comprehension s ex #\) ))))
 			   (else
 			    (error "missing separator in tuple")))))))))
 

@@ -910,7 +910,7 @@ function hvcat(rows::(Int...), X::SparseMatrixCSC...)
         tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
         k += rows[i]
     end
-    vcat(ntuple(nbr, x->tmp_rows[x])...)
+    vcat(tmp_rows...)
 end
 
 

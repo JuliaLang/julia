@@ -359,7 +359,7 @@ ref(t::AbstractArray, r::Real...) = ref(t,map(to_index,r)...)
 # index A[:,:,...,i,:,:,...] where "i" is in dimension "d"
 # TODO: more optimized special cases
 slicedim(A::AbstractArray, d::Integer, i) =
-    A[ntuple(ndims(A), n->(n==d ? i : (1:size(A,n))))...]
+    A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
 
 function flipdim(A::AbstractArray, d::Integer)
     nd = ndims(A)
@@ -379,12 +379,9 @@ function flipdim(A::AbstractArray, d::Integer)
         end
         return B
     end
-    alli = ntuple(nd, n->(n==d ? 0 : (1:size(B,n))))
-    local ri
-    b_ind = n->(n==d ? ri : alli[n])
+    alli = [ 1:size(B,n) for n in 1:nd ]
     for i = 1:sd
-        ri = sd+1-i
-        B[ntuple(nd, b_ind)...] = slicedim(A, d, i)
+        B[[ n==d ? sd+1-i : alli[n] for n in 1:nd ]...] = slicedim(A, d, i)
     end
     return B
 end
@@ -531,7 +528,7 @@ function cat(catdim::Integer, X...)
         end
     end
 
-    cat_ranges = ntuple(nargs, i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1))
+    cat_ranges = [ catdim <= ndimsX[i] ? dimsX[i][catdim] : 1 for i=1:nargs ]
 
     function compute_dims(d)
         if d == catdim
@@ -557,8 +554,7 @@ function cat(catdim::Integer, X...)
     range = 1
     for k=1:nargs
         nextrange = range+cat_ranges[k]
-        cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     (1:dimsC[i]) : (range:nextrange-1) ))
+        cat_one = [ i != catdim ? (1:dimsC[i]) : (range:nextrange-1) for i=1:ndimsC ]
         C[cat_one...] = X[k]
         range = nextrange
     end
@@ -594,7 +590,7 @@ function cat(catdim::Integer, A::AbstractArray...)
         end
     end
 
-    cat_ranges = ntuple(nargs, i->(catdim <= ndimsA[i] ? dimsA[i][catdim] : 1))
+    cat_ranges = [ catdim <= ndimsA[i] ? dimsA[i][catdim] : 1 for i=1:nargs ]
 
     function compute_dims(d)
         if d == catdim
@@ -620,8 +616,7 @@ function cat(catdim::Integer, A::AbstractArray...)
     range = 1
     for k=1:nargs
         nextrange = range+cat_ranges[k]
-        cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     (1:dimsC[i]) : (range:nextrange-1) ))
+        cat_one = [ i != catdim ? (1:dimsC[i]) : (range:nextrange-1) for i=1:ndimsC ]
         C[cat_one...] = A[k]
         range = nextrange
     end
