@@ -7,18 +7,21 @@ module Pkg
 #
 import Base.*
 import Git
-import Metadata
 import Metadata.*
 
 # default locations: local package repo, remote metadata repo
 
-const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
+# get package repo directory
+
+directory() = get(ENV,"JULIA_PACKAGES",string(ENV["HOME"],"/.julia"))
+
 # create a new empty packge repository
 
-function init(dir::String, meta::String)
+function init(meta::String)
+    dir = directory()
     run(`mkdir $dir`)
     cd(dir) do
         run(`git init`)
@@ -29,13 +32,16 @@ function init(dir::String, meta::String)
         Metadata.gen_hashes()
     end
 end
-init(dir::String) = init(dir, DEFAULT_META)
-init() = init(DEFAULT_DIR)
+init() = init(DEFAULT_META)
+
+# get/set the origin url for package repo
+
+
 
 # add and remove packages by name
 
 global add
-function add(pkgs::Vector{VersionSet})
+add(pkgs::Vector{VersionSet}) = cd(directory()) do
     commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
         for pkg in pkgs
             if !contains(Metadata.packages(),pkg.package)
@@ -54,7 +60,7 @@ function add(pkgs::Vector{VersionSet})
             end
         end
         run(`git add REQUIRES`)
-        resolve()
+        _resolve()
     end
 end
 function add(pkgs::Union(String,VersionSet)...)
@@ -65,7 +71,7 @@ function add(pkgs::Union(String,VersionSet)...)
     add(pkgs_)
 end
 
-function rm(pkgs::Vector{String})
+rm(pkgs::Vector{String}) = cd(directory()) do
     commit("rm: $(join(sort!(pkgs), ' '))") do
         for pkg in pkgs
             if !contains(Metadata.packages(),pkg)
@@ -88,39 +94,43 @@ function rm(pkgs::Vector{String})
             run(`mv REQUIRES.new REQUIRES`)
         end
         run(`git add REQUIRES`)
-        resolve()
+        _resolve()
     end
 end
 rm(pkgs::String...) = rm(String[pkgs...])
 
 # list available, required & installed packages
 
-available() = for pkg in Metadata.each_package()
-    println(pkg)
-end
-
-requires() = open("REQUIRES") do io
-    for line in each_line(io)
-        print(line)
+available() = cd(directory()) do
+    for pkg in Metadata.each_package()
+        println(pkg)
     end
 end
 
-installed() = Git.each_submodule(false) do name, path, sha1
-    if name != "METADATA"
-        try
-            ver = Metadata.version(name,sha1)
-            println("$name\tv$ver")
-        catch
-            println("$name\t$sha1")
+requires() = cd(directory()) do
+    open("REQUIRES") do io
+        for line in each_line(io)
+            print(line)
+        end
+    end
+end
+
+installed() = cd(directory()) do
+    Git.each_submodule(false) do name, path, sha1
+        if name != "METADATA"
+            try
+                ver = Metadata.version(name,sha1)
+                println("$name\tv$ver")
+            catch
+                println("$name\t$sha1")
+            end
         end
     end
 end
 
 # update packages from requirements
 
-# TODO: how to deal with attached-head packages?
-
-function resolve()
+function _resolve()
     reqs = parse_requires("REQUIRES")
     have = Dict{String,ASCIIString}()
     Git.each_submodule(false) do pkg, path, sha1
@@ -175,16 +185,17 @@ function resolve()
         end
     end
 end
+resolve() = cd(_resolve,directory())
 
 # clone a new package repo from a URL
 
-function clone(dir::String, url::String)
+function clone(url::String)
+    dir = directory()
     run(`git clone $url $dir`)
     cd(dir) do
         checkout("HEAD")
     end
 end
-clone(url::String) = clone(DEFAULT_DIR, url)
 
 # record all submodule commits as tags
 
@@ -198,7 +209,7 @@ end
 
 # checkout a particular repo version
 
-function checkout(rev::String)
+checkout(rev::String) = cd(directory()) do
     dir = cwd()
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
@@ -247,13 +258,13 @@ end
 
 # push & pull package repos to/from remotes
 
-function push()
+push() = cd(directory()) do
     tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
 
-function pull()
+pull() = cd(directory()) do
     # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
@@ -329,7 +340,7 @@ end
 
 # update system to latest and greatest
 
-function update()
+update() = cd(directory()) do
     commit("update") do
         Git.each_submodule(false) do name, path, sha1
             cd(path) do
@@ -345,7 +356,7 @@ function update()
         end
         run(`git add METADATA`)
         Metadata.gen_hashes()
-        resolve()
+        _resolve()
     end
 end
 
