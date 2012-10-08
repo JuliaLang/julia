@@ -30,14 +30,7 @@ quit() = exit()
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
     stop_reading(STDIN)
-    if show_value == -1
-        print('\n');
-        exit(0)
-    end
-    _jl_eval_user_input(ast, show_value!=0)
-    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    STDIN.readcb = readBuffer
-    start_reading(STDIN)
+    put(_jl_repl_channel, (ast, show_value))
 end
 
 # called to show a REPL result
@@ -98,10 +91,10 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(stream::TTY)
-	# This is bit tricky as :jl_readBuffer can trigger any behavior at any time (including running the event loop).
-	# For now just reset the buffer before the call to it, though this may also have other unintended consequences.
-	nread = stream.buffer.ptr-1
-	stream.buffer.ptr = 1 #reuse buffer
+    # This is bit tricky as :jl_readBuffer can trigger any behavior at any time (including running the event loop).
+    # For now just reset the buffer before the call to it, though this may also have other unintended consequences.
+    nread = stream.buffer.ptr-1
+    stream.buffer.ptr = 1 #reuse buffer
     ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),stream.buffer.data,nread)
     true
 end
@@ -119,17 +112,10 @@ function run_repl()
         println()
     end
 
-    # ctrl-C interrupt for interactive use
-    ccall(:jl_install_sigint_handler, Void, ())
-
-    ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-    STDIN.readcb = readBuffer
-    start_reading(STDIN)
-
     while true
         ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-        start_reading(STDIN)
         STDIN.readcb = readBuffer
+        start_reading(STDIN)
         (ast, show_value) = take(_jl_repl_channel)
         if show_value == -1
             # exit flag
@@ -159,6 +145,8 @@ end
 
 function process_options(args::Array{Any,1})
     global ARGS
+    # install Ctrl-C interrupt handler (InterruptException)
+    ccall(:jl_install_sigint_handler, Void, ())
     quiet = false
     repl = true
     if has(ENV, "JL_POST_BOOT")
