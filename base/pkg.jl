@@ -27,6 +27,10 @@ function init(meta::String)
         run(`git init`)
         run(`touch REQUIRES`)
         run(`git add REQUIRES`)
+        run(`git remote add origin .`)
+        run(`git config --unset remote.origin.url`)
+        run(`git config branch.master.remote origin`)
+        run(`git config branch.master.merge refs/heads/master`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
         Metadata.gen_hashes()
@@ -36,7 +40,15 @@ init() = init(DEFAULT_META)
 
 # get/set the origin url for package repo
 
-
+origin() = cd(directory()) do
+    try readchomp(`git config remote.origin.url`)
+    catch
+        return nothing
+    end
+end
+origin(url::String) = cd(directory()) do
+    run(`git config remote.origin.url $url`)
+end
 
 # add and remove packages by name
 
