@@ -29,7 +29,7 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.1" kateversion="3.8" extensions="*.jl" mimetype="text/x-julia;application/x-julia" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.1" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
     <list name="keywords">
