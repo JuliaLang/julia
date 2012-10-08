@@ -116,7 +116,7 @@ include("rng.jl")
 import Base.RNG.*
 
 # distributed arrays and memory-mapped arrays
-include("darray.jl")
+#include("darray.jl")
 include("mmap.jl")
 
 # utilities - version, timing, help, edit

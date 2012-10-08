@@ -255,8 +255,8 @@ function deserialize{K,V}(s, T::Type{Dict{K,V}})
     n = read(s, Int32)
     t = T(n)
     for i = 1:n
-        k = force(deserialize(s))
-        v = force(deserialize(s))
+        k = deserialize(s)
+        v = deserialize(s)
         t[k] = v
     end
     return t

@@ -37,7 +37,6 @@ export
     FileOffset,
     Filter,    
     GenericString,
-    GlobalObject,
     IO,
     IOStream,
     ImaginaryUnit,
