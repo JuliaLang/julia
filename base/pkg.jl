@@ -241,6 +241,10 @@ checkout() = checkout("HEAD")
 
 # commit the current state of the repo with the given message
 
+assert_git_clean() = Git.dirty() &&
+    error("The following contents must be committed:\n",
+          readall(`git ls-files -d -m -s -u`))
+
 function commit(msg::String)
     tag_submodules()
     Git.canonicalize_config(".gitmodules")
@@ -249,10 +253,7 @@ function commit(msg::String)
 end
 
 function commit(f::Function, msg::String)
-    if Git.dirty()
-        error("The following contents must be committed:",
-              readall(`git ls-files -d -m -s -u`))
-    end
+    assert_git_clean()
     try f()
     catch err
         print(stderr_stream,
@@ -273,12 +274,15 @@ end
 # push & pull package repos to/from remotes
 
 push() = cd(directory()) do
+    assert_git_clean()
     tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
 
 pull() = cd(directory()) do
+    assert_git_clean()
+
     # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
