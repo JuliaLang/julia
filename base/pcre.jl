@@ -99,7 +99,7 @@ study(re::Array{Uint8}) = study(re, int32(0))
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
               str::ByteString, offset::Integer, options::Integer, cap::Bool)
     if offset < 0 || length(str) < offset
-        error("index out of range")
+        error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))

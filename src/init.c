@@ -338,6 +338,8 @@ void jl_get_builtin_hooks(void)
         jl_apply((jl_function_t*)core("UndefRefError"),NULL,0);
     jl_interrupt_exception =
         jl_apply((jl_function_t*)core("InterruptException"),NULL,0);
+    jl_bounds_exception =
+        jl_apply((jl_function_t*)core("BoundsError"),NULL,0);
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 

@@ -373,6 +373,7 @@ extern jl_value_t *jl_overflow_exception;
 extern jl_value_t *jl_inexact_exception;
 extern jl_value_t *jl_undefref_exception;
 extern jl_value_t *jl_interrupt_exception;
+extern jl_value_t *jl_bounds_exception;
 extern jl_value_t *jl_an_empty_cell;
 
 extern jl_struct_type_t *jl_box_type;
@@ -738,7 +739,7 @@ DLLEXPORT jl_value_t *jl_cstr_to_string(char *str);
 DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
-DLLEXPORT void jl_arrayset(jl_array_t *a, size_t i, jl_value_t *v);  // 0-indexed
+DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);

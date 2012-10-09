@@ -124,7 +124,7 @@ function append_any(xs...)
     i = 1
     for x in xs
         for y in x
-            arrayset(out, i, y)
+            arrayset(out, y, i)
             i += 1
         end
     end

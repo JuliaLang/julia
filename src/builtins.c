@@ -346,7 +346,7 @@ JL_CALLABLE(jl_f_tupleref)
     jl_tuple_t *t = (jl_tuple_t*)args[0];
     size_t i = jl_unbox_long(args[1])-1;
     if (i >= jl_tuple_len(t))
-        jl_error("tupleref: index out of range");
+        jl_raise(jl_bounds_exception);
     return jl_tupleref(t, i);
 }
 

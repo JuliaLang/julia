@@ -106,7 +106,7 @@ match(r::Regex, s::String) = match(r, s, start(s))
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str)
     if idx >= len+2
-        return idx == len+2 ? (0,0) : error("index out of range")
+        return idx == len+2 ? (0,0) : error(BoundsError)
     end
     opts = re.options & PCRE.EXECUTE_MASK
     m, n = PCRE.exec(re.regex, re.extra, str, idx-1, opts, true)
