@@ -149,3 +149,12 @@ for f in (:int8, :int16, :int32, :int64, :int128,
           :signed, :integer, :unsigned, :int, :uint)
     @eval ($f)(x::Rational) = ($f)(iround(x))
 end
+
+function ^(x::Rational, y::Integer)
+    if y < 0
+        x = inv(x)
+        y *= -1
+    end
+
+    Rational(x.num^y, x.den^y)
+end
