@@ -152,9 +152,8 @@ end
 
 function ^(x::Rational, y::Integer)
     if y < 0
-        x = inv(x)
-        y *= -1
+        Rational(x.den^-y, x.num^-y)
+    else
+        Rational(x.num^y, x.den^y)
     end
-
-    Rational(x.num^y, x.den^y)
 end
