@@ -85,6 +85,7 @@
       <item> Float </item>
       <item> Float32 </item>
       <item> Float64 </item>
+      <item> Function </item>
       <item> ObjectIdDict </item>
       <item> Int </item>
       <item> Int8 </item>
