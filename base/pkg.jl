@@ -24,13 +24,15 @@ function init(meta::String)
     dir = directory()
     run(`mkdir $dir`)
     cd(dir) do
+        # create & configure
         run(`git init`)
-        run(`touch REQUIRES`)
-        run(`git add REQUIRES`)
         run(`git remote add origin .`)
         run(`git config --unset remote.origin.url`)
         run(`git config branch.master.remote origin`)
         run(`git config branch.master.merge refs/heads/master`)
+        # initial content
+        run(`touch REQUIRES`)
+        run(`git add REQUIRES`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
         Metadata.gen_hashes()
