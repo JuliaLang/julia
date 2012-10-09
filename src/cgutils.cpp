@@ -544,18 +544,17 @@ static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
     for(size_t k=0; k < nidxs; k++) {
         Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx));
         ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
-        Value *d =
-            (k >= nd) ? ConstantInt::get(T_size, 1) : emit_arraysize(a, k+1);
+        i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
-            Value *ok = builder.CreateICmpULT(ii, d);
-            // if !(i < d) goto error
+            Value *d =
+                k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(a, k+1);
             BasicBlock *okBB = BasicBlock::Create(getGlobalContext(), "ib");
-            builder.CreateCondBr(ok, okBB, failBB);
+            // if !(i < d) goto error
+            builder.CreateCondBr(builder.CreateICmpULT(ii, d), okBB, failBB);
             ctx->f->getBasicBlockList().push_back(okBB);
             builder.SetInsertPoint(okBB);
+            stride = builder.CreateMul(stride, d);
         }
-        i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
-        stride = builder.CreateMul(stride, d);
     }
     Value *alen = emit_arraylen(a);
     // if !(i < alen) goto error

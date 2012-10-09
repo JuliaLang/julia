@@ -386,12 +386,13 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
             if (!jl_is_long(args[k]))
                 jl_type_error(fname, (jl_value_t*)jl_long_type, args[k]);
             size_t ii = jl_unbox_long(args[k])-1;
-            size_t d = k>=nd ? 1 : jl_array_dim(a, k);
-            if (k < nidxs-1 && ii >= d) {
-                jl_raise(jl_bounds_exception);
-            }
             i += ii * stride;
-            stride = stride * d;
+            if (k < nidxs-1) {
+                size_t d = k>=nd ? 1 : jl_array_dim(a, k);
+                if (ii >= d)
+                    jl_raise(jl_bounds_exception);
+                stride = stride * d;
+            }
         }
     }
     if (i >= a->length) {
