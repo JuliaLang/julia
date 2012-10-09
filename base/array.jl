@@ -1430,7 +1430,7 @@ function sum{T}(A::StridedArray{T})
     v
 end
 
-function sum{T<:FloatingPoint}(A::StridedArray{T})
+function sum_kbn{T<:FloatingPoint}(A::StridedArray{T})
     n = length(A)
     if (n == 0)
         return zero(T)
@@ -1452,7 +1452,7 @@ function sum{T<:FloatingPoint}(A::StridedArray{T})
 end
 
 # Uses K-B-N summation
-function cumsum{T<:FloatingPoint}(v::StridedVector{T})
+function cumsum_kbn{T<:FloatingPoint}(v::StridedVector{T})
     n = length(v)
     r = similar(v, n)
     if n == 0; return r; end
@@ -1474,7 +1474,7 @@ function cumsum{T<:FloatingPoint}(v::StridedVector{T})
 end
 
 # Uses K-B-N summation
-function cumsum{T<:FloatingPoint}(A::StridedArray{T}, axis::Integer)
+function cumsum_kbn{T<:FloatingPoint}(A::StridedArray{T}, axis::Integer)
     dimsA = size(A)
     ndimsA = ndims(A)
     axis_size = dimsA[axis]
