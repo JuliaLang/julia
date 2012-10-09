@@ -30,6 +30,7 @@ Extras
    textwrap
    zlib
    strpack
+   sound
 
 ****************
 Math & Numerical
