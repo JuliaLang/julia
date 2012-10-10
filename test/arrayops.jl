@@ -216,6 +216,8 @@ d = drand(10,10)
 
 ## cumsum
 
+@assert sum_kbn([1,1e100,1,-1e100]) == 2
+
 begin
     local A, A1, A2, A3, v, v2, cv, cv2, c
     A = ones(Int,2,3,4)
@@ -248,18 +250,18 @@ begin
     cv  = [1,1e100,1e100,2]*1000
     cv2 = [1,-1e100,-1e100,2]*1000
 
-    @assert isequal(cumsum(v), cv)
-    @assert isequal(cumsum(v2), cv2)
+    @assert isequal(cumsum_kbn(v), cv)
+    @assert isequal(cumsum_kbn(v2), cv2)
 
     A = [v reverse(v) v2 reverse(v2)]
 
-    c = cumsum(A, 1)
+    c = cumsum_kbn(A, 1)
 
     @assert isequal(c[:,1], cv)
     @assert isequal(c[:,3], cv2)
     @assert isequal(c[4,:], [2.0 2.0 2.0 2.0]*1000)
 
-    c = cumsum(A, 2)
+    c = cumsum_kbn(A, 2)
 
     @assert isequal(c[1,:], cv2')
     @assert isequal(c[3,:], cv')

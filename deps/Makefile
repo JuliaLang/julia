@@ -311,7 +311,7 @@ UV_OBJ_TARGET = $(USRLIB)/uv.a
 UV_OBJ_SOURCE = libuv/uv.a
 
 libuv/Makefile:
-	(cd .. && git submodule update --init)
+	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
 	$(MAKE) -C libuv $(UV_CFLAGS)
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
@@ -339,7 +339,7 @@ pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	touch $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
-	./configure --prefix=$(abspath $(USR)) --enable-utf8 --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
+	./configure --prefix=$(abspath $(USR)) --enable-utf --enable-unicode-properties --enable-jit CC="$(CC)" CXX="$(CXX)"
 $(PCRE_OBJ_TARGET): pcre-$(PCRE_VER)/config.status
 	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install
 	$(INSTALL_NAME_CMD)libpcre.dylib $@
@@ -1060,7 +1060,7 @@ distclean-zlib:
 
 ## Tk wrapper ##
 
-TKW_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+TKW_INC = -I $(USRINC) -I /usr/include/tcl -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
 TKW_LIB = -ltcl8.5 -ltk8.5 -L$(USRLIB)/ -ljulia-release
 
 $(USRLIB)/libtk_wrapper.$(SHLIB_EXT): tk_wrapper.c
@@ -1073,6 +1073,22 @@ install-tk-wrapper: $(USRLIB)/libtk_wrapper.$(SHLIB_EXT) tk_wrapper.c
 clean-tk-wrapper:
 	rm -f $(USRLIB)/libtk_wrapper.$(SHLIB_EXT)
 distclean-tk-wrapper: clean-tk-wrapper
+
+## Cairo wrapper ##
+
+CAIRO_INC = -I $(USRINC) -I $(JULIAHOME)/src -I $(JULIAHOME)/src/support
+CAIRO_LIB = -L$(USRLIB)/ -ljulia-release
+
+$(USRLIB)/libcairo_wrapper.$(SHLIB_EXT): cairo_wrapper.c
+	mkdir -p $(USRLIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -O2 -shared $(fPIC) $(CAIRO_INC) cairo_wrapper.c $(CAIRO_LIB) -o $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) -Wl,-rpath,$(USRLIB)
+	$(INSTALL_NAME_CMD)libcairo_wrapper.$(SHLIB_EXT) $@
+	touch $@
+install-cairo-wrapper: $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT) cairo_wrapper.c
+
+clean-cairo-wrapper:
+	rm -f $(USRLIB)/libcairo_wrapper.$(SHLIB_EXT)
+distclean-cairo-wrapper: clean-cairo-wrapper
 
 ## phony targets ##
 

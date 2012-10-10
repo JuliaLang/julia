@@ -632,7 +632,7 @@ static void gc_mark(void)
     gc_push_root(jl_current_task);
 
     // modules
-    gc_push_root(jl_root_module);
+    gc_push_root(jl_main_module);
     gc_push_root(jl_current_module);
 
     // invisible builtin values

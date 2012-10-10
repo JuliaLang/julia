@@ -1,5 +1,5 @@
-load("../base/git.jl")
-load("../base/pkgmetadata.jl")
+load("git.jl")
+load("pkgmetadata.jl")
 
 module Pkg
 #
@@ -11,16 +11,26 @@ import Metadata.*
 
 # default locations: local package repo, remote metadata repo
 
-const DEFAULT_DIR = string(ENV["HOME"], "/.julia")
-const DEFAULT_META = "file:///Users/stefan/projects/pkg/METADATA.git"
+const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
 const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+
+# get package repo directory
+
+directory() = get(ENV,"JULIA_PACKAGES",string(ENV["HOME"],"/.julia"))
 
 # create a new empty packge repository
 
-function init(dir::String, meta::String)
+function init(meta::String)
+    dir = directory()
     run(`mkdir $dir`)
     cd(dir) do
+        # create & configure
         run(`git init`)
+        run(`git remote add origin .`)
+        run(`git config --unset remote.origin.url`)
+        run(`git config branch.master.remote origin`)
+        run(`git config branch.master.merge refs/heads/master`)
+        # initial content
         run(`touch REQUIRES`)
         run(`git add REQUIRES`)
         run(`git submodule add $meta METADATA`)
@@ -28,77 +38,113 @@ function init(dir::String, meta::String)
         Metadata.gen_hashes()
     end
 end
-init(dir::String) = init(dir, DEFAULT_META)
-init() = init(DEFAULT_DIR)
+init() = init(DEFAULT_META)
 
-# require & unrequire packages by name
+# get/set the origin url for package repo
 
-function require(pkgs::Array{VersionSet})
-    for pkg in pkgs
-        if !contains(Metadata.packages(),pkg)
-            error("invalid package: $pkg")
-        end
-        reqs = parse_requires("REQUIRES")
-        if anyp(req->req.package==pkg,reqs)
-            error("package already required: $pkg")
-        end
-        open("REQUIRES","a") do io
-            println(io,pkg)
-        end
+origin() = cd(directory()) do
+    try readchomp(`git config remote.origin.url`)
+    catch
+        return nothing
     end
-    run(`git add REQUIRES`)
-    resolve()
+end
+origin(url::String) = cd(directory()) do
+    run(`git config remote.origin.url $url`)
 end
 
-function unrequire(pkgs::String...)
+# add and remove packages by name
+
+global add
+add(pkgs::Vector{VersionSet}) = cd(directory()) do
+    commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg.package)
+                error("invalid package: $(pkg.package)")
+            end
+            reqs = parse_requires("REQUIRES")
+            if anyp(req->req.package==pkg.package,reqs)
+                error("package already required: $pkg")
+            end
+            open("REQUIRES","a") do io
+                print(io,pkg.package)
+                for ver in pkg.versions
+                    print(io,"\t$ver")
+                end
+                println(io)
+            end
+        end
+        run(`git add REQUIRES`)
+        _resolve()
+    end
+end
+function add(pkgs::Union(String,VersionSet)...)
+    pkgs_ = VersionSet[]
     for pkg in pkgs
-        if !contains(Metadata.packages(),pkg)
-            error("invalid package: $pkg")
-        end
-        reqs = parse_requires("REQUIRES")
-        if !anyp(req->req.package==pkg,reqs)
-            error("package not required: $pkg")
-        end
-        open("REQUIRES") do r
-            open("REQUIRES.new","w") do w
-                for line in each_line(r)
-                    fields = split(line)
-                    if isempty(fields) || fields[1]!=pkg
-                        print(w,line)
+        push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+    end
+    add(pkgs_)
+end
+
+rm(pkgs::Vector{String}) = cd(directory()) do
+    commit("rm: $(join(sort!(pkgs), ' '))") do
+        for pkg in pkgs
+            if !contains(Metadata.packages(),pkg)
+                error("invalid package: $pkg")
+            end
+            reqs = parse_requires("REQUIRES")
+            if !anyp(req->req.package==pkg,reqs)
+                error("package not required: $pkg")
+            end
+            open("REQUIRES") do r
+                open("REQUIRES.new","w") do w
+                    for line in each_line(r)
+                        fields = split(line)
+                        if isempty(fields) || fields[1]!=pkg
+                            print(w,line)
+                        end
                     end
                 end
             end
+            run(`mv REQUIRES.new REQUIRES`)
         end
-        run(`mv REQUIRES.new REQUIRES`)
-    end
-    run(`git add REQUIRES`)
-    resolve()
-end
-
-# list required & installed packages
-
-requires() = open("REQUIRES") do io
-    for line in each_line(io)
-        print(line)
+        run(`git add REQUIRES`)
+        _resolve()
     end
 end
+rm(pkgs::String...) = rm(String[pkgs...])
 
-installed() = Git.each_submodule(false) do name, path, sha1
-    if name != "METADATA"
-        try
-            ver = Metadata.version(name,sha1)
-            println("$name\tv$ver")
-        catch
-            println("$name\t$sha1")
+# list available, required & installed packages
+
+available() = cd(directory()) do
+    for pkg in Metadata.each_package()
+        println(pkg)
+    end
+end
+
+requires() = cd(directory()) do
+    open("REQUIRES") do io
+        for line in each_line(io)
+            print(line)
+        end
+    end
+end
+
+installed() = cd(directory()) do
+    Git.each_submodule(false) do name, path, sha1
+        if name != "METADATA"
+            try
+                ver = Metadata.version(name,sha1)
+                println("$name\tv$ver")
+            catch
+                println("$name\t$sha1")
+            end
         end
     end
 end
 
 # update packages from requirements
 
-# TODO: how to deal with attached-head packages?
-
-function resolve()
+function _resolve()
     reqs = parse_requires("REQUIRES")
     have = Dict{String,ASCIIString}()
     Git.each_submodule(false) do pkg, path, sha1
@@ -153,16 +199,17 @@ function resolve()
         end
     end
 end
+resolve() = cd(_resolve,directory())
 
 # clone a new package repo from a URL
 
-function clone(dir::String, url::String)
+function clone(url::String)
+    dir = directory()
     run(`git clone $url $dir`)
     cd(dir) do
         checkout("HEAD")
     end
 end
-clone(url::String) = clone(DEFAULT_DIR, url)
 
 # record all submodule commits as tags
 
@@ -176,7 +223,7 @@ end
 
 # checkout a particular repo version
 
-function checkout(rev::String)
+checkout(rev::String) = cd(directory()) do
     dir = cwd()
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
@@ -194,6 +241,10 @@ checkout() = checkout("HEAD")
 
 # commit the current state of the repo with the given message
 
+assert_git_clean() = Git.dirty() &&
+    error("The following contents must be committed:\n",
+          readall(`git ls-files -d -m -s -u`))
+
 function commit(msg::String)
     tag_submodules()
     Git.canonicalize_config(".gitmodules")
@@ -201,15 +252,37 @@ function commit(msg::String)
     run(`git commit -m $msg`)
 end
 
+function commit(f::Function, msg::String)
+    assert_git_clean()
+    try f()
+    catch err
+        print(stderr_stream,
+              "\n\n*** ERROR ENCOUNTERED ***\n\n",
+              "Rolling back to HEAD...\n")
+        checkout()
+        throw(err)
+    end
+    if Git.staged() && !Git.unstaged()
+        commit(msg)
+    elseif !Git.dirty()
+        println(stderr_stream, "Nothing to commit.")
+    else
+        error("There are both staged and unstaged changes to packages.")
+    end
+end
+
 # push & pull package repos to/from remotes
 
-function push()
+push() = cd(directory()) do
+    assert_git_clean()
     tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
 
-function pull()
+pull() = cd(directory()) do
+    assert_git_clean()
+
     # get remote data
     run(`git fetch --tags`)
     run(`git fetch`)
@@ -269,7 +342,7 @@ function pull()
         unmerged = readall(`git ls-files -m` | `sort` | `uniq`)
         unmerged = replace(unmerged, r"^", "    ")
         print(stderr_stream,
-            "\n*** WARNING ***\n\n",
+            "\n\n*** WARNING ***\n\n",
             "You have unresolved merge conflicts in the following files:\n\n",
             unmerged,
             "\nPlease resolve these conflicts, `git add` the files, and commit.\n"
@@ -285,22 +358,24 @@ end
 
 # update system to latest and greatest
 
-function update()
-    Git.each_submodule(false) do name, path, sha1
-        cd(path) do
-            if Git.attached()
-                run(`git pull`)
-            else
-                run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+update() = cd(directory()) do
+    commit("update") do
+        Git.each_submodule(false) do name, path, sha1
+            cd(path) do
+                if Git.attached()
+                    run(`git pull`)
+                else
+                    run(`git fetch -q --all --tags --prune --recurse-submodules=on-demand`)
+                end
             end
         end
+        cd("METADATA") do
+            run(`git pull`)
+        end
+        run(`git add METADATA`)
+        Metadata.gen_hashes()
+        _resolve()
     end
-    cd("METADATA") do
-        run(`git pull`)
-    end
-    run(`git add METADATA`)
-    Metadata.gen_hashes()
-    resolve()
 end
 
 end # module

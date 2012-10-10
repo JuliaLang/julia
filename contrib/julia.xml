@@ -1,0 +1,226 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ====================================================================
+  Julia syntax highlighting file for the KDE editors Kate and Kwrite
+  ====================================================================
+
+  This was adapted from the Matlab syntax highlighting file
+
+  Most of this XML file is straight and simple. Only the character ' (&apos;)
+  needs nontrivial treatment, since it is both a postfix operator indicating
+  complex conjugate transpose (adjoint) and a character delimiter. It is an
+  adjoint operator in the following positions:
+  1) immediately after an identifier (variable, function, but not keyword)
+  2) immediately after a number literal
+  3) immediately after the closing parenthesis ), ] and }
+  4) immediately after a simple transpose operator .'
+  5) immediately after another adjoint operator '
+  Otherwise it is a character delimiter.
+
+  This is implemented using look-ahead regexps. If one of the entities in the
+  above cases 1-4 (identifier, number literal, ...) matches and look-ahead
+  shows that it is followed by a ', the entity is highlighted and control is
+  passed to the special context _adjoint, whose sole purpose is to correctly
+  highlight a series of ' (thus covering case 5 as well). _adjoint immediately
+  returns to the default context _normal.
+
+  Author: Timothy E. Holy, Washington University in St. Louis
+-->
+
+<!DOCTYPE language SYSTEM "language.dtd">
+
+<language name="Julia" section="Sources" version="0.1" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+
+  <highlighting>
+    <list name="keywords">
+      <item> abstract </item>
+      <item> begin </item>
+      <item> bitstype </item>
+      <item> break </item>
+      <item> catch </item>
+      <item> ccall </item>
+      <item> const </item>
+      <item> continue </item>
+      <item> do </item>
+      <item> else </item>
+      <item> elseif </item>
+      <item> end </item>
+      <item> export </item>
+      <item> for </item>
+      <item> function </item>
+      <item> global </item>
+      <item> if </item>
+      <item> import </item>
+      <item> in </item>
+      <item> let </item>
+      <item> local </item>
+      <item> macro </item>
+      <item> module </item>
+      <item> quote </item>
+      <item> return </item>
+      <item> try </item>
+      <item> type </item>
+      <item> typealias </item>
+      <item> while </item>
+    </list>
+    <list name="types">
+      <item> AbstractArray </item>
+      <item> AbstractMatrix </item>
+      <item> AbstractVector </item>
+      <item> Any </item>
+      <item> Array </item>
+      <item> ASCIIString </item>
+      <item> Associative </item>
+      <item> Bool </item>
+      <item> ByteString </item>
+      <item> Char </item>
+      <item> Complex </item>
+      <item> Complex64 </item>
+      <item> Complex128 </item>
+      <item> ComplexPair </item>
+      <item> DArray </item>
+      <item> Dict </item>
+      <item> Exception </item>
+      <item> Expr </item>
+      <item> Float </item>
+      <item> Float32 </item>
+      <item> Float64 </item>
+      <item> Function </item>
+      <item> ObjectIdDict </item>
+      <item> Int </item>
+      <item> Int8 </item>
+      <item> Int16 </item>
+      <item> Int32 </item>
+      <item> Int64 </item>
+      <item> Integer </item>
+      <item> IntSet </item>
+      <item> IO </item>
+      <item> IOStream </item>
+      <item> Matrix </item>
+      <item> Nothing </item>
+      <item> None </item>
+      <item> NTuple </item>
+      <item> Number </item>
+      <item> Ptr </item>
+      <item> Range </item>
+      <item> Range1 </item>
+      <item> Ranges </item>
+      <item> Rational </item>
+      <item> Real </item>
+      <item> Regex </item>
+      <item> RegexMatch </item>
+      <item> Set </item>
+      <item> Signed </item>
+      <item> StridedArray </item>
+      <item> StridedMatrix </item>
+      <item> StridedVecOrMat </item>
+      <item> StridedVector </item>
+      <item> String </item>
+      <item> SubArray </item>
+      <item> SubString </item>
+      <item> Symbol </item>
+      <item> Task </item>
+      <item> Tuple </item>
+      <item> Type </item>
+      <item> Uint </item>
+      <item> Uint8 </item>
+      <item> Uint16 </item>
+      <item> Uint32 </item>
+      <item> Uint64 </item>
+      <item> Union </item>
+      <item> Unsigned </item>
+      <item> UTF8String </item>
+      <item> VecOrMat </item>
+      <item> Vector </item>
+      <item> Void </item>
+      <item> WeakRef </item>
+    </list>
+    <contexts>
+
+      <context name="_normal" attribute="Normal Text" lineEndContext="#pop">
+
+        <!-- Look-ahead for adjoint ' after variable, number literal, closing braces and .' -->
+        <RegExpr context="_adjoint" attribute="Variable" String="[a-zA-Z]\w*(?=')" />
+        <RegExpr context="_adjoint" attribute="Decimal" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?(?=')" />
+        <RegExpr context="_adjoint" attribute="Delimiter" String="[\)\]}](?=')" />
+        <RegExpr context="_adjoint" attribute="Operator" String="\.'(?=')" />
+
+        <!-- If ' is not the adjoint operator, it starts a character or an unterminated char -->
+        <RegExpr context="#stay" attribute="Char" String="'[^']*(''[^']*)*'(?=[^']|$)" />
+        <RegExpr context="#stay" attribute="Incomplete Char" String="'[^']*(''[^']*)*" />
+
+        <!-- Strings -->
+	<DetectChar attribute="String" context="String" char="&quot;"/>
+	
+        <!-- Handling of keywords, comments, system commands, identifiers, numbers and braces -->
+        <keyword context="#stay" attribute="Keyword" String="keywords" />
+        <keyword context="#stay" attribute="Data Type" String="types" />
+        <RegExpr context="#stay" attribute="Comment" String="#.*$" />
+	<!--<RegExpr context="#stay" attribute="System" String="!.*$" />-->
+        <RegExpr context="#stay" attribute="Variable" String="[a-zA-Z]\w*" />
+        <RegExpr context="#stay" attribute="Hex" String="\b-?0[xX][_0-9a-fA-F]+" />
+        <RegExpr context="#stay" attribute="Decimal" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?" />
+        <AnyChar context="#stay" attribute="Delimiter" String="()[]{}"/>
+
+        <!-- Three and two-character operators -->
+        <StringDetect context="#stay" attribute="Operator" String="..."/>
+        <StringDetect context="#stay" attribute="Operator" String="=="/>
+        <StringDetect context="#stay" attribute="Operator" String="!="/>
+        <StringDetect context="#stay" attribute="Operator" String="&lt;="/>
+        <StringDetect context="#stay" attribute="Operator" String="&gt;="/>
+        <StringDetect context="#stay" attribute="Operator" String="&amp;&amp;"/>
+        <StringDetect context="#stay" attribute="Operator" String="||"/>
+        <StringDetect context="#stay" attribute="Operator" String=".*"/>
+        <StringDetect context="#stay" attribute="Operator" String=".^"/>
+        <StringDetect context="#stay" attribute="Operator" String="./"/>
+        <StringDetect context="#stay" attribute="Operator" String=".'"/>
+
+        <!-- Single-character operators -->
+        <AnyChar context="#stay" attribute="Operator" String="*+-/\&amp;|&lt;&gt;~^=,;:@"/>
+
+      </context>
+
+      <!-- Context entered after encountering an ' adjoint operator -->
+      <context name="_adjoint" attribute="Operator" lineEndContext="#pop">
+        <RegExpr context="#pop" attribute="Operator" String="'+" />
+      </context>
+
+      <!-- Context entered after encountering an " (string) -->      
+      <context attribute="String" lineEndContext="#pop" name="String">
+        <LineContinue attribute="String" context="#stay"/>
+        <HlCStringChar attribute="String Char" context="#stay"/>
+        <DetectChar attribute="String" context="#pop" char="&quot;"/>
+      </context>
+
+    </contexts>
+
+    <itemDatas>
+      <itemData name="Normal Text" defStyleNum="dsNormal" />
+      <itemData name="Variable" defStyleNum="dsNormal" />
+      <itemData name="Operator" defStyleNum="dsNormal"/>
+      <itemData name="Decimal" defStyleNum="dsFloat" />
+      <itemData name="Hex" defStyleNum="dsBaseN" />
+      <itemData name="Delimiter" defStyleNum="dsNormal" />
+      <itemData name="String" defStyleNum="dsString"/>
+      <itemData name="Char" defStyleNum="dsChar"/>
+      <itemData name="Incomplete Char" defStyleNum="dsChar"/>
+      <itemData name="System" defStyleNum="dsBaseN"/>
+      <itemData name="Keyword" defStyleNum="dsKeyword"/>
+      <itemData name="Data Type" defStyleNum="dsDataType"/>
+      <itemData name="Comment" defStyleNum="dsComment"/>
+    </itemDatas>
+
+  </highlighting>
+
+  <general>
+    <comments>
+      <comment name="singleLine" start="#" />
+      <comment name="multiLine" start="# " />
+    </comments>
+    <keywords casesensitive="1" weakDeliminator=""/>
+  </general>
+
+</language>
+
+<!-- It's recommended to put the following line in the Variables field under Settings->Configure Kate->Open/Save->Modes&Filetypes -->
+<!-- kate: space-indent on; indent-width 4; mixed-indent off; indent-mode cstyle; -->

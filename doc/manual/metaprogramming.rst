@@ -275,11 +275,9 @@ with the ``macro`` keyword::
         ...
     end
 
-Here, for example, is very nearly the definition of Julia's ``@assert``
+Here, for example, is the definition of Julia's ``@assert``
 macro (see
-`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_
-for the actual definition, which allows ``@assert`` to work on booleans
-arrays as well)::
+`error.jl <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_)::
 
     macro assert(ex)
         :($ex ? nothing : error("Assertion failed: ", $string(ex)))
@@ -315,15 +313,19 @@ Hygiene
 ~~~~~~~
 
 An issue that arises in more complex macros is that of
-`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, one
-needs to ensure that variables introduced and used by macros do not
+`hygiene <http://en.wikipedia.org/wiki/Hygienic_macro>`_. In short, Julia
+must ensure that variables introduced and used by macros do not
 accidentally clash with the variables used in code interpolated into
-those macros. To demonstrate the problem before providing the solution,
+those macros. Another concern arises from the fact that a macro may be called
+in a different module from where it was defined. In this case we need to
+ensure that all global variables are resolved to the correct module.
+
+To demonstrate these issues,
 let us consider writing a ``@time`` macro that takes an expression as
 its argument, records the time, evaluates the expression, records the
 time again, prints the difference between the before and after times,
-and then has the value of the expression as its final value. A naïve
-attempt to write this macro might look like this::
+and then has the value of the expression as its final value.
+The macro might look like this::
 
     macro time(ex)
       quote
@@ -335,95 +337,67 @@ attempt to write this macro might look like this::
       end
     end
 
-At first blush, this appears to work correctly::
+Here, we want ``t0``, ``t1``, and ``val`` to be private temporary variables,
+and we want ``time`` to refer to the ``time`` function in the standard library,
+not to any ``time`` variable the user might have (the same applies to
+``println``). Imagine the problems that could occur if the user expression
+``ex`` also contained assignments to a variable called ``t0``, or defined
+its own ``time`` variable. We might get errors, or mysteriously incorrect
+behavior.
 
-    julia> @time begin
-             local t = 0
-             for i = 1:10000000
-               t += i
-             end
-             t
-           end
-    elapsed time: 1.1377708911895752 seconds
-    50000005000000
+Julia's macro expander solves these problems in the following way. First,
+variables within a macro result are classified as either local or global.
+A variable is considered local if it is assigned to (and not declared
+global), declared local, or used as a function argument name. Otherwise,
+it is considered global. Local variables are then renamed to be unique
+(using the ``gensym`` function, which generates new symbols), and global
+variables are resolved within the macro definition environment. Therefore
+both of the above concerns are handled; the macro's locals will not conflict
+with any user variables, and ``time`` and ``println`` will refer to the
+standard library definitions.
 
-Suppose, however, that we change the expression passed to ``@time``
-slightly::
+One problem remains however. Consider the following use of this macro::
 
-    julia> @time begin
-             local t0 = 0
-             for i = 1:10000000
-               t0 += i
-             end
-             t0
-           end
-    syntax error: local t0 declared twice
+    module MyModule
+    import Base.@time
 
-What happened? The trouble is that after macro expansion, the above
-expression becomes equivalent to::
+    time() = ... # compute something
 
-    begin
-      local t0 = time()
-      local val = begin
-        local t0 = 0
-        for i = 1:100000000
-          t0 += i
-        end
-        t0
-      end
-      local t1 = time()
-      println("elapsed time: ", t1-t0, " seconds")
-      val
+    @time time()
     end
 
-Declaring a local variable twice in the same scope is illegal, and since
-``begin`` blocks do *not* introduce a new scope block (see :ref:`man-variables-and-scoping`), this code is invalid. The
-root problem is that the naïve ``@time`` macro implementation is
-unhygienic: it is possible for the interpolated code to accidentally use
-variables that clash with the variables used by the macro's code.
-
-To address the macro hygiene problem, Julia provides the ``gensym``
-function, which generates unique symbols that are guaranteed not to
-clash with any other symbols. Called with no arguments, ``gensym``
-returns a single unique symbol::
-
-    julia> s = gensym()
-    #1007
-
-Since it is common to need more than one unique symbol when generating a
-block of code in a macro, if you call ``gensym`` with an integer
-argument, it returns a tuple of that many unique symbols, which can
-easily be captured using tuple destructuring::
-
-    julia> s1, s2 = gensym(2)
-    (#1009,#1010)
-
-    julia> s1
-    #1009
-
-    julia> s2
-    #1010
-
-The ``gensym`` function can be used to define the ``@time`` macro
-correctly, avoiding potential variable name clashes::
+Here the user expression ``ex`` is a call to ``time``, but not the same
+``time`` function that the macro uses. It clearly refers to ``MyModule.time``.
+Therefore we must arrange for the code in ``ex`` to be resolved in the
+macro call environment. This is done by "escaping" the expression with
+the ``esc`` function::
 
     macro time(ex)
-      t0, val, t1 = gensym(3)
-      quote
-        local $t0 = time()
-        local $val = $ex
-        local $t1 = time()
-        println("elapsed time: ", $t1-$t0, " seconds")
-        $val
-      end
+        ...
+        local val = $(esc(ex))
+        ...
     end
 
-The call to ``gensym(3)`` generates three unique names for variables to
-use inside of the generated code block. With this definition, both of
-the above uses of ``@time`` work identically — the behavior of the code
-no longer depends in any way upon the names of variables in the given
-expression, since they are guaranteed not to collide with the names of
-variables used in code generated by the macro.
+An expression wrapped in this manner is left alone by the macro expander
+and simply pasted into the output verbatim. Therefore it will be
+resolved in the macro call environment.
+
+This escaping mechanism can be used to "violate" hygiene when necessary,
+in order to introduce or manipulate user variables. For example, the
+following macro sets ``x`` to zero in the call environment::
+
+    macro zerox()
+      esc(:(x = 0))
+    end
+
+    function foo()
+      x = 1
+      @zerox
+      x  # is zero
+    end
+
+This kind of manipulation of variables should be used judiciously, but
+is occasionally quite handy.
 
 Non-Standard String Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

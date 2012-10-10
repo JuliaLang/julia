@@ -860,8 +860,7 @@
 						   ,(length args)))
 				    ,@(map (lambda (i elt)
 					     `(call (top arrayset) ,name
-						    ,(+ 1 i)
-						    ,elt))
+						    ,elt ,(+ 1 i)))
 					   (iota (length args))
 					   args)
 				    ,name)))))
@@ -874,8 +873,8 @@
 			 `(block (= ,name (call (top Array) (top Any)
 						,nr ,nc))
 				 ,@(map (lambda (i elt)
-					  `(call (top arrayset) ,name ,(+ 1 i)
-						 ,elt))
+					  `(call (top arrayset) ,name
+						 ,elt ,(+ 1 i)))
 					(iota (* nr nc))
 					args)
 				 ,name))))
@@ -1232,6 +1231,21 @@
 			    (if ,g ,g
 				,(loop (cdr tail)))))))))))
 
+;; in "return x()" inside a try block, "x()" is not really in tail position
+;; since we need to pop the exception handler first. convert these cases
+;; to "tmp = x(); return tmp"
+(define (fix-try-block-returns e)
+  (cond ((or (atom? e) (quoted? e))  e)
+	((and (eq? (car e) 'return) (or (symbol? (cadr e)) (pair? (cadr e))))
+	 (let ((sym (gensy)))
+	   `(block (local! ,sym)
+		   (= ,sym ,(cadr e))
+		   (return ,sym))))
+	((eq? (car e) 'lambda) e)
+	(else
+	 (cons (car e)
+	       (map fix-try-block-returns (cdr e))))))
+
 ; conversion to "linear flow form"
 ;
 ; This pass removes control flow constructs from value position.
@@ -1328,18 +1342,13 @@
 	   (cons e '()))
 
 	  ((trycatch)
-	   (cond (tail
-		  (let ((g (gensy)))
-		    (to-lff `(block (local! ,g)
-				    (= ,g ,e)
-				    (return ,g))
-			    #f #f)))
-		 ((eq? dest #t)
+	   (cond ((and (eq? dest #t) (not tail))
 		  (let ((g (gensy)))
 		    (cons g
 			  (cons `(local! ,g) (to-lff e g #f)))))
 		 (else
-		  (cons `(trycatch ,(to-blk (to-lff (cadr e) dest tail))
+		  (cons `(trycatch ,(fix-try-block-returns
+				     (to-blk (to-lff (cadr e) dest tail)))
 				   ,(to-blk (to-lff (caddr e) dest tail)))
 			()))))
 
@@ -1908,12 +1917,17 @@ So far only the second case can actually occur.
 	       (set! handler-level (+ handler-level 1))
 	       (compile (cadr e) break-labels vi)
 	       (set! handler-level (- handler-level 1))
-	       (emit `(leave 1))
-	       (emit `(goto ,endl))
+	       (if (not (and (pair? (car code)) (eq? (caar code) 'return)))
+		   ;; try ends in return, no need to handle flow off end of it
+		   (begin (emit `(leave 1))
+			  (emit `(goto ,endl)))
+		   (set! endl #f))
 	       (mark-label catch)
 	       (emit `(leave 1))
 	       (compile (caddr e) break-labels vi)
-	       (mark-label endl)))
+	       (if endl
+		   (mark-label endl))
+	       ))
 
 	    ((global) #f)  ; remove global declarations
 	    (else  (emit (goto-form e))))))

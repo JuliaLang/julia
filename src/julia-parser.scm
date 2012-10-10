@@ -76,7 +76,7 @@
 ; operators that are special forms, not function names
 (define syntactic-operators
   '(= := += -= *= /= //= .//= .*= ./= |\\=| |.\\=| ^= .^= %= |\|=| &= $= =>
-      <<= >>= >>>= -> --> |\|\|| && : |::| |.|))
+      <<= >>= >>>= -> --> |\|\|| && |::| |.|))
 (define syntactic-unary-operators '($ &))
 
 (define reserved-words '(begin while if for try return break continue
@@ -435,13 +435,17 @@
 		 (first? #t))
 	(let ((t (peek-token s)))
 	  (if (not (eqv? t op))
-	      (if (or (null? ex) (pair? (cdr ex)) (not first?))
-	          ; () => (head)
-	          ; (ex2 ex1) => (head ex1 ex2)
-	          ; (ex1) ** if operator appeared => (head ex1) (handles "x;")
-		  (cons head (reverse ex))
-	          ; (ex1) => ex1
-		  (car ex))
+	      (begin
+		(if (not (or (eof-object? t) (eqv? t #\newline) (eqv? op #\,)
+			     (memv t closers)))
+		    (error "extra token after end of expression"))
+		(if (or (null? ex) (pair? (cdr ex)) (not first?))
+		    ;; () => (head)
+		    ;; (ex2 ex1) => (head ex1 ex2)
+		    ;; (ex1) if operator appeared => (head ex1) (handles "x;")
+		    (cons head (reverse ex))
+		    ;; (ex1) => ex1
+		    (car ex)))
 	      (begin (take-token s)
 		     ; allow input to end with the operator, as in a;b;
 		     (if (or (eof-object? (peek-token s))
@@ -498,16 +502,23 @@
 					  '(end else elseif catch #\newline)
 					  #t))
 ;; ";" at the top level produces a sequence of top level expressions
-(define (parse-stmts s) (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t))
+(define (parse-stmts s)
+  (let ((ex (parse-Nary s parse-eq #\; 'toplevel '(#\newline) #t)))
+    ;; check for unparsed junk after an expression
+    (let ((t (peek-token s)))
+      (if (not (or (eof-object? t) (eqv? t #\newline) (eq? t #f)))
+	  (error "extra token after end of expression")))
+    ex))
 
 (define (parse-eq s)
   (let ((lno (input-port-line (ts:port s))))
     (short-form-function-loc
      (parse-RtoL s parse-comma (prec-ops 0)) lno)))
+
 ; parse-eq* is used where commas are special, for example in an argument list
 (define (parse-eq* s)   (parse-RtoL s parse-cond  (prec-ops 0)))
 ; parse-comma is needed for commas outside parens, for example a = b,c
-(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '( #\) ) #f))
+(define (parse-comma s) (parse-Nary s parse-cond  #\, 'tuple '() #f))
 (define (parse-or s)    (parse-LtoR s parse-and   (prec-ops 2)))
 (define (parse-and s)   (parse-LtoR s parse-arrow (prec-ops 3)))
 (define (parse-arrow s) (parse-RtoL s parse-ineq  (prec-ops 4)))
@@ -902,26 +913,10 @@
 	   (error "invalid export statement"))
        `(export ,@es)))
     ((import)
-     (let ((ns (macrocall-to-atsym (parse-atom s))))
-       (let loop ((path (list ns)))
-	 (if (not (symbol? (car path)))
-	     (error "invalid import statement: expected identifier"))
-	 (let ((nxt (peek-token s)))
-	   (cond ((eq? nxt '|.*|)
-		  (take-token s)
-		  `(importall ,@(reverse path)))
-		 ((eq? nxt '|.|)
-		  (take-token s)
-		  (loop (cons (macrocall-to-atsym (parse-atom s)) path)))
-		 ((or (eqv? nxt #\newline)
-		      (eof-object? nxt))
-		  `(import ,@(reverse path)))
-		 ((eqv? (string.sub (string nxt) 0 1) ".")
-		  (take-token s)
-		  (loop (cons (symbol (string.sub (string nxt) 1))
-			      path)))
-		 (else
-		  (error "invalid import statement")))))))
+     (let ((imports (parse-comma-separated s parse-import)))
+       (if (length= imports 1)
+	   (car imports)
+	   (cons 'toplevel imports))))
     ((ccall)
      (if (not (eqv? (peek-token s) #\())
 	 'ccall
@@ -951,13 +946,38 @@
       (cadr e)
       e))
 
+(define (parse-import s)
+  (let ((ns (macrocall-to-atsym (parse-atom s))))
+    (let loop ((path (list ns)))
+      (if (not (symbol? (car path)))
+	  (error "invalid import statement: expected identifier"))
+      (let ((nxt (peek-token s)))
+	(cond ((eq? nxt '|.*|)
+	       (take-token s)
+	       `(importall ,@(reverse path)))
+	      ((eq? nxt '|.|)
+	       (take-token s)
+	       (loop (cons (macrocall-to-atsym (parse-atom s)) path)))
+	      ((or (memv nxt '(#\newline #\; #\,))
+		   (eof-object? nxt))
+	       `(import ,@(reverse path)))
+	      ((eqv? (string.sub (string nxt) 0 1) ".")
+	       (take-token s)
+	       (loop (cons (symbol (string.sub (string nxt) 1))
+			   path)))
+	      (else
+	       (error "invalid import statement")))))))
+
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
-(define (parse-comma-separated-assignments s)
-  (let loop ((ranges '()))
-    (let ((r (parse-eq* s)))
+(define (parse-comma-separated s what)
+  (let loop ((exprs '()))
+    (let ((r (what s)))
       (case (peek-token s)
-	((#\,)  (take-token s) (loop (cons r ranges)))
-	(else   (reverse! (cons r ranges)))))))
+	((#\,)  (take-token s) (loop (cons r exprs)))
+	(else   (reverse! (cons r exprs)))))))
+
+(define (parse-comma-separated-assignments s)
+  (parse-comma-separated s parse-eq*))
 
 ; as above, but allows both "i=r" and "i in r"
 (define (parse-comma-separated-iters s)
@@ -1205,6 +1225,13 @@
 
 ; parse numbers, identifiers, parenthesized expressions, lists, vectors, etc.
 (define (parse-atom s)
+  (let ((ex (parse-atom- s)))
+    (if (and (symbol? ex)
+	     (memq ex syntactic-operators))
+	(error (string "invalid identifier name " ex)))
+    ex))
+
+(define (parse-atom- s)
   (let ((t (require-token s)))
     (cond ((or (string? t) (number? t)) (take-token s))
 
@@ -1243,7 +1270,7 @@
 	   (take-token s)
 	   (if (closing-token? (peek-token s))
 	       ':
-	       (let ((ex (parse-atom s)))
+	       (let ((ex (parse-atom- s)))
 		 (list 'quote ex))))
 
 	  ;; misplaced =
@@ -1260,13 +1287,13 @@
 	   (if (eqv? (require-token s) #\) )
 	       ;; empty tuple ()
 	       (begin (take-token s) '(tuple))
-	       (if (eq? (peek-token s) '=)
-		   ;; allow (=)
-		   (begin (take-token s)
-			  (if (not (eqv? (require-token s) #\) ))
-			      (error "invalid tuple")
-			      (take-token s))
-			  '=)
+	       (if (memq (peek-token s) syntactic-operators)
+		   ;; allow (=) etc.
+		   (let ((tok (take-token s)))
+		     (if (not (eqv? (require-token s) #\) ))
+			 (error (string "invalid identifier name " tok))
+			 (take-token s))
+		     tok)
 		   ;; here we parse the first subexpression separately, so
 		   ;; we can look for a comma to see if it's a tuple.
 		   ;; this lets us distinguish (x) from (x,)
@@ -1274,9 +1301,10 @@
 			  (t (require-token s)))
 		     (cond ((eqv? t #\) )
 			    (take-token s)
-			    ;; value in parentheses (x)
 			    (if (and (pair? ex) (eq? (car ex) '...))
+				;; (ex...)
 				`(tuple ,ex)
+				;; value in parentheses (x)
 				ex))
 			   ((eqv? t #\, )
 			    ;; tuple (x,) (x,y) (x...) etc.

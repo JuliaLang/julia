@@ -1,9 +1,62 @@
-_jl_librandom = dlopen("librandom")
-@windows_only _jl_advapi32 = dlopen("Advapi32")
+module RNG
+
+import Base.*
+import Base.LibRandom.*
+
+export librandom_init, srand,
+       rand, rand!,
+       randn, randn!,
+       randi, randi!, randival, randival!,
+       randg, randg!,
+       randexp, randexp!, exprnd,
+       randchi2, randchi2!, chi2rnd,
+       randbeta, randbeta!, betarnd,
+       randbit, randbit!, randbool, randbool!,
+       Rng, Rng_MT
+
+abstract Rng
+
+start(r::Rng) = 0
+done(r::Rng, count) = r.len == count ? true : false
+next(r::Rng, count) = (rand(r), count + 1)
+
+type Rng_MT <: Rng
+    state::DSFMT_state
+    seed::Union(Uint32,Vector{Uint32})
+    len::Int   # Use for iteration. Set to -1 otherwise.
+
+    function Rng_MT()
+        seed = uint32(0)
+        state = DSFMT_state()
+        dsfmt_init_gen_rand(state, seed)
+        return new(state, seed, -1)
+    end
+
+    Rng_MT(seed) = Rng_MT(seed, -1)
+
+    function Rng_MT(seed::Uint32, len::Int)
+        state = DSFMT_state()
+        dsfmt_init_gen_rand(state, seed)
+        return new(state, seed, len)
+    end
+
+    function Rng_MT(seed::Vector{Uint32}, len::Int)
+        state = DSFMT_state()
+        dsfmt_init_by_array(state, seed)
+        return new(state, seed, len)
+    end
+end
+
+function srand(r::Rng_MT, seed) 
+    r.seed = seed
+    dsfmt_init_gen_rand(r.state, seed)
+    return r
+end
 
 ## initialization
 
-function _jl_librandom_init()
+function librandom_init()
+
 @unix_only begin
     try
         srand("/dev/urandom")
@@ -19,17 +72,18 @@ function _jl_librandom_init()
         srand(seed)
     end
 end
+
 @windows_only begin
-    a=zeros(Uint32,2)
-    ccall(dlsym(_jl_advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint32),convert(Ptr{Void},a),8)
+    a = zeros(Uint32, 2)
+    win32_SystemFunction036!(a)
     srand(a)
 end
-_jl_randn_zig_init()
+    randmtzig_create_ziggurat_tables()
 end
 
 # macros to generate random arrays
 
-macro _jl_rand_matrix_builder(T, f)
+macro rand_matrix_builder(T, f)
     f! = esc(symbol("$(f)!"))
     f = esc(f)
     quote
@@ -44,7 +98,7 @@ macro _jl_rand_matrix_builder(T, f)
     end
 end
 
-macro _jl_rand_matrix_builder_1arg(T, f)
+macro rand_matrix_builder_1arg(T, f)
     f! = esc(symbol("$(f)!"))
     f = esc(f)
     quote
@@ -63,14 +117,12 @@ end
 
 function srand(seed::Uint32)
     global RANDOM_SEED = seed
-    ccall(dlsym(_jl_librandom, :dsfmt_gv_init_gen_rand),
-          Void, (Uint32,), seed)
+    dsfmt_gv_init_gen_rand(seed)
 end
 
 function srand(seed::Vector{Uint32})
     global RANDOM_SEED = seed
-    ccall(dlsym(_jl_librandom, :dsfmt_gv_init_by_array),
-          Void, (Ptr{Uint32}, Int32), seed, length(seed))
+    dsfmt_gv_init_by_array(seed)
 end
 
 srand(seed::Uint64) = srand([uint32(seed),uint32(seed>>32)])
@@ -88,41 +140,27 @@ srand(filename::String) = srand(filename, 4)
 
 ## rand()
 
-rand() = ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_close_open), Float64, ())
+rand() = dsfmt_gv_genrand_close_open()
+rand(r::Rng_MT) = dsfmt_genrand_close_open(r.state)
 
-const _jl_dsfmt_get_min_array_size =
-    ccall(dlsym(_jl_librandom, :dsfmt_get_min_array_size), Int32, ())
-
-function rand!(A::Array{Float64})
-    n = numel(A)
-    if n <= _jl_dsfmt_get_min_array_size
-        for i = 1:n
-            A[i] = rand()
-        end
-    else
-        ccall(dlsym(_jl_librandom, :dsfmt_gv_fill_array_close_open),
-              Void, (Ptr{Void}, Int32), A, n & 0xfffffffe)
-        if isodd(n)
-            A[n] = rand()
-        end
-    end
-    return A
-end
-
+rand!(A::Array{Float64}) = dsfmt_gv_fill_array_close_open!(A)
 rand(dims::Dims) = rand!(Array(Float64, dims))
 rand(dims::Int...) = rand(dims)
 
+rand!(r::Rng_MT, A::Array{Float64}) = dsfmt_fill_array_close_open!(r.state, A)
+rand(r::Rng, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::Rng, dims::Int...) = rand(r, dims)
+
 ## random integers
 
-_jl_dsfmt_randui32() =
-    ccall(dlsym(_jl_librandom, :dsfmt_gv_genrand_uint32), Uint32, ())
+dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 
-_jl_dsfmt_randui64() =
-    box(Uint64,or_int(zext64(unbox(Uint32,_jl_dsfmt_randui32())),
-                      shl_int(zext64(unbox(Uint32,_jl_dsfmt_randui32())), 32)))
+dsfmt_randui64() =
+    box(Uint64,or_int(zext64(unbox(Uint32,dsfmt_randui32())),
+                      shl_int(zext64(unbox(Uint32,dsfmt_randui32())), 32)))
 
-randi(::Type{Uint32})  = _jl_dsfmt_randui32()
-randi(::Type{Uint64})  = _jl_dsfmt_randui64()
+randi(::Type{Uint32})  = dsfmt_randui32()
+randi(::Type{Uint64})  = dsfmt_randui64()
 randi(::Type{Uint128}) = uint128(randi(Uint64))<<64 | randi(Uint64)
 
 randi(::Type{Int32})   = int32(randi(Uint32)) & typemax(Int32)
@@ -133,6 +171,9 @@ randi() = randi(Int)
 
 # random integer from lo to hi inclusive
 function randival{T<:Integer}(lo::T, hi::T)
+    if lo > hi
+        error("randi: invalid range")
+    end
     m = typemax(T)
     s = randi(T)
     if (hi-lo == m)
@@ -175,39 +216,26 @@ randi(r::(Integer,Integer), dims::Int...) = randival(r[1], r[2], dims)
 
 ## random Bools
 
-randbit() = int(_jl_dsfmt_randui32() & 1)
-@_jl_rand_matrix_builder Int randbit
+randbit() = int(dsfmt_randui32() & 1)
+@rand_matrix_builder Int randbit
 
 randbool() = randbit() == 1
-@_jl_rand_matrix_builder Bool randbool
+@rand_matrix_builder Bool randbool
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
 # Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
 
-_jl_randn_zig_init() =
-    ccall(dlsym(_jl_librandom, :randmtzig_create_ziggurat_tables), Void, ())
-
-function randn!(A::Array{Float64})
-    ccall(dlsym(_jl_librandom, :randmtzig_fill_randn),
-          Void, (Ptr{Float64}, Uint32), A, numel(A))
-    return A
-end
-
-randn() = ccall(dlsym(_jl_librandom, :randmtzig_randn), Float64, ())
+randn() = randmtzig_randn()
+randn!(A::Array{Float64}) = randmtzig_fill_randn!(A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn(dims)
 
 ## randexp() - Exponentially distributed random numbers using Ziggurat algorithm
 
-function randexp!(A::Array{Float64})
-    ccall(dlsym(_jl_librandom, :randmtzig_fill_exprnd),
-          Void, (Ptr{Float64}, Uint32), A, numel(A))
-    return A
-end
-
-randexp() = ccall(dlsym(_jl_librandom, :randmtzig_exprnd), Float64, ())
+randexp() = randmtzig_exprnd()
+randexp!(A::Array{Float64}) = randmtzig_fill_exprnd!(A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp(dims)
 
@@ -247,16 +275,19 @@ function randg!(a::Real, A::Array{Float64})
     end
     A
 end
+
 function randg(a::Real)
     if a <= 0. error("shape parameter a must be > 0") end
     d = (a < 1. ? a + 1 : a) - 1.0/3.0
     randg2(d, 1.0/sqrt(9.0d)) * (a > 1. ? 1. : rand()^(1./a))
 end
+
 randg(a::Real, dims::Dims) = randg!(a, Array(Float64, dims))
 randg(a::Real, dims::Int...) = randg(a, dims)
 
 ## randchi2 - the distribution chi^2(df) is 2*gamma(df/2)
 ## for integer n, a chi^2(n) is the sum of n squared standard normals
+
 function randchi2!(df::Real, A::Array{Float64})
     if df == 1
         for i in 1:numel(A)
@@ -269,9 +300,11 @@ function randchi2!(df::Real, A::Array{Float64})
     for i in 1:numel(A) A[i] = 2.randg2(d,c) end
     A
 end
+
 randchi2(df::Real) = df == 1 ? randn()^2 : 2.randg(df/2.)
 randchi2(df::Real, dims::Dims) = randchi2!(df, Array(Float64, dims))
 randchi2(df::Real, dims::Int...) = randchi2(df, dims)
+
 const chi2rnd = randchi2 # alias chi2rnd
 
 function randbeta!(alpha::Real, beta::Real, A::Array{Float64})
@@ -287,8 +320,13 @@ function randbeta!(alpha::Real, beta::Real, A::Array{Float64})
 end
 
 randbeta(alpha::Real, beta::Real) = (u=randg(alpha); u/(u + randg(beta)))
+
 function randbeta(alpha::Real, beta::Real, dims::Dims)
     randbeta!(alpha, beta, Array(Float64, dims))
 end
+
 randbeta(alpha::Real, beta::Real, dims::Int...) = randbeta(alpha, beta, dims)
+
 const betarnd = randbeta
+
+end # module

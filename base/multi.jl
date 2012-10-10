@@ -216,10 +216,19 @@ end
 myid() = PGRP.myid
 nprocs() = PGRP.np
 
+function worker_from_id(i)
+    pg = PGRP::ProcessGroup
+    while i > length(pg.workers) || pg.workers[i]===nothing
+        sleep(0.1)
+        yield()
+    end
+    pg.workers[i]
+end
+
 function worker_id_from_socket(s)
     global PGRP
     for i=1:nprocs()
-        w = PGRP.workers[i]
+        w = worker_from_id(i)
         if isa(w,Worker)
             if is(s, w.socket) || is(s, w.sendbuf)
                 return i
@@ -232,8 +241,6 @@ function worker_id_from_socket(s)
     end
     return -1
 end
- 
-worker_from_id(id) = PGRP.workers[id]
 
 # establish a Worker connection for processes that connected to us
 function _jl_identify_socket(otherid, sock)
@@ -610,7 +617,7 @@ function sync_msg(verb::Symbol, r::RemoteRef)
             wi.notify = ((), verb, oid, wi.notify)
         end
     else
-        send_msg(pg.workers[r.where], verb, oid)
+        send_msg(worker_from_id(r.where), verb, oid)
     end
     # yield to event loop, return here when answer arrives
     v = yield(WaitFor(verb, r))

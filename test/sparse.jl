@@ -1,5 +1,5 @@
 cd("../extras") do
-require("linalg_suitesparse.jl")
+require("suitesparse.jl")
 
 # check matrix operations
 se33 = speye(3)

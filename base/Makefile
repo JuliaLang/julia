@@ -19,8 +19,8 @@ file_constants.jl: ../src/file_constants.h
 
 
 build_h.jl: ../Make.inc
-	@echo "_jl_libblas_name = \"$(LIBBLASNAME)\"" > $@
-	@echo "_jl_liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
+	@echo "libblas_name = \"$(LIBBLASNAME)\"" > $@
+	@echo "liblapack_name = \"$(LIBLAPACKNAME)\"" >> $@
 
 clean:
 	rm -f *# *~

@@ -55,8 +55,9 @@ function sub{T,N}(A::AbstractArray{T,N}, i::NTuple{N,RangeIndex})
     i = ntuple(length(i), k->(k<=L ? i0[k] : i[k]))
     SubArray{T,L,typeof(A),typeof(i)}(A, i)
 end
-sub(A::AbstractArray, i::RangeIndex...) =
-    sub(A, i)
+
+sub(A::AbstractArray, i::RangeIndex...) = sub(A, i)
+
 function sub(A::SubArray, i::RangeIndex...)
     L = length(i)
     while L > 0 && isa(i[L], Int); L-=1; end

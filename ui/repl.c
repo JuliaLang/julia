@@ -29,6 +29,9 @@ static const char *opts =
     " -p n                     Run n local processes\n"
     " --machinefile file       Run processes on hosts listed in file\n\n"
 
+    " --no-history             Don't load or save history\n"
+    " -f --no-startup          Don't load ~/.juliarc.jl\n\n"
+
     " -h --help                Print this message\n";
 
 void parse_opts(int *argcp, char ***argvp) {
@@ -238,7 +241,7 @@ int true_main(int argc, char *argv[])
         jl_set_global(jl_base_module, jl_symbol("ARGS"), (jl_value_t*)args);
         int i;
         for (i=0; i < argc; i++) {
-            jl_arrayset(args, i, (jl_value_t*)jl_cstr_to_string(argv[i]));
+            jl_arrayset(args, (jl_value_t*)jl_cstr_to_string(argv[i]), i);
         }
     }
     jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),

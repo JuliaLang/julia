@@ -25,6 +25,7 @@
    constructors
    conversion-and-promotion
    arrays
+   modules
    running-external-programs
    metaprogramming
    parallel-computing

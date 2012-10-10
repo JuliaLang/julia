@@ -56,6 +56,12 @@
 
 "),
 
+(E"Getting Around",E"methods",E"methods(f)
+
+   Show all methods of 'f' with their argument types
+
+"),
+
 (E"All Objects",E"is",E"is(x, y)
 
    Determine whether 'x' and 'y' are identical, in the sense that no
@@ -213,7 +219,7 @@
 
 (E"Types",E"eps",E"eps([type])
 
-   The distance between 1.0 and the next largest representable
+   The distance between 1.0 and the next larger representable
    floating-point value of 'type'. The only types that are sensible
    arguments are 'Float32' and 'Float64'. If 'type' is omitted, then
    'eps(Float64)' is returned.
@@ -222,7 +228,7 @@
 
 (E"Types",E"eps",E"eps(x)
 
-   The distance between 'x' and the next largest representable
+   The distance between 'x' and the next larger representable
    floating-point value of the same type as 'x'.
 
 "),
@@ -4522,6 +4528,23 @@ airyaiprime(x)
 (E"specfun.jl",E"zeta",E"zeta(x)
 
    Riemann zeta function \\zeta(s).
+
+"),
+
+(E"strpack.jl",E"pack",E"pack(io, composite[, strategy])
+
+   Create a packed buffer representation of 'composite' in stream
+   'io', using data alignment coded by 'strategy'. This buffer is
+   suitable to pass as a 'struct' argument in a 'ccall'.
+
+"),
+
+(E"strpack.jl",E"unpack",E"unpack(io, T[, strategy])
+
+   Extract an instance of the Julia composite type 'T' from the packed
+   representation in the stream 'io'. 'io' must be positioned at the
+   beginning (using 'seek'). This allows you to read C 'struct'
+   outputs from 'ccall'.
 
 "),
 

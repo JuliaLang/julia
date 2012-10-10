@@ -1,12 +1,14 @@
 # julia tk interface
 # TODO:
-# - callbacks (possibly via C wrapper)
+# * callbacks (possibly via C wrapper)
 # - portable event handling, probably using Tcl_CreateEventSource
-# - types: may not make sense to have one for each widget, maybe one TkWidget
-# - state-interrogating functions
+# * types: may not make sense to have one for each widget, maybe one TkWidget
+# * Cairo drawing surfaces
+# - port cairo_surface_for to other platforms
 # - expose constants from tcl.h like TCL_OK, TCL_ERROR, etc.
-# - Cairo drawing surfaces
 # - more widgets
+# - state-interrogating functions
+# - cleaning up unused callbacks
 
 require("cairo.jl")
 
@@ -15,13 +17,15 @@ import Base.*
 import Cairo.*
 
 export Window, Button, TkCanvas, Canvas, pack, place, tcl_eval, TclError,
-    cairo_surface_for, width, height, reveal, cairo_context, cairo_surface
+    cairo_surface_for, width, height, reveal, cairo_context, cairo_surface,
+    tcl_doevent, MouseHandler
 
 libtcl = dlopen("libtcl8.5")
 libtk = dlopen("libtk8.5")
 libX = dlopen("libX11")
 tk_wrapper = dlopen("libtk_wrapper")
 
+tcl_doevent() = tcl_doevent(0)
 function tcl_doevent(fd)
     while (ccall(dlsym(libtcl,:Tcl_DoOneEvent), Int32, (Int32,), (1<<1))!=0)
     end
@@ -91,7 +95,7 @@ type TkWidget
         tcl_eval("frame $wpath -width $w -height $h")
         tcl_eval("wm manage $wpath")
         tcl_eval("wm title $wpath \"$title\"")
-        tcl_doevent(0)
+        tcl_doevent()
         new(wpath, "frame", nothing)
     end
 end
@@ -157,6 +161,23 @@ function cairo_surface_for(w::TkWidget)
     CairoXlibSurface(disp, d, vis, width(w), height(w))
 end
 
+const default_mouse_cb = (w, x, y)->nothing
+
+type MouseHandler
+    button1press
+    button1release
+    button2press
+    button2release
+    button3press
+    button3release
+    motion
+    button1motion
+
+    MouseHandler() = new(default_mouse_cb, default_mouse_cb, default_mouse_cb,
+                         default_mouse_cb, default_mouse_cb, default_mouse_cb,
+                         default_mouse_cb, default_mouse_cb)
+end
+
 # TkCanvas is the plain Tk canvas widget. This one is double-buffered
 # and built on Cairo.
 type Canvas
@@ -165,41 +186,72 @@ type Canvas
     back::CairoSurface   # backing store
     frontcc::CairoContext
     backcc::CairoContext
+    mouse::MouseHandler
 
-    function Canvas(parent, x, y, w, h)
-        c = TkWidget(parent, "frame")
+    Canvas(parent) = Canvas(parent, -1, -1)
+    function Canvas(parent, w, h)
+        c = TkWidget(parent, "ttk::frame")
         # frame supports empty background, allowing us to control drawing
+        if w < 0
+            w = width(parent)
+        end
+        if h < 0
+            h = height(parent)
+        end
         tcl_eval("frame $(c.path) -width $w -height $h -background \"\"")
-        place(c, x, y)
-        tcl_doevent(0)  # make sure window resources are assigned
-        front = cairo_surface_for(c)
-        back = surface_create_similar(front, w, h)
-        can = new(c, front, back, CairoContext(front), CairoContext(back))
-        cb = tcl_callback((x...)->reveal(can))
-        tcl_eval("bind $(c.path) <Expose> \"$(cb)\"")
-        can
+        new(c)
     end
+end
+
+# some canvas init steps require the widget to fully exist
+function init_canvas(c::Canvas)
+    tcl_doevent()  # make sure window resources are assigned
+    c.front = cairo_surface_for(c.c)
+    w = width(c.c)
+    h = height(c.c)
+    c.back = surface_create_similar(c.front, w, h)
+    c.frontcc = CairoContext(c.front)
+    c.backcc = CairoContext(c.back)
+    c.mouse = MouseHandler()
+    cb = tcl_callback((x...)->reveal(c))
+    tcl_eval("bind $(c.c.path) <Expose> $(cb)")
+    bp1cb = tcl_callback((path,x,y)->(c.mouse.button1press(c,int(x),int(y))))
+    br1cb = tcl_callback((path,x,y)->(c.mouse.button1release(c,int(x),int(y))))
+    bp2cb = tcl_callback((path,x,y)->(c.mouse.button2press(c,int(x),int(y))))
+    br2cb = tcl_callback((path,x,y)->(c.mouse.button2release(c,int(x),int(y))))
+    bp3cb = tcl_callback((path,x,y)->(c.mouse.button3press(c,int(x),int(y))))
+    br3cb = tcl_callback((path,x,y)->(c.mouse.button3release(c,int(x),int(y))))
+    motcb = tcl_callback((path,x,y)->(c.mouse.motion(c,int(x),int(y))))
+    b1mcb = tcl_callback((path,x,y)->(c.mouse.button1motion(c,int(x),int(y))))
+    tcl_eval("bind $(c.c.path) <ButtonPress-1> {$bp1cb %x %y}")
+    tcl_eval("bind $(c.c.path) <ButtonRelease-1> {$br1cb %x %y}")
+    tcl_eval("bind $(c.c.path) <ButtonPress-2> {$bp2cb %x %y}")
+    tcl_eval("bind $(c.c.path) <ButtonRelease-2> {$br2cb %x %y}")
+    tcl_eval("bind $(c.c.path) <ButtonPress-3> {$bp3cb %x %y}")
+    tcl_eval("bind $(c.c.path) <ButtonRelease-3> {$br3cb %x %y}")
+    tcl_eval("bind $(c.c.path) <Motion> {$motcb %x %y}")
+    tcl_eval("bind $(c.c.path) <Button1-Motion> {$b1mcb %x %y}")
+    c
+end
+
+function pack(c::Canvas)
+    pack(c.c)
+    init_canvas(c)
+end
+
+function place(c::Canvas, x::Int, y::Int)
+    place(c.c, x, y)
+    init_canvas(c)
 end
 
 function reveal(c::Canvas)
     set_source_surface(c.frontcc, c.back, 0, 0)
     paint(c.frontcc)
+    tcl_doevent()
 end
 
 cairo_context(c::Canvas) = c.backcc
 cairo_surface(c::Canvas) = c.back
-
-# Example:
-#    w = Window("test", 640, 400)
-#    c = Canvas(w, 10, 10, 320, 200)
-#    cr = cairo_context(c)
-#    set_source_rgb(cr,1,1,1)
-#    paint(cr)
-#    set_source_rgb(cr,1,0,0)
-#    move_to(cr,320,0)
-#    line_to(cr,0,200)
-#    stroke(cr)
-#    reveal(c)
 
 
 tcl_interp = init()

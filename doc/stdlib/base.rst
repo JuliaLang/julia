@@ -34,6 +34,10 @@ Getting Around
 
    Show which method of ``f`` will be called for the given arguments
 
+.. function:: methods(f)
+
+   Show all methods of ``f`` with their argument types
+
 All Objects
 -----------
 
@@ -126,11 +130,11 @@ Types
 
 .. function:: eps([type])
 
-   The distance between 1.0 and the next largest representable floating-point value of ``type``. The only types that are sensible arguments are ``Float32`` and ``Float64``. If ``type`` is omitted, then ``eps(Float64)`` is returned.
+   The distance between 1.0 and the next larger representable floating-point value of ``type``. The only types that are sensible arguments are ``Float32`` and ``Float64``. If ``type`` is omitted, then ``eps(Float64)`` is returned.
 
 .. function:: eps(x)
 
-   The distance between ``x`` and the next largest representable floating-point value of the same type as ``x``.
+   The distance between ``x`` and the next larger representable floating-point value of the same type as ``x``.
 
 .. function:: promote_type(type1, type2)
 
@@ -280,7 +284,7 @@ Associative Collections
 
 ``Dict`` is the standard associative collection. Its implementation uses the ``hash(x)`` as the hashing function for the key, and ``isequal(x,y)`` to determine equality. Define these two functions for custom types to override how they are stored in a hash table.
 
-``ObjectIdDict`` is a special hash table where the keys are always object identities. ``WeakKeyDict`` is a hash table implementation where the keys are weak references to objects, and thus maybe garbage collected even when referenced in a hash table.
+``ObjectIdDict`` is a special hash table where the keys are always object identities. ``WeakKeyDict`` is a hash table implementation where the keys are weak references to objects, and thus may be garbage collected even when referenced in a hash table.
 
 Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``
 

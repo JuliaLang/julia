@@ -9,8 +9,7 @@ runtests("remote")
 
 # array/matrix tests
 runtests("arrayops")
-runtests("lapack")
-runtests("factorizations")
+runtests("linalg")
 runtests("fft")
 runtests("sparse")
 runtests("arpack")

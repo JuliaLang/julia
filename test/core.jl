@@ -377,3 +377,23 @@ begin
     @assert a2 == [101,102,909]
 end
 
+# issue #1287, combinations of try, catch, return
+begin
+    local f, g
+
+    function f()
+        try
+            return 1
+        end
+    end
+    @assert f() == 1
+
+    function g()
+        try
+            error("badness")
+        catch
+            return 2
+        end
+    end
+    @assert g() == 2
+end

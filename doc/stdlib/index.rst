@@ -29,6 +29,8 @@ Extras
    cpp
    textwrap
    zlib
+   strpack
+   sound
 
 ****************
 Math & Numerical

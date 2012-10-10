@@ -18,7 +18,7 @@ import Base.*
 # [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
-load("julia_message_types_h.jl")
+load("webrepl_msgtypes_h.jl")
 
 #macro debug_only(x); x; end
 macro debug_only(x); end
@@ -254,8 +254,10 @@ function __socket_callback(client::TcpSocket,p::__PartialMessageBuffer,stream::T
 end
 
 
-function __eval_exprs(client,__parsed_exprs)
-    global ans
+web_show(user_id, ans) =
+    __Message(__MSG_OUTPUT_EVAL_RESULT, {user_id, sprint(repl_show, ans)})
+
+function __eval_exprs(client,__parsed_exprs)    global ans
     user_id = ""
 
     # try to evaluate the expressions
@@ -273,7 +275,7 @@ function __eval_exprs(client,__parsed_exprs)
     if isa(ans,Nothing)
         return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id,""}))
     else
-        return __write_message(client,__Message(__MSG_OUTPUT_EVAL_RESULT, {user_id,sprint(repl_show, ans)}))
+        return __write_message(client, web_show(user_id, ans))
     end
 end
 

@@ -161,7 +161,16 @@ static jl_value_t *scm_to_julia(value_t e)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
 #endif
-    jl_value_t *v = scm_to_julia_(e);
+    jl_value_t *v;
+    JL_TRY {
+        v = scm_to_julia_(e);
+    }
+    JL_CATCH {
+        // if expression cannot be converted, replace with error expr
+        jl_expr_t *ex = jl_exprn(error_sym, 1);
+        jl_cellset(ex->args, 0, jl_cstr_to_string("invalid AST"));
+        v = (jl_value_t*)ex;
+    }
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
@@ -695,8 +704,17 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
         ast = jl_uncompress_ast((jl_tuple_t*)ast);
     spenv = jl_tuple_tvars_to_symbols(sparams);
     ast = copy_ast(ast, sparams, 1);
-    eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
-    eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    jl_module_t *last_m = jl_current_module;
+    JL_TRY {
+        jl_current_module = li->module;
+        eval_decl_types(jl_lam_vinfo((jl_expr_t*)ast), spenv);
+        eval_decl_types(jl_lam_capt((jl_expr_t*)ast), spenv);
+    }
+    JL_CATCH {
+        jl_current_module = last_m;
+        jl_raise(jl_exception_in_transit);
+    }
+    jl_current_module = last_m;
     JL_GC_POP();
     return ast;
 }

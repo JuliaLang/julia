@@ -61,7 +61,7 @@ function info{T}(
               ret == ERROR_NULL      ? "NULL regex object" :
               ret == ERROR_BADMAGIC  ? "invalid regex object" :
               ret == ERROR_BADOPTION ? "invalid option flags" :
-                                            "unknown error")
+                                       "unknown error $ret")
     end
     reinterpret(T,buf)[1]
 end
@@ -97,9 +97,9 @@ end
 study(re::Array{Uint8}) = study(re, int32(0))
 
 function exec(regex::Array{Uint8}, extra::Ptr{Void},
-                   str::ByteString, offset::Integer, options::Integer, cap::Bool)
+              str::ByteString, offset::Integer, options::Integer, cap::Bool)
     if offset < 0 || length(str) < offset
-        error("index out of range")
+        error(BoundsError)
     end
     ncap = info(regex, extra, INFO_CAPTURECOUNT, Int32)
     ovec = Array(Int32, 3(ncap+1))

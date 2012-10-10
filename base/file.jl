@@ -160,7 +160,9 @@ end
 @unix_only begin
 function real_path(fname::String)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
-    system_error(:real_path, sp == C_NULL)
+    if sp == C_NULL
+        error("Cannot find ", fname)
+    end
     s = bytestring(sp)
     ccall(:free, Void, (Ptr{Uint8},), sp)
     return s

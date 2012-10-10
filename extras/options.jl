@@ -135,11 +135,11 @@ function docheck_common(o::Options,checkflag::Vector{Bool})
     if any(unused)
         s = Array(ASCIIString,0)
         for (k, v) = o.key2index
-            if unused[v]
+            if v <= length(unused) && unused[v]
                 push(s,string(k))
             end
         end
-        msg = strcat("The following options were not used: ",s)
+        msg = strcat("The following option(s) were unused: ",s)
     end
     return unused, msg
 end
@@ -162,8 +162,12 @@ function docheck(o::Options{CheckError},checkflag::Vector{Bool})
 end
 # Reset status on handled options (in case o is reused later)
 function clearcheck(o::Options,checkflag::Vector{Bool})
-    o.used[checkflag] = false
-    o.check_lock[checkflag] = false
+    for i = 1:length(checkflag)
+        if checkflag[i]
+            o.used[i] = false
+            o.check_lock[i] = false
+        end
+    end
 end
 
 

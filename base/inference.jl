@@ -128,9 +128,9 @@ t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
-t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
-                                  a.parameters[1] : Any))
-t_func[arrayset] = (3, 3, (a,i,v)->a)
+#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,CompositeKind) && subtype(a,Array) ?
+#                                     a.parameters[1] : Any))
+#t_func[arrayset] = (3, Inf, (a,v,i...)->a)
 arraysize_tfunc(a, d) = Int
 function arraysize_tfunc(a)
     if isa(a,CompositeKind) && subtype(a,Array)
@@ -278,6 +278,9 @@ getfield_tfunc = function (A, s, name)
         if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
             return abstract_eval_constant(eval(A1,fld))
         end
+        if s === Module
+            return Top
+        end
         for i=1:length(s.names)
             if is(s.names[i],fld)
                 return s.types[i]
@@ -345,6 +348,20 @@ function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return limit_tuple_depth(argtypes)
     end
+    if is(f,arrayset)
+        if length(argtypes) < 3
+            return None
+        end
+        return argtypes[1]
+    end
+    if is(f,arrayref)
+        if length(argtypes) < 2
+            return None
+        end
+        a = argtypes[1]
+        return (isa(a,CompositeKind) && subtype(a,Array) ?
+                a.parameters[1] : Any)
+    end
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)
         # struct constructor
@@ -386,9 +403,20 @@ function isconstantfunc(f, sv::StaticVarInfo)
     end
     if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) &&
-            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode) &&
-            isa(f.args[2],Module)
-            M = f.args[2]; s = f.args[3].value
+            is(f.args[1].name,:getfield) && isa(f.args[3],QuoteNode)
+            s = f.args[3].value
+            if isa(f.args[2],Module)
+                M = f.args[2]
+            else
+                M = isconstantfunc(f.args[2], sv)
+                if M === false
+                    return false
+                end
+                M = _ieval(M)
+                if !isa(M,Module)
+                    return false
+                end
+            end
             return isbound(M,s) && isconst(M,s) && f
         end
     end
@@ -524,6 +552,19 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                          limit_tuple_type(apply(tuple,aargtypes...)) : ()
                     return abstract_call(_ieval(af), (), at, vtypes, sv, ())
                 end
+                af = _ieval(af)
+                if is(af,tuple) && length(fargs)==2
+                    # tuple(xs...)
+                    aat = aargtypes[1]
+                    if aat <: AbstractArray
+                        # tuple(array...)
+                        # TODO: > 1 array of the same type
+                        try
+                            return (eltype(aat)...)
+                        end
+                    end
+                    return Tuple
+                end
             end
         end
         if is(f,invoke) && length(fargs)>1
@@ -539,14 +580,10 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(f,apply) && isa(e,Expr) && (isa(f,Function) || isa(f,IntrinsicFunction))
             e.head = :call1
         end
-        if is(f,getfield) && length(argtypes)==2 && is(argtypes[1],Module)
-            themod = isconstantref(e.args[2], sv)
-            if !is(themod,false) && isa(fargs[2], QuoteNode)
-                themod = _ieval(themod)
-                sym = fargs[2].value
-                if isa(sym,Symbol) && isconst(themod,sym) && isbound(themod,sym)
-                    return abstract_eval_constant(eval(themod, sym))
-                end
+        if is(f,getfield)
+            val = isconstantref(e, sv)
+            if !is(val,false)
+                return abstract_eval_constant(_ieval(val))
             end
         end
         rt = builtin_tfunction(f, fargs, argtypes)
@@ -562,7 +599,7 @@ end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:]
-    argtypes = ntuple(length(fargs), i->abstract_eval(fargs[i],vtypes,sv))
+    argtypes = tuple([abstract_eval(a, vtypes, sv) for a in fargs]...)
     if anyp(x->is(x,None), argtypes)
         return None
     end
@@ -1236,10 +1273,14 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
 
     # add declarations for variables that are always the same type
     for vi in ast.args[2][2]::Array{Any,1}
-        vi[2] = get(decls, vi[1], vi[2])
+        if (vi[3]&4)==0
+            vi[2] = get(decls, vi[1], vi[2])
+        end
     end
     for vi in ast.args[2][3]::Array{Any,1}
-        vi[2] = get(decls, vi[1], vi[2])
+        if (vi[3]&4)==0
+            vi[2] = get(decls, vi[1], vi[2])
+        end
     end
 
     for (li::LambdaStaticData) in closures
@@ -1247,10 +1288,12 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
             a = li.ast
             # pass on declarations of captured vars
             for vi in a.args[2][3]::Array{Any,1}
-                vi[2] = get(decls, vi[1], vi[2])
+                if (vi[3]&4)==0
+                    vi[2] = get(decls, vi[1], vi[2])
+                end
             end
             na = length(a.args[1])
-            typeinf(li, ntuple(na+1, i->(i>na ? Tuple[1] : Any)),
+            typeinf(li, ntuple(na+1, i->(i>na ? (Tuple)[1] : Any)),
                     li.sparams, li, false)
         end
     end
@@ -1411,7 +1454,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
         return NF
     end
     argexprs = e.args[2:]
-    atypes = limit_tuple_type(ntuple(length(argexprs), i->exprtype(argexprs[i])))
+    atypes = limit_tuple_type(tuple(map(exprtype, argexprs)...))
 
     if is(f, convert_default) && length(atypes)==3
         # builtin case of convert. convert(T,x::S) => x, when S<:T
@@ -1505,7 +1548,7 @@ function inlineable(f, e::Expr, sv, enclosing_ast)
                     vnew = unique_name(enclosing_ast)
                     add_variable(enclosing_ast, vnew, aeitype)
                     push(stmts, Expr(:(=), {vnew, aei}, Any))
-                    argexprs[i] = SymbolNode(vnew,aeitype)
+                    argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 elseif !isType(aeitype) && !effect_free(aei)
                     push(stmts, aei)
                 end
@@ -1536,8 +1579,7 @@ function mk_tupleref(texpr, i)
 end
 
 function mk_tuplecall(args)
-    Expr(:call1, {_jl_top_tuple, args...},
-         ntuple(length(args), i->exprtype(args[i])))
+    Expr(:call1, {_jl_top_tuple, args...}, tuple(map(exprtype, args)...))
 end
 
 function inlining_pass(e::Expr, sv, ast)
@@ -1672,7 +1714,8 @@ function add_variable(ast, name, typ)
     push(vinflist, vinf)
 end
 
-const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6}
+const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
+                    :_var7, :_var8, :_var9, :_var10, :_var11, :_var12}
 
 function unique_name(ast)
     locllist = ast.args[2][1]::Array{Any,1}
@@ -1777,16 +1820,22 @@ function tuple_elim_pass(ast::Expr)
             del(body, i)  # remove tuple allocation
             # convert tuple allocation to a series of local var assignments
             vals = cell(nv)
+            n_ins = 0
             for j=1:nv
-                tmpv = unique_name(ast)
                 tupelt = tup[j+1]
-                elty = exprtype(tupelt)
-                tmp = Expr(:(=), {tmpv,tupelt}, Any)
-                add_variable(ast, tmpv, elty)
-                insert(body, i+j-1, tmp)
-                vals[j] = SymbolNode(tmpv, elty)
+                if isa(tupelt,Number) || isa(tupelt,String) || isa(tupelt,QuoteNode)
+                    vals[j] = tupelt
+                else
+                    elty = exprtype(tupelt)
+                    tmpv = unique_name(ast)
+                    tmp = Expr(:(=), {tmpv,tupelt}, Any)
+                    add_variable(ast, tmpv, elty)
+                    insert(body, i+n_ins, tmp)
+                    vals[j] = SymbolNode(tmpv, elty)
+                    n_ins += 1
+                end
             end
-            i += nv
+            i += n_ins
             replace_tupleref(bexpr, var, vals, sv, i)
         else
             i += 1

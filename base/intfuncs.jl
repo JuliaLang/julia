@@ -137,7 +137,10 @@ end
 nextpow2(x::Unsigned) = one(x)<<((sizeof(x)<<3)-leading_zeros(x-1))
 nextpow2(x::Integer) = oftype(x,x < 0 ? -nextpow2(unsigned(-x)) : nextpow2(unsigned(x)))
 
-ispow2(x::Integer) = (x&(x-1))==0
+prevpow2(x::Unsigned) = (one(x)>>(x==0)) << ((sizeof(x)<<3)-leading_zeros(x)-1)
+prevpow2(x::Integer) = oftype(x,x < 0 ? -prevpow2(unsigned(-x)) : prevpow2(unsigned(x)))
+
+ispow2(x::Integer) = ((x<=0) == (x&(x-1)))
 
 # smallest integer n for which a^n >= x
 function nextpow(a, x)

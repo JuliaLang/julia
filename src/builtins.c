@@ -199,9 +199,25 @@ JL_CALLABLE(jl_f_apply)
 {
     JL_NARGSV(apply, 1);
     JL_TYPECHK(apply, function, args[0]);
-    if (nargs == 2 && jl_is_tuple(args[1])) {
-        return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
-                        jl_tuple_len(args[1]));
+    if (nargs == 2) {
+        if (((jl_function_t*)args[0])->fptr == &jl_f_tuple) {
+            if (jl_is_tuple(args[1]))
+                return args[1];
+            if (jl_is_array(args[1])) {
+                size_t n = jl_array_len(args[1]);
+                jl_tuple_t *t = jl_alloc_tuple(n);
+                JL_GC_PUSH(&t);
+                for(size_t i=0; i < n; i++) {
+                    jl_tupleset(t, i, jl_arrayref((jl_array_t*)args[1], i));
+                }
+                JL_GC_POP();
+                return (jl_value_t*)t;
+            }
+        }
+        if (jl_is_tuple(args[1])) {
+            return jl_apply((jl_function_t*)args[0], &jl_tupleref(args[1],0),
+                            jl_tuple_len(args[1]));
+        }
     }
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
@@ -330,7 +346,7 @@ JL_CALLABLE(jl_f_tupleref)
     jl_tuple_t *t = (jl_tuple_t*)args[0];
     size_t i = jl_unbox_long(args[1])-1;
     if (i >= jl_tuple_len(t))
-        jl_error("tupleref: index out of range");
+        jl_raise(jl_bounds_exception);
     return jl_tupleref(t, i);
 }
 

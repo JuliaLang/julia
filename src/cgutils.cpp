@@ -321,12 +321,11 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     builder.SetInsertPoint(passBB);
 }
 
-static Value *emit_bounds_check(Value *i, Value *len, const std::string &msg,
-                                jl_codectx_t *ctx)
+static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
     Value *ok = builder.CreateICmpULT(im1, len);
-    error_unless(ok, msg, ctx);
+    raise_exception_unless(ok, jlboundserr_var, ctx);
     return im1;
 }
 
@@ -533,6 +532,43 @@ static Value *bitstype_pointer(Value *x)
 {
     return builder.CreateGEP(builder.CreateBitCast(x, jl_ppvalue_llvmt),
                              ConstantInt::get(T_size, 1));
+}
+
+static Value *emit_array_nd_index(Value *a, size_t nd, jl_value_t **args,
+                                  size_t nidxs, jl_codectx_t *ctx)
+{
+    Value *i = ConstantInt::get(T_size, 0);
+    Value *stride = ConstantInt::get(T_size, 1);
+    BasicBlock *failBB = BasicBlock::Create(getGlobalContext(), "oob");
+    BasicBlock *endBB = BasicBlock::Create(getGlobalContext(), "idxend");
+    for(size_t k=0; k < nidxs; k++) {
+        Value *ii = emit_unbox(T_size, T_psize, emit_unboxed(args[k], ctx));
+        ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
+        i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
+        if (k < nidxs-1) {
+            Value *d =
+                k >= nd ? ConstantInt::get(T_size, 1) : emit_arraysize(a, k+1);
+            BasicBlock *okBB = BasicBlock::Create(getGlobalContext(), "ib");
+            // if !(i < d) goto error
+            builder.CreateCondBr(builder.CreateICmpULT(ii, d), okBB, failBB);
+            ctx->f->getBasicBlockList().push_back(okBB);
+            builder.SetInsertPoint(okBB);
+            stride = builder.CreateMul(stride, d);
+        }
+    }
+    Value *alen = emit_arraylen(a);
+    // if !(i < alen) goto error
+    builder.CreateCondBr(builder.CreateICmpULT(i, alen), endBB, failBB);
+
+    ctx->f->getBasicBlockList().push_back(failBB);
+    builder.SetInsertPoint(failBB);
+    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
+    builder.CreateBr(endBB);
+
+    ctx->f->getBasicBlockList().push_back(endBB);
+    builder.SetInsertPoint(endBB);
+
+    return i;
 }
 
 // --- propagate julia type from value a to b. returns b. ---

@@ -624,7 +624,7 @@ ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
 ref(A::SparseMatrixCSC, I::(Integer,Integer)) = ref(A, I[1], I[2])
 
 function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
-    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("ref: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error(BoundsError); end
     first = A.colptr[i1]
     last = A.colptr[i1+1]-1
     while first <= last
@@ -677,7 +677,7 @@ assign(A::SparseMatrixCSC, v, i::Integer) = assign(A, v, ind2sub(size(A),i)...)
 function assign{T,T_int}(A::SparseMatrixCSC{T,T_int}, v, i0::Integer, i1::Integer)
     i0 = convert(T_int, i0)
     i1 = convert(T_int, i1)
-    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error("assign: index out of bounds"); end
+    if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); error(BoundsError); end
     v = convert(T, v)
     if v == 0 #either do nothing or delete entry if it exists
         first = A.colptr[i1]
@@ -910,7 +910,7 @@ function hvcat(rows::(Int...), X::SparseMatrixCSC...)
         tmp_rows[i] = hcat(X[(1 : rows[i]) + k]...)
         k += rows[i]
     end
-    vcat(ntuple(nbr, x->tmp_rows[x])...)
+    vcat(tmp_rows...)
 end
 
 

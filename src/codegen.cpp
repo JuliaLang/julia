@@ -102,6 +102,7 @@ static GlobalVariable *jlundeferr_var;
 static GlobalVariable *jldomerr_var;
 static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
+static GlobalVariable *jlboundserr_var;
 
 // important functions
 static Function *jlnew_func;
@@ -884,8 +885,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 Value *valen = emit_n_varargs(ctx);
                 Value *idx = emit_unbox(T_size, T_psize,
                                         emit_unboxed(args[2], ctx));
-                idx = emit_bounds_check(idx, valen,
-                                        "tupleref: index out of range", ctx);
+                idx = emit_bounds_check(idx, valen, ctx);
                 idx = builder.CreateAdd(idx, ConstantInt::get(T_size, ctx->nReqArgs));
                 JL_GC_POP();
                 return builder.
@@ -903,7 +903,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     return emit_nthptr(arg1, idx+1);
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
-                    emit_error("tupleref: index out of range", ctx);
+                    builder.CreateCall(jlraise_func, builder.CreateLoad(jlboundserr_var));
                     JL_GC_POP();
                     return V_null;
                 }
@@ -911,8 +911,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             Value *tlen = emit_tuplelen(arg1);
             Value *idx = emit_unbox(T_size, T_psize,
                                     emit_unboxed(args[2], ctx));
-            emit_bounds_check(idx, tlen,
-                              "tupleref: index out of range", ctx);
+            emit_bounds_check(idx, tlen, ctx);
             JL_GC_POP();
             return emit_nthptr(arg1,
                                builder.CreateAdd(idx, ConstantInt::get(T_size,1)));
@@ -1032,49 +1031,54 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             }
         }
     }
-    else if (f->fptr == &jl_f_arrayref && nargs==2) {
+    else if (f->fptr == &jl_f_arrayref && nargs>=2) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
-        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
-        if (jl_is_array_type(aty) && ity == (jl_value_t*)jl_long_type) {
+        bool indexes_ok = true;
+        for (size_t i=2; i <= nargs; i++) {
+            if (expr_type(args[i], ctx) != (jl_value_t*)jl_long_type) {
+                indexes_ok = false; break;
+            }
+        }
+        if (jl_is_array_type(aty) && indexes_ok) {
             jl_value_t *ety = jl_tparam0(aty);
             if (!jl_is_typevar(ety)) {
-                if (!jl_is_bits_type(ety)) {
+                if (!jl_is_bits_type(ety))
                     ety = (jl_value_t*)jl_any_type;
+                jl_value_t *ndp = jl_tparam1(aty);
+                if (jl_is_long(ndp) || nargs==2) {
+                    Value *ary = emit_expr(args[1], ctx);
+                    size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
+                    Value *idx = emit_array_nd_index(ary, nd, &args[2], nargs-1, ctx);
+                    JL_GC_POP();
+                    return typed_load(emit_arrayptr(ary), idx, ety, ctx);
                 }
-                Value *ary = emit_expr(args[1], ctx);
-                Value *alen = emit_arraylen(ary);
-                Value *idx = emit_unbox(T_size, T_psize,
-                                        emit_unboxed(args[2], ctx));
-                Value *im1 =
-                    emit_bounds_check(idx, alen,
-                                      "arrayref: index out of range", ctx);
-                JL_GC_POP();
-                return typed_load(emit_arrayptr(ary), im1, ety, ctx);
             }
         }
     }
-    else if (f->fptr == &jl_f_arrayset && nargs==3) {
+    else if (f->fptr == &jl_f_arrayset && nargs>=3) {
         jl_value_t *aty = expr_type(args[1], ctx); rt1 = aty;
-        jl_value_t *ity = expr_type(args[2], ctx); rt2 = ity;
-        jl_value_t *vty = expr_type(args[3], ctx); rt3 = vty;
-        if (jl_is_array_type(aty) &&
-            ity == (jl_value_t*)jl_long_type) {
+        jl_value_t *vty = expr_type(args[2], ctx); rt2 = vty;
+        bool indexes_ok = true;
+        for (size_t i=3; i <= nargs; i++) {
+            if (expr_type(args[i], ctx) != (jl_value_t*)jl_long_type) {
+                indexes_ok = false; break;
+            }
+        }
+        if (jl_is_array_type(aty) && indexes_ok) {
             jl_value_t *ety = jl_tparam0(aty);
             if (!jl_is_typevar(ety) && jl_subtype(vty, ety, 0)) {
-                if (!jl_is_bits_type(ety)) {
+                if (!jl_is_bits_type(ety))
                     ety = (jl_value_t*)jl_any_type;
+                jl_value_t *ndp = jl_tparam1(aty);
+                if (jl_is_long(ndp) || nargs==3) {
+                    Value *ary = emit_expr(args[1], ctx);
+                    size_t nd = jl_is_long(ndp) ? jl_unbox_long(ndp) : 1;
+                    Value *idx = emit_array_nd_index(ary, nd, &args[3], nargs-2, ctx);
+                    typed_store(emit_arrayptr(ary), idx,
+                                emit_unboxed(args[2],ctx), ety, ctx);
+                    JL_GC_POP();
+                    return ary;
                 }
-                Value *ary = emit_expr(args[1], ctx);
-                Value *alen = emit_arraylen(ary);
-                Value *idx = emit_unbox(T_size, T_psize,
-                                        emit_unboxed(args[2], ctx));
-                Value *im1 =
-                    emit_bounds_check(idx, alen,
-                                      "arrayset: index out of range", ctx);
-                typed_store(emit_arrayptr(ary), im1, emit_unboxed(args[3],ctx),
-                            ety, ctx);
-                JL_GC_POP();
-                return ary;
             }
         }
     }
@@ -1097,7 +1101,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 jl_value_t *ft = jl_tupleref(sty->types, idx);
                 jl_value_t *rhst = expr_type(args[3], ctx);
                 rt2 = rhst;
-                if (jl_subtype(rhst, ft, 0)) {
+                if (jl_is_leaf_type((jl_value_t*)sty) && jl_subtype(rhst, ft, 0)) {
+                    // TODO: attempt better codegen for approximate types
                     Value *strct = emit_expr(args[1], ctx);
                     Value *rhs;
                     if (sty->fields[idx].isptr)
@@ -2174,6 +2179,8 @@ static void init_julia_llvm_env(Module *m)
                                   (void*)&jl_overflow_exception);
     jlinexacterr_var = global_to_llvm("jl_inexact_exception",
                                       (void*)&jl_inexact_exception);
+    jlboundserr_var = global_to_llvm("jl_bounds_exception",
+                                     (void*)&jl_bounds_exception);
     jlfloat32temp_var =
         new GlobalVariable(*jl_Module, T_float32,
                            false, GlobalVariable::PrivateLinkage,

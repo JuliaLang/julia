@@ -69,17 +69,21 @@ You can read about [getting started](http://julialang.org/manual/getting-started
 
 #### Linux
 
-GCC version 4.6 is the minimum required to build julia.
+GCC version 4.6 or later is recommended to build julia.
 
 If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-On Ubuntu systems, You may also need to install the package `libncurses5-dev`.
+Chinese users should replace line 798 in `deps/Makefile` with "$(WGET) ftp://ftp.gnu.org/gnu/gmp/gmp-$(GMP_VER)/$@" due to IP block .(original line 798 "$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@")
+
+On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
+
+On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build julia.
 
 #### OS X
 
-It is essential to use a 64-bit gfortran. Download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/), if necessary. The HPC gfortran requires gcc to function properlyl.
+It is essential to use a 64-bit gfortran. Download and install [gfortran and gcc from hpc.sf.net](http://hpc.sf.net/), if necessary. The HPC gfortran requires gcc to function properly.
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
@@ -109,7 +113,7 @@ To rebuild a pre-built Julia source install with MKL support, delete from `deps/
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc, g++][gcc]**           — compiling and linking C, C++ (Need at least v4.6)
+- **[gcc, g++][gcc]**           — compiling and linking C, C++
 - **[clang][clang]**            — clang is the default compiler on OS X (Need at least v3.1, Xcode 4.3.3 on OS X)
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — contributions and version control.
@@ -124,7 +128,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
 - **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
-- **[MT]**                  — a fast Mersenne Twister pseudorandom number generator library.
+- **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)      – OpenBLAS & LAPACK may be replaced by Intel's MKL library.
@@ -150,7 +154,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
 [fdlibm]:       http://www.netlib.org/fdlibm/readme
-[MT]:           http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/emt.html
+[DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl/

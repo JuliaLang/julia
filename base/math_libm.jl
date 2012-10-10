@@ -48,6 +48,9 @@ end
 @_jl_libfdmfunc_1arg_float Number asin
 @_jl_libfdmfunc_1arg_float Number acos
 @_jl_libfdmfunc_1arg_float Number atan
+@_jl_libfdmfunc_1arg_float Number asinh
+@_jl_libfdmfunc_1arg_float Number acosh
+@_jl_libfdmfunc_1arg_float Number atanh
 @_jl_libfdmfunc_1arg_float Number log
 @_jl_libfdmfunc_1arg_float Number log2
 @_jl_libfdmfunc_1arg_float Number log10

@@ -180,7 +180,7 @@ end
 function ref_shape(I...)
     n = length(I)
     while n > 0 && isa(I[n],Real); n-=1; end
-    ntuple(n, i->length(I[i]))
+    tuple([length(I[i]) for i=1:n]...)
 end
 
 ref_shape(i::Real) = ()

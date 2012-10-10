@@ -422,9 +422,9 @@ static void push_frame_info_from_ip(jl_array_t *a, size_t ip)
     getFunctionInfo(&func_name, &line_num, &file_name, ip);
     if (func_name != NULL) {
         jl_array_grow_end(a, 3);
-        jl_arrayset(a, i, (jl_value_t*)jl_symbol(func_name)); i++;
-        jl_arrayset(a, i, (jl_value_t*)jl_symbol(file_name)); i++;
-        jl_arrayset(a, i, jl_box_long(line_num));
+        jl_arrayset(a, (jl_value_t*)jl_symbol(func_name), i); i++;
+        jl_arrayset(a, (jl_value_t*)jl_symbol(file_name), i); i++;
+        jl_arrayset(a, jl_box_long(line_num), i);
     }
 }
 
