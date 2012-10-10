@@ -5,5 +5,6 @@ runtests("poly")
 runtests("file")
 runtests("Rmath")
 runtests("zlib")
+runtests("options")
 
 runtests("perf")

@@ -128,9 +128,9 @@ t_func[method_exists] = (2, 2, cmp_tfunc)
 t_func[applicable] = (1, Inf, (f, args...)->Bool)
 t_func[tuplelen] = (1, 1, x->Int)
 t_func[arraylen] = (1, 1, x->Int)
-t_func[arrayref] = (2, 2, (a,i)->(isa(a,CompositeKind) && subtype(a,Array) ?
-                                  a.parameters[1] : Any))
-t_func[arrayset] = (3, 3, (a,i,v)->a)
+#t_func[arrayref] = (2,Inf,(a,i...)->(isa(a,CompositeKind) && subtype(a,Array) ?
+#                                     a.parameters[1] : Any))
+#t_func[arrayset] = (3, Inf, (a,v,i...)->a)
 arraysize_tfunc(a, d) = Int
 function arraysize_tfunc(a)
     if isa(a,CompositeKind) && subtype(a,Array)
@@ -347,6 +347,20 @@ t_func[apply_type] = (1, Inf, apply_type_tfunc)
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     if is(f,tuple)
         return limit_tuple_depth(argtypes)
+    end
+    if is(f,arrayset)
+        if length(argtypes) < 3
+            return None
+        end
+        return argtypes[1]
+    end
+    if is(f,arrayref)
+        if length(argtypes) < 2
+            return None
+        end
+        a = argtypes[1]
+        return (isa(a,CompositeKind) && subtype(a,Array) ?
+                a.parameters[1] : Any)
     end
     tf = get(t_func::ObjectIdDict, f, false)
     if is(tf,false)

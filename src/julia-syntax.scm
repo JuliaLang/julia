@@ -860,8 +860,7 @@
 						   ,(length args)))
 				    ,@(map (lambda (i elt)
 					     `(call (top arrayset) ,name
-						    ,(+ 1 i)
-						    ,elt))
+						    ,elt ,(+ 1 i)))
 					   (iota (length args))
 					   args)
 				    ,name)))))
@@ -874,8 +873,8 @@
 			 `(block (= ,name (call (top Array) (top Any)
 						,nr ,nc))
 				 ,@(map (lambda (i elt)
-					  `(call (top arrayset) ,name ,(+ 1 i)
-						 ,elt))
+					  `(call (top arrayset) ,name
+						 ,elt ,(+ 1 i)))
 					(iota (* nr nc))
 					args)
 				 ,name))))

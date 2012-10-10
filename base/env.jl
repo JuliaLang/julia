@@ -65,7 +65,7 @@ done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
 function next(::EnvHash, i)
     env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
-        error("index out of range")
+        error(BoundsError)
     end
     env::ByteString
     m = match(r"^(.*?)=(.*)$"s, env)

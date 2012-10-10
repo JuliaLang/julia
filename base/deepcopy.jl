@@ -61,9 +61,7 @@ function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     while true
         try
             for i=i0:length(x)
-                # NOTE: this works around the performance problem caused by all
-                # the doubled definitions of assign()
-                arrayset(dest, i, deepcopy_internal(x[i], stackdict))
+                arrayset(dest, deepcopy_internal(x[i], stackdict), i)
             end
             break
         catch err

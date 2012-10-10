@@ -160,7 +160,7 @@ end
 typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 
 function strchr(s::String, c::Chars, i::Integer)
-    if i < 1 error("index out of range") end
+    if i < 1 error(BoundsError) end
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
@@ -179,7 +179,7 @@ function search(s::String, c::Chars, i::Integer)
     if isempty(c)
         return 1 <= i <= length(s)+1 ? (i,i) :
                i == length(s)+2      ? (0,0) :
-               error("index out of range")
+               error(BoundsError)
     end
     i=strchr(s,c,i)
     (i, nextind(s,i))
@@ -190,7 +190,7 @@ function search(s::String, t::String, i::Integer)
     if isempty(t)
         return 1 <= i <= length(s)+1 ? (i,i) :
                i == length(s)+2      ? (0,0) :
-               error("index out of range")
+               error(BoundsError)
     end
     t1, j2 = next(t,start(t))
     while true
@@ -342,7 +342,7 @@ SubString(s::String, i::Integer) = SubString(s, i, length(s))
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.length
-        error("string index out of bounds")
+        error(BoundsError)
     end
     c, i = next(s.string, i+s.offset)
     c, i-s.offset
@@ -356,7 +356,7 @@ length(s::SubString) = s.length
 
 function ref(s::String, r::Range1{Int})
     if first(r) < 1 || length(s) < last(r)
-        error("index out of range")
+        error(BoundsError)
     end
     SubString(s, first(r), last(r))
 end
@@ -373,7 +373,7 @@ strlen(s::RepString) = strlen(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1 || i > length(s)
-        error("string index out of bounds")
+        error(BoundsError)
     end
     j = mod1(i,length(s.string))
     c, k = next(s.string, j)
@@ -1223,9 +1223,9 @@ end
 # find the index of the first occurrence of a value in a byte array
 
 function memchr(a::Array{Uint8,1}, b::Integer, i::Integer)
-    if i < 1 error("index out of range") end
+    if i < 1 error(BoundsError) end
     n = length(a)
-    if i > n return i == n+1 ? 0 : error("index out of range") end
+    if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
     q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Uint), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)

@@ -172,6 +172,9 @@ randi() = randi(Int)
 
 # random integer from lo to hi inclusive
 function randival{T<:Integer}(lo::T, hi::T)
+    if lo > hi
+        error("randi: invalid range")
+    end
     m = typemax(T)
     s = randi(T)
     if (hi-lo == m)
