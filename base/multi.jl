@@ -432,7 +432,7 @@ function deserialize(s, t::Type{RemoteRef})
         add_client(rr2id(rr), myid())
     end
     # call ctor to make sure this rr gets added to the _jl_client_refs table
-    RemoteRef(where, rid[1], rid[2])
+    RemoteRef(where, rr.whence, rr.id)
 end
 
 schedule_call(rid, f_thk, args_thk) =
