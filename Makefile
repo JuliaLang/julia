@@ -4,12 +4,13 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia
+DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base ui,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
+$(foreach link,extras base ui test,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
+$(foreach link,doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui
+debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui $(BUILD)/lib/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
 	@$(MAKE) -s julia-$@
 	@$(MAKE) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) -s $(BUILD)/lib/julia/sys.ji
 
@@ -36,6 +37,7 @@ OPENBLASNAME=openblas
 endif
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
+	@$(MAKE) -sC test/unicode
 	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
@@ -45,6 +47,7 @@ install: release
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
 	-cp $(BUILD)/etc/* $(PREFIX)/etc
+	-cp $(BUILD)/share/* $(PREFIX)/share
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
