@@ -384,8 +384,8 @@ factors(C::CholeskyDense) = C.LR
 
 function det(C::CholeskyDense)
     ff = C.LR
-    dd = 0.
-    for i in 1:size(ff,1) dd += ff[i,i]^2 end
+    dd = 1.
+    for i in 1:size(ff,1) dd *= ff[i,i]^2 end
     dd
 end
     
