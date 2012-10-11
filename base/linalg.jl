@@ -86,6 +86,12 @@ function linreg(x::AbstractVector, y::AbstractVector)
     ((Mt*M)\Mt)*y
 end
 
+function linreg(x::AbstractArray, y::AbstractVector)
+    M = hcat(ones(size(x, 1)), x)
+    Mt = M'
+    inv(Mt * M) * Mt * y 
+end
+
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
     w = sqrt(w)
