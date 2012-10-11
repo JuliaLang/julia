@@ -1,24 +1,16 @@
-# Contributing
+Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev) is a good place to post them, but you should check out the [online Julia docs](http://docs.julialang.org/en/latest/) first. If you have changes you'd like to contribute, you'll need a [free GitHub account](https://github.com/signup/free). (If you're reading this on GitHub, you probably already have one.) You'll also want a working copy of Julia, built from source (you can still contribute with a binary install, but it's harder and not really recommended). In list form, here's what to do to become a contributor:
 
-Hi! Thanks for checking out Julia and contributing. Please consider joining the [Julia dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev). If you have questions or problems, that's a good place to post them. The [online Julia docs](http://docs.julialang.org/en/latest/) might also be helpful. To contribute changes, you'll need a free GitHub account (if you're reading this on GitHub, you probably already have one). And of course, you'll want a working copy of Julia, preferably built from source. In list form, here are the recommended things to do:
+* Join the [dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev).
 
-* Join the [dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev)
+* Create a [GitHub account](https://github.com/signup/free).
 
-* Create a [GitHub account](https://github.com/signup/free)
+* [Fork Julia](https://github.com/JuliaLang/julia/fork_select).
 
-* [Fork Julia](https://github.com/JuliaLang/julia/fork_select)
+* Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
 
-* Build the software and libraries (the first time takes time)
-  <p>
-  Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
-  </p>
+* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keeping your repository up to date and rebasing your work in progress frequently.
 
-* Keep Julia current
-  <p>
-  Julia is a fast-moving target, and many details of the language are still settling out. Keeping your repository up to date and rebasing your work in progress frequently 
-  </p>
-
-* Relax
+* Relax and have fun.
 
 ## Submitting your contributions
 
@@ -26,13 +18,13 @@ The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) t
 
 You can make pull requests for incomplete features to get code review, in which case we have a convention of prefixing the pull request title with "RFC:" to indicate that the work is incomplete so it doesn't accidentally get merged into the master branch before it's baked.
 
-Before submitting, make sure that all tests pass by running `make testall`. Even better, add your own tests for your change or feature to the test files in `tests/`. If your contribution includes changes to Makefiles or external dependencies, do make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent.
+Before submitting, make sure that all tests pass by running `make testall`. Even better, add your own tests for your change or feature to the test files in `tests/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent.
 
 ## Getting help
 
-While getting familiar with Julia, and using unfamiliar aspects of the language, remember to check out the [docs](http://docs.julialang.org/en/latest/). The docs are [searchable](http://docs.julialang.org/en/latest/search/), but if you use a script blocker then you'll have to unblock that page. The [source code](https://github.com/JuliaLang/julia) is an excellent source of examples and, of course, always the most definitive resource on how things work. If you're still stumped, post something on [the dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev), but it won't hurt to search first to see if there's already a discussion about what you're stuck on.
+While getting familiar with Julia and using unfamiliar aspects of the language, remember to check out [the docs](http://docs.julialang.org/en/latest/) and keep in mind that they are [searchable](http://docs.julialang.org/en/latest/search/). (If you use a script blocker then you'll have to unblock that page.) The [source code](https://github.com/JuliaLang/julia) is an excellent source of examples (and it's mostly pretty approachable). If you're still stumped, post something on [the dev list](https://groups.google.com/forum/?fromgroups#!forum/julia-dev), but you may want to search the archives first to see if there's already been a discussion about what you're stuck on.
 
-# Resources
+## Resources
 
 * Julia
   - [Julia](http://julialang.org)
