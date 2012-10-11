@@ -564,7 +564,12 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-function cat(catdim::Integer, A::AbstractArray...)
+cat{T}(catdim::Integer, A::AbstractArray{T}...) = cat_t(catdim, T, A...)
+
+cat(catdim::Integer, A::AbstractArray...) =
+    cat_t(catdim, promote_type(map(eltype, A)...), A...)
+
+function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
@@ -610,7 +615,6 @@ function cat(catdim::Integer, A::AbstractArray...)
 
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    typeC = promote_type(map(eltype, A)...)
     C = similar(full(A[1]), typeC, dimsC)
 
     range = 1
