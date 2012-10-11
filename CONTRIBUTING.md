@@ -8,7 +8,7 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 * Build the software and libraries (the first time takes a while, but it's fast after that). Detailed build instructions are in the [README](https://github.com/JuliaLang/julia/tree/master/README.md). Julia depends on several external packages; most are automatically downloaded and installed, but are less frequently updated than Julia itself.
 
-* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keeping your repository up to date and rebasing your work in progress frequently.
+* Keep Julia current. Julia is a fast-moving target, and many details of the language are still settling out. Keeping your repository up to date and rebasing your work in progress frequently is vital.
 
 * Relax and have fun.
 
