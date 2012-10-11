@@ -559,8 +559,19 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
                     if aat <: AbstractArray
                         # tuple(array...)
                         # TODO: > 1 array of the same type
-                        try
-                            return (eltype(aat)...)
+                        tn = AbstractArray.name
+                        while isa(aat, AbstractKind) || isa(aat, BitsKind) ||
+                            isa(aat, CompositeKind)
+                            if is(aat.name, tn)
+                                et = aat.parameters[1]
+                                if !isa(et,TypeVar)
+                                    return (et...)
+                                end
+                            end
+                            if is(aat, Any)
+                                break
+                            end
+                            aat = aat.super
                         end
                     end
                     return Tuple
