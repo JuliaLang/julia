@@ -47,7 +47,7 @@ install: release
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
 	-cp $(BUILD)/etc/* $(PREFIX)/etc
-	-cp $(BUILD)/share/* $(PREFIX)/share
+	-cp -R -L $(BUILD)/share/* $(PREFIX)/share
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
