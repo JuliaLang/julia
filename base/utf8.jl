@@ -1,4 +1,4 @@
-## from src/boot.jl:
+## from base/boot.jl:
 #
 # type UTF8String <: String
 #     data::Array{Uint8,1}

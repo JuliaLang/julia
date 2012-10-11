@@ -859,7 +859,7 @@ mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
     julia> Uint
     Uint64
 
-This is accomplished via the following code in ``src/boot.jl``::
+This is accomplished via the following code in ``base/boot.jl``::
 
     if is(Int,Int64)
         typealias Uint Uint64
