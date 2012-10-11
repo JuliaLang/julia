@@ -30,14 +30,54 @@ extern "C" {
 
 
 /** libuv callbacks */
+//These callbacks are implemented in stream.jl
+#define JL_CB_TYPES(XX) \
+	XX(close) \
+	XX(return_spawn) \
+	XX(readcb) \
+	XX(alloc_buf) \
+	XX(connectcb) \
+	XX(connectioncb) \
+	XX(asynccb)
 
-#define DEFINE_JULIA_HOOK(hook) static jl_function_t *jl_uvhook_##hook = 0;
-#define JULIA_HOOK(hook) \
-(jl_uvhook_##hook ? jl_uvhook_##hook : (jl_uvhook_##hook = (\
-    (jl_function_t*)jl_get_global(                          \
-        (jl_module_t*)jl_get_global(                        \
-            jl_root_module,jl_symbol("Base")),              \
-        jl_symbol("_uv_hook_" #hook)))))                    \
+#define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
+#define JULIA_HOOK(hook) jl_uvhook_##hook
+#define XX(hook) static jl_function_t *JULIA_HOOK(hook) = 0;
+JL_CB_TYPES(XX)
+#undef XX
+DLLEXPORT void jl_get_uv_hooks() {
+	if (JULIA_HOOK(close)) return; // only do this once
+#define XX(hook) JULIA_HOOK(hook) = JULIA_HOOK_(jl_base_module, hook);
+	JL_CB_TYPES(XX)
+}
+#undef XX
+#undef JL_CB_TYPES
+
+int base_module_conflict = 0; //set to 1 if Base is getting redefined since it means there are two place to try the callbacks
+static jl_type_t* jl_method_error = 0;
+// warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
+// warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
+#define JULIA_CB(hook,args...) \
+    jl_value_t *ret; \
+    if (!base_module_conflict) { \
+        ret = jl_callback_call(JULIA_HOOK(hook),args); \
+    } else { \
+        JL_TRY { \
+            ret = jl_callback_call(JULIA_HOOK(hook),args); \
+            /* fprintf(stderr, #hook " original succeeded\n"); */\
+        } \
+        JL_CATCH { \
+            if (!jl_method_error) jl_method_error = (jl_type_t*)jl_get_global(jl_base_module, jl_symbol("MethodError")); \
+            if (jl_typeof(jl_exception_in_transit) == jl_method_error) { \
+                /* fprintf(stderr, "\n" #hook " being retried with new Base bindings --> "); */\
+                jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
+                ret = jl_callback_call(cb_func,args); \
+                /* fprintf(stderr, #hook " succeeded\n"); */\
+            } else { \
+                jl_raise(jl_exception_in_transit); \
+            } \
+        } \
+    }
 
 jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
 {
@@ -72,64 +112,54 @@ jl_value_t *jl_callback_call(jl_function_t *f,jl_value_t *val,int count,...)
     return v;
 }
 
-//These callbacks are implemented in stream.jl
-DEFINE_JULIA_HOOK(close)
-DEFINE_JULIA_HOOK(return_spawn)
-DEFINE_JULIA_HOOK(readcb)
-DEFINE_JULIA_HOOK(alloc_buf)
-DEFINE_JULIA_HOOK(connectcb)
-DEFINE_JULIA_HOOK(connectioncb)
-DEFINE_JULIA_HOOK(asynccb)
-
 void closeHandle(uv_handle_t* handle)
 {
 #ifndef __WIN32__
     ev_invoke_pending(handle->loop->ev);
 #endif
     handle->loop->block = 0;
-    jl_callback_call(JULIA_HOOK(close),handle->data,0);
+    JULIA_CB(close,handle->data,0);
     //TODO: maybe notify Julia handle to close itself
     free(handle);
 }
 
-
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
-    jl_callback_call(JULIA_HOOK(return_spawn),p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
+    JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     uv_close((uv_handle_t*)p,&closeHandle);
     p->loop->block = 0;
 }
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
-    jl_callback_call(JULIA_HOOK(readcb),handle->data,3,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
+    JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
     handle->loop->block = 0;
 }
 
 uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
     uv_buf_t buf;
-    jl_value_t *val = jl_callback_call(JULIA_HOOK(alloc_buf),handle->data,1,CB_INT32,suggested_size);
-    if(!jl_is_tuple(val) || !jl_is_pointer(jl_t0(val)) || !jl_is_int32(jl_t1(val)))
+    JULIA_CB(alloc_buf,handle->data,1,CB_INT32,suggested_size);
+    if(!jl_is_tuple(ret) || !jl_is_pointer(jl_t0(ret)) || !jl_is_int32(jl_t1(ret)))
         jl_error("jl_alloc_buf: Julia function returned invalid value for buffer allocation callback");
-    buf.base = jl_unbox_pointer(jl_t0(val));
-    buf.len = jl_unbox_int32(jl_t1(val));
+    buf.base = jl_unbox_pointer(jl_t0(ret));
+    buf.len = jl_unbox_int32(jl_t1(ret));
     return buf;
 }
 
 void jl_connectcb(uv_connect_t *connect, int status)
 {
-    jl_callback_call(JULIA_HOOK(connectcb),connect->handle->data,1,CB_INT32,status);
+    JULIA_CB(connectcb,connect->handle->data,1,CB_INT32,status);
     connect->handle->loop->block = 0;
 }
 
 void jl_connectioncb(uv_stream_t *stream, int status)
 {
-    jl_callback_call(JULIA_HOOK(connectioncb),stream->data,1,CB_INT32,status);
+    JULIA_CB(connectioncb,stream->data,1,CB_INT32,status);
     stream->loop->block = 0;
 }
 
 void jl_asynccb(uv_handle_t *handle, int status)
 {
-    jl_callback_call(JULIA_HOOK(asynccb),handle->data,1,CB_INT32,status);
+    JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
     handle->loop->block = 0;
 }
 

@@ -1092,3 +1092,4 @@ end
 
 end
 
+ccall(:jl_get_uv_hooks, Void, ())

@@ -32,6 +32,7 @@ int jl_lineno = 0;
 
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast);
 
+extern int base_module_conflict;
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
 {
     assert(ex->head == module_sym);
@@ -53,6 +54,8 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_base_module == NULL) {
         // pick up Base module during bootstrap
         jl_base_module = newm;
+    } else {
+        base_module_conflict = 1;
     }
     // export all modules from Main
     if (parent_module == jl_main_module)
