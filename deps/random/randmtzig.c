@@ -1,4 +1,12 @@
 /*
+  Copyright (C) 2012 Viral B. Shah
+  All rights reserved.
+
+  Modifications made for julia to support dsfmt and only __LP64__ systems.
+  Precision is 52-bit from the mantissa rather than the original 53-bit.
+ */
+
+/*
    A C-program for MT19937, with initialization improved 2002/2/10.
    Coded by Takuji Nishimura and Makoto Matsumoto.
    This is a faster version by taking Shawn Cokus's optimization,
@@ -46,8 +54,15 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <sys/time.h>
+
+#ifdef STANDALONE
+#define DSFMT_DO_NOT_USE_OLD_NAMES
+#include "dSFMT.c"
+#endif
 
 typedef int randmtzig_idx_type;
 typedef signed char randmtzig_int8_t;
@@ -69,51 +84,26 @@ void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n);
 
 /* ===== Uniform generators ===== */
 
-inline static randmtzig_uint64_t randi53 (void)
+inline static randmtzig_uint64_t randi (void)
 {
-    const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
-    const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x1FFFFF;
-//#ifndef __LP64__
-#if 0
-    randmtzig_uint64_t u;
-    randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
-    p[0] = lo;
-    p[1] = hi;
-    return u;
-#else
-    return (((randmtzig_uint64_t)hi<<32)|lo);
-#endif
-}
-
-inline static randmtzig_uint64_t randi54 (void)
-{
-  const randmtzig_uint32_t lo = dsfmt_gv_genrand_uint32();
-  const randmtzig_uint32_t hi = dsfmt_gv_genrand_uint32()&0x3FFFFF;
-//#ifndef __LP64__
-#if 0
-  randmtzig_uint64_t u;
-  randmtzig_uint32_t *p = (randmtzig_uint32_t *)&u;
-  p[0] = lo;
-  p[1] = hi;
-  return u;
-#else
-  return (((randmtzig_uint64_t)hi<<32)|lo);
-#endif
+    double r = dsfmt_gv_genrand_close1_open2();
+    return *((uint64_t *) &r) & 0x000fffffffffffff;
 }
 
 /* generates a random number on (0,1) with 53-bit resolution */
-inline static double randu53 (void)
+inline static double randu (void)
 {
     return dsfmt_gv_genrand_open_open();
 }
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
-# define EMANTISSA 9007199254740992.0  /* 53 bit mantissa */
-# define ERANDI randi53() /* 53 bits for mantissa */
+# define EMANTISSA 2251799813685248  /* 52 bit mantissa */
+//# define EMANTISSA 9007199254740992.0  /* 52 bit mantissa */
+# define ERANDI randi() /* 52 bits for mantissa */
 # define NMANTISSA EMANTISSA
-# define NRANDI randi54() /* 53 bits for mantissa + 1 bit sign */
-# define RANDU randu53()
+# define NRANDI randi() /* 51 bits for mantissa + 1 bit sign */
+# define RANDU randu()
 
 
 #define ZIGGURAT_TABLE_SIZE 256
@@ -249,53 +239,36 @@ double randmtzig_randn (void)
 {
   while (1)
     {
-//#ifdef __LP64__
-#if 1
       /* arbitrary mantissa (selected by NRANDI, with 1 bit for sign) */
-      const randmtzig_uint64_t r = NRANDI;
-      const randmtzig_int64_t rabs=r>>1;
-      const int idx = (int)(rabs&0xFF);
-      const double x = ( r&1 ? -rabs : rabs) * wi[idx];
-#else
-      double x;
-      int si,idx;
-      register randmtzig_uint32_t lo, hi;
-      randmtzig_int64_t rabs;
-      randmtzig_uint32_t *p = (randmtzig_uint32_t *)&rabs;
-      lo = dsfmt_gv_genrand_uint32();
-      idx = lo&0xFF;
-      hi = dsfmt_gv_genrand_uint32();
-      si = hi&UMASK;
-      p[0] = lo;
-      p[1] = hi&0x1FFFFF;
-      x = ( si ? -rabs : rabs ) * wi[idx];
-# endif
-
-      if (rabs < (randmtzig_int64_t)ki[idx])
-        return x;        /* 99.3% of the time we return here 1st try */
-      else if (idx == 0)
-        {
-          /* As stated in Marsaglia and Tsang
-           *
-           * For the normal tail, the method of Marsaglia[5] provides:
-           * generate x = -ln(U_1)/r, y = -ln(U_2), until y+y > x*x,
-           * then return r+x. Except that r+x is always in the positive
-           * tail!!!! Any thing random might be used to determine the
-           * sign, but as we already have r we might as well use it
-           *
-           * [PAK] but not the bottom 8 bits, since they are all 0 here!
-           */
-          double xx, yy;
-          do
-            {
-              xx = - ZIGGURAT_NOR_INV_R * log (RANDU);
-              yy = - log (RANDU);
+        const randmtzig_uint64_t r = NRANDI;
+        const randmtzig_int64_t rabs=r>>1;
+        const int idx = (int)(rabs&0xFF);
+        const double x = ( r&1 ? -rabs : rabs) * wi[idx];
+        
+        if (rabs < (randmtzig_int64_t)ki[idx]) {
+            return x;        /* 99.3% of the time we return here 1st try */
+        } else if (idx == 0) {
+            /* As stated in Marsaglia and Tsang
+             *
+             * For the normal tail, the method of Marsaglia[5] provides:
+             * generate x = -ln(U_1)/r, y = -ln(U_2), until y+y > x*x,
+             * then return r+x. Except that r+x is always in the positive
+             * tail!!!! Any thing random might be used to determine the
+             * sign, but as we already have r we might as well use it
+             *
+             * [PAK] but not the bottom 8 bits, since they are all 0 here!
+             */
+            double xx, yy;
+            do {
+                xx = - ZIGGURAT_NOR_INV_R * log (RANDU);
+                yy = - log (RANDU);
             }
-          while ( yy+yy <= xx*xx);
-          return (rabs&0x100 ? -ZIGGURAT_NOR_R-xx : ZIGGURAT_NOR_R+xx);
+            while ( yy+yy <= xx*xx);
+            return (rabs&0x100 ? -ZIGGURAT_NOR_R-xx : ZIGGURAT_NOR_R+xx);
+        } else if ((fi[idx-1] - fi[idx]) * RANDU + fi[idx] < exp(-0.5*x*x)) {
+            return x;
         }
-      else if ((fi[idx-1] - fi[idx]) * RANDU + fi[idx] < exp(-0.5*x*x))
-        return x;
+
     }
 }
 
@@ -336,3 +309,54 @@ void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n)
           p[i] = randmtzig_exprnd();
 }
 
+
+#ifdef STANDALONE
+
+int main(int ac, char *av[]) {
+    dsfmt_gv_init_gen_rand(23990);
+    for (int i=0; i<10; ++i) {
+        double r = dsfmt_gv_genrand_close1_open2();
+        uint64_t x =  *((uint64_t *) &r) & 0x000fffffffffffff;
+        printf("%lf, %llx, %lld\n", r, x, x);
+    }
+
+    if (ac == 1) {
+        printf("Usage: randmtzig <n>\n"); 
+        return (-1);
+    }
+
+    int n = atoi(av[1]);
+    time_t t1;
+
+    dsfmt_gv_init_gen_rand(23990);
+    randmtzig_create_ziggurat_tables();
+
+    double *p; posix_memalign((void **)&p, 16, n*sizeof(double));
+    uint32_t *u; posix_memalign((void **)&u, 16, 2*n*sizeof(uint32_t));
+
+    t1 = clock();
+    dsfmt_gv_fill_array_close_open(p, n);
+    printf("Uniform fill (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
+
+    t1 = clock();
+    for (int i = 0; i < n; i++)
+        p[i] = dsfmt_gv_genrand_close_open();
+    printf("Uniform (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
+
+    t1 = clock();
+    for (int i = 0; i < 2*n; i++)
+        u[i] = dsfmt_gv_genrand_uint32();
+    printf("Uniform 32-bit ints (2*n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
+
+    memset((void *)p, 0, n*sizeof(double));
+    t1 = clock();
+    for (int i = 0; i < n; i++)
+        p[i] = randmtzig_randn();
+    printf("Normal (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
+    for (int i = 0; i < 10; i++)
+        printf("%lf\n", p[i]);
+
+    return 0;
+}
+
+#endif
