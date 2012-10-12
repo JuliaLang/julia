@@ -1,9 +1,9 @@
 /*
-  Copyright (C) 2012 Viral B. Shah
+  Parts Copyright (C) 2012 Viral B. Shah
   All rights reserved.
 
   Modifications made for julia to support dsfmt and only __LP64__ systems.
-  Precision is 52-bit from the mantissa rather than the original 53-bit.
+  Precision is 52-bit.
  */
 
 /*
@@ -54,17 +54,18 @@
 
 #include <math.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <time.h>
 #include <sys/time.h>
 
 #ifdef STANDALONE
+#include <stdlib.h>
+#include <string.h>
+
 #define DSFMT_DO_NOT_USE_OLD_NAMES
-#include "dSFMT.c"
+#include "dsfmt-2.2/dSFMT.c"
 #endif
 
-typedef int randmtzig_idx_type;
+typedef long randmtzig_idx_type;
 typedef signed char randmtzig_int8_t;
 typedef unsigned char randmtzig_uint8_t;
 typedef short randmtzig_int16_t;
@@ -99,7 +100,6 @@ inline static double randu (void)
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
 # define EMANTISSA 2251799813685248  /* 52 bit mantissa */
-//# define EMANTISSA 9007199254740992.0  /* 52 bit mantissa */
 # define ERANDI randi() /* 52 bits for mantissa */
 # define NMANTISSA EMANTISSA
 # define NRANDI randi() /* 51 bits for mantissa + 1 bit sign */
@@ -298,28 +298,19 @@ double randmtzig_exprnd (void)
 void randmtzig_fill_randn (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
-     for (i = 0; i < n; i++)
-          p[i] = randmtzig_randn();
+     for (i = 0; i < n; i++)  p[i] = randmtzig_randn();
 }
 
 void randmtzig_fill_exprnd (double *p, randmtzig_idx_type n)
 {
      randmtzig_idx_type i;
-     for (i = 0; i < n; i++)
-          p[i] = randmtzig_exprnd();
+     for (i = 0; i < n; i++)  p[i] = randmtzig_exprnd();
 }
 
 
 #ifdef STANDALONE
 
 int main(int ac, char *av[]) {
-    dsfmt_gv_init_gen_rand(23990);
-    for (int i=0; i<10; ++i) {
-        double r = dsfmt_gv_genrand_close1_open2();
-        uint64_t x =  *((uint64_t *) &r) & 0x000fffffffffffff;
-        printf("%lf, %llx, %lld\n", r, x, x);
-    }
-
     if (ac == 1) {
         printf("Usage: randmtzig <n>\n"); 
         return (-1);
@@ -328,7 +319,7 @@ int main(int ac, char *av[]) {
     int n = atoi(av[1]);
     time_t t1;
 
-    dsfmt_gv_init_gen_rand(23990);
+    dsfmt_gv_init_gen_rand(0);
     randmtzig_create_ziggurat_tables();
 
     double *p; posix_memalign((void **)&p, 16, n*sizeof(double));
@@ -339,22 +330,18 @@ int main(int ac, char *av[]) {
     printf("Uniform fill (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
 
     t1 = clock();
-    for (int i = 0; i < n; i++)
-        p[i] = dsfmt_gv_genrand_close_open();
+    for (int i = 0; i < n; i++)  p[i] = dsfmt_gv_genrand_close_open();
     printf("Uniform (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
 
     t1 = clock();
-    for (int i = 0; i < 2*n; i++)
-        u[i] = dsfmt_gv_genrand_uint32();
+    for (int i = 0; i < 2*n; i++)  u[i] = dsfmt_gv_genrand_uint32();
     printf("Uniform 32-bit ints (2*n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
 
     memset((void *)p, 0, n*sizeof(double));
     t1 = clock();
-    for (int i = 0; i < n; i++)
-        p[i] = randmtzig_randn();
+    for (int i = 0; i < n; i++)  p[i] = randmtzig_randn();
     printf("Normal (n): %f\n", (clock() - t1) / (double) CLOCKS_PER_SEC);
-    for (int i = 0; i < 10; i++)
-        printf("%lf\n", p[i]);
+    for (int i = 0; i < 10; i++)  printf("%lf\n", p[i]);
 
     return 0;
 }
