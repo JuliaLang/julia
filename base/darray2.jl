@@ -105,13 +105,15 @@ end
 
 localpiece(d::DArray) = localpiece(d.pmap)
 
-localize(d::DArray) = fetch(d.chunks[localpiece(d)])
+localize{T,N,A}(d::DArray{T,N,A}) = fetch(d.chunks[localpiece(d)])::A
 myindexes(d::DArray) = d.indexes[localpiece(d)]
 
 # find which piece holds index (I...)
 function locate(d::DArray, I::Int...)
     ntuple(ndims(d), i->search_sorted_last(d.cuts[i], I[i]))
 end
+
+chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 
 ## convenience constructors ##
 
@@ -134,7 +136,7 @@ convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
     for i = 1:length(d.chunks)
-        a[d.indexes[i]...] = fetch(d.chunks[i])
+        a[d.indexes[i]...] = chunk(d, i)
     end
     a
 end
