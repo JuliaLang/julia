@@ -86,6 +86,10 @@ function linreg(x::AbstractVector, y::AbstractVector)
     ((Mt*M)\Mt)*y
 end
 
+function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
+    hcat(ones(T, size(X,1)), X) \ y
+end
+
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
     w = sqrt(w)
