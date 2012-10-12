@@ -1,4 +1,5 @@
 librandom = dlopen("librandom")
+@windows_only advapi32 = dlopen("Advapi32")
 
 module LibRandom
 
@@ -196,7 +197,7 @@ end
 
 @windows_only begin
     function win32_SystemFunction036!(a::Array{Uint32})
-        ccall(dlsym(advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint32),convert(Ptr{Void},a),8)
+        ccall(dlsym(Base.advapi32,:SystemFunction036),stdcall,Uint8,(Ptr{Void},Uint32),convert(Ptr{Void},a),8)
     end
 end
 

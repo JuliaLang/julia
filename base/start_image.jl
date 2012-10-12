@@ -14,7 +14,7 @@ libgrisu = dlopen("libgrisu")
 _jl_libm = dlopen("libopenlibm")
 _jl_libfdm = dlopen("libopenlibm")
 librandom = dlopen("librandom")
-@windows_only _jl_advapi32 = dlopen("Advapi32")
+@windows_only advapi32 = dlopen("Advapi32")
 
 # Optional libraries
 const libblas = dlopen(libblas_name)
