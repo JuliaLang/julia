@@ -4,7 +4,7 @@ type DArray{T,N,A} <: AbstractArray{T,N}
     chunks::Array{RemoteRef,N}
 
     # pmap[i]==p ⇒ processor p has piece i
-    pmap::Array{Int,1}
+    pmap::Vector{Int}
 
     # indexes held by piece i
     indexes::Array{NTuple{N,Range1{Int}},N}
@@ -20,6 +20,8 @@ type DArray{T,N,A} <: AbstractArray{T,N}
     end
 end
 
+## core constructors ##
+
 # dist == size(chunks)
 function DArray(init, dims, procs, dist)
     np = prod(dist)
@@ -29,8 +31,7 @@ function DArray(init, dims, procs, dist)
     for i = 1:np
         chunks[i] = remote_call(procs[i], init, idxs[i])
     end
-    p = find(procs .== myid())
-    p = isempty(p) ? 1 : p[1]
+    p = max(1, localpiece(procs))
     A = remote_call_fetch(procs[p], r->typeof(fetch(r)), chunks[p])
     DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
 end
@@ -40,6 +41,8 @@ DArray(init, dims) = DArray(init, dims, [1:min(nprocs(),max(dims))])
 
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap
+
+## chunk index utilities ##
 
 # decide how to divide each dimension
 # returns size of chunks array
@@ -90,15 +93,17 @@ function chunk_idxs(dims, chunks)
     idxs, cuts
 end
 
-function localpiece(d::DArray)
+function localpiece(pmap::Vector{Int})
     mi = myid()
-    for i = 1:length(d.pmap)
-        if d.pmap[i] == mi
+    for i = 1:length(pmap)
+        if pmap[i] == mi
             return i
         end
     end
     return 0
 end
+
+localpiece(d::DArray) = localpiece(d.pmap)
 
 localize(d::DArray) = fetch(d.chunks[localpiece(d)])
 myindexes(d::DArray) = d.indexes[localpiece(d)]
@@ -107,6 +112,13 @@ myindexes(d::DArray) = d.indexes[localpiece(d)]
 function locate(d::DArray, I::Int...)
     ntuple(ndims(d), i->search_sorted_last(d.cuts[i], I[i]))
 end
+
+## convenience constructors ##
+
+drand(args...)  = DArray(I->rand(map(length,I)), args...)
+drandn(args...) = DArray(I->randn(map(length,I)), args...)
+
+## conversions ##
 
 function distribute(a::Array)
     owner = myid()
@@ -125,4 +137,25 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
         a[d.indexes[i]...] = fetch(d.chunks[i])
     end
     a
+end
+
+## indexing ##
+
+function ref(r::RemoteRef, args...)
+    if r.where==myid()
+        ref(fetch(r), args...)
+    else
+        remote_call_fetch(r.where, ref, r, args...)
+    end
+end
+
+ref(d::DArray, i::Int) = ref(d, ind2sub(size(d), i))
+ref(d::DArray, i::Int...) = ref(d, sub2ind(size(d), i...))
+
+function ref{T}(d::DArray{T}, I::(Int...))
+    chidx = locate(d, I...)
+    chunk = d.chunks[chidx...]
+    idxs = d.indexes[chidx...]
+    localidx = ntuple(ndims(d), i->(I[i]-first(idxs[i])+1))
+    chunk[localidx...]::T
 end
