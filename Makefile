@@ -1,8 +1,5 @@
 JULIAHOME = $(abspath .)
 include $(JULIAHOME)/Make.inc
-ifeq ($(OS),WINNT)
-PATH := ${PATH}:${JULIAHOME}/usr/lib
-endif
 
 all: default
 default: release

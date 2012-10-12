@@ -1,4 +1,4 @@
-JULIAHOME = ..
+JULIAHOME = $(abspath ..)
 include ../Make.inc
 
 default all extra unicode::
