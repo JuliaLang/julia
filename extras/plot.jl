@@ -1,12 +1,14 @@
 
+load("color.jl")
 load("winston.jl")
 
 module Plot
 
 import Base.*
 import Winston.*
+import Color
 
-export plot, semilogx, semilogy, loglog
+export imagesc, plot, semilogx, semilogy, loglog
 export file
 
 function plot(args...)
@@ -118,5 +120,32 @@ function _plot(p::FramedPlot, args...)
     end
     p
 end
+
+typealias Interval (Real,Real)
+
+function data2rgb{T<:Real}(data::Array{T,2}, limits::Interval, colormap)
+    img = similar(data, Uint32)
+    ncolors = numel(colormap)
+    for i = 1:numel(data)
+        idx = iceil(ncolors*(data[i] - limits[1])/(limits[2] - limits[1]))
+        if idx < 1 idx = 1 end
+        if idx > ncolors idx = ncol end
+        img[i] = colormap[idx]
+    end
+    img
+end
+
+RainbowColorMap() = [ Color.rgb2hex(Color.hsv2rgb(i/256,1,1)...)::Uint32 for i = 0:255 ]
+
+_default_colormap = RainbowColorMap()
+
+function imagesc{T<:Real}(xrange::Interval, yrange::Interval, data::Array{T,2}, clims::Interval)
+    p = FramedPlot()
+    img = data2rgb(data, clims, _default_colormap)
+    add(p, Image(xrange, yrange, img))
+    p
+end
+
+imagesc(xrange, yrange, data) = imagesc(xrange, yrange, data, (min(data),max(data)))
 
 end # module

@@ -385,6 +385,8 @@ JL_CALLABLE(jl_f_set_field)
     JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type)
+        jl_error("cannot assign variables in other modules");
     if (!jl_is_struct_type(vt))
         jl_type_error("setfield", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;
@@ -404,6 +406,8 @@ JL_CALLABLE(jl_f_field_type)
     JL_TYPECHK(fieldtype, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type)
+        jl_error("cannot assign variables in other modules");
     if (!jl_is_struct_type(vt))
         jl_type_error("fieldtype", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;

@@ -3002,6 +3002,17 @@ type Image <: ImageComponent
         kw_init(self, args...)
         self
     end
+
+    function Image(xrange, yrange, img, args...)
+        x = min(xrange...)
+        y = min(yrange...)
+        w = (-)(xrange...)
+        h = (-)(yrange...)
+        self = new(Dict(), img, x, y, w, h)
+        conf_setattr(self)
+        kw_init(self, args...)
+        self
+    end
 end
 
 function limits(self::Image)
