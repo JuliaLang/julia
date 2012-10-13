@@ -370,7 +370,7 @@ type CholeskyDense{T<:LapackType} <: Factorization{T}
     function CholeskyDense(A::Matrix{T}, upper::Bool)
         A, info = Lapack.potrf!(upper ? 'U' : 'L' , A)
         if info != 0 error("Matrix A not positive-definite") end
-        new(upper? triu(A) : tril(A), upper)
+        new(upper? triu!(A) : tril!(A), upper)
     end
 end
 
