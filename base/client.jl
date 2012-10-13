@@ -125,6 +125,7 @@ function process_options(args::Array{Any,1})
     quiet = false
     repl = true
     startup = true
+    deferred = Any[]
     if has(ENV, "JL_POST_BOOT")
         eval(parse_input_line(ENV["JL_POST_BOOT"]))
     end
@@ -170,6 +171,14 @@ function process_options(args::Array{Any,1})
             # see repl-readline.c
         elseif args[i] == "-f" || args[i] == "--no-startup"
             startup = false
+        elseif args[i]=="-X"
+            # use next argument as a filename for deferred execution
+            repl = false
+            i+=1
+            push(deferred, args[i])
+            # remove already-processed arguments
+            ARGS = args[i+1:end]
+            break
         elseif args[i][1]!='-'
             # program
             repl = false
@@ -182,7 +191,8 @@ function process_options(args::Array{Any,1})
         end
         i += 1
     end
-    return (quiet,repl,startup)
+
+    return (quiet,repl,startup,deferred)
 end
 
 const _jl_roottask = current_task()
@@ -229,13 +239,13 @@ function _start()
             abs_path("$JULIA_HOME/../lib/julia/ui"),
         ]
 
-        (quiet,repl,startup) = process_options(ARGS)
+        (quiet,repl,startup,deferred) = process_options(ARGS)
+
+        if startup
+            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+        end
 
         if repl
-            if startup
-                try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
-            end
-
             global _jl_have_color = begins_with(get(ENV,"TERM",""),"xterm") ||
                                     success(`tput setaf 0`)
             global _jl_is_interactive = true
@@ -243,6 +253,10 @@ function _start()
                 _jl_banner()
             end
             run_repl()
+        end
+
+        for fl in deferred
+            load(fl)
         end
     catch e
         show(e)
