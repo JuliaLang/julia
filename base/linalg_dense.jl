@@ -900,8 +900,8 @@ end
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(Lapack.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) =
- LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+lud{T}(A::Tridiagonal{T}) = 
+    LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det(lu::LUTridiagonal)
@@ -991,8 +991,6 @@ end
 function det(W::Woodbury)
     det(W.A)*det(W.C)/det(W.Cp)
 end
-    
-
 
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
