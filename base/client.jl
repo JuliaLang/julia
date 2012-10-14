@@ -123,11 +123,6 @@ function run_repl()
         end
         _jl_eval_user_input(ast, show_value!=0)
     end
-
-    if iserr
-        throw(lasterr)
-    end
-    println()
 end
 
 function parse_input_line(s::String)

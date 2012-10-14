@@ -1040,7 +1040,7 @@ endif
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
 ifeq ($(OS), WINNT)
-	cp zlib-${ZLIB_VER)/zlib1.dll $@
+	cp zlib-$(ZLIB_VER)/zlib1.dll $@
 else
 	$(MAKE) -C zlib-$(ZLIB_VER) check
 	PREFIX=$(USRLIB) $(MAKE) -C zlib-$(ZLIB_VER) install
