@@ -1,3 +1,5 @@
+load("color.jl")
+
 module Cairo
 import Base.*
 
@@ -24,8 +26,6 @@ export CairoSurface, finish, destroy, status,
     linetorel, line, rect, ellipse, symbol, symbols, set, get,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango, SVGRenderer
-
-load("color.jl")
 
 load("openlib.jl")
 
