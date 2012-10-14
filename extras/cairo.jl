@@ -29,6 +29,8 @@ load("color.jl")
 
 load("openlib.jl")
 
+import Color.*
+
 try
     global _jl_libcairo = openlib("libcairo")
     global _jl_libpangocairo = openlib("libpangocairo-1.0")
