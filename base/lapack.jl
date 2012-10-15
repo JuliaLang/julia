@@ -395,7 +395,7 @@ for (gels, gelsd, gesv, getrs, getri, elty) in
             lwork = int32(-1)
             iwork = Array(Int32, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, "dgelsd_"), Void,
+                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
                       (Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
                        Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, 
