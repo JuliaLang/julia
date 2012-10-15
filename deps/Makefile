@@ -495,9 +495,6 @@ endif
 
 OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" FFLAGS="$(FFLAGS) $(JFFLAGS)" USE_THREAD=$(OPENBLAS_USE_THREAD) TARGET=$(OPENBLAS_TARGET_ARCH)
 
-ifeq ($(OS), WINNT)
-OPENBLAS_BUILD_OPTS += COMMON_OPT="-mpreferred-stack-boundary=2"
-endif
 ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
@@ -607,9 +604,6 @@ ARPACK_OBJ_TARGET = $(USRLIB)/libarpack.$(SHLIB_EXT)
 ARPACK_OBJ_SOURCE = arpack-ng_$(ARPACK_VER)/libarpack.$(SHLIB_EXT)
 
 ARPACK_OPTS = $(FFLAGS) $(JFFLAGS)
-ifeq ($(OS),WINNT)
-ARPACK_OPS += -mpreferred-stack-boundary=2
-endif
 
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 install-arpack: $(ARPACK_OBJ_TARGET)
@@ -651,7 +645,7 @@ ifneq ($(ARCH), ppc64)
   FFTW_CONFIG += --enable-sse2
 endif
 ifeq ($(OS),WINNT)
-	FFTW_CONFIG += --with-our-malloc --with-combined-threads --with-incoming-stack-boundary=2 LIBS=-lpthread
+	FFTW_CONFIG += --with-our-malloc --with-combined-threads LIBS=-lpthread
 endif
 
 fftw-$(FFTW_VER).tar.gz:
