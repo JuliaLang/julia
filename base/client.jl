@@ -218,7 +218,6 @@ isinteractive() = (_jl_is_interactive::Bool)
 
 function _start()
     # set up standard streams
-    reinit_stdio()
 
     librandom_init()
 

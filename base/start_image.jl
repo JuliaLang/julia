@@ -1,5 +1,5 @@
 # set up non-serializable state
-
+ reinit_stdio()
 # restore shared library handles
 _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 @unix_only _jl_repl = _jl_lib
