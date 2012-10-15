@@ -628,6 +628,26 @@ end
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
 
+## Moore-Penrose inverse
+function pinv{T<:LapackType}(A::StridedMatrix{T})
+    u,s,vt      = svd(A, true)
+    sinv        = zeros(T, length(s))
+    index       = s .> eps(T)*max(size(A))*max(s)
+    sinv[index] = 1 ./ s[index]
+    vt'diagmm(sinv, u')
+end
+pinv(A::StridedMatrix{Int}) = pinv(float(A))
+pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
+
+## Basis for null space
+function null{T<:LapackType}(A::StridedMatrix{T})
+    m,n = size(A)
+    if m >= n; return zeros(T, n, 0); end;
+    u,s,vt = svd(A)
+    vt[m+1:,:]'
+end
+null(A::StridedMatrix{Int}) = null(float(A))
+null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 #### Specialized matrix types ####
 

@@ -186,22 +186,17 @@ ones(args...)               = fill!(Array(Float64, args...), float64(1))
 trues(args...)  = fill(true, args...)
 falses(args...) = fill(false, args...)
 
-eye(n::Int) = eye(n, n)
-function eye(m::Int, n::Int)
-    a = zeros(m,n)
+function eye(T::Type, m::Int, n::Int)
+    a = zeros(T,m,n)
     for i = 1:min(m,n)
-        a[i,i] = 1
+        a[i,i] = one(T)
     end
     return a
 end
-function one{T}(x::StridedMatrix{T})
-    m, n = size(x)
-    a = zeros(T,size(x))
-    for i = 1:min(m,n)
-        a[i,i] = 1
-    end
-    return a
-end
+eye(m::Int, n::Int) = eye(Float64, m, n)
+eye(T::Type, n::Int) = eye(T, n, n)
+eye(n::Int) = eye(Float64, n)
+eye{T}(x::StridedMatrix{T}) = eye(T, size(x, 1), size(x, 2))
 
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)

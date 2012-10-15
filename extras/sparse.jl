@@ -385,7 +385,8 @@ spzeros(Tv::Type, m::Int) = spzeros(Tv, m, m)
 spzeros(Tv::Type, m::Int, n::Int) =
     SparseMatrixCSC(m, n, ones(Int32, n+1), Array(Int32, 0), Array(Tv, 0))
 
-speye(n::Int) = speye(Float64, n, n)
+speye(n::Int) = speye(Float64, n)
+speye(T::Type, n::Int) = speye(T, n, n)
 speye(m::Int, n::Int) = speye(Float64, m, n)
 
 function speye(T::Type, m::Int, n::Int)
@@ -396,10 +397,7 @@ function speye(T::Type, m::Int, n::Int)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function one{T}(S::SparseMatrixCSC{T})
-    m, n = size(S)
-    return speye(T, m, n)
-end
+eye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S,1), size(S,2))
 
 ## Transpose
 

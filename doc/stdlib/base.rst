@@ -1324,6 +1324,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Matrix inverse, or generalized ``1/M``
 
+.. function:: pinv(M)
+
+   Moore-Penrose inverse
+
+.. function:: null(M)
+
+   Basis for null space of M
+
 .. function:: repmat(A, n, m)
 
    Construct a matrix by repeating the given matrix ``n`` times in dimension 1 and ``m`` times in dimension 2.

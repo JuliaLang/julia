@@ -77,6 +77,17 @@ begin
     x = tril(a) \ b
     @assert norm(tril(a)*x - b) < Eps
 
+    # Test null
+    bnull = null(b')
+    @assert norm(b'bnull) < Eps
+    @assert norm(bnull'b) < Eps
+    @assert size(null(b), 2) == 0
+
+    # Test pinv
+    pinvb = pinv(b)
+    @assert norm(b*pinvb*b - b) < Eps
+    @assert norm(pinvb*b*pinvb - pinvb) < Eps
+
     # symmetric, positive definite
     @assert norm(inv([6. 2; 2 1]) - [0.5 -1; -1 3]) < Eps
     # symmetric, negative definite
