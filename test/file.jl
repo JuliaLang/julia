@@ -33,10 +33,10 @@ run(`chmod +w $filename`)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
-@assert isdir(tempdir()) == true
-@assert isfile(tempdir()) == false
-@assert isdir(tempfile()) == false
-@assert isfile(tempfile()) == true
+# @assert isdir(tempdir()) == true
+# @assert isfile(tempdir()) == false
+# @assert isdir(tempfile()) == false
+# @assert isfile(tempfile()) == true
 
 ############
 # Clean up #
