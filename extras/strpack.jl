@@ -25,8 +25,6 @@ type Struct
     canonical::String
     endianness::Endianness
     types
-    pack::Function
-    unpack::Function
     struct::Type
 end
 function Struct{T}(::Type{T}, endianness)
@@ -42,10 +40,10 @@ function Struct{T}(::Type{T}, endianness)
     end
     types = composite_fieldinfo(T)
     packer, unpacker = endianness_converters(endianness)
-    pack = struct_pack(packer, types, T)
-    unpack = struct_unpack(unpacker, types, T)
+    struct_pack(packer, types, T)
+    struct_unpack(unpacker, types, T)
     struct_utils(T)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, T)
+    STRUCTS[s] = Struct(s, endianness, types, T)
 end
 Struct{T}(::Type{T}) = Struct(T, NativeEndian())
 
@@ -113,7 +111,7 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
     push(xprs, :($offset = 0))
     for (typ, dims) in types
         push(xprs, quote
-            $pad = pad_next($offset, $typ, $strategy)
+            $pad = StrPack.pad_next($offset, $typ, $strategy)
             if $pad > 0
                 skip($stream, $pad)
                 $offset += $pad
@@ -132,18 +130,16 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
     end
     xprs, rvars
 end
+
 function struct_unpack(convert, types, struct_type)
     @gensym in offset strategy
     readers, rvars = gen_readers(convert, types, in, offset, strategy)
-    unpackdef = quote
-        (($in)::IO, ($strategy)::DataAlign) -> begin
-            $(readers...)
-            # tail pad
-            skip($in, pad_next($offset, $struct_type, $strategy))
-            ($struct_type)($(rvars...))
-        end
+    @eval function unpack(::Type{$struct_type}, ($in)::IO, ($strategy)::DataAlign)
+        $(readers...)
+        # tail pad
+        skip($in, StrPack.pad_next($offset, $struct_type, $strategy))
+        ($struct_type)($(rvars...))
     end
-    eval(unpackdef)
 end
 
 # Generate a pack function for a composite type
@@ -154,7 +150,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     for (typ, dims) in types
         elnum += 1
         push(xprs, quote
-            $pad = pad_next($offset, $typ, $strategy)
+            $pad = StrPack.pad_next($offset, $typ, $strategy)
             if $pad > 0
                 write($stream, fill(uint8(0), $pad))
                 $offset += $pad
@@ -172,17 +168,15 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     end
     xprs
 end
+
 function struct_pack(convert, types, struct_type)
     @gensym out struct offset strategy
     writers = gen_writers(convert, types, struct_type, out, struct, offset, strategy)
-    packdef = quote
-        (($out)::IO, ($strategy)::DataAlign, ($struct)::($struct_type)) -> begin
-            $(writers...)
-            # tail pad
-            write($out, fill(uint8(0), pad_next($offset, $struct_type, $strategy)))
-        end
+    @eval function pack(($out)::IO, ($strategy)::DataAlign, ($struct)::($struct_type))
+        $(writers...)
+        # tail pad
+        write($out, fill(uint8(0), StrPack.pad_next($offset, $struct_type, $strategy)))
     end
-    eval(packdef)
 end
 
 endianness_converters{T<:Endianness}(::T) = error("endianness type $T not recognized")
@@ -206,20 +200,20 @@ const STRUCTS = BoundedLRU()
 # Julian aliases for the "object-style" calls to pack/unpack/struct
 function pack(out::IO, s::Struct, strategy::DataAlign, struct_or_only_item)
     if isa(struct_or_only_item, s.struct)
-        s.pack(out, strategy, struct_or_only_item)
+        pack(out, strategy, struct_or_only_item)
     else
-        s.pack(out, strategy, s.struct(struct_or_only_item))
+        pack(out, strategy, s.struct(struct_or_only_item))
     end
 end
 pack{T}(out::IO, composite::T, strategy::DataAlign) = pack(out, Struct(T), strategy, composite)
 pack{T}(out::IO, composite::T) = pack(out, Struct(T), align_packed, composite)
-pack(out::IO, s::Struct, strategy::DataAlign, args...) = s.pack(out, strategy, s.struct(args...))
-pack(out::IO, s::Struct, args...) = s.pack(out, align_packed, s.struct(args...))
+pack(out::IO, s::Struct, strategy::DataAlign, args...) = pack( out, strategy, s.struct(args...))
+pack(out::IO, s::Struct, args...) = pack(out, align_packed, s.struct(args...))
 
-unpack(in::IO, s::Struct, strategy::DataAlign) = s.unpack(in, strategy)
-unpack(in::IO, s::Struct) = s.unpack(in, align_packed)
-unpack{T}(in::IO, ::Type{T}, strategy::DataAlign) = Struct(T).unpack(in, strategy)
-unpack{T}(in::IO, ::Type{T}) = Struct(T).unpack(in, align_packed)
+unpack(in::IO, s::Struct, strategy::DataAlign) = unpack(s, in, strategy)
+unpack(in::IO, s::Struct) = unpack(s, in, align_packed)
+unpack{T}(in::IO, ::Type{T}, strategy::DataAlign) = unpack(T, in, strategy)
+unpack{T}(in::IO, ::Type{T}) = unpack(T, in, align_packed)
 
 struct(s::Struct, items...) = s.struct(items...)
 
