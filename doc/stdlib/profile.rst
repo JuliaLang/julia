@@ -41,7 +41,7 @@
        f2(11)
      end
 
-   To view the execution times, type ``@profile report``.  Each row of the output shows the number of times the line was executed, the cumulative time spent on that line, the estimated "compensated" cumulative time (compensating for the overhead of profiling, see below), and the line number and filename.
+   To view the execution times, type ``@profile report``.
 
    Here are the various options you have for controlling profiling:
 
@@ -50,4 +50,11 @@
    *  ``@profile off``: turn profiling off (there is no need to remove ``@profile begin ... end`` blocks)
    *  ``@profile on``: turn profiling back on
 
-   Be aware that profiling adds a significant performance overhead. You can prevent a subsection of your code from being profiled by encapsulating it inside a ``begin ... end`` block; in this case, the block as a whole is profiled, but the individual lines inside the block are not separately timed.
+
+-----------
+Limitations
+-----------
+
+Profiling adds a significant performance overhead. You can prevent a subsection of your code from being profiled by encapsulating it inside a ``begin ... end`` block; in this case, the block as a whole is profiled, but the individual lines inside the block are not separately timed.
+    
+The profiler tries to compensate for its overhead in the reported times. This naturally leads to some degree of uncertainty about the execution time of individual lines. More significantly, currently the profiler does not compensate for its own instrumentation in profiled subfunctions. Consequently, it's not terribly useful in heavily-nested code to profile it as a big chunk---you probably want to pick out individual functions or groups of functions to profile separately.
