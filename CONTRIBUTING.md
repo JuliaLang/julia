@@ -14,11 +14,13 @@ Hi! Thanks for checking out Julia. If you have questions or problems, the [Julia
 
 ## Submitting your contributions
 
-The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests. By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).
+The Julia team uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests.
 
 You can make pull requests for incomplete features to get code review, in which case we have a convention of prefixing the pull request title with "RFC:" to indicate that the work is incomplete so it doesn't accidentally get merged into the master branch before it's ready.
 
 Before submitting, make sure that all tests pass by running `make testall`. Even better, add your own tests for your change or feature to the test files in `tests/`. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
+
+*By contributing code to Julia, you are agreeing to release it under the [MIT License](https://github.com/JuliaLang/julia/tree/master/LICENSE.md).*
 
 ## Getting help
 

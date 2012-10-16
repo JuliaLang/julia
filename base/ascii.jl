@@ -1,4 +1,4 @@
-## from src/boot.jl:
+## from base/boot.jl:
 #
 # type ASCIIString <: DirectIndexString
 #     data::Array{Uint8,1}

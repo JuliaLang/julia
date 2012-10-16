@@ -16,6 +16,7 @@ begin
     @assert norm(b - apd * (capd\b)) < Eps
     @assert norm(apd * inv(capd) - eye(n)) < Eps
     @assert norm(a*(capd\(a'*b)) - b) < Eps  # least squares soln for square a
+    @assert_approx_eq det(capd) det(apd)
 
     l     = factors(chold(apd, false))      # lower Cholesky factor
     @assert norm(l*l' - apd) < Eps
@@ -212,6 +213,7 @@ begin
     Tlu = lud(T)
     x = Tlu\v
     @assert norm(x - invFv) < Eps
+    @assert_approx_eq det(T) det(F)
 
     # symmetric tridiagonal
     Ts = SymTridiagonal(d, dl)
@@ -237,6 +239,7 @@ begin
 
     @assert norm(W*v - F*v) < Eps
     @assert norm(W\v - F\v) < Eps
+    @assert_approx_eq det(W) det(F)
 
     sqd  = rand(n,n)
     sqz  = complex(sqd)

@@ -55,6 +55,10 @@ x = 1:600000;
 load("stockcorr.jl")
 @timeit stockcorr() "stockcorr"
 
+load("bench_eu.jl")
+@timeit bench_eu_vec(10000) "bench_eu_vec"
+@timeit bench_eu_devec(10000) "bench_eu_devec"
+
 # issue #1163
 load("actor_centrality.jl")
 @timeit1 actor_centrality() "actorgraph"

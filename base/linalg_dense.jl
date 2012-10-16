@@ -370,7 +370,7 @@ type CholeskyDense{T<:LapackType} <: Factorization{T}
     function CholeskyDense(A::Matrix{T}, upper::Bool)
         A, info = Lapack.potrf!(upper ? 'U' : 'L' , A)
         if info != 0 error("Matrix A not positive-definite") end
-        new(upper? triu(A) : tril(A), upper)
+        new(upper? triu!(A) : tril!(A), upper)
     end
 end
 
@@ -900,11 +900,12 @@ end
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(Lapack.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) =
+lud{T}(A::Tridiagonal{T}) = 
     LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det(lu::LUTridiagonal)
+    n = length(lu.d)
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
 
@@ -987,6 +988,10 @@ function \(W::Woodbury, R::StridedVecOrMat)
     AinvR = W.A\R
     return AinvR - W.A\(W.U*(W.Cp*(W.V*AinvR)))
 end
+function det(W::Woodbury)
+    det(W.A)*det(W.C)/det(W.Cp)
+end
+
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
 function solve(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})

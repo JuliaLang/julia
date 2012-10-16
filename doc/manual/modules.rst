@@ -72,9 +72,10 @@ a single module, ``import Foo.*`` as discussed, and ``import Foo.a`` which
 imports a single identifier from a module. Modules must explicitly
 list exported identifiers using ``export a, b, c, ...``.
 
-Currently ``export`` only affects which symbols can be imported into
-other modules. All symbols can be accessed if they are qualified, e.g.
-Base._jl_something_private.
+The ``export`` statement affects which symbols can be imported into
+other modules. All non-macro symbols can be accessed if they are qualified,
+e.g. Base._jl_something_private. Macros must be exported if they are
+intended to be used outside the module.
 
 
 Method definition and assignment

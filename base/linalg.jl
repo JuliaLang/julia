@@ -80,18 +80,14 @@ cond(a::AbstractMatrix) = cond(a, 2)
 #istriu(A::AbstractMatrix)
 #istril(A::AbstractMatrix)
 
-function linreg(x::AbstractVector, y::AbstractVector)
-    M = [ones(length(x)) x]
-    Mt = M'
-    ((Mt*M)\Mt)*y
+function linreg{T<:Number}(X::StridedVecOrMat{T}, y::Vector{T})
+    [ones(T, size(X,1)) X] \ y
 end
 
 # weighted least squares
 function linreg(x::AbstractVector, y::AbstractVector, w::AbstractVector)
     w = sqrt(w)
-    M = [w w.*x]
-    Mt = M'
-    ((Mt*M)\Mt)*(w.*y)
+    [w w.*x] \ (w.*y)
 end
 
 # multiply by diagonal matrix as vector
