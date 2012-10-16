@@ -226,14 +226,21 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-function tempdir()
+@linux_only function tempdir()
+  chomp(readall(`mktemp -d`))
+end
+
+@osx_only function tempdir()
   chomp(readall(`mktemp -d -t tmp`))
 end
 
-function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+@linux_only function tempfile()
+  chomp(readall(`mktemp`))
 end
 
+@osx_only function tempfile()
+  chomp(readall(`mktemp -t tmp`))
+end
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)

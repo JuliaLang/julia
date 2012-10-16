@@ -213,7 +213,7 @@ DLLEXPORT unsigned int jl_stat_blocks(char *statbuf)
   return ((struct stat*) statbuf)->st_blocks;
 }
 
-#if defined(__APPLE__)
+#if defined(__APPLE__) || defined(__FreeBSD__)
 #define st_ATIM st_atimespec
 #define st_MTIM st_mtimespec
 #define st_CTIM st_ctimespec

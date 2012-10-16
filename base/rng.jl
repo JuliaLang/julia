@@ -267,7 +267,7 @@ end
 
 function randg!(a::Real, A::Array{Float64})
     if a <= 0. error("shape parameter a must be > 0") end
-    d = (a < 1. ? a + 1 : a) - 1.0/3.0
+    d = (a <= 1. ? a + 1 : a) - 1.0/3.0
     c = 1.0/sqrt(9.0d)
     for i in 1:numel(A) A[i] = randg2(d, c) end
     if a < 1.
@@ -279,7 +279,7 @@ end
 
 function randg(a::Real)
     if a <= 0. error("shape parameter a must be > 0") end
-    d = (a < 1. ? a + 1 : a) - 1.0/3.0
+    d = (a <= 1. ? a + 1 : a) - 1.0/3.0
     randg2(d, 1.0/sqrt(9.0d)) * (a > 1. ? 1. : rand()^(1./a))
 end
 

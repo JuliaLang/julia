@@ -32,6 +32,8 @@ function read(from::IOString, ::Type{Uint8})
     return from.data[from.ptr-1]
 end
 
+read{T}(from::IOString, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
+
 skip(io::IOString, n::Integer) = io.ptr += n
 seek(io::IOString, n::Integer) = io.ptr = n+1
 
@@ -59,3 +61,5 @@ function write(to::IOString, a::Uint8)
     to.ptr += 1
     sizeof(Uint8)
 end
+
+write(to::IOString, p::Ptr) = write(to, convert(Uint, p))
