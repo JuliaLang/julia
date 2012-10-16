@@ -227,11 +227,11 @@ function dir_remove(directory_name::String)
 end
 
 function tempdir()
-  chomp(readall(`mktemp -d -t tmp`))
+  chomp(readall(`mktemp -d`))
 end
 
 function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+  chomp(readall(`mktemp`))
 end
 
 function download_file(url::String)
