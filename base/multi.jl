@@ -1439,7 +1439,7 @@ function pmap(f, lsts...)
     next_idx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
-            if p != myid() && np > 1
+            if p != myid() || np == 1
                 @spawnat myid() begin
                     while true
                         idx = next_idx()
