@@ -1,7 +1,18 @@
-load("iostring.jl")
-load("lru.jl")
+module StrPack
 
-bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
+export Struct, struct
+export pack, unpack, sizeof
+export DataAlign
+export align_default, align_packed, align_packmax, align_structpack, align_table
+export align_x86_pc_linux_gnu, align_native
+export show_struct_layout
+
+import Base.*
+
+require("iostring.jl")
+require("lru.jl")
+
+bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters in UTF-16 or UTF-32
 
 # Represents data endianness
 abstract Endianness
@@ -540,3 +551,5 @@ align_native = align_table(align_default, let
      Float64 => float64align,
      ]
 end)
+
+end
