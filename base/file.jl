@@ -68,7 +68,7 @@ function fileparts(filename::String)
 end
 
 function file_path(components...)
-    join(components, os_separator)
+    replace(join(components, os_separator), r"/+", "/")
 end
 
 function fullfile(pathname::String, basename::String, ext::String)
