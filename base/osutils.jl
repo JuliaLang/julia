@@ -16,4 +16,20 @@ macro unix_only(ex)
     end
 end
 
+macro osx_only(ex)
+    if OS_NAME == :Darwin
+        return esc(ex)
+    else
+        return :nothing
+    end
+end
+
+macro linux_only(ex)
+    if _jl_is_unix(OS_NAME) && OS_NAME != :Darwin
+        return esc(ex)
+    else
+        return :nothing
+    end
+end
+
 _jl_os_name(os::Symbol) = string(os)

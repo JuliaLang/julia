@@ -1262,6 +1262,8 @@ export
     @elapsed,
     @windows_only,
     @unix_only,
+    @osx_only,
+    @linux_only,
     @sync,
     @spawn,
     @spawnlocal,
