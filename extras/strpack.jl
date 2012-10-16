@@ -106,37 +106,6 @@ function calcsize(types)
     size
 end
 
-# Generate an anonymous composite type from a list of its element types
-function gen_typelist(types::Array)
-    xprs = {}
-    for (typ, dims, name) in types
-        fn = !isa(name, Nothing) ? symbol(name) : gensym("field$(length(xprs)+1)")
-        xpr = if dims == 1
-            :(($fn)::($typ))
-        else
-            if typ != ASCIIString
-                sz = length(dims)
-                :(($fn)::Array{($typ),($sz)})
-            else
-                :(($fn)::($typ))
-            end
-        end
-        push(xprs, xpr)
-    end
-    xprs         
-end
-function gen_type(types)
-    @gensym struct
-    fields = gen_typelist(types)
-    typedef = quote
-        type $struct
-            $(fields...)
-        end
-        $struct
-    end
-    eval(typedef)
-end
-
 # Generate an unpack function for a composite type
 function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Symbol, strategy::Symbol)
     xprs, rvars = {}, {}
