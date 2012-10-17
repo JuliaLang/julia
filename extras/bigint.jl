@@ -127,6 +127,27 @@ function gcdext(a::BigInt, b::BigInt)
     BigInt(g), BigInt(s), BigInt(t)
 end
 
+function factorial(n::Uint)
+    z = _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_fac_ui), Void,
+        (Ptr{Void}, Uint), z, n)
+    BigInt(z)
+end
+
+function binomial(n::BigInt, k::Uint)
+    z = _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_bin_ui), Void,
+        (Ptr{Void}, Ptr{Void}, Uint), z, n.mpz, k)
+    BigInt(z)
+end
+
+function binomial(n::Uint, k::Uint)
+    z = _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_bin_uiui), Void,
+        (Ptr{Void}, Uint, Uint), z, n, k)
+    BigInt(z)
+end
+
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
 >=(x::BigInt, y::BigInt) = cmp(x,y) >= 0

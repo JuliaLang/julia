@@ -92,6 +92,18 @@ extern void _jl_mpz_sqrt(mpz_t* rop, mpz_t* op) {
     mpz_sqrt(*rop, *op);
 }
 
+extern void _jl_mpz_fac_ui(mpz_t* rop, unsigned long int op) {
+  mpz_fac_ui(*rop, op);
+}
+
+extern void _jl_mpz_bin_ui(mpz_t* rop, mpz_t* n, unsigned long int k) {
+  mpz_bin_ui(*rop, *n, k);
+}
+
+extern void _jl_mpz_bin_uiui(mpz_t* rop, unsigned long int n, unsigned long int k) {
+  mpz_bin_uiui(*rop, n, k);
+}
+
 extern char*  _jl_mpz_printf(mpz_t* rop) {
   char* pp;
   int s = gmp_asprintf(&pp, "%Zd", *rop);
