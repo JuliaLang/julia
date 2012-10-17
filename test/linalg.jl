@@ -77,6 +77,17 @@ begin
     x = tril(a) \ b
     @assert norm(tril(a)*x - b) < Eps
 
+    # Test null
+    bnull = null(b')
+    @assert norm(b'bnull) < Eps
+    @assert norm(bnull'b) < Eps
+    @assert size(null(b), 2) == 0
+
+    # Test pinv
+    pinvb = pinv(b)
+    @assert norm(b*pinvb*b - b) < Eps
+    @assert norm(pinvb*b*pinvb - pinvb) < Eps
+
     # Least squares
     a = [ones(20) 1:20 1:20]
     b = reshape(eye(8, 5), 20, 2)
