@@ -51,10 +51,18 @@
    *  ``@profile on``: turn profiling back on
 
 
+----
+Tips
+----
+
+You should always discard the results of your first run: it may include the overhead needed to JIT-compile some of the subfunctions.
+
+The primary source of variability is the garbage collector---if it runs between two "instrumentation" lines, its execution time gets added to the time that your own line of code contributes. This can make a fast-running line seem puzzlingly slow. One good way to reduce the variance is to run ``gc()`` before profiling. However, if your code tends to accumulate a bunch of temporaries that need to be cleaned up in the middle of the run, then calling ``gc()`` at the beginning can cause the collector to run at the same point in the code each time, a misleading but consistent result. A different approach is to use multiple runs (without an explicit ``gc()``) and hope that the collector runs at different points in each run. The cost of a given line is probably best reflected in those runs with shortest time for that line.
+
 -----------
 Limitations
 -----------
 
-Profiling adds a significant performance overhead. You can prevent a subsection of your code from being profiled by encapsulating it inside a ``begin ... end`` block; in this case, the block as a whole is profiled, but the individual lines inside the block are not separately timed.
+Profiling adds a performance overhead which can be significant. You can prevent a subsection of your code from being profiled by encapsulating it inside a ``begin ... end`` block; in this case, the block as a whole is profiled, but the individual lines inside the block are not separately timed.
     
-The profiler tries to compensate for its overhead in the reported times. This naturally leads to some degree of uncertainty about the execution time of individual lines. More significantly, currently the profiler does not compensate for its own instrumentation in profiled subfunctions. Consequently, it's not terribly useful in heavily-nested code to profile it as a big chunk---you probably want to pick out individual functions or groups of functions to profile separately.
+The profiler tries to compensate for its overhead in the reported times. This naturally leads to some degree of uncertainty about the execution time of individual lines. More significantly, currently the profiler does not compensate for its own instrumentation in profiled *subfunctions*. Consequently, it's recommended that you avoid profiling heavily-nested code as a big chunk---you probably want to pick out individual functions or groups of functions to profile separately.
