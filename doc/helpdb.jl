@@ -2,7 +2,6 @@
 
 {
 
-
 (E"Getting Around",E"exit",E"exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
@@ -1701,6 +1700,13 @@ collection[key...] = value
 
 "),
 
+(E"Arrays",E"logspace",E"logspace(start, stop, n)
+
+   Construct a vector of 'n' logarithmically-spaced numbers from
+   '10^start' to '10^stop'.
+
+"),
+
 (E"Arrays",E"ref",E"ref(A, ind)
 
    Returns a subset of 'A' as specified by 'ind', which may be an
@@ -1836,6 +1842,9 @@ collection[key...] = value
    performed. For square 'A', Cholesky factorization is tried if the
    input is symmetric with a heavy diagonal. LU factorization is used
    in case Cholesky factorization fails or for general square inputs.
+   If 'size(A,1) > size(A,2)', the result is a least squares solution
+   of 'A*X+eps=B' using the singular value decomposition. 'A' does not
+   need to have full rank.
 
 "),
 
@@ -1895,9 +1904,23 @@ collection[key...] = value
 
 "),
 
-(E"Linear Algebra",E"svd",E"svd(A) -> U, S, V
+(E"Linear Algebra",E"eigvals",E"eigvals(A)
+
+   Returns and >>``<<Array{Float64, 1}'' of the eigenvalues of
+   >>``<<A''.
+
+"),
+
+(E"Linear Algebra",E"svd",E"svd(A) -> U, S, V'
 
    Compute the SVD of A
+
+"),
+
+(E"Linear Algebra",E"svdvals",E"svdvals(A)
+
+   Returns and >>``<<Array{Float64, 1}'' of the singular values of
+   >>``<<A''.
 
 "),
 
@@ -4391,11 +4414,7 @@ glp_eval_tab_col(glp_prob, k)
         f2(11)
       end
 
-   To view the execution times, type '@profile report'.  Each row of
-   the output shows the number of times the line was executed, the
-   cumulative time spent on that line, the estimated 'compensated'
-   cumulative time (compensating for the overhead of profiling, see
-   below), and the line number and filename.
+   To view the execution times, type '@profile report'.
 
    Here are the various options you have for controlling profiling:
 
@@ -4408,12 +4427,6 @@ glp_eval_tab_col(glp_prob, k)
      '@profile begin ... end' blocks)
 
    * '@profile on': turn profiling back on
-
-   Be aware that profiling adds a significant performance overhead.
-   You can prevent a subsection of your code from being profiled by
-   encapsulating it inside a 'begin ... end' block; in this case, the
-   block as a whole is profiled, but the individual lines inside the
-   block are not separately timed.
 
 "),
 
