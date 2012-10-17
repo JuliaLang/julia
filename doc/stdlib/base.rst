@@ -1147,6 +1147,10 @@ Constructors
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
 
+.. function:: logspace(start, stop, n)
+
+   Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
+
 Mathematical operators and functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
