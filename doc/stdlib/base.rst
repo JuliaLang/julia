@@ -1238,7 +1238,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: \
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs. If ``size(A,1) > size(A,2)``, the result is a least squares solution of ``A*X+eps=B`` using the singular value decomposition. ``A`` does not need to have full rank.
 
 .. function:: dot
 
@@ -1276,9 +1276,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute eigenvalues and eigenvectors of A
 
-.. function:: svd(A) -> U, S, V
+.. function:: eigvals(A)
+
+   Returns and ``Array{Float64, 1}'' of the eigenvalues of ``A''.
+
+.. function:: svd(A) -> U, S, V'
 
    Compute the SVD of A
+
+.. function:: svdvals(A)
+
+   Returns and ``Array{Float64, 1}'' of the singular values of ``A''.
 
 .. function:: triu(M)
 
