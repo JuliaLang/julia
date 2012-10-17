@@ -270,7 +270,7 @@ function randg!(a::Real, A::Array{Float64})
     d = (a <= 1. ? a + 1 : a) - 1.0/3.0
     c = 1.0/sqrt(9.0d)
     for i in 1:numel(A) A[i] = randg2(d, c) end
-    if a < 1.
+    if a <= 1.
         ainv = 1./a
         for i in 1:numel(A) A[i] *= rand()^ainv end
     end
