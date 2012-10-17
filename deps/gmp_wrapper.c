@@ -28,6 +28,10 @@ extern void _jl_mpz_set_ui(mpz_t* rop, unsigned long int op) {
   mpz_set_ui(*rop, op);
 } 
 
+extern unsigned long _jl_mpz_get_ui(mpz_t* rop) {
+  return mpz_get_ui(*rop);
+} 
+
 extern void _jl_mpz_set_si(mpz_t* rop, long int op) {
   mpz_set_si(*rop, op);
 } 
