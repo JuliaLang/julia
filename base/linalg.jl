@@ -71,7 +71,7 @@ trace(A::AbstractMatrix) = sum(diag(A))
 #kron{T,S}(a::AbstractMatrix{T}, b::AbstractMatrix{S})
 
 #det(a::AbstractMatrix)
-inv(a::AbstractMatrix) = a \ eye(a)
+inv(a::AbstractMatrix) = a \ one(a)
 cond(a::AbstractMatrix, p) = norm(a, p) * norm(inv(a), p)
 cond(a::AbstractMatrix) = cond(a, 2)
 

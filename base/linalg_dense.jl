@@ -616,7 +616,7 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
-    Lapack.gels!('N', Acopy, X)[2]
+    Lapack.gelsd!(Acopy, X)[1]
 end
 
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))

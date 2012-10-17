@@ -197,6 +197,12 @@ eye(m::Int, n::Int) = eye(Float64, m, n)
 eye(T::Type, n::Int) = eye(T, n, n)
 eye(n::Int) = eye(Float64, n)
 eye{T}(x::StridedMatrix{T}) = eye(T, size(x, 1), size(x, 2))
+function one{T}(x::StridedMatrix{T})
+    m,n = size(x)
+    if m != n; error("Multiplicative identity only defined for square matrices!"); end;
+    eye(T, m)
+end
+
 
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)

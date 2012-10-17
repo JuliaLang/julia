@@ -388,6 +388,7 @@ spzeros(Tv::Type, m::Int, n::Int) =
 speye(n::Int) = speye(Float64, n)
 speye(T::Type, n::Int) = speye(T, n, n)
 speye(m::Int, n::Int) = speye(Float64, m, n)
+speye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S, 1), size(S, 2))
 
 function speye(T::Type, m::Int, n::Int)
     x = int32(min(m,n))
@@ -397,7 +398,11 @@ function speye(T::Type, m::Int, n::Int)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-eye{T}(S::SparseMatrixCSC{T}) = speye(T, size(S,1), size(S,2))
+function one{T}(S::SparseMatrixCSC{T})
+    m,n = size(S)
+    if m != n; error("Multiplicative identity only defined for square matrices!"); end;
+    speye(T, m)
+end
 
 ## Transpose
 
