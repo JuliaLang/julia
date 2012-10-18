@@ -659,6 +659,8 @@ export
     matmul2x2,
     matmul3x3,
     norm,
+    null,
+    pinv,
     qr,
     qrd!,
     qrd,
