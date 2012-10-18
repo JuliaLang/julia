@@ -1,3 +1,15 @@
+## paths
+
+@unix_only begin
+    @assert split_extension(".bashrc") == (".bashrc","")
+    @assert split_extension("/dir/.bashrc") == ("/dir/.bashrc","")
+    @assert split_extension("a.b/a") == ("a.b/a","")
+    @assert split_extension("a/a.b.c") == ("a/a.b",".c")
+
+    @assert split_path("a/b/c") == ["a","b","c"]
+    @assert split_path("a//b/c") == ["a","b","c"]
+end
+
 #############################################
 # Create some temporary files & directories #
 #############################################
