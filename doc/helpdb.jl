@@ -1906,8 +1906,7 @@ collection[key...] = value
 
 (E"Linear Algebra",E"eigvals",E"eigvals(A)
 
-   Returns and >>``<<Array{Float64, 1}'' of the eigenvalues of
-   >>``<<A''.
+   Returns the eigenvalues of 'A'.
 
 "),
 
@@ -1919,8 +1918,7 @@ collection[key...] = value
 
 (E"Linear Algebra",E"svdvals",E"svdvals(A)
 
-   Returns and >>``<<Array{Float64, 1}'' of the singular values of
-   >>``<<A''.
+   Returns the singular values of 'A'.
 
 "),
 

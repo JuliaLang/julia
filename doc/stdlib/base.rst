@@ -1282,7 +1282,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigvals(A)
 
-   Returns and ``Array{Float64, 1}'' of the eigenvalues of ``A''.
+   Returns the eigenvalues of ``A``.
 
 .. function:: svd(A) -> U, S, V'
 
@@ -1290,7 +1290,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: svdvals(A)
 
-   Returns and ``Array{Float64, 1}'' of the singular values of ``A''.
+   Returns the singular values of ``A``.
 
 .. function:: triu(M)
 
