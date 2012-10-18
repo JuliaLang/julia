@@ -100,9 +100,9 @@ inline static double randu (void)
 
 /* ===== Ziggurat normal and exponential generators ===== */
 # define ZIGINT randmtzig_uint64_t
-# define EMANTISSA 2251799813685248  /* 52 bit mantissa */
+# define EMANTISSA 4503599627370496  /* 52 bit mantissa */
 # define ERANDI randi() /* 52 bits for mantissa */
-# define NMANTISSA EMANTISSA
+# define NMANTISSA 2251799813685248
 # define NRANDI randi() /* 51 bits for mantissa + 1 bit sign */
 # define RANDU randu()
 
