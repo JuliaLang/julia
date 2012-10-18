@@ -68,7 +68,7 @@ function function_loc(f::Function, types)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (string(lsd.file), ln)
+                return (find_in_path(string(lsd.file)), ln)
             end
         end
     end
