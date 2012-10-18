@@ -302,7 +302,7 @@ end
 
 ## Indexing: ref ##
 
-ref{T}(a::Array{T,0}) = arrayref(a,1)
+ref(a::Array) = arrayref(a,1)
 
 ref(A::Array, i0::Integer) = arrayref(A,int(i0))
 ref(A::Array, i0::Integer, i1::Integer) = arrayref(A,int(i0),int(i1))
