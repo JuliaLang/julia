@@ -568,11 +568,10 @@ function alignment(
     for j in cols
         l = r = 0
         for i in rows
-            aij = _jl_undef_ref_alignment
-            try
+            if isbound(X,i,j)
                 aij = alignment(X[i,j])
-            catch err
-                if !isa(err,UndefRefError) throw(err) end
+            else
+                aij = _jl_undef_ref_alignment
             end
             l = max(l, aij[1])
             r = max(r, aij[2])
@@ -597,14 +596,13 @@ function print_matrix_row(io,
 )
     for k = 1:length(A)
         j = cols[k]
-        a = _jl_undef_ref_alignment
-        sx = _jl_undef_ref_str
-        try
+        if isbound(X,i,j)
             x = X[i,j]
             a = alignment(x)
             sx = sprint(showcompact, x)
-        catch err
-            if !isa(err,UndefRefError) throw(err) end
+        else
+            a = _jl_undef_ref_alignment
+            sx = _jl_undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
@@ -768,11 +766,10 @@ whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")
-    sx = _jl_undef_ref_str
-    try
+    if isbound(x)
         sx = sprint(showcompact, x[])
-    catch err
-        if !isa(err,UndefRefError) throw(err) end
+    else
+        sx = _jl_undef_ref_str
     end
     print(io, sx)
 end

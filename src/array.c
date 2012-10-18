@@ -410,6 +410,16 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+int jl_array_isassigned(jl_value_t **args, int nargs)
+{
+    assert(jl_is_array(args[0]));
+    jl_array_t *a = (jl_array_t*)args[0];
+    size_t i = array_nd_index(a, &args[1], nargs-1, "isbound");
+    if (a->ptrarray)
+        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    return 1;
+}
+
 void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));

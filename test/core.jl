@@ -242,6 +242,33 @@ glotest()
 # syntax
 @assert (true ? 1 : false ? 2 : 3) == 1
 
+type UndefField
+    field
+    UndefField() = new()
+end
+
+# undefinedness
+begin
+    local a
+    a = cell(2)
+    @assert !isbound(a,1) && !isbound(a,2)
+    a[1] = 1
+    @assert isbound(a,1) && !isbound(a,2)
+    a = Array(Float64,1)
+    @assert isbound(a,1)
+    @assert isbound(a)
+    @assert_fails isbound(a,2)
+
+    @assert isbound("a",:data)
+    a = UndefField()
+    @assert !isbound(a, :field)
+    @assert_fails isbound(a, :foo)
+
+    @assert_fails isbound(2)
+    @assert_fails isbound(2, :a)
+    @assert_fails isbound("a", 2)
+end
+
 # dispatch
 begin
     local foo, bar, baz

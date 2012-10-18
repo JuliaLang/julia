@@ -308,6 +308,10 @@ JL_CALLABLE(jl_f_isbound)
 {
     jl_module_t *m = jl_current_module;
     jl_sym_t *s=NULL;
+    JL_NARGSV(isbound, 1);
+    if (jl_is_array(args[0])) {
+        return jl_array_isassigned(args, nargs) ? jl_true : jl_false;
+    }
     if (nargs == 1) {
         JL_TYPECHK(isbound, symbol, args[0]);
         s = (jl_sym_t*)args[0];
@@ -316,10 +320,17 @@ JL_CALLABLE(jl_f_isbound)
         JL_NARGS(isbound, 1, 1);
     }
     else {
-        JL_TYPECHK(isbound, module, args[0]);
         JL_TYPECHK(isbound, symbol, args[1]);
-        m = (jl_module_t*)args[0];
         s = (jl_sym_t*)args[1];
+        if (!jl_is_module(args[0])) {
+            jl_value_t *vt = (jl_value_t*)jl_typeof(args[0]);
+            if (!jl_is_struct_type(vt)) {
+                jl_type_error("isbound", (jl_value_t*)jl_struct_kind, args[0]);
+            }
+            return jl_field_isassigned(args[0], s, 1) ? jl_true : jl_false;
+        }
+        JL_TYPECHK(isbound, module, args[0]);
+        m = (jl_module_t*)args[0];
     }
     assert(s);
     return jl_boundp(m, s) ? jl_true : jl_false;
