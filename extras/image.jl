@@ -683,7 +683,7 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     separable = true;
     for i = 2:length(S)
         # assumption that <10^-7 \approx 0
-        separable = separable && (abs(S[i]) < 10^-7)
+        separable = separable && (abs(S[i]) < 1e-7)
     end
     if separable
         # conv2 isn't suitable for this (kernel center should be the actual center of the kernel)
