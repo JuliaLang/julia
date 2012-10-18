@@ -134,12 +134,6 @@ end
 
 # #################### set ####################
 
-# Is there any good reason why sets (and dicts) do not implement
-# isequal? I'm providing a quick'n'dirty implementation here to help
-# with the following tests. Will suggest implementation of isequal for
-# sets and dicts, in a later pull request.
-isequal(l::Set,r::Set) = length(l) == length(r) == length(intersect(l,r))
-
 # show
 
 # isempty
@@ -277,4 +271,47 @@ for data_in in ((7,8,4,5),
         @assert has(s,e)
     end
 end
+
+# isequal
+@assert  isequal(Set(), Set())
+@assert !isequal(Set(), Set(1))
+@assert  isequal(Set{Any}(1,2), Set{Int}(1,2))
+@assert !isequal(Set{Any}(1,2), Set{Int}(1,2,3))
+
+# Helper for writing tests about error conditions, used in the
+# following tests
+macro assert_raises(ExcType, expression)
+    quote
+        try
+            $expression
+        catch e
+            if ! (typeof(e) <: $ExcType)
+                println("Error        : ",        e )
+                println("Type of error: ", typeof(e))
+                println("Expected     : ", $ExcType)
+                @assert false
+            end
+        end
+    end
+end
+
+# Comparison of unrelated types seems rather inconsistent
+
+# Not sure whether the behaviour of isequal (as demonstrated below) on
+# sets of unrelated types, is desirable, but it's what there is at the
+# moment.
+@assert                    isequal(Set{Int}(), Set{String}())
+@assert_raises TypeError   isequal(Set{Int}(),    Set{String}{""})
+@assert                   !isequal(Set{String}(), Set{Int}(0))
+@assert_raises MethodError isequal(Set{Int}(1),   Set{String}())
+
+@assert   isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
+@assert   isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
+
+@assert  !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
+@assert  !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
+
+@assert  !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
+@assert  !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
+
 # ########## end of set tests ##########

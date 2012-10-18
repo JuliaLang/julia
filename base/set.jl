@@ -72,3 +72,5 @@ setdiff(a::Set, b::Set) = del_each(copy(a),b)
 |(s::Set...) = union(s...)
 (&)(s::Set...) = intersect(s...)
 -(a::Set, b::Set) = setdiff(a,b)
+
+isequal(l::Set, r::Set) = length(l) == length(r) == length(intersect(l,r))
