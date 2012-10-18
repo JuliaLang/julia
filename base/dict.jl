@@ -440,6 +440,20 @@ next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.keys,i+1))
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
+# Used as default value arg to get in isequal: something that will
+# never be found in any dictionary.
+const _MISSING = gensym()
+
+function isequal(l::Dict, r::Dict)
+    if ! (length(l) == length(r))  return false end
+    for (key, value) in l
+        if ! isequal(value, get(r, key, _MISSING))
+            return false
+        end
+    end
+    true
+end
+
 # weak key dictionaries
 
 function add_weak_key(t::Dict, k, v)
@@ -491,3 +505,4 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+
