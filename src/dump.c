@@ -630,7 +630,7 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
         jl_module_t *m = jl_new_module(mname);
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, m);
-        m->parent = jl_deserialize_value(s);
+        m->parent = (jl_module_t*)jl_deserialize_value(s);
         while (1) {
             jl_value_t *name = jl_deserialize_value(s);
             if (name == NULL)

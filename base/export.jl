@@ -1000,6 +1000,8 @@ export
     help,
     less,
     names,
+    module_name,
+    module_parent,
     which,
     whicht,
     whos,
