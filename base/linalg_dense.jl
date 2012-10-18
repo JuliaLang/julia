@@ -397,6 +397,7 @@ end
 
 ## Should these functions check that the matrix is Hermitian?
 chold!{T<:LapackType}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
+chold!{T<:LapackType}(A::Matrix{T}) = chold!(A, true)
 chold{T<:LapackType}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
 chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
 chold{T<:Number}(A::Matrix{T}) = chold(A, true)
