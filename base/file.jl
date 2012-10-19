@@ -71,13 +71,7 @@ function file_path(components...)
     join(components, os_separator)
 end
 
-function fullfile(pathname::String, basename::String, ext::String)
-    if isempty(pathname)
-        return basename * ext
-    else
-        return pathname * os_separator * basename * ext
-    end
-end
+const fullfile = file_path
 
 # Test for an absolute path
 function isrooted(path::String)
