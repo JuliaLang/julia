@@ -71,13 +71,7 @@ function file_path(components...)
     join(components, os_separator)
 end
 
-function fullfile(pathname::String, basename::String, ext::String)
-    if isempty(pathname)
-        return basename * ext
-    else
-        return pathname * os_separator * basename * ext
-    end
-end
+const fullfile = file_path
 
 # Test for an absolute path
 function isrooted(path::String)
@@ -151,7 +145,7 @@ end
 
 # Get the full, real path to a file, including dereferencing
 # symlinks.
-function real_path(fname::String)
+function realpath(fname::String)
     fname = tilde_expand(fname)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     if sp == C_NULL
