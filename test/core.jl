@@ -242,12 +242,12 @@ glotest()
 # syntax
 @assert (true ? 1 : false ? 2 : 3) == 1
 
+# undefinedness
 type UndefField
     field
     UndefField() = new()
 end
 
-# undefinedness
 begin
     local a
     a = cell(2)
