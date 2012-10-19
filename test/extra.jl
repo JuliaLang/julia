@@ -6,5 +6,6 @@ runtests("file")
 runtests("Rmath")
 runtests("zlib")
 runtests("options")
+runtests("image")
 
 runtests("perf")

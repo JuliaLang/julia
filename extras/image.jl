@@ -642,39 +642,45 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     s1, s2 = int((sf[1]-1)/2), int((sf[2]-1)/2)
     # correlation instead of convolution
     filter = fliplr(fliplr(filter).')
+    mid1 = s1+1:s1+si[1]
+    mid2 = s2+1:s2+si[2]
+    left = 1:s2
+    right = size(A,2)-s2+1:size(A,2)
+    top = 1:s1
+    bot = size(A,1)-s1+1:size(A,1)
     if border == "replicate"
-        A[s1+1:end-s1, s2+1:end-s2] = img
-        A[s1+1:end-s1, 1:s2] = repmat(img[:,1], 1, s2)
-        A[s1+1:end-s1, end-s2+1:end] = repmat(img[:,end], 1, s2)
-        A[1:s1, s2+1:end-s2] = repmat(img[1,:], s1, 1)
-        A[end-s1+1:end, s2+1:end-s2] = repmat(img[end,:], s1, 1)
-        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
-        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
-        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
-        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+        A[mid1, mid2] = img
+        A[mid1, left] = repmat(img[:,1], 1, s2)
+        A[mid1, right] = repmat(img[:,end], 1, s2)
+        A[top, mid2] = repmat(img[1,:], s1, 1)
+        A[bot, mid2] = repmat(img[end,:], s1, 1)
+        A[top, left] = fliplr(fliplr(img[top, left])')
+        A[bot, left] = img[end-s1+1:end, left]'
+        A[top, right] = img[top, end-s2+1:end]'
+        A[bot, right] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
     elseif border == "circular"
-        A[s1+1:end-s1, s2+1:end-s2] = img
-        A[s1+1:end-s1, 1:s2] = img[:, end-s2:end]
-        A[s1+1:end-s1, end-s2+1:end] = img[:, 1:s2]
-        A[1:s1, s2+1:end-s2] = img[end-s1+1:end, :]
-        A[end-s1+1:end, s2+1:end-s2] = img[1:s1, :]
-        A[1:s1, 1:s2] = img[end-s1+1:end, end-s2+1:end]
-        A[end-s1+1:end, 1:s2] = img[1:s1, end-s2+1:end]
-        A[1:s1, end-s2+1:end] = img[end-s1+1:end, 1:s2]
-        A[end-s1+1:end, end-s2+1:end] = img[1:s1, 1:s2]
+        A[mid1, mid2] = img
+        A[mid1, left] = img[:, end-s2+1:end]
+        A[mid1, right] = img[:, left]
+        A[top, mid2] = img[end-s1+1:end, :]
+        A[bot, mid2] = img[top, :]
+        A[top, left] = img[end-s1+1:end, end-s2+1:end]
+        A[bot, left] = img[top, end-s2+1:end]
+        A[top, right] = img[end-s1+1:end, left]
+        A[bot, right] = img[top, left]
     elseif border == "mirror"
-        A[s1+1:end-s1, s2+1:end-s2] = img
-        A[s1+1:end-s1, 1:s2] = fliplr(img[:, 1:s2])
-        A[s1+1:end-s1, end-s2+1:end] = fliplr(img[:, end-s2:end])
-        A[1:s1, s2+1:end-s2] = flipud(img[1:s1, :])
-        A[end-s1+1:end, s2+1:end-s2] = flipud(img[end-s1+1:end, :])
-        A[1:s1, 1:s2] = fliplr(fliplr(img[1:s1, 1:s2])')
-        A[end-s1+1:end, 1:s2] = img[end-s1+1:end, 1:s2]'
-        A[1:s1, end-s2+1:end] = img[1:s1, end-s2+1:end]'
-        A[end-s1+1:end, end-s2+1:end] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
+        A[mid1, mid2] = img
+        A[mid1, left] = fliplr(img[:, left])
+        A[mid1, right] = fliplr(img[:, end-s2+1:end])
+        A[top, mid2] = flipud(img[top, :])
+        A[bot, mid2] = flipud(img[end-s1+1:end, :])
+        A[top, left] = fliplr(fliplr(img[top, left])')
+        A[bot, left] = img[end-s1+1:end, left]'
+        A[top, right] = img[top, end-s2+1:end]'
+        A[bot, right] = flipud(fliplr(img[end-s1+1:end, end-s2+1:end]))'
     elseif border == "value"
         A += value
-        A[s1+1:end-s1, s2+1:end-s2] = img
+        A[mid1, mid2] = img
     else
         error("wrong border treatment")
     end
@@ -694,9 +700,15 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
         m = length(y)+sa[1]
         n = length(x)+sa[2]
         B = zeros(T, m, n)
-        B[int((length(x))/2)+1:sa[1]+int((length(x))/2),int((length(y))/2)+1:sa[2]+int((length(y))/2)] = A
-        y = fft([zeros(T,int((m-length(y)-1)/2)); y; zeros(T,int((m-length(y)-1)/2))])
-        x = fft([zeros(T,int((m-length(x)-1)/2)); x; zeros(T,int((n-length(x)-1)/2))])
+        B[int(length(x)/2)+1:sa[1]+int(length(x)/2),int(length(y)/2)+1:sa[2]+int(length(y)/2)] = A
+        yp = zeros(T, m)
+        halfy = int((m-length(y)-1)/2)
+        yp[halfy+1:halfy+length(y)] = y
+        y = fft(yp)
+        xp = zeros(T, n)
+        halfx = int((n-length(x)-1)/2)
+        xp[halfx+1:halfx+length(x)] = x
+        x = fft(xp)
         C = fftshift(ifft2(fft2(B) .* (y * x.')))
         if T <: Real
             C = real(C)
@@ -704,10 +716,14 @@ function imfilter{T}(img::Matrix{T}, filter::Matrix{T}, border::String, value)
     else
         #C = conv2(A, filter)
         sa, sb = size(A), size(filter)
-        At = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
-        Bt = zeros(T, sa[1]+sb[1], sa[2]+sb[2])
-        At[int(end/2-sa[1]/2)+1:int(end/2+sa[1]/2), int(end/2-sa[2]/2)+1:int(end/2+sa[2]/2)] = A
-        Bt[int(end/2-sb[1]/2)+1:int(end/2+sb[1]/2), int(end/2-sb[2]/2)+1:int(end/2+sb[2]/2)] = filter
+        At = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+        Bt = zeros(T, sa[1]+sb[1]-1, sa[2]+sb[2]-1)
+        halfa1 = ifloor((size(At,1)-sa[1])/2)
+        halfa2 = ifloor((size(At,2)-sa[2])/2)
+        halfb1 = ifloor((size(Bt,1)-sb[1])/2)
+        halfb2 = ifloor((size(Bt,2)-sb[2])/2)
+        At[halfa1+1:halfa1+sa[1], halfa2+1:halfa2+sa[2]] = A
+        Bt[halfb1+1:halfb1+sb[1], halfb2+1:halfb2+sb[2]] = filter
         C = fftshift(ifft2(fft2(At).*fft2(Bt)))
         if T <: Real
             C = real(C)
