@@ -141,7 +141,7 @@ function pow(x::BigInt, y::Uint)
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_pow_ui), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, y)
     BigInt(z)
 end
-pow(x::BigInt, y::Integer) = pow(x, uint(y))
+pow(x::BigInt, y::Integer) = y<0 ? throw(DomainError()) : pow(x, uint(y))
 
 function gcd(x::BigInt, y::BigInt)
     z = _jl_bigint_init()
@@ -161,8 +161,12 @@ function gcdext(a::BigInt, b::BigInt)
 end
 
 function factorial(bn::BigInt)
+    if bn<0
+        return BigInt(0)
+    else
+        n = uint(bn)
+    end
     z = _jl_bigint_init()
-    n = uint(bn)
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_fac_ui), Void,
         (Ptr{Void}, Uint), z, n)
     BigInt(z)
@@ -174,7 +178,7 @@ function binomial(n::BigInt, k::Uint)
         (Ptr{Void}, Ptr{Void}, Uint), z, n.mpz, k)
     BigInt(z)
 end
-binomial(n::BigInt, k::Integer) = binomial(n, uint(k))
+binomial(n::BigInt, k::Integer) = k<0 ? throw(DomainError()) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 <=(x::BigInt, y::BigInt) = cmp(x,y) <= 0
