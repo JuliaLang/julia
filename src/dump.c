@@ -1024,7 +1024,7 @@ void jl_init_serializer(void)
                       jl_f_no_function, jl_f_typeof, 
                       jl_f_subtype, jl_f_isa, 
                       jl_f_typeassert, jl_f_apply, 
-                      jl_f_top_eval, jl_f_isbound, 
+                      jl_f_top_eval, jl_f_isdefined, 
                       jl_f_tuple, jl_f_tupleref, 
                       jl_f_tuplelen, jl_f_get_field, 
                       jl_f_set_field, jl_f_field_type, 

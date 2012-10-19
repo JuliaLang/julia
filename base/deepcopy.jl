@@ -31,7 +31,7 @@ function _deepcopy_t(x, T::CompositeKind, stackdict::ObjectIdDict)
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     stackdict[x] = ret
     for f in T.names
-        if isbound(x,f)
+        if isdefined(x,f)
             ret.(f) = deepcopy_internal(x.(f), stackdict)
         end
     end
@@ -53,7 +53,7 @@ function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     dest = similar(x)
     stackdict[x] = dest
     for i=1:length(x)
-        if isbound(x,i)
+        if isdefined(x,i)
             arrayset(dest, deepcopy_internal(x[i], stackdict), i)
         end
     end

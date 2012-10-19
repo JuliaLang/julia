@@ -251,22 +251,22 @@ end
 begin
     local a
     a = cell(2)
-    @assert !isbound(a,1) && !isbound(a,2)
+    @assert !isdefined(a,1) && !isdefined(a,2)
     a[1] = 1
-    @assert isbound(a,1) && !isbound(a,2)
+    @assert isdefined(a,1) && !isdefined(a,2)
     a = Array(Float64,1)
-    @assert isbound(a,1)
-    @assert isbound(a)
-    @assert_fails isbound(a,2)
+    @assert isdefined(a,1)
+    @assert isdefined(a)
+    @assert_fails isdefined(a,2)
 
-    @assert isbound("a",:data)
+    @assert isdefined("a",:data)
     a = UndefField()
-    @assert !isbound(a, :field)
-    @assert_fails isbound(a, :foo)
+    @assert !isdefined(a, :field)
+    @assert_fails isdefined(a, :foo)
 
-    @assert_fails isbound(2)
-    @assert_fails isbound(2, :a)
-    @assert_fails isbound("a", 2)
+    @assert_fails isdefined(2)
+    @assert_fails isdefined(2, :a)
+    @assert_fails isdefined("a", 2)
 end
 
 # dispatch

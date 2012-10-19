@@ -414,11 +414,11 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
-int jl_array_isassigned(jl_value_t **args, int nargs)
+int jl_array_isdefined(jl_value_t **args, int nargs)
 {
     assert(jl_is_array(args[0]));
     jl_array_t *a = (jl_array_t*)args[0];
-    size_t i = array_nd_index(a, &args[1], nargs-1, "isbound");
+    size_t i = array_nd_index(a, &args[1], nargs-1, "isdefined");
     if (a->ptrarray)
         return ((jl_value_t**)jl_array_data(a))[i] != NULL;
     return 1;

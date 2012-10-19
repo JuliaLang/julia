@@ -149,14 +149,14 @@ function serialize(s, f::Function)
         name = f.env
     end
     if isa(name,Symbol)
-        if isbound(Base,name) && is(f,eval(Base,name))
+        if isdefined(Base,name) && is(f,eval(Base,name))
             write(s, uint8(0))
             serialize(s, name)
             return
         end
         if !is(f.env.defs, ())
             mod = f.env.defs.func.code.module
-            if isbound(mod,name) && is(f,eval(mod,name))
+            if isdefined(mod,name) && is(f,eval(mod,name))
                 # toplevel named func
                 write(s, uint8(2))
                 serialize(s, mod)
@@ -187,7 +187,7 @@ function serialize_type_data(s, t)
     tname = t.name.name
     serialize(s, tname)
     serialize(s, t.name.module)
-    if isbound(tname) && is(t,eval(tname))
+    if isdefined(tname) && is(t,eval(tname))
         serialize(s, ())
     else
         serialize(s, t.parameters)

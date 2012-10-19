@@ -151,7 +151,7 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
                        (char*)v + offs);
 }
 
-int jl_field_isassigned(jl_value_t *v, jl_sym_t *fld, int err)
+int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err)
 {
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
     int i = jl_field_index(st, fld, err);

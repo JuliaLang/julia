@@ -66,11 +66,11 @@ isconst(m::Module, s::Symbol) =
 
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
-    isbound(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
+    isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
 
 _ieval(x) = eval((inference_stack::CallStack).mod, x)
-_iisbound(x) = isbound((inference_stack::CallStack).mod, x)
+_iisdefined(x) = isdefined((inference_stack::CallStack).mod, x)
 
 _iisconst(s::SymbolNode) = _iisconst(s.name)
 _iisconst(s::TopNode) = _iisconst(s.name)
@@ -117,7 +117,7 @@ t_func[eval(Core,:ccall)] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
-t_func[isbound] = (1, 2, (args...)->Bool)
+t_func[isdefined] = (1, 2, (args...)->Bool)
 t_func[Union] = (0, Inf,
                  (args...)->(if allp(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
@@ -275,7 +275,7 @@ getfield_tfunc = function (A, s, name)
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
         A1 = A[1]
-        if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
+        if isa(A1,Module) && isdefined(A1,fld) && isconst(A1, fld)
             return abstract_eval_constant(eval(A1,fld))
         end
         if s === Module
@@ -399,7 +399,7 @@ function isconstantfunc(f, sv::StaticVarInfo)
     end
     if isa(f,GetfieldNode) && isa(f.value,Module)
         M = f.value; s = f.name
-        return isbound(M,s) && isconst(M,s) && f
+        return isdefined(M,s) && isconst(M,s) && f
     end
     if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) &&
@@ -417,7 +417,7 @@ function isconstantfunc(f, sv::StaticVarInfo)
                     return false
                 end
             end
-            return isbound(M,s) && isconst(M,s) && f
+            return isdefined(M,s) && isconst(M,s) && f
         end
     end
 
@@ -641,11 +641,9 @@ end
 
 function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  null  isbound static_typeof
+    # call  null  new  &  static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         t = abstract_eval_call(e, vtypes, sv)
-    #elseif is(e.head,:isbound)
-    #    t = Bool
     elseif is(e.head,:null)
         t = Nothing
     elseif is(e.head,:new)
@@ -722,7 +720,7 @@ function abstract_eval_global(s::Symbol)
     if _iisconst(s)
         return abstract_eval_constant(_ieval(s))
     end
-    if !_iisbound(s)
+    if !_iisdefined(s)
         return Top
     end
     # TODO: change to Undef if there's a way to clear variables
@@ -956,7 +954,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
-    # if isbound(:stdout_stream)
+    # if isdefined(:stdout_stream)
     #     write(stdout_stream, "typeinf ")
     #     write(stdout_stream, string(linfo.name))
     #     write(stdout_stream, string(atypes))
@@ -1351,8 +1349,8 @@ function resolves_same(sym, from, to)
         return true
     end
     # todo: better
-    return (isconst(from,sym) && isconst(to,sym) && isbound(from,sym) &&
-            isbound(to,sym) && is(eval(from,sym),eval(to,sym)))
+    return (isconst(from,sym) && isconst(to,sym) && isdefined(from,sym) &&
+            isdefined(to,sym) && is(eval(from,sym),eval(to,sym)))
 end
 
 # annotate symbols with their original module for inlining
