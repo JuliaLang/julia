@@ -20,6 +20,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
     jl_array_t *a;
 
     for(i=0; i < ndims; i++) {
+        if ((long)dims[i] < 0)
+            jl_error("invalid Array dimension size");
         nel *= dims[i];
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
@@ -151,6 +153,8 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
         size_t l=1;
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            if ((long)adims[i] < 0)
+                jl_error("invalid Array dimension size");
             l *= adims[i];
         }
         a->length = l;
