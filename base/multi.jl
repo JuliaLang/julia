@@ -976,6 +976,8 @@ function start_worker(wrfd)
     # close stdin; workers will not use it
     ccall(:close, Int32, (Int32,), 0)
 
+    ccall(:jl_install_sigint_handler, Void, ())
+
     global const Scheduler = current_task()
 
     worker_sockets = Dict()
