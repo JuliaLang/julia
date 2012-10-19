@@ -145,7 +145,7 @@ end
 
 # Get the full, real path to a file, including dereferencing
 # symlinks.
-function real_path(fname::String)
+function realpath(fname::String)
     fname = tilde_expand(fname)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     if sp == C_NULL
