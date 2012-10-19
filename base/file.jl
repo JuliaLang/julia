@@ -59,7 +59,7 @@ function split_extension(path::String)
     end
 end
 
-split_path(path::String) = split(path, os_separator_match)
+split_path(path::String) = split(abs_path(path), os_separator_match)
 
 function fileparts(filename::String)
     pathname, filestr = dirname_basename(filename)
@@ -68,14 +68,14 @@ function fileparts(filename::String)
 end
 
 function file_path(components...)
-    join(components, os_separator)
+    abs_path(join(components, os_separator))
 end
 
 function fullfile(pathname::String, basename::String, ext::String)
     if isempty(pathname)
-        return basename * ext
+        return abs_path(basename * ext)
     else
-        return pathname * os_separator * basename * ext
+        return abs_path(pathname * os_separator * basename * ext)
     end
 end
 
