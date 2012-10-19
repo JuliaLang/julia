@@ -1176,7 +1176,7 @@ export
     tempdir,
     tempfile,
     download_file,
-    real_path,
+    realpath,
     filemode,
     filesize,
     mtime,
