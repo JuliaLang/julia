@@ -148,7 +148,7 @@ macro assert_raises(ExcType, expression)
     end
 end
 
-@assert  isequal({}, {})
+@assert  isequal(Dict(), Dict())
 @assert  isequal({1 => 1}, {1 => 1})
 @assert !isequal({1 => 1}, {})
 @assert !isequal({1 => 1}, {1 => 2})
