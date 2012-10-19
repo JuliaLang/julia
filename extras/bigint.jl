@@ -87,13 +87,6 @@ function -(x::BigInt)
     BigInt(z)
 end
 
-function lshift(x::BigInt, c::Uint)
-    z= _jl_bigint_init()
-    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_lshift), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
-    BigInt(z)
-end
-lshift(x::BigInt, c::Integer) = lshift(x, uint(c))
-
 function -(x::BigInt, y::BigInt)
     z= _jl_bigint_init()
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_sub), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
@@ -105,6 +98,14 @@ function *(x::BigInt, y::BigInt)
     ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_mul), Void, (Ptr{Void}, Ptr{Void}, Ptr{Void}),z,x.mpz,y.mpz)
     BigInt(z)
 end
+
+function <<(x::BigInt, c::Uint)
+    z= _jl_bigint_init()
+    ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpz_lshift), Void, (Ptr{Void}, Ptr{Void}, Uint), z, x.mpz, c)
+    BigInt(z)
+end
+<<(x::BigInt, c::Int32)   = c<0 ? throw(DomainError()) : x<<uint(c)
+<<(x::BigInt, c::Integer) = c<0 ? throw(DomainError()) : x<<uint(c)
 
 function div(x::BigInt, y::BigInt)
     z= _jl_bigint_init()
