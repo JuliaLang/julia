@@ -1986,7 +1986,19 @@ collection[key...] = value
 
 (E"Linear Algebra",E"inv",E"inv(M)
 
-   Matrix inverse, or generalized '1/M'
+   Matrix inverse
+
+"),
+
+(E"Linear Algebra",E"pinv",E"pinv(M)
+
+   Moore-Penrose inverse
+
+"),
+
+(E"Linear Algebra",E"null",E"null(M)
+
+   Basis for null space of M
 
 "),
 
