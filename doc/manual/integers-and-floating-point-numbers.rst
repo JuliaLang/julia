@@ -130,6 +130,14 @@ hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
 
+Binary and octal literals are also supported::
+
+    julia> 0b10
+    0x02
+
+    julia> 0o10
+    0x08
+
 The minimum and maximum representable values of primitive numeric types
 such as integers are given by the ``typemin`` and ``typemax`` functions::
 
