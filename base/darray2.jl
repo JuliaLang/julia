@@ -123,7 +123,9 @@ chunk{T,N,A}(d::DArray{T,N,A}, i...) = fetch(d.chunks[i...])::A
 ## convenience constructors ##
 
 drand(args...)  = DArray(I->rand(map(length,I)), args...)
+drand(d::Int...) = drand(d)
 drandn(args...) = DArray(I->randn(map(length,I)), args...)
+drandn(d::Int...) = drandn(d)
 
 ## conversions ##
 
@@ -136,13 +138,11 @@ function distribute(a::Array)
     end
 end
 
-convert{T,N}(::Type{Array}, d::DArray{T,N}) = convert(Array{T,N}, d)
+convert{T,N}(::Type{Array}, d::SubOrDArray{T,N}) = convert(Array{T,N}, d)
 
-function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
+function convert{S,T,N}(::Type{Array{S,N}}, d::SubOrDArray{T,N})
     a = Array(S, size(d))
-    for i = 1:length(d.chunks)
-        a[d.indexes[i]...] = chunk(d, i)
-    end
+    a[[1:size(a,i) for i=1:N]...] = d
     a
 end
 
@@ -168,13 +168,7 @@ function ref{T}(d::DArray{T}, I::(Int...))
 end
 
 ref(d::DArray) = d[1]
-ref(d::DArray, I::Range1{Int}...) = sub(d, I)
-
-ref(d::DArray, I::Range1{Int}, j::Int) = d[I, j:j]
-ref(d::DArray, i::Int, J::Range1{Int}) = d[i:i, J]
-
-ref(d::DArray, I::Union(Int,Range1{Int})...) =
-    d[[isa(i,Int) ? (i:i) : i for i in I ]...]
+ref(d::DArray, I::Union(Int,Range1{Int})...) = sub(d,I)
 
 copy(d::SubOrDArray) = d
 
