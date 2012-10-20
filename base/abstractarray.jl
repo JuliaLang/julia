@@ -899,7 +899,7 @@ sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
     [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
-ind2sub(dims::(), ind::Integer) = throw(BoundsError())
+ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
 ind2sub(dims::(Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)

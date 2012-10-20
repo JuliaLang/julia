@@ -209,12 +209,12 @@ function write(s::IOStream, p::Ptr, nb::Integer)
     ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
-function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
+function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
     colsz = size(a,1)*sizeof(T)
-    if N==1
+    if N<=1
         write(s, pointer(a, 1), colsz)
     else
         cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
