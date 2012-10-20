@@ -20,6 +20,9 @@ type DArray{T,N,A} <: AbstractArray{T,N}
     end
 end
 
+typealias SubDArray{T,N,D<:DArray} SubArray{T,N,D}
+typealias SubOrDArray{T,N}         Union(DArray{T,N}, SubDArray{T,N})
+
 ## core constructors ##
 
 # dist == size(chunks)
@@ -41,6 +44,8 @@ DArray(init, dims) = DArray(init, dims, [1:min(nprocs(),max(dims))])
 
 size(d::DArray) = d.dims
 procs(d::DArray) = d.pmap
+
+chunktype{T,N,A}(d::DArray{T,N,A}) = A
 
 ## chunk index utilities ##
 
@@ -161,3 +166,58 @@ function ref{T}(d::DArray{T}, I::(Int...))
     localidx = ntuple(ndims(d), i->(I[i]-first(idxs[i])+1))
     chunk[localidx...]::T
 end
+
+ref(d::DArray) = d[1]
+ref(d::DArray, I::Range1{Int}...) = sub(d, I)
+
+ref(d::DArray, I::Range1{Int}, j::Int) = d[I, j:j]
+ref(d::DArray, i::Int, J::Range1{Int}) = d[i:i, J]
+
+ref(d::DArray, I::Union(Int,Range1{Int})...) =
+    d[[isa(i,Int) ? (i:i) : i for i in I ]...]
+
+copy(d::SubOrDArray) = d
+
+# local copies are obtained by convert(Array, ) or assigning from
+# a SubDArray to a local Array.
+
+function assign(a::Array, d::DArray, I::Range1{Int}...)
+    n = length(I)
+    @sync begin
+        for i = 1:length(d.chunks)
+            K = d.indexes[i]
+            @spawnlocal a[[I[j][K[j]] for j=1:n]...] = chunk(d, i)
+        end
+    end
+    a
+end
+
+function assign(a::Array, s::SubDArray, I::Range1{Int}...)
+    n = length(I)
+    d = s.parent
+    J = s.indexes
+    offs = [isa(J[i],Int) ? J[i]-1 : first(J[i])-1 for i=1:n]
+    @sync begin
+        for i = 1:length(d.chunks)
+            K_c = d.indexes[i]
+            K = [ intersect(J[j],K_c[j]) for j=1:n ]
+            if !anyp(isempty, K)
+                idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
+                if isequal(K, K_c)
+                    # whole chunk
+                    @spawnlocal a[idxs...] = chunk(d, i)
+                else
+                    # partial chunk
+                    @spawnlocal a[idxs...] = d.chunks[i][[K[j]-first(K_c[j])+1 for j=1:n]...]
+                end
+            end
+        end
+    end
+    a
+end
+
+# to disambiguate
+assign(a::Array{Any}, d::SubOrDArray, i::Int) = assign(a, d, i:i)
+
+assign(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
+    assign(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
