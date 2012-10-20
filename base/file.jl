@@ -2,24 +2,24 @@
 # These do not examine the filesystem at all, they just work on strings
 @unix_only begin
     const os_separator = "/"
-    const os_separator_match = "/"
+    const os_separator_match = r"/+"
     const os_separator_match_chars = "/"
 end
 @windows_only begin
     const os_separator = "\\"
-    const os_separator_match = "[/\\]" # permit either slash type on Windows
+    const os_separator_match = r"[/\\]" # permit either slash type on Windows
     const os_separator_match_chars = "/\\" # to permit further concatenation
 end
 # Match only the final separator
-const last_separator = Regex(strcat(os_separator_match, "(?!.*", os_separator_match, ")"))
+const last_separator = Regex(strcat(os_separator_match.pattern, "(?!.*", os_separator_match.pattern, ")"))
 # Match the "." indicating a file extension. Must satisfy the
 # following requirements:
 #   - It's not followed by a later "." or os_separator
 #     (handles cases like myfile.txt.gz, or Mail.directory/cur)
 #   - It's not the first character in a string, nor is it preceded by
 #     an os_separator (handles cases like .bashrc or /home/fred/.juliarc)
-const extension_separator_match = Regex(strcat("(?<!^)(?<!",
-    os_separator_match, ")\\.(?!.*[", os_separator_match_chars, "\.])"))
+const extension_separator_match = Regex(strcat(L"(?<!^|[",
+    os_separator_match_chars, L"])\.[^.", os_separator_match_chars, L"]+$"))
 
 filesep() = os_separator
 
@@ -71,19 +71,13 @@ function file_path(components...)
     join(components, os_separator)
 end
 
-function fullfile(pathname::String, basename::String, ext::String)
-    if isempty(pathname)
-        return basename * ext
-    else
-        return pathname * os_separator * basename * ext
-    end
-end
+const fullfile = file_path
 
 # Test for an absolute path
 function isrooted(path::String)
     # Check whether it begins with the os_separator. On Windows, matches
     # \\servername syntax, so this is a relevant check for everyone
-    m = match(Regex(strcat("^", os_separator_match)), path)
+    m = match(Regex(strcat("^", os_separator_match.pattern)), path)
     if m != nothing
         return true
     end
@@ -151,7 +145,7 @@ end
 
 # Get the full, real path to a file, including dereferencing
 # symlinks.
-function real_path(fname::String)
+function realpath(fname::String)
     fname = tilde_expand(fname)
     sp = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), fname, C_NULL)
     if sp == C_NULL
@@ -226,14 +220,21 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-function tempdir()
+@linux_only function tempdir()
+  chomp(readall(`mktemp -d`))
+end
+
+@osx_only function tempdir()
   chomp(readall(`mktemp -d -t tmp`))
 end
 
-function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+@linux_only function tempfile()
+  chomp(readall(`mktemp`))
 end
 
+@osx_only function tempfile()
+  chomp(readall(`mktemp -t tmp`))
+end
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)

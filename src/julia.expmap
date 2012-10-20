@@ -134,6 +134,8 @@
     jl_match_method;
     jl_module_export;
     jl_module_names;
+    jl_module_name;
+    jl_module_parent;
     jl_module_type;
     jl_nb_available;
     jl_new_array;

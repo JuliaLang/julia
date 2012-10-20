@@ -247,7 +247,7 @@ static jl_value_t *scm_to_julia_(value_t e)
             /* tree node types:
                goto  gotoifnot  label  return
                lambda  call  =  quote
-               null  top  isbound  method
+               null  top  method
                body  file new
                line  enter  leave
             */

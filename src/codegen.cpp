@@ -697,7 +697,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
 
     jl_struct_type_t *sty = (jl_struct_type_t*)expr_type(expr, ctx);
     JL_GC_PUSH(&sty);
-    if (jl_is_struct_type(sty) && sty->uid != 0) {
+    if (jl_is_struct_type(sty) && sty != jl_module_type && sty->uid != 0) {
         size_t idx = jl_field_index(sty, name, 0);
         if (idx != (size_t)-1) {
             Value *strct = emit_expr(expr, ctx);

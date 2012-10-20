@@ -1,6 +1,6 @@
 ## boolean conversions ##
 
-convert(::Type{Bool}, x::Number) = (x!=0)
+convert(::Type{Bool}, x::Real) = (x!=0)
 
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T

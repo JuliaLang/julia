@@ -1,4 +1,5 @@
-// gcc -O4 ziggurat.c -o ziggurat
+// $(CC) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -msse2 -DHAVE_SSE2 -DDSFMT_MEXP=19937 ziggurat.c -o ziggurat
+
 
 /* gauss.c - gaussian random numbers, using the Ziggurat method
  *
@@ -33,7 +34,7 @@
 #include <sys/time.h>
 
 #define DSFMT_MEXP 19937
-#include "../../deps/random/dsfmt-2.1/dSFMT.c"
+#include "../../deps/random/dsfmt-2.2/dSFMT.c"
 
 /* position of right-most step */
 #define PARAM_R 3.44428647676

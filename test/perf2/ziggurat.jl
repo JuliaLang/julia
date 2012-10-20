@@ -136,7 +136,7 @@ function randn_zig()
     return sign != 0 ? x : -x
 end
 
-randn_zig(sigma::Number) = sigma*x
+randn_zig(sigma::Number) = sigma*randn_zig()
 
 function randn_zig!(A::Array)
     for i=1:numel(A)

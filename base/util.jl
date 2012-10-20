@@ -68,7 +68,7 @@ function function_loc(f::Function, types)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (string(lsd.file), ln)
+                return (find_in_path(string(lsd.file)), ln)
             end
         end
     end
@@ -199,7 +199,7 @@ end
 
 function find_in_path(fname)
     if fname[1] == '/'
-        return real_path(fname)
+        return realpath(fname)
     end
     for pfx in LOAD_PATH
         if pfx != "" && pfx[end] != '/'
@@ -208,10 +208,10 @@ function find_in_path(fname)
             pfxd = strcat(pfx,fname)
         end
         if is_file_readable(pfxd)
-            return real_path(pfxd)
+            return realpath(pfxd)
         end
     end
-    return real_path(fname)
+    return realpath(fname)
 end
 
 begin

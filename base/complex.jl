@@ -37,6 +37,9 @@ end
 show(io, z::Complex) = _jl_show(io, z, false)
 showcompact(io, z::Complex) = _jl_show(io, z, true)
 
+convert{T<:Real}(::Type{T}, z::Complex) = (imag(z)==0 ? convert(T,real(z)) :
+                                           throw(InexactError()))
+
 ## packed complex float types ##
 
 bitstype 128 Complex128 <: Complex{Float64}

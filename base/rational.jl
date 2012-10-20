@@ -157,3 +157,5 @@ function ^(x::Rational, y::Integer)
         Rational(x.num^y, x.den^y)
     end
 end
+
+^(x::Number, y::Rational) = x^(y.num/y.den)

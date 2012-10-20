@@ -285,7 +285,7 @@ typedef struct {
 typedef struct _jl_module_t {
     JL_STRUCT_TYPE
     jl_sym_t *name;
-    jl_value_t *parent;
+    struct _jl_module_t *parent;
     htable_t bindings;
     arraylist_t imports;  // modules with all bindings imported
 } jl_module_t;
@@ -717,6 +717,7 @@ void jl_compute_struct_offsets(jl_struct_type_t *st);
 int jl_field_index(jl_struct_type_t *t, jl_sym_t *fld, int err);
 DLLEXPORT jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i);
 jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
+int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err);
 
 // arrays
 DLLEXPORT jl_array_t *jl_new_array(jl_type_t *atype, jl_tuple_t *dims);
@@ -740,6 +741,7 @@ DLLEXPORT jl_value_t *jl_array_to_string(jl_array_t *a);
 DLLEXPORT jl_array_t *jl_alloc_cell_1d(size_t n);
 DLLEXPORT jl_value_t *jl_arrayref(jl_array_t *a, size_t i);  // 0-indexed
 DLLEXPORT void jl_arrayset(jl_array_t *a, jl_value_t *v, size_t i);  // 0-indexed
+int jl_array_isdefined(jl_value_t **args, int nargs);
 DLLEXPORT void *jl_array_ptr(jl_array_t *a);
 DLLEXPORT void jl_array_grow_end(jl_array_t *a, size_t inc);
 DLLEXPORT void jl_array_del_end(jl_array_t *a, size_t dec);

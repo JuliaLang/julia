@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv fdlibm dsfmt rmath double-conversion amos glpk
+STAGE1_DEPS = uv fdlibm random rmath double-conversion amos glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -378,7 +378,7 @@ RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)
 compile-rmath: $(RMATH_OBJ_SOURCE)
 install-rmath: $(RMATH_OBJ_TARGET)
 
-$(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-dsfmt
+$(RMATH_OBJ_SOURCE): Rmath/src/Makefile install-random
 	cd Rmath/src && \
 	$(MAKE) CC="$(CC)" && \
 	$(INSTALL_NAME_CMD)libRmath.$(SHLIB_EXT) libRmath.$(SHLIB_EXT)
@@ -411,18 +411,18 @@ clean-amos:
 	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
 distclean-amos: clean-amos
 
-## DSFMT ##
+## LIBRANDOM ##
 
-DSFMT_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
-DSFMT_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
+LIBRANDOM_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
+LIBRANDOM_OBJ_SOURCE = random/librandom.$(SHLIB_EXT)
 
-LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800  -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
+LIBRANDOM_CFLAGS = $(CFLAGS) -O3 -finline-functions -fomit-frame-pointer -DNDEBUG -fno-strict-aliasing --param max-inline-insns-single=1800 -Wmissing-prototypes -Wall  -std=c99 -DDSFMT_MEXP=19937 $(fPIC) -shared -DDSFMT_DO_NOT_USE_OLD_NAMES
 ifeq ($(ARCH), x86_64)
 LIBRANDOM_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
-compile-dsfmt: $(DSFMT_OBJ_SOURCE)
-install-dsfmt: $(DSFMT_OBJ_TARGET)
+compile-random: $(LIBRANDOM_OBJ_SOURCE)
+install-random: $(LIBRANDOM_OBJ_TARGET)
 
 random/dsfmt-$(DSFMT_VER).tar.gz:
 	$(WGET_DASH_O) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
@@ -433,17 +433,17 @@ random/jl_random.c: random/dsfmt-$(DSFMT_VER).tar.gz
 	tar -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch
 	touch $@
-$(DSFMT_OBJ_SOURCE): random/jl_random.c
+$(LIBRANDOM_OBJ_SOURCE): random/jl_random.c random/randmtzig.c
 	cd random && \
 	$(CC) $(LIBRANDOM_CFLAGS) jl_random.c -o librandom.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)librandom.$(SHLIB_EXT) librandom.$(SHLIB_EXT)
 
-$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+$(LIBRANDOM_OBJ_TARGET): $(LIBRANDOM_OBJ_SOURCE)
 	cp $< $@
 
-clean-dsfmt:
+clean-random:
 	rm -f random/librandom.$(SHLIB_EXT)
-distclean-dsfmt: clean-dsfmt
+distclean-random: clean-random
 	cd random && rm -rf *.tar.gz dsfmt-$(DSFMT_VER)
 
 ## OpenBLAS ##
