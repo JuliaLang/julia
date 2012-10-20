@@ -2672,14 +2672,14 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.copy!(n, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"BLAS.copy!(n, X, incx, Y, incy)
 
    Copy 'n' elements of array 'X' with stride 'incx' to array 'Y' with
    stride 'incy'.  Returns 'Y'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.dot(n, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"BLAS.dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of 'n' elements of array 'X'
    with stride 'incx' and 'n' elements of array 'Y' with stride
@@ -2687,20 +2687,20 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.nrm2(n, X, incx)
+(E"BLAS",E"BLAS",E"BLAS.nrm2(n, X, incx)
 
    2-norm of a vector consisting of 'n' elements of array 'X' with
    stride 'incx'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)
 
    Overwrite 'Y' with 'a*X + Y'.  Returns 'Y'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
+(E"BLAS",E"BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix 'C' as 'alpha*A*A.' + beta*C'
    or 'alpha*A.'*A + beta*C' according to whether 'trans' is 'N' or
@@ -2709,7 +2709,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk(uplo, trans, alpha, A)
+(E"BLAS",E"BLAS",E"BLAS.syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according
    to 'uplo' ('U' or 'L'), of 'alpha*A*A.'' or 'alpha*A.'*A',
@@ -2717,7 +2717,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
+(E"BLAS",E"BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only.  Rank-k update of the Hermitian
    matrix 'C' as 'alpha*A*A' + beta*C' or 'alpha*A'*A + beta*C'
@@ -2727,7 +2727,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk(uplo, trans, alpha, A)
+(E"BLAS",E"BLAS",E"BLAS.herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only.  Returns either the upper triangle
    or the lower triangle, according to 'uplo' ('U' or 'L'), of
@@ -2735,7 +2735,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' or 'alpha*A'*x + beta*y'
    according to 'trans' ('N' or 'T').  The matrix 'A' is a general
@@ -2744,7 +2744,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns 'alpha*A*x' or 'alpha*A'*x' according to 'trans' ('N' or
    'T'). The matrix 'A' is a general band matrix of dimension 'm' by
@@ -2752,7 +2752,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' where 'A' is a a
    symmetric band matrix of order 'size(A,2)' with 'k' super-diagonals
@@ -2764,14 +2764,14 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv(uplo, k, alpha, A, x)
+(E"BLAS",E"BLAS",E"BLAS.sbmv(uplo, k, alpha, A, x)
 
    Returns 'alpha*A*x' where 'A' is a symmetric band matrix of order
    'size(A,2)' with 'k' super-diagonals stored in the argument 'A'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+(E"BLAS",E"BLAS",E"BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update 'C' as 'alpha*A*B + beta*C' or the other three variants
    according to 'tA' (transpose 'A') and 'tB'.  Returns the updated
@@ -2779,7 +2779,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm(tA, tB, alpha, A, B)
+(E"BLAS",E"BLAS",E"BLAS.gemm(tA, tB, alpha, A, B)
 
    Returns 'alpha*A*B' or the other three variants according to 'tA'
    (transpose 'A') and 'tB'.
@@ -4440,7 +4440,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"sound.jl --- Functions for audio",E"Sound",E"Sound.wavread(io[, options])
+(E"sound.jl",E"Sound",E"Sound.wavread(io[, options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples
    are converted to floating point values in the range from -1.0 to
@@ -4480,7 +4480,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"sound.jl --- Functions for audio",E"Sound",E"Sound.wavwrite(samples, io[, options])
+(E"sound.jl",E"Sound",E"Sound.wavwrite(samples, io[, options])
 
       Writes samples to a RIFF/WAVE file io object. The 'io' argument
       accepts either an 'IO' object or a filename ('String'). The
@@ -4719,14 +4719,14 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_bound",E"compress_bound(input_size)
+(E"zlib.jl",E"compress_bound",E"compress_bound(input_size)
 
    Returns the maximum size of the compressed output buffer for a
    given uncompressed input size.
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress",E"compress(source[, level])
+(E"zlib.jl",E"compress",E"compress(source[, level])
 
    Compresses source using the given compression level, and returns
    the compressed buffer ('Array{Uint8,1}').  'level' is an integer
@@ -4739,7 +4739,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
+(E"zlib.jl",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
 
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
@@ -4749,7 +4749,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress",E"uncompress(source[, uncompressed_size])
+(E"zlib.jl",E"uncompress",E"uncompress(source[, uncompressed_size])
 
    Allocates a buffer of size 'uncompressed_size', uncompresses source
    to this buffer using the given compression level, and returns the
@@ -4763,7 +4763,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
+(E"zlib.jl",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
 
    Uncompresses the source buffer into the destination buffer. Returns
    the number of bytes written into dest.  An error is thrown if the
