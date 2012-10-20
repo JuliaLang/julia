@@ -261,3 +261,6 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all)
     JL_GC_POP();
     return (jl_value_t*)a;
 }
+
+DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
+DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }

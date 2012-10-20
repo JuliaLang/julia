@@ -18,7 +18,8 @@ show(io, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 show{T}(io, p::Ptr{T}) =
     print(io, is(T,None) ? "Ptr{Void}" : typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
 
-full_name(m::Module) = m===Main ? () : tuple(full_name(m.parent)...,m.name)
+full_name(m::Module) = m===Main ? () : tuple(full_name(module_parent(m))...,
+                                             module_name(m))
 
 function show(io, m::Module)
     if is(m,Main)
@@ -452,7 +453,7 @@ function _jl_dumptype(io::IOStream, x::Type, n::Int, indent)
     # todo: include current module?
     for m in (Core, Base)
         for s in names(m)
-            if isbound(m,s)
+            if isdefined(m,s)
                 t = eval(m,s)
                 if isa(t, TypeConstructor)
                     if string(x.name) == typargs(t) ||
@@ -567,11 +568,10 @@ function alignment(
     for j in cols
         l = r = 0
         for i in rows
-            aij = _jl_undef_ref_alignment
-            try
+            if isassigned(X,i,j)
                 aij = alignment(X[i,j])
-            catch err
-                if !isa(err,UndefRefError) throw(err) end
+            else
+                aij = _jl_undef_ref_alignment
             end
             l = max(l, aij[1])
             r = max(r, aij[2])
@@ -596,14 +596,13 @@ function print_matrix_row(io,
 )
     for k = 1:length(A)
         j = cols[k]
-        a = _jl_undef_ref_alignment
-        sx = _jl_undef_ref_str
-        try
+        if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(x)
             sx = sprint(showcompact, x)
-        catch err
-            if !isa(err,UndefRefError) throw(err) end
+        else
+            a = _jl_undef_ref_alignment
+            sx = _jl_undef_ref_str
         end
         l = repeat(" ", A[k][1]-a[1])
         r = repeat(" ", A[k][2]-a[2])
@@ -756,7 +755,7 @@ end
 function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
-        if isbound(v) && ismatch(pattern, s)
+        if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(v, 30), summary(eval(m,v)))
         end
     end
@@ -767,11 +766,10 @@ whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")
-    sx = _jl_undef_ref_str
-    try
+    if isassigned(x)
         sx = sprint(showcompact, x[])
-    catch err
-        if !isa(err,UndefRefError) throw(err) end
+    else
+        sx = _jl_undef_ref_str
     end
     print(io, sx)
 end

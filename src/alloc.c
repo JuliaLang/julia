@@ -151,6 +151,18 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
                        (char*)v + offs);
 }
 
+int jl_field_isdefined(jl_value_t *v, jl_sym_t *fld, int err)
+{
+    jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);
+    int i = jl_field_index(st, fld, err);
+    if (i == -1) return 0;
+    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    if (st->fields[i].isptr) {
+        return *(jl_value_t**)((char*)v + offs) != NULL;
+    }
+    return 1;
+}
+
 jl_value_t *jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_struct_type_t *st = (jl_struct_type_t*)jl_typeof(v);

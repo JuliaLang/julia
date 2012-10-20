@@ -339,11 +339,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
 end
 
 ## (GE) general matrices, solvers with factorization, solver and inverse
-for (gels, gesv, getrs, getri, elty) in
-    ((:dgels_,:dgesv_,:dgetrs_,:dgetri_,:Float64),
-     (:sgels_,:sgesv_,:sgetrs_,:sgetri_,:Float32),
-     (:zgels_,:zgesv_,:zgetrs_,:zgetri_,:Complex128),
-     (:cgels_,:cgesv_,:cgetrs_,:cgetri_,:Complex64))
+for (gels, gelsd, gesv, getrs, getri, elty) in
+    ((:dgels_,:dgelsd_,:dgesv_,:dgetrs_,:dgetri_,:Float64),
+     (:sgels_,:sgelsd_,:sgesv_,:sgetrs_,:sgetri_,:Float32),
+     (:zgels_,:zgelsd_,:zgesv_,:zgetrs_,:zgetri_,:Complex128),
+     (:cgels_,:cgelsd_,:cgesv_,:cgetrs_,:cgetri_,:Complex64))
     @eval begin
         #      SUBROUTINE DGELS( TRANS, M, N, NRHS, A, LDA, B, LDB, WORK, LWORK,INFO)
         # *     .. Scalar Arguments ..
@@ -372,7 +372,44 @@ for (gels, gesv, getrs, getri, elty) in
             end
             k   = min(m, n)
             F   = m < n ? tril(A[1:k, 1:k]) : triu(A[1:k, 1:k])
-            F, isa(B, Vector) ? B[1:k] : B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)] 
+            F, isa(B, Vector) ? B[1:k] : B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)]
+        end
+        # SUBROUTINE DGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
+        #      $                   WORK, LWORK, IWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+        #       DOUBLE PRECISION   RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+            Lapack.chkstride1(A, B)
+            m, n  = size(A)
+            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            s     = Array($elty, min(m, n))
+            rcond = eps(Float32)
+            rnk   = Array(Int32, 1)
+            info  = Array(Int32, 1)
+            work  = Array($elty, 1)
+            lwork = int32(-1)
+            iwork = Array(Int32, 1)
+            for i in 1:2
+                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                      (Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                       Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, 
+                       Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, iwork, info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = int32(real(work[1]))
+                    work = Array($elty, lwork)
+                    iwork = Array(Int32, iwork[1])
+                end
+            end
+            isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
         end
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..

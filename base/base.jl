@@ -81,6 +81,8 @@ uint(x::Uint) = x
 
 names(m::Module, all::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32), m, all)
 names(m::Module) = names(m,false)
+module_name(m::Module) = ccall(:jl_module_name, Symbol, (Any,), m)
+module_parent(m::Module) = ccall(:jl_module_parent, Module, (Any,), m)
 
 # index colon
 type Colon

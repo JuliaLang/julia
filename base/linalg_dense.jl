@@ -397,6 +397,7 @@ end
 
 ## Should these functions check that the matrix is Hermitian?
 chold!{T<:LapackType}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
+chold!{T<:LapackType}(A::Matrix{T}) = chold!(A, true)
 chold{T<:LapackType}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
 chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
 chold{T<:Number}(A::Matrix{T}) = chold(A, true)
@@ -616,7 +617,7 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
-    Lapack.gels!('N', Acopy, X)[2]
+    Lapack.gelsd!(Acopy, X)[1]
 end
 
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
@@ -628,6 +629,26 @@ end
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
 
+## Moore-Penrose inverse
+function pinv{T<:LapackType}(A::StridedMatrix{T})
+    u,s,vt      = svd(A, true)
+    sinv        = zeros(T, length(s))
+    index       = s .> eps(T)*max(size(A))*max(s)
+    sinv[index] = 1 ./ s[index]
+    vt'diagmm(sinv, u')
+end
+pinv(A::StridedMatrix{Int}) = pinv(float(A))
+pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
+
+## Basis for null space
+function null{T<:LapackType}(A::StridedMatrix{T})
+    m,n = size(A)
+    if m >= n; return zeros(T, n, 0); end;
+    u,s,vt = svd(A)
+    vt[m+1:,:]'
+end
+null(A::StridedMatrix{Int}) = null(float(A))
+null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 #### Specialized matrix types ####
 

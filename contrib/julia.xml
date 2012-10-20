@@ -6,7 +6,7 @@
 
   This was adapted from the Matlab syntax highlighting file
 
-  Most of this XML file is straight and simple. Only the character ' (&apos;)
+  Most of this XML file is straightforward. Only the character ' (&apos;)
   needs nontrivial treatment, since it is both a postfix operator indicating
   complex conjugate transpose (adjoint) and a character delimiter. It is an
   adjoint operator in the following positions:
@@ -137,33 +137,24 @@
     </list>
     <contexts>
 
-      <context name="_normal" attribute="Normal Text" lineEndContext="#pop">
+      <context name="_normal" attribute="Normal Text" lineEndContext="#stay">
 
-        <!-- Look-ahead for adjoint ' after variable, number literal, closing braces and .' -->
-        <RegExpr context="_adjoint" attribute="Variable" String="[a-zA-Z]\w*(?=')" />
-        <RegExpr context="_adjoint" attribute="Decimal" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?(?=')" />
-        <RegExpr context="_adjoint" attribute="Delimiter" String="[\)\]}](?=')" />
-        <RegExpr context="_adjoint" attribute="Operator" String="\.'(?=')" />
+	<DetectSpaces />
 
-        <!-- If ' is not the adjoint operator, it starts a character or an unterminated char -->
-        <RegExpr context="#stay" attribute="Char" String="'[^']*(''[^']*)*'(?=[^']|$)" />
-        <RegExpr context="#stay" attribute="Incomplete Char" String="'[^']*(''[^']*)*" />
+        <!-- Handling of keywords, types, and comments -->
+        <keyword context="#stay" attribute="Keyword" String="keywords" />
+        <keyword context="#stay" attribute="Data Type" String="types" />
+        <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
         <!-- Strings -->
 	<DetectChar attribute="String" context="String" char="&quot;"/>
-	
-        <!-- Handling of keywords, comments, system commands, identifiers, numbers and braces -->
-        <keyword context="#stay" attribute="Keyword" String="keywords" />
-        <keyword context="#stay" attribute="Data Type" String="types" />
-        <RegExpr context="#stay" attribute="Comment" String="#.*$" />
-	<!--<RegExpr context="#stay" attribute="System" String="!.*$" />-->
-        <RegExpr context="#stay" attribute="Variable" String="[a-zA-Z]\w*" />
-        <RegExpr context="#stay" attribute="Hex" String="\b-?0[xX][_0-9a-fA-F]+" />
-        <RegExpr context="#stay" attribute="Decimal" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?" />
-        <AnyChar context="#stay" attribute="Delimiter" String="()[]{}"/>
 
-        <!-- Three and two-character operators -->
+        <!-- Multi-character operators -->
         <StringDetect context="#stay" attribute="Operator" String="..."/>
+        <StringDetect context="#stay" attribute="Operator" String="::"/>
+        <StringDetect context="#stay" attribute="Operator" String="&gt;&gt;&gt;"/>
+        <StringDetect context="#stay" attribute="Operator" String="&gt;&gt;"/>
+        <StringDetect context="#stay" attribute="Operator" String="&lt;&lt;"/>
         <StringDetect context="#stay" attribute="Operator" String="=="/>
         <StringDetect context="#stay" attribute="Operator" String="!="/>
         <StringDetect context="#stay" attribute="Operator" String="&lt;="/>
@@ -174,9 +165,42 @@
         <StringDetect context="#stay" attribute="Operator" String=".^"/>
         <StringDetect context="#stay" attribute="Operator" String="./"/>
         <StringDetect context="#stay" attribute="Operator" String=".'"/>
+        <StringDetect context="#stay" attribute="Operator" String="+="/>
+        <StringDetect context="#stay" attribute="Operator" String="-="/>
+        <StringDetect context="#stay" attribute="Operator" String="*="/>
+        <StringDetect context="#stay" attribute="Operator" String="/="/>
+        <StringDetect context="#stay" attribute="Operator" String="&amp;="/>
+        <StringDetect context="#stay" attribute="Operator" String="|="/>
+        <StringDetect context="#stay" attribute="Operator" String="$="/>
+        <StringDetect context="#stay" attribute="Operator" String="&gt;&gt;&gt;="/>
+        <StringDetect context="#stay" attribute="Operator" String="&gt;&gt;="/>
+        <StringDetect context="#stay" attribute="Operator" String="&lt;&lt;="/>
+
+        <!-- Look-ahead for adjoint ' after variable, number literal, closing braces and .' -->
+        <RegExpr context="_adjoint" attribute="Variable" String="[a-zA-Z]\w*(?=')" />
+        <RegExpr context="_adjoint" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?(?=')" />
+        <RegExpr context="_adjoint" attribute="Delimiter" String="[\)\]}](?=')" />
+        <RegExpr context="_adjoint" attribute="Operator" String="\.'(?=')" />
+
+        <!-- If ' is not the adjoint operator, it starts a character or an unterminated char -->
+        <RegExpr context="#stay" attribute="Char" String="'[^']*(''[^']*)*'(?=[^']|$)" />
+        <RegExpr context="#stay" attribute="Incomplete Char" String="'[^']*(''[^']*)*" />
+
+        <!-- Handling of identifiers, numbers and braces -->
+        <DetectIdentifier context="#stay" attribute="Variable" />
+        <HlCHex contex="#stay" attribute="Hex" >
+          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
+        </HlCHex>
+	<Int context="#stay" attribute="Decimal">
+          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
+        </Int>
+        <CFloat context="#stay" attribute="Float">
+          <Detect2Chars context="#stay" attribute="Float" char="i" char1="m" />
+        </CFloat>
+        <AnyChar context="#stay" attribute="Delimiter" String="()[]{}"/>
 
         <!-- Single-character operators -->
-        <AnyChar context="#stay" attribute="Operator" String="*+-/\&amp;|&lt;&gt;~^=,;:@"/>
+        <AnyChar context="#stay" attribute="Operator" String="*+-/\&amp;|&lt;&gt;~$!^=,;:@"/>
 
       </context>
 
@@ -185,11 +209,19 @@
         <RegExpr context="#pop" attribute="Operator" String="'+" />
       </context>
 
-      <!-- Context entered after encountering an " (string) -->      
+      <!-- Context entered after encountering an " (string) -->
       <context attribute="String" lineEndContext="#pop" name="String">
+        <DetectSpaces />
+        <DetectIdentifier />
         <LineContinue attribute="String" context="#stay"/>
         <HlCStringChar attribute="String Char" context="#stay"/>
         <DetectChar attribute="String" context="#pop" char="&quot;"/>
+      </context>
+
+      <!-- 1-line comment: #pop@EOL  -->
+      <context name="1-comment" lineEndContext="#pop" attribute="Comment">
+        <DetectSpaces />
+        <DetectIdentifier />
       </context>
 
     </contexts>
@@ -198,7 +230,8 @@
       <itemData name="Normal Text" defStyleNum="dsNormal" />
       <itemData name="Variable" defStyleNum="dsNormal" />
       <itemData name="Operator" defStyleNum="dsNormal"/>
-      <itemData name="Decimal" defStyleNum="dsFloat" />
+      <itemData name="Decimal" defStyleNum="dsDecVal" />
+      <itemData name="Float" defStyleNum="dsFloat" />
       <itemData name="Hex" defStyleNum="dsBaseN" />
       <itemData name="Delimiter" defStyleNum="dsNormal" />
       <itemData name="String" defStyleNum="dsString"/>
@@ -215,7 +248,6 @@
   <general>
     <comments>
       <comment name="singleLine" start="#" />
-      <comment name="multiLine" start="# " />
     </comments>
     <keywords casesensitive="1" weakDeliminator=""/>
   </general>

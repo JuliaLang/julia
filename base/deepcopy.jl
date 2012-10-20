@@ -31,13 +31,8 @@ function _deepcopy_t(x, T::CompositeKind, stackdict::ObjectIdDict)
     ret = ccall(:jl_new_struct_uninit, Any, (Any,), T)
     stackdict[x] = ret
     for f in T.names
-        try
+        if isdefined(x,f)
             ret.(f) = deepcopy_internal(x.(f), stackdict)
-        catch err
-            # we ignore undefined references errors
-            if !isa(err, UndefRefError)
-                throw(err)
-            end
         end
     end
     return ret
@@ -57,19 +52,9 @@ _deepcopy_array_t(x, T::BitsKind, stackdict::ObjectIdDict) = copy(x)
 function _deepcopy_array_t(x, T, stackdict::ObjectIdDict)
     dest = similar(x)
     stackdict[x] = dest
-    i0 = 1; local i
-    while true
-        try
-            for i=i0:length(x)
-                arrayset(dest, deepcopy_internal(x[i], stackdict), i)
-            end
-            break
-        catch err
-            # we ignore undefined references errors
-            if !isa(err, UndefRefError)
-                throw(err)
-            end
-            i0 = i+1
+    for i=1:length(x)
+        if isdefined(x,i)
+            arrayset(dest, deepcopy_internal(x[i], stackdict), i)
         end
     end
     return dest

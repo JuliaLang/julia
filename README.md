@@ -75,8 +75,6 @@ If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCE
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
 
-Chinese users should replace line 798 in `deps/Makefile` with "$(WGET) ftp://ftp.gnu.org/gnu/gmp/gmp-$(GMP_VER)/$@" due to IP block .(original line 798 "$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@")
-
 On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
 
 On CentOS 5 systems, the default compiler (gcc 4.1) is too old to build julia.
