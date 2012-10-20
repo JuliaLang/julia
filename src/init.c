@@ -343,7 +343,6 @@ void jl_get_builtin_hooks(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
-    jl_weakref_type = (jl_struct_type_t*)core("WeakRef");
     jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
     jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
@@ -363,6 +362,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
     jl_backtrace_type = (jl_struct_type_t*)basemod("BackTrace");
+    jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
 
     jl_method_missing_func = (jl_function_t*)basemod("method_missing");
 }

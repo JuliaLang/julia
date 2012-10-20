@@ -89,6 +89,7 @@ export
     Vector,
     VersionNumber,
     WeakKeyDict,
+    WeakRef,
     Woodbury,
     Zip,
     Stat,

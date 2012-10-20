@@ -69,6 +69,12 @@ end
 
 method_missing(f, args...) = throw(MethodError(f, args))
 
+type WeakRef
+    value
+    WeakRef() = WeakRef(nothing)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, WeakRef, (Any,), v)
+end
+
 ccall(:jl_get_system_hooks, Void, ())
 
 
