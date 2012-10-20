@@ -34,6 +34,16 @@ iscomplex(::AbstractArray) = false
 isbool(::AbstractArray{Bool}) = true
 isbool(::AbstractArray) = false
 
+function isassigned(a::AbstractArray, i::Int...)
+    # TODO
+    try
+        a[i...]
+        true
+    catch
+        false
+    end
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1

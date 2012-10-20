@@ -568,7 +568,7 @@ function alignment(
     for j in cols
         l = r = 0
         for i in rows
-            if isdefined(X,i,j)
+            if isassigned(X,i,j)
                 aij = alignment(X[i,j])
             else
                 aij = _jl_undef_ref_alignment
@@ -596,7 +596,7 @@ function print_matrix_row(io,
 )
     for k = 1:length(A)
         j = cols[k]
-        if isdefined(X,i,j)
+        if isassigned(X,i,j)
             x = X[i,j]
             a = alignment(x)
             sx = sprint(showcompact, x)
@@ -755,7 +755,7 @@ end
 function whos(m::Module, pattern::Regex)
     for s in sort(map(string, names(m)))
         v = symbol(s)
-        if isdefined(v) && ismatch(pattern, s)
+        if isdefined(m,v) && ismatch(pattern, s)
             println(rpad(v, 30), summary(eval(m,v)))
         end
     end
@@ -766,7 +766,7 @@ whos(pat::Regex) = whos(ccall(:jl_get_current_module, Module, ()), pat)
 
 function show{T}(io, x::AbstractArray{T,0})
     println(io, summary(x),":")
-    if isdefined(x)
+    if isassigned(x)
         sx = sprint(showcompact, x[])
     else
         sx = _jl_undef_ref_str
