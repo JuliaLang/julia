@@ -202,7 +202,8 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
                     @spawnlocal a[idxs...] = chunk(d, i)
                 else
                     # partial chunk
-                    @spawnlocal a[idxs...] = d.chunks[i][[K[j]-first(K_c[j])+1 for j=1:n]...]
+                    ch = d.chunks[i]
+                    @spawnlocal a[idxs...] = remote_call_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
                 end
             end
         end
