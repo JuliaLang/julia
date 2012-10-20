@@ -186,8 +186,9 @@ end
 function serialize_type_data(s, t)
     tname = t.name.name
     serialize(s, tname)
-    serialize(s, t.name.module)
-    if isdefined(tname) && is(t,eval(tname))
+    mod = t.name.module
+    serialize(s, mod)
+    if isdefined(mod,tname) && is(t,eval(mod,tname))
         serialize(s, ())
     else
         serialize(s, t.parameters)
