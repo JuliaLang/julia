@@ -140,9 +140,28 @@ end
 
 convert{T,N}(::Type{Array}, d::SubOrDArray{T,N}) = convert(Array{T,N}, d)
 
-function convert{S,T,N}(::Type{Array{S,N}}, d::SubOrDArray{T,N})
+function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
-    a[[1:size(a,i) for i=1:N]...] = d
+    @sync begin
+        for i = 1:length(d.chunks)
+            @spawnlocal a[d.indexes[i]...] = chunk(d, i)
+        end
+    end
+    a
+end
+
+function convert{S,T,N}(::Type{Array{S,N}}, s::SubDArray{T,N})
+    I = s.indexes
+    d = s.parent
+    if isa(I,(Range1{Int}...)) && subtype(S,T) && subtype(T,S)
+        l = locate(d, map(first, I)...)
+        if isequal(d.indexes[l...], I)
+            # SubDArray corresponds to a chunk
+            return chunk(d, l...)
+        end
+    end
+    a = Array(S, size(s))
+    a[[1:size(a,i) for i=1:N]...] = s
     a
 end
 
