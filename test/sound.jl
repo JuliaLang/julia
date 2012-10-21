@@ -22,7 +22,6 @@ function reldiff{T<:Real}(current::AbstractArray{T}, target::AbstractArray{T})
 end
 
 ## Test wavread and wavwrite
-wav_header_size = 36
 ## Generate some wav files for writing and reading
 for fs = (8000,11025,22050,44100,48000,96000,192000), nbits = (1,7,8,9,12,16,20,24,32,64), nsamples = convert(Array{Int}, [0, logspace(1, 4, 4)]), nchans = 1:4
     ## Test wav files
@@ -35,12 +34,8 @@ for fs = (8000,11025,22050,44100,48000,96000,192000), nbits = (1,7,8,9,12,16,20,
     io = memio()
     wavwrite(in_data, io, @options Fs=fs nbits=nbits compression=WAVE_FORMAT_PCM)
     flush(io)
-
-    ## Check that the data length makes sense
-    data_length = nsamples * nchans * int(ceil(nbits / 8))
     file_size = position(io)
-    # add "8" for the RIFF + size fields
-    @assert file_size == wav_header_size + data_length + 8
+
     ## Check for the common header identifiers
     seek(io, 0)
     @assert read(io, Uint8, 4) == b"RIFF"
