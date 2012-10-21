@@ -188,6 +188,7 @@ function mkdir(path::String, mode::Unsigned)
     ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
     system_error(:mkdir, ret != 0)
 end
+mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
 
 function rmdir(path::String)
