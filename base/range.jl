@@ -109,6 +109,12 @@ isequal(r::Range1, s::Range1) = (r.start==s.start) & (r.len==s.len)
 
 intersect(r::Range1, s::Range1) = max(r.start,s.start):min(last(r),last(s))
 
+intersect{T<:Integer}(i::Integer, r::Range1{T}) =
+    i < first(r) ? (first(r):i) :
+    i > last(r)  ? (i:last(r))  : (i:i)
+
+intersect{T<:Integer}(r::Range1{T}, i::Integer) = intersect(i, r)
+
 # TODO: general intersect?
 function intersect(r::Range1, s::Range)
     sta = first(s)
