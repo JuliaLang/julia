@@ -33,7 +33,7 @@
 ##
 ## @spawnat p expr - @spawn specifying where to run
 ##
-## @spawnlocal expr -
+## @async expr -
 ##     run expr as an asynchronous task on the local processor
 ##
 ## @parallel (r) for i=1:n ... end -
@@ -1180,6 +1180,10 @@ end
 macro spawnlocal(expr)
     expr = localize_vars(:(()->($expr)))
     :(spawnlocal($(esc(expr))))
+end
+
+macro async(expr)
+    :(@spawnlocal $(esc(expr)))
 end
 
 macro spawnat(p, expr)

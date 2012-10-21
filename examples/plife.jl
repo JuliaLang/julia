@@ -20,7 +20,7 @@ end
 function life_step(d)
     DArray(size(d),[2:nprocs()]) do I
         m, n = length(I[1]), length(I[2])
-        # fetch neighborhood
+        # fetch neighborhood - toroidal boundaries
         old = Array(Bool, m+2, n+2)
         top   = mod(first(I[1])-2,size(d,1))+1
         bot   = mod( last(I[1])  ,size(d,1))+1
@@ -59,14 +59,28 @@ function plife(m, n)
     w = Window("parallel life", n, m)
     c = Canvas(w)
     pack(c)
+    done = false
+    c.mouse.button1press = (c,x,y)->(done=true)
     cr = cairo_context(c)
 
     grid = DArray(I->randbool(map(length,I)), (m, n), [2:nprocs()])
-    while true
-        img = convert(Array,grid) .* 0x00ffffff
-        set_source_surface(cr, CairoRGBSurface(img), 0, 0)
-        paint(cr)
-        reveal(c)
+    f = 1
+    t0 = last = time()
+    while !done
+        @async begin
+            # this went from 5.5 to 8 FPS just by adding @async
+            # (at 500x500 with 9 remote cpus)
+            img = convert(Array,grid) .* 0x00ffffff
+            set_source_surface(cr, CairoRGBSurface(img), 0, 0)
+            paint(cr)
+            reveal(c)
+        end
+        t = time()
+        if t-last > 2
+            println("$(f/(t-t0)) FPS")
+            last = t
+        end
+        f+=1
         grid = life_step(grid)
         #sleep(0.03)
     end

@@ -1270,6 +1270,7 @@ export
     @osx_only,
     @linux_only,
     @sync,
+    @async,
     @spawn,
     @spawnlocal,
     @spawnat,

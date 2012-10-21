@@ -149,7 +149,7 @@ function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
     a = Array(S, size(d))
     @sync begin
         for i = 1:length(d.chunks)
-            @spawnlocal a[d.indexes[i]...] = chunk(d, i)
+            @async a[d.indexes[i]...] = chunk(d, i)
         end
     end
     a
@@ -204,7 +204,7 @@ function assign(a::Array, d::DArray, I::Range1{Int}...)
     @sync begin
         for i = 1:length(d.chunks)
             K = d.indexes[i]
-            @spawnlocal a[[I[j][K[j]] for j=1:n]...] = chunk(d, i)
+            @async a[[I[j][K[j]] for j=1:n]...] = chunk(d, i)
         end
     end
     a
@@ -223,11 +223,11 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
                 if isequal(K, K_c)
                     # whole chunk
-                    @spawnlocal a[idxs...] = chunk(d, i)
+                    @async a[idxs...] = chunk(d, i)
                 else
                     # partial chunk
                     ch = d.chunks[i]
-                    @spawnlocal a[idxs...] = remote_call_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
+                    @async a[idxs...] = remote_call_fetch(ch.where, ()->sub(fetch(ch), [K[j]-first(K_c[j])+1 for j=1:n]...))
                 end
             end
         end
