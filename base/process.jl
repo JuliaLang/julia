@@ -546,6 +546,7 @@ function spawn(cmd::Cmd)
         # now actually do the fork and exec without writes
         pid = fork()
         if pid == 0
+            ccall(:setpgid, Int32, (Int32,Int32), 0, 0)
             i = 1
             n = length(dup2_fds)
             while i <= n
@@ -596,6 +597,7 @@ function spawn(cmd::Cmd)
             error("exec should not return but has")
         end
         c.pid = pid
+        ccall(:setpgid, Int32, (Int32,Int32), pid, pid)
         close(bk_stderr_stream) # do it manually since gc is disabled
     end
     for f in fds_
