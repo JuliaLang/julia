@@ -253,7 +253,7 @@
            (n (string->number s r)))
       (if n
           (cond ((eq? pred char-hex?) (sized-uint-literal n s 4))
-                ((eq? pred char-oct?) (sized-uint-literal n s 3))
+                ((eq? pred char-oct?) (sized-uint-oct-literal n s))
                 ((eq? pred char-bin?) (sized-uint-literal n s 1))
                 (else (if (and (integer? n) (> n 9223372036854775807))
                           (error (string "invalid numeric constant " s))
@@ -266,6 +266,14 @@
           ((<= l 16) (uint16 n))
           ((<= l 32) (uint32 n))
           (else      (uint64 n)))))
+
+(define (sized-uint-oct-literal n s)
+  (if (eqv? (string.char s 2) #\0)
+    (sized-uint-literal n s 3)
+    (cond ((< n 256)        (uint8  n))
+          ((< n 65536)      (uint16 n))
+          ((< n 4294967296) (uint32 n))
+          (else             (uint64 n)))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
