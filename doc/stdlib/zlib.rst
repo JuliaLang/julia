@@ -1,7 +1,7 @@
 :mod:`zlib.jl` --- Wrapper for zlib compress/uncompress
 =======================================================
 
-.. module::zlib.jl
+.. module:: zlib.jl
    :synopsis: Zlib compress/uncompress wrapper
 
 This module provides a wrapper for the compress/uncompress and related
