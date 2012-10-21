@@ -12,7 +12,7 @@ list <http://groups.google.com/group/julia-dev>`_ and `GitHub
 issues <https://github.com/JuliaLang/julia/issues>`_ for the latest
 discussion on potential features.
 
--  `Local ``goto`` <https://github.com/JuliaLang/julia/issues/101>`_
+-  `Local goto <https://github.com/JuliaLang/julia/issues/101>`_
 -  `Abstract multiple
    inheritance <https://github.com/JuliaLang/julia/issues/5>`_
 -  `Enhanced C struct and array
@@ -20,9 +20,9 @@ discussion on potential features.
 -  `Const fields in composite
    types <https://github.com/JuliaLang/julia/issues/359>`_
 -  `Multiline quotes using
-   ``""" ... """`` <https://github.com/JuliaLang/julia/issues/70>`_
+   """ ... """ <https://github.com/JuliaLang/julia/issues/70>`_
 -  `Multiline comments using
-   ``### ... ###`` <https://github.com/JuliaLang/julia/issues/69>`_
+   ### ... ### <https://github.com/JuliaLang/julia/issues/69>`_
 -  `Symbolic
    optimization <https://github.com/JuliaLang/julia/issues/32>`_
 -  `Collaborative cloud-computing
