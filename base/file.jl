@@ -184,8 +184,8 @@ function cd(f::Function, dir::String)
 end
 cd(f::Function) = cd(f, ENV["HOME"])
 
-function mkdir(path::String, mode::Integer)
-    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Int32), bytestring(path), mode)
+function mkdir(path::String, mode::Unsigned)
+    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
     system_error(:mkdir, ret != 0)
 end
 mkdir(path::String) = mkdir(path, 0o777)
