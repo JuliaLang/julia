@@ -20,22 +20,36 @@ end
 function life_step(d)
     DArray(size(d),[2:nprocs()]) do I
         m, n = length(I[1]), length(I[2])
-
         # fetch neighborhood
         old = Array(Bool, m+2, n+2)
-        old[2:end-1, 2:end-1] = d[I...]
         top   = mod(first(I[1])-2,size(d,1))+1
         bot   = mod( last(I[1])  ,size(d,1))+1
         left  = mod(first(I[2])-2,size(d,2))+1
         right = mod( last(I[2])  ,size(d,2))+1
-        old[1      , 2:end-1] = d[top , I[2]]
-        old[2:end-1, 1      ] = d[I[1], left]
-        old[end    , 2:end-1] = d[bot , I[2]]
-        old[2:end-1, end    ] = d[I[1], right]
-        old[1  ,1  ] = d[top,left]
-        old[end,1  ] = d[bot,left]
-        old[1  ,end] = d[top,right]
-        old[end,end] = d[bot,right]
+
+        if top < bot && left < right
+            old[:, :] = d[top:bot, left:right]
+        else
+            old[2:end-1, 2:end-1] = d[I...]
+
+            # top
+            old[1  , 2:end-1] = d[top, I[2]]
+            # bottom
+            old[end, 2:end-1] = d[bot, I[2]]
+
+            # sides
+            if top < bot
+                old[:, 1  ] = d[top:bot, left]
+                old[:, end] = d[top:bot, right]
+            else
+                old[1      , 1  ] = d[top , left]
+                old[2:end-1, 1  ] = d[I[1], left]
+                old[end    , 1  ] = d[bot , left]
+                old[1      , end] = d[top , right]
+                old[2:end-1, end] = d[I[1], right]
+                old[end    , end] = d[bot , right]
+            end
+        end
 
         life_rule(Array(Bool, m, n), old)
     end

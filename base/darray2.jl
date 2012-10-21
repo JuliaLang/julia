@@ -39,7 +39,12 @@ function DArray(init, dims, procs, dist)
     DArray{eltype(A),length(dims),A}(dims, chunks, procs, idxs, cuts)
 end
 
-DArray(init, dims, procs) = DArray(init, dims, procs, defaultdist(dims,procs))
+function DArray(init, dims, procs)
+    if isempty(procs)
+        error("DArray: no processors!")
+    end
+    DArray(init, dims, procs, defaultdist(dims,procs))
+end
 DArray(init, dims) = DArray(init, dims, [1:min(nprocs(),max(dims))])
 
 size(d::DArray) = d.dims
