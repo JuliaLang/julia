@@ -97,16 +97,23 @@ type Worker
     id::Int
     gcflag::Bool
     
-    function Worker(host::ByteString, port)
-        fd = ccall(:connect_to_host, Int32, (Ptr{Uint8}, Int16), host, port)
+    function Worker(host::ByteString, port, tunnel_user)
+        if tunnel_user != ""
+            connect_host = "localhost"
+            connect_port = ssh_tunnel(tunnel_user, host, port)
+        else
+            connect_host, connect_port = host, port
+        end
+        fd = ccall(:connect_to_host, Int32, (Ptr{Uint8}, Int16),
+                   connect_host, connect_port)
         if fd == -1
             error("could not connect to $host:$port, errno=$(errno())\n")
         end
-        Worker(host, port, fd, fdio(fd, true))
+        Worker(host, port, fd, fdio(fd, true), 0)
     end
 
+    Worker(host::ByteString, port) = Worker(host, port, "")
     Worker(host,port,fd,sock,id) = new(host, port, fd, sock, memio(), {}, {}, id, false)
-    Worker(host,port,fd,sock) = Worker(host,port,fd,sock,0)
 end
 
 function send_msg_now(w::Worker, kind, args...)
@@ -919,17 +926,8 @@ function start_worker(wrfd)
     ccall(:exit , Void , (Int32,), 0)
 end
 
-# establish an SSH tunnel to a remote worker
-# returns P such that localhost:P connects to host:port
-# function worker_tunnel(host, port)
-#     localp = 9201
-#     while !success(`ssh -f -o ExitOnForwardFailure=yes julia@$host -L $localp:$host:$port -N`)
-#         localp += 1
-#     end
-#     localp
-# end
-
-function start_remote_workers(machines, cmds)
+start_remote_workers(m, c) = start_remote_workers(m, c, false)
+function start_remote_workers(machines, cmds, tunnel)
     n = length(cmds)
     outs = cell(n)
     for i=1:n
@@ -954,7 +952,17 @@ function start_remote_workers(machines, cmds)
                 break
             end
         end
-        w[i] = Worker(hostname, port)
+        if tunnel
+            s = split(machines[i],'@')
+            if length(s) > 1
+                user = s[1]
+            else
+                user = ENV["USER"]
+            end
+            w[i] = Worker(hostname, port, user)
+        else
+            w[i] = Worker(hostname, port)
+        end
     end
     w
 end
@@ -968,28 +976,49 @@ function parse_connection_info(str)
     end
 end
 
+_jl_tunnel_port = 9201
+# establish an SSH tunnel to a remote worker
+# returns P such that localhost:P connects to host:port
+ssh_tunnel(host, port) = ssh_tunnel(ENV["USER"], host, port)
+function ssh_tunnel(user, host, port)
+    global _jl_tunnel_port
+    localp = _jl_tunnel_port::Int
+    while !success(`ssh -f -o ExitOnForwardFailure=yes $(user)@$host -L $localp:$host:$port -N`)
+        localp += 1
+    end
+    _jl_tunnel_port = localp+1
+    localp
+end
+
 function worker_ssh_cmd(host)
     `ssh -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-end #func
+end
 
-function worker_ssh_cmd(host, key)
-    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
-end #func
+#function worker_ssh_cmd(host, key)
+#    `ssh -i $key -n $host "bash -l -c \"cd $JULIA_HOME && ./julia-release-basic --worker\""`
+#end
 
-function addprocs_ssh(machines) 
+function addprocs_ssh(machines)
     add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines)))
-end #func
+end
 
-function addprocs_ssh(machines, keys)
-    if !(isa(keys, Array)) && isa(machines,Array)
-        key = keys
-        keys = [ key for x = 1:numel(machines)]
-        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
-    else
-        cmdargs = {{machines,keys}}
-    end #if/else
-    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
-end #func
+# start processes via SSH, then connect to them through an SSH tunnel.
+# the tunnel is only used from the head (process 1); the nodes are assumed
+# to be mutually reachable without a tunnel, as is often the case in a cluster.
+function addprocs_ssh_tunnel(machines)
+    add_workers(PGRP, start_remote_workers(machines, map(worker_ssh_cmd, machines), true))
+end
+
+#function addprocs_ssh(machines, keys)
+#    if !(isa(keys, Array)) && isa(machines,Array)
+#        key = keys
+#        keys = [ key for x = 1:numel(machines)]
+#        cmdargs = { {machines[x],keys[x]} for x = 1:numel(machines)}
+#    else
+#        cmdargs = {{machines,keys}}
+#    end #if/else
+#    add_workers(PGRP, start_remote_workers(machines, map(x->worker_ssh_cmd(x[1],x[2]), cmdargs)))
+#end
 
 worker_local_cmd() = `$JULIA_HOME/julia-release-basic --worker`
 

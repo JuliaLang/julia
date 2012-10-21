@@ -1097,6 +1097,7 @@ export
     addprocs_local,
     addprocs_sge,
     addprocs_ssh,
+    addprocs_ssh_tunnel,
     at_each,
     broadcast,
     fetch,
