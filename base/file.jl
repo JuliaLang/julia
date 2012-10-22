@@ -220,21 +220,70 @@ function dir_remove(directory_name::String)
   run(`rmdir $directory_name`)
 end
 
-@linux_only function tempdir()
-  chomp(readall(`mktemp -d`))
+# Find an appropriate temporary directory
+function base_tempdir()
+  # First, try environment variables
+  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
+    if has(ENV, environment_variable)
+      if isdir(ENV[environment_variable])
+        return ENV[environment_variable]
+      end
+    end
+  end
+
+  # Second, try locations based on OS
+  if OS_NAME == :Windows
+    for windows_dir in ["c:\\temp", "c:\\tmp", "\\temp", "\\tmp"]
+      if isdir(windows_dir)
+        return windows_dir
+      end
+    end
+  else
+    for unix_dir in ["/tmp", "/var/tmp", "/usr/tmp"]
+      if isdir(unix_dir)
+        return unix_dir
+      end
+    end
+  end
+
+  # In worst case, return the current directory
+  return cwd()
 end
 
-@osx_only function tempdir()
-  chomp(readall(`mktemp -d -t tmp`))
+# Construct a temporary path using randstring() within an
+# appropriate temporary directory
+function tempname()
+  dir = base_tempdir()
+  temp_name = file_path(dir, randstring(8))
+  while ispath(temp_name)
+    temp_name = file_path(dir, randstring(8))
+  end
+  return temp_name
 end
 
-@linux_only function tempfile()
-  chomp(readall(`mktemp`))
+# Create and return the name of a temporary file
+function tempfile()
+  filename = tempname()
+  try
+    f = open(filename, "w")
+    close(f)
+  catch
+    error("Unable to create tempfile: $filename")
+  end
+  return filename
 end
 
-@osx_only function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+# Create and return the name of a temporary directory
+function tempdir()
+  dirname = tempname()
+  try
+    dir_create(dirname)
+  catch
+    error("Unable to create tempdir: $dirname")
+  end
+  return dirname
 end
+
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)
