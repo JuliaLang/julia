@@ -142,12 +142,6 @@ function dup2(fd1::FileDes, fd2::FileDes)
     system_error(:dup2, ret == -1)
 end
 
-function dup(fd::FileDes)
-    ret = ccall(:dup, Int32, (Int32,), fd.fd)
-    system_error(:dup, ret == -1)
-    return FileDes(ret)
-end
-
 function close(fd::FileDes)
     ret = ccall(:close, Int32, (Int32,), fd.fd)
     system_error(:close, ret != 0)

@@ -1206,7 +1206,6 @@ export
     cmd_stdout_stream,
     cmds,
     connect,
-    dup,
     dup2,
     exec,
     fork,
