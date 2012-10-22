@@ -88,28 +88,33 @@ function serialize(s, x::Symbol)
     write(s, name)
 end
 
+function serialize_array_data(s, a)
+    elty = eltype(a)
+    if elty === Bool && numel(a)>0
+        last = a[1]
+        count = 1
+        for i = 2:numel(a)
+            if a[i] != last || count == 127
+                write(s, uint8((uint8(last)<<7) | count))
+                last = a[i]
+                count = 1
+            else
+                count += 1
+            end
+        end
+        write(s, uint8((uint8(last)<<7) | count))
+    else
+        write(s, a)
+    end
+end
+
 function serialize(s, a::Array)
     writetag(s, Array)
     elty = eltype(a)
     serialize(s, elty)
     serialize(s, size(a))
     if isa(elty,BitsKind)
-        if elty === Bool && numel(a)>0
-            last = a[1]
-            count = 1
-            for i = 2:numel(a)
-                if a[i] != last || count == 127
-                    write(s, uint8((uint8(last)<<7) | count))
-                    last = a[i]
-                    count = 1
-                else
-                    count += 1
-                end
-            end
-            write(s, uint8((uint8(last)<<7) | count))
-        else
-            write(s, a)
-        end
+        serialize_array_data(s, a)
     else
         # TODO: handle uninitialized elements
         for i = 1:numel(a)
@@ -125,7 +130,7 @@ function serialize{T,N,A<:Array}(s, a::SubArray{T,N,A})
     writetag(s, Array)
     serialize(s, T)
     serialize(s, size(a))
-    write(s, a)
+    serialize_array_data(s, a)
 end
 
 function serialize(s, e::Expr)
@@ -328,10 +333,10 @@ function deserialize(s, ::Type{Array})
                 b = read(s, Uint8)
                 v = bool(b>>7)
                 count = b&0x7f
-                for i = i:(i+count-1)
-                    A[i] = v
+                nxt = i+count
+                while i < nxt
+                    A[i] = v; i+=1
                 end
-                i += 1
             end
             return A
         else
