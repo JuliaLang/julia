@@ -236,7 +236,7 @@ function assign(a::Array, s::SubDArray, I::Range1{Int}...)
 end
 
 # to disambiguate
-assign(a::Array{Any}, d::SubOrDArray, i::Int) = assign(a, d, i:i)
+assign(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 
 assign(a::Array, d::SubOrDArray, I::Union(Int,Range1{Int})...) =
     assign(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
