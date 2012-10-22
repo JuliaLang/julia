@@ -1678,6 +1678,15 @@ System
 
    Set the current working directory. Returns the new current directory.
 
+.. function:: mkdir(path[, mode])
+
+   Make a new directory with name ``path`` and permissions ``mode``.
+   ``mode`` defaults to 0o777, modified by the current file creation mask.
+
+.. function:: rmdir(path)
+
+   Remove the directory named ``path``.
+
 .. function:: getpid()
 
    Get julia's process ID.

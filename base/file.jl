@@ -184,6 +184,17 @@ function cd(f::Function, dir::String)
 end
 cd(f::Function) = cd(f, ENV["HOME"])
 
+function mkdir(path::String, mode::Unsigned)
+    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    system_error(:mkdir, ret != 0)
+end
+mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
+mkdir(path::String) = mkdir(path, 0o777)
+
+function rmdir(path::String)
+    ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    system_error(:rmdir, ret != 0)
+end
 
 # The following use Unix command line facilites
 
@@ -210,14 +221,6 @@ end
 
 function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
-end
-
-function dir_create(directory_name::String)
-  run(`mkdir $directory_name`)
-end
-
-function dir_remove(directory_name::String)
-  run(`rmdir $directory_name`)
 end
 
 @linux_only function tempdir()
