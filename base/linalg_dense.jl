@@ -617,12 +617,14 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
-    Lapack.gelsd!(Acopy, X)[1]
+    Lapack.gelsd!(Acopy, X, -1.0)[1]
 end
 
+(\){T1<:LapackType, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, convert(Array{T1}, B))
+(\){T1<:Real, T2<:LapackType}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{T2}, A), B)
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
+(\){T1<:Complex, T2<:Complex}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{Complex128}, A), convert(Array{Complex128}, B))
 
-# TODO: use *gels transpose argument
 (/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly

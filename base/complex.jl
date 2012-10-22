@@ -195,7 +195,9 @@ isequal(x::Real, z::Complex) = real_valued(z) && isequal(real(z),x)
 
 hash(z::Complex) = (r = hash(real(z)); real_valued(z) ? r : bitmix(r,hash(imag(z))))
 
-eps(z::Complex) = eps(abs(z))
+eps(z::Complex) = eps(real(z))
+eps(::Type{Complex64}) = eps(Float32)
+eps(::Type{Complex128}) = eps(Float64)
 
 conj(z::Complex) = complex(real(z),-imag(z))
 abs(z::Complex)  = hypot(real(z), imag(z))
