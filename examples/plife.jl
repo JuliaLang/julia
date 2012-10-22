@@ -1,7 +1,3 @@
-#inclde("extras/tk.jl")
-#import Tk.*
-#import Cairo.*
-
 function life_rule(old)
     m, n = size(old)
     new = similar(old, m-2, n-2)
@@ -21,36 +17,23 @@ end
 
 function life_step(d)
     DArray(size(d),[2:nprocs()]) do I
-        m, n = length(I[1]), length(I[2])
         # fetch neighborhood - toroidal boundaries
-        old = Array(Bool, m+2, n+2)
         top   = mod(first(I[1])-2,size(d,1))+1
         bot   = mod( last(I[1])  ,size(d,1))+1
         left  = mod(first(I[2])-2,size(d,2))+1
         right = mod( last(I[2])  ,size(d,2))+1
 
-        if top < bot && left < right
-            old[:, :] = d[top:bot, left:right]
-        else
-            old[2:end-1, 2:end-1] = d[I...]
-
-            # top
-            old[1  , 2:end-1] = d[top, I[2]]
-            # bottom
-            old[end, 2:end-1] = d[bot, I[2]]
-
-            # sides
-            if top < bot
-                old[:, 1  ] = d[top:bot, left]
-                old[:, end] = d[top:bot, right]
-            else
-                old[1      , 1  ] = d[top , left]
-                old[2:end-1, 1  ] = d[I[1], left]
-                old[end    , 1  ] = d[bot , left]
-                old[1      , end] = d[top , right]
-                old[2:end-1, end] = d[I[1], right]
-                old[end    , end] = d[bot , right]
-            end
+        old = Array(Bool, length(I[1])+2, length(I[2])+2)
+        @sync begin
+            @async old[1      , 1      ] = d[top , left]   # left side
+            @async old[2:end-1, 1      ] = d[I[1], left]
+            @async old[end    , 1      ] = d[bot , left]
+            @async old[1      , 2:end-1] = d[top , I[2]]
+            @async old[2:end-1, 2:end-1] = d[I[1], I[2]]   # middle
+            @async old[end    , 2:end-1] = d[bot , I[2]]
+            @async old[1      , end    ] = d[top , right]  # right side
+            @async old[2:end-1, end    ] = d[I[1], right]
+            @async old[end    , end    ] = d[bot , right]
         end
 
         life_rule(old)
@@ -66,12 +49,10 @@ function plife(m, n)
     cr = cairo_context(c)
 
     grid = DArray(I->randbool(map(length,I)), (m, n), [2:nprocs()])
-    f = 1
-    t0 = last = time()
+
+    last = time(); f = 1
     while !done
         @async begin
-            # this went from 5.5 to 8 FPS just by adding @async
-            # (at 500x500 with 9 remote cpus)
             img = convert(Array,grid) .* 0x00ffffff
             set_source_surface(cr, CairoRGBSurface(img), 0, 0)
             paint(cr)
@@ -79,11 +60,11 @@ function plife(m, n)
         end
         t = time()
         if t-last > 2
-            println("$(f/(t-t0)) FPS")
-            last = t
+            println("$(f/(t-last)) FPS")
+            last = t; f = 0
         end
-        f+=1
         grid = life_step(grid)
-        #sleep(0.03)
+        f += 1
+        sleep(0.01)
     end
 end
