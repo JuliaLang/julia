@@ -275,7 +275,7 @@ function _check_short_opt_name(name::String, settings::ArgParseSettings)
         error("illegal option name: $name (containes whitespace)")
     elseif contains(name, _nbsp)
         error("illegal option name: $name (containes non-breakable-space)")
-    elseif !settings.allow_ambiguous_opts && ismatch(r"[0-9]", name)
+    elseif !settings.allow_ambiguous_opts && ismatch(r"[0-9._(]", name)
         error("ambiguous option name: $name (disabled in the current settings)")
     elseif settings.add_help && name == "h"
         error("option -h is reserved for help in the current settings")
@@ -984,7 +984,7 @@ add_arg_group(settings::ArgParseSettings, desc::String, tag::Union(String,Symbol
 function add_arg_group(settings::ArgParseSettings, desc::String, tag::Union(String,Symbol), set_as_default::Bool)
     name = string(tag)
     _check_group_name(name)
-    _add_arg_group(settings, desc, name, true)
+    _add_arg_group(settings, desc, name, set_as_default)
 end
 
 function _add_arg_group(settings::ArgParseSettings, desc::String, name::String, set_as_default::Bool)
@@ -1299,9 +1299,6 @@ function _looks_like_an_option(arg::String, settings::ArgParseSettings)
     if !ismatch(_number_regex, arg)
         # it's not a number
         return true
-    elseif !settings.allow_ambiguous_opts
-        # it's a number
-        return false
     end
     # looks like a number; but is it overridden by an option?
     d = arg[2]
