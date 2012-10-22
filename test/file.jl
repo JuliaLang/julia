@@ -17,7 +17,7 @@ end
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
 dir_name = strcat("/tmp/testdir", randstring(6))
-dir_create(dir_name)
+mkdir(dir_name)
 filename = strcat(dir_name, "/afile.txt")
 file_create(filename)
 
@@ -54,4 +54,4 @@ run(`chmod +w $filename`)
 # Clean up #
 ############
 file_remove(filename)
-dir_remove(dir_name)
+rmdir(dir_name)
