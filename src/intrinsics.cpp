@@ -126,6 +126,9 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     else if (jl_is_float64(e)) {
         return ConstantFP::get(T_float64, jl_unbox_float64(e));
     }
+    else if (jl_is_float32(e)) {
+        return ConstantFP::get(T_float32, jl_unbox_float32(e));
+    }
     else if (e == jl_true) {
         return ConstantInt::get(T_int1, 1);
     }

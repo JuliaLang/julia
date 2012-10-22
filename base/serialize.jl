@@ -103,7 +103,7 @@ function serialize(s, a::Array)
     end
 end
 
-function serialize{T,N}(s, a::SubArray{T,N,Array})
+function serialize{T,N,A<:Array}(s, a::SubArray{T,N,A})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return serialize(s, copy(a))
     end

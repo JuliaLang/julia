@@ -1,7 +1,7 @@
 :mod:`blas.jl` --- Basic Linear Algebra Subroutines
 ===================================================
 
-.. module::BLAS
+.. module:: BLAS
    :synopsis: Wrapper functions for the Basic Linear Algebra Subroutines
 
 This module provides wrappers for some of the BLAS functions for
