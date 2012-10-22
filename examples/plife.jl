@@ -2,9 +2,11 @@
 #import Tk.*
 #import Cairo.*
 
-function life_rule(new, old)
-    for j = 2:size(old,2)-1
-        for i = 2:size(old,1)-1
+function life_rule(old)
+    m, n = size(old)
+    new = similar(old, m-2, n-2)
+    for j = 2:n-1
+        for i = 2:m-1
             nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
                    old[i  ,j-1],             old[i  ,j+1],
                    old[i+1,j-1], old[i+1,j], old[i+1,j+1])
@@ -51,7 +53,7 @@ function life_step(d)
             end
         end
 
-        life_rule(Array(Bool, m, n), old)
+        life_rule(old)
     end
 end
 

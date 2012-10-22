@@ -94,7 +94,22 @@ function serialize(s, a::Array)
     serialize(s, elty)
     serialize(s, size(a))
     if isa(elty,BitsKind)
-        write(s, a)
+        if elty === Bool && numel(a)>0
+            last = a[1]
+            count = 1
+            for i = 2:numel(a)
+                if a[i] != last || count == 127
+                    write(s, uint8((uint8(last)<<7) | count))
+                    last = a[i]
+                    count = 1
+                else
+                    count += 1
+                end
+            end
+            write(s, uint8((uint8(last)<<7) | count))
+        else
+            write(s, a)
+        end
     else
         # TODO: handle uninitialized elements
         for i = 1:numel(a)
@@ -303,9 +318,25 @@ end
 
 function deserialize(s, ::Type{Array})
     elty = deserialize(s)
-    dims = deserialize(s)
+    dims = deserialize(s)::Dims
     if isa(elty,BitsKind)
-        return read(s, elty, dims)
+        n = prod(dims)::Int
+        if elty === Bool && n>0
+            A = Array(Bool, dims)
+            i = 1
+            while i <= n
+                b = read(s, Uint8)
+                v = bool(b>>7)
+                count = b&0x7f
+                for i = i:(i+count-1)
+                    A[i] = v
+                end
+                i += 1
+            end
+            return A
+        else
+            return read(s, elty, dims)
+        end
     end
     A = Array(elty, dims)
     for i = 1:numel(A)
