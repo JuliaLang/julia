@@ -248,6 +248,49 @@ end
 
 ## text I/O ##
 
+function write(s::IO, c::Char)
+    if c < 0x80
+        write(s, uint8(c))
+        return 1
+    elseif c < 0x800
+        write(s, uint8(( c >> 6          ) | 0xC0))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 2
+    elseif c < 0x10000
+        write(s, uint8(( c >> 12         ) | 0xE0))
+        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 3
+    elseif c < 0x110000
+        write(s, uint8(( c >> 18         ) | 0xF0))
+        write(s, uint8(((c >> 12) & 0x3F ) | 0x80))
+        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 4
+    end
+    error("write(IO, Char): illegal character "*string(uint(c)))
+end
+
+function read(s::IO, ::Type{Char})
+    ch = read(s, Uint8)
+    if ch < 0x80
+        return char(ch)
+    end
+
+    # mimic utf8.next function
+    trailing = Base._jl_utf8_trailing[ch+1]
+    c = uint32(0)
+    for j = 1:trailing
+        c += ch
+        c <<= 6
+        ch = read(s, Uint8)
+    end
+    c += ch
+    c -= Base._jl_utf8_offset[trailing+1]
+    char(c)
+end
+
+
 write(s::IOStream, c::Char) = ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c)
 
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
