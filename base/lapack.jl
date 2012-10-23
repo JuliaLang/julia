@@ -383,30 +383,51 @@ for (gels, gelsd, gesv, getrs, getri, elty) in
         # *     .. Array Arguments ..
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
-        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty})
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond::FloatingPoint)
             Lapack.chkstride1(A, B)
-            m, n  = size(A)
+            m, n    = size(A)
             if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
-            s     = Array($elty, min(m, n))
-            rcond = eps(Float32)
-            rnk   = Array(Int32, 1)
-            info  = Array(Int32, 1)
-            work  = Array($elty, 1)
-            lwork = int32(-1)
-            iwork = Array(Int32, 1)
+            Rtyp    = typeof(real(A[1]))
+            s       = Array(Rtyp, min(m, n))
+            cmplx  = iscomplex(A)
+            if cmplx
+                rwork = Array(Rtyp, 1)
+            end
+            rnk     = Array(Int32, 1)
+            info    = Array(Int32, 1)
+            work    = Array($elty, 1)
+            lwork   = int32(-1)
+            iwork   = Array(Int32, 1)
             for i in 1:2
-                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
-                      (Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
-                       Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
-                       Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, 
-                       Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
-                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
-                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, iwork, info)
+                if cmplx
+                    ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                        (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, 
+                            Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Rtyp}, 
+                            Ptr{Rtyp}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, 
+                            Ptr{Rtyp}, Ptr{Int32}, Ptr{Int32}),
+                        &m, &n, &size(B,2), A, 
+                        &max(1,stride(A,2)), B, &max(1,stride(B,2)), s, 
+                        &rcond, rnk, work, &lwork, 
+                        rwork, iwork, info)
+                else
+                    ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                        (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, 
+                            Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, 
+                            Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, 
+                            Ptr{Int32}, Ptr{Int32}),
+                        &m, &n, &size(B,2), A, 
+                        &max(1,stride(A,2)), B, &max(1,stride(B,2)), s, 
+                        &rcond, rnk, work, &lwork, 
+                        iwork, info)
+                end
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
                     iwork = Array(Int32, iwork[1])
+                    if cmplx
+                        rwork = Array(Rtyp, int(rwork[1]))
+                    end
                 end
             end
             isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
