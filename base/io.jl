@@ -41,7 +41,8 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
-    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, n)
+    (ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n)==0 ||
+     error("truncate failed"))
 
 seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
