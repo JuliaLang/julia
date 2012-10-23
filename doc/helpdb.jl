@@ -2723,6 +2723,20 @@ collection[key...] = value
 
 "),
 
+(E"System",E"mkdir",E"mkdir(path[, mode])
+
+   Make a new directory with name 'path' and permissions 'mode'.
+   'mode' defaults to 0o777, modified by the current file creation
+   mask.
+
+"),
+
+(E"System",E"rmdir",E"rmdir(path)
+
+   Remove the directory named 'path'.
+
+"),
+
 (E"System",E"getpid",E"getpid()
 
    Get julia's process ID.
@@ -2880,35 +2894,35 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.copy!(n, X, incx, Y, incy)
+(E"Blas",E"copy!",E"copy!(n, X, incx, Y, incy)
 
    Copy 'n' elements of array 'X' with stride 'incx' to array 'Y' with
    stride 'incy'.  Returns 'Y'.
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.dot(n, X, incx, Y, incy)
+(E"Blas",E"dot",E"dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of 'n' elements of array 'X'
    with stride 'incx' and 'n' elements of array 'Y' with stride
-   'incy'.  There are no 'BLAS.dot' methods for 'Complex' arrays.
+   'incy'.  There are no 'dot' methods for 'Complex' arrays.
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.nrm2(n, X, incx)
+(E"Blas",E"nrm2",E"nrm2(n, X, incx)
 
    2-norm of a vector consisting of 'n' elements of array 'X' with
    stride 'incx'.
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)
+(E"Blas",E"axpy!",E"axpy!(n, a, X, incx, Y, incy)
 
    Overwrite 'Y' with 'a*X + Y'.  Returns 'Y'.
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
+(E"Blas",E"syrk!",E"syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix 'C' as 'alpha*A*A.' + beta*C'
    or 'alpha*A.'*A + beta*C' according to whether 'trans' is 'N' or
@@ -2917,7 +2931,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.syrk(uplo, trans, alpha, A)
+(E"Blas",E"syrk",E"syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according
    to 'uplo' ('U' or 'L'), of 'alpha*A*A.'' or 'alpha*A.'*A',
@@ -2925,7 +2939,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
+(E"Blas",E"herk!",E"herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only.  Rank-k update of the Hermitian
    matrix 'C' as 'alpha*A*A' + beta*C' or 'alpha*A'*A + beta*C'
@@ -2935,7 +2949,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.herk(uplo, trans, alpha, A)
+(E"Blas",E"herk",E"herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only.  Returns either the upper triangle
    or the lower triangle, according to 'uplo' ('U' or 'L'), of
@@ -2943,7 +2957,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"Blas",E"gbmv!",E"gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' or 'alpha*A'*x + beta*y'
    according to 'trans' ('N' or 'T').  The matrix 'A' is a general
@@ -2952,7 +2966,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"Blas",E"gbmv",E"gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns 'alpha*A*x' or 'alpha*A'*x' according to 'trans' ('N' or
    'T'). The matrix 'A' is a general band matrix of dimension 'm' by
@@ -2960,7 +2974,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
+(E"Blas",E"sbmv!",E"sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' where 'A' is a a
    symmetric band matrix of order 'size(A,2)' with 'k' super-diagonals
@@ -2972,14 +2986,14 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.sbmv(uplo, k, alpha, A, x)
+(E"Blas",E"sbmv",E"sbmv(uplo, k, alpha, A, x)
 
    Returns 'alpha*A*x' where 'A' is a symmetric band matrix of order
    'size(A,2)' with 'k' super-diagonals stored in the argument 'A'.
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+(E"Blas",E"gemm!",E"gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update 'C' as 'alpha*A*B + beta*C' or the other three variants
    according to 'tA' (transpose 'A') and 'tB'.  Returns the updated
@@ -2987,7 +3001,7 @@ collection[key...] = value
 
 "),
 
-(E"BLAS",E"BLAS",E"BLAS.gemm(tA, tB, alpha, A, B)
+(E"Blas",E"gemm",E"gemm(tA, tB, alpha, A, B)
 
    Returns 'alpha*A*B' or the other three variants according to 'tA'
    (transpose 'A') and 'tB'.
