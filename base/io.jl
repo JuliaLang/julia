@@ -139,8 +139,8 @@ readline(s::IO) = readuntil(s, '\n')
 function readall(s::IO)
     out = memio()
     while (!eof(s))
-        c = read(s, Char)
-        write(out, c)
+        a = read(s, Uint8)
+        write(out, a)
     end
     takebuf_string(out)
 end
