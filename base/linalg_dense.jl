@@ -617,7 +617,7 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
-    Lapack.gelsd!(Acopy, X)[1]
+    Lapack.gelsd!(Acopy, X, -1.0)[1]
 end
 
 (\){T1<:LapackType, T2<:LapackType}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
@@ -637,7 +637,7 @@ end
 function pinv{T<:LapackType}(A::StridedMatrix{T})
     u,s,vt      = svd(A, true)
     sinv        = zeros(T, length(s))
-    index       = s .> eps(T)*max(size(A))*max(s)
+    index       = s .> eps(one(T))*max(size(A))*max(s)
     sinv[index] = 1 ./ s[index]
     vt'diagmm(sinv, u')
 end
