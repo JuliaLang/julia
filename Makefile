@@ -38,7 +38,9 @@ endif
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	@$(MAKE) -sC test/unicode
-	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
+	for subdir in "sbin" "bin" "etc" "lib/julia" "share/julia" ; do \
+		mkdir -p $(PREFIX)/$$subdir ; \
+	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
