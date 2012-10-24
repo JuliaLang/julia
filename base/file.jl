@@ -221,7 +221,7 @@ function dir_remove(directory_name::String)
 end
 
 # Find an appropriate temporary directory
-function base_tempdir()
+function tempdir()
   # First, try environment variables
   for environment_variable in ["TMPDIR", "TEMP", "TMP"]
     if has(ENV, environment_variable)
@@ -250,38 +250,27 @@ function base_tempdir()
   return cwd()
 end
 
-# Construct a temporary path using randstring() within an
-# appropriate temporary directory
+# Return a temporary pathname
 function tempname()
-  dir = base_tempdir()
-  temp_name = file_path(dir, randstring(8))
-  while ispath(temp_name)
-    temp_name = file_path(dir, randstring(8))
-  end
-  return temp_name
+  b = Array(Uint8, 1024)
+  p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  bytestring(p)
 end
 
-# Create and return the name of a temporary file
-function tempfile()
-  filename = tempname()
-  try
-    f = open(filename, "w")
-    close(f)
-  catch
-    error("Unable to create tempfile: $filename")
-  end
-  return filename
+# Create and return the name of a temporary file along with an IOStream
+function mktemp()
+  b = tempname()
+  b = strcat(b[1:(end - 6)], "XXXXXX")
+  p = ccall(:mkstemp, Int, (Ptr{Uint8}, ), b)
+  return (b, fdio(p, true))
 end
 
 # Create and return the name of a temporary directory
-function tempdir()
-  dirname = tempname()
-  try
-    dir_create(dirname)
-  catch
-    error("Unable to create tempdir: $dirname")
-  end
-  return dirname
+function mktempdir()
+  b = tempname()
+  b = strcat(b[1:(end - 6)], "XXXXXX")
+  p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  return bytestring(p)
 end
 
 function download_file(url::String)
