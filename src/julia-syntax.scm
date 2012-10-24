@@ -326,7 +326,7 @@
 	 `(block
 	   (global ,name)
 	   (const ,name)
-	   (composite_type ,name (tuple ,@params) 
+	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
 			   (null) ,super (tuple ,@field-types))
 	   (call
@@ -1097,7 +1097,7 @@
 
     ;; Evaluate the comprehension
     `(scope-block
-      (block 
+      (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
        (= ,result (call (top Array) (call (top eltype) ,oneresult)
@@ -1183,8 +1183,8 @@
       ;; Evaluate the comprehension
       `(block
 	,@(map make-assignment rs (map caddr ranges))
-        (scope-block
-	(block 
+	(scope-block
+	(block
 	 ,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
@@ -1551,7 +1551,7 @@ So far only the second case can actually occur.
 	     (let* ((env (append (lam:vars e) env))
 		    (body (add-local-decls (caddr e) env)))
 	       (list 'lambda (cadr e) body)))
-	    
+
 	    ((eq? (car e) 'scope-block)
 	     (let* ((glob (declared-global-vars (cadr e)))
 		    (vars (find-locals
@@ -1656,7 +1656,7 @@ So far only the second case can actually occur.
 	       bod)))
 	  (else (map (lambda (e) (remove-scope-blocks e context usedv))
 		     e))))
-  
+
   (cond ((not (pair? e))   e)
 	((quoted? e)       e)
 	((eq? (car e)      'lambda)

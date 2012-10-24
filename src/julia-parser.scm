@@ -290,9 +290,9 @@
 	  ((special-char? c)    (read-char port))
 
 	  ((char-numeric? c)    (read-number port #f #f))
-	  
+
 	  ((eqv? c #\#)         (skip-to-eol port) (next-token port s))
-	  
+
 	  ; . is difficult to handle; it could start a number or operator
 	  ((and (eqv? c #\.)
 		(let ((c (read-char port))
@@ -307,7 +307,7 @@
 					 (symbol->string
 					  (read-operator port nextc)))))
 			(else '|.|)))))
-	  
+
 	  ((opchar? c)  (read-operator port c))
 
 	  ((identifier-char? c) (accum-julia-symbol c port))
@@ -735,9 +735,9 @@
 			   (loop `(call ,ex ,(parse-do s) ,@al)))
 			 (loop `(call ,ex ,@al)))))
 		  ((#\[ )   (take-token s)
-	           ; ref is syntax, so we can distinguish
-	           ; a[i] = x  from
-	           ; ref(a,i) = x
+		   ; ref is syntax, so we can distinguish
+		   ; a[i] = x  from
+		   ; ref(a,i) = x
 		   (loop (list* 'ref ex
 				(with-end-symbol
 				 (parse-arglist s #\] )))))
