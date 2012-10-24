@@ -51,6 +51,12 @@
 		   (whitespace-newline #f))
 		  ,@body))
 
+(define-macro (with-inside-ref . body)
+  `(with-bindings ((space-sensitive #f)
+		   (inside-vec #t)
+		   (whitespace-newline #t))
+		  ,@body))
+
 (define-macro (with-end-symbol . body)
   `(with-bindings ((end-symbol #t))
 		  ,@body))
@@ -738,9 +744,10 @@
 		   ; ref is syntax, so we can distinguish
 		   ; a[i] = x  from
 		   ; ref(a,i) = x
-		   (loop (list* 'ref ex
-				(with-end-symbol
-				 (parse-arglist s #\] )))))
+		   (let ((al (with-end-symbol (parse-ref s #\] ))))
+		     (if (and (not(null? al)) (eq? (car al) 'comprehension))
+		       (loop (list* 'typed-comprehension ex (cdr al)))
+		       (loop (list* 'ref ex al)))))
 		  ((|.|)
 		   (take-token s)
 		   (if (eqv? (peek-token s) #\()
@@ -1011,8 +1018,7 @@
    (let loop ((exprs '()))
      (if (or (closing-token? (peek-token s))
 	     (newline? (peek-token s))
-	     (and inside-vec (or (eq? (peek-token s) '|\||)
-				 (eq? (peek-token s) 'for))))
+	     (and inside-vec (eq? (peek-token s) 'for)))
 	 (reverse! exprs)
 	 (let ((e (parse-eq s)))
 	   (case (peek-token s)
@@ -1142,6 +1148,28 @@
 	     (parse-comprehension s first closer))
 	    (else
 	     (parse-matrix s first closer))))))))
+
+(define (parse-ref s closer)
+  (with-normal-ops
+   (with-inside-ref
+    (parse-ref- s closer))))
+(define (parse-ref- s closer)
+  (let loop ((lst '()))
+    (let ((t (require-token s)))
+      (if (equal? t closer)
+	  (begin (take-token s)
+		 (reverse lst))
+	  (let* ((nxt (parse-eq* s))
+		 (c (require-token s)))
+	    (cond ((eqv? c #\,)
+		   (begin (take-token s) (loop (cons nxt lst))))
+		  ((equal? c closer)     (loop (cons nxt lst)))
+		  ((eqv? c 'for)
+		   (if (null? lst)
+		     (begin (take-token s) (parse-comprehension s nxt closer))
+		     (error "invalid comprehension syntax")))
+		  (else
+		   (error "invalid ref syntax"))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
@@ -1344,7 +1372,7 @@
 	       (begin (take-token s) '(cell1d))
 	       (let ((vex (parse-cat s #\})))
 		 (cond ((eq? (car vex) 'comprehension)
-			(cons 'cell-comprehension (cdr vex)))
+			(list* 'typed-comprehension 'Any (cdr vex)))
 		       ((eq? (car vex) 'hcat)
 			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)

@@ -1158,9 +1158,9 @@
 	   ,(construct-loops (reverse loopranges))
 	   ,result)))))))
 
-   ;; cell array comprehensions
+   ;; typed array comprehensions
    (pattern-lambda
-    (cell-comprehension expr . ranges)
+    (typed-comprehension atype expr . ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
@@ -1187,7 +1187,7 @@
 	(block
 	 ,@(map (lambda (r) `(local ,r))
 		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
-	 (= ,result (call (top Array) (top Any) ,@(compute-dims rs)))
+	 (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result)))))
