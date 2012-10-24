@@ -174,33 +174,31 @@ end
 product(xss...) = Product(xss...)
 
 function start(it::Product)
-    js = [start(xs) for xs in it.xss]
-    if any([done(xs, j) for (xs, j) in zip(it.xss, js)])
-        (js, nothing)
-    else
-        vs = Array(Any, length(js))
-        for ((xs, j), i) in enumerate(zip(it.xss, js))
-            (vs[i], js[i]) = next(xs, j)
-            (v, j) = next(xs, j)
-            vs[i] = v
-            js[i] = j
-            if done(xs, js[i])
-                js[i] = start(xs)
-            end
-        end
-
-        (js, vs)
+    n = length(it.xss)
+    js = {start(xs) for xs in it.xss}
+    if n == 0
+        return js, nothing
     end
+    for i = 1:n
+        if done(it.xss[i], js[i])
+            return js, nothing
+        end
+    end
+    vs = Array(Any, n)
+    for i = 1:n
+        vs[i], js[i] = next(it.xss[i], js[i])
+    end
+    return js, vs
 end
 
 function next(it::Product, state)
-    (js, vs) = state
+    js, vs = state
     ans = tuple(vs...)
 
     n = length(it.xss)
     for i in 1:n
         if !done(it.xss[i], js[i])
-            (vs[i], js[i]) = next(it.xss[i], js[i])
+            vs[i], js[i] = next(it.xss[i], js[i])
             break
         elseif i == n
             vs = nothing
@@ -208,12 +206,12 @@ function next(it::Product, state)
         end
 
         js[i] = start(it.xss[i])
-        (vs[i], js[i]) = next(it.xss[i], js[i])
+        vs[i], js[i] = next(it.xss[i], js[i])
     end
-    (ans, (js, vs))
+    return ans, (js, vs)
 end
 
-done(it::Product, state) = is(state[2], nothing)
+done(it::Product, state) = state[2] === nothing
 
 end # module Iterators
 
