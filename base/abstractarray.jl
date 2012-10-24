@@ -135,10 +135,12 @@ int64   (x::AbstractArray) = iround_to(similar(x,Int64)  , x)
 uint64  (x::AbstractArray) = iround_to(similar(x,Uint64) , x)
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-char   (x::AbstractArray) = iround_to(similar(x,Char)   , x)
+char    (x::AbstractArray) = iround_to(similar(x,Char)   , x)
 float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
 float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
 float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
+complex64 (x::AbstractArray) = copy_to(similar(x,Complex64),  x)
+complex128(x::AbstractArray) = copy_to(similar(x,Complex128), x)
 
 full(x::AbstractArray) = x
 
