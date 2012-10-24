@@ -88,13 +88,17 @@ begin
     @assert norm(b*pinvb*b - b) < Eps
     @assert norm(pinvb*b*pinvb - pinvb) < Eps
 
+    # Complex vector rhs
+    x = a\complex(b)
+    @assert norm(a*x-complex(b)) < Eps
+    
     # Least squares
     a = [ones(20) 1:20 1:20]
     b = reshape(eye(8, 5), 20, 2)
 
     x = a[:,1:2]\b[:,1]                             # Vector rhs
     @assert abs(((a[:,1:2]*x-b[:,1])'*(a[:,1:2]*x-b[:,1])/20)[1] - 0.127330827) < Eps
-    
+
     x = a[:,1:2]\b                                  # Matrix rhs
     @assert abs(det((a[:,1:2]*x-b)'*(a[:,1:2]*x-b)/20) - 0.0110949248) < Eps
 
