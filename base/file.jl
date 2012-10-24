@@ -223,21 +223,59 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
-@linux_only function tempdir()
-  chomp(readall(`mktemp -d`))
+# Find an appropriate temporary directory
+function tempdir()
+  # First, try environment variables
+  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
+    if has(ENV, environment_variable)
+      if isdir(ENV[environment_variable])
+        return ENV[environment_variable]
+      end
+    end
+  end
+
+  # Second, try locations based on OS
+  if OS_NAME == :Windows
+    for windows_dir in ["c:\\temp", "c:\\tmp", "\\temp", "\\tmp"]
+      if isdir(windows_dir)
+        return windows_dir
+      end
+    end
+  else
+    for unix_dir in ["/tmp", "/var/tmp", "/usr/tmp"]
+      if isdir(unix_dir)
+        return unix_dir
+      end
+    end
+  end
+
+  # In worst case, return the current directory
+  return cwd()
 end
 
-@osx_only function tempdir()
-  chomp(readall(`mktemp -d -t tmp`))
+# Return a temporary pathname
+function tempname()
+  b = Array(Uint8, 1024)
+  p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  bytestring(p)
 end
 
-@linux_only function tempfile()
-  chomp(readall(`mktemp`))
+# Create and return the name of a temporary file along with an IOStream
+function mktemp()
+  b = tempname()
+  b = strcat(b[1:(end - 6)], "XXXXXX")
+  p = ccall(:mkstemp, Int, (Ptr{Uint8}, ), b)
+  return (b, fdio(p, true))
 end
 
-@osx_only function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+# Create and return the name of a temporary directory
+function mktempdir()
+  b = tempname()
+  b = strcat(b[1:(end - 6)], "XXXXXX")
+  p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  return bytestring(p)
 end
+
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)

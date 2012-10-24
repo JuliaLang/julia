@@ -50,6 +50,21 @@ run(`chmod +w $filename`)
 # @assert isdir(tempfile()) == false
 # @assert isfile(tempfile()) == true
 
+# my_tempdir = tempdir()
+# @assert ispath(my_tempdir) && isdir(my_tempdir) == true
+
+# path = tempname()
+# @assert ispath(path) == false
+
+# (filename, f) = mktemp()
+# print(f, "Here is some text")
+# close(f)
+# @assert ispath(filename) && isfile(filename) == true
+# @assert readall(filename) == "Here is some text"
+
+# dirname = mktempdir()
+# @assert ispath(dirname) && isdir(dirname)
+
 ############
 # Clean up #
 ############
