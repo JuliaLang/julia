@@ -178,7 +178,7 @@ export UCAL_ERA,
        UCAL_MILLISECONDS_IN_DAY,
        UCAL_IS_LEAP_MONTH
 
-for (a,i) in enumerate([
+for (i,a) in enumerate([
         :UCAL_ERA,
         :UCAL_YEAR,
         :UCAL_MONTH,
