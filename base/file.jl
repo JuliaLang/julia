@@ -223,9 +223,22 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
+# Return a temporary pathname
+function tempname()
+  b = Array(Uint8, 1024)
+  p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  bytestring(p)
+end
+
 # Find an appropriate temporary directory
 function tempdir()
-  # First, try environment variables
+  # 1: Try name from tempname()
+  testpath = dirname(tempname())
+  if ispath(testpath) && isdir(testpath)
+    return testpath
+  end
+
+  # 2: Try environment variables
   for environment_variable in ["TMPDIR", "TEMP", "TMP"]
     if has(ENV, environment_variable)
       if isdir(ENV[environment_variable])
@@ -234,7 +247,7 @@ function tempdir()
     end
   end
 
-  # Second, try locations based on OS
+  # 3: Try locations based on OS
   if OS_NAME == :Windows
     for windows_dir in ["c:\\temp", "c:\\tmp", "\\temp", "\\tmp"]
       if isdir(windows_dir)
@@ -253,25 +266,16 @@ function tempdir()
   return cwd()
 end
 
-# Return a temporary pathname
-function tempname()
-  b = Array(Uint8, 1024)
-  p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
-  bytestring(p)
-end
-
 # Create and return the name of a temporary file along with an IOStream
 function mktemp()
-  b = tempname()
-  b = strcat(b[1:(end - 6)], "XXXXXX")
+  b = file_path(tempdir(), "tmpXXXXXX")
   p = ccall(:mkstemp, Int, (Ptr{Uint8}, ), b)
   return (b, fdio(p, true))
 end
 
 # Create and return the name of a temporary directory
 function mktempdir()
-  b = tempname()
-  b = strcat(b[1:(end - 6)], "XXXXXX")
+  b = file_path(tempdir(), "tmpXXXXXX")
   p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
   return bytestring(p)
 end
