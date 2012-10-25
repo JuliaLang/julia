@@ -688,6 +688,7 @@ type Poisson <: DiscreteDistribution
     Poisson(l) = l > 0 ? new(float64(l)) : error("lambda must be positive")
 end
 Poisson() = Poisson(1)
+@_jl_dist_1p Poisson pois
 devresid(d::Poisson,  y::Real, mu::Real, wt::Real) = 2wt*((y==0? 0.: log(y/mu)) - (y-mu))
 insupport(d::Poisson, x::Number) = integer_valued(x) && 0 <= x
 logpmf(  d::Poisson, mu::Real, y::Real) = ccall(dlsym(_jl_libRmath,:dpois),Float64,(Float64,Float64,Int32),y,mu,1)
