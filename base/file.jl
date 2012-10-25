@@ -223,7 +223,11 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
-function candidate_tempname()
+@windows_only function candidate_tempname()
+ error("not yet implemented")
+end
+
+@unix_only function candidate_tempname()
   # Get a temporary name from the tmpnam function.
   b = C_NULL
   p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
