@@ -226,7 +226,7 @@ end
 # Return a temporary pathname
 function tempname()
   # Get a temporary name from the tmpnam function.
-  b = Array(Uint8, 1024)
+  b = C_NULL
   p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
   filename = bytestring(p)
 
