@@ -124,23 +124,31 @@ function iround_to{T}(dest::AbstractArray{T}, src)
     return dest
 end
 
-int     (x::AbstractArray) = iround_to(similar(x,Int)    , x)
-int8    (x::AbstractArray) = iround_to(similar(x,Int8)   , x)
-uint8   (x::AbstractArray) = iround_to(similar(x,Uint8)  , x)
-int16   (x::AbstractArray) = iround_to(similar(x,Int16)  , x)
-uint16  (x::AbstractArray) = iround_to(similar(x,Uint16) , x)
-int32   (x::AbstractArray) = iround_to(similar(x,Int32)  , x)
-uint32  (x::AbstractArray) = iround_to(similar(x,Uint32) , x)
-int64   (x::AbstractArray) = iround_to(similar(x,Int64)  , x)
-uint64  (x::AbstractArray) = iround_to(similar(x,Uint64) , x)
+for (f,t) in ((:char,   Char),
+              (:int,    Int),
+              (:int8,   Int8),
+              (:int16,  Int16),
+              (:int32,  Int32),
+              (:int64,  Int64),
+              (:uint8,  Uint8),
+              (:uint16, Uint16),
+              (:uint32, Uint32),
+              (:uint64, Uint64))
+    @eval ($f)(x::AbstractArray{$t}) = x
+    @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
+end
+
+for (f,t) in ((:float32,    Float32),
+              (:float64,    Float64),
+              (:complex64,  Complex64),
+              (:complex128, Complex128))
+    @eval ($f)(x::AbstractArray{$t}) = x
+    @eval ($f)(x::AbstractArray) = copy_to(similar(x,$t), x)
+end
+
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-char    (x::AbstractArray) = iround_to(similar(x,Char)   , x)
-float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
-float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
-float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
-complex64 (x::AbstractArray) = copy_to(similar(x,Complex64),  x)
-complex128(x::AbstractArray) = copy_to(similar(x,Complex128), x)
+float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
 
 full(x::AbstractArray) = x
 
