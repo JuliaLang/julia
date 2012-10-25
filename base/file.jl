@@ -225,26 +225,34 @@ end
 
 # Return a temporary pathname
 function tempname()
+  # Get a temporary name from the tmpnam function.
   b = Array(Uint8, 1024)
   p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
-  bytestring(p)
+  filename = bytestring(p)
+
+  # If tempdir environment vars exist, override basename.
+  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
+    if has(ENV, environment_variable) && isdir(ENV[environment_variable])
+      return file_path(ENV[environment_variable], basename(filename))
+    end
+  end
+
+  return filename
 end
 
 # Find an appropriate temporary directory
 function tempdir()
-  # 1: Try name from tempname()
+  # 1: Try environment variables
+  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
+    if has(ENV, environment_variable) && isdir(ENV[environment_variable])
+      return ENV[environment_variable]
+    end
+  end
+
+  # 2: Try name from tempname()
   testpath = dirname(tempname())
   if ispath(testpath) && isdir(testpath)
     return testpath
-  end
-
-  # 2: Try environment variables
-  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
-    if has(ENV, environment_variable)
-      if isdir(ENV[environment_variable])
-        return ENV[environment_variable]
-      end
-    end
   end
 
   # 3: Try locations based on OS
