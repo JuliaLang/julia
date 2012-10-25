@@ -223,8 +223,7 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
-# Return a temporary pathname
-function tempname()
+function candidate_tempname()
   # Get a temporary name from the tmpnam function.
   b = C_NULL
   p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
@@ -235,6 +234,17 @@ function tempname()
     if has(ENV, environment_variable) && isdir(ENV[environment_variable])
       return file_path(ENV[environment_variable], basename(filename))
     end
+  end
+
+  return filename
+end
+
+# Return a temporary pathname
+function tempname()
+  filename = candidate_tempname()
+
+  while ispath(filename)
+    filename = candidate_tempname()
   end
 
   return filename
@@ -251,7 +261,7 @@ function tempdir()
 
   # 2: Try name from tempname()
   testpath = dirname(tempname())
-  if ispath(testpath) && isdir(testpath)
+  if isdir(testpath)
     return testpath
   end
 
