@@ -971,15 +971,6 @@ function complex{T<:Real}(A::Array{T}, B::Real)
     return F
 end
 
-function complex{T<:Real}(A::Array{T})
-    z = zero(T)
-    F = similar(A, typeof(complex(z,z)))
-    for i=1:numel(A)
-        F[i] = complex(A[i], z)
-    end
-    return F
-end
-
 ## Binary comparison operators ##
 
 for (f,scalarf) in ((:(.==),:(==)), (:.<, :<), (:.!=,:!=), (:.<=,:<=))

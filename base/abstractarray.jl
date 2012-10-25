@@ -146,9 +146,15 @@ for (f,t) in ((:float32,    Float32),
     @eval ($f)(x::AbstractArray) = copy_to(similar(x,$t), x)
 end
 
+integer{T<:Integer}(x::AbstractArray{T}) = x
+unsigned{T<:Unsigned}(x::AbstractArray{T}) = x
+float{T<:FloatingPoint}(x::AbstractArray{T}) = x
+complex{T<:Complex}(x::AbstractArray{T}) = x
+
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
 float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
+complex (x::AbstractArray) = copy_to(similar(x,typeof(complex(one(eltype(x))))), x)
 
 full(x::AbstractArray) = x
 
