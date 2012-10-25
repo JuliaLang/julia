@@ -307,6 +307,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     if h.ndel >= ((3*sz)>>2)
         rehash(h, sz)
+        sz = length(h.keys)  # yes, rehash may grow the table at this point!
     end
 
     iter = 0
