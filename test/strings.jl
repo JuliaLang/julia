@@ -488,3 +488,15 @@ for i1 = 1:length(u8str2)
         @assert u8str2[i1:i2] == u8str2plain[i1:i2]
     end
 end
+
+# Named regex
+m = match(r"(?<greeting>.*), (?<place>.*)\.", astr)
+@assert m.capture_dict["greeting"] == "Hello"
+@assert m.capture_dict["place"]    == "world"
+m = match(r"(?'greeting'.*), (?'place'.*)\.", astr)
+@assert m.capture_dict["greeting"] == "Hello"
+@assert m.capture_dict["place"]    == "world"
+m = match(r"(?P<greeting>.*), (?P<place>.*)\.", astr)
+@assert m.capture_dict["greeting"] == "Hello"
+@assert m.capture_dict["place"]    == "world"
+

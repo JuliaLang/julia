@@ -7,6 +7,8 @@ type Regex
     options::Int32
     regex::Array{Uint8}
     extra::Ptr{Void}
+    named_captures::Dict{String, Int}
+    named_pos::Array{Any}
 
     function Regex(pat::String, opts::Integer, study::Bool)
         pat = bytestring(pat); opts = int32(opts)
@@ -15,7 +17,8 @@ type Regex
         end
         re = PCRE.compile(pat, opts & PCRE.COMPILE_MASK)
         ex = study ? PCRE.study(re) : C_NULL
-        new(pat, opts, re, ex)
+        (names, pos) = PCRE.get_name_table(re, ex)
+        new(pat, opts, re, ex, names, pos)
     end
 end
 Regex(p::String, s::Bool)    = Regex(p, 0, s)
@@ -66,6 +69,8 @@ type RegexMatch
     captures::Tuple
     offset::Int
     offsets::Vector{Int}
+    capture_dict::Dict
+    named_pos::Array{Any}
 end
 
 function show(io, m::RegexMatch)
@@ -74,7 +79,11 @@ function show(io, m::RegexMatch)
     if !isempty(m.captures)
         print(io, ", ")
         for i = 1:length(m.captures)
-            print(io, i, "=")
+            if m.named_pos[i] !=  nothing
+                print(io, i, "(", m.named_pos[i], ")=")
+            else
+                print(io, i, "=")
+            end
             show(io, m.captures[i])
             if i < length(m.captures)
                 print(io, ", ")
@@ -97,7 +106,12 @@ function match(re::Regex, str::ByteString, idx::Integer, opts::Integer)
     mat = str[m[1]+1:m[2]]
     cap = ntuple(n, i->(m[2i+1] < 0 ? nothing : str[m[2i+1]+1:m[2i+2]]))
     off = [ m[2i+1]::Int32+1 for i=1:n ]
-    RegexMatch(mat, cap, m[1]+1, off)
+    cap_dict = if !isempty(re.named_captures)
+        dict(tuple(keys(re.named_captures)...), tuple([cap[v] for v in values(re.named_captures)]...))
+    else
+        Dict()
+    end
+    RegexMatch(mat, cap, m[1]+1, off, cap_dict, re.named_pos)
 end
 match(r::Regex, s::String, i::Integer, o::Integer) = match(r, bytestring(s), i, o)
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)

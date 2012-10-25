@@ -114,4 +114,49 @@ function exec(regex::Array{Uint8}, extra::Ptr{Void},
     cap ? ((n > -1 ? ovec[1:2(ncap+1)] : Array(Int32,0)), ncap) : n > -1
 end
 
+# Returns the name => index mapping for named regular expressions in Regex r
+#
+# According to the pcreapi man page, the name table for
+#
+#         (?<date> (?<year>(\d\d)?\d\d) -
+#         (?<month>\d\d) - (?<day>\d\d) )
+#
+# is stored as
+#
+#         00 01 d  a  t  e  00 ??
+#         00 05 d  a  y  00 ?? ??
+#         00 04 m  o  n  t  h  00
+#         00 02 y  e  a  r  00 ??
+#
+# where the first two bytes in each record hold the index, and the remaining bytes
+# hold the \0-terminated name string
+
+function get_name_table(re::Array{Uint8}, ex::Ptr{Void})
+    name_table_dict = Dict{String, Int}()
+    named_pos = Any[]
+    name_count = int(PCRE.info(re, ex, PCRE.INFO_NAMECOUNT, Int32))
+
+    if name_count > 0
+        name_entry_size = int(PCRE.info(re, ex, PCRE.INFO_NAMEENTRYSIZE, Int32))
+        name_table_ptr = PCRE.info(re, ex, PCRE.INFO_NAMETABLE, Ptr{Uint8})
+
+        name_table = pointer_to_array(name_table_ptr, (name_entry_size, name_count))
+
+        max_idx = 0
+        for n = 1:name_count
+            idx = int(name_table[1,n])<<8 + int(name_table[2,n])
+            last_p = memchr(name_table[3:end,n], 0)+2-1  # null terminator
+            name = bytestring(name_table[3:last_p,n])
+            name_table_dict[name] = idx
+            max_idx = max(idx, max_idx)
+        end
+
+        grow(named_pos, max_idx)
+        named_pos[:] = nothing
+        named_pos[values(name_table_dict)] = keys(name_table_dict)
+    end
+
+    (name_table_dict, named_pos)
+end
+
 end # module
