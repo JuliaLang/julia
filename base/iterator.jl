@@ -6,12 +6,12 @@ end
 enumerate(itr) = Enumerate(itr)
 
 length(e::Enumerate) = length(e.itr)
-start(e::Enumerate) = (start(e.itr), 1)
+start(e::Enumerate) = (1, start(e.itr))
 function next(e::Enumerate, state)
-    v, s = next(e.itr, state[1])
-    (v,state[2]), (s,state[2]+1)
+    v, s = next(e.itr, state[2])
+    (state[1],v), (state[1]+1,s)
 end
-done(e::Enumerate, state) = done(e.itr, state[1])
+done(e::Enumerate, state) = done(e.itr, state[2])
 
 # zip
 
