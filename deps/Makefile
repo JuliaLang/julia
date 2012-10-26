@@ -895,6 +895,7 @@ ifeq ($(USE_SYSTEM_ZLIB), 1)
 ZLIB_OBJ_TARGET =
 else
 ZLIB_OBJ_TARGET = $(USRLIB)/libz.$(SHLIB_EXT)
+ZLIB_CFLAGS = CFLAGS="$(CFLAGS) -D_FILE_OFFSET_BITS=64"
 endif
 
 compile-zlib: install-zlib
@@ -907,7 +908,7 @@ zlib-$(ZLIB_VER)/configure: zlib-$(ZLIB_VER).tar.gz
 	touch $@
 zlib-$(ZLIB_VER)/config.status: zlib-$(ZLIB_VER)/configure
 	cd zlib-$(ZLIB_VER) && \
-	./configure --prefix=$(abspath $(USR))
+	$(ZLIB_CFLAGS) ./configure --prefix=$(abspath $(USR))
 	touch $@
 $(ZLIB_OBJ_TARGET): zlib-$(ZLIB_VER)/config.status
 	$(MAKE) -C zlib-$(ZLIB_VER) CC="$(CC)"
