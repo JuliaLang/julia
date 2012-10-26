@@ -223,70 +223,19 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
-@windows_only function candidate_tempname()
- error("not yet implemented")
+tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
+
+@eval begin
+  function tempname()
+    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+    p = ccall($tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+    s = bytestring(p)
+    c_free(p)
+    s
+  end
 end
 
-@unix_only function candidate_tempname()
-  # Get a temporary name from the tmpnam function.
-  b = C_NULL
-  p = ccall(:tmpnam, Ptr{Uint8}, (Ptr{Uint8}, ), b)
-  filename = bytestring(p)
-
-  # If tempdir environment vars exist, override basename.
-  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
-    if has(ENV, environment_variable) && isdir(ENV[environment_variable])
-      return file_path(ENV[environment_variable], basename(filename))
-    end
-  end
-
-  return filename
-end
-
-# Return a temporary pathname
-function tempname()
-  filename = candidate_tempname()
-
-  while ispath(filename)
-    filename = candidate_tempname()
-  end
-
-  return filename
-end
-
-# Find an appropriate temporary directory
-function tempdir()
-  # 1: Try environment variables
-  for environment_variable in ["TMPDIR", "TEMP", "TMP"]
-    if has(ENV, environment_variable) && isdir(ENV[environment_variable])
-      return ENV[environment_variable]
-    end
-  end
-
-  # 2: Try name from tempname()
-  testpath = dirname(tempname())
-  if isdir(testpath)
-    return testpath
-  end
-
-  # 3: Try locations based on OS
-  if OS_NAME == :Windows
-    for windows_dir in ["c:\\temp", "c:\\tmp", "\\temp", "\\tmp"]
-      if isdir(windows_dir)
-        return windows_dir
-      end
-    end
-  else
-    for unix_dir in ["/tmp", "/var/tmp", "/usr/tmp"]
-      if isdir(unix_dir)
-        return unix_dir
-      end
-    end
-  end
-
-  # In worst case, return the current directory
-  return cwd()
-end
+tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 function mktemp()
