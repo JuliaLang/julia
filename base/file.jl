@@ -225,14 +225,12 @@ end
 
 tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
 
-@eval begin
-  function tempname()
-    d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-    p = ccall($tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
-    s = bytestring(p)
-    c_free(p)
-    s
-  end
+function tempname()
+  d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  s = bytestring(p)
+  c_free(p)
+  s
 end
 
 tempdir() = dirname(tempname())
