@@ -33,7 +33,7 @@ del_all{T}(s::Set{T}) = (del_all(s.hash); s)
 start(s::Set)       = start(s.hash)
 done(s::Set, state) = done(s.hash, state)
 # NOTE: manually optimized to take advantage of Dict representation
-next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash.keys,i+1))
+next(s::Set, i)     = (s.hash.keys[i], skip_deleted(s.hash,i+1))
 
 union() = Set()
 union(s::Set) = copy(s)

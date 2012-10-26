@@ -216,7 +216,8 @@ end
 # dict
 
 type Dict{K,V} <: Associative{K,V}
-    keys::Array{Any,1}
+    slots::Array{Uint8,1}
+    keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
     count::Int
@@ -225,8 +226,7 @@ type Dict{K,V} <: Associative{K,V}
     Dict() = Dict{K,V}(0)
     function Dict(n::Integer)
         n = _tablesz(n)
-        new(fill!(cell(n), _jl_secret_table_token), Array(V,n),
-            0, 0, identity)
+        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(ks::Tuple, vs::Tuple)
         n = length(ks)
@@ -270,23 +270,39 @@ dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-const _jl_missing_token = :__c782dbf1cf4d6a2e5e3965d7e95634f2e09b5901__
+function slotassign(h::Dict, i::Int, k, v)
+    h.slots[i] = 0x1
+    h.keys[i] = k
+    h.vals[i] = v
+    h.count += 1
+end
+
+function slotmissing(h::Dict, i::Int)
+    h.slots[i] = 0x2
+    h.ndel += 1
+    h.count -= 1
+end
+
+isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
+isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
+isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
 function rehash{K,V}(h::Dict{K,V}, newsz)
-    oldk = copy(h.keys)
+    olds = copy(h.slots)
+    oldk = h.keys
     oldv = h.vals
-    sz = length(oldk)
+    sz = length(olds)
     newsz = _tablesz(newsz)
     if newsz > sz
-        grow(h.keys, newsz-sz)
+        grow(h.slots, newsz-sz)
     end
+    h.keys = Array(K, newsz)
     h.vals = Array(V, newsz)
     del_all(h)
 
-    for i = 1:length(oldk)
-        k = oldk[i]
-        if !is(k,_jl_secret_table_token) && !is(k,_jl_missing_token)
-            h[k] = oldv[i]
+    for i = 1:length(olds)
+        if olds[i] == 0x1
+            h[oldk[i]] = oldv[i]
         end
     end
 
@@ -294,7 +310,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
 end
 
 function del_all{K,V}(h::Dict{K,V})
-    fill!(h.keys, _jl_secret_table_token)
+    fill!(h.slots, 0x0)
     h.ndel = 0
     h.count = 0
     return h
@@ -317,26 +333,18 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     keys = h.keys; vals = h.vals
 
     while true
-        hk = keys[index]
-        if is(hk,_jl_secret_table_token)
-            if avail<0
-                keys[index] = key
-                vals[index] = v
-            else
-                keys[avail] = key
-                vals[avail] = v
-            end
-            h.count += 1
+        if isslotempty(h,index)
+            slotassign(h, (avail < 0) ? index : avail, key, v)
             return h
         end
 
-        if is(hk,_jl_missing_token)
+        if isslotmissing(h,index)
             if avail<0
                 # found an available slot, but need to keep scanning
                 # in case "key" already exists in a later collided slot.
                 avail = index
             end
-        elseif isequal(key, hk::K)
+        elseif isequal(key, keys[index])
             vals[index] = v
             return h
         end
@@ -349,9 +357,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     end
 
     if avail>0
-        keys[avail] = key
-        vals[avail] = v
-        h.count += 1
+        slotassign(h, avail, key, v)
         return h
     end
 
@@ -372,11 +378,10 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
     keys = h.keys
 
     while true
-        hk = keys[index]
-        if is(hk,_jl_secret_table_token)
+        if isslotempty(h,index)
             break
         end
-        if !is(hk,_jl_missing_token) && isequal(key,hk::K)
+        if !isslotmissing(h,index) && isequal(key,keys[index])
             return index
         end
 
@@ -410,25 +415,22 @@ end
 function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
-        h.keys[index] = _jl_missing_token
-        h.ndel += 1
-        h.count -= 1
+        slotmissing(h, index)
     end
     return h
 end
 
-function skip_deleted(keys, i)
-    L = length(keys)
-    while i<=L && (is(keys[i],_jl_secret_table_token) ||
-                   is(keys[i],_jl_missing_token))
+function skip_deleted(h::Dict, i)
+    L = length(h.slots)
+    while i<=L && !isslotfilled(h,i)
         i += 1
     end
     return i
 end
 
-start(t::Dict) = skip_deleted(t.keys, 1)
+start(t::Dict) = skip_deleted(t, 1)
 done(t::Dict, i) = done(t.vals, i)
-next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.keys,i+1))
+next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
@@ -454,9 +456,9 @@ function add_weak_value(t::Dict, k, v)
 end
 
 type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
+    ht::Dict{K,V}
 
-    WeakKeyDict() = new(Dict{Any,V}())
+    WeakKeyDict() = new(Dict{K,V}())
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
