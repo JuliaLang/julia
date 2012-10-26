@@ -236,17 +236,25 @@ end
 tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-function mktemp()
+@unix_only function mktemp()
   b = file_path(tempdir(), "tmpXXXXXX")
   p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
   return (b, fdio(p, true))
 end
 
+@windows_only function mktemp()
+  error("not yet implemented")
+end
+
 # Create and return the name of a temporary directory
-function mktempdir()
+@unix_only function mktempdir()
   b = file_path(tempdir(), "tmpXXXXXX")
   p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
   return bytestring(p)
+end
+
+@windows_only function mktempdir()
+  error("not yet implemented")
 end
 
 function download_file(url::String)
