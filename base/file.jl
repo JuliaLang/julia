@@ -238,7 +238,7 @@ tempdir() = dirname(tempname())
 # Create and return the name of a temporary file along with an IOStream
 function mktemp()
   b = file_path(tempdir(), "tmpXXXXXX")
-  p = ccall(:mkstemp, Int, (Ptr{Uint8}, ), b)
+  p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
   return (b, fdio(p, true))
 end
 
