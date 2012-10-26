@@ -104,6 +104,8 @@ begin
 
     x = a\b                            # Rank deficient
     @assert abs(det((a*x-b)'*(a*x-b)/20) - 0.0110949248) < Eps
+    x = (a + im)\(b + im)              # ...and complex
+    @assert abs(det(((a + im)*x-(b + im))'*((a + im)*x-(b + im))/20) - 0.0110949248) < Eps
 
     # symmetric, positive definite
     @assert norm(inv([6. 2; 2 1]) - [0.5 -1; -1 3]) < Eps
