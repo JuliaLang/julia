@@ -223,21 +223,42 @@ function path_rename(old_pathname::String, new_pathname::String)
   run(`mv $old_pathname $new_pathname`)
 end
 
-@linux_only function tempdir()
-  chomp(readall(`mktemp -d`))
+# Obtain a temporary filename.
+tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
+
+function tempname()
+  d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
+  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  s = bytestring(p)
+  c_free(p)
+  s
 end
 
-@osx_only function tempdir()
-  chomp(readall(`mktemp -d -t tmp`))
+# Obtain a temporary directory's path.
+tempdir() = dirname(tempname())
+
+# Create and return the name of a temporary file along with an IOStream
+@unix_only function mktemp()
+  b = file_path(tempdir(), "tmpXXXXXX")
+  p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
+  return (b, fdio(p, true))
 end
 
-@linux_only function tempfile()
-  chomp(readall(`mktemp`))
+@windows_only function mktemp()
+  error("not yet implemented")
 end
 
-@osx_only function tempfile()
-  chomp(readall(`mktemp -t tmp`))
+# Create and return the name of a temporary directory
+@unix_only function mktempdir()
+  b = file_path(tempdir(), "tmpXXXXXX")
+  p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
+  return bytestring(p)
 end
+
+@windows_only function mktempdir()
+  error("not yet implemented")
+end
+
 function download_file(url::String)
   filename = tempfile()
   run(`curl -o $filename $url`)
