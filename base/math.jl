@@ -4,16 +4,16 @@ module Math
 
 import Base.*
 
-export cbrt, sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
+export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
        sech, csch, coth, asech, acsch, acoth, sinc, cosc, 
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        radians2degrees, degrees2radians,
        log, log2, log10, log1p, logb, exp, exp2, expm1, 
-       sqrt, square, erf, erfc, ceil, floor, trunc, round, lgamma,
-       hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
-       modf, ^
+       cbrt, sqrt, square, erf, erfc, ceil, floor, trunc, round, 
+       lgamma, hypot, gamma, lfact, max, min, ilogb, ldexp, frexp,
+       clamp, modf, ^
 
 # non-type specific math functions
 
@@ -46,7 +46,7 @@ for (fd, f) in ((:sind, :sins), (:cosd, :cos), (:tand, :tan),
     end
 end
 
-for (fd, f) in ((:asin, :asin), (:acosd, :acos), (:atand, :atan),
+for (fd, f) in ((:asind, :asin), (:acosd, :acos), (:atand, :atan),
                 (:asecd, :asec), (:acscd, :acsc), (:acotd, :acot))
     @eval begin
         ($fd)(y) = degrees2radians(($f)(z))

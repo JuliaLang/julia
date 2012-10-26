@@ -105,14 +105,17 @@ include("client.jl")
 include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
-include("sort.jl")
-include("combinatorics.jl")
-include("statistics.jl")
+import Base.Math.*
 
-# random number generation
+# random number generation and statistics
+include("statistics.jl")
 include("librandom.jl")
 include("rng.jl")
 import Base.RNG.*
+
+# Combinatorics
+include("sort.jl")
+include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
