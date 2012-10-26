@@ -343,3 +343,11 @@ for theta = pi ./ [1:4]
        sin(theta) cos(theta)]
   @assert abs(det(R) - 1.0) < Eps
 end
+
+let
+    A = [1.+0.im 0; 0 1]
+    B = pinv(A)
+    for i = 1:4
+        @assert_approx_eq A[i] B[i]
+    end
+end
