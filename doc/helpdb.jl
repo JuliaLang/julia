@@ -645,6 +645,50 @@ collection[key...] = value
 
 "),
 
+(E"Associative Collections",E"keys",E"keys(collection)
+
+   Return an array of all keys in a collection.
+
+"),
+
+(E"Associative Collections",E"values",E"values(collection)
+
+   Return an array of all values in a collection.
+
+"),
+
+(E"Associative Collections",E"pairs",E"pairs(collection)
+
+   Return an array of all (key, value) tuples in a collection.
+
+"),
+
+(E"Associative Collections",E"merge",E"merge(collection, others...)
+
+   Construct a merged collection from the given collections.
+
+"),
+
+(E"Associative Collections",E"merge!",E"merge!(collection, others...)
+
+   Update collection with pairs from the other collections
+
+"),
+
+(E"Associative Collections",E"filter",E"filter(function, collection)
+
+   Return a copy of collection, removing (key, value) pairs for which
+   function is false.
+
+"),
+
+(E"Associative Collections",E"filter!",E"filter!(function, collection)
+
+   Update collection, removing (key, value) pairs for which function
+   is false.
+
+"),
+
 (E"Set-Like Collections",E"add",E"add(collection, key)
 
    Add an element to a set-like collection.
