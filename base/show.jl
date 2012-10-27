@@ -87,13 +87,13 @@ unquoted(ex::Expr)       = ex.args[1]
 
 ## AST printing ##
 
-# show(ex::Expr) delegates to show_quoted(), 
+# show(ex::Expr) delegates to show_indented(), 
 # which shows the contents using show_unquoted(),
 # which shows subexpressions using show_unquoted()
 # ==> AST:s are printed wrapped in a single quotation
-show_quoted(  x)                 = show_quoted(OUTPUT_STREAM, x)
-show_quoted(  io::IO, x)         = show_quoted(io, x, 0)
-show_quoted(  io::IO, x, indent) = show(io, x)
+show_indented(x)                 = show_indented(OUTPUT_STREAM, x)
+show_indented(io::IO, x)         = show_indented(io, x, 0)
+show_indented(io::IO, x, indent) = show(io, x)
 show_unquoted(x)                 = show_unquoted(OUTPUT_STREAM, x)
 show_unquoted(io::IO, x)         = show_unquoted(io, x, 0)
 show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
@@ -102,10 +102,10 @@ show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
 
 typealias ExprNode Union(SymbolNode, LineNumberNode, LabelNode, GotoNode,
                          TopNode, QuoteNode)
-show(io::IO, ex::ExprNode) = show_quoted(io, ex)
+show(io::IO, ex::ExprNode) = show_indented(io, ex)
 
-show(io::IO, ex::Expr) = show_quoted(io, ex)
-function show_quoted(io::IO, ex::Expr, indent::Int)
+show(io::IO, ex::Expr) = show_indented(io, ex)
+function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
     elseif contains([:tuple, :vcat, :cell1], ex.head)
@@ -114,12 +114,11 @@ function show_quoted(io::IO, ex::Expr, indent::Int)
         default_show_quoted(io, ex, indent)
     end
 end
-function show_quoted(io::IO, sym::Symbol, indent::Int)
+function show_indented(io::IO, sym::Symbol, indent::Int)
     if is(sym,:(:)) || is(sym,:(==)); print(io, ":($sym)")        
     else                              print(io, ":$sym")        
     end
 end
-show_quoted(io::IO, ex, indent::Int) = default_show_quoted(io, ex, indent)
 function default_show_quoted(io::IO, ex, indent::Int)
     print(io, ":( ")
     show_unquoted(io, ex, indent + indent_width)
@@ -253,7 +252,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif contains([:for,:while,:function,:if,:type,:module],head) && nargs==2
         show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
-        show_quoted(io, args[1], indent)
+        show_indented(io, args[1], indent)
     elseif is(head, :gotoifnot) && nargs == 2
         print(io, "unless ")
         show_list(io, args, " goto ", indent)
@@ -263,10 +262,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         print(io, "nothing")
     else
         print(io, "\$(expr(")
-        show_quoted(io, ex.head, indent)
+        show_indented(io, ex.head, indent)
         for arg in args
             print(io, ", ")
-            show_quoted(io, arg, indent)
+            show_indented(io, arg, indent)
         end
         print(io, "))")
     end
@@ -279,7 +278,7 @@ show_unquoted(io::IO, ex::LineNumberNode) = show_linenumber(io, ex.line)
 show_unquoted(io::IO, ex::LabelNode)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::TopNode)        = print(io, "top(", ex.name, ')')
-show_unquoted(io::IO, ex::QuoteNode, ind::Int) = show_quoted(io, ex.value, ind)
+show_unquoted(io::IO, ex::QuoteNode, ind::Int) = show_indented(io,ex.value,ind)
 function show_unquoted(io::IO, ex::SymbolNode) 
     print(io, ex.name)
     show_expr_type(io, ex.typ)
