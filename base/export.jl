@@ -631,6 +631,8 @@ export
     chol,
     chold,
     chold!,
+    cholpd,
+    cholpd!,
     cond,
     cross,
     ctranspose,
