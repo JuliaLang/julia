@@ -279,6 +279,8 @@ end
 
 function slotmissing(h::Dict, i::Int)
     h.slots[i] = 0x2
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, i-1)
+    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, i-1)
     h.ndel += 1
     h.count -= 1
 end
