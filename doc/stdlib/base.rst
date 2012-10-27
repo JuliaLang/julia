@@ -308,6 +308,34 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``
 
    Delete all keys from a collection.
 
+.. function:: keys(collection)
+
+   Return an array of all keys in a collection.
+
+.. function:: values(collection)
+
+   Return an array of all values in a collection.
+
+.. function:: pairs(collection)
+
+   Return an array of all (key, value) tuples in a collection.
+
+.. function:: merge(collection, others...)
+
+   Construct a merged collection from the given collections.
+
+.. function:: merge!(collection, others...)
+
+   Update collection with pairs from the other collections
+
+.. function:: filter(function, collection)
+
+   Return a copy of collection, removing (key, value) pairs for which function is false.
+
+.. function:: filter!(function, collection)
+
+   Update collection, removing (key, value) pairs for which function is false.
+
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
