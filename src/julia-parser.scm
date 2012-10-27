@@ -1044,7 +1044,7 @@
 	      (let* ((nxt (parse-eq* s))
 		     (c (require-token s)))
 		(if (assignment? nxt)
-		    (error "assignment in function calls not allowed"))
+		    (error "assignment in argument list not allowed"))
 		(cond ((eqv? c #\,)
 		       (begin (take-token s) (loop (cons nxt lst))))
 		      ((eqv? c #\;)          (loop (cons nxt lst)))
