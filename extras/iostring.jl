@@ -38,9 +38,9 @@ skip(io::IOString, n::Integer) = io.ptr += n
 seek(io::IOString, n::Integer) = io.ptr = n+1
 seek_end(io::IOString) = io.ptr = length(io.data)+1
 position(io::IOString) = io.ptr-1
-truncate(io::IOString, n::Integer) = (grow(io.data, n-length(io.data)); ptr = min(ptr, n+1); uint(0))
+truncate(io::IOString, n::Integer) = (grow(io.data, n-length(io.data)); io.ptr = min(io.ptr, n+1); uint(0))
 eof(io::IOString) = io.ptr-1 == length(io.data)
-close(io::IOString) = (grow(io.data, 0); ptr = 1; nothing)
+close(io::IOString) = (grow(io.data, 0); io.ptr = 1; nothing)
 
 bytestring(io::IOString) = bytestring(io.data)
 
