@@ -96,7 +96,7 @@ show_quoted(  io::IO, x)         = show_quoted(io, x, 0)
 show_quoted(  io::IO, x, indent) = show(io, x)
 show_unquoted(x)                 = show_unquoted(OUTPUT_STREAM, x)
 show_unquoted(io::IO, x)         = show_unquoted(io, x, 0)
-show_unquoted(io::IO, x, indent) = show(io, x)
+show_unquoted(io::IO, x, indent) = (print(io,"\$("); show(io,x); print(io,')'))
 
 ## Quoted AST printing ##
 
@@ -178,6 +178,10 @@ function show_enclosed_list(io::IO, op, items, sep, cl, indent)
 end
 
 ## Unquoted AST printing ##
+
+show_unquoted(io::IO, sym::Symbol, indent::Int) = print(io, sym)
+show_unquoted(io::IO, x::Number, indent::Int)   = show(io, x)
+show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
 
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
