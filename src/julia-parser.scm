@@ -1053,10 +1053,10 @@
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
 		      ((memv c '(#\] #\}))
-		       (error (string "unexpected " c
-				      " in argument list")))
+		       (error (string "unexpected " c " in argument list")))
 		      (else
-		       (error "missing comma or ) in argument list")))))))))
+		       (error (string "missing comma or " closer
+				      " in argument list"))))))))))
 
 ; parse [] concatenation expressions and {} cell expressions
 (define (parse-vcat s first closer)
