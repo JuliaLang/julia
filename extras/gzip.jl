@@ -22,6 +22,15 @@ export
   readline,
   write,
 
+# lower-level io functions
+  gzgetc,
+  gzungetc,
+  gzgets,
+  gzputc,
+  gzwrite,
+  gzread,
+  gzbuffer,
+
 # GZError, ZError, related constants (zlib_h.jl)
   GZError,
   ZError,
