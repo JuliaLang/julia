@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv fdlibm random rmath double-conversion amos glpk
+STAGE1_DEPS = uv openlibm random rmath double-conversion amos glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -349,28 +349,29 @@ clean-double-conversion:
 distclean-double-conversion:
 	rm -rf double-conversion-$(GRISU_VER).tar.gz double-conversion-$(GRISU_VER)
 
-## fdlibm ##
+## openlibm ##
 
-FDLIBM_OBJ_TARGET = $(USRLIB)/libfdm.$(SHLIB_EXT)
-FDLIBM_OBJ_SOURCE = fdlibm/libfdm.$(SHLIB_EXT)
+ifeq ($(OS), WINNT) #needs more advanced detection once 64bit build is possible
+OPENLIBM_FLAGS = ARCH=i386
+endif
 
-compile-fdlibm: $(FDLIBM_OBJ_SOURCE)
-install-fdlibm: $(FDLIBM_OBJ_TARGET)
+OPENLIBM_OBJ_TARGET = $(USRLIB)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
-$(FDLIBM_OBJ_SOURCE): fdlibm/*.c
-	cd fdlibm && \
-	$(MAKE) CC="$(CC)" CFLAGS="$(CFLAGS) -D_IEEE_LIBM -Dx86 $(fPIC) -O2 $(CONFIG)" && \
-	$(CC) -shared *.o -o libfdm.$(SHLIB_EXT)
-$(FDLIBM_OBJ_TARGET): $(FDLIBM_OBJ_SOURCE)
+openlibm/Makefile:
+	(cd .. && git submodule update --init)
+$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 	cp $< $@
-	$(INSTALL_NAME_CMD)libfdm.dylib $@
+install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
-clean-fdlibm:
-	cd fdlibm && $(MAKE) clean
-	rm -f $(FDLIBM_OBJ_SOURCE) $(FDLIBM_OBJ_TARGET)
-distclean-fdlibm: clean-fdlibm
+clean-openlibm:
+	$(MAKE) -C openlibm cleanall
+	rm $(OPENLIBM_OBJ_TARGET)
+distclean-openlibm: clean-openlibm      
 
-## rmath ##
+## Rmath ##
 
 RMATH_OBJ_TARGET = $(USRLIB)/libRmath.$(SHLIB_EXT)
 RMATH_OBJ_SOURCE = Rmath/src/libRmath.$(SHLIB_EXT)

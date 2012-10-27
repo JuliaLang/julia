@@ -9,6 +9,7 @@ export
     Blas,
     LibRandom,
     RNG,
+    Math,
     
 # Types
     AbstractMatrix,
