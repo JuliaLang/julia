@@ -228,7 +228,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
     elseif is(head, :macrocall) && nargs >= 1
-        print(io, '@')
         show_list(io, args, ' ', indent)
     elseif is(head, :typealias) && nargs == 2
         print(io, "typealias ")
