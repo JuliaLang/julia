@@ -424,3 +424,16 @@ begin
     end
     @assert g() == 2
 end
+
+# issue #1442
+type S1442{T}
+end
+
+begin
+    local f1442
+    f1442(::CompositeKind) = 1
+    f1442{T}(::Type{S1442{T}}) = 2
+
+    @assert f1442(S1442{Int}) == 2
+    @assert f1442(CompositeKind) == 1
+end
