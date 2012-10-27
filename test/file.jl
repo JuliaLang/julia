@@ -45,11 +45,21 @@ run(`chmod +w $filename`)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
-# @assert isdir(tempdir()) == true
-# @assert isfile(tempdir()) == false
-# @assert isdir(tempfile()) == false
-# @assert isfile(tempfile()) == true
+# my_tempdir = tempdir()
+# @assert isdir(my_tempdir) == true
 
+# path = tempname()
+# @assert ispath(path) == false
+
+# (filename, f) = mktemp()
+# print(f, "Here is some text")
+# close(f)
+# @assert isfile(filename) == true
+# @assert readall(filename) == "Here is some text"
+
+# dirname = mktempdir()
+# @assert isdir(dirname)
+ 
 ############
 # Clean up #
 ############
