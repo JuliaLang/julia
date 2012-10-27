@@ -367,7 +367,7 @@ $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 clean-openlibm:
-	$(MAKE) -C openlibm cleanall
+	$(MAKE) -C openlibm distclean
 	rm $(OPENLIBM_OBJ_TARGET)
 distclean-openlibm: clean-openlibm      
 
