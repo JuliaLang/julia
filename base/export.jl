@@ -712,7 +712,6 @@ export
     del,
     del_all,
     del_each,
-    dict,
     elements,
     eltype,
     get,

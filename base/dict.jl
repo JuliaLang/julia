@@ -228,7 +228,7 @@ type Dict{K,V} <: Associative{K,V}
         new(fill!(cell(n), _jl_secret_table_token), Array(V,n),
             0, 0, identity)
     end
-    function Dict(ks::Tuple, vs::Tuple)
+    function Dict(ks, vs)
         n = length(ks)
         h = Dict{K,V}(n)
         for i=1:n
@@ -239,6 +239,14 @@ type Dict{K,V} <: Associative{K,V}
 end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
+
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# syntax entry points
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
@@ -261,12 +269,6 @@ function deserialize{K,V}(s, T::Type{Dict{K,V}})
     end
     return t
 end
-
-# syntax entry point
-dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
-dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
-dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
-dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 

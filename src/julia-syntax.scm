@@ -848,7 +848,7 @@
 							   (eq? (car e) '=>)))
 					  args))
 			      (error "invalid dict literal")
-			      `(call (top dict)
+			      `(call (top Dict)
 				     (tuple ,@(map cadr  args))
 				     (tuple ,@(map caddr args)))))
 			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
