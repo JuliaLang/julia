@@ -178,13 +178,11 @@ div.sphinxsidebar {
   padding-top: 15px;
   padding-bottom: 15px;
   height: auto;
-  overflow: hidden;
 }
 
 div.sphinxsidebarview {
   border-radius: 5px;
-  overflow-y: scroll;
-  overflow-x: hidden;
+  height: 100%;
 }
 
 div.sphinxsidebarview::-webkit-scrollbar {
@@ -193,19 +191,23 @@ div.sphinxsidebarview::-webkit-scrollbar {
 }
 
 div.sphinxsidebarwrapper {
-  background-color: {{ theme_sidebttbgcolor }};
   border-radius: 5px;
   margin: 0;
   padding: 0;
   margin-left: {{ theme_sidebarlmarg|toint }}px;
-  display: table;
+  height: 100%;
+}
+
+div.sphinxsidebarcontentwrapper {
+  border-radius: 5px 0 0 5px;
+  height: 100%;
+  overflow: auto;
+
 }
 
 div.sphinxsidebarcontent {
   background-color: {{ theme_sidebarbgcolor }};
-  border-radius: 5px 0 0 5px;
   padding: 10px 5px 10px 10px;
-  display: table-cell;
   vertical-align: middle;
 }
 
@@ -218,7 +220,7 @@ div.sphinxsidebarbutton {
   width: 12px;
   height: 100%;
   margin: auto;
-  display: table-cell;
+  float: right;
 }
 
 div.sphinxsidebarbutton:hover {

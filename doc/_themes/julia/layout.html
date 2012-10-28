@@ -10,15 +10,17 @@
     <div class="sphinxsidebar">
       <div class="sphinxsidebarview">
         <div class="sphinxsidebarwrapper">
-          <div class="sphinxsidebarcontent">
-            {#- new style sidebar: explicitly include/exclude templates #}
-            {%- for sidebartemplate in sidebars %}
-            {%- include sidebartemplate %}
-            {%- endfor %}
-          </div>
           <div class="sphinxsidebarbutton">
             <div id="sidebarbutton">
             <span>&laquo;</span>
+            </div>
+          </div>
+          <div class="sphinxsidebarcontentwrapper">
+            <div class="sphinxsidebarcontent">
+              {#- new style sidebar: explicitly include/exclude templates #}
+              {%- for sidebartemplate in sidebars %}
+              {%- include sidebartemplate %}
+              {%- endfor %}
             </div>
           </div>
         </div>
