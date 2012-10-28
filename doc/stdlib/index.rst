@@ -32,6 +32,7 @@ Extras
    strpack
    sound
    argparse
+   gzip
 
 ****************
 Math & Numerical

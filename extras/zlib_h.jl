@@ -61,6 +61,7 @@ const Z_NULL   = C_NULL
 
 # Constants for use with gzbuffer
 const Z_DEFAULT_BUFSIZE = 8192
+const Z_BIG_BUFSIZE = 131072
 
 # Constants for use with gzseek
 const SEEK_SET = int32(0)
