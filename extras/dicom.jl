@@ -239,7 +239,7 @@ function string_parse(st, sz, maxlen, spaces)
     return data
 end
 
-numeric_parse(st, T, sz) = { read(st, T) | i=1:div(sz,sizeof(T)) }
+numeric_parse(st, T, sz) = { read(st, T) for i=1:div(sz,sizeof(T)) }
 
 element(st, evr) = element(st, evr, false)
 function element(st, evr, dcm)
@@ -292,7 +292,7 @@ function element(st, evr, dcm)
     vr == "OF" ? read(st, Float32, div(sz,4)) :
     vr == "OW" ? read(st, Uint16 , div(sz,2)) :
     
-    vr == "AT" ? { read(st,Uint16,2) | n=1:div(sz,4) } :
+    vr == "AT" ? { read(st,Uint16,2) for n=1:div(sz,4) } :
     
     vr == "AS" ? ASCIIString(read(st,Uint8,4)) :
     
