@@ -111,7 +111,7 @@ function read(s::IO, ::Type{Char})
 
     # mimic utf8.next function
     trailing = Base._jl_utf8_trailing[ch+1]
-    c = uint32(0)
+    c::Uint32 = 0
     for j = 1:trailing
         c += ch
         c <<= 6

@@ -8,7 +8,7 @@ import GZip.*
 # test_context("GZip tests")
 ##########################
 
-tmp = tempdir()
+tmp = mktempdir()
 
 test_infile = "$JULIA_HOME/../../extras/gzip.jl"
 test_compressed = "$tmp/gzip.jl.gz"
