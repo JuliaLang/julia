@@ -9,17 +9,23 @@ begin
     apd   = a'*a                            # symmetric positive-definite
     b     = rand(n)
 
-    capd   = chold(apd)                      # upper Cholesky factor
+    capd  = chold(apd)                      # upper Cholesky factor
     r     = factors(capd)
     @assert r == chol(apd)
     @assert norm(r'*r - apd) < Eps
     @assert norm(b - apd * (capd\b)) < Eps
     @assert norm(apd * inv(capd) - eye(n)) < Eps
-    @assert norm(a*(capd\(a'*b)) - b) < Eps  # least squares soln for square a
+    @assert norm(a*(capd\(a'*b)) - b) < Eps # least squares soln for square a
     @assert_approx_eq det(capd) det(apd)
 
     l     = factors(chold(apd, false))      # lower Cholesky factor
     @assert norm(l*l' - apd) < Eps
+
+    cpapd = cholpd(apd)                     # pivoted Choleksy decomposition
+    @assert rank(cpapd) == n
+    @assert all(diff(diag(cpapd.LR)).<=0.)  # diagonal show be non-increasing
+    @assert norm(b - apd * (cpapd\b)) < Eps
+    @assert norm(apd * inv(cpapd) - eye(n)) < Eps
 
     bc1   = BunchKaufman(asym)              # Bunch-Kaufman factor of indefinite matrix
     @assert norm(inv(bc1) * asym - eye(n)) < Eps

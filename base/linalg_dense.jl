@@ -226,7 +226,7 @@ end
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
+function expm!{T<:LapackType}(A::StridedMatrix{T})
     m, n = size(A)
     if m != n error("expm!: Matrix A must be square") end
     if m < 2 return exp(A) end
@@ -385,7 +385,7 @@ factors(C::CholeskyDense) = C.LR
 function det(C::CholeskyDense)
     ff = C.LR
     dd = 1.
-    for i in 1:size(ff,1) dd *= ff[i,i]^2 end
+    for i in 1:size(ff,1) dd *= abs2(ff[i,i]) end
     dd
 end
     
@@ -404,7 +404,54 @@ chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
 ## Matlab (and R) compatible
 chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
- 
+
+type CholeskyDensePivoted{T<:LapackType} <: Factorization{T}
+    LR::Matrix{T}
+    upper::Bool
+    piv::Vector{Int32}
+    rank::Int32
+    tol::Real
+    function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
+        A, piv, rank, info = Lapack.pstrf!(upper ? 'U' : 'L' , A, tol)
+        if info != 0 error("Matrix A not positive-definite") end
+        new(upper? triu!(A) : tril!(A), upper, piv, rank, tol)
+    end
+end
+
+size(C::CholeskyDensePivoted) = size(C.LR)
+size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
+
+factors(C::CholeskyDensePivoted) = C.LR, C.piv
+
+\{T<:LapackType}(C::CholeskyDensePivoted{T}, B::StridedVecOrMat{T}) =
+    Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B)[C.piv])[invperm(C.piv)]
+
+rank(C::CholeskyDensePivoted) = C.rank
+
+det(C::CholeskyDensePivoted) = prod(abs2(diag(C.LR)))
+    
+function inv(C::CholeskyDensePivoted)
+    if C.rank < size(C.LR, 1) error("Matrix singular") end
+    Ci, info = Lapack.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    if info != 0 error("Matrix singular") end
+    ipiv = invperm(C.piv)
+    (symmetrize!(Ci, C.upper))[ipiv, ipiv]
+end
+
+## Should these functions check that the matrix is Hermitian?
+cholpd!{T<:LapackType}(A::Matrix{T}, upper::Bool, tol::Real) = CholeskyDensePivoted{T}(A, upper, tol)
+cholpd!{T<:LapackType}(A::Matrix{T}, upper::Bool) = cholpd!(A, upper, -1.)
+cholpd!{T<:LapackType}(A::Matrix{T}, tol::Real) = cholpd!(A, true, tol)
+cholpd!{T<:LapackType}(A::Matrix{T}) = cholpd!(A, true, -1.)
+cholpd{T<:Number}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd(float64(A), upper, tol)
+cholpd{T<:Number}(A::Matrix{T}, upper::Bool) = cholpd(float64(A), upper, -1.)
+cholpd{T<:Number}(A::Matrix{T}, tol::Real) = cholpd(float64(A), true, tol)
+cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), true, -1.)
+cholpd{T<:LapackType}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd!(copy(A), upper, tol)
+cholpd{T<:LapackType}(A::Matrix{T}, upper::Bool) = cholpd!(copy(A), upper, -1.)
+cholpd{T<:LapackType}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), true, tol)
+cholpd{T<:LapackType}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
+
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
     ipiv::Vector{Int32}
