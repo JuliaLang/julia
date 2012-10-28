@@ -155,12 +155,12 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
 
 if WORD_SIZE == 64
     _jl_hash64(x::Float64) =
-        ccall(:int64hash, Uint64, (Uint64,), reinterpret(Uint64,x))
+        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
     _jl_hash64(x::Union(Int64,Uint64)) =
         ccall(:int64hash, Uint64, (Uint64,), x)
 else
     _jl_hash64(x::Float64) =
-        ccall(:int64to32hash, Uint32, (Uint64,), reinterpret(Uint64,x))
+        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
     _jl_hash64(x::Union(Int64,Uint64)) =
         ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
