@@ -905,11 +905,11 @@ end
 
 # (PO) positive-definite symmetric matrices,
 # Cholesky decomposition, solvers (direct and factored) and inverse.
-for (posv, potrf, potri, potrs, elty) in
-    ((:dposv_,:dpotrf_,:dpotri_,:dpotrs_,:Float64),
-     (:sposv_,:spotrf_,:spotri_,:spotrs_,:Float32),
-     (:zposv_,:zpotrf_,:zpotri_,:zpotrs_,:Complex128),
-     (:cposv_,:cpotrf_,:cpotri_,:cpotrs_,:Complex64))
+for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
+    ((:dposv_,:dpotrf_,:dpotri_,:dpotrs_,:dpstrf_,:Float64,:Float64),
+     (:sposv_,:spotrf_,:spotri_,:spotrs_,:spstrf_,:Float32,:Float32),
+     (:zposv_,:zpotrf_,:zpotri_,:zpotrs_,:zpstrf_,:Complex128,:Float64),
+     (:cposv_,:cpotrf_,:cpotri_,:cpotrs_,:cpstrf_,:Complex64,:Float32))
     @eval begin
         ## Caller should check if returned info[1] is zero,
         ## positive values indicate indefiniteness
@@ -985,6 +985,29 @@ for (posv, potrf, potri, potrs, elty) in
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
             B
+        end
+        #       SUBROUTINE DPSTRF( UPLO, N, A, LDA, PIV, RANK, TOL, WORK, INFO )
+        #       .. Scalar Arguments ..
+        #       DOUBLE PRECISION   TOL
+        #       INTEGER            INFO, LDA, N, RANK
+        #       CHARACTER          UPLO
+        #       .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), WORK( 2*N )
+        #       INTEGER            PIV( N )
+        function pstrf!(uplo::LapackChar, A::StridedMatrix{$elty}, tol::Real)
+            chkstride1(A)
+            chksquare(A)
+            n    = size(A,1)
+            piv  = Array(Int32, n)
+            rank = Array(Int32, 1)
+            work = Array($rtyp, 2n)
+            info = Array(Int32, 1)
+            ccall(dlsym(Base.liblapack, $(string(pstrf))), Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{Int32}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{Int32}),
+                  &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            A, piv, rank[1], info[1]
         end
     end
 end
