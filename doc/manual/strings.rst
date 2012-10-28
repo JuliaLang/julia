@@ -688,6 +688,7 @@ You can extract the following info from a ``RegexMatch`` object:
 -  the captured substrings as a tuple of strings: ``m.captures``
 -  the offset at which the whole match begins: ``m.offset``
 -  the offsets of the captured substrings as a vector: ``m.offsets``
+-  a dictionary of named captured substrings: ``m.capture_dict`` (more on this below)
 
 For when a capture doesn't match, instead of a substring, ``m.captures``
 contains ``nothing`` in that position, and ``m.offsets`` has a zero
@@ -732,6 +733,30 @@ use tuple destructuring syntax to bind them to local variables::
 
     julia> first
     "a"
+
+In complicated regular expressions, it can be hard  to keep track of the
+numbers, and the numbers may change if the expression is modified.  To
+aid with this, subpatterns may be named::
+
+    julia> m = match(r"(?P<greeting>\w+)(?:, (?P<receiver>\w+))?[.!]", "Greetings, Earthling!")
+    RegexMatch("Greetings, Earthling!", 1(greeting)="Greetings", 2(receiver)="Earthling")
+
+As noted above, a dictionary of matched named patterns is made
+available via ``m.capture_dict``::
+
+    julia> m.capture_dict
+    {"greeting"=>"Greetings","receiver"=>"Earthling"}
+
+As with ``captures``, any unmatched named patterns contain ``nothing``::
+
+    julia> m = match(r"(?P<greeting>\w+)(?:, (?P<receiver>\w+))?[.!]", "Hello.")
+    RegexMatch("Hello.", 1(greeting)="Hello", 2(receiver)=nothing)
+
+    julia> m.capture_dict
+    {"greeting"=>"Hello","receiver"=>nothing}
+
+    julia> m.captures
+    ("Hello",nothing)
 
 You can modify the behavior of regular expressions by some combination of
 the flags ``i``, ``m``, ``s``, and ``x`` after the closing double quote
