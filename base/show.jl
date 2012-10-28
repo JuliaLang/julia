@@ -9,7 +9,7 @@ showcompact(io, x) = show(io, x)
 showcompact(x)     = showcompact(OUTPUT_STREAM::IOStream, x)
 
 show(io, s::Symbol) = show_indented(io, s)
-show(io, tn::TypeName) = show(io, tn.name)
+show(io, tn::TypeName) = print(io, tn.name)
 show(io, ::Nothing) = print(io, "nothing")
 show(io, b::Bool) = print(io, b ? "true" : "false")
 show(io, n::Signed) = (write(io, dec(n)); nothing)
