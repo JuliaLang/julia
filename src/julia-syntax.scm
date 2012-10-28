@@ -1055,7 +1055,7 @@
 
 ;; Comprehensions
 
-(define (lower-nd-comprehension expr ranges)
+(define (lower-nd-comprehension atype expr ranges)
   (let ((result    (gensy))
 	(ri        (gensy))
 	(oneresult (gensy)))
@@ -1095,12 +1095,17 @@
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
 
+    (define (get-eltype)
+      (if (null? atype)
+        `((call (top eltype) ,oneresult))
+        `(,atype)))
+
     ;; Evaluate the comprehension
     `(scope-block
       (block
        (= ,oneresult (tuple))
        ,(evaluate-one ranges)
-       (= ,result (call (top Array) (call (top eltype) ,oneresult)
+       (= ,result (call (top Array) ,@(get-eltype)
 			,@(compute-dims ranges 1)))
        (= ,ri 1)
        ,(construct-loops (reverse ranges) (list) 1)
@@ -1118,7 +1123,7 @@
    (pattern-lambda
     (comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
-	(lower-nd-comprehension expr ranges)
+	(lower-nd-comprehension '() expr ranges)
     (let ((result    (gensy))
 	  (ri        (gensy))
 	  (initlabl  (gensy))
@@ -1161,6 +1166,8 @@
    ;; typed array comprehensions
    (pattern-lambda
     (typed-comprehension atype expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+        (lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
@@ -1190,7 +1197,7 @@
 	 (= ,result (call (top Array) ,atype ,@(compute-dims rs)))
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
-	 ,result)))))
+	 ,result))))))
 
 )) ;; lower-comprehensions
 
