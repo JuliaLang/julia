@@ -279,15 +279,12 @@ hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 const _jl_missing_token = :__c782dbf1cf4d6a2e5e3965d7e95634f2e09b5901__
 
 function rehash{K,V}(h::Dict{K,V}, newsz)
-    oldk = copy(h.keys)
+    oldk = h.keys
     oldv = h.vals
-    sz = length(oldk)
     newsz = _tablesz(newsz)
-    if newsz > sz
-        grow(h.keys, newsz-sz)
-    end
+    h.keys = fill!(cell(newsz), _jl_secret_table_token)
     h.vals = Array(V, newsz)
-    del_all(h)
+    h.ndel = h.count = 0
 
     for i = 1:length(oldk)
         k = oldk[i]
@@ -311,13 +308,14 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if h.ndel >= ((3*sz)>>2)
-        rehash(h, sz)
-        sz = length(h.keys)  # yes, rehash may grow the table at this point!
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        sz = length(h.keys)  # rehash may resize the table at this point!
     end
 
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
@@ -362,7 +360,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
         return h
     end
 
-    rehash(h, sz*2)
+    rehash(h, h.count > 64000 ? sz*2 : sz*4)
 
     assign(h, v, key)
 end
@@ -373,7 +371,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
 
     sz = length(h.keys)
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     keys = h.keys
