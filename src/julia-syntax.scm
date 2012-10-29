@@ -674,11 +674,31 @@
 
 ;; convert (lhss...) = (tuple ...) to assignments, eliminating the tuple
 (define (tuple-to-assignments lhss x)
-  (let ((temps (map (lambda (x) (gensy)) (cdr x))))
-    `(block
-      ,@(map make-assignment temps (cdr x))
-      ,@(map make-assignment lhss temps)
-      (unnecessary-tuple (tuple ,@temps)))))
+  (let loop ((lhss lhss)
+	     (rhss (cdr x))
+	     (stmts '())
+	     (after '())
+	     (elts  '()))
+    (if (null? lhss)
+	`(block ,@(reverse stmts)
+		,@(reverse after)
+		(unnecessary-tuple (tuple ,@(reverse elts))))
+	(let ((L (car lhss))
+	      (R (car rhss)))
+	  (if (and (symbol? L)
+		   ;; overwrite var immediately if it doesn't occur elsewhere
+		   (not (contains (lambda (e) (eq? e L)) (cdr rhss))))
+	      (loop (cdr lhss)
+		    (cdr rhss)
+		    (cons (make-assignment L R) stmts)
+		    after
+		    (cons L elts))
+	      (let ((temp (gensy)))
+		(loop (cdr lhss)
+		      (cdr rhss)
+		      (cons (make-assignment temp R) stmts)
+		      (cons (make-assignment L temp) after)
+		      (cons temp elts))))))))
 
 ;; convert (lhss...) = x to tuple indexing, handling the general case
 (define (lower-tuple-assignment lhss x)
@@ -736,35 +756,27 @@
 
    (pattern-lambda (comparison . chain) (expand-compare-chain chain))
 
-   ;; multiple value assignment a,b = x...
-   (pattern-lambda (= (tuple . lhss) (... x))
-		   (let* ((xx  (if (symbol? x) x (gensy)))
-			  (ini (if (eq? x xx) '() `((= ,xx ,x))))
-			  (st  (gensy)))
-		     (if
-		      (and (pair? x) (eq? (car x) 'tuple))
-		      `(= (tuple ,@lhss) ,x)
-		      `(block
-			,@ini
-			(= ,st (call (top start) ,xx))
-			,.(apply append
-				 (map (lambda (lhs)
-					`((if (call (top done) ,xx ,st)
-					      (call (top throw)
-						    (call (top BoundsError))))
-					  (= (tuple ,lhs ,st)
-					     (call (top next) ,xx ,st))))
-				      lhss))
-			,xx))))
-
-   ;; multiple value assignment
-   (pattern-lambda (= (tuple . lhss) x)
-		   (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
-			    (length= lhss (length (cdr x))))
-		       ;; (a, b, ...) = (x, y, ...)
-		       (tuple-to-assignments lhss x)
-		       ;; (a, b, ...) = other
-		       (lower-tuple-assignment lhss x)))
+   ;; multiple value assignment a,b = x
+   (pattern-lambda
+    (= (tuple . lhss) x)
+    (if (and (pair? x) (pair? lhss) (eq? (car x) 'tuple)
+	     (length= lhss (length (cdr x))))
+	;; (a, b, ...) = (x, y, ...)
+	(tuple-to-assignments lhss x)
+	;; (a, b, ...) = other
+	(let* ((xx  (if (symbol? x) x (gensy)))
+	       (ini (if (eq? x xx) '() `((= ,xx ,x))))
+	       (st  (gensy)))
+	  `(block
+	    ,@ini
+	    (= ,st (call (top start) ,xx))
+	    ,.(map (lambda (i lhs)
+		     (lower-tuple-assignment
+		      (list lhs st)
+		      `(call (|.| (top Base) (quote indexed_next)) ,xx ,(+ i 1) ,st)))
+		   (iota (length lhss))
+		   lhss)
+	    ,xx))))
 
    (pattern-lambda (= (ref a . idxs) rhs)
 		   (let* ((reuse (and (pair? a)
@@ -960,7 +972,8 @@
 	       (= ,state (call (top start) ,coll))
 	       (while (call (top !) (call (top done) ,coll ,state))
 		      (block
-		       (= (tuple ,lhs ,state) (call (top next) ,coll ,state))
+		       ,(lower-tuple-assignment (list lhs state)
+						`(call (top next) ,coll ,state))
 		       ,body))))))
 
    ; update operators

@@ -9,8 +9,13 @@ ref(t::Tuple, r::Ranges) = tuple([t[ri] for ri in r]...)
 ## iterating ##
 
 start(t::Tuple) = 1
-done(t::Tuple, i) = (length(t) < i)
-next(t::Tuple, i) = (t[i], i+1)
+done(t::Tuple, i::Int) = (length(t) < i)
+next(t::Tuple, i::Int) = (t[i], i+1)
+
+# this allows partial evaluation of bounded sequences of next() calls on tuples,
+# while reducing to plain next() for arbitrary iterables.
+indexed_next(t::Tuple, i::Int, state) = (t[i], i+1)
+indexed_next(I, i, state) = next(I, state)
 
 ## mapping ##
 

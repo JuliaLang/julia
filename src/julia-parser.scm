@@ -849,7 +849,9 @@
     ((function macro)
      (let* ((paren (eqv? (require-token s) #\())
 	    (sig   (parse-call s))
-	    (def   (if (symbol? sig)
+	    (def   (if (or (symbol? sig)
+			   (and (pair? sig) (eq? (car sig) '|::|)
+				(symbol? (cadr sig))))
 		       (if paren
 			   ;; in "function (x)" the (x) is a tuple
 			   `(tuple ,sig)
