@@ -52,6 +52,7 @@
     jl_array_ptr;
     jl_arrayref;
     jl_arrayset;
+    jl_arrayunset;
     jl_array_to_string;
     jl_backtrace_type;
     jl_base_module;

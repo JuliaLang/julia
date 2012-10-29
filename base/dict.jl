@@ -298,6 +298,7 @@ end
 
 function del_all{K,V}(h::Dict{K,V})
     fill!(h.keys, _jl_secret_table_token)
+    h.vals = Array(V, length(h.keys))
     h.ndel = 0
     h.count = 0
     return h
@@ -416,6 +417,7 @@ function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
         h.keys[index] = _jl_missing_token
+        ccall(:jl_arrayunset, Void, (Any,Uint), h.vals, index-1)
         h.ndel += 1
         h.count -= 1
     end
