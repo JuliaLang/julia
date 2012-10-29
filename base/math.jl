@@ -16,7 +16,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        clamp, modf, ^, 
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
-       hankelh1, hankelh2, besseli, besselk, 
+       hankelh1, hankelh2, besseli, besselk, besselh,
        beta, lbeta, eta, zeta
 
 # non-type specific math functions

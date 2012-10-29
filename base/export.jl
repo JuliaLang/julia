@@ -533,6 +533,7 @@ export
     hankelh2, 
     besseli, 
     besselk, 
+    besselh,
     beta, 
     lbeta, 
     eta, 
