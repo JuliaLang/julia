@@ -1028,8 +1028,8 @@ void get_response(request* req,uv_stream_t *client)
     buf.base=p->cstr;
     buf.len=response.size();
     uv_write_t *wr = new uv_write_t;
+    wr->data=(void*)buf.base;
     uv_write(wr,(uv_stream_t*)client,&buf,1,&free_write_buffer);
-    //wr->data=(void*)buf.base;
 
     // destroySoon the connection to the client
     uv_shutdown_t *sr = new uv_shutdown_t;

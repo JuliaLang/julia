@@ -879,7 +879,7 @@ NGINX_FLAGS += \
 	--with-ld-opt="-L'$(USRLIB)' -lpcre"
 else
 NGINX_FLAGS += \
-	--with-ld-opt="-L'$(USRLIB)' -lpcre"
+	--with-ld-opt="-L'$(USRLIB)' -lpcre -Wl,-rpath,$(USRLIB) $(RPATH)"
 endif
 
 compile-nginx: install-nginx
