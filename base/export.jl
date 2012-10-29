@@ -515,6 +515,28 @@ export
     isinteger,
     typemax,
     typemin,
+
+#specfun
+    airy, 
+    airyai, 
+    airyprime, 
+    airyaiprime, 
+    airybi, 
+    airybiprime,
+    besselj0, 
+    besselj1, 
+    besselj, 
+    bessely0, 
+    bessely1, 
+    bessely,
+    hankelh1, 
+    hankelh2, 
+    besseli, 
+    besselk, 
+    beta, 
+    lbeta, 
+    eta, 
+    zeta,
     
 # arrays
     amap,
