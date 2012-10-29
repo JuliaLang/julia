@@ -107,6 +107,9 @@
     (apply append
 	   (map string->list (map symbol->string operators))))))
 
+(define (dict-literal? l)
+  (and (length= l 3) (eq? (car l) '=>)))
+
 ; --- lexer ---
 
 (define special-char?
@@ -756,8 +759,20 @@
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
-		   (loop (list* 'curly ex
-				(map subtype-syntax (parse-arglist s #\} )))))
+		   (let ((al (parse-ref s #\})))
+		     (if (dict-literal? ex)
+		       (if (and (not(null? al)) (eq? (car al) 'comprehension))
+			  (if (and (not(null? (cdr al)))
+				   (dict-literal? (cadr al)))
+			      (loop (list* 'typed-dict-comprehension ex (cdr al)))
+			      (error "invalid dict comprehension syntax"))
+			  (if (not(every dict-literal? al))
+			    (error "invalid dict literal")
+			    (loop (list* 'typed-dict ex al))))
+		       (if (any dict-literal? al)
+			 (error "invalid dict type specification")
+			 (loop (list* 'curly ex
+				      (map subtype-syntax al)))))))
 		  ((#\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
@@ -1372,11 +1387,10 @@
 	       (begin (take-token s) '(cell1d))
 	       (let ((vex (parse-cat s #\})))
 		 (cond ((eq? (car vex) 'comprehension)
-                        (if (and (not (null? (cdr vex)))
-                                 (length= (cadr vex) 3)
-                                 (eq? (caadr vex) '=>))
-                          (list* 'dict-comprehension (cdr vex))
-                          (list* 'typed-comprehension 'Any (cdr vex))))
+			(if (and (not (null? (cdr vex)))
+				 (dict-literal? (cadr vex)))
+			  (list* 'dict-comprehension (cdr vex))
+			  (list* 'typed-comprehension 'Any (cdr vex))))
 		       ((eq? (car vex) 'hcat)
 			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)

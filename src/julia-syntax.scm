@@ -839,6 +839,15 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; typed dict syntax
+   (pattern-lambda (typed-dict atypes . args)
+		   (if (and (length= atypes 3)
+			    (eq? (car atypes) '=>))
+		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
+			      (tuple ,@(map cadr  args))
+			      (tuple ,@(map caddr args)))
+		       (error "invalid typed-dict syntax")))
+
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
 		   (cond ((any (lambda (e) (and (length= e 3)
@@ -1199,7 +1208,7 @@
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result))))))
 
-   ;; dict array comprehensions
+   ;; dict comprehensions
    (pattern-lambda
     (dict-comprehension expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
@@ -1233,10 +1242,39 @@
 		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	   (label ,initlabl)
 	   (= ,result (call (curly (top Dict)
-                              (static_typeof ,onekey)
-                              (static_typeof ,oneval))))
+			    (static_typeof ,onekey)
+			    (static_typeof ,oneval))))
 	   ,(construct-loops (reverse loopranges))
 	   ,result)))))))
+
+   ;; typed dict comprehensions
+   (pattern-lambda
+    (typed-dict-comprehension atypes expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (if (not (and (length= atypes 3)
+		  (eq? (car atypes) '=>)))
+	(error "invalid typed-dict-comprehension syntax")
+    (let ( (result (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges rs)
+	(if (null? ranges)
+	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
+
+      ;; Evaluate the comprehension
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+	(scope-block
+	(block
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	 (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
+	 ,(construct-loops (reverse ranges) (reverse rs))
+	 ,result)))))))
 
 )) ;; lower-comprehensions
 
