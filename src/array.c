@@ -449,6 +449,15 @@ JL_CALLABLE(jl_f_arrayset)
     return args[0];
 }
 
+void jl_arrayunset(jl_array_t *a, size_t i)
+{
+    if (i >= a->length)
+        jl_raise(jl_bounds_exception);
+    char *ptail = (char*)a->data + i*a->elsize;
+    if (a->ptrarray)
+        memset(ptail, 0, a->elsize);
+}
+
 static jl_mallocptr_t *array_new_buffer(jl_array_t *a, size_t newlen)
 {
     size_t nbytes = newlen * a->elsize;
