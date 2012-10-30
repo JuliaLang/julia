@@ -257,7 +257,7 @@ Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
+similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -468,7 +468,7 @@ end
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
 
-    WeakKeyDict() = new(Dict{Any,V}())
+    WeakKeyDict() = new((Any=>V)[])
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 

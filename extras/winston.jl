@@ -1553,7 +1553,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
 
     halign, valign = _align(self)
 
-    style = Dict{String,Any}()
+    style = (String=>Any)[]
     style["texthalign"] = halign
     style["textvalign"] = valign
     for (k,v) in getattr(self, "ticklabels_style")
@@ -3195,7 +3195,7 @@ const conf_setattr = iniattr
 # HasStyle ---------------------------------------------------------------
 
 kw_defaults(x) = Dict()
-_kw_rename(x) = Dict{String,String}()
+_kw_rename(x) = (String=>String)[]
 
 function kw_init( self::HasStyle, args...)
     # jeez, what a mess...

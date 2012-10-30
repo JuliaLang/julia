@@ -46,7 +46,7 @@ type DataAlign
     # aggregate::(Vector{Type} -> Integer); used for composite types not in ttable
     aggregate::Function
 end
-DataAlign(def::Function, agg::Function) = DataAlign(Dict{Type,Integer}(), def, agg)
+DataAlign(def::Function, agg::Function) = DataAlign((Type=>Integer)[], def, agg)
 
 canonicalize(s::String) = replace(s, r"\s|#.*$"m, "")
 
