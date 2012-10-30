@@ -7,11 +7,16 @@ const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
 
-function show(io, t::Associative)
+function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
     else
-        print(io, "{")
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
+        print(io, delims[1])
         first = true
         for (k, v) = t
             first || print(io, ',')
@@ -20,7 +25,7 @@ function show(io, t::Associative)
             print(io, "=>")
             show(io, v)
         end
-        print(io, "}")
+        print(io, delims[2])
     end
 end
 

@@ -107,6 +107,9 @@
     (apply append
 	   (map string->list (map symbol->string operators))))))
 
+(define (dict-literal? l)
+  (and (length= l 3) (eq? (car l) '=>)))
+
 ; --- lexer ---
 
 (define special-char?
@@ -1374,7 +1377,12 @@
 	       (begin (take-token s) '(cell1d))
 	       (let ((vex (parse-cat s #\})))
 		 (cond ((eq? (car vex) 'comprehension)
-			(list* 'typed-comprehension 'Any (cdr vex)))
+			`(typed-comprehension Any ,@(cdr vex)))
+		       ((and (eq? (car vex) 'vcat)
+			     (any dict-literal? (cdr vex)))
+			(if (every dict-literal? (cdr vex))
+			  `(typed-dict (=> Any Any) ,@(cdr vex))
+			  (error "invalid dict literal")))
 		       ((eq? (car vex) 'hcat)
 			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
 		       (else  ; (vcat ...)
@@ -1403,7 +1411,13 @@
 	  ;; cat expression
 	  ((eqv? t #\[ )
 	   (take-token s)
-	   (parse-cat s #\]))
+	   (let ((vex (parse-cat s #\])))
+	     (if (and (not(null? vex))
+		      (any dict-literal? (cdr vex)))
+	       (if (every dict-literal? (cdr vex))
+		 `(dict ,@(cdr vex))
+		 (error "invalid dict literal"))
+	       vex)))
 
 	  ;; string literal
 	  ((eqv? t #\")

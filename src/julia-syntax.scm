@@ -851,19 +851,24 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; dict syntax
+   (pattern-lambda (dict . args)
+		   `(call (top Dict)
+			  (tuple ,@(map cadr  args))
+			  (tuple ,@(map caddr args))))
+
+   ;; typed dict syntax
+   (pattern-lambda (typed-dict atypes . args)
+		   (if (and (length= atypes 3)
+			    (eq? (car atypes) '=>))
+		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
+			      (tuple ,@(map cadr  args))
+			      (tuple ,@(map caddr args)))
+		       (error (string "invalid typed-dict syntax " atypes))))
+
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (length= e 3)
-						(eq? (car e) '=>)))
-			       args)
-			  (if (not (every (lambda (e) (and (length= e 3)
-							   (eq? (car e) '=>)))
-					  args))
-			      (error "invalid dict literal")
-			      `(call (top Dict)
-				     (tuple ,@(map cadr  args))
-				     (tuple ,@(map caddr args)))))
-			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
 			       args)
 			  `(call (top cell_1d) ,@args))
 			 (else
