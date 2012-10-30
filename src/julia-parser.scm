@@ -213,18 +213,18 @@
 	(if (eqv? (peek-char port) #\0)
 	    (begin (write-char (read-char port) str)
 		   (set! leadingzero #t)
-                   (cond ((allow #\x)
-                          (begin
-                             (set! leadingzero #f)
-                             (set! pred char-hex?)))
-                         ((allow #\o)
-                          (begin
-                             (set! leadingzero #f)
-                             (set! pred char-oct?)))
-                         ((allow #\b)
-                          (begin
-                             (set! leadingzero #f)
-                             (set! pred char-bin?)))))
+		   (cond ((allow #\x)
+			  (begin
+			     (set! leadingzero #f)
+			     (set! pred char-hex?)))
+			 ((allow #\o)
+			  (begin
+			     (set! leadingzero #f)
+			     (set! pred char-oct?)))
+			 ((allow #\b)
+			  (begin
+			     (set! leadingzero #f)
+			     (set! pred char-bin?)))))
 	    (allow #\.)))
     (read-digs leadingzero)
     (if (eqv? (peek-char port) #\.)
@@ -245,41 +245,41 @@
 			      (read-digs #f)
 			      (disallow-dot))
 		       (io.ungetc port c))))
-          ; disallow digits after binary or octal literals, e.g., 0b12
-          (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
-                   (not (eof-object? c))
-                   (char-numeric? c))
-              (error (string "invalid numeric constant "
-                             (get-output-string str) c)))))
+	  ; disallow digits after binary or octal literals, e.g., 0b12
+	  (if (and (or (eq? pred char-bin?) (eq? pred char-oct?))
+		   (not (eof-object? c))
+		   (char-numeric? c))
+	      (error (string "invalid numeric constant "
+			     (get-output-string str) c)))))
     (let* ((s (get-output-string str))
-           (r (cond ((eq? pred char-hex?) 16)
-                    ((eq? pred char-oct?) 8)
-                    ((eq? pred char-bin?) 2)
-                    (else 10)))
-           (n (string->number s r)))
+	   (r (cond ((eq? pred char-hex?) 16)
+		    ((eq? pred char-oct?) 8)
+		    ((eq? pred char-bin?) 2)
+		    (else 10)))
+	   (n (string->number s r)))
       (if n
-          (cond ((eq? pred char-hex?) (sized-uint-literal n s 4))
-                ((eq? pred char-oct?) (sized-uint-oct-literal n s))
-                ((eq? pred char-bin?) (sized-uint-literal n s 1))
-                (else (if (and (integer? n) (> n 9223372036854775807))
-                          (error (string "invalid numeric constant " s))
-                          n)))
+	  (cond ((eq? pred char-hex?) (sized-uint-literal n s 4))
+		((eq? pred char-oct?) (sized-uint-oct-literal n s))
+		((eq? pred char-bin?) (sized-uint-literal n s 1))
+		(else (if (and (integer? n) (> n 9223372036854775807))
+			  (error (string "invalid numeric constant " s))
+			  n)))
 	  (error (string "invalid numeric constant " s))))))
 
 (define (sized-uint-literal n s b)
   (let ((l (* (- (length s) 2) b)))
     (cond ((<= l 8)  (uint8  n))
-          ((<= l 16) (uint16 n))
-          ((<= l 32) (uint32 n))
-          (else      (uint64 n)))))
+	  ((<= l 16) (uint16 n))
+	  ((<= l 32) (uint32 n))
+	  (else      (uint64 n)))))
 
 (define (sized-uint-oct-literal n s)
   (if (eqv? (string.char s 2) #\0)
     (sized-uint-literal n s 3)
     (cond ((< n 256)        (uint8  n))
-          ((< n 65536)      (uint16 n))
-          ((< n 4294967296) (uint32 n))
-          (else             (uint64 n)))))
+	  ((< n 65536)      (uint16 n))
+	  ((< n 4294967296) (uint32 n))
+	  (else             (uint64 n)))))
 
 (define (skip-ws-and-comments port)
   (skip-ws port #t)
@@ -440,7 +440,7 @@
   (if (memv (require-token s) closers)
       (list head)  ; empty block
       (let loop ((ex
-                  ;; in allow-empty mode skip leading runs of operator
+		  ;; in allow-empty mode skip leading runs of operator
 		  (if (and allow-empty (eqv? (require-token s) op))
 		      '()
 		      (if (eqv? op #\newline)

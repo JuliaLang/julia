@@ -277,7 +277,7 @@
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
     `(block ;; make type name global
-            (global ,Tname)
+	    (global ,Tname)
 	    ,(pattern-replace (pattern-set
 			       (pattern-lambda
 				(call (-/ new) . args)
@@ -1110,8 +1110,8 @@
 
     (define (get-eltype)
       (if (null? atype)
-        `((call (top eltype) ,oneresult))
-        `(,atype)))
+	`((call (top eltype) ,oneresult))
+	`(,atype)))
 
     ;; Evaluate the comprehension
     `(scope-block
@@ -1150,7 +1150,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
 		    (call (top assign) ,result ,oneresult ,ri)
@@ -1180,7 +1180,7 @@
    (pattern-lambda
     (typed-comprehension atype expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
-        (lower-nd-comprehension atype expr ranges)
+	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
@@ -1194,7 +1194,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
@@ -1756,7 +1756,7 @@ So far only the second case can actually occur.
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
 	 ;      (begin (vinfo:set-type! vi (caddr e))
-	 ;             (cadr e))
+	 ;	     (cadr e))
 	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
 	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 ; handle var::T declaration by storing the type in the var-info
@@ -1769,7 +1769,7 @@ So far only the second case can actually occur.
 		      (if (assq (cadr e) captvars)
 			  (error (string "type of " (cadr e)
 					 " declared in inner scope")))
-                      (vinfo:set-type! vi (caddr e))
+		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
@@ -1968,7 +1968,7 @@ So far only the second case can actually occur.
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
-        ((not (pair? e))      e)
+	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 (expand-backquote (expand-backquote (cadr e))))
