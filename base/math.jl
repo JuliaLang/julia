@@ -1,5 +1,8 @@
 libopenlibm = dlopen("libopenlibm")
 
+# Need to import Rmath to access psigamma family of functions.
+libRmath = dlopen("libRmath")
+
 module Math
 
 import Base.*
@@ -17,7 +20,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta
+       beta, lbeta, eta, zeta, psigamma, digamma, trigamma
 
 # non-type specific math functions
 
@@ -433,6 +436,23 @@ function lgamma(z::Complex)
 end
 
 gamma(z::Complex) = exp(lgamma(z))
+
+# psigamma post-processes floats into ints for deriv.
+# We could make this more obvious by using type restrictions.
+function psigamma(x::Float64, deriv::Float64)
+  ccall(dlsym(Base.libRmath,  :psigamma),
+        Float64,
+        (Float64, Float64),
+        x, deriv)
+end
+
+function digamma(x::Float64)
+  ccall(dlsym(Base.libRmath,  :digamma), Float64, (Float64, ), x)
+end
+
+function trigamma(x::Float64)
+  ccall(dlsym(Base.libRmath,  :trigamma), Float64, (Float64, ), x)
+end
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)
