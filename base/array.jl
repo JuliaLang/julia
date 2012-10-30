@@ -328,13 +328,13 @@ function ref(A::Array, I::Range1{Int})
 end
 
 # note: this is also useful for Ranges
-function ref{T<:Integer}(A::Array, I::AbstractVector{T})
+function ref{E,T<:Integer}(A::Array{E}, I::AbstractVector{T})
     check_bounds(A, I)
-    return [ A[i] for i=I ]
+    return E[ A[i] for i=I ]
 end
-function ref{T<:Integer}(A::AbstractArray, I::AbstractVector{T})
+function ref{E,T<:Integer}(A::AbstractArray{E}, I::AbstractVector{T})
     check_bounds(A, I)
-    return [ A[i] for i=I ]
+    return E[ A[i] for i=I ]
 end
 
 # 2d indexing
@@ -369,8 +369,8 @@ function ref(A::Array, I::Range1{Int}, J::AbstractVector{Int})
     return X
 end
 
-ref{T<:Integer}(A::Array, I::AbstractVector{T}, j::Integer) = [ A[i,j] for i=I ]
-ref{T<:Integer}(A::Array, I::Integer, J::AbstractVector{T}) = [ A[i,j] for i=I,j=J ]
+ref{E,T<:Integer}(A::Array{E}, I::AbstractVector{T}, j::Integer) = E[ A[i,j] for i=I ]
+ref{E,T<:Integer}(A::Array{E}, I::Integer, J::AbstractVector{T}) = E[ A[i,j] for i=I,j=J ]
 
 # This next is a 2d specialization of the algorithm used for general
 # multidimensional indexing
@@ -1123,7 +1123,7 @@ rotr90(A::AbstractMatrix, k::Integer) = rotl90(A,-k)
 rot180(A::AbstractMatrix, k::Integer) = mod(k, 2) == 1 ? rot180(A) : copy(A)
 const rot90 = rotl90
 
-reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
+reverse{T}(v::StridedVector{T}) = (n=length(v); T[ v[n-i+1] for i=1:n ])
 function reverse!(v::StridedVector)
     n = length(v)
     r = n
@@ -1711,7 +1711,7 @@ function transpose{T<:Union(Float64,Float32,Complex128,Complex64)}(A::Matrix{T})
     if numel(A) > 50000
         return FFTW.transpose(reshape(A, size(A, 2), size(A, 1)))
     else
-        return [ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
+        return T[ A[j,i] for i=1:size(A,2), j=1:size(A,1) ]
     end
 end
 
@@ -1719,11 +1719,11 @@ ctranspose{T<:Real}(A::StridedVecOrMat{T}) = transpose(A)
 
 ctranspose(x::StridedVecOrMat) = transpose(x)
 
-transpose(x::StridedVector) = [ x[j] for i=1, j=1:size(x,1) ]
-transpose(x::StridedMatrix) = [ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
+transpose{T}(x::StridedVector{T}) = T[ x[j] for i=1, j=1:size(x,1) ]
+transpose{T}(x::StridedMatrix{T}) = T[ x[j,i] for i=1:size(x,2), j=1:size(x,1) ]
 
-ctranspose{T<:Number}(x::StridedVector{T}) = [ conj(x[j]) for i=1, j=1:size(x,1) ]
-ctranspose{T<:Number}(x::StridedMatrix{T}) = [ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedVector{T}) = T[ conj(x[j]) for i=1, j=1:size(x,1) ]
+ctranspose{T<:Number}(x::StridedMatrix{T}) = T[ conj(x[j,i]) for i=1:size(x,2), j=1:size(x,1) ]
 
 ## Permute ##
 
