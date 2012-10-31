@@ -233,7 +233,7 @@ cd(f::Function) = cd(f, ENV["HOME"])
 
 function mkdir(path::String, mode::Unsigned)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
-    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8}), bytestring(path))
     system_error(:mkdir, ret != 0)
 end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
@@ -292,8 +292,28 @@ tempdir() = dirname(tempname())
   return (b, fdio(p, true))
 end
 
-@windows_only function mktemp()
-  error("not yet implemented")
+@windows_only begin 
+function GetTempPath(uunique::Bool)
+  temppath = Array(Uint8,261)
+  lentemppath = ccall(:GetTempPath,stdcall,Uint32,(Uint32,Ptr{Uint8}),length(temppath),temppath)
+  if lentemppath >= length(temppath) || lentemppath == 0
+      error("GetTempPath failed")
+  end
+  return bytestring(temppath[1:lentemppath])
+end
+GetTempFileName(uunique::Bool) = GetTempFileName(GetTempPath(), uunique)
+function GetTempFileName(temppath::String,uunique::Bool)
+  temppname = Array(Uint8,261)
+  lentempname = ccall(:GetTempFileName,stdcall,Uint32,(Uint32,Ptr{Uint8},Uint32,Ptr{Uint8}),temppath,"julia.",uunique,tempname)
+  if lentempname == 0
+      error("GetTempFileName failed")
+  end
+  return bytestring(tempname[1:lentempname])
+end
+function mktemp()
+  filename = GetTempFileName(false)
+  return (filename, open(filename,"r+"))
+end
 end
 
 # Create and return the name of a temporary directory
@@ -304,7 +324,14 @@ end
 end
 
 @windows_only function mktempdir()
-  error("not yet implemented")
+  while true
+      filename = GetTempFileName(true)
+      ret = ccall(:_mkdir, Int32, (Ptr{Uint8}), filename)
+      if ret == 0
+          return filename
+      end
+      system_error(:mktempdir, errno()!=EEXIST)
+  end
 end
 
 function download_file(url::String)
