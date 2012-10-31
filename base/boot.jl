@@ -128,7 +128,7 @@ export ..., ANY, ASCIIString, AbstractArray, AbstractKind, Any, Array,
     OverflowError, Ptr, QuoteNode, Real, Signed, StackOverflowError, String,
     Symbol, SymbolNode, Task, Top, TopNode, Tuple, Type, TypeConstructor,
     TypeName, TypeVar, UTF8String, Uint, Uint8, Uint16, Uint32, Uint64, Uint128,
-    Undef, UndefRefError, Union, UnionKind, Unsigned, Void, WeakRef,
+    Undef, UndefRefError, Union, UnionKind, Unsigned, Void,
     GetfieldNode,
     # functions
     setfield, applicable, apply, apply_type, arraylen, arrayref, arrayset,
@@ -220,12 +220,6 @@ type GetfieldNode
     value
     name::Symbol
     typ
-end
-
-type WeakRef
-    value
-    WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, WeakRef, (Any,), v)
 end
 
 type ASCIIString <: DirectIndexString

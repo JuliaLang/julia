@@ -1,6 +1,6 @@
 module FFTW
 
-import Base.*
+using Base
 
 global transpose
 export bfft, bfftn, brfft, brfftn, fft, fft2, fft3, fftn,

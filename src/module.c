@@ -16,9 +16,9 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->name = name;
     htable_new(&m->bindings, 0);
     jl_set_const(m, name, (jl_value_t*)m);
-    arraylist_new(&m->imports, 0);
+    arraylist_new(&m->usings, 0);
     if (jl_core_module) {
-        jl_module_importall(m, jl_core_module);
+        jl_module_using(m, jl_core_module);
     }
     // export own name, so import Foo.* also imports Foo
     jl_module_export(m, name);
@@ -44,7 +44,11 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     jl_binding_t *b;
 
     if (*bp != HT_NOTFOUND) {
-        if ((*bp)->owner != m) {
+        if ((*bp)->owner == NULL) {
+            (*bp)->owner = m;
+            return *bp;
+        }
+        else if ((*bp)->owner != m) {
             ios_printf(JL_STDERR,
                        "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
@@ -59,26 +63,67 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     return *bp;
 }
 
+// get binding for adding a method
+// like jl_get_binding_wr, but uses existing imports instead of warning
+// and overwriting.
+jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
+{
+    jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&m->bindings, var);
+    jl_binding_t *b = *bp;
+
+    if (b != HT_NOTFOUND) {
+        if (b->owner != m && b->owner != NULL) {
+            jl_binding_t *b2 = jl_get_binding(b->owner, var);
+            if (b2 == NULL)
+                jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
+            return b2;
+        }
+        b->owner = m;
+        return b;
+    }
+
+    b = new_binding(var);
+    b->owner = m;
+    *bp = b;
+    return *bp;
+}
+
 // get binding for reading. might return NULL for unbound.
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
 {
     jl_binding_t *b = (jl_binding_t*)ptrhash_get(&m->bindings, var);
-    if (b == HT_NOTFOUND) {
-        for(size_t i=0; i < m->imports.len; i++) {
-            jl_module_t *imp = (jl_module_t*)m->imports.items[i];
+    if (b == HT_NOTFOUND || b->owner == NULL) {
+        for(int i=(int)m->usings.len-1; i >= 0; --i) {
+            jl_module_t *imp = (jl_module_t*)m->usings.items[i];
             b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
             if (b != HT_NOTFOUND && b->exportp) {
-                if (b->owner != imp)
-                    return jl_get_binding(b->owner, var);
+                while (b->owner != imp) {
+                    if (b->owner == NULL) {
+                        //b->owner = imp;
+                        //break;
+                        return NULL;
+                    }
+                    imp = b->owner;
+                    b = jl_get_binding(imp, var);
+                }
+                /*
                 // only import if the source module has resolved the binding;
                 // otherwise it might just be marked for re-export.
                 if (b->constp || b->value) {
                     return b;
                 }
+                */
+                // do a full import to prevent the result of this lookup
+                // from changing, for example if this var is assigned to
+                // later.
+                jl_module_import(m, imp, var);
+                return b;
             }
         }
         return NULL;
     }
+    //if (b->owner == NULL)
+    //    return NULL;
     if (b->owner != m)
         return jl_get_binding(b->owner, var);
     return b;
@@ -96,18 +141,23 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     }
     else {
         jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&to->bindings, s);
-        if (*bp != HT_NOTFOUND) {
-            if ((*bp)->owner != to) {
+        jl_binding_t *bto = *bp;
+        if (bto != HT_NOTFOUND) {
+            if (bto == b) {
+                // importing a binding on top of itself. harmless.
+            }
+            else if (bto->owner == b->owner) {
+                // already imported
+            }
+            else if (bto->owner != to && bto->owner != NULL) {
                 ios_printf(JL_STDERR,
                            "Warning: ignoring conflicting import of %s.%s into %s\n",
                            from->name->name, s->name, to->name->name);
             }
-            else if (*bp == b) {
-                // importing a binding on top of itself. harmless.
-            }
-            else if ((*bp)->constp || (*bp)->value) {
-                if ((*bp)->constp && (*bp)->value && b->constp &&
-                    b->value == (*bp)->value) {
+            else if (bto->constp || bto->value) {
+                assert(bto->owner == to);
+                if (bto->constp && bto->value && b->constp &&
+                    b->value == bto->value) {
                     // import of equivalent binding
                     return;
                 }
@@ -116,7 +166,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
                            from->name->name, s->name, to->name->name);
             }
             else {
-                (*bp)->owner = b->owner;
+                bto->owner = b->owner;
             }
         }
         else {
@@ -127,19 +177,20 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
     }
 }
 
-void jl_module_importall(jl_module_t *to, jl_module_t *from)
+void jl_module_using(jl_module_t *to, jl_module_t *from)
 {
     if (to == from)
         return;
-    for(size_t i=0; i < to->imports.len; i++) {
-        if (from == to->imports.items[i])
+    for(size_t i=0; i < to->usings.len; i++) {
+        if (from == to->usings.items[i])
             return;
     }
-    arraylist_push(&to->imports, from);
+    arraylist_push(&to->usings, from);
     // go though all "from" module's exports to check for conflicts, and
     // re-resolve symbols if it's not too late.
-    // mostly, we want to handle "export x" occurring before the "import M.*"
+    // mostly, we want to handle "export x" occurring before the "using M"
     // statement that actually provides x.
+    /*
     void **table = from->bindings.table;
     for(size_t i=1; i < from->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
@@ -153,6 +204,7 @@ void jl_module_importall(jl_module_t *to, jl_module_t *from)
             }
         }
     }
+    */
 }
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
@@ -160,14 +212,14 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
     if (*bp == HT_NOTFOUND) {
         jl_binding_t *b = jl_get_binding(from, s);
-        if (b == NULL) {
-            b = jl_get_binding_wr(from, s);
-        }
-        if (b->owner != from) {
-            // create an explicit import so we can mark as re-exported
-            jl_module_import(from, b->owner, s);
-        }
         bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
+        if (b == NULL) {
+            //b = jl_get_binding_wr(from, s);
+            b = new_binding(s);
+            // don't yet know who the owner is
+            b->owner = NULL;
+            *bp = b;
+        }
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;

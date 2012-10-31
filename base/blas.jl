@@ -1,7 +1,7 @@
 typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 
 module Blas
-import Base.*
+using Base
 
 export copy!,
        dot,

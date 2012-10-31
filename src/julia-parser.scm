@@ -88,7 +88,7 @@
 (define reserved-words '(begin while if for try return break continue
 			 function macro quote let local global const
 			 abstract typealias type bitstype
-			 module import export ccall do))
+			 module using import export ccall do))
 
 (define (syntactic-op? op) (memq op syntactic-operators))
 (define (syntactic-unary-op? op) (memq op syntactic-unary-operators))
@@ -616,7 +616,7 @@
 (define (closing-token? tok)
   (or (eof-object? tok)
       (and (eq? tok 'end) (not end-symbol))
-      (memv tok '(#\, #\) #\] #\} #\; else elseif catch))))
+      (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
 
 (define (maybe-negate op num)
   (if (eq? op '-) (- num) num))
@@ -931,8 +931,9 @@
        (if (not (every symbol? es))
 	   (error "invalid export statement"))
        `(export ,@es)))
-    ((import)
-     (let ((imports (parse-comma-separated s parse-import)))
+    ((import using)
+     (let ((imports (parse-comma-separated s (lambda (s)
+					       (parse-import s word)))))
        (if (length= imports 1)
 	   (car imports)
 	   (cons 'toplevel imports))))
@@ -965,13 +966,13 @@
       (cadr e)
       e))
 
-(define (parse-import s)
+(define (parse-import s word)
   (let ((ns (macrocall-to-atsym (parse-atom s))))
     (let loop ((path (list ns)))
       (if (not (symbol? (car path)))
-	  (error "invalid import statement: expected identifier"))
+	  (error (string "invalid " word " statement: expected identifier")))
       (let ((nxt (peek-token s)))
-	(cond ((eq? nxt '|.*|)
+	(cond #;((eq? nxt '|.*|)
 	       (take-token s)
 	       `(importall ,@(reverse path)))
 	      ((eq? nxt '|.|)
@@ -979,13 +980,13 @@
 	       (loop (cons (macrocall-to-atsym (parse-atom s)) path)))
 	      ((or (memv nxt '(#\newline #\; #\,))
 		   (eof-object? nxt))
-	       `(import ,@(reverse path)))
+	       `(,word ,@(reverse path)))
 	      ((eqv? (string.sub (string nxt) 0 1) ".")
 	       (take-token s)
 	       (loop (cons (symbol (string.sub (string nxt) 1))
 			   path)))
 	      (else
-	       (error "invalid import statement")))))))
+	       (error (string "invalid " word " statement"))))))))
 
 ; parse comma-separated assignments, like "i=1:n,j=1:m,..."
 (define (parse-comma-separated s what)

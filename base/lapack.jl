@@ -1,6 +1,6 @@
 ## The Lapack module of interfaces to Lapack subroutines
 module Lapack
-import Base.*
+using Base
 
 typealias LapackChar Char
 type LapackException <: Exception

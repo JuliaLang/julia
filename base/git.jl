@@ -2,7 +2,7 @@ module Git
 #
 # some utility functions for working with git repos
 #
-import Base.*
+using Base
 
 dir() = readchomp(`git rev-parse --git-dir`)
 modules(args::Cmd) = readchomp(`git config -f .gitmodules $args`)

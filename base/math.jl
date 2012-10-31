@@ -2,7 +2,7 @@ libopenlibm = dlopen("libopenlibm")
 
 module Math
 
-import Base.*
+using Base
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 

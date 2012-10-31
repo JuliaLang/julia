@@ -1,9 +1,11 @@
 libgrisu = dlopen("libgrisu")
 
 module Grisu
-import Base.*
+using Base
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
+
+import Base.show, Base.showcompact
 
 const NEG    = Array(Bool,1)
 const DIGITS = Array(Uint8,309+17)
@@ -161,4 +163,3 @@ print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST
 print_shortest(io, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module
-import Base.Grisu.print_shortest

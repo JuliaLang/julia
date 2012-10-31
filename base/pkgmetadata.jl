@@ -1,7 +1,7 @@
 load("linprog.jl")
 
 module Metadata
-import Base.*
+using Base
 import Main
 import Git
 export parse_requires, Version, VersionSet
