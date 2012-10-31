@@ -401,7 +401,7 @@ install-amos: $(AMOS_OBJ_TARGET)
 
 $(AMOS_OBJ_SOURCE): amos/*.f
 	cd amos && \
-	$(MAKE) && \
+	$(MAKE) FC="$(FC)" && \
 	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
 $(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
 	cp $< $@
