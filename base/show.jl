@@ -333,7 +333,11 @@ function show(io, bt::BackTrace)
     # we may not declare :_jl_eval_user_input
     # directly so that we get a compile error
     # in case its name changes in the future
-    const _jl_eval_function = symbol(string(_jl_eval_user_input))
+    const _jl_eval_function = try
+            symbol(string(_jl_eval_user_input))
+        catch
+            :(:) #for when client.jl is not yet defined
+        end
     for i = 1:3:length(t)
         if i == 1 && t[i] == :error; continue; end
         if t[i] == _jl_eval_function; break; end
@@ -341,7 +345,11 @@ function show(io, bt::BackTrace)
         lno = t[i+2]
         print(io, " in ", t[i], " at ", t[i+1])
         if lno >= 1
-            print(io, ":", lno)
+            try
+                print(io, ":", lno)
+            catch
+                print('?') #for when dec is not yet defined
+            end
         end
     end
 end
