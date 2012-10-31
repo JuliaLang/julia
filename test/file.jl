@@ -16,9 +16,8 @@ end
 # This first section may not run for non-UNIX people.
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
-dir_name = strcat("/tmp/testdir", randstring(6))
-mkdir(dir_name)
-filename = strcat(dir_name, "/afile.txt")
+dir_name = mktempdir()
+filename = file_path(dir_name, "afile.txt")
 file_create(filename)
 
 #######################################################################

@@ -29,9 +29,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
-- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
-- **FreeBSD:** x86/64 (64-bit); x86 (32-bit).
+- **GNU/Linux**
+- **Darwin/OS X**
+- **FreeBSD**
+
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
