@@ -8,7 +8,7 @@ end
 @windows_only begin
     const os_separator = "\\"
     const os_separator_match = r"[/\\]" # permit either slash type on Windows
-    const os_separator_match_chars = "/\\" # to permit further concatenation
+    const os_separator_match_chars = "/\\\\" # to permit further concatenation
 end
 # Match only the final separator
 const last_separator = Regex(strcat(os_separator_match.pattern, "(?!.*", os_separator_match.pattern, ")"))
@@ -232,14 +232,16 @@ end
 cd(f::Function) = cd(f, ENV["HOME"])
 
 function mkdir(path::String, mode::Unsigned)
-    ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
+    @windows_only ret = ccall(:_mkdir, Int32, (Ptr{Uint8},Uint32), bytestring(path), mode)
     system_error(:mkdir, ret != 0)
 end
 mkdir(path::String, mode::Signed) = error("mkdir: mode must be an unsigned integer -- perhaps 0o", mode, "?")
 mkdir(path::String) = mkdir(path, 0o777)
 
 function rmdir(path::String)
-    ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @unix_only ret = ccall(:rmdir, Int32, (Ptr{Uint8},), bytestring(path))
+    @windows_only ret = ccall(:_rmdir, Int32, (Ptr{Uint8},), bytestring(path))
     system_error(:rmdir, ret != 0)
 end
 
@@ -271,11 +273,10 @@ function path_rename(old_pathname::String, new_pathname::String)
 end
 
 # Obtain a temporary filename.
-tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
-
 function tempname()
   d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
-  p = ccall(tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @unix_only p = ccall(:tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
+  @windows_only p = ccall(:_tempnam, Ptr{Uint8}, (Ptr{Uint8},Ptr{Uint8}), d, "julia")
   s = bytestring(p)
   c_free(p)
   s
