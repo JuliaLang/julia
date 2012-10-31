@@ -1435,7 +1435,7 @@ end
 
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)))
-    :(spawnat($p, $(esc(expr))))
+    :(spawnat($(esc(p)), $(esc(expr))))
 end
 
 function at_each(f, args...)

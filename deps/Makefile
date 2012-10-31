@@ -292,7 +292,7 @@ UV_OBJ_SOURCE = libuv/uv.a
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS)
+	$(MAKE) -C libuv $(UV_CFLAGS) CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
@@ -378,7 +378,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 	cp $< $@
 install-openlibm: $(OPENLIBM_OBJ_TARGET)
