@@ -66,11 +66,11 @@ isconst(m::Module, s::Symbol) =
 
 function _iisconst(s::Symbol)
     m = (inference_stack::CallStack).mod
-    isbound(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
+    isdefined(m,s) && (ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0)
 end
 
 _ieval(x) = eval((inference_stack::CallStack).mod, x)
-_iisbound(x) = isbound((inference_stack::CallStack).mod, x)
+_iisdefined(x) = isdefined((inference_stack::CallStack).mod, x)
 
 _iisconst(s::SymbolNode) = _iisconst(s.name)
 _iisconst(s::TopNode) = _iisconst(s.name)
@@ -117,7 +117,7 @@ t_func[eval(Core,:ccall)] =
 t_func[is] = (2, 2, cmp_tfunc)
 t_func[subtype] = (2, 2, cmp_tfunc)
 t_func[isa] = (2, 2, cmp_tfunc)
-t_func[isbound] = (1, 2, (args...)->Bool)
+t_func[isdefined] = (1, 2, (args...)->Bool)
 t_func[Union] = (0, Inf,
                  (args...)->(if allp(isType,args)
                                  Type{Union(map(t->t.parameters[1],args)...)}
@@ -140,6 +140,8 @@ function arraysize_tfunc(a)
     end
 end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
+t_func[Core.pointerref] = (2,2,(a,i)->(subtype(a,Ptr) ? a.parameters[1] : Any))
+t_func[Core.pointerset] = (3, 3, (a,v,i)->a)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)
@@ -190,7 +192,7 @@ t_func[convert_tuple] =
                      end;
                      isType(t) ? static_convert(t.parameters[1],x) :
                      Any))
-typeof_tfunc = function (t)
+const typeof_tfunc = function (t)
     if isType(t)
         t = t.parameters[1]
         if isa(t,TypeVar)
@@ -223,7 +225,7 @@ t_func[typeassert] =
                            tintersect(v,map(t->t.parameters[1],t)) :
                        Any))
 
-tupleref_tfunc = function (A, t, i)
+const tupleref_tfunc = function (A, t, i)
     if is(t,())
         return None
     end
@@ -262,7 +264,7 @@ tupleref_tfunc = function (A, t, i)
 end
 t_func[tupleref] = (2, 2, tupleref_tfunc)
 
-getfield_tfunc = function (A, s, name)
+const getfield_tfunc = function (A, s, name)
     if isType(s)
         s = typeof(s.parameters[1])
         if s === TypeVar
@@ -275,7 +277,7 @@ getfield_tfunc = function (A, s, name)
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
         A1 = A[1]
-        if isa(A1,Module) && isbound(A1,fld) && isconst(A1, fld)
+        if isa(A1,Module) && isdefined(A1,fld) && isconst(A1, fld)
             return abstract_eval_constant(eval(A1,fld))
         end
         if s === Module
@@ -293,7 +295,7 @@ getfield_tfunc = function (A, s, name)
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
 t_func[setfield] = (3, 3, (o, f, v)->v)
-fieldtype_tfunc = function (A, s, name)
+const fieldtype_tfunc = function (A, s, name)
     if !isa(s,CompositeKind)
         return Type
     end
@@ -308,7 +310,7 @@ t_func[Expr] = (3, 3, (a,b,c)->Expr)
 t_func[Box] = (1, 1, (a,)->Box)
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
-apply_type_tfunc = function (A, args...)
+const apply_type_tfunc = function (A, args...)
     if !isType(args[1])
         return Any
     end
@@ -399,7 +401,7 @@ function isconstantfunc(f, sv::StaticVarInfo)
     end
     if isa(f,GetfieldNode) && isa(f.value,Module)
         M = f.value; s = f.name
-        return isbound(M,s) && isconst(M,s) && f
+        return isdefined(M,s) && isconst(M,s) && f
     end
     if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
         if length(f.args) == 3 && isa(f.args[1], TopNode) &&
@@ -417,7 +419,7 @@ function isconstantfunc(f, sv::StaticVarInfo)
                     return false
                 end
             end
-            return isbound(M,s) && isconst(M,s) && f
+            return isdefined(M,s) && isconst(M,s) && f
         end
     end
 
@@ -431,13 +433,13 @@ const isconstantref = isconstantfunc
 
 isvatuple(t::Tuple) = (n = length(t); n > 0 && isseqtype(t[n]))
 
-limit_tuple_depth(t) = limit_tuple_depth(t,0)
+const limit_tuple_depth = t->limit_tuple_depth_(t,0)
 
-function limit_tuple_depth(t,d)
+const limit_tuple_depth_ = function (t,d::Int)
     if isa(t,UnionKind)
         # also limit within Union types.
         # may have to recur into other stuff in the future too.
-        return Union(limit_tuple_depth(t.types,d)...)
+        return Union(limit_tuple_depth_(t.types,d)...)
     end
     if !isa(t,Tuple)
         return t
@@ -445,10 +447,10 @@ function limit_tuple_depth(t,d)
     if d > MAX_TUPLE_DEPTH
         return Tuple
     end
-    map(x->limit_tuple_depth(x,d+1), t)
+    map(x->limit_tuple_depth_(x,d+1), t)
 end
 
-function limit_tuple_type(t)
+const limit_tuple_type = function (t::Tuple)
     n = length(t)
     if n > MAX_TUPLETYPE_LEN
         last = t[n]
@@ -463,6 +465,20 @@ function limit_tuple_type(t)
 end
 
 function abstract_call_gf(f, fargs, argtypes, e)
+    if length(argtypes)>1 && isa(argtypes[1],Tuple) && argtypes[2]===Int
+        # allow tuple indexing functions to take advantage of constant
+        # index arguments.
+        if f === Main.Base.ref
+            e.head = :call1
+            return tupleref_tfunc(fargs, argtypes[1], argtypes[2])
+        elseif f === Main.Base.next
+            e.head = :call1
+            return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
+        elseif f === Main.Base.indexed_next
+            e.head = :call1
+            return (tupleref_tfunc(fargs, argtypes[1], argtypes[2]), Int)
+        end
+    end
     # don't consider more than N methods. this trades off between
     # compiler performance and generated code performance.
     # typically, considering many methods means spending lots of time
@@ -641,11 +657,9 @@ end
 
 function abstract_eval(e::Expr, vtypes, sv::StaticVarInfo)
     # handle:
-    # call  lambda  null  isbound static_typeof
+    # call  null  new  &  static_typeof
     if is(e.head,:call) || is(e.head,:call1)
         t = abstract_eval_call(e, vtypes, sv)
-    #elseif is(e.head,:isbound)
-    #    t = Bool
     elseif is(e.head,:null)
         t = Nothing
     elseif is(e.head,:new)
@@ -722,7 +736,7 @@ function abstract_eval_global(s::Symbol)
     if _iisconst(s)
         return abstract_eval_constant(_ieval(s))
     end
-    if !_iisbound(s)
+    if !_iisdefined(s)
         return Top
     end
     # TODO: change to Undef if there's a way to clear variables
@@ -956,7 +970,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
     #print("typeinf ", linfo.name, " ", atypes, "\n")
-    # if isbound(:stdout_stream)
+    # if isdefined(:stdout_stream)
     #     write(stdout_stream, "typeinf ")
     #     write(stdout_stream, string(linfo.name))
     #     write(stdout_stream, string(atypes))
@@ -1351,8 +1365,8 @@ function resolves_same(sym, from, to)
         return true
     end
     # todo: better
-    return (isconst(from,sym) && isconst(to,sym) && isbound(from,sym) &&
-            isbound(to,sym) && is(eval(from,sym),eval(to,sym)))
+    return (isconst(from,sym) && isconst(to,sym) && isdefined(from,sym) &&
+            isdefined(to,sym) && is(eval(from,sym),eval(to,sym)))
 end
 
 # annotate symbols with their original module for inlining
@@ -1726,7 +1740,9 @@ function add_variable(ast, name, typ)
 end
 
 const some_names = {:_var0, :_var1, :_var2, :_var3, :_var4, :_var5, :_var6,
-                    :_var7, :_var8, :_var9, :_var10, :_var11, :_var12}
+                    :_var7, :_var8, :_var9, :_var10, :_var11, :_var12,
+                    :_var13, :_var14, :_var15, :_var16, :_var17, :_var18,
+                    :_var19, :_var20, :_var21, :_var22, :_var23, :_var24}
 
 function unique_name(ast)
     locllist = ast.args[2][1]::Array{Any,1}

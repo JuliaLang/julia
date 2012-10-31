@@ -49,7 +49,7 @@ External libraries, if used, include their own licenses:
 - [D3](https://github.com/mbostock/d3/raw/master/LICENSE)
 - [DOUBLE-CONVERSION](https://code.google.com/p/double-conversion/)
 - [DSFMT](http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/LICENSE.txt)
-- [FDLIBM](http://www.netlib.org/fdlibm/fdlibm.h)
+- [OPENLIBM](https://github.com/JuliaLang/openlibm/blob/master/LICENSE.md)
 - [FEMTOLISP](https://github.com/JeffBezanson/femtolisp)
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html)
 - [GLPK](http://www.gnu.org/software/glpk)

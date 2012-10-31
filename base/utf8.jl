@@ -1,4 +1,4 @@
-## from src/boot.jl:
+## from base/boot.jl:
 #
 # type UTF8String <: String
 #     data::Array{Uint8,1}
@@ -39,7 +39,7 @@ function next(s::UTF8String, i::Int)
     if length(s.data) < i + trailing
         error("premature end of UTF-8 data")
     end
-    c = uint32(0)
+    c::Uint32 = 0
     for j = 1:trailing
         c += s.data[i]
         c <<= 6

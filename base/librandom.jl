@@ -174,7 +174,7 @@ end
 function randmtzig_fill_randn!(A)
     ccall(dlsym(Base.librandom, :randmtzig_fill_randn),
           Void,
-          (Ptr{Float64}, Uint32), 
+          (Ptr{Float64}, Int), 
           A, numel(A))
     return A
 end
@@ -188,7 +188,7 @@ end
 function randmtzig_fill_exprnd!(A)
     ccall(dlsym(Base.librandom, :randmtzig_fill_exprnd),
           Void,
-          (Ptr{Float64}, Uint32), 
+          (Ptr{Float64}, Int), 
           A, numel(A))
     return A
 end

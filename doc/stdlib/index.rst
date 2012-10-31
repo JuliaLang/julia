@@ -31,6 +31,8 @@ Extras
    zlib
    strpack
    sound
+   argparse
+   gzip
 
 ****************
 Math & Numerical

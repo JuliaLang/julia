@@ -972,6 +972,8 @@ function start_worker(out::Stream)
     # close stdin; workers will not use it
     #close(STDIN)
 
+    ccall(:jl_install_sigint_handler, Void, ())
+
     global const Scheduler = current_task()
 
 
@@ -1383,7 +1385,7 @@ end
 find_vars(e) = find_vars(e, {})
 function find_vars(e, lst)
     if isa(e,Symbol)
-        if !isbound(e) || isconst(e)
+        if !isdefined(e) || isconst(e)
             # exclude global constants
         else
             push(lst, e)
@@ -1474,14 +1476,16 @@ function pmap(f, lsts...)
     next_idx() = (idx=i; i+=1; idx)
     @sync begin
         for p=1:np
-            @spawnat myid() begin
-                while true
-                    idx = next_idx()
-                    if idx > n
-                        break
+            if p != myid() || np == 1
+                @spawnat myid() begin
+                    while true
+                        idx = next_idx()
+                        if idx > n
+                            break
+                        end
+                        results[idx] = remote_call_fetch(p, f,
+                                                         map(L->L[idx], lsts)...)
                     end
-                    results[idx] = remote_call_fetch(p, f,
-                                                     map(L->L[idx], lsts)...)
                 end
             end
         end

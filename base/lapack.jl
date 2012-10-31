@@ -372,7 +372,7 @@ for (gels, gesv, getrs, getri, elty) in
             end
             k   = min(m, n)
             F   = m < n ? tril(A[1:k, 1:k]) : triu(A[1:k, 1:k])
-            F, B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)] 
+            F, isa(B, Vector) ? B[1:k] : B[1:k,:], [sum(B[(k+1):size(B,1), i].^2) for i=1:size(B,2)]
         end
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..
@@ -442,6 +442,93 @@ for (gels, gesv, getrs, getri, elty) in
             end
             A
         end
+    end
+end
+for (gelsd, elty) in ((:dgelsd_, Float64),
+                      (:sgelsd_, Float32))
+    @eval begin
+        # SUBROUTINE DGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
+        #      $                   WORK, LWORK, IWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+        #       DOUBLE PRECISION   RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
+            Lapack.chkstride1(A, B)
+            m, n  = size(A)
+            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            s     = Array($elty, min(m, n))
+            rnk   = Array(Int32, 1)
+            info  = Array(Int32, 1)
+            work  = Array($elty, 1)
+            lwork = int32(-1)
+            iwork = Array(Int32, 1)
+            for i in 1:2
+                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                      (Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                       Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty},
+                       Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, iwork, info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = int32(real(work[1]))
+                    work = Array($elty, lwork)
+                    iwork = Array(Int32, iwork[1])
+                end
+            end
+            isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
+        end
+        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
+    end
+end
+for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
+                             (:cgelsd_, Complex64, Float32))
+    @eval begin
+        # SUBROUTINE ZGELSD( M, N, NRHS, A, LDA, B, LDB, S, RCOND, RANK,
+        #      $                   WORK, LWORK, RWORK, IWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LDB, LWORK, M, N, NRHS, RANK
+        #       DOUBLE PRECISION   RCOND
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            IWORK( * )
+        #       DOUBLE PRECISION   RWORK( * ), S( * )
+        #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
+        function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
+            Lapack.chkstride1(A, B)
+            m, n  = size(A)
+            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            s     = Array($elty, min(m, n))
+            rnk   = Array(Int32, 1)
+            info  = Array(Int32, 1)
+            work  = Array($elty, 1)
+            lwork = int32(-1)
+            rwork = Array($relty, 1)
+            iwork = Array(Int32, 1)
+            for i in 1:2
+                ccall(dlsym(Base.liblapack, $(string(gelsd))), Void,
+                      (Ptr{Int32}, Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
+                       Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$relty},
+                       Ptr{$relty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                       Ptr{$relty}, Ptr{Int32}, Ptr{Int32}),
+                      &m, &n, &size(B,2), A, &max(1,stride(A,2)),
+                      B, &max(1,stride(B,2)), s, &rcond, rnk, work, &lwork, rwork, iwork, info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = int32(real(work[1]))
+                    work = Array($elty, lwork)
+                    rwork = Array($relty, int(rwork[1]))
+                    iwork = Array(Int32, iwork[1])
+                end
+            end
+            isa(B, Vector) ? B[1:n] : B[1:n,:], rnk[1]
+        end
+        gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}) = gelsd!(A, B, -1.)
     end
 end
 
@@ -818,11 +905,11 @@ end
 
 # (PO) positive-definite symmetric matrices,
 # Cholesky decomposition, solvers (direct and factored) and inverse.
-for (posv, potrf, potri, potrs, elty) in
-    ((:dposv_,:dpotrf_,:dpotri_,:dpotrs_,:Float64),
-     (:sposv_,:spotrf_,:spotri_,:spotrs_,:Float32),
-     (:zposv_,:zpotrf_,:zpotri_,:zpotrs_,:Complex128),
-     (:cposv_,:cpotrf_,:cpotri_,:cpotrs_,:Complex64))
+for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
+    ((:dposv_,:dpotrf_,:dpotri_,:dpotrs_,:dpstrf_,:Float64,:Float64),
+     (:sposv_,:spotrf_,:spotri_,:spotrs_,:spstrf_,:Float32,:Float32),
+     (:zposv_,:zpotrf_,:zpotri_,:zpotrs_,:zpstrf_,:Complex128,:Float64),
+     (:cposv_,:cpotrf_,:cpotri_,:cpotrs_,:cpstrf_,:Complex64,:Float32))
     @eval begin
         ## Caller should check if returned info[1] is zero,
         ## positive values indicate indefiniteness
@@ -898,6 +985,29 @@ for (posv, potrf, potri, potrs, elty) in
                   &uplo, &n, &size(B,2), A, &stride(A,2), B, &stride(B,2), info)
             if info[1] != 0 throw(LapackException(info[1])) end
             B
+        end
+        #       SUBROUTINE DPSTRF( UPLO, N, A, LDA, PIV, RANK, TOL, WORK, INFO )
+        #       .. Scalar Arguments ..
+        #       DOUBLE PRECISION   TOL
+        #       INTEGER            INFO, LDA, N, RANK
+        #       CHARACTER          UPLO
+        #       .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), WORK( 2*N )
+        #       INTEGER            PIV( N )
+        function pstrf!(uplo::LapackChar, A::StridedMatrix{$elty}, tol::Real)
+            chkstride1(A)
+            chksquare(A)
+            n    = size(A,1)
+            piv  = Array(Int32, n)
+            rank = Array(Int32, 1)
+            work = Array($rtyp, 2n)
+            info = Array(Int32, 1)
+            ccall(dlsym(Base.liblapack, $(string(pstrf))), Void,
+                  (Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                   Ptr{Int32}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{Int32}),
+                  &uplo, &n, A, &stride(A,2), piv, rank, &tol, work, info)
+            if info[1] < 0 throw(LapackException(info[1])) end
+            A, piv, rank[1], info[1]
         end
     end
 end

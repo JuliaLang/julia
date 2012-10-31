@@ -34,6 +34,16 @@ iscomplex(::AbstractArray) = false
 isbool(::AbstractArray{Bool}) = true
 isbool(::AbstractArray) = false
 
+function isassigned(a::AbstractArray, i::Int...)
+    # TODO
+    try
+        a[i...]
+        true
+    catch
+        false
+    end
+end
+
 # used to compute "end" for last index
 function trailingsize(A, n)
     s = 1
@@ -114,21 +124,37 @@ function iround_to{T}(dest::AbstractArray{T}, src)
     return dest
 end
 
-int     (x::AbstractArray) = iround_to(similar(x,Int)    , x)
-int8    (x::AbstractArray) = iround_to(similar(x,Int8)   , x)
-uint8   (x::AbstractArray) = iround_to(similar(x,Uint8)  , x)
-int16   (x::AbstractArray) = iround_to(similar(x,Int16)  , x)
-uint16  (x::AbstractArray) = iround_to(similar(x,Uint16) , x)
-int32   (x::AbstractArray) = iround_to(similar(x,Int32)  , x)
-uint32  (x::AbstractArray) = iround_to(similar(x,Uint32) , x)
-int64   (x::AbstractArray) = iround_to(similar(x,Int64)  , x)
-uint64  (x::AbstractArray) = iround_to(similar(x,Uint64) , x)
+for (f,t) in ((:char,   Char),
+              (:int,    Int),
+              (:int8,   Int8),
+              (:int16,  Int16),
+              (:int32,  Int32),
+              (:int64,  Int64),
+              (:uint8,  Uint8),
+              (:uint16, Uint16),
+              (:uint32, Uint32),
+              (:uint64, Uint64))
+    @eval ($f)(x::AbstractArray{$t}) = x
+    @eval ($f)(x::AbstractArray) = iround_to(similar(x,$t), x)
+end
+
+for (f,t) in ((:float32,    Float32),
+              (:float64,    Float64),
+              (:complex64,  Complex64),
+              (:complex128, Complex128))
+    @eval ($f)(x::AbstractArray{$t}) = x
+    @eval ($f)(x::AbstractArray) = copy_to(similar(x,$t), x)
+end
+
+integer{T<:Integer}(x::AbstractArray{T}) = x
+unsigned{T<:Unsigned}(x::AbstractArray{T}) = x
+float{T<:FloatingPoint}(x::AbstractArray{T}) = x
+complex{T<:Complex}(x::AbstractArray{T}) = x
+
 integer (x::AbstractArray) = iround_to(similar(x,typeof(integer(one(eltype(x))))), x)
 unsigned(x::AbstractArray) = iround_to(similar(x,typeof(unsigned(one(eltype(x))))), x)
-char   (x::AbstractArray) = iround_to(similar(x,Char)   , x)
-float32(x::AbstractArray) = copy_to(similar(x,Float32), x)
-float64(x::AbstractArray) = copy_to(similar(x,Float64), x)
-float  (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
+float   (x::AbstractArray) = copy_to(similar(x,typeof(float(one(eltype(x))))), x)
+complex (x::AbstractArray) = copy_to(similar(x,typeof(complex(one(eltype(x))))), x)
 
 full(x::AbstractArray) = x
 
@@ -564,7 +590,12 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-function cat(catdim::Integer, A::AbstractArray...)
+cat{T}(catdim::Integer, A::AbstractArray{T}...) = cat_t(catdim, T, A...)
+
+cat(catdim::Integer, A::AbstractArray...) =
+    cat_t(catdim, promote_type(map(eltype, A)...), A...)
+
+function cat_t(catdim::Integer, typeC, A::AbstractArray...)
     # ndims of all input arrays should be in [d-1, d]
 
     nargs = length(A)
@@ -610,7 +641,6 @@ function cat(catdim::Integer, A::AbstractArray...)
 
     ndimsC = max(catdim, d_max)
     dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    typeC = promote_type(map(eltype, A)...)
     C = similar(full(A[1]), typeC, dimsC)
 
     range = 1
@@ -885,7 +915,7 @@ sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
     [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
 ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
-ind2sub(dims::(), ind::Integer) = throw(BoundsError())
+ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
 ind2sub(dims::(Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(ind-1,dims[1])+1)

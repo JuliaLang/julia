@@ -31,8 +31,8 @@ function init(meta::String)
         run(`git config branch.master.remote origin`)
         run(`git config branch.master.merge refs/heads/master`)
         # initial content
-        run(`touch REQUIRES`)
-        run(`git add REQUIRES`)
+        run(`touch REQUIRE`)
+        run(`git add REQUIRE`)
         run(`git submodule add $meta METADATA`)
         run(`git commit -m"[jul] METADATA"`)
         Metadata.gen_hashes()
@@ -61,11 +61,11 @@ add(pkgs::Vector{VersionSet}) = cd(directory()) do
             if !contains(Metadata.packages(),pkg.package)
                 error("invalid package: $(pkg.package)")
             end
-            reqs = parse_requires("REQUIRES")
+            reqs = parse_requires("REQUIRE")
             if anyp(req->req.package==pkg.package,reqs)
                 error("package already required: $pkg")
             end
-            open("REQUIRES","a") do io
+            open("REQUIRE","a") do io
                 print(io,pkg.package)
                 for ver in pkg.versions
                     print(io,"\t$ver")
@@ -73,7 +73,7 @@ add(pkgs::Vector{VersionSet}) = cd(directory()) do
                 println(io)
             end
         end
-        run(`git add REQUIRES`)
+        run(`git add REQUIRE`)
         _resolve()
     end
 end
@@ -91,12 +91,12 @@ rm(pkgs::Vector{String}) = cd(directory()) do
             if !contains(Metadata.packages(),pkg)
                 error("invalid package: $pkg")
             end
-            reqs = parse_requires("REQUIRES")
+            reqs = parse_requires("REQUIRE")
             if !anyp(req->req.package==pkg,reqs)
                 error("package not required: $pkg")
             end
-            open("REQUIRES") do r
-                open("REQUIRES.new","w") do w
+            open("REQUIRE") do r
+                open("REQUIRE.new","w") do w
                     for line in each_line(r)
                         fields = split(line)
                         if isempty(fields) || fields[1]!=pkg
@@ -105,9 +105,9 @@ rm(pkgs::Vector{String}) = cd(directory()) do
                     end
                 end
             end
-            run(`mv REQUIRES.new REQUIRES`)
+            run(`mv REQUIRE.new REQUIRE`)
         end
-        run(`git add REQUIRES`)
+        run(`git add REQUIRE`)
         _resolve()
     end
 end
@@ -121,8 +121,8 @@ available() = cd(directory()) do
     end
 end
 
-requires() = cd(directory()) do
-    open("REQUIRES") do io
+required() = cd(directory()) do
+    open("REQUIRE") do io
         for line in each_line(io)
             print(line)
         end
@@ -145,13 +145,13 @@ end
 # update packages from requirements
 
 function _resolve()
-    reqs = parse_requires("REQUIRES")
+    reqs = parse_requires("REQUIRE")
     have = Dict{String,ASCIIString}()
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
-            if cd(Git.attached,path) && isfile("$path/REQUIRES")
-                append!(reqs,parse_requires("$path/REQUIRES"))
+            if cd(Git.attached,path) && isfile("$path/REQUIRE")
+                append!(reqs,parse_requires("$path/REQUIRE"))
                 if isfile("$path/VERSION")
                     ver = convert(VersionNumber,readchomp("$path/VERSION"))
                     push(reqs,VersionSet(pkg,[ver]))

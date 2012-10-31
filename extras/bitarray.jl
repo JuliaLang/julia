@@ -1881,9 +1881,9 @@ function cumprod{T}(v::BitVector{T})
     return c
 end
 
-write(s, B::BitArray) = write(s, B.chunks)
+write(s::IO, B::BitArray) = write(s, B.chunks)
 
-read(s, B::BitArray) = read(s, B.chunks)
+read(s::IO, B::BitArray) = read(s, B.chunks)
 
 function mmap_bitarray{T<:Integer,N}(::Type{T}, dims::NTuple{N,Int}, s::IOStream, offset::FileOffset)
     prot, flags, iswrite = mmap_stream_settings(s)

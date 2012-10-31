@@ -3,6 +3,21 @@ typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 module Blas
 import Base.*
 
+export copy!,
+       dot,
+       nrm2,
+       axpy!,
+       syrk!,
+       syrk,
+       herk!,
+       herk,
+       gbmv!,
+       gbmv,
+       sbmv!,
+       sbmv,
+       gemm!,
+       gemm
+
 # SUBROUTINE DCOPY(N,DX,INCX,DY,INCY)
 for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                       (:zcopy_,:Complex128), (:ccopy_,:Complex64))

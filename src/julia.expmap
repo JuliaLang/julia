@@ -56,6 +56,7 @@
     jl_array_ptr;
     jl_arrayref;
     jl_arrayset;
+    jl_arrayunset;
     jl_array_to_string;
     jl_async_send;
     jl_backtrace_type;
@@ -166,6 +167,8 @@
     jl_match_method;
     jl_module_export;
     jl_module_names;
+    jl_module_name;
+    jl_module_parent;
     jl_module_type;
     jl_nb_available;
     jl_new_array;

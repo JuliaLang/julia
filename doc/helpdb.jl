@@ -2,6 +2,214 @@
 
 {
 
+(E"ArgParse",E"parse_args",E"parse_args([args], settings)
+
+   This is the central function of the 'ArgParse' module. It takes a
+   'Vector' of arguments and an 'ArgParseSettings' objects (see *this
+   section*), and returns a 'Dict{String,Any}'. If 'args' is not
+   provided, the global variable 'ARGS' will be used.
+
+   The returned 'Dict' keys are defined (possibly implicitly) in
+   'settings', and their associated values are parsed from 'args'.
+   Special keys are used for more advanced purposes; at the moment,
+   one such key exists: '%COMMAND%' (see *this section*).
+
+   Arguments are parsed in sequence and matched against the argument
+   table in 'settings' to determine whether they are long options,
+   short options, option arguments or positional arguments:
+
+   * long options begin with a doule dash ''--''; if a ''='' character
+     is found, the remainder is the option argument; therefore, '['--
+     opt=arg']' and '['--opt', 'arg']' are equivalent if '--opt' takes
+     at least one argument. Long options can be abbreviated (e.g. '--
+     opt' instead of '--option') as long as there is no ambiguity.
+
+   * short options begin with a single dash ''-'' and their name
+     consists of a single character; they can be grouped togheter
+     (e.g. '['-x', '-y']' can become '['-xy']'), but in that case only
+     the last option in the group can take an argument (which can also
+     be grouped, e.g. '['-a', '-f', 'file.txt']' can be passed as
+     '['-affile.txt']' if '-a' does not take an argument and '-f'
+     does). The ''='' character can be used to separate option names
+     from option arguments as well (e.g. '-af=file.txt').
+
+   * positional arguments are anything else; they can appear anywhere.
+
+   The special string ''--'' can be used to signal the end of all
+   options; after that, everything is considered as a positional
+   argument (e.g. if 'args = ['--opt1', '--', '--opt2']', the parser
+   will recognize '--opt1' as a long option without argument, and '--
+   opt2' as a positional argument).
+
+   The special string ''-'' is always parsed as a positional argument.
+
+   The parsing can stop early if a ':show_help' or ':show_version'
+   action is triggered, or if a parsing error is found.
+
+   Some ambiguities can arise in parsing, see *this section* for a
+   detailed description of how they're solved.
+
+"),
+
+(E"argparse.jl --- Module for command-line argument parsing",E"@add_arg_table(settings, table...)",E"@add_arg_table(settings, table...)
+
+   This macro adds a table of arguments and options to the given
+   'settings'. It can be invoked multiple times. The arguments groups
+   are determined automatically, or the current default group is used
+   if specified (see *this section* for more details).
+
+   The 'table' is a list in which each element can be either 'String',
+   or a tuple or a vector of 'String', or an assigmment expression, or
+   a block:
+
+   * a 'String', a tuple or a vector introduces a new positional
+     argument or option. Tuples and vectors are only allowed for
+     options and provide alternative names (e.g. '['--opt', '-o']')
+
+   * assignment expressions (i.e. expressions using '=', ':=' or '=>')
+     describe the previous argument behavior (e.g. 'help = 'an
+     option'' or 'required => false').  See *this section* for a
+     complete description
+
+   * blocks ('begin...end' or lists of expressions in parentheses
+     separated by semicolons) are useful to group entries and span
+     multiple lines.
+
+   These rules allow for a variety usage styles, which are discussed
+   in *this section*. In the rest of this document, we will mostly use
+   this style:
+
+      @add_arg_table settings begin
+          '--opt1', '-o'
+              help = 'an option with an argument'
+          '--opt2'
+          'arg1'
+              help = 'a positional argument'
+              required = true
+      end
+
+   In the above example, the 'table' is put in a single 'begin...end'
+   block and the line ''-opt1', '-o'' is parsed as a tuple;
+   indentation is used to help readability.
+
+"),
+
+(E"ArgParse",E"add_arg_table",E"add_arg_table(settings, [arg_name [,arg_options]]...)
+
+   This function is almost equivalent to the macro version. Its syntax
+   is stricter (tuples and blocks are not allowed and argument options
+   are explicitly specified as 'Options' objects) but the 'arg_name'
+   entries need not be explicit, they can be anything which evaluates
+   to a 'String' or a 'Vector{String}'.
+
+   Example:
+
+      add_arg_table(settings,
+          ['--opt1', '-o'],
+          @options begin
+              help = 'an option with an argument'
+          end,
+          '--opt2',
+          'arg1',
+          @options begin
+              help = 'a positional argument'
+              required = true
+          end)
+
+   Note that the 'OptionsMod' module must be imported in order to use
+   this function.
+
+"),
+
+(E"ArgParse",E"add_arg_group",E"add_arg_group(settings, description[, name[, set_as_default]])
+
+   This function adds an argument group to the argument table in
+   'settings'. The 'description' is a 'String' used in the help screen
+   as a title for that group. The 'name' is a unique name which can be
+   provided to refer to that group at a later time.
+
+   After invoking this function, all subsequent invocations of the
+   '@add_arg_table' macro and 'add_arg_table' function will use the
+   new group as the default, unless 'set_as_default' is set to 'false'
+   (the default is 'true', and the option can only be set if providing
+   a 'name'). Therefore, the most obvious usage pattern is: for each
+   group, add it and populate the argument table of that group.
+   Example:
+
+      julia> settings = ArgParseSettings();
+
+      julia> add_arg_group(settings, 'custom group');
+
+      julia> @add_arg_table settings begin
+                '--opt'
+                'arg'
+             end;
+
+      julia> parse_args(['--help'], settings)
+      usage: <command> [--opt OPT] [-h] [arg]
+
+      optional arguments:
+        -h, --help  show this help message and exit
+
+      custom group:
+        --opt OPT
+        arg
+
+   As seen from the example, new groups are always added at the end of
+   existing ones.
+
+   The 'name' can also be passed as a 'Symbol'. Forbidden names are
+   the standard groups names (''command'', ''positional'' and
+   ''optional'') and those beginning with a hash character ''#''.
+
+"),
+
+(E"ArgParse",E"set_default_arg_group",E"set_default_arg_group(settings[, name])
+
+   Set the default group for subsequent invocations of the
+   '@add_arg_table' macro and 'add_arg_table' function. 'name' is a
+   'String', and must be one of the standard group names (''command'',
+   ''positional'' or ''optional'') or one of the user-defined names
+   given in 'add_arg_group' (groups with no assigned name cannot be
+   used with this function).
+
+   If 'name' is not provided or is the empty string '''', then the
+   default behavior is reset (i.e. arguments will be automatically
+   assigned to the standard groups). The 'name' can also be passed as
+   a 'Symbol'.
+
+"),
+
+(E"ArgParse",E"import_settings",E"import_settings(settings, other_settings[, args_only])
+
+   Imports 'other_settings' into 'settings', where both are
+   'ArgParseSettings' objects. If 'args_only' is 'true' (this is the
+   default), only the argument table will be imported; otherwise, the
+   default argument group will also be imported, and all general
+   settings except 'prog', 'description', 'epilog' and 'usage'.
+
+   Sub-settings associated with commands will also be imported
+   recursively; the 'args_only' setting applies to those as well. If
+   there are common commands, their sub-settings will be merged.
+
+   While importing, conflicts may arise: if
+   'settings.error_on_conflict' is 'true', this will result in an
+   error, otherwise conflicts will be resolved in favor of
+   'other_settings' (see *this section* for a detailed discussion of
+   how conflicts are handled).
+
+   Argument groups will also be imported; if two groups in 'settings'
+   and 'other_settings' match, they are merged (groups match either by
+   name, or, if unnamed, by their description).
+
+   Note that the import will have effect immediately: any subsequent
+   modification of 'other_settings' will not have any effect on
+   'settings'.
+
+   This function can be used at any time.
+
+"),
+
 (E"Getting Around",E"exit",E"exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
@@ -434,6 +642,50 @@ collection[key...] = value
 (E"Associative Collections",E"del_all",E"del_all(collection)
 
    Delete all keys from a collection.
+
+"),
+
+(E"Associative Collections",E"keys",E"keys(collection)
+
+   Return an array of all keys in a collection.
+
+"),
+
+(E"Associative Collections",E"values",E"values(collection)
+
+   Return an array of all values in a collection.
+
+"),
+
+(E"Associative Collections",E"pairs",E"pairs(collection)
+
+   Return an array of all (key, value) tuples in a collection.
+
+"),
+
+(E"Associative Collections",E"merge",E"merge(collection, others...)
+
+   Construct a merged collection from the given collections.
+
+"),
+
+(E"Associative Collections",E"merge!",E"merge!(collection, others...)
+
+   Update collection with pairs from the other collections
+
+"),
+
+(E"Associative Collections",E"filter",E"filter(function, collection)
+
+   Return a copy of collection, removing (key, value) pairs for which
+   function is false.
+
+"),
+
+(E"Associative Collections",E"filter!",E"filter!(function, collection)
+
+   Update collection, removing (key, value) pairs for which function
+   is false.
 
 "),
 
@@ -1700,6 +1952,13 @@ collection[key...] = value
 
 "),
 
+(E"Arrays",E"logspace",E"logspace(start, stop, n)
+
+   Construct a vector of 'n' logarithmically-spaced numbers from
+   '10^start' to '10^stop'.
+
+"),
+
 (E"Arrays",E"ref",E"ref(A, ind)
 
    Returns a subset of 'A' as specified by 'ind', which may be an
@@ -1835,6 +2094,9 @@ collection[key...] = value
    performed. For square 'A', Cholesky factorization is tried if the
    input is symmetric with a heavy diagonal. LU factorization is used
    in case Cholesky factorization fails or for general square inputs.
+   If 'size(A,1) > size(A,2)', the result is a least squares solution
+   of 'A*X+eps=B' using the singular value decomposition. 'A' does not
+   need to have full rank.
 
 "),
 
@@ -1894,9 +2156,21 @@ collection[key...] = value
 
 "),
 
-(E"Linear Algebra",E"svd",E"svd(A) -> U, S, V
+(E"Linear Algebra",E"eigvals",E"eigvals(A)
+
+   Returns the eigenvalues of 'A'.
+
+"),
+
+(E"Linear Algebra",E"svd",E"svd(A) -> U, S, V'
 
    Compute the SVD of A
+
+"),
+
+(E"Linear Algebra",E"svdvals",E"svdvals(A)
+
+   Returns the singular values of 'A'.
 
 "),
 
@@ -1964,7 +2238,19 @@ collection[key...] = value
 
 (E"Linear Algebra",E"inv",E"inv(M)
 
-   Matrix inverse, or generalized '1/M'
+   Matrix inverse
+
+"),
+
+(E"Linear Algebra",E"pinv",E"pinv(M)
+
+   Moore-Penrose inverse
+
+"),
+
+(E"Linear Algebra",E"null",E"null(M)
+
+   Basis for null space of M
 
 "),
 
@@ -2481,6 +2767,20 @@ collection[key...] = value
 
 "),
 
+(E"System",E"mkdir",E"mkdir(path[, mode])
+
+   Make a new directory with name 'path' and permissions 'mode'.
+   'mode' defaults to 0o777, modified by the current file creation
+   mask.
+
+"),
+
+(E"System",E"rmdir",E"rmdir(path)
+
+   Remove the directory named 'path'.
+
+"),
+
 (E"System",E"getpid",E"getpid()
 
    Get julia's process ID.
@@ -2638,35 +2938,35 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.copy!(n, X, incx, Y, incy)
+(E"Blas",E"copy!",E"copy!(n, X, incx, Y, incy)
 
    Copy 'n' elements of array 'X' with stride 'incx' to array 'Y' with
    stride 'incy'.  Returns 'Y'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.dot(n, X, incx, Y, incy)
+(E"Blas",E"dot",E"dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of 'n' elements of array 'X'
    with stride 'incx' and 'n' elements of array 'Y' with stride
-   'incy'.  There are no 'BLAS.dot' methods for 'Complex' arrays.
+   'incy'.  There are no 'dot' methods for 'Complex' arrays.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.nrm2(n, X, incx)
+(E"Blas",E"nrm2",E"nrm2(n, X, incx)
 
    2-norm of a vector consisting of 'n' elements of array 'X' with
    stride 'incx'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.axpy!(n, a, X, incx, Y, incy)
+(E"Blas",E"axpy!",E"axpy!(n, a, X, incx, Y, incy)
 
    Overwrite 'Y' with 'a*X + Y'.  Returns 'Y'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk!(uplo, trans, alpha, A, beta, C)
+(E"Blas",E"syrk!",E"syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix 'C' as 'alpha*A*A.' + beta*C'
    or 'alpha*A.'*A + beta*C' according to whether 'trans' is 'N' or
@@ -2675,7 +2975,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.syrk(uplo, trans, alpha, A)
+(E"Blas",E"syrk",E"syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according
    to 'uplo' ('U' or 'L'), of 'alpha*A*A.'' or 'alpha*A.'*A',
@@ -2683,7 +2983,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk!(uplo, trans, alpha, A, beta, C)
+(E"Blas",E"herk!",E"herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only.  Rank-k update of the Hermitian
    matrix 'C' as 'alpha*A*A' + beta*C' or 'alpha*A'*A + beta*C'
@@ -2693,7 +2993,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.herk(uplo, trans, alpha, A)
+(E"Blas",E"herk",E"herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only.  Returns either the upper triangle
    or the lower triangle, according to 'uplo' ('U' or 'L'), of
@@ -2701,7 +3001,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"Blas",E"gbmv!",E"gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' or 'alpha*A'*x + beta*y'
    according to 'trans' ('N' or 'T').  The matrix 'A' is a general
@@ -2710,7 +3010,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"Blas",E"gbmv",E"gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns 'alpha*A*x' or 'alpha*A'*x' according to 'trans' ('N' or
    'T'). The matrix 'A' is a general band matrix of dimension 'm' by
@@ -2718,7 +3018,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv!(uplo, k, alpha, A, x, beta, y)
+(E"Blas",E"sbmv!",E"sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector 'y' as 'alpha*A*x + beta*y' where 'A' is a a
    symmetric band matrix of order 'size(A,2)' with 'k' super-diagonals
@@ -2730,14 +3030,14 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.sbmv(uplo, k, alpha, A, x)
+(E"Blas",E"sbmv",E"sbmv(uplo, k, alpha, A, x)
 
    Returns 'alpha*A*x' where 'A' is a symmetric band matrix of order
    'size(A,2)' with 'k' super-diagonals stored in the argument 'A'.
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm!(tA, tB, alpha, A, B, beta, C)
+(E"Blas",E"gemm!",E"gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update 'C' as 'alpha*A*B + beta*C' or the other three variants
    according to 'tA' (transpose 'A') and 'tB'.  Returns the updated
@@ -2745,7 +3045,7 @@ collection[key...] = value
 
 "),
 
-(E"blas.jl --- Basic Linear Algebra Subroutines",E"BLAS",E"BLAS.gemm(tA, tB, alpha, A, B)
+(E"Blas",E"gemm",E"gemm(tA, tB, alpha, A, B)
 
    Returns 'alpha*A*B' or the other three variants according to 'tA'
    (transpose 'A') and 'tB'.
@@ -4198,6 +4498,90 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
+(E"gzip.jl",E"gzopen",E"gzopen(fname[, gzmode[, buf_size]])
+
+   Opens a file with mode (default 'r'), setting internal buffer size
+   to buf_size (default Z_DEFAULT_BUFSIZE=8192), and returns a the
+   file as a GZipStream.
+
+   'gzmode' must contain one of
+
+   +------+-----------------------------------+
+   | r    | read                              |
+   +------+-----------------------------------+
+   | w    | write, create, truncate           |
+   +------+-----------------------------------+
+   | a    | write, create, append             |
+   +------+-----------------------------------+
+
+   In addition, gzmode may also contain
+
+   +-------+-----------------------------------+
+   | x     | create the file exclusively       |
+   +-------+-----------------------------------+
+   | 0-9   | compression level                 |
+   +-------+-----------------------------------+
+
+   and/or a compression strategy:
+
+   +------+-----------------------------------+
+   | f    | filtered data                     |
+   +------+-----------------------------------+
+   | h    | Huffman-only compression          |
+   +------+-----------------------------------+
+   | R    | run-length encoding               |
+   +------+-----------------------------------+
+   | F    | fixed code compression            |
+   +------+-----------------------------------+
+
+   Note that '+' is not allowed in gzmode.
+
+   If an error occurs, 'gzopen' throws a GZError()
+
+"),
+
+(E"gzip.jl",E"gzdopen",E"gzdopen(fd[, gzmode[, buf_size]])
+
+   Create a 'GZipStream' object from an integer file descriptor. See
+   'gzopen' for 'gzmode' and 'buf_size' descriptions.
+
+"),
+
+(E"gzip.jl",E"gzdopen",E"gzdopen(s[, gzmode[, buf_size]])
+
+   Create a 'GZipStream' object from IOStream 's'.
+
+"),
+
+(E"gzip.jl",E"GZipStream",E"type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
+
+   Subtype of 'IO' which wraps a gzip stream.  Returned by 'gzopen'
+   and 'gzdopen'.
+
+"),
+
+(E"gzip.jl",E"GZError",E"type GZError(err, err_str)
+
+   gzip error number and string.  Possible error values:
+
+   +-----------------------+-----------------------------------------+
+   | 'Z_OK'                | No error                                |
+   +-----------------------+-----------------------------------------+
+   | 'Z_ERRNO'             | Filesystem error (consult errno())      |
+   +-----------------------+-----------------------------------------+
+   | 'Z_STREAM_ERROR'      | Inconsistent stream state               |
+   +-----------------------+-----------------------------------------+
+   | 'Z_DATA_ERROR'        | Compressed data error                   |
+   +-----------------------+-----------------------------------------+
+   | 'Z_MEM_ERROR'         | Out of memory                           |
+   +-----------------------+-----------------------------------------+
+   | 'Z_BUF_ERROR'         | Input buffer full/output buffer empty   |
+   +-----------------------+-----------------------------------------+
+   | 'Z_VERSION_ERROR'     | zlib library version is incompatible    |
+   +-----------------------+-----------------------------------------+
+
+"),
+
 
 (E"options.jl",E"options",E"options()
 
@@ -4390,11 +4774,7 @@ glp_eval_tab_col(glp_prob, k)
         f2(11)
       end
 
-   To view the execution times, type '@profile report'.  Each row of
-   the output shows the number of times the line was executed, the
-   cumulative time spent on that line, the estimated 'compensated'
-   cumulative time (compensating for the overhead of profiling, see
-   below), and the line number and filename.
+   To view the execution times, type '@profile report'.
 
    Here are the various options you have for controlling profiling:
 
@@ -4408,11 +4788,98 @@ glp_eval_tab_col(glp_prob, k)
 
    * '@profile on': turn profiling back on
 
-   Be aware that profiling adds a significant performance overhead.
-   You can prevent a subsection of your code from being profiled by
-   encapsulating it inside a 'begin ... end' block; in this case, the
-   block as a whole is profiled, but the individual lines inside the
-   block are not separately timed.
+"),
+
+(E"sound.jl",E"Sound",E"Sound.wavread(io[, options])
+
+   Reads and returns the samples from a RIFF/WAVE file. The samples
+   are converted to floating point values in the range from -1.0 to
+   1.0 by default. The 'io' argument accepts either an 'IO' object or
+   a filename ('String'). The options are passed via an 'Options'
+   object (see the *options page*).
+
+   The available options, and the default values, are:
+
+   * 'format' (default = 'double'): changes the format of the returned
+     samples. The string 'double' returns double precision floating
+     point values in the range -1.0 to 1.0. The string 'native'
+     returns the values as encoded in the file. The string 'size'
+     returns the number of samples in the file, rather than the actual
+     samples.
+
+   * 'subrange' (default = 'Any'): controls which samples are
+     returned. The default, 'Any' returns all of the samples. Passing
+     a number ('Real'), 'N', will return the first 'N' samples of each
+     channel. Passing a range ('Range1{Real}'), 'R', will return the
+     samples in that range of each channel.
+
+   The returned values are:
+
+   * 'y': The acoustic samples; A matrix is returned for files that
+     contain multiple channels.
+
+   * 'Fs': The sampling frequency
+
+   * 'nbits': The number of bits used to encode each sample
+
+   * 'extra': Any additional bytes used to encode the samples (is
+     always 'None')
+
+   The following functions are also defined to make this function
+   compatible with MATLAB:
+
+"),
+
+(E"sound.jl",E"Sound",E"Sound.wavwrite(samples, io[, options])
+
+      Writes samples to a RIFF/WAVE file io object. The 'io' argument
+      accepts either an 'IO' object or a filename ('String'). The
+      function assumes that the sample rate is 8 kHz and uses 16 bits
+      to encode each sample. Both of these values can be changed with
+      the options parameter. Each column of the data represents a
+      different channel. Stereo files should contain two columns. The
+      options are passed via an 'Options' object (see the *options
+      page*).
+
+      The available options, and the default values, are:
+
+   * 'sample_rate' (default = '8000'): sampling frequency
+
+   * 'nbits' (default = '16'): number of bits used to encode each
+     sample
+
+   The type of the input array, samples, also affects the generated
+   file. 'Native' WAVE files are written when integers are passed into
+   wavwrite. This means that the literal values are written into the
+   file. The input ranges are as follows for integer samples.
+
+   +--------+-------------+------------------------+---------------+
+   | N Bits | y Data Type | y Data Range           | Output Format |
+   +========+=============+========================+===============+
+   | 8      | uint8       | 0 <= y <= 255          | uint8         |
+   +--------+-------------+------------------------+---------------+
+   | 16     | int16       | –32768 <= y <= +32767  | int16         |
+   +--------+-------------+------------------------+---------------+
+   | 24     | int32       | –2^23 <= y <= 2^23 – 1 | int32         |
+   +--------+-------------+------------------------+---------------+
+
+   If samples contains floating point values, the input data ranges
+   are the following.
+
+   +--------+------------------+-------------------+---------------+
+   | N Bits | y Data Type      | y Data Range      | Output Format |
+   +========+==================+===================+===============+
+   | 8      | single or double | –1.0 <= y < +1.0  | uint8         |
+   +--------+------------------+-------------------+---------------+
+   | 16     | single or double | –1.0 <= y < +1.0  | int16         |
+   +--------+------------------+-------------------+---------------+
+   | 24     | single or double | –1.0 <= y < +1.0  | int32         |
+   +--------+------------------+-------------------+---------------+
+   | 32     | single or double | –1.0 <= y <= +1.0 | single        |
+   +--------+------------------+-------------------+---------------+
+
+   The following functions are also defined to make this function
+   compatible with MATLAB:
 
 "),
 
@@ -4602,14 +5069,14 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_bound",E"compress_bound(input_size)
+(E"zlib.jl",E"compress_bound",E"compress_bound(input_size)
 
    Returns the maximum size of the compressed output buffer for a
    given uncompressed input size.
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress",E"compress(source[, level])
+(E"zlib.jl",E"compress",E"compress(source[, level])
 
    Compresses source using the given compression level, and returns
    the compressed buffer ('Array{Uint8,1}').  'level' is an integer
@@ -4622,7 +5089,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
+(E"zlib.jl",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
 
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
@@ -4632,7 +5099,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress",E"uncompress(source[, uncompressed_size])
+(E"zlib.jl",E"uncompress",E"uncompress(source[, uncompressed_size])
 
    Allocates a buffer of size 'uncompressed_size', uncompresses source
    to this buffer using the given compression level, and returns the
@@ -4646,7 +5113,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl --- Wrapper for zlib compress/uncompress",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
+(E"zlib.jl",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
 
    Uncompresses the source buffer into the destination buffer. Returns
    the number of bytes written into dest.  An error is thrown if the

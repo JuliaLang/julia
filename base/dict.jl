@@ -154,11 +154,15 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
                                            shl_int(unbox(Uint64,b), 32))))
 
 if WORD_SIZE == 64
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64hash, Uint64, (Uint64,), x)
 else
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
@@ -228,7 +232,7 @@ type Dict{K,V} <: Associative{K,V}
         new(fill!(cell(n), _jl_secret_table_token), Array(V,n),
             0, 0, identity)
     end
-    function Dict(ks::Tuple, vs::Tuple)
+    function Dict(ks, vs)
         n = length(ks)
         h = Dict{K,V}(n)
         for i=1:n
@@ -239,6 +243,14 @@ type Dict{K,V} <: Associative{K,V}
 end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
+
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# syntax entry points
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
@@ -262,26 +274,17 @@ function deserialize{K,V}(s, T::Type{Dict{K,V}})
     return t
 end
 
-# syntax entry point
-dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
-dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
-dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
-dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
-
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
 const _jl_missing_token = :__c782dbf1cf4d6a2e5e3965d7e95634f2e09b5901__
 
 function rehash{K,V}(h::Dict{K,V}, newsz)
-    oldk = copy(h.keys)
+    oldk = h.keys
     oldv = h.vals
-    sz = length(oldk)
     newsz = _tablesz(newsz)
-    if newsz > sz
-        grow(h.keys, newsz-sz)
-    end
+    h.keys = fill!(cell(newsz), _jl_secret_table_token)
     h.vals = Array(V, newsz)
-    del_all(h)
+    h.ndel = h.count = 0
 
     for i = 1:length(oldk)
         k = oldk[i]
@@ -295,6 +298,7 @@ end
 
 function del_all{K,V}(h::Dict{K,V})
     fill!(h.keys, _jl_secret_table_token)
+    h.vals = Array(V, length(h.keys))
     h.ndel = 0
     h.count = 0
     return h
@@ -305,12 +309,14 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if h.ndel >= ((3*sz)>>2)
-        rehash(h, sz)
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        sz = length(h.keys)  # rehash may resize the table at this point!
     end
 
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
@@ -355,7 +361,7 @@ function assign{K,V}(h::Dict{K,V}, v, key)
         return h
     end
 
-    rehash(h, sz*2)
+    rehash(h, h.count > 64000 ? sz*2 : sz*4)
 
     assign(h, v, key)
 end
@@ -366,7 +372,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
 
     sz = length(h.keys)
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     keys = h.keys
@@ -411,6 +417,7 @@ function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
         h.keys[index] = _jl_missing_token
+        ccall(:jl_arrayunset, Void, (Any,Uint), h.vals, index-1)
         h.ndel += 1
         h.count -= 1
     end

@@ -1,3 +1,6 @@
+module Color
+import Base.*
+export hex2rgb, rgb2hex, hsl2rgb, hsv2rgb, name2rgb
 
 # e.g., 0xff0000 -> (1.,0.,0.)
 function hex2rgb( hextriplet::Integer )
@@ -6,6 +9,44 @@ function hex2rgb( hextriplet::Integer )
     g = s * ((hextriplet >>  8) & 0xff)
     b = s * ((hextriplet >>  0) & 0xff)
     return (r, g, b)
+end
+
+# e.g., (1.,0.,0.) -> 0xff0000
+function rgb2hex(r, g, b)
+    (uint32(iround(0xff * r)) << 16) |
+    (uint32(iround(0xff * g)) <<  8) |
+    (uint32(iround(0xff * b)) <<  0)
+end
+
+function hcm2rgb(h, c, m)
+    x = c*(1. - abs(mod(6h,2) - 1.))
+    r1,g1,b1 = 0.,0.,0.
+    if h < 1/6
+        r1,g1,b1 = c,x,0.
+    elseif h < 2/6
+        r1,g1,b1 = x,c,0.
+    elseif h < 3/6
+        r1,g1,b1 = 0.,c,x
+    elseif h < 4/6
+        r1,g1,b1 = 0.,x,c
+    elseif h < 5/6
+        r1,g1,b1 = x,0.,c
+    elseif h < 1
+        r1,g1,b1 = c,0.,x
+    end
+    (r1+m, g1+m, b1+m)
+end
+
+function hsl2rgb(h, s, l)
+    c = s*(1. - abs(2l - 1.))
+    m = l - 0.5*c
+    hcm2rgb(h, c, m)
+end
+
+function hsv2rgb(h, s, v)
+    c = s*v
+    m = v - c
+    hcm2rgb(h, c, m)
 end
 
 # e.g., "red" -> (1.,0.,0.)
@@ -198,3 +239,5 @@ end
 function assign(n::CSNamed,value,key)
     n.str[key] = value
 end
+
+end # module

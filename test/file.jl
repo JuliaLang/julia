@@ -1,10 +1,23 @@
+## paths
+
+@unix_only begin
+    @assert split_extension(".bashrc") == (".bashrc","")
+    @assert split_extension("/dir/.bashrc") == ("/dir/.bashrc","")
+    @assert split_extension("a.b/a") == ("a.b/a","")
+    @assert split_extension("a/a.b.c") == ("a/a.b",".c")
+
+    @assert split_path("a/b/c") == ["a","b","c"]
+    @assert split_path("a//b/c") == ["a","b","c"]
+end
+
 #############################################
 # Create some temporary files & directories #
 #############################################
-# This code assumes the availability of POSIX tools in the current PATH
-# TODO: remove this dependency
-dir_name = strcat("$(systmpdir())/testdir", randstring(6))
-dir_create(dir_name)
+# This first section may not run for non-UNIX people.
+# If so, create the directories and files manually, and comment out this section
+# (Or fix up the code to support such operations on Windows!)
+dir_name = strcat("/$(systmpdir())/testdir", randstring(6))
+mkdir(dir_name)
 filename = strcat(dir_name, "/afile.txt")
 file_create(filename)
 
@@ -31,12 +44,31 @@ run(`chmod +w $filename`)
 	@assert filesize(dir_name) == 0
 end
 @unix_only begin
-	@assert filesize(dir_name) > 0
+@assert filesize(dir_name) > 0
 end
 @assert mtime(filename) >= mtime(dir_name)
 
+#######################################################################
+# This section tests temporary file and directory creation.           #
+#######################################################################
+
+# my_tempdir = tempdir()
+# @assert isdir(my_tempdir) == true
+
+# path = tempname()
+# @assert ispath(path) == false
+
+# (filename, f) = mktemp()
+# print(f, "Here is some text")
+# close(f)
+# @assert isfile(filename) == true
+# @assert readall(filename) == "Here is some text"
+
+# dirname = mktempdir()
+# @assert isdir(dirname)
+ 
 ############
 # Clean up #
 ############
 file_remove(filename)
-dir_remove(dir_name)
+rmdir(dir_name)

@@ -488,3 +488,9 @@ for i1 = 1:length(u8str2)
         @assert u8str2[i1:i2] == u8str2plain[i1:i2]
     end
 end
+
+# string iteration, and issue #1454
+str = "é"
+str_a = [str...]
+@assert length(str_a)==1
+@assert str_a[1] == str[1]

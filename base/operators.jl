@@ -14,6 +14,8 @@ isequal(x,y) = is(x,y)
 > (x,y) = y < x
 <=(x,y) = !(y < x)
 >=(x,y) = (y <= x)
+.> (x,y) = y.<x
+.>=(x,y) = y.<=x
 
 # these definitions allow Number types to implement
 # == and < instead of isequal and isless, which is more idiomatic:
@@ -52,22 +54,20 @@ for op = (:+, :*, :&, :|, :$, :min, :max)
     end
 end
 
-\(x,y) = y/x
+\(x::Number,y::Number) = y/x
 
 # .<op> defaults to <op>
-./(x,y) = x/y
-.\(x,y) = y./x
-.*(x,y) = x*y
-.^(x,y) = x^y
+./(x::Number,y::Number) = x/y
+.\(x::Number,y::Number) = y./x
+.*(x::Number,y::Number) = x*y
+.^(x::Number,y::Number) = x^y
 .+(x,y) = x+y
 .-(x,y) = x-y
 
-.==(x,y) = x==y
-.!=(x,y) = x!=y
-.< (x,y) = x<y
-.> (x,y) = y.<x
-.<=(x,y) = x<=y
-.>=(x,y) = y.<=x
+.==(x::Number,y::Number) = x==y
+.!=(x::Number,y::Number) = x!=y
+.< (x::Real,y::Real) = x<y
+.<=(x::Real,y::Real) = x<=y
 
 # core << >> and >>> takes Int32 as second arg
 <<(x,y::Integer)  = x << convert(Int32,y)

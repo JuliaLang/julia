@@ -304,22 +304,33 @@ JL_CALLABLE(jl_f_top_eval)
     return v;
 }
 
-JL_CALLABLE(jl_f_isbound)
+JL_CALLABLE(jl_f_isdefined)
 {
     jl_module_t *m = jl_current_module;
     jl_sym_t *s=NULL;
+    JL_NARGSV(isdefined, 1);
+    if (jl_is_array(args[0])) {
+        return jl_array_isdefined(args, nargs) ? jl_true : jl_false;
+    }
     if (nargs == 1) {
-        JL_TYPECHK(isbound, symbol, args[0]);
+        JL_TYPECHK(isdefined, symbol, args[0]);
         s = (jl_sym_t*)args[0];
     }
     if (nargs != 2) {
-        JL_NARGS(isbound, 1, 1);
+        JL_NARGS(isdefined, 1, 1);
     }
     else {
-        JL_TYPECHK(isbound, module, args[0]);
-        JL_TYPECHK(isbound, symbol, args[1]);
-        m = (jl_module_t*)args[0];
+        JL_TYPECHK(isdefined, symbol, args[1]);
         s = (jl_sym_t*)args[1];
+        if (!jl_is_module(args[0])) {
+            jl_value_t *vt = (jl_value_t*)jl_typeof(args[0]);
+            if (!jl_is_struct_type(vt)) {
+                jl_type_error("isdefined", (jl_value_t*)jl_struct_kind, args[0]);
+            }
+            return jl_field_isdefined(args[0], s, 1) ? jl_true : jl_false;
+        }
+        JL_TYPECHK(isdefined, module, args[0]);
+        m = (jl_module_t*)args[0];
     }
     assert(s);
     return jl_boundp(m, s) ? jl_true : jl_false;
@@ -385,6 +396,8 @@ JL_CALLABLE(jl_f_set_field)
     JL_TYPECHK(setfield, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type)
+        jl_error("cannot assign variables in other modules");
     if (!jl_is_struct_type(vt))
         jl_type_error("setfield", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;
@@ -404,6 +417,8 @@ JL_CALLABLE(jl_f_field_type)
     JL_TYPECHK(fieldtype, symbol, args[1]);
     jl_value_t *v = args[0];
     jl_value_t *vt = (jl_value_t*)jl_typeof(v);
+    if (vt == (jl_value_t*)jl_module_type)
+        jl_error("cannot assign variables in other modules");
     if (!jl_is_struct_type(vt))
         jl_type_error("fieldtype", (jl_value_t*)jl_struct_kind, v);
     jl_struct_type_t *st = (jl_struct_type_t*)vt;
@@ -884,7 +899,7 @@ void jl_init_primitives(void)
     add_builtin_func("applicable", jl_f_applicable);
     add_builtin_func("invoke", jl_f_invoke);
     add_builtin_func("eval", jl_f_top_eval);
-    add_builtin_func("isbound", jl_f_isbound);
+    add_builtin_func("isdefined", jl_f_isdefined);
     add_builtin_func("yieldto", jl_f_yieldto);
     
     // functions for internal use

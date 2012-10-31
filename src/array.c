@@ -20,6 +20,8 @@ static jl_array_t *_new_array(jl_type_t *atype,
     jl_array_t *a;
 
     for(i=0; i < ndims; i++) {
+        if ((long)dims[i] < 0)
+            jl_error("invalid Array dimension size");
         nel *= dims[i];
     }
     jl_type_t *el_type = (jl_type_t*)jl_tparam0(atype);
@@ -151,6 +153,8 @@ jl_array_t *jl_reshape_array(jl_type_t *atype, jl_array_t *data,
         size_t l=1;
         for(i=0; i < ndims; i++) {
             adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            if ((long)adims[i] < 0)
+                jl_error("invalid Array dimension size");
             l *= adims[i];
         }
         a->length = l;
@@ -410,6 +414,16 @@ JL_CALLABLE(jl_f_arrayref)
     return jl_arrayref(a, i);
 }
 
+int jl_array_isdefined(jl_value_t **args, int nargs)
+{
+    assert(jl_is_array(args[0]));
+    jl_array_t *a = (jl_array_t*)args[0];
+    size_t i = array_nd_index(a, &args[1], nargs-1, "isdefined");
+    if (a->ptrarray)
+        return ((jl_value_t**)jl_array_data(a))[i] != NULL;
+    return 1;
+}
+
 void jl_arrayset(jl_array_t *a, jl_value_t *rhs, size_t i)
 {
     jl_value_t *el_type = jl_tparam0(jl_typeof(a));
@@ -433,6 +447,15 @@ JL_CALLABLE(jl_f_arrayset)
     size_t i = array_nd_index(a, &args[2], nargs-2, "arrayset");
     jl_arrayset(a, args[1], i);
     return args[0];
+}
+
+void jl_arrayunset(jl_array_t *a, size_t i)
+{
+    if (i >= a->length)
+        jl_raise(jl_bounds_exception);
+    char *ptail = (char*)a->data + i*a->elsize;
+    if (a->ptrarray)
+        memset(ptail, 0, a->elsize);
 }
 
 static jl_mallocptr_t *array_new_buffer(jl_array_t *a, size_t newlen)

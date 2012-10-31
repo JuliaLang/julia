@@ -17,14 +17,14 @@ them. The following are Julia's primitive numeric types:
 
 -  **Integer types:**
 
-   -  ``Int8`` — signed 8-bit integers ranging from −2^7 to 2^7 − 1.
-   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 2^8 − 1.
-   -  ``Int16`` — signed 16-bit integers ranging from −2^15 to 2^15 − 1.
-   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 2^16 − 1.
-   -  ``Int32`` — signed 32-bit integers ranging from −2^31 to 2^31 − 1.
-   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 − 1.
-   -  ``Int64`` — signed 64-bit integers ranging from −2^63 to 2^63 − 1.
-   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 − 1.
+   -  ``Int8`` — signed 8-bit integers ranging from -2^7 to 2^7 - 1.
+   -  ``Uint8`` — unsigned 8-bit integers ranging from 0 to 2^8 - 1.
+   -  ``Int16`` — signed 16-bit integers ranging from -2^15 to 2^15 - 1.
+   -  ``Uint16`` — unsigned 16-bit integers ranging from 0 to 2^16 - 1.
+   -  ``Int32`` — signed 32-bit integers ranging from -2^31 to 2^31 - 1.
+   -  ``Uint32`` — unsigned 32-bit integers ranging from 0 to 2^32 - 1.
+   -  ``Int64`` — signed 64-bit integers ranging from -2^63 to 2^63 - 1.
+   -  ``Uint64`` — unsigned 64-bit integers ranging from 0 to 2^64 - 1.
    -  ``Bool`` — either ``true`` or ``false``, which correspond
       numerically to 1 and 0.
    -  ``Char`` — a 32-bit numeric type representing a `Unicode
@@ -129,6 +129,14 @@ This behavior is based on the observation that when one uses unsigned
 hex literals for integer values, one typically is using them to
 represent a fixed numeric byte sequence, rather than just an integer
 value.
+
+Binary and octal literals are also supported::
+
+    julia> 0b10
+    0x02
+
+    julia> 0o10
+    0x08
 
 The minimum and maximum representable values of primitive numeric types
 such as integers are given by the ``typemin`` and ``typemax`` functions::
@@ -336,6 +344,10 @@ It also makes writing exponential functions more elegant::
 
     julia> 2^2x
     64
+
+The precedence of numeric literal coefficients is the same as that of unary
+operators such as negation. So ``2^3x`` is parsed as ``2^(3x)``, and
+``2x^3`` is parsed as ``2*(x^3)``.
 
 You can also use numeric literals as coefficients to parenthesized
 expressions::

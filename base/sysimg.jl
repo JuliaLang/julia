@@ -24,7 +24,7 @@ ccall(:putchar, Void, (Char,), 'g')
 ccall(:putchar, Void, (Char,), 'e')
 ccall(:putchar, Void, (Char,), ':')
 ccall(:putchar, Void, (Char,), '\n')
-ccall(:jl_load_progress_setmax, Void, (Int,), 73)
+ccall(:jl_load_progress_setmax, Void, (Int,), 72)
 
 include("export.jl")
 
@@ -80,7 +80,7 @@ include("operators.jl")
 include("pointer.jl")
 
 _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
-_jl_libfdm = dlopen("libfdm")
+libopenlibm = dlopen("libopenlibm")
 
 include("float.jl")
 include("reduce.jl")
@@ -133,15 +133,17 @@ include("client.jl")
 include("intfuncs.jl")
 include("floatfuncs.jl")
 include("math.jl")
-include("math_libm.jl")
-include("sort.jl")
-include("combinatorics.jl")
-include("statistics.jl")
+import Base.Math.*
 
-# random number generation
+# random number generation and statistics
+include("statistics.jl")
 include("librandom.jl")
 include("rng.jl")
 import Base.RNG.*
+
+# Combinatorics
+include("sort.jl")
+include("combinatorics.jl")
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")

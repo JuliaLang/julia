@@ -103,7 +103,7 @@ function serialize(s, a::Array)
     end
 end
 
-function serialize{T,N}(s, a::SubArray{T,N,Array})
+function serialize{T,N,A<:Array}(s, a::SubArray{T,N,A})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return serialize(s, copy(a))
     end
@@ -149,14 +149,14 @@ function serialize(s, f::Function)
         name = f.env
     end
     if isa(name,Symbol)
-        if isbound(Base,name) && is(f,eval(Base,name))
+        if isdefined(Base,name) && is(f,eval(Base,name))
             write(s, uint8(0))
             serialize(s, name)
             return
         end
         if !is(f.env.defs, ())
             mod = f.env.defs.func.code.module
-            if isbound(mod,name) && is(f,eval(mod,name))
+            if isdefined(mod,name) && is(f,eval(mod,name))
                 # toplevel named func
                 write(s, uint8(2))
                 serialize(s, mod)
@@ -186,8 +186,9 @@ end
 function serialize_type_data(s, t)
     tname = t.name.name
     serialize(s, tname)
-    serialize(s, t.name.module)
-    if isbound(tname) && is(t,eval(tname))
+    mod = t.name.module
+    serialize(s, mod)
+    if isdefined(mod,tname) && is(t,eval(mod,tname))
         serialize(s, ())
     else
         serialize(s, t.parameters)

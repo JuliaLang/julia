@@ -39,7 +39,7 @@
 @assert bool(-1.0) == true
 @assert bool(ComplexPair(0,0)) == false
 @assert bool(ComplexPair(1,0)) == true
-@assert bool(ComplexPair(0,1)) == true
+@assert_fails bool(ComplexPair(0,1)) == true
 @assert bool(0//1) == false
 @assert bool(1//1) == true
 @assert bool(1//2) == true
@@ -1033,6 +1033,26 @@ end
 @assert isa(0b11111111111111111,Uint32)
 @assert isa(0b11111111111111111111111111111111,Uint32)
 @assert isa(0b111111111111111111111111111111111,Uint64)
+
+# octal literals
+
+@assert 0o10 == 0x8
+@assert 0o100 == 0x40
+@assert 0o1000 == 0x200
+@assert 0o724 == 0x1d4
+@assert isa(0o377,Uint8)
+@assert isa(0o00,Uint8)
+@assert isa(0o000,Uint16)
+@assert isa(0o00000,Uint16)
+@assert isa(0o000000,Uint32)
+@assert isa(0o0000000000,Uint32)
+@assert isa(0o00000000000,Uint64)
+@assert isa(0o11,Uint8)
+@assert isa(0o111,Uint8)
+@assert isa(0o11111,Uint16)
+@assert isa(0o111111,Uint16)
+@assert isa(0o1111111111,Uint32)
+@assert isa(0o11111111111,Uint32)
 
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)

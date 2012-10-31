@@ -48,7 +48,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
-    newm->parent = (jl_value_t*)parent_module;
+    newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
     if (parent_module == jl_main_module && name == jl_symbol("Base") &&
         jl_base_module == NULL) {

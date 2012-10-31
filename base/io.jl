@@ -3,6 +3,182 @@
 abstract IO
 # the first argument to any IO MUST be a POINTER (to a JL_STREAM) or using show on it will cause memory corruption
 
+# Generic IO functions
+
+## byte-order mark, ntoh & hton ##
+
+const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
+
+if ENDIAN_BOM == 0x01020304
+    ntoh(x) = identity(x)
+    hton(x) = identity(x)
+    ltoh(x) = bswap(x)
+    htol(x) = bswap(x)
+elseif ENDIAN_BOM == 0x04030201
+    ntoh(x) = bswap(x)
+    hton(x) = bswap(x)
+    ltoh(x) = identity(x)
+    htol(x) = identity(x)
+else
+    error("seriously? what is this machine?")
+end
+
+## binary I/O ##
+
+# all subtypes should implement this
+write(s::IO, x::Uint8) = error(typeof(s)," does not support byte I/O")
+
+if ENDIAN_BOM == 0x01020304
+    function write(s, x::Integer)
+        for n = sizeof(x):-1:1
+            write(s, uint8((x>>>((n-1)<<3))))
+        end
+    end
+else
+    function write(s, x::Integer)
+        for n = 1:sizeof(x)
+            write(s, uint8((x>>>((n-1)<<3))))
+        end
+    end
+end
+
+write(s::IO, x::Bool)    = write(s, uint8(x))
+write(s::IO, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
+write(s::IO, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
+
+function write(s::IO, a::AbstractArray)
+    for i = 1:numel(a)
+        write(s, a[i])
+    end
+end
+
+function write(s::IO, c::Char)
+    if c < 0x80
+        write(s, uint8(c))
+        return 1
+    elseif c < 0x800
+        write(s, uint8(( c >> 6          ) | 0xC0))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 2
+    elseif c < 0x10000
+        write(s, uint8(( c >> 12         ) | 0xE0))
+        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 3
+    elseif c < 0x110000
+        write(s, uint8(( c >> 18         ) | 0xF0))
+        write(s, uint8(((c >> 12) & 0x3F ) | 0x80))
+        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+        write(s, uint8(( c        & 0x3F ) | 0x80))
+        return 4
+    end
+    error("invalid Unicode code point: U+", hex(c))
+end
+
+# all subtypes should implement this
+read(s::IO, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
+
+function read{T <: Integer}(s::IO, ::Type{T})
+    x = zero(T)
+    for n = 1:sizeof(x)
+        x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
+    end
+    return x
+end
+
+read(s::IO, ::Type{Bool})    = (read(s,Uint8)!=0)
+read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
+read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
+
+read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) =
+    read(s, t, tuple(d1,dims...))
+read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
+    read(s, t, map(int,tuple(d1,dims...)))
+
+read{T}(s::IO, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
+
+function read{T}(s::IO, a::Array{T})
+    for i = 1:numel(a)
+        a[i] = read(s, T)
+    end
+    return a
+end
+
+function read(s::IO, ::Type{Char})
+    ch = read(s, Uint8)
+    if ch < 0x80
+        return char(ch)
+    end
+
+    # mimic utf8.next function
+    trailing = Base._jl_utf8_trailing[ch+1]
+    c::Uint32 = 0
+    for j = 1:trailing
+        c += ch
+        c <<= 6
+        ch = read(s, Uint8)
+    end
+    c += ch
+    c -= Base._jl_utf8_offset[trailing+1]
+    char(c)
+end
+
+function readuntil(s::IO, delim)
+    out = memio()
+    while (!eof(s))
+        c = read(s, Char)
+        write(out, c)
+        if c == delim
+            break
+        end
+    end
+    takebuf_string(out)
+end
+
+readline(s::IO) = readuntil(s, '\n')
+
+function readall(s::IO)
+    out = memio()
+    while (!eof(s))
+        a = read(s, Uint8)
+        write(out, a)
+    end
+    takebuf_string(out)
+end
+
+readchomp(x) = chomp(readall(x))
+
+## high-level iterator interfaces ##
+
+type EachLine
+    stream::IO
+end
+each_line(stream::IO) = EachLine(stream)
+
+start(itr::EachLine) = readline(itr.stream)
+function done(itr::EachLine, line)
+    if !isempty(line)
+        return false
+    end
+    close(itr.stream)
+    true
+end
+next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
+
+function readlines(s, fx::Function...)
+    a = {}
+    for l = each_line(s)
+        for f in fx
+          l = f(l)
+        end
+        push(a, l)
+    end
+    return a
+end
+
+
+## IOStream
+
 const sizeof_off_t = int(ccall(:jl_sizeof_off_t, Int32, ()))
 const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 
@@ -45,7 +221,8 @@ close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
 flush(s::IOStream) = ccall(:ios_flush, Void, (Ptr{Void},), s.ios)
 
 truncate(s::IOStream, n::Integer) =
-    ccall(:ios_trunc, Uint, (Ptr{Void}, Uint), s.ios, n)
+    (ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n)==0 ||
+     error("truncate failed"))
 
 seek(s::IOStream, n::Integer) =
     (ccall(:ios_seek, FileOffset, (Ptr{Void}, FileOffset), s.ios, n)==0 ||
@@ -118,82 +295,6 @@ end
 memio(x::Integer) = memio(x, true)
 memio() = memio(0, true)
 
-## byte-order mark, ntoh & hton ##
-takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Vector{Uint8}, (Ptr{Void},), s.ios)
-
-const ENDIAN_BOM = reinterpret(Uint32,uint8([1:4]))[1]
-
-if ENDIAN_BOM == 0x01020304
-    ntoh(x) = identity(x)
-    hton(x) = identity(x)
-    ltoh(x) = bswap(x)
-    htol(x) = bswap(x)
-elseif ENDIAN_BOM == 0x04030201
-    ntoh(x) = bswap(x)
-    hton(x) = bswap(x)
-    ltoh(x) = identity(x)
-    htol(x) = identity(x)
-else
-    error("seriously? what is this machine?")
-end
-
-## binary I/O ##
-write(x) = write(OUTPUT_STREAM::IOStream, x)
-write(s, x::Uint8) = error(typeof(s)," does not support byte I/O")
-
-if ENDIAN_BOM == 0x01020304
-    function write(s, x::Integer)
-        for n = sizeof(x):-1:1
-            write(s, uint8((x>>>((n-1)<<3))))
-        end
-    end
-else
-    function write(s, x::Integer)
-        for n = 1:sizeof(x)
-            write(s, uint8((x>>>((n-1)<<3))))
-        end
-    end
-end
-
-write(s, x::Bool)    = write(s, uint8(x))
-write(s, x::Float32) = write(s, box(Int32,unbox(Float32,x)))
-write(s, x::Float64) = write(s, box(Int64,unbox(Float64,x)))
-
-function write(s, a::AbstractArray)
-    for i = 1:numel(a)
-        write(s, a[i])
-    end
-end
-
-read(s, x::Type{Uint8}) = error(typeof(s)," does not support byte I/O")
-
-function read{T <: Integer}(s, ::Type{T})
-    x = zero(T)
-    for n = 1:sizeof(x)
-        x |= (convert(T,read(s,Uint8))<<((n-1)<<3))
-    end
-    return x
-end
-
-read(s, ::Type{Bool})    = (read(s,Uint8)!=0)
-read(s, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
-read(s, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
-
-read{T}(s, t::Type{T}, d1::Int, dims::Int...) =
-    read(s, t, tuple(d1,dims...))
-read{T}(s, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, map(int,tuple(d1,dims...)))
-
-read{T}(s, ::Type{T}, dims::Dims) = read(s, Array(T, dims))
-
-function read{T}(s, a::Array{T})
-    for i = 1:numel(a)
-        a[i] = read(s, T)
-    end
-    return a
-end
-
 ## low-level calls ##
 
 write(s::IOStream, b::Uint8) = ccall(:jl_putc, Int32, (Int32, Ptr{Void}), b, s.ios)
@@ -212,12 +313,12 @@ function write(s::IOStream, p::Ptr, nb::Integer)
     ccall(:jl_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb)
 end
 
-function write{T,N}(s::IOStream, a::SubArray{T,N,Array})
+function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
     if !isa(T,BitsKind) || stride(a,1)!=1
         return invoke(write, (Any, AbstractArray), s, a)
     end
     colsz = size(a,1)*sizeof(T)
-    if N==1
+    if N<=1
         write(s, pointer(a, 1), colsz)
     else
         cartesian_map((idxs...)->write(s, pointer(a, idxs), colsz),
@@ -237,16 +338,12 @@ function read(s::IOStream, ::Type{Uint8})
 end
 
 function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
-    if isa(T,BitsKind)
-        nb = numel(a)*sizeof(T)
-        if ccall(:ios_readall, Uint,
-                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
-            throw(EOFError())
-        end
-        a
-    else
-        invoke(read, (Any, Array), s, a)
+    nb = numel(a)*sizeof(T)
+    if ccall(:ios_readall, Uint,
+             (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+        throw(EOFError())
     end
+    a
 end
 
 ## text I/O ##
@@ -297,6 +394,8 @@ function with_output_to_string(thunk)
     takebuf_string(m)
 end
 
+write(x) = write(OUTPUT_STREAM::IOStream, x)
+
 function readuntil(s::IOStream, delim)
     # TODO: faster versions that avoid the encoding check
     ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
@@ -308,48 +407,6 @@ function readall(s::IOStream)
     takebuf_string(dest)
 end
 readall(filename::String) = open(readall, filename)
-
-readchomp(x) = chomp(readall(x))
-
-readline(s::IOStream) = readuntil(s, '\n')
-
-## high-level iterator interfaces ##
-
-type EachLine
-    stream::IOStream
-end
-each_line(stream::IOStream) = EachLine(stream)
-
-start(itr::EachLine) = readline(itr.stream)
-function done(itr::EachLine, line)
-    if !isempty(line)
-        return false
-    end
-    close(itr.stream)
-    true
-end
-next(itr::EachLine, this_line) = (this_line, readline(itr.stream))
-
-skip(s::IOStream, delta::Integer) =
-    (ccall(:ios_skip, FileOffset, (Ptr{Void}, FileOffset), s.ios, delta)==0 ||
-     error("skip failed"))
-
-position(s::IOStream) = ccall(:ios_pos, FileOffset, (Ptr{Void},), s.ios)
-
-type IOTally
-    nbytes::Int
-    IOTally() = new(0)
-end
-function readlines(s, fx::Function...)
-    a = {}
-    for l = each_line(s)
-        for f in fx
-          l = f(l)
-        end
-        push(a, l)
-    end
-    return a
-end
 
 ## select interface ##
 

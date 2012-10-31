@@ -308,6 +308,34 @@ Dicts can be created using a literal syntax: ``{"A"=>1, "B"=>2}``
 
    Delete all keys from a collection.
 
+.. function:: keys(collection)
+
+   Return an array of all keys in a collection.
+
+.. function:: values(collection)
+
+   Return an array of all values in a collection.
+
+.. function:: pairs(collection)
+
+   Return an array of all (key, value) tuples in a collection.
+
+.. function:: merge(collection, others...)
+
+   Construct a merged collection from the given collections.
+
+.. function:: merge!(collection, others...)
+
+   Update collection with pairs from the other collections
+
+.. function:: filter(function, collection)
+
+   Return a copy of collection, removing (key, value) pairs for which function is false.
+
+.. function:: filter!(function, collection)
+
+   Update collection, removing (key, value) pairs for which function is false.
+
 Fully implemented by: ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``.
 
 Partially implemented by: ``IntSet``, ``Set``, ``EnvHash``, ``FDSet``, ``Array``.
@@ -1147,6 +1175,10 @@ Constructors
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
 
+.. function:: logspace(start, stop, n)
+
+   Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
+
 Mathematical operators and functions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -1238,7 +1270,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: \
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B``. For rectangular ``A``, QR factorization is used. For triangular ``A``, a triangular solve is performed. For square ``A``, Cholesky factorization is tried if the input is symmetric with a heavy diagonal. LU factorization is used in case Cholesky factorization fails or for general square inputs. If ``size(A,1) > size(A,2)``, the result is a least squares solution of ``A*X+eps=B`` using the singular value decomposition. ``A`` does not need to have full rank.
 
 .. function:: dot
 
@@ -1276,9 +1308,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute eigenvalues and eigenvectors of A
 
-.. function:: svd(A) -> U, S, V
+.. function:: eigvals(A)
+
+   Returns the eigenvalues of ``A``.
+
+.. function:: svd(A) -> U, S, V'
 
    Compute the SVD of A
+
+.. function:: svdvals(A)
+
+   Returns the singular values of ``A``.
 
 .. function:: triu(M)
 
@@ -1322,7 +1362,15 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: inv(M)
 
-   Matrix inverse, or generalized ``1/M``
+   Matrix inverse
+
+.. function:: pinv(M)
+
+   Moore-Penrose inverse
+
+.. function:: null(M)
+
+   Basis for null space of M
 
 .. function:: repmat(A, n, m)
 
@@ -1657,6 +1705,15 @@ System
 .. function:: cd("dir")
 
    Set the current working directory. Returns the new current directory.
+
+.. function:: mkdir(path[, mode])
+
+   Make a new directory with name ``path`` and permissions ``mode``.
+   ``mode`` defaults to 0o777, modified by the current file creation mask.
+
+.. function:: rmdir(path)
+
+   Remove the directory named ``path``.
 
 .. function:: getpid()
 

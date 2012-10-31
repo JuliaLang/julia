@@ -242,6 +242,33 @@ glotest()
 # syntax
 @assert (true ? 1 : false ? 2 : 3) == 1
 
+# undefinedness
+type UndefField
+    field
+    UndefField() = new()
+end
+
+begin
+    local a
+    a = cell(2)
+    @assert !isdefined(a,1) && !isdefined(a,2)
+    a[1] = 1
+    @assert isdefined(a,1) && !isdefined(a,2)
+    a = Array(Float64,1)
+    @assert isdefined(a,1)
+    @assert isdefined(a)
+    @assert_fails isdefined(a,2)
+
+    @assert isdefined("a",:data)
+    a = UndefField()
+    @assert !isdefined(a, :field)
+    @assert_fails isdefined(a, :foo)
+
+    @assert_fails isdefined(2)
+    @assert_fails isdefined(2, :a)
+    @assert_fails isdefined("a", 2)
+end
+
 # dispatch
 begin
     local foo, bar, baz
@@ -396,4 +423,17 @@ begin
         end
     end
     @assert g() == 2
+end
+
+# issue #1442
+type S1442{T}
+end
+
+begin
+    local f1442
+    f1442(::CompositeKind) = 1
+    f1442{T}(::Type{S1442{T}}) = 2
+
+    @assert f1442(S1442{Int}) == 2
+    @assert f1442(CompositeKind) == 1
 end

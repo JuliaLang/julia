@@ -3,7 +3,7 @@
 	url = git://github.com/JuliaLang/libuv.git
 [submodule "deps/openlibm"]
 	path = deps/openlibm
-	url = http://github.com/JuliaLang/openlibm.git
+	url = git://github.com/JuliaLang/openlibm.git
 [submodule "deps/nginx"]
 	path = deps/nginx
-	url = https://github.com/git-mirror/nginx
+	url = git://github.com/git-mirror/nginx

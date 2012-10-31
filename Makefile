@@ -4,12 +4,13 @@ include $(JULIAHOME)/Make.inc
 all: default
 default: release
 
-DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia
+DIRS = $(BUILD)/bin $(BUILD)/etc $(BUILD)/lib/julia $(BUILD)/share/julia
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
-$(foreach link,extras base ui,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
+$(foreach link,extras base ui test,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
+$(foreach link,doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
-debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui
+debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui $(BUILD)/lib/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
 	@$(MAKE) -s julia-$@
 	@$(MAKE) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) -s $(BUILD)/lib/julia/sys.ji
 
@@ -31,15 +32,19 @@ $(BUILD)/lib/julia/sys.ji: VERSION base/*.jl $(BUILD)/lib/julia/helpdb.jl
 
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	mkdir -p $(PREFIX)/{sbin,bin,etc,lib/julia,share/julia}
+	@$(MAKE) -sC test/unicode
+	for subdir in "sbin" "bin" "etc" "lib/julia" "share/julia" ; do \
+		mkdir -p $(PREFIX)/$$subdir ; \
+	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,suitesparseconfig,fdm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,openlibm,pcre,random,readline,suitesparse_wrapper,umfpack,z}.$(SHLIB_EXT) $(PREFIX)/lib
+	-cp $(BUILD)/lib/lib{Rmath,amd,amos,arpack,cholmod,colamd,suitesparseconfig,fdm,openlibm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,openblas,pcre,random,readline,suitesparse_wrapper,tk_wrapper,umfpack,z}.$(SHLIB_EXT) $(PREFIX)/lib
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
 	-cp $(BUILD)/etc/* $(PREFIX)/etc
+	-cp -R -L $(BUILD)/share/* $(PREFIX)/share
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)

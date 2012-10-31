@@ -190,6 +190,10 @@ function process_options(args::Array{Any,1})
             # see repl-readline.c
         elseif args[i] == "-f" || args[i] == "--no-startup"
             startup = false
+        elseif args[i] == "-F"
+            # load juliarc now before processing any more options
+            try include(strcat(ENV["HOME"],"/.juliarc.jl")) end
+            startup = false
         elseif args[i][1]!='-'
             # program
             repl = false

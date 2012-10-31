@@ -29,9 +29,11 @@ This is the GitHub repository of Julia source code, including instructions for c
 <a name="Currently-Supported-Platforms"/>
 ## Currently Supported Platforms
 
-- **GNU/Linux:** x86/64 (64-bit); x86 (32-bit).
-- **Darwin/OS X:** x86/64 (64-bit); x86 (32-bit).
-- **FreeBSD:** x86/64 (64-bit); x86 (32-bit).
+- **GNU/Linux**
+- **Darwin/OS X**
+- **FreeBSD**
+
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
@@ -74,8 +76,6 @@ GCC version 4.6 or later is recommended to build julia.
 If the build fails trying to compile OpenBLAS, set OPENBLAS_TARGET_ARCH to BARCELONA on AMD, or NEHALEM on Intel CPUs in Make.inc and build again.
 
 On some Linux distributions you may need to change how the readline library is linked. If you get a build error involving readline, try changing the value of `USE_SYSTEM_READLINE` in `Make.inc` to `1`.
-
-Chinese users should replace line 798 in `deps/Makefile` with "$(WGET) ftp://ftp.gnu.org/gnu/gmp/gmp-$(GMP_VER)/$@" due to IP block .(original line 798 "$(WGET) ftp://ftp.gmplib.org/pub/gmp-$(GMP_VER)/$@")
 
 On Ubuntu systems, you may also need to install the package `libncurses5-dev`.
 
@@ -127,7 +127,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.1.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
-- **[fdlibm]**              — a portable implementation of much of the system-dependent libm math library's functionality.
+- **[OpenLibm]**            — a portable libm library containing elementary math functions.
 - **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
 - **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
@@ -153,7 +153,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [curl]:         http://curl.haxx.se/
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
-[fdlibm]:       http://www.netlib.org/fdlibm/readme
+[OpenLibm]:     https://github.com/JuliaLang/openlibm
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
 [LAPACK]:       http://www.netlib.org/lapack/

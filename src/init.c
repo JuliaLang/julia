@@ -378,10 +378,10 @@ void julia_init(char *imageFile)
 
     if (!imageFile) {
         jl_main_module = jl_new_module(jl_symbol("Main"));
-        jl_main_module->parent = (jl_value_t*)jl_main_module;
+        jl_main_module->parent = jl_main_module;
         jl_module_export(jl_main_module, jl_symbol("Main"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
-        jl_core_module->parent = (jl_value_t*)jl_main_module;
+        jl_core_module->parent = jl_main_module;
         jl_set_const(jl_main_module, jl_symbol("Core"),
                      (jl_value_t*)jl_core_module);
         jl_module_importall(jl_main_module, jl_core_module);

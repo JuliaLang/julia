@@ -226,7 +226,7 @@ end
 
 ## Destructive matrix exponential using algorithm from Higham, 2008,
 ## "Functions of Matrices: Theory and Computation", SIAM
-function expm!{T<:Union(Float32,Float64,Complex64,Complex128)}(A::StridedMatrix{T})
+function expm!{T<:LapackType}(A::StridedMatrix{T})
     m, n = size(A)
     if m != n error("expm!: Matrix A must be square") end
     if m < 2 return exp(A) end
@@ -370,7 +370,7 @@ type CholeskyDense{T<:LapackType} <: Factorization{T}
     function CholeskyDense(A::Matrix{T}, upper::Bool)
         A, info = Lapack.potrf!(upper ? 'U' : 'L' , A)
         if info != 0 error("Matrix A not positive-definite") end
-        new(upper? triu(A) : tril(A), upper)
+        new(upper? triu!(A) : tril!(A), upper)
     end
 end
 
@@ -384,8 +384,8 @@ factors(C::CholeskyDense) = C.LR
 
 function det(C::CholeskyDense)
     ff = C.LR
-    dd = 0.
-    for i in 1:size(ff,1) dd += ff[i,i]^2 end
+    dd = 1.
+    for i in 1:size(ff,1) dd *= abs2(ff[i,i]) end
     dd
 end
     
@@ -397,13 +397,61 @@ end
 
 ## Should these functions check that the matrix is Hermitian?
 chold!{T<:LapackType}(A::Matrix{T}, upper::Bool) = CholeskyDense{T}(A, upper)
+chold!{T<:LapackType}(A::Matrix{T}) = chold!(A, true)
 chold{T<:LapackType}(A::Matrix{T}, upper::Bool) = chold!(copy(A), upper)
 chold{T<:Number}(A::Matrix{T}, upper::Bool) = chold(float64(A), upper)
 chold{T<:Number}(A::Matrix{T}) = chold(A, true)
 
 ## Matlab (and R) compatible
 chol{T<:Number}(A::Matrix{T}) = factors(chold(A))
- 
+
+type CholeskyDensePivoted{T<:LapackType} <: Factorization{T}
+    LR::Matrix{T}
+    upper::Bool
+    piv::Vector{Int32}
+    rank::Int32
+    tol::Real
+    function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
+        A, piv, rank, info = Lapack.pstrf!(upper ? 'U' : 'L' , A, tol)
+        if info != 0 error("Matrix A not positive-definite") end
+        new(upper? triu!(A) : tril!(A), upper, piv, rank, tol)
+    end
+end
+
+size(C::CholeskyDensePivoted) = size(C.LR)
+size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
+
+factors(C::CholeskyDensePivoted) = C.LR, C.piv
+
+\{T<:LapackType}(C::CholeskyDensePivoted{T}, B::StridedVecOrMat{T}) =
+    Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B)[C.piv])[invperm(C.piv)]
+
+rank(C::CholeskyDensePivoted) = C.rank
+
+det(C::CholeskyDensePivoted) = prod(abs2(diag(C.LR)))
+    
+function inv(C::CholeskyDensePivoted)
+    if C.rank < size(C.LR, 1) error("Matrix singular") end
+    Ci, info = Lapack.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    if info != 0 error("Matrix singular") end
+    ipiv = invperm(C.piv)
+    (symmetrize!(Ci, C.upper))[ipiv, ipiv]
+end
+
+## Should these functions check that the matrix is Hermitian?
+cholpd!{T<:LapackType}(A::Matrix{T}, upper::Bool, tol::Real) = CholeskyDensePivoted{T}(A, upper, tol)
+cholpd!{T<:LapackType}(A::Matrix{T}, upper::Bool) = cholpd!(A, upper, -1.)
+cholpd!{T<:LapackType}(A::Matrix{T}, tol::Real) = cholpd!(A, true, tol)
+cholpd!{T<:LapackType}(A::Matrix{T}) = cholpd!(A, true, -1.)
+cholpd{T<:Number}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd(float64(A), upper, tol)
+cholpd{T<:Number}(A::Matrix{T}, upper::Bool) = cholpd(float64(A), upper, -1.)
+cholpd{T<:Number}(A::Matrix{T}, tol::Real) = cholpd(float64(A), true, tol)
+cholpd{T<:Number}(A::Matrix{T}) = cholpd(float64(A), true, -1.)
+cholpd{T<:LapackType}(A::Matrix{T}, upper::Bool, tol::Real) = cholpd!(copy(A), upper, tol)
+cholpd{T<:LapackType}(A::Matrix{T}, upper::Bool) = cholpd!(copy(A), upper, -1.)
+cholpd{T<:LapackType}(A::Matrix{T}, tol::Real) = cholpd!(copy(A), true, tol)
+cholpd{T<:LapackType}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
+
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
     ipiv::Vector{Int32}
@@ -616,18 +664,42 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
         if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
         return Lapack.gesv!(Acopy, X)[3]
     end
-    Lapack.gels!('N', Acopy, X)[2]
+    Lapack.gelsd!(Acopy, X)[1]
 end
 
+(\){T1<:LapackType, T2<:LapackType}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
+    (\)(convert(Array{promote_type(T1,T2)},A), convert(Array{promote_type(T1,T2)},B))
+(\){T1<:LapackType, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(A, convert(Array{T1}, B))
+(\){T1<:Real, T2<:LapackType}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(convert(Array{T2}, A), B)
 (\){T1<:Real, T2<:Real}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(float64(A), float64(B))
+(\){T1<:Number, T2<:Number}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) = (\)(complex128(A), complex128(B))
 
-# TODO: use *gels transpose argument
 (/)(A::StridedVecOrMat, B::StridedVecOrMat) = (B' \ A')'
 
 ##TODO:  Add methods for rank(A::QRP{T}) and adjust the (\) method accordingly
 ##       Add rcond methods for Cholesky, LU, QR and QRP types
 ## Lower priority: Add LQ, QL and RQ factorizations
 
+## Moore-Penrose inverse
+function pinv{T<:LapackType}(A::StridedMatrix{T})
+    u,s,vt      = svd(A, true)
+    sinv        = zeros(T, length(s))
+    index       = s .> eps(real(one(T)))*max(size(A))*max(s)
+    sinv[index] = 1 ./ s[index]
+    vt'diagmm(sinv, u')
+end
+pinv(A::StridedMatrix{Int}) = pinv(float(A))
+pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
+
+## Basis for null space
+function null{T<:LapackType}(A::StridedMatrix{T})
+    m,n = size(A)
+    if m >= n; return zeros(T, n, 0); end;
+    u,s,vt = svd(A)
+    vt[m+1:,:]'
+end
+null(A::StridedMatrix{Int}) = null(float(A))
+null(a::StridedVector) = null(reshape(a, length(a), 1))
 
 #### Specialized matrix types ####
 
@@ -900,11 +972,12 @@ end
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
 lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(Lapack.gttrf!(A.dl,A.d,A.du)...)
-lud{T}(A::Tridiagonal{T}) =
+lud{T}(A::Tridiagonal{T}) = 
     LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det(lu::LUTridiagonal)
+    n = length(lu.d)
     prod(lu.d) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
 
@@ -987,6 +1060,10 @@ function \(W::Woodbury, R::StridedVecOrMat)
     AinvR = W.A\R
     return AinvR - W.A\(W.U*(W.Cp*(W.V*AinvR)))
 end
+function det(W::Woodbury)
+    det(W.A)*det(W.C)/det(W.Cp)
+end
+
 # Allocation-free solver for arbitrary strides (requires that W.A has a
 # non-aliasing "solve" routine, e.g., is Tridiagonal)
 function solve(x::AbstractArray, xrng::Ranges{Int}, W::Woodbury, rhs::AbstractArray, rhsrng::Ranges{Int})

@@ -1,7 +1,7 @@
 :mod:`sound.jl` --- Functions for audio
 =======================================================
 
-.. module::sound.jl
+.. module:: sound.jl
    :synopsis: Functions for acoustic processing
 
 This module contains functions intended to process acoustic samples.
@@ -106,6 +106,7 @@ Here is a quick example that copies an existing file:
 
    The following functions are also defined to make this function
    compatible with MATLAB:
+
 ::
 
     wavwrite(y::Array) = wavwrite(y, @options)

@@ -75,7 +75,7 @@ DLLEXPORT off_t ios_seek(ios_t *s, off_t pos);   // absolute seek
 DLLEXPORT off_t ios_seek_end(ios_t *s);
 DLLEXPORT off_t ios_skip(ios_t *s, off_t offs);  // relative seek
 DLLEXPORT off_t ios_pos(ios_t *s);  // get current position
-DLLEXPORT size_t ios_trunc(ios_t *s, size_t size);
+DLLEXPORT int ios_trunc(ios_t *s, size_t size);
 DLLEXPORT int ios_eof(ios_t *s);
 DLLEXPORT int ios_flush(ios_t *s);
 DLLEXPORT void ios_close(ios_t *s);

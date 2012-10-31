@@ -2452,7 +2452,9 @@ function compose( self::PlotContainer, device::Renderer, region::BoundingBox )
     compose_interior( self, device, int_bbox )
 end
 
-function page_compose( self::PlotContainer, device::Renderer )
+page_compose(self::PlotContainer, device::Renderer) =
+    page_compose(self, device, true)
+function page_compose( self::PlotContainer, device::Renderer, close_after )
     open(device)
     bb = BoundingBox( device.lowerleft, device.upperright )
     device.bbox = copy(bb)
@@ -2461,7 +2463,9 @@ function page_compose( self::PlotContainer, device::Renderer )
     end
     expand( bb, -getattr(self, "page_margin") )
     compose( self, device, bb )
-    close(device)
+    if close_after
+        close(device)
+    end
 end
 
 function x11( self::PlotContainer, args...)
@@ -2997,6 +3001,17 @@ type Image <: ImageComponent
     h
 
     function Image(img, x, y, w, h, args...)
+        self = new(Dict(), img, x, y, w, h)
+        conf_setattr(self)
+        kw_init(self, args...)
+        self
+    end
+
+    function Image(xrange, yrange, img, args...)
+        x = min(xrange...)
+        y = min(yrange...)
+        w = (-)(xrange...)
+        h = (-)(yrange...)
         self = new(Dict(), img, x, y, w, h)
         conf_setattr(self)
         kw_init(self, args...)

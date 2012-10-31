@@ -68,7 +68,7 @@ function function_loc(f::Function, types)
             lsd = m[3]::LambdaStaticData
             ln = lsd.line
             if ln > 0
-                return (string(lsd.file), ln)
+                return (find_in_path(string(lsd.file)), ln)
             end
         end
     end
@@ -199,7 +199,7 @@ end
 
 function find_in_path(fname)
     if fname[1] == '/'
-        return real_path(fname)
+        return realpath(fname)
     end
     for pfx in LOAD_PATH
         if pfx != "" && pfx[end] != '/'
@@ -208,10 +208,10 @@ function find_in_path(fname)
             pfxd = strcat(pfx,fname)
         end
         if is_file_readable(pfxd)
-            return real_path(pfxd)
+            return realpath(pfxd)
         end
     end
-    return real_path(fname)
+    return realpath(fname)
 end
 
 begin
@@ -364,20 +364,21 @@ function apropos(txt::String)
     _jl_init_help()
     n = 0
     r = Regex("\\Q$txt", PCRE.CASELESS)
-    first = true
     for (cat, _) in _jl_help_category_dict
         if ismatch(r, cat)
             println("Category: \"$cat\"")
-            first = false
         end
     end
     for (func, entries) in _jl_help_function_dict
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
-            if !first
-                println()
+            for desc in entries
+                nl = search(desc,'\n')
+                if nl[1] != 0
+                    println(desc[1:(nl[1]-1)])
+                else
+                    println(desc)
+                end
             end
-            _jl_print_help_entries(entries)
-            first = false
             n+=1
         end
     end

@@ -1,3 +1,5 @@
+load("color.jl")
+
 module Cairo
 import Base.*
 
@@ -25,15 +27,14 @@ export CairoSurface, finish, destroy, status,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango, SVGRenderer
 
-load("color.jl")
-
 load("openlib.jl")
+
+import Color.*
 
 try
     global _jl_libcairo = openlib("libcairo")
     global _jl_libpangocairo = openlib("libpangocairo-1.0")
     global _jl_libgobject = openlib("libgobject-2.0")
-    global libcairo_wrapper = dlopen("libcairo_wrapper")
 catch err
     println("Oops, could not load cairo or pango libraries. Are they installed?")
     if OS_NAME == :Darwin
@@ -49,26 +50,33 @@ catch err
     throw(err)
 end
 
+try global libcairo_wrapper = dlopen("libcairo_wrapper") end
+
 type CairoSurface
     ptr::Ptr{Void}
     width::Float64
     height::Float64
+    data::Array{Uint32,2}
 
     function CairoSurface(ptr::Ptr{Void}, w, h)
         self = new(ptr, w, h)
         finalizer(self, destroy)
         self
     end
+
+    function CairoSurface(ptr::Ptr{Void}, w, h, data)
+        self = new(ptr, w, h, data)
+        finalizer(self, destroy)
+        self
+    end
 end
 
-function finish(surface::CairoSurface)
-    ccall(dlsym(_jl_libcairo,:cairo_surface_finish),
-        Void, (Ptr{Void},), surface.ptr)
-end
-
-function destroy(surface::CairoSurface)
-    ccall(dlsym(_jl_libcairo,:cairo_surface_destroy),
-        Void, (Ptr{Void},), surface.ptr)
+for name in ("destroy","finish","flush","mark_dirty")
+    @eval begin
+        $(symbol(name))(surface::CairoSurface) =
+            ccall(dlsym(_jl_libcairo,$(strcat("cairo_surface_",name))),
+                Void, (Ptr{Void},), surface.ptr)
+    end
 end
 
 function status(surface::CairoSurface)
@@ -96,6 +104,19 @@ function CairoARGBSurface(w::Integer, h::Integer)
         Ptr{Void}, (Int32,Int32,Int32), CAIRO_FORMAT_ARGB32, w, h)
     CairoSurface(ptr, w, h)
 end
+
+function CairoImageSurface(img::Array{Uint32,2}, format::Integer)
+    data = img'
+    w,h = size(data)
+    stride = format_stride_for_width(format, w)
+    @assert stride == 4w
+    ptr = ccall(dlsym(_jl_libcairo,:cairo_image_surface_create_for_data),
+        Ptr{Void}, (Ptr{Void},Int32,Int32,Int32,Int32),
+        data, format, w, h, stride)
+    CairoSurface(ptr, w, h, data)
+end
+CairoARGBSurface(img) = CairoImageSurface(img, CAIRO_FORMAT_ARGB32)
+CairoRGBSurface(img) = CairoImageSurface(img, CAIRO_FORMAT_RGB24)
 
 function CairoPDFSurface(filename::String, w_pts::Real, h_pts::Real)
     ptr = ccall(dlsym(_jl_libcairo,:cairo_pdf_surface_create), Ptr{Void},
@@ -145,6 +166,11 @@ function surface_create_similar(s::CairoSurface, w, h)
                 (Ptr{Void}, Int32, Int32, Int32),
                 s.ptr, CAIRO_CONTENT_COLOR_ALPHA, w, h)
     CairoSurface(ptr, w, h)
+end
+
+function format_stride_for_width(format::Integer, width::Integer)
+    ccall(dlsym(_jl_libcairo,:cairo_format_stride_for_width), Int32,
+        (Int32,Int32), format, width)
 end
 
 # -----------------------------------------------------------------------------
@@ -665,6 +691,9 @@ function image(r::CairoRenderer, s::CairoSurface, x, y, w, h)
     fill(r.ctx)
     restore(r.ctx)
 end
+
+image(r::CairoRenderer, img::Array{Uint32,2}, x, y, w, h) =
+    image(r, CairoRGBSurface(img), x, y, w, h)
 
 function polygon( self::CairoRenderer, points::Vector )
     move(self, points[1])
