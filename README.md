@@ -33,7 +33,7 @@ This is the GitHub repository of Julia source code, including instructions for c
 - **Darwin/OS X**
 - **FreeBSD**
 
-All three systems supported with both x86/64 (64-bit) and x86 (32-bit) architectures.
+All systems are supported with both x86/64 (64-bit) and x86 (32-bit) architectures. [Julia has been ported to Windows](https://github.com/loladiro/julia) as well, and Windows support will be merged into the julia mainline once it stabilizes.
 
 <a name="Source-Download-Compilation"/>
 ## Source Download & Compilation
