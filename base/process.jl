@@ -208,8 +208,8 @@ type Cmd
         end
         this = new(exec,
                    "",
-                   Dict{FileDes,PipeEnd}(),
-                   Dict{FileDes,FileSink}(),
+                   (FileDes=>PipeEnd)[],
+                   (FileDes=>FileSink)[],
                    FileDes[],
                    Set{Cmd}(),
                    0,

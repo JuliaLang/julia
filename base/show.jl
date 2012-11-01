@@ -192,8 +192,8 @@ show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
 const _expr_infix = Set(:(:), :(<:), :(->), :(=>), symbol("::"))
-const _expr_calls  = {:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')}
-const _expr_parens = {:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')}
+const _expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
+const _expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')]
 
 function show_unquoted(io::IO, ex::Expr, indent::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)

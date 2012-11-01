@@ -6,7 +6,7 @@ type Trie{T}
 
     function Trie()
         self = new()
-        self.children = Dict{Char,Trie{T}}()
+        self.children = (Char=>Trie{T})[]
         self.is_key = false
         self
     end
