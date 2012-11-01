@@ -117,6 +117,10 @@ import Base.RNG.*
 include("sort.jl")
 include("combinatorics.jl")
 
+# Sparse matrices
+include("sparse.jl")
+import Base.Sparse.*
+
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
 include("mmap.jl")

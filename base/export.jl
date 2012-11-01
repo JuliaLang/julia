@@ -956,6 +956,17 @@ export
     rfftn,
     xcorr,
 
+# sparse
+    SparseMatrixCSC, 
+    issparse, 
+    full, 
+    sparse, 
+    sprand, 
+    sprandn, 
+    spones, 
+    spzeros, 
+    speye,
+
 # iteration
     start,
     done,
