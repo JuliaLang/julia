@@ -704,7 +704,13 @@ Mathematical Functions
 
    Unary minus
 
-``+`` ``-`` ``*`` ``.*`` ``/`` ``./`` ``\`` ``.\`` ``^`` ``.^``
+.. function:: + - * / \  ^
+
+   The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
+
+.. function:: .* ./ .\ .^
+
+   The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
 .. function:: div
 
@@ -714,15 +720,25 @@ Mathematical Functions
 
    Integer floor division
 
-``mod`` ``%``
+.. function:: mod 
+
+   Modulus after division
+
+.. function:: rem %
+
+   Remainder after division
 
 .. function:: //
 
    Rational division
 
-``<<`` ``>>`` ``>>>``
+.. function:: << >>
 
-``==`` ``!=`` ``<`` ``<=`` ``>`` ``>=``
+   Left and ight shift operators
+
+.. function:: == != < <= > >=
+
+   Comparison operators to test equals, not equals, less than, less than or equals, greater than, and greater than or equals
 
 .. function:: !
 
@@ -744,17 +760,162 @@ Mathematical Functions
 
    Bitwise exclusive or
 
-``sin`` ``cos`` ``tan`` ``sinh`` ``cosh`` ``tanh`` ``asin`` ``acos`` ``atan`` ``atan2`` ``sec`` ``csc`` ``cot`` ``asec`` ``acsc`` ``acot`` ``sech`` ``csch`` ``coth`` ``acosh`` ``asinh`` ``atanh`` ``asech`` ``acsch`` ``acoth`` ``sinc`` ``cosc`` ``hypot`` ``log`` ``log2`` ``log10``
+.. function:: sin(x)
+
+   Compute sine of ``x``
+
+.. function:: cos(x)
+
+   Compute cosine of ``x``
+
+.. function:: tan(x)
+
+   Compute tangent of ``x``
+
+.. function:: sinh(x)
+
+   Compute hyperbolic sine of ``x`` specified in radians
+
+.. function:: cosh(x)
+
+   Compute hyperbolic cosine of ``x`` specified in radians
+
+.. function:: tanh(x)
+
+   Compute hyperbolic tangent of ``x`` specified in radians
+
+.. function:: asin(x)
+
+   Compute the inverse sine of ``x`` specified in radians
+
+.. function:: acos(x)
+
+   Compute the inverse cosine of ``x`` specified in radians
+
+.. function:: atan(x)
+
+   Compute the inverse tangent of ``x`` specified in radians
+
+.. function:: atan2(x, y)
+
+   Compute the inverse tangent of ``y/x``, using the signs of both ``x`` and ``y`` to determine the quadrant of the return value.
+
+.. function:: sec(x)
+
+   Compute the secant of ``x`` specified in radians
+
+.. function:: csc(x)
+
+   Compute the cosecant of ``x`` specified in radians
+
+.. function:: cot(x)
+
+   Compute the cotangent of ``x`` specified in radians
+
+.. function:: asec(x)
+
+   Compute the inverse secant of ``x`` specified in radians
+
+.. function:: acsc(x)
+
+   Compute the inverse cosecant of ``x`` specified in radians
+
+.. function:: acot(x)
+
+   Compute the inverse cotangent of ``x`` specified in radians
+
+.. function:: sech(x)
+
+   Compute the hyperbolic secant of ``x`` specified in radians
+
+.. function:: csch(x)
+
+   Compute the hyperbolic cosecant of ``x`` specified in radians
+
+.. function:: coth(x)
+
+   Compute the hyperbolic cotangent of ``x`` specified in radians
+
+.. function:: asinh(x)
+
+   Compute the inverse hyperbolic sine of ``x`` specified in radians
+
+.. function:: acosh(x)
+
+   Compute the inverse hyperbolic cosine of ``x`` specified in radians
+
+.. function:: atanh(x)
+
+   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+
+.. function:: asech(x)
+
+   Compute the inverse hyperbolic secant of ``x`` specified in radians
+
+.. function:: acsch(x)
+
+   Compute the inverse hyperbolic cosecant of ``x`` specified in radians
+
+.. function:: acoth(x)
+
+   Compute the inverse hyperbolic cotangent of ``x`` specified in radians
+
+.. function:: sinc(x)
+
+   Compute :math:`sin(\pi x) / x`
+
+.. function:: cosc(x)
+
+   Compute :math:`cos(\pi x) / x`
+
+.. function:: hypot(x)
+
+   Compute the :math:`\sqrt{(x^2+y^2)}` without undue overflow or underflow
+
+.. function:: log(x)
+   
+   Compute the natural logarithm of ``x``
+
+.. function:: log2(x)
+
+   Compute the natural logarithm of ``x`` to base 2
+
+.. function:: log10(x)
+
+   Compute the natural logarithm of ``x`` to base 10
 
 .. function:: log1p(x)
 
    Accurate natural logarithm of ``1+x``
 
-``logb`` ``ilogb`` ``frexp`` ``significand`` ``exp``
+.. function:: logb(x)
+
+   Return the exponent of x, represented as a floating-point number
+
+.. function:: ilogb(x) 
+
+   Return the exponent of x, represented as a signed integer value
+
+.. function:: frexp(val, exp)
+
+   Return a number ``x`` such that it has a magnitude in the interval ``[1/2, 1)`` or 0,
+   and val = :math:`x \times 2^{exp}`.
+
+.. function:: exp(x)
+
+   Compute :math:`e^x`
+
+.. function:: exp2(x)
+
+   Compute :math:`2^x`
+
+.. function:: ldexp(x, n)
+
+   Compute :math:`x \times 2^n`
 
 .. function:: expm1(x)
 
-   Accurately compute ``exp(x)-1``
+   Accurately compute :math:`e^x-1`
 
 .. function:: round(x[, digits[, base]]) -> FloatingPoint
 
@@ -792,13 +953,73 @@ Mathematical Functions
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``. 
 
-``exp2`` ``ldexp`` ``min`` ``max`` ``clamp`` ``abs``
+.. function:: min(x, y)
+
+   Return the minimum of ``x`` and ``y``
+
+.. function:: max(x, y)
+
+   Return the maximum of ``x`` and ``y``
+
+.. function:: clamp(x, lo, hi)
+
+   Return x if ``lo <= x <= y``. If ``x < lo``, return ``lo``. If ``x > hi``, return ``hi``.
+
+.. function:: abs(x)
+
+   Absolute value of ``x``
 
 .. function:: abs2(x)
 
    Squared absolute value of ``x``
 
-``copysign`` ``sign`` ``signbit`` ``sqrt`` ``cbrt`` ``erf`` ``erfc`` ``gamma`` ``lgamma`` ``lfact`` ``real`` ``imag`` ``conj`` ``angle`` ``cis(theta)``
+.. function:: copysign(x, y)
+
+   Return ``x`` such that it has the same sign as ``y``
+
+.. function:: sign(x)
+
+   Return ``+1`` if ``x`` is positive, ``0`` if ``x == 0``, and ``-1`` if ``x`` is negative.
+
+.. function:: signbit(x)
+
+   Returns non-zero if the value of the sign of ``x`` is negative, otherwise ``0``.
+
+.. function:: sqrt(x)
+   
+   Return :math:`\sqrt{x}`
+
+.. function:: cbrt(x)
+
+   Return :math:`x^{1/3}`
+
+.. function:: erf(x)
+
+   Compute the error function of ``x``
+
+.. function:: erfc(x)
+
+   Compute the complementary error function of ``x``
+
+.. function:: real(z)
+
+   Return the real part of the complex number ``z``
+
+.. function:: imag(z)
+
+   Return the imaginary part of the complex number ``z``
+
+.. function:: conj(z)
+
+   Compute the complex conjugate of a complex number ``z``
+
+.. function:: angle(z)
+
+   Compute the phase angle of a complex number ``z``   
+
+.. function:: cis(z)
+
+   Return ``cos(z) + i*sin(z)`` if z is real. Return ``(cos(real(z)) + i*sin(real(z)))/exp(imag(z))`` if ``z`` is complex
 
 .. function:: binomial(n,k)
 
@@ -843,6 +1064,85 @@ Mathematical Functions
 .. function:: powermod(x, p, m)
 
    Compute ``mod(x^p, m)``
+
+.. function:: gamma(x)
+.. function:: lgamma(x)
+.. function:: lfact(x)
+
+.. function:: airy(x)
+              airyai(x)
+
+   Airy function :math:`\operatorname{Ai}(x)`.
+
+.. function:: airyprime(x)
+              airyaiprime(x)
+
+   Airy function derivative :math:`\operatorname{Ai}'(x)`.
+
+.. function:: airybi(x)
+
+   Airy function :math:`\operatorname{Bi}(x)`.
+
+.. function:: airybiprime(x)
+
+   Airy function derivative :math:`\operatorname{Bi}'(x)`.
+
+.. function:: besselj0(x)
+
+   Bessel function of the first kind of order 0, :math:`J_0(x)`.
+
+.. function:: besselj1(x)
+
+   Bessel function of the first kind of order 1, :math:`J_1(x)`.
+
+.. function:: besselj(nu, x)
+
+   Bessel function of the first kind of order ``nu``, :math:`J_\nu(x)`.
+
+.. function:: bessely0(x)
+
+   Bessel function of the second kind of order 0, :math:`Y_0(x)`.
+
+.. function:: bessely1(x)
+
+   Bessel function of the second kind of order 1, :math:`Y_1(x)`.
+
+.. function:: bessely(nu, x)
+
+   Bessel function of the second kind of order ``nu``, :math:`Y_\nu(x)`.
+
+.. function:: hankelh1(nu, x)
+
+   Bessel function of the third kind of order ``nu``, :math:`H^{(1)}_\nu(x)`.
+
+.. function:: hankelh2(nu, x)
+
+   Bessel function of the third kind of order ``nu``, :math:`H^{(2)}_\nu(x)`.
+
+.. function:: besseli(nu, x)
+
+   Modified Bessel function of the first kind of order ``nu``, :math:`I_\nu(x)`.
+
+.. function:: besselk(nu, x)
+
+   Modified Bessel function of the second kind of order ``nu``, :math:`K_\nu(x)`.
+
+.. function:: beta(x, y)
+
+   Euler integral of the first kind :math:`\operatorname{B}(x,y) = \Gamma(x)\Gamma(y)/\Gamma(x+y)`.
+
+.. function:: lbeta(x, y)
+
+   Natural logarithm of the beta function :math:`\log(\operatorname{B}(x,y))`.
+
+.. function:: eta(x)
+
+   Dirichlet eta function :math:`\eta(s) = \sum^\infty_{n=1}(-)^{n-1}/n^{s}`.
+
+.. function:: zeta(x)
+
+   Riemann zeta function :math:`\zeta(s)`.
+
 
 Data Formats
 ------------

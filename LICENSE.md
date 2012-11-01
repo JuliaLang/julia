@@ -45,6 +45,7 @@ is licensed under the GNU General Public License Version 2:
 
 External libraries, if used, include their own licenses:
 
+- [AMOS](http://www.netlib.org/slatec/guide)
 - [ARPACK](http://www.caam.rice.edu/software/ARPACK/RiceBSD.txt#LICENSE)
 - [D3](https://github.com/mbostock/d3/raw/master/LICENSE)
 - [DOUBLE-CONVERSION](https://code.google.com/p/double-conversion/)

@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm random rmath double-conversion amos glpk
+STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -272,7 +272,7 @@ UV_OBJ_SOURCE = libuv/uv.a
 libuv/Makefile:
 	(cd .. && git submodule init && git submodule update)
 $(UV_OBJ_SOURCE): libuv/Makefile
-	$(MAKE) -C libuv $(UV_CFLAGS)
+	$(MAKE) -C libuv $(UV_CFLAGS) CC="$(CC)"
 $(UV_OBJ_TARGET): $(UV_OBJ_SOURCE)
 	mkdir -p $(USR)/include
 	cp $(UV_OBJ_SOURCE) $(USRLIB)/
@@ -361,7 +361,7 @@ OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 openlibm/Makefile:
 	(cd .. && git submodule update --init)
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
+	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) CC="$(CC)" FC="$(FC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE) | $(USRLIB)
 	cp $< $@
 install-openlibm: $(OPENLIBM_OBJ_TARGET)
@@ -390,27 +390,6 @@ clean-rmath:
 	cd Rmath/src && $(MAKE) clean
 	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
-
-## amos ##
-
-AMOS_OBJ_TARGET = $(USRLIB)/libamos.$(SHLIB_EXT)
-AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
-
-compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET)
-
-$(AMOS_OBJ_SOURCE): amos/*.f
-	cd amos && \
-	$(MAKE) && \
-	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
-$(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
-	cp $< $@
-	$(INSTALL_NAME_CMD)libamos.dylib $@
-
-clean-amos:
-	cd amos && $(MAKE) clean
-	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
-distclean-amos: clean-amos
 
 ## LIBRANDOM ##
 
