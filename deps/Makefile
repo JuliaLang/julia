@@ -391,30 +391,6 @@ clean-rmath:
 	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
 
-<<<<<<< HEAD
-=======
-## amos ##
-
-AMOS_OBJ_TARGET = $(USRLIB)/libamos.$(SHLIB_EXT)
-AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
-
-compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET)
-
-$(AMOS_OBJ_SOURCE): amos/*.f
-	cd amos && \
-	$(MAKE) FC="$(FC)" && \
-	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
-$(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
-	cp $< $@
-	$(INSTALL_NAME_CMD)libamos.dylib $@
-
-clean-amos:
-	cd amos && $(MAKE) clean
-	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
-distclean-amos: clean-amos
-
->>>>>>> master
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
