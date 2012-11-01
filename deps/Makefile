@@ -12,7 +12,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm random rmath double-conversion amos glpk
+STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -391,6 +391,8 @@ clean-rmath:
 	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
 
+<<<<<<< HEAD
+=======
 ## amos ##
 
 AMOS_OBJ_TARGET = $(USRLIB)/libamos.$(SHLIB_EXT)
@@ -412,6 +414,7 @@ clean-amos:
 	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
 distclean-amos: clean-amos
 
+>>>>>>> master
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
