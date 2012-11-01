@@ -170,7 +170,7 @@ function resolve(reqs::Vector{VersionSet})
           zeros(Int,length(deps)) ]
 
     x = Main.linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
-    h = Dict{String,ASCIIString}()
+    h = (String=>ASCIIString)[]
     for v in vers[x .> 0.5]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")
     end

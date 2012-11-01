@@ -516,11 +516,11 @@ function _kw_func_relative_width( context::PlotContext, key, value )
 end
 
 function push_style( context::PlotContext, style )
-    _kw_func = {
+    _kw_func = [
         "fontsize" => _kw_func_relative_fontsize,
         "linewidth" => _kw_func_relative_width,
         "symbolsize" => _kw_func_relative_size,
-    }
+    ]
     save_state(context.draw)
     if !is(style,nothing)
         for (key, value) in style
@@ -568,10 +568,10 @@ type LineObject <: RenderObject
     end
 end
 
-_kw_rename(::LineObject) = {
+_kw_rename(::LineObject) = [
     "width"     => "linewidth",
     "type"      => "linetype",
-}
+]
 
 function boundingbox( self::LineObject, context )
     bb = BoundingBox( self.p, self.q )
@@ -594,22 +594,22 @@ type LabelsObject <: RenderObject
     end
 end
 
-kw_defaults(::LabelsObject) = {
+kw_defaults(::LabelsObject) = [
     "textangle"     => 0,
     "texthalign"    => "center",
     "textvalign"    => "center",
-}
+]
 
-_kw_rename(::LabelsObject) = {
+_kw_rename(::LabelsObject) = [
     "face"      => "fontface",
     "size"      => "fontsize",
     "angle"     => "textangle",
     "halign"    => "texthalign",
     "valign"    => "textvalign",
-}
+]
 
-__halign_offset = { "right"=>(-1,0), "center"=>(-.5,.5), "left"=>(0,1) }
-__valign_offset = { "top"=>(-1,0), "center"=>(-.5,.5), "bottom"=>(0,1) }
+__halign_offset = [ "right"=>(-1,0), "center"=>(-.5,.5), "left"=>(0,1) ]
+__valign_offset = [ "top"=>(-1,0), "center"=>(-.5,.5), "bottom"=>(0,1) ]
 
 function boundingbox( self::LabelsObject, context )
     bb = BoundingBox()
@@ -685,10 +685,10 @@ type SymbolObject <: RenderObject
     end
 end
 
-_kw_rename(::SymbolObject) = {
+_kw_rename(::SymbolObject) = [
     "type" => "symboltype",
     "size" => "symbolsize",
-}
+]
 
 function boundingbox( self::SymbolObject, context )
     push_style(context, self.style)
@@ -719,10 +719,10 @@ type SymbolsObject <: RenderObject
     end
 end
 
-_kw_rename(::SymbolsObject) = {
+_kw_rename(::SymbolsObject) = [
     "type" => "symboltype",
     "size" => "symbolsize",
-}
+]
 
 function boundingbox( self::SymbolsObject, context::PlotContext )
     xmin = min(self.x)
@@ -751,19 +751,19 @@ type TextObject <: RenderObject
     end
 end
 
-kw_defaults(::TextObject) = {
+kw_defaults(::TextObject) = [
     "textangle"     => 0,
     "texthalign"    => "center",
     "textvalign"    => "center",
-}
+]
 
-_kw_rename(::TextObject) = {
+_kw_rename(::TextObject) = [
     "face"      => "fontface",
     "size"      => "fontsize",
     "angle"     => "textangle",
     "halign"    => "texthalign",
     "valign"    => "textvalign",
-}
+]
 
 function boundingbox( self::TextObject, context::PlotContext )
     push_style(context, self.style)
@@ -800,8 +800,8 @@ function LineTextObject( p, q, str, offset, args... )
     direction = pt_rot( direction, pi/2 )
     pos = pt_add( midpoint, pt_mul(offset, direction) )
 
-    kw = { "textangle" => angle * 180./pi,
-           "texthalign" => "center" }
+    kw = [ "textangle" => angle * 180./pi,
+           "texthalign" => "center" ]
     if offset > 0
         kw["textvalign"] = "bottom"
     else
@@ -824,10 +824,10 @@ type PathObject <: RenderObject
     end
 end
 
-_kw_rename(::PathObject) = {
+_kw_rename(::PathObject) = [
     "width"     => "linewidth",
     "type"      => "linetype",
-}
+]
 
 function boundingbox( self::PathObject, context )
     xmin = min(self.x)
@@ -853,10 +853,10 @@ type PolygonObject <: RenderObject
     end
 end
 
-_kw_rename(::PolygonObject) = {
+_kw_rename(::PolygonObject) = [
     "width"     => "linewidth",
     "type"      => "linetype",
-}
+]
 
 function boundingbox( self::PolygonObject, context )
     return BoundingBox( self.points... )
@@ -927,13 +927,13 @@ type Legend <: PlotComponent
     end
 end
 
-_kw_rename(::Legend) = {
+_kw_rename(::Legend) = [
     "face"      => "fontface",
     "size"      => "fontsize",
     "angle"     => "textangle",
     "halign"    => "texthalign",
     "valign"    => "textvalign",
-}
+]
 
 function make( self::Legend, context::PlotContext )
     key_pos = project(context.plot_geom, self.x, self.y )
@@ -969,11 +969,11 @@ end
 
 abstract ErrorBar <: PlotComponent
 
-_kw_rename(::ErrorBar) = {
+_kw_rename(::ErrorBar) = [
     "color" => "linecolor",
     "width" => "linewidth",
     "type" => "linetype",
-}
+]
 
 type ErrorBarsX <: ErrorBar
     attr::PlotAttributes
@@ -1493,12 +1493,12 @@ end
 
 # defaults
 
-_attr_map(::HalfAxis) = {
+_attr_map(::HalfAxis) = [
     "labeloffset"       => "label_offset",
     "major_ticklabels"  => "ticklabels",
     "major_ticks"       => "ticks",
     "minor_ticks"       => "subticks",
-}
+]
 
 function _ticks( self::HalfAxis, context )
     logidx = _log(self, context) ? 2 : 1
@@ -1553,7 +1553,7 @@ function _make_ticklabels( self::HalfAxis, context, pos, labels )
 
     halign, valign = _align(self)
 
-    style = Dict{String,Any}()
+    style = (String=>Any)[]
     style["texthalign"] = halign
     style["textvalign"] = valign
     for (k,v) in getattr(self, "ticklabels_style")
@@ -1820,7 +1820,7 @@ type FramedPlot <: PlotContainer
             _Alias( x1, x2 ),
             _Alias( y1, y2 ),
         )
-        setattr(self.frame, "grid_style", {"linetype" => "dot"})
+        setattr(self.frame, "grid_style", ["linetype" => "dot"])
         setattr(self.frame, "tickdir", -1)
         setattr(self.frame1, "draw_grid", false)
         iniattr(self, args...)
@@ -1828,7 +1828,7 @@ type FramedPlot <: PlotContainer
     end
 end
 
-_attr_map(fp::FramedPlot) = {
+_attr_map(fp::FramedPlot) = [
     "xlabel"    => (fp.x1, "label"),
     "ylabel"    => (fp.y1, "label"),
     "xlog"      => (fp.x1, "log"),
@@ -1837,7 +1837,7 @@ _attr_map(fp::FramedPlot) = {
     "yrange"    => (fp.y1, "range"),
     "xtitle"    => (fp.x1, "label"),
     "ytitle"    => (fp.y1, "label"),
-}
+]
 
 function getattr( self::FramedPlot, name )
     am = _attr_map(self)
@@ -2542,11 +2542,11 @@ end
 
 abstract LineComponent <: PlotComponent
 
-_kw_rename(::LineComponent) = {
+_kw_rename(::LineComponent) = [
     "color" => "linecolor",
     "width" => "linewidth",
     "type" => "linetype",
-}
+]
 
 function make_key( self::LineComponent, bbox::BoundingBox )
     xr = xrange(bbox)
@@ -2759,10 +2759,10 @@ type BoxLabel <: PlotComponent
     end
 end
 
-_kw_rename(::BoxLabel) = {
+_kw_rename(::BoxLabel) = [
     "face" => "fontface",
     "size" => "fontsize",
-}
+]
 
 function make( self::BoxLabel, context )
     bb = boundingbox( self.obj, context )
@@ -2790,13 +2790,13 @@ end
 
 abstract LabelComponent <: PlotComponent
 
-_kw_rename(::LabelComponent) = {
+_kw_rename(::LabelComponent) = [
     "face"      => "fontface",
     "size"      => "fontsize",
     "angle"     => "textangle",
     "halign"    => "texthalign",
     "valign"    => "textvalign",
-}
+]
 
 #function limits( self::LabelComponent )
 #    return BoundingBox()
@@ -2859,13 +2859,13 @@ end
 #    end
 #end
 #
-#_kw_rename(::Labels) = {
+#_kw_rename(::Labels) = [
 #    "face"      => "fontface",
 #    "size"      => "fontsize",
 #    "angle"     => "textangle",
 #    "halign"    => "texthalign",
 #    "valign"    => "textvalign",
-#}
+#]
 #
 #function limits( self::Labels )
 #    p = min(self.x), min(self.y)
@@ -2889,10 +2889,10 @@ function make_key( self::FillComponent, bbox::BoundingBox )
     return BoxObject( p, q, getattr(self,"style") )
 end
 
-kw_defaults(::FillComponent) = {
+kw_defaults(::FillComponent) = [
     "color" => config_value("FillComponent","fillcolor"),
     "filltype" => config_value("FillComponent","filltype"),
-}
+]
 
 type FillAbove <: FillComponent
     attr::PlotAttributes
@@ -3036,10 +3036,10 @@ end
 
 abstract SymbolDataComponent <: PlotComponent
 
-_kw_rename(::SymbolDataComponent) = {
+_kw_rename(::SymbolDataComponent) = [
     "type" => "symboltype",
     "size" => "symbolsize",
-}
+]
 
 function make_key( self::SymbolDataComponent, bbox::BoundingBox )
     pos = center(bbox)
@@ -3061,10 +3061,10 @@ type Points <: SymbolDataComponent
     end
 end
 
-kw_defaults(::SymbolDataComponent) = {
+kw_defaults(::SymbolDataComponent) = [
     "symboltype" => config_value("Points","symboltype"),
     "symbolsize" => config_value("Points","symbolsize"),
-}
+]
 
 function limits( self::SymbolDataComponent )
     p = min(self.x), min(self.y)
@@ -3098,10 +3098,10 @@ type ColoredPoints <: SymbolDataComponent
     end
 end
 
-kw_defaults(::ColoredPoints) = {
+kw_defaults(::ColoredPoints) = [
     "symboltype" => config_value("Points","symboltype"),
     "symbolsize" => config_value("Points","symbolsize"),
-}
+]
 
 function limits( self::ColoredPoints )
     p = min(self.x), min(self.y)
@@ -3195,7 +3195,7 @@ const conf_setattr = iniattr
 # HasStyle ---------------------------------------------------------------
 
 kw_defaults(x) = Dict()
-_kw_rename(x) = Dict{String,String}()
+_kw_rename(x) = (String=>String)[]
 
 function kw_init( self::HasStyle, args...)
     # jeez, what a mess...

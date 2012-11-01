@@ -10,7 +10,7 @@ macro memoize(ex)
     f_cache = esc(symbol(string(f,"_cache")))
     quote
         $(esc(ex))
-        const ($f_cache) = Dict{Tuple,Any}()
+        const ($f_cache) = (Tuple=>Any)[]
         $(esc(f))(args...) = has(($f_cache),args) ?
             ($f_cache)[args] : (($f_cache)[args] = $(esc(u))(args...))
     end
