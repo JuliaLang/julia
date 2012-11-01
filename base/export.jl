@@ -503,7 +503,6 @@ export
     tanh,
     trailing_ones,
     trailing_zeros,
-    trigamma,
     trunc,
     uint,
     uint128,

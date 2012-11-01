@@ -1,8 +1,5 @@
 libopenlibm = dlopen("libopenlibm")
 
-# Need to import Rmath to access psigamma family of functions.
-libRmath = dlopen("libRmath")
-
 module Math
 
 import Base.*
@@ -20,7 +17,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime,
        besselj0, besselj1, besselj, bessely0, bessely1, bessely,
        hankelh1, hankelh2, besseli, besselk, besselh,
-       beta, lbeta, eta, zeta, psigamma, digamma, trigamma
+       beta, lbeta, eta, zeta, psigamma, digamma
 
 # non-type specific math functions
 
@@ -437,22 +434,41 @@ end
 
 gamma(z::Complex) = exp(lgamma(z))
 
-# psigamma post-processes floats into ints for deriv.
-# We could make this more obvious by using type restrictions.
-function psigamma(x::Float64, deriv::Float64)
-  ccall(dlsym(Base.libRmath,  :psigamma),
-        Float64,
-        (Float64, Float64),
-        x, deriv)
+# Use Algorithm AS 103 by J. M. Bernardo
+# May be slightly less precise numerically than implementation in Netlib,
+# but Bernardo's algorithm is much simpler
+function psigamma(x::Float64)
+  if x <= 0.0
+    error("x must be positive")
+  end
+
+  s = 1.0e-5
+  c = 8.5
+  s3 = 8.333333333e-2
+  s4 = 8.333333333e-3
+  s5 = 3.968253968e-3
+  d1 = -0.5772156649
+
+  if x <= s
+    return d1 - 1.0 / x
+  end
+
+  results = 0.0
+  y = x
+
+  while y < c
+    results -= 1.0 / y
+    y += 1.0
+  end
+
+  r = 1.0 / y
+  results += log(y) - 0.5 * r
+  r = r^2
+  results -= r * (s3 - r * (s4 - r * s5))
+  return results
 end
 
-function digamma(x::Float64)
-  ccall(dlsym(Base.libRmath,  :digamma), Float64, (Float64, ), x)
-end
-
-function trigamma(x::Float64)
-  ccall(dlsym(Base.libRmath,  :trigamma), Float64, (Float64, ), x)
-end
+const digamma = psigamma
 
 beta(x::Number, w::Number) = exp(lgamma(x)+lgamma(w)-lgamma(x+w))
 lbeta(x::Number, w::Number) = lgamma(x)+lgamma(w)-lgamma(x+w)

@@ -10,7 +10,6 @@ libpcre = dlopen("libpcre")
 libgrisu = dlopen("libgrisu")
 librandom = dlopen("librandom")
 libopenlibm = dlopen("libopenlibm")
-libRmath = dlopen("libRmath")
 @windows_only _jl_advapi32 = dlopen("Advapi32")
 
 # Optional libraries
