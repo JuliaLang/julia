@@ -6,7 +6,7 @@ default all extra unicode gzip::
 
 TESTS = default all extra \
 core numbers strings unicode corelib hashing \
-arrayops linalg fft sparse arpack bitarray \
+arrayops linalg fft arpack bitarray \
 random math functional bigint dists combinatorics statistics \
 glpk linprog sparse bigfloat poly file Rmath remote zlib sound image \
 iterators gzip
