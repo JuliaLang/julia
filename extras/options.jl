@@ -7,6 +7,8 @@ module OptionsMod
 using Base
 # can't get Base.ht_keyindex from dict.jl -- will pull it manually
 
+import Base.convert, Base.copy, Base.show, Base.ref, Base.assign
+
 export Options,
 	CheckNone, CheckWarn, CheckError,
 	add_defaults!, show, ref, assign,

@@ -1485,7 +1485,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         int last_depth = ctx->argDepth;
         Value *name = literal_pointer_val(mn);
         jl_binding_t *bnd = NULL;
-        Value *bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+        Value *bp;
+        if (is_global((jl_sym_t*)mn, ctx)) {
+            bnd = jl_get_binding_for_method_def(ctx->module, (jl_sym_t*)mn);
+            bp = literal_pointer_val(&bnd->value, jl_ppvalue_llvmt);
+        }
+        else {
+            bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+        }
         Value *a1 = emit_expr(args[1], ctx);
         make_gcroot(boxed(a1), ctx);
         Value *a2 = emit_expr(args[2], ctx);

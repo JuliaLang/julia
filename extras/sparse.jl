@@ -3,7 +3,7 @@ import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret
 import Base.reshape, Base.similar, Base.convert, Base.find, Base.findn
 import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*)
 import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
-import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length
+import Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length, Base.findn_nzs
 
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure

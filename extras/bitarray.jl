@@ -13,7 +13,7 @@ import Base.nnz, Base.find, Base.findn, Base.nonzeros
 import Base.areduce, Base.max, Base.min, Base.sum, Base.prod, Base.map_to
 import Base.filter, Base.transpose, Base.ctranspose, Base.permute, Base.hcat
 import Base.vcat, Base.cat, Base.isequal, Base.cumsum, Base.cumprod
-import Base.write, Base.read, Base.msync
+import Base.write, Base.read, Base.msync, Base.findn_nzs
 
 # prelimnary definitions: constants, macros
 # and functions used throughout the code
