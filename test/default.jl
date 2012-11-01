@@ -17,7 +17,7 @@ runtests("bitarray")
 
 # other tests
 runtests("random")
-runtests("special")
+runtests("math")
 runtests("functional")
 runtests("bigint")
 runtests("distributions")
