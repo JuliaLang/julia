@@ -4,7 +4,7 @@
 # Harlan Harris & Timothy E. Holy, with contributions from Stefan
 # Karpinski, Patrick O'Leary, and Jeff Bezanson
 module OptionsMod
-import Base.*
+using Base
 # can't get Base.ht_keyindex from dict.jl -- will pull it manually
 
 export Options,

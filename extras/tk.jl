@@ -13,8 +13,8 @@
 require("cairo.jl")
 
 module Tk
-import Base.*
-import Cairo.*
+using Base
+using Cairo
 
 export Window, Button, TkCanvas, Canvas, pack, place, tcl_eval, TclError,
     cairo_surface_for, width, height, reveal, cairo_context, cairo_surface,

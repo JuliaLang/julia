@@ -1,10 +1,10 @@
 require("options.jl", "textwrap.jl")
 
 module ArgParse
-import Base.*
+using Base
 
-import TextWrap.*
-import OptionsMod.*
+using TextWrap
+using OptionsMod
 
 export
 # types

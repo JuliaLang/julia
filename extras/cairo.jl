@@ -1,7 +1,7 @@
 load("color.jl")
 
 module Cairo
-import Base.*
+using Base
 
 export CairoSurface, finish, destroy, status,
     CAIRO_FORMAT_ARGB32,
@@ -29,7 +29,7 @@ export CairoSurface, finish, destroy, status,
 
 load("openlib.jl")
 
-import Color.*
+using Color
 
 try
     global _jl_libcairo = openlib("libcairo")

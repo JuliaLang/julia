@@ -1,5 +1,8 @@
 ## work with Vector{Uint8} via I/O primitives ##
 
+import Base.read, Base.skip, Base.seek, Base.seek_end, Base.position
+import Base.truncate, Base.eof, Base.close, Base.write
+
 # Stateful string
 type IOString <: IO
     data::Vector{Uint8}

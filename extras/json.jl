@@ -5,7 +5,7 @@
 
 module Json
 
-import Base.*
+using Base
 
 export parse_json
 

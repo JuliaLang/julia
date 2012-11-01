@@ -3,7 +3,7 @@
 # 
 # Example:
 #
-#   import ICU.*
+#   using ICU
 #   uppercase("testingß")  # "TESTINGSS"
 #   set_locale("tr")       # set locale to Turkish
 #   uppercase("testingß")  # "TESTİNGSS"
@@ -16,8 +16,8 @@
 load("utf16.jl")
 
 module ICU
-import Base.*
-import UTF16.*
+using Base
+using UTF16
 
 export foldcase,
        lowercase,

@@ -2,6 +2,10 @@
 
 require("sparse.jl")
 
+import Base.(*), Base.triu, Base.tril, Base.diff, Base.diag, Base.diagm
+import Base.trace, Base.kron, Base.issym, Base.ishermitian, Base.istriu
+import Base.istril, Base.diagmm!, Base.diagmm
+
 ## Matrix multiplication
 
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.

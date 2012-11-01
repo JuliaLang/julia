@@ -2,8 +2,8 @@ load("cairo.jl")
 
 module Winston
 
-import Base.*
-import Cairo.*
+using Base
+using Cairo
 
 export PlotContainer
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,

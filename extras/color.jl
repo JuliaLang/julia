@@ -1,5 +1,5 @@
 module Color
-import Base.*
+using Base
 export hex2rgb, rgb2hex, hsl2rgb, hsv2rgb, name2rgb
 
 # e.g., 0xff0000 -> (1.,0.,0.)

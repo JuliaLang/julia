@@ -113,6 +113,7 @@ _d = {"a"=>0}
 type I1438T
     id
 end
+import Base.hash
 hash(x::I1438T) = x.id
 
 begin

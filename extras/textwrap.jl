@@ -3,8 +3,8 @@
 require("options.jl")
 
 module TextWrap
-import Base.*
-import OptionsMod.*
+using Base
+using OptionsMod
 
 export
     wrap,

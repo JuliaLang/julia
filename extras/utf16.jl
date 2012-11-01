@@ -1,5 +1,7 @@
 module UTF16
-import Base.*
+using Base
+
+import Base.convert, Base.length, Base.next
 
 export UTF16String,
        convert,

@@ -3,7 +3,7 @@
 #
 
 load("winston.jl")
-import Winston.*
+using Winston
 
 function web_show(user_id, p::PlotContainer)
     g = nothing

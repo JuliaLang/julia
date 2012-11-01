@@ -4,8 +4,8 @@ load("winston.jl")
 
 module Plot
 
-import Base.*
-import Winston.*
+using Base
+using Winston
 import Color
 
 export imagesc, plot, semilogx, semilogy, loglog
