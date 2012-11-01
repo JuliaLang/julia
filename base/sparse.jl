@@ -607,31 +607,72 @@ end # macro
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
 @binary_op (.^)
 
-function sum(A::SparseMatrixCSC)
-    if length(A.nzval) == nnz(A)
-        return sum(A.nzval)
+# Reductions
+
+# TODO: Should the results of sparse reductions be sparse?
+function areduce{Tv,Ti}(f::Function, A::SparseMatrixCSC{Tv,Ti}, region::Dimspec, v0)
+    if region == 1
+
+        S = Array(Tv, 1, A.n)
+        for i = 1 : A.n
+            Si = v0
+            ccount = 0
+            for j = A.colptr[i] : A.colptr[i+1]-1
+                Si = f(Si, A.nzval[j])
+                ccount += 1
+            end
+            if ccount != A.m; Si = f(Si, zero(Tv)); end
+            S[i] = Si
+        end
+        return S
+
+    elseif region == 2
+
+        S = fill(v0, A.m, 1)
+        rcounts = zeros(Ti, A.m)
+        for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
+            row = A.rowval[j]
+            S[row] = f(S[row], A.nzval[j])
+            rcounts[row] += 1
+        end
+        for i = 1:A.m
+            if rcounts[i] != A.n; S[i] = f(S[i], zero(Tv)); end
+        end
+        return S
+
+    elseif region == (1,2)
+
+        S = v0
+        for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
+            S = f(S, A.nzval[j])
+        end
+        if nnz(A) != A.m*A.n; S = f(S, zero(Tv)); end
+
+        return [S]
+
     else
-        return sum(sub(A.nzval,1:nnz(A)))
+
+        error("Invalid value for region")
+
     end
 end
 
-function sum{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, dim::Int)
-    if dim == 1
-        S = Array(Tv, 1, A.n)
-        for i = 1 : A.n
-            S[i] = sum(sub(A.nzval,A.colptr[i]:A.colptr[i+1]-1))
-        end
-        return S
-    elseif dim == 2
-        S = zeros(Tv, A.m, 1)
-        for i = 1 : A.n, j = A.colptr[i] : A.colptr[i+1]-1
-            S[A.rowval[j]] += A.nzval[j]
-        end
-        return S
-    else
-        return full(A)
-    end
-end
+max{T}(A::SparseMatrixCSC{T}) = areduce(max,A,(1,2),typemin(T))
+max{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(max,A,region,typemin(T))
+
+min{T}(A::SparseMatrixCSC{T}) = areduce(min,A,(1,2),typemax(T))
+min{T}(A::SparseMatrixCSC{T}, b::(), region::Dimspec) = areduce(min,A,region,typemax(T))
+
+sum{T}(A::SparseMatrixCSC{T}) = areduce(+,A,(1,2),zero(T))
+sum{T}(A::SparseMatrixCSC{T}, region::Dimspec)  = areduce(+,A,region,zero(T))
+
+prod{T}(A::SparseMatrixCSC{T}) = areduce(*,A,(1,2),one(T))
+prod{T}(A::SparseMatrixCSC{T}, region::Dimspec) = areduce(*,A,region,one(T))
+
+#all(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(all,A,region,true)
+#any(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(any,A,region,false)
+#sum(A::SparseMatrixCSC{Bool}, region::Dimspec) = areduce(+,A,region,0,Int)
+#sum(A::SparseMatrixCSC{Bool}) = nnz(A)
 
 ## ref
 ref(A::SparseMatrixCSC, i::Integer) = ref(A, ind2sub(size(A),i))
