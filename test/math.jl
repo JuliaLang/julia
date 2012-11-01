@@ -69,6 +69,16 @@ y33 = bessely(3,3.)
 @assert_approx_eq lgamma(1.4+3.7im) -3.709402533100+2.456809050277im
 @assert_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
 
+# digamma
+euler_mascheroni = 0.5772156649015329
+@assert_approx_eq digamma(0.1) -10.42375494041108
+@assert_approx_eq -digamma(1.0) euler_mascheroni
+@assert_approx_eq digamma(2.0) 0.4227843350984675
+@assert_approx_eq digamma(3.0) 0.9227843350984675
+@assert_approx_eq digamma(4.0) 1.256117668431801
+@assert_approx_eq digamma(5.0) 1.506117668431801
+@assert_approx_eq digamma(10.0) 2.251752589066721
+
 # eta, zeta
 @assert_approx_eq eta(1) log(2)
 @assert_approx_eq eta(2) pi^2/12
