@@ -97,6 +97,10 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
             jl_module_t *imp = (jl_module_t*)m->usings.items[i];
             b = (jl_binding_t*)ptrhash_get(&imp->bindings, var);
             if (b != HT_NOTFOUND && b->exportp) {
+                b = jl_get_binding(imp, var);
+                if (b == NULL || b->owner == NULL)
+                    return NULL;
+                /*
                 while (b->owner != imp) {
                     if (b->owner == NULL) {
                         //b->owner = imp;
@@ -106,6 +110,7 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
                     imp = b->owner;
                     b = jl_get_binding(imp, var);
                 }
+                */
                 /*
                 // only import if the source module has resolved the binding;
                 // otherwise it might just be marked for re-export.
@@ -116,7 +121,7 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
                 // do a full import to prevent the result of this lookup
                 // from changing, for example if this var is assigned to
                 // later.
-                jl_module_import(m, imp, var);
+                jl_module_import(m, b->owner, var);
                 return b;
             }
         }
