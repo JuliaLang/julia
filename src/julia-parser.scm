@@ -107,6 +107,9 @@
     (apply append
 	   (map string->list (map symbol->string operators))))))
 
+(define (dict-literal? l)
+  (and (length= l 3) (eq? (car l) '=>)))
+
 ; --- lexer ---
 
 (define special-char?
@@ -756,8 +759,29 @@
 		  ((|.'| |'|) (take-token s)
 		   (loop (list t ex)))
 		  ((#\{ )   (take-token s)
-		   (loop (list* 'curly ex
-				(map subtype-syntax (parse-arglist s #\} )))))
+		   (if (eqv? (peek-token s) '=>)
+		     ;; parse {=>} as a special case
+		     (begin (take-token s)
+		       (if (eqv? (require-token s) #\})
+			 (begin (take-token s)
+			   (if (not(dict-literal? ex))
+			     (error "invalid dict type specification")
+			     (loop (list* 'typed-dict ex '()))))
+			 (error "invalid identifier name =>")))
+		     (let ((al (parse-ref s #\})))
+		       (if (dict-literal? ex)
+			 (if (and (not(null? al)) (eq? (car al) 'comprehension))
+			    (if (and (not(null? (cdr al)))
+				     (dict-literal? (cadr al)))
+				(loop (list* 'typed-dict-comprehension ex (cdr al)))
+				(error "invalid dict comprehension syntax"))
+			    (if (every dict-literal? al)
+			      (loop (list* 'typed-dict ex al))
+			      (else (error "invalid dict literal"))))
+			 (if (any dict-literal? al)
+			   (error "invalid dict type specification")
+			   (loop (list* 'curly ex
+					(map subtype-syntax al))))))))
 		  ((#\")
 		   (if (and (symbol? ex) (not (operator? ex))
 			    (not (ts:space? s)))
@@ -1370,35 +1394,45 @@
 	  ;; cell expression
 	  ((eqv? t #\{ )
 	   (take-token s)
-	   (if (eqv? (require-token s) #\})
-	       (begin (take-token s) '(cell1d))
-	       (let ((vex (parse-cat s #\})))
-		 (cond ((eq? (car vex) 'comprehension)
-			(list* 'typed-comprehension 'Any (cdr vex)))
-		       ((eq? (car vex) 'hcat)
-			`(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
-		       (else  ; (vcat ...)
-			(if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
-			    (let ((nr (length (cdr vex)))
-				  (nc (length (cdadr vex))))
-			      ;; make sure all rows are the same length
-			      (if (not (every
-					(lambda (x)
-					  (and (pair? x)
-					       (eq? (car x) 'row)
-					       (length= (cdr x) nc)))
-					(cddr vex)))
-				  (error "inconsistent shape in cell expression"))
-			      `(cell2d ,nr ,nc
-				       ,@(apply append
-						;; transpose to storage order
-						(apply map list
-						       (map cdr (cdr vex))))))
-			    (if (any (lambda (x) (and (pair? x)
-						      (eq? (car x) 'row)))
-				     (cddr vex))
-				(error "inconsistent shape in cell expression")
-				`(cell1d ,@(cdr vex)))))))))
+	   (if (eqv? (peek-token s) '=>)
+	     ;; parse {=>} as a special case
+	     (begin (take-token s)
+	       (if (eqv? (require-token s) #\})
+		 (begin (take-token s)
+		   (list* 'typed-dict '(=> Any Any) '()))
+		 (error "invalid identifier name =>")))
+	     (if (eqv? (require-token s) #\})
+		 (begin (take-token s) '(cell1d))
+		 (let ((vex (parse-cat s #\})))
+		   (cond ((eq? (car vex) 'comprehension)
+			  (if (and (not (null? (cdr vex)))
+				   (dict-literal? (cadr vex)))
+			    (list* 'dict-comprehension (cdr vex))
+			    (list* 'typed-comprehension 'Any (cdr vex))))
+			 ((eq? (car vex) 'hcat)
+			  `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
+			 (else  ; (vcat ...)
+			  (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
+			      (let ((nr (length (cdr vex)))
+				    (nc (length (cdadr vex))))
+				;; make sure all rows are the same length
+				(if (not (every
+					  (lambda (x)
+					    (and (pair? x)
+						 (eq? (car x) 'row)
+						 (length= (cdr x) nc)))
+					  (cddr vex)))
+				    (error "inconsistent shape in cell expression"))
+				`(cell2d ,nr ,nc
+					 ,@(apply append
+						  ;; transpose to storage order
+						  (apply map list
+							 (map cdr (cdr vex))))))
+			      (if (any (lambda (x) (and (pair? x)
+							(eq? (car x) 'row)))
+				       (cddr vex))
+				  (error "inconsistent shape in cell expression")
+				  `(cell1d ,@(cdr vex))))))))))
 
 	  ;; cat expression
 	  ((eqv? t #\[ )
