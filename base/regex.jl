@@ -105,18 +105,8 @@ match(r::Regex, s::String) = match(r, s, start(s))
 
 function all_matches(r::Regex, s::String)
     matches = RegexMatch[]
-    p::Int = 1
-    l::Int = strlen(s)
-    while p <= l 
-        m = match(r, s)
-        if !isa(m, Nothing)
-            push(matches, m)
-            offset::Int = min(max(m.offsets) + 1, strlen(s))
-        else
-            offset::Int = min(2, strlen(s))
-        end
-        p += offset
-        s = s[offset:]
+    for m in each_match(r, s)
+        push(matches, m)
     end
     return matches
 end
