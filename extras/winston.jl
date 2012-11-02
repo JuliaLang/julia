@@ -396,69 +396,66 @@ function _fontsize_relative( relsize, bbox::BoundingBox, device_bbox::BoundingBo
     return max( devsize, devsize_min )
 end
 
-# AffineTransform -------------------------------------------------------------
+# projections -------------------------------------------------------------
 
-type RectilinearMap
-    t :: Vector{Float64}
-    m :: Matrix{Float64}
+abstract Projection
 
-    function RectilinearMap(src::BoundingBox, dest::BoundingBox)
-        sx = width(dest) / width(src)
-        sy = height(dest) / height(src)
-        p = lowerleft(dest)
-        q = lowerleft(src)
-        tx = p[1] - sx * q[1]
-        ty = p[2] - sy * q[2]
-        t = [tx, ty]
-        m = diagm([sx, sy])
-        new(t, m)
-    end
+type AffineTransformation
+    t :: Array{Float64,1}
+    m :: Array{Float64,2}
 end
 
-function project( self::RectilinearMap, x::Real, y::Real )
+function AffineTransformation(x0, x1, y0, y1, dest::BoundingBox)
+    sx = width(dest) / (x1 - x0)
+    sy = height(dest) / (y1 - y0)
+    p = lowerleft(dest)
+    tx = p[1] - sx * x0
+    ty = p[2] - sy * y0
+    t = [tx, ty]
+    m = diagm([sx, sy])
+    AffineTransformation(t, m)
+end
+
+function project(self::AffineTransformation, x::Real, y::Real)
     self.m*[x,y] + self.t
 end
 
-function project( self::RectilinearMap, x::Vector, y::Vector )
+function project(self::AffineTransformation, x::Vector, y::Vector)
     p = self.t[1] + self.m[1,1] * x + self.m[1,2] * y
     q = self.t[2] + self.m[2,1] * x + self.m[2,2] * y
     return p, q
 end
 
-project( self::RectilinearMap, x::AbstractArray, y::AbstractArray ) =
+project(self::AffineTransformation, x::AbstractArray, y::AbstractArray) =
     project(self, reshape(x,length(x)), reshape(y,length(y)) )
 
-function compose( self::RectilinearMap, other::RectilinearMap )
+function compose(self::AffineTransformation, other::AffineTransformation)
     self.t = call( other.t[1], other.t[2] )
     self.m = self.m * other.m
 end
 
-# PlotContext ------------------------------------------------------------------
+type PlotGeometry <: Projection
 
-type PlotGeometry
-
-    src_bbox::BoundingBox
     dest_bbox::BoundingBox
     xlog::Bool
     ylog::Bool
-    aff::RectilinearMap
+    aff::AffineTransformation
+    xflipped::Bool
+    yflipped::Bool
 
-    function PlotGeometry( src::BoundingBox, dest::BoundingBox, xlog, ylog )
-        a, b = lowerleft(src)
-        c, d = upperright(src)
+    function PlotGeometry(x0, x1, y0, y1, dest::BoundingBox, xlog, ylog)
         if xlog
-            a = log10(a)
-            c = log10(c)
+            x0 = log10(x0)
+            x1 = log10(x1)
         end
         if ylog
-            b = log10(b)
-            d = log10(d)
+            y0 = log10(y0)
+            y1 = log10(y1)
         end
-        fsrc = BoundingBox( (a,b), (c,d) )
-        new(src, dest, xlog, ylog, RectilinearMap(fsrc,dest))
+        new(dest, xlog, ylog, AffineTransformation(x0,x1,y0,y1,dest), x0 > x1, y0 > y1)
     end
 
-    PlotGeometry(src, dest) = PlotGeometry(src, dest, false, false)
+    PlotGeometry(x0, x1, y0, y1, dest) = PlotGeometry(x0, x1, y0, y1, dest, false, false)
 end
 
 function project( self::PlotGeometry, x, y )
@@ -476,28 +473,30 @@ function geodesic( self::PlotGeometry, x, y )
     return [(x, y)]
 end
 
+# PlotContext -------------------------------------------------------------
+
 type PlotContext
     draw
     dev_bbox::BoundingBox
     data_bbox::BoundingBox
     xlog
     ylog
-    geom
-    plot_geom
+    geom::Projection
+    plot_geom::Projection
 
-    function PlotContext( device, dev::BoundingBox, data::BoundingBox, xlog, ylog )
+    function PlotContext(device::Renderer, dev::BoundingBox, data::BoundingBox, proj::Projection, xlog, ylog)
         new(
             device,
             dev,
             data,
             xlog,
             ylog,
-            PlotGeometry( data, dev, xlog, ylog ),
-            PlotGeometry( BoundingBox((0,0),(1,1)), dev ),
+            proj,
+            PlotGeometry(0, 1, 0, 1, dev)
         )
     end
 
-    PlotContext(device, dev, data) = PlotContext(device, dev, data, false, false)
+    PlotContext(device, dev, data, proj) = PlotContext(device, dev, data, proj, false, false)
 end
 
 function _kw_func_relative_fontsize( context::PlotContext, key, value )
@@ -916,7 +915,6 @@ type Legend <: PlotComponent
     components::Array{PlotComponent,1}
 
     function Legend( x, y, components, args... )
-        #_PlotComponent.__init__( self )
         self = new(Dict())
         conf_setattr( self )
         kw_init(self, args...)
@@ -1161,27 +1159,17 @@ function _format_ticklabel( x, range )
     return sprint(showcompact, x)
 end
 
+range(a::Int, b::Int) = (a <= b) ? (a:b) : (a:-1:b)
+
 _ticklist_linear( lo, hi, sep ) = _ticklist_linear( lo, hi, sep, 0. )
 function _ticklist_linear( lo, hi, sep, origin )
-    #r = Any[]
     a = iceil(float(lo - origin)/float(sep))
     b = ifloor(float(hi - origin)/float(sep))
-    #for i in range( a, b+1 )
-    #   r.append( origin + i * sep )
-    r0 = origin + a*sep
-    #for i in 0:(b-a)
-    #    push(r, r0 + i*sep )
-    #end
-    #return r
-    [ r0 + i*sep for i = 0:(b-a) ]
-end
-
-function _pow10(x)
-    return 10.0^x
+    [ origin + i*sep for i in range(a,b) ]
 end
 
 function _ticks_default_linear( lim )
-    a, b = _magform( (lim[2] - lim[1])/5. )
+    a, b = _magform(abs(lim[2] - lim[1])/5.)
     if a < (1 + 2)/2.
         x = 1
     elseif a < (2 + 5)/2.
@@ -1203,10 +1191,8 @@ function _ticks_default_log( lim )
     nn = nhi - nlo +1
 
     if nn >= 10
-        #return map( _pow10, _ticks_default_linear(log_lim) )
         return [ 10.0^x for x=_ticks_default_linear(log_lim) ]
     elseif nn >= 2
-        #return map( _pow10, range(nlo, nhi+1) )
         return [ 10.0^i for i=nlo:nhi ]
     else
         return _ticks_default_linear( lim )
@@ -1216,22 +1202,12 @@ end
 function _ticks_num_linear( lim, num )
     a = lim[1]
     b = (lim[2] - lim[1])/float(num-1)
-    #ticks = Any[]
-    #for i in 0:num-1
-    #    push(ticks, a + i*b )
-    #end
-    #return ticks
     [ a + i*b for i=0:num-1 ]
 end
 
 function _ticks_num_log( lim, num )
     a = log10(lim[1])
     b = (log10(lim[2]) - a)/float(num - 1)
-    #ticks = Any[]
-    #for i in 0:num-1
-    #    push( ticks, a + i*b )
-    #end
-    #return map( _pow10, ticks )
     [ 10.0^(a + i*b) for i=0:num-1 ]
 end
 
@@ -1259,12 +1235,12 @@ function _subticks_log( lim, ticks, num )
     nn = nhi - nlo +1
 
     if nn >= 10
-        return map( _pow10, _subticks_linear(log_lim, map(log10,ticks), num) )
+        return [ 10.0^x for x in _subticks_linear(log_lim, map(log10,ticks), num) ]
     elseif nn >= 2
         minor_ticks = Float64[]
         for i in (nlo-1):nhi
             for j in 1:9
-                z = j * _pow10(i)
+                z = j * 10.0^i
                 if lim[1] <= z && z <= lim[2]
                     push(minor_ticks, z)
                 end
@@ -1340,7 +1316,7 @@ function _intercept( self::HalfAxisX, context )
         return getattr(self, "intercept")
     end
     limits = context.data_bbox
-    if getattr(self, "ticklabels_dir") < 0
+    if (getattr(self, "ticklabels_dir") < 0) $ context.geom.yflipped
         return yrange(limits)[1]
     else
         return yrange(limits)[2]
@@ -1438,7 +1414,7 @@ function _intercept( self::HalfAxisY, context )
         return intercept
     end
     limits = context.data_bbox
-    if getattr(self, "ticklabels_dir") > 0
+    if (getattr(self, "ticklabels_dir") > 0) $ context.geom.xflipped
         return xrange(limits)[2]
     else
         return xrange(limits)[1]
@@ -1879,36 +1855,30 @@ function add2( self::FramedPlot, args... )
     add( self.content2, args... )
 end
 
-function _xy2log( self::FramedPlot )
-    return _first_not_none(getattr(self.x2, "log"), getattr(self.x1, "log")), 
-           _first_not_none(getattr(self.y2, "log"), getattr(self.y1, "log"))
+function _context1(self::FramedPlot, device::Renderer, region::BoundingBox)
+    xlog = getattr(self.x1, "log")
+    ylog = getattr(self.y1, "log")
+    gutter = getattr(self, "gutter")
+    l1 = limits(self.content1)
+    xr = _limits_axis(xrange(l1), gutter, getattr(self.x1,"range"), xlog)
+    yr = _limits_axis(yrange(l1), gutter, getattr(self.y1,"range"), ylog)
+    lims = BoundingBox( (xr[1],yr[1]), (xr[2],yr[2]) )
+    proj = PlotGeometry(xr..., yr..., region, xlog, ylog)
+    return PlotContext(device, region, lims, proj, xlog, ylog)
 end
 
-function _limits1( self::FramedPlot )
-    return _limits( limits(self.content1),
-        getattr(self, "gutter"),
-        getattr(self.x1, "log"),
-        getattr(self.y1, "log"), 
-        getattr(self.x1, "range"),
-        getattr(self.y1, "range") )
-end
-
-function _context1( self::FramedPlot, device::Renderer, region::BoundingBox )
-    return PlotContext( device, region, _limits1(self),
-        getattr(self.x1, "log"), getattr(self.y1, "log") )
-end
-
-function _limits2( self::FramedPlot )
-    lmts = isempty(self.content2) ? limits(self.content1) : limits(self.content2)
-    xlog, ylog = _xy2log(self)
+function _context2(self::FramedPlot, device::Renderer, region::BoundingBox)
+    xlog = _first_not_none(getattr(self.x2, "log"), getattr(self.x1, "log"))
+    ylog = _first_not_none(getattr(self.y2, "log"), getattr(self.y1, "log"))
+    gutter = getattr(self, "gutter")
+    l2 = isempty(self.content2) ? limits(self.content1) : limits(self.content2)
     xr = _first_not_none( getattr(self.x2, "range"), getattr(self.x1, "range") )
     yr = _first_not_none( getattr(self.y2, "range"), getattr(self.y1, "range") )
-    return _limits( lmts, getattr(self, "gutter"), xlog, ylog, xr, yr )
-end
-
-function _context2( self::FramedPlot, device, region )
-    xlog, ylog = _xy2log(self)
-    return PlotContext( device, region, _limits2(self), xlog, ylog )
+    xr = _limits_axis(xrange(l2), gutter, xr, xlog)
+    yr = _limits_axis(yrange(l2), gutter, yr, ylog)
+    lims = BoundingBox( (xr[1],yr[1]), (xr[2],yr[2]) )
+    proj = PlotGeometry(xr..., yr..., region, xlog, ylog)
+    return PlotContext(device, region, lims, proj, xlog, ylog)
 end
 
 function exterior( self::FramedPlot, device::Renderer, region::BoundingBox )
@@ -2077,7 +2047,10 @@ function compose_interior( self::Plot, device, region, lmts )
     if is(lmts,nothing)
         lmts = limits(self)
     end
-    context = PlotContext( device, region, lmts, getattr(self,"xlog"), getattr(self,"ylog") )
+    xlog = getattr(self,"xlog")
+    ylog = getattr(self,"ylog")
+    proj = PlotGeometry(xrange(lmts)..., yrange(lmts)..., region, xlog, ylog)
+    context = PlotContext(device, region, lmts, proj, xlog, ylog)
     render( self.content, context )
 end
 
@@ -2095,7 +2068,12 @@ end
 
 function _frame_draw( obj, device, region, limits, labelticks )
     frame = Frame( labelticks )
-    context = PlotContext( device, region, limits, getattr(obj,"xlog"), getattr(obj,"ylog") )
+    xlog = getattr(obj, "xlog")
+    ylog = getattr(obj, "ylog")
+    xr = xrange(limits)
+    yr = yrange(limits)
+    proj = PlotGeometry(xr..., yr..., region, xlog, ylog)
+    context = PlotContext(device, region, limits, proj, xlog, ylog)
     render( frame, context )
 end
 
@@ -2103,7 +2081,12 @@ _frame_bbox( obj, device, region, limits ) =
     _frame_bbox( obj, device, region, limits, (0,1,1,0) )
 function _frame_bbox( obj, device, region, limits, labelticks )
     frame = Frame( labelticks )
-    context = PlotContext( device, region, limits, getattr(obj,"xlog"), getattr(obj,"ylog") )
+    xlog = getattr(obj, "xlog")
+    ylog = getattr(obj, "ylog")
+    xr = xrange(limits)
+    yr = yrange(limits)
+    proj = PlotGeometry(xr..., yr..., region, xlog, ylog)
+    context = PlotContext(device, region, limits, proj, xlog, ylog)
     return boundingbox( frame, context )
 end
 
@@ -3000,18 +2983,11 @@ type Image <: ImageComponent
     w
     h
 
-    function Image(img, x, y, w, h, args...)
-        self = new(Dict(), img, x, y, w, h)
-        conf_setattr(self)
-        kw_init(self, args...)
-        self
-    end
-
     function Image(xrange, yrange, img, args...)
-        x = min(xrange...)
-        y = min(yrange...)
-        w = (-)(xrange...)
-        h = (-)(yrange...)
+        x = min(xrange)
+        y = min(yrange)
+        w = abs(xrange[2] - xrange[1])
+        h = abs(yrange[2] - yrange[1])
         self = new(Dict(), img, x, y, w, h)
         conf_setattr(self)
         kw_init(self, args...)

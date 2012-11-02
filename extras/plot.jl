@@ -141,8 +141,10 @@ _default_colormap = RainbowColorMap()
 
 function imagesc{T<:Real}(xrange::Interval, yrange::Interval, data::Array{T,2}, clims::Interval)
     p = FramedPlot()
+    setattr(p, "xrange", xrange)
+    setattr(p, "yrange", reverse(yrange))
     img = data2rgb(data, clims, _default_colormap)
-    add(p, Image(xrange, yrange, img))
+    add(p, Image(xrange, reverse(yrange), img))
     p
 end
 
