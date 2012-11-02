@@ -165,7 +165,7 @@ methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
 
 # require
 # Store list of files and their load time
-global _jl_package_list = Dict{ByteString,Float64}()
+global _jl_package_list = (ByteString=>Float64)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)
@@ -363,20 +363,21 @@ function apropos(txt::String)
     _jl_init_help()
     n = 0
     r = Regex("\\Q$txt", PCRE.CASELESS)
-    first = true
     for (cat, _) in _jl_help_category_dict
         if ismatch(r, cat)
             println("Category: \"$cat\"")
-            first = false
         end
     end
     for (func, entries) in _jl_help_function_dict
         if ismatch(r, func) || anyp(e->ismatch(r,e), entries)
-            if !first
-                println()
+            for desc in entries
+                nl = search(desc,'\n')
+                if nl[1] != 0
+                    println(desc[1:(nl[1]-1)])
+                else
+                    println(desc)
+                end
             end
-            _jl_print_help_entries(entries)
-            first = false
             n+=1
         end
     end

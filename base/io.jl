@@ -111,7 +111,7 @@ function read(s::IO, ::Type{Char})
 
     # mimic utf8.next function
     trailing = Base._jl_utf8_trailing[ch+1]
-    c = uint32(0)
+    c::Uint32 = 0
     for j = 1:trailing
         c += ch
         c <<= 6
@@ -139,8 +139,8 @@ readline(s::IO) = readuntil(s, '\n')
 function readall(s::IO)
     out = memio()
     while (!eof(s))
-        c = read(s, Char)
-        write(out, c)
+        a = read(s, Uint8)
+        write(out, a)
     end
     takebuf_string(out)
 end
@@ -337,16 +337,12 @@ function read(s::IOStream, ::Type{Uint8})
 end
 
 function read{T<:Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,Float32,Float64,Complex64,Complex128)}(s::IOStream, a::Array{T})
-    if isa(T,BitsKind)
-        nb = numel(a)*sizeof(T)
-        if ccall(:ios_readall, Uint,
-                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
-            throw(EOFError())
-        end
-        a
-    else
-        invoke(read, (Any, Array), s, a)
+    nb = numel(a)*sizeof(T)
+    if ccall(:ios_readall, Uint,
+             (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+        throw(EOFError())
     end
+    a
 end
 
 ## text I/O ##

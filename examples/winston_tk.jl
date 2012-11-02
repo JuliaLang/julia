@@ -27,6 +27,6 @@ end
 
 function imagesc(I)
     h, w = size(I)
-    pl = imagesc((w,0),(h,0),I)
+    pl = imagesc((0,w),(0,h),I)
     tk(pl, w, h)
 end

@@ -27,6 +27,7 @@ $(function() {
   var sidebarcontent = $('.sphinxsidebarcontent');
   var sidebarbuttondiv = $('.sphinxsidebarbutton');
   var sidebarbutton = $('#sidebarbutton');
+  var searchq = $('.search [name=q]');
 
   var uncollapsed_height = 0;
 
@@ -73,7 +74,9 @@ $(function() {
     var isc = sidebar_is_collapsed();
     if (isc)
       expand_sidebar();
-    uncollapsed_height = sidebarcontent.height();
+    uncollapsed_height = Math.min(
+            sidebarcontent.outerHeight(),
+            sidebarcontent.parent().height() );
     if (isc)
       collapse_sidebar();
   }
@@ -90,6 +93,7 @@ $(function() {
     var buttonscroll = sidebarview.scrollTop();
     var newmargin = (Math.min(barheight, $(window).height() - barpad - bartop) - buttonheight) / 2 + buttonscroll;
     sidebarbutton.css('margin-top', newmargin);
+    searchq.css('width', sidebarcontent.width() - 50);
   }
 
   function collapse_sidebar() {
@@ -108,7 +112,8 @@ $(function() {
     footerwrapper.css(newmargins);
     sidebarbuttondiv.css({
       'height': newheight,
-      'border-radius': '5px'
+      'border-radius': '5px',
+      'float': '',
     });
     sidebarbutton.find('span').text('»');
     sidebarbuttondiv.attr('title', _('Expand sidebar'));
@@ -123,16 +128,16 @@ $(function() {
     };
     bodywrapper.css(newmargins);
     footerwrapper.css(newmargins);
-    sidebar.css('width', ssb_width_expanded);
+    sidebar.css('width', '');
     sidebarcontent.show();
+    compute_uncollapsed_height();
     sidebarbuttondiv.css({
-      'height': '',
-      'border-radius': '0 5px 5px 0'
+      'height': uncollapsed_height,
+      'border-radius': '0 5px 5px 0',
+      'float': 'right',
     });
     sidebarbutton.find('span').text('«');
     sidebarbuttondiv.attr('title', _('Collapse sidebar'));
-    sidebarview.css('height', sidebar.height());
-    sidebar.css('width', sidebarview[0].scrollWidth);
     set_button_margin();
     sidebarview.scrollTop(barscroll);
     document.cookie = 'sidebar=expanded';
@@ -163,9 +168,10 @@ $(function() {
   function set_sidebar_pos() {
     var bodyoff = viewOffsetTop(body);
     sidebar.css('top', Math.max(bodyoff,0));
-    sidebarview.css('height', sidebar.height());
     if (!sidebar_is_collapsed()) {
-      sidebar.css('width', sidebarview[0].scrollWidth);
+      sidebar.css('width', '');
+      compute_uncollapsed_height();
+      sidebarbuttondiv.css('height', uncollapsed_height);
     } else {
       var newheight = get_collapsed_height();
       sidebarbuttondiv.css('height', newheight);
@@ -174,12 +180,10 @@ $(function() {
   }
 
   prepare_sidebar_button();
-  sidebarview.css('height', sidebar.height());
-  sidebarview.css('width', sidebar.width());
-  sidebar.css('width', sidebarview[0].scrollWidth);
   set_state_from_cookie();
   compute_uncollapsed_height();
   set_sidebar_pos();
+  sidebar.css('margin-left','auto');
   $(window).scroll(set_sidebar_pos);
   sidebarview.scroll(set_button_margin);
   $(window).resize(set_sidebar_pos);

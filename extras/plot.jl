@@ -35,7 +35,7 @@ function loglog(args...)
     _plot(p, args...)
 end
 
-const chartokens = {
+const chartokens = [
     '-' => {"linestyle" => "solid"},
     ':' => {"linestyle" => "dotted"},
     ';' => {"linestyle" => "dotdashed"},
@@ -58,12 +58,12 @@ const chartokens = {
     'b' => {"color" => "blue"},
     'w' => {"color" => "white"},
     'k' => {"color" => "black"},
-}
+]
 
 function _parse_style(spec::String)
     style = Dict()
 
-    for (k,v) in { "--" => "dashed", "-." => "dotdashed" }
+    for (k,v) in [ "--" => "dashed", "-." => "dotdashed" ]
         splitspec = split(spec, k)
         if length(splitspec) > 1
             style["linestyle"] = v
@@ -106,7 +106,7 @@ function _plot(p::FramedPlot, args...)
             # TODO
         else
             y = shift(args)
-            style = { "linestyle" => "solid" } # TODO:cycle colors
+            style = [ "linestyle" => "solid" ] # TODO:cycle colors
             if length(args) > 0 && typeof(args[1]) <: String
                 style = _parse_style(shift(args))
             end
@@ -141,8 +141,10 @@ _default_colormap = RainbowColorMap()
 
 function imagesc{T<:Real}(xrange::Interval, yrange::Interval, data::Array{T,2}, clims::Interval)
     p = FramedPlot()
+    setattr(p, "xrange", xrange)
+    setattr(p, "yrange", reverse(yrange))
     img = data2rgb(data, clims, _default_colormap)
-    add(p, Image(xrange, yrange, img))
+    add(p, Image(xrange, reverse(yrange), img))
     p
 end
 

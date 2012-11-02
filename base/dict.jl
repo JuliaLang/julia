@@ -7,11 +7,16 @@ const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
 
-function show(io, t::Associative)
+function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
     else
-        print(io, "{")
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
+        print(io, delims[1])
         first = true
         for (k, v) = t
             first || print(io, ',')
@@ -20,7 +25,7 @@ function show(io, t::Associative)
             print(io, "=>")
             show(io, v)
         end
-        print(io, "}")
+        print(io, delims[2])
     end
 end
 
@@ -154,11 +159,15 @@ bitmix(a::Union(Int64,Uint64), b::Union(Int64, Uint64)) =
                                            shl_int(unbox(Uint64,b), 32))))
 
 if WORD_SIZE == 64
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64hash, Uint64, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64hash, Uint64, (Uint64,), x)
 else
-    _jl_hash64(x::Union(Int64,Uint64,Float64)) =
-        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Uint64,x)))
+    _jl_hash64(x::Float64) =
+        ccall(:int64to32hash, Uint32, (Uint64,), box(Uint64,unbox(Float64,x)))
+    _jl_hash64(x::Union(Int64,Uint64)) =
+        ccall(:int64to32hash, Uint32, (Uint64,), x)
 end
 
 hash(x::Integer) = _jl_hash64(uint64(x))
@@ -228,7 +237,7 @@ type Dict{K,V} <: Associative{K,V}
         n = _tablesz(n)
         new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
-    function Dict(ks::Tuple, vs::Tuple)
+    function Dict(ks, vs)
         n = length(ks)
         h = Dict{K,V}(n)
         for i=1:n
@@ -240,7 +249,15 @@ end
 Dict() = Dict(0)
 Dict(n::Integer) = Dict{Any,Any}(n)
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
+Dict{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V}) = Dict{K,V}(ks,vs)
+Dict(ks, vs) = Dict{Any,Any}(ks, vs)
+
+# syntax entry points
+Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
+Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
+Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
+
+similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -261,12 +278,6 @@ function deserialize{K,V}(s, T::Type{Dict{K,V}})
     end
     return t
 end
-
-# syntax entry point
-dict{K,V}(ks::(K...), vs::(V...)) = Dict{K,V}    (ks, vs)
-dict{K}  (ks::(K...), vs::Tuple ) = Dict{K,Any}  (ks, vs)
-dict{V}  (ks::Tuple , vs::(V...)) = Dict{Any,V}  (ks, vs)
-dict     (ks::Tuple , vs::Tuple)  = Dict{Any,Any}(ks, vs)
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
@@ -290,19 +301,17 @@ isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
 function rehash{K,V}(h::Dict{K,V}, newsz)
-    olds = copy(h.slots)
+    olds = h.slots
     oldk = h.keys
     oldv = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
-    if newsz > sz
-        grow(h.slots, newsz-sz)
-    end
+    h.slots = zeros(Uint8,newsz)
     h.keys = Array(K, newsz)
     h.vals = Array(V, newsz)
-    del_all(h)
+    h.ndel = h.count = 0
 
-    for i = 1:length(olds)
+    for i = 1:sz
         if olds[i] == 0x1
             h[oldk[i]] = oldv[i]
         end
@@ -313,6 +322,7 @@ end
 
 function del_all{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
+    h.vals = Array(V, length(h.keys))
     h.ndel = 0
     h.count = 0
     return h
@@ -323,12 +333,14 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     sz = length(h.keys)
 
-    if h.ndel >= ((3*sz)>>2)
-        rehash(h, sz)
+    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+        # > 3/4 deleted or > 2/3 full
+        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        sz = length(h.keys)  # rehash may resize the table at this point!
     end
 
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     avail = -1  # an available slot
@@ -336,7 +348,12 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     while true
         if isslotempty(h,index)
-            slotassign(h, (avail < 0) ? index : avail, key, v)
+            #slotassign(h, (avail < 0) ? index : avail, key, v)
+            if avail > 0; index = avail; end
+            h.slots[index] = 0x1
+            h.keys[index] = key
+            h.vals[index] = v
+            h.count += 1
             return h
         end
 
@@ -359,11 +376,16 @@ function assign{K,V}(h::Dict{K,V}, v, key)
     end
 
     if avail>0
-        slotassign(h, avail, key, v)
+        index = avail
+        h.slots[index] = 0x1
+        h.keys[index] = key
+        h.vals[index] = v
+        h.count += 1
+        #slotassign(h, avail, key, v)
         return h
     end
 
-    rehash(h, sz*2)
+    rehash(h, h.count > 64000 ? sz*2 : sz*4)
 
     assign(h, v, key)
 end
@@ -374,7 +396,7 @@ function ht_keyindex{K,V}(h::Dict{K,V}, key)
 
     sz = length(h.keys)
     iter = 0
-    maxprobe = sz>>3
+    maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     orig = index
     keys = h.keys
@@ -437,6 +459,20 @@ next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
+# Used as default value arg to get in isequal: something that will
+# never be found in any dictionary.
+const _MISSING = gensym()
+
+function isequal(l::Dict, r::Dict)
+    if ! (length(l) == length(r))  return false end
+    for (key, value) in l
+        if ! isequal(value, get(r, key, _MISSING))
+            return false
+        end
+    end
+    true
+end
+
 # weak key dictionaries
 
 function add_weak_key(t::Dict, k, v)
@@ -460,7 +496,7 @@ end
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{K,V}
 
-    WeakKeyDict() = new(Dict{K,V}())
+    WeakKeyDict() = new((Any=>V)[])
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
@@ -488,3 +524,4 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+

@@ -8,9 +8,8 @@ _jl_lib = ccall(:jl_load_dynamic_library,Ptr{Void},(Ptr{None},),C_NULL)
 # Essential libraries
 libpcre = dlopen("libpcre")
 libgrisu = dlopen("libgrisu")
-_jl_libm = dlopen("libm")
-_jl_libfdm = dlopen("libfdm")
 librandom = dlopen("librandom")
+libopenlibm = dlopen("libopenlibm")
 @windows_only _jl_advapi32 = dlopen("Advapi32")
 
 # Optional libraries

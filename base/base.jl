@@ -118,18 +118,20 @@ function append_any(xs...)
     # used by apply() and quote
     # must be a separate function from append(), since apply() needs this
     # exact function.
-    n = 0
-    for x = xs
-        n += length(x)
-    end
-    out = Array(Any, n)
+    out = Array(Any, 4)
+    l = 4
     i = 1
     for x in xs
         for y in x
+            if i > l
+                ccall(:jl_array_grow_end, Void, (Any, Uint), out, 16)
+                l += 16
+            end
             arrayset(out, y, i)
             i += 1
         end
     end
+    ccall(:jl_array_del_end, Void, (Any, Uint), out, l-i+1)
     out
 end
 
