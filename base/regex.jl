@@ -103,6 +103,24 @@ match(r::Regex, s::String, i::Integer, o::Integer) = match(r, bytestring(s), i, 
 match(r::Regex, s::String, i::Integer) = match(r, s, i, r.options & PCRE.EXECUTE_MASK)
 match(r::Regex, s::String) = match(r, s, start(s))
 
+function all_matches(r::Regex, s::String)
+    matches = RegexMatch[]
+    p::Int = 1
+    l::Int = strlen(s)
+    while p <= l 
+        m = match(r, s)
+        if !isa(m, Nothing)
+            push(matches, m)
+            offset::Int = min(max(m.offsets) + 1, strlen(s))
+        else
+            offset::Int = min(2, strlen(s))
+        end
+        p += offset
+        s = s[offset:]
+    end
+    return matches
+end
+
 function search(str::ByteString, re::Regex, idx::Integer)
     len = length(str)
     if idx >= len+2
