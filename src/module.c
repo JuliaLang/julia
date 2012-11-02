@@ -20,7 +20,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     if (jl_core_module) {
         jl_module_using(m, jl_core_module);
     }
-    // export own name, so import Foo.* also imports Foo
+    // export own name, so "using Foo" makes "Foo" itself visible
     jl_module_export(m, name);
     return m;
 }
@@ -49,6 +49,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
             return *bp;
         }
         else if ((*bp)->owner != m) {
+            // TODO: change this to an error soon
             ios_printf(JL_STDERR,
                        "Warning: imported binding for %s overwritten in module %s\n", var->name, m->name->name);
         }
@@ -100,24 +101,6 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
                 b = jl_get_binding(imp, var);
                 if (b == NULL || b->owner == NULL)
                     return NULL;
-                /*
-                while (b->owner != imp) {
-                    if (b->owner == NULL) {
-                        //b->owner = imp;
-                        //break;
-                        return NULL;
-                    }
-                    imp = b->owner;
-                    b = jl_get_binding(imp, var);
-                }
-                */
-                /*
-                // only import if the source module has resolved the binding;
-                // otherwise it might just be marked for re-export.
-                if (b->constp || b->value) {
-                    return b;
-                }
-                */
                 // do a full import to prevent the result of this lookup
                 // from changing, for example if this var is assigned to
                 // later.
@@ -127,8 +110,6 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
         }
         return NULL;
     }
-    //if (b->owner == NULL)
-    //    return NULL;
     if (b->owner != m)
         return jl_get_binding(b->owner, var);
     return b;
@@ -191,25 +172,6 @@ void jl_module_using(jl_module_t *to, jl_module_t *from)
             return;
     }
     arraylist_push(&to->usings, from);
-    // go though all "from" module's exports to check for conflicts, and
-    // re-resolve symbols if it's not too late.
-    // mostly, we want to handle "export x" occurring before the "using M"
-    // statement that actually provides x.
-    /*
-    void **table = from->bindings.table;
-    for(size_t i=1; i < from->bindings.size; i+=2) {
-        if (table[i] != HT_NOTFOUND) {
-            jl_binding_t *b = (jl_binding_t*)table[i];
-            if (b->exportp) {
-                jl_binding_t **bp =
-                    (jl_binding_t**)ptrhash_bp(&to->bindings, b->name);
-                if (*bp != HT_NOTFOUND) {
-                    jl_module_import(to, from, b->name);
-                }
-            }
-        }
-    }
-    */
 }
 
 void jl_module_export(jl_module_t *from, jl_sym_t *s)
@@ -219,7 +181,6 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
         jl_binding_t *b = jl_get_binding(from, s);
         bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
         if (b == NULL) {
-            //b = jl_get_binding_wr(from, s);
             b = new_binding(s);
             // don't yet know who the owner is
             b->owner = NULL;
