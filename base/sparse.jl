@@ -478,26 +478,23 @@ end
 
 ## Binary operators
 
-macro binary_op(op)
-    quote
-        global $op
-        function ($op){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})
+for op in (:+, :-, :.*, :.^)
+    @eval begin
+
+        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti})
             if size(A,1) != size(B,1) || size(A,2) != size(B,2)
                 error("Incompatible sizes")
             end
 
             (m, n) = size(A)
 
-            TvS = promote_type(TvA, TvB)
-            TiS = promote_type(TiA, TiB)
-
             # TODO: Need better method to estimate result space
             nnzS = nnz(A) + nnz(B)
-            colptrS = Array(TiS, A.n+1)
-            rowvalS = Array(TiS, nnzS)
-            nzvalS = Array(TvS, nnzS)
+            colptrS = Array(Ti, A.n+1)
+            rowvalS = Array(Ti, nnzS)
+            nzvalS = Array(Tv, nnzS)
 
-            zero = convert(TvS, 0)
+            zero = zero(Tv)
 
             colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
             colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -577,17 +574,14 @@ end # macro
 
 (+)(A::SparseMatrixCSC, B::Union(Array,Number)) = (+)(full(A), B)
 (+)(A::Union(Array,Number), B::SparseMatrixCSC) = (+)(A, full(B))
-@binary_op (+)
 
 (-)(A::SparseMatrixCSC, B::Union(Array,Number)) = (-)(full(A), B)
 (-)(A::Union(Array,Number), B::SparseMatrixCSC) = (-)(A, full(B))
-@binary_op (-)
 
 (.*)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval .* B)
 (.*)(A::Number, B::SparseMatrixCSC) = SparseMatrixCSC(B.m, B.n, copy(B.colptr), copy(B.rowval), A .* B.nzval)
 (.*)(A::SparseMatrixCSC, B::Array) = (.*)(A, sparse(B))
 (.*)(A::Array, B::SparseMatrixCSC) = (.*)(sparse(A), B)
-@binary_op (.*)
 
 (./)(A::SparseMatrixCSC, B::Number) = SparseMatrixCSC(A.m, A.n, copy(A.colptr), copy(A.rowval), A.nzval ./ B)
 (./)(A::Number, B::SparseMatrixCSC) = (./)(A, full(B))
@@ -605,7 +599,6 @@ end # macro
 (.^)(A::Number, B::SparseMatrixCSC) = (.^)(A, full(B))
 (.^)(A::SparseMatrixCSC, B::Array) = (.^)(full(A), B)
 (.^)(A::Array, B::SparseMatrixCSC) = (.^)(A, full(B))
-@binary_op (.^)
 
 # Reductions
 
