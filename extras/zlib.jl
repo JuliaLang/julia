@@ -55,7 +55,7 @@ function compress_to_buffer(source::Array{Uint8}, dest::Array{Uint8}, level::Int
     dest_buf_size = Uint[length(dest)]
 
     # Compress the input
-    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
+    ret = ccall(dlsym(_zlib, :compress2), Int32, (Ptr{Uint8}, Ptr{Uint}, Ptr{Uint}, Uint, Int32),
                 dest, dest_buf_size, source, length(source), int32(level))
 
     if ret != Z_OK

@@ -91,7 +91,11 @@ pos = position(gzfile)
 ##########################
 
 # rewrite the test file
-for ch in "fhRFT "
+modes = "fhR "
+if GZip.ZLIB_VERSION >= (1,2,5,2)
+    modes = "fhRFT "
+end
+for ch in modes
     if ch == ' '
         ch = ""
     end
@@ -102,15 +106,17 @@ for ch in "fhRFT "
 
         file_size = filesize(test_compressed)
 
-        if ch == 'F' || ch == 'T'
+        #println("wb$level$ch: ", file_size)
+
+        if ch == 'T'
             @assert(file_size == length(data))
+        elseif ch == 'F'
+            @assert(file_size >= length(data))
         elseif level == 0
             @assert(file_size > length(data))
         else
             @assert(file_size < length(data))
         end
-
-        #println("wb$level$ch: ", filesize(test_compressed))
 
         # readline test
         gzf = gzopen(test_compressed)
@@ -140,7 +146,7 @@ end
 
 const BUFSIZE = 65536
 
-for level = 0:2:6
+for level = 0:3:6
     for T in [Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64,Int128,Uint128,
               Float32,Float64,Complex64,Complex128]
 
@@ -212,24 +218,24 @@ end
 
 unicode_gz_file = "$tmp/unicode_test.gz"
 
-str1 = CharString(reinterpret(Char, read(open("unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]))
-str2 = UTF8String(read(open("unicode/UTF-8.unicode"), Uint8, 4382595)[4:])
+str1 = CharString(reinterpret(Char, read(open("unicode/UTF-32LE.unicode"), Uint32, 1112065)[2:]));
+str2 = UTF8String(read(open("unicode/UTF-8.unicode"), Uint8, 4382595)[4:]);
 
 UTF32LE_gz = gzopen(unicode_gz_file, "w")
 write(UTF32LE_gz, str1)
 close(UTF32LE_gz)
 
-str1b = readall(`gunzip -c $unicode_gz_file`)
-str1c = gzopen(readall, unicode_gz_file)
+str1b = readall(`gunzip -c $unicode_gz_file`);
+str1c = gzopen(readall, unicode_gz_file);
 @assert str1 == str1b
 @assert str1 == str1c
 
-UTF8_gz = gzopen(unicode_gz_file, "w")
+UTF8_gz = gzopen(unicode_gz_file, "w");
 write(UTF8_gz, str2)
 close(UTF8_gz)
 
-str2b = readall(`gunzip -c $unicode_gz_file`)
-str2c = gzopen(readall, unicode_gz_file)
+str2b = readall(`gunzip -c $unicode_gz_file`);
+str2c = gzopen(readall, unicode_gz_file);
 @assert str2 == str2b
 @assert str2 == str2c
 
