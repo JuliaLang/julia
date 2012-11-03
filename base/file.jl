@@ -259,10 +259,28 @@ end
   error("not yet implemented")
 end
 
+downloadcmd = nothing
+for checkcmd in (:curl, :wget, :fetch)
+    if system("which $checkcmd > /dev/null") == 0
+        downloadcmd = checkcmd
+        break
+    end
+end
+function download_file(url::String, filename::String)
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("No download agent available; install curl, wget, or fetch.")
+    end
+    filename
+end
 function download_file(url::String)
   filename = tempname()
-  run(`curl -o $filename $url`)
-  filename
+  download_file(url, filename)
 end
 
 function readdir(path::String)
