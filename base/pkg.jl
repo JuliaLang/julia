@@ -146,7 +146,7 @@ end
 
 function _resolve()
     reqs = parse_requires("REQUIRE")
-    have = Dict{String,ASCIIString}()
+    have = (String=>ASCIIString)[]
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1

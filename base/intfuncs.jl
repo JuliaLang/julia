@@ -407,7 +407,7 @@ function factor{T<:Integer}(n::T)
     if n <= 0
         error("factor: number to be factored must be positive")
     end
-    h = Dict{T,Int}()
+    h = (T=>Int)[]
     if n == 1 return h end
     local p::T
     s = ifloor(sqrt(n))

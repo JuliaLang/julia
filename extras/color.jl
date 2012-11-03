@@ -55,7 +55,7 @@ function name2rgb( name::String )
     (ir/255., ig/255., ib/255.)
 end
 
-const _jl_color_names = {
+const _jl_color_names = [
     "y" => (255, 255, 0),
     "m" => (255, 0, 255),
     "c" => (0, 255, 255),
@@ -213,7 +213,7 @@ const _jl_color_names = {
     "whitesmoke" => (245, 245, 245),
     "yellow" => (255, 255, 0),
     "yellowgreen" => (154, 205, 50),
-}
+]
 
 ## Color spaces
 abstract ColorSpace

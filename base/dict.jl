@@ -7,11 +7,16 @@ const _jl_secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 has(t::Associative, key) = !is(get(t, key, _jl_secret_table_token),
                                _jl_secret_table_token)
 
-function show(io, t::Associative)
+function show{K,V}(io, t::Associative{K,V})
     if isempty(t)
         print(io, typeof(t),"()")
     else
-        print(io, "{")
+        if K === Any && V === Any
+            delims = ['{','}']
+        else
+            delims = ['[',']']
+        end
+        print(io, delims[1])
         first = true
         for (k, v) = t
             first || print(io, ',')
@@ -20,7 +25,7 @@ function show(io, t::Associative)
             print(io, "=>")
             show(io, v)
         end
-        print(io, "}")
+        print(io, delims[2])
     end
 end
 
@@ -252,7 +257,7 @@ Dict{K,V}(ks::(K...), vs::(V...)) = Dict{K  ,V  }(ks, vs)
 Dict{K  }(ks::(K...), vs::Tuple ) = Dict{K  ,Any}(ks, vs)
 Dict{V  }(ks::Tuple , vs::(V...)) = Dict{Any,V  }(ks, vs)
 
-similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
+similar{K,V}(d::Dict{K,V}) = (K=>V)[]
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
@@ -440,6 +445,20 @@ next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t.keys,i+1))
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
+# Used as default value arg to get in isequal: something that will
+# never be found in any dictionary.
+const _MISSING = gensym()
+
+function isequal(l::Dict, r::Dict)
+    if ! (length(l) == length(r))  return false end
+    for (key, value) in l
+        if ! isequal(value, get(r, key, _MISSING))
+            return false
+        end
+    end
+    true
+end
+
 # weak key dictionaries
 
 function add_weak_key(t::Dict, k, v)
@@ -463,7 +482,7 @@ end
 type WeakKeyDict{K,V} <: Associative{K,V}
     ht::Dict{Any,V}
 
-    WeakKeyDict() = new(Dict{Any,V}())
+    WeakKeyDict() = new((Any=>V)[])
 end
 WeakKeyDict() = WeakKeyDict{Any,Any}()
 
@@ -491,3 +510,4 @@ function next{K}(t::WeakKeyDict{K}, i)
     ((kv[1].value::K,kv[2]), i)
 end
 length(t::WeakKeyDict) = length(t.ht)
+

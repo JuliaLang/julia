@@ -150,7 +150,7 @@ _cmd_dest_name = "%COMMAND%"
 type ArgParseTable
     fields::Vector{ArgParseField}
     subsettings::Dict{String,Any} # this in fact will be a Dict{String,ArgParseSettings}
-    ArgParseTable() = new(ArgParseField[], Dict{String,Any}())
+    ArgParseTable() = new(ArgParseField[], (String=>Any)[])
 end
 #}}}
 
@@ -1495,7 +1495,7 @@ function _show_help(settings::ArgParseSettings)
 
     usage_str = usage_string(settings)
 
-    group_lists = Dict{String,Vector{Any}}()
+    group_lists = (String=>Vector{Any})[]
     for ag in settings.args_groups
         group_lists[ag.name] = Any[]
     end
@@ -1626,7 +1626,7 @@ function _parse_args_unhandled(args_list::Vector, settings::ArgParseSettings)
     end
 
     found_args = Set{String}()
-    out_dict = Dict{String,Any}()
+    out_dict = (String=>Any)[]
 
     for f in settings.args_table.fields
         if f.action == :show_help || f.action == :show_version

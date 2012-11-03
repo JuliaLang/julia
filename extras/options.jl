@@ -50,7 +50,7 @@ end
 # Constructor: supply type followed by list of assignment expressions, e.g.,
 #   o = Options(CheckNone,:(a=5),:(b=rand(3)),...)
 function Options{T<:OptionsChecking}(::Type{T},ex::Expr...)
-    ht = Dict{Symbol,Int}()
+    ht = (Symbol=>Int)[]
     vals = Array(Any,0)
     n = length(ex)
     for i = 1:n

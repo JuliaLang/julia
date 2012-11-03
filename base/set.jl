@@ -1,7 +1,7 @@
 type Set{T}
     hash::Dict{T,Bool}
 
-    Set() = new(Dict{T,Bool}())
+    Set() = new((T=>Bool)[])
     Set(x...) = add_each(new(Dict{T,Bool}(length(x))), x)
 end
 Set() = Set{Any}()
@@ -72,3 +72,5 @@ setdiff(a::Set, b::Set) = del_each(copy(a),b)
 |(s::Set...) = union(s...)
 (&)(s::Set...) = intersect(s...)
 -(a::Set, b::Set) = setdiff(a,b)
+
+isequal(l::Set, r::Set) = length(l) == length(r) == length(intersect(l,r))

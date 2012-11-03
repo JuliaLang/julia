@@ -7,7 +7,7 @@ type IniFile
     defaults::HTSS
 end
 
-IniFile() = IniFile(Dict{String,HTSS}(), HTSS())
+IniFile() = IniFile((String=>HTSS)[], HTSS())
 
 function read(inifile::IniFile, stream::IOStream)
     current_section = inifile.defaults

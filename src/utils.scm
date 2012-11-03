@@ -14,8 +14,8 @@
 
 (define (diff s1 s2)
   (cond ((null? s1)         '())
-        ((memq (car s1) s2) (diff (cdr s1) s2))
-        (else               (cons (car s1) (diff (cdr s1) s2)))))
+	((memq (car s1) s2) (diff (cdr s1) s2))
+	(else               (cons (car s1) (diff (cdr s1) s2)))))
 
 (define (unique lst)
   (if (null? lst)

@@ -277,7 +277,7 @@
 (define (rewrite-ctor ctor Tname params field-names)
   (define (ctor-body body)
     `(block ;; make type name global
-            (global ,Tname)
+	    (global ,Tname)
 	    ,(pattern-replace (pattern-set
 			       (pattern-lambda
 				(call (-/ new) . args)
@@ -851,19 +851,24 @@
 
    (pattern-lambda (... a) `(curly ... ,a))
 
+   ;; dict syntax
+   (pattern-lambda (dict . args)
+		   `(call (top Dict)
+			  (tuple ,@(map cadr  args))
+			  (tuple ,@(map caddr args))))
+
+   ;; typed dict syntax
+   (pattern-lambda (typed-dict atypes . args)
+		   (if (and (length= atypes 3)
+			    (eq? (car atypes) '=>))
+		       `(call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))
+			      (tuple ,@(map cadr  args))
+			      (tuple ,@(map caddr args)))
+		       (error (string "invalid typed-dict syntax " atypes))))
+
    ;; cell array syntax
    (pattern-lambda (cell1d . args)
-		   (cond ((any (lambda (e) (and (length= e 3)
-						(eq? (car e) '=>)))
-			       args)
-			  (if (not (every (lambda (e) (and (length= e 3)
-							   (eq? (car e) '=>)))
-					  args))
-			      (error "invalid dict literal")
-			      `(call (top Dict)
-				     (tuple ,@(map cadr  args))
-				     (tuple ,@(map caddr args)))))
-			 ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
+		   (cond ((any (lambda (e) (and (pair? e) (eq? (car e) '...)))
 			       args)
 			  `(call (top cell_1d) ,@args))
 			 (else
@@ -1110,8 +1115,8 @@
 
     (define (get-eltype)
       (if (null? atype)
-        `((call (top eltype) ,oneresult))
-        `(,atype)))
+	`((call (top eltype) ,oneresult))
+	`(,atype)))
 
     ;; Evaluate the comprehension
     `(scope-block
@@ -1150,7 +1155,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (= ,oneresult ,expr)
 		    (type_goto ,initlabl)
 		    (call (top assign) ,result ,oneresult ,ri)
@@ -1180,7 +1185,7 @@
    (pattern-lambda
     (typed-comprehension atype expr . ranges)
     (if (any (lambda (x) (eq? x ':)) ranges)
-        (lower-nd-comprehension atype expr ranges)
+	(lower-nd-comprehension atype expr ranges)
     (let ( (result (gensy))
 	   (ri (gensy))
 	   (rs (map (lambda (x) (gensy)) ranges)) )
@@ -1194,7 +1199,7 @@
 
       ;; construct loops to cycle over all dimensions of an n-d comprehension
       (define (construct-loops ranges rs)
-        (if (null? ranges)
+	(if (null? ranges)
 	    `(block (call (top assign) ,result ,expr ,ri)
 		    (+= ,ri 1))
 	    `(for (= ,(cadr (car ranges)) ,(car rs))
@@ -1211,6 +1216,74 @@
 	 (= ,ri 1)
 	 ,(construct-loops (reverse ranges) (reverse rs))
 	 ,result))))))
+
+   ;; dict comprehensions
+   (pattern-lambda
+    (dict-comprehension expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (let ((result   (gensy))
+	  (initlabl (gensy))
+	  (onekey   (gensy))
+	  (oneval   (gensy))
+	  (rv         (map (lambda (x) (gensy)) ranges)))
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges)
+	(if (null? ranges)
+	    `(block (= ,onekey ,(cadr expr))
+		    (= ,oneval ,(caddr expr))
+		    (type_goto ,initlabl)
+		    (call (top assign) ,result ,oneval ,onekey))
+	    `(for ,(car ranges)
+		  ,(construct-loops (cdr ranges)))))
+
+      ;; Evaluate the comprehension
+      (let ((loopranges
+	     (map (lambda (r v) `(= ,(cadr r) ,v)) ranges rv)))
+	`(block
+	  ,@(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
+	  (scope-block
+	   (block
+	   (local ,onekey)
+	   (local ,oneval)
+	   ,@(map (lambda (r) `(local ,r))
+		  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	   (label ,initlabl)
+	   (= ,result (call (curly (top Dict)
+			    (static_typeof ,onekey)
+			    (static_typeof ,oneval))))
+	   ,(construct-loops (reverse loopranges))
+	   ,result)))))))
+
+   ;; typed dict comprehensions
+   (pattern-lambda
+    (typed-dict-comprehension atypes expr . ranges)
+    (if (any (lambda (x) (eq? x ':)) ranges)
+	(error "invalid iteration syntax")
+    (if (not (and (length= atypes 3)
+		  (eq? (car atypes) '=>)))
+	(error "invalid typed-dict-comprehension syntax")
+    (let ( (result (gensy))
+	   (rs (map (lambda (x) (gensy)) ranges)) )
+
+      ;; construct loops to cycle over all dimensions of an n-d comprehension
+      (define (construct-loops ranges rs)
+	(if (null? ranges)
+	    `(call (top assign) ,result ,(caddr expr) ,(cadr expr))
+	    `(for (= ,(cadr (car ranges)) ,(car rs))
+		  ,(construct-loops (cdr ranges) (cdr rs)))))
+
+      ;; Evaluate the comprehension
+      `(block
+	,@(map make-assignment rs (map caddr ranges))
+	(scope-block
+	(block
+	 ,@(map (lambda (r) `(local ,r))
+		(apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
+	 (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
+	 ,(construct-loops (reverse ranges) (reverse rs))
+	 ,result)))))))
 
 )) ;; lower-comprehensions
 
@@ -1756,7 +1829,7 @@ So far only the second case can actually occur.
 	 ;(let ((vi (var-info-for (cadr e) env)))
 	 ;  (if vi
 	 ;      (begin (vinfo:set-type! vi (caddr e))
-	 ;             (cadr e))
+	 ;	     (cadr e))
 	 `(call (top typeassert) ,(cadr e) ,(caddr e)))
 	((or (eq? (car e) 'decl) (eq? (car e) '|::|))
 	 ; handle var::T declaration by storing the type in the var-info
@@ -1769,7 +1842,7 @@ So far only the second case can actually occur.
 		      (if (assq (cadr e) captvars)
 			  (error (string "type of " (cadr e)
 					 " declared in inner scope")))
-                      (vinfo:set-type! vi (caddr e))
+		      (vinfo:set-type! vi (caddr e))
 		      '(null))
 	       `(call (top typeassert) ,(cadr e) ,(caddr e)))))
 	((eq? (car e) 'lambda)
@@ -1968,7 +2041,7 @@ So far only the second case can actually occur.
 (define (expand-backquote e)
   (cond ((or (eq? e 'true) (eq? e 'false))  e)
 	((symbol? e)          `(quote ,e))
-        ((not (pair? e))      e)
+	((not (pair? e))      e)
 	((eq? (car e) '$)     (cadr e))
 	((and (eq? (car e) 'quote) (pair? (cadr e)))
 	 (expand-backquote (expand-backquote (cadr e))))

@@ -260,7 +260,7 @@ end
 end
 
 function download_file(url::String)
-  filename = tempfile()
+  filename = tempname()
   run(`curl -o $filename $url`)
   filename
 end
