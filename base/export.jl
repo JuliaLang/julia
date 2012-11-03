@@ -1293,6 +1293,9 @@ export
 #libuv branch stuff
     accept,
     AsyncStream,
+    Buffer,
+    IOStream,
+    PipeStream,
     Stream,
     TcpSocket,
     jl_alloca,

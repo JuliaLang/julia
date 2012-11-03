@@ -9,7 +9,7 @@ core numbers strings unicode corelib hashing \
 arrayops linalg fft sparse arpack bitarray \
 random special functional bigint dists combinatorics statistics \
 glpk linprog sparse bigfloat poly file Rmath remote zlib sound image \
-iterators gzip integers spawn
+iterators gzip integers spawn iostring
 
 $(TESTS) ::
 	$(QUIET_JULIA) $(JULIA_EXECUTABLE) ./runtests.jl $@

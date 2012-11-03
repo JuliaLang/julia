@@ -100,7 +100,7 @@ include("inference.jl")
 
 # I/O, strings & printing
 include("io.jl")
-include("buffer.jl")
+include("iostring.jl")
 include("stream.jl")
 import Base.FS.*
 include("char.jl")

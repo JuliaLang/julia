@@ -19,6 +19,7 @@ typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
 
 abstract AsyncStream <: Stream
+
 typealias StreamOrNot Union(Bool,AsyncStream)
 typealias UVHandle Ptr{Void}
 typealias RawOrBoxedHandle Union(UVHandle,AsyncStream)
@@ -99,18 +100,20 @@ type NamedPipe <: AsyncStream
     handle::Ptr{Void}
     buffer::Buffer
     open::Bool
+    line_buffered::Bool
     readcb::Callback
     closecb::Callback
-    NamedPipe() = new(C_NULL,DynamicBuffer(),false,false,false)
+    NamedPipe() = new(C_NULL,PipeString(),false,true,false,false)
 end
 
 type TTY <: AsyncStream
     handle::Ptr{Void}
     open::Bool
+    line_buffered::Bool
     buffer::Buffer
     readcb::Callback
     closecb::Callback
-    TTY(handle,open)=new(handle,open,DynamicBuffer(),false,false)
+    TTY(handle,open)=new(handle,open,true,PipeString(),false,false)
 end
 
 abstract Socket <: AsyncStream
@@ -118,11 +121,12 @@ abstract Socket <: AsyncStream
 type TcpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
+    line_buffered::Bool
     buffer::Buffer
     readcb::Callback
     ccb::Callback
     closecb::Callback
-    TcpSocket(handle,open)=new(handle,open,DynamicBuffer(),false,false,false)
+    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,false,false)
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
@@ -136,11 +140,12 @@ end
 type UdpSocket <: Socket
     handle::Ptr{Void}
     open::Bool
+    line_buffered::Bool
     buffer::Buffer
     readcb::Callback
     ccb::Callback
     closecb::Callback
-    UdpSocket(handle,open)=new(handle,open,DynamicBuffer(),false)
+    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false)
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
@@ -173,6 +178,7 @@ make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
 function _uv_tty2tty(handle::Ptr{Void})
     tty = TTY(handle,true)
+    tty.line_buffered = false
     ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),handle,tty)
     tty
 end
@@ -249,65 +255,45 @@ open_any_tcp_port(preferred_port::Integer,cb::Function)=open_any_tcp_port(uint16
 
 ## BUFFER ##
 ## Allocate a simple buffer
-function alloc_request(buffer::DynamicBuffer, recommended_size)
-    if(length(buffer.data)-buffer.ptr<recommended_size)
-        grow(buffer, recommended_size-length(buffer.data)+buffer.ptr)
+function alloc_request(buffer::IOString, recommended_size::Int32)
+    ensureroom(buffer, int(recommended_size))
+    ptr = buffer.append ? buffer.size + 1 : buffer.ptr
+    return (pointer(buffer.data, ptr), length(buffer.data)-ptr)
+end
+function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32)
+    (buf,size) = alloc_request(stream.buffer, recommended_size)
+    (buf,int32(size))
+end
+
+function notify_filled(buffer::IOString, nread::Int, base::Ptr, len::Int32)
+    if buffer.append
+        buffer.size += nread
+    else
+        buffer.ptr += nread
     end
-    return (pointer(buffer.data)+buffer.ptr-1, recommended_size)
 end
-
-function alloc_request(buffer::LineBuffer, recommended_size)
-    if(length(buffer.data)-buffer.ptr<recommended_size)
-        grow(buffer, recommended_size-length(buffer.data)+buffer.ptr)
+function notify_filled(stream::AsyncStream, nread::Int)
+    more = true
+    while more
+        if isa(stream.readcb,Function)
+            buf = stream.buffer
+            if stream.line_buffered
+                p = pointer(buf.data, buf.ptr)
+                q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,'\n',buf.size)
+                nread = q == C_NULL ? 0 : q-p
+            else
+                nread = buf.size-buf.ptr+1
+            end
+            if nread > 0
+                more = stream.readcb(stream, nread)
+            else
+                more = false
+            end
+        else
+            more = false
+        end
     end
-    return (pointer(buffer.data)+buffer.ptr-1, recommended_size)
 end
-
-function alloc_request(buffer::FixedBuffer, recommended_size)
-    return (pointer(buffer.data)+buffer.ptr-1, length(buffer.data)-buffer.ptr)
-end
-
-_uv_hook_alloc_buf(stream::AsyncStream, recommended_size::Int32) = alloc_request(stream.buffer,recommended_size)
-
-
-function notify_filled(buffer::DynamicBuffer, nread::Int, base::Ptr, len::Int32)
-    buffer.ptr+=nread
-    true
-end
-function notify_filled(buffer::FixedBuffer, nread::Int, base::Ptr, len::Int32)
-    buffer.ptr+=nread
-    true
-end
-function notify_filled(buffer::LineBuffer, nread::Int, base::Ptr, len::Int32)
-    buffer.ptr+=nread
-    notify_filled(buffer)
-end
-function notify_filled(buffer::LineBuffer)
-    p = pointer(buffer.data)
-    q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,'\n',buffer.ptr)
-    pos = (q == C_NULL) ? 0 : q-p
-    show(ascii(buffer.data[1:buffer.ptr]))
-    println()
-    println("LineBuffer: ",pos)
-    if(pos == 0)
-        return false
-    end
-    buffer.nlpos = pos
-    true
-end
-notify_content_accepted(buffer::DynamicBuffer,accepted) = false #Buffer conent management is left to the user
-notify_content_accepted(buffer::FixedBuffer,accepted) = false #Buffer conent management is left to the user
-function notify_content_accepted(buffer::LineBuffer,accepted)
-    #println("LBc: ",buffer.nlpos)
-    len = buffer.ptr - buffer.nlpos
-    if(len > 0)
-        copy_to(buffer.data,1,buffer.data,buffer.nlpos,len)
-    end
-    buffer.ptr = len+1
-    buffer.nlpos = 0
-    return notify_filled(buffer)
-end
-
 function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
     if(nread == -1)
         close(stream)
@@ -319,15 +305,8 @@ function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
         end
         #EOF
     else
-        if(notify_filled(stream.buffer,nread,base,len) && nread != 0 && isa(stream.readcb,Function))
-            dispatch_readcb(stream)
-        end
-    end
-end
-
-function dispatch_readcb(stream::AsyncStream)
-    if(notify_content_accepted(stream.buffer,stream.readcb(stream)))
-        dispatch_readcb(stream)
+        notify_filled(stream.buffer, nread, base, len)
+        notify_filled(stream, nread)
     end
 end
 ##########################################
@@ -479,7 +458,6 @@ start_reading(stream::AsyncStream,cb::Function) = (start_reading(stream);stream.
 start_reading(stream::AsyncStream,cb::Bool) = start_reading(stream)
 
 stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),read_handle(stream))
-change_readcb(stream::AsyncStream,readcb::Function) = ccall(:jl_change_readcb,Int16,(Ptr{Void},Function),read_handle(stream),readcb)
 
 function readall(stream::AsyncStream)
     start_reading(stream)
@@ -665,9 +643,9 @@ function reinit_stdio()
     STDIN.handle  = ccall(:jl_stdin_stream ,Ptr{Void},())
     STDOUT.handle = ccall(:jl_stdout_stream,Ptr{Void},())
     STDERR.handle = ccall(:jl_stderr_stream,Ptr{Void},())
-    STDIN.buffer = DynamicBuffer()
-    STDOUT.buffer = DynamicBuffer()
-    STDERR.buffer = DynamicBuffer()
+    STDIN.buffer = PipeString()
+    STDOUT.buffer = PipeString()
+    STDERR.buffer = PipeString()
     for stream in (STDIN,STDOUT,STDERR)
         ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},TTY),stream.handle,stream)
     end
@@ -797,9 +775,7 @@ function wait(w::AsyncStream,condition::Function)
     return true
 end
 function wait(w::AsyncStream)
-    state::Bool = w.open
-    println("State: ",state)
-    while(state==w.open)
+    while(w.open)
         process_events(globalEventLoop())
     end
     return true
@@ -981,12 +957,6 @@ function getaddrinfo_callback(sock::TcpSocket,status::Int32,port::Uint16,addrinf
         error("Failed to connect to host")
     end
 end
-
-#function readuntil(s::IOStream, delim)
-#    # TODO: faster versions that avoid the encoding check
-#    ccall(:jl_readuntil, ByteString, (Ptr{Void}, Uint8), s.ios, delim)
-#end
-#readline(s::IOStream) = readuntil(s, uint8('\n'))
 
 function readall(s::IOStream)
     dest = memio()

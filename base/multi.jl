@@ -997,15 +997,11 @@ end
 #     localp
 # end
 
-function writeback(handle,nread,base,buflen)
-    if(nread>0)
-        _write(STDOUT,base,nread)
-    end
-end
-
-function _parse_conninfo(ps,w,i::Int,stream::AsyncStream)
+function _parse_conninfo(ps,w,i::Int,stream::AsyncStream,nread::Int)
     println("readcb")
-    s = ascii(take_line(stream.buffer))
+    a = Array(Uint8, nread)
+    read(stream.buffer, a)
+    a = ascii(a)
     m = match(r"^julia_worker:(\d+)#(.*)", s)
     println(m)
     if m != nothing
@@ -1013,34 +1009,18 @@ function _parse_conninfo(ps,w,i::Int,stream::AsyncStream)
         hostname::ByteString = m.captures[2]
         w[i] = worker = Worker(hostname, port)
         sock = w[i].socket
-        notify_content_accepted(stream.buffer,false)
-        old_buffer = stream.buffer
-        stream.buffer = DynamicBuffer()
-        stream.buffer.data = old_buffer.data
-        stream.buffer.ptr = old_buffer.ptr
-        stream.readcb = function (x)
-            local data
-            top = x.buffer.ptr-1
-            try
-                data = ascii(x.buffer.data[1:top])
-                # note that we are using ascii since we are assuming indicies below are byte indicies
-                # the method would be the same, but increment i by the character size for other encodings
-            catch e
-                println("\tError parsing reply from worker $(worker.id):\t",e)
-            end
-            lasti = 1
-            for i = 1:top
-                if data[i] == '\n'
-                    print("\tFrom worker $(worker.id):\t",data[lasti:i])
-                    lasti=i+1
+        stream.readcb = function(handle::IOBuffer,nread::Int)
+            if(nread>0)
+                line = Array(Uint8, nread)
+                read(stream.buffer, line)
+                try
+                    line = ascii(line)
+                    print("\tFrom worker $(worker.id):\t",line)
+                catch e
+                    println("\tError parsing reply from worker $(worker.id):\t",e)
                 end
             end
-            j = 1
-            for i = lasti:top
-                x.buffer.data[j] = x.buffer.data[i]
-                j += 1
-            end
-            x.buffer.ptr = j
+            true
         end
         ps.exit_code=0
 #    else
@@ -1056,10 +1036,10 @@ function start_remote_workers(machines, cmds)
     pps = Array(Process,n)
     for i=1:n; let i=i, ostream, ps
         ostream,ps = read_from(cmds[i])
-        ostream.readcb = (stream)->(_parse_conninfo(ps,w,i,stream);true)
-        ostream.buffer = LineBuffer()
+        ostream.line_buffered = true
         # redirect console output from workers to the client's stdout
-        start_reading(ostream)
+        start_reading(ostream,
+            (stream,nread)->(_parse_conninfo(ps,w,i,stream,nread);true))
         pps[i] = ps
     end; end
     wait(pps)

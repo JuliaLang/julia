@@ -39,6 +39,7 @@ extern "C" {
 	XX(connectcb) \
 	XX(connectioncb) \
 	XX(asynccb)
+//TODO add UDP and other missing callbacks
 
 #define JULIA_HOOK_(m,hook)  ((jl_function_t*)jl_get_global(m, jl_symbol("_uv_hook_" #hook)))
 #define JULIA_HOOK(hook) jl_uvhook_##hook

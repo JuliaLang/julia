@@ -67,7 +67,6 @@
     jl_buf_mutex_lock;
     jl_buf_mutex_unlock;
     jl_callback;
-    jl_change_readcb;
     jl_clear_input;
     jl_close_uv;
     jl_compile_hint;

@@ -217,8 +217,8 @@ void jl_atexit_hook() {
     while (item) {
 		uv_handle_t *handle = item->h;
         switch(handle->type) {
-            case UV_UDP:
             case UV_TTY:
+            case UV_UDP:
 #ifndef __WIN32__ //unix only supports shutdown on TCP and NAMED_PIPE
                 uv_close(handle,NULL);
                 break;

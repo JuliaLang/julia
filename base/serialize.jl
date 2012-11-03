@@ -243,44 +243,35 @@ force(x::Function) = x()
 # we actually make objects. this allows for constructing objects that might
 # interfere with I/O by reading, writing, blocking, etc.
 
-type Deserializer <: Buffer
+type Deserializer <: Stream #TODO: rename to SyncStream
     task::Task
-    returntask::Task
     stream::AsyncStream
-    buffer::DynamicBuffer
-    readptr::Int
     function Deserializer(loop::Function,stream::AsyncStream)
         this=new()
         this.task=Task(()->loop(this))
         this.stream=stream
-        this.buffer=DynamicBuffer(Array(Uint8,4096))
-        this.readptr=1
-        stream.buffer=this
-        stream.readcb = false
-        start_reading(stream)
+        start_reading(stream, (stream,nread) -> notify_filled(this, nread))
         this
     end
 end
 show(io::IO,d::Deserializer) = print(io,"Deserializer()")
 
-alloc_request(buffer::Deserializer, recommended_size) = alloc_request(buffer.buffer, recommended_size)
-notify_content_accepted(buffer::Deserializer,accepted) = false
-function notify_filled(this::Deserializer, nread::Int, base::Ptr, len::Int32)
-    #println("filled")
-    notify_filled(this.buffer, nread, base, len)
-    this.returntask = current_task()
-    yieldto(this.task)
-    true
+function notify_filled(this::Deserializer, nreadable::Int)
+    this.task.runnable = true
+    return yieldto(this.task,nreadable)
 end
 
 function read{T}(this::Deserializer, a::Array{T})
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
-        while position(this.buffer) - this.readptr < nb
-            yieldto(this.returntask)
+        buf = this.stream.buffer
+        assert(buf.seekable == false)
+        assert(buf.maxlength > nb)
+        while length(buf) < nb
+            this.task.runnable = false
+            navailable = yield()
         end
-        ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), a, pointer(this.buffer.data,this.readptr), nb)
-        this.readptr += nb
+        read(this.stream.buffer, a)
         return a
     else
         #error("Read from Buffer only supports bits types or arrays of bits types; got $T.")
@@ -289,16 +280,13 @@ function read{T}(this::Deserializer, a::Array{T})
 end
 
 function read(this::Deserializer,::Type{Uint8})
-    while (this.readptr >= position(this.buffer))
-        yieldto(this.returntask)
+    buf = this.stream.buffer
+    assert(buf.seekable == false)
+    while (length(buf) < 1)
+        this.task.runnable = false
+        navailable = yield()
     end
-    b::Uint8=uint8(this.buffer.data[this.readptr])
-    this.readptr+=1
-    if this.readptr == position(this.buffer)
-        this.buffer.ptr = 1
-        this.readptr = 1
-        #println("emptied")
-    end
+    read(buf,Uint8)
     b
 end
 write(::Deserializer,args...) = error("write not implemented for deserializer")

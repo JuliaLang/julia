@@ -25,4 +25,5 @@ runtests("combinatorics")
 runtests("statistics")
 
 # io, etc.
+runtests("iostring")
 runtests("spawn")

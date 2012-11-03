@@ -90,12 +90,9 @@ function _jl_eval_user_input(ast::ANY, show_value)
     println()
 end
 
-function readBuffer(stream::TTY)
-    # This is bit tricky as :jl_readBuffer can trigger any behavior at any time (including running the event loop).
-    # For now just reset the buffer before the call to it, though this may also have other unintended consequences.
-    nread = stream.buffer.ptr-1
-    stream.buffer.ptr = 1 #reuse buffer
-    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),stream.buffer.data,nread)
+function readBuffer(stream::TTY, nread)
+    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),pointer(stream.buffer.data,stream.buffer.ptr),nread)
+    skip(stream.buffer, nread)
     true
 end
 
@@ -114,8 +111,7 @@ function run_repl()
 
     while true
         ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
-        STDIN.readcb = readBuffer
-        start_reading(STDIN)
+        start_reading(STDIN, readBuffer)
         (ast, show_value) = take(_jl_repl_channel)
         if show_value == -1
             # exit flag
