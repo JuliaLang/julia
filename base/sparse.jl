@@ -494,7 +494,7 @@ for op in (:+, :-, :.*, :.^)
             rowvalS = Array(Ti, nnzS)
             nzvalS = Array(Tv, nnzS)
 
-            zero = zero(Tv)
+            z = zero(Tv)
 
             colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
             colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -512,16 +512,16 @@ for op in (:+, :-, :.*, :.^)
                     rowA = rowvalA[ptrA]
                     rowB = rowvalB[ptrB]
                     if rowA < rowB
-                        res = ($op)(nzvalA[ptrA], zero)
-                        if res != zero
+                        res = ($op)(nzvalA[ptrA], z)
+                        if res != z
                             rowvalS[ptrS] = rowA
-                            nzvalS[ptrS] = ($op)(nzvalA[ptrA], zero)
+                            nzvalS[ptrS] = res
                             ptrS += 1
                         end
                         ptrA += 1
                     elseif rowB < rowA
-                        res = ($op)(zero, nzvalB[ptrB])
-                        if res != zero
+                        res = ($op)(z, nzvalB[ptrB])
+                        if res != z
                             rowvalS[ptrS] = rowB
                             nzvalS[ptrS] = res
                             ptrS += 1
@@ -529,7 +529,7 @@ for op in (:+, :-, :.*, :.^)
                         ptrB += 1
                     else
                         res = ($op)(nzvalA[ptrA], nzvalB[ptrB])
-                        if res != zero
+                        if res != z
                             rowvalS[ptrS] = rowA
                             nzvalS[ptrS] = res
                             ptrS += 1
@@ -540,8 +540,8 @@ for op in (:+, :-, :.*, :.^)
                 end
 
                 while ptrA < stopA
-                    res = ($op)(nzvalA[ptrA], zero)
-                    if res != zero
+                    res = ($op)(nzvalA[ptrA], z)
+                    if res != z
                         rowA = rowvalA[ptrA]
                         rowvalS[ptrS] = rowA
                         nzvalS[ptrS] = res
@@ -551,8 +551,8 @@ for op in (:+, :-, :.*, :.^)
                 end
 
                 while ptrB < stopB
-                    res = ($op)(zero, nzvalB[ptrB])
-                    if res != zero
+                    res = ($op)(z, nzvalB[ptrB])
+                    if res != z
                         rowB = rowvalB[ptrB]
                         rowvalS[ptrS] = rowB
                         nzvalS[ptrS] = res
