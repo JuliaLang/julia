@@ -174,7 +174,7 @@ static jl_value_t *julia_type_of(Value *v)
         return julia_type_of_without_metadata(v, true);
     }
     MDString *md = (MDString*)mdn->getOperand(0);
-    const char *vts = md->getString().data();
+    const unsigned char *vts = (const unsigned char*)md->getString().data();
     int id = (vts[0]-1) + (vts[1]-1)*255;
     return jl_typeid_to_type(id);
 }
