@@ -142,7 +142,6 @@ function abs_path(fname::String)
     return join(comp, os_separator)
 end
 
-
 # Get the full, real path to a file, including dereferencing
 # symlinks.
 function realpath(fname::String)
@@ -152,7 +151,7 @@ function realpath(fname::String)
         error("Cannot find ", fname)
     end
     s = bytestring(sp)
-    ccall(:free, Void, (Ptr{Uint8},), sp)
+    c_free(sp)
     return s
 end
 
@@ -216,15 +215,17 @@ function file_create(filename::String)
 end
 
 function file_remove(filename::String)
-  run(`rm $filename`)
+    ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
+    system_error(:unlink, ret != 0)
 end
 
 function path_rename(old_pathname::String, new_pathname::String)
-  run(`mv $old_pathname $new_pathname`)
+    ret = ccall(:rename, Int32, (Ptr{Uint8},Ptr{Uint8}), bytestring(old_pathname), bytestring(new_pathname))
+    system_error(:rename, ret != 0)
 end
 
 # Obtain a temporary filename.
-tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
+const tempnam = (OS_NAME == :Windows) ? :_tempnam : :tempnam
 
 function tempname()
   d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin

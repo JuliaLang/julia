@@ -40,6 +40,13 @@ run(`chmod +w $filename`)
 @assert filesize(dir_name) > 0
 @assert mtime(filename) >= mtime(dir_name)
 
+# rename file
+newfilename = file_path(dir_name, "bfile.txt")
+path_rename(filename, newfilename)
+@assert ispath(filename) == false
+@assert isfile(newfilename) == true
+filename = newfilename
+
 #######################################################################
 # This section tests temporary file and directory creation.           #
 #######################################################################
@@ -56,11 +63,10 @@ run(`chmod +w $filename`)
 # @assert isfile(filename) == true
 # @assert readall(filename) == "Here is some text"
 
-# dirname = mktempdir()
-# @assert isdir(dirname)
- 
 ############
 # Clean up #
 ############
 file_remove(filename)
 rmdir(dir_name)
+@assert ispath(filename) == false
+@assert ispath(dir_name) == false
