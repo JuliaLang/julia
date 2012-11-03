@@ -43,4 +43,4 @@ m2v(m) = reshape(m, length(m))
 @assert_buildvec product(1:2,1:0,1:1)   []
 @assert_buildvec product(1:2,1:1)       m2v([(i,j)   for i=1:2, j=1:1])
 @assert_buildvec product(1:1,1:3)       m2v([(i,j)   for i=1:1, j=1:3])
-@assert_buildvec product(2:4,1:3,4:8)   m2v([(i,j,k) for i=2:4, j=1:3, k=4:8])
+@assert_buildvec product(2:4,1:3,4:8)   m2v([(i,j,k) for k=4:8, j=1:3, i=2:4])
