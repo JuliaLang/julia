@@ -190,7 +190,7 @@ function start(it::Product)
         end
     end
     vs = Array(Any, n)
-    for i = n:-1:1
+    for i = 1:n
         vs[i], js[i] = next(it.xss[i], js[i])
     end
     return js, vs
@@ -201,11 +201,11 @@ function next(it::Product, state)
     ans = tuple(vs...)
 
     n = length(it.xss)
-    for i in n:-1:1
+    for i in 1:n
         if !done(it.xss[i], js[i])
             vs[i], js[i] = next(it.xss[i], js[i])
             break
-        elseif i == 1
+        elseif i == n
             vs = nothing
             break
         end
