@@ -503,10 +503,10 @@ for op in (:+, :-, :.*, :.^)
             colptrS[1] = 1
 
             for col = 1:n
-                ptrA = int(colptrA[col])
-                stopA = int(colptrA[col+1])
-                ptrB = int(colptrB[col])
-                stopB = int(colptrB[col+1])
+                ptrA::Int  = colptrA[col]
+                stopA::Int = colptrA[col+1]
+                ptrB::Int  = colptrB[col]
+                stopB::Int = colptrB[col+1]
 
                 while ptrA < stopA && ptrB < stopB
                     rowA = rowvalA[ptrA]
