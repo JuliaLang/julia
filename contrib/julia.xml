@@ -98,6 +98,7 @@
       <item> Int16 </item>
       <item> Int32 </item>
       <item> Int64 </item>
+      <item> Int128 </item>
       <item> Integer </item>
       <item> IntSet </item>
       <item> IO </item>
@@ -133,6 +134,7 @@
       <item> Uint16 </item>
       <item> Uint32 </item>
       <item> Uint64 </item>
+      <item> Uint128 </item>
       <item> Union </item>
       <item> Unsigned </item>
       <item> UTF8String </item>
