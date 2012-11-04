@@ -492,6 +492,7 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
 
 function det(lu::LUDense)
+    m, n = size(lu)
     if lu.info > 0; return zero(typeof(lu.lu[1])); end
     prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
