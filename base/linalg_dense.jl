@@ -686,11 +686,11 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
             return ans
         end
         if ishermitian(A) 
-            ans, ~, ~, info = Lapack.sysv!('U', Acopy, X)
+            ans, _, _, info = Lapack.sysv!('U', Acopy, X)
             if info > 0; error("Singular system"); end
             return ans
         end
-        ans, ~, ~, info = Lapack.gesv!(Acopy, X)
+        ans, _, _, info = Lapack.gesv!(Acopy, X)
         if info > 0; error("Singular system"); end
         return ans
     end
