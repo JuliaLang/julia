@@ -36,7 +36,7 @@ function read{T}(from::IOString, a::Array{T})
     if !from.readable error("read failed") end
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
-        if from.size - from.ptr + 1 < nb
+        if nb > nb_available(from)
             throw(EOFError())
         end
         ccall(:memcpy, Void, (Ptr{Void}, Ptr{Void}, Int), a, pointer(from.data,from.ptr), nb)
@@ -59,7 +59,8 @@ end
 
 read{T}(from::IOString, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
-length(io::IOString) = (io.seekable ? io.size : io.size - io.ptr + 1)
+length(io::IOString) = (io.seekable ? io.size : nb_available(io))
+nb_available(io::IOString) = io.size - io.ptr + 1
 skip(io::IOString, n::Integer) = (io.ptr = min(io.ptr + n, io.size+1))
 function seek(io::IOString, n::Integer) 
     if !io.seekable error("seek failed") end
@@ -87,7 +88,7 @@ end
 function compact(io::IOString)
     if !io.writable error("compact failed") end 
     if io.seekable error("compact failed") end
-    ccall(:memmove, Void, (Ptr{Void},Ptr{Void},Int), io.data, pointer(io.data,io.ptr), io.size - io.ptr + 1)
+    ccall(:memmove, Void, (Ptr{Void},Ptr{Void},Int), io.data, pointer(io.data,io.ptr), nb_available(io))
     io.size -= io.ptr - 1
     io.ptr = 1
     return true
@@ -144,7 +145,7 @@ function takebuf_array(io::IOString)
             data = copy(data)
         end
     else
-        nbytes = io.size - io.ptr + 1
+        nbytes = nb_available(io)
         a = Array(Uint8, nbytes)
         data = read(io, a)
     end
@@ -187,4 +188,19 @@ function write(to::IOString, a::Uint8)
 end
 
 write(to::IOString, p::Ptr) = write(to, convert(Uint, p))
+
+readbytes(io::IOString,nb::Integer) = bytestring(read(io, Array(Uint8, nb)))
+readall(io::IOString) = readbytes(io,nb_available(io))
+function memchr(buf::IOString, delim)
+    p = pointer(buf.data, buf.ptr)
+    q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,delim,nb_available(buf))
+    nb = (q == C_NULL ? 0 : q-p+1)
+end
+function readuntil(io::IOString, delim)
+    nb = memchr(io, delim)
+    if nb == 0
+        nb = available(io)
+    end
+    readbytes(io,nb)
+end
 

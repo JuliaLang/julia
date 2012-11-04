@@ -3,20 +3,23 @@
 #TODO: cleanup methods duplicated with io.jl
 #TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
 #TODO: remove ProcessStatus if not used
-#TODO: allow waiting on handles other than processes
-#TODO: don't allow waiting on close'd handles
-#TODO: libuv process_events w/o blocking
 #TODO: implement various buffer modes and helper function (minor)
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
+#TODO: UDPSockets are probably broken
 
 
-
-typealias PtrSize Int
 globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
 mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},())
 
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
+type WaitTask 
+    task::Task
+    filter::Callback #runs task only if false
+    localdata::Any
+    WaitTask(task::Task,test::Callback,localdata) = new(task,test,localdata)
+    WaitTask(task::Task) = new(task, false)
+end
 
 abstract AsyncStream <: Stream
 
@@ -50,7 +53,6 @@ end
 ignorestatus(cmd::Cmd) = (cmd.ignorestatus=true; cmd)
 ignorestatus(cmd::Union(OrCmds,AndCmds)) = (ignorestatus(cmd.a); ignorestatus(cmd.b); cmd)
 
-#typealias StreamHandle Union(PtrSize,AsyncStream)
 
 type Process
     cmd::Cmd
@@ -61,18 +63,20 @@ type Process
     exit_code::Int32
     term_signal::Int32
     exitcb::Callback
+    exitnotify::Vector{WaitTask}
     closecb::Callback
+    closenotify::Vector{WaitTask}
     function Process(cmd::Cmd,handle::Ptr{Void},in::RawOrBoxedHandle,out::RawOrBoxedHandle,err::RawOrBoxedHandle)
-    if(!isa(in,AsyncStream))
-        in=null_handle
-    end
-    if(!isa(out,AsyncStream))
-        out=null_handle
-    end
-    if(!isa(err,AsyncStream))
-        err=null_handle
-    end
-    new(cmd,handle,in,out,err,-2,-2,false,false)
+        if(!isa(in,AsyncStream))
+            in=null_handle
+        end
+        if(!isa(out,AsyncStream))
+            out=null_handle
+        end
+        if(!isa(err,AsyncStream))
+            err=null_handle
+        end
+        new(cmd,handle,in,out,err,-2,-2,false,WaitTask[],false,WaitTask[])
     end
 end
 
@@ -85,25 +89,16 @@ type ProcessChain
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
-typealias Waitable Union(Process,AsyncStream)
-
-const _jl_wait_for = Union(Process,AsyncStream)[]
-function _jl_wait_for_(p::Process)
-    if !process_exited(p)
-        push(_jl_wait_for, p)
-    end
-end
-_jl_wait_for_(p::AsyncStream) = push(_jl_wait_for, p)
-_jl_wait_for_(pc::ProcessChain) = map(_jl_wait_for_, pc.processes)
-
 type NamedPipe <: AsyncStream
     handle::Ptr{Void}
     buffer::Buffer
     open::Bool
     line_buffered::Bool
     readcb::Callback
+    readnotify::Vector{WaitTask}
     closecb::Callback
-    NamedPipe() = new(C_NULL,PipeString(),false,true,false,false)
+    closenotify::Vector{WaitTask}
+    NamedPipe() = new(C_NULL,PipeString(),false,true,false,WaitTask[],false,WaitTask[])
 end
 
 type TTY <: AsyncStream
@@ -112,8 +107,10 @@ type TTY <: AsyncStream
     line_buffered::Bool
     buffer::Buffer
     readcb::Callback
+    readnotify::Vector{WaitTask}
     closecb::Callback
-    TTY(handle,open)=new(handle,open,true,PipeString(),false,false)
+    closenotify::Vector{WaitTask}
+    TTY(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[])
 end
 
 abstract Socket <: AsyncStream
@@ -124,9 +121,12 @@ type TcpSocket <: Socket
     line_buffered::Bool
     buffer::Buffer
     readcb::Callback
+    readnotify::Vector{WaitTask}
     ccb::Callback
+    connectnotify::Vector{WaitTask}
     closecb::Callback
-    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,false,false)
+    closenotify::Vector{WaitTask}
+    TcpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[],false,WaitTask[])
     function TcpSocket()
         this = TcpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},TcpSocket),globalEventLoop(),this)
@@ -143,9 +143,12 @@ type UdpSocket <: Socket
     line_buffered::Bool
     buffer::Buffer
     readcb::Callback
+    readnotify::Vector{WaitTask}
     ccb::Callback
+    connectnotify::Vector{WaitTask}
     closecb::Callback
-    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false)
+    closenotify::Vector{WaitTask}
+    UdpSocket(handle,open)=new(handle,open,true,PipeString(),false,WaitTask[],false,WaitTask[],false,WaitTask[])
     function UdpSocket()
         this = UdpSocket(C_NULL,false)
         this.handle = ccall(:jl_make_tcp,Ptr{Void},(Ptr{Void},UdpSocket),globalEventLoop(),this)
@@ -217,15 +220,109 @@ end
 
 type Ip6Addr <: IpAddr
     port::Uint16
-    host::Array{Uint8,1} #this should be fixed at 16 bytes is fixed size arrays are implemented
+    host::Array{Uint8,1} #this should be fixed at 16 bytes if fixed size arrays are implemented
     flow_info::Uint32
     scope::Uint32
 end
 
+function tasknotify(waittasks::Vector{WaitTask}, args...)
+    newwts = WaitTask[]
+    ct = current_task()
+    for wt in waittasks
+        if (isa(wt.filter, Function) && isequal(wt.filter(wt.localdata, args...), false)) || isequal(wt, false)
+            work = WorkItem(wt.task)
+            work.argument = args
+            enq_work(work) #make_scheduled(wt.task)
+        else
+            push(newwts,wt)
+        end
+    end
+    grow(waittasks,length(newwts)-length(waittasks))
+    waittasks[:] = newwts
+end
+
+wait_exit_filter(p::Process, args...) = !process_exited(p)
+wait_connect_filter(w::AsyncStream, args...) = !w.open
+wait_close_filter(w::Union(AsyncStream,Process), args...) = w.open
+wait_readable_filter(w::AsyncStream, args...) = nb_available(w.buffer) <= 0
+wait_readnb_filter(w::(AsyncStream,Int), args...) = nb_available(w[1].buffer) < w[2]
+wait_readline_filter(w::AsyncStream, args...) = memchr(w.buffer,'\n') <= 0
+
+#general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
+for (fcn, notify, filter_fcn, types) in
+    ((:wait_exit,:exitnotify,:wait_exit_filter,:Process),
+     (:wait_connect,:connectnotify,:wait_connect_filter,:AsyncStream),
+     (:wait_close,:closenotify,:wait_close_filter,:(Union(AsyncStream,Process))),
+     (:wait_readable,:readnotify,:wait_readable_filter,:AsyncStream),
+     (:wait_readline,:readnotify,:wait_readline_filter,:AsyncStream),
+     (:wait_readnb,:readnotify,:wait_readnb_filter,:(AsyncStream,Int)))
+    @eval begin
+        function $filter_fcn(x::Vector{$types}, args...)
+            for a=x
+                if $filter_fcn(a, args...)
+                    return true
+                end
+            end
+            return false
+        end
+        function $fcn(x::Union($types,Vector{$types}))
+            ct = current_task()
+            tw = WaitTask(ct, $filter_fcn, x)
+            args = ()
+            while $filter_fcn(x)
+                if isa(x,Vector)
+                    for a = x
+                        if isa(a,Tuple)
+                            a = a[1]
+                        end
+                        if $filter_fcn(a)
+                            push(getfield(a,$(expr(:quote,notify))),tw)
+                        end
+                    end
+                else
+                    a = x
+                    if isa(a,Tuple)
+                        a = a[1]
+                    end
+                    push(getfield(a,$(expr(:quote,notify))),tw)
+                end
+                ct.runnable = false
+                args = yield()
+            end
+            args
+        end
+        $fcn(x,y...) = $fcn((x,y...)) #allow either form
+    end
+end
+wait_exit(x::ProcessChain) = wait_exit(x.processes)
+function wait_read(x::AsyncStream)
+    ct = current_task()
+    tw = WaitTask(ct)
+    push(x.readnotify,tw)
+    ct.runnable = false
+    yield()
+end
+wait_success(x::ProcessChain) = wait_success(x.processes)
+function wait_success(x::Union(Process,Vector{Process}))
+    wait_exit(x)
+    kill(x)
+    success(x)
+end
+    
 #from `connect`
-_uv_hook_connectcb(sock::AsyncStream, status::Int32) = if(isa(sock.ccb,Function)); sock.ccb(sock,status); end
+function _uv_hook_connectcb(sock::AsyncStream, status::Int32)
+    if isa(sock.ccb,Function)
+        sock.ccb(sock, status)
+    end
+    tasknotify(sock.connectnotify, sock, status)
+end
 #from `listen`
-_uv_hook_connectioncb(sock::AsyncStream, status::Int32) = if(isa(sock.ccb,Function)); sock.ccb(sock,status); end
+function _uv_hook_connectioncb(sock::AsyncStream, status::Int32)
+    if(isa(sock.ccb,Function))
+        sock.ccb(sock,status)
+    end
+    tasknotify(sock.connectnotify, sock, status)
+end
 
 function _jl_listen(sock::AsyncStream,backlog::Int32,cb::Function)
     sock.ccb = cb
@@ -276,16 +373,9 @@ function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            buf = stream.buffer
-            if stream.line_buffered
-                p = pointer(buf.data, buf.ptr)
-                q = ccall(:memchr,Ptr{Uint8},(Ptr{Uint8},Int32,Int32),p,'\n',buf.size)
-                nread = q == C_NULL ? 0 : q-p
-            else
-                nread = buf.size-buf.ptr+1
-            end
-            if nread > 0
-                more = stream.readcb(stream, nread)
+            nreadable = (stream.line_buffered ? int(memchr(stream.buffer, '\n')) : nb_available(stream.buffer))
+            if nreadable > 0
+                more = stream.readcb(stream, nreadable)
             else
                 more = false
             end
@@ -294,7 +384,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
         end
     end
 end
-function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
+function _uv_hook_readcb(stream::AsyncStream, nread::Int, base::Ptr, len::Int32)
     if(nread == -1)
         close(stream)
         if(isa(stream.closecb,Function))
@@ -307,6 +397,7 @@ function _uv_hook_readcb(stream::AsyncStream,nread::Int, base::Ptr, len::Int32)
     else
         notify_filled(stream.buffer, nread, base, len)
         notify_filled(stream, nread)
+        tasknotify(stream.readnotify, stream)
     end
 end
 ##########################################
@@ -350,7 +441,11 @@ end
 
 const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
 
-_uv_hook_close(uv::AsyncStream) = uv.open = false
+function _uv_hook_close(uv::AsyncStream)
+    uv.open = false
+    if isa(uv.closecb, Function) uv.closecb(uv) end
+    tasknotify(uv.closenotify, uv)
+end
 _uv_hook_close(uv::AsyncWork) = nothing
 
 # This serves as a common callback for all async classes
@@ -380,20 +475,21 @@ end
 abstract ProcessStatus
 type ProcessNotRun   <: ProcessStatus; end
 type ProcessRunning  <: ProcessStatus; end
-type ProcessExited   <: ProcessStatus; status::PtrSize; end
-type ProcessSignaled <: ProcessStatus; signal::PtrSize; end
-type ProcessStopped  <: ProcessStatus; signal::PtrSize; end
+type ProcessExited   <: ProcessStatus; status::Int32; end
+type ProcessSignaled <: ProcessStatus; signal::Int32; end
+type ProcessStopped  <: ProcessStatus; signal::Int32; end
 
 process_exited  (s::Process) = (s.exit_code != -2)
-process_exited  (s::Vector{Process}) =all(map(process_exited,s))
+process_exited  (s::Vector{Process}) = all(map(process_exited,s))
 process_signaled(s::Process) = (s.term_signal > 0)
-process_stopped (s::Process) = 0 #not supported by libuv. Do we need this?
+process_stopped (s::Process) = false #not supported by libuv. Do we need this?
 
 process_exit_status(s::Process) = s.exit_code
 process_term_signal(s::Process) = s.term_signal
-process_stop_signal(s::Process) = 0 #not supported by libuv. Do we need this?
+process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
-function process_status(s::PtrSize)
+function process_status(s::Process)
+    s.exit_code == -2   ? ProcessRunning :
     process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
     process_signaled(s) ? ProcessSignaled(process_term_signal(s)) :
     process_stopped (s) ? ProcessStopped (process_stop_signal(s)) :
@@ -407,16 +503,6 @@ function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
 run_event_loop() = run_event_loop(globalEventLoop())
-
-function break_one_loop(loop::Ptr{Void})
-    ccall(:uv_break_one,Void,(Ptr{Void},),loop)
-end
-break_one_loop() = break_one_loop(globalEventLoop())
-
-function process_events(loop::Ptr{Void})
-    ccall(:jl_process_events,Void,(Ptr{Void},),loop)
-end
-process_events() = process_events(globalEventLoop())
 
 ##pipe functions
 malloc_pipe() = c_malloc(_sizeof_uv_pipe)
@@ -445,27 +531,34 @@ end
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
 function close(stream::AsyncStream)
-    if(stream.open)
+    if stream.open
         ccall(:jl_close_uv,Void,(Ptr{Void},),stream.handle)
-        stream.open=false
+        stream.open = false
     end
 end
 
 ##stream functions
 
-start_reading(stream::AsyncStream) = stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream)) : 0
-start_reading(stream::AsyncStream,cb::Function) = (start_reading(stream);stream.readcb=cb)
-start_reading(stream::AsyncStream,cb::Bool) = start_reading(stream)
+start_reading(stream::AsyncStream) = (stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream)) : int32(0))
+function start_reading(stream::AsyncStream,cb::Function)
+    start_reading(stream)
+    stream.readcb = cb
+    nread = nb_available(stream.buffer)
+    if nread > 0
+        notify_filled(stream,nread)
+    end
+end
+start_reading(stream::AsyncStream,cb::Bool) = (start_reading(stream); stream.readcb = cb)
 
 stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),read_handle(stream))
 
 function readall(stream::AsyncStream)
     start_reading(stream)
-    wait(stream)
+    wait_close(stream)
     return takebuf_string(stream.buffer)
 end
 
-show(io, p::Process) = print(io, "Process(", p.cmd, ")")
+show(io, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
 
 function finish_read(pipe::NamedPipe)
     close(pipe) #handles to UV and ios will be invalid after this point
@@ -475,28 +568,23 @@ function finish_read(state::(NamedPipe,ByteString))
     finish_read(state...)
 end
 
-function end_process(p::Process,h::Ptr{Void},e::Int32, t::Int32)
-    p.exit_code=e
-    p.term_signal=t
-end
-
 function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
         in::Ptr{Void}, out::Ptr{Void}, err::Ptr{Void})
-    return ccall(:jl_spawn, PtrSize,
+    return ccall(:jl_spawn, Ptr{Void},
         (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Process, Ptr{Void}, Ptr{Void}, Ptr{Void}),
          cmd,        argv,            loop,      pp,       in,        out,       err)
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::Int32)
-    if proc.exitcb == false || !isa(proc.exitcb(proc,exit_status,term_signal), Nothing)
-        process_exited_chain(proc,exit_status,term_signal)
-    end
+    proc.exit_code = exit_status
+    proc.term_signal = term_signal
+    if isa(proc.exitcb, Function) proc.exitcb(proc, exit_status, term_signal) end
+    tasknotify(proc.exitnotify, proc)
 end
 
 function _uv_hook_close(proc::Process)
-    if proc.closecb == false || !isa(proc.exitcb(pp,args...), Nothing)
-        process_closed_chain(proc)
-    end
+    if isa(proc.closecb, Function) proc.closecb(proc) end
+    tasknotify(proc.closenotify, proc)
 end
 
 function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -548,26 +636,6 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         #c_free(err)
     end
     pp
-end
-
-function process_exited_chain(p::Process,e::Int32,t::Int32)
-    p.exit_code = e
-    p.term_signal = t
-    true
-end
-
-function done_waiting_for(p::Waitable)
-    i = findfirst(_jl_wait_for, p)
-    if i > 0
-        del(_jl_wait_for, i)
-        if length(_jl_wait_for) == 0
-            break_one_loop()
-        end
-    end
-end
-
-function process_closed_chain(p::Waitable)
-    process_exited(p)
 end
 
 function spawn(pc::ProcessChainOrNot,cmds::OrCmds,stdios::StdIOSet,exitcb::Callback,closecb::Callback)
@@ -700,7 +768,7 @@ end
 readall(cmd::AbstractCmd) = readall(cmd, null_handle)
 function readall(cmd::AbstractCmd,stdin::AsyncStream)
     (out,pc)=read_from(cmd, stdin)
-    if !wait(pc)
+    if !wait_success(pc)
         pipeline_error(pc)
     end
     return takebuf_string(out.buffer)
@@ -708,7 +776,7 @@ end
 
 function run(cmds::AbstractCmd,args...)
     ps = spawn(cmds,spawn_opts_inherit(args...)...)
-    success = wait(ps)
+    success = wait_success(ps)
     if success
         return true
     else
@@ -719,7 +787,7 @@ end
 success(proc::Process) = (assert(process_exited(proc)); proc.exit_code==0)
 success(procs::Vector{Process}) = all(map(success, procs))
 success(procs::ProcessChain) = success(procs.processes)
-success(cmd::AbstractCmd) = wait(spawn(cmd))
+success(cmd::AbstractCmd) = wait_success(spawn(cmd))
 
 function pipeline_error(proc::Process)
     if !proc.cmd.ignorestatus
@@ -727,6 +795,7 @@ function pipeline_error(proc::Process)
     end
     true
 end
+
 function pipeline_error(procs::ProcessChain)
     failed = Process[]
     for p = procs.processes
@@ -752,45 +821,6 @@ function exec(thunk::Function)
         exit(0xff)
     end
     exit(0)
-end
-
-
-function wait(procs::Union(Process,Vector{Process}))
-    try
-        while(!process_exited(procs)) #wait(procs)
-            process_events()
-        end
-    catch e
-        kill(procs)
-        process_events() #join(procs)
-        throw(e)
-    end
-    return success(procs)
-end
-wait(procs::ProcessChain) = wait(procs.processes)
-function wait(w::AsyncStream,condition::Function)
-    while(condition(w))
-        process_events()
-    end
-    return true
-end
-function wait(w::AsyncStream)
-    while(w.open)
-        process_events(globalEventLoop())
-    end
-    return true
-end
-function wait()
-    if length(_jl_wait_for) > 0
-        try
-            run_event_loop() #wait(procs)
-        catch e
-            del_all(_jl_wait_for)
-            process_events() #join(procs)
-            throw(e)
-        end
-        assert(length(_jl_wait_for) == 0)
-    end
 end
 
 _jl_kill(p::Process,signum::Int32) = ccall(:uv_process_kill,Int32,(Ptr{Void},Int32),p.handle,signum)
@@ -940,7 +970,7 @@ function connect_callback(sock::TcpSocket,status::Int32)
     if(status==-1)
         error("Socket connection failed: ",_uv_lasterror(globalEventLoop()))
     end
-    sock.open=true;
+    sock.open = true;
 end
 
 
@@ -970,8 +1000,7 @@ function connect_to_host(host::ByteString,port::Uint16)
     if(err!=0)
         error("Failed to  initilize request to resolve hostname: ",host)
     end
-    wait(sock)
-    println("done")
+    wait_connect(sock)
     return sock
 end
 

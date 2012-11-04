@@ -46,16 +46,17 @@ extern "C" {
 #define XX(hook) static jl_function_t *JULIA_HOOK(hook) = 0;
 JL_CB_TYPES(XX)
 #undef XX
+static jl_type_t* jl_method_error = 0;
 DLLEXPORT void jl_get_uv_hooks() {
 	if (JULIA_HOOK(close)) return; // only do this once
 #define XX(hook) JULIA_HOOK(hook) = JULIA_HOOK_(jl_base_module, hook);
 	JL_CB_TYPES(XX)
-}
 #undef XX
+	jl_method_error = (jl_type_t*)jl_get_global(jl_base_module, jl_symbol("MethodError"));
+}
 #undef JL_CB_TYPES
 
 int base_module_conflict = 0; //set to 1 if Base is getting redefined since it means there are two place to try the callbacks
-static jl_type_t* jl_method_error = 0;
 // warning: this is defined without the standard do {...} while (0) wrapper, since I wanted ret to escape
 // warning: during bootstrapping, callbacks will be called twice if a MethodError occured at ANY time during callback call
 #define JULIA_CB(hook,args...) \
@@ -65,15 +66,14 @@ static jl_type_t* jl_method_error = 0;
     } else { \
         JL_TRY { \
             ret = jl_callback_call(JULIA_HOOK(hook),args); \
-            /* fprintf(stderr, #hook " original succeeded\n"); */\
+            /* jl_puts(#hook " original succeeded\n",jl_uv_stderr); */ \
         } \
         JL_CATCH { \
-            if (!jl_method_error) jl_method_error = (jl_type_t*)jl_get_global(jl_base_module, jl_symbol("MethodError")); \
             if (jl_typeof(jl_exception_in_transit) == jl_method_error) { \
-                /* fprintf(stderr, "\n" #hook " being retried with new Base bindings --> "); */\
+                /* jl_puts("\n" #hook " being retried with new Base bindings --> ",jl_uv_stderr); */ \
                 jl_function_t *cb_func = JULIA_HOOK_((jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base")), hook); \
                 ret = jl_callback_call(cb_func,args); \
-                /* fprintf(stderr, #hook " succeeded\n"); */\
+                /* jl_puts(#hook " succeeded\n",jl_uv_stderr); */ \
             } else { \
                 jl_raise(jl_exception_in_transit); \
             } \
@@ -118,7 +118,6 @@ void closeHandle(uv_handle_t* handle)
 #ifndef __WIN32__
     ev_invoke_pending(handle->loop->ev);
 #endif
-    handle->loop->block = 0;
     JULIA_CB(close,handle->data,0);
     //TODO: maybe notify Julia handle to close itself
     free(handle);
@@ -127,13 +126,11 @@ void closeHandle(uv_handle_t* handle)
 void jl_return_spawn(uv_process_t *p, int exit_status, int term_signal) {
     JULIA_CB(return_spawn,p->data,2,CB_INT32,exit_status,CB_INT32,term_signal);
     uv_close((uv_handle_t*)p,&closeHandle);
-    p->loop->block = 0;
 }
 
 void jl_readcb(uv_stream_t *handle, ssize_t nread, uv_buf_t buf)
 {
     JULIA_CB(readcb,handle->data,3,CB_INT,nread,CB_PTR,(buf.base),CB_INT32,buf.len);
-    handle->loop->block = 0;
 }
 
 uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
@@ -149,19 +146,16 @@ uv_buf_t jl_alloc_buf(uv_handle_t *handle, size_t suggested_size) {
 void jl_connectcb(uv_connect_t *connect, int status)
 {
     JULIA_CB(connectcb,connect->handle->data,1,CB_INT32,status);
-    connect->handle->loop->block = 0;
 }
 
 void jl_connectioncb(uv_stream_t *stream, int status)
 {
     JULIA_CB(connectioncb,stream->data,1,CB_INT32,status);
-    stream->loop->block = 0;
 }
 
 void jl_asynccb(uv_handle_t *handle, int status)
 {
     JULIA_CB(asynccb,handle->data,1,CB_INT32,status);
-    handle->loop->block = 0;
 }
 
 /** libuv constructors */

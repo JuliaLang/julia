@@ -105,7 +105,7 @@ type Worker
     Worker(host::String,port::Integer)=Worker(bytestring(host),uint16(port))
     Worker(host::ByteString, port::Uint16)=Worker(host, port, connect_to_host(host,port))
 
-    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, DynamicBuffer(),
+    Worker(host::String,port::Uint16,sock::TcpSocket,id) = new(host, port, sock, IOString(),
                                        {}, {}, id, false)
     Worker(host::String,port::Integer,sock::TcpSocket,id)=Worker(host,uint16(port),sock,id)
     Worker(host,port,sock) = Worker(host,port,sock,0)
@@ -874,7 +874,6 @@ function message_handler_loop(this::Deserializer)
     global PGRP
     #println("message_handler_loop")
     refs = (PGRP::ProcessGroup).refs
-    this.task=current_task()
     if PGRP.np == 0
             # first connection; get process group info from client
             PGRP.myid = force(deserialize(this))
@@ -915,7 +914,7 @@ function message_handler_loop(this::Deserializer)
             elseif is(msg, :do)
                 f = deserialize(this)
                 args = deserialize(this)
-                print("got args: $args\n")
+                #print("got args: $args\n")
                 let func=f, ar=args
                     enq_work(WorkItem(()->apply(force(func),force(ar))))
                 end
@@ -997,52 +996,43 @@ end
 #     localp
 # end
 
-function _parse_conninfo(ps,w,i::Int,stream::AsyncStream,nread::Int)
-    println("readcb")
-    a = Array(Uint8, nread)
-    read(stream.buffer, a)
-    a = ascii(a)
-    m = match(r"^julia_worker:(\d+)#(.*)", s)
-    println(m)
-    if m != nothing
-        port = parse_int(Uint16, m.captures[1])
-        hostname::ByteString = m.captures[2]
-        w[i] = worker = Worker(hostname, port)
-        sock = w[i].socket
-        stream.readcb = function(handle::IOBuffer,nread::Int)
-            if(nread>0)
-                line = Array(Uint8, nread)
-                read(stream.buffer, line)
-                try
-                    line = ascii(line)
-                    print("\tFrom worker $(worker.id):\t",line)
-                catch e
-                    println("\tError parsing reply from worker $(worker.id):\t",e)
-                end
-            end
-            true
-        end
-        ps.exit_code=0
-#    else
-#        println("_parse_conninfo failed $s")
-    end
-    true
-end
-
 function start_remote_workers(machines, cmds)
     n = length(cmds)
     outs = cell(n)
     w = cell(n)
     pps = Array(Process,n)
-    for i=1:n; let i=i, ostream, ps
-        ostream,ps = read_from(cmds[i])
-        ostream.line_buffered = true
-        # redirect console output from workers to the client's stdout
-        start_reading(ostream,
-            (stream,nread)->(_parse_conninfo(ps,w,i,stream,nread);true))
-        pps[i] = ps
-    end; end
-    wait(pps)
+    for i=1:n
+        outs[i],pps[i] = read_from(cmds[i])
+        outs[i].line_buffered = true
+    end
+    for i=1:n
+        local hostname::String, port::Int16
+        stream = outs[i]
+        stream.line_buffered = true
+        while true
+            wait_readline(stream)
+            conninfo = readline(stream.buffer)
+            hostname, port = parse_connection_info(conninfo)
+            if hostname != ""
+                break
+            end
+        end
+        w[i] = wrker = Worker(hostname, port)
+
+        # redirect console output from workers to the client's stdout:
+        start_reading(stream,function(stream::AsyncStream,nread::Int)
+            if(nread>0)
+                try
+                    line = readbytes(stream.buffer, nread)
+                    print("\tFrom worker $(wrker.id):\t",line)
+                catch e
+                    println("\tError parsing reply from worker $(wrker.id):\t",e)
+                    return false
+                end
+            end
+            true
+        end)
+    end
     w
 end
 
@@ -1625,21 +1615,13 @@ function event_loop(isclient)
     multi_cb_handles.fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
     timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(multi_cb_handles.work_cb))
     startTimer(timer,int64(1),int64(10000)) #do work every 10s
-    while true
+    #while true
         #try
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
             end
             run_event_loop();
-        if isempty(Workqueue)
-            flush_gc_msgs()
-        else
-            perform_work()
-        end
-        if !isempty(Workqueue)
-            queueAsync(multi_cb_handles.work_cb) #really this should just make process_event be non-blocking
-        end
         #catch e
         #    if isa(e,DisconnectException)
         #        # TODO: wake up tasks waiting for failed process
@@ -1653,7 +1635,7 @@ function event_loop(isclient)
         #    end
         #    iserr, lasterr = true, e
         #end
-    end
+    #end
 end
 
 # force a task to stop waiting, providing with_value as the value of

@@ -244,33 +244,23 @@ force(x::Function) = x()
 # interfere with I/O by reading, writing, blocking, etc.
 
 type Deserializer <: Stream #TODO: rename to SyncStream
-    task::Task
     stream::AsyncStream
     function Deserializer(loop::Function,stream::AsyncStream)
-        this=new()
-        this.task=Task(()->loop(this))
-        this.stream=stream
-        start_reading(stream, (stream,nread) -> notify_filled(this, nread))
+        this = new(stream)
+        enq_work(() -> loop(this))
+        start_reading(stream)
         this
     end
 end
 show(io::IO,d::Deserializer) = print(io,"Deserializer()")
-
-function notify_filled(this::Deserializer, nreadable::Int)
-    this.task.runnable = true
-    return yieldto(this.task,nreadable)
-end
 
 function read{T}(this::Deserializer, a::Array{T})
     if isa(T, BitsKind)
         nb = numel(a)*sizeof(T)
         buf = this.stream.buffer
         assert(buf.seekable == false)
-        assert(buf.maxlength > nb)
-        while length(buf) < nb
-            this.task.runnable = false
-            navailable = yield()
-        end
+        assert(buf.maxsize >= nb)
+        wait_readnb(this.stream,nb)
         read(this.stream.buffer, a)
         return a
     else
@@ -282,13 +272,17 @@ end
 function read(this::Deserializer,::Type{Uint8})
     buf = this.stream.buffer
     assert(buf.seekable == false)
-    while (length(buf) < 1)
-        this.task.runnable = false
-        navailable = yield()
-    end
+    wait_readnb(this.stream,1)
     read(buf,Uint8)
-    b
 end
+
+function readline(this::Deserializer)
+    buf = this.stream.buffer
+    assert(buf.seekable == false)
+    wait_readline(this.stream)
+    readline(buf)
+end
+
 write(::Deserializer,args...) = error("write not implemented for deserializer")
 position(d::Deserializer) = d.pos
 

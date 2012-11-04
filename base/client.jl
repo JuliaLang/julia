@@ -29,7 +29,9 @@ quit() = exit()
 
 function repl_callback(ast::ANY, show_value)
     # use root task to execute user input
-    stop_reading(STDIN)
+    global _repl_enough_stdin = true
+    stop_reading(STDIN) 
+    STDIN.readcb = false
     put(_jl_repl_channel, (ast, show_value))
 end
 
@@ -91,9 +93,26 @@ function _jl_eval_user_input(ast::ANY, show_value)
 end
 
 function readBuffer(stream::TTY, nread)
-    ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),pointer(stream.buffer.data,stream.buffer.ptr),nread)
-    skip(stream.buffer, nread)
-    true
+    global _repl_enough_stdin::Bool    
+    while !_repl_enough_stdin && nb_available(stream.buffer) > 0
+        nread = int(memchr(stream.buffer,'\n')) # never more than one line or readline explodes :O
+        nread2 = int(memchr(stream.buffer,'\r'))
+        if nread == 0
+            if nread2 == 0
+                nread = nb_available(stream.buffer)
+            else
+                nread = nread2
+            end
+        else
+            if nread2 != 0 && nread2 < nread
+                nread = nread2
+            end
+        end
+        ptr = pointer(stream.buffer.data,stream.buffer.ptr)
+        skip(stream.buffer,nread)
+        ccall(dlsym(_jl_repl,:jl_readBuffer),Void,(Ptr{Void},Int32),ptr,nread)
+    end
+    return false
 end
 
 function run_repl()
@@ -111,6 +130,7 @@ function run_repl()
 
     while true
         ccall(dlsym(_jl_repl,:repl_callback_enable), Void, ())
+        global _repl_enough_stdin = false
         start_reading(STDIN, readBuffer)
         (ast, show_value) = take(_jl_repl_channel)
         if show_value == -1

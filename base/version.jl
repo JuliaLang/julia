@@ -138,6 +138,7 @@ end
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
 try
     ver = string(VERSION)
+    error() #TODO: how to do this without Scheduler / uv_run() ?!!!
     commit = readchomp(`git rev-parse HEAD`)
     tagged = try readchomp(`git rev-parse --verify --quiet v$ver`)
              catch "doesn't reference a commit"; end
