@@ -67,7 +67,15 @@ function intersect(s::Set, sets::Set...)
     return i
 end
 
-setdiff(a::Set, b::Set) = del_each(copy(a),b)
+function setdiff(a::Set, b::Set)
+    d = copy(a)
+    for x in b
+        if has(d, x)
+            del(d, x)
+        end
+    end
+    d
+end
 
 |(s::Set...) = union(s...)
 (&)(s::Set...) = intersect(s...)

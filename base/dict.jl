@@ -281,21 +281,6 @@ end
 
 hashindex(key, sz) = (int(hash(key)) & (sz-1)) + 1
 
-function slotassign(h::Dict, i::Int, k, v)
-    h.slots[i] = 0x1
-    h.keys[i] = k
-    h.vals[i] = v
-    h.count += 1
-end
-
-function slotmissing(h::Dict, i::Int)
-    h.slots[i] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, i-1)
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, i-1)
-    h.ndel += 1
-    h.count -= 1
-end
-
 isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
@@ -330,7 +315,9 @@ end
 
 function del_all{K,V}(h::Dict{K,V})
     fill!(h.slots, 0x0)
-    h.vals = Array(V, length(h.keys))
+    sz = length(h.slots)
+    h.keys = Array(K, sz)
+    h.vals = Array(V, sz)
     h.ndel = 0
     h.count = 0
     return h
@@ -356,7 +343,6 @@ function assign{K,V}(h::Dict{K,V}, v, key)
 
     while true
         if isslotempty(h,index)
-            #slotassign(h, (avail < 0) ? index : avail, key, v)
             if avail > 0; index = avail; end
             h.slots[index] = 0x1
             h.keys[index] = key
@@ -389,7 +375,6 @@ function assign{K,V}(h::Dict{K,V}, v, key)
         h.keys[index] = key
         h.vals[index] = v
         h.count += 1
-        #slotassign(h, avail, key, v)
         return h
     end
 
@@ -447,9 +432,14 @@ end
 function del(h::Dict, key)
     index = ht_keyindex(h, key)
     if index > 0
-        slotmissing(h, index)
+        h.slots[index] = 0x2
+        ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
+        ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+        h.ndel += 1
+        h.count -= 1
+        return h
     end
-    return h
+    throw(KeyError(key))
 end
 
 function skip_deleted(h::Dict, i)
