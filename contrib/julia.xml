@@ -29,7 +29,7 @@
 
 <!DOCTYPE language SYSTEM "language.dtd">
 
-<language name="Julia" section="Sources" version="0.1" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
+<language name="Julia" section="Sources" version="0.2" kateversion="2.2" extensions="*.jl" casesensitive="1" priority="5" license="MIT">
 
   <highlighting>
     <list name="block_begin">
@@ -98,6 +98,7 @@
       <item> Int16 </item>
       <item> Int32 </item>
       <item> Int64 </item>
+      <item> Int128 </item>
       <item> Integer </item>
       <item> IntSet </item>
       <item> IO </item>
@@ -133,6 +134,7 @@
       <item> Uint16 </item>
       <item> Uint32 </item>
       <item> Uint64 </item>
+      <item> Uint128 </item>
       <item> Union </item>
       <item> Unsigned </item>
       <item> UTF8String </item>
@@ -163,9 +165,9 @@ endRegion="block" />
         <DetectChar char="#" context="1-comment" attribute="Comment"/>
 
 	<!-- Lists and arrays -->
-        <DetectChar char="(" context="nested" beginRegion="nested" attribute="Delimiter" />
+        <!-- <DetectChar char="(" context="nested" beginRegion="nested" attribute="Delimiter" />
         <DetectChar char="[" context="squared" beginRegion="squared" attribute="Delimiter" />
-        <DetectChar char="{" context="curly" beginRegion="curly" attribute="Delimiter" />
+        <DetectChar char="{" context="curly" beginRegion="curly" attribute="Delimiter" /> -->
 
         <!-- Strings -->
 	<DetectChar attribute="String" context="String" char="&quot;"/>
@@ -199,7 +201,7 @@ endRegion="block" />
 
         <!-- Look-ahead for adjoint ' after variable, number literal, closing braces and .' -->
         <RegExpr context="_adjoint" attribute="Variable" String="[a-zA-Z]\w*(?=')" />
-        <RegExpr context="_adjoint" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?[ij]?(?=')" />
+        <RegExpr context="_adjoint" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?(im)?(?=')" />
         <RegExpr context="_adjoint" attribute="Delimiter" String="[\)\]}](?=')" />
         <RegExpr context="_adjoint" attribute="Operator" String="\.'(?=')" />
 
@@ -208,16 +210,10 @@ endRegion="block" />
         <RegExpr context="#stay" attribute="Incomplete Char" String="'[^']*(''[^']*)*" />
 
         <!-- Identifiers, numbers and braces -->
+        <!-- We can't use HlCHex, Int, and Float because we need to allow the "im" at the end of complex numbers -->
         <DetectIdentifier context="#stay" attribute="Variable" />
-        <HlCHex contex="#stay" attribute="Hex" >
-          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
-        </HlCHex>
-	<Int context="#stay" attribute="Decimal">
-          <Detect2Chars context="#stay" attribute="Decimal" char="i" char1="m" />
-        </Int>
-        <CFloat context="#stay" attribute="Float">
-          <Detect2Chars context="#stay" attribute="Float" char="i" char1="m" />
-        </CFloat>
+        <RegExpr context="#stay" attribute="Hex" String="0x[0-9a-fA-F]+(im)?" />
+        <RegExpr context="#stay" attribute="Float" String="(\d+(\.\d+)?|\.\d+)([eE][+-]?\d+)?(im)?" />
         <AnyChar context="#stay" attribute="Delimiter" String="()[]{}"/>
 
         <!-- Single-character operators -->

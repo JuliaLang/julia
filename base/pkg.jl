@@ -1,5 +1,5 @@
-load("git.jl")
-load("pkgmetadata.jl")
+require("git.jl")
+require("pkgmetadata.jl")
 
 module Pkg
 #
@@ -12,7 +12,7 @@ using Metadata
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
-const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # get package repo directory
 
@@ -189,7 +189,7 @@ function _resolve()
         else
             ver = Metadata.version(pkg,want[pkg])
             println("installing $pkg v$ver")
-            url = readchomp("METADATA/$pkg/url")
+            url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
                 run(`git checkout -q --detach`)

@@ -215,12 +215,12 @@ An [Arch Linux package](https://aur.archlinux.org/packages.php?ID=56877) is also
 <a name="Editor-Terminal-Setup"/>
 ## Editor & Terminal Setup
 
-Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, and Textmate.
+Currently, [julia editing mode](https://github.com/JuliaLang/julia/wiki/Configuring-Editors) support is available for Emacs, Vim, Textmate, Notepad++, and Kate.
 
 Adjusting your terminal bindings is optional; everything will work fine without these key bindings.
 For the best interactive session experience, however, make sure that your terminal emulator (`Terminal`, `iTerm`, `xterm`, etc.) sends the `^H` sequence for `Backspace` (delete key) and that the `Shift-Enter` key combination sends a `\n` newline character to distinguish it from just pressing `Enter`, which sends a `\r` carriage return character.
-These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue behave normally with these bindings.
-The first binding makes backspacing through text in the interactive session behave more intuitively.
+These bindings allow custom readline handlers to trap and correctly deal with these key sequences; other programs will continue to behave normally with these bindings.
+The first binding makes backspacing through text at the prompt behave more intuitively.
 The second binding allows `Shift-Enter` to insert a newline without evaluating the current expression, even when the current expression is complete.
 (Pressing an unmodified `Enter` inserts a newline if the current expression is incomplete, evaluates the expression if it is complete, or shows an error if the syntax is irrecoverably invalid.)
 
