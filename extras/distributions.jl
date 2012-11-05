@@ -1,5 +1,5 @@
 module Distributions
-import Base.*
+using Base
 
 export                                  # types
     Distribution,

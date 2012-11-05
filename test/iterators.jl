@@ -1,5 +1,5 @@
 require("../extras/iterators.jl")
-import Iterators.*
+using Iterators
 
 # aux function emulating a comprehension [x for x in f]
 function buildvec(f)

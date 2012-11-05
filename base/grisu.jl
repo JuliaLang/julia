@@ -1,9 +1,11 @@
 libgrisu = dlopen("libgrisu")
 
 module Grisu
-import Base.*
+using Base
 export print_shortest
 export @grisu_ccall, NEG, DIGITS, BUFLEN, LEN, POINT
+
+import Base.show, Base.showcompact
 
 const NEG    = Array(Bool,1)
 const DIGITS = Array(Uint8,309+17)
@@ -27,7 +29,6 @@ const FIXED           = int32(2) # fixed number of trailing decimal points
 const PRECISION       = int32(3) # fixed precision regardless of magnitude
 
 # wrapper for the core grisu function, primarily for debugging
-global grisu, grisu_fix, grisu_sig
 function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
@@ -161,4 +162,3 @@ print_shortest(io, x::Float32, dot::Bool) = _print_shortest(io, x, dot, SHORTEST
 print_shortest(io, x::Union(FloatingPoint,Integer)) = print_shortest(io, float(x), false)
 
 end # module
-import Base.Grisu.print_shortest

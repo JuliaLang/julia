@@ -28,9 +28,9 @@ end
 
 type FileDes; fd::Int32; end
 
-global const STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
-global const STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
-global const STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
+const STDIN  = FileDes(ccall(:jl_stdin,  Int32, ()))
+const STDOUT = FileDes(ccall(:jl_stdout, Int32, ()))
+const STDERR = FileDes(ccall(:jl_stderr, Int32, ()))
 
 isequal(fd1::FileDes, fd2::FileDes) = (fd1.fd == fd2.fd)
 
@@ -208,8 +208,8 @@ type Cmd
         end
         this = new(exec,
                    "",
-                   Dict{FileDes,PipeEnd}(),
-                   Dict{FileDes,FileSink}(),
+                   (FileDes=>PipeEnd)[],
+                   (FileDes=>FileSink)[],
                    FileDes[],
                    Set{Cmd}(),
                    0,

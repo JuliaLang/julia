@@ -1,6 +1,6 @@
 module Sparse
 
-import Base.*
+using Base
 
 export SparseMatrixCSC, issparse, size, nnz, show,
        reinterpret, reshape, similar, convert,

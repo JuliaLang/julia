@@ -3,8 +3,8 @@
 require("options.jl")
 
 module Sound
-import Base.*
-import OptionsMod.*
+using Base
+using OptionsMod
 
 export wavread, wavwrite
 

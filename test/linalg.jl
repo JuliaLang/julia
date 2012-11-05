@@ -352,6 +352,7 @@ for theta = pi ./ [1:4]
   @assert abs(det(R) - 1.0) < Eps
 end
 
+# issue 1447
 let
     A = [1.+0.im 0; 0 1]
     B = pinv(A)
@@ -359,3 +360,6 @@ let
         @assert_approx_eq A[i] B[i]
     end
 end
+
+# issue 1490
+@assert_approx_eq det(ones(3,3)) 0.0

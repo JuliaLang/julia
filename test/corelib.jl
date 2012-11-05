@@ -113,6 +113,7 @@ _d = {"a"=>0}
 type I1438T
     id
 end
+import Base.hash
 hash(x::I1438T) = x.id
 
 begin
@@ -132,13 +133,73 @@ begin
     end
 end
 
-# #################### set ####################
+# Helper for writing tests about error conditions
+macro assert_raises(ExcType, expression)
+    quote
+        try
+            $expression
+        catch e
+            if !isa(e, $ExcType)
+                println("Error        : ",        e )
+                println("Type of error: ", typeof(e))
+                println("Expected     : ", $ExcType)
+                @assert false
+            end
+        end
+    end
+end
 
-# Is there any good reason why sets (and dicts) do not implement
-# isequal? I'm providing a quick'n'dirty implementation here to help
-# with the following tests. Will suggest implementation of isequal for
-# sets and dicts, in a later pull request.
-isequal(l::Set,r::Set) = length(l) == length(r) == length(intersect(l,r))
+@assert  isequal(Dict(), Dict())
+@assert  isequal({1 => 1}, {1 => 1})
+@assert !isequal({1 => 1}, {})
+@assert !isequal({1 => 1}, {1 => 2})
+@assert !isequal({1 => 1}, {2 => 1})
+
+# Generate some data to populate dicts to be compared
+data_in = [ (randi(1000), randstring(2)) for _ in 1:1001 ]
+
+# Populate the first dict
+d1 = Dict{Int, String}(length(data_in))
+for (k,v) in data_in
+    d1[k] = v
+end
+data_in = pairs(d1)
+# shuffle the data
+for i in 1:length(data_in)
+    j = randi(length(data_in))
+    data_in[i], data_in[j] = data_in[j], data_in[i]
+end
+# Inserting data in different (shuffled) order should result in
+# equivalent dict.
+d2 = Dict{Int, String}(length(data_in))
+for (k,v) in data_in
+    d2[k] = v
+end
+
+@assert  isequal(d1, d2)
+d3 = copy(d2)
+d4 = copy(d2)
+# Removing an item gives different dict
+del(d1, data_in[randi(length(data_in))][1])
+@assert !isequal(d1, d2)
+# Changing a value gives different dict
+d3[data_in[randi(length(data_in))][1]] = randstring(3)
+!isequal(d1, d3)
+# Adding a pair gives different dict
+d4[1001] = randstring(3)
+@assert !isequal(d1, d4)
+
+@assert isequal(Dict(), Dict(96))
+
+# Here is what currently happens when dictionaries of different types
+# are compared. This is not necessarily desirable. These tests are
+# descriptive rather than proscriptive.
+@assert_raises MethodError !isequal({1 => 2}, {"dog" => "bone"})
+@assert isequal(Dict{Int, Int}(), Dict{String, String}())
+
+# ############# end of dict tests #############
+
+# #################### set ####################
 
 # show
 
@@ -277,4 +338,30 @@ for data_in in ((7,8,4,5),
         @assert has(s,e)
     end
 end
+
+# isequal
+@assert  isequal(Set(), Set())
+@assert !isequal(Set(), Set(1))
+@assert  isequal(Set{Any}(1,2), Set{Int}(1,2))
+@assert !isequal(Set{Any}(1,2), Set{Int}(1,2,3))
+
+# Comparison of unrelated types seems rather inconsistent
+
+# Not sure whether the behaviour of isequal (as demonstrated below) on
+# sets of unrelated types, is desirable, but it's what there is at the
+# moment.
+@assert                    isequal(Set{Int}(), Set{String}())
+@assert_raises TypeError   isequal(Set{Int}(),    Set{String}{""})
+@assert                   !isequal(Set{String}(), Set{Int}(0))
+@assert_raises MethodError isequal(Set{Int}(1),   Set{String}())
+
+@assert   isequal(Set{Any}(1,2,3), Set{Int}(1,2,3))
+@assert   isequal(Set{Int}(1,2,3), Set{Any}(1,2,3))
+
+@assert  !isequal(Set{Any}(1,2,3), Set{Int}(1,2,3,4))
+@assert  !isequal(Set{Int}(1,2,3), Set{Any}(1,2,3,4))
+
+@assert  !isequal(Set{Any}(1,2,3,4), Set{Int}(1,2,3))
+@assert  !isequal(Set{Int}(1,2,3,4), Set{Any}(1,2,3))
+
 # ########## end of set tests ##########

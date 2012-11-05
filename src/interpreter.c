@@ -168,11 +168,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             }
         }
         if (bp == NULL) {
-            b = jl_get_binding(jl_current_module, fname);
-            if (b == NULL) {
-                // if no existing binding for this, make a new one
-                b = jl_get_binding_wr(jl_current_module, fname);
-            }
+            b = jl_get_binding_for_method_def(jl_current_module, fname);
             bp = &b->value;
         }
         jl_value_t *atypes=NULL, *meth=NULL, *tvars=NULL;

@@ -167,8 +167,25 @@ extern int jl_in_inference;
 
 static jl_module_t *eval_import_path(jl_array_t *args)
 {
-    jl_module_t *m = jl_main_module;
-    for(size_t i=0; i < args->length-1; i++) {
+    // in A.B.C, first find a binding for A in the chain of module scopes
+    // following parent links. then evaluate the rest of the path from there.
+    jl_sym_t *var = (jl_sym_t*)jl_cellref(args,0);
+    assert(jl_is_symbol(var));
+    jl_module_t *m = jl_current_module;
+    while (1) {
+        jl_binding_t *mb = jl_get_binding(m, var);
+        if (mb != NULL) {
+            if (mb->value == NULL || !jl_is_module(mb->value))
+                jl_errorf("invalid module path");
+            m = (jl_module_t*)mb->value;
+            break;
+        }
+        if (m == jl_main_module)
+            jl_errorf("in module path: %s not defined", var->name);
+        m = m->parent;
+    }
+
+    for(size_t i=1; i < args->length-1; i++) {
         jl_value_t *s = jl_cellref(args,i);
         assert(jl_is_symbol(s));
         m = (jl_module_t*)jl_eval_global_var(m, (jl_sym_t*)s);
@@ -195,15 +212,15 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
         return jl_eval_module_expr(ex);
     }
 
-    // handle import, export toplevel-only forms
-    if (ex->head == importall_sym) {
+    // handle import, using, export toplevel-only forms
+    if (ex->head == using_sym) {
         jl_module_t *m = eval_import_path(ex->args);
         jl_sym_t *name = (jl_sym_t*)jl_cellref(ex->args, ex->args->length-1);
         assert(jl_is_symbol(name));
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-            jl_errorf("invalid import statement");
-        jl_module_importall(jl_current_module, m);
+            jl_errorf("invalid using statement");
+        jl_module_using(jl_current_module, m);
         return jl_nothing;
     }
 

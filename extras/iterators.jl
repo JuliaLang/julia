@@ -1,6 +1,8 @@
 
 module Iterators
-import Base.*
+using Base
+
+import Base.start, Base.next, Base.done
 
 export
     count,

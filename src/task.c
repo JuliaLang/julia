@@ -146,6 +146,8 @@ jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
+    if (t->done)
+        return;
     volatile int _x;
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;

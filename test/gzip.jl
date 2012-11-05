@@ -2,7 +2,7 @@
 require("../extras/gzip.jl")
 #require("../extras/test.jl")
 
-import GZip.*
+using GZip
 
 ##########################
 # test_context("GZip tests")

@@ -2,7 +2,7 @@ libopenlibm = dlopen("libopenlibm")
 
 module Math
 
-import Base.*
+using Base
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
@@ -579,6 +579,5 @@ function zeta(z::Number)
     zz = 2.0^z
     eta(z) * zz/(zz-2)
 end
-
 
 end # module

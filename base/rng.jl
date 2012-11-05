@@ -1,7 +1,7 @@
 module RNG
 
-import Base.*
-import Base.LibRandom.*
+using Base
+using Base.LibRandom
 
 export librandom_init, srand,
        rand, rand!,

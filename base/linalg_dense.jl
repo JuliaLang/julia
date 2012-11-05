@@ -455,9 +455,10 @@ cholpd{T<:LapackType}(A::Matrix{T}) = cholpd!(copy(A), true, -1.)
 type LUDense{T} <: Factorization{T}
     lu::Matrix{T}
     ipiv::Vector{Int32}
-    function LUDense(lu::Matrix{T}, ipiv::Vector{Int32})
+    info::Int32
+    function LUDense(lu::Matrix{T}, ipiv::Vector{Int32}, info::Int32)
         m, n = size(lu)
-        m == numel(ipiv) ? new(lu, ipiv) : error("LUDense: dimension mismatch")
+        m == n ? new(lu, ipiv, info) : error("LUDense only defined for square matrices")
     end
 end
 
@@ -480,8 +481,8 @@ function factors{T<:LapackType}(lu::LUDense{T})
 end
 
 function lud!{T<:LapackType}(A::Matrix{T})
-    lu, ipiv = Lapack.getrf!(A)
-    LUDense{T}(lu, ipiv)
+    lu, ipiv, info = Lapack.getrf!(A)
+    LUDense{T}(lu, ipiv, info)
 end
 
 lud{T<:LapackType}(A::Matrix{T}) = lud!(copy(A))
@@ -491,17 +492,29 @@ lud{T<:Number}(A::Matrix{T}) = lud(float64(A))
 lu{T<:Number}(A::Matrix{T}) = factors(lud(A))
 
 function det(lu::LUDense)
-    m, n = size(lu.lu)
-    if m != n error("det only defined for square matrices") end
+    m, n = size(lu)
+    if lu.info > 0; return zero(typeof(lu.lu[1])); end
     prod(diag(lu.lu)) * (bool(sum(lu.ipiv .!= 1:n) % 2) ? -1 : 1)
 end
 
-det(A::Matrix) = det(lud(A))
+function det(A::Matrix)
+    m, n = size(A)
+    if m != n; error("det only defined for square matrices"); end
+    if istriu(A) | istril(A); return prod(diag(A)); end
+    return det(lud(A))
+end
 
-(\){T<:LapackType}(lu::LUDense{T}, B::StridedVecOrMat{T}) =
+function (\){T<:LapackType}(lu::LUDense{T}, B::StridedVecOrMat{T})
+    if lu.info > 0; error("Singular system"); end
     Lapack.getrs!('N', lu.lu, lu.ipiv, copy(B))
+end
 
-inv{T<:LapackType}(lu::LUDense{T}) = Lapack.getri!(copy(lu.lu), lu.ipiv)
+function inv{T<:LapackType}(lu::LUDense{T})
+    m, n = size(lu.lu)
+    if m != n; error("inv only defined for square matrices"); end
+    if lu.info > 0; return error("Singular system"); end
+    Lapack.getri!(copy(lu.lu), lu.ipiv)
+end
 
 ## QR decomposition without column pivots
 type QRDense{T} <: Factorization{T}
@@ -537,7 +550,9 @@ Ac_mul_B{T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T}) =
 ## Least squares solution.  Should be more careful about cases with m < n
 function (\){T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
-    Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    ans, info = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    if info > 0; error("Singular system"); end
+    return ans
 end
 
 type QRPDense{T} <: Factorization{T}
@@ -576,7 +591,8 @@ qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
 function (\){T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
-    x = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    x, info = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    if info > 0; error("Singular system"); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
 
@@ -659,10 +675,24 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
     X     = copy(B)
 
     if m == n # Square
-        if istriu(A) return Lapack.trtrs!('U', 'N', 'N', Acopy, X) end
-        if istril(A) return Lapack.trtrs!('L', 'N', 'N', Acopy, X) end
-        if ishermitian(A) return Lapack.sysv!('U', Acopy, X)[1] end
-        return Lapack.gesv!(Acopy, X)[3]
+        if istriu(A) 
+            ans, info = Lapack.trtrs!('U', 'N', 'N', Acopy, X)
+            if info > 0; error("Singular system"); end
+            return ans
+        end
+        if istril(A) 
+            ans, info = Lapack.trtrs!('L', 'N', 'N', Acopy, X) 
+            if info > 0; error("Singular system"); end
+            return ans
+        end
+        if ishermitian(A) 
+            ans, _, _, info = Lapack.sysv!('U', Acopy, X)
+            if info > 0; error("Singular system"); end
+            return ans
+        end
+        ans, _, _, info = Lapack.gesv!(Acopy, X)
+        if info > 0; error("Singular system"); end
+        return ans
     end
     Lapack.gelsd!(Acopy, X)[1]
 end

@@ -1,4 +1,18 @@
-# .ini file parser
+module Inifile
+using Base
+
+import Base.get,
+       Base.has,
+       Base.read
+
+export IniFile,
+       defaults,
+       get,
+       get_bool,
+       has,
+       has_section,
+       read,
+       section
 
 typealias HTSS Dict{String,String}
 
@@ -7,7 +21,7 @@ type IniFile
     defaults::HTSS
 end
 
-IniFile() = IniFile(Dict{String,HTSS}(), HTSS())
+IniFile() = IniFile((String=>HTSS)[], HTSS())
 
 function read(inifile::IniFile, stream::IOStream)
     current_section = inifile.defaults
@@ -76,3 +90,4 @@ has_section(inifile::IniFile, section::String) = has(inifile.sections, section)
 
 section(inifile::IniFile, section::String) = inifile.sections[section]
 
+end # module
