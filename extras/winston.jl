@@ -1,9 +1,11 @@
 load("cairo.jl")
+load("inifile.jl")
 
 module Winston
 
 using Base
 using Cairo
+using Inifile
 
 export PlotContainer
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,
@@ -11,8 +13,6 @@ export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,
     SymmetricErrorBarsX, SymmetricErrorBarsY
 export FramedArray, FramedPlot, Table
 export file, setattr, style, svg
-
-load("inifile.jl")
 
 abstract HasAttr
 abstract HasStyle <: HasAttr

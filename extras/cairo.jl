@@ -1,7 +1,10 @@
 load("color.jl")
+load("openlib.jl")
 
 module Cairo
 using Base
+using Color
+using Openlib
 
 export CairoSurface, finish, destroy, status,
     CAIRO_FORMAT_ARGB32,
@@ -26,10 +29,6 @@ export CairoSurface, finish, destroy, status,
     linetorel, line, rect, ellipse, symbol, symbols, set, get,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango, SVGRenderer
-
-load("openlib.jl")
-
-using Color
 
 try
     global _jl_libcairo = openlib("libcairo")
