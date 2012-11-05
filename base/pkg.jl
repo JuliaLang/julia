@@ -5,9 +5,11 @@ module Pkg
 #
 # Julia's git-based declarative package manager
 #
+
 using Base
-import Git
 using Metadata
+
+import Git
 
 # default locations: local package repo, remote metadata repo
 
