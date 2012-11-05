@@ -502,7 +502,7 @@ function add_weak_value(t::Dict, k, v)
 end
 
 type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{K,V}
+    ht::Dict{Any,V}
 
     WeakKeyDict() = new((Any=>V)[])
 end
