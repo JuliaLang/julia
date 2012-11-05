@@ -195,7 +195,7 @@ The ``parse_args`` function
    The parsing can stop early if a ``:show_help`` or ``:show_version`` action is triggered, or if a parsing error is
    found.
 
-   Some ambiguities can arise in parsing, see :ref:`this section <argparse-parsing-details>` for a detailed description
+   Some ambiguities can arise in parsing, see :ref:`this section <argparse-details>` for a detailed description
    of how they're solved.
 
 .. _argparse-settings-overview:
