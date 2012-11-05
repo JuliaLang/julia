@@ -293,9 +293,11 @@ end
 
 function show(io, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
-    if e.expected == Bool
+    if e.expected === Bool
         print(io, "type error: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
+    elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
+        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
     else
         if isa(e.got,Type)
             tstr = "Type{$(e.got)}"
