@@ -13,11 +13,16 @@
 # after the locale is set to Turkish.
 #
 
+load("openlib.jl")
 load("utf16.jl")
 
 module ICU
 using Base
+using Openlib
 using UTF16
+
+import Base.lowercase,
+       Base.uppercase
 
 export foldcase,
        lowercase,
@@ -25,7 +30,6 @@ export foldcase,
        titlecase,
        uppercase
 
-load("openlib.jl")
 const iculib = openlib(OS_NAME == :Darwin ? "libicucore" : "libicuuc")
 const iculibi18n = OS_NAME == :Darwin ? iculib : openlib("libicui18n")
 

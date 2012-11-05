@@ -1,9 +1,12 @@
 require("linprog.jl")
 
 module Metadata
+
 using Base
+
 import Main
 import Git
+
 export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
