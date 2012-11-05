@@ -1,4 +1,27 @@
-load("color.jl")
+## Color spaces
+abstract ColorSpace
+type CSnil <: ColorSpace
+end
+type CSgray <: ColorSpace
+end
+type CSsRGB <: ColorSpace
+end
+type CSCMYK <: ColorSpace
+end
+# Color space where each channel is given a name, e.g.,
+#   cs = CSNamed("GFP","tdTomato")
+# or
+#   cs = CSNamed(["GFP","tdTomato"])
+type CSNamed <: ColorSpace
+    str::Vector{ASCIIString}
+end
+CSNamed(t...) = CSNamed([t...])  # allow tuple
+function ref(n::CSNamed,ind::Int)
+    return n.str[ind]
+end
+function assign(n::CSNamed,value,key)
+    n.str[key] = value
+end
 
 # The super-type of all images
 abstract Image
