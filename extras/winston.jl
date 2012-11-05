@@ -7,6 +7,8 @@ using Base
 using Cairo
 using Inifile
 
+import Base.ref, Base.assign, Base.+, Base.-, Base.add, Base.isempty
+
 export PlotContainer
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,
     LineX, LineY, PlotInset, PlotLabel, Points, Slope,
