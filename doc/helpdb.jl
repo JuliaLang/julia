@@ -1256,6 +1256,20 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"+ - * /   ^",E"+ - * /   ^
+
+   The binary addition, subtraction, multiplication, left division,
+   right division, and exponentiation operators
+
+"),
+
+(E"Mathematical Functions",E".* ./ . .^",E".* ./ . .^
+
+   The element-wise binary addition, subtraction, multiplication, left
+   division, right division, and exponentiation operators
+
+"),
+
 (E"Mathematical Functions",E"div",E"div()
 
    Integer truncating division
@@ -1268,9 +1282,34 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"mod",E"mod()
+
+   Modulus after division
+
+"),
+
+(E"Mathematical Functions",E"rem %",E"rem %
+
+   Remainder after division
+
+"),
+
 (E"Mathematical Functions",E"//",E"//
 
    Rational division
+
+"),
+
+(E"Mathematical Functions",E"<< >>",E"<< >>
+
+   Left and ight shift operators
+
+"),
+
+(E"Mathematical Functions",E"== != < <= > >=",E"== != < <= > >=
+
+   Comparison operators to test equals, not equals, less than, less
+   than or equals, greater than, and greater than or equals
 
 "),
 
@@ -1304,15 +1343,241 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"sin",E"sin(x)
+
+   Compute sine of 'x'
+
+"),
+
+(E"Mathematical Functions",E"cos",E"cos(x)
+
+   Compute cosine of 'x'
+
+"),
+
+(E"Mathematical Functions",E"tan",E"tan(x)
+
+   Compute tangent of 'x'
+
+"),
+
+(E"Mathematical Functions",E"sinh",E"sinh(x)
+
+   Compute hyperbolic sine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"cosh",E"cosh(x)
+
+   Compute hyperbolic cosine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"tanh",E"tanh(x)
+
+   Compute hyperbolic tangent of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"asin",E"asin(x)
+
+   Compute the inverse sine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acos",E"acos(x)
+
+   Compute the inverse cosine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"atan",E"atan(x)
+
+   Compute the inverse tangent of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"atan2",E"atan2(x, y)
+
+   Compute the inverse tangent of 'y/x', using the signs of both 'x'
+   and 'y' to determine the quadrant of the return value.
+
+"),
+
+(E"Mathematical Functions",E"sec",E"sec(x)
+
+   Compute the secant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"csc",E"csc(x)
+
+   Compute the cosecant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"cot",E"cot(x)
+
+   Compute the cotangent of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"asec",E"asec(x)
+
+   Compute the inverse secant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acsc",E"acsc(x)
+
+   Compute the inverse cosecant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acot",E"acot(x)
+
+   Compute the inverse cotangent of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"sech",E"sech(x)
+
+   Compute the hyperbolic secant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"csch",E"csch(x)
+
+   Compute the hyperbolic cosecant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"coth",E"coth(x)
+
+   Compute the hyperbolic cotangent of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"asinh",E"asinh(x)
+
+   Compute the inverse hyperbolic sine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acosh",E"acosh(x)
+
+   Compute the inverse hyperbolic cosine of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"atanh",E"atanh(x)
+
+   Compute the inverse hyperbolic cotangent of 'x' specified in
+   radians
+
+"),
+
+(E"Mathematical Functions",E"asech",E"asech(x)
+
+   Compute the inverse hyperbolic secant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acsch",E"acsch(x)
+
+   Compute the inverse hyperbolic cosecant of 'x' specified in radians
+
+"),
+
+(E"Mathematical Functions",E"acoth",E"acoth(x)
+
+   Compute the inverse hyperbolic cotangent of 'x' specified in
+   radians
+
+"),
+
+(E"Mathematical Functions",E"sinc",E"sinc(x)
+
+   Compute sin(\\pi x) / x
+
+"),
+
+(E"Mathematical Functions",E"cosc",E"cosc(x)
+
+   Compute cos(\\pi x) / x
+
+"),
+
+(E"Mathematical Functions",E"hypot",E"hypot(x)
+
+   Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
+
+"),
+
+(E"Mathematical Functions",E"log",E"log(x)
+
+   Compute the natural logarithm of 'x'
+
+"),
+
+(E"Mathematical Functions",E"log2",E"log2(x)
+
+   Compute the natural logarithm of 'x' to base 2
+
+"),
+
+(E"Mathematical Functions",E"log10",E"log10(x)
+
+   Compute the natural logarithm of 'x' to base 10
+
+"),
+
 (E"Mathematical Functions",E"log1p",E"log1p(x)
 
    Accurate natural logarithm of '1+x'
 
 "),
 
+(E"Mathematical Functions",E"logb",E"logb(x)
+
+   Return the exponent of x, represented as a floating-point number
+
+"),
+
+(E"Mathematical Functions",E"ilogb",E"ilogb(x)
+
+   Return the exponent of x, represented as a signed integer value
+
+"),
+
+(E"Mathematical Functions",E"frexp",E"frexp(val, exp)
+
+   Return a number 'x' such that it has a magnitude in the interval
+   '[1/2, 1)' or 0, and val = x \\times 2^{exp}.
+
+"),
+
+(E"Mathematical Functions",E"exp",E"exp(x)
+
+   Compute e^x
+
+"),
+
+(E"Mathematical Functions",E"exp2",E"exp2(x)
+
+   Compute 2^x
+
+"),
+
+(E"Mathematical Functions",E"ldexp",E"ldexp(x, n)
+
+   Compute x \\times 2^n
+
+"),
+
 (E"Mathematical Functions",E"expm1",E"expm1(x)
 
-   Accurately compute 'exp(x)-1'
+   Accurately compute e^x-1
 
 "),
 
@@ -1380,9 +1645,109 @@ collection[key...] = value
 
 "),
 
+(E"Mathematical Functions",E"min",E"min(x, y)
+
+   Return the minimum of 'x' and 'y'
+
+"),
+
+(E"Mathematical Functions",E"max",E"max(x, y)
+
+   Return the maximum of 'x' and 'y'
+
+"),
+
+(E"Mathematical Functions",E"clamp",E"clamp(x, lo, hi)
+
+   Return x if 'lo <= x <= y'. If 'x < lo', return 'lo'. If 'x > hi',
+   return 'hi'.
+
+"),
+
+(E"Mathematical Functions",E"abs",E"abs(x)
+
+   Absolute value of 'x'
+
+"),
+
 (E"Mathematical Functions",E"abs2",E"abs2(x)
 
    Squared absolute value of 'x'
+
+"),
+
+(E"Mathematical Functions",E"copysign",E"copysign(x, y)
+
+   Return 'x' such that it has the same sign as 'y'
+
+"),
+
+(E"Mathematical Functions",E"sign",E"sign(x)
+
+   Return '+1' if 'x' is positive, '0' if 'x == 0', and '-1' if 'x' is
+   negative.
+
+"),
+
+(E"Mathematical Functions",E"signbit",E"signbit(x)
+
+   Returns non-zero if the value of the sign of 'x' is negative,
+   otherwise '0'.
+
+"),
+
+(E"Mathematical Functions",E"sqrt",E"sqrt(x)
+
+   Return \\sqrt{x}
+
+"),
+
+(E"Mathematical Functions",E"cbrt",E"cbrt(x)
+
+   Return x^{1/3}
+
+"),
+
+(E"Mathematical Functions",E"erf",E"erf(x)
+
+   Compute the error function of 'x'
+
+"),
+
+(E"Mathematical Functions",E"erfc",E"erfc(x)
+
+   Compute the complementary error function of 'x'
+
+"),
+
+(E"Mathematical Functions",E"real",E"real(z)
+
+   Return the real part of the complex number 'z'
+
+"),
+
+(E"Mathematical Functions",E"imag",E"imag(z)
+
+   Return the imaginary part of the complex number 'z'
+
+"),
+
+(E"Mathematical Functions",E"conj",E"conj(z)
+
+   Compute the complex conjugate of a complex number 'z'
+
+"),
+
+(E"Mathematical Functions",E"angle",E"angle(z)
+
+   Compute the phase angle of a complex number 'z'
+
+"),
+
+(E"Mathematical Functions",E"cis",E"cis(z)
+
+   Return 'cos(z) + i*sin(z)' if z is real. Return '(cos(real(z)) +
+   i*sin(real(z)))/exp(imag(z))' if 'z' is complex
 
 "),
 
@@ -1451,6 +1816,133 @@ collection[key...] = value
 (E"Mathematical Functions",E"powermod",E"powermod(x, p, m)
 
    Compute 'mod(x^p, m)'
+
+"),
+
+(E"Mathematical Functions",E"gamma",E"gamma(x)
+
+"),
+
+(E"Mathematical Functions",E"lgamma",E"lgamma(x)
+
+"),
+
+(E"Mathematical Functions",E"lfact",E"lfact(x)
+
+"),
+
+(E"Mathematical Functions",E"airyai",E"airy(x)
+airyai(x)
+
+   Airy function \\operatorname{Ai}(x).
+
+"),
+
+(E"Mathematical Functions",E"airyaiprime",E"airyprime(x)
+airyaiprime(x)
+
+   Airy function derivative \\operatorname{Ai}'(x).
+
+"),
+
+(E"Mathematical Functions",E"airybi",E"airybi(x)
+
+   Airy function \\operatorname{Bi}(x).
+
+"),
+
+(E"Mathematical Functions",E"airybiprime",E"airybiprime(x)
+
+   Airy function derivative \\operatorname{Bi}'(x).
+
+"),
+
+(E"Mathematical Functions",E"besselj0",E"besselj0(x)
+
+   Bessel function of the first kind of order 0, J_0(x).
+
+"),
+
+(E"Mathematical Functions",E"besselj1",E"besselj1(x)
+
+   Bessel function of the first kind of order 1, J_1(x).
+
+"),
+
+(E"Mathematical Functions",E"besselj",E"besselj(nu, x)
+
+   Bessel function of the first kind of order 'nu', J_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"bessely0",E"bessely0(x)
+
+   Bessel function of the second kind of order 0, Y_0(x).
+
+"),
+
+(E"Mathematical Functions",E"bessely1",E"bessely1(x)
+
+   Bessel function of the second kind of order 1, Y_1(x).
+
+"),
+
+(E"Mathematical Functions",E"bessely",E"bessely(nu, x)
+
+   Bessel function of the second kind of order 'nu', Y_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"hankelh1",E"hankelh1(nu, x)
+
+   Bessel function of the third kind of order 'nu', H^{(1)}_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"hankelh2",E"hankelh2(nu, x)
+
+   Bessel function of the third kind of order 'nu', H^{(2)}_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"besseli",E"besseli(nu, x)
+
+   Modified Bessel function of the first kind of order 'nu',
+   I_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"besselk",E"besselk(nu, x)
+
+   Modified Bessel function of the second kind of order 'nu',
+   K_\\nu(x).
+
+"),
+
+(E"Mathematical Functions",E"beta",E"beta(x, y)
+
+   Euler integral of the first kind \\operatorname{B}(x,y) =
+   \\Gamma(x)\\Gamma(y)/\\Gamma(x+y).
+
+"),
+
+(E"Mathematical Functions",E"lbeta",E"lbeta(x, y)
+
+   Natural logarithm of the beta function
+   \\log(\\operatorname{B}(x,y)).
+
+"),
+
+(E"Mathematical Functions",E"eta",E"eta(x)
+
+   Dirichlet eta function \\eta(s) =
+   \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}.
+
+"),
+
+(E"Mathematical Functions",E"zeta",E"zeta(x)
+
+   Riemann zeta function \\zeta(s).
 
 "),
 
@@ -4880,121 +5372,6 @@ glp_eval_tab_col(glp_prob, k)
 
    The following functions are also defined to make this function
    compatible with MATLAB:
-
-"),
-
-(E"specfun.jl",E"airyai",E"airy(x)
-airyai(x)
-
-   Airy function \\operatorname{Ai}(x).
-
-"),
-
-(E"specfun.jl",E"airyaiprime",E"airyprime(x)
-airyaiprime(x)
-
-   Airy function derivative \\operatorname{Ai}'(x).
-
-"),
-
-(E"specfun.jl",E"airybi",E"airybi(x)
-
-   Airy function \\operatorname{Bi}(x).
-
-"),
-
-(E"specfun.jl",E"airybiprime",E"airybiprime(x)
-
-   Airy function derivative \\operatorname{Bi}'(x).
-
-"),
-
-(E"specfun.jl",E"besselj0",E"besselj0(x)
-
-   Bessel function of the first kind of order 0, J_0(x).
-
-"),
-
-(E"specfun.jl",E"besselj1",E"besselj1(x)
-
-   Bessel function of the first kind of order 1, J_1(x).
-
-"),
-
-(E"specfun.jl",E"besselj",E"besselj(nu, x)
-
-   Bessel function of the first kind of order 'nu', J_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"bessely0",E"bessely0(x)
-
-   Bessel function of the second kind of order 0, Y_0(x).
-
-"),
-
-(E"specfun.jl",E"bessely1",E"bessely1(x)
-
-   Bessel function of the second kind of order 1, Y_1(x).
-
-"),
-
-(E"specfun.jl",E"bessely",E"bessely(nu, x)
-
-   Bessel function of the second kind of order 'nu', Y_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"hankelh1",E"hankelh1(nu, x)
-
-   Bessel function of the third kind of order 'nu', H^{(1)}_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"hankelh2",E"hankelh2(nu, x)
-
-   Bessel function of the third kind of order 'nu', H^{(2)}_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"besseli",E"besseli(nu, x)
-
-   Modified Bessel function of the first kind of order 'nu',
-   I_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"besselk",E"besselk(nu, x)
-
-   Modified Bessel function of the second kind of order 'nu',
-   K_\\nu(x).
-
-"),
-
-(E"specfun.jl",E"beta",E"beta(x, y)
-
-   Euler integral of the first kind \\operatorname{B}(x,y) =
-   \\Gamma(x)\\Gamma(y)/\\Gamma(x+y).
-
-"),
-
-(E"specfun.jl",E"lbeta",E"lbeta(x, y)
-
-   Natural logarithm of the beta function
-   \\log(\\operatorname{B}(x,y)).
-
-"),
-
-(E"specfun.jl",E"eta",E"eta(x)
-
-   Dirichlet eta function \\eta(s) =
-   \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}.
-
-"),
-
-(E"specfun.jl",E"zeta",E"zeta(x)
-
-   Riemann zeta function \\zeta(s).
 
 "),
 

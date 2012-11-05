@@ -43,7 +43,6 @@ Math & Numerical
 
    blas
    glpk
-   specfun
 
 ************
 File Formats
