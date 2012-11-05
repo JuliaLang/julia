@@ -294,7 +294,13 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     for i = 1:length(oldk)
         k = oldk[i]
         if !is(k,_jl_secret_table_token) && !is(k,_jl_missing_token)
-            h[k] = oldv[i]
+            index = hashindex(k::K, newsz)
+            while !is(h.keys[index],_jl_secret_table_token)
+                index = (index & (newsz-1)) + 1
+            end
+            h.keys[index] = k
+            h.vals[index] = oldv[i]
+            h.count += 1
         end
     end
 
