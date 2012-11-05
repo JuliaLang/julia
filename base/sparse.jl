@@ -12,6 +12,15 @@ export SparseMatrixCSC, issparse, size, nnz, show,
        trace, kron, issym, ishermitian, istriu, istril,
        diagmm, diagmm!
 
+# overloads
+import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret,
+       Base.reshape, Base.similar, Base.convert, Base.copy,
+       Base.find, Base.findn, Base.findn_nzs,
+       Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*),
+       Base.(./), Base.(.\), Base.(.^), Base.ref, Base.assign,
+       Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length,
+       Base.min, Base.max, Base.sum, Base.prod
+
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
 type SparseMatrixCSC{Tv,Ti<:Union(Int32,Int64)} <: AbstractMatrix{Tv}

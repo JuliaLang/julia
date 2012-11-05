@@ -121,7 +121,7 @@ include("combinatorics.jl")
 
 # Sparse matrices
 include("sparse.jl")
-import Base.Sparse.*
+using Sparse
 
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
