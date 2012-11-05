@@ -1,4 +1,4 @@
-load("linprog.jl")
+require("linprog.jl")
 
 module Metadata
 import Base.*
@@ -7,7 +7,7 @@ import Git
 export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
-    for (ver,sha1) in Git.each_version(pkg)
+    for (ver,sha1) in Git.each_version("$pkg.jl")
         dir = "METADATA/$pkg/versions/$ver"
         run(`mkdir -p $dir`)
         open("$dir/sha1","w") do io
@@ -27,6 +27,7 @@ function gen_hashes(pkg::String)
 end
 gen_hashes() = for pkg in each_package() gen_hashes(pkg) end
 
+pkg_url(pkg::String) = readchomp("METADATA/$pkg/url")
 version(pkg::String, sha1::String) =
     convert(VersionNumber,readchomp("METADATA/$pkg/hashes/$sha1"))
 
