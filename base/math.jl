@@ -580,5 +580,4 @@ function zeta(z::Number)
     eta(z) * zz/(zz-2)
 end
 
-
 end # module

@@ -54,7 +54,6 @@ end
 
 # add and remove packages by name
 
-global add
 add(pkgs::Vector{VersionSet}) = cd(directory()) do
     commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
         for pkg in pkgs

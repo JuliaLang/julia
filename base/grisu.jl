@@ -29,7 +29,6 @@ const FIXED           = int32(2) # fixed number of trailing decimal points
 const PRECISION       = int32(3) # fixed precision regardless of magnitude
 
 # wrapper for the core grisu function, primarily for debugging
-global grisu, grisu_fix, grisu_sig
 function grisu(x::Float64, mode::Integer, ndigits::Integer)
     if !isfinite(x); error("non-finite value: $x"); end
     if ndigits < 0; error("negative digits requested"); end
