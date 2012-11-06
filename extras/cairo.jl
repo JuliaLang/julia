@@ -6,6 +6,8 @@ using Base
 using Color
 using Openlib
 
+import Base.fill, Base.get, Base.open, Base.close, Base.symbol
+
 export CairoSurface, finish, destroy, status,
     CAIRO_FORMAT_ARGB32,
     CAIRO_FORMAT_RGB24,
