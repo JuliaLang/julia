@@ -87,6 +87,11 @@ It is essential to use a 64-bit gfortran. Download and install [gfortran and gcc
 
 If you get link errors mentioning `gfortran`, it might help to put `/usr/local/gfortran/lib` at the beginning of the `DYLD_LIBRARY_PATH` environment variable.
 
+Alternatively, install gfortran and gcc with [homebrew](http://mxcl.github.com/homebrew/):
+
+	brew tap homebrew/dupes
+	brew install gcc --enable-fortran
+
 Clang is now used by default to build julia on OS X (10.7 and above). Make sure to update to at least Xcode 4.3.3, and update to the latest command line tools from the Xcode preferences. This will ensure that clang v3.1 is installed, which is the minimum version of clang required to build julia.
 
 #### FreeBSD
