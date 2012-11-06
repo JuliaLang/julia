@@ -278,8 +278,9 @@ typedef struct {
     jl_value_t *value;
     jl_type_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
-    int constp:1;
-    int exportp:1;
+    unsigned constp:1;
+    unsigned exportp:1;
+    unsigned imported:1;
 } jl_binding_t;
 
 typedef struct _jl_module_t {

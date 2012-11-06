@@ -57,6 +57,8 @@ export                                  # types
     std,        # standard deviation of distribution
     var         # variance of distribution
 
+import Base.mean, Base.median, Base.quantile, Base.rand, Base.std, Base.var
+
 abstract Distribution
 abstract DiscreteDistribution   <: Distribution
 abstract ContinuousDistribution <: Distribution

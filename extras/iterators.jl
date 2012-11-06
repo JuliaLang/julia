@@ -4,6 +4,8 @@ using Base
 
 import Base.start, Base.next, Base.done
 
+global count, take, repeat
+
 export
     count,
     take,

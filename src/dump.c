@@ -163,8 +163,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
                 jl_serialize_value(s, b->value);
                 jl_serialize_value(s, b->type);
                 jl_serialize_value(s, b->owner);
-                write_int8(s, b->constp);
-                write_int8(s, b->exportp);
+                write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
             }
         }
     }
@@ -641,8 +640,10 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             b->value = jl_deserialize_value(s);
             b->type = (jl_type_t*)jl_deserialize_value(s);
             b->owner = (jl_module_t*)jl_deserialize_value(s);
-            b->constp = read_int8(s);
-            b->exportp = read_int8(s);
+            int8_t flags = read_int8(s);
+            b->constp = (flags>>2) & 1;
+            b->exportp = (flags>>1) & 1;
+            b->imported = (flags) & 1;
         }
         size_t ni = read_int32(s);
         for(size_t i=0; i < ni; i++) {
