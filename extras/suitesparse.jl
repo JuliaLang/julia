@@ -1,4 +1,3 @@
-require("linalg_sparse.jl")
 require("suitesparse_h.jl")
 
 const _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
