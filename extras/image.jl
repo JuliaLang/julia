@@ -1,4 +1,4 @@
-import Base.ref, Base.assign, Base.sub, Base.size
+import Base.ref, Base.assign, Base.sub, Base.size, Base.copy
 
 ## Color spaces
 abstract ColorSpace
