@@ -7,6 +7,9 @@ using Base
 using Cairo
 using Inifile
 
+import Base.ref, Base.assign, Base.+, Base.-, Base.add, Base.isempty,
+       Base.copy
+
 export PlotContainer
 export Curve, FillAbove, FillBelow, FillBetween, Histogram, Image, Legend,
     LineX, LineY, PlotInset, PlotLabel, Points, Slope,
@@ -1940,7 +1943,7 @@ type _Grid
     end
 end
 
-function cell( self::_Grid, i::Int, j::Int )
+function cellbb(self::_Grid, i::Int, j::Int)
     ii = self.nrows - i 
     p = pt_add( self.origin, ((j-1)*self.step_x,ii*self.step_y) )
     q = pt_add( p, self.cell_dimen )
@@ -1986,7 +1989,7 @@ function exterior( self::Table, device::Renderer, intbbox::BoundingBox )
         for i = 1:self.rows
             for j = 1:self.cols
                 obj = self.content[i,j]
-                subregion = cell(g, i, j)
+                subregion = cellbb(g, i, j)
                 union( ext, exterior(obj, device, subregion) )
             end
         end
@@ -2003,7 +2006,7 @@ function compose_interior( self::Table, device::Renderer, intbbox::BoundingBox )
     for i = 1:self.rows
         for j = 1:self.cols
             obj = self.content[i,j]
-            subregion = cell(g, i, j)
+            subregion = cellbb(g, i, j)
             if getattr(self, "align_interiors")
                 compose_interior( obj, device, subregion )
             else
@@ -2187,7 +2190,7 @@ function _frames_bbox( self::FramedArray, device, interior )
 
     for (i,j) in corners
         obj = self.content[i,j]
-        subregion = cell(g, i, j)
+        subregion = cellbb(g, i, j)
         limits = _limits(self, i, j)
         axislabels = [0,0,0,0]
         if i == self.nrows
@@ -2226,7 +2229,7 @@ function _frames_draw( self::FramedArray, device, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
         obj = self.content[i,j]
-        subregion = cell( g, i, j )
+        subregion = cellbb(g, i, j)
         limits = _limits(self, i, j)
         axislabels = [0,0,0,0]
         if i == self.nrows
@@ -2244,7 +2247,7 @@ function _data_draw( self::FramedArray, device, interior )
 
     for i in 1:self.nrows, j=1:self.ncols
         obj = self.content[i,j]
-        subregion = cell(g, i, j)
+        subregion = cellbb(g, i, j)
         lmts = _limits( self, i, j)
         compose_interior( obj, device, subregion, lmts )
     end

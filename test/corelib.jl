@@ -300,7 +300,7 @@ add_each(s,           (  2,3,4,5    ))
 
 # del_each
 s =                Set(1,  3,  5,  7)
-del_each(s,           (  2,3,4,5    ))
+del_each(s,           (    3,  5    ))
 @assert isequal(s, Set(1,          7))
 
 # similar

@@ -19,10 +19,9 @@ export
     set_default_arg_group,
     import_settings,
     usage_string,
-    parse_args,
-    ref,
-    assign,
-    has
+    parse_args
+
+import Base.ref, Base.assign, Base.has
 
 # auxiliary functions/constants
 _found_a_bug() = error("you just found a bug in the ArgParse module, please report it.")
