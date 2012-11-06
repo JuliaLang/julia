@@ -10,9 +10,6 @@ USRINC = $(USR)/include
 LLVMROOT = $(USR)
 BUILD = $(USR)
 
-# Fix problems with Ubuntu using dash instead of bash
-SHELL = /bin/bash
-
 OS = $(shell uname)
 ARCH = $(shell uname -m)
 
