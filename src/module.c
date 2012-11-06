@@ -193,14 +193,10 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
 {
     jl_binding_t **bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
     if (*bp == HT_NOTFOUND) {
-        jl_binding_t *b = jl_get_binding(from, s);
-        bp = (jl_binding_t**)ptrhash_bp(&from->bindings, s);
-        if (b == NULL) {
-            b = new_binding(s);
-            // don't yet know who the owner is
-            b->owner = NULL;
-            *bp = b;
-        }
+        jl_binding_t *b = new_binding(s);
+        // don't yet know who the owner is
+        b->owner = NULL;
+        *bp = b;
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
