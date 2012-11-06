@@ -81,7 +81,7 @@ end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
     for pkg in pkgs
-        push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+        Base.push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
     end
     add(pkgs_)
 end
