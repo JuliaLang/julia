@@ -19,7 +19,7 @@ export
     set_default_arg_group,
     import_settings,
     usage_string,
-    parse_args,
+    parse_args
 
 import Base.ref, Base.assign, Base.has
 
