@@ -19,7 +19,7 @@ import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret,
        Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*),
        Base.(./), Base.(.\), Base.(.^), Base.ref, Base.assign,
        Base.vcat, Base.hcat, Base.cat, Base.hvcat, Base.length,
-       Base.min, Base.max, Base.sum, Base.prod, Base.full, Base.\, Base.*
+       Base.min, Base.max, Base.sum, Base.prod, Base.full, Base.\
 
 # Compressed sparse columns data structure
 # Assumes that no zeros are stored in the data structure
