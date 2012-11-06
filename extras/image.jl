@@ -1,3 +1,5 @@
+import Base.ref, Base.assign, Base.sub, Base.size
+
 ## Color spaces
 abstract ColorSpace
 type CSnil <: ColorSpace

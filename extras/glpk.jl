@@ -2,6 +2,8 @@
 ### GLPK API Wrapper
 ###
 
+import Base.pointer
+
 require("sparse.jl")
 
 ## Shared library interface setup

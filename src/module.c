@@ -34,6 +34,7 @@ static jl_binding_t *new_binding(jl_sym_t *name)
     b->owner = NULL;
     b->constp = 0;
     b->exportp = 0;
+    b->imported = 0;
     return b;
 }
 
@@ -77,6 +78,8 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
+            if (!b->imported)
+                jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
         b->owner = m;
@@ -88,6 +91,9 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
     *bp = b;
     return *bp;
 }
+
+static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
+                           int explicit);
 
 // get binding for reading. might return NULL for unbound.
 jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
@@ -104,7 +110,7 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
                 // do a full import to prevent the result of this lookup
                 // from changing, for example if this var is assigned to
                 // later.
-                jl_module_import(m, b->owner, var);
+                module_import_(m, b->owner, var, 0);
                 return b;
             }
         }
@@ -115,7 +121,8 @@ jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var)
     return b;
 }
 
-void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
+                           int explicit)
 {
     if (to == from)
         return;
@@ -134,6 +141,7 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
             }
             else if (bto->owner == b->owner) {
                 // already imported
+                bto->imported = (explicit!=0);
             }
             else if (bto->owner != to && bto->owner != NULL) {
                 ios_printf(JL_STDERR,
@@ -153,14 +161,21 @@ void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
             }
             else {
                 bto->owner = b->owner;
+                bto->imported = (explicit!=0);
             }
         }
         else {
             jl_binding_t *nb = new_binding(s);
             nb->owner = b->owner;
+            nb->imported = (explicit!=0);
             *bp = nb;
         }
     }
+}
+
+void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s)
+{
+    module_import_(to, from, s, 1);
 }
 
 void jl_module_using(jl_module_t *to, jl_module_t *from)

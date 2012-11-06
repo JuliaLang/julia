@@ -4,7 +4,8 @@ require("sparse.jl")
 
 import Base.(*), Base.triu, Base.tril, Base.diff, Base.diag, Base.diagm
 import Base.trace, Base.kron, Base.issym, Base.ishermitian, Base.istriu
-import Base.istril, Base.diagmm!, Base.diagmm
+import Base.istril, Base.diagmm!, Base.diagmm, Base.norm, Base.rank
+import Base.solve
 
 ## Matrix multiplication
 
