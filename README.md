@@ -127,6 +127,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LLVM]**                — compiler infrastructure. Currently, julia requires LLVM 3.1.
 - **[FemtoLisp]**           — packaged with julia source, and used to implement the compiler front-end.
 - **[readline]**            — library allowing shell-like line editing in the terminal, with history and familiar key bindings.
+- **[libuv]**               — portable, high-performance event-based I/O library
 - **[OpenLibm]**            — a portable libm library containing elementary math functions.
 - **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
 - **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
@@ -155,7 +156,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [perl]:         http://www.perl.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
-[OpenBLAS]:     https://github.com/xianyi/OpenBLAS#readme
+[OpenBLAS]:     https://github.com/xianyi/OpenBLAS
 [LAPACK]:       http://www.netlib.org/lapack/
 [MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
 [SuiteSparse]:  http://www.cise.ufl.edu/research/sparse/SuiteSparse/
@@ -171,6 +172,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [double-conversion]: http://double-conversion.googlecode.com/
 [GLPK]:         http://www.gnu.org/software/glpk/
 [Rmath]:        http://cran.r-project.org/doc/manuals/R-admin.html#The-standalone-Rmath-library
+[libuv]:        https://github.com/JuliaLang/libuv
 
 If you already have one or more of these packages installed on your system, it is possible to pass `USE_SYSTEM_...=1` to `make` to prevent Julia from compiling duplicates of these libraries. The complete list of possible flags can be found in Make.inc (or pass `USE_DEBIAN=1` to make if you have all build dependencies and want the minimal Julia build). Please be aware that this proceedure is not officially supported, as it introduces additional variablity into the installation and versioning of the dependencies, and is recommended only for system package maintainers. Unexpected compile errors may result, as the build system will do no further checking to ensure the proper packages are installed.
 
