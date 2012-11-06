@@ -1,5 +1,5 @@
 # overloads
-import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret
+import Base.size, Base.nnz, Base.eltype, Base.show, Base.reinterpret, Base.copy
 import Base.reshape, Base.similar, Base.convert, Base.find, Base.findn
 import Base.one, Base.transpose, Base.ctranspose, Base.+, Base.-, Base.(.*)
 import Base.(./), Base.(.\), Base.(.^), Base.sum, Base.ref, Base.assign
