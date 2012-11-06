@@ -30,6 +30,10 @@ export CairoSurface, finish, destroy, status,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango, SVGRenderer
 
+import Base.get
+
+global fill, open, close, symbol
+
 try
     global _jl_libcairo = openlib("libcairo")
     global _jl_libpangocairo = openlib("libpangocairo-1.0")
@@ -72,7 +76,7 @@ end
 
 for name in ("destroy","finish","flush","mark_dirty")
     @eval begin
-        $(symbol(name))(surface::CairoSurface) =
+        $(Base.symbol(name))(surface::CairoSurface) =
             ccall(dlsym(_jl_libcairo,$(strcat("cairo_surface_",name))),
                 Void, (Ptr{Void},), surface.ptr)
     end
