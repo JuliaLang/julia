@@ -1,6 +1,6 @@
 module Base
 
-convert{T}(::Type{T},x::T) = x
+convert(T, x) = convert_default(T,x,convert)
 ccall(:putchar, Void, (Char,), 'B')
 ccall(:putchar, Void, (Char,), 'u')
 ccall(:putchar, Void, (Char,), 'i')
