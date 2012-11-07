@@ -270,6 +270,7 @@ function commit(f::Function, msg::String)
     else
         error("There are both staged and unstaged changes to packages.")
     end
+    checkout()
 end
 
 # push & pull package repos to/from remotes
