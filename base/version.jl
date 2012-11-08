@@ -136,33 +136,78 @@ end
 ## julia version info
 
 const VERSION = convert(VersionNumber,readchomp("$JULIA_HOME/../../VERSION"))
-try
+let
+    expected = ErrorException("error: don't copy this code, for breaking out of uv_run during boot-strapping only")
+    acceptable = ErrorException(expected.msg) # we would like to update the error msg for this later, but at
+                                              # this point in the bootstrapping, conflicts between old and new
+                                              # defintions for write, TTY, ASCIIString, and STDOUT make it fail
     ver = string(VERSION)
-    error() #TODO: how to do this without Scheduler / uv_run() ?!!!
-    commit = readchomp(`git rev-parse HEAD`)
-    tagged = try readchomp(`git rev-parse --verify --quiet v$ver`)
-             catch "doesn't reference a commit"; end
-    ctim = int(readall(`git log -1 --pretty=format:%ct`))
-    if commit != tagged
-        # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
-        push(VERSION.build, ctim - 1250998746)
-        push(VERSION.build, "r$(commit[1:4])")
+    (outver,ps) = read_from(`git rev-parse HEAD`)
+    ps.closecb = function(proc)
+        if !success(proc)
+            #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+            error(acceptable)
+        end
+        commit = readchomp(proc.out.buffer)
+        (outtag,ps) = read_from(`git rev-parse --verify --quiet v$ver`)
+        ps.closecb = function(proc)
+            tagged = if success(proc)
+                readchomp(proc.out.buffer)
+            elseif proc.exit_code == 1 && proc.term_signal == 0
+                "doesn't reference a commit"
+            else
+                #acceptable.msg = "failed process: $proc [$(proc.exit_code)]"
+                error(acceptable)
+            end
+            tagged = success(proc) ? readchomp(proc.out.buffer) : "doesn't reference a commit"
+            (outctim,ps) = read_from(`git log -1 --pretty=format:%ct`)
+            ps.closecb = function(proc)
+                if !success(proc)
+                    #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+                    error(acceptable)
+                end
+                ctim = int(readall(proc.out.buffer))
+                if commit != tagged
+                    # 1250998746: ctime of first commit (Sat Aug 23 3:39:06 2009 UTC)
+                    push(VERSION.build, ctim - 1250998746)
+                    push(VERSION.build, "r$(commit[1:4])")
+                end
+                ps = spawn(`git diff --quiet HEAD`)
+                ps.closecb = function(proc)
+                    clean = if success(proc)
+                        ""
+                    elseif proc.exit_code == 1 && proc.term_signal == 0
+                        push(VERSION.build, "dirty")
+                        "*" 
+                    else
+                        #acceptable.msg = string("failed process: ",proc," [",proc.exit_code,"]")
+                        error(acceptable)
+                    end
+                    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
+                    global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
+                    global const VERSION_COMMIT = commit[1:10]
+                    error(expected)
+                end
+            end
+        end
     end
-    # This should be a call to `success`, which for unknown reasons fails
-    # because it can't find copy(SpawnNullStream) during inlining even though
-    # that function is defined in stream.jl. This has therefore been manually 
-    # inline, but should be replace with `success` if possible.
-    clean = wait(spawn(`git diff --quiet HEAD`,(null_handle,null_handle,null_handle)))
-    if !clean; push(VERSION.build, "dirty"); end
-    clean = clean ? "" : "*"
-    isotime = strftime("%Y-%m-%d %H:%M:%S", ctim)
-    global const _jl_commit_string = "Commit $(commit[1:10]) ($isotime)$clean"
-    global const VERSION_COMMIT = commit[1:10]
-catch
-    global const _jl_commit_string = ""
-    global const VERSION_COMMIT = ""
+    try
+        run_event_loop() # equivalent to wait_exit() on a more sane version of the previous
+                         # block of code, but Scheduler doesn't exist during bootstrapping
+                         # so we do what we must, but don't do this in user-land code or you'll regret it
+    catch err
+        if err != expected
+            global const _jl_commit_string = ""
+            global const VERSION_COMMIT = ""
+            if err == acceptable
+                println("Warning: git failed in version.jl")
+                #println(err) # not a useful error msg currently
+            else
+                error(err)
+            end
+        end
+    end
 end
-
 begin
 const _jl_version_string = "Version $VERSION"
 const _jl_banner_plain =

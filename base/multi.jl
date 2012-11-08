@@ -1610,32 +1610,34 @@ _jl_work_cb(args...) = _jl_work_cb()
 function event_loop(isclient)
     global multi_cb_handles
     fdset = FDSet()
-    iserr, lasterr = false, ()
     multi_cb_handles.work_cb = SingleAsyncWork(globalEventLoop(),_jl_work_cb)
     multi_cb_handles.fgcm = SingleAsyncWork(globalEventLoop(),(args...)->flush_gc_msgs());
     timer = TimeoutAsyncWork(globalEventLoop(),(args...)->queueAsync(multi_cb_handles.work_cb))
     startTimer(timer,int64(1),int64(10000)) #do work every 10s
-    #while true
-        #try
+    iserr, lasterr = false, ()
+    while true
+        try
+            ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
                 show(lasterr)
                 iserr, lasterr = false, ()
+            else
+                run_event_loop();
             end
-            run_event_loop();
-        #catch e
-        #    if isa(e,DisconnectException)
-        #        # TODO: wake up tasks waiting for failed process
-        #        if !isclient
-        #            return
-        #        end
-        #    elseif isclient && isa(e,InterruptException)
-        #        # root task is waiting for something on client. allow C-C
-        #        # to interrupt.
-        #        interrupt_waiting_task(_jl_roottask_wi, e)
-        #    end
-        #    iserr, lasterr = true, e
-        #end
-    #end
+        catch e
+            if isa(e,DisconnectException)
+                # TODO: wake up tasks waiting for failed process
+                if !isclient
+                    return
+                end
+            elseif isclient && isa(e,InterruptException)
+                # root task is waiting for something on client. allow C-C
+                # to interrupt.
+                interrupt_waiting_task(_jl_roottask_wi, e)
+            end
+            iserr, lasterr = true, e
+        end
+    end
 end
 
 # force a task to stop waiting, providing with_value as the value of

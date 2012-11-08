@@ -250,7 +250,7 @@ wait_readline_filter(w::AsyncStream, args...) = memchr(w.buffer,'\n') <= 0
 
 #general form of generated calls is: wait_<for_event>(o::NotificationObject, [args::AsRequired...])
 for (fcn, notify, filter_fcn, types) in
-    ((:wait_exit,:exitnotify,:wait_exit_filter,:Process),
+    ((:wait_exit,:closenotify,:wait_exit_filter,:Process), #close happens almost immediately after exit, but gives I/O time to finish
      (:wait_connect,:connectnotify,:wait_connect_filter,:AsyncStream),
      (:wait_close,:closenotify,:wait_close_filter,:(Union(AsyncStream,Process))),
      (:wait_readable,:readnotify,:wait_readable_filter,:AsyncStream),
@@ -720,7 +720,7 @@ function reinit_stdio()
 end
 
 # INTERNAL
-# returns a touple of function arguments to spawn:
+# returns a tuple of function arguments to spawn:
 # (stdios, exitcb, closecb)
 # |       |        \ The function to be called once the uv handle is closed
 # |       \ The function to be called once the process exits
