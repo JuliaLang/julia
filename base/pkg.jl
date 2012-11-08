@@ -189,7 +189,7 @@ function _resolve()
             url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
-                run(`git checkout -q --detach`)
+                run(`git checkout -q HEAD^0`)
                 run(`git reset --soft $(want[pkg])`)
             end
             run(`git add -- $pkg`)
