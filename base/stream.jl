@@ -1,7 +1,5 @@
 #TODO: function writeall(Cmd, String)
-#TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
-#TODO: split into appropriate files (io.jl / stream.jl / process.jl / file.jl)
 
 
 ## types ##
@@ -18,9 +16,9 @@ end
 
 abstract AsyncStream <: Stream
 
-typealias StreamOrNot Union(Bool,AsyncStream)
 typealias UVHandle Ptr{Void}
-typealias RawOrBoxedHandle Union(UVHandle,AsyncStream)
+typealias UVStream AsyncStream
+typealias RawOrBoxedHandle Union(UVHandle,UVStream)
 typealias StdIOSet (RawOrBoxedHandle, RawOrBoxedHandle, RawOrBoxedHandle)
 
 const _sizeof_uv_pipe = ccall(:jl_sizeof_uv_pipe_t,Int32,())
@@ -77,9 +75,9 @@ end
 
 type ProcessChain
     processes::Vector{Process}
-    in::StreamOrNot
-    out::StreamOrNot
-    err::StreamOrNot
+    in::UVStream
+    out::UVStream
+    err::UVStream
     ProcessChain(stdios::StdIOSet) = new(Process[],stdios[1],stdios[2],stdios[3])
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
@@ -161,7 +159,6 @@ copy(::SpawnNullStream) = null_handle
 
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 handle(s::AsyncStream) = s.handle
-handle(s::Bool) = s ? error("handle: invalid value") : C_NULL
 handle(::SpawnNullStream) = C_NULL
 handle(s::Ptr{Void}) = s
 
@@ -727,17 +724,17 @@ for (sym, stdin, stdout, stderr) in {(:spawn_opts_inherit, STDIN,STDOUT,STDERR),
  ($sym)(stdios::StdIOSet,exitcb::Callback) = (stdios,exitcb,false)
  ($sym)(stdios::StdIOSet) = (stdios,false,false)
  ($sym)() = (($stdin,$stdout,$stderr),false,false)
- ($sym)(in::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),false,false)
- ($sym)(in::StreamOrNot,out::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),false,false)
- ($sym)(in::StreamOrNot,out::StreamOrNot,err::StreamOrNot) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,isa(err,AsyncStream)?err:$stderr),false,false)
+ ($sym)(in::UVStream) = ((isa(in,AsyncStream)?in:$stdin,$stdout,$stderr),false,false)
+ ($sym)(in::UVStream,out::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,$stderr),false,false)
+ ($sym)(in::UVStream,out::UVStream,err::UVStream) = ((isa(in,AsyncStream)?in:$stdin,isa(out,AsyncStream)?out:$stdout,isa(err,AsyncStream)?err:$stderr),false,false)
 end
 end
 
 spawn(pc::ProcessChainOrNot,cmds::AbstractCmd,args...) = spawn(pc,cmds,spawn_opts_swallow(args...)...)
 spawn(cmds::AbstractCmd,args...) = spawn(false,cmds,spawn_opts_swallow(args...)...)
 
-spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::StreamOrNot) = spawn(pc,cmd,(false,out,false),false,false)
-spawn_nostdin(cmd::AbstractCmd,out::StreamOrNot) = spawn(false,cmd,(false,out,false),false,false)
+spawn_nostdin(pc::ProcessChainOrNot,cmd::AbstractCmd,out::UVStream) = spawn(pc,cmd,(null_handle,out,null_handle),false,false)
+spawn_nostdin(cmd::AbstractCmd,out::UVStream) = spawn(false,cmd,(null_handle,out,null_handle),false,false)
 
 #returns a pipe to read from the last command in the pipelines
 read_from(cmds::AbstractCmd)=read_from(cmds, null_handle)
@@ -749,9 +746,9 @@ function read_from(cmds::AbstractCmd, stdin::AsyncStream)
 end
 
 write_to(cmds::AbstractCmd) = write_to(cmds, null_handle)
-function write_to(cmds::AbstractCmd, stdout::StreamOrNot)
+function write_to(cmds::AbstractCmd, stdout::UVStream)
     in = NamedPipe()
-    processes = spawn(false, cmds, (in,stdout,false))
+    processes = spawn(false, cmds, (in,stdout,null_handle))
     (in, processes)
 end
 
@@ -762,6 +759,17 @@ function readall(cmd::AbstractCmd,stdin::AsyncStream)
         pipeline_error(pc)
     end
     return takebuf_string(out.buffer)
+end
+
+writeall(cmd::AbstractCmd, stdout::String) = writeall(cmd, stdout, null_handle)
+function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream)
+    (in,pc) = write_to(cmd, stdout)
+    write(in, stdin)
+    close(in)
+    if !wait_success(pc)
+        pipeline_error(pc)
+    end
+    return true
 end
 
 function run(cmds::AbstractCmd,args...)

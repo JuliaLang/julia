@@ -1,5 +1,3 @@
-load("base/iostring.jl")
-
 let io = IOString()
 @assert eof(io)
 @assert try read(io,Uint8); false; catch e; isa(e,EOFError); end
@@ -61,25 +59,25 @@ let io = PipeString()
 @assert write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @assert position(io) == 0
 @assert readline(io) == "pancakes\n"
-compact(io)
+Base.compact(io)
 @assert readline(io) == "waffles\n"
 @assert write(io,"whipped cream\n") > 0
 @assert readline(io) == "blueberries\n"
 @assert try seek(io,0); false; catch e; true; end
 @assert try truncate(io,0); false; catch e; true; end
 @assert readline(io) == "whipped cream\n"
-compact(io)
+Base.compact(io)
 @assert position(io) == 0
 @assert length(io) == 0
-ensureroom(io,50)
+Base.ensureroom(io,50)
 @assert position(io) == 0
 @assert length(io) == 0
 @assert length(io.data) == 50
-ensureroom(io,10)
+Base.ensureroom(io,10)
 @assert length(io) == 0
 @assert length(io.data) == 50
 io.maxsize = 75
-ensureroom(io,100)
+Base.ensureroom(io,100)
 @assert length(io) == 0
 @assert length(io.data) == 75
 @assert seek_end(io)
