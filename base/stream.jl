@@ -1,15 +1,10 @@
-#TODO: function readline(???)
 #TODO: function writeall(Cmd, String)
-#TODO: cleanup methods duplicated with io.jl
 #TODO: fix examples in manual (run return value, STDIO parameters, const first, dup)
-#TODO: remove ProcessStatus if not used
-#TODO: implement various buffer modes and helper function (minor)
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
-#TODO: UDPSockets are probably broken
+#TODO: split into appropriate files (io.jl / stream.jl / process.jl / file.jl)
 
 
-globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
-mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},())
+## types ##
 
 typealias Executable Union(Vector{ByteString},Function)
 typealias Callback Union(Function,Bool)
@@ -159,23 +154,16 @@ end
 copy(s::TTY) = TTY(s.handle,s.open)
 
 #SpawnNullStream is Singleton
-type SpawnNullStream <: AsyncStream
-end
-
+type SpawnNullStream <: AsyncStream end
 const null_handle = SpawnNullStream()
 SpawnNullStream() = null_handle
-
 copy(::SpawnNullStream) = null_handle
 
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
-read_handle(s::AsyncStream) = s.handle
-write_handle(s::AsyncStream) = s.handle
-read_handle(s::Bool) = s ? error("read_handle: invalid value") : C_NULL
-write_handle(s::Bool) = s ? error("write_handle: invalid value") : C_NULL
-read_handle(::SpawnNullStream) = C_NULL
-write_handle(::SpawnNullStream) = C_NULL
-read_handle(s::Ptr{Void}) = s
-write_handle(s::Ptr{Void}) = s
+handle(s::AsyncStream) = s.handle
+handle(s::Bool) = s ? error("handle: invalid value") : C_NULL
+handle(::SpawnNullStream) = C_NULL
+handle(s::Ptr{Void}) = s
 
 make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
@@ -471,7 +459,7 @@ function queueAsync(work::SingleAsyncWork)
     ccall(:jl_async_send,Void,(Ptr{Void},),work.handle)
 end
 
-# process status #
+## process status ##
 abstract ProcessStatus
 type ProcessNotRun   <: ProcessStatus; end
 type ProcessRunning  <: ProcessStatus; end
@@ -479,7 +467,8 @@ type ProcessExited   <: ProcessStatus; status::Int32; end
 type ProcessSignaled <: ProcessStatus; signal::Int32; end
 type ProcessStopped  <: ProcessStatus; signal::Int32; end
 
-process_exited  (s::Process) = (s.exit_code != -2)
+process_running (s::Process) = s.exit_code == -2
+process_exited  (s::Process) = !process_running(s)
 process_exited  (s::Vector{Process}) = all(map(process_exited,s))
 process_signaled(s::Process) = (s.term_signal > 0)
 process_stopped (s::Process) = false #not supported by libuv. Do we need this?
@@ -489,16 +478,17 @@ process_term_signal(s::Process) = s.term_signal
 process_stop_signal(s::Process) = false #not supported by libuv. Do we need this?
 
 function process_status(s::Process)
-    s.exit_code == -2   ? ProcessRunning :
+    process_running (s) ? ProcessRunning () :
     process_exited  (s) ? ProcessExited  (process_exit_status(s)) :
     process_signaled(s) ? ProcessSignaled(process_term_signal(s)) :
     process_stopped (s) ? ProcessStopped (process_stop_signal(s)) :
     error("process status error")
 end
 
-## types
+## event loop ##
+globalEventLoop() = ccall(:jl_global_event_loop,Ptr{Void},())
+#mkNewEventLoop() = ccall(:jl_new_event_loop,Ptr{Void},()) # this would be fine, but is nowhere supported
 
-##event loop
 function run_event_loop(loop::Ptr{Void})
     ccall(:jl_run_event_loop,Void,(Ptr{Void},),loop)
 end
@@ -539,7 +529,7 @@ end
 
 ##stream functions
 
-start_reading(stream::AsyncStream) = (stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),read_handle(stream)) : int32(0))
+start_reading(stream::AsyncStream) = (stream.handle != 0 ? ccall(:jl_start_reading,Int32,(Ptr{Void},),handle(stream)) : int32(0))
 function start_reading(stream::AsyncStream,cb::Function)
     start_reading(stream)
     stream.readcb = cb
@@ -550,7 +540,7 @@ function start_reading(stream::AsyncStream,cb::Function)
 end
 start_reading(stream::AsyncStream,cb::Bool) = (start_reading(stream); stream.readcb = cb)
 
-stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),read_handle(stream))
+stop_reading(stream::AsyncStream) = ccall(:uv_read_stop,Bool,(Ptr{Void},),handle(stream))
 
 function readall(stream::AsyncStream)
     start_reading(stream)
@@ -596,7 +586,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         link_pipe(in,false,stdios[1],true)
         close_in = true
     else
-        in = read_handle(stdios[1])
+        in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
@@ -604,7 +594,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         link_pipe(stdios[2],false,out,true)
         close_out = true
     else
-        out = write_handle(stdios[2])
+        out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
@@ -612,7 +602,7 @@ function spawn(pc::ProcessChainOrNot,cmd::Cmd,stdios::StdIOSet,exitcb::Callback,
         link_pipe(stdios[3],false,err,true)
         close_err = true
     else
-        err = write_handle(stdios[3])
+        err = handle(stdios[3])
     end
     pp = Process(cmd,C_NULL,stdios[1],stdios[2],stdios[3]);
     ptrs = _jl_pre_exec(cmd.exec)
@@ -671,7 +661,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         link_pipe(in,false,stdios[1],true)
         close_in = true
     else
-        in = read_handle(stdios[1])
+        in = handle(stdios[1])
     end
     if(isa(stdios[2],NamedPipe)&&stdios[2].handle==C_NULL)
         out = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
@@ -679,7 +669,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         link_pipe(stdios[2],false,out,true)
         close_out = true
     else
-        out = write_handle(stdios[2])
+        out = handle(stdios[2])
     end
     if(isa(stdios[3],NamedPipe)&&stdios[3].handle==C_NULL)
         err = box(Ptr{Void},jl_alloca(unbox(Int32,_sizeof_uv_pipe)))
@@ -687,7 +677,7 @@ function spawn(pc::ProcessChainOrNot,cmds::AndCmds,stdios::StdIOSet,exitcb::Call
         link_pipe(stdios[3],false,err,true)
         close_err = true
     else
-        err = write_handle(stdios[3])
+        err = handle(stdios[3])
     end
     spawn(pc, cmds.a, (in,out,err), exitcb, closecb)
     spawn(pc, cmds.b, (in,out,err), exitcb, closecb)
@@ -839,8 +829,12 @@ function _contains_newline(bufptr::Ptr{Void},len::Int32)
     return (ccall(:memchr,Ptr{Uint8},(Ptr{Void},Int32,Uint),bufptr,'\n',len)!=C_NULL)
 end
 
-## process status ##
 
+# WARNING: do not call this and keep the returned array of pointers
+# around longer than the args vector and then use array of pointers.
+# this could cause a segfault. this is really just for use by the
+# spawn function below so that we can exec more efficiently.
+#
 function _jl_pre_exec(args::Vector{ByteString})
     if length(args) < 1
         error("exec: too few words to exec")
@@ -895,14 +889,14 @@ end
 ## low-level calls
 
 write(s::AsyncStream, b::ASCIIString) =
-    ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,write_handle(s))
+    ccall(:jl_puts, Int32, (Ptr{Uint8},Ptr{Void}),b.data,handle(s))
 write(s::AsyncStream, b::Uint8) =
-    ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, write_handle(s))
+    ccall(:jl_putc, Int32, (Uint8, Ptr{Void}), b, handle(s))
 write(s::AsyncStream, c::Char) =
-    ccall(:jl_pututf8, Int32, (Ptr{Void},Char), write_handle(s), c)
-write{T<:BitsKind}(s::AsyncStream, a::Array{T}) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),write_handle(s), a, uint(numel(a)*sizeof(T)))
-write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),write_handle(s), p, uint(nb))
-_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),write_handle(s),p,uint(nb))
+    ccall(:jl_pututf8, Int32, (Ptr{Void},Char), handle(s), c)
+write{T<:BitsKind}(s::AsyncStream, a::Array{T}) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint32),handle(s), a, uint(numel(a)*sizeof(T)))
+write(s::AsyncStream, p::Ptr, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s), p, uint(nb))
+_write(s::AsyncStream, p::Ptr{Void}, nb::Integer) = ccall(:jl_write, Uint,(Ptr{Void}, Ptr{Void}, Uint),handle(s),p,uint(nb))
 
 (&)(left::AbstractCmd,right::AbstractCmd) = AndCmds(left,right)
 (|)(src::AbstractCmd,dest::AbstractCmd) = OrCmds(src,dest)
@@ -1007,12 +1001,13 @@ end
 ## UV based file operations ##
 
 module FS
+using Base
 
 export File, open, close, unlink, write,
     JL_O_WRONLY, JL_O_RDONLY, JL_O_RDWR, JL_O_APPEND, JL_O_CREAT, JL_O_EXCL,
-    JL_O_TRUNC,JL_O_TEMPORARY,JL_O_SHORT_LIVED,JL_O_SEQUENTIAL,JL_O_RANDOM
+    JL_O_TRUNC, JL_O_TEMPORARY, JL_O_SHORT_LIVED, JL_O_SEQUENTIAL, JL_O_RANDOM
 
-import Base.*
+import Base.show, Base.open, Base.close, Base.write
 
 include("file_constants.jl")
 
@@ -1071,11 +1066,11 @@ function unlink(p::String)
     uv_error(err)
 end
 function unlink(f::File)
-if(f.open)
-    close(f)
-end
-unlink(f.path)
-f
+    if(f.open)
+        close(f)
+    end
+    unlink(f.path)
+    f
 end
 
 function write(f::File,buf::Ptr{Uint8},len::Int32,offset::Int64)

@@ -231,7 +231,7 @@ DLLEXPORT uv_pipe_t *jl_init_pipe(uv_pipe_t *pipe, int writable, int julia_only,
      flags = writable ? UV_PIPE_WRITEABLE : UV_PIPE_READABLE;
      if (!julia_only)
          flags |= UV_PIPE_SPAWN_SAFE;
-     uv_pipe_init(jl_event_loop, pipe, flags);
+     uv_pipe_init(jl_io_loop, pipe, flags);
      pipe->data = julia_struct;//will be initilized on io
      return pipe;
 }
@@ -321,11 +321,6 @@ DLLEXPORT uv_loop_t *jl_new_event_loop()
 DLLEXPORT uv_loop_t *jl_global_event_loop()
 {
     return jl_io_loop;
-}
-
-DLLEXPORT uv_loop_t *jl_local_event_loop()
-{
-    return jl_event_loop;
 }
 
 DLLEXPORT void jl_async_send(uv_async_t *handle) {

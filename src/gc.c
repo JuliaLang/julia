@@ -650,7 +650,6 @@ static void gc_mark(void)
 
     // libuv loops
     gc_mark_uv_state(jl_global_event_loop());
-    gc_mark_uv_state(jl_local_event_loop());
 
     jl_mark_box_caches();
 

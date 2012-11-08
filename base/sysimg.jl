@@ -102,7 +102,7 @@ include("inference.jl")
 include("io.jl")
 include("iostring.jl")
 include("stream.jl")
-import Base.FS.*
+using FS
 include("char.jl")
 include("ascii.jl")
 include("utf8.jl")

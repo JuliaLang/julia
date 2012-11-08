@@ -442,7 +442,6 @@ extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
-extern uv_loop_t *jl_event_loop;
 extern uv_loop_t *jl_io_loop;
 
 // some important symbols
@@ -790,7 +789,6 @@ DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT void jl_process_events(uv_loop_t *loop);
 
 DLLEXPORT uv_loop_t *jl_global_event_loop();
-DLLEXPORT uv_loop_t *jl_local_event_loop();
 
 DLLEXPORT uv_pipe_t *jl_make_pipe(int writable, int julia_only, jl_value_t *julia_struct);
 DLLEXPORT void jl_close_uv(uv_handle_t *handle);

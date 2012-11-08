@@ -182,7 +182,6 @@ void sigint_handler(int sig, siginfo_t *info, void *context)
     } else {
         jl_signal_pending = 0;
         ev_break(jl_global_event_loop()->ev,EVBREAK_CANCEL);
-        ev_break(jl_local_event_loop()->ev,EVBREAK_CANCEL);
         jl_raise(jl_interrupt_exception);
     }
 }
@@ -265,7 +264,6 @@ uv_lib_t *jl_kernel32_handle=&_jl_kernel32_handle;
 uv_lib_t *jl_crtdll_handle=&_jl_crtdll_handle;
 uv_lib_t *jl_winsock_handle=&_jl_winsock_handle;
 #endif
-uv_loop_t *jl_event_loop;
 uv_loop_t *jl_io_loop;
 
 #ifdef COPY_STACKS
@@ -347,10 +345,8 @@ void julia_init(char *imageFile)
     uv_dlopen("msvcrt.dll",jl_crtdll_handle);
     uv_dlopen("Ws2_32.dll",jl_winsock_handle);
 #endif
-    //jl_io_loop =  uv_loop_new(); //this loop will handle io/sockets - if not handled otherwise
-    jl_io_loop = jl_event_loop = uv_default_loop(); //this loop will internal events (spawining process etc.) - this has to be the uv default loop as that's the only supported loop for processes ;(
-    //init io
-    init_stdio();
+    jl_io_loop = uv_default_loop(); //this loop will internal events (spawining process etc.)
+	init_stdio();
 
 #if defined(__linux__)
     int ncores = jl_cpu_cores();
