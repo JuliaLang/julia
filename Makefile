@@ -49,7 +49,7 @@ install: release
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-for suffix in "Rmath" "amd" "arpack" "cholmod" "colamd" "openlibm" "fftw3" "fftw3f" "fftw3_threads" "fftw3f_threads" "glpk" "glpk_wrapper" "gmp" "gmp_wrapper" "grisu" "history" "julia-release" "$(OPENBLASNAME)" "openlibm" "pcre" "random" "readline" "suitesparse_wrapper" "tk_wrapper" "umfpack" "z" ; do \
+	-for suffix in "Rmath" "amd" "arpack" "cholmod" "colamd" "openlibm" "fftw3" "fftw3f" "fftw3_threads" "fftw3f_threads" "glpk" "glpk_wrapper" "gmp" "gmp_wrapper" "grisu" "history" "julia-release" "$(OPENBLASNAME)" "openlibm" "pcre" "random" "readline" "suitesparse_wrapper" "tk_wrapper" "spqr" "umfpack" "z" ; do \
 		cp $(BUILD)/lib/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/lib ; \
 	done
 # Web-REPL stuff
