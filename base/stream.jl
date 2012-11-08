@@ -214,10 +214,10 @@ function tasknotify(waittasks::Vector{WaitTask}, args...)
     newwts = WaitTask[]
     ct = current_task()
     for wt in waittasks
-        if (isa(wt.filter, Function) && isequal(wt.filter(wt.localdata, args...), false)) || isequal(wt, false)
+        if (isa(wt.filter, Function) ? wt.filter(wt.localdata, args...) : wt) === false
             work = WorkItem(wt.task)
             work.argument = args
-            enq_work(work) #make_scheduled(wt.task)
+            enq_work(work)
         else
             push(newwts,wt)
         end
@@ -273,10 +273,15 @@ for (fcn, notify, filter_fcn, types) in
                 end
                 ct.runnable = false
                 args = yield()
+                if isa(args,InterruptException)
+                    error(args)
+                end
             end
             args
         end
-        $fcn(x,y...) = $fcn((x,y...)) #allow either form
+        if isa($types,Tuple)
+            fcn(x,y...) = $fcn((x,y...)) #allow either form
+        end
     end
 end
 wait_exit(x::ProcessChain) = wait_exit(x.processes)
@@ -427,11 +432,12 @@ end
 const dummySingleAsync = SingleAsyncWork(C_NULL,()->nothing)
 
 function _uv_hook_close(uv::AsyncStream)
+    uv.handle = 0
     uv.open = false
     if isa(uv.closecb, Function) uv.closecb(uv) end
     tasknotify(uv.closenotify, uv)
 end
-_uv_hook_close(uv::AsyncWork) = nothing
+_uv_hook_close(uv::AsyncWork) = (uv.handle = 0; nothing)
 
 # This serves as a common callback for all async classes
 _uv_hook_asynccb(async::AsyncWork, status::Int32) = async.cb(status)
@@ -570,6 +576,7 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int32, term_signal::I
 end
 
 function _uv_hook_close(proc::Process)
+    proc.handle = 0
     if isa(proc.closecb, Function) proc.closecb(proc) end
     tasknotify(proc.closenotify, proc)
 end

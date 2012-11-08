@@ -1619,12 +1619,14 @@ function event_loop(isclient)
         try
             ccall(:jl_register_toplevel_eh, Void, ())
             if iserr
+                println(typeof(lasterr))
                 show(lasterr)
                 iserr, lasterr = false, ()
             else
                 run_event_loop();
             end
-        catch e
+        catch backtrace
+            e = backtrace.e
             if isa(e,DisconnectException)
                 # TODO: wake up tasks waiting for failed process
                 if !isclient
@@ -1634,8 +1636,9 @@ function event_loop(isclient)
                 # root task is waiting for something on client. allow C-C
                 # to interrupt.
                 interrupt_waiting_task(_jl_roottask_wi, e)
+                continue
             end
-            iserr, lasterr = true, e
+            iserr, lasterr = true, backtrace
         end
     end
 end
@@ -1652,4 +1655,6 @@ function interrupt_waiting_task(wi::WorkItem, with_value)
             end
         end
     end
+    wi.argument = with_value
+    enq_work(wi)
 end
