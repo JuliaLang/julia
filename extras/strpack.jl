@@ -1,7 +1,18 @@
-load("iostring.jl")
-load("lru.jl")
+module StrPack
 
-bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters
+export Struct, struct
+export pack, unpack, sizeof
+export DataAlign
+export align_default, align_packed, align_packmax, align_structpack, align_table
+export align_x86_pc_linux_gnu, align_native
+export show_struct_layout
+
+import Base.*
+
+require("iostring.jl")
+require("lru.jl")
+
+bswap(c::Char) = identity(c) # white lie which won't work for multibyte characters in UTF-16 or UTF-32
 
 # Represents data endianness
 abstract Endianness
@@ -14,8 +25,6 @@ type Struct
     canonical::String
     endianness::Endianness
     types
-    pack::Function
-    unpack::Function
     struct::Type
 end
 function Struct{T}(::Type{T}, endianness)
@@ -31,10 +40,10 @@ function Struct{T}(::Type{T}, endianness)
     end
     types = composite_fieldinfo(T)
     packer, unpacker = endianness_converters(endianness)
-    pack = struct_pack(packer, types, T)
-    unpack = struct_unpack(unpacker, types, T)
+    struct_pack(packer, types, T)
+    struct_unpack(unpacker, types, T)
     struct_utils(T)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, T)
+    STRUCTS[s] = Struct(s, endianness, types, T)
 end
 Struct{T}(::Type{T}) = Struct(T, NativeEndian())
 
@@ -95,124 +104,6 @@ function calcsize(types)
     size
 end
 
-# Struct string syntax
-# Note that not all of these are checked by the regex itself but are verified after
-# Presented in regex-style EBNF
-#
-# struct_string := endianness? element_specifier*
-# endianness := "<" | ">" | "!" | "=" | "@"
-# element_specifier := name? size? type
-# name := "[" identifier "]"
-# size := unsigned_integer | "(" unsigned_integer ("," unsigned_integer)* ")"
-# type := predefined_type | "{" identifier "}"
-# predefined_type := "x" | "c" | "b" | "B" | "?" | "h" | "i" | "I" | "l" | "L" | "q" | "Q" | "f" | "d"
-function struct_parse(s::String)
-    t = {}
-    i = 2
-    endianness = if s[1] == '<'
-        LittleEndian()
-    elseif s[1] == '>' || s[1] == '!'
-        BigEndian()
-    elseif s[1] == '='
-        NativeEndian()
-    elseif s[1] == '@'
-        println("Warning: struct does not support fully native structures.")
-        NativeEndian()
-    else
-        i = 1 # no byte order command
-        NativeEndian()
-    end
-    
-    tmap = ['x' => PadByte,
-            'c' => Char,
-            'b' => Int8,
-            'B' => Uint8,
-            '?' => Bool,
-            'h' => Int16,
-            'H' => Uint16,
-            'i' => Int32,
-            'I' => Uint32,
-            'l' => Int32,
-            'L' => Uint32,
-            'q' => Int64,
-            'Q' => Uint64,
-            'f' => Float32,
-            'd' => Float64,
-            #'s' => ASCIIString, #TODO
-            ]
-    t = {}
-    while i <= length(s)
-        m = match(r"^                      # at the beginning of the string, find
-                  (?:\[([a-zA-Z]\w*)\])?   # an optional name in []
-                  (?:                      # then
-                      (\d+)                # a vector length
-                      |                    # or
-                      \((\d+(?:,\d+)*)\)   # a comma-separated array size in ()
-                  )?                       # or neither
-                  (?:                      # followed by either
-                      ([a-zA-Z?])          # a predefined type specifier
-                      |                    # or
-                      {([a-zA-Z]\w*)}      # another type in {}
-                  )
-                  "x, s[i:end])
-        if isa(m, Nothing)
-            error("Failed to compile struct; syntax error at ...$(s[i])...")
-        end
-        name, oneD, nD, typ, custtyp = m.captures
-        dims = if isa(oneD, Nothing) && isa(nD, Nothing)
-            1
-        elseif isa(nD, Nothing)
-            int(oneD)
-        else
-            tuple(map(int, split(nD, ','))...)
-        end
-        elemtype = if isa(custtyp, Nothing)
-            tmap[typ[1]]
-        else
-            testtype = eval(symbol(custtyp)) #is there an easier way to do this?
-            if isbitsequivalent(testtype)
-                testtype
-            else
-                error("Failed to compile struct; $testtype is not a bits-equivalent type.")
-            end
-        end
-        i += length(m.match)
-        push(t, (elemtype, dims, name))
-    end
-    (endianness, t)
-end
-
-# Generate an anonymous composite type from a list of its element types
-function gen_typelist(types::Array)
-    xprs = {}
-    for (typ, dims, name) in types
-        fn = !isa(name, Nothing) ? symbol(name) : gensym("field$(length(xprs)+1)")
-        xpr = if dims == 1
-            :(($fn)::($typ))
-        else
-            if typ != ASCIIString
-                sz = length(dims)
-                :(($fn)::Array{($typ),($sz)})
-            else
-                :(($fn)::($typ))
-            end
-        end
-        push(xprs, xpr)
-    end
-    xprs         
-end
-function gen_type(types)
-    @gensym struct
-    fields = gen_typelist(types)
-    typedef = quote
-        type $struct
-            $(fields...)
-        end
-        $struct
-    end
-    eval(typedef)
-end
-
 # Generate an unpack function for a composite type
 function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Symbol, strategy::Symbol)
     xprs, rvars = {}, {}
@@ -220,7 +111,7 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
     push(xprs, :($offset = 0))
     for (typ, dims) in types
         push(xprs, quote
-            $pad = pad_next($offset, $typ, $strategy)
+            $pad = StrPack.pad_next($offset, $typ, $strategy)
             if $pad > 0
                 skip($stream, $pad)
                 $offset += $pad
@@ -239,18 +130,16 @@ function gen_readers(convert::Function, types::Array, stream::Symbol, offset::Sy
     end
     xprs, rvars
 end
+
 function struct_unpack(convert, types, struct_type)
     @gensym in offset strategy
     readers, rvars = gen_readers(convert, types, in, offset, strategy)
-    unpackdef = quote
-        (($in)::IO, ($strategy)::DataAlign) -> begin
-            $(readers...)
-            # tail pad
-            skip($in, pad_next($offset, $struct_type, $strategy))
-            ($struct_type)($(rvars...))
-        end
+    @eval function unpack(::Type{$struct_type}, ($in)::IO, ($strategy)::DataAlign)
+        $(readers...)
+        # tail pad
+        skip($in, StrPack.pad_next($offset, $struct_type, $strategy))
+        ($struct_type)($(rvars...))
     end
-    eval(unpackdef)
 end
 
 # Generate a pack function for a composite type
@@ -261,7 +150,7 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     for (typ, dims) in types
         elnum += 1
         push(xprs, quote
-            $pad = pad_next($offset, $typ, $strategy)
+            $pad = StrPack.pad_next($offset, $typ, $strategy)
             if $pad > 0
                 write($stream, fill(uint8(0), $pad))
                 $offset += $pad
@@ -279,17 +168,15 @@ function gen_writers(convert::Function, types::Array, struct_type, stream::Symbo
     end
     xprs
 end
+
 function struct_pack(convert, types, struct_type)
     @gensym out struct offset strategy
     writers = gen_writers(convert, types, struct_type, out, struct, offset, strategy)
-    packdef = quote
-        (($out)::IO, ($strategy)::DataAlign, ($struct)::($struct_type)) -> begin
-            $(writers...)
-            # tail pad
-            write($out, fill(uint8(0), pad_next($offset, $struct_type, $strategy)))
-        end
+    @eval function pack(($out)::IO, ($strategy)::DataAlign, ($struct)::($struct_type))
+        $(writers...)
+        # tail pad
+        write($out, fill(uint8(0), StrPack.pad_next($offset, $struct_type, $strategy)))
     end
-    eval(packdef)
 end
 
 endianness_converters{T<:Endianness}(::T) = error("endianness type $T not recognized")
@@ -310,41 +197,23 @@ end
 # * we don't spend time regenerating types and functions when we don't have to
 const STRUCTS = BoundedLRU()
 
-function interp_struct_parse(str::String)
-    s = canonicalize(str)
-    if has(STRUCTS, s)
-        return STRUCTS[s]
-    end
-    endianness, types = struct_parse(s)
-    packer, unpacker = endianness_converters(endianness)
-    struct_type = gen_type(types)
-    pack = struct_pack(packer, types, struct_type)
-    unpack = struct_unpack(unpacker, types, struct_type)
-    struct_utils(struct_type)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, struct_type)
-end
-
-macro s_str(str)
-    interp_struct_parse(str)
-end
-
 # Julian aliases for the "object-style" calls to pack/unpack/struct
 function pack(out::IO, s::Struct, strategy::DataAlign, struct_or_only_item)
     if isa(struct_or_only_item, s.struct)
-        s.pack(out, strategy, struct_or_only_item)
+        pack(out, strategy, struct_or_only_item)
     else
-        s.pack(out, strategy, s.struct(struct_or_only_item))
+        pack(out, strategy, s.struct(struct_or_only_item))
     end
 end
 pack{T}(out::IO, composite::T, strategy::DataAlign) = pack(out, Struct(T), strategy, composite)
 pack{T}(out::IO, composite::T) = pack(out, Struct(T), align_packed, composite)
-pack(out::IO, s::Struct, strategy::DataAlign, args...) = s.pack(out, strategy, s.struct(args...))
-pack(out::IO, s::Struct, args...) = s.pack(out, align_packed, s.struct(args...))
+pack(out::IO, s::Struct, strategy::DataAlign, args...) = pack( out, strategy, s.struct(args...))
+pack(out::IO, s::Struct, args...) = pack(out, align_packed, s.struct(args...))
 
-unpack(in::IO, s::Struct, strategy::DataAlign) = s.unpack(in, strategy)
-unpack(in::IO, s::Struct) = s.unpack(in, align_packed)
-unpack{T}(in::IO, ::Type{T}, strategy::DataAlign) = Struct(T).unpack(in, strategy)
-unpack{T}(in::IO, ::Type{T}) = Struct(T).unpack(in, align_packed)
+unpack(in::IO, s::Struct, strategy::DataAlign) = unpack(s, in, strategy)
+unpack(in::IO, s::Struct) = unpack(s, in, align_packed)
+unpack{T}(in::IO, ::Type{T}, strategy::DataAlign) = unpack(T, in, strategy)
+unpack{T}(in::IO, ::Type{T}) = unpack(T, in, align_packed)
 
 struct(s::Struct, items...) = s.struct(items...)
 
@@ -540,3 +409,5 @@ align_native = align_table(align_default, let
      Float64 => float64align,
      ]
 end)
+
+end
