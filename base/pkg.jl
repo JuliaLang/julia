@@ -16,14 +16,10 @@ import Git
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
 const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
-# get package repo directory
-
-directory() = get(ENV,"JULIA_PACKAGES",string(ENV["HOME"],"/.julia"))
-
 # create a new empty packge repository
 
 function init(meta::String)
-    dir = directory()
+    dir = julia_pkgdir()
     run(`mkdir $dir`)
     cd(dir) do
         # create & configure
@@ -44,19 +40,19 @@ init() = init(DEFAULT_META)
 
 # get/set the origin url for package repo
 
-origin() = cd(directory()) do
+origin() = cd(julia_pkgdir()) do
     try readchomp(`git config remote.origin.url`)
     catch
         return nothing
     end
 end
-origin(url::String) = cd(directory()) do
+origin(url::String) = cd(julia_pkgdir()) do
     run(`git config remote.origin.url $url`)
 end
 
 # add and remove packages by name
 
-add(pkgs::Vector{VersionSet}) = cd(directory()) do
+add(pkgs::Vector{VersionSet}) = cd(julia_pkgdir()) do
     commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
         for pkg in pkgs
             if !contains(Metadata.packages(),pkg.package)
@@ -86,7 +82,7 @@ function add(pkgs::Union(String,VersionSet)...)
     add(pkgs_)
 end
 
-rm(pkgs::Vector{String}) = cd(directory()) do
+rm(pkgs::Vector{String}) = cd(julia_pkgdir()) do
     commit("rm: $(join(sort!(pkgs), ' '))") do
         for pkg in pkgs
             if !contains(Metadata.packages(),pkg)
@@ -116,13 +112,13 @@ rm(pkgs::String...) = rm(String[pkgs...])
 
 # list available, required & installed packages
 
-available() = cd(directory()) do
+available() = cd(julia_pkgdir()) do
     for pkg in Metadata.each_package()
         println(pkg)
     end
 end
 
-required() = cd(directory()) do
+required() = cd(julia_pkgdir()) do
     open("REQUIRE") do io
         for line in each_line(io)
             print(line)
@@ -130,7 +126,7 @@ required() = cd(directory()) do
     end
 end
 
-installed() = cd(directory()) do
+installed() = cd(julia_pkgdir()) do
     Git.each_submodule(false) do name, path, sha1
         if name != "METADATA"
             try
@@ -200,12 +196,12 @@ function _resolve()
         end
     end
 end
-resolve() = cd(_resolve,directory())
+resolve() = cd(_resolve,julia_pkgdir())
 
 # clone a new package repo from a URL
 
 function clone(url::String)
-    dir = directory()
+    dir = julia_pkgdir()
     run(`git clone $url $dir`)
     cd(dir) do
         checkout("HEAD")
@@ -224,7 +220,7 @@ end
 
 # checkout a particular repo version
 
-checkout(rev::String) = cd(directory()) do
+checkout(rev::String) = cd(julia_pkgdir()) do
     dir = cwd()
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
@@ -275,14 +271,14 @@ end
 
 # push & pull package repos to/from remotes
 
-push() = cd(directory()) do
+push() = cd(julia_pkgdir()) do
     assert_git_clean()
     tag_submodules()
     run(`git push --tags`)
     run(`git push`)
 end
 
-pull() = cd(directory()) do
+pull() = cd(julia_pkgdir()) do
     assert_git_clean()
 
     # get remote data
@@ -360,7 +356,7 @@ end
 
 # update system to latest and greatest
 
-update() = cd(directory()) do
+update() = cd(julia_pkgdir()) do
     commit("update") do
         Git.each_submodule(false) do name, path, sha1
             cd(path) do

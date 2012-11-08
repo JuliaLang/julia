@@ -195,6 +195,8 @@ const _jl_roottask_wi = WorkItem(_jl_roottask)
 _jl_is_interactive = false
 isinteractive() = (_jl_is_interactive::Bool)
 
+julia_pkgdir() = abs_path(get(ENV,"JULIA_PKGDIR",string(ENV["HOME"],"/.julia")))
+
 function _start()
     # set up standard streams
     global const stdout_stream = make_stdout_stream()
@@ -225,8 +227,9 @@ function _start()
             global PGRP = ProcessGroup(0, {}, {})
         end
 
-        global const LOAD_PATH = String[
+        global const LOAD_PATH = ByteString[
             ".",
+            julia_pkgdir(),
             abs_path("$JULIA_HOME/../lib/julia"),
             abs_path("$JULIA_HOME/../lib/julia/base"),
             abs_path("$JULIA_HOME/../lib/julia/extras"),
