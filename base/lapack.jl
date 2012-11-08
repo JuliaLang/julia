@@ -161,7 +161,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
                       (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                      &m, &n, AA, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
+                      &m, &n, A, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))

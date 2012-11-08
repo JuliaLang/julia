@@ -6,11 +6,12 @@ using Base
 
 import Main
 import Git
+import Base.isequal, Base.isless
 
 export parse_requires, Version, VersionSet
 
 function gen_versions(pkg::String)
-    for (ver,sha1) in Git.each_version("$pkg.jl")
+    for (ver,sha1) in Git.each_version("$pkg")
         dir = "METADATA/$pkg/versions/$ver"
         run(`mkdir -p $dir`)
         open("$dir/sha1","w") do io
@@ -68,6 +69,7 @@ type Version
     package::ByteString
     version::VersionNumber
 end
+
 isequal(a::Version, b::Version) =
     a.package == b.package && a.version == b.version
 function isless(a::Version, b::Version)

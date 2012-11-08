@@ -309,8 +309,9 @@ endif
 
 
 # Colors for make
-
+ifndef USE_QUIET
 USE_QUIET = 1
+endif
 ifeq ($(USE_QUIET), 1)
 
 CCCOLOR="\033[34m"

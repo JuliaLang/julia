@@ -1066,3 +1066,94 @@ function assign(S::SparseAccumulator, v, i::Integer)
     end
     return S
 end
+
+function mminfo(filename::ASCIIString)
+#  function  [rows, cols, entries, rep, field, symmetry] = mminfo(filename)
+#
+#      Reads the contents of the Matrix Market file 'filename'
+#      and extracts size and storage information.
+#
+#      In the case of coordinate matrices, entries refers to the
+#      number of coordinate entries stored in the file.  The number
+#      of non-zero entries in the final matrix cannot be determined
+#      until the data is read (and symmetrized, if necessary).
+#
+#      In the case of array matrices, entries is the product
+#      rows*cols, regardless of whether symmetry was used to
+#      store the matrix efficiently.
+
+    mmfile = open(filename,"r")
+    tokens = split(chomp(readline(mmfile)), ' ')
+    if length(tokens) != 5 error("Not enough words on header line") end
+    if tokens[1] != "%%MatrixMarket" error("Not a valid MatrixMarket header.") end
+    (head1, rep, field, symm) = map(lowercase, tokens[2:5])
+    if head1 != "matrix"
+        error("This seems to be a MatrixMarket $head1 file, not a MatrixMarket matrix file")
+    end
+                                  # Read through comments, ignoring them
+    ll = readline(mmfile)
+    while length(ll) > 0 && ll[1] == '%'
+        ll = readline(mmfile)
+    end
+    dd = int(split(ll, ' '))      # Read dimensions
+    rows = dd[1]
+    cols = dd[2]
+    entries = (rep == "coordinate" ? dd[3] : rows * cols)
+    return rows, cols, entries, rep, field, symm
+end
+
+function mmread(filename::ASCIIString)
+# function  [A] = mmread(filename)
+#
+# function  [A,rows,cols,entries,rep,field,symm] = mmread(filename)
+#
+#      Reads the contents of the Matrix Market file 'filename'
+#      into the matrix 'A'.  'A' will be either sparse or full,
+#      depending on the Matrix Market format indicated by
+#      'coordinate' (coordinate sparse storage), or
+#      'array' (dense array storage).  The data will be duplicated
+#      as appropriate if symmetry is indicated in the header.
+#
+#      Optionally, size information about the matrix can be
+#      obtained by using the return values rows, cols, and
+#      entries, where entries is the number of nonzero entries
+#      in the final matrix. Type information can also be retrieved
+#      using the optional return values rep (representation), field,
+#      and symm (symmetry).
+#
+    mmfile = open(filename,"r")
+    tokens = split(chomp(readline(mmfile)))
+    if length(tokens) != 5 error("Not enough words on header line") end
+    if tokens[1] != "%%MatrixMarket" error("Not a valid MatrixMarket header.") end
+    (head1, rep, field, symm) = map(lowercase, tokens[2:5])
+    if head1 != "matrix"
+        error("This seems to be a MatrixMarket $head1 file, not a MatrixMarket matrix file")
+    end
+    if field != "real" error("non-float fields not yet allowed") end
+
+    ll = readline(mmfile)         # Read through comments, ignoring them
+    while length(ll) > 0 && ll[1] == '%'
+        ll = readline(mmfile)
+    end
+                                  # Read size information
+    dd = int(split(ll, ' '))
+    rows = dd[1]
+    cols = dd[2]
+    if rep == "coordinate"
+        entries = dd[3]
+        rr = Array(Int32, entries)
+        cc = Array(Int32, entries)
+        xx = Array(Float64, entries)
+        for i in 1:entries
+            flds = split(chomp(readline(mmfile)))
+            rr[i] = int32(flds[1])
+            cc[i] = int32(flds[2])
+            xx[i] = float64(flds[3])
+        end
+        return sparse(rr, cc, xx, rows, cols)
+    elseif rep == "array"
+        aa = Array(Float64, 0)
+        for ll in EachLine(mmfile) push(aa, float64(ll)) end
+        return reshape(aa, (rows, cols))
+    end
+end

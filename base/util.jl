@@ -197,21 +197,19 @@ function is_file_readable(path)
     return true
 end
 
-function find_in_path(fname)
-    if fname[1] == '/'
-        return realpath(fname)
-    end
-    for pfx in LOAD_PATH
-        if pfx != "" && pfx[end] != '/'
-            pfxd = strcat(pfx,"/",fname)
-        else
-            pfxd = strcat(pfx,fname)
+function find_in_path(name::String)
+    name[1] == '/' && return realpath(name)
+    base = match(r"^(.*?)(?:\.jl)?$",name).captures[1]
+    for prefix in LOAD_PATH
+        if prefix != "" && prefix[end] != '/'
+            prefix *= "/"
         end
-        if is_file_readable(pfxd)
-            return realpath(pfxd)
-        end
+        path = strcat(prefix,base,"/src/",name)
+        is_file_readable(path) && return realpath(path)
+        path = strcat(prefix,name)
+        is_file_readable(path) && return realpath(path)
     end
-    return realpath(fname)
+    return realpath(name)
 end
 
 begin

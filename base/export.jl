@@ -1043,6 +1043,7 @@ export
     include_string,
     load,
     require,
+    julia_pkgdir,
     
 # RTS internals
     compile_hint,

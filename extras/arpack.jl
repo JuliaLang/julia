@@ -269,6 +269,7 @@ function svds{T}(A::AbstractMatrix{T}, k::Integer)
     select = Array(Int32, ncv)
     iparam = zeros(Int32, 11)
     ipntr = zeros(Int32, 14)
+    info  = Array(Int32, 1)
 
     tol = zeros(T, 1)
     sigma = zeros(T, 1)
