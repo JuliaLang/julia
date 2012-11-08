@@ -10,16 +10,21 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,extras base ui test,$(eval $(call symlink_target,$(link),$(BUILD)/lib/julia)))
 $(foreach link,doc examples,$(eval $(call symlink_target,$(link),$(BUILD)/share/julia)))
 
+MAKEs = $(MAKE)
+ifeq ($(USE_QUIET), 1)
+MAKEs += -s
+endif
+
 debug release: | $(DIRS) $(BUILD)/lib/julia/extras $(BUILD)/lib/julia/base $(BUILD)/lib/julia/ui $(BUILD)/lib/julia/test $(BUILD)/share/julia/doc $(BUILD)/share/julia/examples
-	@$(MAKE) -s julia-$@
-	@$(MAKE) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) -s $(BUILD)/lib/julia/sys.ji
+	@$(MAKEs) julia-$@
+	@$(MAKEs) JULIA_EXECUTABLE=$(JULIA_EXECUTABLE_$@) $(BUILD)/lib/julia/sys.ji
 
 julia-debug julia-release:
-	@$(MAKE) -sC deps
-	@$(MAKE) -sC src lib$@
-	@$(MAKE) -sC base
-	@$(MAKE) -sC extras
-	@$(MAKE) -sC ui $@
+	@$(MAKEs) -C deps
+	@$(MAKEs) -C src lib$@
+	@$(MAKEs) -C base
+	@$(MAKEs) -C extras
+	@$(MAKEs) -C ui $@
 	@ln -sf $(BUILD)/bin/$@-$(DEFAULT_REPL) julia
 
 $(BUILD)/lib/julia/helpdb.jl: doc/helpdb.jl | $(BUILD)/lib/julia
@@ -37,7 +42,7 @@ OPENBLASNAME=openblas
 endif
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
-	@$(MAKE) -sC test/unicode
+	@$(MAKEs) -C test/unicode
 	for subdir in "sbin" "bin" "etc" "lib/julia" "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
@@ -77,28 +82,28 @@ h2j: $(BUILD)/lib/libLLVM*.a $(BUILD)/lib/libclang*.a src/h2j.cpp
 	$(QUIET_CC) g++ -O2 -fno-rtti -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -Iinclude $^ -o $@
 
 clean: | $(CLEAN_TARGETS)
-	@$(MAKE) -sC base clean
-	@$(MAKE) -sC extras clean
-	@$(MAKE) -sC src clean
-	@$(MAKE) -sC ui clean
-	@$(MAKE) -sC ui/webserver clean
-	@$(MAKE) -sC test/unicode clean
+	@$(MAKE) -C base clean
+	@$(MAKE) -C extras clean
+	@$(MAKE) -C src clean
+	@$(MAKE) -C ui clean
+	@$(MAKE) -C ui/webserver clean
+	@$(MAKE) -C test/unicode clean
 	@rm -f julia-{release,debug}-{basic,readline,webserver}
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/lib/julia
 
 cleanall: clean
-	@$(MAKE) -sC src clean-flisp clean-support
-#	@$(MAKE) -sC deps clean-uv
+	@$(MAKE) -C src clean-flisp clean-support
+#	@$(MAKE) -C deps clean-uv
 
 .PHONY: default debug release julia-debug julia-release \
 	test testall test-* clean cleanall
 
 test: release
-	@$(MAKE) -sC test default
+	@$(MAKEs) -C test default
 
 testall: release
-	@$(MAKE) -sC test all
+	@$(MAKEs) -C test all
 
 test-%: release
-	@$(MAKE) -sC test $*
+	@$(MAKEs) -C test $*
