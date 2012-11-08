@@ -248,7 +248,7 @@ function dec(x::Unsigned, pad::Int, neg::Bool)
     a = Array(Uint8,i)
     while i > neg
         a[i] = '0'+rem(x,10)
-        x = div(x,10)
+        x = oftype(x,div(x,10))
         i -= 1
     end
     if neg; a[1]='-'; end
