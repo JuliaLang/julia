@@ -1,7 +1,10 @@
 load("color.jl")
+load("openlib.jl")
 
 module Cairo
-import Base.*
+using Base
+using Color
+using Openlib
 
 export CairoSurface, finish, destroy, status,
     CAIRO_FORMAT_ARGB32,
@@ -27,9 +30,9 @@ export CairoSurface, finish, destroy, status,
     open, close, curve, polygon, layout_text, text, textwidth, textheight,
     TeXLexer, tex2pango, SVGRenderer
 
-load("openlib.jl")
+import Base.get
 
-import Color.*
+global fill, open, close, symbol
 
 try
     global _jl_libcairo = openlib("libcairo")
@@ -73,7 +76,7 @@ end
 
 for name in ("destroy","finish","flush","mark_dirty")
     @eval begin
-        $(symbol(name))(surface::CairoSurface) =
+        $(Base.symbol(name))(surface::CairoSurface) =
             ccall(dlsym(_jl_libcairo,$(strcat("cairo_surface_",name))),
                 Void, (Ptr{Void},), surface.ptr)
     end
@@ -394,13 +397,13 @@ function _set_color( ctx::CairoContext, color )
 end
 
 function _set_line_type(ctx::CairoContext, nick::String)
-    const nick2name = {
+    const nick2name = [
        "dot"       => "dotted",
        "dash"      => "shortdashed",
        "dashed"    => "shortdashed",
-    }
+    ]
     # XXX:should be scaled by linewidth
-    const name2dashes = {
+    const name2dashes = [
         "solid"           => Float64[],
         "dotted"          => [1.,3.],
         "dotdashed"       => [1.,3.,4.,4.],
@@ -408,7 +411,7 @@ function _set_line_type(ctx::CairoContext, nick::String)
         "shortdashed"     => [4.,4.],
         "dotdotdashed"    => [1.,3.,1.,3.,4.,4.],
         "dotdotdotdashed" => [1.,3.,1.,3.,1.,3.,4.,4.],
-    }
+    ]
     name = get(nick2name, nick, nick)
     if has(name2dashes, name)
         set_dash(ctx, name2dashes[name])
@@ -451,7 +454,7 @@ function _str_size_to_pts( str )
     num_xx = float64(m.captures[1])
     units = m.captures[2]
     # convert to postscipt pt = in/72
-    const xx2pt = { "in"=>72., "pt"=>1., "mm"=>2.835, "cm"=>28.35 }
+    const xx2pt = [ "in"=>72., "pt"=>1., "mm"=>2.835, "cm"=>28.35 ]
     num_pt = num_xx*xx2pt[units]
     return num_pt
 end
@@ -497,7 +500,7 @@ end
 
 ## state commands
 
-const __pl_style_func = {
+const __pl_style_func = [
     "color"     => _set_color,
     "linecolor" => _set_color,
     "fillcolor" => _set_color,
@@ -506,7 +509,7 @@ const __pl_style_func = {
     "linewidth" => set_line_width,
     "filltype"  => set_fill_type,
     "cliprect"  => set_clip_rect,
-}
+]
 
 function set( self::CairoRenderer, key::String, value )
     set(self.state, key, value )
@@ -589,7 +592,7 @@ function symbols( self::CairoRenderer, x, y )
     name = pop(splitname)
     filled = contains(splitname, "solid") || contains(splitname, "filled")
 
-    const symbol_funcs = {
+    const symbol_funcs = [
         "asterisk" => (c, x, y, r) -> (
             _move_to(c, x, y+r);
             _line_to(c, x, y-r);
@@ -649,7 +652,7 @@ function symbols( self::CairoRenderer, x, y )
             _line_to(c, x+0.5r, y-0.866r);
             close_path(c)
         ),
-    }
+    ]
     default_symbol_func = (ctx,x,y,r) -> (
         new_sub_path(ctx);
         _circle(ctx,x,y,r)
@@ -723,13 +726,13 @@ function text( self::CairoRenderer, p, text )
     layout_text(self, text)
     update_layout(self.ctx)
 
-    const _xxx = {
+    const _xxx = [
         "center"    => 0.5,
         "left"      => 0.,
         "right"     => 1.,
         "top"       => 0.,
         "bottom"    => 1.,
-    }
+    ]
     extents = get_layout_size(self.ctx)
     dx = -_xxx[halign]*extents[1]
     dy = _xxx[valign]*extents[2]
@@ -803,7 +806,7 @@ function peek( self::TeXLexer )
     return token
 end
 
-const _common_token_dict = {
+const _common_token_dict = [
     L"\{"               => L"{",
     L"\}"               => L"}",
     L"\_"               => L"_",
@@ -813,17 +816,17 @@ const _common_token_dict = {
     ## ignore stray brackets
     L"{"                => L"",
     L"}"                => L"",
-}
+]
 
-const _text_token_dict = {
+const _text_token_dict = [
     ## non-math symbols (p438)
     L"\S"               => E"\ua7",
     L"\P"               => E"\ub6",
     L"\dag"             => E"\u2020",
     L"\ddag"            => E"\u2021",
-}
+]
 
-const _math_token_dict = {
+const _math_token_dict = [
 
     L"-"                => E"\u2212", # minus sign
 
@@ -1074,7 +1077,7 @@ const _math_token_dict = {
     L"\arcdeg"          => E"\ub0",
     L"\arcmin"          => E"\u2032",
     L"\arcsec"          => E"\u2033",
-}
+]
 
 function map_text_token(token::String)
     if has(_text_token_dict, token)

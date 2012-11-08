@@ -1,5 +1,5 @@
 load("json.jl")
-import Json.*;
+using Json
 
 load("test/json_samples.jl")
 

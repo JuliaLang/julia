@@ -275,7 +275,7 @@ JL_CALLABLE(jl_f_top_eval)
         /*
         if (jl_is_expr(ex) && (ex->head == export_sym ||
                                ex->head == import_sym ||
-                               ex->head == importall_sym)) {
+                               ex->head == using_sym)) {
             jl_errorf("unsupported or misplaced expression %s", ex->head->name);
         }
         */

@@ -379,12 +379,11 @@ void julia_init(char *imageFile)
     if (!imageFile) {
         jl_main_module = jl_new_module(jl_symbol("Main"));
         jl_main_module->parent = jl_main_module;
-        jl_module_export(jl_main_module, jl_symbol("Main"));
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_core_module->parent = jl_main_module;
         jl_set_const(jl_main_module, jl_symbol("Core"),
                      (jl_value_t*)jl_core_module);
-        jl_module_importall(jl_main_module, jl_core_module);
+        jl_module_using(jl_main_module, jl_core_module);
         jl_current_module = jl_core_module;
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -423,7 +422,7 @@ void julia_init(char *imageFile)
     // current module for bare (non-module-wrapped) toplevel expressions.
     // it does import Base.* if Base is available.
     if (jl_base_module != NULL)
-        jl_module_importall(jl_main_module, jl_base_module);
+        jl_module_using(jl_main_module, jl_base_module);
     jl_current_module = jl_main_module;
 
 #ifndef __WIN32__
@@ -562,7 +561,6 @@ void jl_get_builtin_hooks(void)
     jl_memory_exception =
         jl_apply((jl_function_t*)core("MemoryError"),NULL,0);
 
-    jl_weakref_type = (jl_struct_type_t*)core("WeakRef");
     jl_ascii_string_type = (jl_struct_type_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_struct_type_t*)core("UTF8String");
     jl_symbolnode_type = (jl_struct_type_t*)core("SymbolNode");
@@ -582,6 +580,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_typeerror_type = (jl_struct_type_t*)basemod("TypeError");
     jl_loaderror_type = (jl_struct_type_t*)basemod("LoadError");
     jl_backtrace_type = (jl_struct_type_t*)basemod("BackTrace");
+    jl_weakref_type = (jl_struct_type_t*)basemod("WeakRef");
 
     jl_method_missing_func = (jl_function_t*)basemod("method_missing");
 }

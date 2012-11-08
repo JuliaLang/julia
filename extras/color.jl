@@ -1,5 +1,5 @@
 module Color
-import Base.*
+using Base
 export hex2rgb, rgb2hex, hsl2rgb, hsv2rgb, name2rgb
 
 # e.g., 0xff0000 -> (1.,0.,0.)
@@ -55,7 +55,7 @@ function name2rgb( name::String )
     (ir/255., ig/255., ib/255.)
 end
 
-const _jl_color_names = {
+const _jl_color_names = [
     "y" => (255, 255, 0),
     "m" => (255, 0, 255),
     "c" => (0, 255, 255),
@@ -213,31 +213,6 @@ const _jl_color_names = {
     "whitesmoke" => (245, 245, 245),
     "yellow" => (255, 255, 0),
     "yellowgreen" => (154, 205, 50),
-}
-
-## Color spaces
-abstract ColorSpace
-type CSnil <: ColorSpace
-end
-type CSgray <: ColorSpace
-end
-type CSsRGB <: ColorSpace
-end
-type CSCMYK <: ColorSpace
-end
-# Color space where each channel is given a name, e.g.,
-#   cs = CSNamed("GFP","tdTomato")
-# or
-#   cs = CSNamed(["GFP","tdTomato"])
-type CSNamed <: ColorSpace
-    str::Vector{ASCIIString}
-end
-CSNamed(t...) = CSNamed([t...])  # allow tuple
-function ref(n::CSNamed,ind::Int)
-    return n.str[ind]
-end
-function assign(n::CSNamed,value,key)
-    n.str[key] = value
-end
+]
 
 end # module

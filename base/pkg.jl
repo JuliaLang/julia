@@ -1,18 +1,20 @@
-load("git.jl")
-load("pkgmetadata.jl")
+require("git.jl")
+require("pkgmetadata.jl")
 
 module Pkg
 #
 # Julia's git-based declarative package manager
 #
-import Base.*
+
+using Base
+using Metadata
+
 import Git
-import Metadata.*
 
 # default locations: local package repo, remote metadata repo
 
 const DEFAULT_META = "https://github.com/JuliaLang/METADATA.jl.git"
-const GITHUB_URL_RE = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
+const GITHUB_REGEX = r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](.*)$"i
 
 # get package repo directory
 
@@ -54,7 +56,6 @@ end
 
 # add and remove packages by name
 
-global add
 add(pkgs::Vector{VersionSet}) = cd(directory()) do
     commit("add: $(join(sort!(map(x->x.package,pkgs)), ' '))") do
         for pkg in pkgs
@@ -80,7 +81,7 @@ end
 function add(pkgs::Union(String,VersionSet)...)
     pkgs_ = VersionSet[]
     for pkg in pkgs
-        push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
+        Base.push(pkgs_, isa(pkg,VersionSet) ? pkg : VersionSet(pkg))
     end
     add(pkgs_)
 end
@@ -146,7 +147,7 @@ end
 
 function _resolve()
     reqs = parse_requires("REQUIRE")
-    have = Dict{String,ASCIIString}()
+    have = (String=>ASCIIString)[]
     Git.each_submodule(false) do pkg, path, sha1
         if pkg != "METADATA"
             have[pkg] = sha1
@@ -189,7 +190,7 @@ function _resolve()
         else
             ver = Metadata.version(pkg,want[pkg])
             println("installing $pkg v$ver")
-            url = readchomp("METADATA/$pkg/url")
+            url = Metadata.pkg_url(pkg)
             run(`git submodule add --reference . $url $pkg`)
             cd(pkg) do
                 run(`git checkout -q --detach`)
@@ -269,6 +270,7 @@ function commit(f::Function, msg::String)
     else
         error("There are both staged and unstaged changes to packages.")
     end
+    checkout()
 end
 
 # push & pull package repos to/from remotes

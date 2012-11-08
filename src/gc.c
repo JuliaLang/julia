@@ -703,9 +703,9 @@ static void print_obj_profile(void)
     jl_value_t *errstream = jl_stderr_obj();
     for(int i=0; i < obj_counts.size; i+=2) {
         if (obj_counts.table[i+1] != HT_NOTFOUND) {
-            ios_printf(ios_stderr, "%d ", obj_counts.table[i+1]-1);
+            jl_printf(jl_stderr, "%d ", obj_counts.table[i+1]-1);
             jl_show(errstream, obj_counts.table[i]);
-            ios_printf(ios_stderr, "\n");
+            jl_printf(jl_stderr, "\n");
         }
     }
 }
@@ -828,13 +828,13 @@ void print_gc_stats(void)
 {
     malloc_stats();
     double ptime = clock_now()-process_t0;
-    ios_printf(ios_stderr, "exec time\t%.5f sec\n", ptime);
-    ios_printf(ios_stdout, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
+    jl_printf(JL_STDERR, "exec time\t%.5f sec\n", ptime);
+    jl_printf(JL_STDOUT, "gc time  \t%.5f sec (%2.1f%%)\n", total_gc_time,
                (total_gc_time/ptime)*100);
     struct mallinfo mi = mallinfo();
-    ios_printf(ios_stdout, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
-    ios_printf(ios_stdout, "total freed\t%llu b\n", total_freed_bytes);
-    ios_printf(ios_stdout, "free rate\t%.1f MB/sec\n",
+    jl_printf(JL_STDOUT, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
+    jl_printf(JL_STDOUT, "total freed\t%llu b\n", total_freed_bytes);
+    jl_printf(JL_STDOUT, "free rate\t%.1f MB/sec\n",
                (total_freed_bytes/total_gc_time)/1024/1024);
 }
 #endif

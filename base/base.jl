@@ -1,5 +1,7 @@
 # important core definitions
 
+import Core.Array  # to add methods
+
 convert(T, x)               = convert_default(T, x, convert)
 convert(T::Tuple, x::Tuple) = convert_tuple(T, x, convert)
 
@@ -68,6 +70,12 @@ function show(io, se::ShowError)
 end
 
 method_missing(f, args...) = throw(MethodError(f, args))
+
+type WeakRef
+    value
+    WeakRef() = WeakRef(nothing)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, WeakRef, (Any,), v)
+end
 
 ccall(:jl_get_system_hooks, Void, ())
 

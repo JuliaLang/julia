@@ -5,7 +5,7 @@
 
 module Json
 
-import Base.*
+using Base
 
 export parse_json
 
@@ -17,7 +17,7 @@ function parse_json(strng::String)
 
     function parse_object()
         parse_char('{')
-        object = Dict{String, Any}()
+        object = (String=>Any)[]
         if next_char() != '}'
             while true
                 str = parse_string()

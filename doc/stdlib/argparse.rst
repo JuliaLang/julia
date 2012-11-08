@@ -21,7 +21,7 @@ Quick overview and a simple example
 First of all, the module needs to be loaded and imported::
 
     require("argparse.jl")
-    import ArgParse.*
+    using ArgParse
 
 Note that in the second line we imported all names in the current namespace; this should be completely safe in most cases.
 
@@ -67,7 +67,7 @@ In the above example, it will contain the keys ``"opt1"``, ``"opt2"``, ``"flag1"
 Putting all this together in a file, we can see how a basic command-line interface is created::
 
     require("argparse.jl")
-    import ArgParse.*
+    using ArgParse
 
     function parse_commandline()
         s = ArgParseSettings()
@@ -195,7 +195,7 @@ The ``parse_args`` function
    The parsing can stop early if a ``:show_help`` or ``:show_version`` action is triggered, or if a parsing error is
    found.
 
-   Some ambiguities can arise in parsing, see :ref:`this section <argparse-parsing-details>` for a detailed description
+   Some ambiguities can arise in parsing, see :ref:`this section <argparse-details>` for a detailed description
    of how they're solved.
 
 .. _argparse-settings-overview:
@@ -555,7 +555,7 @@ Commands are introduced by the ``action = :command`` setting in the argument tab
 a file called ``cmd_example.jl``::
 
     require("argparse.jl")
-    import ArgParse.*
+    using ArgParse
 
     function parse_commandline()
         s = ArgParseSettings("cmd_example.jl")

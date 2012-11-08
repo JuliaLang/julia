@@ -1,6 +1,6 @@
 module Printf
-import Base.*
-import Base.Grisu.*
+using Base
+using Base.Grisu
 export @printf, @sprintf
 
 ### printf formatter generation ###
@@ -794,4 +794,3 @@ macro sprintf(args...)
 end
 
 end # module
-import Base.Printf.*

@@ -3,8 +3,8 @@
 
 require("../extras/sound.jl")
 require("../extras/options.jl")
-import Sound.*
-import OptionsMod.*
+using Sound
+using OptionsMod
 
 # These float array comparison functions are from dists.jl
 function absdiff{T<:Real}(current::AbstractArray{T}, target::AbstractArray{T})

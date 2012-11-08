@@ -165,7 +165,7 @@ methods(t::CompositeKind) = (methods(t,Tuple);  # force constructor creation
 
 # require
 # Store list of files and their load time
-global _jl_package_list = Dict{ByteString,Float64}()
+_jl_package_list = (ByteString=>Float64)[]
 require(fname::String) = require(bytestring(fname))
 require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
 function require(name::ByteString)

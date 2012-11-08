@@ -13,7 +13,7 @@ include $(JULIAHOME)/Make.inc
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
-STAGE1_DEPS = uv openlibm random rmath double-conversion amos glpk
+STAGE1_DEPS = uv openlibm random rmath double-conversion glpk
 STAGE2_DEPS = gmp-wrapper
 STAGE3_DEPS = suitesparse-wrapper
 
@@ -408,27 +408,6 @@ clean-rmath:
 	rm -f $(RMATH_OBJ_SOURCE) $(RMATH_OBJ_TARGET)
 distclean-rmath: clean-rmath
 
-## amos ##
-
-AMOS_OBJ_TARGET = $(USRLIB)/libamos.$(SHLIB_EXT)
-AMOS_OBJ_SOURCE = amos/libamos.$(SHLIB_EXT)
-
-compile-amos: $(AMOS_OBJ_SOURCE)
-install-amos: $(AMOS_OBJ_TARGET)
-
-$(AMOS_OBJ_SOURCE): amos/*.f
-	cd amos && \
-	$(MAKE) && \
-	$(FC) $(FFLAGS) $(JFFLAGS) -shared *.o -o libamos.$(SHLIB_EXT)
-$(AMOS_OBJ_TARGET): $(AMOS_OBJ_SOURCE)
-	cp $< $@
-	$(INSTALL_NAME_CMD)libamos.dylib $@
-
-clean-amos:
-	cd amos && $(MAKE) clean
-	rm -f $(AMOS_OBJ_SOURCE) $(AMOS_OBJ_TARGET)
-distclean-amos: clean-amos
-
 ## LIBRANDOM ##
 
 LIBRANDOM_OBJ_TARGET = $(USRLIB)/librandom.$(SHLIB_EXT)
@@ -713,7 +692,7 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	cd SuiteSparse-$(SUITESPARSE_VER)/lib && \
 	rm -f *.a && \
-	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a 2>/dev/null` . && \
+	cp -f `find .. -name libamd.a -o -name libcolamd.a -o -name libcholmod.a -o -name libumfpack.a -o -name libsuitesparseconfig.a -o -name libspqr.a 2>/dev/null` . && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libamd.a $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(INSTALL_NAME_CMD)libamd.$(SHLIB_EXT) $(USRLIB)/libamd.$(SHLIB_EXT) && \
 	$(CC) -shared $(WHOLE_ARCHIVE) libcolamd.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcolamd.$(SHLIB_EXT) && \
@@ -721,7 +700,9 @@ $(SUITESPARSE_OBJ_TARGET): $(SUITESPARSE_OBJ_SOURCE)
 	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libcholmod.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libcholmod.$(SHLIB_EXT) -L$(USRLIB) -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
 	$(INSTALL_NAME_CMD)libcholmod.$(SHLIB_EXT) $(USRLIB)/libcholmod.$(SHLIB_EXT) && \
 	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libumfpack.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libumfpack.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
-	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT)
+	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(USRLIB)/libumfpack.$(SHLIB_EXT) && \
+	$(CXX) -shared $(WHOLE_ARCHIVE) libsuitesparseconfig.a libspqr.a  $(NO_WHOLE_ARCHIVE) -o $(USRLIB)/libspqr.$(SHLIB_EXT) -L$(USRLIB) -lcholmod -lcolamd -lamd $(LIBBLAS) $(RPATH_ORIGIN) && \
+	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(USRLIB)/libspqr.$(SHLIB_EXT)
 endif
 
 clean-suitesparse:
@@ -734,10 +715,10 @@ distclean-suitesparse: clean-suitesparse
 
 ifeq ($(USE_SYSTEM_SUITESPARSE), 1)
 SUITESPARSE_INC = -I /usr/include/suitesparse
-SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd
+SUITESPARSE_LIB = -lumfpack -lcholmod -lamd -lcamd -lcolamd -lspqr
 else
-SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config
-SUITESPARSE_LIB = -L$(USRLIB) -lcholmod $(RPATH_ORIGIN)
+SUITESPARSE_INC = -I SuiteSparse-$(SUITESPARSE_VER)/CHOLMOD/Include -I SuiteSparse-$(SUITESPARSE_VER)/SuiteSparse_config -I SuiteSparse-$(SUITESPARSE_VER)/SPQR/Include
+SUITESPARSE_LIB = -L$(USRLIB) -lcholmod -lumfpack -lspqr $(RPATH_ORIGIN)
 endif
 
 $(USRLIB)/libsuitesparse_wrapper.$(SHLIB_EXT): SuiteSparse_wrapper.c $(SUITESPARSE_OBJ_TARGET)

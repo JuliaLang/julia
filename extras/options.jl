@@ -4,8 +4,10 @@
 # Harlan Harris & Timothy E. Holy, with contributions from Stefan
 # Karpinski, Patrick O'Leary, and Jeff Bezanson
 module OptionsMod
-import Base.*
+using Base
 # can't get Base.ht_keyindex from dict.jl -- will pull it manually
+
+import Base.convert, Base.copy, Base.show, Base.ref, Base.assign
 
 export Options,
 	CheckNone, CheckWarn, CheckError,
@@ -48,7 +50,7 @@ end
 # Constructor: supply type followed by list of assignment expressions, e.g.,
 #   o = Options(CheckNone,:(a=5),:(b=rand(3)),...)
 function Options{T<:OptionsChecking}(::Type{T},ex::Expr...)
-    ht = Dict{Symbol,Int}()
+    ht = (Symbol=>Int)[]
     vals = Array(Any,0)
     n = length(ex)
     for i = 1:n

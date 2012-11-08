@@ -122,7 +122,7 @@ void *jl_dlsym(uv_lib_t *handle, char *symbol)
     void *ptr;
     int  error = uv_dlsym(handle, symbol, &ptr);
     if (error != 0) {
-        ios_printf(ios_stderr, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
     }
     return ptr;
 }

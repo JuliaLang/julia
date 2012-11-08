@@ -29,12 +29,15 @@ DLLEXPORT void jl_lisp_prompt(void)
 
 value_t fl_defined_julia_global(value_t *args, uint32_t nargs)
 {
+    // tells whether a var is defined in and *by* the current module
     argcount("defined-julia-global", nargs, 1);
     (void)tosymbol(args[0], "defined-julia-global");
     if (jl_current_module == NULL)
         return FL_F;
-    char *name = symbol_name(args[0]);
-    return jl_boundp(jl_current_module, jl_symbol(name)) ? FL_T : FL_F;
+    jl_sym_t *var = jl_symbol(symbol_name(args[0]));
+    jl_binding_t *b =
+        (jl_binding_t*)ptrhash_get(&jl_current_module->bindings, var);
+    return (b != HT_NOTFOUND && b->owner==jl_current_module) ? FL_T : FL_F;
 }
 
 value_t fl_invoke_julia_macro(value_t *args, uint32_t nargs)
@@ -453,7 +456,7 @@ jl_value_t *jl_parse_next()
         value_t a = car_(c);
         if (isfixnum(a)) {
             jl_lineno = numval(a);
-            //ios_printf(ios_stderr, "  on line %d\n", jl_lineno);
+            //jl_printf(JL_STDERR, "  on line %d\n", jl_lineno);
             return scm_to_julia(cdr_(c));
         }
     }

@@ -3,7 +3,7 @@ librandom = dlopen("librandom")
 
 module LibRandom
 
-import Base.*
+using Base
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
        dsfmt_init_gen_rand, dsfmt_gv_init_gen_rand, 

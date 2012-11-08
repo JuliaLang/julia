@@ -158,12 +158,13 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         if (table[i] != HT_NOTFOUND &&
             !(table[i-1] == jhsym && m == jl_core_module)) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            jl_serialize_value(s, b->name);
-            jl_serialize_value(s, b->value);
-            jl_serialize_value(s, b->type);
-            jl_serialize_value(s, b->owner);
-            write_int8(s, b->constp);
-            write_int8(s, b->exportp);
+            if (!(b->owner != m && m == jl_main_module)) {
+                jl_serialize_value(s, b->name);
+                jl_serialize_value(s, b->value);
+                jl_serialize_value(s, b->type);
+                jl_serialize_value(s, b->owner);
+                write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
+            }
         }
     }
     jl_serialize_value(s, NULL);
@@ -172,9 +173,9 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
         jl_serialize_value(s, (jl_value_t*)jl_core_module);
     }
     else {
-        write_int32(s, m->imports.len);
-        for(i=0; i < m->imports.len; i++) {
-            jl_serialize_value(s, (jl_value_t*)m->imports.items[i]);
+        write_int32(s, m->usings.len);
+        for(i=0; i < m->usings.len; i++) {
+            jl_serialize_value(s, (jl_value_t*)m->usings.items[i]);
         }
     }
 }
@@ -639,12 +640,14 @@ static jl_value_t *jl_deserialize_value(ios_t *s)
             b->value = jl_deserialize_value(s);
             b->type = (jl_type_t*)jl_deserialize_value(s);
             b->owner = (jl_module_t*)jl_deserialize_value(s);
-            b->constp = read_int8(s);
-            b->exportp = read_int8(s);
+            int8_t flags = read_int8(s);
+            b->constp = (flags>>2) & 1;
+            b->exportp = (flags>>1) & 1;
+            b->imported = (flags) & 1;
         }
         size_t ni = read_int32(s);
         for(size_t i=0; i < ni; i++) {
-            arraylist_push(&m->imports, jl_deserialize_value(s));
+            arraylist_push(&m->usings, jl_deserialize_value(s));
         }
         return (jl_value_t*)m;
     }

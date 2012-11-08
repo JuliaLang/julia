@@ -1,6 +1,6 @@
 ## The Lapack module of interfaces to Lapack subroutines
 module Lapack
-import Base.*
+using Base
 
 typealias LapackChar Char
 type LapackException <: Exception
@@ -161,7 +161,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
                       (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
-                      &m, &n, AA, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
+                      &m, &n, A, &stride(A,2), d, s, tauq, taup, work, &lwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
@@ -327,13 +327,13 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, gerqf, getrf, elty) in
             info = Array(Int32, 1)
             m, n = size(A)
             lda  = stride(A, 2)
-            ipiv = Array(Int32, n)
+            ipiv = Array(Int32, min(m,n))
             ccall(dlsym(Base.liblapack, $(string(getrf))), Void,
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty},
                    Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
                   &m, &n, A, &lda, ipiv, info)
-            if info[1] != 0 throw(LapackException(info[1])) end
-            A, ipiv
+            if info[1] < 0 throw(LapackException(info[1])) end
+            A, ipiv, info[1]
         end
     end
 end
@@ -392,8 +392,8 @@ for (gels, gesv, getrs, getri, elty) in
                   (Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
                    Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
-            A, ipiv, B
+            if info[1] < 0 throw(LapackException(info[1])) end
+            B, A, ipiv, info[1]
         end
         #     SUBROUTINE DGETRS( TRANS, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         #*     .. Scalar Arguments ..
@@ -1096,8 +1096,8 @@ for (trtri, trtrs, elty) in
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
                    Ptr{Int32}),
                   &uplo, &diag, &n, A, &lda, info)
-            if info[1] != 0 error("trtri!: error $(info[1])") end
-            A
+            if info[1] < 0 error("trtri!: error $(info[1])") end
+            A, info[1]
         end
         #      SUBROUTINE DTRTRS( UPLO, TRANS, DIAG, N, NRHS, A, LDA, B, LDB, INFO )
         # *     .. Scalar Arguments ..
@@ -1117,8 +1117,8 @@ for (trtri, trtrs, elty) in
                    Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &stride(A,2),
                   B, &stride(B,2), info)
-            if info[1] != 0 throw(LapackException(info[1])) end
-            B
+            if info[1] < 0 throw(LapackException(info[1])) end
+            B, info[1]
         end
     end
 end
@@ -1237,13 +1237,13 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
                        Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32}),
                       &uplo, &n, &size(B,2), A, &stride(A,2), ipiv, B, &stride(B,2),
                       work, &lwork, info)
-                if info[1] != 0 throw(LapackException(info[1])) end
+                if info[1] < 0 throw(LapackException(info[1])) end
                 if lwork < 0
                     lwork = int32(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            B, A, ipiv
+            B, A, ipiv, info[1]
         end
         #       SUBROUTINE DSYTRF( UPLO, N, A, LDA, IPIV, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..

@@ -278,8 +278,9 @@ typedef struct {
     jl_value_t *value;
     jl_type_t *type;
     struct _jl_module_t *owner;  // for individual imported bindings
-    int constp:1;
-    int exportp:1;
+    unsigned constp:1;
+    unsigned exportp:1;
+    unsigned imported:1;
 } jl_binding_t;
 
 typedef struct _jl_callback_t {
@@ -293,7 +294,7 @@ typedef struct _jl_module_t {
     jl_sym_t *name;
     struct _jl_module_t *parent;
     htable_t bindings;
-    arraylist_t imports;  // modules with all bindings imported
+    arraylist_t usings;  // modules with all bindings potentially imported
 } jl_module_t;
 
 typedef struct _jl_methlist_t {
@@ -455,7 +456,7 @@ extern DLLEXPORT jl_sym_t *jl_continue_sym;
 extern jl_sym_t *error_sym;   extern jl_sym_t *amp_sym;
 extern jl_sym_t *module_sym;  extern jl_sym_t *colons_sym;
 extern jl_sym_t *export_sym;  extern jl_sym_t *import_sym;
-extern jl_sym_t *importall_sym;
+extern jl_sym_t *importall_sym; extern jl_sym_t *using_sym;
 extern jl_sym_t *goto_sym;    extern jl_sym_t *goto_ifnot_sym;
 extern jl_sym_t *label_sym;   extern jl_sym_t *return_sym;
 extern jl_sym_t *lambda_sym;  extern jl_sym_t *assign_sym;
@@ -881,6 +882,7 @@ jl_module_t *jl_new_module(jl_sym_t *name);
 DLLEXPORT jl_binding_t *jl_get_binding(jl_module_t *m, jl_sym_t *var);
 // get binding for assignment
 jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var);
+jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_boundp(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT int jl_is_const(jl_module_t *m, jl_sym_t *var);
 DLLEXPORT jl_value_t *jl_get_global(jl_module_t *m, jl_sym_t *var);
@@ -888,7 +890,7 @@ DLLEXPORT void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 DLLEXPORT void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val);
 void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs);
 void jl_declare_constant(jl_binding_t *b);
-void jl_module_importall(jl_module_t *to, jl_module_t *from);
+void jl_module_using(jl_module_t *to, jl_module_t *from);
 void jl_module_import(jl_module_t *to, jl_module_t *from, jl_sym_t *s);
 DLLEXPORT void jl_module_export(jl_module_t *from, jl_sym_t *s);
 

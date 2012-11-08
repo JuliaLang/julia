@@ -148,7 +148,6 @@ function abs_path(fname::String)
     return join(comp, os_separator)
 end
 
-
 # Get the full, real path to a file, including dereferencing
 # symlinks.
 @unix_only begin
@@ -159,7 +158,7 @@ function realpath(fname::String)
         error("Cannot find ", fname)
     end
     s = bytestring(sp)
-    ccall(:free, Void, (Ptr{Uint8},), sp)
+    c_free(sp)
     return s
 end
 end
@@ -265,11 +264,13 @@ function file_create(filename::String)
 end
 
 function file_remove(filename::String)
-  run(`rm $filename`)
+    ret = ccall(:unlink, Int32, (Ptr{Uint8},), bytestring(filename))
+    system_error(:unlink, ret != 0)
 end
 
 function path_rename(old_pathname::String, new_pathname::String)
-  run(`mv $old_pathname $new_pathname`)
+    ret = ccall(:rename, Int32, (Ptr{Uint8},Ptr{Uint8}), bytestring(old_pathname), bytestring(new_pathname))
+    system_error(:rename, ret != 0)
 end
 
 # Obtain a temporary filename.
@@ -298,7 +299,7 @@ function GetTempPath()
   lentemppath = ccall(:GetTempPathA,stdcall,Uint32,(Uint32,Ptr{Uint8}),length(temppath),temppath)
   if lentemppath >= length(temppath) || lentemppath == 0
       error("GetTempPath failed")
-  end
+end
   grow(temppath,lentemppath-length(temppath))
   return convert(ASCIIString,temppath)
 end
@@ -333,16 +334,37 @@ end
       ret = ccall(:_mkdir, Int32, (Ptr{Uint8},), filename)
       if ret == 0
           return filename
-      end
+end
       system_error(:mktempdir, errno()!=EEXIST)
       seed += 1
   end
 end
 
+downloadcmd = nothing
+function download_file(url::String, filename::String)
+    global downloadcmd
+    if downloadcmd === nothing
+        for checkcmd in (:curl, :wget, :fetch)
+            if system("which $checkcmd > /dev/null") == 0
+                downloadcmd = checkcmd
+                break
+            end
+        end
+    end
+    if downloadcmd == :wget
+        run(`wget -O $filename $url`)
+    elseif downloadcmd == :curl
+        run(`curl -o $filename $url`)
+    elseif downloadcmd == :fetch
+        run(`fetch -f $filename $url`)
+    else
+        error("No download agent available; install curl, wget, or fetch.")
+    end
+    filename
+end
 function download_file(url::String)
-  filename = tempfile()
-  run(`curl -o $filename $url`)
-  filename
+  filename = tempname()
+  download_file(url, filename)
 end
 
 function readdir(path::String)

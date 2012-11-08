@@ -1,6 +1,10 @@
 ## gzip file io ##
 module GZip
-import Base.*
+using Base
+
+import Base.show, Base.fd, Base.close, Base.flush, Base.truncate, Base.seek
+import Base.skip, Base.position, Base.eof, Base.read, Base.readuntil
+import Base.readline, Base.write
 
 export
   GZipStream,

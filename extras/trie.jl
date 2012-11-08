@@ -1,3 +1,18 @@
+module Tries
+using Base
+
+import Base.assign,
+       Base.get,
+       Base.has,
+       Base.keys
+
+export Trie,
+       assign,
+       get,
+       has,
+       keys,
+       keys_with_prefix,
+       subtrie
 
 type Trie{T}
     value::T
@@ -6,7 +21,7 @@ type Trie{T}
 
     function Trie()
         self = new()
-        self.children = Dict{Char,Trie{T}}()
+        self.children = (Char=>Trie{T})[]
         self.is_key = false
         self
     end
@@ -68,3 +83,4 @@ function keys_with_prefix(t::Trie, prefix::String)
     st != nothing ? keys(st,prefix) : []
 end
 
+end # module

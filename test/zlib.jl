@@ -1,7 +1,7 @@
 require("../extras/zlib.jl")
 
 import Zlib
-import Zlib.*
+using Zlib
 
 ########################
 # Zlib tests

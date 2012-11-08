@@ -192,8 +192,8 @@ show_unquoted(io::IO, x::String, indent::Int)   = show(io, x)
 const _expr_infix_wide = Set(:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=), 
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||))
 const _expr_infix = Set(:(:), :(<:), :(->), :(=>), symbol("::"))
-const _expr_calls  = {:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')}
-const _expr_parens = {:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')}
+const _expr_calls  = [:call =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
+const _expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}')]
 
 function show_unquoted(io::IO, ex::Expr, indent::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
@@ -293,9 +293,11 @@ end
 
 function show(io, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
-    if e.expected == Bool
+    if e.expected === Bool
         print(io, "type error: non-boolean ($(typeof(e.got))) ",
                   "used in boolean context")
+    elseif e.expected === Function && e.func === :apply && isa(e.got,AbstractKind)
+        print(io, "type error: cannot instantiate abstract type $(e.got.name)")
     else
         if isa(e.got,Type)
             tstr = "Type{$(e.got)}"

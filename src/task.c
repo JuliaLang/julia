@@ -32,10 +32,10 @@ static int _stack_grows_up;
 static size_t _frame_offset;
 
 struct _probe_data {
-    intptr_t low_bound;     /* below probe on stack */
-    intptr_t probe_local;   /* local to probe on stack */
-    intptr_t high_bound;    /* above probe on stack */
-    intptr_t prior_local;   /* value of probe_local from earlier call */
+    intptr_t low_bound;		/* below probe on stack */
+    intptr_t probe_local;	/* local to probe on stack */
+    intptr_t high_bound;	/* above probe on stack */
+    intptr_t prior_local;	/* value of probe_local from earlier call */
 
     jl_jmp_buf probe_env;	/* saved environment of probe */
     jl_jmp_buf probe_sameAR;	/* second environment saved by same call */
@@ -146,7 +146,9 @@ jl_jmp_buf * volatile jl_jmp_target;
 
 static void save_stack(jl_task_t *t)
 {
-    int _x;
+    if (t->done)
+        return;
+    volatile int _x;
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
