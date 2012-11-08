@@ -106,93 +106,6 @@ function calcsize(types)
     size
 end
 
-# Struct string syntax
-# Note that not all of these are checked by the regex itself but are verified after
-# Presented in regex-style EBNF
-#
-# struct_string := endianness? element_specifier*
-# endianness := "<" | ">" | "!" | "=" | "@"
-# element_specifier := name? size? type
-# name := "[" identifier "]"
-# size := unsigned_integer | "(" unsigned_integer ("," unsigned_integer)* ")"
-# type := predefined_type | "{" identifier "}"
-# predefined_type := "x" | "c" | "b" | "B" | "?" | "h" | "i" | "I" | "l" | "L" | "q" | "Q" | "f" | "d"
-function struct_parse(s::String)
-    t = {}
-    i = 2
-    endianness = if s[1] == '<'
-        LittleEndian()
-    elseif s[1] == '>' || s[1] == '!'
-        BigEndian()
-    elseif s[1] == '='
-        NativeEndian()
-    elseif s[1] == '@'
-        println("Warning: struct does not support fully native structures.")
-        NativeEndian()
-    else
-        i = 1 # no byte order command
-        NativeEndian()
-    end
-    
-    tmap = ['x' => PadByte,
-            'c' => Char,
-            'b' => Int8,
-            'B' => Uint8,
-            '?' => Bool,
-            'h' => Int16,
-            'H' => Uint16,
-            'i' => Int32,
-            'I' => Uint32,
-            'l' => Int32,
-            'L' => Uint32,
-            'q' => Int64,
-            'Q' => Uint64,
-            'f' => Float32,
-            'd' => Float64,
-            #'s' => ASCIIString, #TODO
-            ]
-    t = {}
-    while i <= length(s)
-        m = match(r"^                      # at the beginning of the string, find
-                  (?:\[([a-zA-Z]\w*)\])?   # an optional name in []
-                  (?:                      # then
-                      (\d+)                # a vector length
-                      |                    # or
-                      \((\d+(?:,\d+)*)\)   # a comma-separated array size in ()
-                  )?                       # or neither
-                  (?:                      # followed by either
-                      ([a-zA-Z?])          # a predefined type specifier
-                      |                    # or
-                      {([a-zA-Z]\w*)}      # another type in {}
-                  )
-                  "x, s[i:end])
-        if isa(m, Nothing)
-            error("Failed to compile struct; syntax error at ...$(s[i])...")
-        end
-        name, oneD, nD, typ, custtyp = m.captures
-        dims = if isa(oneD, Nothing) && isa(nD, Nothing)
-            1
-        elseif isa(nD, Nothing)
-            int(oneD)
-        else
-            tuple(map(int, split(nD, ','))...)
-        end
-        elemtype = if isa(custtyp, Nothing)
-            tmap[typ[1]]
-        else
-            testtype = eval(symbol(custtyp)) #is there an easier way to do this?
-            if isbitsequivalent(testtype)
-                testtype
-            else
-                error("Failed to compile struct; $testtype is not a bits-equivalent type.")
-            end
-        end
-        i += length(m.match)
-        push(t, (elemtype, dims, name))
-    end
-    (endianness, t)
-end
-
 # Generate an anonymous composite type from a list of its element types
 function gen_typelist(types::Array)
     xprs = {}
@@ -320,24 +233,6 @@ end
 # * a given canonical struct string returns the same struct (until you run out of cache space)
 # * we don't spend time regenerating types and functions when we don't have to
 const STRUCTS = BoundedLRU()
-
-function interp_struct_parse(str::String)
-    s = canonicalize(str)
-    if has(STRUCTS, s)
-        return STRUCTS[s]
-    end
-    endianness, types = struct_parse(s)
-    packer, unpacker = endianness_converters(endianness)
-    struct_type = gen_type(types)
-    pack = struct_pack(packer, types, struct_type)
-    unpack = struct_unpack(unpacker, types, struct_type)
-    struct_utils(struct_type)
-    STRUCTS[s] = Struct(s, endianness, types, pack, unpack, struct_type)
-end
-
-macro s_str(str)
-    interp_struct_parse(str)
-end
 
 # Julian aliases for the "object-style" calls to pack/unpack/struct
 function pack(out::IO, s::Struct, strategy::DataAlign, struct_or_only_item)
