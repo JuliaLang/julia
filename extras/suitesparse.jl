@@ -33,7 +33,18 @@ require("suitesparse_h.jl")
 const _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 const _jl_libcholmod = dlopen("libcholmod")
 const _jl_libumfpack = dlopen("libumfpack")
-const _jl_libspqr    = dlopen("libspqr")
+try
+    global const _jl_libspqr = dlopen("libspqr")
+catch err
+    # XXX:can be removed when suitesparse > 4.0.2
+    println(E"
+Oops, Suitesparse needs to be rebuilt. Try running:
+
+    $ touch deps/Suitesparse-4.0.2/Makfile
+    $ make
+")
+    throw(err)
+end
 const _chm_aat       = dlsym(_jl_libcholmod, :cholmod_aat)
 const _chm_amd       = dlsym(_jl_libcholmod, :cholmod_amd)
 const _chm_analyze   = dlsym(_jl_libcholmod, :cholmod_analyze)
