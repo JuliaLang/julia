@@ -46,7 +46,7 @@ install: release
 	-cp $(BUILD)/etc/* $(PREFIX)/etc
 	-cp -R -L $(BUILD)/share/* $(PREFIX)/share
 ifeq ($(OS), WINNT)
-	-cp dist/windows/* $(PREFIX)
+	-cp contrib/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
 	-cp /mingw/bin/{libgfortran-3,libquadmath-0,libgcc_s_dw2-1,libstdc++-6,pthreadgc2}.dll $(PREFIX)/lib
 endif

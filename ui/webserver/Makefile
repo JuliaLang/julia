@@ -27,8 +27,8 @@ WEBSERVER_SRCS = webserver.cpp server.cpp jsoncpp.cpp
 	
 ifeq ($(OS),WINNT)
 LAUNCH_SCRIPT = launch-julia-webserver.bat
-$(USRBIN)/$(LAUNCH_SCRIPT): ${JULIAHOME}/dist/windows/*.bat
-	cp ${JULIAHOME}/dist/windows/*.bat ${USRBIN}
+$(USRBIN)/$(LAUNCH_SCRIPT): ${JULIAHOME}/contrib/windows/*.bat
+	cp ${JULIAHOME}/contrib/windows/*.bat ${USRBIN}
 else
 LAUNCH_SCRIPT = launch-julia-webserver
 $(USRBIN)/$(LAUNCH_SCRIPT): $(LAUNCH_SCRIPT)

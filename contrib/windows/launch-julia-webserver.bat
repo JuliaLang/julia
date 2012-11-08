@@ -2,7 +2,7 @@
 
 pushd %cd%
 setlocal enableextensions enabledelayedexpansion
-call %~dp0prepare_env.bat %*
+call %~dp0prepare-julia-env.bat %*
 
 if exist %JULIA_HOME%..\sbin\nginx.exe goto nginx
 if exist %JULIA_HOME%..\sbin\lighttpd.exe goto lighttpd
