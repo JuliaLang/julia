@@ -25,14 +25,20 @@ function init(meta::String)
         # create & configure
         run(`git init`)
         run(`git remote add origin .`)
-        run(`git config --unset remote.origin.url`)
+        if success(`git config --global github.user` > "/dev/null")
+            base = basename(julia_pkgdir())
+            user = readchomp(`git config --global github.user`)
+            run(`git config remote.origin.url git@github.com:$user/$base`)
+        else
+            run(`git config --unset remote.origin.url`)
+        end
         run(`git config branch.master.remote origin`)
         run(`git config branch.master.merge refs/heads/master`)
         # initial content
         run(`touch REQUIRE`)
         run(`git add REQUIRE`)
         run(`git submodule add $meta METADATA`)
-        run(`git commit -m"[jul] METADATA"`)
+        run(`git commit -m "empty package repo"`)
         Metadata.gen_hashes()
     end
 end
