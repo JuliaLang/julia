@@ -37,7 +37,9 @@ macro _jl_stat_call(sym,arg)
     quote
         fill!(_jl_stat_buf,0)
         r = ccall($(expr(:quote,sym)), Int32, (Ptr{Uint8},Ptr{Uint8}), $arg, _jl_stat_buf)
-        system_error("stat", r!=0 && errno()!=ENOENT)
+        uv_errno = _uv_lasterror(globalEventLoop())
+        ENOENT = 34
+        system_error("stat", r!=0 && uv_errno!=ENOENT)
         st = Stat(_jl_stat_buf)
         if ispath(st) != (r==0)
             error("WTF: stat returned zero type for a valid path!?")
