@@ -133,7 +133,7 @@ end
 function string(x::BigFloat)
     s=ccall(dlsym(_jl_libgmp_wrapper, :_jl_mpf_printf), Ptr{Uint8}, (Ptr{Void},), x.mpf)
     ret = bytestring(s) #This copies s.
-    c_free(s)
+    ccall(dlsym(_jl_libgmp_wrapper,:_jl_gmp_free), Void, (Ptr{Void},), s)
     ret
 end
 
