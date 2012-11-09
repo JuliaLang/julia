@@ -1191,7 +1191,7 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
             work  = Array($elty, 1)
             lwork = int32(-1)
             if cmplx
-                rwork = Array(Rtyp, max(1, 2n-1))
+                rwork = Array(Rtyp, max(1, 3n-2))
             end
             info  = Array(Int32, 1)
             for i in 1:2
@@ -1344,5 +1344,123 @@ for (syconv, syev, sysv, sytrf, sytri, sytrs, elty) in
         end
     end
 end
-
+for (syevr, elty) in
+    ((:dsyevr_,:Float64),
+     (:ssyevr_,:Float32))
+    @eval begin
+        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+        #       SUBROUTINE DSYEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
+        #      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
+        #      $                   IWORK, LIWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       CHARACTER          JOBZ, RANGE, UPLO
+        #       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LWORK, M, N
+        #       DOUBLE PRECISION   ABSTOL, VL, VU
+        # *     ..
+        # *     .. Array Arguments ..
+        #       INTEGER            ISUPPZ( * ), IWORK( * )
+        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
+            chkstride1(A)
+            chksquare(A)
+            n = size(A, 2)
+            lda = max(1,stride(A,2))
+            m = Array(Int32, 1)
+            w = Array($elty, n)
+            ldz = jobz == 'V' ? n : 1
+            z = Array($elty, ldz, n)
+            isuppz = Array(Int, 2*n)
+            work  = Array($elty, 1)
+            lwork = int32(-1)
+            iwork = Array(Int32, 1)
+            liwork = int32(-1)
+            info  = Array(Int32, 1)
+            for i in 1:2
+                ccall(dlsym(Base.liblapack, $(string(syevr))), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, 
+                        Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, 
+                        Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                        Ptr{$elty}, Ptr{Int32}, Ptr{Int32}, Ptr{Int32},
+                        Ptr{Int32}),
+                    &jobz, &range, &uplo, &n, 
+                    A, &lda, &vl, &vu, 
+                    &il, &iu, &abstol, m,
+                    w, z, &ldz, isuppz,
+                    work, &lwork, iwork, &liwork, 
+                    info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = int32(work[1])
+                    work = Array($elty, lwork)
+                    liwork = iwork[1]
+                    iwork = Array(Int32, liwork)
+                end
+            end
+            return w[1:m[1]], z[1:m[1],:]
+        end
+    end
+end
+for (syevr, elty, relty) in
+    ((:zheevr_,:Complex128,:Float64),
+     (:cheevr_,:Complex64,:Float32))
+    @eval begin
+        function syevr!(jobz::LapackChar, range::LapackChar, uplo::LapackChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
+#       SUBROUTINE ZHEEVR( JOBZ, RANGE, UPLO, N, A, LDA, VL, VU, IL, IU,
+#      $                   ABSTOL, M, W, Z, LDZ, ISUPPZ, WORK, LWORK,
+#      $                   RWORK, LRWORK, IWORK, LIWORK, INFO )
+# *     .. Scalar Arguments ..
+#       CHARACTER          JOBZ, RANGE, UPLO
+#       INTEGER            IL, INFO, IU, LDA, LDZ, LIWORK, LRWORK, LWORK,
+#      $                   M, N
+#       DOUBLE PRECISION   ABSTOL, VL, VU
+# *     ..
+# *     .. Array Arguments ..
+#       INTEGER            ISUPPZ( * ), IWORK( * )
+#       DOUBLE PRECISION   RWORK( * ), W( * )
+#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
+            chkstride1(A)
+            chksquare(A)
+            n = size(A, 2)
+            lda = max(1,stride(A,2))
+            m = Array(Int32, 1)
+            w = Array($elty, n)
+            ldz = jobz == 'V' ? n : 1
+            z = Array($elty, ldz, n)
+            isuppz = Array(Int, 2*n)
+            work  = Array($elty, 1)
+            lwork = int32(-1)
+            rwork = Array($relty, 1)
+            lrwork = int32(-1)
+            iwork = Array(Int32, 1)
+            liwork = int32(-1)
+            info  = Array(Int32, 1)
+            for i in 1:2
+                ccall(dlsym(Base.liblapack, $(string(syevr))), Void,
+                    (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Int32}, 
+                        Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, 
+                        Ptr{Int32}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32},
+                        Ptr{$elty}, Ptr{$elty}, Ptr{Int32}, Ptr{Int32},
+                        Ptr{$elty}, Ptr{Int32}, Ptr{$relty}, Ptr{Int32},
+                        Ptr{Int32}, Ptr{Int32}, Ptr{Int32}),
+                    &jobz, &range, &uplo, &n, 
+                    A, &lda, &vl, &vu, 
+                    &il, &iu, &abstol, m,
+                    w, z, &ldz, isuppz,
+                    work, &lwork, rwork, &lrwork,
+                    iwork, &liwork, info)
+                if info[1] != 0 throw(LapackException(info[1])) end
+                if lwork < 0
+                    lwork = int32(real(work[1]))
+                    work = Array($elty, lwork)
+                    lrwork = int32(rwork[1])
+                    rwork = Array($elty, lrwork)
+                    liwork = iwork[1]
+                    iwork = Array(Int32, liwork)
+                end
+            end
+            return w[1:m[1]], z[1:m[1],:]
+        end
+    end
+end
+syevr!(jobz::LapackChar, A::StridedMatrix) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 end # module
