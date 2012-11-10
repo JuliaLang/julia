@@ -1,4 +1,3 @@
-require("sparse.jl")
 require("linalg_sparse.jl")
 
 ## Can't modularize until Sparse is a module - at least the

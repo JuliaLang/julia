@@ -684,34 +684,81 @@ function ref{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     return zero(T)
 end
 
-ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, J::AbstractVector{T}) = _jl_sparse_ref(A,I,J)
-ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector) = _jl_sparse_ref(A,I,J)
 ref{T<:Integer}(A::SparseMatrixCSC, I::AbstractVector{T}, j::Integer) = ref(A,I,[j])
 ref{T<:Integer}(A::SparseMatrixCSC, i::Integer, J::AbstractVector{T}) = ref(A,[i],J)
 
-function _jl_sparse_ref(A::SparseMatrixCSC, I::AbstractVector, J::AbstractVector)
+function ref{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
 
-    (nr, nc) = size(A)
+    (m, n) = size(A)
     nI = length(I)
     nJ = length(J)
 
-    is_I_colon = (isa(I,Range1)||isa(I,Range)) && first(I)==1 && last(I)==nr && step(I)==1
-    is_J_colon = (isa(J,Range1)||isa(J,Range)) && first(J)==1 && last(J)==nc && step(J)==1
+    colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
-    if is_I_colon && is_J_colon
-        return A
-    elseif is_J_colon
-        IM = sparse (1:nI, I, 1, nI, nr)
-        B = IM * A
-    elseif is_I_colon
-        JM = sparse (J, 1:nJ, 1, nc, nJ)
-        B = A *JM
+    if ~issorted(I)
+        (I, pI) = sortperm(I)
     else
-        IM = sparse (1:nI, I, 1, nI, nr)
-        JM = sparse (J, 1:nJ, 1, nc, nJ)
-        B = IM * A * JM
+        pI = 1:nI
     end
 
+    # Form the structure of the result and compute space
+    colptrS = Array(Ti, nJ+1)
+    colptrS[1] = 1
+    nnzS = 0
+
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI = 1
+        for ptrA = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[ptrA]
+            
+            while ptrI <= nI
+                rowI = I[ptrI]
+                if rowI > rowA
+                    break
+                elseif rowA == rowI
+                    nnzS += 1
+                    break
+                end
+                ptrI += 1
+            end
+
+        end
+        colptrS[j+1] = nnzS+1
+
+    end
+
+    # Populate the values in the result
+    rowvalS = Array(Ti, nnzS)
+    nzvalS  = Array(Tv, nnzS)
+    ptrS = 0
+
+    for j = 1:nJ
+        col = J[j]
+
+        ptrI = 1
+        for ptrA = colptrA[col]:colptrA[col+1]-1
+            rowA = rowvalA[ptrA]
+            
+            while ptrI <= nI
+                rowI = I[ptrI]
+                if rowI > rowA
+                    break
+                elseif rowA == rowI
+                    ptrS += 1
+                    rowvalS[ptrS] = pI[ptrI]
+                    nzvalS[ptrS]  = nzvalA[ptrA]
+                    break
+                end
+                ptrI += 1
+            end
+
+        end
+
+    end
+
+    return SparseMatrixCSC(nI, nJ, colptrS, rowvalS, nzvalS)
 end
 
 ## assign
