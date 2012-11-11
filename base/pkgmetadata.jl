@@ -3,6 +3,7 @@ require("linprog.jl")
 module Metadata
 
 using Base
+using LinProgGLPK
 
 import Main
 import Git
@@ -166,7 +167,7 @@ function resolve(reqs::Vector{VersionSet})
         W[r,rem(i-1,n)+1] = -1
         W[r,div(i-1,n)+1] = G[i]
     end
-    w = iround(Main.linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
+    w = iround(linprog_simplex(u,W,zeros(Int,length(I)),nothing,nothing,u,nothing)[2])
 
     V = [ p == v.package ? 1 : 0                     for p=pkgs, v=vers ]
     R = [ contains(r,v) ? -1 : 0                     for r=reqs, v=vers ]
@@ -175,7 +176,7 @@ function resolve(reqs::Vector{VersionSet})
           -ones(Int,length(reqs))
           zeros(Int,length(deps)) ]
 
-    x = Main.linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
+    x = linprog_simplex(w,[V;R;D],b,nothing,nothing,z,u)[2]
     h = (String=>ASCIIString)[]
     for v in vers[x .> 0.5]
         h[v.package] = readchomp("METADATA/$(v.package)/versions/$(v.version)/sha1")

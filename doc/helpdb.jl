@@ -3706,83 +3706,83 @@ airyaiprime(x)
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_prob_name",E"glp_set_prob_name(glp_prob, name)
+(E"GLPK",E"GLPK",E"set_prob_name",E"set_prob_name(glp_prob, name)
 
    Assigns a name to the problem object (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_obj_name",E"glp_set_obj_name(glp_prob, name)
+(E"GLPK",E"GLPK",E"set_obj_name",E"set_obj_name(glp_prob, name)
 
    Assigns a name to the objective function (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_obj_dir",E"glp_set_obj_dir(glp_prob, dir)
+(E"GLPK",E"GLPK",E"set_obj_dir",E"set_obj_dir(glp_prob, dir)
 
-   Sets the optimization direction, \"GLP_MIN\" (minimization) or
-   \"GLP_MAX\" (maximization).
+   Sets the optimization direction, \"GLPK.MIN\" (minimization) or
+   \"GLPK.MAX\" (maximization).
 
 "),
 
-(E"glpk.jl",E"",E"glp_add_rows",E"glp_add_rows(glp_prob, rows)
+(E"GLPK",E"GLPK",E"add_rows",E"add_rows(glp_prob, rows)
 
    Adds the given number of rows (constraints) to the problem object;
    returns the number of the first new row added.
 
 "),
 
-(E"glpk.jl",E"",E"glp_add_cols",E"glp_add_cols(glp_prob, cols)
+(E"GLPK",E"GLPK",E"add_cols",E"add_cols(glp_prob, cols)
 
    Adds the given number of columns (structural variables) to the
    problem object; returns the number of the first new column added.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_row_name",E"glp_set_row_name(glp_prob, row, name)
+(E"GLPK",E"GLPK",E"set_row_name",E"set_row_name(glp_prob, row, name)
 
    Assigns a name to the specified row (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_col_name",E"glp_set_col_name(glp_prob, col, name)
+(E"GLPK",E"GLPK",E"set_col_name",E"set_col_name(glp_prob, col, name)
 
    Assigns a name to the specified column (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_row_bnds",E"glp_set_row_bnds(glp_prob, row, bounds_type, lb, ub)
+(E"GLPK",E"GLPK",E"set_row_bnds",E"set_row_bnds(glp_prob, row, bounds_type, lb, ub)
 
    Sets the type and bounds on a row. \"type\" must be one of
-   \"GLP_FR\" (free), \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper
-   bounded), \"GLP_DB\" (double bounded), \"GLP_FX\" (fixed).
+   \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
+   bounded), \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
 
    At initialization, each row is free.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_col_bnds",E"glp_set_col_bnds(glp_prob, col, bounds_type, lb, ub)
+(E"GLPK",E"GLPK",E"set_col_bnds",E"set_col_bnds(glp_prob, col, bounds_type, lb, ub)
 
    Sets the type and bounds on a column. \"type\" must be one of
-   \"GLP_FR\" (free), \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper
-   bounded), \"GLP_DB\" (double bounded), \"GLP_FX\" (fixed).
+   \"GLPK.FR\" (free), \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper
+   bounded), \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
 
    At initialization, each column is fixed at 0.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_obj_coef",E"glp_set_obj_coef(glp_prob, col, coef)
+(E"GLPK",E"GLPK",E"set_obj_coef",E"set_obj_coef(glp_prob, col, coef)
 
    Sets the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_mat_row",E"glp_set_mat_row(glp_prob, row[, len], ind, val)
+(E"GLPK",E"GLPK",E"set_mat_row",E"set_mat_row(glp_prob, row[, len], ind, val)
 
    Sets (replaces) the content of a row. The content is specified in
    sparse format: \"ind\" is a vector of indices, \"val\" is the
@@ -3797,15 +3797,15 @@ airyaiprime(x)
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_mat_col",E"glp_set_mat_col(glp_prob, col[, len], ind, val)
+(E"GLPK",E"GLPK",E"set_mat_col",E"set_mat_col(glp_prob, col[, len], ind, val)
 
    Sets (replaces) the content of a column. Everything else is like
-   \"glp_set_mat_row\".
+   \"set_mat_row\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_load_matrix",E"glp_load_matrix(glp_prob[, numel], ia, ja, ar)
-glp_load_matrix(glp_prob, A)
+(E"GLPK",E"GLPK",E"load_matrix",E"load_matrix(glp_prob[, numel], ia, ja, ar)
+load_matrix(glp_prob, A)
 
    Sets (replaces) the content matrix (i.e. sets all  rows/coluns at
    once). The matrix is passed in sparse format.
@@ -3825,24 +3825,23 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"",E"glp_check_dup",E"glp_check_dup(rows, cols[, numel], ia, ja)
+(E"GLPK",E"GLPK",E"check_dup",E"check_dup(rows, cols[, numel], ia, ja)
 
    Check for duplicates in the indices vectors \"ia\" and \"ja\".
    \"numel\" has the same meaning and (optional) use as in
-   \"glp_load_matrix\". Returns 0 if no duplicates/out-of-range
-   indices are found, or a positive number indicating where a
-   duplicate occurs, or a negative number indicating an out-of-bounds
-   index.
+   \"load_matrix\". Returns 0 if no duplicates/out-of-range indices
+   are found, or a positive number indicating where a duplicate
+   occurs, or a negative number indicating an out-of-bounds index.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sort_matrix",E"glp_sort_matrix(glp_prob)
+(E"GLPK",E"GLPK",E"sort_matrix",E"sort_matrix(glp_prob)
 
    Sorts the elements of the problem object's matrix.
 
 "),
 
-(E"glpk.jl",E"",E"glp_del_rows",E"glp_del_rows(glp_prob[, num_rows], rows_ids)
+(E"GLPK",E"GLPK",E"del_rows",E"del_rows(glp_prob[, num_rows], rows_ids)
 
    Deletes rows from the problem object. Rows are specified in the
    \"rows_ids\" vector. \"num_rows\" is the number of elements of
@@ -3853,132 +3852,132 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"",E"glp_del_cols",E"glp_del_cols(glp_prob, cols_ids)
+(E"GLPK",E"GLPK",E"del_cols",E"del_cols(glp_prob, cols_ids)
 
-   Deletes columns from the problem object. See \"glp_del_rows\".
+   Deletes columns from the problem object. See \"del_rows\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_copy_prob",E"glp_copy_prob(glp_prob_dest, glp_prob, copy_names)
+(E"GLPK",E"GLPK",E"copy_prob",E"copy_prob(glp_prob_dest, glp_prob, copy_names)
 
    Makes a copy of the problem object. The flag \"copy_names\"
-   determines if names are copied, and must be either \"GLP_ON\" or
-   \"GLP_OFF\".
+   determines if names are copied, and must be either \"GLPK.ON\" or
+   \"GLPK.OFF\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_erase_prob",E"glp_erase_prob(glp_prob)
+(E"GLPK",E"GLPK",E"erase_prob",E"erase_prob(glp_prob)
 
    Resets the problem object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_prob_name",E"glp_get_prob_name(glp_prob)
+(E"GLPK",E"GLPK",E"get_prob_name",E"get_prob_name(glp_prob)
 
    Returns the problem object's name. Unlike the C version, if the
    problem has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_obj_name",E"glp_get_obj_name(glp_prob)
+(E"GLPK",E"GLPK",E"get_obj_name",E"get_obj_name(glp_prob)
 
    Returns the objective function's name. Unlike the C version, if the
    objective has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_obj_dir",E"glp_get_obj_dir(glp_prob)
+(E"GLPK",E"GLPK",E"get_obj_dir",E"get_obj_dir(glp_prob)
 
-   Returns the optimization direction, \"GLP_MIN\" (minimization) or
-   \"GLP_MAX\" (maximization).
+   Returns the optimization direction, \"GLPK.MIN\" (minimization) or
+   \"GLPK.MAX\" (maximization).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_num_rows",E"glp_get_num_rows(glp_prob)
+(E"GLPK",E"GLPK",E"get_num_rows",E"get_num_rows(glp_prob)
 
    Returns the current number of rows.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_num_cols",E"glp_get_num_cols(glp_prob)
+(E"GLPK",E"GLPK",E"get_num_cols",E"get_num_cols(glp_prob)
 
    Returns the current number of columns.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_name",E"glp_get_row_name(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_name",E"get_row_name(glp_prob, row)
 
    Returns the name of the specified row. Unlike the C version, if the
    row has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_name",E"glp_get_col_name(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_name",E"get_col_name(glp_prob, col)
 
    Returns the name of the specified column. Unlike the C version, if
    the column has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_type",E"glp_get_row_type(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_type",E"get_row_type(glp_prob, row)
 
-   Returns the type of the specified row: \"GLP_FR\" (free),
-   \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper bounded), \"GLP_DB\"
-   (double bounded), \"GLP_FX\" (fixed).
+   Returns the type of the specified row: \"GLPK.FR\" (free),
+   \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
+   \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_lb",E"glp_get_row_lb(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_lb",E"get_row_lb(glp_prob, row)
 
    Returns the lower bound of the specified row, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_ub",E"glp_get_row_ub(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_ub",E"get_row_ub(glp_prob, row)
 
    Returns the upper bound of the specified row, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_type",E"glp_get_col_type(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_type",E"get_col_type(glp_prob, col)
 
-   Returns the type of the specified column: \"GLP_FR\" (free),
-   \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper bounded), \"GLP_DB\"
-   (double bounded), \"GLP_FX\" (fixed).
+   Returns the type of the specified column: \"GLPK.FR\" (free),
+   \"GLPK.LO\" (lower bounded), \"GLPK.UP\" (upper bounded),
+   \"GLPK.DB\" (double bounded), \"GLPK.FX\" (fixed).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_lb",E"glp_get_col_lb(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_lb",E"get_col_lb(glp_prob, col)
 
    Returns the lower bound of the specified column, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_ub",E"glp_get_col_ub(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_ub",E"get_col_ub(glp_prob, col)
 
    Returns the upper bound of the specified column, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_obj_coef",E"glp_get_obj_coef(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_obj_coef",E"get_obj_coef(glp_prob, col)
 
    Return the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_num_nz",E"glp_get_num_nz(glp_prob)
+(E"GLPK",E"GLPK",E"get_num_nz",E"get_num_nz(glp_prob)
 
    Return the number of non-zero elements in the constraint matrix.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_mat_row",E"glp_get_mat_row(glp_prob, row, ind, val)
-glp_get_mat_row(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_mat_row",E"get_mat_row(glp_prob, row, ind, val)
+get_mat_row(glp_prob, row)
 
    Returns the contents of a row. In the first form (original C API),
    it fills the \"ind\" and \"val\" vectors provided, which must be of
@@ -3992,232 +3991,233 @@ glp_get_mat_row(glp_prob, row)
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_mat_col",E"glp_get_mat_col(glp_prob, col, ind, val)
-glp_get_mat_col(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_mat_col",E"get_mat_col(glp_prob, col, ind, val)
+get_mat_col(glp_prob, col)
 
-   Returns the contents of a column. See \"glp_get_mat_row\".
-
-"),
-
-(E"glpk.jl",E"",E"glp_create_index",E"glp_create_index(glp_prob)
-
-   Creates the name index (used by \"glp_find_row\", \"glp_find_col\")
-   for the problem object.
+   Returns the contents of a column. See \"get_mat_row\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_find_row",E"glp_find_row(glp_prob, name)
+(E"GLPK",E"GLPK",E"create_index",E"create_index(glp_prob)
+
+   Creates the name index (used by \"find_row\", \"find_col\") for the
+   problem object.
+
+"),
+
+(E"GLPK",E"GLPK",E"find_row",E"find_row(glp_prob, name)
 
    Finds the numeric id of a row by name. Returns 0 if no row with the
    given name is found.
 
 "),
 
-(E"glpk.jl",E"",E"glp_find_col",E"glp_find_col(glp_prob, name)
+(E"GLPK",E"GLPK",E"find_col",E"find_col(glp_prob, name)
 
    Finds the numeric id of a column by name. Returns 0 if no column
    with the given name is found.
 
 "),
 
-(E"glpk.jl",E"",E"glp_delete_index",E"glp_delete_index(glp_prob)
+(E"GLPK",E"GLPK",E"delete_index",E"delete_index(glp_prob)
 
    Deletes the name index for the problem object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_rii",E"glp_set_rii(glp_prob, row, rii)
+(E"GLPK",E"GLPK",E"set_rii",E"set_rii(glp_prob, row, rii)
 
    Sets the rii scale factor for the specified row.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_sjj",E"glp_set_sjj(glp_prob, col, sjj)
+(E"GLPK",E"GLPK",E"set_sjj",E"set_sjj(glp_prob, col, sjj)
 
    Sets the sjj scale factor for the specified column.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_rii",E"glp_get_rii(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_rii",E"get_rii(glp_prob, row)
 
    Returns the rii scale factor for the specified row.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_sjj",E"glp_get_sjj(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_sjj",E"get_sjj(glp_prob, col)
 
    Returns the sjj scale factor for the specified column.
 
 "),
 
-(E"glpk.jl",E"",E"glp_scale_prob",E"glp_scale_prob(glp_prob, flags)
+(E"GLPK",E"GLPK",E"scale_prob",E"scale_prob(glp_prob, flags)
 
    Performs automatic scaling of problem data for the problem object.
-   The parameter \"flags\" can be \"GLP_SF_AUTO\" (automatic) or a
-   bitwise OR of the forllowing: \"GLP_SF_GM\" (geometric mean),
-   \"GLP_SF_EQ\" (equilibration), \"GLP_SF_2N\" (nearest power of 2),
-   \"GLP_SF_SKIP\" (skip if well scaled).
+   The parameter \"flags\" can be \"GLPK.SF_AUTO\" (automatic) or a
+   bitwise OR of the forllowing: \"GLPK.SF_GM\" (geometric mean),
+   \"GLPK.SF_EQ\" (equilibration), \"GLPK.SF_2N\" (nearest power of
+   2), \"GLPK.SF_SKIP\" (skip if well scaled).
 
 "),
 
-(E"glpk.jl",E"",E"glp_unscale_prob",E"glp_unscale_prob(glp_prob)
+(E"GLPK",E"GLPK",E"unscale_prob",E"unscale_prob(glp_prob)
 
    Unscale the problem data (cancels the scaling effect).
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_row_stat",E"glp_set_row_stat(glp_prob, row, stat)
+(E"GLPK",E"GLPK",E"set_row_stat",E"set_row_stat(glp_prob, row, stat)
 
    Sets the status of the specified row. \"stat\" must be one of:
-   \"GLP_BS\" (basic), \"GLP_NL\" (non-basic lower bounded),
-   \"GLP_NU\" (non-basic upper-bounded), \"GLP_NF\" (non-basic free),
-   \"GLP_NS\" (non-basic fixed).
+   \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
+   \"GLPK.NU\" (non-basic upper-bounded), \"GLPK.NF\" (non-basic
+   free), \"GLPK.NS\" (non-basic fixed).
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_col_stat",E"glp_set_col_stat(glp_prob, col, stat)
+(E"GLPK",E"GLPK",E"set_col_stat",E"set_col_stat(glp_prob, col, stat)
 
    Sets the status of the specified column. \"stat\" must be one of:
-   \"GLP_BS\" (basic), \"GLP_NL\" (non-basic lower bounded),
-   \"GLP_NU\" (non-basic upper-bounded), \"GLP_NF\" (non-basic free),
-   \"GLP_NS\" (non-basic fixed).
+   \"GLPK.BS\" (basic), \"GLPK.NL\" (non-basic lower bounded),
+   \"GLPK.NU\" (non-basic upper-bounded), \"GLPK.NF\" (non-basic
+   free), \"GLPK.NS\" (non-basic fixed).
 
 "),
 
-(E"glpk.jl",E"",E"glp_std_basis",E"glp_std_basis(glp_prob)
+(E"GLPK",E"GLPK",E"std_basis",E"std_basis(glp_prob)
 
    Constructs the standard (trivial) initial LP basis for the problem
    object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_adv_basis",E"glp_adv_basis(glp_prob[, flags])
+(E"GLPK",E"GLPK",E"adv_basis",E"adv_basis(glp_prob[, flags])
 
    Constructs an advanced initial LP basis for the problem object. The
    flag \"flags\" is optional; it must be 0 if given.
 
 "),
 
-(E"glpk.jl",E"",E"glp_cpx_basis",E"glp_cpx_basis(glp_prob)
+(E"GLPK",E"GLPK",E"cpx_basis",E"cpx_basis(glp_prob)
 
    Constructs an initial LP basis for the problem object with the
    algorithm proposed by R. Bixby.
 
 "),
 
-(E"glpk.jl",E"",E"glp_simplex",E"glp_simplex(glp_prob[, glp_param])
+(E"GLPK",E"GLPK",E"simplex",E"simplex(glp_prob[, glp_param])
 
-   The routine \"glp_simplex\" is a driver to the LP solver based on
-   the simplex method. This routine retrieves problem data from the
+   The routine \"simplex\" is a driver to the LP solver based on the
+   simplex method. This routine retrieves problem data from the
    specified problem object, calls the solver to solve the problem
    instance, and stores results of computations back into the problem
    object.
 
    The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPSimplexParam\" (or \"nothing\" to
+   argument, which is of type \"GLPK.SimplexParam\" (or \"nothing\" to
    use the default settings).
 
    Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLP_EBADB\" (invalid base), \"GLP_ESING\"
-   (singular matrix), \"GLP_ECOND\" (ill-conditioned matrix),
-   \"GLP_EBOUND\" (incorrect bounds), \"GLP_EFAIL\" (solver failure),
-   \"GLP_EOBJLL\" (lower limit reached), \"GLP_EOBJUL\" (upper limit
-   reached), \"GLP_ITLIM\" (iterations limit exceeded), \"GLP_ETLIM\"
-   (time limit exceeded), \"GLP_ENOPFS\" (no primal feasible
-   solution), \"GLP_ENODFS\" (no dual feasible solution).
+   reason for failure: \"GLPK.EBADB\" (invalid base), \"GLPK.ESING\"
+   (singular matrix), \"GLPK.ECOND\" (ill-conditioned matrix),
+   \"GLPK.EBOUND\" (incorrect bounds), \"GLPK.EFAIL\" (solver
+   failure), \"GLPK.EOBJLL\" (lower limit reached), \"GLPK.EOBJUL\"
+   (upper limit reached), \"GLPK.ITLIM\" (iterations limit exceeded),
+   \"GLPK.ETLIM\" (time limit exceeded), \"GLPK.ENOPFS\" (no primal
+   feasible solution), \"GLPK.ENODFS\" (no dual feasible solution).
 
 "),
 
-(E"glpk.jl",E"",E"glp_exact",E"glp_exact(glp_prob[, glp_param])
+(E"GLPK",E"GLPK",E"exact",E"exact(glp_prob[, glp_param])
 
    A tentative implementation of the primal two-phase simplex method
-   based on exact (rational) arithmetic. Similar to \"glp_simplex\".
-   The optional glp_param is of type \"GLPSimplexParam\".
+   based on exact (rational) arithmetic. Similar to \"simplex\". The
+   optional \"glp_param\" is of type \"GLPK.SimplexParam\".
 
-   The possible return values are 0 (success) or \"GLP_EBADB\",
-   \"GLP_ESING\", \"GLP_EBOUND\", \"GLP_EFAIL\", \"GLP_ITLIM\",
-   \"GLP_ETLIM\" (see \"glp_simplex()\").
+   The possible return values are \"0\" (success) or \"GLPK.EBADB\",
+   \"GLPK.ESING\", \"GLPK.EBOUND\", \"GLPK.EFAIL\", \"GLPK.ITLIM\",
+   \"GLPK.ETLIM\" (see \"simplex()\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_init_smcp",E"glp_init_smcp(glp_param)
+(E"GLPK",E"GLPK",E"init_smcp",E"init_smcp(glp_param)
 
-   Initializes a \"GLPSimplexParam\" object with the default values.
+   Initializes a \"GLPK.SimplexParam\" object with the default values.
    In Julia, this is done at object creation time; this function can
    be used to reset the object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_status",E"glp_get_status(glp_prob)
+(E"GLPK",E"GLPK",E"get_status",E"get_status(glp_prob)
 
    Returns the generic status of the current basic solution:
-   \"GLP_OPT\" (optimal), \"GLP_FEAS\" (feasible), \"GLP_INFEAS\"
-   (infeasible), \"GLP_NOFEAS\" (no feasible solution), \"GLP_UNBND\"
-   (unbounded solution), \"GLP_UNDEF\" (undefined).
+   \"GLPK.OPT\" (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.INFEAS\"
+   (infeasible), \"GLPK.NOFEAS\" (no feasible solution),
+   \"GLPK.UNBND\" (unbounded solution), \"GLPK.UNDEF\" (undefined).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_prim_stat",E"glp_get_prim_stat(glp_prob)
+(E"GLPK",E"GLPK",E"get_prim_stat",E"get_prim_stat(glp_prob)
 
-   Returns the status of the primal basic solution: \"GLP_FEAS\",
-   \"GLP_INFEAS\", \"GLP_NOFEAS\", \"GLP_UNDEF\" (see
-   \"glp_get_status()\").
-
-"),
-
-(E"glpk.jl",E"",E"glp_get_dual_stat",E"glp_get_dual_stat(glp_prob)
-
-   Returns the status of the dual basic solution: \"GLP_FEAS\",
-   \"GLP_INFEAS\", \"GLP_NOFEAS\", \"GLP_UNDEF\" (see
-   \"glp_get_status()\").
+   Returns the status of the primal basic solution: \"GLPK.FEAS\",
+   \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
+   \"get_status()\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_obj_val",E"glp_get_obj_val(glp_prob)
+(E"GLPK",E"GLPK",E"get_dual_stat",E"get_dual_stat(glp_prob)
+
+   Returns the status of the dual basic solution: \"GLPK.FEAS\",
+   \"GLPK.INFEAS\", \"GLPK.NOFEAS\", \"GLPK.UNDEF\" (see
+   \"get_status()\").
+
+"),
+
+(E"GLPK",E"GLPK",E"get_obj_val",E"get_obj_val(glp_prob)
 
    Returns the current value of the objective function.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_stat",E"glp_get_row_stat(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_stat",E"get_row_stat(glp_prob, row)
 
-   Returns the status of the specified row: \"GLP_BS\", \"GLP_NL\",
-   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat()\").
+   Returns the status of the specified row: \"GLPK.BS\", \"GLPK.NL\",
+   \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see \"set_row_stat()\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_prim",E"glp_get_row_prim(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_prim",E"get_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_dual",E"glp_get_row_dual(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_dual",E"get_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_stat",E"glp_get_col_stat(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_stat",E"get_col_stat(glp_prob, col)
 
-   Returns the status of the specified column: \"GLP_BS\", \"GLP_NL\",
-   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat()\").
+   Returns the status of the specified column: \"GLPK.BS\",
+   \"GLPK.NL\", \"GLPK.NU\", \"GLPK.NF\", \"GLPK.NS\" (see
+   \"set_row_stat()\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_prim",E"glp_get_col_prim(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_prim",E"get_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_dual",E"glp_get_col_dual(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_dual",E"get_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_unbnd_ray",E"glp_get_unbnd_ray(glp_prob)
+(E"GLPK",E"GLPK",E"get_unbnd_ray",E"get_unbnd_ray(glp_prob)
 
    Returns the number k of a variable, which causes primal or dual
    unboundedness (if 1 <= k <= rows it's row k; if rows+1 <= k <=
@@ -4225,178 +4225,179 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_interior",E"glp_interior(glp_prob[, glp_param])
+(E"GLPK",E"GLPK",E"interior",E"interior(glp_prob[, glp_param])
 
-   The routine \"glp_interior\" is a driver to the LP solver based on
-   the primal-dual interior-point method. This routine retrieves
-   problem data from the specified problem object, calls the solver to
-   solve the problem instance, and stores results of computations back
-   into the problem object.
+   The routine \"interior\" is a driver to the LP solver based on the
+   primal-dual interior-point method. This routine retrieves problem
+   data from the specified problem object, calls the solver to solve
+   the problem instance, and stores results of computations back into
+   the problem object.
 
    The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPInteriorParam\" (or \"nothing\" to
-   use the default settings).
+   argument, which is of type \"GLPK.InteriorParam\" (or \"nothing\"
+   to use the default settings).
 
    Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLP_EFAIL\" (solver failure), \"GLP_ENOCVG\"
-   (very slow convergence, or divergence), \"GLP_ITLIM\" (iterations
-   limit exceeded), \"GLP_EINSTAB\" (numerical instability).
+   reason for failure: \"GLPK.EFAIL\" (solver failure),
+   \"GLPK.ENOCVG\" (very slow convergence, or divergence),
+   \"GLPK.ITLIM\" (iterations limit exceeded), \"GLPK.EINSTAB\"
+   (numerical instability).
 
 "),
 
-(E"glpk.jl",E"",E"glp_init_iptcp",E"glp_init_iptcp(glp_param)
+(E"GLPK",E"GLPK",E"init_iptcp",E"init_iptcp(glp_param)
 
-   Initializes a \"GLPInteriorParam\" object with the default values.
-   In Julia, this is done at object creation time; this function can
-   be used to reset the object.
-
-"),
-
-(E"glpk.jl",E"",E"glp_ipt_status",E"glp_ipt_status(glp_prob)
-
-   Returns the status of the interior-point solution: \"GLP_OPT\"
-   (optimal), \"GLP_INFEAS\" (infeasible), \"GLP_NOFEAS\" (no feasible
-   solution), \"GLP_UNDEF\" (undefined).
+   Initializes a \"GLPK.InteriorParam\" object with the default
+   values. In Julia, this is done at object creation time; this
+   function can be used to reset the object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_ipt_obj_val",E"glp_ipt_obj_val(glp_prob)
+(E"GLPK",E"GLPK",E"ipt_status",E"ipt_status(glp_prob)
+
+   Returns the status of the interior-point solution: \"GLPK.OPT\"
+   (optimal), \"GLPK.INFEAS\" (infeasible), \"GLPK.NOFEAS\" (no
+   feasible solution), \"GLPK.UNDEF\" (undefined).
+
+"),
+
+(E"GLPK",E"GLPK",E"ipt_obj_val",E"ipt_obj_val(glp_prob)
 
    Returns the current value of the objective function for the
    interior-point solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_ipt_row_prim",E"glp_ipt_row_prim(glp_prob, row)
+(E"GLPK",E"GLPK",E"ipt_row_prim",E"ipt_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row for the interior-
    point solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_ipt_row_dual",E"glp_ipt_row_dual(glp_prob, row)
+(E"GLPK",E"GLPK",E"ipt_row_dual",E"ipt_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row for the
    interior-point solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_ipt_col_prim",E"glp_ipt_col_prim(glp_prob, col)
+(E"GLPK",E"GLPK",E"ipt_col_prim",E"ipt_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column for the interior-
    point solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_ipt_col_dual",E"glp_ipt_col_dual(glp_prob, col)
+(E"GLPK",E"GLPK",E"ipt_col_dual",E"ipt_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column for
    the interior-point solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_col_kind",E"glp_set_col_kind(glp_prob, col, kind)
+(E"GLPK",E"GLPK",E"set_col_kind",E"set_col_kind(glp_prob, col, kind)
 
    Sets the kind for the specified column (for mixed-integer
-   programming). \"kind\" must be one of: \"GLP_CV\" (continuous),
-   \"GLP_IV\" (integer), \"GLP_BV\" (binary, 0/1).
+   programming). \"kind\" must be one of: \"GLPK.CV\" (continuous),
+   \"GLPK.IV\" (integer), \"GLPK.BV\" (binary, 0/1).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_kind",E"glp_get_col_kind(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_kind",E"get_col_kind(glp_prob, col)
 
-   Returns the kind for the specified column (see
-   \"glp_set_col_kind()\").
+   Returns the kind for the specified column (see \"set_col_kind()\").
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_num_int",E"glp_get_num_int(glp_prob)
+(E"GLPK",E"GLPK",E"get_num_int",E"get_num_int(glp_prob)
 
    Returns the number of columns marked as integer (including binary).
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_num_bin",E"glp_get_num_bin(glp_prob)
+(E"GLPK",E"GLPK",E"get_num_bin",E"get_num_bin(glp_prob)
 
    Returns the number of columns marked binary.
 
 "),
 
-(E"glpk.jl",E"",E"glp_intopt",E"glp_intopt(glp_prob[, glp_param])
+(E"GLPK",E"GLPK",E"intopt",E"intopt(glp_prob[, glp_param])
 
-   The routine \"glp_intopt\" is a driver to the mixed-integer-
-   programming (MIP) solver based on the branch- and-cut method, which
-   is a hybrid of branch-and-bound and cutting plane methods.
+   The routine \"intopt\" is a driver to the mixed-integer-programming
+   (MIP) solver based on the branch- and-cut method, which is a hybrid
+   of branch-and-bound and cutting plane methods.
 
    The parameters are specified via the optional \"glp_param\"
-   argument, which is of type \"GLPIntoptParam\" (or \"nothing\" to
+   argument, which is of type \"GLPK.IntoptParam\" (or \"nothing\" to
    use the default settings).
 
    Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLP_EBOUND\" (incorrect bounds),
-   \"GLP_EROOT\" (no optimal LP basis given), \"GLP_ENOPFS\" (no
-   primal feasible LP solution), \"GLP_ENODFS\" (no dual feasible LP
-   solution), \"GLP_EFAIL\" (solver failure), \"GLP_EMIPGAP\" (mip gap
-   tolearance reached), \"GLP_ETLIM\" (time limit exceeded),
-   \"GLP_ESTOP\" (terminated by application).
+   reason for failure: \"GLPK.EBOUND\" (incorrect bounds),
+   \"GLPK.EROOT\" (no optimal LP basis given), \"GLPK.ENOPFS\" (no
+   primal feasible LP solution), \"GLPK.ENODFS\" (no dual feasible LP
+   solution), \"GLPK.EFAIL\" (solver failure), \"GLPK.EMIPGAP\" (mip
+   gap tolearance reached), \"GLPK.ETLIM\" (time limit exceeded),
+   \"GLPK.ESTOP\" (terminated by application).
 
 "),
 
-(E"glpk.jl",E"",E"glp_init_iocp",E"glp_init_iocp(glp_param)
+(E"GLPK",E"GLPK",E"init_iocp",E"init_iocp(glp_param)
 
-   Initializes a \"GLPIntoptParam\" object with the default values. In
-   Julia, this is done at object creation time; this function can be
-   used to reset the object.
-
-"),
-
-(E"glpk.jl",E"",E"glp_mip_status",E"glp_mip_status(glp_prob)
-
-   Returns the generic status of the MIP solution: \"GLP_OPT\"
-   (optimal), \"GLP_FEAS\" (feasible), \"GLP_NOFEAS\" (no feasible
-   solution), \"GLP_UNDEF\" (undefined).
+   Initializes a \"GLPK.IntoptParam\" object with the default values.
+   In Julia, this is done at object creation time; this function can
+   be used to reset the object.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mip_obj_val",E"glp_mip_obj_val(glp_prob)
+(E"GLPK",E"GLPK",E"mip_status",E"mip_status(glp_prob)
+
+   Returns the generic status of the MIP solution: \"GLPK.OPT\"
+   (optimal), \"GLPK.FEAS\" (feasible), \"GLPK.NOFEAS\" (no feasible
+   solution), \"GLPK.UNDEF\" (undefined).
+
+"),
+
+(E"GLPK",E"GLPK",E"mip_obj_val",E"mip_obj_val(glp_prob)
 
    Returns the current value of the objective function for the MIP
    solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mip_row_val",E"glp_mip_row_val(glp_prob, row)
+(E"GLPK",E"GLPK",E"mip_row_val",E"mip_row_val(glp_prob, row)
 
    Returns the value of the specified row for the MIP solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mip_col_val",E"glp_mip_col_val(glp_prob, col)
+(E"GLPK",E"GLPK",E"mip_col_val",E"mip_col_val(glp_prob, col)
 
    Returns the value of the specified column for the MIP solution.
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_mps",E"glp_read_mps(glp_prob, format[, param], filename)
+(E"GLPK",E"GLPK",E"read_mps",E"read_mps(glp_prob, format[, param], filename)
 
    Reads problem data in MPS format from a text file. \"format\" must
-   be one of \"GLP_MPS_DECK\" (fixed, old) or \"GLP_MPS_FILE\" (free,
-   modern). \"param\" is optional; if given it must be \"nothing\".
+   be one of \"GLPK.MPS_DECK\" (fixed, old) or \"GLPK.MPS_FILE\"
+   (free, modern). \"param\" is optional; if given it must be
+   \"nothing\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_mps",E"glp_write_mps(glp_prob, format[, param], filename)
+(E"GLPK",E"GLPK",E"write_mps",E"write_mps(glp_prob, format[, param], filename)
 
    Writes problem data in MPS format from a text file. See
-   \"glp_read_mps\".
+   \"read_mps\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_lp",E"glp_read_lp(glp_prob[, param], filename)
+(E"GLPK",E"GLPK",E"read_lp",E"read_lp(glp_prob[, param], filename)
 
    Reads problem data in CPLEX LP format from a text file. \"param\"
    is optional; if given it must be \"nothing\".
@@ -4405,16 +4406,16 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_lp",E"glp_write_lp(glp_prob[, param], filename)
+(E"GLPK",E"GLPK",E"write_lp",E"write_lp(glp_prob[, param], filename)
 
    Writes problem data in CPLEX LP format from a text file. See
-   \"glp_read_lp\".
+   \"read_lp\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_prob",E"glp_read_prob(glp_prob[, flags], filename)
+(E"GLPK",E"GLPK",E"read_prob",E"read_prob(glp_prob[, flags], filename)
 
    Reads problem data in GLPK LP/MIP format from a text file.
    \"flags\" is optional; if given it must be 0.
@@ -4423,40 +4424,40 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_prob",E"glp_write_prob(glp_prob[, flags], filename)
+(E"GLPK",E"GLPK",E"write_prob",E"write_prob(glp_prob[, flags], filename)
 
    Writes problem data in GLPK LP/MIP format from a text file. See
-   \"glp_read_prob\".
+   \"read_prob\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mpl_read_model",E"glp_mpl_read_model(glp_tran, filename, skip)
+(E"GLPK",E"GLPK",E"mpl_read_model",E"mpl_read_model(glp_tran, filename, skip)
 
    Reads the model section and, optionally, the data section, from a
    text file in MathProg format, and stores it in \"glp_tran\", which
-   is a \"GLPMathProgWorkspace\" object. If \"skip\" is nonzero, the
+   is a \"GLPK.MathProgWorkspace\" object. If \"skip\" is nonzero, the
    data section is skipped if present.
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mpl_read_data",E"glp_mpl_read_data(glp_tran, filename)
+(E"GLPK",E"GLPK",E"mpl_read_data",E"mpl_read_data(glp_tran, filename)
 
    Reads data section from a text file in MathProg format and stores
-   it in \"glp_tran\", which is a \"GLPMathProgWorkspace\" object. May
-   be called more than once.
+   it in \"glp_tran\", which is a \"GLPK.MathProgWorkspace\" object.
+   May be called more than once.
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mpl_generate",E"glp_mpl_generate(glp_tran[, filename])
+(E"GLPK",E"GLPK",E"mpl_generate",E"mpl_generate(glp_tran[, filename])
 
    Generates the model using its description stored in the
-   \"GLPMathProgWorkspace\" translator workspace \"glp_tran\". The
+   \"GLPK.MathProgWorkspace\" translator workspace \"glp_tran\". The
    optional \"filename\" specifies an output file; if not given or
    \"nothing\", the terminal is used.
 
@@ -4464,30 +4465,30 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_mpl_build_prob",E"glp_mpl_build_prob(glp_tran, glp_prob)
+(E"GLPK",E"GLPK",E"mpl_build_prob",E"mpl_build_prob(glp_tran, glp_prob)
 
-   Transfer information from the \"GLPMathProgWorkspace\" translator
-   workspace \"glp_tran\" to the \"GLPProb\" problem object
+   Transfer information from the \"GLPK.MathProgWorkspace\" translator
+   workspace \"glp_tran\" to the \"GLPK.Prob\" problem object
    \"glp_prob\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_mpl_postsolve",E"glp_mpl_postsolve(glp_tran, glp_prob, sol)
+(E"GLPK",E"GLPK",E"mpl_postsolve",E"mpl_postsolve(glp_tran, glp_prob, sol)
 
-   Copies the solution from the \"GLPProb\" problem object
-   \"glp_prob\" to the \"GLPMathProgWorkspace\" translator workspace
+   Copies the solution from the \"GLPK.Prob\" problem object
+   \"glp_prob\" to the \"GLPK.MathProgWorkspace\" translator workspace
    \"glp_tran\" and then executes all the remaining model statements,
    which follow the solve statement.
 
    The parameter \"sol\" specifies which solution should be copied
-   from the problem object to the workspace: \"GLP_SOL\" (basic),
-   \"GLP_IPT\" (interior-point), \"GLP_MIP\" (MIP).
+   from the problem object to the workspace: \"GLPK.SOL\" (basic),
+   \"GLPK.IPT\" (interior-point), \"GLPK.MIP\" (MIP).
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_print_sol",E"glp_print_sol(glp_prob, filename)
+(E"GLPK",E"GLPK",E"print_sol",E"print_sol(glp_prob, filename)
 
    Writes the current basic solution to a text file, in printable
    format.
@@ -4496,25 +4497,25 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_sol",E"glp_read_sol(glp_prob, filename)
+(E"GLPK",E"GLPK",E"read_sol",E"read_sol(glp_prob, filename)
 
    Reads the current basic solution from a text file, in the format
-   used by \"glp_write_sol\".
+   used by \"write_sol\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_sol",E"glp_write_sol(glp_prob, filename)
+(E"GLPK",E"GLPK",E"write_sol",E"write_sol(glp_prob, filename)
 
    Writes the current basic solution from a text file, in a format
-   which can be read by \"glp_read_sol\".
+   which can be read by \"read_sol\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_print_ipt",E"glp_print_ipt(glp_prob, filename)
+(E"GLPK",E"GLPK",E"print_ipt",E"print_ipt(glp_prob, filename)
 
    Writes the current interior-point solution to a text file, in
    printable format.
@@ -4523,25 +4524,25 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_ipt",E"glp_read_ipt(glp_prob, filename)
+(E"GLPK",E"GLPK",E"read_ipt",E"read_ipt(glp_prob, filename)
 
    Reads the current interior-point solution from a text file, in the
-   format used by \"glp_write_ipt\".
+   format used by \"write_ipt\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_ipt",E"glp_write_ipt(glp_prob, filename)
+(E"GLPK",E"GLPK",E"write_ipt",E"write_ipt(glp_prob, filename)
 
    Writes the current interior-point solution from a text file, in a
-   format which can be read by \"glp_read_ipt\".
+   format which can be read by \"read_ipt\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_print_mip",E"glp_print_mip(glp_prob, filename)
+(E"GLPK",E"GLPK",E"print_mip",E"print_mip(glp_prob, filename)
 
    Writes the current MIP solution to a text file, in printable
    format.
@@ -4550,25 +4551,25 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_mip",E"glp_read_mip(glp_prob, filename)
+(E"GLPK",E"GLPK",E"read_mip",E"read_mip(glp_prob, filename)
 
    Reads the current MIP solution from a text file, in the format used
-   by \"glp_write_mip\".
+   by \"write_mip\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_mip",E"glp_write_mip(glp_prob, filename)
+(E"GLPK",E"GLPK",E"write_mip",E"write_mip(glp_prob, filename)
 
    Writes the current MIP solution from a text file, in a format which
-   can be read by \"glp_read_mip\".
+   can be read by \"read_mip\".
 
    Returns 0 upon success; throws an error in case of failure.
 
 "),
 
-(E"glpk.jl",E"",E"glp_print_ranges",E"glp_print_ranges(glp_prob, [[len,] list,] [flags,] filename)
+(E"GLPK",E"GLPK",E"print_ranges",E"print_ranges(glp_prob, [[len,] list,] [flags,] filename)
 
    Performs sensitivity analysis of current optimal basic solution and
    writes the analysis report in human-readable format to a text file.
@@ -4588,51 +4589,51 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_bf_exists",E"glp_bf_exists(glp_prob)
+(E"GLPK",E"GLPK",E"bf_exists",E"bf_exists(glp_prob)
 
    Returns non-zero if the basis fatorization for the current basis
    exists, 0 otherwise.
 
 "),
 
-(E"glpk.jl",E"",E"glp_factorize",E"glp_factorize(glp_prob)
+(E"GLPK",E"GLPK",E"factorize",E"factorize(glp_prob)
 
    Computes the basis factorization for the current basis.
 
-   Returns 0 if successful, otherwise: \"GLP_EBADB\" (invalid matrix),
-   \"GLP_ESING\" (singluar matrix), \"GLP_ECOND\" (ill-conditioned
-   matrix).
+   Returns 0 if successful, otherwise: \"GLPK.EBADB\" (invalid
+   matrix), \"GLPK.ESING\" (singluar matrix), \"GLPK.ECOND\" (ill-
+   conditioned matrix).
 
 "),
 
-(E"glpk.jl",E"",E"glp_bf_updated",E"glp_bf_updated(glp_prob)
+(E"GLPK",E"GLPK",E"bf_updated",E"bf_updated(glp_prob)
 
    Returns 0 if the basis factorization was computed from scratch,
    non-zero otherwise.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_bfcp",E"glp_get_bfcp(glp_prob, glp_param)
+(E"GLPK",E"GLPK",E"get_bfcp",E"get_bfcp(glp_prob, glp_param)
 
    Retrieves control parameters, which are used on computing and
    updating the basis factorization associated with the problem
-   object, and stores them in the \"GLPBasisFactParam\" object
+   object, and stores them in the \"GLPK.BasisFactParam\" object
    \"glp_param\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_set_bfcp",E"glp_set_bfcp(glp_prob[, glp_param])
+(E"GLPK",E"GLPK",E"set_bfcp",E"set_bfcp(glp_prob[, glp_param])
 
-   Sets the control parameters stored in the \"GLPBasisFactParam\"
+   Sets the control parameters stored in the \"GLPK.BasisFactParam\"
    object \"glp_param\" into the problem object. If \"glp_param\" is
    \"nothing\" or is omitted, resets the parameters to their defaults.
 
-   The \"glp_param\" should always be retreived via \"glp_get_bfcp\"
+   The \"glp_param\" should always be retreived via \"get_bfcp\"
    before changing its values and calling this function.
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_bhead",E"glp_get_bhead(glp_prob, k)
+(E"GLPK",E"GLPK",E"get_bhead",E"get_bhead(glp_prob, k)
 
    Returns the basis header information for the current basis. \"k\"
    is a row index.
@@ -4643,25 +4644,25 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_row_bind",E"glp_get_row_bind(glp_prob, row)
+(E"GLPK",E"GLPK",E"get_row_bind",E"get_row_bind(glp_prob, row)
 
    Returns the index of the basic variable \"k\" which is associated
-   with the specified row, or 0 if the variable is non-basic. If
-   \"glp_get_bhead(glp_prob, k) = row\", then \"glp_get_bind(glp_prob,
-   row) = k\".
+   with the specified row, or \"0\" if the variable is non-basic. If
+   \"GLPK.get_bhead(glp_prob, k) == row\", then
+   \"GLPK.get_bind(glp_prob, row) = k\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_get_col_bind",E"glp_get_col_bind(glp_prob, col)
+(E"GLPK",E"GLPK",E"get_col_bind",E"get_col_bind(glp_prob, col)
 
    Returns the index of the basic variable \"k\" which is associated
-   with the specified column, or 0 if the variable is non-basic. If
-   \"glp_get_bhead(glp_prob, k) = rows+col\", then
-   \"glp_get_bind(glp_prob, col) = k\".
+   with the specified column, or \"0\" if the variable is non-basic.
+   If \"GLPK.get_bhead(glp_prob, k) == rows+col\", then
+   \"GLPK.get_bind(glp_prob, col) = k\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_ftran",E"glp_ftran(glp_prob, v)
+(E"GLPK",E"GLPK",E"ftran",E"ftran(glp_prob, v)
 
    Performs forward transformation (FTRAN), i.e. it solves the system
    Bx = b, where B is the basis matrix, x is the vector of unknowns to
@@ -4671,32 +4672,32 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"",E"glp_btran",E"glp_btran(glp_prob, v)
+(E"GLPK",E"GLPK",E"btran",E"btran(glp_prob, v)
 
    Performs backward transformation (BTRAN), i.e. it solves the system
-   B'x = b, where B is the transposed of the basis matrix, x is the
-   vector of unknowns to be computed, b is the vector of right-hand
-   sides. At input, \"v\" represents the vector b; at output, it
-   contains the vector x. \"v\" must be a \"Vector{Float64}\" whose
-   length is the number of rows.
+   \"B'x = b\", where \"B\" is the transposed of the basis matrix,
+   \"x\" is the vector of unknowns to be computed, \"b\" is the vector
+   of right-hand sides. At input, \"v\" represents the vector \"b\";
+   at output, it contains the vector \"x\". \"v\" must be a
+   \"Vector{Float64}\" whose length is the number of rows.
 
 "),
 
-(E"glpk.jl",E"",E"glp_warm_up",E"glp_warm_up(glp_prob)
+(E"GLPK",E"GLPK",E"warm_up",E"warm_up(glp_prob)
 
    \"Warms up\" the LP basis using current statuses assigned to rows
    and columns, i.e. computes factorization of the basis matrix (if it
    does not exist), computes primal and dual components of basic
    solution, and determines the solution status.
 
-   Returns 0 if successful, otherwise: \"GLP_EBADB\" (invalid matrix),
-   \"GLP_ESING\" (singluar matrix), \"GLP_ECOND\" (ill-conditioned
-   matrix).
+   Returns 0 if successful, otherwise: \"GLPK.EBADB\" (invalid
+   matrix), \"GLPK.ESING\" (singluar matrix), \"GLPK.ECOND\" (ill-
+   conditioned matrix).
 
 "),
 
-(E"glpk.jl",E"",E"glp_eval_tab_row",E"glp_eval_tab_row(glp_prob, k, ind, val)
-glp_eval_tab_row(glp_prob, k)
+(E"GLPK",E"GLPK",E"eval_tab_row",E"eval_tab_row(glp_prob, k, ind, val)
+eval_tab_row(glp_prob, k)
 
    Computes a row of the current simplex tableau which corresponds to
    some basic variable specified by the parameter \"k\". If 1 <= \"k\"
@@ -4715,41 +4716,40 @@ glp_eval_tab_row(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_eval_tab_col",E"glp_eval_tab_col(glp_prob, k, ind, val)
-glp_eval_tab_col(glp_prob, k)
+(E"GLPK",E"GLPK",E"eval_tab_col",E"eval_tab_col(glp_prob, k, ind, val)
+eval_tab_col(glp_prob, k)
 
    Computes a column of the current simplex tableau which corresponds
    to some non-basic variable specified by the parameter \"k\". See
-   \"glp_eval_tab_row\".
+   \"eval_tab_row\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_transform_row",E"glp_transform_row(glp_prob[, len], ind, val)
+(E"GLPK",E"GLPK",E"transform_row",E"transform_row(glp_prob[, len], ind, val)
 
-   Performs the same operation as \"glp_eval_tab_row\" with the
-   exception that the row to be transformed is specified explicitly as
-   a sparse vector. The parameter \"len\" is the number of elements of
-   \"ind\" and \"val\" which will be used, and must be smaller or
-   equal to the length of both vectors; in Julia it is optional (and
-   the \"ind\" and \"val\" must have the same length). The vectors
-   \"int\" and \"val\" must be of type \"Vector{Int32}\" and
-   \"Vector{Float64}\", respectively, since they will also hold the
-   result; in Julia, they will be resized to the resulting required
-   length.
+   Performs the same operation as \"eval_tab_row\" with the exception
+   that the row to be transformed is specified explicitly as a sparse
+   vector. The parameter \"len\" is the number of elements of \"ind\"
+   and \"val\" which will be used, and must be smaller or equal to the
+   length of both vectors; in Julia it is optional (and the \"ind\"
+   and \"val\" must have the same length). The vectors \"int\" and
+   \"val\" must be of type \"Vector{Int32}\" and \"Vector{Float64}\",
+   respectively, since they will also hold the result; in Julia, they
+   will be resized to the resulting required length.
 
    Returns the length if the resulting vectors \"ind\" and \"val\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_transform_col",E"glp_transform_col(glp_prob[, len], ind, val)
+(E"GLPK",E"GLPK",E"transform_col",E"transform_col(glp_prob[, len], ind, val)
 
-   Performs the same operation as \"glp_eval_tab_col\" with the
-   exception that the row to be transformed is specified explicitly as
-   a sparse vector. See \"glp_transform_row\".
+   Performs the same operation as \"eval_tab_col\" with the exception
+   that the row to be transformed is specified explicitly as a sparse
+   vector. See \"transform_row\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_prim_rtest",E"glp_prim_rtest(glp_prob[, len], ind, val, dir, eps)
+(E"GLPK",E"GLPK",E"prim_rtest",E"prim_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the primal ratio test using an explicitly specified column
    of the simplex table. The current basic solution must be primal
@@ -4770,16 +4770,16 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_dual_rtest",E"glp_dual_rtest(glp_prob[, len], ind, val, dir, eps)
+(E"GLPK",E"GLPK",E"dual_rtest",E"dual_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the dual ratio test using an explicitly specified row of
    the simplex table. The current basic solution must be dual
    feasible. The indices in \"ind\" must correspond to non-basic
-   variables. Everything else is like in \"glp_prim_rtest\".
+   variables. Everything else is like in \"prim_rtest\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_analyze_bound",E"glp_analyze_bound(glp_prob, k)
+(E"GLPK",E"GLPK",E"analyze_bound",E"analyze_bound(glp_prob, k)
 
    Analyzes the effect of varying the active bound of specified non-
    basic variable. See the GLPK manual for a detailed explanation. In
@@ -4789,7 +4789,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_analyze_coef",E"glp_analyze_coef(glp_prob, k)
+(E"GLPK",E"GLPK",E"analyze_coef",E"analyze_coef(glp_prob, k)
 
    Analyzes the effect of varying the objective coefficient at
    specified basic variable. See the GLPK manual for a detailed
@@ -4799,7 +4799,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_init_env",E"glp_init_env()
+(E"GLPK",E"GLPK",E"init_env",E"init_env()
 
    Initializes the GLPK environment. Not normally needed.
 
@@ -4809,7 +4809,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_version",E"glp_version()
+(E"GLPK",E"GLPK",E"version",E"version()
 
    Returns the GLPK version number. In Julia, instead of returning a
    string as in C, it returns a tuple of integer values, containing
@@ -4817,7 +4817,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_free_env",E"glp_free_env()
+(E"GLPK",E"GLPK",E"free_env",E"free_env()
 
    Frees all resources used by GLPK routines (memory blocks, etc.)
    which are currently still in use. Not normally needed.
@@ -4826,17 +4826,17 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_term_out",E"glp_term_out(flag)
+(E"GLPK",E"GLPK",E"term_out",E"term_out(flag)
 
    Enables/disables the terminal output of glpk routines. \"flag\" is
-   either \"GLP_ON\" (output enabled) or \"GLP_OFF\" (output
+   either \"GLPK.ON\" (output enabled) or \"GLPK.OFF\" (output
    disabled).
 
    Returns the previous status of the terminal output.
 
 "),
 
-(E"glpk.jl",E"",E"glp_open_tee",E"glp_open_tee(filename)
+(E"GLPK",E"GLPK",E"open_tee",E"open_tee(filename)
 
    Starts copying all the terminal output to an output text file.
 
@@ -4845,125 +4845,125 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_close_tee",E"glp_close_tee()
+(E"GLPK",E"GLPK",E"close_tee",E"close_tee()
 
    Stops copying the terminal output to the output text file
-   previously open by the \"glp_open_tee\".
+   previously open by the \"open_tee\".
 
    Return 0 if successful, 1 if copying terminal output was not
    started.
 
 "),
 
-(E"glpk.jl",E"",E"glp_malloc",E"glp_malloc(size)
+(E"GLPK",E"GLPK",E"malloc",E"malloc(size)
 
    Replacement of standard C \"malloc\". Allocates uninitialized
-   memeory which must freed with \"glp_free\".
+   memeory which must freed with \"free\".
 
    Returns a pointer to the allocated memory.
 
 "),
 
-(E"glpk.jl",E"",E"glp_calloc",E"glp_calloc(n, size)
+(E"GLPK",E"GLPK",E"calloc",E"calloc(n, size)
 
    Replacement of standard C \"calloc\", but does not initialize the
    memeory. Allocates uninitialized memeory which must freed with
-   \"glp_free\".
+   \"free\".
 
    Returns a pointer to the allocated memory.
 
 "),
 
-(E"glpk.jl",E"",E"glp_free",E"glp_free(ptr)
+(E"GLPK",E"GLPK",E"free",E"free(ptr)
 
-   Deallocates a memory block previously allocated by \"glp_malloc\"
-   or \"glp_calloc\".
+   Deallocates a memory block previously allocated by \"malloc\" or
+   \"calloc\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_mem_usage",E"glp_mem_usage()
+(E"GLPK",E"GLPK",E"mem_usage",E"mem_usage()
 
    Reports some information about utilization of the memory by the
-   routines \"glp_malloc\", \"glp_calloc\", and \"glp_free\". In
-   Julia, this function has a different API then C. It returns
-   \"(count, cpeak, total, tpeak)\" rather then taking them as
-   pointers in the argument list.
+   routines \"malloc\", \"calloc\", and \"free\". In Julia, this
+   function has a different API then C. It returns \"(count, cpeak,
+   total, tpeak)\" rather then taking them as pointers in the argument
+   list.
 
 "),
 
-(E"glpk.jl",E"",E"glp_mem_limit",E"glp_mem_limit(limit)
+(E"GLPK",E"GLPK",E"mem_limit",E"mem_limit(limit)
 
    Limits the amount of memory avaliable for dynamic allocation to a
    value in megabyes given by the integer parameter \"limit\".
 
 "),
 
-(E"glpk.jl",E"",E"glp_time",E"glp_time()
+(E"GLPK",E"GLPK",E"time",E"time()
 
    Returns the current universal time (UTC), in milliseconds.
 
 "),
 
-(E"glpk.jl",E"",E"glp_difftime",E"glp_difftime(t1, t0)
+(E"GLPK",E"GLPK",E"difftime",E"difftime(t1, t0)
 
    Returns the difference between two time values \"t1\" and \"t0\",
    expressed in seconds.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_open_file",E"glp_sdf_open_file(filename)
+(E"GLPK",E"GLPK",E"sdf_open_file",E"sdf_open_file(filename)
 
    Opens a plain data file.
 
-   If successful, returns a GLPData() object, otherwise throws an
+   If successful, returns a \"GLPK.Data\" object, otherwise throws an
    error.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_read_int",E"glp_sdf_read_int(glp_data)
+(E"GLPK",E"GLPK",E"sdf_read_int",E"sdf_read_int(glp_data)
 
    Reads an integer number from the plain data file specified by the
-   \"GLPData\" parameter \"glp_data\", skipping initial whitespace.
+   \"GLPK.Data\" parameter \"glp_data\", skipping initial whitespace.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_read_num",E"glp_sdf_read_num(glp_data)
+(E"GLPK",E"GLPK",E"sdf_read_num",E"sdf_read_num(glp_data)
 
    Reads a floating point number from the plain data file specified by
-   the \"GLPData\" parameter \"glp_data\", skipping initial
+   the \"GLPK.Data\" parameter \"glp_data\", skipping initial
    whitespace.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_read_item",E"glp_sdf_read_item(glp_data)
+(E"GLPK",E"GLPK",E"sdf_read_item",E"sdf_read_item(glp_data)
 
    Reads a data item (a String) from the plain data file specified by
-   the \"GLPData\" parameter \"glp_data\", skipping initial
+   the \"GLPK.Data\" parameter \"glp_data\", skipping initial
    whitespace.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_read_text",E"glp_sdf_read_text(glp_data)
+(E"GLPK",E"GLPK",E"sdf_read_text",E"sdf_read_text(glp_data)
 
    Reads a line of text from the plain data file specified by the
-   \"GLPData\" parameter \"glp_data\", skipping initial and final
+   \"GLPK.Data\" parameter \"glp_data\", skipping initial and final
    whitespace.
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_line",E"glp_sdf_line(glp_data)
+(E"GLPK",E"GLPK",E"sdf_line",E"sdf_line(glp_data)
 
-   Returns the current line in the GLPData object \"glp_data\"
+   Returns the current line in the \"GLPK.Data\" object \"glp_data\"
 
 "),
 
-(E"glpk.jl",E"",E"glp_sdf_close_file",E"glp_sdf_close_file(glp_data)
+(E"GLPK",E"GLPK",E"sdf_close_file",E"sdf_close_file(glp_data)
 
    Closes the file associated to \"glp_data\" and frees the resources.
 
 "),
 
-(E"glpk.jl",E"",E"glp_read_cnfsat",E"glp_read_cnfsat(glp_prob, filename)
+(E"GLPK",E"GLPK",E"read_cnfsat",E"read_cnfsat(glp_prob, filename)
 
    Reads the CNF-SAT problem data in DIMACS format from a text file.
 
@@ -4971,14 +4971,14 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_check_cnfsat",E"glp_check_cnfsat(glp_prob)
+(E"GLPK",E"GLPK",E"check_cnfsat",E"check_cnfsat(glp_prob)
 
    Checks if the problem object encodes a CNF-SAT problem instance, in
    which case it returns 0, otherwise returns non-zero.
 
 "),
 
-(E"glpk.jl",E"",E"glp_write_cnfsat",E"glp_write_cnfsat(glp_prob, filename)
+(E"GLPK",E"GLPK",E"write_cnfsat",E"write_cnfsat(glp_prob, filename)
 
    Writes the CNF-SAT problem data in DIMACS format into a text file.
 
@@ -4986,21 +4986,21 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"",E"glp_minisat1",E"glp_minisat1(glp_prob)
+(E"GLPK",E"GLPK",E"minisat1",E"minisat1(glp_prob)
 
-   The routine *glp_minisat1* is a driver to MiniSat, a CNF-SAT solver
+   The routine \"minisat1\" is a driver to MiniSat, a CNF-SAT solver
    developed by Niklas Eén and Niklas Sörensson, Chalmers University
    of Technology, Sweden.
 
    Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLP_EDATA\" (problem is not CNF-SAT),
-   \"GLP_EFAIL\" (solver failure).
+   reason for failure: \"GLPK.EDATA\" (problem is not CNF-SAT),
+   \"GLPK.EFAIL\" (solver failure).
 
 "),
 
-(E"glpk.jl",E"",E"glp_intfeas1",E"glp_intfeas1(glp_prob, use_bound, obj_bound)
+(E"GLPK",E"GLPK",E"intfeas1",E"intfeas1(glp_prob, use_bound, obj_bound)
 
-   The routine glp_intfeas1 is a tentative implementation of an
+   The routine \"glp_intfeas1\" is a tentative implementation of an
    integer feasibility solver based on a CNF-SAT solver (currently
    MiniSat). \"use_bound\" is a flag: if zero, any feasible solution
    is seeked, otherwise seraches for an integer feasible solution.
@@ -5012,8 +5012,8 @@ glp_eval_tab_col(glp_prob, k)
    constraint and objective coeffient must be integer.
 
    Returns 0 in case of success, or a non-zero flag specifying the
-   reason for failure: \"GLP_EDATA\" (problem data is not valid),
-   \"GLP_ERANGE\" (integer overflow occurred), \"GLP_EFAIL\" (solver
+   reason for failure: \"GLPK.EDATA\" (problem data is not valid),
+   \"GLPK.ERANGE\" (integer overflow occurred), \"GLPK.EFAIL\" (solver
    failure).
 
 "),
