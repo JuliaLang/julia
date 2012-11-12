@@ -43,13 +43,15 @@ endif
 PREFIX ?= julia-$(JULIA_COMMIT)
 install: release
 	@$(MAKEs) -C test/unicode
-	for subdir in "sbin" "bin" "etc" "lib/julia" "share/julia" ; do \
+	@for subdir in "sbin" "bin" "etc" "lib/julia" "share/julia" ; do \
 		mkdir -p $(PREFIX)/$$subdir ; \
 	done
 	cp $(BUILD)/bin/*julia* $(PREFIX)/bin
 	cd $(PREFIX)/bin && ln -s julia-release-$(DEFAULT_REPL) julia
 	cp -R -L $(BUILD)/lib/julia/* $(PREFIX)/lib/julia
-	-cp $(BUILD)/lib/lib{Rmath,amd,arpack,cholmod,colamd,openlibm,fftw3,fftw3f,fftw3_threads,fftw3f_threads,glpk,glpk_wrapper,gmp,gmp_wrapper,grisu,history,julia-release,$(OPENBLASNAME),openlibm,pcre,random,readline,suitesparse_wrapper,tk_wrapper,umfpack,z}.$(SHLIB_EXT) $(PREFIX)/lib
+	-for suffix in "Rmath" "amd" "arpack" "cholmod" "colamd" "openlibm" "fftw3" "fftw3f" "fftw3_threads" "fftw3f_threads" "glpk" "glpk_wrapper" "gmp" "gmp_wrapper" "grisu" "history" "julia-release" "$(OPENBLASNAME)" "openlibm" "pcre" "random" "readline" "suitesparse_wrapper" "tk_wrapper" "spqr" "umfpack" "z" ; do \
+		cp $(BUILD)/lib/lib$${suffix}.$(SHLIB_EXT) $(PREFIX)/lib ; \
+	done
 # Web-REPL stuff
 	-cp $(BUILD)/lib/mod* $(PREFIX)/lib
 	-cp $(BUILD)/sbin/* $(PREFIX)/sbin
@@ -58,7 +60,9 @@ install: release
 ifeq ($(OS), WINNT)
 	-cp dist/windows/* $(PREFIX)
 ifeq ($(shell uname),MINGW32_NT-6.1)
-	-cp /mingw/bin/{libgfortran-3,libquadmath-0,libgcc_s_dw2-1,libstdc++-6,pthreadgc2}.dll $(PREFIX)/lib
+	-for dllname in "libgfortran-3" "libquadmath-0" "libgcc_s_dw2-1" "libstdc++-6,pthreadgc2" ; do \
+		cp /mingw/bin/$${dllname}.dll $(PREFIX)/lib ; \
+	done
 endif
 endif
 
@@ -88,7 +92,11 @@ clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C ui clean
 	@$(MAKE) -C ui/webserver clean
 	@$(MAKE) -C test/unicode clean
-	@rm -f julia-{release,debug}-{basic,readline,webserver}
+	@for buildtype in "release" "debug" ; do \
+		for repltype in "basic" "readline" "webserver" ; do \
+			rm -f julia-$${buildtype}-$${repltype}; \
+		done \
+	done
 	@rm -f *~ *# *.tar.gz
 	@rm -fr $(BUILD)/lib/julia
 
