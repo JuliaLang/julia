@@ -5,21 +5,18 @@
  The Julia Standard Library
 ############################
 
-:Release: |version|
-:Date: |today|
-
-*********
-Built-ins
-*********
+***********
+ Built-ins
+***********
 
 .. toctree::
    :maxdepth: 1
 
    base
 
-******
-Extras
-******
+********
+ Extras
+********
 
 .. toctree::
    :maxdepth: 1
@@ -34,9 +31,9 @@ Extras
    argparse
    gzip
 
-****************
-Math & Numerical
-****************
+******************
+ Math & Numerical
+******************
 
 .. toctree::
    :maxdepth: 1
@@ -44,9 +41,9 @@ Math & Numerical
    blas
    glpk
 
-************
-File Formats
-************
+**************
+ File Formats
+**************
 
 .. toctree::
    :maxdepth: 1

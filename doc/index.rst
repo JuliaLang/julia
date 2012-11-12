@@ -4,14 +4,8 @@
 %%%%%%%%%%%%%%%%%%%%%
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    manual/index
    stdlib/index
-
-Indices and tables
-==================
-
-* :ref:`genindex`
-* :ref:`search`
 
