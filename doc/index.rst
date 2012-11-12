@@ -1,19 +1,14 @@
+
 %%%%%%%%%%%%%%%%%%%%%
  Julia Documentation
 %%%%%%%%%%%%%%%%%%%%%
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    manual/index
    stdlib/index
    packages/packagelist
-
-Index and search
-================
-
-* :ref:`genindex`
-* :ref:`search`
 
 Translations
 ============
