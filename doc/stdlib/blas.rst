@@ -1,4 +1,4 @@
-:mod:`blas.jl` --- Basic Linear Algebra Subroutines
+:mod:`Blas` --- Basic Linear Algebra Subroutines
 ===================================================
 
 .. module:: Blas
@@ -6,7 +6,7 @@
 
 This module provides wrappers for some of the BLAS functions for
 linear algebra.  Those BLAS functions that overwrite one of the input
-arrays have names ending in '!'.
+arrays have names ending in ``'!'``.
 
 Usually a function has 4 methods defined, one each for ``Float64``,
 ``Float32``, ``Complex128`` and ``Complex64`` arrays.

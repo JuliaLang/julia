@@ -1,13 +1,15 @@
-:mod:`argparse.jl` --- Module for command-line argument parsing
-===============================================================
+:mod:`ArgParse` --- Module for command-line argument parsing
+============================================================
 
 .. module:: ArgParse
    :synopsis: Command line argument parser
 
+.. note:: located in ``argparse.jl``
+
 This module allows the creation of user-friendly command-line interfaces to Julia programs:
 the program defines which arguments, options and sub-commands it accepts, and the ``ArgParse`` module
-does the actual parsing, issues errors when the input is invalid, and automatically generates help and
-usage messages.
+does the actual parsing, issues errors when the input is invalid, and automatically generates help
+and usage messages.
 
 Users familiar with Python's argparse module will find many similarities, but some important differences
 as well.
@@ -317,7 +319,7 @@ methods to populate it:
                 required = true
             end)
 
-    Note that the ``OptionsMod`` module must be imported in order to use this function.
+    Note that the :mod:`OptionsMod` module must be imported in order to use this function.
 
 .. _argparse-argument-table-entries:
 

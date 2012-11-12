@@ -1,7 +1,7 @@
-:mod:`fitsio.jl` --- FITS File I/O
-==================================
+fitsio.jl --- FITS File I/O
+===========================
 
-.. module:: fitsio.jl
+.. .. module:: fitsio.jl
    :synopsis: Read and write FITS files.
 
 A wrapper for the CFITSIO_ library. 
@@ -41,11 +41,11 @@ Header Keyword Routines
 
 .. function:: fits_read_record(f::FITSFile, keynum::Int) -> String
 
-   Return the nth header record in the CHU. The first keyword in the header is at keynum = 1.
+   Return the nth header record in the CHU. The first keyword in the header is at ``keynum = 1``.
 
 .. function:: fits_read_keyn(f::FITSFile, keynum::Int) -> (name, value, comment)
 
-   Return the nth header record in the CHU. The first keyword in the header is at keynum = 1.
+   Return the nth header record in the CHU. The first keyword in the header is at ``keynum = 1``.
 
 .. function:: fits_write_key(f::FITSFile, keyname::String, value, comment::String)
 
@@ -61,7 +61,7 @@ Header Keyword Routines
 
 .. function:: fits_delete_key(f::FITSFile, keyname::String)
 
-   Delete the keyword named `keyname`.
+   Delete the keyword named ``keyname``.
 
 Primary Array Routines
 ----------------------

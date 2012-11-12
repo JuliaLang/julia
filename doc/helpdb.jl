@@ -216,21 +216,21 @@
 
 "),
 
-(E"Getting Around",E"",E"exit",E"exit([code])
+(E"Getting Around",E"Base",E"exit",E"exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
    indicating that the processes completed successfully.
 
 "),
 
-(E"Getting Around",E"",E"whos",E"whos([Module][, pattern::Regex])
+(E"Getting Around",E"Base",E"whos",E"whos([Module][, pattern::Regex])
 
    Print information about global variables in a module, optionally
    restricted to those matching \"pattern\".
 
 "),
 
-(E"Getting Around",E"",E"edit",E"edit(\"file\"[, line])
+(E"Getting Around",E"Base",E"edit",E"edit(\"file\"[, line])
 
    Edit a file optionally providing a line number to edit at. Returns
    to the julia prompt when you quit the editor. If the file name ends
@@ -238,7 +238,7 @@
 
 "),
 
-(E"Getting Around",E"",E"edit",E"edit(function[, types])
+(E"Getting Around",E"Base",E"edit",E"edit(function[, types])
 
    Edit the definition of a function, optionally specifying a tuple of
    types to indicate which method to edit. When the editor exits, the
@@ -246,50 +246,50 @@
 
 "),
 
-(E"Getting Around",E"",E"load",E"load(\"file\")
+(E"Getting Around",E"Base",E"load",E"load(\"file\")
 
    Evaluate the contents of a source file
 
 "),
 
-(E"Getting Around",E"",E"help",E"help(\"name\" or object)
+(E"Getting Around",E"Base",E"help",E"help(\"name\" or object)
 
    Get help for a function
 
 "),
 
-(E"Getting Around",E"",E"apropos",E"apropos(\"string\")
+(E"Getting Around",E"Base",E"apropos",E"apropos(\"string\")
 
    Search help for a substring
 
 "),
 
-(E"Getting Around",E"",E"which",E"which(f, args...)
+(E"Getting Around",E"Base",E"which",E"which(f, args...)
 
    Show which method of \"f\" will be called for the given arguments
 
 "),
 
-(E"Getting Around",E"",E"methods",E"methods(f)
+(E"Getting Around",E"Base",E"methods",E"methods(f)
 
    Show all methods of \"f\" with their argument types
 
 "),
 
-(E"All Objects",E"",E"is",E"is(x, y)
+(E"All Objects",E"Base",E"is",E"is(x, y)
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
    no program could distinguish them.
 
 "),
 
-(E"All Objects",E"",E"isa",E"isa(x, type)
+(E"All Objects",E"Base",E"isa",E"isa(x, type)
 
    Determine whether \"x\" is of the given type.
 
 "),
 
-(E"All Objects",E"",E"isequal",E"isequal(x, y)
+(E"All Objects",E"Base",E"isequal",E"isequal(x, y)
 
    True if and only if \"x\" and \"y\" have the same contents. Loosely
    speaking, this means \"x\" and \"y\" would look the same when
@@ -297,7 +297,7 @@
 
 "),
 
-(E"All Objects",E"",E"isless",E"isless(x, y)
+(E"All Objects",E"Base",E"isless",E"isless(x, y)
 
    Test whether \"x\" is less than \"y\". Provides a total order
    consistent with \"isequal\". Values that are normally unordered,
@@ -307,40 +307,40 @@
 
 "),
 
-(E"All Objects",E"",E"typeof",E"typeof(x)
+(E"All Objects",E"Base",E"typeof",E"typeof(x)
 
    Get the concrete type of \"x\".
 
 "),
 
-(E"All Objects",E"",E"tuple",E"tuple(xs...)
+(E"All Objects",E"Base",E"tuple",E"tuple(xs...)
 
    Construct a tuple of the given objects.
 
 "),
 
-(E"All Objects",E"",E"ntuple",E"ntuple(n, f::Function)
+(E"All Objects",E"Base",E"ntuple",E"ntuple(n, f::Function)
 
    Create a tuple of length \"n\", computing each element as \"f(i)\",
    where \"i\" is the index of the element.
 
 "),
 
-(E"All Objects",E"",E"object_id",E"object_id(x)
+(E"All Objects",E"Base",E"object_id",E"object_id(x)
 
    Get a unique integer id for \"x\". \"object_id(x)==object_id(y)\"
    if and only if \"is(x,y)\".
 
 "),
 
-(E"All Objects",E"",E"hash",E"hash(x)
+(E"All Objects",E"Base",E"hash",E"hash(x)
 
    Compute an integer hash code such that \"isequal(x,y)\" implies
    \"hash(x)==hash(y)\".
 
 "),
 
-(E"All Objects",E"",E"finalizer",E"finalizer(x, function)
+(E"All Objects",E"Base",E"finalizer",E"finalizer(x, function)
 
    Register a function to be called on \"x\" when there are no
    program-accessible references to \"x\". The behavior of this
@@ -348,7 +348,7 @@
 
 "),
 
-(E"All Objects",E"",E"copy",E"copy(x)
+(E"All Objects",E"Base",E"copy",E"copy(x)
 
    Create a shallow copy of \"x\": the outer structure is copied, but
    not all internal values. For example, copying an array produces a
@@ -356,7 +356,7 @@
 
 "),
 
-(E"All Objects",E"",E"deepcopy",E"deepcopy(x)
+(E"All Objects",E"Base",E"deepcopy",E"deepcopy(x)
 
    Create a deep copy of \"x\": everything is copied recursively,
    resulting in a fully independent object. For example, deep-copying
@@ -379,20 +379,20 @@
 
 "),
 
-(E"All Objects",E"",E"convert",E"convert(type, x)
+(E"All Objects",E"Base",E"convert",E"convert(type, x)
 
    Try to convert \"x\" to the given type.
 
 "),
 
-(E"All Objects",E"",E"promote",E"promote(xs...)
+(E"All Objects",E"Base",E"promote",E"promote(xs...)
 
    Convert all arguments to their common promotion type (if any), and
    return them all (as a tuple).
 
 "),
 
-(E"Types",E"",E"subtype",E"subtype(type1, type2)
+(E"Types",E"Base",E"subtype",E"subtype(type1, type2)
 
    True if and only if all values of \"type1\" are also of \"type2\".
    Can also be written using the \"<:\" infix operator as \"type1 <:
@@ -400,40 +400,40 @@
 
 "),
 
-(E"Types",E"",E"typemin",E"typemin(type)
+(E"Types",E"Base",E"typemin",E"typemin(type)
 
    The lowest value representable by the given (real) numeric type.
 
 "),
 
-(E"Types",E"",E"typemax",E"typemax(type)
+(E"Types",E"Base",E"typemax",E"typemax(type)
 
    The highest value representable by the given (real) numeric type.
 
 "),
 
-(E"Types",E"",E"realmin",E"realmin(type)
+(E"Types",E"Base",E"realmin",E"realmin(type)
 
    The smallest in absolute value non-denormal value representable by
    the given floating-point type
 
 "),
 
-(E"Types",E"",E"realmax",E"realmax(type)
+(E"Types",E"Base",E"realmax",E"realmax(type)
 
    The highest finite value representable by the given floating-point
    type
 
 "),
 
-(E"Types",E"",E"sizeof",E"sizeof(type)
+(E"Types",E"Base",E"sizeof",E"sizeof(type)
 
    Size, in bytes, of the canonical binary representation of the given
    type, if any.
 
 "),
 
-(E"Types",E"",E"eps",E"eps([type])
+(E"Types",E"Base",E"eps",E"eps([type])
 
    The distance between 1.0 and the next larger representable
    floating-point value of \"type\". The only types that are sensible
@@ -442,14 +442,14 @@
 
 "),
 
-(E"Types",E"",E"eps",E"eps(x)
+(E"Types",E"Base",E"eps",E"eps(x)
 
    The distance between \"x\" and the next larger representable
    floating-point value of the same type as \"x\".
 
 "),
 
-(E"Types",E"",E"promote_type",E"promote_type(type1, type2)
+(E"Types",E"Base",E"promote_type",E"promote_type(type1, type2)
 
    Determine a type big enough to hold values of each argument type
    without loss, whenever possible. In some cases, where no type
@@ -460,21 +460,21 @@
 
 "),
 
-(E"Generic Functions",E"",E"method_exists",E"method_exists(f, tuple)
+(E"Generic Functions",E"Base",E"method_exists",E"method_exists(f, tuple)
 
    Determine whether the given generic function has a method matching
    the given tuple of argument types.
 
 "),
 
-(E"Generic Functions",E"",E"applicable",E"applicable(f, args...)
+(E"Generic Functions",E"Base",E"applicable",E"applicable(f, args...)
 
    Determine whether the given generic function has a method
    applicable to the given arguments.
 
 "),
 
-(E"Generic Functions",E"",E"invoke",E"invoke(f, (types...), args...)
+(E"Generic Functions",E"Base",E"invoke",E"invoke(f, (types...), args...)
 
    Invoke a method for the given generic function matching the
    specified types (as a tuple), on the specified arguments. The
@@ -486,32 +486,32 @@
 
 "),
 
-(E"Iteration",E"",E"start",E"start(iter)
+(E"Iteration",E"Base",E"start",E"start(iter)
 
    Get initial iteration state for an iterable object
 
 "),
 
-(E"Iteration",E"",E"done",E"done(iter, state)
+(E"Iteration",E"Base",E"done",E"done(iter, state)
 
    Test whether we are done iterating
 
 "),
 
-(E"Iteration",E"",E"next",E"next(iter, state) -> item, state
+(E"Iteration",E"Base",E"next",E"next(iter, state) -> item, state
 
    For a given iterable object and iteration state, return the current
    item and the next iteration state
 
 "),
 
-(E"General Collections",E"",E"isempty",E"isempty(collection)
+(E"General Collections",E"Base",E"isempty",E"isempty(collection)
 
    Determine whether a collection is empty (has no elements).
 
 "),
 
-(E"General Collections",E"",E"length",E"length(collection)
+(E"General Collections",E"Base",E"length",E"length(collection)
 
    For ordered, indexable collections, the maximum index \"i\" for
    which \"ref(collection, i)\" is valid. For unordered collections,
@@ -519,13 +519,13 @@
 
 "),
 
-(E"Iterable Collections",E"",E"contains",E"contains(itr, x)
+(E"Iterable Collections",E"Base",E"contains",E"contains(itr, x)
 
    Determine whether a collection contains the given value, \"x\".
 
 "),
 
-(E"Iterable Collections",E"",E"reduce",E"reduce(op, v0, itr)
+(E"Iterable Collections",E"Base",E"reduce",E"reduce(op, v0, itr)
 
    Reduce the given collection with the given operator, i.e.
    accumulate \"v = op(v,elt)\" for each element, where \"v\" starts
@@ -536,77 +536,77 @@
 
 "),
 
-(E"Iterable Collections",E"",E"max",E"max(itr)
+(E"Iterable Collections",E"Base",E"max",E"max(itr)
 
    Determine maximum element in a collection
 
 "),
 
-(E"Iterable Collections",E"",E"min",E"min(itr)
+(E"Iterable Collections",E"Base",E"min",E"min(itr)
 
    Determine minimum element in a collection
 
 "),
 
-(E"Iterable Collections",E"",E"sum",E"sum(itr)
+(E"Iterable Collections",E"Base",E"sum",E"sum(itr)
 
    Sum elements of a collection
 
 "),
 
-(E"Iterable Collections",E"",E"prod",E"prod(itr)
+(E"Iterable Collections",E"Base",E"prod",E"prod(itr)
 
    Multiply elements of a collection
 
 "),
 
-(E"Iterable Collections",E"",E"any",E"any(itr)
+(E"Iterable Collections",E"Base",E"any",E"any(itr)
 
    Test whether any elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"",E"all",E"all(itr)
+(E"Iterable Collections",E"Base",E"all",E"all(itr)
 
    Test whether all elements of a boolean collection are true
 
 "),
 
-(E"Iterable Collections",E"",E"count",E"count(itr)
+(E"Iterable Collections",E"Base",E"count",E"count(itr)
 
    Count the number of boolean elements in \"itr\" which are \"true\"
    rather than \"false\".
 
 "),
 
-(E"Iterable Collections",E"",E"countp",E"countp(p, itr)
+(E"Iterable Collections",E"Base",E"countp",E"countp(p, itr)
 
    Count the number of elements in \"itr\" for which predicate \"p\"
    is true.
 
 "),
 
-(E"Iterable Collections",E"",E"anyp",E"anyp(p, itr)
+(E"Iterable Collections",E"Base",E"anyp",E"anyp(p, itr)
 
    Determine whether any element of \"itr\" satisfies the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"",E"allp",E"allp(p, itr)
+(E"Iterable Collections",E"Base",E"allp",E"allp(p, itr)
 
    Determine whether all elements of \"itr\" satisfy the given
    predicate.
 
 "),
 
-(E"Iterable Collections",E"",E"map",E"map(f, c)
+(E"Iterable Collections",E"Base",E"map",E"map(f, c)
 
    Transform collection \"c\" by applying \"f\" to each element
 
 "),
 
-(E"Indexable Collections",E"",E"collection[key...]",E"ref(collection, key...)
+(E"Indexable Collections",E"Base",E"collection[key...]",E"ref(collection, key...)
 collection[key...]()
 
    Retrieve the value(s) stored at the given key or index within a
@@ -622,241 +622,241 @@ collection[key...] = value
 
 "),
 
-(E"Associative Collections",E"",E"Dict{K,V}",E"Dict{K,V}(n)
+(E"Associative Collections",E"Base",E"Dict{K,V}",E"Dict{K,V}(n)
 
    Construct a hashtable with keys of type K and values of type V and
    intial size of n
 
 "),
 
-(E"Associative Collections",E"",E"has",E"has(collection, key)
+(E"Associative Collections",E"Base",E"has",E"has(collection, key)
 
    Determine whether a collection has a mapping for a given key.
 
 "),
 
-(E"Associative Collections",E"",E"get",E"get(collection, key, default)
+(E"Associative Collections",E"Base",E"get",E"get(collection, key, default)
 
    Return the value stored for the given key, or the given default
    value if no mapping for the key is present.
 
 "),
 
-(E"Associative Collections",E"",E"del",E"del(collection, key)
+(E"Associative Collections",E"Base",E"del",E"del(collection, key)
 
    Delete the mapping for the given key in a collection.
 
 "),
 
-(E"Associative Collections",E"",E"del_all",E"del_all(collection)
+(E"Associative Collections",E"Base",E"del_all",E"del_all(collection)
 
    Delete all keys from a collection.
 
 "),
 
-(E"Associative Collections",E"",E"keys",E"keys(collection)
+(E"Associative Collections",E"Base",E"keys",E"keys(collection)
 
    Return an array of all keys in a collection.
 
 "),
 
-(E"Associative Collections",E"",E"values",E"values(collection)
+(E"Associative Collections",E"Base",E"values",E"values(collection)
 
    Return an array of all values in a collection.
 
 "),
 
-(E"Associative Collections",E"",E"pairs",E"pairs(collection)
+(E"Associative Collections",E"Base",E"pairs",E"pairs(collection)
 
    Return an array of all (key, value) tuples in a collection.
 
 "),
 
-(E"Associative Collections",E"",E"merge",E"merge(collection, others...)
+(E"Associative Collections",E"Base",E"merge",E"merge(collection, others...)
 
    Construct a merged collection from the given collections.
 
 "),
 
-(E"Associative Collections",E"",E"merge!",E"merge!(collection, others...)
+(E"Associative Collections",E"Base",E"merge!",E"merge!(collection, others...)
 
    Update collection with pairs from the other collections
 
 "),
 
-(E"Associative Collections",E"",E"filter",E"filter(function, collection)
+(E"Associative Collections",E"Base",E"filter",E"filter(function, collection)
 
    Return a copy of collection, removing (key, value) pairs for which
    function is false.
 
 "),
 
-(E"Associative Collections",E"",E"filter!",E"filter!(function, collection)
+(E"Associative Collections",E"Base",E"filter!",E"filter!(function, collection)
 
    Update collection, removing (key, value) pairs for which function
    is false.
 
 "),
 
-(E"Set-Like Collections",E"",E"add",E"add(collection, key)
+(E"Set-Like Collections",E"Base",E"add",E"add(collection, key)
 
    Add an element to a set-like collection.
 
 "),
 
-(E"Set-Like Collections",E"",E"Set",E"Set(x...)
+(E"Set-Like Collections",E"Base",E"Set",E"Set(x...)
 
    Construct a \"Set\" with the given elements. Should be used instead
    of \"IntSet\" for sparse integer sets.
 
 "),
 
-(E"Set-Like Collections",E"",E"IntSet",E"IntSet(i...)
+(E"Set-Like Collections",E"Base",E"IntSet",E"IntSet(i...)
 
    Construct an \"IntSet\" of the given integers. Implemented as a bit
    string, and therefore good for dense integer sets.
 
 "),
 
-(E"Set-Like Collections",E"",E"choose",E"choose(s)
+(E"Set-Like Collections",E"Base",E"choose",E"choose(s)
 
    Pick an element of a set
 
 "),
 
-(E"Set-Like Collections",E"",E"union",E"union(s1, s2)
+(E"Set-Like Collections",E"Base",E"union",E"union(s1, s2)
 
    Construct the union of two sets
 
 "),
 
-(E"Dequeues",E"",E"push",E"push(collection, item)
+(E"Dequeues",E"Base",E"push",E"push(collection, item)
 
    Insert an item at the end of a collection.
 
 "),
 
-(E"Dequeues",E"",E"pop",E"pop(collection)
+(E"Dequeues",E"Base",E"pop",E"pop(collection)
 
    Remove the last item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"",E"enqueue",E"enqueue(collection, item)
+(E"Dequeues",E"Base",E"enqueue",E"enqueue(collection, item)
 
    Insert an item at the beginning of a collection. Also called
    \"unshift\".
 
 "),
 
-(E"Dequeues",E"",E"shift",E"shift(collection)
+(E"Dequeues",E"Base",E"shift",E"shift(collection)
 
    Remove the first item in a collection and return it.
 
 "),
 
-(E"Dequeues",E"",E"insert",E"insert(collection, index, item)
+(E"Dequeues",E"Base",E"insert",E"insert(collection, index, item)
 
    Insert an item at the given index.
 
 "),
 
-(E"Dequeues",E"",E"del",E"del(collection, index)
+(E"Dequeues",E"Base",E"del",E"del(collection, index)
 
    Remove the item at the given index.
 
 "),
 
-(E"Dequeues",E"",E"grow",E"grow(collection, n)
+(E"Dequeues",E"Base",E"grow",E"grow(collection, n)
 
    Add uninitialized space for \"n\" elements at the end of a
    collection.
 
 "),
 
-(E"Dequeues",E"",E"append!",E"append!(collection, items)
+(E"Dequeues",E"Base",E"append!",E"append!(collection, items)
 
    Add the elements of \"items\" to the end of a collection.
 
 "),
 
-(E"Strings",E"",E"strlen",E"strlen(s)
+(E"Strings",E"Base",E"strlen",E"strlen(s)
 
    The number of characters in string \"s\".
 
 "),
 
-(E"Strings",E"",E"length",E"length(s)
+(E"Strings",E"Base",E"length",E"length(s)
 
    The last valid index for string \"s\". Indexes are byte offsets and
    not character numbers.
 
 "),
 
-(E"Strings",E"",E"chars",E"chars(string)
+(E"Strings",E"Base",E"chars",E"chars(string)
 
    Return an array of the characters in \"string\".
 
 "),
 
-(E"Strings",E"",E"strcat",E"strcat(strs...)
+(E"Strings",E"Base",E"strcat",E"strcat(strs...)
 
    Concatenate strings.
 
 "),
 
-(E"Strings",E"",E"string",E"string(char...)
+(E"Strings",E"Base",E"string",E"string(char...)
 
    Create a string with the given characters.
 
 "),
 
-(E"Strings",E"",E"string",E"string(x)
+(E"Strings",E"Base",E"string",E"string(x)
 
    Create a string from any value using the \"show\" function.
 
 "),
 
-(E"Strings",E"",E"bytestring",E"bytestring(::Ptr{Uint8})
+(E"Strings",E"Base",E"bytestring",E"bytestring(::Ptr{Uint8})
 
    Create a string from the address of a C (0-terminated) string.
 
 "),
 
-(E"Strings",E"",E"bytestring",E"bytestring(s)
+(E"Strings",E"Base",E"bytestring",E"bytestring(s)
 
    Convert a string to a contiguous byte array representation
    appropriate for passing it to C functions.
 
 "),
 
-(E"Strings",E"",E"ascii",E"ascii(::Array{Uint8, 1})
+(E"Strings",E"Base",E"ascii",E"ascii(::Array{Uint8, 1})
 
    Create an ASCII string from a byte array.
 
 "),
 
-(E"Strings",E"",E"ascii",E"ascii(s)
+(E"Strings",E"Base",E"ascii",E"ascii(s)
 
    Convert a string to a contiguous ASCII string (all characters must
    be valid ASCII characters).
 
 "),
 
-(E"Strings",E"",E"utf8",E"utf8(::Array{Uint8, 1})
+(E"Strings",E"Base",E"utf8",E"utf8(::Array{Uint8, 1})
 
    Create a UTF-8 string from a byte array.
 
 "),
 
-(E"Strings",E"",E"utf8",E"utf8(s)
+(E"Strings",E"Base",E"utf8",E"utf8(s)
 
    Convert a string to a contiguous UTF-8 string (all characters must
    be valid UTF-8 characters).
 
 "),
 
-(E"Strings",E"",E"strchr",E"strchr(string, char[, i])
+(E"Strings",E"Base",E"strchr",E"strchr(string, char[, i])
 
    Return the index of \"char\" in \"string\", giving 0 if not found.
    The second argument may also be a vector or a set of characters.
@@ -864,21 +864,21 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"",E"lpad",E"lpad(string, n, p)
+(E"Strings",E"Base",E"lpad",E"lpad(string, n, p)
 
    Make a string at least \"n\" characters long by padding on the left
    with copies of \"p\".
 
 "),
 
-(E"Strings",E"",E"rpad",E"rpad(string, n, p)
+(E"Strings",E"Base",E"rpad",E"rpad(string, n, p)
 
    Make a string at least \"n\" characters long by padding on the
    right with copies of \"p\".
 
 "),
 
-(E"Strings",E"",E"search",E"search(string, chars[, start])
+(E"Strings",E"Base",E"search",E"search(string, chars[, start])
 
    Search for the given characters within the given string. The second
    argument may be a single character, a vector or a set of
@@ -893,7 +893,7 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"",E"split",E"split(string, chars[, limit][, include_empty])
+(E"Strings",E"Base",E"split",E"split(string, chars[, limit][, include_empty])
 
    Return an array of strings by splitting the given string on
    occurrences of the given character delimiters, which may be
@@ -904,105 +904,105 @@ collection[key...] = value
 
 "),
 
-(E"Strings",E"",E"strip",E"strip(string)
+(E"Strings",E"Base",E"strip",E"strip(string)
 
    Return \"string\" with any leading and trailing whitespace removed.
 
 "),
 
-(E"Strings",E"",E"lstrip",E"lstrip(string)
+(E"Strings",E"Base",E"lstrip",E"lstrip(string)
 
    Return \"string\" with any leading whitespace removed.
 
 "),
 
-(E"Strings",E"",E"rstrip",E"rstrip(string)
+(E"Strings",E"Base",E"rstrip",E"rstrip(string)
 
    Return \"string\" with any trailing whitespace removed.
 
 "),
 
-(E"Strings",E"",E"begins_with",E"begins_with(string, prefix)
+(E"Strings",E"Base",E"begins_with",E"begins_with(string, prefix)
 
    Returns \"true\" if \"string\" starts with \"prefix\".
 
 "),
 
-(E"Strings",E"",E"ends_with",E"ends_with(string, suffix)
+(E"Strings",E"Base",E"ends_with",E"ends_with(string, suffix)
 
    Returns \"true\" if \"string\" ends with \"suffix\".
 
 "),
 
-(E"Strings",E"",E"uppercase",E"uppercase(string)
+(E"Strings",E"Base",E"uppercase",E"uppercase(string)
 
    Returns \"string\" with all characters converted to uppercase.
 
 "),
 
-(E"Strings",E"",E"lowercase",E"lowercase(string)
+(E"Strings",E"Base",E"lowercase",E"lowercase(string)
 
    Returns \"string\" with all characters converted to lowercase.
 
 "),
 
-(E"Strings",E"",E"join",E"join(strings, delim)
+(E"Strings",E"Base",E"join",E"join(strings, delim)
 
    Join an array of strings into a single string, inserting the given
    delimiter between adjacent strings.
 
 "),
 
-(E"Strings",E"",E"chop",E"chop(string)
+(E"Strings",E"Base",E"chop",E"chop(string)
 
    Remove the last character from a string
 
 "),
 
-(E"Strings",E"",E"chomp",E"chomp(string)
+(E"Strings",E"Base",E"chomp",E"chomp(string)
 
    Remove a trailing newline from a string
 
 "),
 
-(E"Strings",E"",E"ind2chr",E"ind2chr(string, i)
+(E"Strings",E"Base",E"ind2chr",E"ind2chr(string, i)
 
    Convert a byte index to a character index
 
 "),
 
-(E"Strings",E"",E"chr2ind",E"chr2ind(string, i)
+(E"Strings",E"Base",E"chr2ind",E"chr2ind(string, i)
 
    Convert a character index to a byte index
 
 "),
 
-(E"Strings",E"",E"randstring",E"randstring(len)
+(E"Strings",E"Base",E"randstring",E"randstring(len)
 
    Create a random ASCII string of length \"len\", consisting of
    upper- and lower-case letters and the digits 0-9
 
 "),
 
-(E"I/O",E"",E"stdout_stream",E"stdout_stream
+(E"I/O",E"Base",E"stdout_stream",E"stdout_stream
 
    Global variable referring to the standard out stream.
 
 "),
 
-(E"I/O",E"",E"stderr_stream",E"stderr_stream
+(E"I/O",E"Base",E"stderr_stream",E"stderr_stream
 
    Global variable referring to the standard error stream.
 
 "),
 
-(E"I/O",E"",E"stdin_stream",E"stdin_stream
+(E"I/O",E"Base",E"stdin_stream",E"stdin_stream
 
    Global variable referring to the standard input stream.
 
 "),
 
-(E"I/O",E"",E"open",E"open(file_name[, read, write, create, truncate, append])
+(E"I/O",E"Base",E"open",E"open(file_name[, read, write, create, truncate, append])
 
    Open a file in a mode specified by five boolean arguments. The
    default is to open files for reading only. Returns a stream for
@@ -1010,7 +1010,7 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"",E"open",E"open(file_name[, mode])
+(E"I/O",E"Base",E"open",E"open(file_name[, mode])
 
    Alternate syntax for open, where a string-based mode specifier is
    used instead of the five booleans. The values of \"mode\"
@@ -1033,14 +1033,14 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"",E"memio",E"memio([size])
+(E"I/O",E"Base",E"memio",E"memio([size])
 
    Create an in-memory I/O stream, optionally specifying how much
    initial space is needed.
 
 "),
 
-(E"I/O",E"",E"fdio",E"fdio(descriptor[, own])
+(E"I/O",E"Base",E"fdio",E"fdio(descriptor[, own])
 
    Create an \"IOStream\" object from an integer file descriptor. If
    \"own\" is true, closing this object will close the underlying
@@ -1049,33 +1049,33 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"",E"flush",E"flush(stream)
+(E"I/O",E"Base",E"flush",E"flush(stream)
 
    Commit all currently buffered writes to the given stream.
 
 "),
 
-(E"I/O",E"",E"close",E"close(stream)
+(E"I/O",E"Base",E"close",E"close(stream)
 
    Close an I/O stream. Performs a \"flush\" first.
 
 "),
 
-(E"I/O",E"",E"write",E"write(stream, x)
+(E"I/O",E"Base",E"write",E"write(stream, x)
 
    Write the canonical binary representation of a value to the given
    stream.
 
 "),
 
-(E"I/O",E"",E"read",E"read(stream, type)
+(E"I/O",E"Base",E"read",E"read(stream, type)
 
    Read a value of the given type from a stream, in canonical binary
    representation.
 
 "),
 
-(E"I/O",E"",E"read",E"read(stream, type, dims)
+(E"I/O",E"Base",E"read",E"read(stream, type, dims)
 
    Read a series of values of the given type from a stream, in
    canonical binary representation. \"dims\" is either a tuple or a
@@ -1084,31 +1084,31 @@ collection[key...] = value
 
 "),
 
-(E"I/O",E"",E"position",E"position(s)
+(E"I/O",E"Base",E"position",E"position(s)
 
    Get the current position of a stream.
 
 "),
 
-(E"I/O",E"",E"seek",E"seek(s, pos)
+(E"I/O",E"Base",E"seek",E"seek(s, pos)
 
    Seek a stream to the given position.
 
 "),
 
-(E"I/O",E"",E"seek_end",E"seek_end(s)
+(E"I/O",E"Base",E"seek_end",E"seek_end(s)
 
    Seek a stream to the end.
 
 "),
 
-(E"I/O",E"",E"skip",E"skip(s, offset)
+(E"I/O",E"Base",E"skip",E"skip(s, offset)
 
    Seek a stream relative to the current position.
 
 "),
 
-(E"Text I/O",E"",E"show",E"show(x)
+(E"Text I/O",E"Base",E"show",E"show(x)
 
    Write an informative text representation of a value to the current
    output stream. New types should overload \"show(io, x)\" where the
@@ -1116,7 +1116,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"",E"print",E"print(x)
+(E"Text I/O",E"Base",E"print",E"print(x)
 
    Write (to the default output stream) a canonical (un-decorated)
    text representation of a value if there is one, otherwise call
@@ -1124,57 +1124,57 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"",E"println",E"println(x)
+(E"Text I/O",E"Base",E"println",E"println(x)
 
    Print (using \"print\") \"x\" followed by a newline
 
 "),
 
-(E"Text I/O",E"",E"showall",E"showall(x)
+(E"Text I/O",E"Base",E"showall",E"showall(x)
 
    Show x, printing all elements of arrays
 
 "),
 
-(E"Text I/O",E"",E"dump",E"dump(x)
+(E"Text I/O",E"Base",E"dump",E"dump(x)
 
    Write a thorough text representation of a value to the current
    output stream.
 
 "),
 
-(E"Text I/O",E"",E"readall",E"readall(stream)
+(E"Text I/O",E"Base",E"readall",E"readall(stream)
 
    Read the entire contents of an I/O stream as a string.
 
 "),
 
-(E"Text I/O",E"",E"readline",E"readline(stream)
+(E"Text I/O",E"Base",E"readline",E"readline(stream)
 
    Read a single line of text, including a trailing newline character
    (if one is reached before the end of the input).
 
 "),
 
-(E"Text I/O",E"",E"readuntil",E"readuntil(stream, delim)
+(E"Text I/O",E"Base",E"readuntil",E"readuntil(stream, delim)
 
    Read a string, up to and including the given delimiter byte.
 
 "),
 
-(E"Text I/O",E"",E"readlines",E"readlines(stream)
+(E"Text I/O",E"Base",E"readlines",E"readlines(stream)
 
    Read all lines as an array.
 
 "),
 
-(E"Text I/O",E"",E"EachLine",E"EachLine(stream)
+(E"Text I/O",E"Base",E"EachLine",E"EachLine(stream)
 
    Create an iterable object that will yield each line from a stream.
 
 "),
 
-(E"Text I/O",E"",E"dlmread",E"dlmread(filename, delim::Char)
+(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char)
 
    Read a matrix from a text file where each line gives one row, with
    elements separated by the given delimeter. If all data is numeric,
@@ -1183,7 +1183,7 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"",E"dlmread",E"dlmread(filename, delim::Char, T::Type)
+(E"Text I/O",E"Base",E"dlmread",E"dlmread(filename, delim::Char, T::Type)
 
    Read a matrix from a text file with a given element type. If \"T\"
    is a numeric type, the result is an array of that type, with any
@@ -1193,26 +1193,26 @@ collection[key...] = value
 
 "),
 
-(E"Text I/O",E"",E"dlmwrite",E"dlmwrite(filename, array, delim::Char)
+(E"Text I/O",E"Base",E"dlmwrite",E"dlmwrite(filename, array, delim::Char)
 
    Write an array to a text file using the given delimeter (defaults
    to comma).
 
 "),
 
-(E"Text I/O",E"",E"csvread",E"csvread(filename[, T::Type])
+(E"Text I/O",E"Base",E"csvread",E"csvread(filename[, T::Type])
 
    Equivalent to \"dlmread\" with \"delim\" set to comma.
 
 "),
 
-(E"Text I/O",E"",E"csvwrite",E"csvwrite(filename, array)
+(E"Text I/O",E"Base",E"csvwrite",E"csvwrite(filename, array)
 
    Equivalent to \"dlmwrite\" with \"delim\" set to comma.
 
 "),
 
-(E"Memory-mapped I/O",E"",E"mmap_array",E"mmap_array(type, dims, stream[, offset])
+(E"Memory-mapped I/O",E"Base",E"mmap_array",E"mmap_array(type, dims, stream[, offset])
 
    Create an array whose values are linked to a file, using memory-
    mapping. This provides a convenient way of working with data too
@@ -1235,7 +1235,7 @@ collection[key...] = value
 
 "),
 
-(E"Memory-mapped I/O",E"",E"msync",E"msync(array)
+(E"Memory-mapped I/O",E"Base",E"msync",E"msync(array)
 
    Forces synchronization between the in-memory version of a memory-
    mapped array and the on-disk version. You may not need to call this
@@ -1246,13 +1246,13 @@ collection[key...] = value
 
 "),
 
-(E"Memory-mapped I/O",E"",E"mmap",E"mmap(len, prot, flags, fd, offset)
+(E"Memory-mapped I/O",E"Base",E"mmap",E"mmap(len, prot, flags, fd, offset)
 
    Low-level interface to the mmap system call. See the man page.
 
 "),
 
-(E"Memory-mapped I/O",E"",E"munmap",E"munmap(pointer, len)
+(E"Memory-mapped I/O",E"Base",E"munmap",E"munmap(pointer, len)
 
    Low-level interface for unmapping memory (see the man page). With
    mmap_array you do not need to call this directly; the memory is
@@ -1260,39 +1260,39 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"-",E"-()
+(E"Mathematical Functions",E"Base",E"-",E"-()
 
    Unary minus
 
 "),
 
-(E"Mathematical Functions",E"",E"+ - * /   ^",E"+ - * /   ^
+(E"Mathematical Functions",E"",E"+ - * / \\ ^",E"+ - * / \\ ^
 
    The binary addition, subtraction, multiplication, left division,
    right division, and exponentiation operators
 
 "),
 
-(E"Mathematical Functions",E"",E".* ./ . .^",E".* ./ . .^
+(E"Mathematical Functions",E"",E".* ./ .\\ .^",E".* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left
    division, right division, and exponentiation operators
 
 "),
 
-(E"Mathematical Functions",E"",E"div",E"div()
+(E"Mathematical Functions",E"Base",E"div",E"div()
 
    Integer truncating division
 
 "),
 
-(E"Mathematical Functions",E"",E"fld",E"fld()
+(E"Mathematical Functions",E"Base",E"fld",E"fld()
 
    Integer floor division
 
 "),
 
-(E"Mathematical Functions",E"",E"mod",E"mod()
+(E"Mathematical Functions",E"Base",E"mod",E"mod()
 
    Modulus after division
 
@@ -1304,7 +1304,7 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"//",E"//()
+(E"Mathematical Functions",E"Base",E"//",E"//()
 
    Rational division
 
@@ -1312,7 +1312,7 @@ collection[key...] = value
 
 (E"Mathematical Functions",E"",E"<< >>",E"<< >>
 
-   Left and ight shift operators
+   Left and right shift operators
 
 "),
 
@@ -1323,276 +1323,276 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"!",E"!()
+(E"Mathematical Functions",E"Base",E"!",E"!()
 
    Boolean not
 
 "),
 
-(E"Mathematical Functions",E"",E"~",E"~()
+(E"Mathematical Functions",E"Base",E"~",E"~()
 
    Boolean or bitwise not
 
 "),
 
-(E"Mathematical Functions",E"",E"&",E"&()
+(E"Mathematical Functions",E"Base",E"&",E"&()
 
    Bitwise and
 
 "),
 
-(E"Mathematical Functions",E"",E"|",E"|()
+(E"Mathematical Functions",E"Base",E"|",E"|()
 
    Bitwise or
 
 "),
 
-(E"Mathematical Functions",E"",E"$",E"$()
+(E"Mathematical Functions",E"Base",E"$",E"$()
 
    Bitwise exclusive or
 
 "),
 
-(E"Mathematical Functions",E"",E"sin",E"sin(x)
+(E"Mathematical Functions",E"Base",E"sin",E"sin(x)
 
    Compute sine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"cos",E"cos(x)
+(E"Mathematical Functions",E"Base",E"cos",E"cos(x)
 
    Compute cosine of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"tan",E"tan(x)
+(E"Mathematical Functions",E"Base",E"tan",E"tan(x)
 
    Compute tangent of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"sinh",E"sinh(x)
+(E"Mathematical Functions",E"Base",E"sinh",E"sinh(x)
 
    Compute hyperbolic sine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"cosh",E"cosh(x)
+(E"Mathematical Functions",E"Base",E"cosh",E"cosh(x)
 
    Compute hyperbolic cosine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"tanh",E"tanh(x)
+(E"Mathematical Functions",E"Base",E"tanh",E"tanh(x)
 
    Compute hyperbolic tangent of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"asin",E"asin(x)
+(E"Mathematical Functions",E"Base",E"asin",E"asin(x)
 
    Compute the inverse sine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acos",E"acos(x)
+(E"Mathematical Functions",E"Base",E"acos",E"acos(x)
 
    Compute the inverse cosine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"atan",E"atan(x)
+(E"Mathematical Functions",E"Base",E"atan",E"atan(x)
 
    Compute the inverse tangent of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"atan2",E"atan2(x, y)
+(E"Mathematical Functions",E"Base",E"atan2",E"atan2(x, y)
 
    Compute the inverse tangent of \"y/x\", using the signs of both
    \"x\" and \"y\" to determine the quadrant of the return value.
 
 "),
 
-(E"Mathematical Functions",E"",E"sec",E"sec(x)
+(E"Mathematical Functions",E"Base",E"sec",E"sec(x)
 
    Compute the secant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"csc",E"csc(x)
+(E"Mathematical Functions",E"Base",E"csc",E"csc(x)
 
    Compute the cosecant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"cot",E"cot(x)
+(E"Mathematical Functions",E"Base",E"cot",E"cot(x)
 
    Compute the cotangent of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"asec",E"asec(x)
+(E"Mathematical Functions",E"Base",E"asec",E"asec(x)
 
    Compute the inverse secant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acsc",E"acsc(x)
+(E"Mathematical Functions",E"Base",E"acsc",E"acsc(x)
 
    Compute the inverse cosecant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acot",E"acot(x)
+(E"Mathematical Functions",E"Base",E"acot",E"acot(x)
 
    Compute the inverse cotangent of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"sech",E"sech(x)
+(E"Mathematical Functions",E"Base",E"sech",E"sech(x)
 
    Compute the hyperbolic secant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"csch",E"csch(x)
+(E"Mathematical Functions",E"Base",E"csch",E"csch(x)
 
    Compute the hyperbolic cosecant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"coth",E"coth(x)
+(E"Mathematical Functions",E"Base",E"coth",E"coth(x)
 
    Compute the hyperbolic cotangent of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"asinh",E"asinh(x)
+(E"Mathematical Functions",E"Base",E"asinh",E"asinh(x)
 
    Compute the inverse hyperbolic sine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acosh",E"acosh(x)
+(E"Mathematical Functions",E"Base",E"acosh",E"acosh(x)
 
    Compute the inverse hyperbolic cosine of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"atanh",E"atanh(x)
+(E"Mathematical Functions",E"Base",E"atanh",E"atanh(x)
 
    Compute the inverse hyperbolic cotangent of \"x\" specified in
    radians
 
 "),
 
-(E"Mathematical Functions",E"",E"asech",E"asech(x)
+(E"Mathematical Functions",E"Base",E"asech",E"asech(x)
 
    Compute the inverse hyperbolic secant of \"x\" specified in radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acsch",E"acsch(x)
+(E"Mathematical Functions",E"Base",E"acsch",E"acsch(x)
 
    Compute the inverse hyperbolic cosecant of \"x\" specified in
    radians
 
 "),
 
-(E"Mathematical Functions",E"",E"acoth",E"acoth(x)
+(E"Mathematical Functions",E"Base",E"acoth",E"acoth(x)
 
    Compute the inverse hyperbolic cotangent of \"x\" specified in
    radians
 
 "),
 
-(E"Mathematical Functions",E"",E"sinc",E"sinc(x)
+(E"Mathematical Functions",E"Base",E"sinc",E"sinc(x)
 
    Compute sin(\\pi x) / x
 
 "),
 
-(E"Mathematical Functions",E"",E"cosc",E"cosc(x)
+(E"Mathematical Functions",E"Base",E"cosc",E"cosc(x)
 
    Compute cos(\\pi x) / x
 
 "),
 
-(E"Mathematical Functions",E"",E"hypot",E"hypot(x)
+(E"Mathematical Functions",E"Base",E"hypot",E"hypot(x)
 
    Compute the \\sqrt{(x^2+y^2)} without undue overflow or underflow
 
 "),
 
-(E"Mathematical Functions",E"",E"log",E"log(x)
+(E"Mathematical Functions",E"Base",E"log",E"log(x)
 
    Compute the natural logarithm of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"log2",E"log2(x)
+(E"Mathematical Functions",E"Base",E"log2",E"log2(x)
 
    Compute the natural logarithm of \"x\" to base 2
 
 "),
 
-(E"Mathematical Functions",E"",E"log10",E"log10(x)
+(E"Mathematical Functions",E"Base",E"log10",E"log10(x)
 
    Compute the natural logarithm of \"x\" to base 10
 
 "),
 
-(E"Mathematical Functions",E"",E"log1p",E"log1p(x)
+(E"Mathematical Functions",E"Base",E"log1p",E"log1p(x)
 
    Accurate natural logarithm of \"1+x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"logb",E"logb(x)
+(E"Mathematical Functions",E"Base",E"logb",E"logb(x)
 
    Return the exponent of x, represented as a floating-point number
 
 "),
 
-(E"Mathematical Functions",E"",E"ilogb",E"ilogb(x)
+(E"Mathematical Functions",E"Base",E"ilogb",E"ilogb(x)
 
    Return the exponent of x, represented as a signed integer value
 
 "),
 
-(E"Mathematical Functions",E"",E"frexp",E"frexp(val, exp)
+(E"Mathematical Functions",E"Base",E"frexp",E"frexp(val, exp)
 
    Return a number \"x\" such that it has a magnitude in the interval
    \"[1/2, 1)\" or 0, and val = x \\times 2^{exp}.
 
 "),
 
-(E"Mathematical Functions",E"",E"exp",E"exp(x)
+(E"Mathematical Functions",E"Base",E"exp",E"exp(x)
 
    Compute e^x
 
 "),
 
-(E"Mathematical Functions",E"",E"exp2",E"exp2(x)
+(E"Mathematical Functions",E"Base",E"exp2",E"exp2(x)
 
    Compute 2^x
 
 "),
 
-(E"Mathematical Functions",E"",E"ldexp",E"ldexp(x, n)
+(E"Mathematical Functions",E"Base",E"ldexp",E"ldexp(x, n)
 
    Compute x \\times 2^n
 
 "),
 
-(E"Mathematical Functions",E"",E"expm1",E"expm1(x)
+(E"Mathematical Functions",E"Base",E"expm1",E"expm1(x)
 
    Accurately compute e^x-1
 
 "),
 
-(E"Mathematical Functions",E"",E"round",E"round(x[, digits[, base]]) -> FloatingPoint
+(E"Mathematical Functions",E"Base",E"round",E"round(x[, digits[, base]]) -> FloatingPoint
 
    \"round(x)\" returns the nearest integer to \"x\". \"round(x,
    digits)\" rounds to the specified number of digits after the
@@ -1602,52 +1602,52 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"ceil",E"ceil(x[, digits[, base]]) -> FloatingPoint
+(E"Mathematical Functions",E"Base",E"ceil",E"ceil(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not less than \"x\". \"digits\" and
    \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"",E"floor",E"floor(x[, digits[, base]]) -> FloatingPoint
+(E"Mathematical Functions",E"Base",E"floor",E"floor(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not greater than \"x\". \"digits\" and
    \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"",E"trunc",E"trunc(x[, digits[, base]]) -> FloatingPoint
+(E"Mathematical Functions",E"Base",E"trunc",E"trunc(x[, digits[, base]]) -> FloatingPoint
 
    Returns the nearest integer not greater in magnitude than \"x\".
    \"digits\" and \"base\" work as above.
 
 "),
 
-(E"Mathematical Functions",E"",E"iround",E"iround(x) -> Integer
+(E"Mathematical Functions",E"Base",E"iround",E"iround(x) -> Integer
 
    Returns the nearest integer to \"x\".
 
 "),
 
-(E"Mathematical Functions",E"",E"iceil",E"iceil(x) -> Integer
+(E"Mathematical Functions",E"Base",E"iceil",E"iceil(x) -> Integer
 
    Returns the nearest integer not less than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"",E"ifloor",E"ifloor(x) -> Integer
+(E"Mathematical Functions",E"Base",E"ifloor",E"ifloor(x) -> Integer
 
    Returns the nearest integer not greater than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"",E"itrunc",E"itrunc(x) -> Integer
+(E"Mathematical Functions",E"Base",E"itrunc",E"itrunc(x) -> Integer
 
    Returns the nearest integer not greater in magnitude than \"x\".
 
 "),
 
-(E"Mathematical Functions",E"",E"signif",E"signif(x, digits[, base]) -> FloatingPoint
+(E"Mathematical Functions",E"Base",E"signif",E"signif(x, digits[, base]) -> FloatingPoint
 
    Rounds (in the sense of \"round\") \"x\" so that there are
    \"digits\" significant digits, under a base \"base\"
@@ -1656,466 +1656,466 @@ collection[key...] = value
 
 "),
 
-(E"Mathematical Functions",E"",E"min",E"min(x, y)
+(E"Mathematical Functions",E"Base",E"min",E"min(x, y)
 
    Return the minimum of \"x\" and \"y\"
 
 "),
 
-(E"Mathematical Functions",E"",E"max",E"max(x, y)
+(E"Mathematical Functions",E"Base",E"max",E"max(x, y)
 
    Return the maximum of \"x\" and \"y\"
 
 "),
 
-(E"Mathematical Functions",E"",E"clamp",E"clamp(x, lo, hi)
+(E"Mathematical Functions",E"Base",E"clamp",E"clamp(x, lo, hi)
 
    Return x if \"lo <= x <= y\". If \"x < lo\", return \"lo\". If \"x
    > hi\", return \"hi\".
 
 "),
 
-(E"Mathematical Functions",E"",E"abs",E"abs(x)
+(E"Mathematical Functions",E"Base",E"abs",E"abs(x)
 
    Absolute value of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"abs2",E"abs2(x)
+(E"Mathematical Functions",E"Base",E"abs2",E"abs2(x)
 
    Squared absolute value of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"copysign",E"copysign(x, y)
+(E"Mathematical Functions",E"Base",E"copysign",E"copysign(x, y)
 
    Return \"x\" such that it has the same sign as \"y\"
 
 "),
 
-(E"Mathematical Functions",E"",E"sign",E"sign(x)
+(E"Mathematical Functions",E"Base",E"sign",E"sign(x)
 
    Return \"+1\" if \"x\" is positive, \"0\" if \"x == 0\", and \"-1\"
    if \"x\" is negative.
 
 "),
 
-(E"Mathematical Functions",E"",E"signbit",E"signbit(x)
+(E"Mathematical Functions",E"Base",E"signbit",E"signbit(x)
 
    Returns non-zero if the value of the sign of \"x\" is negative,
    otherwise \"0\".
 
 "),
 
-(E"Mathematical Functions",E"",E"sqrt",E"sqrt(x)
+(E"Mathematical Functions",E"Base",E"sqrt",E"sqrt(x)
 
    Return \\sqrt{x}
 
 "),
 
-(E"Mathematical Functions",E"",E"cbrt",E"cbrt(x)
+(E"Mathematical Functions",E"Base",E"cbrt",E"cbrt(x)
 
    Return x^{1/3}
 
 "),
 
-(E"Mathematical Functions",E"",E"erf",E"erf(x)
+(E"Mathematical Functions",E"Base",E"erf",E"erf(x)
 
    Compute the error function of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"erfc",E"erfc(x)
+(E"Mathematical Functions",E"Base",E"erfc",E"erfc(x)
 
    Compute the complementary error function of \"x\"
 
 "),
 
-(E"Mathematical Functions",E"",E"real",E"real(z)
+(E"Mathematical Functions",E"Base",E"real",E"real(z)
 
    Return the real part of the complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"",E"imag",E"imag(z)
+(E"Mathematical Functions",E"Base",E"imag",E"imag(z)
 
    Return the imaginary part of the complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"",E"conj",E"conj(z)
+(E"Mathematical Functions",E"Base",E"conj",E"conj(z)
 
    Compute the complex conjugate of a complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"",E"angle",E"angle(z)
+(E"Mathematical Functions",E"Base",E"angle",E"angle(z)
 
    Compute the phase angle of a complex number \"z\"
 
 "),
 
-(E"Mathematical Functions",E"",E"cis",E"cis(z)
+(E"Mathematical Functions",E"Base",E"cis",E"cis(z)
 
    Return \"cos(z) + i*sin(z)\" if z is real. Return \"(cos(real(z)) +
    i*sin(real(z)))/exp(imag(z))\" if \"z\" is complex
 
 "),
 
-(E"Mathematical Functions",E"",E"binomial",E"binomial(n, k)
+(E"Mathematical Functions",E"Base",E"binomial",E"binomial(n, k)
 
    Number of ways to choose \"k\" out of \"n\" items
 
 "),
 
-(E"Mathematical Functions",E"",E"factorial",E"factorial(n)
+(E"Mathematical Functions",E"Base",E"factorial",E"factorial(n)
 
    Factorial of n
 
 "),
 
-(E"Mathematical Functions",E"",E"factorial",E"factorial(n, k)
+(E"Mathematical Functions",E"Base",E"factorial",E"factorial(n, k)
 
    Compute \"factorial(n)/factorial(k)\"
 
 "),
 
-(E"Mathematical Functions",E"",E"gcd",E"gcd(x, y)
+(E"Mathematical Functions",E"Base",E"gcd",E"gcd(x, y)
 
    Greatest common divisor
 
 "),
 
-(E"Mathematical Functions",E"",E"lcm",E"lcm(x, y)
+(E"Mathematical Functions",E"Base",E"lcm",E"lcm(x, y)
 
    Least common multiple
 
 "),
 
-(E"Mathematical Functions",E"",E"nextpow2",E"nextpow2(n)
+(E"Mathematical Functions",E"Base",E"nextpow2",E"nextpow2(n)
 
    Next power of two not less than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"",E"nextpow",E"nextpow(a, n)
+(E"Mathematical Functions",E"Base",E"nextpow",E"nextpow(a, n)
 
    Next power of \"a\" not less than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"",E"prevpow",E"prevpow(a, n)
+(E"Mathematical Functions",E"Base",E"prevpow",E"prevpow(a, n)
 
    Previous power of \"a\" not greater than \"n\"
 
 "),
 
-(E"Mathematical Functions",E"",E"nextprod",E"nextprod([a, b, c], n)
+(E"Mathematical Functions",E"Base",E"nextprod",E"nextprod([a, b, c], n)
 
    Next integer not less than \"n\" that can be written \"a^i1 * b^i2
    * c^i3\" for integers \"i1\", \"i2\", \"i3\".
 
 "),
 
-(E"Mathematical Functions",E"",E"prevprod",E"prevprod([a, b, c], n)
+(E"Mathematical Functions",E"Base",E"prevprod",E"prevprod([a, b, c], n)
 
    Previous integer not greater than \"n\" that can be written \"a^i1
    * b^i2 * c^i3\" for integers \"i1\", \"i2\", \"i3\".
 
 "),
 
-(E"Mathematical Functions",E"",E"powermod",E"powermod(x, p, m)
+(E"Mathematical Functions",E"Base",E"powermod",E"powermod(x, p, m)
 
    Compute \"mod(x^p, m)\"
 
 "),
 
-(E"Mathematical Functions",E"",E"gamma",E"gamma(x)
+(E"Mathematical Functions",E"Base",E"gamma",E"gamma(x)
 
 "),
 
-(E"Mathematical Functions",E"",E"lgamma",E"lgamma(x)
+(E"Mathematical Functions",E"Base",E"lgamma",E"lgamma(x)
 
 "),
 
-(E"Mathematical Functions",E"",E"lfact",E"lfact(x)
+(E"Mathematical Functions",E"Base",E"lfact",E"lfact(x)
 
 "),
 
-(E"Mathematical Functions",E"",E"airyai",E"airy(x)
+(E"Mathematical Functions",E"Base",E"airyai",E"airy(x)
 airyai(x)
 
    Airy function \\operatorname{Ai}(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"airyaiprime",E"airyprime(x)
+(E"Mathematical Functions",E"Base",E"airyaiprime",E"airyprime(x)
 airyaiprime(x)
 
    Airy function derivative \\operatorname{Ai}'(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"airybi",E"airybi(x)
+(E"Mathematical Functions",E"Base",E"airybi",E"airybi(x)
 
    Airy function \\operatorname{Bi}(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"airybiprime",E"airybiprime(x)
+(E"Mathematical Functions",E"Base",E"airybiprime",E"airybiprime(x)
 
    Airy function derivative \\operatorname{Bi}'(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"besselj0",E"besselj0(x)
+(E"Mathematical Functions",E"Base",E"besselj0",E"besselj0(x)
 
    Bessel function of the first kind of order 0, J_0(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"besselj1",E"besselj1(x)
+(E"Mathematical Functions",E"Base",E"besselj1",E"besselj1(x)
 
    Bessel function of the first kind of order 1, J_1(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"besselj",E"besselj(nu, x)
+(E"Mathematical Functions",E"Base",E"besselj",E"besselj(nu, x)
 
    Bessel function of the first kind of order \"nu\", J_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"bessely0",E"bessely0(x)
+(E"Mathematical Functions",E"Base",E"bessely0",E"bessely0(x)
 
    Bessel function of the second kind of order 0, Y_0(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"bessely1",E"bessely1(x)
+(E"Mathematical Functions",E"Base",E"bessely1",E"bessely1(x)
 
    Bessel function of the second kind of order 1, Y_1(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"bessely",E"bessely(nu, x)
+(E"Mathematical Functions",E"Base",E"bessely",E"bessely(nu, x)
 
    Bessel function of the second kind of order \"nu\", Y_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"hankelh1",E"hankelh1(nu, x)
+(E"Mathematical Functions",E"Base",E"hankelh1",E"hankelh1(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(1)}_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"hankelh2",E"hankelh2(nu, x)
+(E"Mathematical Functions",E"Base",E"hankelh2",E"hankelh2(nu, x)
 
    Bessel function of the third kind of order \"nu\", H^{(2)}_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"besseli",E"besseli(nu, x)
+(E"Mathematical Functions",E"Base",E"besseli",E"besseli(nu, x)
 
    Modified Bessel function of the first kind of order \"nu\",
    I_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"besselk",E"besselk(nu, x)
+(E"Mathematical Functions",E"Base",E"besselk",E"besselk(nu, x)
 
    Modified Bessel function of the second kind of order \"nu\",
    K_\\nu(x).
 
 "),
 
-(E"Mathematical Functions",E"",E"beta",E"beta(x, y)
+(E"Mathematical Functions",E"Base",E"beta",E"beta(x, y)
 
    Euler integral of the first kind \\operatorname{B}(x,y) =
    \\Gamma(x)\\Gamma(y)/\\Gamma(x+y).
 
 "),
 
-(E"Mathematical Functions",E"",E"lbeta",E"lbeta(x, y)
+(E"Mathematical Functions",E"Base",E"lbeta",E"lbeta(x, y)
 
    Natural logarithm of the beta function
    \\log(\\operatorname{B}(x,y)).
 
 "),
 
-(E"Mathematical Functions",E"",E"eta",E"eta(x)
+(E"Mathematical Functions",E"Base",E"eta",E"eta(x)
 
    Dirichlet eta function \\eta(s) =
    \\sum^\\infty_{n=1}(-)^{n-1}/n^{s}.
 
 "),
 
-(E"Mathematical Functions",E"",E"zeta",E"zeta(x)
+(E"Mathematical Functions",E"Base",E"zeta",E"zeta(x)
 
    Riemann zeta function \\zeta(s).
 
 "),
 
-(E"Data Formats",E"",E"bin",E"bin(n[, pad])
+(E"Data Formats",E"Base",E"bin",E"bin(n[, pad])
 
    Convert an integer to a binary string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"",E"hex",E"hex(n[, pad])
+(E"Data Formats",E"Base",E"hex",E"hex(n[, pad])
 
    Convert an integer to a hexadecimal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"",E"dec",E"dec(n[, pad])
+(E"Data Formats",E"Base",E"dec",E"dec(n[, pad])
 
    Convert an integer to a decimal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"",E"oct",E"oct(n[, pad])
+(E"Data Formats",E"Base",E"oct",E"oct(n[, pad])
 
    Convert an integer to an octal string, optionally specifying a
    number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"",E"base",E"base(b, n[, pad])
+(E"Data Formats",E"Base",E"base",E"base(b, n[, pad])
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to.
 
 "),
 
-(E"Data Formats",E"",E"parse_int",E"parse_int(type, str, base)
+(E"Data Formats",E"Base",E"parse_int",E"parse_int(type, str, base)
 
    Parse a string as an integer in the given base, yielding a number
    of the specified type.
 
 "),
 
-(E"Data Formats",E"",E"bool",E"bool(x)
+(E"Data Formats",E"Base",E"bool",E"bool(x)
 
    Convert a number or numeric array to boolean
 
 "),
 
-(E"Data Formats",E"",E"int8",E"int8(x)
+(E"Data Formats",E"Base",E"int8",E"int8(x)
 
    Convert a number or array to \"Int8\" data type
 
 "),
 
-(E"Data Formats",E"",E"int16",E"int16(x)
+(E"Data Formats",E"Base",E"int16",E"int16(x)
 
    Convert a number or array to \"Int16\" data type
 
 "),
 
-(E"Data Formats",E"",E"int32",E"int32(x)
+(E"Data Formats",E"Base",E"int32",E"int32(x)
 
    Convert a number or array to \"Int32\" data type
 
 "),
 
-(E"Data Formats",E"",E"int64",E"int64(x)
+(E"Data Formats",E"Base",E"int64",E"int64(x)
 
    Convert a number or array to \"Int64\" data type
 
 "),
 
-(E"Data Formats",E"",E"uint8",E"uint8(x)
+(E"Data Formats",E"Base",E"uint8",E"uint8(x)
 
    Convert a number or array to \"Uint8\" data type
 
 "),
 
-(E"Data Formats",E"",E"uint16",E"uint16(x)
+(E"Data Formats",E"Base",E"uint16",E"uint16(x)
 
    Convert a number or array to \"Uint16\" data type
 
 "),
 
-(E"Data Formats",E"",E"uint32",E"uint32(x)
+(E"Data Formats",E"Base",E"uint32",E"uint32(x)
 
    Convert a number or array to \"Uint32\" data type
 
 "),
 
-(E"Data Formats",E"",E"uint64",E"uint64(x)
+(E"Data Formats",E"Base",E"uint64",E"uint64(x)
 
    Convert a number or array to \"Uint64\" data type
 
 "),
 
-(E"Data Formats",E"",E"float32",E"float32(x)
+(E"Data Formats",E"Base",E"float32",E"float32(x)
 
    Convert a number or array to \"Float32\" data type
 
 "),
 
-(E"Data Formats",E"",E"float64",E"float64(x)
+(E"Data Formats",E"Base",E"float64",E"float64(x)
 
    Convert a number or array to \"Float64\" data type
 
 "),
 
-(E"Data Formats",E"",E"char",E"char(x)
+(E"Data Formats",E"Base",E"char",E"char(x)
 
    Convert a number or array to \"Char\" data type
 
 "),
 
-(E"Data Formats",E"",E"safe_char",E"safe_char(x)
+(E"Data Formats",E"Base",E"safe_char",E"safe_char(x)
 
    Convert to \"Char\", checking for invalid code points
 
 "),
 
-(E"Data Formats",E"",E"complex",E"complex(r, i)
+(E"Data Formats",E"Base",E"complex",E"complex(r, i)
 
    Convert real numbers or arrays to complex
 
 "),
 
-(E"Data Formats",E"",E"iscomplex",E"iscomplex(x)
+(E"Data Formats",E"Base",E"iscomplex",E"iscomplex(x)
 
    Test whether a number or array is of a complex type
 
 "),
 
-(E"Data Formats",E"",E"isreal",E"isreal(x)
+(E"Data Formats",E"Base",E"isreal",E"isreal(x)
 
    Test whether a number or array is of a real type
 
 "),
 
-(E"Data Formats",E"",E"bswap",E"bswap(n)
+(E"Data Formats",E"Base",E"bswap",E"bswap(n)
 
    Byte-swap an integer
 
 "),
 
-(E"Data Formats",E"",E"num2hex",E"num2hex(f)
+(E"Data Formats",E"Base",E"num2hex",E"num2hex(f)
 
    Get a hexadecimal string of the binary representation of a floating
    point number
 
 "),
 
-(E"Data Formats",E"",E"hex2num",E"hex2num(str)
+(E"Data Formats",E"Base",E"hex2num",E"hex2num(str)
 
    Convert a hexadecimal string to the floating point number it
    represents
 
 "),
 
-(E"Numbers",E"",E"one",E"one(x)
+(E"Numbers",E"Base",E"one",E"one(x)
 
    Get the multiplicative identity element for the type of x (x can
    also specify the type itself). For matrices, returns an identity
@@ -2123,220 +2123,220 @@ airyaiprime(x)
 
 "),
 
-(E"Numbers",E"",E"zero",E"zero(x)
+(E"Numbers",E"Base",E"zero",E"zero(x)
 
    Get the additive identity element for the type of x (x can also
    specify the type itself).
 
 "),
 
-(E"Numbers",E"",E"pi",E"pi
+(E"Numbers",E"Base",E"pi",E"pi
 
    The constant pi
 
 "),
 
-(E"Numbers",E"",E"isdenormal",E"isdenormal(f)
+(E"Numbers",E"Base",E"isdenormal",E"isdenormal(f)
 
    Test whether a floating point number is denormal
 
 "),
 
-(E"Numbers",E"",E"isfinite",E"isfinite(f)
+(E"Numbers",E"Base",E"isfinite",E"isfinite(f)
 
    Test whether a number is finite
 
 "),
 
-(E"Numbers",E"",E"isnan",E"isnan(f)
+(E"Numbers",E"Base",E"isnan",E"isnan(f)
 
    Test whether a floating point number is not a number (NaN)
 
 "),
 
-(E"Numbers",E"",E"nextfloat",E"nextfloat(f)
+(E"Numbers",E"Base",E"nextfloat",E"nextfloat(f)
 
    Get the next floating point number in lexicographic order
 
 "),
 
-(E"Numbers",E"",E"prevfloat",E"prevfloat(f)
+(E"Numbers",E"Base",E"prevfloat",E"prevfloat(f)
 
    Get the previous floating point number in lexicographic order
 
 "),
 
-(E"Numbers",E"",E"integer_valued",E"integer_valued(x)
+(E"Numbers",E"Base",E"integer_valued",E"integer_valued(x)
 
    Test whether \"x\" is numerically equal to some integer
 
 "),
 
-(E"Numbers",E"",E"real_valued",E"real_valued(x)
+(E"Numbers",E"Base",E"real_valued",E"real_valued(x)
 
    Test whether \"x\" is numerically equal to some real number
 
 "),
 
-(E"Numbers",E"",E"exponent",E"exponent(f)
+(E"Numbers",E"Base",E"exponent",E"exponent(f)
 
    Get the exponent of a floating-point number
 
 "),
 
-(E"Numbers",E"",E"mantissa",E"mantissa(f)
+(E"Numbers",E"Base",E"mantissa",E"mantissa(f)
 
    Get the mantissa of a floating-point number
 
 "),
 
-(E"Random Numbers",E"",E"rand",E"rand()
+(E"Random Numbers",E"Base",E"rand",E"rand()
 
    Generate a \"Float64\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"",E"randf",E"randf()
+(E"Random Numbers",E"Base",E"randf",E"randf()
 
    Generate a \"Float32\" random number in (0,1)
 
 "),
 
-(E"Random Numbers",E"",E"randi",E"randi(Int32|Uint32|Int64|Uint64)
+(E"Random Numbers",E"Base",E"randi",E"randi(Int32|Uint32|Int64|Uint64)
 
    Generate a random integer of the given type
 
 "),
 
-(E"Random Numbers",E"",E"randi",E"randi(n)
+(E"Random Numbers",E"Base",E"randi",E"randi(n)
 
    Generate a random integer from 1 to \"n\" inclusive
 
 "),
 
-(E"Random Numbers",E"",E"randi",E"randi(n, dims...)
+(E"Random Numbers",E"Base",E"randi",E"randi(n, dims...)
 
    Generate an array of random integers from 1 to \"n\" inclusive
 
 "),
 
-(E"Random Numbers",E"",E"randi",E"randi((a, b))
+(E"Random Numbers",E"Base",E"randi",E"randi((a, b))
 
    Generate a random integer in the interval from \"a\" to \"b\"
    inclusive. The argument is a tuple.
 
 "),
 
-(E"Random Numbers",E"",E"randi",E"randi((a, b), dims...)
+(E"Random Numbers",E"Base",E"randi",E"randi((a, b), dims...)
 
    Generate an array of random integers in the interval from \"a\" to
    \"b\" inclusive. The first argument is a tuple.
 
 "),
 
-(E"Random Numbers",E"",E"randbit",E"randbit()
+(E"Random Numbers",E"Base",E"randbit",E"randbit()
 
    Generate \"1\" or \"0\" at random
 
 "),
 
-(E"Random Numbers",E"",E"randbool",E"randbool()
+(E"Random Numbers",E"Base",E"randbool",E"randbool()
 
    Generate a random boolean value
 
 "),
 
-(E"Random Numbers",E"",E"randn",E"randn()
+(E"Random Numbers",E"Base",E"randn",E"randn()
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1
 
 "),
 
-(E"Random Numbers",E"",E"randg",E"randg(a)
+(E"Random Numbers",E"Base",E"randg",E"randg(a)
 
    Generate a sample from the gamma distribution with shape parameter
    \"a\"
 
 "),
 
-(E"Random Numbers",E"",E"randchi2",E"randchi2(n)
+(E"Random Numbers",E"Base",E"randchi2",E"randchi2(n)
 
    Generate a sample from the chi-squared distribution with \"n\"
    degrees of freedom (also available as \"chi2rnd\")
 
 "),
 
-(E"Random Numbers",E"",E"randexp",E"randexp()
+(E"Random Numbers",E"Base",E"randexp",E"randexp()
 
    Generate samples from the exponential distribution
 
 "),
 
-(E"Random Numbers",E"",E"srand",E"srand()
+(E"Random Numbers",E"Base",E"srand",E"srand()
 
    Seed the RNG
 
 "),
 
-(E"Arrays",E"",E"ndims",E"ndims(A)
+(E"Arrays",E"Base",E"ndims",E"ndims(A)
 
    Returns the number of dimensions of A
 
 "),
 
-(E"Arrays",E"",E"size",E"size(A)
+(E"Arrays",E"Base",E"size",E"size(A)
 
    Returns a tuple containing the dimensions of A
 
 "),
 
-(E"Arrays",E"",E"eltype",E"eltype(A)
+(E"Arrays",E"Base",E"eltype",E"eltype(A)
 
    Returns the type of the elements contained in A
 
 "),
 
-(E"Arrays",E"",E"numel",E"numel(A)
+(E"Arrays",E"Base",E"numel",E"numel(A)
 
    Returns the number of elements in A
 
 "),
 
-(E"Arrays",E"",E"length",E"length(A)
+(E"Arrays",E"Base",E"length",E"length(A)
 
    Returns the number of elements in A (note that this differs from
    Matlab where \"length(A)\" is the largest dimension of \"A\")
 
 "),
 
-(E"Arrays",E"",E"nnz",E"nnz(A)
+(E"Arrays",E"Base",E"nnz",E"nnz(A)
 
    Counts the number of nonzero values in A
 
 "),
 
-(E"Arrays",E"",E"stride",E"stride(A, k)
+(E"Arrays",E"Base",E"stride",E"stride(A, k)
 
    Returns the distance in memory (in number of elements) between
    adjacent elements in dimension k
 
 "),
 
-(E"Arrays",E"",E"strides",E"strides(A)
+(E"Arrays",E"Base",E"strides",E"strides(A)
 
    Returns a tuple of the memory strides in each dimension
 
 "),
 
-(E"Arrays",E"",E"Array",E"Array(type, dims)
+(E"Arrays",E"Base",E"Array",E"Array(type, dims)
 
    Construct an uninitialized dense array. \"dims\" may be a tuple or
    a series of integer arguments.
 
 "),
 
-(E"Arrays",E"",E"ref",E"ref(type)
+(E"Arrays",E"Base",E"ref",E"ref(type)
 
    Construct an empty 1-d array of the specified type. This is usually
    called with the syntax \"Type[]\". Element values can be specified
@@ -2344,50 +2344,50 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"cell",E"cell(dims)
+(E"Arrays",E"Base",E"cell",E"cell(dims)
 
    Construct an uninitialized cell array (heterogeneous array).
    \"dims\" can be either a tuple or a series of integer arguments.
 
 "),
 
-(E"Arrays",E"",E"zeros",E"zeros(type, dims)
+(E"Arrays",E"Base",E"zeros",E"zeros(type, dims)
 
    Create an array of all zeros of specified type
 
 "),
 
-(E"Arrays",E"",E"ones",E"ones(type, dims)
+(E"Arrays",E"Base",E"ones",E"ones(type, dims)
 
    Create an array of all ones of specified type
 
 "),
 
-(E"Arrays",E"",E"trues",E"trues(dims)
+(E"Arrays",E"Base",E"trues",E"trues(dims)
 
    Create a Bool array with all values set to true
 
 "),
 
-(E"Arrays",E"",E"falses",E"falses(dims)
+(E"Arrays",E"Base",E"falses",E"falses(dims)
 
    Create a Bool array with all values set to false
 
 "),
 
-(E"Arrays",E"",E"fill",E"fill(v, dims)
+(E"Arrays",E"Base",E"fill",E"fill(v, dims)
 
    Create an array filled with \"v\"
 
 "),
 
-(E"Arrays",E"",E"fill!",E"fill!(A, x)
+(E"Arrays",E"Base",E"fill!",E"fill!(A, x)
 
    Fill array \"A\" with value \"x\"
 
 "),
 
-(E"Arrays",E"",E"reshape",E"reshape(A, dims)
+(E"Arrays",E"Base",E"reshape",E"reshape(A, dims)
 
    Create an array with the same data as the given array, but with
    different dimensions. An implementation for a particular type of
@@ -2395,13 +2395,13 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"copy",E"copy(A)
+(E"Arrays",E"Base",E"copy",E"copy(A)
 
    Create a copy of \"A\"
 
 "),
 
-(E"Arrays",E"",E"similar",E"similar(array, element_type, dims)
+(E"Arrays",E"Base",E"similar",E"similar(array, element_type, dims)
 
    Create an uninitialized array of the same type as the given array,
    but with the specified element type and dimensions. The second and
@@ -2410,66 +2410,66 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"reinterpret",E"reinterpret(type, A)
+(E"Arrays",E"Base",E"reinterpret",E"reinterpret(type, A)
 
    Construct an array with the same binary data as the given array,
    but with the specified element type
 
 "),
 
-(E"Arrays",E"",E"rand",E"rand(dims)
+(E"Arrays",E"Base",E"rand",E"rand(dims)
 
    Create a random array with Float64 random values in (0,1)
 
 "),
 
-(E"Arrays",E"",E"randf",E"randf(dims)
+(E"Arrays",E"Base",E"randf",E"randf(dims)
 
    Create a random array with Float32 random values in (0,1)
 
 "),
 
-(E"Arrays",E"",E"randn",E"randn(dims)
+(E"Arrays",E"Base",E"randn",E"randn(dims)
 
    Create a random array with Float64 normally-distributed random
    values with a mean of 0 and standard deviation of 1
 
 "),
 
-(E"Arrays",E"",E"eye",E"eye(n)
+(E"Arrays",E"Base",E"eye",E"eye(n)
 
    n-by-n identity matrix
 
 "),
 
-(E"Arrays",E"",E"eye",E"eye(m, n)
+(E"Arrays",E"Base",E"eye",E"eye(m, n)
 
    m-by-n identity matrix
 
 "),
 
-(E"Arrays",E"",E"linspace",E"linspace(start, stop, n)
+(E"Arrays",E"Base",E"linspace",E"linspace(start, stop, n)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
    to \"stop\".
 
 "),
 
-(E"Arrays",E"",E"logspace",E"logspace(start, stop, n)
+(E"Arrays",E"Base",E"logspace",E"logspace(start, stop, n)
 
    Construct a vector of \"n\" logarithmically-spaced numbers from
    \"10^start\" to \"10^stop\".
 
 "),
 
-(E"Arrays",E"",E"ref",E"ref(A, ind)
+(E"Arrays",E"Base",E"ref",E"ref(A, ind)
 
    Returns a subset of \"A\" as specified by \"ind\", which may be an
    \"Int\", a \"Range\", or a \"Vector\".
 
 "),
 
-(E"Arrays",E"",E"sub",E"sub(A, ind)
+(E"Arrays",E"Base",E"sub",E"sub(A, ind)
 
    Returns a SubArray, which stores the input \"A\" and \"ind\" rather
    than computing the result immediately. Calling \"ref\" on a
@@ -2477,7 +2477,7 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"slicedim",E"slicedim(A, d, i)
+(E"Arrays",E"Base",E"slicedim",E"slicedim(A, d, i)
 
    Return all the data of \"A\" where the index for dimension \"d\"
    equals \"i\". Equivalent to \"A[:,:,...,i,:,:,...]\" where \"i\" is
@@ -2485,76 +2485,76 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"assign",E"assign(A, X, ind)
+(E"Arrays",E"Base",E"assign",E"assign(A, X, ind)
 
    Store an input array \"X\" within some subset of \"A\" as specified
    by \"ind\".
 
 "),
 
-(E"Arrays",E"",E"cat",E"cat(dim, A...)
+(E"Arrays",E"Base",E"cat",E"cat(dim, A...)
 
    Concatenate the input arrays along the specified dimension
 
 "),
 
-(E"Arrays",E"",E"vcat",E"vcat(A...)
+(E"Arrays",E"Base",E"vcat",E"vcat(A...)
 
    Concatenate along dimension 1
 
 "),
 
-(E"Arrays",E"",E"hcat",E"hcat(A...)
+(E"Arrays",E"Base",E"hcat",E"hcat(A...)
 
    Concatenate along dimension 2
 
 "),
 
-(E"Arrays",E"",E"hvcat",E"hvcat()
+(E"Arrays",E"Base",E"hvcat",E"hvcat()
 
    Horizontal and vertical concatenation in one call
 
 "),
 
-(E"Arrays",E"",E"flipdim",E"flipdim(A, d)
+(E"Arrays",E"Base",E"flipdim",E"flipdim(A, d)
 
    Reverse \"A\" in dimension \"d\".
 
 "),
 
-(E"Arrays",E"",E"flipud",E"flipud(A)
+(E"Arrays",E"Base",E"flipud",E"flipud(A)
 
    Equivalent to \"flipdim(A,1)\".
 
 "),
 
-(E"Arrays",E"",E"fliplr",E"fliplr(A)
+(E"Arrays",E"Base",E"fliplr",E"fliplr(A)
 
    Equivalent to \"flipdim(A,2)\".
 
 "),
 
-(E"Arrays",E"",E"circshift",E"circshift(A, shifts)
+(E"Arrays",E"Base",E"circshift",E"circshift(A, shifts)
 
    Circularly shift the data in an array. The second argument is a
    vector giving the amount to shift in each dimension.
 
 "),
 
-(E"Arrays",E"",E"find",E"find(A)
+(E"Arrays",E"Base",E"find",E"find(A)
 
    Return a vector of the linear indexes of the non-zeros in \"A\".
 
 "),
 
-(E"Arrays",E"",E"findn",E"findn(A)
+(E"Arrays",E"Base",E"findn",E"findn(A)
 
    Return a vector of indexes for each dimension giving the locations
    of the non-zeros in \"A\".
 
 "),
 
-(E"Arrays",E"",E"permute",E"permute(A, perm)
+(E"Arrays",E"Base",E"permute",E"permute(A, perm)
 
    Permute the dimensions of array \"A\". \"perm\" is a vector
    specifying a permutation of length \"ndims(A)\". This is a
@@ -2563,33 +2563,33 @@ airyaiprime(x)
 
 "),
 
-(E"Arrays",E"",E"ipermute",E"ipermute(A, perm)
+(E"Arrays",E"Base",E"ipermute",E"ipermute(A, perm)
 
    Like \"permute\", except the inverse of the given permutation is
    applied.
 
 "),
 
-(E"Arrays",E"",E"squeeze",E"squeeze(A)
+(E"Arrays",E"Base",E"squeeze",E"squeeze(A)
 
    Remove singleton dimensions from the shape of array \"A\"
 
 "),
 
-(E"Arrays",E"",E"vec",E"vec(A)
+(E"Arrays",E"Base",E"vec",E"vec(A)
 
    Make a vector out of an array with only one non-singleton
    dimension.
 
 "),
 
-(E"Linear Algebra",E"",E"*",E"*()
+(E"Linear Algebra",E"Base",E"*",E"*()
 
    Matrix multiplication
 
 "),
 
-(E"Linear Algebra",E"",E"\\",E"\\()
+(E"Linear Algebra",E"Base",E"\\",E"\\()
 
    Matrix division using a polyalgorithm. For input matrices \"A\" and
    \"B\", the result \"X\" is such that \"A*X == B\". For rectangular
@@ -2603,329 +2603,329 @@ airyaiprime(x)
 
 "),
 
-(E"Linear Algebra",E"",E"dot",E"dot()
+(E"Linear Algebra",E"Base",E"dot",E"dot()
 
    Compute the dot product
 
 "),
 
-(E"Linear Algebra",E"",E"cross",E"cross()
+(E"Linear Algebra",E"Base",E"cross",E"cross()
 
    Compute the cross product of two 3-vectors
 
 "),
 
-(E"Linear Algebra",E"",E"norm",E"norm()
+(E"Linear Algebra",E"Base",E"norm",E"norm()
 
    Compute the norm of a \"Vector\" or a \"Matrix\"
 
 "),
 
-(E"Linear Algebra",E"",E"lu",E"lu(A) -> LU
+(E"Linear Algebra",E"Base",E"lu",E"lu(A) -> LU
 
    Compute LU factorization. LU is an \"LU factorization\" type that
    can be used as an ordinary matrix.
 
 "),
 
-(E"Linear Algebra",E"",E"chol",E"chol(A)
+(E"Linear Algebra",E"Base",E"chol",E"chol(A)
 
    Compute Cholesky factorization
 
 "),
 
-(E"Linear Algebra",E"",E"qr",E"qr(A)
+(E"Linear Algebra",E"Base",E"qr",E"qr(A)
 
    Compute QR factorization
 
 "),
 
-(E"Linear Algebra",E"",E"qrp",E"qrp(A)
+(E"Linear Algebra",E"Base",E"qrp",E"qrp(A)
 
    Compute QR factorization with pivoting
 
 "),
 
-(E"Linear Algebra",E"",E"factors",E"factors(D)
+(E"Linear Algebra",E"Base",E"factors",E"factors(D)
 
    Return the factors of a decomposition D. For an LU decomposition,
    factors(LU) -> L, U, p
 
 "),
 
-(E"Linear Algebra",E"",E"eig",E"eig(A) -> D, V
+(E"Linear Algebra",E"Base",E"eig",E"eig(A) -> D, V
 
    Compute eigenvalues and eigenvectors of A
 
 "),
 
-(E"Linear Algebra",E"",E"eigvals",E"eigvals(A)
+(E"Linear Algebra",E"Base",E"eigvals",E"eigvals(A)
 
    Returns the eigenvalues of \"A\".
 
 "),
 
-(E"Linear Algebra",E"",E"svd",E"svd(A) -> U, S, V'
+(E"Linear Algebra",E"Base",E"svd",E"svd(A) -> U, S, V'
 
    Compute the SVD of A
 
 "),
 
-(E"Linear Algebra",E"",E"svdvals",E"svdvals(A)
+(E"Linear Algebra",E"Base",E"svdvals",E"svdvals(A)
 
    Returns the singular values of \"A\".
 
 "),
 
-(E"Linear Algebra",E"",E"triu",E"triu(M)
+(E"Linear Algebra",E"Base",E"triu",E"triu(M)
 
    Upper triangle of a matrix
 
 "),
 
-(E"Linear Algebra",E"",E"tril",E"tril(M)
+(E"Linear Algebra",E"Base",E"tril",E"tril(M)
 
    Lower triangle of a matrix
 
 "),
 
-(E"Linear Algebra",E"",E"diag",E"diag(M)
+(E"Linear Algebra",E"Base",E"diag",E"diag(M)
 
    The diagonal of a matrix, as a vector
 
 "),
 
-(E"Linear Algebra",E"",E"diagm",E"diagm(v)
+(E"Linear Algebra",E"Base",E"diagm",E"diagm(v)
 
    Construct a diagonal matrix from a vector
 
 "),
 
-(E"Linear Algebra",E"",E"Tridiagonal",E"Tridiagonal(dl, d, du)
+(E"Linear Algebra",E"Base",E"Tridiagonal",E"Tridiagonal(dl, d, du)
 
    Construct a tridiagonal matrix from the lower diagonal, diagonal,
    and upper diagonal
 
 "),
 
-(E"Linear Algebra",E"",E"Woodbury",E"Woodbury(A, U, C, V)
+(E"Linear Algebra",E"Base",E"Woodbury",E"Woodbury(A, U, C, V)
 
    Construct a matrix in a form suitable for applying the Woodbury
    matrix identity
 
 "),
 
-(E"Linear Algebra",E"",E"rank",E"rank(M)
+(E"Linear Algebra",E"Base",E"rank",E"rank(M)
 
    Compute the rank of a matrix
 
 "),
 
-(E"Linear Algebra",E"",E"cond",E"cond(M)
+(E"Linear Algebra",E"Base",E"cond",E"cond(M)
 
    Matrix condition number
 
 "),
 
-(E"Linear Algebra",E"",E"trace",E"trace(M)
+(E"Linear Algebra",E"Base",E"trace",E"trace(M)
 
    Matrix trace
 
 "),
 
-(E"Linear Algebra",E"",E"det",E"det(M)
+(E"Linear Algebra",E"Base",E"det",E"det(M)
 
    Matrix determinant
 
 "),
 
-(E"Linear Algebra",E"",E"inv",E"inv(M)
+(E"Linear Algebra",E"Base",E"inv",E"inv(M)
 
    Matrix inverse
 
 "),
 
-(E"Linear Algebra",E"",E"pinv",E"pinv(M)
+(E"Linear Algebra",E"Base",E"pinv",E"pinv(M)
 
    Moore-Penrose inverse
 
 "),
 
-(E"Linear Algebra",E"",E"null",E"null(M)
+(E"Linear Algebra",E"Base",E"null",E"null(M)
 
    Basis for null space of M
 
 "),
 
-(E"Linear Algebra",E"",E"repmat",E"repmat(A, n, m)
+(E"Linear Algebra",E"Base",E"repmat",E"repmat(A, n, m)
 
    Construct a matrix by repeating the given matrix \"n\" times in
    dimension 1 and \"m\" times in dimension 2.
 
 "),
 
-(E"Linear Algebra",E"",E"kron",E"kron(A, B)
+(E"Linear Algebra",E"Base",E"kron",E"kron(A, B)
 
    Kronecker tensor product of two vectors or two matrices.
 
 "),
 
-(E"Linear Algebra",E"",E"linreg",E"linreg(x, y)
+(E"Linear Algebra",E"Base",E"linreg",E"linreg(x, y)
 
    Determine parameters \"[a, b]\" that minimize the squared error
    between \"y\" and \"a+b*x\".
 
 "),
 
-(E"Linear Algebra",E"",E"linreg",E"linreg(x, y, w)
+(E"Linear Algebra",E"Base",E"linreg",E"linreg(x, y, w)
 
    Weighted least-squares linear regression
 
 "),
 
-(E"Combinatorics",E"",E"sort",E"sort(v)
+(E"Combinatorics",E"Base",E"sort",E"sort(v)
 
    Sort a vector in ascending order, according to \"isless\".
 
 "),
 
-(E"Combinatorics",E"",E"sort!",E"sort!(v)
+(E"Combinatorics",E"Base",E"sort!",E"sort!(v)
 
    In-place sort
 
 "),
 
-(E"Combinatorics",E"",E"sortr",E"sortr(v)
+(E"Combinatorics",E"Base",E"sortr",E"sortr(v)
 
    Sort a vector in descending order
 
 "),
 
-(E"Combinatorics",E"",E"sortr!",E"sortr!(v)
+(E"Combinatorics",E"Base",E"sortr!",E"sortr!(v)
 
    In-place descending-order sort
 
 "),
 
-(E"Combinatorics",E"",E"sort",E"sort(a, dim)
+(E"Combinatorics",E"Base",E"sort",E"sort(a, dim)
 
    Sort an array along the given dimension
 
 "),
 
-(E"Combinatorics",E"",E"sort",E"sort(lessthan, a[, dim])
+(E"Combinatorics",E"Base",E"sort",E"sort(lessthan, a[, dim])
 
    Sort with a custom comparison function
 
 "),
 
-(E"Combinatorics",E"",E"sortperm",E"sortperm(v) -> s,p
+(E"Combinatorics",E"Base",E"sortperm",E"sortperm(v) -> s,p
 
    Sort a vector in ascending order, also constructing the permutation
    that sorts the vector
 
 "),
 
-(E"Combinatorics",E"",E"issorted",E"issorted(v)
+(E"Combinatorics",E"Base",E"issorted",E"issorted(v)
 
    Test whether a vector is in ascending sorted order
 
 "),
 
-(E"Combinatorics",E"",E"nthperm",E"nthperm(v, k)
+(E"Combinatorics",E"Base",E"nthperm",E"nthperm(v, k)
 
    Compute the kth lexicographic permutation of a vector
 
 "),
 
-(E"Combinatorics",E"",E"nthperm!",E"nthperm!(v, k)
+(E"Combinatorics",E"Base",E"nthperm!",E"nthperm!(v, k)
 
    In-place version of \"nthperm\"
 
 "),
 
-(E"Combinatorics",E"",E"randperm",E"randperm(n)
+(E"Combinatorics",E"Base",E"randperm",E"randperm(n)
 
    Construct a random permutation of the given length
 
 "),
 
-(E"Combinatorics",E"",E"randcycle",E"randcycle(n)
+(E"Combinatorics",E"Base",E"randcycle",E"randcycle(n)
 
    Construct a random cyclic permutation of the given length
 
 "),
 
-(E"Combinatorics",E"",E"shuffle",E"shuffle(v)
+(E"Combinatorics",E"Base",E"shuffle",E"shuffle(v)
 
    Randomly rearrange the elements of a vector
 
 "),
 
-(E"Combinatorics",E"",E"shuffle!",E"shuffle!(v)
+(E"Combinatorics",E"Base",E"shuffle!",E"shuffle!(v)
 
    In-place version of \"shuffle\"
 
 "),
 
-(E"Combinatorics",E"",E"reverse",E"reverse(v)
+(E"Combinatorics",E"Base",E"reverse",E"reverse(v)
 
    Reverse vector \"v\"
 
 "),
 
-(E"Combinatorics",E"",E"reverse!",E"reverse!(v)
+(E"Combinatorics",E"Base",E"reverse!",E"reverse!(v)
 
    Reverse vector \"v\" in-place
 
 "),
 
-(E"Combinatorics",E"",E"select",E"select(v, k)
+(E"Combinatorics",E"Base",E"select",E"select(v, k)
 
    Find the element in position \"k\" in the sorted vector \"v\"
    without sorting
 
 "),
 
-(E"Combinatorics",E"",E"select!",E"select!(v, k)
+(E"Combinatorics",E"Base",E"select!",E"select!(v, k)
 
    In-place version of \"select\"
 
 "),
 
-(E"Statistics",E"",E"mean",E"mean(v[, dim])
+(E"Statistics",E"Base",E"mean",E"mean(v[, dim])
 
    Compute the mean of whole array \"v\", or optionally along
    dimension \"dim\"
 
 "),
 
-(E"Statistics",E"",E"std",E"std(v)
+(E"Statistics",E"Base",E"std",E"std(v)
 
    Compute the standard deviation of a vector \"v\"
 
 "),
 
-(E"Statistics",E"",E"median",E"median(v)
+(E"Statistics",E"Base",E"median",E"median(v)
 
    Compute the median of a vector \"v\"
 
 "),
 
-(E"Statistics",E"",E"hist",E"hist(v[, n])
+(E"Statistics",E"Base",E"hist",E"hist(v[, n])
 
    Compute the histogram of \"v\", optionally using \"n\" bins
 
 "),
 
-(E"Statistics",E"",E"histc",E"histc(v[, e])
+(E"Statistics",E"Base",E"histc",E"histc(v[, e])
 
    Compute the histogram of \"v\", optionally using a vector \"e\" as
    the edges for the bins
 
 "),
 
-(E"Signal Processing",E"",E"fft",E"fft(A, dim)
+(E"Signal Processing",E"Base",E"fft",E"fft(A, dim)
 
    One dimensional FFT if input is a \"Vector\". For n-d cases,
    compute fft of vectors along dimension \"dim\". Most efficient if
@@ -2933,49 +2933,49 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"fft2",E"fft2()
+(E"Signal Processing",E"Base",E"fft2",E"fft2()
 
    2d FFT
 
 "),
 
-(E"Signal Processing",E"",E"fft3",E"fft3()
+(E"Signal Processing",E"Base",E"fft3",E"fft3()
 
    3d FFT
 
 "),
 
-(E"Signal Processing",E"",E"fftn",E"fftn()
+(E"Signal Processing",E"Base",E"fftn",E"fftn()
 
    N-d FFT
 
 "),
 
-(E"Signal Processing",E"",E"ifft",E"ifft(A, dim)
+(E"Signal Processing",E"Base",E"ifft",E"ifft(A, dim)
 
    Inverse FFT. Same arguments as \"fft\".
 
 "),
 
-(E"Signal Processing",E"",E"ifft2",E"ifft2()
+(E"Signal Processing",E"Base",E"ifft2",E"ifft2()
 
    Inverse 2d FFT
 
 "),
 
-(E"Signal Processing",E"",E"ifft3",E"ifft3()
+(E"Signal Processing",E"Base",E"ifft3",E"ifft3()
 
    Inverse 3d FFT
 
 "),
 
-(E"Signal Processing",E"",E"ifftn",E"ifftn()
+(E"Signal Processing",E"Base",E"ifftn",E"ifftn()
 
    Inverse N-d FFT
 
 "),
 
-(E"Signal Processing",E"",E"rfft",E"rfft(A[, dim=1])
+(E"Signal Processing",E"Base",E"rfft",E"rfft(A[, dim=1])
 
    One-dimensional FFT of real array A along dimension dim. If A has
    size \"(..., n_dim, ...)\", the result has size \"(...,
@@ -2983,65 +2983,65 @@ airyaiprime(x)
 
 "),
 
-(E"Signal Processing",E"",E"rfftn",E"rfftn(A)
+(E"Signal Processing",E"Base",E"rfftn",E"rfftn(A)
 
    N-d FFT of real array A. If A has size \"(n_1, ..., n_d)\", the
    result has size \"(floor(n_1/2)+1, ..., n_d)\".
 
 "),
 
-(E"Signal Processing",E"",E"fftshift",E"fftshift(x)
+(E"Signal Processing",E"Base",E"fftshift",E"fftshift(x)
 
    Swap the first and second halves of each dimension of \"x\".
 
 "),
 
-(E"Signal Processing",E"",E"fftshift",E"fftshift(x, dim)
+(E"Signal Processing",E"Base",E"fftshift",E"fftshift(x, dim)
 
    Swap the first and second halves of the given dimension of array
    \"x\".
 
 "),
 
-(E"Signal Processing",E"",E"ifftshift",E"ifftshift(x[, dim])
+(E"Signal Processing",E"Base",E"ifftshift",E"ifftshift(x[, dim])
 
    Undoes the effect of \"fftshift\".
 
 "),
 
-(E"Signal Processing",E"",E"filt",E"filt(b, a, x)
+(E"Signal Processing",E"Base",E"filt",E"filt(b, a, x)
 
    Apply filter described by vectors \"a\" and \"b\" to vector \"x\".
 
 "),
 
-(E"Signal Processing",E"",E"deconv",E"deconv(b, a)
+(E"Signal Processing",E"Base",E"deconv",E"deconv(b, a)
 
    Construct vector \"c\" such that \"b = conv(a,c) + r\". Equivalent
    to polynomial division.
 
 "),
 
-(E"Signal Processing",E"",E"conv",E"conv(u, v)
+(E"Signal Processing",E"Base",E"conv",E"conv(u, v)
 
    Convolution of two vectors. Uses FFT algorithm.
 
 "),
 
-(E"Signal Processing",E"",E"xcorr",E"xcorr(u, v)
+(E"Signal Processing",E"Base",E"xcorr",E"xcorr(u, v)
 
    Compute the cross-correlation of two vectors.
 
 "),
 
-(E"Parallel Computing",E"",E"addprocs_local",E"addprocs_local(n)
+(E"Parallel Computing",E"Base",E"addprocs_local",E"addprocs_local(n)
 
    Add processes on the local machine. Can be used to take advantage
    of multiple cores.
 
 "),
 
-(E"Parallel Computing",E"",E"addprocs_ssh",E"addprocs_ssh({\"host1\", \"host2\", ...})
+(E"Parallel Computing",E"Base",E"addprocs_ssh",E"addprocs_ssh({\"host1\", \"host2\", ...})
 
    Add processes on remote machines via SSH. Requires julia to be
    installed in the same location on each node, or to be available via
@@ -3049,58 +3049,58 @@ airyaiprime(x)
 
 "),
 
-(E"Parallel Computing",E"",E"addprocs_sge",E"addprocs_sge(n)
+(E"Parallel Computing",E"Base",E"addprocs_sge",E"addprocs_sge(n)
 
    Add processes via the Sun/Oracle Grid Engine batch queue, using
    \"qsub\".
 
 "),
 
-(E"Parallel Computing",E"",E"nprocs",E"nprocs()
+(E"Parallel Computing",E"Base",E"nprocs",E"nprocs()
 
    Get the number of available processors
 
 "),
 
-(E"Parallel Computing",E"",E"myid",E"myid()
+(E"Parallel Computing",E"Base",E"myid",E"myid()
 
    Get the id of the current processor
 
 "),
 
-(E"Parallel Computing",E"",E"remote_call",E"remote_call(id, func, args...)
+(E"Parallel Computing",E"Base",E"remote_call",E"remote_call(id, func, args...)
 
    Call a function asynchronously on the given arguments on the
    specified processor. Returns a \"RemoteRef\".
 
 "),
 
-(E"Parallel Computing",E"",E"wait",E"wait(RemoteRef)
+(E"Parallel Computing",E"Base",E"wait",E"wait(RemoteRef)
 
    Wait for a value to become available for the specified remote
    reference.
 
 "),
 
-(E"Parallel Computing",E"",E"fetch",E"fetch(RemoteRef)
+(E"Parallel Computing",E"Base",E"fetch",E"fetch(RemoteRef)
 
    Wait for and get the value of a remote reference.
 
 "),
 
-(E"Parallel Computing",E"",E"remote_call_wait",E"remote_call_wait(id, func, args...)
+(E"Parallel Computing",E"Base",E"remote_call_wait",E"remote_call_wait(id, func, args...)
 
    Perform \"wait(remote_call(...))\" in one message.
 
 "),
 
-(E"Parallel Computing",E"",E"remote_call_fetch",E"remote_call_fetch(id, func, args...)
+(E"Parallel Computing",E"Base",E"remote_call_fetch",E"remote_call_fetch(id, func, args...)
 
    Perform \"fetch(remote_call(...))\" in one message.
 
 "),
 
-(E"Parallel Computing",E"",E"put",E"put(RemoteRef, value)
+(E"Parallel Computing",E"Base",E"put",E"put(RemoteRef, value)
 
    Store a value to a remote reference. Implements \"shared queue of
    length 1\" semantics: if a value is already present, blocks until
@@ -3108,26 +3108,26 @@ airyaiprime(x)
 
 "),
 
-(E"Parallel Computing",E"",E"take",E"take(RemoteRef)
+(E"Parallel Computing",E"Base",E"take",E"take(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the
    reference is empty again.
 
 "),
 
-(E"Parallel Computing",E"",E"RemoteRef",E"RemoteRef()
+(E"Parallel Computing",E"Base",E"RemoteRef",E"RemoteRef()
 
    Make an uninitialized remote reference on the local machine.
 
 "),
 
-(E"Parallel Computing",E"",E"RemoteRef",E"RemoteRef(n)
+(E"Parallel Computing",E"Base",E"RemoteRef",E"RemoteRef(n)
 
    Make an uninitialized remote reference on processor \"n\".
 
 "),
 
-(E"Distributed Arrays",E"",E"darray",E"darray(init, type, dims[, distdim, procs, dist])
+(E"Distributed Arrays",E"Base",E"darray",E"darray(init, type, dims[, distdim, procs, dist])
 
    Construct a distributed array. \"init\" is a function of three
    arguments that will run on each processor, and should return an
@@ -3147,131 +3147,131 @@ airyaiprime(x)
 
 "),
 
-(E"Distributed Arrays",E"",E"darray",E"darray(f, A)
+(E"Distributed Arrays",E"Base",E"darray",E"darray(f, A)
 
    Transform \"DArray\" \"A\" to another of the same type and
    distribution by applying function \"f\" to each block of \"A\".
 
 "),
 
-(E"Distributed Arrays",E"",E"dzeros",E"dzeros([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dzeros",E"dzeros([type], dims, ...)
 
    Construct a distributed array of zeros. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"dones",E"dones([type], dims, ...)
+(E"Distributed Arrays",E"Base",E"dones",E"dones([type], dims, ...)
 
    Construct a distributed array of ones. Trailing arguments are the
    same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"dfill",E"dfill(x, dims, ...)
+(E"Distributed Arrays",E"Base",E"dfill",E"dfill(x, dims, ...)
 
    Construct a distributed array filled with value \"x\". Trailing
    arguments are the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"drand",E"drand(dims, ...)
+(E"Distributed Arrays",E"Base",E"drand",E"drand(dims, ...)
 
    Construct a distributed uniform random array. Trailing arguments
    are the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"drandn",E"drandn(dims, ...)
+(E"Distributed Arrays",E"Base",E"drandn",E"drandn(dims, ...)
 
    Construct a distributed normal random array. Trailing arguments are
    the same as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"dcell",E"dcell(dims, ...)
+(E"Distributed Arrays",E"Base",E"dcell",E"dcell(dims, ...)
 
    Construct a distributed cell array. Trailing arguments are the same
    as those accepted by \"darray\".
 
 "),
 
-(E"Distributed Arrays",E"",E"distribute",E"distribute(a[, distdim])
+(E"Distributed Arrays",E"Base",E"distribute",E"distribute(a[, distdim])
 
    Convert a local array to distributed
 
 "),
 
-(E"Distributed Arrays",E"",E"localize",E"localize(d)
+(E"Distributed Arrays",E"Base",E"localize",E"localize(d)
 
    Get the local piece of a distributed array
 
 "),
 
-(E"Distributed Arrays",E"",E"changedist",E"changedist(d, distdim)
+(E"Distributed Arrays",E"Base",E"changedist",E"changedist(d, distdim)
 
    Change the distributed dimension of a \"DArray\"
 
 "),
 
-(E"Distributed Arrays",E"",E"myindexes",E"myindexes(d)
+(E"Distributed Arrays",E"Base",E"myindexes",E"myindexes(d)
 
    A tuple describing the indexes owned by the local processor
 
 "),
 
-(E"Distributed Arrays",E"",E"owner",E"owner(d, i)
+(E"Distributed Arrays",E"Base",E"owner",E"owner(d, i)
 
    Get the id of the processor holding index \"i\" in the distributed
    dimension
 
 "),
 
-(E"Distributed Arrays",E"",E"procs",E"procs(d)
+(E"Distributed Arrays",E"Base",E"procs",E"procs(d)
 
    Get the vector of processors storing pieces of \"d\"
 
 "),
 
-(E"Distributed Arrays",E"",E"distdim",E"distdim(d)
+(E"Distributed Arrays",E"Base",E"distdim",E"distdim(d)
 
    Get the distributed dimension of \"d\"
 
 "),
 
-(E"System",E"",E"system",E"system(\"command\")
+(E"System",E"Base",E"system",E"system(\"command\")
 
    Run a shell command.
 
 "),
 
-(E"System",E"",E"gethostname",E"gethostname()
+(E"System",E"Base",E"gethostname",E"gethostname()
 
    Get the local machine's host name.
 
 "),
 
-(E"System",E"",E"getipaddr",E"getipaddr()
+(E"System",E"Base",E"getipaddr",E"getipaddr()
 
    Get the IP address of the local machine, as a string of the form
    \"x.x.x.x\".
 
 "),
 
-(E"System",E"",E"cwd",E"cwd()
+(E"System",E"Base",E"cwd",E"cwd()
 
    Get the current working directory.
 
 "),
 
-(E"System",E"",E"cd",E"cd(\"dir\")
+(E"System",E"Base",E"cd",E"cd(\"dir\")
 
    Set the current working directory. Returns the new current
    directory.
 
 "),
 
-(E"System",E"",E"mkdir",E"mkdir(path[, mode])
+(E"System",E"Base",E"mkdir",E"mkdir(path[, mode])
 
    Make a new directory with name \"path\" and permissions \"mode\".
    \"mode\" defaults to 0o777, modified by the current file creation
@@ -3279,109 +3279,109 @@ airyaiprime(x)
 
 "),
 
-(E"System",E"",E"rmdir",E"rmdir(path)
+(E"System",E"Base",E"rmdir",E"rmdir(path)
 
    Remove the directory named \"path\".
 
 "),
 
-(E"System",E"",E"getpid",E"getpid()
+(E"System",E"Base",E"getpid",E"getpid()
 
    Get julia's process ID.
 
 "),
 
-(E"System",E"",E"time",E"time()
+(E"System",E"Base",E"time",E"time()
 
    Get the time in seconds since the epoch, with fairly high
    (typically, microsecond) resolution.
 
 "),
 
-(E"System",E"",E"time_ns",E"time_ns()
+(E"System",E"Base",E"time_ns",E"time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is
    undefined, and wraps every 5.8 years.
 
 "),
 
-(E"System",E"",E"tic",E"tic()
+(E"System",E"Base",E"tic",E"tic()
 
    Set a timer to be read by the next call to \"toc\" or \"toq\". The
    macro call \"@time expr\" can also be used to time evaluation.
 
 "),
 
-(E"System",E"",E"toc",E"toc()
+(E"System",E"Base",E"toc",E"toc()
 
    Print and return the time elapsed since the last \"tic\"
 
 "),
 
-(E"System",E"",E"toq",E"toq()
+(E"System",E"Base",E"toq",E"toq()
 
    Return, but do not print, the time elapsed since the last \"tic\"
 
 "),
 
-(E"System",E"",E"EnvHash",E"EnvHash()
+(E"System",E"Base",E"EnvHash",E"EnvHash()
 
    A singleton of this type, \"ENV\", provides a hash table interface
    to environment variables.
 
 "),
 
-(E"System",E"",E"dlopen",E"dlopen(libfile)
+(E"System",E"Base",E"dlopen",E"dlopen(libfile)
 
    Load a shared library, returning an opaque handle
 
 "),
 
-(E"System",E"",E"dlsym",E"dlsym(handle, sym)
+(E"System",E"Base",E"dlsym",E"dlsym(handle, sym)
 
    Look up a symbol from a shared library handle
 
 "),
 
-(E"Errors",E"",E"error",E"error(message)
+(E"Errors",E"Base",E"error",E"error(message)
 
    Raise an error with the given message
 
 "),
 
-(E"Errors",E"",E"throw",E"throw(e)
+(E"Errors",E"Base",E"throw",E"throw(e)
 
    Throw an object as an exception
 
 "),
 
-(E"Errors",E"",E"errno",E"errno()
+(E"Errors",E"Base",E"errno",E"errno()
 
    Get the value of the C library's \"errno\"
 
 "),
 
-(E"Errors",E"",E"strerror",E"strerror(n)
+(E"Errors",E"Base",E"strerror",E"strerror(n)
 
    Convert a system call error code to a descriptive string
 
 "),
 
-(E"Errors",E"",E"assert",E"assert(cond)
+(E"Errors",E"Base",E"assert",E"assert(cond)
 
    Raise an error if \"cond\" is false. Also available as the macro
    \"@assert expr\".
 
 "),
 
-(E"Tasks",E"",E"Task",E"Task(func)
+(E"Tasks",E"Base",E"Task",E"Task(func)
 
    Create a \"Task\" (i.e. thread, or coroutine) to execute the given
    function. The task exits when this function returns.
 
 "),
 
-(E"Tasks",E"",E"yieldto",E"yieldto(task, args...)
+(E"Tasks",E"Base",E"yieldto",E"yieldto(task, args...)
 
    Switch to the given task. The first time a task is switched to, the
    task's function is called with \"args\". On subsequent switches,
@@ -3389,53 +3389,53 @@ airyaiprime(x)
 
 "),
 
-(E"Tasks",E"",E"current_task",E"current_task()
+(E"Tasks",E"Base",E"current_task",E"current_task()
 
    Get the currently running Task.
 
 "),
 
-(E"Tasks",E"",E"istaskdone",E"istaskdone(task)
+(E"Tasks",E"Base",E"istaskdone",E"istaskdone(task)
 
    Tell whether a task has exited.
 
 "),
 
-(E"Tasks",E"",E"consume",E"consume(task)
+(E"Tasks",E"Base",E"consume",E"consume(task)
 
    Receive the next value passed to \"produce\" by the specified task.
 
 "),
 
-(E"Tasks",E"",E"produce",E"produce(value)
+(E"Tasks",E"Base",E"produce",E"produce(value)
 
    Send the given value to the last \"consume\" call, switching to the
    consumer task.
 
 "),
 
-(E"Tasks",E"",E"make_scheduled",E"make_scheduled(task)
+(E"Tasks",E"Base",E"make_scheduled",E"make_scheduled(task)
 
    Register a task with the main event loop, so it will automatically
    run when possible.
 
 "),
 
-(E"Tasks",E"",E"yield",E"yield()
+(E"Tasks",E"Base",E"yield",E"yield()
 
    For scheduled tasks, switch back to the scheduler to allow another
    scheduled task to run.
 
 "),
 
-(E"Tasks",E"",E"tls",E"tls(symbol)
+(E"Tasks",E"Base",E"tls",E"tls(symbol)
 
    Look up the value of a symbol in the current task's task-local
    storage.
 
 "),
 
-(E"Tasks",E"",E"tls",E"tls(symbol, value)
+(E"Tasks",E"Base",E"tls",E"tls(symbol, value)
 
    Assign a value to a symbol in the current task's task-local
    storage.
@@ -3561,7 +3561,7 @@ airyaiprime(x)
 
 "),
 
-(E"cpp.jl",E"cpp.jl",E"cpp",E"cpp()
+(E"cpp.jl",E"",E"@cpp",E"@cpp(ccall_expression)
 
    Suppose you have a C++ shared library, \"libdemo\", which contains
    a function \"timestwo\":
@@ -3605,31 +3605,31 @@ airyaiprime(x)
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_create_file",E"fits_create_file(filename::String)
+(E"fitsio.jl",E"",E"fits_create_file",E"fits_create_file(filename::String)
 
    Create and open a new empty output FITS file.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_clobber_file",E"fits_clobber_file(filename::String)
+(E"fitsio.jl",E"",E"fits_clobber_file",E"fits_clobber_file(filename::String)
 
    Like fits_create_file, but overwrites \"filename\" if it exists.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_open_file",E"fits_open_file(filename::String)
+(E"fitsio.jl",E"",E"fits_open_file",E"fits_open_file(filename::String)
 
    Open an existing data file.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_close_file",E"fits_close_file(f::FITSFile)
+(E"fitsio.jl",E"",E"fits_close_file",E"fits_close_file(f::FITSFile)
 
    Close a previously opened FITS file.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_get_hdrspace",E"fits_get_hdrspace(f::FITSFile) -> (keysexist, morekeys)
+(E"fitsio.jl",E"",E"fits_get_hdrspace",E"fits_get_hdrspace(f::FITSFile) -> (keysexist, morekeys)
 
    Return the number of existing keywords (not counting the END
    keyword) and the amount of space currently available for more
@@ -3637,125 +3637,125 @@ airyaiprime(x)
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_read_keyword",E"fits_read_keyword(f::FITSFile, keyname::String) -> (value, comment)
+(E"fitsio.jl",E"",E"fits_read_keyword",E"fits_read_keyword(f::FITSFile, keyname::String) -> (value, comment)
 
    Return the specified keyword.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_read_record",E"fits_read_record(f::FITSFile, keynum::Int) -> String
+(E"fitsio.jl",E"",E"fits_read_record",E"fits_read_record(f::FITSFile, keynum::Int) -> String
 
    Return the nth header record in the CHU. The first keyword in the
-   header is at keynum = 1.
+   header is at \"keynum = 1\".
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_read_keyn",E"fits_read_keyn(f::FITSFile, keynum::Int) -> (name, value, comment)
+(E"fitsio.jl",E"",E"fits_read_keyn",E"fits_read_keyn(f::FITSFile, keynum::Int) -> (name, value, comment)
 
    Return the nth header record in the CHU. The first keyword in the
-   header is at keynum = 1.
+   header is at \"keynum = 1\".
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_write_key",E"fits_write_key(f::FITSFile, keyname::String, value, comment::String)
+(E"fitsio.jl",E"",E"fits_write_key",E"fits_write_key(f::FITSFile, keyname::String, value, comment::String)
 
    Write a keyword of the appropriate data type into the CHU.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_write_record",E"fits_write_record(f::FITSFile, card::String)
+(E"fitsio.jl",E"",E"fits_write_record",E"fits_write_record(f::FITSFile, card::String)
 
    Write a user specified keyword record into the CHU.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_delete_record",E"fits_delete_record(f::FITSFile, keynum::Int)
+(E"fitsio.jl",E"",E"fits_delete_record",E"fits_delete_record(f::FITSFile, keynum::Int)
 
    Delete the keyword record at the specified index.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_delete_key",E"fits_delete_key(f::FITSFile, keyname::String)
+(E"fitsio.jl",E"",E"fits_delete_key",E"fits_delete_key(f::FITSFile, keyname::String)
 
-   Delete the keyword named *keyname*.
+   Delete the keyword named \"keyname\".
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_get_img_size",E"fits_get_img_size(f::FITSFile)
+(E"fitsio.jl",E"",E"fits_get_img_size",E"fits_get_img_size(f::FITSFile)
 
    Get the dimensions of the image.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_create_img",E"fits_create_img(f::FITSFile, t::Type, naxes::Vector{Int})
+(E"fitsio.jl",E"",E"fits_create_img",E"fits_create_img(f::FITSFile, t::Type, naxes::Vector{Int})
 
    Create a new primary array or IMAGE extension with a specified data
    type and size.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_write_pix",E"fits_write_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
+(E"fitsio.jl",E"",E"fits_write_pix",E"fits_write_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
 
    Write pixels from *data* into the FITS file.
 
 "),
 
-(E"fitsio.jl",E"fitsio.jl",E"fits_read_pix",E"fits_read_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
+(E"fitsio.jl",E"",E"fits_read_pix",E"fits_read_pix(f::FITSFile, fpixel::Vector{Int}, nelements::Int, data::Array)
 
    Read pixels from the FITS file into \"data\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_prob_name",E"glp_set_prob_name(glp_prob, name)
+(E"glpk.jl",E"",E"glp_set_prob_name",E"glp_set_prob_name(glp_prob, name)
 
    Assigns a name to the problem object (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_obj_name",E"glp_set_obj_name(glp_prob, name)
+(E"glpk.jl",E"",E"glp_set_obj_name",E"glp_set_obj_name(glp_prob, name)
 
    Assigns a name to the objective function (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_obj_dir",E"glp_set_obj_dir(glp_prob, dir)
+(E"glpk.jl",E"",E"glp_set_obj_dir",E"glp_set_obj_dir(glp_prob, dir)
 
    Sets the optimization direction, \"GLP_MIN\" (minimization) or
    \"GLP_MAX\" (maximization).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_add_rows",E"glp_add_rows(glp_prob, rows)
+(E"glpk.jl",E"",E"glp_add_rows",E"glp_add_rows(glp_prob, rows)
 
    Adds the given number of rows (constraints) to the problem object;
    returns the number of the first new row added.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_add_cols",E"glp_add_cols(glp_prob, cols)
+(E"glpk.jl",E"",E"glp_add_cols",E"glp_add_cols(glp_prob, cols)
 
    Adds the given number of columns (structural variables) to the
    problem object; returns the number of the first new column added.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_row_name",E"glp_set_row_name(glp_prob, row, name)
+(E"glpk.jl",E"",E"glp_set_row_name",E"glp_set_row_name(glp_prob, row, name)
 
    Assigns a name to the specified row (or deletes it if \"name\" is
    empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_col_name",E"glp_set_col_name(glp_prob, col, name)
+(E"glpk.jl",E"",E"glp_set_col_name",E"glp_set_col_name(glp_prob, col, name)
 
    Assigns a name to the specified column (or deletes it if \"name\"
    is empty or \"nothing\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_row_bnds",E"glp_set_row_bnds(glp_prob, row, bounds_type, lb, ub)
+(E"glpk.jl",E"",E"glp_set_row_bnds",E"glp_set_row_bnds(glp_prob, row, bounds_type, lb, ub)
 
    Sets the type and bounds on a row. \"type\" must be one of
    \"GLP_FR\" (free), \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper
@@ -3765,7 +3765,7 @@ airyaiprime(x)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_col_bnds",E"glp_set_col_bnds(glp_prob, col, bounds_type, lb, ub)
+(E"glpk.jl",E"",E"glp_set_col_bnds",E"glp_set_col_bnds(glp_prob, col, bounds_type, lb, ub)
 
    Sets the type and bounds on a column. \"type\" must be one of
    \"GLP_FR\" (free), \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper
@@ -3775,14 +3775,14 @@ airyaiprime(x)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_obj_coef",E"glp_set_obj_coef(glp_prob, col, coef)
+(E"glpk.jl",E"",E"glp_set_obj_coef",E"glp_set_obj_coef(glp_prob, col, coef)
 
    Sets the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_mat_row",E"glp_set_mat_row(glp_prob, row[, len], ind, val)
+(E"glpk.jl",E"",E"glp_set_mat_row",E"glp_set_mat_row(glp_prob, row[, len], ind, val)
 
    Sets (replaces) the content of a row. The content is specified in
    sparse format: \"ind\" is a vector of indices, \"val\" is the
@@ -3797,14 +3797,14 @@ airyaiprime(x)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_mat_col",E"glp_set_mat_col(glp_prob, col[, len], ind, val)
+(E"glpk.jl",E"",E"glp_set_mat_col",E"glp_set_mat_col(glp_prob, col[, len], ind, val)
 
    Sets (replaces) the content of a column. Everything else is like
    \"glp_set_mat_row\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_load_matrix",E"glp_load_matrix(glp_prob[, numel], ia, ja, ar)
+(E"glpk.jl",E"",E"glp_load_matrix",E"glp_load_matrix(glp_prob[, numel], ia, ja, ar)
 glp_load_matrix(glp_prob, A)
 
    Sets (replaces) the content matrix (i.e. sets all  rows/coluns at
@@ -3825,7 +3825,7 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_check_dup",E"glp_check_dup(rows, cols[, numel], ia, ja)
+(E"glpk.jl",E"",E"glp_check_dup",E"glp_check_dup(rows, cols[, numel], ia, ja)
 
    Check for duplicates in the indices vectors \"ia\" and \"ja\".
    \"numel\" has the same meaning and (optional) use as in
@@ -3836,13 +3836,13 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sort_matrix",E"glp_sort_matrix(glp_prob)
+(E"glpk.jl",E"",E"glp_sort_matrix",E"glp_sort_matrix(glp_prob)
 
    Sorts the elements of the problem object's matrix.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_del_rows",E"glp_del_rows(glp_prob[, num_rows], rows_ids)
+(E"glpk.jl",E"",E"glp_del_rows",E"glp_del_rows(glp_prob[, num_rows], rows_ids)
 
    Deletes rows from the problem object. Rows are specified in the
    \"rows_ids\" vector. \"num_rows\" is the number of elements of
@@ -3853,13 +3853,13 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_del_cols",E"glp_del_cols(glp_prob, cols_ids)
+(E"glpk.jl",E"",E"glp_del_cols",E"glp_del_cols(glp_prob, cols_ids)
 
    Deletes columns from the problem object. See \"glp_del_rows\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_copy_prob",E"glp_copy_prob(glp_prob_dest, glp_prob, copy_names)
+(E"glpk.jl",E"",E"glp_copy_prob",E"glp_copy_prob(glp_prob_dest, glp_prob, copy_names)
 
    Makes a copy of the problem object. The flag \"copy_names\"
    determines if names are copied, and must be either \"GLP_ON\" or
@@ -3867,60 +3867,60 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_erase_prob",E"glp_erase_prob(glp_prob)
+(E"glpk.jl",E"",E"glp_erase_prob",E"glp_erase_prob(glp_prob)
 
    Resets the problem object.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_prob_name",E"glp_get_prob_name(glp_prob)
+(E"glpk.jl",E"",E"glp_get_prob_name",E"glp_get_prob_name(glp_prob)
 
    Returns the problem object's name. Unlike the C version, if the
    problem has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_obj_name",E"glp_get_obj_name(glp_prob)
+(E"glpk.jl",E"",E"glp_get_obj_name",E"glp_get_obj_name(glp_prob)
 
    Returns the objective function's name. Unlike the C version, if the
    objective has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_obj_dir",E"glp_get_obj_dir(glp_prob)
+(E"glpk.jl",E"",E"glp_get_obj_dir",E"glp_get_obj_dir(glp_prob)
 
    Returns the optimization direction, \"GLP_MIN\" (minimization) or
    \"GLP_MAX\" (maximization).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_num_rows",E"glp_get_num_rows(glp_prob)
+(E"glpk.jl",E"",E"glp_get_num_rows",E"glp_get_num_rows(glp_prob)
 
    Returns the current number of rows.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_num_cols",E"glp_get_num_cols(glp_prob)
+(E"glpk.jl",E"",E"glp_get_num_cols",E"glp_get_num_cols(glp_prob)
 
    Returns the current number of columns.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_name",E"glp_get_row_name(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_name",E"glp_get_row_name(glp_prob, row)
 
    Returns the name of the specified row. Unlike the C version, if the
    row has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_name",E"glp_get_col_name(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_name",E"glp_get_col_name(glp_prob, col)
 
    Returns the name of the specified column. Unlike the C version, if
    the column has no assigned name, returns an empty string.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_type",E"glp_get_row_type(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_type",E"glp_get_row_type(glp_prob, row)
 
    Returns the type of the specified row: \"GLP_FR\" (free),
    \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper bounded), \"GLP_DB\"
@@ -3928,21 +3928,21 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_lb",E"glp_get_row_lb(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_lb",E"glp_get_row_lb(glp_prob, row)
 
    Returns the lower bound of the specified row, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_ub",E"glp_get_row_ub(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_ub",E"glp_get_row_ub(glp_prob, row)
 
    Returns the upper bound of the specified row, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_type",E"glp_get_col_type(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_type",E"glp_get_col_type(glp_prob, col)
 
    Returns the type of the specified column: \"GLP_FR\" (free),
    \"GLP_LO\" (lower bounded), \"GLP_UP\" (upper bounded), \"GLP_DB\"
@@ -3950,34 +3950,34 @@ glp_load_matrix(glp_prob, A)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_lb",E"glp_get_col_lb(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_lb",E"glp_get_col_lb(glp_prob, col)
 
    Returns the lower bound of the specified column, \"-DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_ub",E"glp_get_col_ub(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_ub",E"glp_get_col_ub(glp_prob, col)
 
    Returns the upper bound of the specified column, \"+DBL_MAX\" if
    unbounded.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_obj_coef",E"glp_get_obj_coef(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_obj_coef",E"glp_get_obj_coef(glp_prob, col)
 
    Return the objective coefficient to a column (\"col\" can be 0 to
    indicate the constant term of the objective function).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_num_nz",E"glp_get_num_nz(glp_prob)
+(E"glpk.jl",E"",E"glp_get_num_nz",E"glp_get_num_nz(glp_prob)
 
    Return the number of non-zero elements in the constraint matrix.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_mat_row",E"glp_get_mat_row(glp_prob, row, ind, val)
+(E"glpk.jl",E"",E"glp_get_mat_row",E"glp_get_mat_row(glp_prob, row, ind, val)
 glp_get_mat_row(glp_prob, row)
 
    Returns the contents of a row. In the first form (original C API),
@@ -3992,65 +3992,65 @@ glp_get_mat_row(glp_prob, row)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_mat_col",E"glp_get_mat_col(glp_prob, col, ind, val)
+(E"glpk.jl",E"",E"glp_get_mat_col",E"glp_get_mat_col(glp_prob, col, ind, val)
 glp_get_mat_col(glp_prob, col)
 
    Returns the contents of a column. See \"glp_get_mat_row\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_create_index",E"glp_create_index(glp_prob)
+(E"glpk.jl",E"",E"glp_create_index",E"glp_create_index(glp_prob)
 
    Creates the name index (used by \"glp_find_row\", \"glp_find_col\")
    for the problem object.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_find_row",E"glp_find_row(glp_prob, name)
+(E"glpk.jl",E"",E"glp_find_row",E"glp_find_row(glp_prob, name)
 
    Finds the numeric id of a row by name. Returns 0 if no row with the
    given name is found.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_find_col",E"glp_find_col(glp_prob, name)
+(E"glpk.jl",E"",E"glp_find_col",E"glp_find_col(glp_prob, name)
 
    Finds the numeric id of a column by name. Returns 0 if no column
    with the given name is found.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_delete_index",E"glp_delete_index(glp_prob)
+(E"glpk.jl",E"",E"glp_delete_index",E"glp_delete_index(glp_prob)
 
    Deletes the name index for the problem object.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_rii",E"glp_set_rii(glp_prob, row, rii)
+(E"glpk.jl",E"",E"glp_set_rii",E"glp_set_rii(glp_prob, row, rii)
 
    Sets the rii scale factor for the specified row.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_sjj",E"glp_set_sjj(glp_prob, col, sjj)
+(E"glpk.jl",E"",E"glp_set_sjj",E"glp_set_sjj(glp_prob, col, sjj)
 
    Sets the sjj scale factor for the specified column.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_rii",E"glp_get_rii(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_rii",E"glp_get_rii(glp_prob, row)
 
    Returns the rii scale factor for the specified row.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_sjj",E"glp_get_sjj(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_sjj",E"glp_get_sjj(glp_prob, col)
 
    Returns the sjj scale factor for the specified column.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_scale_prob",E"glp_scale_prob(glp_prob, flags)
+(E"glpk.jl",E"",E"glp_scale_prob",E"glp_scale_prob(glp_prob, flags)
 
    Performs automatic scaling of problem data for the problem object.
    The parameter \"flags\" can be \"GLP_SF_AUTO\" (automatic) or a
@@ -4060,13 +4060,13 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_unscale_prob",E"glp_unscale_prob(glp_prob)
+(E"glpk.jl",E"",E"glp_unscale_prob",E"glp_unscale_prob(glp_prob)
 
    Unscale the problem data (cancels the scaling effect).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_row_stat",E"glp_set_row_stat(glp_prob, row, stat)
+(E"glpk.jl",E"",E"glp_set_row_stat",E"glp_set_row_stat(glp_prob, row, stat)
 
    Sets the status of the specified row. \"stat\" must be one of:
    \"GLP_BS\" (basic), \"GLP_NL\" (non-basic lower bounded),
@@ -4075,7 +4075,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_col_stat",E"glp_set_col_stat(glp_prob, col, stat)
+(E"glpk.jl",E"",E"glp_set_col_stat",E"glp_set_col_stat(glp_prob, col, stat)
 
    Sets the status of the specified column. \"stat\" must be one of:
    \"GLP_BS\" (basic), \"GLP_NL\" (non-basic lower bounded),
@@ -4084,28 +4084,28 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_std_basis",E"glp_std_basis(glp_prob)
+(E"glpk.jl",E"",E"glp_std_basis",E"glp_std_basis(glp_prob)
 
    Constructs the standard (trivial) initial LP basis for the problem
    object.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_adv_basis",E"glp_adv_basis(glp_prob[, flags])
+(E"glpk.jl",E"",E"glp_adv_basis",E"glp_adv_basis(glp_prob[, flags])
 
    Constructs an advanced initial LP basis for the problem object. The
    flag \"flags\" is optional; it must be 0 if given.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_cpx_basis",E"glp_cpx_basis(glp_prob)
+(E"glpk.jl",E"",E"glp_cpx_basis",E"glp_cpx_basis(glp_prob)
 
    Constructs an initial LP basis for the problem object with the
    algorithm proposed by R. Bixby.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_simplex",E"glp_simplex(glp_prob[, glp_param])
+(E"glpk.jl",E"",E"glp_simplex",E"glp_simplex(glp_prob[, glp_param])
 
    The routine \"glp_simplex\" is a driver to the LP solver based on
    the simplex method. This routine retrieves problem data from the
@@ -4128,7 +4128,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_exact",E"glp_exact(glp_prob[, glp_param])
+(E"glpk.jl",E"",E"glp_exact",E"glp_exact(glp_prob[, glp_param])
 
    A tentative implementation of the primal two-phase simplex method
    based on exact (rational) arithmetic. Similar to \"glp_simplex\".
@@ -4136,11 +4136,11 @@ glp_get_mat_col(glp_prob, col)
 
    The possible return values are 0 (success) or \"GLP_EBADB\",
    \"GLP_ESING\", \"GLP_EBOUND\", \"GLP_EFAIL\", \"GLP_ITLIM\",
-   \"GLP_ETLIM\" (see \"glp_simplex\").
+   \"GLP_ETLIM\" (see \"glp_simplex()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_init_smcp",E"glp_init_smcp(glp_param)
+(E"glpk.jl",E"",E"glp_init_smcp",E"glp_init_smcp(glp_param)
 
    Initializes a \"GLPSimplexParam\" object with the default values.
    In Julia, this is done at object creation time; this function can
@@ -4148,7 +4148,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_status",E"glp_get_status(glp_prob)
+(E"glpk.jl",E"",E"glp_get_status",E"glp_get_status(glp_prob)
 
    Returns the generic status of the current basic solution:
    \"GLP_OPT\" (optimal), \"GLP_FEAS\" (feasible), \"GLP_INFEAS\"
@@ -4157,67 +4157,67 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_prim_stat",E"glp_get_prim_stat(glp_prob)
+(E"glpk.jl",E"",E"glp_get_prim_stat",E"glp_get_prim_stat(glp_prob)
 
    Returns the status of the primal basic solution: \"GLP_FEAS\",
    \"GLP_INFEAS\", \"GLP_NOFEAS\", \"GLP_UNDEF\" (see
-   \"glp_get_status\").
+   \"glp_get_status()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_dual_stat",E"glp_get_dual_stat(glp_prob)
+(E"glpk.jl",E"",E"glp_get_dual_stat",E"glp_get_dual_stat(glp_prob)
 
    Returns the status of the dual basic solution: \"GLP_FEAS\",
    \"GLP_INFEAS\", \"GLP_NOFEAS\", \"GLP_UNDEF\" (see
-   \"glp_get_status\").
+   \"glp_get_status()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_obj_val",E"glp_get_obj_val(glp_prob)
+(E"glpk.jl",E"",E"glp_get_obj_val",E"glp_get_obj_val(glp_prob)
 
    Returns the current value of the objective function.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_stat",E"glp_get_row_stat(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_stat",E"glp_get_row_stat(glp_prob, row)
 
    Returns the status of the specified row: \"GLP_BS\", \"GLP_NL\",
-   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat\").
+   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_prim",E"glp_get_row_prim(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_prim",E"glp_get_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_dual",E"glp_get_row_dual(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_dual",E"glp_get_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_stat",E"glp_get_col_stat(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_stat",E"glp_get_col_stat(glp_prob, col)
 
    Returns the status of the specified column: \"GLP_BS\", \"GLP_NL\",
-   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat\").
+   \"GLP_NU\", \"GLP_NF\", \"GLP_NS\" (see \"glp_set_row_stat()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_prim",E"glp_get_col_prim(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_prim",E"glp_get_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_dual",E"glp_get_col_dual(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_dual",E"glp_get_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_unbnd_ray",E"glp_get_unbnd_ray(glp_prob)
+(E"glpk.jl",E"",E"glp_get_unbnd_ray",E"glp_get_unbnd_ray(glp_prob)
 
    Returns the number k of a variable, which causes primal or dual
    unboundedness (if 1 <= k <= rows it's row k; if rows+1 <= k <=
@@ -4225,7 +4225,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_interior",E"glp_interior(glp_prob[, glp_param])
+(E"glpk.jl",E"",E"glp_interior",E"glp_interior(glp_prob[, glp_param])
 
    The routine \"glp_interior\" is a driver to the LP solver based on
    the primal-dual interior-point method. This routine retrieves
@@ -4244,7 +4244,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_init_iptcp",E"glp_init_iptcp(glp_param)
+(E"glpk.jl",E"",E"glp_init_iptcp",E"glp_init_iptcp(glp_param)
 
    Initializes a \"GLPInteriorParam\" object with the default values.
    In Julia, this is done at object creation time; this function can
@@ -4252,7 +4252,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_status",E"glp_ipt_status(glp_prob)
+(E"glpk.jl",E"",E"glp_ipt_status",E"glp_ipt_status(glp_prob)
 
    Returns the status of the interior-point solution: \"GLP_OPT\"
    (optimal), \"GLP_INFEAS\" (infeasible), \"GLP_NOFEAS\" (no feasible
@@ -4260,42 +4260,42 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_obj_val",E"glp_ipt_obj_val(glp_prob)
+(E"glpk.jl",E"",E"glp_ipt_obj_val",E"glp_ipt_obj_val(glp_prob)
 
    Returns the current value of the objective function for the
    interior-point solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_row_prim",E"glp_ipt_row_prim(glp_prob, row)
+(E"glpk.jl",E"",E"glp_ipt_row_prim",E"glp_ipt_row_prim(glp_prob, row)
 
    Returns the primal value of the specified row for the interior-
    point solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_row_dual",E"glp_ipt_row_dual(glp_prob, row)
+(E"glpk.jl",E"",E"glp_ipt_row_dual",E"glp_ipt_row_dual(glp_prob, row)
 
    Returns the dual value (reduced cost) of the specified row for the
    interior-point solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_col_prim",E"glp_ipt_col_prim(glp_prob, col)
+(E"glpk.jl",E"",E"glp_ipt_col_prim",E"glp_ipt_col_prim(glp_prob, col)
 
    Returns the primal value of the specified column for the interior-
    point solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ipt_col_dual",E"glp_ipt_col_dual(glp_prob, col)
+(E"glpk.jl",E"",E"glp_ipt_col_dual",E"glp_ipt_col_dual(glp_prob, col)
 
    Returns the dual value (reduced cost) of the specified column for
    the interior-point solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_col_kind",E"glp_set_col_kind(glp_prob, col, kind)
+(E"glpk.jl",E"",E"glp_set_col_kind",E"glp_set_col_kind(glp_prob, col, kind)
 
    Sets the kind for the specified column (for mixed-integer
    programming). \"kind\" must be one of: \"GLP_CV\" (continuous),
@@ -4303,25 +4303,26 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_kind",E"glp_get_col_kind(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_kind",E"glp_get_col_kind(glp_prob, col)
 
-   Returns the kind for the specified column (see *glp_set_col_kind*).
+   Returns the kind for the specified column (see
+   \"glp_set_col_kind()\").
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_num_int",E"glp_get_num_int(glp_prob)
+(E"glpk.jl",E"",E"glp_get_num_int",E"glp_get_num_int(glp_prob)
 
    Returns the number of columns marked as integer (including binary).
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_num_bin",E"glp_get_num_bin(glp_prob)
+(E"glpk.jl",E"",E"glp_get_num_bin",E"glp_get_num_bin(glp_prob)
 
    Returns the number of columns marked binary.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_intopt",E"glp_intopt(glp_prob[, glp_param])
+(E"glpk.jl",E"",E"glp_intopt",E"glp_intopt(glp_prob[, glp_param])
 
    The routine \"glp_intopt\" is a driver to the mixed-integer-
    programming (MIP) solver based on the branch- and-cut method, which
@@ -4341,7 +4342,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_init_iocp",E"glp_init_iocp(glp_param)
+(E"glpk.jl",E"",E"glp_init_iocp",E"glp_init_iocp(glp_param)
 
    Initializes a \"GLPIntoptParam\" object with the default values. In
    Julia, this is done at object creation time; this function can be
@@ -4349,7 +4350,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mip_status",E"glp_mip_status(glp_prob)
+(E"glpk.jl",E"",E"glp_mip_status",E"glp_mip_status(glp_prob)
 
    Returns the generic status of the MIP solution: \"GLP_OPT\"
    (optimal), \"GLP_FEAS\" (feasible), \"GLP_NOFEAS\" (no feasible
@@ -4357,26 +4358,26 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mip_obj_val",E"glp_mip_obj_val(glp_prob)
+(E"glpk.jl",E"",E"glp_mip_obj_val",E"glp_mip_obj_val(glp_prob)
 
    Returns the current value of the objective function for the MIP
    solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mip_row_val",E"glp_mip_row_val(glp_prob, row)
+(E"glpk.jl",E"",E"glp_mip_row_val",E"glp_mip_row_val(glp_prob, row)
 
    Returns the value of the specified row for the MIP solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mip_col_val",E"glp_mip_col_val(glp_prob, col)
+(E"glpk.jl",E"",E"glp_mip_col_val",E"glp_mip_col_val(glp_prob, col)
 
    Returns the value of the specified column for the MIP solution.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_mps",E"glp_read_mps(glp_prob, format[, param], filename)
+(E"glpk.jl",E"",E"glp_read_mps",E"glp_read_mps(glp_prob, format[, param], filename)
 
    Reads problem data in MPS format from a text file. \"format\" must
    be one of \"GLP_MPS_DECK\" (fixed, old) or \"GLP_MPS_FILE\" (free,
@@ -4386,7 +4387,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_mps",E"glp_write_mps(glp_prob, format[, param], filename)
+(E"glpk.jl",E"",E"glp_write_mps",E"glp_write_mps(glp_prob, format[, param], filename)
 
    Writes problem data in MPS format from a text file. See
    \"glp_read_mps\".
@@ -4395,7 +4396,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_lp",E"glp_read_lp(glp_prob[, param], filename)
+(E"glpk.jl",E"",E"glp_read_lp",E"glp_read_lp(glp_prob[, param], filename)
 
    Reads problem data in CPLEX LP format from a text file. \"param\"
    is optional; if given it must be \"nothing\".
@@ -4404,7 +4405,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_lp",E"glp_write_lp(glp_prob[, param], filename)
+(E"glpk.jl",E"",E"glp_write_lp",E"glp_write_lp(glp_prob[, param], filename)
 
    Writes problem data in CPLEX LP format from a text file. See
    \"glp_read_lp\".
@@ -4413,7 +4414,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_prob",E"glp_read_prob(glp_prob[, flags], filename)
+(E"glpk.jl",E"",E"glp_read_prob",E"glp_read_prob(glp_prob[, flags], filename)
 
    Reads problem data in GLPK LP/MIP format from a text file.
    \"flags\" is optional; if given it must be 0.
@@ -4422,7 +4423,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_prob",E"glp_write_prob(glp_prob[, flags], filename)
+(E"glpk.jl",E"",E"glp_write_prob",E"glp_write_prob(glp_prob[, flags], filename)
 
    Writes problem data in GLPK LP/MIP format from a text file. See
    \"glp_read_prob\".
@@ -4431,7 +4432,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mpl_read_model",E"glp_mpl_read_model(glp_tran, filename, skip)
+(E"glpk.jl",E"",E"glp_mpl_read_model",E"glp_mpl_read_model(glp_tran, filename, skip)
 
    Reads the model section and, optionally, the data section, from a
    text file in MathProg format, and stores it in \"glp_tran\", which
@@ -4442,7 +4443,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mpl_read_data",E"glp_mpl_read_data(glp_tran, filename)
+(E"glpk.jl",E"",E"glp_mpl_read_data",E"glp_mpl_read_data(glp_tran, filename)
 
    Reads data section from a text file in MathProg format and stores
    it in \"glp_tran\", which is a \"GLPMathProgWorkspace\" object. May
@@ -4452,7 +4453,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mpl_generate",E"glp_mpl_generate(glp_tran[, filename])
+(E"glpk.jl",E"",E"glp_mpl_generate",E"glp_mpl_generate(glp_tran[, filename])
 
    Generates the model using its description stored in the
    \"GLPMathProgWorkspace\" translator workspace \"glp_tran\". The
@@ -4463,7 +4464,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mpl_build_prob",E"glp_mpl_build_prob(glp_tran, glp_prob)
+(E"glpk.jl",E"",E"glp_mpl_build_prob",E"glp_mpl_build_prob(glp_tran, glp_prob)
 
    Transfer information from the \"GLPMathProgWorkspace\" translator
    workspace \"glp_tran\" to the \"GLPProb\" problem object
@@ -4471,7 +4472,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mpl_postsolve",E"glp_mpl_postsolve(glp_tran, glp_prob, sol)
+(E"glpk.jl",E"",E"glp_mpl_postsolve",E"glp_mpl_postsolve(glp_tran, glp_prob, sol)
 
    Copies the solution from the \"GLPProb\" problem object
    \"glp_prob\" to the \"GLPMathProgWorkspace\" translator workspace
@@ -4486,7 +4487,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_print_sol",E"glp_print_sol(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_print_sol",E"glp_print_sol(glp_prob, filename)
 
    Writes the current basic solution to a text file, in printable
    format.
@@ -4495,7 +4496,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_sol",E"glp_read_sol(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_read_sol",E"glp_read_sol(glp_prob, filename)
 
    Reads the current basic solution from a text file, in the format
    used by \"glp_write_sol\".
@@ -4504,7 +4505,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_sol",E"glp_write_sol(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_write_sol",E"glp_write_sol(glp_prob, filename)
 
    Writes the current basic solution from a text file, in a format
    which can be read by \"glp_read_sol\".
@@ -4513,7 +4514,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_print_ipt",E"glp_print_ipt(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_print_ipt",E"glp_print_ipt(glp_prob, filename)
 
    Writes the current interior-point solution to a text file, in
    printable format.
@@ -4522,7 +4523,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_ipt",E"glp_read_ipt(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_read_ipt",E"glp_read_ipt(glp_prob, filename)
 
    Reads the current interior-point solution from a text file, in the
    format used by \"glp_write_ipt\".
@@ -4531,7 +4532,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_ipt",E"glp_write_ipt(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_write_ipt",E"glp_write_ipt(glp_prob, filename)
 
    Writes the current interior-point solution from a text file, in a
    format which can be read by \"glp_read_ipt\".
@@ -4540,7 +4541,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_print_mip",E"glp_print_mip(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_print_mip",E"glp_print_mip(glp_prob, filename)
 
    Writes the current MIP solution to a text file, in printable
    format.
@@ -4549,7 +4550,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_mip",E"glp_read_mip(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_read_mip",E"glp_read_mip(glp_prob, filename)
 
    Reads the current MIP solution from a text file, in the format used
    by \"glp_write_mip\".
@@ -4558,7 +4559,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_mip",E"glp_write_mip(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_write_mip",E"glp_write_mip(glp_prob, filename)
 
    Writes the current MIP solution from a text file, in a format which
    can be read by \"glp_read_mip\".
@@ -4567,7 +4568,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_print_ranges",E"glp_print_ranges(glp_prob, [[len,] list,] [flags,] filename)
+(E"glpk.jl",E"",E"glp_print_ranges",E"glp_print_ranges(glp_prob, [[len,] list,] [flags,] filename)
 
    Performs sensitivity analysis of current optimal basic solution and
    writes the analysis report in human-readable format to a text file.
@@ -4587,14 +4588,14 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_bf_exists",E"glp_bf_exists(glp_prob)
+(E"glpk.jl",E"",E"glp_bf_exists",E"glp_bf_exists(glp_prob)
 
    Returns non-zero if the basis fatorization for the current basis
    exists, 0 otherwise.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_factorize",E"glp_factorize(glp_prob)
+(E"glpk.jl",E"",E"glp_factorize",E"glp_factorize(glp_prob)
 
    Computes the basis factorization for the current basis.
 
@@ -4604,14 +4605,14 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_bf_updated",E"glp_bf_updated(glp_prob)
+(E"glpk.jl",E"",E"glp_bf_updated",E"glp_bf_updated(glp_prob)
 
    Returns 0 if the basis factorization was computed from scratch,
    non-zero otherwise.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_bfcp",E"glp_get_bfcp(glp_prob, glp_param)
+(E"glpk.jl",E"",E"glp_get_bfcp",E"glp_get_bfcp(glp_prob, glp_param)
 
    Retrieves control parameters, which are used on computing and
    updating the basis factorization associated with the problem
@@ -4620,7 +4621,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_set_bfcp",E"glp_set_bfcp(glp_prob[, glp_param])
+(E"glpk.jl",E"",E"glp_set_bfcp",E"glp_set_bfcp(glp_prob[, glp_param])
 
    Sets the control parameters stored in the \"GLPBasisFactParam\"
    object \"glp_param\" into the problem object. If \"glp_param\" is
@@ -4631,7 +4632,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_bhead",E"glp_get_bhead(glp_prob, k)
+(E"glpk.jl",E"",E"glp_get_bhead",E"glp_get_bhead(glp_prob, k)
 
    Returns the basis header information for the current basis. \"k\"
    is a row index.
@@ -4642,7 +4643,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_row_bind",E"glp_get_row_bind(glp_prob, row)
+(E"glpk.jl",E"",E"glp_get_row_bind",E"glp_get_row_bind(glp_prob, row)
 
    Returns the index of the basic variable \"k\" which is associated
    with the specified row, or 0 if the variable is non-basic. If
@@ -4651,7 +4652,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_get_col_bind",E"glp_get_col_bind(glp_prob, col)
+(E"glpk.jl",E"",E"glp_get_col_bind",E"glp_get_col_bind(glp_prob, col)
 
    Returns the index of the basic variable \"k\" which is associated
    with the specified column, or 0 if the variable is non-basic. If
@@ -4660,7 +4661,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_ftran",E"glp_ftran(glp_prob, v)
+(E"glpk.jl",E"",E"glp_ftran",E"glp_ftran(glp_prob, v)
 
    Performs forward transformation (FTRAN), i.e. it solves the system
    Bx = b, where B is the basis matrix, x is the vector of unknowns to
@@ -4670,7 +4671,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_btran",E"glp_btran(glp_prob, v)
+(E"glpk.jl",E"",E"glp_btran",E"glp_btran(glp_prob, v)
 
    Performs backward transformation (BTRAN), i.e. it solves the system
    B'x = b, where B is the transposed of the basis matrix, x is the
@@ -4681,7 +4682,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_warm_up",E"glp_warm_up(glp_prob)
+(E"glpk.jl",E"",E"glp_warm_up",E"glp_warm_up(glp_prob)
 
    \"Warms up\" the LP basis using current statuses assigned to rows
    and columns, i.e. computes factorization of the basis matrix (if it
@@ -4694,7 +4695,7 @@ glp_get_mat_col(glp_prob, col)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_eval_tab_row",E"glp_eval_tab_row(glp_prob, k, ind, val)
+(E"glpk.jl",E"",E"glp_eval_tab_row",E"glp_eval_tab_row(glp_prob, k, ind, val)
 glp_eval_tab_row(glp_prob, k)
 
    Computes a row of the current simplex tableau which corresponds to
@@ -4714,7 +4715,7 @@ glp_eval_tab_row(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_eval_tab_col",E"glp_eval_tab_col(glp_prob, k, ind, val)
+(E"glpk.jl",E"",E"glp_eval_tab_col",E"glp_eval_tab_col(glp_prob, k, ind, val)
 glp_eval_tab_col(glp_prob, k)
 
    Computes a column of the current simplex tableau which corresponds
@@ -4723,7 +4724,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_transform_row",E"glp_transform_row(glp_prob[, len], ind, val)
+(E"glpk.jl",E"",E"glp_transform_row",E"glp_transform_row(glp_prob[, len], ind, val)
 
    Performs the same operation as \"glp_eval_tab_row\" with the
    exception that the row to be transformed is specified explicitly as
@@ -4740,7 +4741,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_transform_col",E"glp_transform_col(glp_prob[, len], ind, val)
+(E"glpk.jl",E"",E"glp_transform_col",E"glp_transform_col(glp_prob[, len], ind, val)
 
    Performs the same operation as \"glp_eval_tab_col\" with the
    exception that the row to be transformed is specified explicitly as
@@ -4748,7 +4749,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_prim_rtest",E"glp_prim_rtest(glp_prob[, len], ind, val, dir, eps)
+(E"glpk.jl",E"",E"glp_prim_rtest",E"glp_prim_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the primal ratio test using an explicitly specified column
    of the simplex table. The current basic solution must be primal
@@ -4769,7 +4770,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_dual_rtest",E"glp_dual_rtest(glp_prob[, len], ind, val, dir, eps)
+(E"glpk.jl",E"",E"glp_dual_rtest",E"glp_dual_rtest(glp_prob[, len], ind, val, dir, eps)
 
    Performs the dual ratio test using an explicitly specified row of
    the simplex table. The current basic solution must be dual
@@ -4778,7 +4779,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_analyze_bound",E"glp_analyze_bound(glp_prob, k)
+(E"glpk.jl",E"",E"glp_analyze_bound",E"glp_analyze_bound(glp_prob, k)
 
    Analyzes the effect of varying the active bound of specified non-
    basic variable. See the GLPK manual for a detailed explanation. In
@@ -4788,7 +4789,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_analyze_coef",E"glp_analyze_coef(glp_prob, k)
+(E"glpk.jl",E"",E"glp_analyze_coef",E"glp_analyze_coef(glp_prob, k)
 
    Analyzes the effect of varying the objective coefficient at
    specified basic variable. See the GLPK manual for a detailed
@@ -4798,7 +4799,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_init_env",E"glp_init_env()
+(E"glpk.jl",E"",E"glp_init_env",E"glp_init_env()
 
    Initializes the GLPK environment. Not normally needed.
 
@@ -4808,7 +4809,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_version",E"glp_version()
+(E"glpk.jl",E"",E"glp_version",E"glp_version()
 
    Returns the GLPK version number. In Julia, instead of returning a
    string as in C, it returns a tuple of integer values, containing
@@ -4816,7 +4817,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_free_env",E"glp_free_env()
+(E"glpk.jl",E"",E"glp_free_env",E"glp_free_env()
 
    Frees all resources used by GLPK routines (memory blocks, etc.)
    which are currently still in use. Not normally needed.
@@ -4825,7 +4826,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_term_out",E"glp_term_out(flag)
+(E"glpk.jl",E"",E"glp_term_out",E"glp_term_out(flag)
 
    Enables/disables the terminal output of glpk routines. \"flag\" is
    either \"GLP_ON\" (output enabled) or \"GLP_OFF\" (output
@@ -4835,7 +4836,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_open_tee",E"glp_open_tee(filename)
+(E"glpk.jl",E"",E"glp_open_tee",E"glp_open_tee(filename)
 
    Starts copying all the terminal output to an output text file.
 
@@ -4844,7 +4845,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_close_tee",E"glp_close_tee()
+(E"glpk.jl",E"",E"glp_close_tee",E"glp_close_tee()
 
    Stops copying the terminal output to the output text file
    previously open by the \"glp_open_tee\".
@@ -4854,7 +4855,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_malloc",E"glp_malloc(size)
+(E"glpk.jl",E"",E"glp_malloc",E"glp_malloc(size)
 
    Replacement of standard C \"malloc\". Allocates uninitialized
    memeory which must freed with \"glp_free\".
@@ -4863,7 +4864,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_calloc",E"glp_calloc(n, size)
+(E"glpk.jl",E"",E"glp_calloc",E"glp_calloc(n, size)
 
    Replacement of standard C \"calloc\", but does not initialize the
    memeory. Allocates uninitialized memeory which must freed with
@@ -4873,14 +4874,14 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_free",E"glp_free(ptr)
+(E"glpk.jl",E"",E"glp_free",E"glp_free(ptr)
 
    Deallocates a memory block previously allocated by \"glp_malloc\"
    or \"glp_calloc\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mem_usage",E"glp_mem_usage()
+(E"glpk.jl",E"",E"glp_mem_usage",E"glp_mem_usage()
 
    Reports some information about utilization of the memory by the
    routines \"glp_malloc\", \"glp_calloc\", and \"glp_free\". In
@@ -4890,27 +4891,27 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_mem_limit",E"glp_mem_limit(limit)
+(E"glpk.jl",E"",E"glp_mem_limit",E"glp_mem_limit(limit)
 
    Limits the amount of memory avaliable for dynamic allocation to a
    value in megabyes given by the integer parameter \"limit\".
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_time",E"glp_time()
+(E"glpk.jl",E"",E"glp_time",E"glp_time()
 
    Returns the current universal time (UTC), in milliseconds.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_difftime",E"glp_difftime(t1, t0)
+(E"glpk.jl",E"",E"glp_difftime",E"glp_difftime(t1, t0)
 
    Returns the difference between two time values \"t1\" and \"t0\",
    expressed in seconds.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_open_file",E"glp_sdf_open_file(filename)
+(E"glpk.jl",E"",E"glp_sdf_open_file",E"glp_sdf_open_file(filename)
 
    Opens a plain data file.
 
@@ -4919,14 +4920,14 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_read_int",E"glp_sdf_read_int(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_read_int",E"glp_sdf_read_int(glp_data)
 
    Reads an integer number from the plain data file specified by the
    \"GLPData\" parameter \"glp_data\", skipping initial whitespace.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_read_num",E"glp_sdf_read_num(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_read_num",E"glp_sdf_read_num(glp_data)
 
    Reads a floating point number from the plain data file specified by
    the \"GLPData\" parameter \"glp_data\", skipping initial
@@ -4934,7 +4935,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_read_item",E"glp_sdf_read_item(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_read_item",E"glp_sdf_read_item(glp_data)
 
    Reads a data item (a String) from the plain data file specified by
    the \"GLPData\" parameter \"glp_data\", skipping initial
@@ -4942,7 +4943,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_read_text",E"glp_sdf_read_text(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_read_text",E"glp_sdf_read_text(glp_data)
 
    Reads a line of text from the plain data file specified by the
    \"GLPData\" parameter \"glp_data\", skipping initial and final
@@ -4950,19 +4951,19 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_line",E"glp_sdf_line(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_line",E"glp_sdf_line(glp_data)
 
    Returns the current line in the GLPData object \"glp_data\"
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_sdf_close_file",E"glp_sdf_close_file(glp_data)
+(E"glpk.jl",E"",E"glp_sdf_close_file",E"glp_sdf_close_file(glp_data)
 
    Closes the file associated to \"glp_data\" and frees the resources.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_read_cnfsat",E"glp_read_cnfsat(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_read_cnfsat",E"glp_read_cnfsat(glp_prob, filename)
 
    Reads the CNF-SAT problem data in DIMACS format from a text file.
 
@@ -4970,14 +4971,14 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_check_cnfsat",E"glp_check_cnfsat(glp_prob)
+(E"glpk.jl",E"",E"glp_check_cnfsat",E"glp_check_cnfsat(glp_prob)
 
    Checks if the problem object encodes a CNF-SAT problem instance, in
    which case it returns 0, otherwise returns non-zero.
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_write_cnfsat",E"glp_write_cnfsat(glp_prob, filename)
+(E"glpk.jl",E"",E"glp_write_cnfsat",E"glp_write_cnfsat(glp_prob, filename)
 
    Writes the CNF-SAT problem data in DIMACS format into a text file.
 
@@ -4985,7 +4986,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_minisat1",E"glp_minisat1(glp_prob)
+(E"glpk.jl",E"",E"glp_minisat1",E"glp_minisat1(glp_prob)
 
    The routine *glp_minisat1* is a driver to MiniSat, a CNF-SAT solver
    developed by Niklas Eén and Niklas Sörensson, Chalmers University
@@ -4997,7 +4998,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"glpk.jl",E"glpk.jl",E"glp_intfeas1",E"glp_intfeas1(glp_prob, use_bound, obj_bound)
+(E"glpk.jl",E"",E"glp_intfeas1",E"glp_intfeas1(glp_prob, use_bound, obj_bound)
 
    The routine glp_intfeas1 is a tentative implementation of an
    integer feasibility solver based on a CNF-SAT solver (currently
@@ -5017,11 +5018,11 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"gzip.jl",E"gzip.jl",E"gzopen",E"gzopen(fname[, gzmode[, buf_size]])
+(E"GZip",E"GZip",E"gzopen",E"gzopen(fname[, gzmode[, buf_size]])
 
-   Opens a file with mode (default \"r\"), setting internal buffer
-   size to buf_size (default Z_DEFAULT_BUFSIZE=8192), and returns a
-   the file as a GZipStream.
+   Opens a file with mode (default \"\"r\"\"), setting internal buffer
+   size to buf_size (default \"Z_DEFAULT_BUFSIZE=8192\"), and returns
+   a the file as a \"GZipStream\".
 
    \"gzmode\" must contain one of
 
@@ -5053,56 +5054,56 @@ glp_eval_tab_col(glp_prob, k)
    | F    | fixed code compression            |
    +------+-----------------------------------+
 
-   Note that '+' is not allowed in gzmode.
+   Note that \"+\" is not allowed in gzmode.
 
-   If an error occurs, \"gzopen\" throws a GZError()
+   If an error occurs, \"gzopen\" throws a \"GZError\"
 
 "),
 
-(E"gzip.jl",E"gzip.jl",E"gzdopen",E"gzdopen(fd[, gzmode[, buf_size]])
+(E"GZip",E"GZip",E"gzdopen",E"gzdopen(fd[, gzmode[, buf_size]])
 
    Create a \"GZipStream\" object from an integer file descriptor. See
-   \"gzopen\" for \"gzmode\" and \"buf_size\" descriptions.
+   \"gzopen()\" for \"gzmode\" and \"buf_size\" descriptions.
 
 "),
 
-(E"gzip.jl",E"gzip.jl",E"gzdopen",E"gzdopen(s[, gzmode[, buf_size]])
+(E"GZip",E"GZip",E"gzdopen",E"gzdopen(s[, gzmode[, buf_size]])
 
-   Create a \"GZipStream\" object from IOStream \"s\".
+   Create a \"GZipStream\" object from \"IOStream\" \"s\".
 
 "),
 
-(E"gzip.jl",E"gzip.jl",E"GZipStream",E"type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
+(E"GZip",E"GZip",E"GZipStream",E"type GZipStream(name, gz_file[, buf_size[, fd[, s]]])
 
    Subtype of \"IO\" which wraps a gzip stream.  Returned by
-   \"gzopen\" and \"gzdopen\".
+   \"gzopen()\" and \"gzdopen()\".
 
 "),
 
-(E"gzip.jl",E"gzip.jl",E"GZError",E"type GZError(err, err_str)
+(E"GZip",E"GZip",E"GZError",E"type GZError(err, err_str)
 
    gzip error number and string.  Possible error values:
 
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_OK\\\"              | No error                                |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_ERRNO\\\"           | Filesystem error (consult errno())      |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_STREAM_ERROR\\\"    | Inconsistent stream state               |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_DATA_ERROR\\\"      | Compressed data error                   |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_MEM_ERROR\\\"       | Out of memory                           |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_BUF_ERROR\\\"       | Input buffer full/output buffer empty   |
-   +-----------------------+-----------------------------------------+
-   | \\\"Z_VERSION_ERROR\\\"   | zlib library version is incompatible    |
-   +-----------------------+-----------------------------------------+
+   +-----------------------+------------------------------------------+
+   | \\\"Z_OK\\\"              | No error                                 |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_ERRNO\\\"           | Filesystem error (consult \\\"errno()\\\")   |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_STREAM_ERROR\\\"    | Inconsistent stream state                |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_DATA_ERROR\\\"      | Compressed data error                    |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_MEM_ERROR\\\"       | Out of memory                            |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_BUF_ERROR\\\"       | Input buffer full/output buffer empty    |
+   +-----------------------+------------------------------------------+
+   | \\\"Z_VERSION_ERROR\\\"   | zlib library version is incompatible     |
+   +-----------------------+------------------------------------------+
 
 "),
 
 
-(E"options.jl",E"options.jl",E"options",E"options()
+(E"OptionsMod",E"OptionsMod",E"@options",E"@options([check_flag], assignments...)
 
    Use the \"@options\" macro to set the value of optional parameters
    for a function that has been written to use them (see
@@ -5138,7 +5139,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"options.jl",E"options.jl",E"set_options",E"set_options()
+(E"OptionsMod",E"OptionsMod",E"@set_options",E"@set_options(opts, assigments...)
 
    The \"@set_options\" macro lets you add new parameters to an
    existing options structure.  For example:
@@ -5150,7 +5151,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"options.jl",E"options.jl",E"defaults",E"defaults()
+(E"OptionsMod",E"OptionsMod",E"@defaults",E"@defaults(opts, assignments...)
 
    The \"@defaults\" macro is for writing functions that take optional
    parameters.  The typical syntax of such functions is:
@@ -5168,7 +5169,7 @@ glp_eval_tab_col(glp_prob, k)
           return y
       end
 
-   Note the function calls \"check_used()\" at the end.
+   Note the function calls \"@check_used()\" at the end.
 
    It is possible to have more than one Options parameter to a
    function, for example:
@@ -5186,10 +5187,10 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"options.jl",E"options.jl",E"check_used",E"check_used()
+(E"OptionsMod",E"OptionsMod",E"@check_used",E"@check_used(opts)
 
    The \"@check_used\" macro tests whether user-supplied parameters
-   were ever accessed by the \"@defaults\" macro. The test is
+   were ever accessed by the \"@defaults()\" macro. The test is
    performed at the end of the function body, so that subfunction
    handling parameters not used by the parent function may be
    \"credited\" for their usage. Each sub-function should also call
@@ -5220,7 +5221,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"options.jl",E"options.jl",E"Options",E"type Options(OptionsChecking, param1, val1, param2, val2, ...)
+(E"OptionsMod",E"OptionsMod",E"Options",E"type Options(OptionsChecking, param1, val1, param2, val2, ...)
 
    \"Options\" is the central type used for handling optional
    arguments. Its fields are briefly described below.
@@ -5248,14 +5249,14 @@ glp_eval_tab_col(glp_prob, k)
       A vector of booleans, one per variable. This is a \"lock\" that
       prevents sub-functions from complaining that they did not access
       variables that were intended for the parent function.
-      \"@defaults\" sets the lock to true for any options variables
+      \"@defaults()\" sets the lock to true for any options variables
       that have already been defined; new variables added through
-      \"@set_options\" will start with their \"check_lock\" set to
+      \"@set_options()\" will start with their \"check_lock\" set to
       \"false\", to be handled by a subfunction.
 
 "),
 
-(E"profile.jl",E"profile.jl",E"profile",E"profile()
+(E"profile.jl",E"",E"@profile",E"@profile()
 
    Profiling is controlled via the \"@profile\" macro. Your first step
    is to determine which code you want to profile and encapsulate it
@@ -5310,13 +5311,13 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"sound.jl",E"sound.jl",E"Sound",E"Sound.wavread(io[, options])
+(E"Sound",E"Sound",E"wavread",E"wavread(io[, options])
 
    Reads and returns the samples from a RIFF/WAVE file. The samples
    are converted to floating point values in the range from -1.0 to
    1.0 by default. The \"io\" argument accepts either an \"IO\" object
    or a filename (\"String\"). The options are passed via an
-   \"Options\" object (see the *options page*).
+   \"Options\" object (see the \"OptionsMod\" module).
 
    The available options, and the default values, are:
 
@@ -5348,9 +5349,16 @@ glp_eval_tab_col(glp_prob, k)
    The following functions are also defined to make this function
    compatible with MATLAB:
 
+      wavread(filename::String) = wavread(filename, @options)
+      wavread(filename::String, fmt::String) = wavread(filename, @options format=fmt)
+      wavread(filename::String, N::Int) = wavread(filename, @options subrange=N)
+      wavread(filename::String, N::Range1{Int}) = wavread(filename, @options subrange=N)
+      wavread(filename::String, N::Int, fmt::String) = wavread(filename, @options subrange=N format=fmt)
+      wavread(filename::String, N::Range1{Int}, fmt::String) = wavread(filename, @options subrange=N format=fmt)
+
 "),
 
-(E"sound.jl",E"sound.jl",E"Sound",E"Sound.wavwrite(samples, io[, options])
+(E"Sound",E"Sound",E"wavwrite",E"wavwrite(samples, io[, options])
 
       Writes samples to a RIFF/WAVE file io object. The \"io\"
       argument accepts either an \"IO\" object or a filename
@@ -5359,7 +5367,7 @@ glp_eval_tab_col(glp_prob, k)
       be changed with the options parameter. Each column of the data
       represents a different channel. Stereo files should contain two
       columns. The options are passed via an \"Options\" object (see
-      the *options page*).
+      the \"OptionsMod\" module).
 
       The available options, and the default values, are:
 
@@ -5401,10 +5409,14 @@ glp_eval_tab_col(glp_prob, k)
    The following functions are also defined to make this function
    compatible with MATLAB:
 
+      wavwrite(y::Array) = wavwrite(y, @options)
+      wavwrite(y::Array, Fs::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs)
+      wavwrite(y::Array, Fs::Real, N::Real, filename::String) = wavwrite(y, filename, @options sample_rate=Fs nbits=N)
+
 "),
 
 
-(E"strpack.jl",E"strpack.jl",E"pack",E"pack(io, composite[, strategy])
+(E"strpack.jl",E"",E"pack",E"pack(io, composite[, strategy])
 
    Create a packed buffer representation of \"composite\" in stream
    \"io\", using data alignment coded by \"strategy\". This buffer is
@@ -5412,7 +5424,7 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"strpack.jl",E"strpack.jl",E"unpack",E"unpack(io, T[, strategy])
+(E"strpack.jl",E"",E"unpack",E"unpack(io, T[, strategy])
 
    Extract an instance of the Julia composite type \"T\" from the
    packed representation in the stream \"io\". \"io\" must be
@@ -5421,13 +5433,14 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"textwrap.jl",E"textwrap.jl",E"wrap",E"wrap(string[, options])
+(E"TextWrap",E"TextWrap",E"wrap",E"wrap(string[, options])
 
    Returns a string in which newlines are inserted as appropriate in
    order for each line to fit within a specified width.
 
-   The options are passed via an \"Options\" object (see the *options
-   page*). The available options, and their default values, are:
+   The options are passed via an \"Options\" object (provided by the
+   \"OptionsMod\" module). The available options, and their default
+   values, are:
 
    * \"width\" (default = \"70\"): the maximum width of the wrapped
      text, including indentation.
@@ -5463,27 +5476,27 @@ glp_eval_tab_col(glp_prob, k)
 
 "),
 
-(E"textwrap.jl",E"textwrap.jl",E"println_wrapped",E"print_wrapped(text...[, options])
+(E"TextWrap",E"TextWrap",E"println_wrapped",E"print_wrapped(text...[, options])
 print_wrapped(io, text...[, options])
 println_wrapped(text...[, options])
 println_wrapped(io, text...[, options])
 
-   These are just like the standard \"print\" and \"println\"
+   These are just like the standard \"print()\" and \"println()\"
    functions (they print multiple arguments and accept an optional
    \"IO\" first argument), except that they wrap the result, and
    accept an optional last argument with the options to pass to
-   \"wrap\".
+   \"wrap()\".
 
 "),
 
-(E"zlib.jl",E"zlib.jl",E"compress_bound",E"compress_bound(input_size)
+(E"Zlib",E"Zlib",E"compress_bound",E"compress_bound(input_size)
 
    Returns the maximum size of the compressed output buffer for a
    given uncompressed input size.
 
 "),
 
-(E"zlib.jl",E"zlib.jl",E"compress",E"compress(source[, level])
+(E"Zlib",E"Zlib",E"compress",E"compress(source[, level])
 
    Compresses source using the given compression level, and returns
    the compressed buffer (\"Array{Uint8,1}\").  \"level\" is an
@@ -5497,7 +5510,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl",E"zlib.jl",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
+(E"Zlib",E"Zlib",E"compress_to_buffer",E"compress_to_buffer(source, dest, level=Z_DEFAULT_COMPRESSION)
 
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
@@ -5507,7 +5520,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl",E"zlib.jl",E"uncompress",E"uncompress(source[, uncompressed_size])
+(E"Zlib",E"Zlib",E"uncompress",E"uncompress(source[, uncompressed_size])
 
    Allocates a buffer of size \"uncompressed_size\", uncompresses
    source to this buffer using the given compression level, and
@@ -5522,7 +5535,7 @@ println_wrapped(io, text...[, options])
 
 "),
 
-(E"zlib.jl",E"zlib.jl",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
+(E"Zlib",E"Zlib",E"uncompress_to_buffer",E"uncompress_to_buffer(source, dest)
 
    Uncompresses the source buffer into the destination buffer. Returns
    the number of bytes written into dest.  An error is thrown if the

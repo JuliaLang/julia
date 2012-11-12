@@ -1,3 +1,5 @@
+.. currentmodule:: Base
+
 Getting Around
 --------------
 
@@ -704,11 +706,11 @@ Mathematical Functions
 
    Unary minus
 
-.. function:: + - * / \  ^
+.. function:: + - * / \\ ^
 
    The binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
-.. function:: .* ./ .\ .^
+.. function:: .* ./ .\\ .^
 
    The element-wise binary addition, subtraction, multiplication, left division, right division, and exponentiation operators
 
@@ -734,7 +736,7 @@ Mathematical Functions
 
 .. function:: << >>
 
-   Left and ight shift operators
+   Left and right shift operators
 
 .. function:: == != < <= > >=
 

@@ -1,11 +1,11 @@
-:mod:`glpk.jl` --- Wrapper for the GNU Linear Programming Kit (GLPK)
-======================================================================
+glpk.jl --- Wrapper for the GNU Linear Programming Kit (GLPK)
+=============================================================
 
-.. module:: glpk.jl
+.. .. module:: GLPK
    :synopsis: GLPK wrapper
 
-This module provides a wrapper for the GNU Linear Programming Kit (`GLPK <http://www.gnu.org/software/glpk>`_),
-which is a C library, in Julia.
+This file provides a wrapper for the GNU Linear Programming Kit
+(`GLPK <http://www.gnu.org/software/glpk>`_), which is a C library, in Julia.
 It is designed for making it easy to port C code to Julia, while at the same time having the
 benefits of the higher level language features of Julia, like the automatic management of memory, the possibility
 of returning tuples/strings/vectors etc.
@@ -558,7 +558,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
     ``glp_simplex``. The optional glp_param is of type ``GLPSimplexParam``.
 
     The possible return values are 0 (success) or ``GLP_EBADB``, ``GLP_ESING``, ``GLP_EBOUND``,
-    ``GLP_EFAIL``, ``GLP_ITLIM``, ``GLP_ETLIM`` (see ``glp_simplex``).
+    ``GLP_EFAIL``, ``GLP_ITLIM``, ``GLP_ETLIM`` (see :func:`glp_simplex`).
 
 .. function:: glp_init_smcp(glp_param)
 
@@ -574,12 +574,12 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 .. function:: glp_get_prim_stat(glp_prob)
 
     Returns the status of the primal basic solution: ``GLP_FEAS``, ``GLP_INFEAS``, ``GLP_NOFEAS``,
-    ``GLP_UNDEF`` (see ``glp_get_status``).
+    ``GLP_UNDEF`` (see :func:`glp_get_status`).
 
 .. function:: glp_get_dual_stat(glp_prob)
 
     Returns the status of the dual basic solution: ``GLP_FEAS``, ``GLP_INFEAS``, ``GLP_NOFEAS``,
-    ``GLP_UNDEF`` (see ``glp_get_status``).
+    ``GLP_UNDEF`` (see :func:`glp_get_status`).
 
 .. function:: glp_get_obj_val(glp_prob)
 
@@ -588,7 +588,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 .. function:: glp_get_row_stat(glp_prob, row)
 
     Returns the status of the specified row: ``GLP_BS``, ``GLP_NL``, ``GLP_NU``, ``GLP_NF``,
-    ``GLP_NS`` (see ``glp_set_row_stat``).
+    ``GLP_NS`` (see :func:`glp_set_row_stat`).
 
 .. function:: glp_get_row_prim(glp_prob, row)
 
@@ -601,7 +601,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 .. function:: glp_get_col_stat(glp_prob, col)
 
     Returns the status of the specified column: ``GLP_BS``, ``GLP_NL``, ``GLP_NU``, ``GLP_NF``,
-    ``GLP_NS`` (see ``glp_set_row_stat``).
+    ``GLP_NS`` (see :func:`glp_set_row_stat`).
 
 .. function:: glp_get_col_prim(glp_prob, col)
 
@@ -667,7 +667,7 @@ calling forms when available. Refer to the GLPK manual for a complete descriptio
 
 .. function:: glp_get_col_kind(glp_prob, col)
 
-    Returns the kind for the specified column (see `glp_set_col_kind`).
+    Returns the kind for the specified column (see :func:`glp_set_col_kind`).
 
 .. function:: glp_get_num_int(glp_prob)
 
