@@ -275,26 +275,57 @@ evalfile(fname::String) = eval(parse(readall(fname))[1])
 
 _jl_help_category_list = nothing
 _jl_help_category_dict = nothing
+_jl_help_module_dict = nothing
 _jl_help_function_dict = nothing
 
+function _jl_decor_help_desc(func::String, mfunc::String, desc::String)
+    sd = split(desc, '\n')
+    for i = 1:length(sd)
+        if begins_with(sd[i], func)
+            sd[i] = mfunc * sd[i][length(func)+1:end]
+        else
+            break
+        end
+    end
+    return join(sd, '\n')
+end
+
 function _jl_init_help()
-    global _jl_help_category_list, _jl_help_category_dict, _jl_help_function_dict
+    global _jl_help_category_list, _jl_help_category_dict,
+           _jl_help_module_dict, _jl_help_function_dict
     if _jl_help_category_dict == nothing
         println("Loading help data...")
         helpdb = evalfile("$JULIA_HOME/../lib/julia/helpdb.jl")
         _jl_help_category_list = {}
         _jl_help_category_dict = Dict()
+        _jl_help_module_dict = Dict()
         _jl_help_function_dict = Dict()
-        for (cat,func,desc) in helpdb
+        for (cat,mod,func,desc) in helpdb
             if !has(_jl_help_category_dict, cat)
                 push(_jl_help_category_list, cat)
                 _jl_help_category_dict[cat] = {}
             end
-            push(_jl_help_category_dict[cat], func)
-            if !has(_jl_help_function_dict, func)
-                _jl_help_function_dict[func] = {}
+            if !isempty(mod)
+                if begins_with(func, '@')
+                    mfunc = "@" * mod * "." * func[2:]
+                else
+                    mfunc = mod * "." * func
+                end
+                desc = _jl_decor_help_desc(func, mfunc, desc)
+            else
+                mfunc = func
             end
-            push(_jl_help_function_dict[func], desc)
+            push(_jl_help_category_dict[cat], mfunc)
+            if !has(_jl_help_function_dict, mfunc)
+                _jl_help_function_dict[mfunc] = {}
+            end
+            push(_jl_help_function_dict[mfunc], desc)
+            if !has(_jl_help_module_dict, func)
+                _jl_help_module_dict[func] = {}
+            end
+            if !contains(_jl_help_module_dict[func], mod)
+                push(_jl_help_module_dict[func], mod)
+            end
         end
     end
 end
@@ -346,9 +377,32 @@ end
 help_for(s::String) = help_for(s, 0)
 function help_for(fname::String, obj)
     _jl_init_help()
-    if has(_jl_help_function_dict, fname)
-        _jl_print_help_entries(_jl_help_function_dict[fname])
+    found = false
+    if contains(fname, '.')
+        if has(_jl_help_function_dict, fname)
+            _jl_print_help_entries(_jl_help_function_dict[fname])
+            found = true
+        end
     else
+        macrocall = ""
+        if begins_with(fname, '@')
+            sfname = fname[2:]
+            macrocall = "@"
+        else
+            sfname = fname
+        end
+        if has(_jl_help_module_dict, fname)
+            allmods = _jl_help_module_dict[fname]
+            alldesc = {}
+            for mod in allmods
+                mod_prefix = isempty(mod) ? "" : mod * "."
+                append!(alldesc, _jl_help_function_dict[macrocall * mod_prefix * sfname])
+            end
+            _jl_print_help_entries(alldesc)
+            found = true
+        end
+    end
+    if !found
         if isgeneric(obj)
             repl_show(obj); println()
         else
