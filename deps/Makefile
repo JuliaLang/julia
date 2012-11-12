@@ -439,9 +439,9 @@ ifeq ($(OPENBLAS_DYNAMIC_ARCH), 1)
 OPENBLAS_BUILD_OPTS += DYNAMIC_ARCH=1
 endif
 
-#ifeq ($(ARCH), x86_64)
-#OPENBLAS_BUILD_OPTS += -DINTERFACE64=1
-#endif
+ifeq ($(ARCH), x86_64)
+OPENBLAS_BUILD_OPTS += -DINTERFACE64=1
+endif
 
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 install-openblas: $(USRLIB)/libopenblas.$(SHLIB_EXT)
