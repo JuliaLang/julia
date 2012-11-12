@@ -704,6 +704,8 @@ export
     svdvals,
     sdd,
     sddvals,
+    symmetrize,
+    symmetrize!,
     trace,
     transpose,
     trideig,
