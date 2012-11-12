@@ -142,7 +142,7 @@ html_sidebars = juliadoc.default_sidebars()
 #html_additional_pages = {}
 
 # If false, no module index is generated.
-html_domain_indices = False
+#html_domain_indices = True
 
 # If false, no index is generated.
 #html_use_index = True
@@ -188,16 +188,13 @@ latex_elements = {
         \DeclareUnicodeCharacter{2203}{\ensuremath{\exists}}
         \DeclareUnicodeCharacter{2200}{\ensuremath{\forall}}
         \DeclareUnicodeCharacter{27FA}{\ensuremath{\Longleftrightarrow}}
-        \usepackage{amsfonts}
-        \DeclareUnicodeCharacter{2713}{\checkmark}
-        \usepackage{CJKutf8}
     ''',
 }
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title, author, documentclass [howto/manual]).
 latex_documents = [
-  ('latex', 'JuliaLanguage.tex', u'Julia Language Documentation',
+  ('index', 'JuliaLanguage.tex', u'Julia Language Documentation',
    AUTHORS, 'manual'),
 ]
 
@@ -219,7 +216,7 @@ latex_documents = [
 #latex_appendices = []
 
 # If false, no module index is generated.
-latex_domain_indices = False
+#latex_domain_indices = True
 
 
 # -- Options for manual page output --------------------------------------------
