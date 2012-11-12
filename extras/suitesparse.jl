@@ -40,7 +40,7 @@ catch err
     println(E"
 Oops, Suitesparse needs to be rebuilt. Try running:
 
-    $ touch deps/Suitesparse-4.0.2/Makfile
+    $ touch deps/SuiteSparse-4.0.2/Makefile
     $ make
 ")
     throw(err)
