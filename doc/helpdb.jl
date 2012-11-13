@@ -5505,7 +5505,7 @@ println_wrapped(io, text...[, options])
    \"Z_DEFAULT_COMPRESSION\".  It defaults to
    \"Z_DEFAULT_COMPRESSION\".
 
-   If an error occurs, \"compress\" throws a ZLibError with more
+   If an error occurs, \"compress\" throws a \"ZError\" with more
    information about the error.
 
 "),
@@ -5515,7 +5515,7 @@ println_wrapped(io, text...[, options])
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
 
-   If an error occurs, \"uncompress\" throws a ZLibError with more
+   If an error occurs, \"uncompress\" throws a \"ZError\" with more
    information about the error.
 
 "),
@@ -5530,7 +5530,7 @@ println_wrapped(io, text...[, options])
    uncompressed_size, the allocated buffer is grown and the
    uncompression is retried.
 
-   If an error occurs, \"uncompress\" throws a ZLibError with more
+   If an error occurs, \"uncompress\" throws a \"ZError\" with more
    information about the error.
 
 "),
@@ -5541,7 +5541,7 @@ println_wrapped(io, text...[, options])
    the number of bytes written into dest.  An error is thrown if the
    destination buffer does not have enough space.
 
-   If an error occurs, \"uncompress_to_buffer\" throws a ZLibError
+   If an error occurs, \"uncompress_to_buffer\" throws a \"ZError\"
    with more information about the error.
 
 "),

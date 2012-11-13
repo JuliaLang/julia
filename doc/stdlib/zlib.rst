@@ -34,7 +34,7 @@ Utility Functions
    ``Z_DEFAULT_COMPRESSION``.  It defaults to
    ``Z_DEFAULT_COMPRESSION``.
 
-   If an error occurs, ``compress`` throws a ZLibError with more
+   If an error occurs, ``compress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -43,7 +43,7 @@ Utility Functions
    Compresses the source buffer into the destination buffer, and
    returns the number of bytes written into dest.
 
-   If an error occurs, ``uncompress`` throws a ZLibError with more
+   If an error occurs, ``uncompress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -57,7 +57,7 @@ Utility Functions
    uncompressed_size, the allocated buffer is grown and the
    uncompression is retried.
 
-   If an error occurs, ``uncompress`` throws a ZLibError with more
+   If an error occurs, ``uncompress`` throws a :class:`ZError` with more
    information about the error.
 
 
@@ -67,6 +67,6 @@ Utility Functions
    Returns the number of bytes written into dest.  An error is thrown
    if the destination buffer does not have enough space.
 
-   If an error occurs, ``uncompress_to_buffer`` throws a ZLibError with
-   more information about the error.
+   If an error occurs, ``uncompress_to_buffer`` throws a :class:`ZError`
+   with more information about the error.
 
