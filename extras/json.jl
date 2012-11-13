@@ -18,12 +18,10 @@ function parse(strng::String)
     # String delimiters and escape characters are identified beforehand to improve speed
     len_esc::Int = 0
     index_esc::Int = 1
-    esc_locations::Array{Int64,1}  = Array(Int, 0)
-    for m in each_match(r"[\"\\\\]", strng)
-        len_esc = len_esc+1
-        push(esc_locations, m.offset)
-    end    
-    # esc = regexp(str, "[\"\\\\]"); index_esc = 1; len_esc = length(esc);  #TODO Enable for speed
+
+    esc_locations::Array{Int64,1}  = map(x->x.offset, [each_match(r"[\"\\\\]", strng)...])
+    len_esc=length(esc_locations)  
+
 
     function parse_object()
         parse_char('{')
