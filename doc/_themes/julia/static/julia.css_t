@@ -20,10 +20,8 @@ body {
 div.related {
   background: #eee;
   border-bottom: 1px solid #ddd;
-  left: 0;
+  margin: 0;
   padding: 0.5em;
-  position: fixed;
-  top: 0;
 }
 
 div.sphinxsidebar {
@@ -32,6 +30,14 @@ div.sphinxsidebar {
 
 div.document {
   margin: 3em auto 0 auto;
+}
+
+@media screen and (min-width: 768px) {
+  div.related {
+    position: fixed;
+    left: 0;
+    top: 0;
+  }
 }
 
 @media screen and (min-width: {{ page_width }}) {
