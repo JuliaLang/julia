@@ -12,8 +12,18 @@ export parse_json
 
 function parse_json(strng::String)
 
-    pos = 1
-    len = length(strng)
+    pos::Int = 1
+    len::Int = length(strng)
+
+    # String delimiters and escape characters are identified beforehand to improve speed
+    len_esc::Int = 0
+    index_esc::Int = 1
+    esc_locations::Array{Int64,1}  = Array(Int, 0)
+    for m in each_match(r"[\"\\\\]", strng)
+        len_esc = len_esc+1
+        push(esc_locations, m.offset)
+    end    
+    # esc = regexp(str, "[\"\\\\]"); index_esc = 1; len_esc = length(esc);  #TODO Enable for speed
 
     function parse_object()
         parse_char('{')
@@ -87,6 +97,17 @@ function parse_json(strng::String)
         end
         str = ""
         while pos <= len
+            while index_esc <= len_esc && esc_locations[index_esc] < pos 
+                 index_esc = index_esc + 1;
+            end
+            if index_esc > len_esc
+                str = strcat(str, strng[pos:end]);
+                pos = len + 1;
+                break;
+            else
+                str = strcat(str, strng[pos:esc_locations[index_esc]-1]);
+                pos = esc_locations[index_esc];
+            end
             nc = strng[pos]
             if nc == '"' 
                     pos = nextind(strng, pos)
