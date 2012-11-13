@@ -3,14 +3,14 @@
 #Original BSD Licence, (c) 2011, François Glineur
 
 
-module Json
+module JSON
 
 using Base
 
-export parse_json
+export parse
 
 
-function parse_json(strng::String)
+function parse(strng::String)
 
     pos::Int = 1
     len::Int = length(strng)
