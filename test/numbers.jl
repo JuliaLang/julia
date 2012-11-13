@@ -1054,6 +1054,14 @@ end
 @assert isa(0o1111111111,Uint32)
 @assert isa(0o11111111111,Uint32)
 
+# float32 literals
+@assert isa(1f0,Float32)
+@assert isa(1.f0,Float32)
+@assert isa(1.0f0,Float32)
+@assert 1f0 == 1.
+@assert isa(1f1,Float32)
+@assert 1f1 == 10.
+
 # custom rounding and significant-digit ops
 function approx_eq(a, b, tol)
     abs(a - b) < tol
