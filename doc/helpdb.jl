@@ -3442,14 +3442,14 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"copy!",E"copy!(n, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"copy!",E"copy!(n, X, incx, Y, incy)
 
    Copy \"n\" elements of array \"X\" with stride \"incx\" to array
    \"Y\" with stride \"incy\".  Returns \"Y\".
 
 "),
 
-(E"Blas",E"Blas",E"dot",E"dot(n, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"dot",E"dot(n, X, incx, Y, incy)
 
    Dot product of two vectors consisting of \"n\" elements of array
    \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
@@ -3458,20 +3458,20 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"nrm2",E"nrm2(n, X, incx)
+(E"BLAS",E"BLAS",E"nrm2",E"nrm2(n, X, incx)
 
    2-norm of a vector consisting of \"n\" elements of array \"X\" with
    stride \"incx\".
 
 "),
 
-(E"Blas",E"Blas",E"axpy!",E"axpy!(n, a, X, incx, Y, incy)
+(E"BLAS",E"BLAS",E"axpy!",E"axpy!(n, a, X, incx, Y, incy)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
 
 "),
 
-(E"Blas",E"Blas",E"syrk!",E"syrk!(uplo, trans, alpha, A, beta, C)
+(E"BLAS",E"BLAS",E"syrk!",E"syrk!(uplo, trans, alpha, A, beta, C)
 
    Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
    beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
@@ -3480,7 +3480,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"syrk",E"syrk(uplo, trans, alpha, A)
+(E"BLAS",E"BLAS",E"syrk",E"syrk(uplo, trans, alpha, A)
 
    Returns either the upper triangle or the lower triangle, according
    to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
@@ -3488,7 +3488,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"herk!",E"herk!(uplo, trans, alpha, A, beta, C)
+(E"BLAS",E"BLAS",E"herk!",E"herk!(uplo, trans, alpha, A, beta, C)
 
    Methods for complex arrays only.  Rank-k update of the Hermitian
    matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
@@ -3498,7 +3498,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"herk",E"herk(uplo, trans, alpha, A)
+(E"BLAS",E"BLAS",E"herk",E"herk(uplo, trans, alpha, A)
 
    Methods for complex arrays only.  Returns either the upper triangle
    or the lower triangle, according to \"uplo\" ('U' or 'L'), of
@@ -3507,7 +3507,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"gbmv!",E"gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"gbmv!",E"gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
    beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
@@ -3517,7 +3517,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"gbmv",E"gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"gbmv",E"gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
 
    Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
    or 'T'). The matrix \"A\" is a general band matrix of dimension
@@ -3526,7 +3526,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"sbmv!",E"sbmv!(uplo, k, alpha, A, x, beta, y)
+(E"BLAS",E"BLAS",E"sbmv!",E"sbmv!(uplo, k, alpha, A, x, beta, y)
 
    Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
    symmetric band matrix of order \"size(A,2)\" with \"k\" super-
@@ -3538,7 +3538,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"sbmv",E"sbmv(uplo, k, alpha, A, x)
+(E"BLAS",E"BLAS",E"sbmv",E"sbmv(uplo, k, alpha, A, x)
 
    Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
    order \"size(A,2)\" with \"k\" super-diagonals stored in the
@@ -3546,7 +3546,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"gemm!",E"gemm!(tA, tB, alpha, A, B, beta, C)
+(E"BLAS",E"BLAS",E"gemm!",E"gemm!(tA, tB, alpha, A, B, beta, C)
 
    Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
    according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
@@ -3554,7 +3554,7 @@ airyaiprime(x)
 
 "),
 
-(E"Blas",E"Blas",E"gemm",E"gemm(tA, tB, alpha, A, B)
+(E"BLAS",E"BLAS",E"gemm",E"gemm(tA, tB, alpha, A, B)
 
    Returns \"alpha*A*B\" or the other three variants according to
    \"tA\" (transpose \"A\") and \"tB\".

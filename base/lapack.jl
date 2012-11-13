@@ -1,5 +1,5 @@
-## The Lapack module of interfaces to Lapack subroutines
-module Lapack
+## The LAPACK module of interfaces to LAPACK subroutines
+module LAPACK
 using Base
 
 typealias LapackChar Char
@@ -12,14 +12,14 @@ end
 
 function chkstride1(A::StridedVecOrMat...)
     for a in A
-        if stride(a,1) != 1 error("Lapack: Matrix must have contiguous columns") end
+        if stride(a,1) != 1 error("LAPACK: Matrix must have contiguous columns") end
     end
 end
 
 function chksquare(A::Matrix...)
     for a in A
         m, n = size(a)
-        if m != n error("Lapack: Matrix must be square") end
+        if m != n error("LAPACK: Matrix must be square") end
     end
 end
 
@@ -457,9 +457,9 @@ for (gelsd, elty) in ((:dgelsd_, Float64),
         #       INTEGER            IWORK( * )
         #       DOUBLE PRECISION   A( LDA, * ), B( LDB, * ), S( * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            Lapack.chkstride1(A, B)
+            LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
             s     = Array($elty, min(m, n))
             rnk   = Array(Int32, 1)
             info  = Array(Int32, 1)
@@ -500,9 +500,9 @@ for (gelsd, elty, relty) in ((:zgelsd_, Complex128, Float64),
         #       DOUBLE PRECISION   RWORK( * ), S( * )
         #       COMPLEX*16         A( LDA, * ), B( LDB, * ), WORK( * )
         function gelsd!(A::StridedMatrix{$elty}, B::StridedVecOrMat{$elty}, rcond)
-            Lapack.chkstride1(A, B)
+            LAPACK.chkstride1(A, B)
             m, n  = size(A)
-            if size(B,1) != m; throw(Lapack.LapackDimMisMatch("gelsd!")); end
+            if size(B,1) != m; throw(LAPACK.LapackDimMisMatch("gelsd!")); end
             s     = Array($elty, min(m, n))
             rnk   = Array(Int32, 1)
             info  = Array(Int32, 1)

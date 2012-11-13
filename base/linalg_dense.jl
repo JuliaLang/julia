@@ -42,13 +42,13 @@ function istril(A::Matrix)
     return true
 end
 
-norm{T<:LapackType}(x::Vector{T}) = Blas.nrm2(length(x), x, 1)
+norm{T<:LapackType}(x::Vector{T}) = BLAS.nrm2(length(x), x, 1)
 
 function norm{T<:LapackType, TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}))
     if min(rx) < 1 || max(rx) > length(x)
         throw(BoundsError())
     end
-    Blas.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
+    BLAS.nrm2(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx))
 end
 
 function triu!{T}(M::Matrix{T}, k::Integer)
@@ -230,7 +230,7 @@ function expm!{T<:LapackType}(A::StridedMatrix{T})
     m, n = size(A)
     if m != n error("expm!: Matrix A must be square") end
     if m < 2 return exp(A) end
-    ilo, ihi, scale = Lapack.gebal!('B', A)    # modifies A
+    ilo, ihi, scale = LAPACK.gebal!('B', A)    # modifies A
     nA   = norm(A, 1)
     I    = convert(Array{T,2}, eye(n))
     ## For sufficiently small nA, use lower order Padé-Approximations
@@ -343,7 +343,7 @@ type BunchKaufman{T<:LapackType} <: Factorization{T}
     ipiv::Vector{Int32}
     upper::Bool
     function BunchKaufman(A::Matrix{T}, upper::Bool)
-        LD, ipiv = Lapack.sytrf!(upper ? 'U' : 'L' , copy(A))
+        LD, ipiv = LAPACK.sytrf!(upper ? 'U' : 'L' , copy(A))
         new(LD, ipiv, upper)
     end
 end
@@ -355,20 +355,20 @@ BunchKaufman{T<:Number}(A::StridedMatrix{T}) = BunchKaufman(A, true)
 size(B::BunchKaufman) = size(B.LD)
 size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 ## need to work out how to extract the factors.
-#factors(B::BunchKaufman) = Lapack.syconv!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv)
+#factors(B::BunchKaufman) = LAPACK.syconv!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv)
 
 function inv(B::BunchKaufman)
-    symmetrize!(Lapack.sytri!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv), B.upper)
+    symmetrize!(LAPACK.sytri!(B.upper ? 'U' : 'L', copy(B.LD), B.ipiv), B.upper)
 end
 
 \{T<:LapackType}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) =
-    Lapack.sytrs!(B.upper ? 'U' : 'L', B.LD, B.ipiv, copy(R))
+    LAPACK.sytrs!(B.upper ? 'U' : 'L', B.LD, B.ipiv, copy(R))
     
 type CholeskyDense{T<:LapackType} <: Factorization{T}
     LR::Matrix{T}
     upper::Bool
     function CholeskyDense(A::Matrix{T}, upper::Bool)
-        A, info = Lapack.potrf!(upper ? 'U' : 'L' , A)
+        A, info = LAPACK.potrf!(upper ? 'U' : 'L' , A)
         if info != 0 error("Matrix A not positive-definite") end
         new(upper? triu!(A) : tril!(A), upper)
     end
@@ -380,7 +380,7 @@ size(C::CholeskyDense,d::Integer) = size(C.LR,d)
 factors(C::CholeskyDense) = C.LR
 
 \{T<:LapackType}(C::CholeskyDense{T}, B::StridedVecOrMat{T}) =
-    Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
+    LAPACK.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B))
 
 function det(C::CholeskyDense)
     ff = C.LR
@@ -390,7 +390,7 @@ function det(C::CholeskyDense)
 end
     
 function inv(C::CholeskyDense)
-    Ci, info = Lapack.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    Ci, info = LAPACK.potri!(C.upper ? 'U' : 'L', copy(C.LR))
     if info != 0 error("Matrix singular") end 
     symmetrize!(Ci, C.upper)
 end
@@ -412,7 +412,7 @@ type CholeskyDensePivoted{T<:LapackType} <: Factorization{T}
     rank::Int32
     tol::Real
     function CholeskyDensePivoted(A::Matrix{T}, upper::Bool, tol::Real)
-        A, piv, rank, info = Lapack.pstrf!(upper ? 'U' : 'L' , A, tol)
+        A, piv, rank, info = LAPACK.pstrf!(upper ? 'U' : 'L' , A, tol)
         if info != 0 error("Matrix A not positive-definite") end
         new(upper? triu!(A) : tril!(A), upper, piv, rank, tol)
     end
@@ -424,7 +424,7 @@ size(C::CholeskyDensePivoted,d::Integer) = size(C.LR,d)
 factors(C::CholeskyDensePivoted) = C.LR, C.piv
 
 \{T<:LapackType}(C::CholeskyDensePivoted{T}, B::StridedVecOrMat{T}) =
-    Lapack.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B)[C.piv])[invperm(C.piv)]
+    LAPACK.potrs!(C.upper ? 'U' : 'L', C.LR, copy(B)[C.piv])[invperm(C.piv)]
 
 rank(C::CholeskyDensePivoted) = C.rank
 
@@ -432,7 +432,7 @@ det(C::CholeskyDensePivoted) = prod(abs2(diag(C.LR)))
     
 function inv(C::CholeskyDensePivoted)
     if C.rank < size(C.LR, 1) error("Matrix singular") end
-    Ci, info = Lapack.potri!(C.upper ? 'U' : 'L', copy(C.LR))
+    Ci, info = LAPACK.potri!(C.upper ? 'U' : 'L', copy(C.LR))
     if info != 0 error("Matrix singular") end
     ipiv = invperm(C.piv)
     (symmetrize!(Ci, C.upper))[ipiv, ipiv]
@@ -481,7 +481,7 @@ function factors{T<:LapackType}(lu::LUDense{T})
 end
 
 function lud!{T<:LapackType}(A::Matrix{T})
-    lu, ipiv, info = Lapack.getrf!(A)
+    lu, ipiv, info = LAPACK.getrf!(A)
     LUDense{T}(lu, ipiv, info)
 end
 
@@ -506,14 +506,14 @@ end
 
 function (\){T<:LapackType}(lu::LUDense{T}, B::StridedVecOrMat{T})
     if lu.info > 0; error("Singular system"); end
-    Lapack.getrs!('N', lu.lu, lu.ipiv, copy(B))
+    LAPACK.getrs!('N', lu.lu, lu.ipiv, copy(B))
 end
 
 function inv{T<:LapackType}(lu::LUDense{T})
     m, n = size(lu.lu)
     if m != n; error("inv only defined for square matrices"); end
     if lu.info > 0; return error("Singular system"); end
-    Lapack.getri!(copy(lu.lu), lu.ipiv)
+    LAPACK.getri!(copy(lu.lu), lu.ipiv)
 end
 
 ## QR decomposition without column pivots
@@ -527,30 +527,30 @@ end
 size(A::QRDense) = size(A.hh)
 size(A::QRDense,n) = size(A.hh,n)
 
-qrd!{T<:LapackType}(A::StridedMatrix{T}) = QRDense{T}(Lapack.geqrf!(A)...)
+qrd!{T<:LapackType}(A::StridedMatrix{T}) = QRDense{T}(LAPACK.geqrf!(A)...)
 qrd{T<:LapackType}(A::StridedMatrix{T}) = qrd!(copy(A))
 qrd{T<:Real}(A::StridedMatrix{T}) = qrd(float64(A))
 
 function factors{T<:LapackType}(qrd::QRDense{T})
     aa  = copy(qrd.hh)
     R   = triu(aa[1:min(size(aa)),:])   # must be *before* call to orgqr!
-    Lapack.orgqr!(aa, qrd.tau, size(aa,2)), R
+    LAPACK.orgqr!(aa, qrd.tau, size(aa,2)), R
 end
 
 qr{T<:Number}(x::StridedMatrix{T}) = factors(qrd(x))
 
 ## Multiplication by Q from the QR decomposition
 (*){T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T}) =
-    Lapack.ormqr!('L', 'N', A.hh, size(A.hh,2), A.tau, copy(B))
+    LAPACK.ormqr!('L', 'N', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Multiplication by Q' from the QR decomposition
 Ac_mul_B{T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T}) =
-    Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A.hh,2), A.tau, copy(B))
+    LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A.hh,2), A.tau, copy(B))
 
 ## Least squares solution.  Should be more careful about cases with m < n
 function (\){T<:LapackType}(A::QRDense{T}, B::StridedVecOrMat{T})
     n   = length(A.tau)
-    ans, info = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    ans, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
     if info > 0; error("Singular system"); end
     return ans
 end
@@ -571,19 +571,19 @@ size(x::QRPDense)   = size(x.hh)
 size(x::QRPDense,d) = size(x.hh,d)
 ## Multiplication by Q from the QR decomposition
 (*){T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
-    Lapack.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
+    LAPACK.ormqr!('L', 'N', A.hh, size(A,2), A.tau, copy(B))
 ## Multiplication by Q' from the QR decomposition
 Ac_mul_B{T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T}) =
-    Lapack.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
+    LAPACK.ormqr!('L', iscomplex(A.tau)?'C':'T', A.hh, size(A,2), A.tau, copy(B))
 
-qrpd!{T<:LapackType}(A::StridedMatrix{T}) = QRPDense{T}(Lapack.geqp3!(A)...)
+qrpd!{T<:LapackType}(A::StridedMatrix{T}) = QRPDense{T}(LAPACK.geqp3!(A)...)
 qrpd{T<:LapackType}(A::StridedMatrix{T}) = qrpd!(copy(A))
 qrpd{T<:Real}(x::StridedMatrix{T}) = qrpd(float64(x))
 
 function factors{T<:LapackType}(x::QRPDense{T})
     aa = copy(x.hh)
     R  = triu(aa[1:min(size(aa)),:])
-    Lapack.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
+    LAPACK.orgqr!(aa, x.tau, size(aa,2)), R, x.jpvt
 end
 
 qrp{T<:LapackType}(x::StridedMatrix{T}) = factors(qrpd(x))
@@ -591,7 +591,7 @@ qrp{T<:Real}(x::StridedMatrix{T}) = qrp(float64(x))
 
 function (\){T<:LapackType}(A::QRPDense{T}, B::StridedVecOrMat{T})
     n = length(A.tau)
-    x, info = Lapack.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
+    x, info = LAPACK.trtrs!('U','N','N',A.hh[1:n,:],(A'*B)[1:n,:])
     if info > 0; error("Singular system"); end
     isa(B, Vector) ? x[invperm(A.jpvt)] : x[:,invperm(A.jpvt)]
 end
@@ -600,15 +600,15 @@ function eig{T<:LapackType}(A::StridedMatrix{T}, vecs::Bool)
     n = size(A, 2)
     if n == 0; return vecs ? (zeros(T, 0), zeros(T, 0, 0)) : zeros(T, 0, 0); end
 
-    if ishermitian(A); return Lapack.syev!(vecs ? 'V' : 'N', 'U', copy(A)); end
+    if ishermitian(A); return LAPACK.syev!(vecs ? 'V' : 'N', 'U', copy(A)); end
 
     if iscomplex(A)
-        W, VR = Lapack.geev!('N', vecs ? 'V' : 'N', copy(A))[2:3]
+        W, VR = LAPACK.geev!('N', vecs ? 'V' : 'N', copy(A))[2:3]
         if vecs; return W, VR; end
         return W
     end
 
-    VL, WR, WI, VR = Lapack.geev!('N', vecs ? 'V' : 'N', copy(A))
+    VL, WR, WI, VR = LAPACK.geev!('N', vecs ? 'V' : 'N', copy(A))
     if all(WI .== 0.) 
         if vecs; return WR, VR; end
         return WR
@@ -645,8 +645,8 @@ eigvals(x::StridedMatrix) = eig(x, false)
 #         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
 #         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
 #     end
-#     if vecs; return Lapack.gesvd!(thin ? 'S' : 'A', thin ? 'S' : 'A', copy(A)); end
-#     Lapack.gesvd!('N', 'N', copy(A))
+#     if vecs; return LAPACK.gesvd!(thin ? 'S' : 'A', thin ? 'S' : 'A', copy(A)); end
+#     LAPACK.gesvd!('N', 'N', copy(A))
 # end
 #
 # svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
@@ -660,8 +660,8 @@ function svd{T<:LapackType}(A::StridedMatrix{T},vecs::Bool,thin::Bool)
         if vecs; return (eye(m, thin ? n : m), zeros(0), eye(n,n)); end
         return (zeros(T, 0, 0), zeros(T, 0), zeros(T, 0, 0))
     end
-    if vecs; return Lapack.gesdd!(thin ? 'S' : 'A', copy(A)); end
-    Lapack.gesdd!('N', copy(A))
+    if vecs; return LAPACK.gesdd!(thin ? 'S' : 'A', copy(A)); end
+    LAPACK.gesdd!('N', copy(A))
 end
 
 svd{T<:Integer}(x::StridedMatrix{T},vecs,thin) = svd(float64(x),vecs,thin)
@@ -676,25 +676,25 @@ function (\){T<:LapackType}(A::StridedMatrix{T}, B::StridedVecOrMat{T})
 
     if m == n # Square
         if istriu(A) 
-            ans, info = Lapack.trtrs!('U', 'N', 'N', Acopy, X)
+            ans, info = LAPACK.trtrs!('U', 'N', 'N', Acopy, X)
             if info > 0; error("Singular system"); end
             return ans
         end
         if istril(A) 
-            ans, info = Lapack.trtrs!('L', 'N', 'N', Acopy, X) 
+            ans, info = LAPACK.trtrs!('L', 'N', 'N', Acopy, X) 
             if info > 0; error("Singular system"); end
             return ans
         end
         if ishermitian(A) 
-            ans, _, _, info = Lapack.sysv!('U', Acopy, X)
+            ans, _, _, info = LAPACK.sysv!('U', Acopy, X)
             if info > 0; error("Singular system"); end
             return ans
         end
-        ans, _, _, info = Lapack.gesv!(Acopy, X)
+        ans, _, _, info = LAPACK.gesv!(Acopy, X)
         if info > 0; error("Singular system"); end
         return ans
     end
-    Lapack.gelsd!(Acopy, X)[1]
+    LAPACK.gelsd!(Acopy, X)[1]
 end
 
 (\){T1<:LapackType, T2<:LapackType}(A::StridedMatrix{T1}, B::StridedVecOrMat{T2}) =
@@ -772,10 +772,10 @@ end
 size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<2 ? length(m.dv) : 1)
 
-eig(m::SymTridiagonal, vecs::Bool) = Lapack.stev!(vecs ? 'V' : 'N', copy(m.dv), copy(m.ev))
+eig(m::SymTridiagonal, vecs::Bool) = LAPACK.stev!(vecs ? 'V' : 'N', copy(m.dv), copy(m.ev))
 eig(m::SymTridiagonal) = eig(m::SymTridiagonal, true)
 ## This function has been in Julia for some time.  Could probably be dropped.
-trideig{T<:LapackType}(d::Vector{T}, e::Vector{T}) = Lapack.stev!('N', copy(d), copy(e))[1]
+trideig{T<:LapackType}(d::Vector{T}, e::Vector{T}) = LAPACK.stev!('N', copy(d), copy(e))[1]
 
 ## Tridiagonal matrices ##
 type Tridiagonal{T} <: AbstractMatrix{T}
@@ -847,13 +847,13 @@ iround(M::Tridiagonal) = Tridiagonal(iround(M.dl), iround(M.d), iround(M.du))
 #### Tridiagonal matrix routines ####
 function \{T<:LapackType}(M::Tridiagonal{T}, rhs::StridedVecOrMat{T})
     if stride(rhs, 1) == 1
-        return Lapack.gtsv!(copy(M.dl), copy(M.d), copy(M.du), copy(rhs))
+        return LAPACK.gtsv!(copy(M.dl), copy(M.d), copy(M.du), copy(rhs))
     end
     solve(M, rhs)  # use the Julia "fallback"
 end
 
 # This is definitely not going to work
-#eig(M::Tridiagonal) = Lapack.stev!('V', copy(M))
+#eig(M::Tridiagonal) = LAPACK.stev!('V', copy(M))
 
 # Allocation-free variants
 # Note that solve is non-aliasing, so you can use the same array for
@@ -978,11 +978,11 @@ type LDLTTridiagonal{T} <: Factorization{T}
     E::Vector{T}
 end
 
-ldltd!{T<:LapackType}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(Lapack.pttrf!(A.dv,A.ev)...)
+ldltd!{T<:LapackType}(A::SymTridiagonal{T}) = LDLTTridiagonal{T}(LAPACK.pttrf!(A.dv,A.ev)...)
 ldltd{T<:LapackType}(A::SymTridiagonal{T}) = ldltd!(copy(A))
 
 (\){T<:LapackType}(C::LDLTTridiagonal{T}, B::StridedVecOrMat{T}) =
-    Lapack.pttrs!(C.D, C.E, copy(B))
+    LAPACK.pttrs!(C.D, C.E, copy(B))
 
 type LUTridiagonal{T} <: Factorization{T}
     dl::Vector{T}
@@ -1001,9 +1001,9 @@ type LUTridiagonal{T} <: Factorization{T}
 end
 #show(io, lu::LUTridiagonal) = print(io, "LU decomposition of ", summary(lu.lu))
 
-lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(Lapack.gttrf!(A.dl,A.d,A.du)...)
+lud!{T}(A::Tridiagonal{T}) = LUTridiagonal{T}(LAPACK.gttrf!(A.dl,A.d,A.du)...)
 lud{T}(A::Tridiagonal{T}) = 
-    LUTridiagonal{T}(Lapack.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
+    LUTridiagonal{T}(LAPACK.gttrf!(copy(A.dl),copy(A.d),copy(A.du))...)
 lu(A::Tridiagonal) = factors(lud(A))
 
 function det(lu::LUTridiagonal)
@@ -1014,7 +1014,7 @@ end
 det(A::Tridiagonal) = det(lud(A))
 
 (\){T<:LapackType}(lu::LUTridiagonal{T}, B::StridedVecOrMat{T}) =
-    Lapack.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))
+    LAPACK.gttrs!('N', lu.dl, lu.d, lu.du, lu.du2, lu.ipiv, copy(B))
 
 
 #### Woodbury matrices ####

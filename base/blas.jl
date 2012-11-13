@@ -1,6 +1,6 @@
 typealias LapackType Union(Float64,Float32,Complex128,Complex64)
 
-module Blas
+module BLAS
 using Base
 
 export copy!,
@@ -389,7 +389,7 @@ end # module
 
 function copy_to{T<:LapackType}(dest::Ptr{T}, src::Ptr{T}, n::Integer)
     if n < 200
-        Blas.copy!(n, src, 1, dest, 1)
+        BLAS.copy!(n, src, 1, dest, 1)
     else
         ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint), dest, src, n*sizeof(T))
     end
@@ -411,7 +411,7 @@ function copy_to{T<:LapackType,Ti<:Integer}(dest::Array{T}, rdest::Union(Range1{
     if length(rdest) != length(rsrc)
         error("Ranges must be of the same length")
     end
-    Blas.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
+    BLAS.copy!(length(rsrc), pointer(src)+(first(rsrc)-1)*sizeof(T), step(rsrc),
               pointer(dest)+(first(rdest)-1)*sizeof(T), step(rdest))
     return dest
 end

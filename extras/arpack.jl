@@ -3,14 +3,14 @@ require("linalg_sparse.jl")
 ## Can't modularize until Sparse is a module - at least the
 ## SparseMatrixCSC is not defined even after the require("sparse.jl")
 
-#module Arpack 
+#module ARPACK 
 #using Base
 #export eigs, svds
 
 _jl_libarpack = dlopen("libarpack")
 
 # For a dense matrix A is ignored and At is actually A'*A
-_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = Blas.symv('U', one(T), At, X)
+_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
 _jl_sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
 
 for (T, saupd, seupd, naupd, neupd) in
@@ -188,7 +188,7 @@ eigs(A::AbstractMatrix) = eigs(A, 6, "LM", true)
 
 
 # For a dense matrix A is ignored and At is actually A'*A
-_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = Blas.symv('U', one(T), At, X)
+_jl_sarupdate{T}(A::StridedMatrix{T}, At::StridedMatrix{T}, X::StridedVector{T}) = BLAS.symv('U', one(T), At, X)
 _jl_sarupdate{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, At::SparseMatrixCSC{Tv,Ti}, X::StridedVector{Tv}) = At*(A*X)
 
 for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :sseupd_))
@@ -197,7 +197,7 @@ for (T, saupd, seupd) in ((:Float64, :dsaupd_, :dseupd_), (:Float32, :ssaupd_, :
            (m, n) = size(A)
            if m < n error("m = $m, n = $n and only the m >= n case is implemented") end
 
-           At = isa(A, StridedMatrix) ? Blas.syrk('U','T',1.,A) : A'
+           At = isa(A, StridedMatrix) ? BLAS.syrk('U','T',1.,A) : A'
     
            ncv    = min(max(nev*2, 20), n)
            lworkl = ncv*(ncv+8)
@@ -258,4 +258,4 @@ svds(A::AbstractMatrix, rvec::Bool) = svds(A, 6, "LA", rvec)
 svds(A::AbstractMatrix, nev::Integer) = svds(A, nev, "LA", true)
 svds(A::AbstractMatrix) = svds(A, 6, "LA", true)
 
-# end #module Arpack
+# end #module ARPACK

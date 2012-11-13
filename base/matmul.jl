@@ -38,7 +38,7 @@ diagmm(b::Vector, A::Matrix) =
 
 function dot{T<:Union(Vector{Float64}, Vector{Float32})}(x::T, y::T)
     length(x) != length(y) ? error("Inputs should be of same length") : true
-    Blas.dot(length(x), x, 1, y, 1)
+    BLAS.dot(length(x), x, 1, y, 1)
 end
 
 function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Range1{TI},Range{TI}), y::Vector{T}, ry::Union(Range1{TI},Range{TI}))
@@ -46,7 +46,7 @@ function dot{T<:Union(Float64, Float32), TI<:Integer}(x::Vector{T}, rx::Union(Ra
     if min(rx) < 1 || max(rx) > length(x) || min(ry) < 1 || max(ry) > length(y)
         throw(BoundsError())
     end
-    Blas.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
+    BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 
 Ac_mul_B(x::Vector, y::Vector) = [dot(x, y)]
@@ -212,7 +212,7 @@ function gemv{T<:LapackType}(y::StridedVector{T},
     if nA != length(x); error("*: argument shapes do not match"); end
     if mA != length(y); error("*: output size is incorrect"); end
 
-    Blas.gemv!(tA, one(T), A, x, zero(T), y)
+    BLAS.gemv!(tA, one(T), A, x, zero(T), y)
 end
 
 function syrk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
@@ -231,7 +231,7 @@ function syrk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
         return generic_matmatmul(tA, tAt, A, A)
     end
 
-    symmetrize!(Blas.syrk('U', tA, one(T), A))
+    symmetrize!(BLAS.syrk('U', tA, one(T), A))
 end
 
 function herk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
@@ -253,7 +253,7 @@ function herk_wrapper{T<:LapackType}(tA, A::StridedMatrix{T})
     # Result array does not need to be initialized as long as beta==0
     #    C = Array(T, mA, mA)
 
-    symmetrize_conj!(Blas.herk('U', tA, one(T), A))
+    symmetrize_conj!(BLAS.herk('U', tA, one(T), A))
 end
 
 function gemm_wrapper{T<:LapackType}(tA, tB,
@@ -281,7 +281,7 @@ function gemm_wrapper{T<:LapackType}(C::StridedMatrix{T}, tA, tB,
         return generic_matmatmul(C, tA, tB, A, B)
     end
 
-    Blas.gemm!(tA, tB, one(T), A, B, zero(T), C)
+    BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
 end
 
 # blas.jl defines matmul for floats; other integer and mixed precision
