@@ -34,7 +34,7 @@ div.document {
   margin: 3em auto 0 auto;
 }
 
-@media screen and (min-width: 768px) {
+@media screen and (min-width: {{ page_width }}) {
 
 div.document {
   width: {{ page_width }};
