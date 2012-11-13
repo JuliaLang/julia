@@ -230,7 +230,6 @@ checkout(rev::String) = cd(julia_pkgdir()) do
     dir = cwd()
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
-    run(`git ls-files --other` | `xargs rm -rf`)
     Git.each_submodule(true) do name, path, sha1
         branch = try Git.modules(`submodule.$name.branch`) end
         if branch != nothing
@@ -267,12 +266,13 @@ function commit(f::Function, msg::String)
     end
     if Git.staged() && !Git.unstaged()
         commit(msg)
+        run(`git diff --name-only --diff-filter=D HEAD^ HEAD` | `xargs rm -rf`)
+        checkout()
     elseif !Git.dirty()
         println(stderr_stream, "Nothing to commit.")
     else
         error("There are both staged and unstaged changes to packages.")
     end
-    checkout()
 end
 
 # push & pull package repos to/from remotes
