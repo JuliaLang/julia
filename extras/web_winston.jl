@@ -2,7 +2,7 @@
 # Load this file in the web repl to display winston plots inline.
 #
 
-load("winston.jl")
+load("winston")
 using Winston
 
 function web_show(user_id, p::PlotContainer)

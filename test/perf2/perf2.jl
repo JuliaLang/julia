@@ -16,7 +16,7 @@ end
 
 srand(1776)  # get more consistent times
 
-require("$JULIA_HOME/../../examples/list.jl")
+require("$JULIA_HOME/../../examples/list")
 
 function listn1n2(n1::Int64,n2::Int64)
     l1 = Nil{Int64}()
@@ -30,16 +30,16 @@ end
 gc()
 
 # issue #1211
-load("ziggurat.jl")
+load("ziggurat")
 a = Array(Float64, 1000000)
 @timeit randn_zig!(a) "randn_zig"
 
 # issue #950
-load("gk.jl")
+load("gk")
 @timeit gk(350,[0.1]) "gk      "
 
 # issue #942
-require("linalg_sparse.jl")
+require("linalg_sparse")
 s = sparse(ones(280,280));
 @timeit s*s "sparsemul"
 
@@ -52,24 +52,24 @@ x = 1:600000;
 @timeit sparse(x,x,x) "sparserang"
 
 # issue #445
-load("stockcorr.jl")
+load("stockcorr")
 @timeit stockcorr() "stockcorr"
 
-load("bench_eu.jl")
+load("bench_eu")
 @timeit bench_eu_vec(10000) "bench_eu_vec"
 @timeit bench_eu_devec(10000) "bench_eu_devec"
 
 # issue #1163
-load("actor_centrality.jl")
+load("actor_centrality")
 @timeit1 actor_centrality() "actorgraph"
 
 # issue #1168
-load("laplace.jl")
+load("laplace")
 @timeit1 laplace_vec() "laplace_vec"
 @timeit laplace_devec() "laplace_devec"
 
 # issue #1169
-load("go_benchmark.jl")
+load("go_benchmark")
 @timeit1 benchmark(10) "go_benchmark"
 
 function cmp_with_func(x::Vector, f::Function)
@@ -107,7 +107,7 @@ end
 
 @timeit parse() "splitline"
 
-load("json.jl")
+load("json")
 
 _json_data = "{\"web-app\": {
   \"servlet\": [   

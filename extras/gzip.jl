@@ -61,7 +61,7 @@ export
   Z_FIXED,
   Z_DEFAULT_STRATEGY
 
-load("zlib_h.jl")
+load("zlib_h")
 
 # Expected line length for strings
 const GZ_LINE_BUFSIZE = 256

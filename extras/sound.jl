@@ -1,6 +1,6 @@
 # -*- mode: julia; -*-
 # sound.jl
-require("options.jl")
+require("options")
 
 module Sound
 using Base

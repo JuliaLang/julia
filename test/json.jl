@@ -1,7 +1,7 @@
-load("json.jl")
+load("json")
 using Json
 
-load("test/json_samples.jl")
+load("test/json_samples")
 
 
 @assert parse_json(a) != nothing

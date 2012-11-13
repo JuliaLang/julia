@@ -1,4 +1,4 @@
-require("extras/bigint.jl")
+require("extras/bigint")
 
 module BigFib
 export bigfib

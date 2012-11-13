@@ -1,4 +1,4 @@
-require("linprog.jl")
+require("linprog")
 
 module Metadata
 

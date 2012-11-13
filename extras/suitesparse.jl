@@ -1,4 +1,4 @@
-require("linalg_sparse.jl")
+require("linalg_sparse")
 
 #module Suitesparse
 #using Base
@@ -28,7 +28,7 @@ export                                  # types
     At_ldiv_B,
     Ac_ldiv_B
 
-require("suitesparse_h.jl")
+require("suitesparse_h")
 
 const _jl_libsuitesparse_wrapper = dlopen("libsuitesparse_wrapper")
 const _jl_libcholmod = dlopen("libcholmod")

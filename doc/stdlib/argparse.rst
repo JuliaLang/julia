@@ -22,7 +22,7 @@ Quick overview and a simple example
 
 First of all, the module needs to be loaded and imported::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
 Note that in the second line we imported all names in the current namespace; this should be completely safe in most cases.
@@ -68,7 +68,7 @@ In the above example, it will contain the keys ``"opt1"``, ``"opt2"``, ``"flag1"
 
 Putting all this together in a file, we can see how a basic command-line interface is created::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
     function parse_commandline()
@@ -556,7 +556,7 @@ The ``ArgParse`` module allows commands to look both as positional arguments or 
 Commands are introduced by the ``action = :command`` setting in the argument table. Suppose we save the following script in
 a file called ``cmd_example.jl``::
 
-    require("argparse.jl")
+    require("argparse")
     using ArgParse
 
     function parse_commandline()

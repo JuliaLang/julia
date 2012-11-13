@@ -1,5 +1,5 @@
 
-load("trie.jl")
+load("trie")
 
 module Openlib
 using Base

@@ -1,5 +1,5 @@
 cd("../extras") do
-require("glpk.jl")
+require("glpk")
 
 # Same example as in the GLPK manual
 

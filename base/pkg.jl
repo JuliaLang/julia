@@ -1,5 +1,5 @@
-require("git.jl")
-require("pkgmetadata.jl")
+require("git")
+require("pkgmetadata")
 
 module Pkg
 #

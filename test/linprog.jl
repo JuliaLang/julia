@@ -1,7 +1,7 @@
 ### Linear programming
 
 cd("../extras") # we can't use do-notation because of "using"
-require("linprog.jl")
+require("linprog")
 
 using LinProgGLPK
 

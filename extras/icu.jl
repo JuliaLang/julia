@@ -13,8 +13,8 @@
 # after the locale is set to Turkish.
 #
 
-load("openlib.jl")
-load("utf16.jl")
+load("openlib")
+load("utf16")
 
 module ICU
 using Base

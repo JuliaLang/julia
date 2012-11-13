@@ -2,7 +2,7 @@
 ### GLPK API Wrapper
 ###
 
-require("sparse.jl")
+require("sparse")
 
 module GLPK
 using Base
@@ -176,7 +176,7 @@ typealias SparseMatrixCSC Main.SparseMatrixCSC # XXX to be removed when sparse g
 
 ## Shared library interface setup
 #{{{
-load("glpk_h.jl") # XXX include would probably be more apt here, but it doesn't
+load("glpk_h") # XXX include would probably be more apt here, but it doesn't
                   # search LOAD_PATH
 
 _jl_libglpk = dlopen("libglpk")

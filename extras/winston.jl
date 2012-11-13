@@ -1,5 +1,5 @@
-load("cairo.jl")
-load("inifile.jl")
+load("cairo")
+load("inifile")
 
 module Winston
 

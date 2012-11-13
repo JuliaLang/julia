@@ -41,7 +41,7 @@ Note that C's ``int`` corresponds to ``Int32``. Let's initialize an object of th
 
     s = TestStruct(-1, 1.2)
     
-Now we load the strpack "module", ``load("strpack.jl")``, which also brings in ``iostring.jl``. We're going to
+Now we load the strpack "module", ``load("strpack")``, which also brings in ``iostring.jl``. We're going to
 pack ``s`` into a form suitable to pass as the input to our C function ``getvalues``, which we do in the
 following way::
 

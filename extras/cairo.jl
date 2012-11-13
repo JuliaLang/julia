@@ -1,5 +1,5 @@
-load("color.jl")
-load("openlib.jl")
+load("color")
+load("openlib")
 
 module Cairo
 using Base

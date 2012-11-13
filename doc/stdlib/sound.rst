@@ -15,7 +15,7 @@ the one found in MATLAB.
 
 Here is a quick example that copies an existing file::
 
-    julia> require("sound.jl")
+    julia> require("sound")
 
     julia> using Sound
 

@@ -16,7 +16,7 @@
 # [message_type::number, arg0::string, arg1::string, ...]
 
 # import the message types
-load("webrepl_msgtypes_h.jl")
+load("webrepl_msgtypes_h")
 
 ###########################################
 # set up the socket connection
@@ -91,7 +91,7 @@ end
 ###########################################
 
 # load the special functions available to the web repl
-load("julia_web.jl")
+load("julia_web")
 
 ###########################################
 # input event handler

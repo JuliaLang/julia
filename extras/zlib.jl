@@ -26,7 +26,7 @@ export
    Z_BUF_ERROR,
    Z_VERSION_ERROR
 
-load("zlib_h.jl")
+load("zlib_h")
 
 # zlib functions
 

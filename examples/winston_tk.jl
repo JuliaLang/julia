@@ -1,5 +1,5 @@
-load("plot.jl")
-load("tk.jl")
+load("plot")
+load("tk")
 
 using Tk, Cairo, Winston, Plot
 

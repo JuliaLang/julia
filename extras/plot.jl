@@ -1,6 +1,6 @@
 
-load("color.jl")
-load("winston.jl")
+load("color")
+load("winston")
 
 module Plot
 

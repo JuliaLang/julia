@@ -3,7 +3,7 @@
 ## for optimization and constraint satisfaction problems
 ##
 
-require("glpk.jl")
+require("glpk")
 
 module LinProgGLPK
 using Base

@@ -1,6 +1,6 @@
 ## linalg_bitarray.jl: Basic Linear Algebra functions for BitArrays ##
 
-require("bitarray.jl")
+require("bitarray")
 
 import Base.dot, Base.triu, Base.tril, Base./, Base.\, Base.gradient
 import Base.svd, Base.qr, Base.*, Base.diag, Base.diagm, Base.kron

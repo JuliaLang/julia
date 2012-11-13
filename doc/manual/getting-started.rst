@@ -26,7 +26,7 @@ learn and experiment with Julia is by starting an interactive session
     julia> ans
     3
 
-    julia> load("file.jl")
+    julia> load("file")
 
 To exit the interactive session, type ``^D`` — the control key together
 with the ``d`` key. When run in interactive mode, ``julia`` displays a

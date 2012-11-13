@@ -14,7 +14,7 @@ Here is a quick example:
 
 ::
 
-    julia> require("textwrap.jl")
+    julia> require("textwrap")
 
     julia> using TextWrap
 

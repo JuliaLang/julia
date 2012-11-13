@@ -1,4 +1,4 @@
-load("lru.jl")
+load("lru")
 
 const TestLRU = UnboundedLRU{ASCIIString, ASCIIString}()
 const TestBLRUs = BoundedLRU{ASCIIString, ASCIIString}(100)

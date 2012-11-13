@@ -10,7 +10,7 @@
 # - state-interrogating functions
 # - cleaning up unused callbacks
 
-require("cairo.jl")
+require("cairo")
 
 module Tk
 using Base

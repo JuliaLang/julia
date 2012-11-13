@@ -1,7 +1,7 @@
-require("linalg_sparse.jl")
+require("linalg_sparse")
 
 ## Can't modularize until Sparse is a module - at least the
-## SparseMatrixCSC is not defined even after the require("sparse.jl")
+## SparseMatrixCSC is not defined even after the require("sparse")
 
 #module ARPACK 
 #using Base

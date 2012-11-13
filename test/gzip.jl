@@ -1,6 +1,6 @@
 # Testing for gzip
-require("../extras/gzip.jl")
-#require("../extras/test.jl")
+require("../extras/gzip")
+#require("../extras/test")
 
 using GZip
 

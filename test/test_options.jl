@@ -1,6 +1,6 @@
 test_context("Options for functions")
 
-require("options.jl")
+require("options")
 using OptionsMod
 
 test_group("basic functionality")

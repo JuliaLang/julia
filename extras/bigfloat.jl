@@ -5,7 +5,7 @@ import Base.showcompact
 
 _jl_libgmp_wrapper = dlopen("libgmp_wrapper")
 
-require("bigint.jl")
+require("bigint")
 
 type BigFloat <: FloatingPoint
     mpf::Ptr{Void}
