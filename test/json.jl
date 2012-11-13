@@ -46,5 +46,5 @@ u=parse_json(unicode)
 @assert u["অলিম্পিকস"]["রেকর্ড"][2]["Marathon"] == "জনি হেইস"
 
 #Uncomment while doing timing tests
-@time for i=1:100 ; parse_json(d) ; end
+#@time for i=1:100 ; parse_json(d) ; end
 
