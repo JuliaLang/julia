@@ -10,7 +10,7 @@ unsigned long stdin_buf_maxlen = 128;
 
 void init_repl_environment(int argc, char *argv[])
 {
-    stdin_buf = LLT_ALLOC(stdin_buf_maxlen);
+    stdin_buf = malloc(stdin_buf_maxlen);
 }
 
 DLLEXPORT void jl_enable_color(void)
@@ -58,7 +58,7 @@ void repl_callback_enable()
 static void stdin_buf_pushc(char c) {
     if (stdin_buf_len >= stdin_buf_maxlen) {
         stdin_buf_maxlen *= 2;
-        stdin_buf = LLT_REALLOC(stdin_buf, stdin_buf_maxlen);
+        stdin_buf = realloc(stdin_buf, stdin_buf_maxlen);
         if (!stdin_buf) {
             // we can safely ignore this error and continue, if that is preferred
             perror("realloc");
