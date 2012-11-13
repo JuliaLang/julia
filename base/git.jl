@@ -20,7 +20,7 @@ unstaged(paths) = !success(`git diff --quiet -- $paths`)
 attached() = success(`git symbolic-ref -q HEAD` > "/dev/null")
 branch() = readchomp(`git rev-parse --symbolic-full-name --abbrev-ref HEAD`)
 
-function each_version()
+function each_tagged_version()
     git_dir = abs_path(dir())
     @task for line in each_line(`git --git-dir=$git_dir show-ref --tags`)
         m = match(r"^([0-9a-f]{40}) refs/tags/(v\S+)$", line)
@@ -29,7 +29,7 @@ function each_version()
         end
     end
 end
-each_version(dir::String) = cd(each_version,dir)
+each_tagged_version(dir::String) = cd(each_tagged_version,dir)
 
 function each_submodule(f::Function, recursive::Bool, dir::ByteString)
     cmd = `git submodule foreach --quiet 'echo "$name\t$path\t$sha1"'`

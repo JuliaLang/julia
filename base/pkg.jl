@@ -230,14 +230,6 @@ checkout(rev::String) = cd(julia_pkgdir()) do
     dir = cwd()
     run(`git checkout -fq $rev`)
     run(`git submodule update --init --reference $dir --recursive`)
-    Git.each_submodule(true) do name, path, sha1
-        branch = try Git.modules(`submodule.$name.branch`) end
-        if branch != nothing
-            cd(path) do
-                run(`git checkout -B $branch $sha1`)
-            end
-        end
-    end
 end
 checkout() = checkout("HEAD")
 
