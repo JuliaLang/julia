@@ -47,6 +47,13 @@ for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
                   &n, &DA, DX, &incx)
             DX
         end
+        function scal(n::Integer, DA::$elty, DX_orig::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            DX = copy(DX_orig)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
+        end
     end
 end
 
