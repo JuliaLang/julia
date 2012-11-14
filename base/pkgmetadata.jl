@@ -18,8 +18,12 @@ function gen_versions(pkg::String)
         open("$dir/sha1","w") do io
             println(io,sha1)
         end
+        if isfile("$pkg/REQUIRE")
+            run(`cp $pkg/REQUIRE $dir/requires`)
+        end
     end
 end
+gen_versions() = for pkg in each_package() gen_versions(pkg) end
 
 function gen_hashes(pkg::String)
     for (ver,dir) in each_tagged_version(pkg)
