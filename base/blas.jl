@@ -4,6 +4,8 @@ module BLAS
 using Base
 
 export copy!,
+       scal!,
+       scal,
        dot,
        nrm2,
        axpy!,
@@ -31,6 +33,19 @@ for (fname, elty) in ((:dcopy_,:Float64), (:scopy_,:Float32),
                   (Ptr{Int32}, Ptr{$elty}, Ptr{Int32}, Ptr{$elty}, Ptr{Int32}),
                   &n, DX, &incx, DY, &incy)
             DY
+        end
+    end
+end
+
+# SUBROUTINE DSCAL(N,DA,DX,INCX)
+for (fname, elty) in ((:dscal_,:Float64),    (:sscal_,:Float32),
+                      (:zscal_,:Complex128), (:cscal_,:Complex64))
+    @eval begin
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},Array{$elty}), incx::Integer)
+            ccall(dlsym(Base.libblas, $(string(fname))), Void,
+                  (Ptr{Int32}, Ptr{$elty}, Ptr{$elty}, Ptr{Int32}),
+                  &n, &DA, DX, &incx)
+            DX
         end
     end
 end
