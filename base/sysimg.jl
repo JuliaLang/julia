@@ -139,6 +139,7 @@ include("lapack.jl")
 include("matmul.jl")
 include("linalg.jl")
 include("linalg_dense.jl")
+include("symmetricmatrix.jl")
 
 # signal processing
 include("fftw.jl")
