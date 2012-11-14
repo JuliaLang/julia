@@ -1366,8 +1366,7 @@ for (syevr, elty) in
             lda = max(1,stride(A,2))
             m = Array(Int32, 1)
             w = Array($elty, n)
-            ldz = jobz == 'V' ? n : 1
-            z = Array($elty, ldz, n)
+            z = Array($elty, n, n)
             isuppz = Array(Int, 2*n)
             work  = Array($elty, 1)
             lwork = int32(-1)
@@ -1385,7 +1384,7 @@ for (syevr, elty) in
                     &jobz, &range, &uplo, &n, 
                     A, &lda, &vl, &vu, 
                     &il, &iu, &abstol, m,
-                    w, z, &ldz, isuppz,
+                    w, z, &n, isuppz,
                     work, &lwork, iwork, &liwork, 
                     info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1396,7 +1395,7 @@ for (syevr, elty) in
                     iwork = Array(Int32, liwork)
                 end
             end
-            return w[1:m[1]], z[1:m[1],:]
+            return jobz == 'V' ? (w[1:m[1]], z[1:m[1],:]) : w[1:m[1]]
         end
     end
 end
@@ -1424,8 +1423,7 @@ for (syevr, elty, relty) in
             lda = max(1,stride(A,2))
             m = Array(Int32, 1)
             w = Array($elty, n)
-            ldz = jobz == 'V' ? n : 1
-            z = Array($elty, ldz, n)
+            z = Array($elty, n, n)
             isuppz = Array(Int, 2*n)
             work  = Array($elty, 1)
             lwork = int32(-1)
@@ -1445,7 +1443,7 @@ for (syevr, elty, relty) in
                     &jobz, &range, &uplo, &n, 
                     A, &lda, &vl, &vu, 
                     &il, &iu, &abstol, m,
-                    w, z, &ldz, isuppz,
+                    w, z, &n, isuppz,
                     work, &lwork, rwork, &lrwork,
                     iwork, &liwork, info)
                 if info[1] != 0 throw(LapackException(info[1])) end
@@ -1458,7 +1456,7 @@ for (syevr, elty, relty) in
                     iwork = Array(Int32, liwork)
                 end
             end
-            return w[1:m[1]], z[1:m[1],:]
+            return jobz == 'V' ? (w[1:m[1]], z[1:m[1],:]) : w[1:m[1]]
         end
     end
 end
