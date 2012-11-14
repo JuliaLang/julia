@@ -190,7 +190,7 @@ end
 
 # Use 64-bit functions if available
 
-if dlsym(_zlib, :gzopen64) != C_NULL
+if dlsym_e(_zlib, :gzopen64) != C_NULL
     const _gzopen = :gzopen64
     const _gzseek = :gzseek64
     const _gztell = :gztell64
