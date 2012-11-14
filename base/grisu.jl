@@ -50,20 +50,17 @@ function grisu_sig(x::Real, n::Integer)
 end
 
 function _show(io, x::FloatingPoint, mode::Int32, n::Int)
-    if isnan(x); return write(io, "NaN"); end
-    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
+    if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
+    if x < 0 write(io,'-') end
+    if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
     @grisu_ccall x mode n
     pdigits = pointer(DIGITS)
-    neg = NEG[1]
     len = LEN[1]
     pt  = POINT[1]
     if mode == PRECISION
         while len > 1 && DIGITS[len] == '0'
             len -= 1
         end
-    end
-    if neg
-        write(io, '-')
     end
     if pt <= -4 || pt > 6 # .00001 to 100000.
         # => #.#######e###
@@ -74,8 +71,9 @@ function _show(io, x::FloatingPoint, mode::Int32, n::Int)
         else
             write(io, '0')
         end
-        write(io, 'e')
+        write(io, isa(x,Float32) ? 'f' : 'e')
         write(io, dec(pt-1))
+        return
     elseif pt <= 0
         # => 0.00########
         write(io, "0.")
@@ -97,6 +95,7 @@ function _show(io, x::FloatingPoint, mode::Int32, n::Int)
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
+    if isa(x,Float32) write(io, "f0") end
     nothing
 end
 
@@ -114,23 +113,21 @@ showcompact(io, x::FloatingPoint) = _show(io, x, PRECISION, 6)
 #   0 < pt              ########e###        len+k+1
 
 function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
-    if isnan(x); return write(io, "NaN"); end
-    if isinf(x); return write(io, x < 0 ? "-Inf" : "Inf"); end
+    if isnan(x); return write(io, isa(x,Float32) ? "NaN32" : "NaN"); end
+    if x < 0 write(io,'-') end
+    if isinf(x); return write(io, isa(x,Float32) ? "Inf32" : "Inf"); end
     @grisu_ccall x mode 0
     pdigits = pointer(DIGITS)
-    neg = NEG[1]
     len = LEN[1]
     pt  = POINT[1]
-    if neg
-        write(io, '-')
-    end
     e = pt-len
     k = -9<=e<=9 ? 1 : 2
     if -pt > k+1 || e+dot > k+1
         # => ########e###
         write(io, pdigits+0, len)
-        write(io, 'e')
+        write(io, isa(x,Float32) ? 'f' : 'e')
         write(io, dec(e))
+        return
     elseif pt <= 0
         # => .000########
         write(io, '.')
@@ -154,6 +151,7 @@ function _print_shortest(io, x::FloatingPoint, dot::Bool, mode::Int32)
         write(io, '.')
         write(io, pdigits+pt, len-pt)
     end
+    if isa(x,Float32) write(io, "f0") end
     nothing
 end
 
