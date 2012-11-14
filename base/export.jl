@@ -1315,5 +1315,4 @@ export
     @vectorize_1arg,
     @vectorize_2arg,
     @printf,
-    @sprintf,
-    @memoize
+    @sprintf

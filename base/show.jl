@@ -115,7 +115,7 @@ show(io::IO, ex::Expr) = show_indented(io, ex)
 function show_indented(io::IO, ex::Expr, indent::Int)
     if is(ex.head, :block) || is(ex.head, :body)
         show_block(io, "quote", ex, indent); print(io, "end")
-    elseif contains([:tuple, :vcat, :cell1], ex.head)
+    elseif contains((:tuple, :vcat, :cell1), ex.head)
         print(io, ':'); show_unquoted(io, ex, indent + indent_width)        
     else
         default_show_quoted(io, ex, indent)
@@ -230,8 +230,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
     elseif is(head, :(...)) && nargs == 1
         show_unquoted(io, args[1], indent)
         print(io, "...")
-    elseif (nargs == 1 && contains([:return, :abstract, :const], head)) ||
-                          contains([:local,  :global], head)
+    elseif (nargs == 1 && contains((:return, :abstract, :const), head)) ||
+                          contains((:local,  :global), head)
         print(io, head, ' ')
         show_list(io, args, ", ", indent)
     elseif is(head, :macrocall) && nargs >= 1
@@ -255,7 +255,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int)
         show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
-    elseif contains([:for,:while,:function,:if,:type,:module],head) && nargs==2
+    elseif contains((:for,:while,:function,:if,:type,:module),head) && nargs==2
         show_block(io, head, args[1], args[2], indent); print(io, "end")
     elseif is(head, :quote) && nargs == 1
         show_indented(io, args[1], indent)
