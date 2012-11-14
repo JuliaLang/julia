@@ -23,6 +23,29 @@ const extension_separator_match = Regex(strcat(L"(?<!^|[",
 
 filesep() = os_separator
 
+type Path <: String
+    string::ByteString
+end
+
+bytestring(p::Path) = p.string
+convert(::Type{Path}, p::Path) = p
+convert(::Type{Path}, s::String) = Path(bytestring(s))
+
+for f in (:isempty,:length,:start,:strlen)
+    @eval ($f)(p::Path) = ($f)(p.string)
+end
+for f in (:done,:next,:ref)
+    @eval ($f)(p::Path, i::Int) = ($f)(p.string, i)
+end
+
+path(p::Path) = p
+path(s::String...) = Path(join(s, os_separator))
+split(p::Path) = split(p.string, os_separator_match)
+
+for op in (:*,:/,:\)
+    @eval ($op)(p::Path, s::String...) = path(p.string, s...)
+end
+
 function basename(path::String)
     m = match(last_separator, path)
     if m == nothing
@@ -37,7 +60,7 @@ function dirname(path::String)
     if m == nothing
         return ""
     else
-        return path[1:m.offset-1]
+        return Path(path[1:m.offset-1])
     end
 end
 
@@ -59,19 +82,13 @@ function split_extension(path::String)
     end
 end
 
-split_path(path::String) = split(path, os_separator_match)
-
 function fileparts(filename::String)
     pathname, filestr = dirname_basename(filename)
     filebase, ext = split_extension(filestr)
     return pathname, filebase, ext
 end
 
-function file_path(components...)
-    join(components, os_separator)
-end
-
-const fullfile = file_path
+const fullfile = path
 
 # Test for an absolute path
 function isrooted(path::String)
@@ -161,7 +178,7 @@ function cwd()
     b = Array(Uint8,1024)
     p = ccall(:getcwd, Ptr{Uint8}, (Ptr{Uint8}, Uint), b, length(b))
     system_error("getcwd", p == C_NULL)
-    bytestring(p)
+    Path(bytestring(p))
 end
 
 cd(dir::String) = system_error("chdir", ccall(:chdir,Int32,(Ptr{Uint8},),dir) == -1)
@@ -240,7 +257,7 @@ tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
 @unix_only function mktemp()
-  b = file_path(tempdir(), "tmpXXXXXX")
+  b = tempdir() / "tmpXXXXXX"
   p = ccall(:mkstemp, Int32, (Ptr{Uint8}, ), b)
   return (b, fdio(p, true))
 end
@@ -251,9 +268,9 @@ end
 
 # Create and return the name of a temporary directory
 @unix_only function mktempdir()
-  b = file_path(tempdir(), "tmpXXXXXX")
+  b = tempdir() / "tmpXXXXXX"
   p = ccall(:mkdtemp, Ptr{Uint8}, (Ptr{Uint8}, ), b)
-  return bytestring(p)
+  return Path(bytestring(p))
 end
 
 @windows_only function mktempdir()

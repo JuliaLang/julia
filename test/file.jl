@@ -6,8 +6,8 @@
     @assert split_extension("a.b/a") == ("a.b/a","")
     @assert split_extension("a/a.b.c") == ("a/a.b",".c")
 
-    @assert split_path("a/b/c") == ["a","b","c"]
-    @assert split_path("a//b/c") == ["a","b","c"]
+    @assert split(path("a/b/c")) == ["a","b","c"]
+    @assert split(path("a//b/c")) == ["a","b","c"]
 end
 
 #############################################
@@ -17,7 +17,7 @@ end
 # If so, create the directories and files manually, and comment out this section
 # (Or fix up the code to support such operations on Windows!)
 dir_name = mktempdir()
-filename = file_path(dir_name, "afile.txt")
+filename = dir_name / "afile.txt"
 file_create(filename)
 
 #######################################################################
@@ -41,7 +41,7 @@ run(`chmod +w $filename`)
 @assert mtime(filename) >= mtime(dir_name)
 
 # rename file
-newfilename = file_path(dir_name, "bfile.txt")
+newfilename = dir_name / "bfile.txt"
 path_rename(filename, newfilename)
 @assert ispath(filename) == false
 @assert isfile(newfilename) == true
