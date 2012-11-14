@@ -139,7 +139,7 @@ function _test(ex::Expr, expect_succeed::Bool)
             tr.arg1 = eval(ex.args[1])
             tr.arg2 = eval(ex.args[3])
         elseif (ex.head == :call) # is it a helper we know about?
-            if (ex.args[1] == :isapprox)
+            if (ex.args[1] == :approx_eq)
                 tr.operation = ex.args[1]
                 tr.arg1 = eval(ex.args[2])
                 tr.arg2 = eval(ex.args[3])
