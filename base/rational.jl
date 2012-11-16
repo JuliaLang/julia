@@ -46,12 +46,15 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     b = c = zero(T)
     while true
         f = convert(T,trunc(y)); y -= f
-        a, b, c, d = f*a+c, f*b+d, a, b
+        p, q = f*a+c, f*b+d
+        if p > typemax(T) || q > typemax(T) break end
+        a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
-            return a//b
+            break
         end
         y = 1/y
     end
+    return convert(T,a)//convert(T,b)
 end
 convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,0)
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
