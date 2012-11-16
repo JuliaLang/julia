@@ -179,7 +179,7 @@ function process_options(args::Array{Any,1})
             repl = false
             # remove julia's arguments
             ARGS = args[i+1:end]
-            load(args[i])
+            include(args[i])
             break
         else
             error("unknown option: ", args[i])
