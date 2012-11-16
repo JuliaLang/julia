@@ -34,7 +34,7 @@ const iculib = openlib(OS_NAME == :Darwin ? "libicucore" : "libicuuc")
 const iculibi18n = OS_NAME == :Darwin ? iculib : openlib("libicui18n")
 
 for suffix in ["", ["_"*string(i) for i in 42:50]]
-    if dlsym(iculib, "u_strToUpper"*suffix) != C_NULL
+    if dlsym_e(iculib, "u_strToUpper"*suffix) != C_NULL
         for f in (:u_strFoldCase,
                   :u_strToLower,
                   :u_strToTitle,
