@@ -227,6 +227,14 @@ static int try_to_determine_bitstype_nbits(jl_value_t *targ, jl_codectx_t *ctx)
 // unbox using user-specified type
 static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
 {
+    jl_value_t *et = expr_type(targ, ctx);
+    if (jl_is_type_type(et)) {
+        jl_value_t *p = jl_tparam0(et);
+        if (jl_is_leaf_type(p)) {
+            Type *to = julia_type_to_llvm(p);
+            return emit_unbox(to, PointerType::get(to,0), emit_unboxed(x,ctx));
+        }
+    }
     int nb = try_to_determine_bitstype_nbits(targ, ctx);
     if (nb == -1) {
         jl_value_t *bt=NULL;
