@@ -76,6 +76,8 @@ Here is a quick example that copies an existing file::
    * ``sample_rate`` (default = ``8000``): sampling frequency
    * ``nbits`` (default = ``16``): number of bits used to encode each
      sample
+   * ``compression`` (default = ``WAVE_FORMAT_PCM``): The desired
+     compression technique; accepted values are: WAVE_FORMAT_PCM, WAVE_FORMAT_IEEE_FLOAT
 
    The type of the input array, samples, also affects the generated
    file. "Native" WAVE files are written when integers are passed into
