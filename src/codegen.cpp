@@ -1235,15 +1235,13 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
         theF = literal_pointer_val((jl_value_t*)f);
     }
 
-    size_t i;
-    int argStart = ctx->argDepth;
     Value *result;
     if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->cFunctionObject!=NULL) {
         // emit specialized call site
         Value *argvals[nargs];
         Function *cf = (Function*)f->linfo->cFunctionObject;
         FunctionType *cft = cf->getFunctionType();
-        for(i=0; i < nargs; i++) {
+        for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(i);
             if (at == jl_pvalue_llvmt) {
                 argvals[i] = boxed(emit_expr(args[i+1], ctx));
@@ -1269,7 +1267,8 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx,
     }
     else {
         // emit arguments
-        for(i=0; i < nargs; i++) {
+        int argStart = ctx->argDepth;
+        for(size_t i=0; i < nargs; i++) {
             Value *anArg = emit_expr(args[i+1], ctx);
             // put into argument space
             make_gcroot(boxed(anArg), ctx);
