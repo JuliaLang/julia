@@ -42,9 +42,10 @@ path(p::Path) = p
 path(s::String...) = Path(join(s, os_separator))
 split(p::Path) = split(p.string, os_separator_match)
 
-for op in (:*,:/,:\)
+for op in (:/,:\)
     @eval ($op)(p::Path, s::String...) = path(p.string, s...)
 end
+(*)(p::Path, s::String...) = Path(bytestring(strcat(p.string, s...)))
 
 function basename(path::String)
     m = match(last_separator, path)
