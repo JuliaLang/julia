@@ -56,7 +56,7 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     end
     return convert(T,a)//convert(T,b)
 end
-convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,0)
+convert{T<:Integer}(rt::Type{Rational{T}}, x::FloatingPoint) = convert(rt,x,eps(one(x)))
 convert(::Type{Bool}, x::Rational) = (x!=0)  # to resolve ambiguity
 convert{T<:Rational}(::Type{T}, x::Rational) = x
 convert{T<:Real}(::Type{T}, x::Rational) = convert(T, x.num/x.den)

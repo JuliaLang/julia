@@ -1100,3 +1100,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @assert hex(~uint128(0)) == "f"^32
 @assert uint128(~0) == ~uint128(0)
 @assert int128(~0) == ~int128(0)
+
+# issue 1552
+@assert isa(convert(Rational{Int8},pi),Rational{Int8})
+@assert convert(Rational{Int8},pi) == 22//7
+@assert convert(Rational{Int64},0.957762604052997) == 42499549//44373782
