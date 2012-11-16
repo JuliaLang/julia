@@ -1278,6 +1278,7 @@ export
     pointer,
     pointer_to_array,
     ptr_arg_convert,
+    cfunction,
     setenv,
     strerror,
     unsafe_ref,

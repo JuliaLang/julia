@@ -121,6 +121,9 @@ dlsym(hnd, s::Symbol) = ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd
 dlsym_e(hnd, s::Symbol) = ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 dlopen(s::String) = ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},), s)
 
+cfunction(f::Function, r, a) =
+    ccall(:jl_function_ptr, Ptr{Void}, (Any, Any, Any), f, r, a)
+
 identity(x) = x
 
 function append_any(xs...)

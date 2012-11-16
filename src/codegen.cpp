@@ -270,6 +270,33 @@ const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types)
     return jl_cstr_to_string((char*)stream.str().c_str());
 }
 
+static jl_value_t *ast_rettype(jl_value_t *ast);
+
+extern "C" DLLEXPORT
+void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
+{
+    JL_TYPECHK(jl_function_ptr, type, rt);
+    JL_TYPECHK(jl_function_ptr, tuple, argt);
+    JL_TYPECHK(jl_function_ptr, type, argt);
+    if (jl_is_gf(f) && jl_is_leaf_type(rt) && jl_is_leaf_type(argt)) {
+        jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
+        if (ff != NULL && ff->env == (jl_value_t*)jl_null && ff->linfo != NULL &&
+            ff->linfo->cFunctionObject != NULL) {
+            jl_lambda_info_t *li = ff->linfo;
+            if (jl_types_equal((jl_value_t*)li->specTypes, argt) &&
+                jl_types_equal(ast_rettype(li->ast), rt)) {
+                return jl_ExecutionEngine->getPointerToFunction((Function*)ff->linfo->cFunctionObject);
+            }
+            else {
+                jl_errorf("function_ptr: type signature of %s does not match",
+                          li->name->name);
+            }
+        }
+    }
+    jl_error("function is not yet c-callable");
+    return NULL;
+}
+
 // information about the context of a piece of code: its enclosing
 // function and module, and visible local variables and labels.
 typedef struct {
