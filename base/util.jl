@@ -201,7 +201,7 @@ end
 
 function find_in_path(name::String)
     name[1] == '/' && return realpath(name)
-    is_file_readable(name) && return realpath(name)
+    isfile(name) && return realpath(name)
     base = name
     if ends_with(name,".jl")
         base = match(r"^(.*)\.jl$",name).captures[1]
