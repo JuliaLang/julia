@@ -39,8 +39,11 @@ type WinstonConfig
         inifile = IniFile()
 
         # read global config
-        winston_ini = "winston.ini"
-        fn = find_in_path(winston_ini)
+        local fn
+        for dir in LOAD_PATH
+            fn = file_path(dir, "winston.ini")
+            if isfile(fn) break end
+        end
         read(inifile, fn)
 
         new(inifile)
