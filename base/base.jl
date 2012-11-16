@@ -1,5 +1,7 @@
 # important core definitions
 
+using Core.Intrinsics
+
 import Core.Array  # to add methods
 
 convert(T, x)               = convert_default(T, x, convert)

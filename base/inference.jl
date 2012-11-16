@@ -140,8 +140,8 @@ function arraysize_tfunc(a)
     end
 end
 t_func[arraysize] = (1, 2, arraysize_tfunc)
-t_func[Core.pointerref] = (2,2,(a,i)->(subtype(a,Ptr) ? a.parameters[1] : Any))
-t_func[Core.pointerset] = (3, 3, (a,v,i)->a)
+t_func[pointerref] = (2,2,(a,i)->(subtype(a,Ptr) ? a.parameters[1] : Any))
+t_func[pointerset] = (3, 3, (a,v,i)->a)
 
 function static_convert(to::ANY, from::ANY)
     if !isa(to,Tuple) || !isa(from,Tuple)

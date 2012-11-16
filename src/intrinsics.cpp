@@ -1009,16 +1009,21 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
     box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
                                    "jl_box_"#ct, (void*)&jl_box_##ct);
 
-static void add_intrinsic(const std::string &name, intrinsic f)
+static void add_intrinsic(jl_module_t *m, const std::string &name, intrinsic f)
 {
     jl_value_t *i = jl_box32(jl_intrinsic_type, (int32_t)f);
-    jl_set_const(jl_core_module, jl_symbol((char*)name.c_str()), i);
+    jl_sym_t *sym = jl_symbol((char*)name.c_str());
+    jl_set_const(m, sym, i);
+    jl_module_export(m, sym);
 }
 
-#define ADD_I(name) add_intrinsic(#name, name)
+#define ADD_I(name) add_intrinsic(inm, #name, name)
 
 extern "C" void jl_init_intrinsic_functions(void)
 {
+    jl_module_t *inm = jl_new_module(jl_symbol("Intrinsics"));
+    inm->parent = jl_core_module;
+    jl_set_const(jl_core_module, jl_symbol("Intrinsics"), (jl_value_t*)inm);
     ADD_I(box); ADD_I(unbox);
     ADD_I(neg_int); ADD_I(add_int); ADD_I(sub_int); ADD_I(mul_int);
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);

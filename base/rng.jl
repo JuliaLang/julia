@@ -156,9 +156,7 @@ rand(r::Rng, dims::Int...) = rand(r, dims)
 
 dsfmt_randui32() = dsfmt_gv_genrand_uint32()
 
-dsfmt_randui64() =
-    box(Uint64,or_int(zext64(unbox(Uint32,dsfmt_randui32())),
-                      shl_int(zext64(unbox(Uint32,dsfmt_randui32())), 32)))
+dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
 
 randi(::Type{Uint32})  = dsfmt_randui32()
 randi(::Type{Uint64})  = dsfmt_randui64()
