@@ -1105,3 +1105,12 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @assert isa(convert(Rational{Int8},pi),Rational{Int8})
 @assert convert(Rational{Int8},pi) == 22//7
 @assert convert(Rational{Int64},0.957762604052997) == 42499549//44373782
+@assert convert(Rational{Int16},0.929261477046077) == 11639//12525
+@assert convert(Rational{Int16},0.2264705884044309) == 77//340
+@assert convert(Rational{Int16},0.39999899264235683) == 2//5
+@assert convert(Rational{Int16},1.1264233500618559e-5) == 0//1
+@assert convert(Rational{Uint16},1.1264233500618559e-5) == 1//65535
+@assert convert(Rational{Uint16},0.6666652791223875) == 2//3
+@assert convert(Rational{Int8},0.9374813124660655) == 15//16
+@assert convert(Rational{Int8},0.003803032342443835) == 0//1
+@assert convert(Rational{Uint8},0.003803032342443835) == 1//255

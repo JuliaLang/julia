@@ -41,13 +41,20 @@ function convert{T<:Integer}(::Type{Rational{T}}, x::FloatingPoint, tol::Real)
     if isnan(x);       return zero(T)//zero(T); end
     if x < typemin(T); return -one(T)//zero(T); end
     if typemax(T) < x; return  one(T)//zero(T); end
+    tm = x < 0 ? typemin(T) : typemax(T)
+    z = x*tm
+    if z <= 0.5 return zero(T)//one(T) end
+    if z <= 1.0 return one(T)//tm end
     y = x
-    a = d = one(T)
-    b = c = zero(T)
+    a = d = 1
+    b = c = 0
     while true
-        f = convert(T,trunc(y)); y -= f
+        f = itrunc(y); y -= f
         p, q = f*a+c, f*b+d
-        if p > typemax(T) || q > typemax(T) break end
+        if p < typemin(T) || p > typemax(T) ||
+           q < typemin(T) || q > typemax(T)
+           break
+        end
         a, b, c, d = p, q, a, b
         if y == 0 || abs(a/b-x) <= tol
             break
