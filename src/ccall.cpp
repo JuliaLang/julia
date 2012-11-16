@@ -215,7 +215,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     jl_tuple_t *tt = (jl_tuple_t*)at;
     std::vector<Type *> fargt(0);
     std::vector<Type *> fargt_sig(0);
-    Type *lrt = julia_type_to_llvm(rt, ctx);
+    Type *lrt = julia_type_to_llvm(rt);
     if (lrt == NULL) {
         JL_GC_POP();
         return literal_pointer_val(jl_nothing);
@@ -229,7 +229,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             isVa = true;
             tti = jl_tparam0(tti);
         }
-        Type *t = julia_type_to_llvm(tti, ctx);
+        Type *t = julia_type_to_llvm(tti);
         if (t == NULL) {
             JL_GC_POP();
             return literal_pointer_val(jl_nothing);

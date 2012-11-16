@@ -159,10 +159,10 @@ typedef struct _jl_lambda_info_t {
     jl_value_t *tfunc;
     jl_sym_t *name;  // for error reporting
     jl_array_t *roots;  // pointers in generated code
-    jl_value_t *specTypes;  // argument types this is specialized for
+    jl_tuple_t *specTypes;  // argument types this is specialized for
     // a slower-but-works version of this function as a fallback
     struct _jl_function_t *unspecialized;
-    // pairlist of all lambda infos with code generated from this one
+    // array of all lambda infos with code generated from this one
     jl_array_t *specializations;
     int8_t inferred;
     jl_value_t *file;
@@ -170,8 +170,9 @@ typedef struct _jl_lambda_info_t {
     struct _jl_module_t *module;
 
     // hidden fields:
-    jl_fptr_t fptr;
-    void *functionObject;
+    jl_fptr_t fptr;        // jlcall entry point
+    void *functionObject;  // jlcall llvm Function
+    void *cFunctionObject; // c callable llvm Function
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     uptrint_t inInference : 1;

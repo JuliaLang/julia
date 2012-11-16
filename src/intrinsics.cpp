@@ -197,7 +197,7 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             return ConstantInt::get(T_size, 0);
         }
     }
-    Type *to = julia_type_to_llvm(bt, ctx);
+    Type *to = julia_type_to_llvm(bt);
     if (to == NULL || to == jl_pvalue_llvmt) {
         unsigned int nb = jl_bitstype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
@@ -272,7 +272,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_error("box: expected bits type as first argument");
     }
     else {
-        llvmt = julia_type_to_llvm(bt, ctx);
+        llvmt = julia_type_to_llvm(bt);
         if (nb == -1)
             nb = (bt==(jl_value_t*)jl_bool_type) ? 1 : jl_bitstype_nbits(bt);
     }
@@ -319,7 +319,7 @@ static Value *generic_trunc(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bits_type(bt))
         jl_error("trunc_int: expected bits type as first argument");
-    Type *to = julia_type_to_llvm(bt, ctx);
+    Type *to = julia_type_to_llvm(bt);
     if (to == NULL) {
         unsigned int nb = jl_bitstype_nbits(bt);
         to = IntegerType::get(jl_LLVMContext, nb);
@@ -398,22 +398,24 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
 static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx) {
     jl_value_t *aty = expr_type(e, ctx);
     if (!jl_is_cpointer_type(aty))
-        jl_error("pointerref: expected pointer type as first argument");
+        jl_error("pointerset: expected pointer type as first argument");
     jl_value_t *ety = jl_tparam0(aty);
     if(jl_is_typevar(ety))
-        jl_error("pointerref: invalid pointer");
+        jl_error("pointerset: invalid pointer");
     jl_value_t *xty = expr_type(x, ctx);    
     if (!jl_subtype(xty, ety, 0))
-        jl_error("pointerref: type mismatch in assign");
+        jl_error("pointerset: type mismatch in assign");
     if (!jl_is_bits_type(ety)) {
         ety = (jl_value_t*)jl_any_type;
     }
     if ((jl_bits_type_t*)expr_type(i, ctx) != jl_long_type) {
-        jl_error("pointerref: invalid index type");
+        jl_error("pointerset: invalid index type");
     }
     Value *idx = emit_unbox(T_size, T_psize, emit_unboxed(i, ctx));
     Value *im1 = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
-    return typed_store(auto_unbox(e,ctx), im1, emit_unboxed(x,ctx), ety, ctx);
+    Value *thePtr = auto_unbox(e,ctx);
+    (void)typed_store(thePtr, im1, emit_unboxed(x,ctx), ety, ctx);
+    return mark_julia_type(thePtr, aty);
 }
 
 #define HANDLE(intr,n)                                                  \

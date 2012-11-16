@@ -16,7 +16,7 @@ end
 
 srand(1776)  # get more consistent times
 
-require("$JULIA_HOME/../../examples/list")
+require("$JULIA_HOME/../../examples/list.jl")
 
 function listn1n2(n1::Int64,n2::Int64)
     l1 = Nil{Int64}()
