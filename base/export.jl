@@ -1271,6 +1271,7 @@ export
     c_free,
     dlopen,
     dlsym,
+    dlsym_e,
     errno,
     getenv,
     hasenv,
