@@ -53,7 +53,10 @@ catch err
     throw(err)
 end
 
-try global libcairo_wrapper = dlopen("libcairo_wrapper") end
+function cairo_write_to_ios_callback(s::Ptr{Void}, buf::Ptr{Uint8}, len::Uint32)
+    n = ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s, buf, len)
+    ret::Int32 = (n == len) ? 0 : 11
+end
 
 type CairoSurface
     ptr::Ptr{Void}
@@ -143,9 +146,9 @@ function CairoXlibSurface(display, drawable, visual, w, h)
 end
 
 function CairoSVGSurface(stream::IOStream, w, h)
+    callback = cfunction(cairo_write_to_ios_callback, Int32, (Ptr{Void},Ptr{Uint8},Uint32))
     ptr = ccall(dlsym(_jl_libcairo,:cairo_svg_surface_create_for_stream), Ptr{Void},
-                (Ptr{Void}, Ptr{Void}, Float64, Float64),
-                dlsym(libcairo_wrapper,:cairo_write_to_ios_callback), stream, w, h)
+                (Ptr{Void}, Ptr{Void}, Float64, Float64), callback, stream, w, h)
     CairoSurface(ptr, w, h)
 end
 
